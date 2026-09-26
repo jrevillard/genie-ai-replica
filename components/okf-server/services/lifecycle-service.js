@@ -79,11 +79,15 @@ const TRANSITIONS = {
   // re-promoted the SAME v11 graph name, mutating retired content under
   // citations pinned to it). Post-retract changes now always re-enter the
   // loop: submit -> review -> approve -> publish (mints v{N+1}) -> ingest.
+  // 2026-09-25: Add reverse transition from Published to In Review for unbundling
+  // and rework scenarios. The bundle zip remains published but the repo
+  // reverts to reviewable state for corrections.
   submit: { from: ['draft', 'register', 'validate', 'retracted'], to: 'review' },
   approve: { from: ['review'], to: 'approve' },
   publish: { from: ['approve', 'publish'], to: 'publish' },
   ingest: { from: ['publish'], to: 'publish' },
-  retract: { from: ['publish'], to: 'retracted' }
+  retract: { from: ['publish'], to: 'retracted' },
+  unpublish: { from: ['publish'], to: 'review' }
 };
 
 // Terminal conversion statuses — SINGLE-SOURCED from the owner service
@@ -555,6 +559,35 @@ async function transition(repoId, action, actor) {
         lifecycle_state: spec.to,
         bundle_version: bundle.bundle_version,
         bundle
+      };
+    }
+
+    if (action === 'unpublish') {
+      // 2026-09-25: Reverse transition from Published to In Review for unbundling
+      // and rework scenarios. The bundle zip remains published but the repo
+      // reverts to reviewable state for corrections.
+      logger.info('[OKF-UNPUBLISH] unpublishing repository', { repo_id: repoId, current_state: repo.lifecycle_state });
+
+      // Update repository state to 'review'
+      await db.collection(REPOS).update(repoId, {
+        lifecycle_state: spec.to,
+        ingested_at: null, // Clear serving status
+        ingested_version: null,
+        updated_at: nowIso()
+      });
+
+      // Audit the unpublish action
+      await audit('repo.unpublish', repoId, actor, {
+        from: repo.lifecycle_state,
+        to: spec.to,
+        description: 'Unpublished — reverted to In Review status for unbundling and rework'
+      });
+
+      logger.info('OKF repository unpublished', { repo_id: repoId });
+      return {
+        ok: true,
+        action,
+        lifecycle_state: spec.to
       };
     }
 

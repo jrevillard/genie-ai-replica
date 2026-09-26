@@ -247,11 +247,55 @@ function audit(action, repoId, actor, extra = {}) {
  * Called by the ingest transition (nothing left to drain) and by the worker
  * when the armed drain completes. Idempotent per version.
  */
+// Settle-lease window (spec #1020 §5.8): how long a crashed settler's claim
+// blocks a retry. Inert in the single-worker deployment (the lease is
+// acquired and released within one settle).
+function settleLeaseMs() {
+  const v = parseInt(process.env.OKF_SETTLE_LEASE_MS || '', 10);
+  return Number.isFinite(v) && v > 0 ? v : 600000;
+}
+
 async function _settleIngest(db, repo, actor) {
+  // SETTLE CAS (spec #1020 §5.4 race 2): claim the settle with a conditional
+  // single-statement lease. Concurrent settlers (worker reconcile + finishing
+  // job; future multi-worker) previously raced past the read-then-act checks
+  // and converged only by value-idempotency — while the from≠to rename path
+  // (drop + renames) ran unserialized. The lease serializes them: the loser
+  // sees a fresh settle_claimed_at and skips; a crashed settler's lease
+  // expires after OKF_SETTLE_LEASE_MS. Single-worker behavior is identical
+  // (acquire → settle → the flip below releases).
+  const leaseMs = settleLeaseMs();
+  const claim = await (
+    await db.query(
+      'FOR r IN okf_repositories ' +
+        'FILTER r._key == @rid AND r.rag_drain_active == true ' +
+        'AND (r.settle_claimed_at == null OR DATE_TIMESTAMP(r.settle_claimed_at) < DATE_NOW() - @leaseMs) ' +
+        'UPDATE r WITH { settle_claimed_at: DATE_ISO8601(DATE_NOW()) } IN okf_repositories',
+      { rid: repo.repo_id, leaseMs }
+    )
+  ).all();
+  if (claim.length !== 1) {
+    logger.warn('Settle: lease not acquired (disarmed, or another settler holds it) — skipping', {
+      repo_id: repo.repo_id,
+      version: repo.version || null
+    });
+    return { ok: false, busy: true };
+  }
   // VERSIONED GRAPH (David, 2026-08-30): physically rename the working graph
   // to `OKF_<name-slug>_v<N>` BEFORE the serving flags flip — a failed rename
   // leaves the repo un-serving and simply retryable.
-  const graphName = await graphLifecycle.promoteGraph(repo, actor);
+  let graphName;
+  try {
+    graphName = await graphLifecycle.promoteGraph(repo, actor);
+  } catch (e) {
+    // RELEASE the lease — a failed rename must stay immediately retryable
+    // (the pre-CAS behavior), not blocked for the lease window.
+    await db
+      .collection(REPOS)
+      .update(repo.repo_id, { settle_claimed_at: null })
+      .catch(() => {});
+    throw e;
+  }
   const ts = nowIso();
   await db.collection(REPOS).update(repo.repo_id, {
     lifecycle_state: 'publish', // (re-ingest from 'retracted' returns to publish)
@@ -259,6 +303,7 @@ async function _settleIngest(db, repo, actor) {
     ingested_version: repo.version || null,
     ingested_graph_name: graphName,
     rag_drain_active: false,
+    settle_claimed_at: null, // THE FLIP RELEASES THE LEASE (its normal exit)
     updated_at: ts
   });
   // P0 (David's re-test, 2026-09-08): _settleIngest OWNS the final
@@ -371,7 +416,12 @@ async function transition(repoId, action, actor) {
     span.setAttribute('okf.lifecycle.action', action);
     const db = await getDb();
     const repo = await loadRepo(db, repoId);
-    logger.info('[OKF-LIFECYCLE] loaded repo', { repo_id: repoId, state: repo.lifecycle_state, version: repo.version, ingested_version: repo.ingested_version });
+    logger.info('[OKF-LIFECYCLE] loaded repo', {
+      repo_id: repoId,
+      state: repo.lifecycle_state,
+      version: repo.version,
+      ingested_version: repo.ingested_version
+    });
 
     // BUILDING GATE — before the transition table so a building repo hears
     // "still building", never "invalid transition". Retract is exempt (a
@@ -486,10 +536,7 @@ async function transition(repoId, action, actor) {
       // Read existing bundles first (publish is a single-writer path —
       // route's requireRepoScope + publish gate), then write the merge.
       const existingBundles = (
-        await db.query(
-          'FOR r IN okf_repositories FILTER r._key == @rid RETURN r.bundles',
-          { rid: repoId }
-        )
+        await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.bundles', { rid: repoId })
       ).all();
       const prevBundles = (existingBundles && existingBundles[0]) || [];
       await db.collection(REPOS).update(repoId, {
@@ -645,7 +692,19 @@ async function transition(repoId, action, actor) {
       if (pending === 0) {
         // Everything already drained (re-ingest) — settle immediately.
         const fresh = await loadRepo(db, repoId);
-        return _settleIngest(db, fresh, actor);
+        const settled = await _settleIngest(db, fresh, actor);
+        if (settled && settled.busy) {
+          // CAS lost (spec #1020 §5.4 race 2): a concurrent settler (the
+          // worker's reconcile/sweep) holds the lease and IS completing the
+          // settle — the transition's goal is being achieved by it. Report
+          // success rather than a spurious 409 to the route.
+          logger.info('OKF ingest: settle delegated to the concurrent settler holding the lease', {
+            repo_id: repoId,
+            version: repo.version
+          });
+          return { ok: true, action, lifecycle_state: 'publish', settle_delegated: true };
+        }
+        return settled;
       }
       // Async: the worker drains, then settles (promotes the serving graph).
       return {
@@ -743,9 +802,7 @@ async function transition(repoId, action, actor) {
         { timeout: 5000 }
       );
       const rd = resp && resp.data;
-      const items = Array.isArray(rd)
-        ? rd
-        : (rd && (rd.data || rd.items || rd.files)) || [];
+      const items = Array.isArray(rd) ? rd : (rd && (rd.data || rd.items || rd.files)) || [];
       const bundle = items[0];
       if (bundle && bundle.file_id) {
         await authedAxios.patch(

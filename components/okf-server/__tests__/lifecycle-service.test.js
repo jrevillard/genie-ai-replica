@@ -511,6 +511,58 @@ describe('ingest / retract — the serving flag', () => {
     expect(repo.settle_claimed_at).toBeNull(); // and the lease is released
   });
 
+  // GRAPH GC (2026-09-26, the v2-orphan decision): once a successor version's
+  // graph is promoted at settle, the PREVIOUS version's graph is unreachable
+  // weight — settle drops it (cascade) and never touches the new serving name.
+  test('GRAPH GC: settle drops the PREVIOUS version graph, never the promoted one', async () => {
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 2,
+      bundle: { file_id: 'f2', file_name: 'demo-v2.zip', bundle_version: 2 },
+      ingested_graph_name: 'OKF_Demo_v1' // the predecessor being superseded
+    });
+    const res = await lifecycleService.transition(REPO, 'ingest', {});
+    expect(res).toMatchObject({ ok: true, ingested_version: 2, graph_name: 'OKF_demo_v2' });
+    const dropCalls = mockDb.route.mock.calls.filter(
+      (c) => String(c[0]).indexOf('_api/gharial/OKF_Demo_v1?dropCollections=true') !== -1
+    );
+    expect(dropCalls).toHaveLength(1); // cascade drop of the predecessor
+    // The NEW serving graph is never a drop target.
+    expect(mockDb.route.mock.calls.some((c) => String(c[0]).indexOf('_api/gharial/OKF_demo_v2') !== -1)).toBe(false);
+    expect(mockDb._stores.okf_repositories[REPO].ingested_graph_name).toBe('OKF_demo_v2');
+  });
+
+  test('GRAPH GC: same-name re-settle (born-right) drops NOTHING', async () => {
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 2,
+      bundle: { file_id: 'f2', file_name: 'demo-v2.zip', bundle_version: 2 },
+      ingested_graph_name: 'OKF_demo_v2' // the promoted graph IS the recorded one
+    });
+    await lifecycleService.transition(REPO, 'ingest', {});
+    expect(mockDb.route.mock.calls.some((c) => String(c[0]).indexOf('_api/gharial/') !== -1)).toBe(false);
+    expect(mockDb._stores.okf_repositories[REPO].ingested_graph_name).toBe('OKF_demo_v2');
+  });
+
+  test('GRAPH GC: a drop failure never fails the settle (non-fatal)', async () => {
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 2,
+      bundle: { file_id: 'f2', file_name: 'demo-v2.zip', bundle_version: 2 },
+      ingested_graph_name: 'OKF_Demo_v1'
+    });
+    // The FIRST route call in the settle flow is the GC drop — make it blow up.
+    mockDb.route.mockImplementationOnce(() => ({
+      delete: jest.fn(async () => {
+        throw new Error('arango: graph temporarily busy');
+      })
+    }));
+    const res = await lifecycleService.transition(REPO, 'ingest', {});
+    expect(res).toMatchObject({ ok: true, ingested_version: 2 }); // settle succeeded anyway
+    expect(mockDb._stores.okf_repositories[REPO].ingested_at).toBeTruthy();
+    expect(mockDb._stores.okf_repositories[REPO].ingested_graph_name).toBe('OKF_demo_v2');
+  });
+
   test('retract: publish+serving → retracted (a pulled repo stays VISIBLE)', async () => {
     seedRepo({
       lifecycle_state: 'publish',

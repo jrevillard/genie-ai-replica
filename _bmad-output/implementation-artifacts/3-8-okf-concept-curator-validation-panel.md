@@ -3,7 +3,7 @@ baseline_commit: 14205ae
 ---
 # Story 3.8: OKF concept curator + validation panel
 
-Status: ready-for-dev
+Status: in-progress (reconciled 2026-09-27 — Curate real (tree + markdown editor + label editor, labels save); Validate shell real but live-validation API deferred (empty groups); concept body save deferred to 4.2)
 
 Story key: `3-8-okf-concept-curator-validation-panel` | GitLab: #970
 Epic: 3 (Admin UI) / **Epic 10** (OKF Studio capstone) | Branch: `feat/okf-server`

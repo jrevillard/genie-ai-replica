@@ -3,7 +3,7 @@ baseline_commit: 14205ae
 ---
 # Story 3.6: Document-management "Create OKF repository" entry point
 
-Status: ready-for-dev
+Status: done (reconciled 2026-09-27 — entry point + event + StudioTab handoff live; gate amendment delivered via 7.7; wizard Input documents-panel = 3.4 amendment scope)
 
 > **AMENDED 2026-09-14 (David's directive — folded into Story 7.7):** the AC-1 gate condition
 > "none are `dataprep.status == 'ingested'`" is DROPPED. Ingested documents CAN be imported; the

@@ -3,7 +3,7 @@ baseline_commit: 14205ae
 ---
 # Story 3.5: OKF Studio dashboard + multi-repo kanban
 
-Status: ready-for-dev
+Status: done (reconciled 2026-09-27 — dashboard live: kanban by stage, resume routing, bulk actions, i18n, #1020 queue chips; gated items hidden per spec)
 
 Story key: `3-5-okf-studio-dashboard-multi-repo-kanban` | GitLab: #967
 Epic: 3 (Admin UI) / **Epic 10** (OKF Studio capstone) | Branch: `feat/okf-server`

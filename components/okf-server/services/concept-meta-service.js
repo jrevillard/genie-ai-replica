@@ -808,6 +808,12 @@ async function patchConceptMeta(repo_id, concept_id, parsed) {
     // leave index_status alone — preserving 'indexed' when only frontmatter
     // (e.g. labels) changed avoids re-embedding unnecessarily.
     index_status: hashChanged ? 'parsed' : existing.index_status,
+    // REVIEW FIX #9 (#1020): a content change must be claimable NOW — a
+    // stale park (§5.5 backoff up to 15 min, §5.9 defer up to 6 h) would
+    // hide the edited concept from every lane until the park expired, and
+    // a stale claim would age it toward the reaper. Both belong to the NEW
+    // drain cycle, not the parked one.
+    ...(hashChanged ? { next_attempt_after: null, worker_claimed_at: null } : {}),
     updated_at: nowIso()
   };
 

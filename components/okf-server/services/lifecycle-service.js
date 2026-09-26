@@ -270,7 +270,13 @@ async function _settleIngest(db, repo, actor) {
       'FOR r IN okf_repositories ' +
         'FILTER r._key == @rid AND r.rag_drain_active == true ' +
         'AND (r.settle_claimed_at == null OR DATE_TIMESTAMP(r.settle_claimed_at) < DATE_NOW() - @leaseMs) ' +
-        'UPDATE r WITH { settle_claimed_at: DATE_ISO8601(DATE_NOW()) } IN okf_repositories',
+        // REVIEW FIX #1 (2026-09-26): an AQL UPDATE without RETURN yields NO
+        // result rows — .all() is always [] and the check below always read
+        // "busy" on real ArangoDB (no drain would ever settle). The jest mock
+        // fabricated a matched row for this exact shape and masked it — the
+        // same stub-masked-production class as the G-2 graphExists bug.
+        // RETURN 1 per matched doc → .all().length IS the matched-row count.
+        'UPDATE r WITH { settle_claimed_at: DATE_ISO8601(DATE_NOW()) } IN okf_repositories RETURN 1',
       { rid: repo.repo_id, leaseMs }
     )
   ).all();
@@ -284,28 +290,40 @@ async function _settleIngest(db, repo, actor) {
   // VERSIONED GRAPH (David, 2026-08-30): physically rename the working graph
   // to `OKF_<name-slug>_v<N>` BEFORE the serving flags flip — a failed rename
   // leaves the repo un-serving and simply retryable.
+  const ts = nowIso();
   let graphName;
   try {
-    graphName = await graphLifecycle.promoteGraph(repo, actor);
+    try {
+      graphName = await graphLifecycle.promoteGraph(repo, actor);
+    } catch (e) {
+      // RELEASE the lease — a failed rename must stay immediately retryable
+      // (the pre-CAS behavior), not blocked for the lease window.
+      await db
+        .collection(REPOS)
+        .update(repo.repo_id, { settle_claimed_at: null })
+        .catch(() => {});
+      throw e;
+    }
+    await db.collection(REPOS).update(repo.repo_id, {
+      lifecycle_state: 'publish', // (re-ingest from 'retracted' returns to publish)
+      ingested_at: ts,
+      ingested_version: repo.version || null,
+      ingested_graph_name: graphName,
+      rag_drain_active: false,
+      settle_claimed_at: null, // THE FLIP RELEASES THE LEASE (its normal exit)
+      updated_at: ts
+    });
   } catch (e) {
-    // RELEASE the lease — a failed rename must stay immediately retryable
-    // (the pre-CAS behavior), not blocked for the lease window.
+    // REVIEW FIX #13: promoteGraph succeeded but the flags flip threw — the
+    // lease must not outlive this attempt (a retry within the window would
+    // read "busy" for the full lease). Release + rethrow; the flip is
+    // retryable and promote is idempotent (born-right from==to no-op).
     await db
       .collection(REPOS)
       .update(repo.repo_id, { settle_claimed_at: null })
       .catch(() => {});
     throw e;
   }
-  const ts = nowIso();
-  await db.collection(REPOS).update(repo.repo_id, {
-    lifecycle_state: 'publish', // (re-ingest from 'retracted' returns to publish)
-    ingested_at: ts,
-    ingested_version: repo.version || null,
-    ingested_graph_name: graphName,
-    rag_drain_active: false,
-    settle_claimed_at: null, // THE FLIP RELEASES THE LEASE (its normal exit)
-    updated_at: ts
-  });
   // P0 (David's re-test, 2026-09-08): _settleIngest OWNS the final
   // rag_ingestion record — it is the single authority for "serving now".
   // The worker's refresh normally completes the record, but a settle that
@@ -351,7 +369,10 @@ async function _settleIngest(db, repo, actor) {
         concepts_total: total,
         concepts_done: doneCount,
         error: failedCount > 0 ? failedCount + ' concept(s) failed to index — re-ingest them' : null,
-        failed_concepts: failedRows
+        failed_concepts: failedRows,
+        // COMPLETE FRESH RECORD (review fix #12): deep-merge would preserve a
+        // previous drain's queue context — null it like every other key.
+        queue: null
       }
     });
     // Write the per-version ingest outcome to the version manifest so the
@@ -675,7 +696,10 @@ async function transition(repoId, action, actor) {
           concepts_total: pending + done,
           concepts_done: done,
           error: null,
-          failed_concepts: []
+          failed_concepts: [],
+          // COMPLETE FRESH RECORD (review fix #12): the previous drain's
+          // queue context must not survive the deep-merge into this arm.
+          queue: null
         },
         updated_at: ts
       });
@@ -694,15 +718,24 @@ async function transition(repoId, action, actor) {
         const fresh = await loadRepo(db, repoId);
         const settled = await _settleIngest(db, fresh, actor);
         if (settled && settled.busy) {
-          // CAS lost (spec #1020 §5.4 race 2): a concurrent settler (the
-          // worker's reconcile/sweep) holds the lease and IS completing the
-          // settle — the transition's goal is being achieved by it. Report
-          // success rather than a spurious 409 to the route.
-          logger.info('OKF ingest: settle delegated to the concurrent settler holding the lease', {
-            repo_id: repoId,
-            version: repo.version
-          });
-          return { ok: true, action, lifecycle_state: 'publish', settle_delegated: true };
+          // REVIEW FIX #10: busy conflates "a concurrent settler holds the
+          // lease" with "the repo was disarmed mid-window" — only the first
+          // is a success being achieved by someone else. Verify: a real
+          // delegated settle leaves ingested_at SET; anything else is an
+          // honest 409 (the steward retries, no fabricated success).
+          const cur = await loadRepo(db, repoId);
+          if (cur && cur.ingested_at) {
+            logger.info('OKF ingest: settle delegated to the concurrent settler holding the lease', {
+              repo_id: repoId,
+              version: repo.version
+            });
+            return { ok: true, action, lifecycle_state: 'publish', settle_delegated: true };
+          }
+          throw new LifecycleError(
+            'SETTLE_BUSY',
+            'the repository is not armed for a settle and no concurrent settler completed it — retry ingest',
+            409
+          );
         }
         return settled;
       }

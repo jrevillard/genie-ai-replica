@@ -149,9 +149,7 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     // (idempotent re-ingest). The first authedAxios.post is the retract, the
     // second is the ingest. The ingest POST targets DATAPREP directly
     // (content-only — no doc-repo files doc).
-    const ingestCall = authedAxios.post.mock.calls.find((c) =>
-      String(c[0]).includes('/v1/dataprep/ingest_file')
-    );
+    const ingestCall = authedAxios.post.mock.calls.find((c) => String(c[0]).includes('/v1/dataprep/ingest_file'));
     expect(ingestCall).toBeDefined();
     const [url, body] = ingestCall;
     expect(url).toBe('http://dataprep-arango-service:5000/v1/dataprep/ingest_file');
@@ -306,6 +304,96 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     // Progress untouched: concepts_done must still be 42 — no spurious reset.
     expect(mockDb._stores.okf_repositories[REPO].rag_ingestion.concepts_done).toBe(42);
     expect(mockDb.collection('okf_repositories').update).not.toHaveBeenCalled();
+  });
+});
+
+describe('ingestWorker fair claim strategy (spec #1020 §5.2 — OKF_CLAIM_STRATEGY=fair)', () => {
+  afterEach(() => {
+    delete process.env.OKF_CLAIM_STRATEGY;
+    delete process.env.OKF_REPO_INGEST_CAP;
+  });
+
+  const FAIR_ROW = {
+    job: { repo_id: REPO, concept_id: 'fc', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# fc' },
+    repo_in_flight: 0,
+    repo_queue_depth: 997,
+    claim_wait_ms: 12345
+  };
+
+  test('fair strategy claims via the FUSED single statement and proceeds with the job', async () => {
+    process.env.OKF_CLAIM_STRATEGY = 'fair';
+    programQueries(FAIR_ROW, [{ index_status: 'indexed', chunk_count: 1 }]);
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('ingested');
+    // One fused statement: repo pick (COLLECT AGGREGATE) + row pick + claim
+    // UPDATE in the SAME query — the atomic CAS that makes multi-worker safe.
+    const fair = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => {
+        const t = String((q && q.query) || '');
+        return t.includes('COLLECT') && t.includes('UPDATE cand WITH');
+      });
+    expect(fair).toBeDefined();
+    // Starvation guard: least in-flight first, oldest head tiebreak.
+    expect(fair.query).toContain('SORT inFlight ASC, oldest ASC');
+    // Per-repo cap: unlimited (0) OR inFlight < cap.
+    expect(fair.query).toContain('<= 0 OR inFlight <');
+    // Kick-backoff gate (§5.5) present in BOTH selection passes.
+    expect((fair.query.match(/next_attempt_after/g) || []).length).toBeGreaterThanOrEqual(2);
+    // The claim stamp rides in the fused statement — no separate _stampClaim.
+    const stampCalls = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .filter((q) => {
+        const t = String((q && q.query) || '');
+        return t.includes('UPDATE m WITH') && t.includes('worker_claimed_at');
+      });
+    expect(stampCalls).toHaveLength(0);
+  });
+
+  test('cap env flows into the query as a bind value', async () => {
+    process.env.OKF_CLAIM_STRATEGY = 'fair';
+    process.env.OKF_REPO_INGEST_CAP = '2';
+    programQueries(FAIR_ROW, [{ index_status: 'indexed', chunk_count: 1 }]);
+    await worker._processOneJob();
+    const fair = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => {
+        const t = String((q && q.query) || '');
+        return t.includes('COLLECT') && t.includes('UPDATE cand WITH');
+      });
+    expect(Object.values(fair.bindVars || {})).toContain(2);
+  });
+
+  test('default strategy stays fifo — no COLLECT in any claim query', async () => {
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'f', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# f' }],
+      [{ index_status: 'indexed', chunk_count: 1 }]
+    );
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('ingested');
+    const texts = mockDb.query.mock.calls.map((c) => String((c[0] && c[0].query) || ''));
+    expect(texts.some((t) => t.includes('COLLECT r = m.repo_id'))).toBe(false);
+    // fifo path still stamps via the separate two-statement shape.
+    expect(texts.some((t) => t.includes('UPDATE m WITH') && t.includes('worker_claimed_at'))).toBe(true);
+  });
+
+  test('write-write conflict (errorNum 1200) → retries once on a fresh snapshot', async () => {
+    process.env.OKF_CLAIM_STRATEGY = 'fair';
+    programQueries(FAIR_ROW, [{ index_status: 'indexed', chunk_count: 1 }]);
+    const conflict = new Error('write-write conflict');
+    conflict.errorNum = 1200;
+    mockDb.query.mockRejectedValueOnce(conflict);
+    const res = await worker._processOneJob();
+    // The loser's whole query aborted (nothing written) — the retry claims fine.
+    expect(res.outcome).toBe('ingested');
+    expect(res.concept_id).toBe('fc');
+  });
+
+  test('fair-claim indexes exist in the ensured schema (db/collections.js)', () => {
+    const { INDEXES } = require('../db/collections');
+    const fields = (INDEXES.okf_concepts_meta || []).map((i) => i.fields.join(','));
+    expect(fields).toContain('index_status,updated_at');
+    expect(fields).toContain('repo_id,index_status,updated_at');
   });
 });
 

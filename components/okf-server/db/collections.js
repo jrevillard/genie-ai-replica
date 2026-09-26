@@ -37,7 +37,12 @@ const INDEXES = {
   ],
   okf_concepts_meta: [
     { type: 'persistent', fields: ['repo_id'] },
-    { type: 'persistent', fields: ['repo_id', 'concept_id'], unique: true }
+    { type: 'persistent', fields: ['repo_id', 'concept_id'], unique: true },
+    // Fair-claim scans (spec #1020 §5.2): global FIFO head + per-repo
+    // candidate/repo-selection passes; also speeds countByIndexStatus
+    // (settle / refresh / callback paths).
+    { type: 'persistent', fields: ['index_status', 'updated_at'] },
+    { type: 'persistent', fields: ['repo_id', 'index_status', 'updated_at'] }
   ],
   // Story 2.9.7 (ADR-031): the immutable version manifests. INSERT-only; the
   // [repo_id, bundle_version] unique index doubles as the concurrent-mint race

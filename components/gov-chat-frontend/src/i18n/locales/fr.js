@@ -1747,7 +1747,7 @@ export default {
       select: "Sélectionner {'{'}name{'}'} pour la publication groupée",
       stage: {
         drainFailed: "Échec de l'action ingest",
-        queueBehind: "{n} en file d’attente · ingest dans {m} dépôt(s)",
+        queueBehind: '{n} en file d’attente · ingest dans {m} dépôt(s)',
         redraining: 'Redrainage…',
         building: 'Construction…',
         draft: 'Brouillon',

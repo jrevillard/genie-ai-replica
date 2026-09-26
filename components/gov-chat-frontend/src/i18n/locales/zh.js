@@ -1717,6 +1717,11 @@ export default {
       },
       title: '存储库',
       topics: '主题',
+      unpublish: {
+        title: '取消发布',
+        body: "这将立即停止向 RAG 智能体提供 {name}。已发布的 bundle zip 压缩包和版本历史会保留；仓库回到“审核中”状态以便更正。再次发布并摄取即可重新提供服务。",
+        confirm: '取消发布'
+      },
       lane: {
         draft: '导入',
         in_review: '审核中',
@@ -1974,7 +1979,7 @@ export default {
           col: {
             name: '名称',
             status: '状态',
-            topics: '主题'
+            topics: '主题',
           },
           status: {
             ready: '就绪'
@@ -2288,7 +2293,8 @@ export default {
       approve: '批准',
       publish: '发布',
       ingest: '摄取',
-      retract: '撤回'
+      retract: '撤回',
+      unpublish: '取消发布'
     }
   }
 };

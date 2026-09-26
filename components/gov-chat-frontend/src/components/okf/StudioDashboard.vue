@@ -102,6 +102,19 @@
             <DsButton v-else variant="secondary" small :disabled="actionBusy" @click.stop="onLifecycle(r)">
               {{ contextualLabel(r) }}
             </DsButton>
+            <!-- Unpublish (2026-09-25): publish → review. A published repo
+              (serving or not) can be reverted to In Review for corrections —
+              stops RAG serving immediately, the bundle zip stays. Confirm
+              dialog first (it pulls live content out of the serving lane). -->
+            <DsButton
+              v-if="r.lifecycle_state === 'publish' && !isImporting(r) && !isDraining(r)"
+              variant="ghost"
+              small
+              :disabled="actionBusy"
+              @click.stop="onUnpublishAsk(r)"
+            >
+              {{ translate('okf.lifecycle.unpublish', 'Unpublish') }}
+            </DsButton>
             <DsButton variant="ghost" small :disabled="actionBusy" @click.stop="onVersions(r)">
               {{ translate('okf.dashboard.card.versions', 'Versions') }}
             </DsButton>
@@ -189,6 +202,24 @@
         <strong>{{ deleteAsk && (deleteAsk.name || deleteAsk.repo_id) }}</strong>
       </p>
       <p v-if="deleteError" class="okf-dashboard__dialog-error">{{ deleteError }}</p>
+    </DsDialog>
+
+    <!-- Unpublish confirm (2026-09-25): pulls the repo out of the serving lane
+      immediately; bundle zip + version history stay. Repo returns to In Review
+      for corrections; publish (mints vN+1) + Ingest to serve again. -->
+    <DsDialog
+      :visible="unpublishAsk !== null"
+      :title="translate('okf.dashboard.unpublish.title', 'Unpublish')"
+      size="sm"
+      :actions="unpublishActions"
+      @close="unpublishAsk = null"
+      @action="onUnpublishAction"
+    >
+      <p>
+        {{ unpublishBodyText }}
+        <strong>{{ unpublishAsk && (unpublishAsk.name || unpublishAsk.repo_id) }}</strong>
+      </p>
+      <p v-if="unpublishError" class="okf-dashboard__dialog-error">{{ unpublishError }}</p>
     </DsDialog>
 
     <DsDialog
@@ -331,6 +362,8 @@ export default {
       publishBusy: false,
       publishError: '',
       piiBlocked: false,
+      unpublishAsk: null,
+      unpublishError: '',
       deleteAsk: null,
       deleteError: '',
       versionsRepo: null,
@@ -388,6 +421,19 @@ export default {
         { key: 'cancel', label: this.translate('common.cancel', 'Cancel'), variant: 'secondary' },
         { key: 'confirm', label: this.translate('okf.dashboard.delete.confirm', 'Delete'), variant: 'danger' }
       ];
+    },
+    unpublishActions() {
+      return [
+        { key: 'cancel', label: this.translate('common.cancel', 'Cancel'), variant: 'secondary' },
+        { key: 'confirm', label: this.translate('okf.dashboard.unpublish.confirm', 'Unpublish'), variant: 'danger' }
+      ];
+    },
+    unpublishBodyText() {
+      if (!this.unpublishAsk) return '';
+      return this.translate(
+        'okf.dashboard.unpublish.body',
+        'This stops serving {name} to RAG agents immediately. The published bundle zip and version history are kept; the repository returns to In Review so you can correct it. Publish again and Ingest to serve it once more.'
+      ).replace('{name}', this.unpublishAsk.name || this.unpublishAsk.repo_id);
     }
   },
   mounted() {
@@ -638,6 +684,26 @@ export default {
       this.actionBusy = false;
       this.deleteAsk = null;
       if (!res.ok) this.actionError = res.message || 'Delete failed';
+    },
+    onUnpublishAsk(r) {
+      this.unpublishError = '';
+      this.unpublishAsk = r;
+    },
+    async onUnpublishAction(key) {
+      if (key === 'cancel') {
+        this.unpublishAsk = null;
+        return;
+      }
+      if (key !== 'confirm' || !this.unpublishAsk) return;
+      this.actionBusy = true;
+      this.unpublishError = '';
+      const res = await this.$store.dispatch('okf/lifecycleTransition', {
+        repoId: this.unpublishAsk.repo_id,
+        action: 'unpublish'
+      });
+      this.actionBusy = false;
+      this.unpublishAsk = null;
+      if (!res.ok) this.actionError = okfRepoOps.friendlyLifecycleError(res.code, res.message);
     },
     onPublishDialogClose() {
       // While the bundle transfer is in flight the dialog stays visible with

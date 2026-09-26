@@ -1,6 +1,6 @@
 # Spec: Fair, Parallel OKF Repo Ingestion — Remediation for Cross-Repo Starvation
 
-- **Status**: Draft for review
+- **Status**: IMPLEMENTED on `feat/okf-ingest-fairness` (commits e848e8c…9eb565d, 2026-09-26). Defaults unchanged (`fifo`, backoff off, cap 0, adaptive off) — rollout per §8. Deviations: `last_kick_error` not added (duplicates `last_worker_error`); dashboard chip renders only when >1 repo is armed (single-repo noise); spec §7 items 7-9 (multi-worker chaos + live soak) run against the live stack, not jest.
 - **Date**: 2026-09-26
 - **Author**: Engineering (AI-assisted), from the 2026-09-25/26 starvation incident
 - **Scope**: OKF repo ingestion (okf-server ingest worker + claim path). **The legacy shared-graph (`GRAPH`) single-file, file-locked ingestion path is OUT OF SCOPE and MUST NOT be modified.**

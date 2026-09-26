@@ -86,6 +86,11 @@
               <DsPill v-if="isDrainFailed(r)" variant="danger" class="okf-dashboard__redrain">{{
                 translate('okf.dashboard.stage.drainFailed', 'Ingest failed')
               }}</DsPill>
+              <!-- Cross-repo queue context (spec #1020 §5.7): while this
+                repo's drain runs, show how many concepts are queued here and
+                how many repos share the worker — the visibility whose absence
+                made the 2026-09-25 cross-repo starvation invisible. -->
+              <DsPill v-if="queueContext(r)" variant="info" class="okf-dashboard__redrain">{{ queueLabel(r) }}</DsPill>
             </span>
           </button>
           <div class="okf-dashboard__card-actions" role="group" :aria-label="actionsAria(r)">
@@ -553,6 +558,23 @@ export default {
     },
     isDraining(r) {
       return !!(r.rag_ingestion && r.rag_ingestion.status === 'draining');
+    },
+    /** Cross-repo queue context (spec #1020 §5.7): shown only while this
+     * repo is draining AND other repos share the ingest worker — the chip
+     * would be noise for a single-repo deployment. */
+    queueContext(r) {
+      return !!(
+        this.isDraining(r) &&
+        r.rag_ingestion &&
+        r.rag_ingestion.queue &&
+        r.rag_ingestion.queue.armed_repos > 1
+      );
+    },
+    queueLabel(r) {
+      const q = r.rag_ingestion.queue;
+      return this.translate('okf.dashboard.stage.queueBehind', '{n} queued · {m} repo(s) ingesting')
+        .replace('{n}', q.parsed != null ? q.parsed : 0)
+        .replace('{m}', q.armed_repos != null ? q.armed_repos : 0);
     },
     isBuilding(r) {
       return okfRepoOps.isBuilding(r);

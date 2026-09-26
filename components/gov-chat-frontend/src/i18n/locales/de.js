@@ -1745,6 +1745,7 @@ export default {
       select: "{'{'}name{'}'} für Massenveröffentlichung auswählen",
       stage: {
         drainFailed: 'Ingest fehlgeschlagen',
+        queueBehind: '{n} in Warteschlange · Ingest in {m} Repo(s)',
         redraining: 'Erneut entleeren…',
         building: 'Wird erstellt…',
         draft: 'Entwurf',

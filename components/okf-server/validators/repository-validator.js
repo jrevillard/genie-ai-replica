@@ -64,7 +64,7 @@ const cloneSchema = Joi.object({
 // Story #978 lifecycle — ONE action per request; the service owns the
 // transition map (409 INVALID_TRANSITION on a state/action mismatch).
 const lifecycleSchema = Joi.object({
-  action: Joi.string().valid('submit', 'approve', 'publish', 'ingest', 'retract').required()
+  action: Joi.string().valid('submit', 'approve', 'publish', 'ingest', 'retract', 'unpublish').required()
 });
 
 // Steward PII acknowledgement (2026-08-30): { acknowledge: true|false }.

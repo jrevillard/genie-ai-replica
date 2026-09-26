@@ -303,6 +303,36 @@ function isNotFound(err) {
 }
 
 /**
+ * GRAPH GC (David, 2026-09-26 — the v2-orphan decision): drop a SUPERSEDED
+ * serving graph with its member collections. The settle is the point where a
+ * successor graph goes live, so the PREVIOUS version's graph is dead weight
+ * from then on (unpublish retains its graph by design; only a live successor
+ * makes the predecessor unreachable). Idempotent: an absent graph is already
+ * gone (returns dropped=false, never throws). Footgun guard: only OKF_
+ * per-repo graphs are droppable here — the free-form default GRAPH can never
+ * be reached, same as the retract teardown. The caller decides fatality.
+ * @param {string} graphName e.g. 'OKF_demo_v1'
+ * @returns {Promise<{dropped: boolean}>} dropped=true when the definition +
+ *   member collections were removed now; false when already absent.
+ */
+async function dropServingGraph(graphName) {
+  if (!graphName || !String(graphName).startsWith('OKF_')) {
+    throw new GraphLifecycleError('INVALID_GRAPH_NAME', 'refusing to drop a non-OKF graph: ' + graphName, 400);
+  }
+  const db = await getDb();
+  try {
+    // Cascade (definition first, dropCollections=true — ArangoDB hard rule:
+    // member tables cannot be dropped while a definition references them,
+    // errorNum 1942), same invocation as the retract teardown.
+    await db.route(`_api/gharial/${encodeURIComponent(graphName)}?dropCollections=true`).delete();
+    return { dropped: true };
+  } catch (err) {
+    if (isNotFound(err)) return { dropped: false };
+    throw err;
+  }
+}
+
+/**
  * Keep okf_concepts_meta.graph_name aligned after a transition — the worker
  * drains rows by the graph_name stamped on them, so a version transition must
  * re-point every row of the repo. (Enqueue is blocked while serving and no
@@ -497,5 +527,6 @@ module.exports = {
   workingGraphName,
   draftGraphName,
   graphExists,
+  dropServingGraph,
   GraphLifecycleError
 };

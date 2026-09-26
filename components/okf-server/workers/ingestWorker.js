@@ -62,6 +62,27 @@ const claimStrategy = () => ((process.env.OKF_CLAIM_STRATEGY || 'fifo').toLowerC
 // Per-repo in-flight cap (spec §5.3). 0 = unlimited (today). Only consulted
 // by the fair strategy — fifo has no per-repo notion.
 const repoIngestCap = () => safeIntOrZero('OKF_REPO_INGEST_CAP', 0);
+// Kick-5xx backoff (spec #1020 §5.5). Base 0 = OFF (default — today's
+// behavior: a failing kick re-enters the FIFO immediately). With base > 0,
+// a 5xx or transport-failed kick parks the row for
+// min(MAX, BASE × 2^(attempts-1)) + 0..25% jitter before it is claimable
+// again — spreading the reaper's 8-attempt ceiling over ~1 h (base 60 s,
+// cap 15 min) so a transient dataprep restart no longer converts healthy
+// concepts into dead-letters (the live failure documented at the error
+// path below). 429 is NEVER parked: slot-busy self-regulates against the
+// flock slots; prompt retry is correct there.
+const kickBackoffBaseMs = () => safeIntOrZero('OKF_KICK_BACKOFF_BASE_MS', 0);
+const kickBackoffMaxMs = () => safeIntOrZero('OKF_KICK_BACKOFF_MAX_MS', 900000);
+/** Park delay for a failed kick: exponential in the CURRENT attempt number
+ * (job.ingest_attempts — the claim already bumped it), capped, jittered.
+ * Returns null when backoff is disabled (base 0). */
+function nextAttemptAfter(attempts) {
+  const base = kickBackoffBaseMs();
+  if (base <= 0) return null;
+  const exp = Math.min(kickBackoffMaxMs(), base * Math.pow(2, Math.max(0, (attempts || 1) - 1)));
+  const delay = Math.floor(exp * (1 + Math.random() * 0.25));
+  return new Date(Date.now() + delay).toISOString();
+}
 
 /** NaN-safe env int (the 2.9.1 maxConceptsFromEnv lesson). For the GRACE
  * variable 0 is a legitimate value (sweep immediately / test) — use
@@ -487,7 +508,8 @@ async function _processOneJob() {
             index_status: 'parsed',
             worker_claimed_at: null,
             ingest_attempts: 0,
-            last_error: null
+            last_error: null,
+            next_attempt_after: null
           } IN okf_concepts_meta
       `);
     } catch (e) {
@@ -610,6 +632,9 @@ async function _processOneJob() {
       // concept next cycle — a poison concept must never starve the queue
       // head-of-line. The row stays 'parsed' and is retried on a later cycle.
       try {
+        // §5.5 kick backoff: transport failure = dataprep unreachable — park
+        // the row when backoff is enabled (disabled by default: null → no-op).
+        const parked = nextAttemptAfter(job.ingest_attempts);
         await conceptMetaService.upsertConceptMeta(
           job.repo_id,
           { concept_id: conceptId, repo_id: job.repo_id },
@@ -623,7 +648,8 @@ async function _processOneJob() {
               // unclaimed pool lets a lane re-claim it long before the grace
               // window. (Live: 10 healthy rows dead-lettered after dataprep
               // was briefly not-ready at worker start.)
-              worker_claimed_at: null
+              worker_claimed_at: null,
+              ...(parked ? { next_attempt_after: parked } : {})
             }
           }
         );
@@ -639,13 +665,18 @@ async function _processOneJob() {
     }
     if (kick.status !== 200 && kick.status !== 202) {
       try {
+        // §5.5 kick backoff: only a 5xx dataprep parks the row (the service
+        // is failing) — a 4xx is a deterministic rejection, prompt retry
+        // preserves the reaper's attempt accounting for it.
+        const parked = kick.status >= 500 ? nextAttemptAfter(job.ingest_attempts) : null;
         await conceptMetaService.upsertConceptMeta(
           job.repo_id,
           { concept_id: conceptId, repo_id: job.repo_id },
           {
             patch: {
               last_worker_error: `dataprep status ${kick.status}`.slice(0, 500),
-              worker_claimed_at: null // claim cleared — see the POST-failed path
+              worker_claimed_at: null, // claim cleared — see the POST-failed path
+              ...(parked ? { next_attempt_after: parked } : {})
             }
           }
         );

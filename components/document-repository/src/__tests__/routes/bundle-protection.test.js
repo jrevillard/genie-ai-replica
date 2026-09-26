@@ -93,11 +93,20 @@ describe('WS2: Bundle zip delete protection', () => {
       mockAdminAuth();
       // rebuild app + fileService mock with the Admin-auth middleware
       jest.doMock('../../services/fileService', () => ({
-        uploadFile: jest.fn(), uploadLink: jest.fn(), getFiles: jest.fn(),
-        deleteFile: jest.fn().mockResolvedValue(true), searchFiles: jest.fn(), getFileStats: jest.fn(),
-        getDb: jest.fn(), scheduleSiteCrawl: jest.fn(), getCrawlJobByFileId: jest.fn(),
-        getCrawlMetrics: jest.fn(), getCrawlLogs: jest.fn(), killCrawlTask: jest.fn(),
-        addIngestionLog: jest.fn(), getIngestionLogs: jest.fn()
+        uploadFile: jest.fn(),
+        uploadLink: jest.fn(),
+        getFiles: jest.fn(),
+        deleteFile: jest.fn().mockResolvedValue(true),
+        searchFiles: jest.fn(),
+        getFileStats: jest.fn(),
+        getDb: jest.fn(),
+        scheduleSiteCrawl: jest.fn(),
+        getCrawlJobByFileId: jest.fn(),
+        getCrawlMetrics: jest.fn(),
+        getCrawlLogs: jest.fn(),
+        killCrawlTask: jest.fn(),
+        addIngestionLog: jest.fn(),
+        getIngestionLogs: jest.fn()
       }));
       jest.doMock('../../services/metadataService', () => ({
         addMetadata: jest.fn(),
@@ -135,11 +144,20 @@ describe('WS2: Bundle zip delete protection', () => {
     beforeEach(() => {
       mockOkfServiceAuth();
       jest.doMock('../../services/fileService', () => ({
-        uploadFile: jest.fn(), uploadLink: jest.fn(), getFiles: jest.fn(),
-        deleteFile: jest.fn().mockResolvedValue(true), searchFiles: jest.fn(), getFileStats: jest.fn(),
-        getDb: jest.fn(), scheduleSiteCrawl: jest.fn(), getCrawlJobByFileId: jest.fn(),
-        getCrawlMetrics: jest.fn(), getCrawlLogs: jest.fn(), killCrawlTask: jest.fn(),
-        addIngestionLog: jest.fn(), getIngestionLogs: jest.fn()
+        uploadFile: jest.fn(),
+        uploadLink: jest.fn(),
+        getFiles: jest.fn(),
+        deleteFile: jest.fn().mockResolvedValue(true),
+        searchFiles: jest.fn(),
+        getFileStats: jest.fn(),
+        getDb: jest.fn(),
+        scheduleSiteCrawl: jest.fn(),
+        getCrawlJobByFileId: jest.fn(),
+        getCrawlMetrics: jest.fn(),
+        getCrawlLogs: jest.fn(),
+        killCrawlTask: jest.fn(),
+        addIngestionLog: jest.fn(),
+        getIngestionLogs: jest.fn()
       }));
       jest.doMock('../../services/metadataService', () => ({
         addMetadata: jest.fn(),
@@ -165,11 +183,20 @@ describe('WS2: Bundle zip delete protection', () => {
     beforeEach(() => {
       mockAdminAuth();
       jest.doMock('../../services/fileService', () => ({
-        uploadFile: jest.fn(), uploadLink: jest.fn(), getFiles: jest.fn(),
-        deleteFile: jest.fn().mockResolvedValue(true), searchFiles: jest.fn(), getFileStats: jest.fn(),
-        getDb: jest.fn(), scheduleSiteCrawl: jest.fn(), getCrawlJobByFileId: jest.fn(),
-        getCrawlMetrics: jest.fn(), getCrawlLogs: jest.fn(), killCrawlTask: jest.fn(),
-        addIngestionLog: jest.fn(), getIngestionLogs: jest.fn()
+        uploadFile: jest.fn(),
+        uploadLink: jest.fn(),
+        getFiles: jest.fn(),
+        deleteFile: jest.fn().mockResolvedValue(true),
+        searchFiles: jest.fn(),
+        getFileStats: jest.fn(),
+        getDb: jest.fn(),
+        scheduleSiteCrawl: jest.fn(),
+        getCrawlJobByFileId: jest.fn(),
+        getCrawlMetrics: jest.fn(),
+        getCrawlLogs: jest.fn(),
+        killCrawlTask: jest.fn(),
+        addIngestionLog: jest.fn(),
+        getIngestionLogs: jest.fn()
       }));
       jest.doMock('../../services/metadataService', () => ({
         addMetadata: jest.fn(),

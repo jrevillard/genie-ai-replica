@@ -266,15 +266,18 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   // G-2 (#1022) + G-3 (#1023) — the missing-graph pre-flight was DEAD CODE:
   // graphExists is async and the old code omitted the await, so `!Promise`
   // was always false and the reset never ran in production. These tests
-  // pin both the firing of the branch (await fixed) and the SHAPE of the
-  // reset write (nested rag_ingestion patch, not dotted flat keys).
-  test('graph missing at claim → reset fires (G-2 await), rag_ingestion patched NESTED (G-3), drain proceeds', async () => {
+  // pin the reset firing ONLY against recorded progress (review fix #2:
+  // a missing graph is the NORMAL fresh-drain state — dataprep's first
+  // kick creates it; resetting then would nuke sibling lanes' claims),
+  // the FUSED conditional record write (#14), and the no-op happy path.
+  test('graph missing WITH recorded progress → reset fires: fused conditional write, drain proceeds', async () => {
     const graphLifecycle = require('../services/graph-lifecycle-service');
     graphLifecycle.graphExists.mockResolvedValueOnce(false);
     mockDb._stores.okf_repositories = {
       [REPO]: {
         _key: REPO,
         repo_id: REPO,
+        rag_drain_active: true,
         rag_ingestion: { concepts_done: 42, phase: 'draining' }
       }
     };
@@ -285,23 +288,53 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     const res = await worker._processOneJob();
     // The reset branch FALLS THROUGH — the concept still ingests.
     expect(res.outcome).toBe('ingested');
-    // Nested patch: concepts_done zeroed, reset reason recorded, sibling
-    // keys inside rag_ingestion preserved (read-modify-write, not replace).
-    const after = mockDb._stores.okf_repositories[REPO].rag_ingestion;
-    expect(after.concepts_done).toBe(0);
-    expect(after.last_reset_reason).toBe('graph_missing_at_resume');
-    expect(after.phase).toBe('draining');
-    // G-3 shape guard: the update patch must contain NO dotted flat keys
-    // ('rag_ingestion.concepts_done' as a literal attribute name is the bug).
-    const updateHandle = mockDb.collection('okf_repositories');
-    const patches = updateHandle.update.mock.calls.map((c) => c[1]);
-    expect(patches.length).toBeGreaterThan(0);
-    for (const p of patches) {
-      expect(Object.keys(p).some((k) => k.includes('.'))).toBe(false);
-    }
+    // #14: the record reset is ONE conditional statement — disarm guard +
+    // server-side MERGE with the reset keys (never a JS read-modify-write,
+    // never flat dotted keys).
+    const resets = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .filter((q) => queryText(q).includes('graph_missing_at_resume'));
+    expect(resets).toHaveLength(1);
+    const text = queryText(resets[0]);
+    expect(text).toContain('rag_drain_active == true');
+    expect(text).toContain('MERGE(');
+    expect(text).toContain('concepts_done: 0');
+    expect(text).not.toContain("'rag_ingestion.");
+    // NO unguarded JS update on the repo doc.
+    expect(mockDb.collection('okf_repositories').update).not.toHaveBeenCalled();
+    // The meta requeue also ran (all rows of the graph back to parsed).
+    const requeues = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .filter((q) => queryText(q).includes("index_status: 'parsed'") && queryText(q).includes('ingest_attempts: 0'));
+    expect(requeues).toHaveLength(1);
+  });
+
+  test('graph missing WITHOUT progress (fresh drain) → NO reset — the review #2 routine-path fix', async () => {
+    const graphLifecycle = require('../services/graph-lifecycle-service');
+    // ONCE only — a mockResolvedValue here would poison every later test in
+    // this file (clearAllMocks strips calls, not implementations).
+    graphLifecycle.graphExists.mockResolvedValueOnce(false);
+    // Fresh repo: no rag_ingestion record at all (never drained).
+    mockDb._stores.okf_repositories = { [REPO]: { _key: REPO, repo_id: REPO, rag_drain_active: true } };
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'fresh', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# f' }],
+      [{ index_status: 'indexed', chunk_count: 1 }]
+    );
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('ingested');
+    // No reset of any kind: no fused record write, no meta requeue.
+    expect(mockDb.query.mock.calls.map((c) => queryText(c[0])).some((t) => t.includes('graph_missing_at_resume'))).toBe(
+      false
+    );
+    expect(
+      mockDb.query.mock.calls
+        .map((c) => queryText(c[0]))
+        .some((t) => t.includes("index_status: 'parsed'") && t.includes('ingest_attempts: 0'))
+    ).toBe(false);
   });
 
   test('graph present → pre-flight is a no-op (the await must not flip the happy path)', async () => {
+    const graphLifecycle = require('../services/graph-lifecycle-service');
     mockDb._stores.okf_repositories = {
       [REPO]: {
         _key: REPO,
@@ -317,6 +350,9 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     expect(res.outcome).toBe('ingested');
     // Progress untouched: concepts_done must still be 42 — no spurious reset.
     expect(mockDb._stores.okf_repositories[REPO].rag_ingestion.concepts_done).toBe(42);
+    expect(mockDb.query.mock.calls.map((c) => queryText(c[0])).some((t) => t.includes('graph_missing_at_resume'))).toBe(
+      false
+    );
     expect(mockDb.collection('okf_repositories').update).not.toHaveBeenCalled();
   });
 });
@@ -350,6 +386,10 @@ describe('ingestWorker fair claim strategy (spec #1020 §5.2 — OKF_CLAIM_STRAT
     expect(fair).toBeDefined();
     // Starvation guard: least in-flight first, oldest head tiebreak.
     expect(fair.query).toContain('SORT inFlight ASC, oldest ASC');
+    // Review fix #7: a repo with NO claimable row right now must not win
+    // the pick (cand would be null and every lane would idle its poll).
+    expect(fair.query).toContain('claimable = SUM(');
+    expect(fair.query).toContain('FILTER claimable > 0');
     // Per-repo cap: unlimited (0) OR inFlight < cap.
     expect(fair.query).toContain('<= 0 OR inFlight <');
     // Kick-backoff gate (§5.5) present in BOTH selection passes.
@@ -464,6 +504,27 @@ describe('kick-5xx backoff (spec #1020 §5.5 — OKF_KICK_BACKOFF_BASE_MS)', () 
     expect(patches().every((p) => p.next_attempt_after === undefined)).toBe(true);
   });
 
+  test('review fix #3: a THROWING 4xx (axios validateStatus) never parks either', async () => {
+    process.env.OKF_KICK_BACKOFF_BASE_MS = '1000';
+    programQueries([JOB]);
+    // Real axios throws on 4xx/5xx — this is the shape production errors have.
+    authedAxios.post.mockRejectedValue(Object.assign(new Error('422'), { response: { status: 422 } }));
+    await worker._processOneJob();
+    expect(patches().every((p) => p.next_attempt_after === undefined)).toBe(true);
+    // ...while a throwing 5xx still parks (dataprep failing). URL-scoped:
+    // the once-rejection must hit the KICK, not the retract that precedes it.
+    authedAxios.post.mockReset();
+    authedAxios.post.mockImplementation(async (url) => {
+      if (String(url).includes('/v1/dataprep/ingest_file')) {
+        throw Object.assign(new Error('503'), { response: { status: 503 } });
+      }
+      return { status: 200 };
+    });
+    programQueries([{ ...JOB, concept_id: 'bk503' }]);
+    await worker._processOneJob();
+    expect(patches().some((p) => p.next_attempt_after)).toBe(true);
+  });
+
   test('429 is never parked even with backoff enabled (slot busy ≠ failing)', async () => {
     process.env.OKF_KICK_BACKOFF_BASE_MS = '1000';
     programQueries([JOB]);
@@ -480,6 +541,12 @@ describe('kick-5xx backoff (spec #1020 §5.5 — OKF_KICK_BACKOFF_BASE_MS)', () 
       .map((c) => c[0])
       .find((q) => String((q && q.query) || '').includes('SORT m.updated_at ASC'));
     expect(claim.query).toContain('next_attempt_after');
+    // Review fix #4: the claim projection carries ingest_attempts — the §5.5
+    // exponential is computed from the REAL attempt count, not undefined.
+    const keepBind = Object.values(claim.bindVars || {}).find((v) => Array.isArray(v));
+    expect(keepBind).toBeDefined();
+    expect(keepBind).toContain('ingest_attempts');
+    expect(keepBind).toContain('next_attempt_after');
   });
 });
 
@@ -610,6 +677,66 @@ describe('size-adaptive job windows (spec #1020 §5.9 — OKF_JOB_WINDOW_ADAPTIV
     const res = await worker._processOneJob();
     expect(res.outcome).toBe('timeout');
     expect(authedAxios.post.mock.calls.some((c) => String(c[0]).includes('task_status'))).toBe(false);
+  });
+
+  test('review fix #5: the reaper grace covers the max adaptive window (never reaps a live long-window concept)', () => {
+    process.env.OKF_INGEST_WORKER_REAP_GRACE_MS = '3600000';
+    expect(worker.reapGraceMs()).toBe(3600000); // flat mode: the configured grace
+    process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+    process.env.OKF_JOB_WINDOW_MAX_MS = '21600000';
+    expect(worker.reapGraceMs()).toBe(21600000); // adaptive: the max window
+  });
+});
+
+describe('claim-time park re-probe (review fix #8 — expired park must not retract a live task)', () => {
+  // Belt-and-braces: re-pin the happy graphExists (a poisoned
+  // mockResolvedValue from an earlier describe would flip graphMissing and
+  // silently skip the probe block).
+  beforeEach(() => {
+    require('../services/graph-lifecycle-service').graphExists.mockResolvedValue(true);
+  });
+
+  const PARKED = () => ({
+    repo_id: REPO,
+    concept_id: 'parked',
+    graph_name: `OKF_${REPO}`,
+    frontmatter: {},
+    body: '# p',
+    next_attempt_after: new Date(Date.now() - 1000).toISOString() // park EXPIRED
+  });
+
+  test('task ALIVE at reclaim → defer extended, NO retract, NO re-kick', async () => {
+    programQueries([PARKED()], [{ index_status: 'indexed', chunk_count: 1 }]);
+    authedAxios.post.mockImplementation(async (url) => {
+      if (String(url).includes('/v1/dataprep/task_status')) return { status: 200, data: { alive: true } };
+      return { status: 200 };
+    });
+    const t0 = Date.now();
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('deferred');
+    // The ONLY outbound call is the probe — retract and kick never ran.
+    const urls = authedAxios.post.mock.calls.map((c) => String(c[0]));
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain('/v1/dataprep/task_status');
+    // The row is re-parked one window (flat mode: JOB_TIMEOUT_MS = 5000).
+    const patch = conceptMeta.upsertConceptMeta.mock.calls
+      .map((c) => c[2] && c[2].patch)
+      .find((p) => p && p.next_attempt_after);
+    expect(patch).toBeDefined();
+    expect(patch.worker_claimed_at).toBeNull();
+    const extendMs = new Date(patch.next_attempt_after).getTime() - t0;
+    expect(extendMs).toBeGreaterThanOrEqual(4900);
+    expect(extendMs).toBeLessThanOrEqual(5200);
+  });
+
+  test('task DEAD at reclaim → normal reclaim path (retract + kick run)', async () => {
+    programQueries([PARKED()], [{ index_status: 'indexed', chunk_count: 1 }]);
+    authedAxios.post.mockResolvedValue({ status: 200 });
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('ingested');
+    const urls = authedAxios.post.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.includes('/retract'))).toBe(true);
+    expect(urls.some((u) => u.includes('/v1/dataprep/ingest_file'))).toBe(true);
   });
 });
 

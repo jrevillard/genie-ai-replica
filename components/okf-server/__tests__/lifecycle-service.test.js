@@ -466,18 +466,36 @@ describe('ingest / retract — the serving flag', () => {
 
   // Spec #1020 §5.4 race 2: the settle CAS serializes concurrent settlers
   // (worker reconcile + finishing job; future multi-worker). The first query
-  // of the settle flow IS the lease claim — a not-acquired result must
-  // de-escalate to a delegated success, never a spurious route error.
-  test('settle CAS: a held lease delegates the immediate settle to the concurrent settler', async () => {
+  // of the settle flow IS the lease claim — a not-acquired result is only a
+  // delegated SUCCESS when a concurrent settler actually completed the
+  // settle (ingested_at set); otherwise it is an honest 409 (review fix #10:
+  // never fabricate success for a disarmed repo with no settler).
+  test('settle CAS: lease lost but a concurrent settler COMPLETED → delegated success', async () => {
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 1,
+      bundle: { file_id: 'f1', file_name: 'demo-v1.zip', bundle_version: 1 },
+      ingested_at: '2026-09-26T10:00:00.000Z' // the concurrent settler's flip
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // lease NOT acquired
+    const res = await lifecycleService.transition(REPO, 'ingest', {});
+    expect(res).toMatchObject({ ok: true, settle_delegated: true });
+    // The settling caller's record stands.
+    expect(mockDb._stores.okf_repositories[REPO].ingested_at).toBe('2026-09-26T10:00:00.000Z');
+  });
+
+  test('settle CAS: lease lost and NO settler completed → honest 409 SETTLE_BUSY', async () => {
     seedRepo({
       lifecycle_state: 'publish',
       version: 1,
       bundle: { file_id: 'f1', file_name: 'demo-v1.zip', bundle_version: 1 }
     });
     mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // lease NOT acquired
-    const res = await lifecycleService.transition(REPO, 'ingest', {});
-    expect(res).toMatchObject({ ok: true, settle_delegated: true });
-    // The lease holder owns the settle — this caller must NOT have settled.
+    await expect(lifecycleService.transition(REPO, 'ingest', {})).rejects.toMatchObject({
+      code: 'SETTLE_BUSY',
+      status: 409
+    });
+    // Nothing was settled here — no fabricated ingested_at.
     expect(mockDb._stores.okf_repositories[REPO].ingested_at).toBeUndefined();
   });
 

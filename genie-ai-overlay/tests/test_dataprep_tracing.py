@@ -413,8 +413,7 @@ class TestUploadSaveName:
         long_name = (
             "www-gov-uk-government-consultations-consultation-on-proposals-"
             "for-a-revised-system-of-financial-support-for-abattoirs-and-"
-            "game-handling-establishments-" * 2
-            + ".md"
+            "game-handling-establishments-" * 2 + ".md"
         )
         assert len(long_name.encode("utf-8")) > dps._UPLOAD_NAME_MAX_BYTES
         safe = dps._upload_save_name(long_name)

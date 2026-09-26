@@ -67,8 +67,9 @@ jest.mock('../../services/fileService', () => ({
   getIngestionLogs: jest.fn()
 }));
 
-const fileService = require('../../services/fileService');
-const metadataService = require('../../services/metadataService');
+// NOTE: fileService/metadataService are required INSIDE the tests after
+// jest.resetModules() + doMock — top-level requires here would be stale
+// (and ESLint-dead) because each beforeEach rebuilds the module registry.
 
 const mockAdminAuth = () => {
   jest.doMock('../../middlewares/keycloak-auth-middleware', makeAuthMock(['Admin']));

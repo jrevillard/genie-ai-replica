@@ -411,6 +411,78 @@ describe('ingestWorker fair claim strategy (spec #1020 §5.2 — OKF_CLAIM_STRAT
   });
 });
 
+describe('kick-5xx backoff (spec #1020 §5.5 — OKF_KICK_BACKOFF_BASE_MS)', () => {
+  afterEach(() => {
+    delete process.env.OKF_KICK_BACKOFF_BASE_MS;
+    delete process.env.OKF_KICK_BACKOFF_MAX_MS;
+  });
+
+  const JOB = { repo_id: REPO, concept_id: 'bk', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# bk' };
+  const patches = () => conceptMeta.upsertConceptMeta.mock.calls.map((c) => c[2] && c[2].patch).filter(Boolean);
+
+  test('backoff disabled (default) → transport error parks NOTHING (today behavior)', async () => {
+    programQueries([JOB]);
+    authedAxios.post.mockRejectedValue(new Error('dataprep down'));
+    await worker._processOneJob();
+    expect(patches().every((p) => p.next_attempt_after === undefined)).toBe(true);
+  });
+
+  test('transport error + base 1000 → parked ~1s–1.25s out (exponential base, jitter ≤25%)', async () => {
+    process.env.OKF_KICK_BACKOFF_BASE_MS = '1000';
+    programQueries([JOB]);
+    authedAxios.post.mockRejectedValue(new Error('ECONNREFUSED'));
+    const t0 = Date.now();
+    await worker._processOneJob();
+    const parked = patches().find((p) => p.next_attempt_after);
+    expect(parked).toBeDefined();
+    const delta = new Date(parked.next_attempt_after).getTime() - t0;
+    expect(delta).toBeGreaterThanOrEqual(900);
+    expect(delta).toBeLessThanOrEqual(1600);
+  });
+
+  test('attempt number grows the delay; MAX caps it', async () => {
+    process.env.OKF_KICK_BACKOFF_BASE_MS = '1000';
+    process.env.OKF_KICK_BACKOFF_MAX_MS = '5000';
+    const heavy = { ...JOB, concept_id: 'bk6', ingest_attempts: 6 };
+    programQueries([heavy]);
+    authedAxios.post.mockResolvedValue({ status: 503 }); // dataprep 5xx parks too
+    const t0 = Date.now();
+    await worker._processOneJob();
+    const parked = patches().find((p) => p.next_attempt_after);
+    expect(parked).toBeDefined();
+    // 1000 × 2^5 would be 32000 — capped at MAX=5000, +jitter ≤25%.
+    const delta = new Date(parked.next_attempt_after).getTime() - t0;
+    expect(delta).toBeGreaterThanOrEqual(4900);
+    expect(delta).toBeLessThanOrEqual(6600);
+  });
+
+  test('a 4xx rejection never parks (deterministic rejection — prompt retry)', async () => {
+    process.env.OKF_KICK_BACKOFF_BASE_MS = '1000';
+    programQueries([JOB]);
+    authedAxios.post.mockResolvedValue({ status: 404 });
+    await worker._processOneJob();
+    expect(patches().every((p) => p.next_attempt_after === undefined)).toBe(true);
+  });
+
+  test('429 is never parked even with backoff enabled (slot busy ≠ failing)', async () => {
+    process.env.OKF_KICK_BACKOFF_BASE_MS = '1000';
+    programQueries([JOB]);
+    authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('busy');
+    expect(patches().every((p) => p.next_attempt_after === undefined)).toBe(true);
+  });
+
+  test('the fifo claim carries the next_attempt_after gate (both strategies)', async () => {
+    programQueries([JOB], [{ index_status: 'indexed', chunk_count: 1 }]);
+    await worker._processOneJob();
+    const claim = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => String((q && q.query) || '').includes('SORT m.updated_at ASC'));
+    expect(claim.query).toContain('next_attempt_after');
+  });
+});
+
 describe('ingestWorker._sweepOnce (orphan cleanup)', () => {
   test('retracts + removes OKF files docs whose meta row is gone (victims logged)', async () => {
     programQueries([{ file_id: 'orf1', file_name: 'z.md', repo_id: REPO }], []);

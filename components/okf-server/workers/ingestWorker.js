@@ -334,19 +334,34 @@ async function _processOneJob() {
   // design comment at :746-749 is preserved for unrelated GRAPH-GONE
   // dead-lettering — this pre-flight is the JOB-CLAIM-TIME analogue.
   const expectedGraph = job.graph_name || `OKF_${job.repo_id}`;
-  if (!graphLifecycle.graphExists(db, expectedGraph)) {
+  // G-2 fix (#1022): graphExists is ASYNC — the pre-2026-09-26 code omitted the
+  // await, so `!Promise` was always false and this entire reset branch was dead
+  // code in production (the jest stub `async () => true` masked it).
+  if (!(await graphLifecycle.graphExists(db, expectedGraph))) {
     logger.warn('[INGEST-WORKER] graph missing at process time — recreating + resetting drain', {
       repo_id: job.repo_id,
       expected_graph: expectedGraph,
       concept_id: job.concept_id
     });
     try {
-      await db.collection('okf_repositories').update(job.repo_id, {
-        'rag_ingestion.concepts_done': 0,
-        'rag_ingestion.last_reset_reason': 'graph_missing_at_resume',
-        'rag_ingestion.last_reset_at': new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
+      // G-3 fix (#1023): dotted keys ('rag_ingestion.concepts_done') are stored
+      // as FLAT attributes, never nested paths — the exact gotcha documented in
+      // _refreshRagIngestion below (:156-161). Read-modify-write the nested
+      // object so the reset actually reaches the record the dashboard reads.
+      const current = await db
+        .collection('okf_repositories')
+        .document(job.repo_id)
+        .catch(() => null);
+      if (current) {
+        await db.collection('okf_repositories').update(job.repo_id, {
+          rag_ingestion: Object.assign({}, current.rag_ingestion || {}, {
+            concepts_done: 0,
+            last_reset_reason: 'graph_missing_at_resume',
+            last_reset_at: new Date().toISOString()
+          }),
+          updated_at: new Date().toISOString()
+        });
+      }
     } catch (e) {
       logger.warn('[INGEST-WORKER] reset concepts_done failed', {
         repo_id: job.repo_id, err: e.message

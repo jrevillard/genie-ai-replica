@@ -391,6 +391,31 @@ async def kill_ingest_task(payload: DocRepoRetractPayload):
 
 
 # ------------------------------------------------------------------------------
+# Ingestion task liveness probe (spec #1020 §5.9 — size-adaptive job windows)
+# ------------------------------------------------------------------------------
+@register_microservice(
+    name="opea_service@dataprep",
+    service_type=ServiceType.DATAPREP,
+    endpoint="/v1/dataprep/task_status",
+    host="0.0.0.0",
+    port=5000,
+)
+async def ingestion_task_status(payload: DocRepoRetractPayload):
+    """
+    Reports whether an ingestion task is ACTIVELY running for this fileId.
+    The OKF worker's window expiry (§5.9) probes this before touching a
+    timed-out concept: alive → the worker defers (parks the row, never
+    re-kicks) because a re-kick would retract and destroy the in-flight
+    work; dead/unknown → the reclaim + retract is safe.
+    """
+    file_id = payload.fileId
+    task = active_ingestion_tasks.get(file_id)
+    alive = task is not None and not task.done()
+    logger.info(f"[ task_status ] file_id={file_id} alive={alive}")
+    return {"success": True, "status": 200, "fileId": file_id, "alive": alive}
+
+
+# ------------------------------------------------------------------------------
 # Retract (delete) a file from graph
 # ------------------------------------------------------------------------------
 @register_microservice(

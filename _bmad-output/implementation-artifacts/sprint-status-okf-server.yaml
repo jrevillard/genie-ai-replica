@@ -5,7 +5,7 @@
 # GitLab sync is driven directly via glab against the OKF epics.md.
 
 generated: 2026-08-11
-last_updated: 2026-09-14
+last_updated: 2026-09-27
 project: GENIE.AI OKF Server
 project_key: okf-server
 tracking_system: gitlab
@@ -57,15 +57,15 @@ development_status:
   4-8-amend-wp-c-content-only-chunking: done  # WP-C landed on feat/okf-server @ d0db1a13; live smoke rework deferred to follow-up context (jest+pytest+CI is the merge gate)
   epic-2.9-retrospective: optional
 
-  epic-3: backlog            # Vue admin UI — ungated
-  3-1-okf-repositories-tab-service-vuex: backlog
-  3-2-repository-dialog-details-view: backlog
-  3-3-ingestion-progress-i18n: backlog
-  3-4-okf-studio-wizard-shell-stepper-tab: ready-for-dev          # NEW 2026-08-13 (Epic 10 Studio frontend)
-  3-5-okf-studio-dashboard-multi-repo-kanban: ready-for-dev        # NEW 2026-08-13
-  3-6-document-mgmt-create-okf-entry-point: ready-for-dev          # NEW 2026-08-13 (sibling to Ingest Selected); AMENDED 2026-09-14 — gate drops the ingested-doc refusal (amber warning instead); prevention moved to 7.7's SOURCES_NOT_RETRACTED lifecycle gate
-  3-7-crawler-ui-create-okf-entry-point: ready-for-dev             # NEW 2026-08-13 (AddFromLinkDialog + FileDetailsDialog)
-  3-8-okf-concept-curator-validation-panel: ready-for-dev          # NEW 2026-08-13 (Step 5/6; composes conformance-service)
+  epic-3: in-progress        # Vue admin UI — ungated; RECONCILED 2026-09-27: 3.1-3.7 done, 3.4/3.8 in-progress (3.4 carries Amendment A — wizard completion & editor parity), 3.9 backlog
+  3-1-okf-repositories-tab-service-vuex: done     # RECONCILED 2026-09-27 (David OK) — Vuex okf module + service layer + repo surfaces live; note: the old G25 If-Match/409 optimistic-concurrency idea was NEVER built (verified: no If-Match/ETag in okf-server)
+  3-2-repository-dialog-details-view: done        # RECONCILED 2026-09-27 (David OK) — details surface live (RepoEditorShell + RepoEditor/Versions/Logs dialogs)
+  3-3-ingestion-progress-i18n: done               # RECONCILED 2026-09-27 (David OK) — okf.* i18n keys landed (8f9334c04 + lifecycle keys)
+  3-4-okf-studio-wizard-shell-stepper-tab: in-progress    # NEW 2026-08-13; RECONCILED 2026-09-27 — shell/tab/stepper/Vuex client live (StudioTab view='wizard', DsStepper rail, context rail, R-C/R-D idempotency tested) BUT the 3.4 ACs are NOT met: steps never write selections back to the draft (Entry/Choose/LabelOnboard keep local state — lost on advance), footer Continue bypasses any step gate, server-side resume is NOT_READY (drafts endpoint deferred to 10.5), context rail reads phantom draft shapes (provenance/lifecycle never populated), Input/Produce panels are declared placeholders. AMENDMENT A (2026-09-27) written in the story file — wizard completion & editor parity (David directives: idempotent, dual-mode, KH labels, full files/frontmatter/metadata editing, FS files + markdown creation, FULL editor-feature parity in friendlier form incl. PII redact/replace/remove, automation-first, wizard-default routing).
+  3-5-okf-studio-dashboard-multi-repo-kanban: done        # RECONCILED 2026-09-27 — StudioDashboard.vue live (kanban by stage, resume routing, bulk actions, health/metrics, i18n, #1020 queue chips 3bccd5f1a); gated items (6.1b shared-label, 10.4 inbox) hidden per spec
+  3-6-document-mgmt-create-okf-entry-point: done          # RECONCILED 2026-09-27 — ImportDocumentsDialog + okf:create-from-documents event + StudioTab wizard handoff live; gate amendment DELIVERED via 7.7 (SOURCES_NOT_RETRACTED); the wizard Input documents-panel variant itself = 3.4 amendment scope
+  3-7-crawler-ui-create-okf-entry-point: done             # RECONCILED 2026-09-27 — AddFromLinkDialog + crawlerToOkfService + okf:create-from-crawl / okf:okf-repo-created (#977 opens crawl repos at Curate) live; crawler Input-panel variant = 3.4 amendment scope
+  3-8-okf-concept-curator-validation-panel: in-progress   # RECONCILED 2026-09-27 — Curate step REAL (concept tree + DsOkfMarkdownEditor + OkfLabelEditor, labels save + lifecycle-error rollback); Validate step shell real but live-validation API call deferred (issue groups always empty, health score unpopulated); concept BODY save deferred to 4.2
   3-9-okf-repository-clone-admin-action: backlog          # NEW 2026-08-18 (D-V5; Studio §8.1) — Clone action: repos-tab toolbar/row + details dialog + Studio Step-1 source card; consumes 4.8 clone API
   epic-3-retrospective: optional
 

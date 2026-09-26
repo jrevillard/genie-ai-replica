@@ -405,15 +405,22 @@ class TestUploadSaveName:
     def test_long_name_hashed_to_safe_length(self):
         import dataprep.genieai_dataprep_microservice as dps
 
+        # A live-poison shape: a gov-uk consultation slug far past the 255-byte
+        # filename limit (the F-1 case). Built by repetition so the fixture
+        # provably exceeds the threshold it targets (CI-caught: the original
+        # literal was 153 bytes — UNDER _UPLOAD_NAME_MAX_BYTES — so the hash
+        # path never triggered and the assertion fired).
         long_name = (
-            "www-gov-uk-government-consultations-consultation-on-proposals-for-"
-            "a-revised-system-of-financial-support-for-abattoirs-and-game-"
-            "handling-establishments.md"
+            "www-gov-uk-government-consultations-consultation-on-proposals-"
+            "for-a-revised-system-of-financial-support-for-abattoirs-and-"
+            "game-handling-establishments-" * 2
+            + ".md"
         )
-        assert len(long_name.encode("utf-8")) > 255  # the live poison shape
+        assert len(long_name.encode("utf-8")) > dps._UPLOAD_NAME_MAX_BYTES
         safe = dps._upload_save_name(long_name)
-        assert len(safe.encode("utf-8")) <= 255
+        assert len(safe.encode("utf-8")) <= dps._UPLOAD_NAME_MAX_BYTES
         assert safe.endswith(".md")
+        assert safe != long_name
 
     def test_long_name_hash_is_deterministic_and_collision_free(self):
         import dataprep.genieai_dataprep_microservice as dps

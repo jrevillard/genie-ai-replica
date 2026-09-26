@@ -483,6 +483,136 @@ describe('kick-5xx backoff (spec #1020 §5.5 — OKF_KICK_BACKOFF_BASE_MS)', () 
   });
 });
 
+describe('size-adaptive job windows (spec #1020 §5.9 — OKF_JOB_WINDOW_ADAPTIVE)', () => {
+  afterEach(() => {
+    delete process.env.OKF_JOB_WINDOW_ADAPTIVE;
+    delete process.env.OKF_JOB_WINDOW_FLOOR_MS;
+    delete process.env.OKF_JOB_WINDOW_MAX_MS;
+    delete process.env.OKF_JOB_WINDOW_SEC_PER_CHUNK_MS;
+  });
+
+  describe('window computation (worker.jobWindowMs)', () => {
+    test('adaptive OFF → the flat JOB_TIMEOUT_MS (today behavior)', () => {
+      process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS = '123456';
+      expect(worker.jobWindowMs({ body: 'x'.repeat(500000) })).toBe(123456);
+    });
+
+    test('small concept → the FLOOR (30 min default; small files keep today’s window)', () => {
+      process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+      // 100 KB ≈ 200 chunks → 200 × 5000 × 1.5 = 25 min < 30 min floor.
+      expect(worker.jobWindowMs({ body: 'x'.repeat(100000) })).toBe(1800000);
+    });
+
+    test('large concept scales past the floor: ~500 KB ≈ 1000 chunks ≈ 2 h 5 m', () => {
+      process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+      // 1000 chunks × 5000 × 1.5 = 7,500,000 ms.
+      expect(worker.jobWindowMs({ body: 'x'.repeat(500000) })).toBe(7500000);
+    });
+
+    test('monster concept → capped at MAX (6 h)', () => {
+      process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+      // 2 MB ≈ 4000 chunks → 30,000,000 ms raw > 21,600,000 cap.
+      expect(worker.jobWindowMs({ body: 'x'.repeat(2000000) })).toBe(21600000);
+    });
+
+    test('a prior attempt’s real chunk_count overrides the bytes estimate', () => {
+      process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+      expect(worker.jobWindowMs({ body: 'x', chunk_count: 900 })).toBe(6750000);
+    });
+  });
+
+  test('expiry with an ALIVE dataprep task → deferred: parked one window, NO re-kick, NO retract', async () => {
+    process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+    process.env.OKF_JOB_WINDOW_FLOOR_MS = '60';
+    process.env.OKF_JOB_WINDOW_SEC_PER_CHUNK_MS = '10'; // 1 chunk ≈ 15 ms raw → floor 60 ms
+    process.env.OKF_INGEST_WORKER_JOB_POLL_MS = '1';
+    const t0 = Date.now();
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'big', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# big' }],
+      [{ index_status: 'parsed' }] // every poll + the dedupe re-read: still draining
+    );
+    authedAxios.post.mockImplementation(async (url) => {
+      if (String(url).includes('/v1/dataprep/task_status')) {
+        return { status: 200, data: { alive: true } }; // the pipeline is RUNNING
+      }
+      return { status: 200 }; // retract + kick happy
+    });
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('deferred');
+    // The probe happened exactly once.
+    const urls = authedAxios.post.mock.calls.map((c) => String(c[0]));
+    expect(urls.filter((u) => u.includes('/v1/dataprep/task_status'))).toHaveLength(1);
+    // The defer patch parks the row one window and clears the claim — the
+    // in-flight run's callback owns the transition (dedupe guard accepts it).
+    const patch = conceptMeta.upsertConceptMeta.mock.calls
+      .map((c) => c[2] && c[2].patch)
+      .find((p) => p && p.next_attempt_after);
+    expect(patch).toBeDefined();
+    expect(patch.worker_claimed_at).toBeNull();
+    const parkedMs = new Date(patch.next_attempt_after).getTime() - t0;
+    expect(parkedMs).toBeGreaterThanOrEqual(50);
+    expect(parkedMs).toBeLessThanOrEqual(2000);
+  });
+
+  test('expiry with a DEAD task → immediate reclaim, no park (the next WS5 retract is then correct)', async () => {
+    process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+    process.env.OKF_JOB_WINDOW_FLOOR_MS = '60';
+    process.env.OKF_JOB_WINDOW_SEC_PER_CHUNK_MS = '10';
+    process.env.OKF_INGEST_WORKER_JOB_POLL_MS = '1';
+    process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS = '40'; // short flat window for speed
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'dead', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# d' }],
+      [{ index_status: 'parsed' }]
+    );
+    authedAxios.post.mockImplementation(async (url) => {
+      if (String(url).includes('/v1/dataprep/task_status')) return { status: 200, data: { alive: false } };
+      return { status: 200 };
+    });
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('timeout');
+    const patch = conceptMeta.upsertConceptMeta.mock.calls
+      .map((c) => c[2] && c[2].patch)
+      .find((p) => p && p.worker_claimed_at === null);
+    expect(patch).toBeDefined();
+    expect(patch.next_attempt_after).toBeUndefined(); // reclaimable NOW
+  });
+
+  test('probe transport failure → treated as dead (the kick path re-parks under §5.5 if enabled)', async () => {
+    process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+    process.env.OKF_JOB_WINDOW_FLOOR_MS = '60';
+    process.env.OKF_JOB_WINDOW_SEC_PER_CHUNK_MS = '10';
+    process.env.OKF_INGEST_WORKER_JOB_POLL_MS = '1';
+    process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS = '40';
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'probe-fail', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# p' }],
+      [{ index_status: 'parsed' }]
+    );
+    authedAxios.post.mockImplementation(async (url) => {
+      if (String(url).includes('/v1/dataprep/task_status')) throw new Error('dataprep down');
+      return { status: 200 };
+    });
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('timeout');
+    const patch = conceptMeta.upsertConceptMeta.mock.calls
+      .map((c) => c[2] && c[2].patch)
+      .find((p) => p && p.worker_claimed_at === null);
+    expect(patch).toBeDefined();
+    expect(patch.next_attempt_after).toBeUndefined();
+  });
+
+  test('adaptive OFF expiry never probes dataprep (today behavior, byte-for-byte)', async () => {
+    process.env.OKF_INGEST_WORKER_JOB_POLL_MS = '1';
+    process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS = '40';
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'flat', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# f' }],
+      [{ index_status: 'parsed' }]
+    );
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('timeout');
+    expect(authedAxios.post.mock.calls.some((c) => String(c[0]).includes('task_status'))).toBe(false);
+  });
+});
+
 describe('ingestWorker._sweepOnce (orphan cleanup)', () => {
   test('retracts + removes OKF files docs whose meta row is gone (victims logged)', async () => {
     programQueries([{ file_id: 'orf1', file_name: 'z.md', repo_id: REPO }], []);

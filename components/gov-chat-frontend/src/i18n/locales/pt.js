@@ -1755,7 +1755,7 @@ export default {
       topics: 'tópicos',
       unpublish: {
         title: 'Despublicar',
-        body: "Isto deixa de servir {name} aos agentes RAG imediatamente. O ficheiro zip do bundle publicado e o histórico de versões são mantidos; o repositório regressa a Em Revisão para correções. Publique novamente e faça Ingest para voltar a servir.",
+        body: 'Isto deixa de servir {name} aos agentes RAG imediatamente. O ficheiro zip do bundle publicado e o histórico de versões são mantidos; o repositório regressa a Em Revisão para correções. Publique novamente e faça Ingest para voltar a servir.',
         confirm: 'Despublicar'
       },
       lane: {
@@ -2027,7 +2027,7 @@ export default {
           col: {
             name: 'Nome',
             status: 'Status',
-            topics: 'Tópicos',
+            topics: 'Tópicos'
           },
           status: {
             ready: 'Pronto'

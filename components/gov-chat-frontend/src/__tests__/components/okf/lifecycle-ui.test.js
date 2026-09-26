@@ -198,7 +198,10 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     await seedRepos(store, REPOS);
     await flush();
     const ingesty = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('Ingesty'));
-    await ingesty.findAll('button').find((b) => b.text() === 'Unpublish').trigger('click');
+    await ingesty
+      .findAll('button')
+      .find((b) => b.text() === 'Unpublish')
+      .trigger('click');
     await flush();
     // Confirm via the dialog's action event — immune to DsButton class shapes.
     const dialogs = wrapper.findAllComponents({ name: 'DsDialog' });
@@ -216,7 +219,10 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     await seedRepos(store, REPOS);
     await flush();
     const ingesty = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('Ingesty'));
-    await ingesty.findAll('button').find((b) => b.text() === 'Unpublish').trigger('click');
+    await ingesty
+      .findAll('button')
+      .find((b) => b.text() === 'Unpublish')
+      .trigger('click');
     await flush();
     expect(wrapper.vm.unpublishAsk).toMatchObject({ repo_id: 'in' });
     // Cancel via the emitted action event (the dialog footer Cancel button).

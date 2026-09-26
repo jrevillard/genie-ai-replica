@@ -1731,9 +1731,9 @@ export default {
       title: 'Kafuolu',
       topics: 'kuuolu',
       unpublish: {
-        title: "Falsifya bugbugu",
+        title: 'Falsifya bugbugu',
         body: "Wannan na tsayawar ba da {name} ga wakilan RAG nan da nan. Babban bundle zip da tarihin siguna suna nan; ma'ajiyar ta koma 'Ana Duba' domin gyara. Sake bugbugu sannan ka yi Ingest don sake ba da.",
-        confirm: "Falsifya bugbugu"
+        confirm: 'Falsifya bugbugu'
       },
       lane: {
         draft: 'A sambataa',
@@ -2000,7 +2000,7 @@ export default {
           col: {
             name: 'Āt',
             status: 'Ejjāliklik',
-            topics: 'Un ko',
+            topics: 'Un ko'
           },
           status: {
             ready: 'M̦ōj kōpooj'

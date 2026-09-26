@@ -16,7 +16,7 @@ Basis: [okf-course-correction-2026-08-13 §2.3[7], §3 D21](../../_bmad-output/p
 
 1. **Explicit `TRANSITIONS` map.** Each state lists its valid successor states + the gate type:
    - **Auto gates**: `register → validate` (on first conformance run); `validate → review` (on conformance pass); `parsed → indexed` (on worker success, per-concept `index_status`).
-   - **Human gates**: `review → approve` (steward sign-off, FR-10); `approve → publish` (steward, writes `verified` trust signal).
+   - **Human gates**: `review → approve` (steward sign-off, FR-10); `approve → publish` (steward, writes `verified` trust signal); `published → review` (steward, unpublish for unbundling/rework, 2026-09-25).
    - **Terminal-ish**: `published → deprecated` (steward); `deprecated → retired` (steward + grace). `delete` is a separate, audited, irreversible-after-grace operation (FR-23), not a lifecycle state.
 
 2. **`version` is a publish side-effect** (D20/ADR-okf-031), not a state. Entering `published` mints a `bundle_version`; it is not a state the repo transitions *through*.

@@ -99,6 +99,20 @@ function createMockDb() {
 
   const collection = jest.fn((name) => handleFor(name));
 
+  // Default query handler — shape-aware for the SPEC-#1020 conditional
+  // single-statement writes, which the real code relies on returning their
+  // matched-row count:
+  //   settle CAS (lifecycle-service._settleIngest): reports ONE matched row
+  //   so the settle proceeds (lease acquired).
+  // Everything else returns no rows (the historical default).
+  function defaultQuery(q) {
+    const text = typeof q === 'string' ? q : q && q.query ? String(q.query) : '';
+    if (text.includes('UPDATE r WITH') && text.includes('settle_claimed_at')) {
+      return Promise.resolve({ all: async () => [{ _key: 'settle-lease' }] });
+    }
+    return Promise.resolve({ all: async () => [] });
+  }
+
   // Raw _api routes (gharial graph definitions etc.) — minimal passthrough.
   const route = jest.fn((_path) => ({
     get: jest.fn(async () => ({ body: {} })),
@@ -109,7 +123,7 @@ function createMockDb() {
   return {
     collection,
     route,
-    query: jest.fn(async () => ({ all: async () => [] })),
+    query: jest.fn(defaultQuery),
     exists: jest.fn(async () => true),
     /** Named-graph handles: existence derived from member collections. */
     graph: jest.fn((n) => ({
@@ -130,7 +144,7 @@ function createMockDb() {
       this.graph.mockClear();
       this.createGraph.mockClear();
       this.query.mockReset();
-      this.query.mockResolvedValue({ all: async () => [] });
+      this.query.mockImplementation(defaultQuery);
     },
     _stores: stores
   };

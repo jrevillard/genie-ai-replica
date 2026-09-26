@@ -264,6 +264,10 @@ async function _settleIngest(db, repo, actor) {
   // sees a fresh settle_claimed_at and skips; a crashed settler's lease
   // expires after OKF_SETTLE_LEASE_MS. Single-worker behavior is identical
   // (acquire → settle → the flip below releases).
+  // GRAPH GC target (2026-09-26): the repo doc as loaded here still carries
+  // the PREVIOUS version's ingested_graph_name — snapshot it before the flip
+  // overwrites it, so the drop below knows exactly what became superseded.
+  const previousGraph = (repo && repo.ingested_graph_name) || null;
   const leaseMs = settleLeaseMs();
   const claim = await (
     await db.query(
@@ -323,6 +327,32 @@ async function _settleIngest(db, repo, actor) {
       .update(repo.repo_id, { settle_claimed_at: null })
       .catch(() => {});
     throw e;
+  }
+  // GRAPH GC (David, 2026-09-26 — the v2-orphan decision): the previous
+  // version's serving graph is dead the moment the successor's graph is
+  // promoted — unpublish keeps its graph by design, but once a SUCCESSOR is
+  // live the predecessor is unreachable weight (the manual drop of the
+  // orphaned OKF_www-gov-uk-full-crawl_v2 motivated this). Best-effort and
+  // strictly AFTER the serving flip: a GC failure never fails a settle.
+  // Skipped when null (first serve — nothing to supersede) or equal to the
+  // promoted name (born-right re-settle — the recorded graph IS the live one).
+  if (previousGraph && previousGraph !== graphName) {
+    try {
+      const gc = await graphLifecycle.dropServingGraph(previousGraph);
+      logger.info('OKF graph GC: previous serving graph dropped at settle', {
+        repo_id: repo.repo_id,
+        previous_graph: previousGraph,
+        serving_graph: graphName,
+        dropped: gc.dropped
+      });
+    } catch (gcErr) {
+      logger.warn('OKF graph GC: previous serving graph drop failed (non-fatal)', {
+        repo_id: repo.repo_id,
+        previous_graph: previousGraph,
+        serving_graph: graphName,
+        error: gcErr && gcErr.message
+      });
+    }
   }
   // P0 (David's re-test, 2026-09-08): _settleIngest OWNS the final
   // rag_ingestion record — it is the single authority for "serving now".

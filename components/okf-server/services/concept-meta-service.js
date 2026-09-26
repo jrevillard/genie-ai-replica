@@ -349,6 +349,7 @@ async function requeueRepoForRedrain(repo_id, opts = {}) {
          reindex_retry: 0,
          last_good_index_at: null,
          last_error: null,
+         next_attempt_after: null,
          updated_at: DATE_ISO8601(DATE_NOW())
        } IN okf_concepts_meta
        RETURN NEW.index_status`,

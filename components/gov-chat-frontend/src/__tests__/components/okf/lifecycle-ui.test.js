@@ -174,6 +174,60 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     expect(mockOpsLifecycle).toHaveBeenCalledWith('pb', 'ingest', {});
   });
 
+  it('offers Unpublish ONLY on publish-state cards (serving or not)', async () => {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, {
+      global: { mocks: { $store: store }, stubs: STUBS }
+    });
+    await seedRepos(store, REPOS);
+    await flush();
+    const cards = wrapper.findAll('.okf-dashboard__card-wrap');
+    const pubby = cards.find((c) => c.text().includes('Pubby'));
+    const ingesty = cards.find((c) => c.text().includes('Ingesty'));
+    const drafty = cards.find((c) => c.text().includes('Drafty'));
+    const retracted = cards.find((c) => c.text().includes('Pully'));
+    expect(pubby.findAll('button').some((b) => b.text() === 'Unpublish')).toBe(true);
+    expect(ingesty.findAll('button').some((b) => b.text() === 'Unpublish')).toBe(true);
+    expect(drafty.findAll('button').some((b) => b.text() === 'Unpublish')).toBe(false);
+    expect(retracted.findAll('button').some((b) => b.text() === 'Unpublish')).toBe(false);
+  });
+
+  it('Unpublish opens the confirm dialog; confirm dispatches lifecycle unpublish and closes', async () => {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });
+    await seedRepos(store, REPOS);
+    await flush();
+    const ingesty = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('Ingesty'));
+    await ingesty.findAll('button').find((b) => b.text() === 'Unpublish').trigger('click');
+    await flush();
+    // Confirm via the dialog's action event — immune to DsButton class shapes.
+    const dialogs = wrapper.findAllComponents({ name: 'DsDialog' });
+    const unpublishDialog = dialogs.find((d) => d.props('visible') === true);
+    expect(unpublishDialog).toBeTruthy();
+    unpublishDialog.vm.$emit('action', 'confirm');
+    await flush();
+    expect(mockOpsLifecycle).toHaveBeenCalledWith('in', 'unpublish', {});
+  });
+
+  it('Unpublish cancel closes the dialog WITHOUT dispatching', async () => {
+    mockOpsLifecycle.mockClear(); // prior tests dispatched unpublish — start clean
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });
+    await seedRepos(store, REPOS);
+    await flush();
+    const ingesty = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('Ingesty'));
+    await ingesty.findAll('button').find((b) => b.text() === 'Unpublish').trigger('click');
+    await flush();
+    expect(wrapper.vm.unpublishAsk).toMatchObject({ repo_id: 'in' });
+    // Cancel via the emitted action event (the dialog footer Cancel button).
+    const dialogs = wrapper.findAllComponents({ name: 'DsDialog' });
+    const unpublishDialog = dialogs.find((d) => d.props('visible') === true);
+    unpublishDialog.vm.$emit('action', 'cancel');
+    await flush();
+    expect(wrapper.vm.unpublishAsk).toBeNull();
+    expect(mockOpsLifecycle).not.toHaveBeenCalledWith('in', 'unpublish', {});
+  });
+
   it('export calls the shared library', async () => {
     const store = buildStore();
     const wrapper = mount(OkfStudioDashboard, {

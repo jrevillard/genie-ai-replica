@@ -1736,6 +1736,11 @@ export default {
       },
       title: 'المستودعات',
       topics: 'المواضيع',
+      unpublish: {
+        title: 'إلغاء النشر',
+        body: "يؤدي هذا إلى إيقاف تقديم {name} لوكلاء RAG فوراً. يبقى ملف zip للحزمة المنشورة وسجل الإصدارات محفوظاً؛ يعود المستودع إلى قيد المراجعة لتصحيحه. انشر مرة أخرى وقم بـ Ingest لتقديمه مرة أخرى.",
+        confirm: 'إلغاء النشر'
+      },
       lane: {
         draft: 'استيراد',
         in_review: 'قيد المراجعة',
@@ -2000,7 +2005,7 @@ export default {
           col: {
             name: 'الاسم',
             status: 'الحالة',
-            topics: 'الموضوعات'
+            topics: 'الموضوعات',
           },
           status: {
             ready: 'جاهز'
@@ -2315,7 +2320,8 @@ export default {
       approve: 'موافقة',
       publish: 'نشر',
       ingest: 'استيعاب',
-      retract: 'سحب'
+      retract: 'سحب',
+      unpublish: 'إلغاء النشر'
     }
   }
 };

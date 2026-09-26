@@ -1754,6 +1754,11 @@ export default {
       },
       title: 'Repositorios',
       topics: 'temas',
+      unpublish: {
+        title: 'Despublicar',
+        body: "Esto deja de servir {name} a los agentes RAG de inmediato. El zip del paquete publicado y el historial de versiones se conservan; el repositorio vuelve a En Revisión para corregirlo. Publique de nuevo y haga Ingest para volver a servirlo.",
+        confirm: 'Despublicar'
+      },
       lane: {
         draft: 'Importar',
         in_review: 'En revisión',
@@ -2024,7 +2029,7 @@ export default {
           col: {
             name: 'Nombre',
             status: 'Estado',
-            topics: 'Temas'
+            topics: 'Temas',
           },
           status: {
             ready: 'Listo'
@@ -2347,7 +2352,8 @@ export default {
       approve: 'Aprobar',
       publish: 'Publicar',
       ingest: 'Ingestar',
-      retract: 'Retirar'
+      retract: 'Retirar',
+      unpublish: 'Despublicar'
     }
   }
 };

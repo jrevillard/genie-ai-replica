@@ -1743,6 +1743,11 @@ export default {
       },
       title: 'Hazina',
       topics: 'mada',
+      unpublish: {
+        title: 'Sitisha uchapishaji',
+        body: "Hii inaacha mara moja kutoa {name} kwa ajenti za RAG. Faili la bundle zip lililochapishwa na historia ya matoleo hubakizwa; hifadhi inarudi kwenye hali ya “Inapitiwa” ili urekebishe. Chapisha tena na Ingest ili kutoa tena.",
+        confirm: 'Sitisha uchapishaji'
+      },
       lane: {
         draft: 'Ingiza',
         in_review: 'Inakaguliwa',
@@ -2011,7 +2016,7 @@ export default {
           col: {
             name: 'Jina',
             status: 'Hali',
-            topics: 'Mada'
+            topics: 'Mada',
           },
           status: {
             ready: 'Tayari'
@@ -2331,7 +2336,8 @@ export default {
       approve: 'Idhinisha',
       publish: 'Chapisha',
       ingest: 'Meza',
-      retract: 'Batilisha'
+      retract: 'Batilisha',
+      unpublish: 'Sitisha uchapishaji'
     }
   }
 };

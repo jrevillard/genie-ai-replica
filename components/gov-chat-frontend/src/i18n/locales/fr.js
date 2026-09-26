@@ -1758,6 +1758,11 @@ export default {
       },
       title: 'Dépôts',
       topics: 'sujets',
+      unpublish: {
+        title: "Dépublier",
+        body: "Ceci cesse immédiatement de servir {name} aux agents RAG. Le fichier zip du bundle publié et l'historique des versions sont conservés ; le dépôt revient en révision pour correction. Publiez à nouveau et ingérez pour le servir de nouveau.",
+        confirm: "Dépublier"
+      },
       lane: {
         draft: 'Importer',
         in_review: "En cours d'examen",
@@ -2029,7 +2034,7 @@ export default {
           col: {
             name: 'Nom',
             status: 'État',
-            topics: 'Sujets'
+            topics: 'Sujets',
           },
           status: {
             ready: 'Prêt'
@@ -2350,7 +2355,8 @@ export default {
       approve: 'Approuver',
       publish: 'Publier',
       ingest: 'Ingérer',
-      retract: 'Retirer'
+      retract: 'Retirer',
+      unpublish: 'Dépublier'
     }
   }
 };

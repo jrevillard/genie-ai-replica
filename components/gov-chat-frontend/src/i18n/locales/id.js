@@ -1748,6 +1748,11 @@ export default {
       },
       title: 'Repositori',
       topics: 'topik',
+      unpublish: {
+        title: 'Batalkan publikasi',
+        body: "Ini segera berhenti menyajikan {name} kepada agen RAG. Zip bundle yang dipublikasikan dan riwayat versi tetap disimpan; repositori kembali ke status \"Dalam Tinjauan\" agar Anda dapat memperbaikinya. Publikasikan lagi dan lakukan Ingest untuk menyajikannya kembali.",
+        confirm: 'Batalkan publikasi'
+      },
       lane: {
         draft: 'Impor',
         in_review: 'Dalam tinjauan',
@@ -2015,7 +2020,7 @@ export default {
           col: {
             name: 'Nama',
             status: 'Status',
-            topics: 'Topik'
+            topics: 'Topik',
           },
           status: {
             ready: 'Siap'
@@ -2335,7 +2340,8 @@ export default {
       approve: 'Setujui',
       publish: 'Publikasikan',
       ingest: 'Serap',
-      retract: 'Tarik'
+      retract: 'Tarik',
+      unpublish: 'Batalkan publikasi'
     }
   }
 };

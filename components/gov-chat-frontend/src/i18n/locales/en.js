@@ -1802,6 +1802,11 @@ export default {
       },
       title: 'Repositories',
       topics: 'topics',
+      unpublish: {
+        title: 'Unpublish',
+        body: "This stops serving {'{'}name{'}'} to RAG agents immediately. The published bundle zip and version history are kept; the repository returns to In Review so you can correct it. Publish again and Ingest to serve it once more.",
+        confirm: 'Unpublish'
+      },
       lane: {
         draft: 'Import',
         in_review: 'In review',
@@ -2322,7 +2327,8 @@ export default {
       approve: 'Approve',
       publish: 'Publish',
       ingest: 'Ingest',
-      retract: 'Retract'
+      retract: 'Retract',
+      unpublish: 'Unpublish'
     }
   }
 };

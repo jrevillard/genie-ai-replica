@@ -250,6 +250,63 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     expect(res).toEqual({ outcome: 'vanished', concept_id: 'v' });
     expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
   });
+
+  // G-2 (#1022) + G-3 (#1023) — the missing-graph pre-flight was DEAD CODE:
+  // graphExists is async and the old code omitted the await, so `!Promise`
+  // was always false and the reset never ran in production. These tests
+  // pin both the firing of the branch (await fixed) and the SHAPE of the
+  // reset write (nested rag_ingestion patch, not dotted flat keys).
+  test('graph missing at claim → reset fires (G-2 await), rag_ingestion patched NESTED (G-3), drain proceeds', async () => {
+    const graphLifecycle = require('../services/graph-lifecycle-service');
+    graphLifecycle.graphExists.mockResolvedValueOnce(false);
+    mockDb._stores.okf_repositories = {
+      [REPO]: {
+        _key: REPO,
+        repo_id: REPO,
+        rag_ingestion: { concepts_done: 42, phase: 'draining' }
+      }
+    };
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'g', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# g' }],
+      [{ index_status: 'indexed', chunk_count: 1 }]
+    );
+    const res = await worker._processOneJob();
+    // The reset branch FALLS THROUGH — the concept still ingests.
+    expect(res.outcome).toBe('ingested');
+    // Nested patch: concepts_done zeroed, reset reason recorded, sibling
+    // keys inside rag_ingestion preserved (read-modify-write, not replace).
+    const after = mockDb._stores.okf_repositories[REPO].rag_ingestion;
+    expect(after.concepts_done).toBe(0);
+    expect(after.last_reset_reason).toBe('graph_missing_at_resume');
+    expect(after.phase).toBe('draining');
+    // G-3 shape guard: the update patch must contain NO dotted flat keys
+    // ('rag_ingestion.concepts_done' as a literal attribute name is the bug).
+    const updateHandle = mockDb.collection('okf_repositories');
+    const patches = updateHandle.update.mock.calls.map((c) => c[1]);
+    expect(patches.length).toBeGreaterThan(0);
+    for (const p of patches) {
+      expect(Object.keys(p).some((k) => k.includes('.'))).toBe(false);
+    }
+  });
+
+  test('graph present → pre-flight is a no-op (the await must not flip the happy path)', async () => {
+    mockDb._stores.okf_repositories = {
+      [REPO]: {
+        _key: REPO,
+        repo_id: REPO,
+        rag_ingestion: { concepts_done: 42, phase: 'draining' }
+      }
+    };
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'g', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# g' }],
+      [{ index_status: 'indexed', chunk_count: 1 }]
+    );
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('ingested');
+    // Progress untouched: concepts_done must still be 42 — no spurious reset.
+    expect(mockDb._stores.okf_repositories[REPO].rag_ingestion.concepts_done).toBe(42);
+    expect(mockDb.collection('okf_repositories').update).not.toHaveBeenCalled();
+  });
 });
 
 describe('ingestWorker._sweepOnce (orphan cleanup)', () => {

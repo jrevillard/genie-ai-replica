@@ -1719,6 +1719,7 @@ export default {
       select: "Kāālet {'{'}name{'}'} ñan l̦ap an publish",
       stage: {
         drainFailed: 'Ingest ear l̦apier',
+        queueBehind: '{n} nderi e haande · inngest wooɗɗa {m} repo',
         redraining: 'A bering bo-kuta…',
         building: 'A bering loo…',
         draft: 'Binoo',

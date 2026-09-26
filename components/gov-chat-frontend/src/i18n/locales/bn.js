@@ -1730,6 +1730,7 @@ export default {
       select: "বাল্ক প্রকাশের জন্য {'{'}name{'}'} নির্বাচন করুন",
       stage: {
         drainFailed: 'Ingest ব্যর্থ হয়েছে',
+        queueBehind: '{n} সারিবদ্ধ · {m}টি রেপো ইনজেস্ট হচ্ছে',
         redraining: 'পুনরায় ড্রেন করা হচ্ছে…',
         building: 'তৈরি করা হচ্ছে…',
         draft: 'খসড়া',

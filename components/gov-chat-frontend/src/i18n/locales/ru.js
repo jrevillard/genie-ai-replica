@@ -1736,6 +1736,7 @@ export default {
       select: "Выбрать {'{'}name{'}'} для массовой публикации",
       stage: {
         drainFailed: 'Ошибка ingest',
+        queueBehind: '{n} в очереди · ingest в {m} репо(зиториях)',
         redraining: 'Повторная очистка…',
         building: 'Сборка…',
         draft: 'Черновик',

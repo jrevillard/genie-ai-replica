@@ -384,3 +384,48 @@ class TestTaskStatusEndpoint:
         with patch.object(dps, "active_ingestion_tasks", {}):
             result = await dps.ingestion_task_status(payload)
         assert result["alive"] is False
+
+
+# ---------------------------------------------------------------------------
+# Test: upload filename hashing (F-1 / #1021 — ENAMETOOLONG poison)
+# ---------------------------------------------------------------------------
+
+
+class TestUploadSaveName:
+    """F-1 (#1021): long concept ids overflowed the 255-byte filename limit —
+    every kick failed with OSError ENAMETOOLONG until the reaper dead-lettered
+    the concept. Over-long upload names must hash deterministically; short
+    names pass through unchanged and identity fields are untouched."""
+
+    def test_short_name_unchanged(self):
+        import dataprep.genieai_dataprep_microservice as dps
+
+        assert dps._upload_save_name("ecitizen-digital-payments.md") == "ecitizen-digital-payments.md"
+
+    def test_long_name_hashed_to_safe_length(self):
+        import dataprep.genieai_dataprep_microservice as dps
+
+        long_name = (
+            "www-gov-uk-government-consultations-consultation-on-proposals-for-"
+            "a-revised-system-of-financial-support-for-abattoirs-and-game-"
+            "handling-establishments.md"
+        )
+        assert len(long_name.encode("utf-8")) > 255  # the live poison shape
+        safe = dps._upload_save_name(long_name)
+        assert len(safe.encode("utf-8")) <= 255
+        assert safe.endswith(".md")
+
+    def test_long_name_hash_is_deterministic_and_collision_free(self):
+        import dataprep.genieai_dataprep_microservice as dps
+
+        a = "x" * 240 + ".md"
+        b = "y" * 240 + ".md"
+        assert dps._upload_save_name(a) == dps._upload_save_name(a)  # stable per name
+        assert dps._upload_save_name(a) != dps._upload_save_name(b)  # distinct names
+        assert dps._upload_save_name(a) != a
+
+    def test_long_name_without_extension_gets_md(self):
+        import dataprep.genieai_dataprep_microservice as dps
+
+        safe = dps._upload_save_name("z" * 240)
+        assert safe.endswith(".md")

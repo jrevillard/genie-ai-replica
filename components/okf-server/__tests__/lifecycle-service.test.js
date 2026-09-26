@@ -392,6 +392,41 @@ describe('publish — mint + bundle export + serving cleared', () => {
       code: 'INVALID_TRANSITION'
     });
   });
+
+  test('unpublish: publish → review (revert to In Review for unbundling and rework, 2026-09-25)', async () => {
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 1,
+      ingested_at: '2026-09-25T10:00:00Z',
+      ingested_version: 1,
+      bundle: { file_id: 'f1', file_name: 'demo-v1.zip', bundle_version: 1 }
+    });
+    const res = await lifecycleService.transition(REPO, 'unpublish', { sub: 'steward-1' });
+    expect(res).toMatchObject({ ok: true, action: 'unpublish', lifecycle_state: 'review' });
+    const repo = mockDb._stores.okf_repositories[REPO];
+    expect(repo.lifecycle_state).toBe('review');
+    expect(repo.ingested_at).toBeNull();
+    expect(repo.ingested_version).toBeNull();
+    expect(typeof repo.updated_at).toBe('string');
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'repo.unpublish',
+        repo_id: REPO,
+        actor: 'steward-1',
+        from: 'publish',
+        to: 'review',
+        description: expect.stringContaining('Unpublished — reverted to In Review status for unbundling and rework')
+      })
+    );
+  });
+
+  test('unpublish from non-published state → 409 INVALID_TRANSITION', async () => {
+    seedRepo({ lifecycle_state: 'review' });
+    await expect(lifecycleService.transition(REPO, 'unpublish', {})).rejects.toMatchObject({
+      code: 'INVALID_TRANSITION',
+      status: 409
+    });
+  });
 });
 
 describe('ingest / retract — the serving flag', () => {

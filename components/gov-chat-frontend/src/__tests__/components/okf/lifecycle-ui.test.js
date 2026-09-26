@@ -192,6 +192,50 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     expect(retracted.findAll('button').some((b) => b.text() === 'Unpublish')).toBe(false);
   });
 
+  it('shows the cross-repo queue chip while draining with multiple armed repos (spec #1020 §5.7)', async () => {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, {
+      global: { mocks: { $store: store }, stubs: STUBS }
+    });
+    await seedRepos(store, [
+      {
+        repo_id: 'q1',
+        name: 'Queued',
+        lifecycle_state: 'publish',
+        version: 1,
+        concept_count: 997,
+        rag_ingestion: {
+          status: 'draining',
+          concepts_done: 5,
+          concepts_total: 997,
+          queue: { parsed: 992, in_flight: 6, armed_repos: 2 }
+        }
+      },
+      {
+        repo_id: 'q2',
+        name: 'Solo',
+        lifecycle_state: 'publish',
+        version: 1,
+        concept_count: 9,
+        rag_ingestion: {
+          status: 'draining',
+          concepts_done: 1,
+          concepts_total: 9,
+          queue: { parsed: 8, in_flight: 0, armed_repos: 1 }
+        }
+      }
+    ]);
+    await flush();
+    const cards = wrapper.findAll('.okf-dashboard__card-wrap');
+    const queued = cards.find((c) => c.text().includes('Queued'));
+    const solo = cards.find((c) => c.text().includes('Solo'));
+    // Multi-repo drain: the chip renders with the repo's own backlog + the
+    // armed-repo count — the visibility whose absence hid the starvation.
+    expect(queued.text()).toContain('992 queued · 2 repo(s) ingesting');
+    // Single-repo drain: the chip would be noise — hidden.
+    expect(solo.text()).not.toContain('repo(s) ingesting');
+  });
+
   it('Unpublish opens the confirm dialog; confirm dispatches lifecycle unpublish and closes', async () => {
     const store = buildStore();
     const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });

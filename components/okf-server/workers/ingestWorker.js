@@ -40,9 +40,35 @@ const meter = getMeter();
 const jobsCounter = meter.createCounter('okf_ingest_worker_jobs_total', {
   description: 'OKF ingestion worker job outcomes'
 });
-function recordJob(outcome) {
+// §5.7 observability: per-repo job attribution + live lane pressure + the
+// cross-repo queue depth that made the 2026-09-25 starvation invisible.
+const lanesBusyCounter = (() => {
   try {
-    jobsCounter.add(1, { outcome });
+    return meter.createUpDownCounter('okf_ingest_worker_lanes_busy', {
+      description: 'OKF ingestion worker lanes currently executing a job cycle'
+    });
+  } catch {
+    return null;
+  }
+})();
+const _repoQueueDepth = new Map(); // repo_id -> parsed-row backlog (gauge feed)
+(() => {
+  try {
+    const gauge = meter.createObservableGauge('okf_ingest_repo_queue_depth', {
+      description: 'Parsed-row backlog per OKF repo (drain queue depth)'
+    });
+    gauge.addCallback((result) => {
+      for (const [repo, depth] of _repoQueueDepth) {
+        result.observe(depth, { repo });
+      }
+    });
+  } catch {
+    /* meter no-op when observability off */
+  }
+})();
+function recordJob(outcome, repoId) {
+  try {
+    jobsCounter.add(1, repoId ? { outcome, repo: repoId } : { outcome });
   } catch {
     /* meter no-op when observability off */
   }
@@ -331,6 +357,37 @@ async function _refreshRagIngestion(db, repoId) {
       // 'cancelled' record (the documented Bali wedge). One conditional
       // statement checks rag_drain_active AND writes in the same transaction:
       // a disarmed repo matches ZERO rows → nothing is written, ever.
+      //
+      // QUEUE CONTEXT (spec #1020 §5.7/G-8): the starvation incident was
+      // invisible because nothing recorded "repo X waits among M armed
+      // repos". One aggregate query per refresh (in-flight rows of THIS repo
+      // + armed-repo count) rides into the record; the dashboard renders it.
+      // queue: null when the aggregate fails — the key is ALWAYS written
+      // (complete-fresh-record rule: no stale leakage between drains).
+      let queue = null;
+      try {
+        const qctx = await (
+          await db.query(aql`
+          LET inflight = COUNT(
+            FOR m IN okf_concepts_meta
+              FILTER m.repo_id == ${repoId} AND m.index_status == 'parsed'
+                AND m.worker_claimed_at != null
+                AND DATE_TIMESTAMP(m.worker_claimed_at) >= DATE_NOW() - ${claimStaleMs()}
+              RETURN 1
+          )
+          LET armed = COUNT(
+            FOR rr IN okf_repositories
+              FILTER rr.rag_drain_active == true AND rr.deleted_at == null
+              RETURN 1
+          )
+          RETURN { in_flight: inflight, armed_repos: armed }
+        `)
+        ).all();
+        if (qctx[0]) queue = { parsed, in_flight: qctx[0].in_flight, armed_repos: qctx[0].armed_repos };
+      } catch {
+        /* queue context is best-effort — never block the progress write */
+      }
+      _repoQueueDepth.set(repoId, parsed); // §5.7 gauge feed
       await db.query(aql`
       FOR r IN okf_repositories
         FILTER r._key == ${repoId} AND r.rag_drain_active == true
@@ -339,7 +396,8 @@ async function _refreshRagIngestion(db, repoId) {
             status: 'draining',
             concepts_done: ${indexed},
             concepts_total: ${indexed + parsed + failed},
-            error: null
+            error: null,
+            queue: ${queue}
           })
         } IN okf_repositories
       `);
@@ -657,7 +715,7 @@ async function _processOneJob() {
           /* best-effort */
         }
         logger.info('Ingest worker: dataprep busy (429) — backing off', { concept_id: conceptId });
-        recordJob('busy');
+        recordJob('busy', job.repo_id);
         return { outcome: 'busy', concept_id: conceptId };
       }
       // 2-9-5 atomicity pass (2026-08-24): TOUCH the row (the patch stamps
@@ -689,7 +747,7 @@ async function _processOneJob() {
       } catch {
         /* best-effort — the error log below still records it */
       }
-      recordJob('error');
+      recordJob('error', job.repo_id);
       logger.error('Ingest worker: dataprep POST failed', { concept_id: conceptId, error: err.message });
       // DIRECTIVE (David, 2026-09-04): EVERY drain failure reaches the
       // ingestion log — silent catch-and-continue is banned in the drain path.
@@ -716,7 +774,7 @@ async function _processOneJob() {
       } catch {
         /* best-effort */
       }
-      recordJob('error');
+      recordJob('error', job.repo_id);
       logger.error('Ingest worker: dataprep rejected', { concept_id: conceptId, status: kick.status });
       writeBundleIngestionLog(
         job.repo_id,
@@ -817,7 +875,7 @@ async function _processOneJob() {
           } catch {
             /* best-effort */
           }
-          recordJob('deferred');
+          recordJob('deferred', job.repo_id);
           logger.info('Ingest worker: window expired but dataprep task ALIVE — deferred, no retract/re-kick', {
             repo_id: job.repo_id,
             concept_id: conceptId,
@@ -863,7 +921,7 @@ async function _processOneJob() {
         logger.error('Ingest worker: re-index retry reset failed', { concept_id: conceptId, error: err.message });
       }
     }
-    recordJob(outcome);
+    recordJob(outcome, job.repo_id);
     // Mirror ONLY failure/timeout verdicts — dataprep's per-stage logs (incl.
     // the System start/complete lines) already mirror to the bundle zip;
     // a worker "completed" entry would duplicate them.
@@ -912,7 +970,7 @@ async function _processOneJob() {
       duration_ms: durationMs
     });
     if (terminal.status === 'vanished') {
-      recordJob('vanished');
+      recordJob('vanished', job.repo_id);
       logger.info('Ingest worker: concept vanished mid-drain', { concept_id: conceptId });
       return { outcome: 'vanished', concept_id: conceptId };
     }
@@ -1258,6 +1316,7 @@ function start() {
   for (let lane = 0; lane < lanes; lane++) {
     const poll = async () => {
       try {
+        if (lanesBusyCounter) lanesBusyCounter.add(1); // §5.7 lane pressure
         let timeoutHandle;
         const timeoutPromise = new Promise((_, reject) => {
           timeoutHandle = setTimeout(() => reject(new Error('Ingest worker cycle timeout')), cycleTimeoutMs());
@@ -1277,6 +1336,7 @@ function start() {
         // claimNextJob will pick the freshest stale-claim row first (FILTER
         // clause orders by updated_at ASC).
       } finally {
+        if (lanesBusyCounter) lanesBusyCounter.add(-1);
         const i = _drainTimers.indexOf(poll);
         _drainTimers[i >= 0 ? i : _drainTimers.length] = setTimeout(poll, intervalMs());
       }

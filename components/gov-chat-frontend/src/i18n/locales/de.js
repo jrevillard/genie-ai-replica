@@ -2050,6 +2050,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'veröffentlicht',
         inReview: 'in Überprüfung',
@@ -2057,6 +2066,7 @@ export default {
       },
       exit: 'Zurück zum Dashboard',
       context: {
+        version: 'Version',
         untitled: 'Unbenanntes Repository',
         trust: 'Vertrauen',
         title: 'Repository',
@@ -2071,6 +2081,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'Repository-Name & Themenbereich',
         hint: 'Geben Sie diesem OKF-Repository einen eindeutigen Namen und wählen Sie dessen Themenbereich.',
         nameLabel: 'Repository-Name',

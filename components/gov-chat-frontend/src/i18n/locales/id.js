@@ -2037,6 +2037,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'dipublikasikan',
         inReview: 'dalam tinjauan',
@@ -2044,6 +2053,7 @@ export default {
       },
       exit: 'Kembali ke dasbor',
       context: {
+        version: 'Version',
         untitled: 'Repositori tanpa judul',
         trust: 'Kepercayaan',
         title: 'Repositori',
@@ -2058,6 +2068,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'Nama repositori & bidang subjek',
         hint: 'Beri nama yang jelas untuk repositori OKF ini dan pilih bidang subjeknya.',
         nameLabel: 'Nama repositori',

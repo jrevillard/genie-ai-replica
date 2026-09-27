@@ -2022,6 +2022,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'منشور',
         inReview: 'قيد المراجعة',
@@ -2029,6 +2038,7 @@ export default {
       },
       exit: 'العودة إلى لوحة التحكم',
       context: {
+        version: 'Version',
         untitled: 'مستودع بدون عنوان',
         trust: 'الثقة',
         title: 'المستودع',
@@ -2043,6 +2053,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'اسم المستودع ومجال الموضوع',
         hint: 'امنح مستودع OKF هذا اسمًا واضحًا واختر مجال موضوعه.',
         nameLabel: 'اسم المستودع',

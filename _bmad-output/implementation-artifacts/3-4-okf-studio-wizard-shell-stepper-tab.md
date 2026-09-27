@@ -260,3 +260,23 @@ with the six-step-contract DsInfoTip. Slice 3b complete. Remaining: B9
 reachability (graph/versions/logs/rename), slice 4 (B1 input panels, B2
 produce 7.2-gated, B11 automation, doc-mgmt + crawler + step tips ×14
 locale batch).
+
+### Dev-log — slice 4a LANDED (commit 555ad35ac, 2026-09-27)
+
+The Input dead end (David's UI pass stopped at the placeholder) is GONE.
+B1 real panels: documents → doc-repo multi-select (bundles excluded);
+crawl → single crawled-file pick; manual → FS markdown import via the
+idempotent /import upsert + in-wizard authoring modal; clone → nothing
+to add (gate open at once — the fork already landed the content; found
+during self-review that a closed Continue on the clone side-visit read
+as a trap). B2 (documents/crawl legs): Produce runs the REAL conversions
+through the new optional repo_id passthrough (backend, additive —
+convert-from-documents/crawl target the EXISTING repo; 404 on unknown),
+with IDEMPOTENT kick (conversion_kicked on draft + live status on
+mount — resume polls, never re-kicks), real pages_done/total progress,
+failed→Retry (no dead end). Dedicated spec input.test.js (4 cases: bundle
+filter + gate/write-back, clone gate, manual /import shape,
+beforeAdvance no-repo refusal). Frontend 1520/1520, backend 719/719,
+lint+prettier clean, served-bundle markers verified through the gateway.
+Remaining: B9 reachability, B11 automation depth, LabelOnboard decision,
+doc-mgmt + crawler + remaining step tips, ×14 locale batch.

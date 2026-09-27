@@ -21,14 +21,15 @@
       </button>
     </div>
 
-    <!-- CLONE: the source picker. Amendment A decision (David, 2026-09-27):
-         clone is REAL — the topics are imported from the chosen draft
-         repository on Continue (idempotent /import upsert, so re-running
-         refreshes instead of duplicating). -->
+    <!-- CLONE: the source picker. Amendment A decision #9 (David,
+         2026-09-27): clone is REAL — on Continue the 4.8 clone API copies
+         the source wholesale (concepts, links, PII state, labels) into a
+         repo cloned under this draft's name. Switching the workflow card
+         clears any Input selection so ids never leak across variants. -->
     <div v-if="local.source === 'clone'" class="okf-step__clone">
       <label class="okf-step__clone-field">
         <span>{{ translate('okf.steps.choose.cloneSource', 'Source repository (not yet serving)') }}</span>
-        <DsSelect v-model="local.clone_source_repo_id" size="sm" @change="pickSource">
+        <DsSelect v-model="local.clone_source_repo_id" size="sm">
           <option value="" disabled>
             {{ translate('okf.steps.choose.clonePh', 'Select the repository to clone from') }}
           </option>
@@ -108,17 +109,20 @@ export default {
   },
   computed: {
     ...mapGetters('okf', ['reposByStage', 'repoById']),
-    // Cloneable sources: repos that are NOT serving (decision #9) —
-    // flattened from the dashboard's stage lanes.
+    // Cloneable sources: repos that are NOT serving (decision #9). The
+    // stage lanes carry repo_id STRINGS (store laneFor) — resolve each
+    // through repoById (max-review F3: treating ids as objects rendered
+    // one blank option and disabled the non-serving filter).
     cloneSources() {
       const lanes = this.reposByStage || {};
       const seen = new Set();
       const out = [];
       Object.keys(lanes).forEach((stage) => {
-        (lanes[stage] || []).forEach((r) => {
-          if (seen.has(r.repo_id)) return;
-          seen.add(r.repo_id);
-          if (!r.ingested_at && !r.deleted_at) out.push(r);
+        (lanes[stage] || []).forEach((id) => {
+          if (seen.has(id)) return;
+          seen.add(id);
+          const r = this.repoById(id);
+          if (r && !r.ingested_at && !r.deleted_at) out.push(r);
         });
       });
       return out;
@@ -128,6 +132,21 @@ export default {
       if (!this.local.source) return false;
       if (this.local.source === 'clone') return !!this.local.clone_source_repo_id;
       return true;
+    }
+  },
+  watch: {
+    // v-model ordering: DsSelect spreads $attrs (the parent's @change)
+    // BEFORE its own update emit, so a change handler read the PREVIOUS
+    // value (max-review F6). The watcher sees the post-update value.
+    'local.clone_source_repo_id'(v) {
+      this.$emit('update', { clone_source_repo_id: v });
+      this.emitGate();
+    },
+    // G3: switching the workflow card clears the Input selection so stale
+    // document_ids never cross variants (a crawl kick would convert only
+    // ids[0] of a documents selection).
+    'local.source'(v, old) {
+      if (old && v !== old) this.$emit('update', { input: null });
     }
   },
   mounted() {
@@ -140,17 +159,15 @@ export default {
       this.$emit('update', { source: value });
       this.emitGate();
     },
-    pickSource() {
-      this.$emit('update', { clone_source_repo_id: this.local.clone_source_repo_id });
-      this.emitGate();
-    },
     emitGate() {
       this.$emit('gate', this.canAdvance);
     },
-    // A3: the shell awaits this BEFORE advancing. Clone copies the source's
-    // concepts (frontmatter + body) into the repo Entry already created via
-    // the standard /import upsert — no destroy-and-mint dance, no duplicate
-    // (name,domain) 409 against the async 202 delete.
+    // A3: the shell awaits this BEFORE advancing. The 4.8 clone API copies
+    // the source wholesale (meta verbatim: links, PII state, labels) — the
+    // decision-#9 sanctioned path. Entry's empty shell holds the target
+    // (name,domain), and clone mints its own repo, so the shell is deleted
+    // first; its 202 delete is ASYNC, so a 409 (name still registered) is
+    // retried with backoff.
     async beforeAdvance() {
       if (this.local.source !== 'clone') return true;
       const sourceId = this.local.clone_source_repo_id;
@@ -161,32 +178,47 @@ export default {
       this.cloning = true;
       this.cloneError = '';
       try {
-        const rows = await repoOkfService.listConcepts(sourceId);
-        const concepts = [];
-        const CHUNK = 5;
-        for (let i = 0; i < rows.length; i += CHUNK) {
-          const details = await Promise.all(
-            rows.slice(i, i + CHUNK).map((r) => repoOkfService.getConcept(sourceId, r.concept_id).catch(() => null))
-          );
-          details.forEach((d) => {
-            if (!d) return;
-            concepts.push({
-              path: d.path || d.concept_id,
-              frontmatter: d.frontmatter || { type: 'topic', title: d.title || d.path },
-              body: d.body || ''
-            });
-          });
+        try {
+          await repoOkfService.deleteRepo(this.draft.repo_id);
+        } catch {
+          /* tolerate — the clone retry below still surfaces a real failure */
         }
-        if (concepts.length) await repoOkfService.importConcepts(this.draft.repo_id, concepts);
+        let clone = null;
+        let lastErr = null;
+        for (let attempt = 0; attempt < 3 && !clone; attempt++) {
+          try {
+            clone = await repoOkfService.clone(sourceId, {
+              name: this.draft.name,
+              domain: this.draft.domain
+            });
+          } catch (err) {
+            lastErr = err;
+            if (err && err.status === 409) {
+              await new Promise((r) => setTimeout(r, 1200));
+            } else {
+              break;
+            }
+          }
+        }
+        if (!clone || !clone.repo_id) {
+          this.cloneError =
+            lastErr && lastErr.status === 409
+              ? this.translate(
+                  'okf.steps.choose.cloneBusy',
+                  'The previous repository is still being removed — go Back and Continue again in a moment.'
+                )
+              : this.translate('okf.steps.choose.cloneFailed', 'The clone failed — try again.');
+          return false;
+        }
         this.$emit('update', {
+          repo_id: clone.repo_id,
+          name: clone.name || this.draft.name,
           cloned_from: sourceId,
           clone_source_repo_id: sourceId,
-          concept_count: concepts.length
+          concept_count: clone.concept_count || 0
         });
+        this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
         return true;
-      } catch {
-        this.cloneError = this.translate('okf.steps.choose.cloneFailed', 'The clone failed — try again.');
-        return false;
       } finally {
         this.cloning = false;
       }

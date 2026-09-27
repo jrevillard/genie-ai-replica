@@ -15,10 +15,14 @@
  */
 
 const mockImportConcepts = jest.fn();
+const mockListConcepts = jest.fn();
 
 jest.mock('@/services/repoOkfService', () => ({
   __esModule: true,
-  default: { importConcepts: (...a) => mockImportConcepts(...a) }
+  default: {
+    importConcepts: (...a) => mockImportConcepts(...a),
+    listConcepts: (...a) => mockListConcepts(...a)
+  }
 }));
 
 const { mount } = require('@vue/test-utils');
@@ -36,6 +40,7 @@ function mountInput(draft) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockImportConcepts.mockResolvedValue({ ok: true });
+  mockListConcepts.mockResolvedValue([{ concept_id: 'existing-1' }, { concept_id: 'water-points' }]);
 });
 
 it('documents: the dialog owns the sources; confirming writes back and opens the gate', async () => {
@@ -85,7 +90,7 @@ it('manual: a declined editor never re-pops (editor_offered respected)', () => {
   expect(wrapper.emitted('update')).toBeUndefined();
 });
 
-it('manual: the input patch SPREADS draft.input (conversion_kicked survives)', async () => {
+it('manual: the input patch SPREADS draft.input (conversion_kicked survives) and ids follow the sanctioned slug', async () => {
   const wrapper = mountInput({
     repo_id: 'r1',
     source: 'manual',
@@ -95,10 +100,14 @@ it('manual: the input patch SPREADS draft.input (conversion_kicked survives)', a
   await wrapper.vm.onFsFiles({ target: { files: [fake] } });
   const last = wrapper.emitted('update').pop()[0].input;
   expect(last.conversion_kicked).toBe(true); // not clobbered by the replace
-  expect(last.concepts_added).toBe(1);
+  // F13: 'Water Points' already exists in the repo (the mock's second row)
+  // → the slug builder dedupes to water-points-2, and addedCount is the
+  // SERVER truth (2), not a local +=.
   expect(mockImportConcepts).toHaveBeenCalledWith('r1', [
-    { path: 'Water Points', frontmatter: { type: 'topic', title: 'Water Points' }, body: '# Water Points' }
+    expect.objectContaining({ path: 'water-points-2', frontmatter: expect.objectContaining({ title: 'Water Points' }) })
   ]);
+  expect(last.concepts_added).toBe(2);
+  expect(mockListConcepts).toHaveBeenCalledWith('r1');
   expect(wrapper.emitted('gate').pop()[0]).toBe(true);
 });
 

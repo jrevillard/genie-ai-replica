@@ -28,7 +28,7 @@
       <DsButton :variant="view === 'dashboard' ? 'primary' : 'secondary'" small @click="view = 'dashboard'">
         {{ translate('okf.studio.view.dashboard', 'Dashboard') }}
       </DsButton>
-      <DsButton :variant="view === 'wizard' ? 'primary' : 'secondary'" small @click="view = 'wizard'">
+      <DsButton :variant="view === 'wizard' ? 'primary' : 'secondary'" small @click="openWizard">
         {{ translate('okf.studio.view.wizard', 'Wizard') }}
       </DsButton>
     </nav>
@@ -562,8 +562,41 @@ export default {
       this.view = 'wizard';
     },
     onCreateFromCrawl() {
-      // AddFromLinkDialog / FileDetailsDialog preloaded crawlSeeds; the wizard
-      // surfaces Step 1 (Choose workflow) with the crawl source pre-selected.
+      // AddFromLinkDialog / FileDetailsDialog preloaded crawlSeeds; seed a
+      // crawl draft (mirrors onCreateFromDocuments) so the wizard never
+      // mounts with a null draft — a null draft made the wizard's write-back
+      // guard drop EVERY step update (max-review F4), orphaning the repo
+      // Entry created.
+      const sel = this.$store.getters['okf/selection'] || {};
+      const ids = (sel.crawlSeeds || []).map((d) => (typeof d === 'string' ? d : d.file_id)).filter(Boolean);
+      this.activeDraft = {
+        repo_id: null,
+        name: '',
+        domain: '',
+        source: 'crawl',
+        concept_count: 0,
+        studio_step: 0,
+        input: { document_ids: ids, concepts_added: 0 }
+      };
+      this.view = 'wizard';
+    },
+    /**
+     * The view rail's Wizard toggle (max-review F4): a null activeDraft
+     * reached StudioWizard and its write-back guard (`if (!this.draft)`)
+     * silently discarded every step update — Entry minted a repo whose
+     * identity was then lost (orphan + DUPLICATE_REPO on retry). A fresh
+     * empty draft gives the write-back chain an owner.
+     */
+    openWizard() {
+      if (!this.activeDraft) {
+        this.activeDraft = {
+          repo_id: null,
+          name: '',
+          domain: '',
+          concept_count: 0,
+          studio_step: 0
+        };
+      }
       this.view = 'wizard';
     },
     onOkfRepoCreated(evt) {

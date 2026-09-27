@@ -2033,6 +2033,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'imechapishwa',
         inReview: 'inakaguliwa',
@@ -2040,6 +2049,7 @@ export default {
       },
       exit: 'Rudi kwenye dashibodi',
       context: {
+        version: 'Version',
         untitled: 'Ghala lisilo na jina',
         trust: 'Uaminifu',
         title: 'Hazina',
@@ -2054,6 +2064,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'Jina la ghala & eneo la mada',
         hint: 'Lipe ghala hili la OKF jina lililo wazi na uchague eneo la mada yake.',
         nameLabel: 'Jina la ghala',

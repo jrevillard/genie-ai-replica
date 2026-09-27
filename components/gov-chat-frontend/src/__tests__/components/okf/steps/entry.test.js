@@ -72,6 +72,92 @@ it('a KH-listed draft domain is kept as-is (no legacy duplicate)', async () => {
   expect(texts(wrapper).filter((t) => t.includes('(legacy)'))).toEqual([]);
 });
 
+describe('Amendment A — A1 write-back / A2 gate / A3 create-on-advance', () => {
+  function mountWithStore(draft, dispatchImpl) {
+    const dispatch = jest.fn(dispatchImpl || (() => Promise.resolve({ ok: true })));
+    const wrapper = mount(OkfStepEntry, {
+      props: { draft: draft || null, expert: false },
+      global: {
+        stubs: { DsInput: true },
+        mocks: { $store: { dispatch } }
+      }
+    });
+    return { wrapper, dispatch };
+  }
+
+  it('emits gate=false when nothing is filled, gate=true once name + domain are set', async () => {
+    mockLoad.mockResolvedValue(KH);
+    const { wrapper } = mountWithStore(null);
+    await wrapper.vm.$nextTick();
+    const gates = wrapper.emitted('gate') || [];
+    expect(gates[gates.length - 1]).toEqual([false]);
+    wrapper.vm.local.name = 'Permits';
+    wrapper.vm.local.domain = 'Water Supply';
+    await wrapper.vm.$nextTick();
+    const gates2 = wrapper.emitted('gate') || [];
+    expect(gates2[gates2.length - 1]).toEqual([true]);
+  });
+
+  it('A1: selections write back to the draft via the update event', async () => {
+    mockLoad.mockResolvedValue(KH);
+    const draft = {};
+    const { wrapper } = mountWithStore(draft);
+    await wrapper.vm.$nextTick();
+    wrapper.vm.local.name = 'Transport permits';
+    wrapper.vm.local.domain = 'Water Supply';
+    await wrapper.vm.$nextTick();
+    const updates = wrapper.emitted('update') || [];
+    const last = updates[updates.length - 1][0];
+    expect(last).toMatchObject({ name: 'Transport permits', domain: 'Water Supply' });
+  });
+
+  it('A3: beforeAdvance CREATES the repo and writes the minted identity back', async () => {
+    mockLoad.mockResolvedValue(KH);
+    const { wrapper, dispatch } = mountWithStore(null, () =>
+      Promise.resolve({ ok: true, repo: { repo_id: 'r-1', name: 'Permits', domain: 'Water Supply' } })
+    );
+    await wrapper.vm.$nextTick();
+    wrapper.vm.local.name = 'Permits';
+    wrapper.vm.local.domain = 'Water Supply';
+    await wrapper.vm.$nextTick();
+    const ok = await wrapper.vm.beforeAdvance();
+    expect(ok).toBe(true);
+    expect(dispatch).toHaveBeenCalledWith('okf/createRepo', { name: 'Permits', domain: 'Water Supply' });
+    const updates = wrapper.emitted('update') || [];
+    expect(updates[updates.length - 1][0]).toMatchObject({ repo_id: 'r-1' });
+  });
+
+  it('A3: a DUPLICATE_REPO refusal BLOCKS the advance and surfaces the error', async () => {
+    mockLoad.mockResolvedValue(KH);
+    const { wrapper } = mountWithStore(null, () => Promise.resolve({ ok: false, code: 'DUPLICATE_REPO' }));
+    await wrapper.vm.$nextTick();
+    wrapper.vm.local.name = 'Permits';
+    wrapper.vm.local.domain = 'Water Supply';
+    await wrapper.vm.$nextTick();
+    const ok = await wrapper.vm.beforeAdvance();
+    expect(ok).toBe(false);
+    expect(wrapper.text()).toMatch(/already exists/i);
+  });
+
+  it('A3 idempotency: a draft with a repo_id never creates again', async () => {
+    mockLoad.mockResolvedValue(KH);
+    const { wrapper, dispatch } = mountWithStore({ repo_id: 'r-exists', name: 'X', domain: 'Water Supply' });
+    await wrapper.vm.$nextTick();
+    const ok = await wrapper.vm.beforeAdvance();
+    expect(ok).toBe(true);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('A2: an existing repo (repo_id present) gates OPEN from the start', async () => {
+    mockLoad.mockResolvedValue(KH);
+    const { wrapper } = mountWithStore({ repo_id: 'r-exists', name: 'X', domain: 'Water Supply' });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.canAdvance).toBe(true);
+    const gates = wrapper.emitted('gate') || [];
+    expect(gates[gates.length - 1]).toEqual([true]);
+  });
+});
+
 function texts(wrapper) {
   return wrapper.findAll('option').map((o) => o.text());
 }

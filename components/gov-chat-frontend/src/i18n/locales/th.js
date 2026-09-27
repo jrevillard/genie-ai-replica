@@ -2024,6 +2024,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'เผยแพร่แล้ว',
         inReview: 'กำลังตรวจสอบ',
@@ -2031,6 +2040,7 @@ export default {
       },
       exit: 'กลับสู่แดชบอร์ด',
       context: {
+        version: 'Version',
         untitled: 'ที่เก็บที่ไม่มีชื่อ',
         trust: 'ความน่าเชื่อถือ',
         title: 'ที่เก็บข้อมูล',
@@ -2045,6 +2055,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'ชื่อที่เก็บและสาขาวิชา',
         hint: 'ตั้งชื่อที่เก็บ OKF นี้ให้ชัดเจนและเลือกสาขาวิชา',
         nameLabel: 'ชื่อที่เก็บ',

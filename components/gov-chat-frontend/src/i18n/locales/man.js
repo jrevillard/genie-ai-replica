@@ -2018,6 +2018,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'A keta',
         inReview: 'A bering juube',
@@ -2025,6 +2034,7 @@ export default {
       },
       exit: 'Jeblak ñan dashboard',
       context: {
+        version: 'Version',
         untitled: 'Jikin kakwōn ejjel̦o̦k etan',
         trust: 'Laana',
         title: 'Kafuolu',
@@ -2039,6 +2049,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'Āt an jikin kakwōn & un ko',
         hint: 'Kōm̦m̦an juon āt ealikkar ñan jikin kakwōn OKF in im kāālet un ko ie.',
         nameLabel: 'Āt an jikin kakwōn',

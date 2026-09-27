@@ -45,7 +45,7 @@ const LIFECYCLE_STATES = [
 ];
 const INITIAL_STATE = 'register';
 const IMMUTABLE_FIELDS = ['graph_name', 'repo_id', 'domain'];
-const UPDATABLE_FIELDS = ['name', 'source', 'acl', 'retention'];
+const UPDATABLE_FIELDS = ['name', 'source', 'acl', 'retention', 'studio_step'];
 
 // ArangoDB error codes used for control flow.
 const ARANGO_NOT_FOUND = (err) => err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404);
@@ -558,6 +558,20 @@ async function update(repo_id, patch, actor) {
           `Repository "${patch.name}" already exists in domain "${existing.domain}"`,
           409
         );
+      }
+    }
+
+    // Studio wizard resume pointer (3.4 Amendment A, A4): an optional int
+    // 0..9 or null. Anything else is a client bug — refuse with 400 rather
+    // than silently clamp (a bogus pointer would desync the wizard's lock
+    // model). Serving repos never reach here (READ-ONLY above) — by design:
+    // a serving repo has nothing left to draft, so its pointer is inert.
+    if (Object.prototype.hasOwnProperty.call(patch, 'studio_step')) {
+      const step = patch.studio_step;
+      const validStep = step === null || (Number.isInteger(step) && step >= 0 && step <= 9);
+      if (!validStep) {
+        recordOp('update', 'validation');
+        throw new RepoError('VALIDATION_ERROR', 'studio_step must be an integer 0-9 or null', 400);
       }
     }
 

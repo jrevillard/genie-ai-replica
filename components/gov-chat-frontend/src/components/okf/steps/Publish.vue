@@ -21,6 +21,7 @@
 
 <script>
 import DsStatusTag from '../../ds/StatusTag.vue';
+import { mapGetters } from 'vuex';
 import translateMixin from '../../../mixins/translateMixin';
 
 export default {
@@ -28,15 +29,42 @@ export default {
   components: { DsStatusTag },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
+  emits: ['gate'],
   computed: {
+    ...mapGetters('okf', ['repoById']),
+    // B8 (Amendment A): the checklist reads the LIVE repo doc — never the
+    // dead draft shapes. Each item is a real publish gate the steward can
+    // still act on.
+    repo() {
+      return (this.draft && this.draft.repo_id && this.repoById(this.draft.repo_id)) || null;
+    },
+    nameOk() {
+      return !!((this.repo && this.repo.name) || (this.draft && this.draft.name));
+    },
+    topicsOk() {
+      return ((this.repo && this.repo.concept_count) || (this.draft && this.draft.concept_count) || 0) > 0;
+    },
+    notFrozen() {
+      return !(this.repo && this.repo.ingested_at);
+    },
+    canPublish() {
+      return this.nameOk && this.topicsOk && this.notFrozen;
+    },
     checklistVariants() {
-      const d = this.draft || {};
       return {
-        name: d.name ? 'success' : 'pending',
-        labels: Array.isArray(d.labels) && d.labels.length >= 1 ? 'success' : 'pending',
-        topics: (d.concept_count || 0) > 0 ? 'success' : 'pending'
+        name: this.nameOk ? 'success' : 'pending',
+        labels: this.topicsOk ? 'success' : 'pending',
+        topics: this.topicsOk ? 'success' : 'pending'
       };
     }
+  },
+  watch: {
+    canPublish() {
+      this.$emit('gate', this.canPublish);
+    }
+  },
+  mounted() {
+    this.$emit('gate', this.canPublish);
   }
 };
 </script>

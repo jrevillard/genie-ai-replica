@@ -3,7 +3,7 @@ baseline_commit: 14205ae
 ---
 # Story 3.7: Crawler UI "Create OKF repository" entry point
 
-Status: ready-for-dev
+Status: done (reconciled 2026-09-27 — AddFromLinkDialog + crawlerToOkfService + #977 Curate-handoff live; crawler Input-panel = 3.4 amendment scope)
 
 Story key: `3-7-crawler-ui-create-okf-entry-point` | GitLab: #969
 Epic: 3 (Admin UI) / **Epic 10** (OKF Studio capstone) | Branch: `feat/okf-server`

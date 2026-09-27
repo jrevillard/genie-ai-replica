@@ -11,6 +11,7 @@ document repository ingestion and retraction, using ArangoDB as the backend.
 import asyncio
 import base64
 import fcntl
+import hashlib
 import importlib
 import os
 import time
@@ -63,6 +64,30 @@ setup_trace_logging("genie_dataprep_microservice")
 logflag = os.getenv("LOGFLAG", False)
 upload_folder = "./uploaded_files/"
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
+# F-1 (#1021, spec §5.6): filesystems cap a single filename at 255 BYTES.
+# Names whose UTF-8 encoding passes this threshold are hashed instead —
+# 200 leaves ample margin for the extension and any filesystem overhead.
+_UPLOAD_NAME_MAX_BYTES = 200
+
+
+def _upload_save_name(file_name: str) -> str:
+    """Filesystem-safe name for the temporary upload file.
+
+    Long OKF concept ids overflow the 255-byte filename limit and made the
+    ingest kick fail with OSError ENAMETOOLONG on every deterministic retry.
+    Names over the byte threshold map to sha256(name)<ext> — stable per name
+    (re-kicks overwrite the same temp file instead of littering), and the
+    original extension is preserved for extension-based behavior. Identity
+    fields (file_id, concept_id, file_name) are never derived from this; it
+    names ONLY the temporary bytes vehicle, removed after ingest.
+    """
+    name_bytes = file_name.encode("utf-8")
+    if len(name_bytes) <= _UPLOAD_NAME_MAX_BYTES:
+        return file_name
+    ext = os.path.splitext(file_name)[1] or ".md"
+    return hashlib.sha256(name_bytes).hexdigest() + ext
+
+
 # PARALLEL INGEST (David, 2026-09-03): number of concurrently accepted ingest
 # requests. Each slot is its own flock file; a request takes any FREE slot and
 # 429s only when ALL are busy. Default 1 = the historical single-flight
@@ -258,7 +283,15 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         try:
             # Decode and temporarily save file
             file_bytes = base64.b64decode(payload.fileBase64)
-            save_path = os.path.join(upload_folder, payload.fileName)
+            # F-1 (#1021, spec §5.6): OKF concept ids can exceed the
+            # filesystem's 255-byte filename limit — the kick then failed with
+            # OSError ENAMETOOLONG on EVERY attempt (live 2026-09-26: 230-char
+            # UK consultation concepts dead-lettered after 8 deterministic
+            # failures). Map over-long upload names to sha256(name).ext. The
+            # path is a temporary vehicle for the bytes only — identity
+            # (file_id / concept_id / file_name for logs) is untouched, and
+            # the file is removed after ingest.
+            save_path = os.path.join(upload_folder, _upload_save_name(payload.fileName))
             # OKF concept file names can carry folder structure (a zip import
             # preserves the bundle's internal directories, e.g.
             # "kenya-okf/concepts/ecitizen-digital-payments.md"). The save path
@@ -319,8 +352,18 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             _slot_owner_task.append(task)  # register for the synchronous-release guard
             active_ingestion_tasks[payload.fileId] = task
 
-            # Ensure the task is removed from the registry upon completion (success or failure)
-            task.add_done_callback(lambda t: active_ingestion_tasks.pop(payload.fileId, None))
+            # Ensure the task is removed from the registry upon completion (success or failure).
+            # REVIEW FIX #11 (#1020): pop only if the registry STILL points at THIS
+            # task — a re-kick overwrites the entry with a newer task, and the OLD
+            # task's completion callback would otherwise delete the NEW task's
+            # registration (task_status then reports dead for a live task, and the
+            # OKF worker's probe-defer logic retracts running work; kill_ingest
+            # would 404 or cancel the wrong task).
+            task.add_done_callback(
+                lambda t, _fid=payload.fileId, _me=task: (
+                    active_ingestion_tasks.pop(_fid) if active_ingestion_tasks.get(_fid) is _me else None
+                )
+            )
 
             statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
 
@@ -388,6 +431,31 @@ async def kill_ingest_task(payload: DocRepoRetractPayload):
         span.set_attribute("dataprep.kill_result", "not_found")
         logger.warning(f"[ kill ] No active ingestion task found for file_id: {file_id}")
         return {"success": False, "status": 404, "message": "No active ingestion task found for this file."}
+
+
+# ------------------------------------------------------------------------------
+# Ingestion task liveness probe (spec #1020 §5.9 — size-adaptive job windows)
+# ------------------------------------------------------------------------------
+@register_microservice(
+    name="opea_service@dataprep",
+    service_type=ServiceType.DATAPREP,
+    endpoint="/v1/dataprep/task_status",
+    host="0.0.0.0",
+    port=5000,
+)
+async def ingestion_task_status(payload: DocRepoRetractPayload):
+    """
+    Reports whether an ingestion task is ACTIVELY running for this fileId.
+    The OKF worker's window expiry (§5.9) probes this before touching a
+    timed-out concept: alive → the worker defers (parks the row, never
+    re-kicks) because a re-kick would retract and destroy the in-flight
+    work; dead/unknown → the reclaim + retract is safe.
+    """
+    file_id = payload.fileId
+    task = active_ingestion_tasks.get(file_id)
+    alive = task is not None and not task.done()
+    logger.info(f"[ task_status ] file_id={file_id} alive={alive}")
+    return {"success": True, "status": 200, "fileId": file_id, "alive": alive}
 
 
 # ------------------------------------------------------------------------------

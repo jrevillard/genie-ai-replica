@@ -1737,6 +1737,7 @@ export default {
       select: "Pilih {'{'}name{'}'} untuk publikasi massal",
       stage: {
         drainFailed: 'Proses ingest gagal',
+        queueBehind: '{n} dalam antrean · meng-ingest {m} repo',
         redraining: 'Mengosongkan ulang…',
         building: 'Membangun…',
         draft: 'Draf',

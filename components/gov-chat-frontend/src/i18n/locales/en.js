@@ -1790,6 +1790,7 @@ export default {
       select: "Select {'{'}name{'}'} for bulk publish",
       stage: {
         drainFailed: 'Ingest failed',
+        queueBehind: '{n} queued · {m} repo(s) ingesting',
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',

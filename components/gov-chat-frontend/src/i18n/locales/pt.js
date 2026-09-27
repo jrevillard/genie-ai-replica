@@ -2044,6 +2044,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'publicado',
         inReview: 'em revisão',
@@ -2051,6 +2060,7 @@ export default {
       },
       exit: 'Voltar ao painel',
       context: {
+        version: 'Version',
         untitled: 'Repositório sem título',
         trust: 'Confiança',
         title: 'Repositório',
@@ -2065,6 +2075,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'Nome do repositório e área temática',
         hint: 'Dê a este repositório OKF um nome claro e escolha sua área temática.',
         nameLabel: 'Nome do repositório',

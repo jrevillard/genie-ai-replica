@@ -2029,6 +2029,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'প্রকাশিত',
         inReview: 'পর্যালোচনা চলছে',
@@ -2036,6 +2045,7 @@ export default {
       },
       exit: 'ড্যাশবোর্ডে ফিরে যান',
       context: {
+        version: 'Version',
         untitled: 'শিরোনামহীন রিপোজিটরি',
         trust: 'বিশ্বাস',
         title: 'রিপোজিটরি',
@@ -2050,6 +2060,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'রিপোজিটরির নাম ও বিষয় ক্ষেত্র',
         hint: 'এই OKF রিপোজিটরিকে একটি স্পষ্ট নাম দিন এবং এর বিষয় ক্ষেত্র বেছে নিন।',
         nameLabel: 'রিপোজিটরির নাম',

@@ -2046,6 +2046,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'e hatisitsoe',
         inReview: 'ho hlahloba',
@@ -2053,6 +2062,7 @@ export default {
       },
       exit: 'Khutlela ho dashboard',
       context: {
+        version: 'Version',
         untitled: 'Polokelo e se nang lebitso',
         trust: 'Tšepo',
         title: 'Lefapha',
@@ -2067,6 +2077,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'Lebitso la polokelo & sebaka sa taba',
         hint: "Fana ka lebitso le hlakileng polokelong ena ea OKF 'me u khethe sebaka sa taba ea eona.",
         nameLabel: 'Lebitso la polokelo',

@@ -152,8 +152,9 @@
       :source-file-id="activeSourceFileId"
       @back="onBackToDashboard"
       @refresh="onRepoRefresh"
+      @update-draft="onDraftUpdate"
     />
-    <OkfStudioWizard v-if="view === 'wizard'" :draft="activeDraft" @reset="resetWizard" />
+    <OkfStudioWizard v-if="view === 'wizard'" :draft="activeDraft" @reset="resetWizard" @update-draft="onDraftUpdate" />
 
     <DsDialog
       :visible="helpOpen"
@@ -343,8 +344,18 @@ export default {
           source: 'editor'
         };
       }
-      this.$store.dispatch('okf/setEditorSubTab', 'editor');
+      this.$store.dispatch('okf/setEditorSubTab', 'wizard'); // C1 (Amendment A): the WIZARD is the default repo surface — the editor stays one click away
       this.view = 'repo';
+    },
+    /**
+     * A1 write-back (Amendment A): the wizard's step selections flow up here —
+     * activeDraft is StudioTab's OWN data, so mutating it is the one-way-flow
+     * compliant write-back point. The wizard persists to the store + the
+     * studio_step pointer itself.
+     */
+    onDraftUpdate(patch) {
+      if (!patch || !this.activeDraft) return;
+      Object.assign(this.activeDraft, patch);
     },
     onBackToDashboard() {
       this.activeDraft = null;
@@ -438,7 +449,7 @@ export default {
         studio_step: 9,
         source: 'editor'
       };
-      this.$store.dispatch('okf/setEditorSubTab', 'editor');
+      this.$store.dispatch('okf/setEditorSubTab', 'wizard'); // C1 (Amendment A): a fresh repo lands in the wizard flow, not the raw editor
       this.view = 'repo';
     },
     onImportFilePick(evt) {

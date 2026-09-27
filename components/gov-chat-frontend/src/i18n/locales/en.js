@@ -2089,6 +2089,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'published',
         inReview: 'in review',
@@ -2096,6 +2105,7 @@ export default {
       },
       exit: 'Back to dashboard',
       context: {
+        version: 'Version',
         untitled: 'Untitled repository',
         trust: 'Trust',
         title: 'Repository',
@@ -2110,6 +2120,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'Repository name & subject area',
         hint: 'Give this OKF repository a clear name and pick its subject area.',
         nameLabel: 'Repository name',

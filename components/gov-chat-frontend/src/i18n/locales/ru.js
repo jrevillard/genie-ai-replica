@@ -2039,6 +2039,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'опубликовано',
         inReview: 'на проверке',
@@ -2046,6 +2055,7 @@ export default {
       },
       exit: 'Вернуться в панель управления',
       context: {
+        version: 'Version',
         untitled: 'Репозиторий без названия',
         trust: 'Доверие',
         title: 'Репозиторий',
@@ -2060,6 +2070,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'Имя репозитория и предметная область',
         hint: 'Задайте понятное имя для этого репозитория OKF и выберите его предметную область.',
         nameLabel: 'Имя репозитория',

@@ -43,7 +43,16 @@
       <OkfNarrative :kind="'step' + activeStep" />
 
       <section class="okf-wizard__step" :aria-label="stepLabel(activeStep)">
-        <component :is="stepComponents[activeStep]" v-bind="stepProps" @advance="onAdvance" @back="onBack" />
+        <component
+          :is="stepComponents[activeStep]"
+          ref="activeStep"
+          :key="activeStep"
+          v-bind="stepProps"
+          @advance="onAdvance"
+          @back="onBack"
+          @update="onDraftUpdate"
+          @gate="onGate"
+        />
       </section>
 
       <footer class="okf-wizard__footer">
@@ -54,11 +63,13 @@
           {{ translate('okf.wizard.back', 'Back') }}
         </DsButton>
         <span class="okf-wizard__step-counter">{{ activeStep + 1 }} / 10</span>
-        <DsButton variant="primary" @click="onAdvance">
+        <DsButton variant="primary" :disabled="!gateOpen || advancing" @click="onAdvance">
           {{
-            activeStep === 9
-              ? translate('okf.wizard.publish', 'Publish repository')
-              : translate('okf.wizard.continue', 'Continue')
+            advancing
+              ? translate('okf.wizard.working', 'Working…')
+              : activeStep === 9
+                ? translate('okf.wizard.publish', 'Publish repository')
+                : translate('okf.wizard.continue', 'Continue')
           }}
         </DsButton>
       </footer>
@@ -68,19 +79,20 @@
       <div class="okf-wizard__context-card">
         <header class="okf-wizard__context-header">{{ translate('okf.wizard.context.title', 'Repository') }}</header>
         <p class="okf-wizard__context-name">
-          {{ draft?.name || translate('okf.wizard.context.untitled', 'Untitled repository') }}
+          {{ repoName || translate('okf.wizard.context.untitled', 'Untitled repository') }}
         </p>
-        <p class="okf-wizard__context-domain">{{ draft?.domain || '—' }}</p>
+        <p class="okf-wizard__context-domain">{{ repoDomain || '—' }}</p>
 
         <DsStatusTag :variant="statusVariant">{{ statusLabel }}</DsStatusTag>
 
-        <p class="okf-wizard__context-meta">
-          {{ translate('okf.wizard.context.trust', 'Trust') }}:
-          <DsPill :variant="trustVariant">{{ trustLabel }}</DsPill>
+        <p v-if="repoVersion" class="okf-wizard__context-meta">
+          {{ translate('okf.wizard.context.version', 'Version') }}:
+          <span>v{{ repoVersion }}</span>
         </p>
 
-        <p v-if="isStale" class="okf-wizard__context-stale">
-          <DsPill variant="warning">{{ translate('okf.wizard.context.stale', 'stale') }}</DsPill>
+        <p class="okf-wizard__context-meta">
+          {{ translate('okf.wizard.context.concepts', 'Concepts so far') }}:
+          <span>{{ conceptCount }}</span>
         </p>
 
         <p class="okf-wizard__context-meta">
@@ -91,11 +103,6 @@
         <p v-if="clonedFromLabel" class="okf-wizard__context-clone">
           <DsTag variant="info" :label="clonedFromLabel" />
         </p>
-
-        <p class="okf-wizard__context-meta">
-          {{ translate('okf.wizard.context.concepts', 'Concepts so far') }}:
-          <span>{{ draft?.concept_count || 0 }}</span>
-        </p>
       </div>
     </aside>
   </div>
@@ -104,10 +111,10 @@
 <script>
 import { mapGetters } from 'vuex';
 import translateMixin from '../../mixins/translateMixin';
+import repoOkfService from '../../services/repoOkfService';
 import DsStepper from '../ds/Stepper.vue';
 import DsButton from '../ds/Button.vue';
 import DsStatusTag from '../ds/StatusTag.vue';
-import DsPill from '../ds/Pill.vue';
 import DsTag from '../ds/Tag.vue';
 import OkfNarrative from './Narrative.vue';
 import OkfStepEntry from './steps/Entry.vue';
@@ -140,7 +147,6 @@ export default {
     DsStepper,
     DsButton,
     DsStatusTag,
-    DsPill,
     DsTag,
     OkfNarrative,
     OkfStepEntry,
@@ -158,10 +164,14 @@ export default {
   props: {
     draft: { type: Object, default: null }
   },
-  emits: ['reset', 'step-change'],
+  emits: ['reset', 'step-change', 'update-draft'],
   data() {
     return {
       activeStep: 0,
+      // A2 gate contract: the ACTIVE step owns the Continue. A step that
+      // emits no gate event (the not-yet-wired panels) defaults to open.
+      gateOpen: true,
+      advancing: false,
       stepConfig: STEP_LABELS.map((label, idx) => ({
         value: String(idx),
         label: `${idx + 1}. ${label}`
@@ -169,7 +179,48 @@ export default {
     };
   },
   computed: {
-    ...mapGetters('okf', ['isExpert']),
+    ...mapGetters('okf', ['isExpert', 'repoById']),
+    // A5 context rail: the REAL repo doc is the source of truth — never a
+    // phantom draft shape. Falls back to the draft while the repo is not yet
+    // created (Entry's create-on-advance).
+    repo() {
+      return (this.draft && this.draft.repo_id && this.repoById(this.draft.repo_id)) || null;
+    },
+    repoName() {
+      return (this.repo && this.repo.name) || (this.draft && this.draft.name) || '';
+    },
+    repoDomain() {
+      return (this.repo && this.repo.domain) || (this.draft && this.draft.domain) || '';
+    },
+    repoVersion() {
+      return (this.repo && this.repo.version) || null;
+    },
+    conceptCount() {
+      return (this.repo && this.repo.concept_count) || (this.draft && this.draft.concept_count) || 0;
+    },
+    sourceCountLabel() {
+      const sources = (this.repo && this.repo.source_documents) || [];
+      return sources.length ? `${sources.length}` : '0';
+    },
+    clonedFromLabel() {
+      const cf = (this.repo && this.repo.cloned_from) || (this.draft && this.draft.cloned_from);
+      if (!cf || !cf.repo_id) return null;
+      return `Cloned from ${cf.name || cf.repo_id} · v${cf.version}`;
+    },
+    // REAL lifecycle state, not the step counter. Missing locale keys fall
+    // back to the raw state string (honest over pretty — i18n pass later).
+    statusVariant() {
+      if (this.repo && this.repo.ingested_at) return 'success';
+      if (this.repo && this.repo.lifecycle_state === 'retracted') return 'warning';
+      if (this.repo && ['review', 'approve', 'publish'].includes(this.repo.lifecycle_state)) return 'pending';
+      return 'info';
+    },
+    statusLabel() {
+      if (!this.repo) return this.translate('okf.wizard.status.draft', 'in progress');
+      if (this.repo.ingested_at) return this.translate('okf.wizard.status.published', 'published');
+      const state = this.repo.lifecycle_state || 'draft';
+      return this.translate(`okf.wizard.state.${state}`, state);
+    },
     stepComponents() {
       return [
         OkfStepEntry,
@@ -192,51 +243,6 @@ export default {
       const out = [];
       for (let i = saved + 1; i < 10; i++) out.push(i);
       return out;
-    },
-    statusVariant() {
-      if (this.activeStep === 9 && this.draft?.published) return 'success';
-      if (this.activeStep >= 8) return 'pending';
-      return 'info';
-    },
-    statusLabel() {
-      if (this.activeStep === 9 && this.draft?.published)
-        return this.translate('okf.wizard.status.published', 'published');
-      if (this.activeStep >= 8) return this.translate('okf.wizard.status.inReview', 'in review');
-      return this.translate('okf.wizard.status.draft', 'in progress');
-    },
-    trustVariant() {
-      const t = this.draft?.trust_tier;
-      if (t === 'human-reviewed') return 'success';
-      if (t === 'machine-confirmed') return 'accent';
-      return 'neutral';
-    },
-    trustLabel() {
-      const t = this.draft?.trust_tier || 'unverified';
-      return this.translate(`okf.trust.tier.${t}`, t);
-    },
-    isStale() {
-      const stale = this.draft?.lifecycle?.stale_after;
-      if (!stale) return false;
-      return Date.parse(stale) <= Date.now();
-    },
-    sourceCountLabel() {
-      const src = this.draft?.provenance?.sources || [];
-      const counts = src.reduce((acc, s) => {
-        const k = s.type || 'other';
-        acc[k] = (acc[k] || 0) + 1;
-        return acc;
-      }, {});
-      const parts = [];
-      if (counts.documentation) parts.push(`${counts.documentation} docs`);
-      if (counts.web) parts.push(`${counts.web} web`);
-      const total = src.length;
-      const prefix = total > 0 ? `${total} sources` : 'no sources';
-      return parts.length ? `${prefix} (${parts.join(', ')})` : prefix;
-    },
-    clonedFromLabel() {
-      const cf = this.draft?.cloned_from;
-      if (!cf || !cf.repo_id) return null;
-      return `Cloned from ${cf.name || cf.repo_id} · v${cf.version}`;
     }
   },
   watch: {
@@ -271,7 +277,27 @@ export default {
       this.$emit('step-change', idx);
       this.persistDraft();
     },
-    onAdvance() {
+    // A2 + A3: advance consults the ACTIVE step — its beforeAdvance hook may
+    // do async work (Entry's create) and refuse the advance (duplicate name,
+    // missing input). The footer's disabled state is the step's own gate.
+    activeStepVm() {
+      return this.$refs.activeStep || null;
+    },
+    async onAdvance() {
+      if (this.advancing) return;
+      const step = this.activeStepVm();
+      if (this.gateOpen === false) return;
+      if (step && typeof step.beforeAdvance === 'function') {
+        this.advancing = true;
+        let ok;
+        try {
+          ok = (await step.beforeAdvance()) !== false;
+        } catch {
+          ok = false;
+        }
+        this.advancing = false;
+        if (!ok) return;
+      }
       if (this.activeStep < 9) {
         this.activeStep += 1;
         this.$emit('step-change', this.activeStep);
@@ -286,16 +312,42 @@ export default {
       this.$emit('step-change', this.activeStep);
       this.persistDraft();
     },
-    persistDraft() {
-      if (!this.draft) return;
+    // A1 write-back: a step's selections flow UP to the draft's owner
+    // (StudioTab applies them to its own data — the wizard never mutates a
+    // prop) and persist immediately; re-entering a step re-seeds its local
+    // state from the refreshed draft (the :key remount), so every step is
+    // idempotent re-entrant.
+    onDraftUpdate(patch) {
+      if (!this.draft || !patch) return;
+      const merged = { ...this.draft, ...patch };
+      this.$emit('update-draft', patch);
+      this.persistMerged(merged);
+    },
+    onGate(open) {
+      this.gateOpen = open !== false;
+    },
+    persistMerged(merged) {
+      const step = this.activeStep;
       this.$store.dispatch('okf/saveDraft', {
-        repoId: this.draft.repo_id || 'pending',
+        repoId: merged.repo_id || 'pending',
         draft: {
-          ...this.draft,
-          studio_step: this.activeStep,
+          ...merged,
+          studio_step: step,
           updated_at: Date.now()
         }
       });
+      // A4 server resume: the cheap okf_repositories.studio_step pointer.
+      // Best-effort + silent; skipped for frozen repos (R-C parity — the
+      // backend 409s serving repos anyway).
+      if (merged.repo_id) {
+        const repo = this.repo;
+        const frozen = repo && (repo.ingested_at || repo.lifecycle_state === 'publish');
+        if (!frozen) repoOkfService.saveStudioStep(merged.repo_id, step);
+      }
+    },
+    persistDraft() {
+      if (!this.draft) return;
+      this.persistMerged({ ...this.draft });
     },
     publishRepo() {
       // Story #978 lifecycle (David, 2026-08-28): the wizard publishes through

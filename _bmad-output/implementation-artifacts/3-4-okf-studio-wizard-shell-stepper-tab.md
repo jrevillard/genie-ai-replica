@@ -280,3 +280,18 @@ beforeAdvance no-repo refusal). Frontend 1520/1520, backend 719/719,
 lint+prettier clean, served-bundle markers verified through the gateway.
 Remaining: B9 reachability, B11 automation depth, LabelOnboard decision,
 doc-mgmt + crawler + remaining step tips, ×14 locale batch.
+
+#### Live-UI follow-up (cd71dfd63, 2026-09-27, David's first pass)
+
+Three fixes from David's live pass: (1) THE 400 — the inline doc list
+called getFiles({limit:200}) but the backend validates limit ≤ 50 →
+every load failed (inline + snack bar); (2) the Documents choice now
+uses the new OkfSourceDialog selecting from BOTH sources (doc-repo
+paginated at 50 + local FS upload through /files/upload with auto-
+select; crawl reuses it in single mode, no upload); (3) Blank Canvas =
+the editor — AddConcept auto-opens on first arrival, editor_offered
+rides the draft (never re-pops), FS import secondary. Also fixed a real
+idempotency bug found in the rewrite: Input's writeBack replaced the
+whole draft.input, which would drop Produce's conversion_kicked on a
+Back-visit (shallow wizard merge) — the patch now spreads. Frontend
+1529/1529 (+ source-dialog spec), markers verified.

@@ -460,13 +460,6 @@
                       >
                         {{ translate('okf.docs.createRepo', 'Create OKF repository') }}
                       </DsButton>
-                      <!-- Story 7.7: documents → OKF repository import dialog -->
-                      <ImportDocumentsDialog
-                        :visible="showImportDialog"
-                        :documents="importDocsSelection"
-                        @close="showImportDialog = false"
-                        @imported="onImportDocsImported"
-                      />
                     </div>
                     <div v-if="showRetractButton" class="card-actions">
                       <DsButton variant="secondary" @click="handleBatchAction('retract')">
@@ -1592,7 +1585,6 @@ import LogSearchDialog from './LogSearchDialog.vue';
 import UploadFilesDialog from './UploadFilesDialog.vue';
 import AddFromLinkDialog from './AddFromLinkDialog.vue';
 import FileDetailsDialog from './FileDetailsDialog.vue';
-import ImportDocumentsDialog from './okf/editor/ImportDocumentsDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue'; // IMPORT ConfirmDialog
 import QueryInspector from './admin/QueryInspector/QueryInspector.vue';
 import DsButton from './ds/Button.vue';
@@ -1616,11 +1608,10 @@ export default {
   components: {
     OperationResultsModal,
     LogSearchDialog,
+    ConfirmDialog,
     UploadFilesDialog,
     AddFromLinkDialog,
     FileDetailsDialog,
-    ImportDocumentsDialog,
-    ConfirmDialog, // REGISTER ConfirmDialog
     QueryInspector,
     DsButton,
     DsInput,
@@ -1662,8 +1653,6 @@ export default {
 
       // Tab navigation
       activeTab: 'overview',
-      showImportDialog: false,
-      importDocsSelection: [],
       tabs: [
         { id: 'overview', label: 'System Health' },
         { id: 'hierarchy', label: 'Knowledge Hierarchy' },
@@ -3367,32 +3356,24 @@ export default {
     },
 
     /**
-     * Story 3-6: "Create OKF repository" entry button (sibling to Ingest Selected).
-     * Pre-loads the selected documents into the okf Vuex store, switches to
-     * the OKF Studio tab, and opens the wizard. The wizard's Step 2 Input
-     * (variant) reads the preloaded selection from okf/selection.documents.
+     * Story 3-6 entry point, per Amendment A decision #5 (David, 2026-09-27):
+     * "Create OKF repository" routes INTO THE WIZARD — the selection is
+     * preloaded into okf/selection.documents, the studio tab opens, and
+     * StudioTab seeds the wizard draft from the selection (Entry names the
+     * repo, Choose shows Documents preselected, Input carries the pick into
+     * Produce's conversion). The 7.7 import dialog path is retired here —
+     * one documents→repo path, the wizard.
      */
     async onCreateOkfRepoFromSelection() {
       if (!this.okfRepoGate.visible) return;
-      // Story 7.7: the selected doc objects drive the import dialog
-      // (preflight list + serving warnings), then POST convert-from-documents.
       const keys = new Set(this.selectedDocuments);
-      this.importDocsSelection = this.documents.filter((doc) => keys.has(doc._key));
-      this.showImportDialog = true;
-    },
-    async onImportDocsImported(repo) {
-      this.showImportDialog = false;
+      const docs = this.documents.filter((doc) => keys.has(doc._key));
+      this.$store.commit('okf/setSelection', {
+        documents: docs.map((d) => ({ file_id: d._key, file_name: d.file_name }))
+      });
       this.selectedDocuments = [];
-      try {
-        await this.$store.dispatch('okf/fetchRepos', { stage: 'all' });
-      } catch {
-        /* the dashboard refreshes on next poll anyway */
-      }
       this.activeTab = 'studio';
-      if (repo && repo.repo_id) {
-        const evt = new CustomEvent('okf:import-created', { detail: { repo_id: repo.repo_id } });
-        window.dispatchEvent(evt);
-      }
+      window.dispatchEvent(new CustomEvent('okf:create-from-documents'));
     },
     /** Deep link (Story 7.7 provenance popup cards): ?tab=documents&file=<id>
      * opens the Document Management tab with the FileDetailsDialog — the SAME

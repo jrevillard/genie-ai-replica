@@ -51,6 +51,21 @@ const repoOkfService = {
     }
   },
 
+  /**
+   * Amendment A (wizard clone): ONE concept's full meta row — frontmatter +
+   * body included (persisted on the meta doc since 4.8-amend content-only
+   * chunking) — so the wizard's clone path can re-import the source's
+   * concepts into the new repository via the standard /import upsert.
+   */
+  async getConcept(repoId, conceptId) {
+    const res = await httpService.get(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}`,
+      {},
+      { silent: true }
+    );
+    return res && res.data ? res.data : null;
+  },
+
   async create(body) {
     // silent: the create dialog owns the outcome display (e.g. a friendly
     // DUPLICATE_REPO message) — no global toast, no console.error.

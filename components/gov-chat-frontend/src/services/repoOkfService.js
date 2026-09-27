@@ -44,11 +44,24 @@ const repoOkfService = {
   // Story 7.7 (David, 2026-09-14): multi-select doc-repo documents into ONE
   // OKF repository — whole-corpus linking/labeling; ingested sources allowed
   // (the repo's own ingest is gated downstream: SOURCES_NOT_RETRACTED).
-  async importDocuments({ file_ids, name, domain, classification }) {
+  // Amendment A (B1): repoId targets an EXISTING repo (the wizard's Entry
+  // already created it) — the conversion lands there instead of minting one.
+  async importDocuments({ file_ids, name, domain, classification, repo_id }) {
     // silent: the import dialog owns the outcome display.
     const res = await httpService.post(
       '/okf/repos/convert-from-documents',
-      { file_ids, name, domain, classification },
+      { file_ids, name, domain, classification, repo_id },
+      { silent: true }
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  // Amendment A (B1): crawl conversion into an EXISTING repo (wizard Input
+  // → Produce). split_mode 'B' (per-page) is the historical default.
+  async convertFromCrawlInto({ repo_id, file_id, url, crawl_job_id, classification, split_mode = 'B' }) {
+    const res = await httpService.post(
+      '/okf/repos/convert-from-crawl',
+      { repo_id, file_id, url, crawl_job_id, classification, split_mode },
       { silent: true }
     );
     return res && res.data ? res.data : null;

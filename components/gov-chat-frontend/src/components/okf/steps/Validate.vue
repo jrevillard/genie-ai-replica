@@ -175,6 +175,18 @@ export default {
           addIssue('INDEX_FAILED', 'Index failed', { label: row.concept_id + ' - re-index failed; edit or re-split' });
         }
       }
+      // 3. PII (B10, David 2026-09-27): flagged entities surface as a first-
+      // class issue group — PII-completeness is a publish gate, and the
+      // remediation surface (redact/remove/accept) lives in Curate's editor.
+      let flagged = 0;
+      for (const row of rows) {
+        if (row.pii_state === 'flagged') flagged += 1;
+      }
+      if (flagged > 0) {
+        addIssue('PII_FLAGGED', 'PII flagged', {
+          label: flagged + ' concept(s) with unreviewed personal data — use Redact/Remove/Accept in Curate'
+        });
+      }
       this.issueGroups = Array.from(groups.values());
       this._metrics = metrics.status === 'fulfilled' ? metrics.value : null;
     }

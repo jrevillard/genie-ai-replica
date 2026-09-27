@@ -543,8 +543,22 @@ export default {
       this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
     },
     onCreateFromDocuments() {
-      // AdminDashboard already set the active tab to 'studio' + dispatched
-      // this event with the documents preloaded into okf/selection.
+      // Amendment A decision #5 (David, 2026-09-27): the doc-mgmt batch
+      // action lands IN the wizard with the selection preloaded — this
+      // seeds a fresh draft (source='documents', input.document_ids from
+      // okf/selection) so Entry names the repo, Choose shows Documents
+      // preselected, and Input carries the pick into Produce's conversion.
+      const sel = this.$store.getters['okf/selection'] || {};
+      const ids = (sel.documents || []).map((d) => (typeof d === 'string' ? d : d.file_id)).filter(Boolean);
+      this.activeDraft = {
+        repo_id: null,
+        name: '',
+        domain: '',
+        source: 'documents',
+        concept_count: 0,
+        studio_step: 0,
+        input: { document_ids: ids, concepts_added: 0 }
+      };
       this.view = 'wizard';
     },
     onCreateFromCrawl() {

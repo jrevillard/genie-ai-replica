@@ -251,3 +251,12 @@ comment misled the deep-dive). B5 = done, not built here. Remaining:
 B7 review lifecycle surfacing, B9 graph/versions/logs/rename reachability,
 B1 input panels, B2 produce (7.2-gated), B11 automation wiring, doc-mgmt +
 crawler tips (slice 4).
+
+### Dev-log — slice 3b LANDED (commit 9b9747816, 2026-09-27)
+
+Review step surfaces the REAL lifecycle: live summary + the state-valid
+action button (submit/approve per R-C; publish/serving -> footer owns it)
+with the six-step-contract DsInfoTip. Slice 3b complete. Remaining: B9
+reachability (graph/versions/logs/rename), slice 4 (B1 input panels, B2
+produce 7.2-gated, B11 automation, doc-mgmt + crawler + step tips ×14
+locale batch).

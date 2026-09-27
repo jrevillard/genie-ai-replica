@@ -132,6 +132,9 @@ export default {
       page: 1,
       pageSize: PAGE_SIZE,
       total: 0,
+      // reactive: canLoadMore keys off the RAW page size (F8) — a plain
+      // instance prop would never invalidate the computed
+      lastRawCount: 0,
       loading: false,
       loadError: '',
       selectedIds: (this.selected || []).slice(),
@@ -148,10 +151,12 @@ export default {
         : this.translate('okf.src.title', 'Choose the source documents');
     },
     canLoadMore() {
-      // A full page may have a successor; the backend answers the count via
-      // total when it provides one — otherwise a full page is the hint.
+      // F8: the backend puts the count at body.pagination.totalFiles (not
+      // body.total). Without it, a RAW FULL page is the only honest hint —
+      // comparing the BUNDLE-FILTERED rows against page*size hides the
+      // button whenever a bundle zip shrank the page.
       if (this.total > 0) return this.rows.length < this.total;
-      return this.rows.length >= this.page * this.pageSize;
+      return this.lastRawCount === this.pageSize;
     }
   },
   watch: {
@@ -168,19 +173,21 @@ export default {
     if (this.visible) this.loadPage(1);
   },
   methods: {
-    unwrap(body, prev) {
-      const rows = Array.isArray(body) ? body : (body && (body.data || body.items || body.files)) || [];
-      // bundle zips are the OKF artifacts — never sources
-      return prev.concat(rows.filter((f) => !f.is_bundle));
-    },
     async loadPage(p) {
       this.loading = true;
       this.loadError = '';
       try {
         const body = await documentFileService.getFiles({ page: p, limit: this.pageSize });
         this.page = p;
-        this.rows = p === 1 ? this.unwrap(body, []) : this.unwrap(body, this.rows);
-        if (body && typeof body.total === 'number') this.total = body.total;
+        const raw = Array.isArray(body) ? body : (body && (body.data || body.items || body.files)) || [];
+        // bundle zips are the OKF artifacts — never sources
+        const kept = raw.filter((f) => !f.is_bundle);
+        this.lastRawCount = raw.length;
+        this.rows = p === 1 ? kept : this.rows.concat(kept);
+        // F8: the count lives at pagination.totalFiles on this backend;
+        // body.total accepted for forward-compat.
+        const t = body && (body.total != null ? body.total : body.pagination && body.pagination.totalFiles);
+        if (typeof t === 'number') this.total = t;
       } catch {
         this.loadError = this.translate('okf.src.loadFailed', 'Could not load the document list.');
       } finally {

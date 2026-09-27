@@ -90,7 +90,9 @@ export default {
       this.loading = true;
       this.loadError = '';
       try {
-        this.concepts = await repoOkfService.listConcepts(repoId);
+        // strict: the error branch must be REACHABLE (C3) — the default []
+        // swallow made a backend failure render as a silent empty preview.
+        this.concepts = await repoOkfService.listConcepts(repoId, { strict: true });
       } catch {
         this.loadError = this.translate('okf.steps.label.loadFailed', 'Could not read the labels right now.');
       } finally {

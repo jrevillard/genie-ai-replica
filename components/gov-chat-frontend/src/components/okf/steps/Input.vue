@@ -44,6 +44,22 @@
         />
       </div>
       <p class="okf-step__note">{{ selectionSummary }}</p>
+      <label v-if="variant === 'documents' || variant === 'crawl'" class="okf-step__cls">
+        <span>{{ translate('okf.steps.input.classification', 'Classification strategy') }}</span>
+        <DsSelect v-model="classification" size="sm">
+          <option value="heuristics">{{ translate('okf.steps.input.clsHeur', 'Heuristics (fast, no LLM)') }}</option>
+          <option value="llm">{{ translate('okf.steps.input.clsLlm', 'LLM classification') }}</option>
+          <option value="hybrid">{{ translate('okf.steps.input.clsHybrid', 'Hybrid') }}</option>
+        </DsSelect>
+        <DsInfoTip
+          :text="
+            translate(
+              'okf.glossary.classification',
+              'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.'
+            )
+          "
+        />
+      </label>
       <OkfSourceDialog
         :visible="pickOpen"
         :mode="variant === 'crawl' ? 'single' : 'multi'"
@@ -117,14 +133,16 @@
 <script>
 import DsButton from '../../ds/Button.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
+import DsSelect from '../../ds/Select.vue';
 import OkfAddConceptModal from '../editor/AddConceptModal.vue';
 import OkfSourceDialog from '../wizard/OkfSourceDialog.vue';
 import repoOkfService from '../../../services/repoOkfService';
+import { buildConceptPayload } from '../../../services/okfRepoOps';
 import translateMixin from '../../../mixins/translateMixin';
 
 export default {
   name: 'OkfStepInput',
-  components: { DsButton, DsInfoTip, OkfAddConceptModal, OkfSourceDialog },
+  components: { DsButton, DsInfoTip, DsSelect, OkfAddConceptModal, OkfSourceDialog },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   emits: ['update', 'gate'],
@@ -133,6 +151,7 @@ export default {
       selectedIds: ((this.draft && this.draft.input && this.draft.input.document_ids) || []).slice(),
       selectedNames: [],
       pickOpen: false,
+      classification: (this.draft && this.draft.classification) || 'heuristics',
       fsBusy: false,
       fsError: '',
       inputError: '',
@@ -192,6 +211,11 @@ export default {
   watch: {
     canAdvance() {
       this.emitGate();
+    },
+    // C1: the classification choice rides the draft so Produce's kick uses
+    // it (the curation spec's user-selectable heuristics|llm|hybrid).
+    classification(v) {
+      this.$emit('update', { classification: v });
     }
   },
   mounted() {
@@ -243,28 +267,43 @@ export default {
       const el = this.$refs.fsInput;
       if (el) el.click();
     },
-    // A3-adjacent idempotency: /import is an UPSERT per concept_id (the file
-    // name), so re-adding the same files refreshes instead of duplicating.
+    // A3-adjacent idempotency: /import is an UPSERT per concept_id, and the
+    // concept_id comes from the SAME sanctioned slug builder AddConceptModal
+    // uses (F13) — 'Water Points.md' and a hand-added 'Water Points' now
+    // land as ONE topic, never two. The picked file's own frontmatter wins
+    // per-field. addedCount is refreshed from the SERVER truth after every
+    // import (a local += drifted from the upsert reality).
     async onFsFiles(evt) {
       const picked = (evt && evt.target && evt.target.files) || [];
       if (!picked.length) return;
       this.fsBusy = true;
       this.fsError = '';
       try {
+        const existing = (await repoOkfService.listConcepts(this.draft.repo_id)).map((c) => c.concept_id);
+        const taken = new Set(existing);
         const concepts = [];
+        let skipped = 0;
         for (const file of picked) {
-          const body = await file.text();
+          const raw = await file.text();
+          if (!raw.trim()) {
+            skipped += 1;
+            continue;
+          }
           const title = file.name.replace(/\.(md|markdown|txt)$/i, '');
-          concepts.push({
-            path: title,
-            frontmatter: { type: 'topic', title },
-            body
-          });
+          const payload = buildConceptPayload({ title, type: 'topic', body: raw, existingIds: [...taken] });
+          taken.add(payload.concept_id);
+          concepts.push({ path: payload.concept_id, frontmatter: payload.frontmatter, body: payload.body });
         }
-        await repoOkfService.importConcepts(this.draft.repo_id, concepts);
-        this.addedCount += concepts.length;
+        if (concepts.length) await repoOkfService.importConcepts(this.draft.repo_id, concepts);
+        this.addedCount = (await repoOkfService.listConcepts(this.draft.repo_id)).length;
         this.writeBack();
         this.emitGate();
+        if (skipped) {
+          this.fsError = this.translate('okf.steps.input.skippedEmpty', '{n} empty file(s) skipped.').replace(
+            '{n}',
+            String(skipped)
+          );
+        }
       } catch {
         this.fsError =
           this.translate('okf.steps.input.fsFailed', 'Import failed — check the files and retry.') || 'Import failed';
@@ -315,6 +354,13 @@ export default {
   gap: var(--space-sm);
   align-items: center;
   flex-wrap: wrap;
+}
+.okf-step__cls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  max-width: 320px;
+  font-size: var(--text-sm);
 }
 .okf-step__fs {
   display: inline-flex;

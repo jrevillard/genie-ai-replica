@@ -59,7 +59,7 @@ it('labels: automated + preview — no free-text adder, live labeled count', asy
   const w = mountStep(OkfStepLabel);
   await w.vm.$nextTick();
   await w.vm.$nextTick();
-  expect(mockListConcepts).toHaveBeenCalledWith('r1');
+  expect(mockListConcepts).toHaveBeenCalledWith('r1', { strict: true });
   expect(w.text()).toContain('1 of 2'); // labeled / total preview line
   expect(w.find('.okf-step__add').exists()).toBe(false); // the free-text adder is gone
   expect(w.emitted('gate')[0][0]).toBe(true);

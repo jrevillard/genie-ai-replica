@@ -66,20 +66,52 @@
         />
       </p>
     </div>
+
+    <!-- REPOSITORY TOOLS (Amendment A decision #4, David 2026-09-27):
+      read-only summaries + actions reach the wizard here — versions,
+      action log and rename use the SAME dialogs the editor hosts. -->
+    <div class="okf-step__tools">
+      <span class="okf-step__tools-summary">{{ versionSummary }}</span>
+      <DsButton variant="secondary" small :disabled="!repo" @click="versionsOpen = true">
+        {{ translate('okf.steps.review.versions', 'Versions') }}
+      </DsButton>
+      <DsButton variant="secondary" small :disabled="!repo" @click="logsOpen = true">
+        {{ translate('okf.steps.review.logs', 'Action log') }}
+      </DsButton>
+      <DsButton variant="secondary" small :disabled="!repo || frozen" @click="renameOpen = true">
+        {{ translate('okf.steps.review.rename', 'Rename') }}
+      </DsButton>
+    </div>
+    <OkfVersionsDialog
+      :visible="versionsOpen"
+      :repo="repo"
+      @close="versionsOpen = false"
+      @changed="loadVersionSummary"
+    />
+    <OkfLogsDialog :visible="logsOpen" :repo="repo" @close="logsOpen = false" />
+    <OkfRenameRepoDialog :visible="renameOpen" :repo="repo" @close="renameOpen = false" @renamed="onRenamed" />
   </div>
 </template>
 
 <script>
 import { mapGetters } from 'vuex';
+import DsButton from '../../ds/Button.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
+import OkfVersionsDialog from '../editor/VersionsDialog.vue';
+import OkfLogsDialog from '../editor/LogsDialog.vue';
+import OkfRenameRepoDialog from '../editor/RenameRepoDialog.vue';
+import repoOkfService from '../../../services/repoOkfService';
 import translateMixin from '../../../mixins/translateMixin';
 
 export default {
   name: 'OkfStepReview',
-  components: { DsInfoTip },
+  components: { DsButton, DsInfoTip, OkfVersionsDialog, OkfLogsDialog, OkfRenameRepoDialog },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   emits: ['gate'],
+  data() {
+    return { versionsOpen: false, logsOpen: false, renameOpen: false, versionCount: 0, latestVersion: null };
+  },
   computed: {
     ...mapGetters('okf', ['repoById']),
     repo() {
@@ -100,10 +132,37 @@ export default {
       if (this.repo.ingested_at) return this.translate('okf.wizard.status.published', 'published');
       const state = this.repo.lifecycle_state || 'draft';
       return this.translate(`okf.wizard.state.${state}`, state);
+    },
+    frozen() {
+      return !!(this.repo && this.repo.ingested_at);
+    },
+    versionSummary() {
+      if (!this.versionCount)
+        return this.translate('okf.steps.review.noVersions', 'No versions yet — publish mints v1.');
+      return this.translate('okf.steps.review.versionSummary', '{n} version(s) · latest v{latest}')
+        .replace('{n}', String(this.versionCount))
+        .replace('{latest}', String(this.latestVersion || 1));
     }
   },
   mounted() {
     this.$emit('gate', true); // review never blocks — the hand-off is next
+    this.loadVersionSummary();
+  },
+  methods: {
+    async loadVersionSummary() {
+      const repoId = this.draft && this.draft.repo_id;
+      if (!repoId) return;
+      try {
+        const versions = await repoOkfService.listVersions(repoId);
+        this.versionCount = versions.length;
+        this.latestVersion = versions.length ? versions[0].bundle_version : null;
+      } catch {
+        /* a summary must never block the step */
+      }
+    },
+    onRenamed() {
+      this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
+    }
   }
 };
 </script>
@@ -120,6 +179,17 @@ export default {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
+}
+.okf-step__tools {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.okf-step__tools-summary {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  margin-right: auto;
 }
 .okf-step__note {
   margin: 0;

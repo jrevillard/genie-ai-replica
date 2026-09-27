@@ -42,10 +42,12 @@ function mountStep(cmp, draft) {
   });
 }
 
-it('review: no lifecycle button — the ritual is named as living outside the wizard', () => {
+it('review: no lifecycle transitions — the ritual is named as living outside the wizard', () => {
   const w = mountStep(OkfStepReview);
   expect(w.emitted('gate')[0][0]).toBe(true);
-  expect(w.find('button').exists()).toBe(false); // no submit/approve/publish here
+  // the submit/approve/publish action block is gone; only tool + dialog
+  // buttons remain (versions/logs/rename)
+  expect(w.find('.okf-step__action').exists()).toBe(false);
   expect(w.text()).toContain('Editor');
 });
 

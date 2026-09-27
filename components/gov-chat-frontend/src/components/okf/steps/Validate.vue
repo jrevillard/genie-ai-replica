@@ -42,6 +42,48 @@
       </details>
     </div>
 
+    <!-- PII REMEDIATION (Amendment A decision #3, David 2026-09-27): the
+      FULL panel is embedded — pick a flagged concept, redact/replace/remove/
+      accept each entity right here (the same OkfPiiOccurrences the editor
+      uses). No hop to Curate for personal-data fixes. -->
+    <div v-if="piiConcepts.length" class="okf-step-validate__pii">
+      <p class="okf-step-validate__pii-title">
+        {{ translate('okf.validation.piiTitle', 'Personal data — review each flagged concept') }}
+        <DsInfoTip
+          :text="
+            translate(
+              'okf.glossary.piiReview',
+              'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot publish with unreviewed findings.'
+            )
+          "
+        />
+      </p>
+      <div class="okf-step-validate__pii-cols">
+        <ul class="okf-step-validate__pii-list">
+          <li v-for="c in piiConcepts" :key="c.concept_id">
+            <button
+              type="button"
+              class="okf-step-validate__pii-row"
+              :class="{ 'okf-step-validate__pii-row--active': selectedPiiConcept === c.concept_id }"
+              @click="selectedPiiConcept = c.concept_id"
+            >
+              {{ c.title || c.concept_id }}
+            </button>
+          </li>
+        </ul>
+        <div v-if="selectedPiiConcept" class="okf-step-validate__pii-panel">
+          <OkfPiiOccurrences
+            :key="selectedPiiConcept"
+            :repo-id="repoId"
+            :concept-id="selectedPiiConcept"
+            :revision="piiRevision"
+            :read-only="!!frozenAt"
+            @applied="onPiiApplied"
+          />
+        </div>
+      </div>
+    </div>
+
     <p v-if="!expert" class="okf-step-validate__expert-hint">
       {{
         translate(
@@ -56,6 +98,8 @@
 <script>
 import { mapGetters } from 'vuex';
 import DsHealthRing from '../../ds/HealthRing.vue';
+import DsInfoTip from '../../ds/InfoTip.vue';
+import OkfPiiOccurrences from '../editor/PiiOccurrences.vue';
 import translateMixin from '../../../mixins/translateMixin';
 
 const ISSUE_GROUPS = [
@@ -68,19 +112,25 @@ const ISSUE_GROUPS = [
 
 export default {
   name: 'OkfStepValidate',
-  components: { DsHealthRing },
+  components: { DsHealthRing, DsInfoTip, OkfPiiOccurrences },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   data() {
     return {
       issueGroups: ISSUE_GROUPS.map((g) => ({ ...g })),
-      frozenAt: null
+      frozenAt: null,
+      piiConcepts: [],
+      selectedPiiConcept: '',
+      piiRevision: 0
     };
   },
   computed: {
     ...mapGetters('okf', ['isExpert']),
     expertMode() {
       return this.expert;
+    },
+    repoId() {
+      return (this.draft && this.draft.repo_id) || '';
     },
     healthScore() {
       // Prefer server metrics when the fetch succeeded; else derive from issues.
@@ -175,20 +225,27 @@ export default {
           addIssue('INDEX_FAILED', 'Index failed', { label: row.concept_id + ' - re-index failed; edit or re-split' });
         }
       }
-      // 3. PII (B10, David 2026-09-27): flagged entities surface as a first-
-      // class issue group — PII-completeness is a publish gate, and the
-      // remediation surface (redact/remove/accept) lives in Curate's editor.
-      let flagged = 0;
-      for (const row of rows) {
-        if (row.pii_state === 'flagged') flagged += 1;
-      }
-      if (flagged > 0) {
+      // 3. PII (decision #3, David 2026-09-27): flagged concepts become the
+      // embedded remediation section below — the panel carries the fixes.
+      this.piiConcepts = rows.filter((row) => row.pii_state === 'flagged');
+      if (this.piiConcepts.length) {
         addIssue('PII_FLAGGED', 'PII flagged', {
-          label: flagged + ' concept(s) with unreviewed personal data — use Redact/Remove/Accept in Curate'
+          label: this.piiConcepts.length + ' concept(s) with unreviewed personal data — review below'
         });
+        if (!this.selectedPiiConcept || !this.piiConcepts.some((c) => c.concept_id === this.selectedPiiConcept)) {
+          this.selectedPiiConcept = this.piiConcepts[0].concept_id;
+        }
+      } else {
+        this.selectedPiiConcept = '';
       }
       this.issueGroups = Array.from(groups.values());
       this._metrics = metrics.status === 'fulfilled' ? metrics.value : null;
+    },
+    onPiiApplied() {
+      // An action already re-scanned server-side — bump the panel revision
+      // and refresh; a resolved concept leaves the flagged list.
+      this.piiRevision += 1;
+      this.refresh();
     }
   }
 };
@@ -281,5 +338,60 @@ export default {
   border-radius: var(--radius-sm);
   color: var(--muted);
   font-size: var(--text-sm);
+}
+.okf-step-validate__pii {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.okf-step-validate__pii-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.okf-step-validate__pii-cols {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--space-md);
+  align-items: start;
+}
+.okf-step-validate__pii-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.okf-step-validate__pii-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font: inherit;
+  color: var(--fg);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.okf-step-validate__pii-row:hover {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+.okf-step-validate__pii-row--active {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+.okf-step-validate__pii-panel {
+  min-width: 0;
 }
 </style>

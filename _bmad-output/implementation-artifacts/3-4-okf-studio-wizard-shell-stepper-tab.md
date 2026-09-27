@@ -349,6 +349,19 @@ ALL ELEVEN DECISIONS IMPLEMENTED. Amendment A B-series is functionally
 complete pending David's live pass. Remaining polish: ×14 locale batch
 for the new fallback-only keys; doc-mgmt/crawler ⓘ tips coverage.
 
+### Post-merge records (!474 → 07740a988, 2026-09-27)
+
+- Decision ledger promoted to ADRs: **ADR-okf-040** (wizard/editor
+  surface governance — parity by composition, ritual outside the
+  wizard, landing rules, automated labels), **ADR-okf-041** (doc-mgmt
+  routes through the wizard; event-after-mount rule), **ADR-okf-042**
+  (wizard clone via the 4.8 API; shell-delete + 409 backoff).
+- **E2E readiness**: the work list (W1 preflight pills, W2 locales,
+  W3 tips, W4 bundle-zip lifecycle, W5 retract-loop verify, W6 arch
+  links) + the full-cycle UI test plan live in
+  `okf-e2e-cycle-test-readiness.md` (same directory). Story keys for
+  W1-W6 get assigned at the next sprint-planning pass.
+
 ### REVIEW FIX SWEEP (f7b7e33fe, 2026-09-27) — /code-review max, all 20 findings fixed
 
 The max-effort adversarial review of the slice-4 branch confirmed 15

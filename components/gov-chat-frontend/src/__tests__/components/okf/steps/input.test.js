@@ -1,23 +1,21 @@
 'use strict';
 
 /**
- * Amendment A slice 4 (B1) — the real Input step panels:
- *   documents/crawl → doc-repo picker (bundles excluded), selection drives
- *                     the gate and writes back to the draft;
- *   manual          → FS markdown import via the standard /import route
- *                     (idempotent upsert) + in-wizard authoring modal;
+ * Amendment A slice 4a (B1, David 2026-09-27 redesign) — the real Input step:
+ *   documents/crawl → the dual-source OkfSourceDialog (repo + local FS);
+ *                     the step itself never lists files (the dialog owns the
+ *                     paginated listing; limit ≤ 50 or the backend 400s).
+ *   manual          → the editor IS the surface: auto-opens on first arrival
+ *                     (editor_offered rides the draft so it never re-pops);
+ *                     FS markdown import stays available via /import upsert.
  *   clone           → the fork already landed the content, so the gate is
- *                     open at once (David, 2026-09-27: a closed Continue on
- *                     the clone side-visit read as a trap).
+ *                     open at once.
+ * The input patch SPREADS draft.input — a whole-object replace would drop
+ * Produce's conversion_kicked on a Back-visit (shallow wizard merge).
  */
 
-const mockGetFiles = jest.fn();
 const mockImportConcepts = jest.fn();
 
-jest.mock('@/services/documentFileService', () => ({
-  __esModule: true,
-  default: { getFiles: (...a) => mockGetFiles(...a) }
-}));
 jest.mock('@/services/repoOkfService', () => ({
   __esModule: true,
   default: { importConcepts: (...a) => mockImportConcepts(...a) }
@@ -25,55 +23,82 @@ jest.mock('@/services/repoOkfService', () => ({
 
 const { mount } = require('@vue/test-utils');
 const OkfStepInput = require('@/components/okf/steps/Input.vue').default;
+const OkfSourceDialog = require('@/components/okf/wizard/OkfSourceDialog.vue').default;
+const OkfAddConceptModal = require('@/components/okf/editor/AddConceptModal.vue').default;
 
 function mountInput(draft) {
   return mount(OkfStepInput, {
     props: { draft: draft || { repo_id: 'r1' }, expert: false },
-    global: { stubs: { DsInfoTip: true, DsSpinner: true, OkfAddConceptModal: true } }
+    global: { stubs: { DsInfoTip: true } }
   });
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockGetFiles.mockResolvedValue([
-    { file_id: 'f1', file_name: 'a.pdf', file_size: 2048 },
-    { file_id: 'f2', file_name: 'b.zip', is_bundle: true }
-  ]);
   mockImportConcepts.mockResolvedValue({ ok: true });
 });
 
-it('documents: bundles are never sources; picking a file writes back and opens the gate', async () => {
+it('documents: the dialog owns the sources; confirming writes back and opens the gate', async () => {
   const wrapper = mountInput({ repo_id: 'r1', source: 'documents' });
+  expect(wrapper.emitted('gate')[0][0]).toBe(false);
+  const dialog = wrapper.findComponent(OkfSourceDialog);
+  expect(dialog.exists()).toBe(true);
+  expect(dialog.props('mode')).toBe('multi');
+  expect(dialog.props('allowUpload')).toBe(true);
+  await dialog.vm.$emit('confirm', { ids: ['f1', 'f2'], rows: [{ file_id: 'f1', file_name: 'a.pdf' }] });
   await wrapper.vm.$nextTick();
-  await wrapper.vm.$nextTick(); // getFiles resolves → rows render
-  expect(mockGetFiles).toHaveBeenCalled();
-  const rows = wrapper.findAll('.okf-step__row');
-  expect(rows.length).toBe(1); // the is_bundle zip is filtered out
-  // initial gate: closed until a selection exists
-  expect(wrapper.emitted('gate').pop()[0]).toBe(false);
-  await rows[0].trigger('click');
   const updates = wrapper.emitted('update');
-  expect(updates.length).toBe(1);
-  expect(updates[0][0].input.document_ids).toEqual(['f1']);
+  expect(updates.length).toBeGreaterThan(0);
+  const last = updates[updates.length - 1][0].input;
+  expect(last.document_ids).toEqual(['f1', 'f2']);
   expect(wrapper.emitted('gate').pop()[0]).toBe(true);
+  expect(dialog.props('visible')).toBe(false); // dialog closed on confirm
 });
 
-it('clone: the gate is open at once and the panel says the content is already in place', () => {
+it('crawl: the dialog is single-select with no upload section', () => {
+  const wrapper = mountInput({ repo_id: 'r1', source: 'crawl', input: { document_ids: [] } });
+  const dialog = wrapper.findComponent(OkfSourceDialog);
+  expect(dialog.props('mode')).toBe('single');
+  expect(dialog.props('allowUpload')).toBe(false);
+});
+
+it('clone: the gate is open at once and no dialog renders', () => {
   const wrapper = mountInput({ repo_id: 'r1', source: 'clone' });
   expect(wrapper.emitted('gate')[0][0]).toBe(true);
-  expect(wrapper.text()).toContain('clone');
-  expect(wrapper.find('.okf-step__row').exists()).toBe(false);
+  expect(wrapper.findComponent(OkfSourceDialog).exists()).toBe(false);
 });
 
-it('manual: importing FS markdown lands via the /import route and opens the gate', async () => {
+it('manual: the editor auto-opens on FIRST arrival and editor_offered rides the draft', async () => {
   const wrapper = mountInput({ repo_id: 'r1', source: 'manual' });
-  expect(wrapper.emitted('gate')[0][0]).toBe(false);
+  await wrapper.vm.$nextTick(); // addOpen set in mounted → render flush
+  expect(wrapper.findComponent(OkfAddConceptModal).props('visible')).toBe(true);
+  const updates = wrapper.emitted('update');
+  expect(updates.length).toBeGreaterThan(0);
+  const last = updates[updates.length - 1][0].input;
+  expect(last.editor_offered).toBe(true);
+  expect(last.concepts_added).toBe(0);
+});
+
+it('manual: a declined editor never re-pops (editor_offered respected)', () => {
+  const wrapper = mountInput({ repo_id: 'r1', source: 'manual', input: { editor_offered: true } });
+  expect(wrapper.findComponent(OkfAddConceptModal).props('visible')).toBe(false);
+  expect(wrapper.emitted('update')).toBeUndefined();
+});
+
+it('manual: the input patch SPREADS draft.input (conversion_kicked survives)', async () => {
+  const wrapper = mountInput({
+    repo_id: 'r1',
+    source: 'manual',
+    input: { conversion_kicked: true }
+  });
   const fake = { name: 'Water Points.md', text: async () => '# Water Points' };
   await wrapper.vm.onFsFiles({ target: { files: [fake] } });
+  const last = wrapper.emitted('update').pop()[0].input;
+  expect(last.conversion_kicked).toBe(true); // not clobbered by the replace
+  expect(last.concepts_added).toBe(1);
   expect(mockImportConcepts).toHaveBeenCalledWith('r1', [
     { path: 'Water Points', frontmatter: { type: 'topic', title: 'Water Points' }, body: '# Water Points' }
   ]);
-  expect(wrapper.emitted('update').pop()[0].input.concepts_added).toBe(1);
   expect(wrapper.emitted('gate').pop()[0]).toBe(true);
 });
 

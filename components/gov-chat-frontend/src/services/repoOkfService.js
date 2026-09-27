@@ -59,6 +59,26 @@ const repoOkfService = {
     return res && res.data ? res.data : { ok: true };
   },
 
+  /**
+   * Studio wizard resume pointer (3.4 Amendment A, A4): best-effort
+   * persistence of the wizard's current step on the repo doc
+   * (okf_repositories.studio_step, int 0-9 or null). Silent + non-throwing:
+   * resume persistence must never break the wizard flow — a failure just
+   * means the next session resumes from the in-memory default.
+   */
+  async saveStudioStep(repoId, studioStep) {
+    try {
+      await httpService.patch(
+        `/okf/repos/${encodeURIComponent(repoId)}`,
+        { studio_step: studioStep },
+        { silent: true }
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   async getManifest(repoId) {
     try {
       // silent: a fresh repo's bundle is NOT settled until the indexing worker

@@ -2051,6 +2051,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'publié',
         inReview: "en cours d'examen",
@@ -2058,6 +2067,7 @@ export default {
       },
       exit: 'Retour au tableau de bord',
       context: {
+        version: 'Version',
         untitled: 'Référentiel sans titre',
         trust: 'Confiance',
         title: 'Dépôt',
@@ -2072,6 +2082,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'Nom du référentiel et domaine',
         hint: 'Donnez à ce référentiel OKF un nom clair et choisissez son domaine.',
         nameLabel: 'Nom du référentiel',

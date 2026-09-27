@@ -1414,7 +1414,9 @@ export default {
       duplicate: '文件 "{fileName}" 已添加。',
       uploadSuccess: '成功上传 {fileName}',
       uploadFailed: '上传 {fileName} 失败。'
-    }
+    },
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
     versions: {
@@ -2095,7 +2097,13 @@ export default {
             title: '克隆已有知识库',
             desc: '从另一个 OKF 知识库中复刻主题与架构。'
           }
-        }
+        },
+        cloneSource: 'Source repository (not yet serving)',
+        clonePh: 'Select the repository to clone from',
+        cloning: 'Cloning topics into this repository…',
+        cloneNeed: 'Pick the repository to clone from first.',
+        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
+        cloneFailed: 'The clone failed — try again.'
       },
       input: {
         title: '输入项',
@@ -2126,7 +2134,8 @@ export default {
         added: '{n} topic(s) in this repository so far.',
         deleteTitle: 'Delete topic',
         deleteBody: 'This permanently removes the topic from this repository.',
-        labelFailed: 'Could not set the label.'
+        labelFailed: 'Could not set the label.',
+        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
       },
       produce: {
         title: '生成主题',
@@ -2140,6 +2149,8 @@ export default {
         done: '{n} topic(s) are ready — continue to review them in Curate.',
         noSources: 'No sources selected — go back to Input.',
         neverStarted: 'The conversion did not start — retry.',
+        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        labelDone: 'Conversion complete',
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
@@ -2156,7 +2167,12 @@ export default {
         hint: '标签是您本体架构的分类维度 — 这些主题属于哪些性质类别？请挑选 3 至 7 个。',
         add: '+ 添加标签',
         addConfirm: '添加',
-        placeholder: '例如：许可审批'
+        placeholder: '例如：许可审批',
+        loading: 'Reading labels…',
+        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        unlabeled: 'no labels yet',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        loadFailed: 'Could not read the labels right now.'
       },
       curate: {
         embedHint:
@@ -2338,7 +2354,8 @@ export default {
       },
       run: {
         notReady: '校验逻辑将在后续故事中接入。'
-      }
+      },
+      piiTitle: 'Personal data — review each flagged concept'
     },
     pii: {
       panel: '标记的实体',
@@ -2423,6 +2440,7 @@ export default {
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: '{n} document(s)',
+      titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
       empty: 'No documents in the repository yet — upload some below.',
@@ -2444,5 +2462,9 @@ export default {
       alreadyBadge: 'already in an OKF repo',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     }
+  },
+  link: {
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

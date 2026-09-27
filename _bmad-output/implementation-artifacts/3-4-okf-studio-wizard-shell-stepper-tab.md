@@ -362,6 +362,18 @@ for the new fallback-only keys; doc-mgmt/crawler ⓘ tips coverage.
   `okf-e2e-cycle-test-readiness.md` (same directory). Story keys for
   W1-W6 get assigned at the next sprint-planning pass.
 
+### E2E readiness execution (2026-09-27/28)
+
+W4 verified ALREADY LANDED (09-25 — plan file was stale). W5 live loop:
+leg 1 PASS (create→import 5→submit/approve/publish v1→ingest→settled
+serving); leg 2 PASS invariants (retract→edit→PII gate correctly re-
+blocked after the edit's re-scan→accept→publish v2→**v1 zip survives**→
+re-ingest settled; finding: retract DROPS the v1 graph collections —
+retention nuance recorded in the readiness doc). W1 preflight pills,
+W2 ×14 locale batch (88 keys safe-added to en.js + propagated, 10/10
+locale tests), W3 upload/link dialog tips, W6 PRD-arch ADR links — all
+implemented; frontend 1538/1538 + locale 10/10 green.
+
 ### REVIEW FIX SWEEP (f7b7e33fe, 2026-09-27) — /code-review max, all 20 findings fixed
 
 The max-effort adversarial review of the slice-4 branch confirmed 15

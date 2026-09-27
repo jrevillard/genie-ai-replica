@@ -222,6 +222,9 @@ export default {
       if (this.total > 0) return this.rows.length < this.total;
       return this.lastRawCount === this.pageSize;
     },
+    // W1 preflight pills (port of the 7.7 dialog's warnings): the steward
+    // sees WHY a document may 409 later — the server-side guards stay the
+    // real safety (DOCUMENT_IN_ANOTHER_REPO / SOURCES_NOT_RETRACTED).
     servingTip() {
       return this.translate(
         'okf.src.servingTip',

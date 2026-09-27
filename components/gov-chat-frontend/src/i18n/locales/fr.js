@@ -1449,7 +1449,9 @@ export default {
       duplicate: 'Le fichier "{fileName}" a déjà été ajouté.',
       uploadSuccess: '{fileName} téléchargé avec succès',
       uploadFailed: 'Échec du téléchargement de {fileName}.'
-    }
+    },
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
     versions: {
@@ -2148,7 +2150,13 @@ export default {
             title: "Clone d'un référentiel existant",
             desc: "Dupliquez les sujets et la structure d'un autre référentiel OKF."
           }
-        }
+        },
+        cloneSource: 'Source repository (not yet serving)',
+        clonePh: 'Select the repository to clone from',
+        cloning: 'Cloning topics into this repository…',
+        cloneNeed: 'Pick the repository to clone from first.',
+        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
+        cloneFailed: 'The clone failed — try again.'
       },
       input: {
         title: 'Entrées',
@@ -2179,7 +2187,8 @@ export default {
         added: '{n} topic(s) in this repository so far.',
         deleteTitle: 'Delete topic',
         deleteBody: 'This permanently removes the topic from this repository.',
-        labelFailed: 'Could not set the label.'
+        labelFailed: 'Could not set the label.',
+        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
       },
       produce: {
         title: 'Générer des sujets',
@@ -2193,6 +2202,8 @@ export default {
         done: '{n} topic(s) are ready — continue to review them in Curate.',
         noSources: 'No sources selected — go back to Input.',
         neverStarted: 'The conversion did not start — retry.',
+        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        labelDone: 'Conversion complete',
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
@@ -2209,7 +2220,12 @@ export default {
         hint: 'Les libellés constituent les axes catégoriels de votre ontologie — quelle est la nature de ces sujets ? Choisissez-en 3 à 7.',
         add: '+ Ajouter un libellé',
         addConfirm: 'Ajouter',
-        placeholder: 'par ex. Permis'
+        placeholder: 'par ex. Permis',
+        loading: 'Reading labels…',
+        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        unlabeled: 'no labels yet',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        loadFailed: 'Could not read the labels right now.'
       },
       curate: {
         embedHint:
@@ -2397,7 +2413,8 @@ export default {
       },
       run: {
         notReady: 'La validation sera raccordée dans une story ultérieure.'
-      }
+      },
+      piiTitle: 'Personal data — review each flagged concept'
     },
     pii: {
       panel: 'Entités signalées',
@@ -2483,6 +2500,7 @@ export default {
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: '{n} document(s)',
+      titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
       empty: 'No documents in the repository yet — upload some below.',
@@ -2504,5 +2522,9 @@ export default {
       alreadyBadge: 'already in an OKF repo',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     }
+  },
+  link: {
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

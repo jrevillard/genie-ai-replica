@@ -220,9 +220,29 @@
     </template>
 
     <footer class="okf-cl__footer">
+      <span class="okf-cl__footer-tip">
+        <DsInfoTip
+          :text="
+            translate(
+              'okf.glossary.addConcept',
+              'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.'
+            )
+          "
+        />
+      </span>
       <DsButton variant="secondary" small :disabled="readOnly" @click="$emit('add')"
         >+ {{ translate('okf.editor.concepts.add', 'Add concept') }}</DsButton
       >
+      <span class="okf-cl__footer-tip">
+        <DsInfoTip
+          :text="
+            translate(
+              'okf.glossary.resplit',
+              'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.'
+            )
+          "
+        />
+      </span>
       <DsButton variant="ghost" small :disabled="readOnly" @click="$emit('resplit')">{{
         translate('okf.editor.concepts.resplit', 'Re-split')
       }}</DsButton>
@@ -283,6 +303,7 @@
 <script>
 import translateMixin from '../../../mixins/translateMixin';
 import DsButton from '../../ds/Button.vue';
+import DsInfoTip from '../../ds/InfoTip.vue';
 import DsInput from '../../ds/Input.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsProgress from '../../ds/Progress.vue';
@@ -291,7 +312,7 @@ import DsSpinner from '../../ds/Spinner.vue';
 
 export default {
   name: 'OkfConceptList',
-  components: { DsButton, DsInput, DsPill, DsProgress, DsSelect, DsSpinner },
+  components: { DsButton, DsInfoTip, DsInput, DsPill, DsProgress, DsSelect, DsSpinner },
   mixins: [translateMixin],
   props: {
     concepts: { type: Array, default: () => [] },
@@ -685,8 +706,15 @@ export default {
 .okf-cl__footer {
   display: flex;
   gap: var(--space-sm);
+  align-items: center;
   border-top: 1px solid var(--border);
   padding-top: var(--space-sm);
+}
+/* ⓘ tips ride immediately BEFORE their action button (David, 2026-09-27:
+   every complex control explains its RAG purpose in place). */
+.okf-cl__footer-tip {
+  display: inline-flex;
+  align-items: center;
 }
 /* INGEST-FAILURE CARD (2026-09-14): fixed-position tooltip next to the
    hovered RED row. Tokens only; pointer-events none — pure overlay. */

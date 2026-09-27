@@ -1873,6 +1873,15 @@ export default {
       saveFailed: 'فشل حفظ frontmatter'
     },
     glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
       concept:
         'مدخل واحد في المستودع الخاص بك — عادةً صفحة واحدة أو موضوع واحد. يحتوي كل مفهوم على frontmatter مهيكل يقرأه المساعد، بالإضافة إلى نص markdown الذي يجيب منه.',
       repository:
@@ -1892,7 +1901,7 @@ export default {
       classification:
         'كيف نحدد ماهية كل مفهوم (موضوع، كيان، عملية…). يقرأ الاستدلال الصفحة تلقائيًا؛ بينما خيار LLM أبطأ ولكنه يتعامل مع الصفحات المعقدة.',
       resplit:
-        'إعادة تقسيم المصدر إلى مفاهيم بطريقة مختلفة — على سبيل المثال مفهوم واحد لكل صفحة بدلاً من مفهوم واحد للموقع بأكمله.',
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'فشل الحفظ',
       importFailedTitle: 'فشل الاستيراد — تعذر تحويل الملف المصدر.',
       importFailedHint: 'احذف هذا المستودع واستورد الملف المصدر مرة أخرى.',
@@ -2021,6 +2030,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'منشور',
         inReview: 'قيد المراجعة',
@@ -2028,6 +2046,7 @@ export default {
       },
       exit: 'العودة إلى لوحة التحكم',
       context: {
+        version: 'Version',
         untitled: 'مستودع بدون عنوان',
         trust: 'الثقة',
         title: 'المستودع',
@@ -2042,6 +2061,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'اسم المستودع ومجال الموضوع',
         hint: 'امنح مستودع OKF هذا اسمًا واضحًا واختر مجال موضوعه.',
         nameLabel: 'اسم المستودع',
@@ -2092,6 +2112,9 @@ export default {
         placeholder: 'مثال: التصاريح'
       },
       curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'مراجعة الموضوعات',
         hint: 'كل موضوع هو وحدة معرفية صغيرة وقابلة للاستشهاد. قم بتحرير العنوان والوصف.',
         placeholder: 'ستتوفر شجرة الإشراف والمحرر في المهمة 3-8.'

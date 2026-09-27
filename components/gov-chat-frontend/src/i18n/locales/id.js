@@ -1886,6 +1886,15 @@ export default {
       saveFailed: 'Penyimpanan frontmatter gagal'
     },
     glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
       concept:
         'Satu entri di repositori Anda — biasanya satu halaman atau topik tunggal. Setiap konsep memiliki frontmatter terstruktur yang dibaca asisten, ditambah teks markdown yang menjadi rujukan jawabannya.',
       repository:
@@ -1907,7 +1916,7 @@ export default {
       classification:
         'Bagaimana kami menentukan entitas apa dari setiap konsep (topik, entitas, proses…). Heuristik membaca halaman secara otomatis; opsi LLM lebih lambat tetapi dapat menangani halaman yang rumit.',
       resplit:
-        'Memotong ulang sumber menjadi konsep dengan cara berbeda — misalnya satu konsep per halaman alih-alih satu untuk seluruh situs.',
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'Gagal menyimpan',
       importFailedTitle: 'Impor gagal — berkas sumber tidak dapat dikonversi.',
       importFailedHint: 'Hapus repositori ini dan impor kembali berkas sumber.',
@@ -2037,6 +2046,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'dipublikasikan',
         inReview: 'dalam tinjauan',
@@ -2044,6 +2062,7 @@ export default {
       },
       exit: 'Kembali ke dasbor',
       context: {
+        version: 'Version',
         untitled: 'Repositori tanpa judul',
         trust: 'Kepercayaan',
         title: 'Repositori',
@@ -2058,6 +2077,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'Nama repositori & bidang subjek',
         hint: 'Beri nama yang jelas untuk repositori OKF ini dan pilih bidang subjeknya.',
         nameLabel: 'Nama repositori',
@@ -2108,6 +2128,9 @@ export default {
         placeholder: 'mis. Izin'
       },
       curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'Tinjau topik',
         hint: 'Setiap topik adalah unit pengetahuan kecil yang dapat dikutip. Edit judul dan deskripsi.',
         placeholder: 'Pohon kurator + editor hadir di Story 3-8.'

@@ -1855,6 +1855,15 @@ export default {
       saveFailed: 'Frontmatter 保存失败'
     },
     glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
       concept:
         '知识库中的一个条目 — 通常为单页或单一主题。每个概念都具备供助手读取的结构化 frontmatter，以及用于生成答案的 markdown 正文。',
       repository:
@@ -1869,7 +1878,8 @@ export default {
       ingestion: '为已发布的版本建立应答准备的步骤 — 文本将被分块、向量化与关联。在此之前，任何内容均不会触达助手。',
       classification:
         '判定每个概念“究竟是什么”（主题、实体、流程…）的逻辑。启发式规则会自动解析页面；LLM 选项耗时稍长，但能处理结构复杂的页面。',
-      resplit: '以另一种方式重新切分源文件为概念 — 例如改为每页一个概念，而非整个站点合并为一个概念。',
+      resplit:
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: '保存失败',
       importFailedTitle: '导入失败 — 源文件未能完成转换。',
       importFailedHint: '请删除此知识库并重新导入源文件。',
@@ -1996,6 +2006,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: '已发布',
         inReview: '审核中',
@@ -2003,6 +2022,7 @@ export default {
       },
       exit: '返回仪表盘',
       context: {
+        version: 'Version',
         untitled: '未命名知识库',
         trust: '信任',
         title: '存储库',
@@ -2017,6 +2037,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: '知识库名称与主题领域',
         hint: '为此 OKF 知识库指定明确的名称，并选定其所属的主题领域。',
         nameLabel: '知识库名称',
@@ -2067,6 +2088,9 @@ export default {
         placeholder: '例如：许可审批'
       },
       curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: '审核主题',
         hint: '每个主题都是一个细粒度、可引用的知识单元。支持编辑标题与描述。',
         placeholder: '策展树与编辑器将在故事 3-8 中交付。'

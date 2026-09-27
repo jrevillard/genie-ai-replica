@@ -1879,6 +1879,15 @@ export default {
       saveFailed: 'Frontmatter সংরক্ষণ ব্যর্থ হয়েছে'
     },
     glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
       concept:
         'আপনার রিপোজিটরিতে একটি এন্ট্রি — সাধারণত একটি একক পৃষ্ঠা বা বিষয়। প্রতিটি ধারণায় কাঠামোগত frontmatter থাকে যা সহকারী পড়ে, সাথে থাকে markdown টেক্সট যা থেকে এটি উত্তর দেয়।',
       repository:
@@ -1899,7 +1908,7 @@ export default {
       classification:
         'আমরা কীভাবে নির্ধারণ করি প্রতিটি ধারণা কী (একটি বিষয়, একটি সত্ত্বা, একটি প্রক্রিয়া…)। হিউরিস্টিকস স্বয়ংক্রিয়ভাবে পৃষ্ঠা পড়ে; LLM বিকল্পটি ধীরগতির হলেও জটিল পৃষ্ঠা পরিচালনা করতে পারে।',
       resplit:
-        'উৎসটিকে অন্য উপায়ে ধারণায় পুনরায় কাটা — উদাহরণস্বরূপ সম্পূর্ণ সাইটের জন্য একটির পরিবর্তে প্রতি পৃষ্ঠায় একটি ধারণা।',
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'সংরক্ষণ ব্যর্থ হয়েছে',
       importFailedTitle: 'আমদানি ব্যর্থ হয়েছে — উৎস ফাইল রূপান্তর করা যায়নি।',
       importFailedHint: 'এই রিপোজিটরিটি মুছুন এবং উৎস ফাইলটি আবার আমদানি করুন।',
@@ -2029,6 +2038,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'প্রকাশিত',
         inReview: 'পর্যালোচনা চলছে',
@@ -2036,6 +2054,7 @@ export default {
       },
       exit: 'ড্যাশবোর্ডে ফিরে যান',
       context: {
+        version: 'Version',
         untitled: 'শিরোনামহীন রিপোজিটরি',
         trust: 'বিশ্বাস',
         title: 'রিপোজিটরি',
@@ -2050,6 +2069,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'রিপোজিটরির নাম ও বিষয় ক্ষেত্র',
         hint: 'এই OKF রিপোজিটরিকে একটি স্পষ্ট নাম দিন এবং এর বিষয় ক্ষেত্র বেছে নিন।',
         nameLabel: 'রিপোজিটরির নাম',
@@ -2100,6 +2120,9 @@ export default {
         placeholder: 'উদাঃ পারমিট'
       },
       curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'বিষয়গুলি পর্যালোচনা করুন',
         hint: 'প্রতিটি বিষয় জ্ঞানের একটি ছোট, উদ্ধৃতিযোগ্য একক। শিরোনাম এবং বিবরণ সম্পাদনা করুন।',
         placeholder: 'কিউরেটর ট্রি + সম্পাদক গল্প ৩-৮-এ আসবে।'

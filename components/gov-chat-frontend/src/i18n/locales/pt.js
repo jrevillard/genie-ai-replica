@@ -1891,6 +1891,15 @@ export default {
       saveFailed: 'Falha ao salvar frontmatter'
     },
     glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
       concept:
         'Uma entrada no seu repositório — geralmente uma única página ou tópico. Cada conceito possui frontmatter estruturado que o assistente lê, além do texto em markdown a partir do qual ele responde.',
       repository:
@@ -1913,7 +1922,7 @@ export default {
       classification:
         'Como decidimos o que cada conceito É (um tópico, uma entidade, um processo…). A heurística lê a página automaticamente; a opção com LLM é mais lenta, mas lida bem com páginas complexas.',
       resplit:
-        'Recortar a fonte em conceitos de uma maneira diferente — por exemplo, um conceito por página em vez de um para todo o site.',
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'Falha ao salvar',
       importFailedTitle: 'A importação falhou — o arquivo de origem não pôde ser convertido.',
       importFailedHint: 'Exclua este repositório e importe o arquivo de origem novamente.',
@@ -2044,6 +2053,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'publicado',
         inReview: 'em revisão',
@@ -2051,6 +2069,7 @@ export default {
       },
       exit: 'Voltar ao painel',
       context: {
+        version: 'Version',
         untitled: 'Repositório sem título',
         trust: 'Confiança',
         title: 'Repositório',
@@ -2065,6 +2084,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'Nome do repositório e área temática',
         hint: 'Dê a este repositório OKF um nome claro e escolha sua área temática.',
         nameLabel: 'Nome do repositório',
@@ -2115,6 +2135,9 @@ export default {
         placeholder: 'ex.: Licenças'
       },
       curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'Revisar os tópicos',
         hint: 'Cada tópico é uma unidade pequena e citável de conhecimento. Edite o título e a descrição.',
         placeholder: 'A árvore do curador e o editor virão na História 3-8.'

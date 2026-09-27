@@ -96,3 +96,30 @@ describe('repository-service.update — the rename path (born-right graph carry)
     expect(rows.some((r) => r.action === 'repo.rename')).toBe(false);
   });
 });
+
+describe('repository-service.update — studio_step resume pointer (3.4 Amendment A, A4)', () => {
+  test('persists an integer step 0-9', async () => {
+    seedRepo();
+    const out = await repoService.update(RID, { studio_step: 5 }, { sub: 'steward-1' });
+    expect(out.studio_step).toBe(5);
+    expect(mockDb._stores.okf_repositories[RID].studio_step).toBe(5);
+  });
+
+  test('persists null (clearing the pointer)', async () => {
+    seedRepo({ studio_step: 3 });
+    const out = await repoService.update(RID, { studio_step: null }, { sub: 'steward-1' });
+    expect(out.studio_step).toBeNull();
+  });
+
+  test('refuses a non-integer or out-of-range pointer with 400', async () => {
+    seedRepo();
+    await expect(repoService.update(RID, { studio_step: 13 })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
+    await expect(repoService.update(RID, { studio_step: 1.5 })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(repoService.update(RID, { studio_step: 'five' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    // nothing was written
+    expect(mockDb._stores.okf_repositories[RID].studio_step).toBeUndefined();
+  });
+});

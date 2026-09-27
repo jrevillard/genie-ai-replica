@@ -1894,6 +1894,15 @@ export default {
       saveFailed: 'Ho boloka frontmatter ho hlolehile'
     },
     glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
       concept:
         "Kenyelletso e le 'ngoe polokelong ea hau — hangata leqephe le le leng kapa taba e le 'ngoe. Mohopolo o mong le o mong o na le frontmatter e hlophisitsoeng eo mothusi a e balang, hammoho le mongolo oa markdown oo a arabang ho tsoa ho oona.",
       repository:
@@ -1915,7 +1924,7 @@ export default {
       classification:
         'Kamoo re etsang qeto ea hore na mohopolo ka mong KE eng (sehlooho, mokhatlo, tshebetso…). Li-heuristics li bala leqephe ka bo tsona; khetho ea LLM e lieha haholo empa e ka khona ho sebetsana le maqephe a thata.',
       resplit:
-        'Ho arola mohloli hape ka mehopolo ka tsela e fapaneng — mohlala, mohopolo o le mong leqepheng ka leng ho fapana le o le mong bakeng sa sebaka sohle sa marang-rang.',
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'Ho boloka ho hlotsoe',
       importFailedTitle: 'Ho kenya ho hlolehile — faele ea mohloli ha ea khona ho fetoloa.',
       importFailedHint: "Hlakola polokelo ena 'me u kenye faele ea mohloli hape.",
@@ -2046,6 +2055,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'e hatisitsoe',
         inReview: 'ho hlahloba',
@@ -2053,6 +2071,7 @@ export default {
       },
       exit: 'Khutlela ho dashboard',
       context: {
+        version: 'Version',
         untitled: 'Polokelo e se nang lebitso',
         trust: 'Tšepo',
         title: 'Lefapha',
@@ -2067,6 +2086,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'Lebitso la polokelo & sebaka sa taba',
         hint: "Fana ka lebitso le hlakileng polokelong ena ea OKF 'me u khethe sebaka sa taba ea eona.",
         nameLabel: 'Lebitso la polokelo',
@@ -2117,6 +2137,9 @@ export default {
         placeholder: 'mohlala: Litumello'
       },
       curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'Hlahloba lihlooho',
         hint: 'Sehlooho ka seng ke karolo e nyane ea tsebo e ka qotsoang. Hlophisa sehlooho le tlhaloso.',
         placeholder: 'Sefate sa mohlophisi + morulaganyi li tla fihla ho Pale ea 3-8.'

@@ -1873,6 +1873,15 @@ export default {
       saveFailed: 'การบันทึก frontmatter ล้มเหลว'
     },
     glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
       concept:
         'รายการหนึ่งรายการในที่เก็บของคุณ — มักจะเป็นหน้าเดียวหรือหัวข้อเดียว แต่ละแนวคิดมี frontmatter ที่มีโครงสร้างซึ่งระบบผู้ช่วยอ่านได้ ควบคู่ไปกับข้อความ markdown ที่ใช้อ้างอิงในการตอบ',
       repository:
@@ -1894,7 +1903,7 @@ export default {
       classification:
         'วิธีที่เราใช้กำหนดว่าแต่ละแนวคิดคืออะไร (หัวข้อ เอนทิตี กระบวนการ…) ฮิวริสติกส์จะอ่านหน้าเว็บโดยอัตโนมัติ ตัวเลือก LLM จะช้ากว่าแต่สามารถจัดการกับหน้าที่ซับซ้อนได้ดี',
       resplit:
-        'การตัดแบ่งแหล่งที่มาออกเป็นแนวคิดใหม่อีกวิธีหนึ่ง — เช่น แนวคิดละหนึ่งหน้า แทนที่จะเป็นแนวคิดเดียวสำหรับทั้งไซต์',
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'บันทึกล้มเหลว',
       importFailedTitle: 'การนำเข้าล้มเหลว — ไม่สามารถแปลงไฟล์ต้นฉบับได้',
       importFailedHint: 'ลบที่เก็บนี้และนำเข้าไฟล์ต้นฉบับอีกครั้ง',
@@ -2024,6 +2033,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: 'เผยแพร่แล้ว',
         inReview: 'กำลังตรวจสอบ',
@@ -2031,6 +2049,7 @@ export default {
       },
       exit: 'กลับสู่แดชบอร์ด',
       context: {
+        version: 'Version',
         untitled: 'ที่เก็บที่ไม่มีชื่อ',
         trust: 'ความน่าเชื่อถือ',
         title: 'ที่เก็บข้อมูล',
@@ -2045,6 +2064,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: 'ชื่อที่เก็บและสาขาวิชา',
         hint: 'ตั้งชื่อที่เก็บ OKF นี้ให้ชัดเจนและเลือกสาขาวิชา',
         nameLabel: 'ชื่อที่เก็บ',
@@ -2095,6 +2115,9 @@ export default {
         placeholder: 'เช่น ใบอนุญาต'
       },
       curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'ตรวจสอบหัวข้อ',
         hint: 'แต่ละหัวข้อคือหน่วยความรู้ขนาดเล็กที่สามารถอ้างอิงได้ แก้ไขชื่อและคำอธิบาย',
         placeholder: 'โครงสร้างแผนผังผู้ดูแล + ตัวแก้ไขจะพร้อมใช้งานในเรื่องราว 3-8'

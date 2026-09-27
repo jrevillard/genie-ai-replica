@@ -14,7 +14,7 @@
         type="button"
         class="okf-step__card"
         :class="{ 'okf-step__card--selected': local.source === src.value }"
-        @click="local.source = src.value"
+        @click="pick(src.value)"
       >
         <span class="okf-step__card-title">{{ translate(src.titleKey, src.title) }}</span>
         <span class="okf-step__card-desc">{{ translate(src.descKey, src.desc) }}</span>
@@ -61,11 +61,32 @@ export default {
   name: 'OkfStepChoose',
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
+  emits: ['update', 'gate'],
   data() {
     return {
-      local: { source: (this.draft && this.draft.source) || 'documents' },
+      local: { source: (this.draft && this.draft.source) || '' },
       sources: SOURCES
     };
+  },
+  computed: {
+    // A2 gate: a workflow must be chosen (existing drafts arrive with one).
+    canAdvance() {
+      return !!this.local.source;
+    }
+  },
+  mounted() {
+    this.emitGate();
+  },
+  methods: {
+    // A1 write-back: the choice lives in the draft — re-entry restores it.
+    pick(value) {
+      this.local.source = value;
+      this.$emit('update', { source: value });
+      this.emitGate();
+    },
+    emitGate() {
+      this.$emit('gate', this.canAdvance);
+    }
   }
 };
 </script>

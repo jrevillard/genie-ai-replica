@@ -3373,6 +3373,10 @@ export default {
       });
       this.selectedDocuments = [];
       this.activeTab = 'studio';
+      // The Studio tab mounts under v-if="activeTab === 'studio'" and
+      // registers this listener in mounted() — dispatching in the same tick
+      // fired with zero receivers (max-review F2). One tick for the mount.
+      await this.$nextTick();
       window.dispatchEvent(new CustomEvent('okf:create-from-documents'));
     },
     /** Deep link (Story 7.7 provenance popup cards): ?tab=documents&file=<id>

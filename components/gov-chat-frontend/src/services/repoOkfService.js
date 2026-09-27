@@ -38,15 +38,19 @@ const repoOkfService = {
    * Amendment A (Labels step preview): the repo's concept meta rows —
    * {concept_id, path, title, labels, tags, ...} per Story #978's KEEP list.
    * The controller returns the legacy full array (no pagination opts sent).
+   * opts.strict: rethrow instead of resolving [] — callers that must
+   * DISTINGUISH failure from empty (Choose's clone, LabelOnboard's error
+   * branch) use it; previews stay permissive by default.
    */
-  async listConcepts(repoId) {
+  async listConcepts(repoId, opts = {}) {
     try {
       const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/concepts`, {}, { silent: true });
       const body = res && res.data;
       if (Array.isArray(body)) return body;
       if (body && Array.isArray(body.concepts)) return body.concepts;
       return [];
-    } catch {
+    } catch (err) {
+      if (opts.strict) throw err;
       return []; // a preview must never block the step
     }
   },

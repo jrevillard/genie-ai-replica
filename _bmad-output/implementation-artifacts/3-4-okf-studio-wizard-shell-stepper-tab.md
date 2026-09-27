@@ -295,3 +295,56 @@ idempotency bug found in the rewrite: Input's writeBack replaced the
 whole draft.input, which would drop Produce's conversion_kicked on a
 Back-visit (shallow wizard merge) — the patch now spreads. Frontend
 1529/1529 (+ source-dialog spec), markers verified.
+
+### Amendment A — FUNCTIONAL DECISIONS (David, 2026-09-27, binding)
+
+Eleven decisions from three multiple-choice rounds — all "Recommended"
+options accepted except lifecycle (stronger: ritual ENTIRELY outside):
+
+1. Crawl = pick existing crawl only (no in-wizard crawl kickoff).
+2. Labels step = automated + live preview; adjustments in Curate only.
+3. PII = FULL remediation panel EMBEDDED in Validate (per-concept
+   redact/replace/remove/accept + bulk, same service calls as editor).
+4. Repo tools (graph/versions/logs/rename) = read-only summaries +
+   actions in the wizard; re-split lives in Curate.
+5. Doc-mgmt "Create OKF repository" batch action ROUTES INTO THE WIZARD
+   with the selection preloaded at Input (replaces the 7.7 dialog path;
+   3-6 entry-point plumbing reused).
+6. Curate = one-click automations: Fix frontmatter (autocorrect
+   proposals → apply) + Re-split (confirm-guarded).
+7. Existing repos open straight at the resume step (A4 confirmed).
+8. Lifecycle ritual (submit/approve/publish) ENTIRELY outside the wizard
+   — Review = live state + hand-off guidance; footer publish removed;
+   wizard never transitions.
+9. Clone becomes REAL: source-repo picker at Choose (draft repos),
+   Entry create-on-advance calls the 4.8 clone API.
+10. Wizard finish lands in the repo's Editor shell, Editor sub-tab
+    active ("Back to dashboard" stays the explicit ghost exit).
+11. Serving repos = read-only wizard summary (confirmed as-is).
+
+BATCH 1 LANDED (d2e191e25, 2026-09-27): decisions 8 + 10 + 2 (Review
+rework, finish→Editor shell, Labels preview via new listConcepts; the
+free-text chip adder removed). Spec wizard-handoff.test.js. 1534/1534,
+markers verified.
+
+BATCH 2 LANDED (d55557a44): #9 clone REAL (Choose source picker, non-
+serving repos; beforeAdvance imports source concepts via /concepts/:id
+→ /import upsert — no destroy-and-mint, idempotent re-runs; spec
+choose-clone.test.js) + #5 doc-mgmt batch action routes INTO the wizard
+(selection → okf/selection.documents → StudioTab seeds the draft →
+Entry → Choose preselected → Input → Produce; 7.7 dialog retired from
+the button, orphaned okf:import-created event removed) + #6 verified
+already-composed (embedded editor hosts Resplit + Autocorrect).
+
+BATCH 3 LANDED (0a79eab90): #3 Validate embeds the editor's OWN
+OkfPiiOccurrences (flagged list → full redact/replace/remove/accept,
+green RESOLVED / orange flagged, Re-scan re-flags — same approach as
+the editor per David's live note; actions bump revision + refresh) +
+#4 Review gains the Repository tools row (version summary + Versions/
+Logs/Rename dialogs — the editor's own components; graph/re-split/
+autocorrect already inside Curate's editor). Frontend 1538/1538
+throughout, lint+prettier clean, served markers verified per batch.
+
+ALL ELEVEN DECISIONS IMPLEMENTED. Amendment A B-series is functionally
+complete pending David's live pass. Remaining polish: ×14 locale batch
+for the new fallback-only keys; doc-mgmt/crawler ⓘ tips coverage.

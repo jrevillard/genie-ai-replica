@@ -34,6 +34,23 @@ const repoOkfService = {
     return res && res.data ? res.data : null;
   },
 
+  /**
+   * Amendment A (Labels step preview): the repo's concept meta rows —
+   * {concept_id, path, title, labels, tags, ...} per Story #978's KEEP list.
+   * The controller returns the legacy full array (no pagination opts sent).
+   */
+  async listConcepts(repoId) {
+    try {
+      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/concepts`, {}, { silent: true });
+      const body = res && res.data;
+      if (Array.isArray(body)) return body;
+      if (body && Array.isArray(body.concepts)) return body.concepts;
+      return [];
+    } catch {
+      return []; // a preview must never block the step
+    }
+  },
+
   async create(body) {
     // silent: the create dialog owns the outcome display (e.g. a friendly
     // DUPLICATE_REPO message) — no global toast, no console.error.

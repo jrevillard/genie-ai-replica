@@ -1,10 +1,10 @@
 <!--
-  OkfStepReview.vue — Amendment A slice 3b (B7): the review step surfaces the
-  REAL lifecycle. The summary reads the live repo doc (never the dead draft
-  shapes) and the lifecycle action is the SAME state-valid transition the
-  wizard publishes through (R-C): draft/register → submit; review → (approve
-  is the reviewer's sign-off, dispatched here); retracted → submit; publish/
-  serving → nothing left (the footer's Publish/Ingest handles it).
+  OkfStepReview.vue — Amendment A: the review step shows the LIVE lifecycle
+  state and where the ritual finishes. DECISION (David, 2026-09-27): the
+  lifecycle transitions — submit → approve → publish — live OUTSIDE the
+  wizard (the Editor and the Studio dashboard own them); this step performs
+  NO transitions. It reads the live repo doc (never the dead draft shapes)
+  and hands the steward off through the footer's "Open the Editor".
 -->
 <template>
   <div class="okf-step">
@@ -31,7 +31,16 @@
         <strong>{{ translate('okf.steps.review.topics', 'Topics') }}:</strong> {{ conceptCount }}
       </p>
       <p>
-        <strong>{{ translate('okf.steps.review.labels', 'Labels') }}:</strong>
+        <strong>{{ translate('okf.steps.review.labels', 'Labels') }}</strong>
+        <DsInfoTip
+          :text="
+            translate(
+              'okf.glossary.labelsAuto',
+              'Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.'
+            )
+          "
+        />
+        <strong>:</strong>
         {{ conceptCount > 0 ? translate('okf.steps.review.labelsSet', 'set per topic in Curate') : '—' }}
       </p>
       <p>
@@ -39,45 +48,38 @@
       </p>
     </div>
 
-    <div v-if="lifecycleAction" class="okf-step__action">
-      <DsButton variant="secondary" small :disabled="acting" @click="runLifecycle">
-        {{ actionLabel }}
-      </DsButton>
-      <DsInfoTip
-        :text="
+    <div class="okf-step__handoff">
+      <p class="okf-step__note">
+        {{
           translate(
-            'okf.glossary.reviewAction',
-            'The next lifecycle step for this repository in its current state. Publishing mints a version and exports the bundle; ingest then makes the content retrievable.'
+            'okf.steps.review.ritualOutside',
+            'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.'
           )
-        "
-      />
+        }}
+        <DsInfoTip
+          :text="
+            translate(
+              'okf.glossary.reviewHandoff',
+              'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.'
+            )
+          "
+        />
+      </p>
     </div>
-    <p v-else class="okf-step__note">
-      {{
-        translate(
-          'okf.steps.review.nothingToDo',
-          'Nothing to review — this repository is already serving or has no lifecycle step pending here.'
-        )
-      }}
-    </p>
   </div>
 </template>
 
 <script>
 import { mapGetters } from 'vuex';
-import DsButton from '../../ds/Button.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import translateMixin from '../../../mixins/translateMixin';
 
 export default {
   name: 'OkfStepReview',
-  components: { DsButton, DsInfoTip },
+  components: { DsInfoTip },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   emits: ['gate'],
-  data() {
-    return { acting: false };
-  },
   computed: {
     ...mapGetters('okf', ['repoById']),
     repo() {
@@ -98,41 +100,10 @@ export default {
       if (this.repo.ingested_at) return this.translate('okf.wizard.status.published', 'published');
       const state = this.repo.lifecycle_state || 'draft';
       return this.translate(`okf.wizard.state.${state}`, state);
-    },
-    // R-C parity: only transitions VALID for the current state are offered.
-    lifecycleAction() {
-      if (!this.repo || this.repo.ingested_at) return null;
-      const s = this.repo.lifecycle_state;
-      if (s === 'draft' || s === 'register' || s === 'retracted') return 'submit';
-      if (s === 'review') return 'approve';
-      return null; // publish/publish+serving — the footer Publish owns it
-    },
-    actionLabel() {
-      if (this.lifecycleAction === 'approve')
-        return this.translate('okf.steps.review.approve', 'Approve (review sign-off)');
-      return this.translate('okf.steps.review.submit', 'Submit for review');
     }
   },
   mounted() {
-    this.$emit('gate', true); // review never blocks — the publish gates do
-  },
-  methods: {
-    async runLifecycle() {
-      if (!this.lifecycleAction || !this.repo || this.acting) return;
-      this.acting = true;
-      try {
-        const result = await this.$store.dispatch('okf/lifecycleTransition', {
-          repoId: this.repo.repo_id,
-          action: this.lifecycleAction,
-          actor: { sub: 'studio-wizard' }
-        });
-        if (result && result.ok) {
-          await this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
-        }
-      } finally {
-        this.acting = false;
-      }
-    }
+    this.$emit('gate', true); // review never blocks — the hand-off is next
   }
 };
 </script>
@@ -144,10 +115,11 @@ export default {
   gap: var(--space-xs);
   font-size: var(--text-sm);
 }
-.okf-step__action {
-  display: flex;
-  gap: var(--space-sm);
-  align-items: center;
+.okf-step__handoff {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
 }
 .okf-step__note {
   margin: 0;

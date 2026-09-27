@@ -68,7 +68,7 @@
             advancing
               ? translate('okf.wizard.working', 'Working…')
               : activeStep === 9
-                ? translate('okf.wizard.publish', 'Publish repository')
+                ? translate('okf.wizard.finish', 'Open the Editor')
                 : translate('okf.wizard.continue', 'Continue')
           }}
         </DsButton>
@@ -138,7 +138,7 @@ const STEP_LABELS = [
   'Validate',
   'Auto-correct',
   'Review',
-  'Publish'
+  'Finish'
 ];
 
 export default {
@@ -164,7 +164,7 @@ export default {
   props: {
     draft: { type: Object, default: null }
   },
-  emits: ['reset', 'step-change', 'update-draft'],
+  emits: ['reset', 'step-change', 'update-draft', 'finish'],
   data() {
     return {
       activeStep: 0,
@@ -303,7 +303,11 @@ export default {
         this.$emit('step-change', this.activeStep);
         this.persistDraft();
       } else {
-        this.publishRepo();
+        // Amendment A decision (David, 2026-09-27): the lifecycle ritual —
+        // submit → approve → publish — lives OUTSIDE the wizard. Finishing
+        // hands off to StudioTab, which opens the repo's Editor shell with
+        // the Editor sub-tab active. The wizard never publishes.
+        this.$emit('finish', { repo_id: this.draft && this.draft.repo_id });
       }
     },
     onBack() {
@@ -348,34 +352,6 @@ export default {
     persistDraft() {
       if (!this.draft) return;
       this.persistMerged({ ...this.draft });
-    },
-    publishRepo() {
-      // Story #978 lifecycle (David, 2026-08-28): the wizard publishes through
-      // the SAME transition as the editor/dashboard (mint + bundle zip export
-      // + state flip) — equal features via one shared path. On success the
-      // dashboard shows the repo in the Published lane with its version.
-      if (!this.draft || !this.draft.repo_id) return;
-      // WIZARD IDEMPOTENCY R-C (David, 2026-09-04): the final step offers
-      // only transitions VALID for the current state — never a doomed
-      // publish on a serving repo (409 REPO_READ_ONLY). Serving = view-only
-      // no-op; published-not-serving advances with 'ingest'; a RETRACTED
-      // repo re-enters the loop via 'submit' (its only legal exit — David,
-      // 2026-09-11); everything else publishes.
-      const repo = this.$store.getters['okf/repoById'](this.draft.repo_id);
-      if (repo && repo.ingested_at) return; // serving — nothing to mutate
-      const s = repo && repo.lifecycle_state;
-      const action = s === 'publish' ? 'ingest' : s === 'retracted' ? 'submit' : 'publish';
-      this.$store
-        .dispatch('okf/lifecycleTransition', {
-          repoId: this.draft.repo_id,
-          action,
-          actor: { sub: 'studio-wizard' }
-        })
-        .then((result) => {
-          if (result && result.ok) {
-            this.$emit('reset');
-          }
-        });
     }
   }
 };

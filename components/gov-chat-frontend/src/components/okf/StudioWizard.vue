@@ -256,16 +256,13 @@ export default {
     if (this.draft && typeof this.draft.studio_step === 'number') {
       this.activeStep = Math.min(this.draft.studio_step, 9);
     }
-    if (
-      this.draft &&
-      (this.draft.source === 'clone' || this.draft.source === 'crawl' || this.draft.source === 'editor')
-    ) {
-      // Clone/crawler-sourced repos skip Produce and open at Step 5 (Curate)
-      // per UX design (3-4 Clone amendment, 3-7 #977). 'editor'-sourced drafts
-      // (Story #978 — a repo opened from the Editor shell) start at Curate
-      // too, with all steps unlocked (studio_step 9 set by StudioTab).
-      this.activeStep = Math.max(this.activeStep, 5);
-    }
+    // NO source-based step jump here (max-review F14/G2): the old
+    // clone/crawl/editor → Curate bump was written for EXTERNAL drafts,
+    // which carry their landing step explicitly (crawler-created = 5,
+    // editor-opened = 9, both seeded by StudioTab). With wizard-NATIVE
+    // crawl/clone flows now setting the same sources at Choose, the bump
+    // teleported every remount past Produce mid-conversion. The saved
+    // studio_step alone decides the landing step.
   },
   methods: {
     stepLabel(i) {
@@ -273,6 +270,10 @@ export default {
     },
     onStepClick(idx) {
       if (idx === this.activeStep) return;
+      // F9: steps that never emit a gate (Validate, Auto-correct) would
+      // inherit the PREVIOUS step's closed gate — a permanent dead Continue.
+      // Optimistically open; a gate-emitting step re-emits on mount.
+      this.gateOpen = true;
       this.activeStep = idx;
       this.$emit('step-change', idx);
       this.persistDraft();
@@ -299,6 +300,7 @@ export default {
         if (!ok) return;
       }
       if (this.activeStep < 9) {
+        this.gateOpen = true; // F9: same rationale as onStepClick
         this.activeStep += 1;
         this.$emit('step-change', this.activeStep);
         this.persistDraft();
@@ -342,11 +344,17 @@ export default {
       });
       // A4 server resume: the cheap okf_repositories.studio_step pointer.
       // Best-effort + silent; skipped for frozen repos (R-C parity — the
-      // backend 409s serving repos anyway).
-      if (merged.repo_id) {
+      // backend 409s serving repos anyway). G4 (max-review): ONLY when the
+      // step actually changed — every PATCH writes an audit row
+      // ('Updated repository fields: studio_step'), and one-per-interaction
+      // was drowning the Review step's own Action log.
+      if (merged.repo_id && step !== this._lastPersistedStep) {
         const repo = this.repo;
         const frozen = repo && (repo.ingested_at || repo.lifecycle_state === 'publish');
-        if (!frozen) repoOkfService.saveStudioStep(merged.repo_id, step);
+        if (!frozen) {
+          repoOkfService.saveStudioStep(merged.repo_id, step);
+          this._lastPersistedStep = step;
+        }
       }
     },
     persistDraft() {

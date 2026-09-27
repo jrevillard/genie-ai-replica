@@ -504,7 +504,10 @@ const actions = {
       return { ok: true, repo };
     } catch (err) {
       commit('setError', err.message || 'createRepo failed');
-      return { ok: false, code: 'CREATE_FAILED', message: err.message };
+      // Preserve the server's code (DUPLICATE_REPO etc.) — Entry's curated
+      // refusal copy keys off it; a hardcoded CREATE_FAILED made the branch
+      // unreachable (max-review F11, 2026-09-27).
+      return { ok: false, code: err.code || 'CREATE_FAILED', message: err.message };
     }
   },
 

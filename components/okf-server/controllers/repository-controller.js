@@ -160,10 +160,14 @@ async function convertFromCrawl(req, res, next) {
     // new one (the wizard creates the repo at Entry, then feeds it here).
     // Additive: absent repo_id = the historical create-with-suffix loop.
     if (typeof body.repo_id === 'string' && body.repo_id.trim()) {
-      repo = await repoService.getById(body.repo_id.trim());
+      // F15 (max-review): same narrowing + writability as every sibling
+      // mutation — an authz-scoped fetch (a domain-A caller cannot target a
+      // domain-B repo by id) and a 409 for serving/drain-frozen content.
+      repo = await repoService.getById(body.repo_id.trim(), { authz: authzForService(req) });
       if (!repo || repo.deleted_at) {
         return res.status(404).json({ error: 'REPO_NOT_FOUND', message: `Repository ${body.repo_id} not found` });
       }
+      assertWritable(repo);
     }
     for (let attempt = 1; attempt <= 10 && !repo; attempt++) {
       const candidate = attempt === 1 ? baseName : `${baseName}-${attempt}`;
@@ -222,10 +226,14 @@ async function convertFromDocuments(req, res, next) {
     // Wizard B1 (Amendment A, 2026-09-27): optional repo_id targets an
     // EXISTING repository — same additive contract as convert-from-crawl.
     if (typeof body.repo_id === 'string' && body.repo_id.trim()) {
-      repo = await repoService.getById(body.repo_id.trim());
+      // F15 (max-review): same narrowing + writability as every sibling
+      // mutation — an authz-scoped fetch (a domain-A caller cannot target a
+      // domain-B repo by id) and a 409 for serving/drain-frozen content.
+      repo = await repoService.getById(body.repo_id.trim(), { authz: authzForService(req) });
       if (!repo || repo.deleted_at) {
         return res.status(404).json({ error: 'REPO_NOT_FOUND', message: `Repository ${body.repo_id} not found` });
       }
+      assertWritable(repo);
     }
     for (let attempt = 1; attempt <= 10 && !repo; attempt++) {
       const candidate = attempt === 1 ? baseName : `${baseName}-${attempt}`;

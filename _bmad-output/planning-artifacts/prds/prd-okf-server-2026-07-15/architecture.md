@@ -370,3 +370,18 @@ Tooling layer = in-app editor + steward REST API + admin UI + optional local val
 - ~~versioning granularity (PRD §13.2).~~ **RESOLVED (2026-08-13):** repo-level `bundle_version` ([ADR-okf-031](../../../../docs/adr/okf-031-versioning-strategy.md)).
 - whether the free-form `GRAPH` corpus should also become domain-partitioned later (not required now).
 - *2026-08-13 additions:* `MAX_FANOUT_GRAPHS` tuning vs the latency benchmark (LG-1); the Authz Resolver scope-mapper shape in Keycloak ([ADR-okf-025](../../../../docs/adr/okf-025-authz-resolver.md)).
+
+## Amendment A ADRs (2026-09-27)
+
+The wizard-completion wave added three decision records (all Implemented,
+MR !474):
+
+- [ADR-okf-040](../../../../docs/adr/okf-040-wizard-editor-surface-governance.md)
+  — wizard/editor surface governance: parity by composition, the lifecycle
+  ritual outside the wizard, landing rules, automated KH labels.
+- [ADR-okf-041](../../../../docs/adr/okf-041-doc-mgmt-routes-through-wizard.md)
+  — Document-management "Create OKF repository" routes through the wizard;
+  the 7.7 import dialog retired; event-after-mount rule.
+- [ADR-okf-042](../../../../docs/adr/okf-042-wizard-clone-via-48-api.md)
+  — wizard clone via the 4.8 clone API (wholesale meta copy), shell-delete
+  with 409 backoff.

@@ -42,6 +42,14 @@
           />
           <p v-if="crawlMode === 'single_page'" class="form-hint">
             {{ translate('link.hint', 'The content of the webpage will be crawled and saved as an HTML file.') }}
+            <DsInfoTip
+              :text="
+                translate(
+                  'link.ragTip',
+                  'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
+                )
+              "
+            />
           </p>
           <p v-else class="form-hint">
             {{
@@ -183,6 +191,7 @@ import documentFileService from '../services/documentFileService.js';
 import { eventBus } from '../eventBus.js';
 import DsButton from './ds/Button.vue';
 import DsInput from './ds/Input.vue';
+import DsInfoTip from './ds/InfoTip.vue';
 
 // --- TOP 20 SITE PRESETS ---
 const SITE_PRESETS = {
@@ -319,7 +328,8 @@ export default {
   name: 'AddFromLinkDialog',
   components: {
     DsButton,
-    DsInput
+    DsInput,
+    DsInfoTip
   },
   emits: ['close', 'link-submitted'],
   data() {

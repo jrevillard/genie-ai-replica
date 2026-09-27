@@ -155,6 +155,16 @@ async function convertFromCrawl(req, res, next) {
     const acl = { required_scopes: [`okf:t:${bundleExportService.slugFor(repoDomain)}:admin`] };
     const baseName = typeof body.name === 'string' && body.name ? body.name : 'crawled-repository';
     let repo = null;
+    // Wizard B1 (Amendment A, 2026-09-27): an optional repo_id targets an
+    // EXISTING repository — the conversion lands in it instead of minting a
+    // new one (the wizard creates the repo at Entry, then feeds it here).
+    // Additive: absent repo_id = the historical create-with-suffix loop.
+    if (typeof body.repo_id === 'string' && body.repo_id.trim()) {
+      repo = await repoService.getById(body.repo_id.trim());
+      if (!repo || repo.deleted_at) {
+        return res.status(404).json({ error: 'REPO_NOT_FOUND', message: `Repository ${body.repo_id} not found` });
+      }
+    }
     for (let attempt = 1; attempt <= 10 && !repo; attempt++) {
       const candidate = attempt === 1 ? baseName : `${baseName}-${attempt}`;
       try {
@@ -209,6 +219,14 @@ async function convertFromDocuments(req, res, next) {
     const acl = { required_scopes: [`okf:t:${bundleExportService.slugFor(repoDomain)}:admin`] };
     const baseName = typeof body.name === 'string' && body.name ? body.name : 'imported-repository';
     let repo = null;
+    // Wizard B1 (Amendment A, 2026-09-27): optional repo_id targets an
+    // EXISTING repository — same additive contract as convert-from-crawl.
+    if (typeof body.repo_id === 'string' && body.repo_id.trim()) {
+      repo = await repoService.getById(body.repo_id.trim());
+      if (!repo || repo.deleted_at) {
+        return res.status(404).json({ error: 'REPO_NOT_FOUND', message: `Repository ${body.repo_id} not found` });
+      }
+    }
     for (let attempt = 1; attempt <= 10 && !repo; attempt++) {
       const candidate = attempt === 1 ? baseName : `${baseName}-${attempt}`;
       try {

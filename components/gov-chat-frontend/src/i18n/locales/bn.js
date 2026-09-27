@@ -1434,7 +1434,9 @@ export default {
       duplicate: 'ফাইল "{fileName}" ইতিমধ্যে যোগ করা হয়েছে।',
       uploadSuccess: 'সফলভাবে আপলোড হয়েছে {fileName}',
       uploadFailed: '{fileName} আপলোড করতে ব্যর্থ।'
-    }
+    },
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
     versions: {
@@ -2128,7 +2130,13 @@ export default {
             title: 'একটি বিদ্যমান রিপোজিটরির ক্লোন',
             desc: 'অন্য একটি OKF রিপোজিটরি থেকে বিষয় এবং কাঠামো ফর্ক করুন।'
           }
-        }
+        },
+        cloneSource: 'Source repository (not yet serving)',
+        clonePh: 'Select the repository to clone from',
+        cloning: 'Cloning topics into this repository…',
+        cloneNeed: 'Pick the repository to clone from first.',
+        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
+        cloneFailed: 'The clone failed — try again.'
       },
       input: {
         title: 'ইনপুট',
@@ -2159,7 +2167,8 @@ export default {
         added: '{n} topic(s) in this repository so far.',
         deleteTitle: 'Delete topic',
         deleteBody: 'This permanently removes the topic from this repository.',
-        labelFailed: 'Could not set the label.'
+        labelFailed: 'Could not set the label.',
+        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
       },
       produce: {
         title: 'বিষয় তৈরি করুন',
@@ -2173,6 +2182,8 @@ export default {
         done: '{n} topic(s) are ready — continue to review them in Curate.',
         noSources: 'No sources selected — go back to Input.',
         neverStarted: 'The conversion did not start — retry.',
+        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        labelDone: 'Conversion complete',
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
@@ -2189,7 +2200,12 @@ export default {
         hint: 'লেবেল হলো আপনার তত্ত্বের শ্রেণিবদ্ধ অক্ষ — এই বিষয়গুলি কী ধরনের জিনিস? ৩-৭টি বেছে নিন।',
         add: '+ লেবেল যোগ করুন',
         addConfirm: 'যোগ করুন',
-        placeholder: 'উদাঃ পারমিট'
+        placeholder: 'উদাঃ পারমিট',
+        loading: 'Reading labels…',
+        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        unlabeled: 'no labels yet',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        loadFailed: 'Could not read the labels right now.'
       },
       curate: {
         embedHint:
@@ -2376,7 +2392,8 @@ export default {
       },
       run: {
         notReady: 'যাচাইকরণ পরবর্তী একটি গল্পে যুক্ত হবে।'
-      }
+      },
+      piiTitle: 'Personal data — review each flagged concept'
     },
     pii: {
       panel: 'চিহ্নিত সত্ত্বা',
@@ -2462,6 +2479,7 @@ export default {
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: '{n} document(s)',
+      titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
       empty: 'No documents in the repository yet — upload some below.',
@@ -2483,5 +2501,9 @@ export default {
       alreadyBadge: 'already in an OKF repo',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     }
+  },
+  link: {
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

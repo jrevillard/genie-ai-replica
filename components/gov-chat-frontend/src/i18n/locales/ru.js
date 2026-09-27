@@ -1439,7 +1439,9 @@ export default {
       duplicate: 'Файл "{fileName}" уже добавлен.',
       uploadSuccess: 'Файл {fileName} успешно загружен',
       uploadFailed: 'Не удалось загрузить файл {fileName}.'
-    }
+    },
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
     versions: {
@@ -2137,7 +2139,13 @@ export default {
             title: 'Клон существующего репозитория',
             desc: 'Создать ответвление тем и структуры из другого репозитория OKF.'
           }
-        }
+        },
+        cloneSource: 'Source repository (not yet serving)',
+        clonePh: 'Select the repository to clone from',
+        cloning: 'Cloning topics into this repository…',
+        cloneNeed: 'Pick the repository to clone from first.',
+        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
+        cloneFailed: 'The clone failed — try again.'
       },
       input: {
         title: 'Входные данные',
@@ -2168,7 +2176,8 @@ export default {
         added: '{n} topic(s) in this repository so far.',
         deleteTitle: 'Delete topic',
         deleteBody: 'This permanently removes the topic from this repository.',
-        labelFailed: 'Could not set the label.'
+        labelFailed: 'Could not set the label.',
+        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
       },
       produce: {
         title: 'Генерация тем',
@@ -2182,6 +2191,8 @@ export default {
         done: '{n} topic(s) are ready — continue to review them in Curate.',
         noSources: 'No sources selected — go back to Input.',
         neverStarted: 'The conversion did not start — retry.',
+        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        labelDone: 'Conversion complete',
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
@@ -2198,7 +2209,12 @@ export default {
         hint: 'Метки — это категориальные оси вашей онтологии: к какому типу относятся эти темы? Выберите от 3 до 7.',
         add: '+ Добавить метку',
         addConfirm: 'Добавить',
-        placeholder: 'например, Разрешения'
+        placeholder: 'например, Разрешения',
+        loading: 'Reading labels…',
+        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        unlabeled: 'no labels yet',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        loadFailed: 'Could not read the labels right now.'
       },
       curate: {
         embedHint:
@@ -2386,7 +2402,8 @@ export default {
       },
       run: {
         notReady: 'Интеграция валидации появится в следующей истории.'
-      }
+      },
+      piiTitle: 'Personal data — review each flagged concept'
     },
     pii: {
       panel: 'Отмеченные сущности',
@@ -2473,6 +2490,7 @@ export default {
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: '{n} document(s)',
+      titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
       empty: 'No documents in the repository yet — upload some below.',
@@ -2494,5 +2512,9 @@ export default {
       alreadyBadge: 'already in an OKF repo',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     }
+  },
+  link: {
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

@@ -154,7 +154,13 @@
       @refresh="onRepoRefresh"
       @update-draft="onDraftUpdate"
     />
-    <OkfStudioWizard v-if="view === 'wizard'" :draft="activeDraft" @reset="resetWizard" @update-draft="onDraftUpdate" />
+    <OkfStudioWizard
+      v-if="view === 'wizard'"
+      :draft="activeDraft"
+      @reset="resetWizard"
+      @update-draft="onDraftUpdate"
+      @finish="onWizardFinish"
+    />
 
     <DsDialog
       :visible="helpOpen"
@@ -345,6 +351,29 @@ export default {
         };
       }
       this.$store.dispatch('okf/setEditorSubTab', 'wizard'); // C1 (Amendment A): the WIZARD is the default repo surface — the editor stays one click away
+      this.view = 'repo';
+    },
+    /**
+     * Wizard finish (Amendment A decision, David 2026-09-27): the lifecycle
+     * ritual — submit → approve → publish — lives OUTSIDE the wizard, so
+     * finishing it lands in the repo's Editor shell with the EDITOR sub-tab
+     * active (the hand-off surface). "Back to dashboard" stays the explicit
+     * ghost action in the wizard footer.
+     */
+    onWizardFinish(evt) {
+      const repoId = (evt && evt.repo_id) || (this.activeDraft && this.activeDraft.repo_id);
+      if (!repoId) {
+        this.onBackToDashboard();
+        return;
+      }
+      this.$store.commit('okf/setSelectedConcept', null);
+      const draft = this.$store.getters['okf/activeDraft'](repoId);
+      this.activeRepoId = repoId;
+      if (draft) {
+        this.activeDraft = draft;
+        this.activeSourceFileId = draft.source_file_id || null;
+      }
+      this.$store.dispatch('okf/setEditorSubTab', 'editor');
       this.view = 'repo';
     },
     /**

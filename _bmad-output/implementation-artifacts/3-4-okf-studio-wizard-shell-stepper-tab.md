@@ -159,3 +159,19 @@ autocorrect → 10.2 · diff/review/publish → 10.1/10.6 · server drafts → 1
 No new backend endpoints beyond 10.5's drafts + existing services · no
 re-styling of the editor components themselves (wrapping/presentation only) ·
 no removal of the editor shell.
+
+### Dev-log — slice 1 LANDED (commit ca6d1bd4b, 2026-09-27)
+
+A1–A5 + C1 done: step write-back via the update→update-draft→StudioTab event
+chain (wizard never mutates a prop — vue/no-mutating-props clean); per-step
+gate events drive the footer Continue; Entry's beforeAdvance creates the repo
+(idempotent, DUPLICATE_REPO refuses the advance); studio_step resume pointer
+PATCHes onto the repo doc (0-9|null validated, 400 otherwise; serving repos
+READ-ONLY by design, pointer skipped frozen); context rail reads the REAL
+repo doc; StudioTab opens repos on the WIZARD sub-tab by default. Remaining:
+B1–B11 panels (B3 KH labels, B4 full edit, B10 PII, B11 automation wiring,
+B2 produce last — 7.2 gap). Verified: frontend jest 1516/1516 (+15 new),
+okf-server full suite green, localeConsistency 5/5 (keys ×14), ESLint/
+Prettier clean, local build rebuilt + in-container markers verified
+(studio_step ×4 backend, saveStudioStep in served bundle). David's UI pass
+pending.

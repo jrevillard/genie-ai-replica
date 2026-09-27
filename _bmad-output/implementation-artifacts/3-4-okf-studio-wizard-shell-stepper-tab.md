@@ -240,3 +240,14 @@ okf-server full suite green, localeConsistency 5/5 (keys ×14), ESLint/
 Prettier clean, local build rebuilt + in-container markers verified
 (studio_step ×4 backend, saveStudioStep in served bundle). David's UI pass
 pending.
+
+### Dev-log — slice 3a LANDED (commit 6f4a63515, 2026-09-27)
+
+Validate PII_FLAGGED group (B10 repo-level visibility; remediation lives in
+Curate's editor) + Publish live checklist gating the footer (B8).
+CORRECTION: Validate was ALREADY live (refresh wires autocorrect dry-run +
+index failures + metrics — a later wave finished it; the stale header
+comment misled the deep-dive). B5 = done, not built here. Remaining:
+B7 review lifecycle surfacing, B9 graph/versions/logs/rename reachability,
+B1 input panels, B2 produce (7.2-gated), B11 automation wiring, doc-mgmt +
+crawler tips (slice 4).

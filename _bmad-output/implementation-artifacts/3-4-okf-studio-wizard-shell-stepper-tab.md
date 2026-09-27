@@ -160,6 +160,71 @@ No new backend endpoints beyond 10.5's drafts + existing services · no
 re-styling of the editor components themselves (wrapping/presentation only) ·
 no removal of the editor shell.
 
+### Gap matrix — wizard vs editor parity (post-slice-1, 2026-09-27)
+
+Editor inventory verified live: `RepoEditor` = three-pane (ConceptList with
+add/resplit/delete/label/pii-bulk · ConceptEditor Source|Rendered with
+debounced save + frontmatter bar · metadata panel with KH single-select
+labels + type/title + status/trust) hosting Resplit + Autocorrect modals;
+shell-level: RepoGraphView, VersionsDialog, LogsDialog, BuildProgressCard,
+RenameRepoDialog, PiiOccurrences, ImportDocumentsDialog, AddConceptModal.
+
+| Editor feature | Editor surface | Wizard state after slice 1 | Slice |
+|---|---|---|---|
+| Concept list + select/filter | ConceptList | Curate: flat tree + search only | **2 (B4)** |
+| Concept body+fm editing w/ save | ConceptEditor (debounced save, fm bar, toolbar) | Curate: body-only LOCAL MIRROR, no save | **2 (B4)** |
+| Metadata panel (type/title/KH label) | RepoEditor right pane | ABSENT (LabelOnboard free-text = wrong) | **2 (B4+B3)** |
+| Add concept (md) | AddConceptModal | ABSENT | **2** |
+| Delete concept | ConceptList @delete | ABSENT | **2** |
+| Resplit / Autocorrect modals | hosted BY RepoEditor | ABSENT | **2 (rides B4)** |
+| PII scan + remediation | PiiOccurrences + pii-bulk | ABSENT | **3 (B10)** |
+| Live validation | conformance getRepoMetrics | Validate groups always empty | **3 (B5)** |
+| Review lifecycle + diff | shell/dashboard transitions | Review step static; publish R-C works | **3 (B7/B8)** |
+| Graph view / Versions / Logs / Build progress / Rename | shell-level dialogs+views | ABSENT | **3 (B9)** |
+| Manual input (FS files + md create) | — (dialog only) | Input = declared placeholder | **4 (B1)** |
+| Documents add-more in-wizard | ImportDocumentsDialog | 3.6 event opens Curate (works); no in-wizard add | **4 (B1)** |
+| Crawl add-source in-wizard | AddFromLinkDialog | #977 opens Curate (works); no in-wizard add | **4 (B1)** |
+| Produce (LLM topics) | — | placeholder; **7.2 LLM producer = the gap** | **4 (B2, gated)** |
+
+**Creation paths today:** documents (ImportDocumentsDialog → convert → wizard
+at Curate) and crawl (AddFromLinkDialog → convert → wizard at Curate) WORK
+end-to-end for curation; manual creation stalls at the Input placeholder.
+Doc-mgmt ↔ Studio alignment is largely delivered by 7.7 (entry points,
+classification surface, provenance deep links); the residual gaps are all
+wizard B-items above.
+
+**Slice-2 key insight (equivalence move):** mount `OkfRepoEditor` INSIDE the
+Curate step (same props the shell uses: repo-id / source-file-id / read-only)
+— it carries the full three-pane editor, KH labels, add/delete/resplit/
+autocorrect with zero duplication (composition rule). That single composition
+closes B4+B3+most of B9 for existing repos. UX rule for the embedding
+(David, laser focus): the editor appears in its FRIENDLIER form — Basic mode
+hides raw source by default, the narrative card explains what curation is
+and why it matters for RAG, the context rail keeps live counts, and no step
+presents a dead end.
+
+### ⓘ DsInfoTip coverage checklist (David, 2026-09-27: tips EVERYWHERE —
+
+wizard + editor + document management — each explaining how the facet serves
+RAG accuracy). Paradigm component: DsInfoTip (hover+focus). Each slice ships
+its tips as part of acceptance; EN fallbacks OK, ×14 batch-inject at slice end.
+
+| Surface | Facets needing ⓘ | Slice |
+|---|---|---|
+| Wizard Entry | Subject Area (✓ exists) + why it binds labels & retrieval scope | 2 |
+| Wizard Choose | each of the 4 source cards — what it produces, what curation it needs | 2 |
+| Wizard Curate (embedded editor) | concept list actions (add/delete/resplit/label/pii-bulk), metadata fields (type/KH label/status/trust), editor mode bar (Source vs Rendered), body-vs-frontmatter | **2** |
+| Wizard Label/Validate/Autocorrect/Review/Publish | per-step what/why + gate meaning + what validation codes mean for retrieval | 3 |
+| Editor (RepoEditor/ConceptList/ConceptEditor) | same facets as Curate (shared components — one pass serves both) | **2** |
+| RepoGraphView / Versions / Logs | what the graph proves, what versions pin, what logs show | 3 |
+| Doc-mgmt (FileDetailsDialog, ImportDocumentsDialog, table) | Create-OKF entry, classification choices (heuristics/llm/hybrid + RAG cost/quality), PII status, dataprep status meaning, OKF deep links | 4 |
+| Crawler dialog (AddFromLinkDialog) | crawl scope, what gets converted, split implications | 4 |
+
+RAG-accuracy copy pattern: "<facet> — what it is · what it changes in the
+pipeline · what good looks like" (e.g. KH label: ties the topic to its service
+category; retrieval fans out BY label — a wrong label hides the topic from the
+questions it should answer).
+
 ### Dev-log — slice 1 LANDED (commit ca6d1bd4b, 2026-09-27)
 
 A1–A5 + C1 done: step write-back via the update→update-draft→StudioTab event

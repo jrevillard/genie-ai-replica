@@ -137,6 +137,7 @@
           :key="draft && draft.repo_id"
           :draft="draft"
           @reset="$emit('back')"
+          @update-draft="$emit('update-draft', $event)"
         />
         <OkfRepoEditor
           v-show="subTab === 'editor'"
@@ -274,7 +275,7 @@ export default {
     draft: { type: Object, default: null },
     sourceFileId: { type: String, default: null }
   },
-  emits: ['back', 'refresh'],
+  emits: ['back', 'refresh', 'update-draft'],
   data() {
     return {
       versionsOpen: false,

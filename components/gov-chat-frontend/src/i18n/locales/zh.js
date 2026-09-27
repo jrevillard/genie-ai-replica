@@ -1996,6 +1996,15 @@ export default {
       }
     },
     wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        publish: 'Ready to ingest',
+        retracted: 'Retracted'
+      },
       status: {
         published: '已发布',
         inReview: '审核中',
@@ -2003,6 +2012,7 @@ export default {
       },
       exit: '返回仪表盘',
       context: {
+        version: 'Version',
         untitled: '未命名知识库',
         trust: '信任',
         title: '存储库',
@@ -2017,6 +2027,7 @@ export default {
     },
     steps: {
       entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
         title: '知识库名称与主题领域',
         hint: '为此 OKF 知识库指定明确的名称，并选定其所属的主题领域。',
         nameLabel: '知识库名称',

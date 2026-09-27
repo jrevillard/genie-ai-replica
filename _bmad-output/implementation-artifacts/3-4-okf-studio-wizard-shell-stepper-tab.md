@@ -348,3 +348,29 @@ throughout, lint+prettier clean, served markers verified per batch.
 ALL ELEVEN DECISIONS IMPLEMENTED. Amendment A B-series is functionally
 complete pending David's live pass. Remaining polish: ×14 locale batch
 for the new fallback-only keys; doc-mgmt/crawler ⓘ tips coverage.
+
+### REVIEW FIX SWEEP (f7b7e33fe, 2026-09-27) — /code-review max, all 20 findings fixed
+
+The max-effort adversarial review of the slice-4 branch confirmed 15
+findings (+5 from the gap-sweep agent). ALL FIXED in one sweep; the big
+flow-breakers: Finish-gate could never open (concept_count lives on
+/metrics, not the repo doc — now fetched live; serving repos gate OPEN
+onto the read-only summary); the doc-mgmt→wizard event fired before
+StudioTab mounted (one nextTick); reposByStage lanes are repo_id
+STRINGS (clone picker resolved via repoById); the Wizard view-toggle
+opened a NULL draft whose write-back guard silently dropped every step
+update (openWizard seeds a draft); the mounted source-bump hijacked the
+wizard-native crawl/clone flows on every remount (removed — external
+drafts carry explicit studio_step); a failed kick resumed as phantom
+running (live-verified resume + converted_ids staleness + immediate
+first poll); the clone now uses the sanctioned 4.8 API (wholesale meta
+copy) with shell-delete + 409 backoff; the okf-server repo_id
+passthroughs gained authz narrowing + assertWritable. Plus: DsSelect
+stale-value watcher, pagination.totalFiles + raw-count Load-more, gate
+reset on step change, producer 409s surfaced, DUPLICATE_REPO code
+passthrough, buildConceptPayload slugs for FS import, workflow-switch
+clears stale ids, studio_step PATCH only on change (audit spam),
+classification selector at Input, real progress fields (files_*/pages_*),
+listConcepts strict, dead 7.7 dialog deleted. Frontend 1538/1538
+(specs un-masked to real store shapes; publish-gate spec added),
+okf-server 719/719, both images rebuilt, served markers verified.

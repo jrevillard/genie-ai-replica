@@ -1868,6 +1868,15 @@ export default {
       saveFailed: 'Kōjparok frontmatter ear l̦apier'
     },
     glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
       concept:
         'Juon bwijin ilo jikin kakwōn eo am — juon wōt peij ak un. Kajojo kōm̦m̦an ewōr frontmatter ie me jipañ eo ej riiti, koba markdown me ej uwaak jān e.',
       repository:
@@ -1888,7 +1897,7 @@ export default {
       classification:
         'Ewi wāween ad kalikkar ta in kōm̦m̦an eo (un, m̦ōttan, wāween…). Heuristics ej riiti peij eo ilo make; LLM ej etto l̦o̦k ak emaron̦ jerbale peij ko rekanooj ben.',
       resplit:
-        'Bar ajeje melele ko ilo bar juon wāween — āinwōt juon kōm̦m̦an ilo kajojo peij ijellokin juon wōt ñan aolep jikin.',
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'A mara baata',
       importFailedTitle: 'Bōktok ear l̦apier — ban ukōt fail eo.',
       importFailedHint: 'Jol̦o̦k jikin kakwōn in innem bar bōktok fail eo jān jikin eo.',
@@ -2099,6 +2108,9 @@ export default {
         placeholder: 'āinwōt Peba in kōmāl̦im'
       },
       curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'Etale un ko',
         hint: 'Kajojo un ej juon m̦ōttan dik in jel̦āl̦o̦kjen̦ me kwomaron̦ kōjerbale. Jeje āt im melele eo.',
         placeholder: 'Wōjke in ri-karōk + ri-jeje enaj itok ilo Bwebwenato 3-8.'

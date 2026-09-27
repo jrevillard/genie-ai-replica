@@ -1897,6 +1897,15 @@ export default {
       saveFailed: "Échec de l'enregistrement du frontmatter"
     },
     glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
       concept:
         "Une entrée de votre référentiel — généralement une seule page ou un seul sujet. Chaque concept comporte un frontmatter structuré lu par l'assistant, ainsi que le texte en markdown sur lequel il s'appuie pour répondre.",
       repository:
@@ -1919,7 +1928,7 @@ export default {
       classification:
         "La méthode employée pour déterminer ce qu'EST chaque concept (un sujet, une entité, un processus...). L'heuristique lit la page automatiquement ; l'option LLM est plus lente mais traite les pages complexes.",
       resplit:
-        "Découper à nouveau la source en concepts selon une autre méthode — par exemple, un concept par page plutôt qu'un seul pour tout le site.",
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: "Échec de l'enregistrement",
       importFailedTitle: "L'importation a échoué — le fichier source n'a pas pu être converti.",
       importFailedHint: 'Supprimez ce référentiel et importez à nouveau le fichier source.',
@@ -2132,6 +2141,9 @@ export default {
         placeholder: 'par ex. Permis'
       },
       curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'Examiner les sujets',
         hint: 'Chaque sujet est une petite unité de connaissance citable. Modifiez le titre et la description.',
         placeholder: "L'arborescence de curation et l'éditeur arrivent dans la Story 3-8."

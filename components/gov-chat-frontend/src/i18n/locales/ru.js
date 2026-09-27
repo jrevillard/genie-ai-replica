@@ -1886,6 +1886,15 @@ export default {
       saveFailed: 'Не удалось сохранить frontmatter'
     },
     glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
       concept:
         'Элемент вашего репозитория — обычно отдельная страница или тема. Каждый концепт содержит структурированный frontmatter, считываемый ассистентом, и текст markdown, на основе которого формируются ответы.',
       repository:
@@ -1908,7 +1917,7 @@ export default {
       classification:
         'Метод определения сущности каждого концепта (тема, объект, процесс…). Эвристика анализирует страницу автоматически; опция LLM работает медленнее, но справляется со сложными страницами.',
       resplit:
-        'Повторное разбиение источника на концепты другим методом — например, по одному концепту на страницу вместо одного на весь сайт.',
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'Ошибка сохранения',
       importFailedTitle: 'Импорт завершился ошибкой — исходный файл не удалось преобразовать.',
       importFailedHint: 'Удалите этот репозиторий и импортируйте исходный файл снова.',
@@ -2121,6 +2130,9 @@ export default {
         placeholder: 'например, Разрешения'
       },
       curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'Просмотр тем',
         hint: 'Каждая тема — это небольшая цитируемая единица знаний. Отредактируйте заголовок и описание.',
         placeholder: 'Дерево куратора и редактор появятся в истории 3-8.'

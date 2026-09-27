@@ -1,86 +1,90 @@
 'use strict';
 
 /**
- * Labels write-through (David, 2026-09-05): the wizard Curate step writes
- * accepted labels IMMEDIATELY (conceptService.update → { frontmatter } PATCH)
- * and NEVER swallows a failure — a REPO_READ_ONLY 409 on a serving repo must
- * surface "retract to edit" and roll the local chips back, not vanish.
+ * Amendment A slice 2 — Curate EMBEDS the full OkfRepoEditor (functional
+ * equivalence by composition: concept list, body+frontmatter editing, KH
+ * labels, add/delete/resplit/autocorrect). The old labels write-through
+ * tests moved WITH the feature into RepoEditor (its meta save surfaces
+ * friendlyLifecycleError for REPO_READ_ONLY — editor.test.js covers it).
+ * This suite pins the wizard-side contract of the embedding.
  */
 
-const mockListForRepo = jest.fn();
-const mockUpdate = jest.fn();
-
+jest.mock('@/services/studioService', () => ({
+  __esModule: true,
+  default: { saveDraft: jest.fn().mockResolvedValue({}), getDraft: jest.fn().mockResolvedValue(null) }
+}));
+jest.mock('@/services/repoOkfService', () => ({
+  __esModule: true,
+  default: { list: jest.fn().mockResolvedValue([]), saveStudioStep: jest.fn().mockResolvedValue(true) }
+}));
 jest.mock('@/services/conceptService', () => ({
   __esModule: true,
-  default: {
-    listForRepo: (...a) => mockListForRepo(...a),
-    get: jest.fn(),
-    update: (...a) => mockUpdate(...a)
-  }
+  default: { listForRepo: jest.fn().mockResolvedValue([]), update: jest.fn().mockResolvedValue({}) }
 }));
 
+const Vuex = require('vuex');
 const { mount } = require('@vue/test-utils');
-const OkfStepCurate = require('@/components/okf/steps/Curate.vue').default;
+const okfModule = require('@/store/modules/okf').default;
+const Curate = require('@/components/okf/steps/Curate.vue').default;
 
-function mountCurate() {
-  return mount(OkfStepCurate, {
-    props: { draft: { repo_id: 'r-1', name: 'Repo' }, expert: false },
+function buildStore() {
+  return new Vuex.Store({
+    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+  });
+}
+
+function mountCurate(draft, store) {
+  return mount(Curate, {
+    props: { draft, expert: false },
     global: {
-      mocks: {
-        $store: { getters: { 'okf/isExpert': false } }
-      },
+      plugins: [store],
+      mocks: { $i18n: { t: (k) => k, locale: 'en' } },
       stubs: {
-        DsInput: true,
-        DsButton: true,
-        DsPill: true,
-        DsOkfMarkdownEditor: true,
-        OkfLabelEditor: true
+        // RepoEditor is a tested component of its own — here we pin the
+        // CONTRACT of the embedding (props + placement), not its internals.
+        OkfRepoEditor: {
+          name: 'OkfRepoEditorStub',
+          template: '<div class="repo-editor-stub" :data-readonly="readOnly ? \'yes\' : \'no\'">{{ repoId }}</div>',
+          props: ['repoId', 'sourceFileId', 'readOnly']
+        }
       }
     }
   });
 }
 
-const ROWS = [{ concept_id: 'c-1', title: 'C1', labels: ['Old'], body: '# C1', sources: [] }];
+beforeEach(() => {
+  jest.clearAllMocks();
+});
 
-describe('OkfStepCurate — labels write-through', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('writes accepted labels immediately through conceptService.update', async () => {
-    mockListForRepo.mockResolvedValue(ROWS.map((r) => ({ ...r, labels: r.labels.slice() })));
-    mockUpdate.mockResolvedValue({ ok: true });
-    const wrapper = mountCurate();
+describe('OkfStepCurate — the embedded full editor (Amendment A slice 2)', () => {
+  it('mounts OkfRepoEditor with the draft repo_id and an open gate', async () => {
+    const store = buildStore();
+    const wrapper = mountCurate({ repo_id: 'r1', source_file_id: 'f9' }, store);
     await wrapper.vm.$nextTick();
-    wrapper.vm.selected = 'c-1';
-    await wrapper.vm.$nextTick();
-    await wrapper.vm.onLabelsSave(['New']);
-    expect(mockUpdate).toHaveBeenCalledWith('r-1', 'c-1', { labels: ['New'] });
-    expect(wrapper.vm.labelError).toBe('');
-    expect(wrapper.vm.selectedConcept.labels).toEqual(['New']);
+    const editor = wrapper.find('.repo-editor-stub');
+    expect(editor.exists()).toBe(true);
+    expect(editor.text()).toBe('r1');
+    expect(editor.attributes('data-readonly')).toBe('no');
+    const gates = wrapper.emitted('gate') || [];
+    expect(gates[gates.length - 1]).toEqual([true]); // curation never blocks the flow
+    wrapper.unmount();
   });
 
-  it('surfaces REPO_READ_ONLY ("retract to edit") and rolls the chips back', async () => {
-    mockListForRepo.mockResolvedValue(ROWS.map((r) => ({ ...r, labels: r.labels.slice() })));
-    mockUpdate.mockRejectedValue({ status: 409, data: { error: 'REPO_READ_ONLY' } });
-    const wrapper = mountCurate();
+  it('passes readOnly DOWN when the repo is serving (frozen content)', async () => {
+    const store = buildStore();
+    store.commit('okf/upsertRepo', { repo_id: 'r1', lifecycle_state: 'publish', ingested_at: '2026-09-27T00:00:00Z' });
+    const wrapper = mountCurate({ repo_id: 'r1' }, store);
     await wrapper.vm.$nextTick();
-    wrapper.vm.selected = 'c-1';
-    await wrapper.vm.$nextTick();
-    await wrapper.vm.onLabelsSave(['New']);
-    expect(wrapper.vm.labelError).toContain('READ ONLY');
-    expect(wrapper.vm.labelError).toContain('retract');
-    // the local mirror shows only what the server actually accepted
-    expect(wrapper.vm.selectedConcept.labels).toEqual(['Old']);
+    expect(wrapper.find('.repo-editor-stub').attributes('data-readonly')).toBe('yes');
+    wrapper.unmount();
   });
 
-  it('surfaces a generic failure with a fallback message (never a silent catch)', async () => {
-    mockListForRepo.mockResolvedValue(ROWS.map((r) => ({ ...r, labels: r.labels.slice() })));
-    mockUpdate.mockRejectedValue(new Error('network down'));
-    const wrapper = mountCurate();
+  it('renders the no-repository empty state (dead-end-free) when no repo_id', async () => {
+    const store = buildStore();
+    const wrapper = mountCurate({ name: 'Fresh Idea' }, store);
     await wrapper.vm.$nextTick();
-    wrapper.vm.selected = 'c-1';
-    await wrapper.vm.$nextTick();
-    await wrapper.vm.onLabelsSave(['New']);
-    expect(wrapper.vm.labelError).toContain('network down');
-    expect(wrapper.vm.selectedConcept.labels).toEqual(['Old']);
+    expect(wrapper.find('.repo-editor-stub').exists()).toBe(false);
+    expect(wrapper.text()).toMatch(/No repository yet/i);
+    wrapper.unmount();
   });
 });

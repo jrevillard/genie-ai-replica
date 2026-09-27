@@ -107,7 +107,18 @@
       <template v-if="selectedRow">
         <h4 class="okf-re__meta-title">{{ translate('okf.editor.meta.label', 'Concept metadata') }}</h4>
 
-        <DsFormGroup :label="translate('okf.editor.meta.type', 'Type')" input-id="okf-meta-type">
+        <DsFormGroup input-id="okf-meta-type">
+          <template #label>
+            {{ translate('okf.editor.meta.type', 'Type') }}
+            <DsInfoTip
+              :text="
+                translate(
+                  'okf.glossary.type',
+                  'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.'
+                )
+              "
+            />
+          </template>
           <DsSelect
             id="okf-meta-type"
             v-model="metaType"
@@ -120,7 +131,18 @@
           </DsSelect>
         </DsFormGroup>
 
-        <DsFormGroup :label="translate('okf.editor.meta.title', 'Title')" input-id="okf-meta-title">
+        <DsFormGroup input-id="okf-meta-title">
+          <template #label>
+            {{ translate('okf.editor.meta.title', 'Title') }}
+            <DsInfoTip
+              :text="
+                translate(
+                  'okf.glossary.title',
+                  'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.'
+                )
+              "
+            />
+          </template>
           <DsInput
             id="okf-meta-title"
             v-model="metaTitle"
@@ -165,9 +187,29 @@
         </DsFormGroup>
 
         <dl class="okf-re__meta-facts">
-          <dt>{{ translate('okf.editor.meta.status', 'Index status') }}</dt>
+          <dt>
+            {{ translate('okf.editor.meta.status', 'Index status') }}
+            <DsInfoTip
+              :text="
+                translate(
+                  'okf.glossary.indexStatus',
+                  'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.'
+                )
+              "
+            />
+          </dt>
           <dd>{{ selectedRow.index_status || '—' }}</dd>
-          <dt>{{ translate('okf.editor.meta.trust', 'Trust tier') }}</dt>
+          <dt>
+            {{ translate('okf.editor.meta.trust', 'Trust tier') }}
+            <DsInfoTip
+              :text="
+                translate(
+                  'okf.glossary.trustTier',
+                  'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.'
+                )
+              "
+            />
+          </dt>
           <dd>{{ selectedRow.trust_tier || '—' }}</dd>
         </dl>
 

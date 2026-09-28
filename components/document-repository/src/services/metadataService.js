@@ -29,6 +29,12 @@ async function extractMetadata(filePath, fileInfo = {}) {
     create_date: fileInfo.create_date || stats.birthtime.toISOString(),
     crawl_date: fileInfo.crawl_date || '',
     source_url: fileInfo.source_url || '',
+    // Story 3.10 T1 (D1): origin stamps ride the caller's record through —
+    // uploadFile computes them once; anything calling this without stamps is
+    // by definition an upload-path doc (bundles are filtered out of the
+    // wizard picker by is_bundle and never surface as sources).
+    source: fileInfo.source || 'upload',
+    crawl_session_id: fileInfo.crawl_session_id || null,
     language: fileInfo.language ?? 'unknown',
     graph_name: fileInfo.graph_name || null,
     repo_id: fileInfo.repo_id || null,

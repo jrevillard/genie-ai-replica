@@ -1,12 +1,20 @@
 <!--
-  OkfSourceDialog — Amendment A slice 4a (David, 2026-09-27): the wizard's
-  source picker for the Documents choice. Selection from BOTH sources in one
-  dialog — the document repository (paginated; bundles are never sources) and
-  the local file system (uploads land in the document repository and are
-  selected on arrival). mode 'single' (crawl) allows one source at a time and
-  hides the upload section. Dialog paradigm per ImportDocumentsDialog
-  (overlay + panel, DS primitives, Options API); the dialog ONLY selects —
-  the step's Produce owns what happens with the sources.
+  OkfSourceDialog — the wizard's source picker (3.10 T1, decisions D1+D6).
+
+  Multi-select over the document repository (bundles are never sources):
+    - SEARCH: debounced `GET /files?search=` (backend supported it; the old
+      dialog never sent it — David's field report #1).
+    - ORIGIN CHIPS: All | Crawls | Uploads — driven by the files doc's
+      `source` stamp (backend T1); pre-stamp legacy docs count as uploads.
+    - PROVENANCE: every crawl row carries a `crawl` pill whose tooltip is
+      the seed URL; serving-RAG / already-in-repo preflight pills (W1)
+      warn why a conversion may 409 later.
+    - MULTI-CRAWL (D3): the crawl variant selects MANY crawl files — one
+      repo, topics merged (merge accounting = Produce, T3). There is no
+      single-select mode anymore.
+  The dialog ONLY selects — the step's Produce owns what happens with the
+  sources. Uploads land in the document repository and are selected on
+  arrival (all feeders stay available — D6).
 -->
 <template>
   <div v-if="visible" class="okf-src__overlay" @click.self="close">
@@ -23,6 +31,28 @@
 
       <!-- Document repository -->
       <p class="okf-src__sec">{{ translate('okf.src.repoSec', 'From the document repository') }}</p>
+      <div class="okf-src__toolbar">
+        <DsInput
+          v-model="search"
+          size="sm"
+          type="search"
+          :placeholder="translate('okf.src.searchPh', 'Search by name or site…')"
+          :aria-label="translate('okf.src.searchPh', 'Search by name or site…')"
+        />
+        <div class="okf-src__chips" role="group" :aria-label="translate('okf.src.chipsLabel', 'Filter by origin')">
+          <button
+            v-for="chip in chipOptions"
+            :key="chip.value"
+            type="button"
+            class="okf-src__chip"
+            :class="{ 'okf-src__chip--on': sourceFilter === chip.value }"
+            :aria-pressed="sourceFilter === chip.value"
+            @click="setFilter(chip.value)"
+          >
+            {{ chip.label }}
+          </button>
+        </div>
+      </div>
       <div v-if="loading" class="okf-src__loading">
         <DsSpinner size="sm" />
         <span>{{ translate('okf.src.loading', 'Loading documents…') }}</span>
@@ -32,9 +62,13 @@
         <DsButton variant="secondary" small @click="loadPage(1)">{{ translate('okf.src.retry', 'Retry') }}</DsButton>
       </p>
       <p v-else-if="rows.length === 0" class="okf-src__note">
-        {{ translate('okf.src.empty', 'No documents in the repository yet — upload some below.') }}
+        {{
+          isFiltered
+            ? translate('okf.src.noMatches', 'Nothing matches this search or filter.')
+            : translate('okf.src.empty', 'No documents in the repository yet — upload some below.')
+        }}
       </p>
-      <ul v-else class="okf-src__list" role="listbox" :aria-multiselectable="mode === 'multi'">
+      <ul v-else class="okf-src__list" role="listbox" :aria-multiselectable="true">
         <li v-for="f in rows" :key="f.file_id">
           <button
             type="button"
@@ -45,6 +79,15 @@
             @click="toggle(f)"
           >
             <span class="okf-src__row-name">{{ f.file_name }}</span>
+            <DsPill v-if="isCrawl(f)" variant="info" :title="crawlTip(f)">{{
+              translate('okf.src.crawlBadge', 'crawl')
+            }}</DsPill>
+            <DsPill v-if="isServing(f)" variant="warning" :title="servingTip">{{
+              translate('okf.src.servingBadge', 'serving free-form RAG')
+            }}</DsPill>
+            <DsPill v-else-if="f.okf_repo_id" variant="danger" :title="alreadyTip">{{
+              translate('okf.src.alreadyBadge', 'already in an OKF repo')
+            }}</DsPill>
             <span v-if="f.file_size" class="okf-src__row-meta">{{ Math.round(f.file_size / 1024) }} KB</span>
           </button>
         </li>
@@ -59,6 +102,9 @@
       >
         {{ translate('okf.src.more', 'Load more') }}
       </DsButton>
+      <p v-if="rows.length || total" class="okf-src__total">
+        {{ translate('okf.src.total', '{n} document(s)').replace('{n}', String(total || rows.length)) }}
+      </p>
 
       <!-- Local file system -->
       <template v-if="allowUpload">
@@ -104,6 +150,8 @@
 
 <script>
 import DsButton from '../../ds/Button.vue';
+import DsInput from '../../ds/Input.vue';
+import DsPill from '../../ds/Pill.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 import documentFileService from '../../../services/documentFileService';
 import translateMixin from '../../../mixins/translateMixin';
@@ -111,19 +159,22 @@ import translateMixin from '../../../mixins/translateMixin';
 // The backend validates limit ≤ 50 (fileController getFilesSchema) — a
 // bigger page is a guaranteed 400 (slice-4a lesson, 2026-09-27).
 const PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE_MS = 300;
 
 export default {
   name: 'OkfSourceDialog',
-  components: { DsButton, DsSpinner },
+  components: { DsButton, DsInput, DsPill, DsSpinner },
   mixins: [translateMixin],
   props: {
     visible: { type: Boolean, default: false },
-    // 'multi' (documents) | 'single' (crawl)
-    mode: { type: String, default: 'multi' },
     // file_ids pre-selected from the draft (re-entry restores them)
     selected: { type: Array, default: () => [] },
-    // 'single' mode (crawl sources) has no upload section
-    allowUpload: { type: Boolean, default: true }
+    // whether the picker shows the upload section (crawl variant hides it —
+    // crawling happens in the crawler, D3)
+    allowUpload: { type: Boolean, default: true },
+    // initial origin chip (D1/D3): the crawl variant opens scoped to crawls;
+    // the steward can still switch chips — nothing is ever locked (D6).
+    defaultSource: { type: String, default: 'all' }
   },
   emits: ['close', 'confirm'],
   data() {
@@ -137,6 +188,10 @@ export default {
       lastRawCount: 0,
       loading: false,
       loadError: '',
+      // 3.10 T1: search + origin chips
+      search: '',
+      sourceFilter: this.defaultSource === 'crawl' ? 'crawl' : 'all',
+      searchTimer: null,
       selectedIds: (this.selected || []).slice(),
       uploading: false,
       uploadError: '',
@@ -146,9 +201,17 @@ export default {
   },
   computed: {
     title() {
-      return this.mode === 'single'
-        ? this.translate('okf.src.titleSingle', 'Choose the crawled document')
-        : this.translate('okf.src.title', 'Choose the source documents');
+      return this.translate('okf.src.title', 'Choose the source documents');
+    },
+    chipOptions() {
+      return [
+        { value: 'all', label: this.translate('okf.src.chipAll', 'All') },
+        { value: 'crawl', label: this.translate('okf.src.chipCrawl', 'Crawls') },
+        { value: 'upload', label: this.translate('okf.src.chipUpload', 'Uploads') }
+      ];
+    },
+    isFiltered() {
+      return this.search.trim().length > 0 || this.sourceFilter !== 'all';
     },
     canLoadMore() {
       // F8: the backend puts the count at body.pagination.totalFiles (not
@@ -157,6 +220,18 @@ export default {
       // button whenever a bundle zip shrank the page.
       if (this.total > 0) return this.rows.length < this.total;
       return this.lastRawCount === this.pageSize;
+    },
+    servingTip() {
+      return this.translate(
+        'okf.src.servingTip',
+        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.'
+      );
+    },
+    alreadyTip() {
+      return this.translate(
+        'okf.src.alreadyTip',
+        'This document is already the source of another OKF repository — the conversion will refuse it.'
+      );
     }
   },
   watch: {
@@ -167,17 +242,53 @@ export default {
         this.confirmError = '';
         if (this.rows.length === 0) this.loadPage(1);
       }
+    },
+    // T1: search + chip changes reload from page 1 (debounced for typing).
+    search() {
+      clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(() => this.loadPage(1), SEARCH_DEBOUNCE_MS);
+    },
+    sourceFilter() {
+      clearTimeout(this.searchTimer);
+      this.loadPage(1);
     }
+  },
+  beforeUnmount() {
+    clearTimeout(this.searchTimer);
   },
   mounted() {
     if (this.visible) this.loadPage(1);
   },
   methods: {
+    // W1: serving free-form RAG = the doc-repo dataprep status; already
+    // claimed = the okf_repo_id stamp (Story 2.5).
+    isServing(f) {
+      const s = f && f.dataprep && String(f.dataprep.status).toLowerCase().trim();
+      return s === 'ingesting' || s === 'ingested' || s === 'ingested with warnings';
+    },
+    // T1 (D1): the origin stamp — pre-stamp legacy docs have no attribute;
+    // they were uploads (the only pre-stamp creation path).
+    isCrawl(f) {
+      return f && f.source === 'crawl';
+    },
+    crawlTip(f) {
+      const seed = (f && f.source_url) || '';
+      return seed
+        ? this.translate('okf.src.crawlTip', 'Crawled from: {url}').replace('{url}', seed)
+        : this.translate('okf.src.crawlBadge', 'crawl');
+    },
+    setFilter(v) {
+      this.sourceFilter = v;
+    },
     async loadPage(p) {
       this.loading = true;
       this.loadError = '';
       try {
-        const body = await documentFileService.getFiles({ page: p, limit: this.pageSize });
+        const params = { page: p, limit: this.pageSize };
+        const term = this.search.trim();
+        if (term) params.search = term;
+        if (this.sourceFilter === 'crawl' || this.sourceFilter === 'upload') params.source = this.sourceFilter;
+        const body = await documentFileService.getFiles(params);
         this.page = p;
         const raw = Array.isArray(body) ? body : (body && (body.data || body.items || body.files)) || [];
         // bundle zips are the OKF artifacts — never sources
@@ -198,9 +309,7 @@ export default {
       return this.selectedIds.includes(f.file_id);
     },
     toggle(f) {
-      if (this.mode === 'single') {
-        this.selectedIds = this.isSelected(f) ? [] : [f.file_id];
-      } else if (this.isSelected(f)) {
+      if (this.isSelected(f)) {
         this.selectedIds = this.selectedIds.filter((id) => id !== f.file_id);
       } else {
         this.selectedIds = this.selectedIds.concat([f.file_id]);
@@ -226,7 +335,7 @@ export default {
           if (fileId) {
             this.rows = [{ file_id: fileId, file_name: created.file_name || file.name }, ...this.rows];
             if (!this.selectedIds.includes(fileId)) {
-              this.selectedIds = this.mode === 'single' ? [fileId] : this.selectedIds.concat([fileId]);
+              this.selectedIds = this.selectedIds.concat([fileId]);
             }
             ok += 1;
           }
@@ -269,7 +378,7 @@ export default {
   background: var(--overlay, rgba(9, 14, 20, 0.45));
 }
 .okf-src {
-  width: 520px;
+  width: 560px;
   max-width: calc(100vw - 24px);
   max-height: calc(100vh - 48px);
   overflow-y: auto;
@@ -298,6 +407,35 @@ export default {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
+}
+.okf-src__toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+.okf-src__chips {
+  display: flex;
+  gap: var(--space-xs);
+}
+.okf-src__chip {
+  padding: 2px 10px;
+  font-size: var(--text-xs);
+  font-family: inherit;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.okf-src__chip:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+.okf-src__chip--on {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+  color: var(--fg);
 }
 .okf-src__loading {
   display: flex;
@@ -352,6 +490,11 @@ export default {
 }
 .okf-src__more {
   align-self: flex-start;
+}
+.okf-src__total {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
 }
 .okf-src__fs {
   display: flex;

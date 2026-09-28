@@ -295,6 +295,112 @@ describe('fileService', () => {
     });
   });
 
+  // Story 3.10 T1 (D1): every file knows its origin — the wizard's source
+  // picker can search/filter crawls vs uploads without filename archaeology.
+  describe('origin stamps + source filter (3.10 T1)', () => {
+    const crawlHappyPathMocks = () => {
+      mime.lookup.mockReturnValue('application/pdf');
+      fileUtils.generateUniqueFileId.mockReturnValue('file-crawl1');
+      fileUtils.ensureDirectoryExists.mockResolvedValue();
+      fileUtils.getFileHash.mockResolvedValue('hash123');
+      fs.writeFile.mockResolvedValue();
+      fs.stat.mockResolvedValue({ birthtime: new Date('2025-01-01') });
+      pdf.mockResolvedValue({ text: 'This is an English document for testing language detection' });
+      langdetect.detectOne.mockReturnValue('en');
+      metadataService.addMetadata.mockResolvedValue({});
+    };
+
+    it('uploadFile stamps a user upload as source=upload with no crawl session', async () => {
+      crawlHappyPathMocks();
+
+      const result = await fileService.uploadFile(
+        { originalname: 'test.pdf', mimetype: 'application/pdf', size: 1024, buffer: Buffer.from('x') },
+        { labels: [], author: 'Test' }
+      );
+
+      expect(result.source).toBe('upload');
+      expect(result.crawl_session_id).toBeNull();
+      const saved = metadataService.addMetadata.mock.calls[0][1];
+      expect(saved.source).toBe('upload');
+      expect(saved.crawl_session_id).toBeNull();
+    });
+
+    it('uploadFile stamps crawler-origin files as source=crawl with a session id', async () => {
+      crawlHappyPathMocks();
+
+      const result = await fileService.uploadFile(
+        {
+          originalname: 'naat.digital_full_crawl.md',
+          mimetype: 'text/markdown',
+          size: 2048,
+          buffer: Buffer.from('# page')
+        },
+        {
+          labels: [],
+          author: 'crawler',
+          sourceUrl: 'https://naat.digital',
+          crawlDate: new Date().toISOString(),
+          language: 'en'
+        }
+      );
+
+      expect(result.source).toBe('crawl');
+      expect(result.crawl_session_id).toBe('file-crawl1');
+      const saved = metadataService.addMetadata.mock.calls[0][1];
+      expect(saved.source).toBe('crawl');
+      expect(saved.crawl_session_id).toBe('file-crawl1');
+      expect(saved.source_url).toBe('https://naat.digital');
+    });
+
+    it('scheduleSiteCrawl stub is born tagged: source=crawl, session, seed URL', async () => {
+      fileUtils.generateUniqueFileId.mockReturnValue('file-site1');
+      const saved = {};
+      const collection = jest.fn(() => ({
+        save: jest.fn(async (doc) => {
+          Object.assign(saved, doc);
+        })
+      }));
+      fileService.getDb = jest.fn().mockResolvedValue({ collection });
+
+      const stub = await fileService.scheduleSiteCrawl('https://naat.digital', 2, {});
+
+      expect(stub.source).toBe('crawl');
+      expect(stub.crawl_session_id).toBe('file-site1');
+      expect(stub.source_url).toBe('https://naat.digital');
+      expect(collection).toHaveBeenCalledWith('files');
+      expect(collection).toHaveBeenCalledWith('crawl_job');
+    });
+
+    it('getFiles filters by source=crawl (strict match)', async () => {
+      const mockCursor = { all: jest.fn().mockResolvedValue([]) };
+      const mockCountCursor = { next: jest.fn().mockResolvedValue(0) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValueOnce(mockCursor).mockResolvedValueOnce(mockCountCursor)
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await fileService.getFiles({ page: 1, limit: 10, source: 'crawl' });
+
+      const query = mockDb.query.mock.calls[0][0];
+      expect(query).toContain('file.source == @source');
+      expect(query).not.toContain('file.source == null');
+    });
+
+    it('getFiles source=upload tolerates pre-stamp legacy docs (source==null)', async () => {
+      const mockCursor = { all: jest.fn().mockResolvedValue([]) };
+      const mockCountCursor = { next: jest.fn().mockResolvedValue(0) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValueOnce(mockCursor).mockResolvedValueOnce(mockCountCursor)
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await fileService.getFiles({ page: 1, limit: 10, source: 'upload' });
+
+      const query = mockDb.query.mock.calls[0][0];
+      expect(query).toContain('file.source == @source OR file.source == null');
+    });
+  });
+
   describe('deleteFile', () => {
     it('should delete file and metadata successfully', async () => {
       const file = {

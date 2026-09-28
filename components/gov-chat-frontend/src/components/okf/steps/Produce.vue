@@ -37,8 +37,22 @@
         }}
       </p>
       <p v-if="status === 'failed'" class="okf-step__error">{{ errorText }}</p>
+      <!-- T3 (D2): per-source merge accounting — the steward sees what each
+           source contributed. Exact-slug merges are silent server-side; the
+           delta is what THIS source added on top of the running total. -->
+      <ul v-if="sourceLog.length" class="okf-step__log">
+        <li v-for="(e, i) in sourceLog" :key="i" class="okf-step__log-row">
+          <span class="okf-step__log-name">{{ e.name }}</span>
+          <span class="okf-step__log-stat">{{ e.stat }}</span>
+        </li>
+      </ul>
       <p v-if="status === 'done'" class="okf-step__note">
-        {{ translate('okf.steps.produce.done', 'Topics are ready — continue to review them in Curate.') }}
+        {{
+          translate('okf.steps.produce.done', '{n} topic(s) are ready — continue to review them in Curate.').replace(
+            '{n}',
+            String(conceptCount)
+          )
+        }}
       </p>
       <div class="okf-step__actions">
         <DsButton variant="secondary" small :disabled="status === 'running'" @click="kick">
@@ -82,12 +96,18 @@ export default {
       progressPct: 0,
       progressNote: '',
       errorText: '',
-      pollTimer: null
+      pollTimer: null,
+      // T3 (D2/D3): multi-crawl conversion queue + per-source accounting.
+      sourceQueue: [],
+      sourceLog: [],
+      conceptCount: 0
     };
   },
   computed: {
     needsProduction() {
-      return this.variant === 'documents' || this.variant === 'crawl';
+      // T3 (D6): production is DATA-driven, not variant-driven — whatever
+      // sources were picked in Input (in ANY variant) convert here.
+      return ((this.draft && this.draft.input && this.draft.input.document_ids) || []).length > 0;
     },
     variant() {
       return (this.draft && this.draft.source) || 'documents';
@@ -128,11 +148,9 @@ export default {
         return;
       }
       if (liveStatus === 'done') {
-        this.status = 'done';
-        this.$emit('update', {
-          input: { ...input, converted_ids: ids }
-        });
-        this.$emit('gate', true);
+        // T3: route through the queue-aware completion — a mid-queue restart
+        // continues the remaining crawl files; a finished chain finalizes.
+        await this.onConversionDone();
         return;
       }
       this.status = 'failed';
@@ -144,14 +162,29 @@ export default {
     if (live === 'running' && !stale) {
       this.status = 'running';
       this.poll();
-    } else if ((live === 'done' || live === 'failed') && !stale) {
-      this.status = live;
-      if (live === 'failed') {
-        this.errorText = this.translate(
-          'okf.steps.produce.failed',
-          'The conversion failed — retry, or go back and pick different inputs.'
-        );
-      }
+    } else if (live === 'failed' && !stale) {
+      this.status = 'failed';
+      this.errorText = this.translate(
+        'okf.steps.produce.failed',
+        'The conversion failed — retry, or go back and pick different inputs.'
+      );
+      this.$emit('gate', true);
+    } else if (live === 'done' && !stale && (input.convert_queue || []).length > 0) {
+      // T3: the chain finished one leg server-side but the draft still has
+      // queue — resume the remaining crawl files (seed the LOCAL queue —
+      // the running chain reads local state, not the prop).
+      this.status = 'running';
+      this._lastCount = await this.fetchConceptCount();
+      this.sourceQueue = input.convert_queue.slice();
+      const next = this.sourceQueue.shift();
+      this.$emit('update', {
+        input: { ...input, convert_queue: this.sourceQueue.slice(), converting_id: next }
+      });
+      await this.kickNextCrawl(null, next);
+    } else if (live === 'done' && !stale) {
+      this.status = 'done';
+      this.progressPct = 100;
+      this.conceptCount = await this.fetchConceptCount();
       this.$emit('gate', true);
     } else {
       // fresh draft, stale terminal state for NEW inputs, or no live state —
@@ -204,22 +237,29 @@ export default {
         input: { ...input, document_ids: ids, conversion_kicked: true }
       });
       try {
+        // Baseline for per-source accounting (D2): how many topics exist
+        // before the first conversion lands.
+        this._lastCount = await this.fetchConceptCount();
+        const classification = (this.draft && this.draft.classification) || 'heuristics';
         if (this.variant === 'documents') {
+          // One repo-scoped job converts ALL selected documents.
           await repoOkfService.importDocuments({
             file_ids: ids,
             repo_id: repoId,
             name: (this.draft && this.draft.name) || undefined,
-            classification: (this.draft && this.draft.classification) || 'heuristics'
+            classification
           });
+          this.poll();
         } else {
-          await repoOkfService.convertFromCrawlInto({
-            repo_id: repoId,
-            file_id: ids[0],
-            classification: (this.draft && this.draft.classification) || 'heuristics',
-            split_mode: 'B'
+          // T3 multi-crawl (D2/D3): PER-FILE conversion, sequential — each
+          // kick is repo-scoped and upserts by slug; the merge IS the repo
+          // level. The queue rides the draft so a restart resumes the tail.
+          this.sourceQueue = ids.slice(1);
+          this.$emit('update', {
+            input: { ...((this.draft && this.draft.input) || {}), convert_queue: this.sourceQueue.slice() }
           });
+          await this.kickNextCrawl(classification, ids[0]);
         }
-        this.poll();
       } catch (err) {
         // F10: the producer's 409s carry the remedy — surface them instead
         // of looping a doomed Retry.
@@ -230,6 +270,90 @@ export default {
         });
         this.$emit('gate', true);
       }
+    },
+    sourceName(fileId) {
+      const names = ((this.draft && this.draft.input) || {}).document_names || [];
+      const hit = names.find((n) => n.file_id === fileId);
+      return (hit && hit.file_name) || fileId;
+    },
+    async fetchConceptCount() {
+      const repoId = this.draft && this.draft.repo_id;
+      if (!repoId) return 0;
+      try {
+        return (await repoOkfService.listConcepts(repoId)).length;
+      } catch {
+        return this._lastCount || 0;
+      }
+    },
+    // One leg of the multi-crawl chain: kick ONE crawl file, then poll().
+    async kickNextCrawl(classification, fileId) {
+      const repoId = this.draft && this.draft.repo_id;
+      const id = fileId || this.sourceQueue.shift();
+      if (!id) {
+        await this.onAllConversionsDone();
+        return;
+      }
+      this._currentId = id;
+      this._currentSource = this.sourceName(id);
+      await repoOkfService.convertFromCrawlInto({
+        repo_id: repoId,
+        file_id: id,
+        classification: classification || (this.draft && this.draft.classification) || 'heuristics',
+        split_mode: 'B'
+      });
+      this.poll();
+    },
+    // ONE conversion finished: account it, then either continue the queue
+    // (multi-crawl) or finalize. The RUNNING chain's queue is local state —
+    // the draft copy exists so a restart knows a chain was mid-flight.
+    async onConversionDone() {
+      const count = await this.fetchConceptCount();
+      const delta = Math.max(0, count - (this._lastCount || 0));
+      this.conceptCount = count;
+      this._lastCount = count;
+      if (this._currentId) {
+        this.sourceLog.push({
+          name: this._currentSource || this.sourceName(this._currentId),
+          stat: this.translate('okf.steps.produce.sourceStat', '+{n} new (total {t})')
+            .replace('{n}', String(delta))
+            .replace('{t}', String(count))
+        });
+      }
+      // Restart resume: a fresh mount with a draft queue seeds the local one.
+      if (this.sourceQueue.length === 0) {
+        const input = (this.draft && this.draft.input) || {};
+        this.sourceQueue = (input.convert_queue || []).slice();
+      }
+      if (this.sourceQueue.length > 0) {
+        const next = this.sourceQueue.shift();
+        this.$emit('update', {
+          input: {
+            ...((this.draft && this.draft.input) || {}),
+            convert_queue: this.sourceQueue.slice(),
+            converting_id: next
+          }
+        });
+        this.status = 'running';
+        await this.kickNextCrawl(null, next);
+        return;
+      }
+      await this.onAllConversionsDone();
+    },
+    async onAllConversionsDone() {
+      this.status = 'done';
+      this.progressPct = 100;
+      this.conceptCount = this._lastCount || this.conceptCount;
+      this.$emit('update', {
+        input: {
+          ...((this.draft && this.draft.input) || {}),
+          converted_ids: ((this.draft && this.draft.input) || {}).document_ids || [],
+          convert_queue: [],
+          converting_id: null
+        }
+      });
+      this.$emit('gate', true);
+      this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
+      if (this.pollTimer) clearInterval(this.pollTimer);
     },
     poll() {
       if (this.pollTimer) clearInterval(this.pollTimer);
@@ -244,17 +368,8 @@ export default {
           const conv = repo && repo.conversion;
           const st = conv ? conv.status : null;
           if (st === 'done') {
-            this.status = 'done';
-            this.progressPct = 100;
-            this.$emit('update', {
-              input: {
-                ...((this.draft && this.draft.input) || {}),
-                converted_ids: ((this.draft && this.draft.input) || {}).document_ids || []
-              }
-            });
-            this.$emit('gate', true);
-            this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
             clearInterval(this.pollTimer);
+            await this.onConversionDone();
           } else if (st === 'failed') {
             this.status = 'failed';
             this.errorText = this.translate(
@@ -342,6 +457,33 @@ export default {
   margin: 0;
   color: var(--danger);
   font-size: var(--text-sm);
+}
+.okf-step__log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.okf-step__log-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font-size: var(--text-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.okf-step__log-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.okf-step__log-stat {
+  color: var(--muted);
+  white-space: nowrap;
 }
 .okf-step__actions {
   display: flex;

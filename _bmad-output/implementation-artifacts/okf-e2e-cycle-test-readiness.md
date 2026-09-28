@@ -74,10 +74,88 @@ settle is rename-based promotion — the 1.7M-edge rewrite wedge is gone).
 Action: one manual dry run against a SMALL repo (5 concepts) BEFORE the
 full E2E pass, so W4 lands on confirmed mechanics.
 
+### W8 — Wizard UX remediation (plan FINAL — rev 3, decisions locked)
+
+Full per-step plan at `okf-wizard-ux-review-2026-09-28.md` (rev 3):
+8 binding design decisions (D1–D8) via multiple-choice rounds — tagged
+crawl sessions (tag+session+seed-URL), exact-slug auto-merge with
+near-dupe flags, crawl decision point in the CRAWLER dialog only (crawl
+stays fully independent), step 9 = Handoff (publish OUT of the wizard
+permanently), light workbench + edit dialog, ALL source feeders always
+visible once the repo exists, auto-label on Labels-step entry, zip
+round-trip for outside curation. 5 P0s, small additive backend deps
+(stamps+filter, handoff payload, auto-label op, accounting view, export
+zip). **Blocks**: David's practical-usage E2E pass.
+
 ### W6 — Architecture doc links (docs, trivial)
 
 Reference ADR-okf-040/041/042 from the architecture overview's wizard /
 doc-mgmt / clone sections (they are written but unreferenced).
+
+### W7 — Settle durability hardening (David, 2026-09-28: "these ingestion
+jobs must be resumable, idempotent and survivable")
+
+Incident anatomy (Indonesia 2026-09-28, 08:27–08:44 UTC): a legacy-era
+settle chains rename → HAS_SOURCE rewrite (99 s) → LINKS_TO rewrite
+(99 s) → final flip. Two infra events (arangod restart, okf-server
+restart) landed inside that chain. What the code got RIGHT: every step
+is idempotent (stale-endpoint-filtered rewrite — verified 0 stale rows
+of 2.33M after recovery; rename skips completed parts), the lease CAS
+lets a later attempt take over, and the startup reconcile re-fires
+settle. The chain RESUMED correctly. Three real defects remain:
+
+1. **Retry timing**: a failed/lost settle waits for the HOURLY sweep
+   (`DEFAULT_SWEEP_INTERVAL_MS=3600000`). Fix: reconcile on its own
+   short timer (e.g. 5 min) or exponential backoff after a settle
+   failure — an empty-queue draining repo is one cheap indexed AQL.
+2. **No timeout on settle-step awaits**: the 08:32 freeze held the lease
+   for 70+ min with no error and no release (await on a dead socket
+   post-arango-restart never rejected). Fix: wrap each settle step in a
+   timeout; on timeout → release lease → backoff retry.
+3. **Concurrent-settle collision**: restarting okf-server mid-settle
+   orphans the server-side UPDATE; the new process's startup reconcile
+   races it → 10 s key-lock timeout → the loser treats it as failure
+   (benign — the orphan completes — but the loser should backoff-retry
+   in minutes, not an hour). Falls out of fix 1.
+
+Deploy note (until 1–3 land): **never restart okf-server or arangod
+while a settle is in flight** (`settle_claimed_at` set + `ingested_graph`
+null on a draining repo) — the recovery works but wastes up to an hour.
+
+**Implemented in the local build 2026-09-28 (pending sync/commit):**
+two of the incident's root causes were fixed in code, live-verified on
+the Indonesia settle:
+
+- `components/shared/lib/db-connection-service.js` — Arango agent socket
+  timeout is env-configurable (`ARANGO_AGENT_TIMEOUT_MS`, default
+  120000 UNCHANGED). The hardcoded 120s aborted the idempotent no-op
+  rewrite scans (~99s quiet, >120s under load); the execute wrapper's
+  retry then write-write conflicted with its OWN orphaned server-side
+  attempt (Bali 2026-09, Indonesia ×2 today). Local `.env` sets 600000.
+- `components/okf-server/workers/ingestWorker.js` — 429 lane cool-down
+  (`OKF_KICK_429_COOLDOWN_MS`, default 15000): dataprep slot-busy used
+  to hot-loop the whole queue at ~1 claim/sec (434 rows bouncing while
+  one slot was held for hours during the vLLM outage) — continuous load
+  that itself pushed the settle scans past the socket timeout. Rows
+  never park (existing contract kept + test extended); only the lane
+  pauses. `docker-compose.yaml` wires both vars with unchanged defaults.
+
+Unsticking a wedged settle WITHOUT a restart (used live): the worker
+module exports `_reconcileArmedRepos()` — run it inside the container
+(`docker exec -w /app main-okf-server-1 node -e "require('./workers/
+ingestWorker')._reconcileArmedRepos().then(r=>console.log(r))"`). It is
+the same designed reconcile (CAS lease, idempotent), equivalent to a
+second replica; no hand-written state edits.
+
+Ops gap (this incident): `docker logs main-okf-server-1` returns ZERO
+lines with the fluentd log driver — dual logging is not capturing on
+this Docker Desktop, so container stdout is invisible whenever
+VictoriaLogs is unreachable. Incident response ran blind through the
+log-rotation layer; VictoriaLogs queries via `docker exec … curl
+victorialogs:9428` were the only channel. Fix: make the fluentd driver
+conditional on the observability profile (local dev keeps json-file) or
+verify/repair dual logging on Desktop. Story keys assigned at sprint
+planning.
 
 ---
 

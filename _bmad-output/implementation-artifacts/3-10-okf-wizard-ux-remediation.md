@@ -188,3 +188,11 @@
   - NEXT: full-solution smoke (sync D:→C:\Dev\builds\main, rebuild
     doc-repo + frontend, run the E2E pass per the readiness plan), then
     /code-review max (David's call), then P1 slice (T6–T10).
+- 2026-09-29 (deployed to the local build): delta synced D:→C:
+  (36 files), doc-repository + frontend images rebuilt, containers
+  force-recreated. Deployed-code verification (grep-marker rule):
+  crawl_session_id stamps present in the running doc-repo container;
+  the frontend bundle carries the T2 strings ("From documents").
+  Containers healthy. The UI E2E pass (wizard crawl-pick → workbench →
+  produce accounting → handoff → editor add-sources) is David's;
+  /code-review max queued after it. Committed + pushed as f748e4885.

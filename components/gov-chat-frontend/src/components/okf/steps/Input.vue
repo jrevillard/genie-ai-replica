@@ -1,39 +1,77 @@
 <!--
-  OkfStepInput.vue — Amendment A slice 4a (B1): the REAL input panels.
+  OkfStepInput.vue — 3.10 T2: the UNIVERSAL WORKBENCH (decisions D5+D6).
 
-    documents — the dual-source dialog (OkfSourceDialog): pick from the
-                document repository AND/OR upload from this computer →
-                Produce runs the whole-corpus conversion into THIS repo
-                (repo_id passthrough).
-    crawl     — the same dialog in single mode (no upload): one crawled
-                doc-repo file → Produce runs the crawl conversion
-                (per-page split default).
-    manual    — the EDITOR is the surface: it opens on arrival (first
-                visit), markdown files from the file system remain
-                available; each lands immediately via the standard import
-                route (idempotent upsert).
-    clone     — the fork already landed the content; nothing to add here.
+  Every variant lands here once the repository exists (the wizard owns
+  creation at Entry) and sees THE SAME surface:
+    - the concept TREE (the editor's real ConceptList — grouped, index
+      pinned, click-to-edit in a focused ConceptEditor dialog, delete) —
+      no count-only states, ever;
+    - ALL FEEDERS, ALWAYS (D6: "once it is an OKF repo there is NOTHING
+      to stop us from adding files from any source type"): the source
+      picker (searchable, tagged — T1), local uploads (inside the
+      picker), markdown import from this computer, and hand-written
+      concepts (AddConceptModal). The Entry variant only pre-highlights
+      a feeder (the picker opens scoped to crawls for the crawl variant)
+      and shapes the initial hint.
+  Production is data-driven, not variant-driven: whatever sources are
+  picked (in ANY variant) convert at Produce (T3). Manual authoring and
+  source picking compose freely.
 
-  Selections write back to the draft (A1) and the gate reflects readiness.
-  The input patch SPREADS the existing draft.input — the wizard merges
-  patches shallowly, so a whole-object replace would drop Produce's
-  conversion_kicked flag on a Back-visit.
+  Selections write back to the draft (A1); patches SPREAD draft.input —
+  the wizard merges shallowly, so a whole-object replace would drop
+  Produce's conversion_kicked flag on a Back-visit.
 -->
 <template>
   <div class="okf-step">
     <h3 class="okf-step__title">{{ translate('okf.steps.input.title', 'Inputs') }}</h3>
     <p class="okf-step__hint">{{ hintText }}</p>
 
-    <!-- DOCUMENTS / CRAWL: the dual-source picker dialog -->
-    <template v-if="variant === 'documents' || variant === 'crawl'">
-      <div class="okf-step__manual">
-        <DsButton variant="primary" small @click="pickOpen = true">
-          {{
-            variant === 'crawl'
-              ? translate('okf.steps.input.chooseCrawl', 'Choose the crawled document')
-              : translate('okf.steps.input.chooseDocs', 'Choose source documents')
-          }}
-        </DsButton>
+    <!-- THE WORKBENCH TREE (D5): what the repo looks like so far -->
+    <div v-if="repoId" class="okf-step__bench">
+      <div class="okf-step__bench-head">
+        <span class="okf-step__bench-title">{{
+          translate('okf.steps.input.benchTitle', 'Topics in this repository')
+        }}</span>
+        <span class="okf-step__bench-count">{{
+          translate('okf.steps.input.benchCount', '{n}').replace('{n}', String(concepts.length))
+        }}</span>
+      </div>
+      <div v-if="conceptsLoading" class="okf-step__bench-loading">
+        <DsSpinner size="sm" />
+        <span>{{ translate('okf.steps.input.benchLoading', 'Reading topics…') }}</span>
+      </div>
+      <p v-else-if="conceptsError" class="okf-step__error">{{ conceptsError }}</p>
+      <p v-else-if="concepts.length === 0" class="okf-step__note">
+        {{
+          translate(
+            'okf.steps.input.benchEmpty',
+            'Nothing here yet — pick sources below, import markdown, or write your first topic.'
+          )
+        }}
+      </p>
+      <OkfConceptList
+        v-else
+        :concepts="concepts"
+        :selected-id="editConceptId"
+        :label-options="[]"
+        :read-only="readOnly"
+        @select="onConceptSelect"
+        @add="addOpen = true"
+        @delete="onConceptDelete"
+      />
+    </div>
+    <p v-else class="okf-step__note">
+      {{ translate('okf.steps.input.noRepoYet', 'Create the repository first (go back to Entry).') }}
+    </p>
+
+    <!-- ALL FEEDERS, ALWAYS (D6) -->
+    <div class="okf-step__feeders">
+      <DsButton v-if="variant !== 'clone'" variant="primary" small @click="pickOpen = true">
+        {{
+          variant === 'crawl'
+            ? translate('okf.steps.input.chooseCrawl', 'Choose crawled documents')
+            : translate('okf.steps.input.chooseDocs', 'Choose source documents')
+        }}
         <DsInfoTip
           :text="
             translate(
@@ -42,89 +80,71 @@
             )
           "
         />
-      </div>
-      <p class="okf-step__note">{{ selectionSummary }}</p>
-      <label v-if="variant === 'documents' || variant === 'crawl'" class="okf-step__cls">
-        <span>{{ translate('okf.steps.input.classification', 'Classification strategy') }}</span>
-        <DsSelect v-model="classification" size="sm">
-          <option value="heuristics">{{ translate('okf.steps.input.clsHeur', 'Heuristics (fast, no LLM)') }}</option>
-          <option value="llm">{{ translate('okf.steps.input.clsLlm', 'LLM classification') }}</option>
-          <option value="hybrid">{{ translate('okf.steps.input.clsHybrid', 'Hybrid') }}</option>
-        </DsSelect>
-        <DsInfoTip
-          :text="
-            translate(
-              'okf.glossary.classification',
-              'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.'
-            )
-          "
+      </DsButton>
+      <label class="okf-step__fs">
+        <DsButton variant="secondary" small :disabled="fsBusy || !repoId" @click="pickFiles">
+          {{ translate('okf.steps.input.fsPick', '+ Import markdown from this computer') }}
+        </DsButton>
+        <input
+          ref="fsInput"
+          type="file"
+          accept=".md,.markdown,.txt"
+          multiple
+          class="okf-step__fs-input"
+          @change="onFsFiles"
         />
       </label>
-      <OkfSourceDialog
-        :visible="pickOpen"
-        :mode="variant === 'crawl' ? 'single' : 'multi'"
-        :allow-upload="variant === 'documents'"
-        :selected="selectedIds"
-        @close="pickOpen = false"
-        @confirm="onSourcesConfirmed"
-      />
-    </template>
+      <DsButton variant="secondary" small :disabled="!repoId" @click="addOpen = true">
+        {{ translate('okf.steps.input.writeOne', '+ Write a concept') }}
+      </DsButton>
+    </div>
+    <p v-if="fsBusy" class="okf-step__note">{{ translate('okf.steps.input.fsBusy', 'Importing your files…') }}</p>
+    <p v-if="fsError" class="okf-step__error">{{ fsError }}</p>
 
-    <!-- CLONE: the fork already landed the content — nothing to add here. -->
-    <template v-else-if="variant === 'clone'">
-      <p class="okf-step__note">
-        {{
+    <p v-if="variant === 'documents' || variant === 'crawl'" class="okf-step__note">{{ selectionSummary }}</p>
+    <label v-if="variant === 'documents' || variant === 'crawl'" class="okf-step__cls">
+      <span>{{ translate('okf.steps.input.classification', 'Classification strategy') }}</span>
+      <DsSelect v-model="classification" size="sm">
+        <option value="heuristics">{{ translate('okf.steps.input.clsHeur', 'Heuristics (fast, no LLM)') }}</option>
+        <option value="llm">{{ translate('okf.steps.input.clsLlm', 'LLM classification') }}</option>
+        <option value="hybrid">{{ translate('okf.steps.input.clsHybrid', 'Hybrid') }}</option>
+      </DsSelect>
+      <DsInfoTip
+        :text="
           translate(
-            'okf.steps.input.cloned',
-            'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+            'okf.glossary.classificationStrategy',
+            'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.'
           )
-        }}
-      </p>
-    </template>
-
-    <!-- MANUAL: the editor is the surface; FS markdown stays available -->
-    <template v-else>
-      <div class="okf-step__manual">
-        <DsButton variant="primary" small @click="addOpen = true">
-          {{ translate('okf.steps.input.writeOne', 'Open the editor') }}
-        </DsButton>
-        <label class="okf-step__fs">
-          <DsButton variant="secondary" small :disabled="fsBusy" @click="pickFiles">
-            {{ translate('okf.steps.input.fsPick', '+ Add markdown files from this computer') }}
-          </DsButton>
-          <input
-            ref="fsInput"
-            type="file"
-            accept=".md,.markdown,.txt"
-            multiple
-            class="okf-step__fs-input"
-            @change="onFsFiles"
-          />
-        </label>
-        <span class="okf-step__fs-tip">
-          <DsInfoTip
-            :text="
-              translate(
-                'okf.glossary.fsPick',
-                'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.'
-              )
-            "
-          />
-        </span>
-      </div>
-      <p v-if="fsBusy" class="okf-step__note">{{ translate('okf.steps.input.fsBusy', 'Importing your files…') }}</p>
-      <p v-if="fsError" class="okf-step__error">{{ fsError }}</p>
-      <p v-if="addedCount > 0" class="okf-step__note">
-        {{ translate('okf.steps.input.added', '{n} topic(s) in this repository so far.').replace('{n}', addedCount) }}
-      </p>
-      <OkfAddConceptModal
-        :visible="addOpen"
-        :repo-id="draft && draft.repo_id"
-        :has-index="false"
-        @close="addOpen = false"
-        @created="onConceptCreated"
+        "
       />
-    </template>
+    </label>
+
+    <OkfSourceDialog
+      :visible="pickOpen"
+      :default-source="variant === 'crawl' ? 'crawl' : 'all'"
+      :allow-upload="true"
+      :selected="selectedIds"
+      @close="pickOpen = false"
+      @confirm="onSourcesConfirmed"
+    />
+
+    <OkfAddConceptModal
+      :visible="addOpen"
+      :repo-id="repoId"
+      :has-index="false"
+      @close="addOpen = false"
+      @created="onConceptCreated"
+    />
+
+    <!-- Click-to-edit (D5): a saved concept is never a dead end -->
+    <DsDialog :visible="editOpen" :title="editTitle" size="xl" scrollable @close="editOpen = false">
+      <OkfConceptEditor
+        v-if="editOpen && editConceptId"
+        :repo-id="repoId"
+        :concept-id="editConceptId"
+        @saved="onConceptSaved"
+      />
+    </DsDialog>
 
     <p v-if="inputError" class="okf-step__error">{{ inputError }}</p>
   </div>
@@ -132,17 +152,32 @@
 
 <script>
 import DsButton from '../../ds/Button.vue';
+import DsDialog from '../../ds/Dialog.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import DsSelect from '../../ds/Select.vue';
+import DsSpinner from '../../ds/Spinner.vue';
 import OkfAddConceptModal from '../editor/AddConceptModal.vue';
+import OkfConceptEditor from '../editor/ConceptEditor.vue';
+import OkfConceptList from '../editor/ConceptList.vue';
 import OkfSourceDialog from '../wizard/OkfSourceDialog.vue';
+import { mapGetters } from 'vuex';
 import repoOkfService from '../../../services/repoOkfService';
 import { buildConceptPayload } from '../../../services/okfRepoOps';
 import translateMixin from '../../../mixins/translateMixin';
 
 export default {
   name: 'OkfStepInput',
-  components: { DsButton, DsInfoTip, DsSelect, OkfAddConceptModal, OkfSourceDialog },
+  components: {
+    DsButton,
+    DsDialog,
+    DsInfoTip,
+    DsSelect,
+    DsSpinner,
+    OkfAddConceptModal,
+    OkfConceptEditor,
+    OkfConceptList,
+    OkfSourceDialog
+  },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   emits: ['update', 'gate'],
@@ -156,12 +191,30 @@ export default {
       fsError: '',
       inputError: '',
       addOpen: false,
+      // T2 workbench state
+      concepts: [],
+      conceptsLoading: false,
+      conceptsError: '',
+      editOpen: false,
+      editConceptId: null,
       addedCount: (this.draft && this.draft.input && this.draft.input.concepts_added) || 0
     };
   },
   computed: {
+    ...mapGetters('okf', ['repoById']),
     variant() {
       return (this.draft && this.draft.source) || 'documents';
+    },
+    repoId() {
+      return (this.draft && this.draft.repo_id) || '';
+    },
+    readOnly() {
+      const repo = this.repoId && this.repoById(this.repoId);
+      return !!(repo && repo.ingested_at);
+    },
+    editTitle() {
+      const c = this.concepts.find((x) => x.concept_id === this.editConceptId);
+      return c ? c.title || c.path : this.translate('okf.steps.input.editTitle', 'Edit concept');
     },
     hintText() {
       const keys = {
@@ -171,10 +224,12 @@ export default {
         clone: 'okf.steps.input.clone'
       };
       const fallbacks = {
-        documents: 'Pick the documents that should seed the topic list — from the repository or your computer.',
-        crawl: 'Pick the crawled document to turn into topics.',
-        manual: 'Write your topics in the editor, or add markdown files from your computer.',
-        clone: 'This repository is a clone — its topics are already in place.'
+        documents:
+          'Pick the documents that should seed the topic list — from the repository or your computer. Everything you add lands in the tree below.',
+        crawl: 'Pick the crawled documents to turn into topics — every crawl you ran is here, tagged and searchable.',
+        manual:
+          'Write your topics, import markdown, or pick sources — the tree below always shows what this repository holds.',
+        clone: 'This repository is a clone — its topics are already in place. Add more sources any time.'
       };
       const k = keys[this.variant] || keys.documents;
       return this.translate(k, fallbacks[this.variant] || fallbacks.documents);
@@ -200,12 +255,12 @@ export default {
         String(this.selectedIds.length)
       );
     },
-    // A2 gate: documents/crawl need a selection; manual needs ≥1 topic added;
-    // clone needs nothing — the fork already landed the content.
+    // A2 gate (E2.4): content from ANY feeder satisfies it — picked sources
+    // (they convert at Produce) or concepts already in the tree. Clone is
+    // free (the fork landed the content).
     canAdvance() {
       if (this.variant === 'clone') return true;
-      if (this.variant === 'manual') return this.addedCount > 0;
-      return this.selectedIds.length > 0;
+      return this.selectedIds.length > 0 || this.concepts.length > 0;
     }
   },
   watch: {
@@ -220,12 +275,12 @@ export default {
   },
   mounted() {
     this.emitGate();
-    // The editor IS the blank-canvas surface (David, 2026-09-27): open it on
-    // the first arrival. editor_offered rides the draft so Back/Forward and
-    // re-entry don't re-pop the modal once declined.
+    this.refreshConcepts();
+    // First-visit nudge for the blank-canvas steward (editor_offered rides
+    // the draft so Back/Forward never re-pops a declined modal).
     if (
       this.variant === 'manual' &&
-      this.addedCount === 0 &&
+      this.concepts.length === 0 &&
       !((this.draft && this.draft.input && this.draft.input.editor_offered) || false)
     ) {
       this.addOpen = true;
@@ -235,6 +290,21 @@ export default {
   methods: {
     emitGate() {
       this.$emit('gate', this.canAdvance);
+    },
+    // T2: the tree is the live truth — refreshed after EVERY mutation.
+    async refreshConcepts() {
+      if (!this.repoId) return;
+      this.conceptsLoading = true;
+      this.conceptsError = '';
+      try {
+        this.concepts = await repoOkfService.listConcepts(this.repoId);
+        this.addedCount = this.concepts.length;
+      } catch {
+        this.conceptsError = this.translate('okf.steps.input.benchFailed', 'Could not read the topics right now.');
+      } finally {
+        this.conceptsLoading = false;
+        this.emitGate();
+      }
     },
     // Merge with the EXISTING draft.input — the wizard's patch merge is
     // shallow (Object.assign on the draft), so replacing the input object
@@ -251,6 +321,9 @@ export default {
     currentInput() {
       return {
         document_ids: this.selectedIds.slice(),
+        // T3: names ride the draft so Produce's per-source accounting can
+        // label each conversion leg without re-fetching file metadata.
+        document_names: this.selectedNames.slice(),
         concepts_added: this.addedCount
       };
     },
@@ -271,15 +344,14 @@ export default {
     // concept_id comes from the SAME sanctioned slug builder AddConceptModal
     // uses (F13) — 'Water Points.md' and a hand-added 'Water Points' now
     // land as ONE topic, never two. The picked file's own frontmatter wins
-    // per-field. addedCount is refreshed from the SERVER truth after every
-    // import (a local += drifted from the upsert reality).
+    // per-field. The tree refreshes from SERVER truth after every import.
     async onFsFiles(evt) {
       const picked = (evt && evt.target && evt.target.files) || [];
       if (!picked.length) return;
       this.fsBusy = true;
       this.fsError = '';
       try {
-        const existing = (await repoOkfService.listConcepts(this.draft.repo_id)).map((c) => c.concept_id);
+        const existing = this.concepts.map((c) => c.concept_id);
         const taken = new Set(existing);
         const concepts = [];
         let skipped = 0;
@@ -294,10 +366,9 @@ export default {
           taken.add(payload.concept_id);
           concepts.push({ path: payload.concept_id, frontmatter: payload.frontmatter, body: payload.body });
         }
-        if (concepts.length) await repoOkfService.importConcepts(this.draft.repo_id, concepts);
-        this.addedCount = (await repoOkfService.listConcepts(this.draft.repo_id)).length;
+        if (concepts.length) await repoOkfService.importConcepts(this.repoId, concepts);
+        await this.refreshConcepts();
         this.writeBack();
-        this.emitGate();
         if (skipped) {
           this.fsError = this.translate('okf.steps.input.skippedEmpty', '{n} empty file(s) skipped.').replace(
             '{n}',
@@ -313,15 +384,39 @@ export default {
       }
     },
     onConceptCreated() {
-      this.addedCount += 1;
+      this.refreshConcepts();
       this.writeBack();
-      this.emitGate();
+    },
+    // T2: click-to-edit — a saved concept reopens in the focused editor.
+    onConceptSelect(conceptId) {
+      this.editConceptId = conceptId;
+      this.editOpen = true;
+    },
+    async onConceptDelete(node) {
+      if (!node || !node.concept_id || !this.repoId) return;
+      try {
+        await repoOkfService.deleteConcept(this.repoId, node.concept_id);
+        if (this.editConceptId === node.concept_id) {
+          this.editOpen = false;
+          this.editConceptId = null;
+        }
+        await this.refreshConcepts();
+        this.writeBack();
+      } catch {
+        this.conceptsError = this.translate('okf.steps.input.deleteFailed', 'Could not delete the concept.');
+      }
+    },
+    async onConceptSaved() {
+      this.editOpen = false;
+      this.editConceptId = null;
+      await this.refreshConcepts();
+      this.writeBack();
     },
     // A3: the shell awaits this BEFORE advancing — documents/crawl hand off
     // to Produce, which runs the conversion; manual is already landed.
     async beforeAdvance() {
       if (this.variant === 'documents' || this.variant === 'crawl') {
-        if (!this.draft.repo_id) {
+        if (!this.repoId) {
           this.inputError = this.translate('okf.steps.input.noRepo', 'Create the repository first (go back to Entry).');
           return false;
         }
@@ -349,7 +444,39 @@ export default {
   color: var(--muted);
   font-size: var(--text-sm);
 }
-.okf-step__manual {
+.okf-step__bench {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  background: var(--bg);
+}
+.okf-step__bench-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.okf-step__bench-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.okf-step__bench-count {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.okf-step__bench-loading {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.okf-step__feeders {
   display: flex;
   gap: var(--space-sm);
   align-items: center;
@@ -369,10 +496,6 @@ export default {
 }
 .okf-step__fs-input {
   display: none;
-}
-.okf-step__fs-tip {
-  display: inline-flex;
-  align-items: center;
 }
 .okf-step__note {
   margin: 0;

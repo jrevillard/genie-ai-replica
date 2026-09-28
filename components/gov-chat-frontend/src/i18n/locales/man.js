@@ -1608,7 +1608,8 @@ export default {
         bulkAccept: 'Abee song',
         bulkRedact: 'Abee nuun',
         bulkRemove: 'Abee kuntu',
-        loadProgress: 'Kōdāl̦o̦k fail ko {done}/{total}'
+        loadProgress: 'Kōdāl̦o̦k fail ko {done}/{total}',
+        addSource: '+ From documents'
       },
       delete: {
         body: 'Men in enaj jol̦o̦k fail eo, kōkōm̧bōļ ko em̦ōj laajraki, im kebaake ko an graf indreo.',
@@ -1677,6 +1678,11 @@ export default {
       actions: {
         bulkPii: 'Jerbale kōm̦m̦an ko l̦ap an PII',
         deleting: 'A bering kuntu'
+      },
+      addSources: {
+        working: 'Converting sources…',
+        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
+        failed: 'A conversion failed — check the logs; the rest may still have queued.'
       }
     },
     dashboard: {
@@ -1902,7 +1908,20 @@ export default {
       saveFailed: 'A mara baata',
       importFailedTitle: 'Bōktok ear l̦apier — ban ukōt fail eo.',
       importFailedHint: 'Jol̦o̦k jikin kakwōn in innem bar bōktok fail eo jān jikin eo.',
-      frontmatter: 'Melele ko ioon aolep fail — kain, āt, kakōl̦l̦e. Jipañ eo ej kōjerbale bwe en jel̦ā ta in kōm̦m̦an eo.'
+      frontmatter: 'Melele ko ioon aolep fail — kain, āt, kakōl̦l̦e. Jipañ eo ej kōjerbale bwe en jel̦ā ta in kōm̦m̦an eo.',
+      pickSource:
+        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy:
+        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      clsHeur: 'Heuristics (fast, no LLM)',
+      clsLlm: 'LLM classification',
+      clsHybrid: 'Hybrid',
+      fsPick:
+        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect:
+        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff:
+        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.'
     },
     md: {
       toolbar: 'Cogo kuta',
@@ -2093,13 +2112,47 @@ export default {
         crawl: 'Kāālet website ko kwonañin crawl iie.',
         manual: 'Kwomaron̦ jeje un ko ilo buñtōn eo juon.',
         clone: 'Kāālet jikin kakwōn eo em̦ōj an kōm̦m̦an bwe kwōn kopi.',
-        placeholder: 'UI an buñtōn in enaj itok ilo bwebwenato ko tok ālik.'
+        placeholder: 'UI an buñtōn in enaj itok ilo bwebwenato ko tok ālik.',
+        chooseCrawl: 'Choose crawled documents',
+        chooseDocs: 'Choose source documents',
+        writeOne: '+ Write a concept',
+        fsPick: '+ Import markdown from this computer',
+        fsBusy: 'Importing your files…',
+        fsFailed: 'Import failed — check the files and retry.',
+        skippedEmpty: '{n} empty file(s) skipped.',
+        noneSelected: 'No sources selected yet.',
+        selectedN: 'Selected: {n}',
+        moreN: ' +{n} more',
+        noRepo: 'Create the repository first (go back to Entry).',
+        noRepoYet: 'Create the repository first (go back to Entry).',
+        benchTitle: 'Topics in this repository',
+        benchCount: '{n}',
+        benchLoading: 'Reading topics…',
+        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
+        benchFailed: 'Could not read the topics right now.',
+        editTitle: 'Edit concept',
+        deleteFailed: 'Could not delete the concept.',
+        added: '{n} topic(s) in this repository so far.'
       },
       produce: {
         title: 'Kōm̦m̦an un ko',
         hint: 'Kōmij riiti jikin ko am im kōpooj un ko.',
         progress: 'Ri-kōm̦m̦an ej jerbal...',
-        placeholder: 'Jerbal in kōm̦m̦an enaj itok ilo bwebwenato ko tok ālik.'
+        placeholder: 'Jerbal in kōm̦m̦an enaj itok ilo bwebwenato ko tok ālik.',
+        retry: 'Retry conversion',
+        restart: 'Run again',
+        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
+        failed: 'The conversion failed — retry, or go back and pick different inputs.',
+        done: '{n} topic(s) are ready — continue to review them in Curate.',
+        noSources: 'No sources selected — go back to Input.',
+        neverStarted: 'The conversion did not start — retry.',
+        dupContent:
+          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        filesNote: '{done} of {total} documents converted',
+        pagesNote: '{done} of {total} pages converted',
+        pagesSoFar: '{n} pages converted so far',
+        sourceStat: '+{n} new (total {t})'
       },
       label: {
         title: 'Kāālet kakōl̦l̦e ko',
@@ -2124,7 +2177,9 @@ export default {
       autocorrect: {
         title: 'Make-kōjim̦we',
         hint: 'Jet kakkōl remaron̦ make jim̦we. Jerbale jim̦we ko kwotōmak ie, innem jeblak ñan ri-karōk eo ñan etale.',
-        placeholder: 'Make-kōjim̦we enaj itok ilo Bwebwenato 10.2.'
+        placeholder: 'Make-kōjim̦we enaj itok ilo Bwebwenato 10.2.',
+        noRepo: 'No repository yet — go back to Entry and create one first.',
+        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
       },
       review: {
         title: 'Etale',
@@ -2139,7 +2194,14 @@ export default {
         hint: 'Publishing ej kōm̦m̦an wāween v1 an jikin kakwōn in.',
         nameOk: 'Āt an jikin kakwōn em̦ōj likūti',
         labelsOk: 'Kakōl̦l̦e ko em̦ōj kāāleti',
-        topicsOk: 'Un ko em̦ōj etale'
+        topicsOk: 'Un ko em̦ōj etale',
+        topicsPending: 'No topics yet',
+        topicsServing: 'Topics serving',
+        noTopics: 'No topics yet — go back to Curate to produce or write them.',
+        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        ritual:
+          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        openDashboard: 'Open the Dashboard'
       }
     },
     trust: {
@@ -2344,6 +2406,40 @@ export default {
       ingest: 'A mara',
       retract: 'A sayi',
       unpublish: 'Falsifya bugbugu'
+    },
+    src: {
+      title: 'Choose the source documents',
+      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
+      repoSec: 'From the document repository',
+      searchPh: 'Search by name or site…',
+      chipsLabel: 'Filter by origin',
+      chipAll: 'All',
+      chipCrawl: 'Crawls',
+      chipUpload: 'Uploads',
+      noMatches: 'Nothing matches this search or filter.',
+      crawlBadge: 'crawl',
+      crawlTip: 'Crawled from: {url}',
+      total: '{n} document(s)',
+      loading: 'Loading documents…',
+      retry: 'Retry',
+      empty: 'No documents in the repository yet — upload some below.',
+      more: 'Load more',
+      fsSec: 'From this computer',
+      fsPick: '+ Upload files',
+      uploading: 'Uploading…',
+      uploaded: '{n} file(s) uploaded.',
+      uploadFailed: 'An upload failed — check the files and retry.',
+      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      count: 'Selected: {n}',
+      needOne: 'Select at least one source.',
+      confirm: 'Use {n} source(s)',
+      cancel: 'Cancel',
+      loadFailed: 'Could not load the document list.',
+      servingBadge: 'serving free-form RAG',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      alreadyBadge: 'already in an OKF repo',
+      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     }
   }
 };

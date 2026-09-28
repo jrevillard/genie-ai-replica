@@ -134,3 +134,57 @@
 
 - 2026-09-28: story created from the rev-3 design review; decisions
   D1–D8 locked with David (multiple-choice rounds); P0 sweep queued.
+- 2026-09-28 (sweep start): dev-story runs in THIS session (David:
+  "we will do dev-story in this session... make sure you know the
+  status when it compacts"). Working checkout: **D:\ITU-Gitlab** on
+  feat/okf-server @ 5722667e9 (design commit) — clean except
+  .serena/project.yml (leave) + untracked .claude/dora.json (DORA
+  registration, machine-local, leave). C:\Dev\builds\main is the
+  running local build and carries UNCOMMITTED deploy-verified fixes
+  from the settle incident: ARANGO_AGENT_TIMEOUT_MS knob (shared/lib/db-
+  connection-service.js), OKF_KICK_429_COOLDOWN_MS lane cool-down
+  (workers/ingestWorker.js + test), compose env wiring, local .env
+  override — sync into this checkout as their own commit BEFORE any
+  okf-server file work here touches the same files. T1 begins: doc-repo
+  stamps. Watch state at sweep start: Indonesia SERVED; Bali draining
+  (~290 parsed, healthy); monitors armed.
+- 2026-09-29 (T1–T5 CODED, unit-tested, committed): David's directive —
+  all five P0s in one batch, unit tests included, ONE full-solution
+  smoke at the end (no isolated smokes), and the multi-file/add-later
+  features ALSO in the EDITOR (parity). Landed:
+  - T1: doc-repo origin stamps (source/crawl_session_id at creation —
+    uploadFile + scheduleSiteCrawl + extractMetadata pass-through),
+    `source` filter on GET /files (legacy docs match 'upload'),
+    OkfSourceDialog rebuilt (debounced search, origin chips, crawl
+    provenance pills + W1 preflight pills re-carried, multi-crawl — the
+    single mode is GONE), Input passes defaultSource per variant.
+  - T2: Input = universal workbench (D5+D6): the editor's ConceptList
+    as the live tree + ConceptEditor click-to-edit dialog + delete +
+    ALL feeders always (picker/upload/.md import/write); gate = sources
+    OR concepts (variant only pre-highlights).
+  - T3: Produce is DATA-driven (needsProduction = document_ids exist) +
+    multi-crawl sequential chain (per-file kick, draft-queued,
+    restart-resumable) + per-source merge accounting (+delta over
+    running total) + produced-topic count.
+  - T4: Auto-correct step WIRED to the real AutocorrectPanel (the full
+    stack existed — backend route/controller + service + panel; the
+    placeholder text is gone).
+  - T5: step 9 = Handoff (D4): explicit ritual statement, zero publish
+    affordances, "Open the Dashboard" emit wired through StudioWizard →
+    StudioTab.onBackToDashboard.
+  - Editor parity: ConceptList gains showAddSource → "+ From documents"
+    → RepoEditor opens OkfSourceDialog and runs conversions (crawl
+    files sequential, others batched) under the long-action strip, then
+    refreshes the tree.
+  - i18n: ~84 new en.js keys (incl. re-carried W1 pill keys this
+    lineage lacked) propagated to all 13 locales via the filler;
+    glossary.classificationStrategy added (the pre-existing
+    glossary.classification kept — different meaning).
+  - Tests: doc-repo 81/81 (stamp + filter cases), frontend 1556/1556
+    (78 suites) incl. new source-dialog (9), input (11, real-Vuex-store
+    pattern), produce (5, multi-crawl chain + accounting), autocorrect-
+    publish (6); localeConsistency 5/5. ESLint + Prettier clean on all
+    touched files.
+  - NEXT: full-solution smoke (sync D:→C:\Dev\builds\main, rebuild
+    doc-repo + frontend, run the E2E pass per the readiness plan), then
+    /code-review max (David's call), then P1 slice (T6–T10).

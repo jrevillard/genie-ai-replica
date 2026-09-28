@@ -52,6 +52,7 @@
           @back="onBack"
           @update="onDraftUpdate"
           @gate="onGate"
+          @dashboard="$emit('dashboard')"
         />
       </section>
 
@@ -164,7 +165,7 @@ export default {
   props: {
     draft: { type: Object, default: null }
   },
-  emits: ['reset', 'step-change', 'update-draft', 'finish'],
+  emits: ['reset', 'step-change', 'update-draft', 'finish', 'dashboard'],
   data() {
     return {
       activeStep: 0,

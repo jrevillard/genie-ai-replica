@@ -1,7 +1,10 @@
 <!--
-  OkfStepPublish.vue — Step 10 (Finish): the readiness checklist + the
-  hand-off. The lifecycle ritual lives OUTSIDE the wizard (Amendment A
-  decision #8) — this step's gate opens onto "Open the Editor".
+  OkfStepPublish.vue — Step 10: HANDOFF (3.10 T5, decision D4). The wizard
+  NEVER publishes — "KEEP PUBLISHING OUT OF THE WIZARD. I MEANT IT."
+  Submit → approve → publish lives ONLY in the dashboard and the editor.
+  This step is the readiness summary + the explicit handoff to those
+  surfaces ("Open the Editor" in the wizard footer; "Open the Dashboard"
+  here).
 
   Live counts come from the /metrics payload (max-review F1: repo docs
   carry no concept_count — only conformance-service computes one). A
@@ -10,12 +13,12 @@
 -->
 <template>
   <div class="okf-step">
-    <h3 class="okf-step__title">{{ translate('okf.steps.publish.title', 'Ready to finish') }}</h3>
+    <h3 class="okf-step__title">{{ translate('okf.steps.publish.title', 'Handoff') }}</h3>
     <p class="okf-step__hint">
       {{
         translate(
           'okf.steps.publish.hint',
-          'Publishing creates a version of this repository — from the Editor, when the ritual is due.'
+          'This repository is ready for review. Publishing never happens here — submit it for approval on the dashboard, then approve and publish from the dashboard or the editor.'
         )
       }}
     </p>
@@ -27,6 +30,27 @@
       <DsStatusTag :variant="checklistVariants.labels">{{
         translate('okf.steps.publish.labelsOk', 'Labels assigned')
       }}</DsStatusTag>
+    </div>
+    <p class="okf-step__ritual">
+      {{
+        translate(
+          'okf.steps.publish.ritual',
+          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.'
+        )
+      }}
+    </p>
+    <div class="okf-step__handoff">
+      <DsButton variant="secondary" small @click="$emit('dashboard')">
+        {{ translate('okf.steps.publish.openDashboard', 'Open the Dashboard') }}
+      </DsButton>
+      <DsInfoTip
+        :text="
+          translate(
+            'okf.glossary.handoff',
+            'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.'
+          )
+        "
+      />
     </div>
     <p v-if="frozen" class="okf-step__frozen">
       {{
@@ -43,16 +67,18 @@
 </template>
 
 <script>
+import DsButton from '../../ds/Button.vue';
+import DsInfoTip from '../../ds/InfoTip.vue';
 import DsStatusTag from '../../ds/StatusTag.vue';
 import { mapGetters } from 'vuex';
 import translateMixin from '../../../mixins/translateMixin';
 
 export default {
   name: 'OkfStepPublish',
-  components: { DsStatusTag },
+  components: { DsButton, DsInfoTip, DsStatusTag },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
-  emits: ['gate'],
+  emits: ['gate', 'dashboard'],
   data() {
     return { liveConceptCount: null };
   },
@@ -143,6 +169,20 @@ export default {
   display: flex;
   gap: var(--space-sm);
   flex-wrap: wrap;
+}
+.okf-step__ritual {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--info-bg);
+  border: 1px solid var(--info);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-size: var(--text-sm);
+}
+.okf-step__handoff {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
 }
 .okf-step__frozen {
   margin: 0;

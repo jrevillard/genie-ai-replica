@@ -160,6 +160,7 @@
       @reset="resetWizard"
       @update-draft="onDraftUpdate"
       @finish="onWizardFinish"
+      @dashboard="onBackToDashboard"
     />
 
     <DsDialog

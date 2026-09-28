@@ -21,8 +21,10 @@
       :load-progress="loadProgress"
       :label-options="labelOptions"
       :read-only="readOnly"
+      :show-add-source="!readOnly"
       @select="onSelect"
       @add="addOpen = true"
+      @add-source="sourceOpen = true"
       @resplit="resplitOpen = true"
       @delete="onDeleteAsk"
       @label="onTreeLabel"
@@ -233,6 +235,18 @@
       @created="onConceptCreated"
     />
 
+    <!-- 3.10 T-editor (D6 editor parity): add MORE sources (tagged crawls,
+         uploads — any format) into THIS repo at any time. Conversions run
+         under the long-action strip; the tree refreshes on completion. -->
+    <OkfSourceDialog
+      :visible="sourceOpen"
+      :allow-upload="true"
+      :selected="[]"
+      @close="sourceOpen = false"
+      @confirm="onAddSources"
+    />
+    <p v-if="sourceNote" class="okf-re__source-note" role="status">{{ sourceNote }}</p>
+
     <DsDialog
       :visible="deleteAsk !== null"
       :title="translate('okf.editor.delete.title', 'Delete file')"
@@ -297,6 +311,7 @@ import OkfConceptList from './ConceptList.vue';
 import OkfConceptEditor from './ConceptEditor.vue';
 import OkfResplitModal from './ResplitModal.vue';
 import OkfAddConceptModal from './AddConceptModal.vue';
+import OkfSourceDialog from '../wizard/OkfSourceDialog.vue';
 import OkfRepoGraphView from './RepoGraphView.vue';
 import DsDialog from '../../ds/Dialog.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
@@ -318,6 +333,7 @@ export default {
     OkfConceptEditor,
     OkfResplitModal,
     OkfAddConceptModal,
+    OkfSourceDialog,
     OkfRepoGraphView,
     OkfAutocorrectPanel
   },
@@ -333,6 +349,9 @@ export default {
   emits: ['resplit-done'],
   data() {
     return {
+      // 3.10 T-editor (D6): add-sources picker + post-conversion note
+      sourceOpen: false,
+      sourceNote: '',
       typeOptions: TYPE_OPTIONS,
       labelOptions: [],
       // False when the repo's Subject Area has no KH match — the picker then
@@ -512,6 +531,60 @@ export default {
         this._longTimer = null;
       }
       this.longAction = null;
+    },
+    // ── ADD FROM DOCUMENTS (3.10 T-editor, D6 editor parity) ──────────────
+    // The editor accepts MORE sources at any time: tagged crawl files
+    // convert one-by-one (per-file repo-scoped job, split_mode B), other
+    // documents convert as one batch — the same services the wizard's
+    // Produce step drives. Kicks ride the long-action strip; the tree
+    // refreshes when the chain lands.
+    async onAddSources(payload) {
+      const rows = (payload && payload.rows) || [];
+      const ids = (payload && payload.ids) || rows.map((r) => r.file_id);
+      this.sourceOpen = false;
+      if (!this.repoId || ids.length === 0) return;
+      const crawls = rows.filter((r) => r && r.source === 'crawl').map((r) => r.file_id);
+      const docs = ids.filter((id) => !crawls.includes(id));
+      const classification = 'heuristics';
+      this.beginLongAction(this.translate('okf.editor.addSources.working', 'Converting sources…'));
+      this.sourceNote = '';
+      try {
+        for (const fileId of crawls) {
+          await repoOkfService.convertFromCrawlInto({
+            repo_id: this.repoId,
+            file_id: fileId,
+            classification,
+            split_mode: 'B'
+          });
+        }
+        if (docs.length > 0) {
+          await repoOkfService.importDocuments({
+            file_ids: docs,
+            repo_id: this.repoId,
+            classification
+          });
+        }
+        await this.$store.dispatch('okf/fetchConcepts', this.repoId);
+        const total = this.concepts.length;
+        this.sourceNote = this.translate(
+          'okf.editor.addSources.done',
+          '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).'
+        )
+          .replace('{n}', String(ids.length))
+          .replace('{t}', String(total));
+      } catch (err) {
+        this.sourceNote =
+          this.translate(
+            'okf.editor.addSources.failed',
+            'A conversion failed — check the logs; the rest may still have queued.'
+          ) + (err && err.message ? ` (${err.message})` : '');
+      } finally {
+        this.endLongAction();
+        clearTimeout(this._sourceNoteTimer);
+        this._sourceNoteTimer = setTimeout(() => {
+          this.sourceNote = '';
+        }, 8000);
+      }
     },
     // ── FLEXIBLE COLUMNS (David, 2026-09-09) ──────────────────────────────
     // Pointer-drag on either splitter (drag anywhere — listeners sit on the
@@ -793,6 +866,15 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.okf-re__source-note {
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--info-bg);
+  border: 1px solid var(--info);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-size: var(--text-xs);
 }
 .okf-re__placeholder {
   color: var(--muted);

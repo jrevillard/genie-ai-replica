@@ -235,6 +235,13 @@ class FileService {
       logger.debug(`[FILE-SERVICE] File creation date: ${createdDate}`);
 
       // Create file record in database
+      // Story 3.10 T1 (D1): every file carries an ORIGIN — 'crawl' when the
+      // crawler produced it (either kind arrives with sourceUrl and/or
+      // author 'crawler'), 'upload' for user uploads. crawl_session_id
+      // groups a crawl's files in the wizard picker; today each crawl is
+      // one combined .md (session == file), but the field is the grouping
+      // key the moment a crawler ever splits pages into separate files.
+      const isCrawl = Boolean(fileInfo.sourceUrl) || fileInfo.author === 'crawler';
       const fileRecord = {
         file_id: fileId,
         file_name: originalFileName,
@@ -247,6 +254,8 @@ class FileService {
         uploaded_date: new Date().toISOString(),
         created_date: createdDate,
         crawl_date: fileInfo.crawlDate || null,
+        source: isCrawl ? 'crawl' : 'upload',
+        crawl_session_id: isCrawl ? fileId : null,
         source_url: fileInfo.sourceUrl || '',
         language: detectedLang, // Use the final validated content language
         chunk_count: 0,
@@ -451,6 +460,10 @@ class FileService {
     const fileName = `${domain}_full_crawl.md`;
 
     // 1. Create File Stub
+    // Story 3.10 T1 (D1): the async crawl stub is born tagged — origin
+    // 'crawl', session == its own id (1:1 today; the grouping key if a
+    // crawler ever emits one file per page), seed URL for picker grouping
+    // ("Crawl of naat.digital (47 pages)").
     const fileRecord = {
       file_id: fileId,
       file_name: fileName,
@@ -463,6 +476,8 @@ class FileService {
       uploaded_date: new Date().toISOString(),
       created_date: new Date().toISOString(),
       crawl_date: new Date().toISOString(),
+      source: 'crawl',
+      crawl_session_id: fileId,
       source_url: url,
       language: null,
       chunk_count: 0,
@@ -604,7 +619,7 @@ class FileService {
    */
   async getFiles(options = {}) {
     try {
-      const { page = 1, limit = 10, language, mimeType, search, dataprepStatus, repo_id, is_bundle } = options;
+      const { page = 1, limit = 10, language, mimeType, search, dataprepStatus, repo_id, is_bundle, source } = options;
       const offset = (page - 1) * limit;
 
       // Build query
@@ -642,6 +657,18 @@ class FileService {
         // Use case-insensitive matching for status
         filters.push('LOWER(file.dataprep.status) == LOWER(@status)');
         bindVars.status = dataprepStatus;
+      }
+      // Story 3.10 T1 (D1): origin filter. Files created BEFORE the stamp
+      // landed have no `source` attribute — match them to 'upload' (the
+      // only pre-stamp creation path was the upload controller) so the
+      // wizard's chips partition cleanly from day one.
+      if (source) {
+        if (source === 'upload') {
+          filters.push('(file.source == @source OR file.source == null)');
+        } else {
+          filters.push('file.source == @source');
+        }
+        bindVars.source = source;
       }
       // Story 4.8-amend: bundle-file lookup by repo_id + is_bundle=true
       // (the OKF worker mirrors per-concept ingest progress to the bundle zip's

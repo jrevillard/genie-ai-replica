@@ -1618,7 +1618,8 @@ export default {
         bulkAccept: 'সব গ্রহণ করুন',
         bulkRedact: 'সব রিডাক্ট করুন',
         bulkRemove: 'সব সরান',
-        loadProgress: 'ফাইল লোড হচ্ছে {done}/{total}'
+        loadProgress: 'ফাইল লোড হচ্ছে {done}/{total}',
+        addSource: '+ From documents'
       },
       delete: {
         body: 'এটি ফাইল, এর ইনডেক্স করা অংশ এবং এর গ্রাফ লিঙ্কগুলিকে স্থায়ীভাবে সরিয়ে দেয়।',
@@ -1689,6 +1690,11 @@ export default {
       actions: {
         bulkPii: 'বাল্ক PII পদক্ষেপ প্রয়োগ করা হচ্ছে',
         deleting: 'মোছা হচ্ছে'
+      },
+      addSources: {
+        working: 'Converting sources…',
+        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
+        failed: 'A conversion failed — check the logs; the rest may still have queued.'
       }
     },
     dashboard: {
@@ -1915,7 +1921,20 @@ export default {
       importFailedTitle: 'আমদানি ব্যর্থ হয়েছে — উৎস ফাইল রূপান্তর করা যায়নি।',
       importFailedHint: 'এই রিপোজিটরিটি মুছুন এবং উৎস ফাইলটি আবার আমদানি করুন।',
       frontmatter:
-        'প্রতিটি ফাইলের শীর্ষে থাকা কাঠামোগত তথ্য — ধরন, শিরোনাম, লেবেল। প্রতিটি ধারণা কী সম্পর্কে তা জানতে সহকারী এটি ব্যবহার করে।'
+        'প্রতিটি ফাইলের শীর্ষে থাকা কাঠামোগত তথ্য — ধরন, শিরোনাম, লেবেল। প্রতিটি ধারণা কী সম্পর্কে তা জানতে সহকারী এটি ব্যবহার করে।',
+      pickSource:
+        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy:
+        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      clsHeur: 'Heuristics (fast, no LLM)',
+      clsLlm: 'LLM classification',
+      clsHybrid: 'Hybrid',
+      fsPick:
+        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect:
+        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff:
+        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.'
     },
     md: {
       toolbar: 'ফর্মাটিং',
@@ -2106,13 +2125,47 @@ export default {
         crawl: 'ক্রল করার জন্য ওয়েবসাইট নির্বাচন করুন।',
         manual: 'আপনি পরবর্তী ধাপে সরাসরি বিষয়গুলি লিখতে পারেন।',
         clone: 'ক্লোন করার জন্য বিদ্যমান রিপোজিটরিটি বেছে নিন।',
-        placeholder: 'ধাপের UI পরবর্তী একটি গল্পে আসবে।'
+        placeholder: 'ধাপের UI পরবর্তী একটি গল্পে আসবে।',
+        chooseCrawl: 'Choose crawled documents',
+        chooseDocs: 'Choose source documents',
+        writeOne: '+ Write a concept',
+        fsPick: '+ Import markdown from this computer',
+        fsBusy: 'Importing your files…',
+        fsFailed: 'Import failed — check the files and retry.',
+        skippedEmpty: '{n} empty file(s) skipped.',
+        noneSelected: 'No sources selected yet.',
+        selectedN: 'Selected: {n}',
+        moreN: ' +{n} more',
+        noRepo: 'Create the repository first (go back to Entry).',
+        noRepoYet: 'Create the repository first (go back to Entry).',
+        benchTitle: 'Topics in this repository',
+        benchCount: '{n}',
+        benchLoading: 'Reading topics…',
+        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
+        benchFailed: 'Could not read the topics right now.',
+        editTitle: 'Edit concept',
+        deleteFailed: 'Could not delete the concept.',
+        added: '{n} topic(s) in this repository so far.'
       },
       produce: {
         title: 'বিষয় তৈরি করুন',
         hint: 'আমরা আপনার উৎসগুলি পড়ছি এবং বিষয় প্রস্তাব করছি।',
         progress: 'প্রযোজক চলছে...',
-        placeholder: 'প্রযোজক পরিষেবা পরবর্তী একটি গল্পে যুক্ত হবে।'
+        placeholder: 'প্রযোজক পরিষেবা পরবর্তী একটি গল্পে যুক্ত হবে।',
+        retry: 'Retry conversion',
+        restart: 'Run again',
+        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
+        failed: 'The conversion failed — retry, or go back and pick different inputs.',
+        done: '{n} topic(s) are ready — continue to review them in Curate.',
+        noSources: 'No sources selected — go back to Input.',
+        neverStarted: 'The conversion did not start — retry.',
+        dupContent:
+          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        filesNote: '{done} of {total} documents converted',
+        pagesNote: '{done} of {total} pages converted',
+        pagesSoFar: '{n} pages converted so far',
+        sourceStat: '+{n} new (total {t})'
       },
       label: {
         title: 'লেবেল বেছে নিন',
@@ -2137,7 +2190,9 @@ export default {
       autocorrect: {
         title: 'স্বয়ংক্রিয় সমাধান',
         hint: 'কিছু সতর্কতা স্বয়ংক্রিয়ভাবে ঠিক করা যেতে পারে। আপনি যে সংশোধনগুলি সমর্থন করেন তা প্রয়োগ করুন, তারপর পর্যালোচনা করতে কিউরেটরে ফিরে যান।',
-        placeholder: 'স্বয়ংক্রিয় সংশোধন পরিষেবা গল্প ১০.২-এ আসবে।'
+        placeholder: 'স্বয়ংক্রিয় সংশোধন পরিষেবা গল্প ১০.২-এ আসবে।',
+        noRepo: 'No repository yet — go back to Entry and create one first.',
+        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
       },
       review: {
         title: 'পর্যালোচনা',
@@ -2152,7 +2207,14 @@ export default {
         hint: 'Publish করলে এই রিপোজিটরির v1 সংস্করণ তৈরি হয়।',
         nameOk: 'রিপোজিটরির নাম সেট করা হয়েছে',
         labelsOk: 'লেবেল নির্বাচিত হয়েছে',
-        topicsOk: 'বিষয় পর্যালোচনা করা হয়েছে'
+        topicsOk: 'বিষয় পর্যালোচনা করা হয়েছে',
+        topicsPending: 'No topics yet',
+        topicsServing: 'Topics serving',
+        noTopics: 'No topics yet — go back to Curate to produce or write them.',
+        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        ritual:
+          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        openDashboard: 'Open the Dashboard'
       }
     },
     trust: {
@@ -2360,6 +2422,40 @@ export default {
       ingest: 'গ্রহণ করুন',
       retract: 'প্রত্যাহার করুন',
       unpublish: 'আনপাবলিশ'
+    },
+    src: {
+      title: 'Choose the source documents',
+      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
+      repoSec: 'From the document repository',
+      searchPh: 'Search by name or site…',
+      chipsLabel: 'Filter by origin',
+      chipAll: 'All',
+      chipCrawl: 'Crawls',
+      chipUpload: 'Uploads',
+      noMatches: 'Nothing matches this search or filter.',
+      crawlBadge: 'crawl',
+      crawlTip: 'Crawled from: {url}',
+      total: '{n} document(s)',
+      loading: 'Loading documents…',
+      retry: 'Retry',
+      empty: 'No documents in the repository yet — upload some below.',
+      more: 'Load more',
+      fsSec: 'From this computer',
+      fsPick: '+ Upload files',
+      uploading: 'Uploading…',
+      uploaded: '{n} file(s) uploaded.',
+      uploadFailed: 'An upload failed — check the files and retry.',
+      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      count: 'Selected: {n}',
+      needOne: 'Select at least one source.',
+      confirm: 'Use {n} source(s)',
+      cancel: 'Cancel',
+      loadFailed: 'Could not load the document list.',
+      servingBadge: 'serving free-form RAG',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      alreadyBadge: 'already in an OKF repo',
+      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     }
   }
 };

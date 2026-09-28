@@ -57,7 +57,7 @@ development_status:
   4-8-amend-wp-c-content-only-chunking: done  # WP-C landed on feat/okf-server @ d0db1a13; live smoke rework deferred to follow-up context (jest+pytest+CI is the merge gate)
   epic-2.9-retrospective: optional
 
-  epic-3: in-progress        # Vue admin UI — ungated; RECONCILED 2026-09-27: 3.1-3.7 done, 3.4/3.8 in-progress (3.4 carries Amendment A — wizard completion & editor parity), 3.9 backlog
+  epic-3: in-progress        # Vue admin UI — ungated; RECONCILED 2026-09-27: 3.1-3.7 done, 3.4/3.8 in-progress (3.4 carries Amendment A — wizard completion & editor parity), 3.9 backlog; 3.10 planned 2026-09-28 (wizard UX remediation — design rev 3 FINAL, P0 sweep next)
   3-1-okf-repositories-tab-service-vuex: done     # RECONCILED 2026-09-27 (David OK) — Vuex okf module + service layer + repo surfaces live; note: the old G25 If-Match/409 optimistic-concurrency idea was NEVER built (verified: no If-Match/ETag in okf-server)
   3-2-repository-dialog-details-view: done        # RECONCILED 2026-09-27 (David OK) — details surface live (RepoEditorShell + RepoEditor/Versions/Logs dialogs)
   3-3-ingestion-progress-i18n: done               # RECONCILED 2026-09-27 (David OK) — okf.* i18n keys landed (8f9334c04 + lifecycle keys)
@@ -67,6 +67,7 @@ development_status:
   3-7-crawler-ui-create-okf-entry-point: done             # RECONCILED 2026-09-27 — AddFromLinkDialog + crawlerToOkfService + okf:create-from-crawl / okf:okf-repo-created (#977 opens crawl repos at Curate) live; crawler Input-panel variant = 3.4 amendment scope
   3-8-okf-concept-curator-validation-panel: in-progress   # Substance IMPLEMENTED via Amendment A (2026-09-27): Validate populates from LIVE data (autocorrect dry-run groups, index failures, metrics health) + FULL embedded PII remediation panel (editor's PiiOccurrences: redact/replace/remove/accept, green RESOLVED/orange flagged); Curate = full embedded editor (supersedes the slice-2 concept-tree design; body save live via patchConcept — the 4.2 deferral is moot). Pending David's live pass to mark done
   3-9-okf-repository-clone-admin-action: backlog          # NEW 2026-08-18 (D-V5; Studio §8.1) — clone API 4.8 SHIPPED; dashboard/editor clone dialog live; WIZARD clone now real via the same API (Choose source picker → clone on Continue, Amendment A #9, 2026-09-27). Remaining for this story: nothing functional — verify dashboard toolbar entry + close
+  3-10-okf-wizard-ux-remediation: planned                 # NEW 2026-09-28 (David field report: wizard unusable) — design FINAL rev 3 (okf-wizard-ux-review-2026-09-28.md, decisions D1-D8 locked via multiple-choice): tagged multi-crawl picker (search+provenance+session grouping), universal add-anything workbench (tree+edit, all feeders always), merge accounting (exact-slug auto-merge, near-dupe flags), auto-correct wire-or-remove, step 9 → Handoff (publish OUT of wizard PERMANENTLY per David), formatted-file split import, auto-label on entry, zip round-trip, crawler-dialog decision point; 5 P0s + small additive backend deps; blocks David's practical-usage E2E pass (readiness W8)
   epic-3-retrospective: optional
 
   epic-4: backlog            # Authoring & curation — ungated (Node-side)

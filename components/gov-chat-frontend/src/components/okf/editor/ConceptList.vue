@@ -233,6 +233,13 @@
       <DsButton variant="secondary" small :disabled="readOnly" @click="$emit('add')"
         >+ {{ translate('okf.editor.concepts.add', 'Add concept') }}</DsButton
       >
+      <!-- 3.10 T-editor (D6 editor parity): add MORE sources from the
+           document repository (tagged crawl files, uploads — any format)
+           into THIS repo at any time. The parent opens the source picker
+           and runs the conversions; the tree refreshes on completion. -->
+      <DsButton v-if="showAddSource" variant="secondary" small :disabled="readOnly" @click="$emit('add-source')"
+        >+ {{ translate('okf.editor.concepts.addSource', 'From documents') }}</DsButton
+      >
       <span class="okf-cl__footer-tip">
         <DsInfoTip
           :text="
@@ -322,9 +329,12 @@ export default {
     // NON-BLOCKING LOAD: { done, total } while a chunked fetch runs, else null.
     loadProgress: { type: Object, default: null },
     // READ ONLY (serving repo): add/delete/re-split/label writes are hidden.
-    readOnly: { type: Boolean, default: false }
+    readOnly: { type: Boolean, default: false },
+    // 3.10 T-editor (D6): show the "+ From documents" feeder (editor parity —
+    // the wizard's workbench has its own feeder row and omits this).
+    showAddSource: { type: Boolean, default: false }
   },
-  emits: ['select', 'resplit', 'add', 'delete', 'label', 'pii-bulk', 'open-source'],
+  emits: ['select', 'resplit', 'add', 'delete', 'label', 'pii-bulk', 'open-source', 'add-source'],
   data() {
     return {
       filter: '',

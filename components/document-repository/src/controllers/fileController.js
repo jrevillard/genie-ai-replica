@@ -110,7 +110,11 @@ const getFilesSchema = Joi.object({
   // the smoke uses short test IDs + some integration paths pass prefixed IDs;
   // the route is authenticated + scoped, so no security risk in relaxing).
   repo_id: Joi.string().min(1).max(256).optional(),
-  is_bundle: Joi.boolean().optional()
+  is_bundle: Joi.boolean().optional(),
+  // Story 3.10 T1 (D1): origin filter for the OKF wizard's source picker —
+  // "show me the crawled files". 'link' reserved for the future add-by-link
+  // path distinct from the crawler.
+  source: Joi.string().valid('crawl', 'upload', 'link').optional()
 });
 
 const updateFileSchema = Joi.object({

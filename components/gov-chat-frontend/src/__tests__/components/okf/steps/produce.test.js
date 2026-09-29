@@ -273,6 +273,35 @@ it('documents: one repo-scoped job takes ALL ids at once (no queue)', async () =
   expect(wrapper.vm.status).toBe('done');
 });
 
+it("a 'queued' conversion is ACTIVE — the poll must not declare neverStarted (the PDF field bug)", async () => {
+  // The server registers status 'queued' and returns 202 BEFORE the
+  // background run flips it to downloading/running. The old binary check
+  // treated 'queued' as "no conversion" and failed the step on the
+  // IMMEDIATE first tick while the conversion ran to completion.
+  jest.useFakeTimers();
+  try {
+    mockListConcepts.mockResolvedValue([1, 2]);
+    mockGet.mockResolvedValue({ repo_id: 'r1', conversion: { status: 'queued' } });
+    const wrapper = mountProduce({
+      repo_id: 'r1',
+      source: 'documents',
+      input: { document_ids: ['f1'], document_names: [{ file_id: 'f1', file_name: 'guide.pdf' }] }
+    });
+    await jest.advanceTimersByTimeAsync(0); // the immediate first tick
+    await settled(wrapper, 3);
+    expect(wrapper.vm.status).toBe('running'); // NOT failed/neverStarted
+    expect(wrapper.vm.errorText).toBe('');
+    // the queued flips to done → the next interval tick finalizes
+    mockGet.mockResolvedValue(convState('done'));
+    await jest.advanceTimersByTimeAsync(3100);
+    await settled(wrapper, 4);
+    expect(wrapper.vm.status).toBe('done');
+    expect(wrapper.emitted('gate').pop()[0]).toBe(true);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 it('a failed conversion surfaces the friendly error and reopens the gate', async () => {
   mockConvertFromCrawl.mockRejectedValue({ code: 'DUPLICATE_CONTENT' });
   mockGet.mockResolvedValue(convState('running'));

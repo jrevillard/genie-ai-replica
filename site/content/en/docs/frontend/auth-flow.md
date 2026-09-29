@@ -54,44 +54,34 @@ Final config returned to `oidc-client-ts`:
 
 ## Login sequence
 
-```
-[ User clicks "Sign in" ]
-         │
-         ▼
-Router guard (src/router/index.js) — routes with meta.requiresAuth=true
-         │  if no currentUser → router.push('/login')
-         ▼
-[ LoginView dispatches auth/login({ returnUrl }) ]
-         │
-         ▼
-auth.js → keycloakAuthService.login(options)
-         │  sessionStorage.removeItem('genie_post_logout')   ← clears any prior logout block
-         ▼
-oidc-client-ts → keycloakAuthService.getUserManager().signinRedirect({ state: { returnUrl } })
-         │
-         ▼
-[ Browser navigates to Keycloak login page ]
-         │
-         ▼
-User authenticates (username + password, MFA, IdP redirect, ...)
-         │
-         ▼
-[ Keycloak redirects browser to {origin}/callback?code=...&state=... ]
-         │
-         ▼
-[ CallbackView mounts → CallbackView dispatches auth/handleCallback (`this.$store.dispatch('handleCallback')`) ]
-         │
-         ▼
-auth.js → keycloakAuthService.handleCallback()
-         │  sessionStorage.removeItem('genie_post_logout')   ← again, for new sessions
-         │  userManager.signinRedirectCallback() — exchanges code for tokens (in-memory only)
-         │  if user returned → commit('setAuth', { isAuthenticated: true, user, accessToken })
-         │  registerAccessTokenUpdatedCallback — silent renew path
-         ▼
-[ App.vue v-else-if guards become true → authenticated shell renders ]
-         │
-         ▼
-[ Router pushes to returnUrl from the state, or /dashboard ]
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant R as Router
+    participant V as LoginView
+    participant A as auth.js
+    participant S as oidc-client-ts
+    participant K as Keycloak
+    participant C as CallbackView
+    participant App as App.vue
+
+    U->>R: click "Sign in"
+    Note over R: meta.requiresAuth=true<br/>if no currentUser → router.push('/login')
+    R->>V: dispatches auth/login({ returnUrl })
+    V->>A: keycloakAuthService.login(options)
+    Note over A: sessionStorage.removeItem('genie_post_logout')<br/>(clears any prior logout block)
+    A->>S: getUserManager().signinRedirect({ state: { returnUrl } })
+    S->>K: redirect browser to Keycloak login
+    Note over U,K: User authenticates<br/>(username + password, MFA, IdP redirect, ...)
+    K-->>U: redirect to {origin}/callback?code=...&state=...
+    U->>C: CallbackView mounts
+    C->>A: dispatch('handleCallback')
+    A->>A: sessionStorage.removeItem('genie_post_logout')
+    A->>S: userManager.signinRedirectCallback()<br/>exchanges code for tokens (in-memory only)
+    A->>A: commit('setAuth', { isAuthenticated: true, user, accessToken })
+    A->>A: registerAccessTokenUpdatedCallback<br/>(silent renew path)
+    Note over App: v-else-if guards become true<br/>authenticated shell renders
+    R->>U: push returnUrl from state, or /dashboard
 ```
 
 The `returnUrl` flow: the router guard stores `route.fullPath` in the state passed to `signinRedirect`. After the callback, the auth store reads it back via `keycloakAuthService` and pushes the user to their original destination. If the state is missing or invalid, `/dashboard` is used.
@@ -160,22 +150,25 @@ If Keycloak reports `session lost` or the iframe times out, `oidc-client-ts` fir
 App.vue emits @logout → dispatch('logout')
          │
          ▼
-auth.js:
-  1. commit('clearError')
-  2. localStorage.removeItem('user')         ← legacy cleanup (pre-OIDC)
-  3. localStorage.removeItem('auth_token')   ← legacy cleanup (pre-OIDC)
-  4. sessionStorage.setItem('genie_post_logout', 'true')   ← the block flag
-  5. removeAccessTokenUpdatedCallback       ← detach silent renew
-  6. keycloakAuthService.logout()
-         │
-         ▼
-oidc-client-ts → signoutRedirect({ id_token_hint }) → Keycloak session terminated
-         │
-         ▼
-[ Browser redirects to origin / Keycloak end-session endpoint completes ]
-         │
-         ▼
-commit('clearAuth')                           ← runs even if redirect throws (try/catch)
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as auth.js
+    participant S as oidc-client-ts
+    participant K as Keycloak
+    participant B as Browser
+
+    U->>A: trigger logout
+    A->>A: 1. commit('clearError')
+    A->>A: 2. localStorage.removeItem('user')<br/>(legacy pre-OIDC)
+    A->>A: 3. localStorage.removeItem('auth_token')<br/>(legacy pre-OIDC)
+    A->>A: 4. sessionStorage.setItem('genie_post_logout', 'true')<br/>(the block flag)
+    A->>A: 5. removeAccessTokenUpdatedCallback<br/>(detach silent renew)
+    A->>A: 6. keycloakAuthService.logout()
+    A->>S: signoutRedirect({ id_token_hint })
+    S->>K: terminate session
+    K-->>B: redirect to origin<br/>Keycloak end-session endpoint completes
+    Note over A: commit('clearAuth') runs<br/>even if redirect throws (try/catch)
 ```
 
 The `try/catch` around the redirect matters: `signoutRedirect` navigates away from the page, so the `commit('clearAuth')` after it may not execute. The `catch` branch guarantees the local state is cleared even if the redirect itself fails.

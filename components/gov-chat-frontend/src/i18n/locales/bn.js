@@ -1971,9 +1971,9 @@ export default {
       step7:
         'কিছু সতর্কতা স্বয়ংক্রিয়ভাবে ঠিক করা যেতে পারে: স্থিতির মান বৈধ গণনায় সীমাবদ্ধ করা যেতে পারে, অনুপস্থিত ফিল্ডগুলি যুক্তিসঙ্গত ডিফল্ট দিয়ে পূরণ করা যেতে পারে। আপনি যে সংশোধনগুলি সমর্থন করেন তা প্রয়োগ করুন, তারপর পর্যালোচনা করতে কিউরেটরে ফিরে যান।',
       step8:
-        'আপনি যা প্রকাশ করতে চলেছেন তার একটি সারাংশ: বিষয়, লেবেল, উৎস এবং যেকোনো অমীমাংসিত সমস্যা। একবার আপনি অনুমোদন দিলে, রিপোজিটরির কাজ প্রকাশিত ধাপে চলে যায়।',
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        'Publish করলে এই রিপোজিটরির v1 সংস্করণ তৈরি হয়। পরবর্তী প্রতিটি পরিবর্তন — একটি নতুন বিষয়, একটি সংশোধিত বিবরণ, একটি পুরানো পুনঃযাচাই — v2, v3 ইত্যাদি হিসেবে প্রকাশিত হয়। পুরানো সংস্করণগুলি চিরকাল উদ্ধৃতিযোগ্য থাকে।',
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         'নির্বাচিত নথিগুলি থেকে একটি নতুন OKF রিপোজিটরি তৈরি করুন। নথিগুলি উৎস হয়ে উঠবে; কোনো কিছু প্রকাশিত হওয়ার আগে সেগুলি যে বিষয়গুলি তৈরি করে তা আপনি পর্যালোচনা করবেন এবং নাম দেবেন।',
       crawlSegment:

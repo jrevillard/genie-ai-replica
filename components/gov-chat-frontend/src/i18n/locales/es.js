@@ -1985,9 +1985,9 @@ export default {
       step7:
         'Algunas advertencias pueden corregirse automáticamente: los valores de estado pueden ajustarse a enumeraciones válidas y los campos ausentes pueden rellenarse con valores predeterminados adecuados. Aplique las correcciones que considere oportunas y vuelva al curador para revisarlas.',
       step8:
-        'Un resumen de lo que está a punto de publicar: los temas, las etiquetas, las fuentes y cualquier problema pendiente. Una vez firmado, el repositorio pasa a la fase de publicación.',
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        'La acción publish crea la versión v1 de este repositorio. Cada modificación posterior —un nuevo tema, una descripción revisada, una reverificación por caducidad— se publica como v2, v3, etc. Las versiones anteriores permanecen citables para siempre.',
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         'Cree un nuevo repositorio OKF a partir de los documentos seleccionados. Los documentos se convertirán en fuentes; usted revisará y nombrará los temas que generen antes de publicar nada.',
       crawlSegment:

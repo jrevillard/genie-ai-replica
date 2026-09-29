@@ -1984,9 +1984,9 @@ export default {
       step7:
         'Alguns avisos podem ser corrigidos automaticamente: valores de status podem ser ajustados para enums válidos, campos ausentes podem ser preenchidos com padrões razoáveis. Aplique as correções com as quais concorda e retorne ao curador para revisar.',
       step8:
-        'Um resumo do que você está prestes a publicar: os tópicos, os rótulos, as fontes e quaisquer problemas não resolvidos. Assim que você aprovar, o repositório avançará para a etapa de publicação.',
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        'A publicação cria a versão v1 deste repositório. Cada alteração subsequente — um novo tópico, uma descrição revisada, uma nova verificação de obsolescência — é publicada como v2, v3, etc. As versões antigas permanecem citáveis para sempre.',
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         'Crie um novo repositório OKF a partir dos documentos selecionados. Os documentos se tornarão fontes; você revisará e nomeará os tópicos produzidos antes que qualquer coisa seja publicada.',
       crawlSegment:

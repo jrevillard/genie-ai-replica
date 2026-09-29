@@ -1977,9 +1977,9 @@ export default {
       step7:
         'Beberapa peringatan dapat diperbaiki secara otomatis: nilai status dapat disesuaikan ke enum yang valid, bidang yang hilang dapat diisi dengan default yang wajar. Terapkan perbaikan yang Anda setujui, lalu kembali ke kurator untuk meninjau.',
       step8:
-        'Ringkasan tentang apa yang akan Anda publikasikan: topik, label, sumber, dan masalah yang belum terselesaikan. Setelah Anda menyetujui, repositori berpindah ke jalur yang dipublikasikan.',
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        'Melakukan publish akan membuat versi v1 dari repositori ini. Setiap perubahan berikutnya — topik baru, deskripsi yang direvisi, verifikasi ulang yang basi — dipublikasikan sebagai v2, v3, dll. Versi lama tetap dapat dikutip selamanya.',
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         'Buat repositori OKF baru dari dokumen yang dipilih. Dokumen akan menjadi sumber; Anda akan meninjau dan menamai topik yang dihasilkan sebelum apa pun dipublikasikan.',
       crawlSegment:

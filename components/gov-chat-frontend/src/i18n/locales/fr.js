@@ -1990,9 +1990,9 @@ export default {
       step7:
         "Certains avertissements peuvent être corrigés automatiquement : les valeurs d'état peuvent être alignées sur des énumérations valides, les champs manquants peuvent être complétés avec des valeurs par défaut appropriées. Appliquez les correctifs approuvés, puis revenez à l'outil de curation pour vérification.",
       step8:
-        'Un récapitulatif de ce que vous vous apprêtez à publier : les sujets, les libellés, les sources et les éventuels points non résolus. Une fois votre accord donné, le référentiel passe dans le circuit de publication.',
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        "L'action publish génère la version v1 de ce référentiel. Chaque modification ultérieure — un nouveau sujet, une description révisée, une réévaluation d'obsolescence — fait l'objet d'une publication sous forme de version v2, v3, etc. Les anciennes versions restent citables indéfiniment.",
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         "Créez un nouveau référentiel OKF à partir des documents sélectionnés. Les documents deviendront des sources ; vous examinerez et nommerez les sujets qu'ils produisent avant toute publication.",
       crawlSegment:

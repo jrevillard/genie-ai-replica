@@ -1958,9 +1958,9 @@ export default {
       step7:
         'Jet kakkōl remaron̦ make jim̦we: wāween ko remaron̦ pedped ioon kien ko, jikin ko ejjel̦o̦k kobbaer remaron̦ koba melele ko rejim̦we. Jerbale jim̦we ko kwotōmak ie, innem jeblak ñan ri-karōk eo ñan etale.',
       step8:
-        'Maron̦ in aolep men ko kwoj kōpooj ñan publish: un ko, kakōl̦l̦e ko, jikin ko, im jabdewōt men ko rejan̄in jim̦we. Ñe em̦ōj am kam̦ool, jikin kakwōn eo ej etal ñan lain in publish.',
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        'Publishing ej kōm̦m̦an wāween v1 an jikin kakwōn in. Aolep oktak tok ālik — un ekāāl, melele ekāāl, kōkāāl eo em̦ōj an kanooj etto — enaj publish āinwōt v2, v3, im aolep. Wāween ko rōtto renaj maron̦ kōjerbali indreo.',
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         'Kōm̦m̦an juon jikin kakwōn OKF ekāāl jān peba ko em̦ōj kāāleti. Peba ko renaj jikin bōk melele; kwonaj etale im nōmbaar un ko renaj kōm̦m̦ani m̦okta jān an jabdewōt publish.',
       crawlSegment:

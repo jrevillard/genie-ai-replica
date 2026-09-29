@@ -1989,9 +1989,9 @@ export default {
       step7:
         'Einige Warnungen können automatisch korrigiert werden: Statuswerte können auf gültige Enums begrenzt und fehlende Felder mit sinnvollen Standardwerten belegt werden. Wenden Sie gewünschte Korrekturen an und kehren Sie zur Prüfung zum Kurator zurück.',
       step8:
-        'Eine Zusammenfassung dessen, was Sie veröffentlichen werden: Themen, Labels, Quellen und alle ungelösten Probleme. Sobald Sie freigeben, wechselt das Repository in die Veröffentlichungsspur.',
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        'Das Veröffentlichen erstellt Version v1 dieses Repositories. Jede nachfolgende Änderung — ein neues Thema, eine überarbeitete Beschreibung, eine erneute Validierung — wird als v2, v3 usw. veröffentlicht. Alte Versionen bleiben dauerhaft zitierfähig.',
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         'Erstellen Sie ein neues OKF-Repository aus den ausgewählten Dokumenten. Dokumente werden zu Quellen; Sie prüfen und benennen die erzeugten Themen, bevor Inhalte veröffentlicht werden.',
       crawlSegment:

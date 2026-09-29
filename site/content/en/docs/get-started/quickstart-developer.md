@@ -361,7 +361,7 @@ backend`.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `docker compose build backend` re-downloads every layer | BuildKit cache evicted (after `docker system prune`, low disk) | Run once to warm the cache; subsequent builds are incremental. Pin the cache with `BUILDKIT_CACHE_DIR` or use the [Ansible registry cache](/docs/deploy/install-guide/). |
+| `docker compose build backend` re-downloads every layer | BuildKit cache evicted (after `docker system prune`, low disk) | Run once to warm the cache; subsequent builds are incremental. Pin the cache with `BUILDKIT_CACHE_DIR` (Compose dev only — for Swarm/registry cache see the [install guide](/docs/deploy/install-guide/)). |
 | `docker compose up -d backend` shows `Up` but never reaches `healthy` | Old container still holding the network alias, or stale image | `docker compose down backend && docker compose up -d backend`. If still stuck, `docker image rm <backend-image-sha> && docker compose build backend`. |
 | Edit does not appear at the endpoint | Skipped the rebuild — host source is **build-time** copy, not bind-mount | Re-run Steps 7–8 (`docker compose build backend && docker compose up -d backend`). |
 | `npm test` crashes with `MODULE_NOT_FOUND` | Image built before a `package.json` change landed on the host | Rebuild: `docker compose build backend && docker compose up -d backend`, then re-run the test. |

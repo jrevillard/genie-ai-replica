@@ -1973,9 +1973,9 @@ export default {
       step7:
         'Baadhi ya maonyo yanaweza kurekebishwa kiotomatiki: maadili ya hali yanaweza kurekebishwa kuwa orodha sahihi, nyanja zilizokosekana zinaweza kujazwa na maadili yanayofaa. Tumia marekebisho unayokubaliana nayo, kisha rudi kwa mratibu ili kukagua.',
       step8:
-        'Muhtasari wa kile unachokaribia kuchapisha: mada, lebo, vyanzo na masuala yoyote ambayo hayajatatuliwa. Mara tu unapothibitisha, ghala linaelekea kwenye njia ya uchapishaji.',
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        'Kufanya publish kunaunda toleo la v1 la ghala hili. Kila mabadiliko ya baadaye — mada mpya, maelezo yaliyoboreshwa, uhakiki mpya wa taarifa zilizopitwa na wakati — huchapishwa kama v2, v3, n.k. Matoleo ya zamani yataendelea kutajika milele.',
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         'Unda ghala jipya la OKF kutoka kwenye nyaraka zilizochaguliwa. Nyaraka zitakuwa vyanzo; utakagua na kutaja mada zinazozalishwa kabla ya chochote kuchapishwa.',
       crawlSegment:

@@ -1979,9 +1979,9 @@ export default {
       step7:
         'Некоторые предупреждения можно исправить автоматически: привести статусы к допустимым значениям перечислений, заполнить отсутствующие поля стандартными значениями. Примените нужные исправления и вернитесь к куратору для проверки.',
       step8:
-        'Сводка публикуемых данных: темы, метки, источники и нерешенные вопросы. После вашего утверждения репозиторий перейдет на этап публикации.',
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        'Публикация создает версию v1 этого репозитория. Каждое последующее изменение — новая тема, обновленное описание, повторная проверка устаревших данных — публикуется как v2, v3 и далее. Старые версии навсегда остаются доступными для цитирования.',
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         'Создайте новый репозиторий OKF из выбранных документов. Документы станут источниками; вы сможете просмотреть и назвать созданные ими темы до публикации.',
       crawlSegment:

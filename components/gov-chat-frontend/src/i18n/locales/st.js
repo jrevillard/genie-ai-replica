@@ -1985,9 +1985,9 @@ export default {
       step7:
         'Litemoso tse ling li ka lokisoa ka bo tsona: litekanyetso tsa boemo li ka fetoloa ho li-enum tse nepahetseng, mabala a sieo a ka tlatsoa ka lintlha tse utloahalang tsa kamehla. Sebelisa litokiso tseo u lumellanang le tsona, ebe u khutlela ho mohlophisi ho hlahloba.',
       step8:
-        'Kakaretso ea seo u tlang ho se phatlalatsa: lihlooho, lileibole, mehloli, le litaba life kapa life tse sa rarolloang. Hang ha u saena, polokelo e fetela tseleng ea phatlalatso.',
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        "Ho etsa publish ho theha mofuta oa v1 oa polokelo ena. Phetoho e 'ngoe le e 'ngoe e latelang — sehlooho se secha, tlhaloso e nchafalitsoeng, netefatso e ncha ea khale — e phatlalatsoa e le v2, v3, joalo-joalo. Mefuta ea khale e lula e ka qotsoa ka ho sa feleng.",
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         'Theha polokelo e ncha ea OKF ho tsoa litokomaneng tse khethiloeng. Litokomane li tla fetoha mehloli; u tla hlahloba le ho reha lihlooho tseo li li hlahisang mabitso pele ho phatlalatsoa letho.',
       crawlSegment:

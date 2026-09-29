@@ -2161,31 +2161,6 @@ export default {
       continue: 'Continue',
       finish: 'Open the Editor'
     },
-    src: {
-      title: 'Choose the source documents',
-      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
-      repoSec: 'From the document repository',
-      loading: 'Loading documents…',
-      retry: 'Retry',
-      empty: 'No documents in the repository yet — upload some below.',
-      more: 'Load more',
-      fsSec: 'From this computer',
-      fsPick: '+ Upload files',
-      uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
-      uploadFailed: 'An upload failed — check the files and retry.',
-      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: 'Selected: {n}',
-      needOne: 'Select at least one source.',
-      confirm: 'Use {n} source(s)',
-      cancel: 'Cancel',
-      loadFailed: 'Could not load the document list.',
-      servingBadge: 'serving free-form RAG',
-      servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
-      alreadyBadge: 'already in an OKF repo',
-      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
-    },
     steps: {
       entry: {
         createdHint: 'Repository created — rename it later from the editor.',

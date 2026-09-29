@@ -891,7 +891,7 @@ sequenceDiagram
     C->>N: POST /api/queries/stream
     N->>K: forward
     K->>B: forward
-    B->>Q: POST /v1/chat/completions
+    B->>Q: POST /v1/chatqna
 
     Note over Q: Orchestration:<br/>1. Embedding<br/>2. Retrieval (ArangoDB)<br/>3. Reranking<br/>4. LLM Inference
 
@@ -953,7 +953,7 @@ sequenceDiagram
     C->>N: POST /api/queries/stream
     N->>K: forward
     K->>B: forward
-    B->>Q: POST /v1/chat/completions
+    B->>Q: POST /v1/chatqna
 
     Q-->>B: SSE: chunk
     B-->>K: SSE: chunk

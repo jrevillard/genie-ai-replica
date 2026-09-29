@@ -598,30 +598,45 @@ api-gateway-solution/
 
 ```mermaid
 flowchart TB
-    Nginx["NGINX<br/>(api-gateway-solution/)<br/>SSL termination, static files,<br/>reverse proxy, ModSecurity"]
-    Kong["Kong<br/>(reverse proxy, CORS,<br/>rate limit, OIDC)"]
-    FE["Frontend (Vue)<br/>gov-chat-frontend/<br/>Port: 5173"]
-    BE["Backend API<br/>gov-chat-backend/<br/>Port: 3000"]
-    Mobile["Mobile App<br/>genie_ai_mobile/<br/>(native app)"]
-    KC["Keycloak (OIDC)<br/>/auth/* routes"]
-    Arango["ArangoDB (Data Layer)<br/>users, conversations,<br/>messages, serviceCategories,<br/>vector search"]
-    DocRepo["Document Repository<br/>Port: 3001<br/>/api/files/*"]
-    OPEA["OPEA Microservices<br/>ChatQnA :8888<br/>Retriever :7000<br/>Reranker :8000<br/>Dataprep :5000"]
-    Ext["External Services<br/>vLLM (LLM inference)<br/>TEI (embeddings/reranking)<br/>ClamAV (virus scanning)<br/>Redis (cache/sessions)"]
+    subgraph Edge["Host-edge (api-gateway-solution/)"]
+        Nginx["NGINX<br/>SSL termination, static files,<br/>reverse proxy, ModSecurity"]
+    end
 
-    Nginx --> Kong
-    Kong --> FE
+    subgraph Client["Client layer"]
+        Browser["Browser<br/>SPA + JSON API"]
+        Mobile["Mobile App<br/>genie_ai_mobile/ (native)"]
+    end
+
+    subgraph API["API layer"]
+        Kong["Kong<br/>(CORS, rate limit, OIDC plugin)"]
+        BE["Backend API<br/>gov-chat-backend/<br/>Port: 3000"]
+        DocRepo["Document Repository<br/>Port: 3001<br/>/api/files/*"]
+        KC["Keycloak (OIDC)<br/>/auth/* routes<br/>PostgreSQL-backed"]
+    end
+
+    subgraph Data["Data layer"]
+        Arango["ArangoDB<br/>users, conversations,<br/>messages, serviceCategories,<br/>vector search"]
+        Postgres["PostgreSQL<br/>(Kong + Keycloak DBs)"]
+        Redis["Redis<br/>(translation-service only)"]
+    end
+
+    subgraph AI["AI layer (genie-ai-overlay/)"]
+        OPEA["OPEA Microservices<br/>ChatQnA :8888<br/>Retriever :7000<br/>Reranker :8000<br/>Dataprep :5000"]
+    end
+
+    Browser --> Nginx
+    Mobile --> Nginx
+    Nginx -- "/ → static SPA" --> Browser
+    Nginx -- "/api/*" --> Kong
     Kong --> BE
-    Kong --> Mobile
-    BE --> KC
-    KC --> Arango
+    Kong --> KC
     BE --> Arango
-    BE --> DocRepo
+    BE --> Redis
     BE --> OPEA
-    OPEA --> Ext
-    Arango --> Ext
-    DocRepo --> Ext
-    FE --> Ext
+    DocRepo --> Arango
+    DocRepo --> ClamAV["ClamAV (sidecar)<br/>antivirus scan"]
+    KC --> Postgres
+    OPEA --> Arango
 ```
 
 ### Authentication Flow

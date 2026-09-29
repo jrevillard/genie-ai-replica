@@ -14,8 +14,12 @@ result is a single pane where operators can see service health, search logs,
 trace a request end-to-end across the RAG pipeline, and get alerted before things
 break.
 
-The stack is **optional and disabled by default**. Enable it per deployment with
-`ENABLE_OBSERVABILITY=1`.
+The stack has **two layers** with different defaults. VictoriaLogs and the OTel
+Collector are **always-on** (the admin logs UI queries VL directly and every
+container ships logs via the fluentd driver). The in-app OTel SDK is **opt-in**
+via `ENABLE_OBSERVABILITY=1` in `.env`. Profile-gated services (Grafana,
+VictoriaMetrics, VictoriaTraces, tempo-proxy) come up with `--profile
+observability` in Compose, or `ENABLE_OBSERVABILITY=1` in Swarm.
 
 ## Architecture at a glance
 

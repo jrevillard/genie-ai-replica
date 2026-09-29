@@ -143,6 +143,40 @@ Each OPEA microservice that touches the network has its own authentication postu
 
 **Failure mode:** if ChatQnA's JWKS call to Keycloak fails (Keycloak down or unreachable), chatqna returns 401/500 — the backend surfaces this as a 5xx to the user. The JWKS cache absorbs short Keycloak hiccups; cache miss on every request is a sign Keycloak itself is misconfigured.
 
+### ChatQnA token validation rules
+
+`genie-ai-overlay/chatqna/keycloak_token_validator.py` (post-commit
+`2e5cb17b6` — final state) implements a standard OIDC Resource Server posture:
+
+- **No anonymous access.** A request without a Bearer token (or with a
+  malformed `Authorization` header) is rejected with `401 UNAUTHENTICATED`
+  before the JWKS call. There is no service-account fallback path for
+  chatqna — every chat call must carry the originating user's JWT.
+- **Per-request token forwarding.** ChatQnA receives the user's Bearer
+  token on every request (forwarded by the backend, which itself received
+  it from Kong). Dataprep, in contrast, uses a dedicated service account
+  (`KC_DATAPREP_CLIENT_ID/SECRET`) and never sees a user token.
+- **JWKS-based signature validation.** Tokens are verified against the
+  Keycloak JWKS (no shared secret, no `HS256`). The validator fetches the
+  JWKS from `KEYCLOAK_INTERNAL_URL/realms/<KEYCLOAK_REALM>/protocol/openid-connect/certs`
+  and caches it.
+- **What is validated.** `signature` (via JWKS), `iss` (must match the
+  configured realm), `exp` (rejects expired tokens).
+- **What is NOT validated.** `azp` (Authorized Party) is deliberately NOT
+  checked — this aligns ChatQnA with `gov-chat-backend` and
+  `document-repository`, which all follow standard OIDC Resource Server
+  semantics where audience verification alone (`aud`, when present) is
+  enough. The per-flavor `KEYCLOAK_CLIENT_ID` override was removed because
+  it broke mobile auth (mobile tokens carry a different `azp` than web
+  tokens).
+- **`verify_aud: False`.** Keycloak 26+ uses `aud=account` on user tokens;
+  ChatQnA trusts `iss` + `exp` + signature instead.
+
+**Failure mode:** an unauthenticated request returns `401`; a malformed
+token returns `401 TOKEN_INVALID`; a token whose `iss` does not match
+the configured realm returns `401 INVALID_ISSUER`. All three are surfaced
+to the user as `401` from the BFF (the backend does not auto-retry).
+
 ---
 
 ## 4. Telemetry Architecture

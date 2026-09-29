@@ -41,7 +41,7 @@ source first** (the file in the repo), then regenerate.
 | Variable | Default | Used by | Notes |
 |---|---|---|---|
 | `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-4b-it` | translation | e.g. `facebook/m2m100-418M` |
-| `EMBEDDING_MODEL_ID` | `BAAI/bge-base-en-v1.5` | embedding | Any TEI-supported encoder |
+| `EMBEDDING_MODEL_ID` | `BAAI/bge-large-en-v1.5` | embedding | Any TEI-supported encoder |
 | `RERANKER_MODEL_ID` | `BAAI/bge-reranker-v2-m3` | reranker | Any TEI-supported cross-encoder |
 | `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | vllm | Must support guided JSON (`response_format={"type":"json_object"}`) |
 | `RERANKING_STRATEGY` | `slice` | chatqna | `slice` / `threshold` / `slice_threshold` / `knee_threshold` / `adaptive` |
@@ -76,6 +76,8 @@ source first** (the file in the repo), then regenerate.
 | `KONG_TRACING_INSTRUMENTATIONS` | `request` | kong | |
 | `KONG_TRACING_SAMPLING_RATE` | `1.0` | kong | 0.0–1.0 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | backend, opea, kong | Base URL for OTLP |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | _(not set — collector derives `/v1/logs` from `OTEL_EXPORTER_OTLP_ENDPOINT`)_ | backend, opea | Set only when the logs endpoint must override the inferred one (signal-specific URL is used as-is; no path appended). |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | _(not set — collector derives `/v1/traces` from `OTEL_EXPORTER_OTLP_ENDPOINT`)_ | backend, opea | Set only when the traces endpoint must override the inferred one. |
 | `VL_QUERY_TIMEOUT_MS` | `30000` | backend | axios timeout for VictoriaLogs `query` / `hits` |
 
 ## Prompts (override defaults)

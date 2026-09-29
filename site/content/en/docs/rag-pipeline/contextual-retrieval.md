@@ -44,25 +44,25 @@ chunks are (or are not) landing well in the vector space.
 | Variable | Default | Effect |
 |---|---|---|
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | `true` | Master switch. On by default; set `false` to disable (a no-op beyond skipping context generation). |
-| `CONTEXTUAL_STRATEGY` | `doc_level` (docker-compose) / `per_chunk` (env template & code default) | Strategy selector. The docker-compose runtime default is `doc_level` (one context per document, reused for every chunk); the in-code and env-template default is `per_chunk` (one context per chunk — the Anthropic recipe). |
+| `CONTEXTUAL_STRATEGY` | `per_chunk` | Strategy selector. Both docker-compose and env-template now default to `per_chunk` (one context per chunk — the Anthropic recipe); `doc_level` is a cheaper opt-in. |
 | `DATAPREP_CONTEXTUAL_MODEL` | _(reuses `VLLM_LLM_MODEL_ID`)_ | Model for context generation. Empty = reuse `VLLM_LLM_MODEL_ID`. Must support guided JSON. |
-| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | `6000` (docker-compose) / `100000` (env template & code default) | Max chars of doc text fed to the context LLM when `CONTEXTUAL_STRATEGY=per_chunk`. The docker-compose runtime default (`6000`, ~1 500 tokens at ~4 chars/token) is set in `docker-compose.yaml:1164`; the in-code and env-template default is `100000` (~25 000 tokens). |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | `100000` | Max chars of doc text fed to the context LLM when `CONTEXTUAL_STRATEGY=per_chunk`. ~25 000 tokens at ~4 chars/token; ≤0 disables truncation. |
 | `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` | `100000` | Max chars of doc text fed to the context LLM when `CONTEXTUAL_STRATEGY=doc_level`. |
 | `DATAPREP_CONTEXTUAL_MAX_TOKENS` | `512` | Max OUTPUT tokens of generated context (avoids truncation under load; the model writes ~196). |
 | `CONTEXTUAL_LABEL_RAW` | `true` | Decoupled mode: label the **raw** chunk but embed the **contextualised** chunk. |
 
 ## Strategies
 
-- **`doc_level`** (docker-compose default) — one context-generation call
-  per document, and the *same* context is prepended to every chunk in
-  that document. N× cheaper than `per_chunk`, and enough to propagate
-  the document's subject into every chunk's vector. The right choice for
-  cost-sensitive deployments where subject propagation is the goal.
-- **`per_chunk`** (code / env-template default) — one context-generation
-  call per chunk. Each chunk gets a context tailored to its own section;
-  this is the canonical Anthropic recipe. Highest precision, highest
-  cost (N calls for N chunks). Choose it when retrieval precision on
-  individual chunks matters more than ingest cost.
+- **`per_chunk`** (default — docker-compose, env template, code) — one
+  context-generation call per chunk. Each chunk gets a context tailored to
+  its own section; this is the canonical Anthropic recipe. Highest
+  precision, highest cost (N calls for N chunks). Choose it when retrieval
+  precision on individual chunks matters more than ingest cost.
+- **`doc_level`** (opt-in) — one context-generation call per document, and
+  the *same* context is prepended to every chunk in that document. N×
+  cheaper than `per_chunk`, and enough to propagate the document's subject
+  into every chunk's vector. The right choice for cost-sensitive deployments
+  where subject propagation is the goal.
 
 The choice is one env var: `CONTEXTUAL_STRATEGY=per_chunk|doc_level`.
 Both can be re-applied to a corpus by re-ingesting.

@@ -404,7 +404,7 @@ defaults.
 | `CHATQNA_TYPE` | string | no | `ChatQnA` | ChatQnA deployment type |
 | `EMBEDDING_SERVER_HOST_IP` | string | no | `embedding` | OPEA embedding wrapper hostname (port 6000) |
 | `EMBEDDING_SERVER_PORT` | number | no | `6000` | OPEA embedding wrapper port |
-| `EMBEDDING_MODEL_ID` | string | no | `BAAI/bge-base-en-v1.5` | Embedding model |
+| `EMBEDDING_MODEL_ID` | string | no | `BAAI/bge-large-en-v1.5` | Embedding model |
 | `EMBEDDING_SERVER_ENDPOINT` | string | no | `/v1/embeddings` | Embedding endpoint path |
 | `RETRIEVER_SERVICE_HOST_IP` | string | no | `retriever-arango-service` | Retriever hostname |
 | `RETRIEVER_SERVICE_PORT` | number | no | `7000` | Retriever port |

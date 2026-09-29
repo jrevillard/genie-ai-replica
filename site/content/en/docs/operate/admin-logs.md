@@ -21,7 +21,7 @@ swapped without changing call sites), with graceful degradation when VL is
 unreachable.
 
 This page covers what the Logs tab does, the five endpoints behind it, the
-env vars that govern fallback behaviour, and how to debug common VL failures.
+env vars that govern behaviour, and how to debug common VL failures.
 
 ## Architecture
 
@@ -38,15 +38,15 @@ flowchart LR
     MELT -- /select/logsql/{query,hits} --> VL
   end
   API -- GET search/summary --> LogsService
-  LogsService -. file mode .-> F[(Winston rotated<br/>NDJSON on disk)]
-  VL -. degraded:true envelope .-> API
+  VL -. VlUnavailableError .-> API
 ```
 
 The Logs tab never talks to VL directly — every read goes through the backend's
 MELT seam (`components/shared/lib/melt/victorialogs-client.js`). Ingestion
 also goes through the OTel Collector (no direct jsonline POST from the app
-code). The only failure mode that produces a `degraded: true` envelope is
-the VL outage path covered in [Failure modes](#failure-modes-and-debugging).
+code). When VL is unreachable the read path throws a typed `VlUnavailableError`
+that surfaces to the API as HTTP 503 — see
+[Failure modes](#failure-modes-and-debugging).
 
 ## Prerequisites
 
@@ -171,14 +171,18 @@ against VL (e.g. from inside the VL container):
 
 ## Configuration
 
+VictoriaLogs has **no environment opt-out** — it is always-on because the
+fluentd driver ships container logs to it unconditionally and the admin
+logs UI queries it for backend endpoints. The in-app OTel SDK init is
+controlled separately by `ENABLE_OBSERVABILITY` (see
+[Observability &rarr; Configuration]({{< relref "/docs/observe/configuration" >}})).
+
 | Env var | Default | Purpose |
 |---|---|---|
 | `MELT_PROVIDER` | `victorialogs` (hardcoded constant in `components/shared/lib/melt/index.js`) | Future-proof seam selector. Whitelisted by `tests/config-validator/` so a deployer can override the env file; the runtime constant is the actual current value. Today there is only one backend implementation. |
 | `VICTORIALOGS_URL` | `http://victorialogs:9428` (set by Ansible `env.j2:241`) | VL HTTP base URL. There is **no in-code default** — the `VictoriaLogsClient` constructor must receive `baseURL` (it gets `undefined` if you bypass Ansible and forget to inject this env var). |
 | `VICTORIALOGS_TENANT_ID` | `0:0` (read by `shared/lib/melt/victorialogs-client.js:105`) | Tenant header for `/select/logsql/*` (`AccountID:ProjectID`). |
 | `VL_QUERY_TIMEOUT_MS` | `30000` (hardcoded `docker-compose.yaml:578,623`) | axios timeout for VL `query` and `hits` methods. Raise for long scans. Lower for fast-fail dashboards. |
-| `ADMIN_LOGS_SOURCE` | empty → routes to VL | Per-call selector for the LogsService. Set to `file` to fall back to the worker_threads file scanner — the permanent escape hatch when VL is down. Read every call (no restart). |
-| `SECURITY_SCAN_BACKEND` | empty → routes to VL | Source for the Security tab scan. Set to `file` for the same worker_threads fallback. |
 | `ENABLE_OBSERVABILITY` | `0` (`docker-compose.yaml:576`) | Gate for the OTel SDK self-telemetry. The Logs tab itself stays functional regardless — VL + OTel Collector + LogsService do not depend on this flag. |
 
 > **Tunables worth knowing** (not env vars, but operator-facing knobs in
@@ -191,49 +195,58 @@ against VL (e.g. from inside the VL container):
 > - VL-unreachable warning logging is rate-limited to **1 per minute** per
 >   host (`VL_UNREACHABLE_LOG_COOLDOWN_MS = 60_000`, persisted to
 >   `/tmp/vl-unreachable-ts` so backend restarts do not reset the cadence).
-> - File-mode queries cap the date range at 366 days
->   (`MAX_LOG_FILES_RANGE_DAYS`). VL mode has no such cap (LogSQL is
->   unbounded — restrict the date range explicitly if a query times out).
+> - VL mode has no date-range cap (LogSQL is unbounded — restrict the date
+>   range explicitly if a query times out).
 
 ## Failure modes and debugging
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Logs tab returns `degraded: true` and an empty list | VL is unreachable (5xx/ECONNREFUSED/ENOTFOUND/timeout — recognised by `_isVlUnavailable` in `logs-service.js`) and the wrapper degraded to an empty envelope | Check `docker service logs <stack>_victorialogs --since 5m` (Swarm) or `docker compose logs victorialogs --since 5m` (Compose). VL disk full? → check the storage dashboard (`VICTORIALOGS_RETENTION` may be too generous). The first failure per minute is logged with `[opName] VictoriaLogs unreachable: …` — subsequent ones are rate-limited. |
+| All `/api/admin/logs/*` calls return `503 {error: 'vl_unreachable', message}` | VictoriaLogs is unreachable — `LogsService._vlOrThrow` re-throws connection-class errors (`ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`, `ECONNABORTED`, `VictoriaLogsHealthError`, 5xx upstream) as a typed `VlUnavailableError` carrying `statusCode: 503` + the documented body. The global error middleware reads `err.statusCode` + `err.body` and renders them verbatim. | Check `docker service logs <stack>_victorialogs --since 5m` (Swarm) or `docker compose logs victorialogs --since 5m` (Compose). VL disk full? → check the storage dashboard (`VICTORIALOGS_RETENTION` may be too generous). The first failure per minute is logged with `[opName] VictoriaLogs unreachable: …` — subsequent ones are rate-limited. |
 | `/api/admin/logs/summary` returns all-zero counts even though services are logging | VL is healthy but the service logs aren't reaching it | Check `service.name` in the Service Logs dashboard for the same window — if empty, the affected service may be missing the `logging: *fluent-logging` directive in `docker-compose.yaml`. Out of 37 services in `docker-compose.yaml`, 35 use the fluentd logging driver; the rest use default Docker logging and **do not** land in VL. |
 | `/api/admin/logs/search` returns rows but `level` filter does nothing | The query param is one of the six allowed levels (`TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`) but the rows' `_stream.level` is empty or non-canonical | VL `_msg` is the raw Winston JSON envelope. `VictoriaLogsAdapter._normalizeRows` projects `_msg` into `message` and pulls `level` from `fields.level` (falling back to `_stream.level`, then `INFO`). Inspect raw rows with `curl -sk "http://victorialogs:9428/select/logsql/query?query=*&limit=1"`. |
-| All `/api/admin/logs/*` calls return 503 | The backend cannot reach `VICTORIALOGS_URL` from the container (no `baseURL` configured, or DNS failure) | From inside the backend container: `docker exec <stack>_backend wget -qO- "http://victorialogs:9428/health"`. If that succeeds but the Logs tab still fails, check the in-container env: `docker exec <stack>_backend printenv VICTORIALOGS_URL` — if empty, your `.env` is missing the var (Ansible normally injects it). |
+| Backend cannot reach `VICTORIALOGS_URL` from the container (no `baseURL` configured, or DNS failure) | The first VL request triggers the health-probe retries, then `_vlOrThrow` re-throws as `VlUnavailableError` (HTTP 503) | From inside the backend container: `docker exec <stack>_backend wget -qO- "http://victorialogs:9428/health"`. If that succeeds but the Logs tab still fails, check the in-container env: `docker exec <stack>_backend printenv VICTORIALOGS_URL` — if empty, your `.env` is missing the var (Ansible normally injects it). |
 | Cron still hitting `/api/admin/logs/rollover` and getting 410 | Old crontab entry not removed | Remove the cron job — log rollover is no longer required (logs are written directly to VL). The User-Agent regex that triggers the 410 is `/\b(?:cron\|curl\|wget\|httpie\|python-requests\|python-urllib\|go-http-client)\b/`. |
 | Backend OOM during wide scans | VL query returning huge result sets | Lower `VL_QUERY_TIMEOUT_MS` to fail fast, or restrict the dateRange preset (`today` / `yesterday` / `week` are bounded; `month` may be too wide for noisy services; `custom` requires explicit `startDate` + `endDate`). |
-| `ADMIN_LOGS_SOURCE=file` returns `vl_files_disabled` 503 | File-mode is requested but no rotated Winston archives exist in `${DATA_DIR:-./data}/logs/backend/` (mounted as `/app/logs` in the container) | Re-enable file logging in `components/shared/lib/logger.js` (the `DailyRotateFile` transport), or switch back to `ADMIN_LOGS_SOURCE=victorialogs` (the default). File mode is the escape hatch — not the steady-state source. |
-| `ADMIN_LOGS_SOURCE=file` query fails on a wide date range | File mode caps the range at 366 days (`MAX_LOG_FILES_RANGE_DAYS`) | Split the query into ≤ 366-day windows, or use VL mode (no such cap). |
 
-### Force the file fallback
+### What happens when VL is unreachable
 
-If VL is genuinely down and you need logs **now**:
+`LogsService._vlOrThrow` (static method) classifies connection-class failures
+into a typed `VlUnavailableError`. Connection errors caught:
 
-```bash
-# Compose (single-node): edit .env and restart the backend container.
-ADMIN_LOGS_SOURCE=file
-docker compose up -d backend
+- `VictoriaLogsHealthError` (raised by the client when the health-probe
+  retries are exhausted)
+- `ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`, `ECONNABORTED` (Node network
+  errors)
+- 5xx upstream responses from VL
 
-# Swarm: edit .env (or override the running service), then force a re-deploy
-# so the new env var is injected — LogsService reads ADMIN_LOGS_SOURCE on
-# every call, but only after the env var is in the container.
-docker service update --force <stack>_backend
+The thrown `VlUnavailableError` carries:
 
-# Direct runtime override (no restart needed — LogsService reads per-call):
-# export ADMIN_LOGS_SOURCE=file inside the running container only as a last
-# resort; the value is lost on the next container restart.
+```js
+err.statusCode === 503
+err.body      === { error: 'vl_unreachable', message: '<human-readable>' }
 ```
 
-`file` mode reads the rotated Winston files in
-`${DATA_DIR:-./data}/logs/backend/` (mounted as `/app/logs` inside the
-container) via a worker_threads scanner — a Node.js worker-thread pool that
-reads rotated files off the request thread, so the HTTP path stays
-responsive while scans run in the background. Each scan is sequential
-(one thread pool per process), which is why performance is much lower
-than VL. The data is identical.
+The global error middleware in `components/gov-chat-backend/index.js` reads
+`err.statusCode` + `err.body` and renders them verbatim, so the API contract
+is `503 + {error: 'vl_unreachable', message}`.
+
+Validation / programmer errors (bad query params, etc.) propagate unchanged
+so the route layer keeps its existing 400 / 500 semantics.
+
+> **Carve-out for `/api/admin/system-health`.** The
+> `AdminDashboardService.getSystemHealth()` path deliberately does **not**
+> call `_vlOrThrow` for the VL `hits` query. The error-rate tile is one
+> derived metric of a larger health payload, and the dashboard stays
+> well-formed (`errorRate: 0`, a `warn` log line) on a VL outage rather
+> than 503-ing the whole health response. All other VL read paths in
+> `LogsService` and `AdminDashboardService.debugYesterdayLogs` funnel
+> through `_vlOrThrow`.
+
+> **Why VL is always-on.** The fluentd logging driver is configured on every
+> container regardless of the `observability` profile, so container logs reach
+> VL unconditionally. Removing VL would break log shipping entirely — the
+> only configurable opt-out is the in-app SDK (`ENABLE_OBSERVABILITY`).
 
 ## Verify it worked
 
@@ -255,7 +268,7 @@ on a fresh deployment:
    # → a non-empty JSON array; each row has _stream.service, _time, _msg
    ```
 
-3. **The Logs tab returns rows, not `{degraded: true}`**
+3. **The Logs tab returns rows, not a `vl_unreachable` error**
 
    Open `https://<NGINX_PUBLIC_DOMAIN>/admin` → Logs tab, run a search with
    the "Yesterday" preset. You should see rows; the TYPE column should show

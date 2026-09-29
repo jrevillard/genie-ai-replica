@@ -10,9 +10,13 @@ owner: "docs-stewards"
 last_reviewed: 2026-09-18
 ---
 
-The observability stack is **disabled by default**. Enabling it is a single
-environment variable, but a handful of related variables control access,
-retention, and sampling.
+The observability stack has **two layers** with different defaults. VictoriaLogs
+and the OTel Collector are **always-on** (no environment opt-out) — the admin
+logs UI queries VictoriaLogs directly and every container ships logs via the
+fluentd driver, so VL is not gated. The in-app OTel SDK is **opt-in** via
+`ENABLE_OBSERVABILITY=0|1` (default `0`). Profile-gated services (Grafana,
+VictoriaMetrics, VictoriaTraces, tempo-proxy) come up with the `observability`
+profile in Compose, or `ENABLE_OBSERVABILITY=1` in Swarm.
 
 **Prerequisites:** an existing GENIE.AI deploy with an editable `.env` file.
 See the deployment guides for setup —
@@ -167,6 +171,24 @@ unaffected.
 > VictoriaMetrics to scrape — silence the rule while observability is off, or
 > the on-call channel gets woken up nightly). Backend log records continue to
 > reach VictoriaLogs (always-on), so the Admin Logs UI keeps working.
+
+## Identity model (service.namespace / service.name / service.version)
+
+Telemetry emitted by every instrumented service carries a hard-coded identity
+triple (no environment override, per the 2026-09-18 ops decision). Dashboards
+and alerting query against it.
+
+| Attribute | Value | Notes |
+|---|---|---|
+| `service.namespace` | `genie-core` (backend, document-repository) **or** `genieai` (OPEA overlay) | Two-namespace model: the GENIE.AI services you operate yourself live in `genie-core`; the OPEA-wrapped AI services live in `genieai`. |
+| `service.name` | per-service, e.g. `backend`, `document-repository`, `genieai-chatqna`, `genieai-retriever`, `genieai-reranker`, `genieai-embedding`, `genieai-dataprep` | The naming convention is `<namespace-prefix>-<service>` for `genieai`, plain `<service>` for `genie-core`. |
+| `service.version` | `1.0.0` | Pinned at SDK init (the project does not yet ship build-time version stamping). |
+
+The `service.namespace` is the natural filter for cross-service queries
+(everything in `genieai` participates in the RAG pipeline; `genie-core`
+participates in admin/UI/ingest). Cross-link:
+[`observe/dashboards.md`]({{< relref "dashboards" >}}) where the namespace
+appears in the common-tag set for the pre-built dashboards.
 
 ## Config file locations
 

@@ -178,7 +178,7 @@ Approximate model weights (FP16) for the project defaults shipped with the compo
 |---|---|---|
 | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Main LLM (`VLLM_LLM_MODEL_ID` default) | ~16 GB |
 | `google/gemma-3-4b-it` | Translation LLM (`VLLM_TRANSLATION_MODEL_ID` default) | ~8 GB |
-| `BAAI/bge-base-en-v1.5` | Embedding (`EMBEDDING_MODEL_ID` default) | ~0.5 GB |
+| `BAAI/bge-large-en-v1.5` | Embedding (`EMBEDDING_MODEL_ID` default) | ~1.3 GB |
 | `BAAI/bge-reranker-v2-m3` | Reranker (`RERANKER_MODEL_ID` default) | ~1 GB |
 
 For smaller GPUs, swap in lighter defaults via `.env` (e.g. a 2B/3B chat model and a MiniLM reranker) — the weight column above shows the shipped baselines.

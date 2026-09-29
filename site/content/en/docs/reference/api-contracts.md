@@ -67,7 +67,7 @@ time guessing what is wrong.
   named routes for `/api/auth`, `/api/me`, `/api/queries`, etc.) must be
   applied.
 
-**For admin endpoints (`/api/admin/*`, `/api/logger/*`)**
+**For admin endpoints (`/api/admin/*`)**
 
 - A user with the realm role `admin` assigned (lowercase — verified in
   `keycloak-auth-middleware.js:183`).
@@ -534,14 +534,12 @@ JSON/JSONL to `BACKUP_DIR` with metadata. Use the admin-prefixed paths in
 client code (they require an admin role; `/api/database/*` is
 authenticated-only).
 
-**Log rollover note:** `POST /api/logger/rollover` always returns `200`;
-`POST /api/admin/logs/rollover` returns `200` for browser callers and
-`410 Gone` for cron UAs (`cron`, `curl`, `wget`, `httpie`,
-`python-requests`, `python-urllib`, `go-http-client` — see
-`admin-routes.js:200-217`). Both endpoints are no-ops: logs are written
-directly to VictoriaLogs and there is nothing to rotate
-(`logger-routes.js:82-90`). They remain for backward-compat with older
-scripts.
+**Log rollover note:** `POST /api/admin/logs/rollover` returns `200` for
+browser callers and `410 Gone` for cron UAs (`cron`, `curl`, `wget`,
+`httpie`, `python-requests`, `python-urllib`, `go-http-client` — see
+`admin-routes.js:200-217`). The endpoint is a no-op: logs are written
+directly to VictoriaLogs and there is nothing to rotate. It remains for
+backward-compat with older scripts.
 
 ### 7. Service category routes (`/api/service-categories`)
 
@@ -649,22 +647,7 @@ city within the lookup radius.
 > pipeline does not call it. Keep it in the public surface only if an
 > upstream client still depends on it.
 
-### 11. Logger routes (`/api/logger`)
-
-**Route file**: `routes/logger-routes.js` **Mount**: `/api/logger`
-(Kong `logger-route`) **Auth required**: **Yes + realm role `admin`**.
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/configure` | Admin | Configure logger — **deprecated, no-op** |
-| POST | `/rollover` | Admin | Roll over logs — **deprecated, no-op** |
-
-> Both endpoints are deprecated. The backend writes logs directly to
-> VictoriaLogs; there is nothing to configure or rotate from the BFF. They
-> remain on the public surface for backward compatibility with older
-> admin scripts.
-
-### 12. Database operations routes (`/api/database`)
+### 11. Database operations routes (`/api/database`)
 
 **Route file**: `routes/database-operations-routes.js` **Mount**:
 `/api/database` (Kong `database-operations-route`) **Auth required**:
@@ -878,7 +861,7 @@ for the runtime contract.
   "availableEndpoints": [
     "/api/me", "/api/queries", "/api/services",
     "/api/service-categories", "/api/chat-history", "/api/chat",
-    "/api/analytics", "/api/auth", "/api/logger",
+    "/api/analytics", "/api/auth",
     "/api/database", "/api/admin", "/api/weather", "/api/translate"
   ]
 }

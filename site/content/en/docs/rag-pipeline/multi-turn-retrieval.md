@@ -58,7 +58,7 @@ They are independent and complementary — both can be enabled at once.
 History text is the last `MULTI_TURN_HISTORY_TURNS` user/assistant
 messages, normalised to English by the backend before embedding (see
 [Generation → Multilingual chat history]({{< relref "generation" >}})).
-This keeps the `bge-base-en-v1.5` embedding space consistent regardless
+This keeps the `bge-large-en-v1.5` embedding space consistent regardless
 of the UI language.
 
 ## Limitations

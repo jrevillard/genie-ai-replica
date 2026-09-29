@@ -69,7 +69,7 @@ flowchart LR
 
 The user's query is sent to the embedding service, which returns a dense
 vector using the configured embedding model (default
-`BAAI/bge-base-en-v1.5`, 768-dim, configured by `EMBEDDING_MODEL_ID`). The
+`BAAI/bge-large-en-v1.5`, 1024-dim, configured by `EMBEDDING_MODEL_ID`). The
 same model is used at ingest time so that query and chunk vectors live in the
 same space.
 

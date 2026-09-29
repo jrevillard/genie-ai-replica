@@ -74,6 +74,16 @@ class DatabaseService {
       const password = process.env.ARANGO_PASSWORD;
       const maxSockets = process.env.MAX_SOCKETS || 100;
       const maxFreeSockets = process.env.MAX_FREE_SOCKETS || 50;
+      // ARANGO_AGENT_TIMEOUT_MS (settle-rewrite incident 2026-09-28): the agent
+      // socket timeout bounds how long one legitimate long-running AQL statement
+      // may hold the socket. 120s aborted the idempotent no-op edge-endpoint
+      // rewrite scans (~99s quiet, >120s under load) mid-settle; the execute
+      // wrapper's retry then write-write conflicted with the orphaned
+      // server-side first attempt (Bali 2026-09, Indonesia 2026-09-28 ×2).
+      // Default UNCHANGED (120000) — long-pipeline deployments opt in via env.
+      const arangoAgentTimeoutMs = parseInt(process.env.ARANGO_AGENT_TIMEOUT_MS || '', 10);
+      const agentTimeout =
+        Number.isFinite(arangoAgentTimeoutMs) && arangoAgentTimeoutMs > 0 ? arangoAgentTimeoutMs : 120000;
 
       logger.info(`process.env.ARANGO_URL:` + process.env.ARANGO_URL);
       logger.info(`process.env.ARANGO_DB:` + process.env.ARANGO_DB);
@@ -93,7 +103,7 @@ class DatabaseService {
           keepAliveMsecs: 60000,
           maxSockets: maxSockets,
           maxFreeSockets: maxFreeSockets,
-          timeout: 120000,
+          timeout: agentTimeout,
           freeSocketTimeout: 1800000
         },
         timeout: 60000

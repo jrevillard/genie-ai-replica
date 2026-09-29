@@ -236,7 +236,7 @@ components/gov-chat-backend/
 ├── services/                     # Business logic layer
 │   ├── keycloak-auth-service.js  # Keycloak token validation
 │   ├── keycloak-proxy-service.js # Keycloak Admin API proxy
-│   ├── session-service.js        # Session management (Redis)
+│   ├── session-service.js        # Session management (ArangoDB collections: sessions, userSessions, sessionQueries)
 │   ├── user-profile-service.js   # User profile (singleton)
 │   ├── user-provisioning-service.js # User provisioning
 │   ├── query-service.js          # Chat query orchestration (OPEA ChatQnA)
@@ -855,7 +855,7 @@ docs/e2e-tests/
 
 | Service | Port |
 |---------|------|
-| Frontend | 5173 |
+| Frontend | 8090 |
 | Backend | 3000 |
 | Document Repository | 3001 |
 | Dataprep | 5000 |

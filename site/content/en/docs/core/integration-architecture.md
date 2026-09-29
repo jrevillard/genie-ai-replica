@@ -64,7 +64,7 @@ flowchart TB
 
         subgraph Data["Data Layer"]
             Arango["ArangoDB<br/>Vector + Graph"]
-            Redis["Redis<br/>Cache"]
+            Redis["Redis<br/>(translation-service only)"]
             Postgres["PostgreSQL<br/>Kong + KC"]
             Files["File Storage"]
         end

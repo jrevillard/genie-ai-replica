@@ -53,6 +53,16 @@
         <DsButton :variant="centerView === 'graph' ? 'primary' : 'secondary'" small @click="centerView = 'graph'">
           {{ translate('okf.editor.pane.graph', 'Graph') }}
         </DsButton>
+        <!-- R1 (David, 2026-09-29): the center must be able to EXPAND ACROSS
+             the metadata pane — collapse it to give the editor the full
+             remaining width; restore with the same control. -->
+        <DsButton variant="ghost" small class="okf-re__meta-toggle" @click="toggleMetaPane">
+          {{
+            metaCollapsed
+              ? translate('okf.editor.meta.show', 'Show metadata')
+              : translate('okf.editor.meta.hide', 'Hide metadata')
+          }}
+        </DsButton>
       </div>
       <!-- LONG-ACTION STRIP (David, 2026-09-12): any editor action that can
            outlive a browser/gateway timeout renders here as a NON-BLOCKING
@@ -93,7 +103,10 @@
       />
     </div>
 
+    <!-- R1: the metadata splitter + pane collapse away entirely — the center
+         then spans across them. -->
     <div
+      v-if="!metaCollapsed"
       class="okf-re__split"
       role="separator"
       aria-orientation="vertical"
@@ -105,7 +118,11 @@
       @keydown="onSplitKey($event, 'meta')"
     ></div>
 
-    <aside class="okf-re__meta" :aria-label="translate('okf.editor.meta.label', 'Concept metadata')">
+    <aside
+      v-if="!metaCollapsed"
+      class="okf-re__meta"
+      :aria-label="translate('okf.editor.meta.label', 'Concept metadata')"
+    >
       <template v-if="selectedRow">
         <h4 class="okf-re__meta-title">{{ translate('okf.editor.meta.label', 'Concept metadata') }}</h4>
 
@@ -381,16 +398,23 @@ export default {
       metaSyncing: false,
       // FLEXIBLE COLUMNS (David, 2026-09-09): draggable pane widths (px),
       // persisted per browser. The center pane always flexes.
-      railWidth: 260,
-      metaWidth: 280
+      // R1 (David, 2026-09-29): defaults give the CENTER the wide layout —
+      // concepts and metadata start narrow (his screenshot-3 default), and
+      // the metadata pane can collapse entirely so the editor expands
+      // across it.
+      railWidth: 230,
+      metaWidth: 250,
+      metaCollapsed: false
     };
   },
   computed: {
     ...mapGetters('okf', ['conceptsByRepo', 'selectedConceptId', 'editorLoading', 'editorLoadProgress', 'repoById']),
     gridStyle() {
-      return {
-        gridTemplateColumns: `${this.railWidth}px 6px minmax(0, 1fr) 6px ${this.metaWidth}px`
-      };
+      // R1: the metadata tracks vanish when the pane is collapsed — the
+      // center column then stretches across the full remaining width.
+      return this.metaCollapsed
+        ? { gridTemplateColumns: `${this.railWidth}px 6px minmax(0, 1fr)` }
+        : { gridTemplateColumns: `${this.railWidth}px 6px minmax(0, 1fr) 6px ${this.metaWidth}px` };
     },
     concepts() {
       return this.conceptsByRepo(this.repoId);
@@ -509,7 +533,14 @@ export default {
     this.loadLabelOptions();
   },
   beforeUnmount() {
+    // Verifier A8-minor: a kick/poll tail still in flight must never arm a
+    // timer on the dead instance — the flag gates startConversionWatch and
+    // waitForConversionTerminal, and every timer dies here.
+    this._torndown = true;
     this.endLongAction();
+    this.stopConversionWatch();
+    clearTimeout(this._sourceNoteTimer);
+    if (this._metaTimer) clearTimeout(this._metaTimer);
   },
   methods: {
     // ── LONG-ACTION STRIP (David, 2026-09-12) ─────────────────────────────
@@ -549,20 +580,22 @@ export default {
       this.beginLongAction(this.translate('okf.editor.addSources.working', 'Converting sources…'));
       this.sourceNote = '';
       try {
+        // Verifier B7 (2026-09-29): the server runs ONE conversion per repo —
+        // kicking leg N+1 while leg N still runs 409s after ~12s of retries
+        // (conversions take MINUTES). The chain is therefore truly
+        // sequential: kick one leg, WAIT for its terminal status, then kick
+        // the next. Upsert idempotency keeps a re-run safe.
         for (const fileId of crawls) {
-          await repoOkfService.convertFromCrawlInto({
-            repo_id: this.repoId,
-            file_id: fileId,
-            classification,
-            split_mode: 'B'
-          });
+          await this.kickCrawlWithRetry(fileId, classification);
+          await this.waitForConversionTerminal();
         }
         if (docs.length > 0) {
-          await repoOkfService.importDocuments({
+          await this.kickDocumentsWithRetry({
             file_ids: docs,
             repo_id: this.repoId,
             classification
           });
+          await this.waitForConversionTerminal();
         }
         await this.$store.dispatch('okf/fetchConcepts', this.repoId);
         const total = this.concepts.length;
@@ -572,6 +605,9 @@ export default {
         )
           .replace('{n}', String(ids.length))
           .replace('{t}', String(total));
+        // A8 (audit): safety net — refresh the tree when any residual
+        // background work lands (normally already terminal here).
+        this.startConversionWatch();
       } catch (err) {
         this.sourceNote =
           this.translate(
@@ -584,6 +620,85 @@ export default {
         this._sourceNoteTimer = setTimeout(() => {
           this.sourceNote = '';
         }, 8000);
+      }
+    },
+    // Verifier B7: poll the repo's conversion to a terminal state (or give
+    // up after an hour — a stalled conversion must not pin the strip
+    // forever). Returns the terminal status; null/undefined handled by the
+    // caller as "nothing running".
+    async waitForConversionTerminal() {
+      const deadline = Date.now() + 3600000;
+      for (;;) {
+        if (this._torndown) return null;
+        const repo = await repoOkfService.get(this.repoId).catch(() => null);
+        const st = repo && repo.conversion ? repo.conversion.status : null;
+        if (st === 'done' || st === 'failed' || st == null) return st;
+        if (Date.now() > deadline) return 'timeout';
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    },
+    // Sequential-kick race (same class as wizard audit A3): the live-registry
+    // delete lags the "done" poll, so a kick fired right at the terminal
+    // boundary can read CONVERSION_IN_FLIGHT against the just-finished leg.
+    // Retry briefly (2s/4s/6s) before surfacing failure.
+    async kickWithRetry(kickFn) {
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          await kickFn();
+          return;
+        } catch (err) {
+          const code = (err && (err.code || (err.data && err.data.error))) || '';
+          const msg = (err && (err.message || (err.data && err.data.message))) || '';
+          const inFlight = code === 'CONVERSION_IN_FLIGHT' || /in flight/i.test(msg);
+          if (!inFlight || attempt >= 3) throw err;
+          await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+        }
+      }
+    },
+    async kickCrawlWithRetry(fileId, classification) {
+      await this.kickWithRetry(() =>
+        repoOkfService.convertFromCrawlInto({
+          repo_id: this.repoId,
+          file_id: fileId,
+          classification,
+          split_mode: 'B'
+        })
+      );
+    },
+    async kickDocumentsWithRetry(payload) {
+      await this.kickWithRetry(() => repoOkfService.importDocuments(payload));
+    },
+    startConversionWatch() {
+      if (this._torndown) return; // verifier A8-minor: never arm past unmount
+      this.stopConversionWatch();
+      this._convWatch = setInterval(async () => {
+        try {
+          const repo = await repoOkfService.get(this.repoId);
+          const st = repo && repo.conversion ? repo.conversion.status : null;
+          if (st === 'done' || st === 'failed' || st == null) {
+            this.stopConversionWatch();
+            await this.$store.dispatch('okf/fetchConcepts', this.repoId);
+            if (st === 'done') {
+              const total = this.concepts.length;
+              this.sourceNote = this.translate(
+                'okf.editor.addSources.landed',
+                'Conversions complete — {t} topics now in the tree.'
+              ).replace('{t}', String(total));
+              clearTimeout(this._sourceNoteTimer);
+              this._sourceNoteTimer = setTimeout(() => {
+                this.sourceNote = '';
+              }, 8000);
+            }
+          }
+        } catch {
+          /* transient fetch error — keep watching */
+        }
+      }, 5000);
+    },
+    stopConversionWatch() {
+      if (this._convWatch) {
+        clearInterval(this._convWatch);
+        this._convWatch = null;
       }
     },
     // ── FLEXIBLE COLUMNS (David, 2026-09-09) ──────────────────────────────
@@ -615,17 +730,28 @@ export default {
       this.savePaneWidths();
     },
     resetPane(which) {
-      this.setPaneWidth(which, which === 'rail' ? 260 : 280);
+      if (which === 'rail') this.setPaneWidth('rail', 230);
+      else {
+        this.metaCollapsed = false;
+        this.setPaneWidth('meta', 250);
+      }
       this.savePaneWidths();
     },
     setPaneWidth(which, px) {
-      const clamped = Math.max(180, Math.min(560, Math.round(px)));
+      const clamped = Math.max(170, Math.min(560, Math.round(px)));
       if (which === 'rail') this.railWidth = clamped;
       else this.metaWidth = clamped;
     },
+    toggleMetaPane() {
+      this.metaCollapsed = !this.metaCollapsed;
+      this.savePaneWidths();
+    },
     savePaneWidths() {
       try {
-        localStorage.setItem('okf.editor.panes', JSON.stringify({ rail: this.railWidth, meta: this.metaWidth }));
+        localStorage.setItem(
+          'okf.editor.panes',
+          JSON.stringify({ rail: this.railWidth, meta: this.metaWidth, metaCollapsed: this.metaCollapsed })
+        );
       } catch {
         /* storage unavailable — widths stay session-local */
       }
@@ -635,8 +761,9 @@ export default {
         const raw = localStorage.getItem('okf.editor.panes');
         if (!raw) return;
         const p = JSON.parse(raw);
-        this.setPaneWidth('rail', Number(p && p.rail) || 260);
-        this.setPaneWidth('meta', Number(p && p.meta) || 280);
+        this.setPaneWidth('rail', Number(p && p.rail) || 230);
+        this.setPaneWidth('meta', Number(p && p.meta) || 250);
+        this.metaCollapsed = !!(p && p.metaCollapsed);
       } catch {
         /* ignore malformed storage */
       }

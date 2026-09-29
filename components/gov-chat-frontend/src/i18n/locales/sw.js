@@ -41,7 +41,7 @@ export default {
     CG: 'Kongo',
     CD: 'Jamhuri ya Kidemokrasia ya Kongo',
     CR: 'Kosta Rika',
-    CI: "Cote d'Ivoire",
+    CI: 'Cote d\'Ivoire',
     HR: 'Kroeshia',
     CU: 'Kuba',
     CY: 'Kupro',
@@ -412,10 +412,8 @@ export default {
       gitRepoAccess: 'Majaribio ya Ufikiaji wa Hifadhi ya Git',
       gitRepoAccessDesc: 'majaribio ya kufikia faili za hifadhi ya .git yamegunduliwa',
       recommendedAction: 'Hatua Inayopendekezwa',
-      rateLimitRecommendation:
-        'Fikiria kutekeleza ukomo wa viwango, kuzuia IP kwa wakosaji wa kudumu, na hakikisha uimarishaji sahihi wa seva umewekwa.',
-      envFileRecommendation:
-        'Hakikisha faili za mazingira hazipatikani kutoka kwa saraka za wavuti na usanidi wa seva unazuia ipasavyo ufikiaji wa faili nyeti.',
+      rateLimitRecommendation: 'Fikiria kutekeleza ukomo wa viwango, kuzuia IP kwa wakosaji wa kudumu, na hakikisha uimarishaji sahihi wa seva umewekwa.',
+      envFileRecommendation: 'Hakikisha faili za mazingira hazipatikani kutoka kwa saraka za wavuti na usanidi wa seva unazuia ipasavyo ufikiaji wa faili nyeti.',
       gitRepoRecommendation: 'Hakikisha saraka za .git zimelindwa ipasavyo na hazipatikani kutoka kwa wavuti.',
       logPatternMatches: 'Mifano ya logi iliyopatikana',
       patternMatchNote:
@@ -731,7 +729,7 @@ export default {
     chatTitle: 'Kichwa cha mazungumzo',
     chatTitlePlaceholder: 'Ingiza kichwa cha mazungumzo haya',
     deleteFolder: 'Futa Folda',
-    deleteFolderConfirm: "Una uhakika unataka kufuta folda ya '{name}'?",
+    deleteFolderConfirm: 'Una uhakika unataka kufuta folda ya \'{name}\'?',
     chatsMoveWarning: 'Mazungumzo yote katika folda hii yatahamishwa kwenye folda ya chaguo-msingi.',
     weatherTitle: 'Utabiri wa Hali ya Hewa',
     weatherLoading: 'Inapakia data ya hali ya hewa...',
@@ -817,43 +815,35 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. Utambulisho & Usajili wa Kiraia',
-      children:
-        'Vyeti vya kuzaliwa,Vitambulisho vya Taifa,Pasi za kusafiria,Vyeti vya ndoa na vifo,Usajili wa wapiga kura'
+      children: 'Vyeti vya kuzaliwa,Vitambulisho vya Taifa,Pasi za kusafiria,Vyeti vya ndoa na vifo,Usajili wa wapiga kura'
     },
     cat2: {
       name: '2. Huduma za Afya & Ustawi wa Jamii',
-      children:
-        'Upatikanaji wa huduma za afya,Mikakati ya chanjo,Bima ya afya,Huduma za walemavu,Msaada wa ustawi na chakula'
+      children: 'Upatikanaji wa huduma za afya,Mikakati ya chanjo,Bima ya afya,Huduma za walemavu,Msaada wa ustawi na chakula'
     },
     cat3: {
       name: '3. Elimu & Kujifunza',
-      children:
-        'Shule za umma na vyuo vikuu,Mikopo na ufadhili wa wanafunzi,Programu za elimu ya watu wazima,Rasilimali za kujifunza mtandaoni'
+      children: 'Shule za umma na vyuo vikuu,Mikopo na ufadhili wa wanafunzi,Programu za elimu ya watu wazima,Rasilimali za kujifunza mtandaoni'
     },
     cat4: {
       name: '4. Ajira & Huduma za Kazi',
-      children:
-        'Utafutaji wa kazi na malipo ya ukosefu wa ajira,Haki na ulinzi wa wafanyakazi,Kanuni za usalama kazini,Mafunzo ya stadi na uanagenzi'
+      children: 'Utafutaji wa kazi na malipo ya ukosefu wa ajira,Haki na ulinzi wa wafanyakazi,Kanuni za usalama kazini,Mafunzo ya stadi na uanagenzi'
     },
     cat5: {
       name: '5. Ushuru & Mapato',
-      children:
-        'Kuwasilisha kodi ya mapato na marejesho,Malipo ya kodi ya mali,Uzingatiaji kodi za biashara,Ushuru wa forodha na uingizaji'
+      children: 'Kuwasilisha kodi ya mapato na marejesho,Malipo ya kodi ya mali,Uzingatiaji kodi za biashara,Ushuru wa forodha na uingizaji'
     },
     cat6: {
       name: '6. Usalama wa Umma & Sheria',
-      children:
-        'Polisi na huduma za dharura,Mahakama na msaada wa kisheria,Kuripoti uhalifu,Sheria za ulinzi wa watumiaji'
+      children: 'Polisi na huduma za dharura,Mahakama na msaada wa kisheria,Kuripoti uhalifu,Sheria za ulinzi wa watumiaji'
     },
     cat7: {
       name: '7. Usafiri & Uhamaji',
-      children:
-        'Leseni za udereva na usajili wa magari,Usafiri wa umma na miundombinu,Makosa ya trafiki na faini,Programu za usalama barabarani'
+      children: 'Leseni za udereva na usajili wa magari,Usafiri wa umma na miundombinu,Makosa ya trafiki na faini,Programu za usalama barabarani'
     },
     cat8: {
       name: '8. Makazi & Maendeleo ya Miji',
-      children:
-        'Msaada wa makazi ya umma,Usajili wa ardhi na mali,Mikopo na ruzuku za makazi,Vibali vya ujenzi na upangaji'
+      children: 'Msaada wa makazi ya umma,Usajili wa ardhi na mali,Mikopo na ruzuku za makazi,Vibali vya ujenzi na upangaji'
     },
     cat9: {
       name: '9. Huduma za Umma & Mazingira',
@@ -861,8 +851,7 @@ export default {
     },
     cat10: {
       name: '10. Biashara & Biashara',
-      children:
-        'Usajili wa biashara na leseni,Kanuni na vibali vya biashara,Misaada na motisha kwa biashara ndogo,Msaada wa biashara za mtandaoni'
+      children: 'Usajili wa biashara na leseni,Kanuni na vibali vya biashara,Misaada na motisha kwa biashara ndogo,Msaada wa biashara za mtandaoni'
     },
     cat11: {
       name: '11. Hifadhi ya Jamii & Pensheni',
@@ -870,8 +859,7 @@ export default {
     },
     cat12: {
       name: '12. Jamii & Ushiriki wa Kiraia',
-      children:
-        'Kupiga kura na uchaguzi,Maoni ya umma na malalamiko ya raia,Kujitolea na programu za jamii,Ushiriki katika serikali za mitaa'
+      children: 'Kupiga kura na uchaguzi,Maoni ya umma na malalamiko ya raia,Kujitolea na programu za jamii,Ushiriki katika serikali za mitaa'
     }
   },
   settings: {
@@ -932,8 +920,7 @@ export default {
     user: 'Mtumiaji',
     loadingUserInfo: 'Inapakia taarifa za mtumiaji...',
     resetUserDataTitle: 'Weka Upya Data ya Mtumiaji',
-    confirmResetUserData:
-      'Una uhakika unataka kuweka upya data yako yote ya wasifu? Hii itafuta taarifa zako zote za wasifu na historia ya mazungumzo, lakini itaweka stakabadhi zako za akaunti.',
+    confirmResetUserData: 'Una uhakika unataka kuweka upya data yako yote ya wasifu? Hii itafuta taarifa zako zote za wasifu na historia ya mazungumzo, lakini itaweka stakabadhi zako za akaunti.',
     reset: 'Weka Upya',
     deleteAccount: 'Futa akaunti yangu',
     deleteAccountDesc: 'Futa akaunti yako na data zote kwa sababu ya kudumu. Hii haiwezi kurudishwa.',
@@ -1209,10 +1196,8 @@ export default {
     noMatchingCountries: 'Hakuna nchi zinazofanana zilizopatikana',
     noMatchingDisciplines: 'Hakuna fani zinazofanana zilizopatikana',
     noMatchingDegrees: 'Hakuna shahada zinazofanana zilizopatikana',
-    educationOptions:
-      'Uhasibu,Uhandisi wa Anga,Sayansi ya Kilimo,Anthropolojia,Ujenzi,Historia ya Sanaa,Akili Bandia,Astronomia,Astrofizikia,Biokemia,Uhandisi wa Biomedikal,Bioteknolojia,Utawala wa Biashara,Uhandisi wa Kemikali,Kemia,Uhandisi wa Ujenzi,Mawasiliano,Uhandisi wa Kompyuta,Sayansi ya Kompyuta,Usimamizi wa Ujenzi,Haki za Jinai,Usalama wa Mtandao,Sayansi ya Data,Udaktari wa Meno,Uchumi,Elimu,Uhandisi wa Umeme,Elimu ya Msingi,Fasihi ya Kiingereza,Uhandisi wa Mazingira,Sayansi ya Mazingira,Ubunifu wa Mitindo,Masomo ya Filamu,Fedha,Sanaa,Sayansi ya Chakula,Sayansi ya Uchunguzi,Ubunifu wa Michezo,Jiografia,Jiolojia,Ubunifu wa Grafiki,Utawala wa Afya,Historia,Usimamizi wa Ukarimu,Rasilimali Watu,Ubunifu wa Viwanda,Uhandisi wa Viwanda,Mifumo ya Habari,Teknolojia ya Habari,Ubunifu wa Ndani,Biashara ya Kimataifa,Mahusiano ya Kimataifa,Uandishi wa Habari,Sheria,Sayansi ya Maktaba,Isimu,Usimamizi,Masoko,Sayansi ya Vifaa,Hisabati,Uhandisi wa Mitambo,Masomo ya Vyombo vya Habari,Tiba,Meteorolojia,Mikrobaiolojia,Muziki,Nanoteknolojia,Uuguzi,Lishe,Tiba ya Kazi,Oseanografia,Uhandisi wa Mafuta,Famasia,Falsafa,Upigaji Picha,Elimu ya Mazoezi,Tiba ya Viungo,Fizikia,Sayansi ya Siasa,Saikolojia,Utawala wa Umma,Afya ya Umma,Uhusiano wa Umma,Robotiki,Elimu ya Sekondari,Kazi ya Jamii,Sosiolojia,Uhandisi wa Programu,Elimu Maalum,Usimamizi wa Michezo,Takwimu,Uhandisi wa Mifumo,Sanaa za Maigizo,Utalii,Mipango ya Miji,Udaktari wa Mifugo,Utengenezaji wa Tovuti,Biolojia ya Wanyama Pori,Zoolojia',
-    degreeOptions:
-      'Stashahada ya Uhusiano,Shahada ya Sanaa (BA),Shahada ya Sayansi (BS),Shahada ya Uhandisi (BEng),Shahada ya Utawala wa Biashara (BBA),Shahada ya Sanaa Nzuri (BFA),Shahada ya Elimu (BEd),Shahada ya Udaktari (MBBS),Shahada ya Sheria (LLB),Uzamili wa Sanaa (MA),Uzamili wa Sayansi (MS),Uzamili wa Utawala wa Biashara (MBA),Uzamili wa Uhandisi (MEng),Uzamili wa Sanaa Nzuri (MFA),Uzamili wa Elimu (MEd),Uzamili wa Sheria (LLM),Uzamili wa Afya ya Umma (MPH),Uzamivu wa Falsafa (PhD),Uzamivu wa Udaktari (MD),Uzamivu wa Elimu (EdD),Uzamivu wa Utawala wa Biashara (DBA),Uzamivu wa Sheria (JD),Diploma ya Kitaaluma,Diploma ya Kiufundi,Cheti cha Ufundi,Cheti cha Uzamili,Diploma ya Baada ya Shahada,Baada ya Uzamivu',
+    educationOptions: 'Uhasibu,Uhandisi wa Anga,Sayansi ya Kilimo,Anthropolojia,Ujenzi,Historia ya Sanaa,Akili Bandia,Astronomia,Astrofizikia,Biokemia,Uhandisi wa Biomedikal,Bioteknolojia,Utawala wa Biashara,Uhandisi wa Kemikali,Kemia,Uhandisi wa Ujenzi,Mawasiliano,Uhandisi wa Kompyuta,Sayansi ya Kompyuta,Usimamizi wa Ujenzi,Haki za Jinai,Usalama wa Mtandao,Sayansi ya Data,Udaktari wa Meno,Uchumi,Elimu,Uhandisi wa Umeme,Elimu ya Msingi,Fasihi ya Kiingereza,Uhandisi wa Mazingira,Sayansi ya Mazingira,Ubunifu wa Mitindo,Masomo ya Filamu,Fedha,Sanaa,Sayansi ya Chakula,Sayansi ya Uchunguzi,Ubunifu wa Michezo,Jiografia,Jiolojia,Ubunifu wa Grafiki,Utawala wa Afya,Historia,Usimamizi wa Ukarimu,Rasilimali Watu,Ubunifu wa Viwanda,Uhandisi wa Viwanda,Mifumo ya Habari,Teknolojia ya Habari,Ubunifu wa Ndani,Biashara ya Kimataifa,Mahusiano ya Kimataifa,Uandishi wa Habari,Sheria,Sayansi ya Maktaba,Isimu,Usimamizi,Masoko,Sayansi ya Vifaa,Hisabati,Uhandisi wa Mitambo,Masomo ya Vyombo vya Habari,Tiba,Meteorolojia,Mikrobaiolojia,Muziki,Nanoteknolojia,Uuguzi,Lishe,Tiba ya Kazi,Oseanografia,Uhandisi wa Mafuta,Famasia,Falsafa,Upigaji Picha,Elimu ya Mazoezi,Tiba ya Viungo,Fizikia,Sayansi ya Siasa,Saikolojia,Utawala wa Umma,Afya ya Umma,Uhusiano wa Umma,Robotiki,Elimu ya Sekondari,Kazi ya Jamii,Sosiolojia,Uhandisi wa Programu,Elimu Maalum,Usimamizi wa Michezo,Takwimu,Uhandisi wa Mifumo,Sanaa za Maigizo,Utalii,Mipango ya Miji,Udaktari wa Mifugo,Utengenezaji wa Tovuti,Biolojia ya Wanyama Pori,Zoolojia',
+    degreeOptions: 'Stashahada ya Uhusiano,Shahada ya Sanaa (BA),Shahada ya Sayansi (BS),Shahada ya Uhandisi (BEng),Shahada ya Utawala wa Biashara (BBA),Shahada ya Sanaa Nzuri (BFA),Shahada ya Elimu (BEd),Shahada ya Udaktari (MBBS),Shahada ya Sheria (LLB),Uzamili wa Sanaa (MA),Uzamili wa Sayansi (MS),Uzamili wa Utawala wa Biashara (MBA),Uzamili wa Uhandisi (MEng),Uzamili wa Sanaa Nzuri (MFA),Uzamili wa Elimu (MEd),Uzamili wa Sheria (LLM),Uzamili wa Afya ya Umma (MPH),Uzamivu wa Falsafa (PhD),Uzamivu wa Udaktari (MD),Uzamivu wa Elimu (EdD),Uzamivu wa Utawala wa Biashara (DBA),Uzamivu wa Sheria (JD),Diploma ya Kitaaluma,Diploma ya Kiufundi,Cheti cha Ufundi,Cheti cha Uzamili,Diploma ya Baada ya Shahada,Baada ya Uzamivu',
     aria: {
       tabList: 'Sehemu za fomu ya wasifu',
       nextButton: 'Nenda kwenye sehemu inayofuata',
@@ -1227,8 +1212,7 @@ export default {
     streamingError: 'Jibu lilikatika. Tafadhali jaribu tena.',
     aiGeneratedNoDocs: 'Imezalishwa na AI — haitokani na nyaraka za maktaba',
     welcomeMessage: 'Karibu! Nawezaje kukusaidia leo?',
-    configMismatchWarning:
-      'Hitilafu ya ulinganifu wa usanidi: {warnings}. Tafadhali kagua Msaada wa Haraka na usanidi wa muundo wa maarifa.',
+    configMismatchWarning: 'Hitilafu ya ulinganifu wa usanidi: {warnings}. Tafadhali kagua Msaada wa Haraka na usanidi wa muundo wa maarifa.',
     categoryNotFound: 'Kategoria ya "{label}" haijapatikana katika muundo wa maarifa',
     serviceLabelMismatch: 'Huduma "{label}" inatumia lebo ya kiolesura ambayo huenda hailingani na muundo wa maarifa',
     noFilterWarning: 'Hakuna kichujio cha muktadha kinachofanya kazi — hoja haitachujwa.',
@@ -1260,8 +1244,7 @@ export default {
     saveConfirmTitle: 'Hifadhi Mazungumzo Yaliyopo',
     saveConfirmMessage: 'Hifadhi mazungumzo yaliyopo?',
     loadConfirmTitle: 'Pakia Mazungumzo Yaliyopo',
-    loadConfirmMessage:
-      'Una mabadiliko ambayo hayajahifadhiwa. Je, unataka kuyatupa na kupakia mazungumzo yaliyochaguliwa, au kuhifadhi mazungumzo ya sasa kwanza?',
+    loadConfirmMessage: 'Una mabadiliko ambayo hayajahifadhiwa. Je, unataka kuyatupa na kupakia mazungumzo yaliyochaguliwa, au kuhifadhi mazungumzo ya sasa kwanza?',
     loadAndDiscard: 'Pakia na Tupa',
     saveAndLoad: 'Hifadhi na Pakia',
     saveAndStartNew: 'Hifadhi na Anza Mazungumzo Mapya',
@@ -1276,24 +1259,15 @@ export default {
     removeItem: 'Ondoa'
   },
   quickhelp: {
-    applyForIDPrompt:
-      "Fanya kazi kama mtaalamu msaidizi wa usajili wa raia wa Kenya. Eleza hatua za kupata Kitambulisho cha Kitaifa (Maisha Namba) au kubadilisha kilichopotea. MUHIMU: Toa orodha iliyo wazi ya nyaraka zinazohitajika (mf. Cheti cha Kuzaliwa, nakala za vitambulisho vya wazazi) na mshauri mtumiaji kutembelea Kituo cha Huduma au ofisi ya Registrar of Persons iliyo karibu naye. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
-    payTaxesPrompt:
-      "Fanya kazi kama mwongozo wa KRA (Kenya Revenue Authority). Eleza mchakato wa kuwasilisha ritani za kodi, kuomba KRA PIN, au kuweka upya nenosiri kwenye lango la iTax. MUHIMU: Mkumbushe mtumiaji kuhusu tarehe ya mwisho ya Juni 30 kwa ajili ya ritani za kila mwaka na umwelekeze jinsi ya kuwasilisha ritani zisizo na mapato (Nil returns) ikiwa hakuwa na mapato. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
-    startBusinessPrompt:
-      "Fanya kazi kama mshauri wa biashara kwa huduma za eCitizen. Mwelekeze mtumiaji katika kuhifadhi jina la biashara na usajili wa kampuni nchini Kenya. MUHIMU: Eleza gharama za sasa za utafutaji wa jina na usajili, na umwelekeze mtumiaji kwenye tovuti rasmi ya eCitizen ili kukamilisha maombi. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
-    findHealthcarePrompt:
-      "Fanya kazi kama muongoza huduma za afya. Toa taarifa kuhusu mabadiliko kutoka NHIF kwenda SHIF (Social Health Insurance Fund) na jinsi ya kujiandikisha. MUHIMU: Shiriki misimbo rasmi ya USSD (kama vile *263#) au viungo vya tovuti kwa ajili ya usajili na ueleze manufaa ya bima ya afya ya umma. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
-    educationServicesPrompt:
-      "Fanya kazi kama mshauri wa masuala ya elimu. Jadili mtaala wa CBC, usajili wa NEMIS, au upangaji wa vyuo vikuu kupitia KUCCPS. MUHIMU: Eleza jinsi wazazi wanavyoweza kuangalia matokeo ya mitihani ya kitaifa kupitia SMS au tovuti ya KNEC yanapotangazwa. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
-    transportLicensesPrompt:
-      "Fanya kazi kama mwongozo wa huduma za NTSA. Eleza mchakato wa kufanya upya leseni ya udereva, ukaguzi wa gari, au usimamizi wa akaunti ya TIMS. MUHIMU: Mwelekeze mtumiaji jinsi ya kuingia kwenye lango la eCitizen NTSA ili kuomba Smart DL yao au kuratibu miadi ya ukaguzi wa gari. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
-    housingProgramsPrompt:
-      "Fanya kazi kama mshauri wa mipango ya makazi. Eleza Mpango wa Makazi ya Bei Nafuu (Boma Yangu), usajili na mchakato wa uchangiaji wa hiari. MUHIMU: Mwelekeze mtumiaji kwenye tovuti ya Boma Yangu ili kuona miradi na ueleze vigezo vya kustahiki kupata mgao. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
-    findJobsPrompt:
-      "Fanya kazi kama kocha wa ajira katika utumishi wa umma. Mwelekeze mtumiaji jinsi ya kuunda wasifu na kutuma maombi ya nafasi za kazi kupitia lango la Public Service Commission (PSC). MUHIMU: Mshauri mtumiaji kuweka vyeti vyake vya masomo tayari na kuangalia mara kwa mara tovuti ya PSC au magazeti ya hapa nchini kwa ajili ya matangazo ya MyGov. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
-    justChatPrompt:
-      "Fanya kazi kama mwenzi wa karibu mwenye urafiki. Kuwa na heshima, msaidizi, na mwenye ujuzi wa kina kuhusu utamaduni na maisha ya kila siku ya Kenya. MUHIMU: Mkumbushe mtumiaji kwamba ingawa unaweza kuzungumza kuhusu jambo lolote, uwezo wako mkuu ni kuwasaidia kutumia huduma za serikali ya Kenya kama vile Vitambulisho, Kodi, na Usajili wa Biashara. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'."
+    applyForIDPrompt: 'Fanya kazi kama mtaalamu msaidizi wa usajili wa raia wa Kenya. Eleza hatua za kupata Kitambulisho cha Kitaifa (Maisha Namba) au kubadilisha kilichopotea. MUHIMU: Toa orodha iliyo wazi ya nyaraka zinazohitajika (mf. Cheti cha Kuzaliwa, nakala za vitambulisho vya wazazi) na mshauri mtumiaji kutembelea Kituo cha Huduma au ofisi ya Registrar of Persons iliyo karibu naye. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.',
+    payTaxesPrompt: 'Fanya kazi kama mwongozo wa KRA (Kenya Revenue Authority). Eleza mchakato wa kuwasilisha ritani za kodi, kuomba KRA PIN, au kuweka upya nenosiri kwenye lango la iTax. MUHIMU: Mkumbushe mtumiaji kuhusu tarehe ya mwisho ya Juni 30 kwa ajili ya ritani za kila mwaka na umwelekeze jinsi ya kuwasilisha ritani zisizo na mapato (Nil returns) ikiwa hakuwa na mapato. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.',
+    startBusinessPrompt: 'Fanya kazi kama mshauri wa biashara kwa huduma za eCitizen. Mwelekeze mtumiaji katika kuhifadhi jina la biashara na usajili wa kampuni nchini Kenya. MUHIMU: Eleza gharama za sasa za utafutaji wa jina na usajili, na umwelekeze mtumiaji kwenye tovuti rasmi ya eCitizen ili kukamilisha maombi. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.',
+    findHealthcarePrompt: 'Fanya kazi kama muongoza huduma za afya. Toa taarifa kuhusu mabadiliko kutoka NHIF kwenda SHIF (Social Health Insurance Fund) na jinsi ya kujiandikisha. MUHIMU: Shiriki misimbo rasmi ya USSD (kama vile *263#) au viungo vya tovuti kwa ajili ya usajili na ueleze manufaa ya bima ya afya ya umma. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.',
+    educationServicesPrompt: 'Fanya kazi kama mshauri wa masuala ya elimu. Jadili mtaala wa CBC, usajili wa NEMIS, au upangaji wa vyuo vikuu kupitia KUCCPS. MUHIMU: Eleza jinsi wazazi wanavyoweza kuangalia matokeo ya mitihani ya kitaifa kupitia SMS au tovuti ya KNEC yanapotangazwa. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.',
+    transportLicensesPrompt: 'Fanya kazi kama mwongozo wa huduma za NTSA. Eleza mchakato wa kufanya upya leseni ya udereva, ukaguzi wa gari, au usimamizi wa akaunti ya TIMS. MUHIMU: Mwelekeze mtumiaji jinsi ya kuingia kwenye lango la eCitizen NTSA ili kuomba Smart DL yao au kuratibu miadi ya ukaguzi wa gari. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.',
+    housingProgramsPrompt: 'Fanya kazi kama mshauri wa mipango ya makazi. Eleza Mpango wa Makazi ya Bei Nafuu (Boma Yangu), usajili na mchakato wa uchangiaji wa hiari. MUHIMU: Mwelekeze mtumiaji kwenye tovuti ya Boma Yangu ili kuona miradi na ueleze vigezo vya kustahiki kupata mgao. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.',
+    findJobsPrompt: 'Fanya kazi kama kocha wa ajira katika utumishi wa umma. Mwelekeze mtumiaji jinsi ya kuunda wasifu na kutuma maombi ya nafasi za kazi kupitia lango la Public Service Commission (PSC). MUHIMU: Mshauri mtumiaji kuweka vyeti vyake vya masomo tayari na kuangalia mara kwa mara tovuti ya PSC au magazeti ya hapa nchini kwa ajili ya matangazo ya MyGov. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.',
+    justChatPrompt: 'Fanya kazi kama mwenzi wa karibu mwenye urafiki. Kuwa na heshima, msaidizi, na mwenye ujuzi wa kina kuhusu utamaduni na maisha ya kila siku ya Kenya. MUHIMU: Mkumbushe mtumiaji kwamba ingawa unaweza kuzungumza kuhusu jambo lolote, uwezo wako mkuu ni kuwasaidia kutumia huduma za serikali ya Kenya kama vile Vitambulisho, Kodi, na Usajili wa Biashara. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.'
   },
   common: {
     cancel: 'Ghairi',
@@ -1360,14 +1334,10 @@ export default {
     tabs: {
       details: 'Maelezo',
       ingestionLog: 'Kumbukumbu ya Uchakataji',
-      detailsHint:
-        'Data ya maelezo ya faili hili: jina, mwandishi na lebo za muundo wa maarifa ambazo AI hutumia kuelekeza maswali. Hatua ya ingest inahitaji angalau lebo moja.',
-      dashboardHint:
-        'Mtazamo wa moja kwa moja wa ukusanyaji wa tovuti wa faili hili: kasi, foleni, makosa na maendeleo. Ukusanyaji ukifanikiwa, kijachini hapa chini kinakigeuza kuwa ghala la OKF.',
-      crawlLogHint:
-        'Kumbukumbu ya kila ukurasa ya ukusanyaji wa tovuti: URL zipi zilipatikana, zilielekezwa kwingine au zilishindikana. Huandikwa wakati ukusanyaji ukiendelea.',
-      ingestionLogHint:
-        'Maendeleo ya hatua kwa hatua ya kuandaa faili hili kwa majibu ya AI: ugawaji wa vipande (chunking), kuweka lebo, uwekaji wa vipachiko (embedding) na uorodheshaji. Makosa hapa yanaonyesha mahali husika ambapo ingest ilisimama.'
+      detailsHint: 'Data ya maelezo ya faili hili: jina, mwandishi na lebo za muundo wa maarifa ambazo AI hutumia kuelekeza maswali. Hatua ya ingest inahitaji angalau lebo moja.',
+      dashboardHint: 'Mtazamo wa moja kwa moja wa ukusanyaji wa tovuti wa faili hili: kasi, foleni, makosa na maendeleo. Ukusanyaji ukifanikiwa, kijachini hapa chini kinakigeuza kuwa ghala la OKF.',
+      crawlLogHint: 'Kumbukumbu ya kila ukurasa ya ukusanyaji wa tovuti: URL zipi zilipatikana, zilielekezwa kwingine au zilishindikana. Huandikwa wakati ukusanyaji ukiendelea.',
+      ingestionLogHint: 'Maendeleo ya hatua kwa hatua ya kuandaa faili hili kwa majibu ya AI: ugawaji wa vipande (chunking), kuweka lebo, uwekaji wa vipachiko (embedding) na uorodheshaji. Makosa hapa yanaonyesha mahali husika ambapo ingest ilisimama.'
     },
     log: {
       killActions: 'Vitendo vya Kusitisha:',
@@ -1413,11 +1383,9 @@ export default {
       retractTitle: 'Thibitisha Kuondoa',
       deleteTitle: 'Thibitisha Kufuta',
       killDocTitle: 'Sitisha Uchakataji wa Hati',
-      killDoc:
-        'Una uhakika unataka kusitisha kazi ya uchakataji kwa HATI HII? Mfumo utajaribu kurudisha nyuma kwa usalama.',
+      killDoc: 'Una uhakika unataka kusitisha kazi ya uchakataji kwa HATI HII? Mfumo utajaribu kurudisha nyuma kwa usalama.',
       killProcTitle: 'Sitisha MCHAKATO MZIMA wa Uchakataji',
-      killProc:
-        'ONYO: Hii itasitisha huduma nzima ya uchakataji ya backend, ikiathiri FAILI ZOTE zinazochakatwa kwa sasa. Una uhakika kabisa?'
+      killProc: 'ONYO: Hii itasitisha huduma nzima ya uchakataji ya backend, ikiathiri FAILI ZOTE zinazochakatwa kwa sasa. Una uhakika kabisa?'
     }
   },
   uploadDialog: {
@@ -1428,8 +1396,7 @@ export default {
     remove: 'Ondoa',
     uploading: 'Inapakia...',
     notifications: {
-      dropError:
-        'Faili pekee ndizo zinaweza kudondoshwa. Tafadhali hakikisha unaburuta faili halali kutoka kwa kompyuta yako.',
+      dropError: 'Faili pekee ndizo zinaweza kudondoshwa. Tafadhali hakikisha unaburuta faili halali kutoka kwa kompyuta yako.',
       typeNotAllowed: 'Aina ya faili "{extension}" hairuhusiwi.',
       shortcutUnsupported: 'Faili za njia za mkato (.url) hazitumiki. Tafadhali buruta faili halisi.',
       duplicate: 'Faili "{fileName}" tayari imeongezwa.',
@@ -1453,7 +1420,7 @@ export default {
       none: 'Bado hakuna matoleo yaliyotolewa — kufanya publish kunaunda v1.',
       notServing: 'Haitoi huduma',
       publish: 'Unda toleo jipya',
-      published: "Toleo la v{'{'}v{'}'} limechapishwa — kifurushi {'{'}f{'}'} kimehifadhiwa katika ghala la nyaraka.",
+      published: 'Toleo la v{\'{\'}v{\'}\'} limechapishwa — kifurushi {\'{\'}f{\'}\'} kimehifadhiwa katika ghala la nyaraka.',
       serving: 'Imeingizwa kupitia ingest (serving)',
       title: 'Matoleo'
     },
@@ -1473,7 +1440,7 @@ export default {
         note: 'Vitambulisho vilivyowekewa alama ni sehemu ya maudhui yaliyochapishwa. Ikiwa umeyakagua (mf. mawasiliano rasmi), yakubali na uendelee.'
       },
       publish: {
-        body: "Kufanya publish kunatoa v{'{'}n{'}'} na kuhifadhi kifurushi cha \"{'{'}file{'}'}\" katika ghala la nyaraka, kikichukua nafasi ya zip yoyote ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.",
+        body: 'Kufanya publish kunatoa v{\'{\'}n{\'}\'} na kuhifadhi kifurushi cha "{\'{\'}file{\'}\'}" katika ghala la nyaraka, kikichukua nafasi ya zip yoyote ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.',
         confirm: 'Chapisha',
         inProgress: 'Inachapishwa — kunasafirisha na kuhamisha kifurushi…',
         title: 'Chapisha'
@@ -1487,21 +1454,21 @@ export default {
         editor: 'Mhariri',
         wizard: 'Mchawi'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{\'{\'}n{\'}\'}',
       versions: 'Matoleo',
       deleteLabel: 'Futa'
     },
     logs: {
-      labeled: "zilizowekewa lebo: {'{'}n{'}'}",
-      fallbacks: "mikakati mbadala ya LLM: {'{'}n{'}'}",
-      concepts: "dhana: {'{'}n{'}'}",
+      labeled: 'zilizowekewa lebo: {\'{\'}n{\'}\'}',
+      fallbacks: 'mikakati mbadala ya LLM: {\'{\'}n{\'}\'}',
+      concepts: 'dhana: {\'{\'}n{\'}\'}',
       col: {
         action: 'Kitendo',
         description: 'Maelezo',
         user: 'Mtumiaji',
         when: 'Tarehe na saa'
       },
-      count: "maingizo {'{'}n{'}'}",
+      count: 'maingizo {\'{\'}n{\'}\'}',
       loadFailed: 'Imeshindwa kupakia kumbukumbu ya shughuli.',
       none: 'Bado hakuna shughuli iliyorekodiwa — vitendo vya ghala vitaonekana hapa vinapotokea.',
       title: 'Kumbukumbu ya shughuli'
@@ -1519,8 +1486,8 @@ export default {
       zoomIn: 'Kuza',
       zoomOut: 'Punguza',
       card: {
-        links: "viungo {'{'}n{'}'}",
-        chunks: "vipande {'{'}n{'}'}",
+        links: 'viungo {\'{\'}n{\'}\'}',
+        chunks: 'vipande {\'{\'}n{\'}\'}',
         failed: 'uorodheshaji umeshindwa',
         flagged: 'vitambulisho vilivyowekewa alama',
         hub: 'Kitovu cha ielezo',
@@ -1542,8 +1509,7 @@ export default {
       alreadyBadge: 'tayari iko kwenye hazina ya OKF',
       servingTip: 'Hati hii kwa sasa inahudumia korpus huru — hazina mpya haiwezi kuingizwa hadi itakapotolewa.',
       alreadyTip: 'Hati hii ni tayari ni chanzo cha hazina nyingine ya OKF.',
-      servingWarn:
-        '{n} hati bado zinahudumia korpus huru. Uingizaji unafanikiwa, lakini hazina hii haiwezi kuingizwa hadi zitakapotolewa.',
+      servingWarn: '{n} hati bado zinahudumia korpus huru. Uingizaji unafanikiwa, lakini hazina hii haiwezi kuingizwa hadi zitakapotolewa.',
       cancel: 'Ghairi',
       importing: 'Inaingiza…',
       go: 'Ingiza',
@@ -1591,15 +1557,12 @@ export default {
           problem: 'Tatizo',
           noError: 'Imeashiriwa kushindwa bila sababu iliyorekodiwa.',
           fixLabel: 'Jinsi ya kurekebisha',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {\'{\'}n{\'}\'}',
+          when: 'Last attempt {\'{\'}when{\'}\'}',
           fix: {
-            reaper:
-              'Mfanyakazi wa ingest aliacha kusubiri ndani ya dirisha la rehema (mfuo ulikuwa umejaa) — maudhui yako salama. Kurekebisha: hariri faili hii kidogo kisha hifadhi ili iingizwe tena kwenye safu, au futa na ingiza upya hazina yote.',
-            dataprep:
-              'Huduma ya maandalizi ya maudhui imeshindwa na ingest hii. Kurekebisha: hariri na hifadhi; ikirudia, angalia hali ya huduma ya dataprep.',
-            generic:
-              'Ufaharisi umeshindwa. Kurekebisha: hariri maudhui kisha hifadhi, au futa na ingiza upya hazina yote.'
+            reaper: 'Mfanyakazi wa ingest aliacha kusubiri ndani ya dirisha la rehema (mfuo ulikuwa umejaa) — maudhui yako salama. Kurekebisha: hariri faili hii kidogo kisha hifadhi ili iingizwe tena kwenye safu, au futa na ingiza upya hazina yote.',
+            dataprep: 'Huduma ya maandalizi ya maudhui imeshindwa na ingest hii. Kurekebisha: hariri na hifadhi; ikirudia, angalia hali ya huduma ya dataprep.',
+            generic: 'Ufaharisi umeshindwa. Kurekebisha: hariri maudhui kisha hifadhi, au futa na ingiza upya hazina yote.'
           }
         },
         indexBadge: 'ielezo',
@@ -1607,11 +1570,9 @@ export default {
         loading: 'Inapakia…',
         resplit: 'Gawanya tena',
         flagged: 'imetiwa alama',
-        flaggedTip:
-          'Dhana zenye vitambulisho vilivyowekewa alama — fungua kila moja, ondoa au rekebisha kitambulisho, kisha hifadhi (huchanganua tena kiotomatiki); au zikubali wakati wa kufanya publish.',
+        flaggedTip: 'Dhana zenye vitambulisho vilivyowekewa alama — fungua kila moja, ondoa au rekebisha kitambulisho, kisha hifadhi (huchanganua tena kiotomatiki); au zikubali wakati wa kufanya publish.',
         piiBadge: 'PII',
-        piiTip:
-          'Vitambulisho vilivyowekewa alama: {k}. Vifungue, viondoe au virekebishe, kisha uhifadhi — huchanganua tena kiotomatiki.',
+        piiTip: 'Vitambulisho vilivyowekewa alama: {k}. Vifungue, viondoe au virekebishe, kisha uhifadhi — huchanganua tena kiotomatiki.',
         piiTipBare: 'Vitambulisho vilivyowekewa alama — fungua, kagua, kisha uhifadhi ili kuchanganua upya.',
         sourceLabel: 'Hati ya chanzo',
         sourceView: 'Fungua hati ya chanzo',
@@ -1640,7 +1601,9 @@ export default {
         title: 'Kichwa',
         trust: 'Kiwango cha uaminifu',
         type: 'Aina',
-        typePlaceholder: 'Chagua aina…'
+        typePlaceholder: 'Chagua aina…',
+        hide: 'Hide metadata',
+        show: 'Show metadata'
       },
       pane: {
         files: 'Faili',
@@ -1677,13 +1640,11 @@ export default {
           accept: 'Kubali vitambulisho vyote vilivyowekewa alama'
         },
         body: {
-          redact:
-            'Mwili mkuu wa kila dhana iliyowekewa alama unabadilishwa na taarifa ya ubadilishaji data. Hatua hii haiwezi kutenduliwa.',
+          redact: 'Mwili mkuu wa kila dhana iliyowekewa alama unabadilishwa na taarifa ya ubadilishaji data. Hatua hii haiwezi kutenduliwa.',
           remove: 'Mwili mkuu wa kila dhana iliyowekewa alama unafutwa kabisa. Hatua hii haiwezi kutenduliwa.',
-          accept:
-            'Vitambulisho vyote vilivyowekewa alama vinatiwa alama ya kukaguliwa na kuhifadhiwa — havitawekewa alama tena isipokuwa ukichanganua upya.'
+          accept: 'Vitambulisho vyote vilivyowekewa alama vinatiwa alama ya kukaguliwa na kuhifadhiwa — havitawekewa alama tena isipokuwa ukichanganua upya.'
         },
-        scope: "Dhana zilizoathirika: {'{'}n{'}'}.",
+        scope: 'Dhana zilizoathirika: {\'{\'}n{\'}\'}.',
         confirm: 'Tumia',
         failed: 'Kitendo cha pamoja cha PII kimeshindwa — jaribu tena.'
       },
@@ -1694,18 +1655,19 @@ export default {
       addSources: {
         working: 'Converting sources…',
         done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
-        failed: 'A conversion failed — check the logs; the rest may still have queued.'
+        failed: 'A conversion failed — check the logs; the rest may still have queued.',
+        landed: 'Conversions complete — {t} topics now in the tree.'
       }
     },
     dashboard: {
       bulk: {
         body: 'Kila ghala huchapishwa kupitia ukaguzi kamili wa geti (ukaguzi wa PII, uorodheshaji, ulinganifu). Matokeo kwa kila ghala:',
         pending: 'Thibitisha kufanya publish kwa maghala yaliyochaguliwa.',
-        publishConfirm: "Phatlalatsa {'{'}n{'}'}",
+        publishConfirm: 'Phatlalatsa {\'{\'}n{\'}\'}',
         title: 'Chapisha maghala yaliyochaguliwa'
       },
       card: {
-        actions: "Vitendo vya {'{'}name{'}'}",
+        actions: 'Vitendo vya {\'{\'}name{\'}\'}',
         building: 'Inajenga…',
         buildingAria: 'Inajengwa — faili chanzo bado inachakatwa',
         delete: 'Futa',
@@ -1730,12 +1692,12 @@ export default {
         note: 'Vitambulisho vilivyowekewa alama ni sehemu ya maudhui yaliyochapishwa. Ikiwa umeyakagua (mf. mawasiliano rasmi), yakubali na uendelee.'
       },
       publish: {
-        body: "Kufanya publish kunatoa v{'{'}n{'}'} na kuhifadhi kifurushi cha \"{'{'}file{'}'}\" katika ghala la nyaraka, kikichukua nafasi ya zip ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.",
+        body: 'Kufanya publish kunatoa v{\'{\'}n{\'}\'} na kuhifadhi kifurushi cha "{\'{\'}file{\'}\'}" katika ghala la nyaraka, kikichukua nafasi ya zip ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.',
         confirm: 'Chapisha',
         title: 'Chapisha'
       },
       search: 'Tafuta...',
-      select: "Chagua {'{'}name{'}'} kwa uchapishaji wa pamoja",
+      select: 'Chagua {\'{\'}name{\'}\'} kwa uchapishaji wa pamoja',
       stage: {
         drainFailed: 'Ingest imeshindwa',
         queueBehind: '{n} kwenye foleni · ingest katika {m} repo(s)',
@@ -1743,8 +1705,8 @@ export default {
         building: 'Inajenga…',
         draft: 'Rasimu',
         inReview: 'Inakaguliwa',
-        ingested: "Imeingizwa kupitia ingest v{'{'}n{'}'}",
-        published: "Imechapishwa v{'{'}n{'}'}",
+        ingested: 'Imeingizwa kupitia ingest v{\'{\'}n{\'}\'}',
+        published: 'Imechapishwa v{\'{\'}n{\'}\'}',
         retracted: 'Imebatilishwa',
         stepOf: 'Step '
       },
@@ -1772,7 +1734,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} zaidi",
+        more: '+ {\'{\'}n{\'}\'} zaidi',
         fixPath: 'Fanya ingest tena ili kurudia: retract → unda toleo → ingest.'
       },
       curation: {
@@ -1786,9 +1748,9 @@ export default {
       bytes: 'Chanzo kimesomwa',
       conceptsIndexed: 'dhana zilizoorodheshwa',
       elapsed: {
-        hr: "Ilianza saa {'{'}n{'}'} zilizopita",
+        hr: 'Ilianza saa {\'{\'}n{\'}\'} zilizopita',
         lt1: 'Ilianza chini ya dakika moja iliyopita',
-        min: "Ilianza dakika {'{'}n{'}'} zilizopita"
+        min: 'Ilianza dakika {\'{\'}n{\'}\'} zilizopita'
       },
       hint: {
         import: 'Ghala linabaki katika hatua ya Import hadi ubadilishaji wa faili utakapokamilika.',
@@ -1831,7 +1793,7 @@ export default {
     },
     create: {
       zipOnly: 'Chagua faili ya kifurushi cha .zip.',
-      stagedFile: "Kimeandaliwa: {'{'}name{'}'}",
+      stagedFile: 'Kimeandaliwa: {\'{\'}name{\'}\'}',
       staged: 'Kifurushi kimeandaliwa — bofya Unda Ghala ili kuanza uingizaji.',
       openExisting: 'Fungua ghala lililopo',
       name: 'Jina la ghala',
@@ -1868,8 +1830,7 @@ export default {
       kindLabel: 'Aina ya thamani',
       keyPh: 'jina la nyanja',
       fullHint: 'Kila uwanja wa frontmatter unaweza kuhaririwa. Ongeza au ondoa funguo kwa hiari.',
-      errRemovalPending:
-        'Kuondoa nyanja kunahitaji makubaliano ya seva ya kuunganisha na kufuta (inakuja hivi karibuni).',
+      errRemovalPending: 'Kuondoa nyanja kunahitaji makubaliano ya seva ya kuunganisha na kufuta (inakuja hivi karibuni).',
       errKeyRequired: 'Kila uwanja unahitaji jina.',
       arrayPh: 'maadili yaliyotenganishwa kwa koma',
       addKey: 'Ongeza nyanja',
@@ -1888,55 +1849,39 @@ export default {
       saveFailed: 'Uhifadhi wa frontmatter umeshindwa'
     },
     glossary: {
-      addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      addConcept: 'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
       type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
-      title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
-      indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
-      trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
-      concept:
-        'Kipengee kimoja katika ghala lako — kwa kawaida ukurasa mmoja au mada moja. Kila dhana ina frontmatter yenye muundo thabiti ambayo msaidizi husoma, pamoja na matini ya markdown anayotumia kutoa majibu.',
-      repository:
-        'Mkusanyiko wa dhana zilizoratibiwa kuhusu Eneo moja la Mada. Huwa kifurushi cha OKF unachokichapisha, kukitolea toleo na kukifanya kipatikane kwa msaidizi.',
-      subjectArea:
-        'Maarifa haya yanahusiana na wapi? Eneo la Mada hupanga ghala lako na kubainisha lebo unazoweza kuchagua. Haliwezi kubadilishwa baada ya kuundwa.',
+      title: 'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus: 'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier: 'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept: 'Kipengee kimoja katika ghala lako — kwa kawaida ukurasa mmoja au mada moja. Kila dhana ina frontmatter yenye muundo thabiti ambayo msaidizi husoma, pamoja na matini ya markdown anayotumia kutoa majibu.',
+      repository: 'Mkusanyiko wa dhana zilizoratibiwa kuhusu Eneo moja la Mada. Huwa kifurushi cha OKF unachokichapisha, kukitolea toleo na kukifanya kipatikane kwa msaidizi.',
+      subjectArea: 'Maarifa haya yanahusiana na wapi? Eneo la Mada hupanga ghala lako na kubainisha lebo unazoweza kuchagua. Haliwezi kubadilishwa baada ya kuundwa.',
       selectSubjectArea: 'Chagua eneo la mada…',
       subjectAreaMissing: 'Eneo la Mada la ghala hili halipo katika Muundo wa Maarifa — linaonyesha kila lebo.',
-      label:
-        'Kundi kutoka kwenye Muundo wa Maarifa linalomweleza msaidizi dhana hii inawakilisha kitu gani. Lebo husaidia majibu kupata maudhui sahihi.',
-      bundle:
-        'Faili ya zip iliyotolewa ya ghala — dhana zake, muundo na data ya maelezo kwenye faili moja. Vifurushi ndiyo namna maghala yanavyohamishwa kati ya mifumo.',
-      version:
-        'Nakala isiyobadilika ya ghala wakati linapofanyiwa publish. Uhariri unaendelea kwenye toleo lijalo — matoleo yaliyochapishwa hayabadiliki kamwe.',
-      serving:
-        'Toleo hili liko mtandaoni: msaidizi husoma maudhui yake wakati akijibu. Lifanyie retract ili kufanya mabadiliko.',
-      ingestion:
-        'Hatua ambapo toleo lililochapishwa huandaliwa kwa ajili ya kutoa majibu — matini hugawanywa, hupachikwa viini na kuunganishwa. Hakuna kinachomfikia msaidizi kabla ya hatua hii.',
-      classification:
-        'Jinsi tunavyoamua kila dhana NI nini (mada, kitambulisho, mchakato…). Mbinu za uzoefu husoma ukurasa kiotomatiki; chaguo la LLM linachukua muda mrefu zaidi lakini linashughulikia kurasa ngumu vizuri.',
-      resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      label: 'Kundi kutoka kwenye Muundo wa Maarifa linalomweleza msaidizi dhana hii inawakilisha kitu gani. Lebo husaidia majibu kupata maudhui sahihi.',
+      bundle: 'Faili ya zip iliyotolewa ya ghala — dhana zake, muundo na data ya maelezo kwenye faili moja. Vifurushi ndiyo namna maghala yanavyohamishwa kati ya mifumo.',
+      version: 'Nakala isiyobadilika ya ghala wakati linapofanyiwa publish. Uhariri unaendelea kwenye toleo lijalo — matoleo yaliyochapishwa hayabadiliki kamwe.',
+      serving: 'Toleo hili liko mtandaoni: msaidizi husoma maudhui yake wakati akijibu. Lifanyie retract ili kufanya mabadiliko.',
+      ingestion: 'Hatua ambapo toleo lililochapishwa huandaliwa kwa ajili ya kutoa majibu — matini hugawanywa, hupachikwa viini na kuunganishwa. Hakuna kinachomfikia msaidizi kabla ya hatua hii.',
+      classification: 'Jinsi tunavyoamua kila dhana NI nini (mada, kitambulisho, mchakato…). Mbinu za uzoefu husoma ukurasa kiotomatiki; chaguo la LLM linachukua muda mrefu zaidi lakini linashughulikia kurasa ngumu vizuri.',
+      resplit: 'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'Imeshindwa kuhifadhi',
       importFailedTitle: 'Uingizaji umeshindwa — faili chanzo haikuweza kubadilishwa.',
       importFailedHint: 'Futa ghala hili na uingize faili chanzo tena.',
-      frontmatter:
-        'Taarifa zilizoundwa kimpangilio zilizo juu ya kila faili — aina, kichwa, lebo. Msaidizi huzitumia kujua mada ya kila dhana inahusu nini.',
-      pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
-      classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      frontmatter: 'Taarifa zilizoundwa kimpangilio zilizo juu ya kila faili — aina, kichwa, lebo. Msaidizi huzitumia kujua mada ya kila dhana inahusu nini.',
+      pickSource: 'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy: 'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
       clsHeur: 'Heuristics (fast, no LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
-      fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
-      autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
-      handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.'
+      fsPick: 'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect: 'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff: 'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      lifecycle: 'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto: 'Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.',
+      reviewHandoff: 'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview: 'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
     },
     md: {
       toolbar: 'Uumbizaji',
@@ -1954,34 +1899,20 @@ export default {
       rendering: 'Inatolewa…'
     },
     narrative: {
-      intro:
-        'Ghala la OKF ni mkusanyiko wa mada zilizopangwa na kupewa matoleo ambao majibu yako ya mazungumzo yanaweza kuyataja. Lichukulie kama mfumo mwepesi wa uainishaji maarifa kwa uwanja wako — lebo hufafanua makundi, mada hufafanua vitambulisho, na vyanzo hufafanua asili.',
-      step0:
-        'Ghala la OKF ni mkusanyiko ulioratibiwa na wenye matoleo wa mada mbalimbali. Lichukulie kama tabaka jepesi la maarifa kwa uwanja wako — lebo hufafanua makundi, mada hufafanua vitambulisho, na vyanzo hufafanua asili. Baada ya kuchapishwa, majibu ya gumzo hutaja mada hizi kwa vitambulisho vyake vya kipekee.',
-      step1:
-        'Njia tatu za kuanzisha ghala la OKF: vuta mada kutoka kwenye ukusanyaji wa tovuti, zitoe kutoka kwenye nyaraka ulizokwisha pakia, au anza moja kwa moja kuanzia mwanzo. Kunakili ghala lililopo kunanukuu mada zake na kukuruhusu kugawa kazi.',
-      step2:
-        'Kila waraka unakuwa chanzo cha mada. Mzalishaji huzisoma, hutoa mapendekezo ya mada na kupendekeza muundo. Utakagua kila mada katika hatua inayofuata — hakuna kitakachowekwa wazi hadi utakapothibitisha.',
-      step3:
-        'Tunasoma vyanzo vyako na kupendekeza mada. Mada hujikusanya chini ya lebo za makundi unazochagua. Mzalishaji ni makini — anapendelea kupendekeza mada chache zilizoundwa vizuri badala ya mada nyingi zisizo na mpangilio.',
-      step4:
-        'Lebo ndizo misingi mikuu ya muundo wako — mada hii ni kitu cha namna gani? Chagua lebo 3 hadi 7 zinazoshikilia misingi mikuu; mzalishaji huzitumia kama nguzo za kuongoza muundo wa mada.',
-      step5:
-        'Huu ndio msingi wa kazi yote. Kila mada ni kipande kidogo cha maarifa kinachoweza kutajwa. Mada hupata kichwa, maelezo, na kurithi lebo ulizochagua. Jukumu lako ni kuifanya iwe thabiti: badilisha vichwa visivyo wazi, unganisha vile vinavyokaribia kufanana, na ondoa vile usivyoweza kuvithibitisha kwa chanzo.',
-      step6:
-        'Tunafanya ukaguzi wa kufuata vigezo: je, kila mada ina kichwa? Je, lebo ni sahihi? Je, uthibitisho wa chanzo uko salama? Masuala yanayozuia lazima yarekebishwe kabla ya kuchapisha; maonyo yanaweza tu kukubaliwa.',
-      step7:
-        'Baadhi ya maonyo yanaweza kurekebishwa kiotomatiki: maadili ya hali yanaweza kurekebishwa kuwa orodha sahihi, nyanja zilizokosekana zinaweza kujazwa na maadili yanayofaa. Tumia marekebisho unayokubaliana nayo, kisha rudi kwa mratibu ili kukagua.',
-      step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
-      step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
-      docMgmtEntry:
-        'Unda ghala jipya la OKF kutoka kwenye nyaraka zilizochaguliwa. Nyaraka zitakuwa vyanzo; utakagua na kutaja mada zinazozalishwa kabla ya chochote kuchapishwa.',
-      crawlSegment:
-        'Ghala la OKF ni mkusanyiko wa mada zilizopangwa na kupewa matoleo ambao majibu ya mazungumzo yako yanaweza kuyataja kama ushahidi.',
-      emptyDashboard:
-        'Bado hujaunda ghala lolote la OKF. Ghala la OKF ni seti ya mada iliyopangwa na inayoweza kutajwa ambayo majibu yako ya mazungumzo yanaweza kuitumia.',
+      intro: 'Ghala la OKF ni mkusanyiko wa mada zilizopangwa na kupewa matoleo ambao majibu yako ya mazungumzo yanaweza kuyataja. Lichukulie kama mfumo mwepesi wa uainishaji maarifa kwa uwanja wako — lebo hufafanua makundi, mada hufafanua vitambulisho, na vyanzo hufafanua asili.',
+      step0: 'Ghala la OKF ni mkusanyiko ulioratibiwa na wenye matoleo wa mada mbalimbali. Lichukulie kama tabaka jepesi la maarifa kwa uwanja wako — lebo hufafanua makundi, mada hufafanua vitambulisho, na vyanzo hufafanua asili. Baada ya kuchapishwa, majibu ya gumzo hutaja mada hizi kwa vitambulisho vyake vya kipekee.',
+      step1: 'Njia tatu za kuanzisha ghala la OKF: vuta mada kutoka kwenye ukusanyaji wa tovuti, zitoe kutoka kwenye nyaraka ulizokwisha pakia, au anza moja kwa moja kuanzia mwanzo. Kunakili ghala lililopo kunanukuu mada zake na kukuruhusu kugawa kazi.',
+      step2: 'Kila waraka unakuwa chanzo cha mada. Mzalishaji huzisoma, hutoa mapendekezo ya mada na kupendekeza muundo. Utakagua kila mada katika hatua inayofuata — hakuna kitakachowekwa wazi hadi utakapothibitisha.',
+      step3: 'Tunasoma vyanzo vyako na kupendekeza mada. Mada hujikusanya chini ya lebo za makundi unazochagua. Mzalishaji ni makini — anapendelea kupendekeza mada chache zilizoundwa vizuri badala ya mada nyingi zisizo na mpangilio.',
+      step4: 'Lebo ndizo misingi mikuu ya muundo wako — mada hii ni kitu cha namna gani? Chagua lebo 3 hadi 7 zinazoshikilia misingi mikuu; mzalishaji huzitumia kama nguzo za kuongoza muundo wa mada.',
+      step5: 'Huu ndio msingi wa kazi yote. Kila mada ni kipande kidogo cha maarifa kinachoweza kutajwa. Mada hupata kichwa, maelezo, na kurithi lebo ulizochagua. Jukumu lako ni kuifanya iwe thabiti: badilisha vichwa visivyo wazi, unganisha vile vinavyokaribia kufanana, na ondoa vile usivyoweza kuvithibitisha kwa chanzo.',
+      step6: 'Tunaendesha ukaguzi wa uwiano: kila mada ina kichwa? Lebo ni sahihi? Sifa za vyanzo ziko salama? Matatizo ya kuzuia lazima yarekebishwe kabla ya kuhamisha hifadhi; maonyo yanaweza kuthibitishwa.',
+      step7: 'Baadhi ya maonyo yanaweza kurekebishwa kiotomatiki: maadili ya hali yanaweza kurekebishwa kuwa orodha sahihi, nyanja zilizokosekana zinaweza kujazwa na maadili yanayofaa. Tumia marekebisho unayokubaliana nayo, kisha rudi kwa mratibu ili kukagua.',
+      step8: 'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9: 'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry: 'Unda ghala jipya la OKF kutoka kwenye nyaraka zilizochaguliwa. Nyaraka zitakuwa vyanzo; utakagua na kutaja mada zinazozalishwa kabla ya chochote kuchapishwa.',
+      crawlSegment: 'Ghala la OKF ni mkusanyiko wa mada zilizopangwa na kupewa matoleo ambao majibu ya mazungumzo yako yanaweza kuyataja kama ushahidi.',
+      emptyDashboard: 'Bado hujaunda ghala lolote la OKF. Ghala la OKF ni seti ya mada iliyopangwa na inayoweza kutajwa ambayo majibu yako ya mazungumzo yanaweza kuitumia.',
       labels: 'Lebo ndizo misingi mikuu ya muundo wako — zinajibu "mada hii inawakilisha kitu cha namna gani?".',
       hide: 'Ficha',
       whatIsThis: 'Hii ni nini?'
@@ -1997,8 +1928,7 @@ export default {
       title: 'OKF Studio',
       help: 'Msaada',
       helpTitle: 'Kuhusu OKF Studio',
-      helpBody:
-        'Maghala ya OKF ni tabaka jepesi la uainishaji maarifa — lebo hufafanua makundi, mada hufafanua vitambulisho, vyanzo hufafanua asili. Mara tu yanapochapishwa, majibu ya gumzo hutaja mada kwa vitambulisho vyake na kuonyesha asili yake.',
+      helpBody: 'Maghala ya OKF ni tabaka jepesi la uainishaji maarifa — lebo hufafanua makundi, mada hufafanua vitambulisho, vyanzo hufafanua asili. Mara tu yanapochapishwa, majibu ya gumzo hutaja mada kwa vitambulisho vyake na kuonyesha asili yake.',
       view: {
         dashboard: 'Dashibodi',
         wizard: 'Kielekezi'
@@ -2067,8 +1997,8 @@ export default {
         register: 'In progress',
         review: 'In review',
         approve: 'Approved',
-        publish: 'Ready to ingest',
-        retracted: 'Retracted'
+        retracted: 'Retracted',
+        publish: 'Ready to ingest'
       },
       status: {
         published: 'imechapishwa',
@@ -2088,7 +2018,7 @@ export default {
       label: 'Kielekezi cha OKF Studio',
       back: 'Nyuma',
       continue: 'Endelea',
-      publish: 'Chapisha ghala'
+      finish: 'Open the Editor'
     },
     steps: {
       entry: {
@@ -2147,7 +2077,10 @@ export default {
         benchFailed: 'Could not read the topics right now.',
         editTitle: 'Edit concept',
         deleteFailed: 'Could not delete the concept.',
-        added: '{n} topic(s) in this repository so far.'
+        added: '{n} topic(s) in this repository so far.',
+        deleteTitle: 'Delete topic',
+        deleteBody: 'This permanently removes the topic from this repository.',
+        labelFailed: 'Could not set the label.'
       },
       produce: {
         title: 'Zalisha mada',
@@ -2161,13 +2094,15 @@ export default {
         done: '{n} topic(s) are ready — continue to review them in Curate.',
         noSources: 'No sources selected — go back to Input.',
         neverStarted: 'The conversion did not start — retry.',
-        dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        dupContent: 'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
-        sourceStat: '+{n} new (total {t})'
+        sourceStat: '+{n} new (total {t})',
+        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        docsLeg: '{n} selected document(s)',
+        legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
         title: 'Chagua lebo',
@@ -2177,8 +2112,7 @@ export default {
         placeholder: 'mf. Vibali'
       },
       curate: {
-        embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        embedHint: 'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
         noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'Kagua mada',
         hint: 'Kila mada ni kipande kidogo cha maarifa kinachoweza kutajwa. Hariri kichwa na maelezo.',
@@ -2186,7 +2120,7 @@ export default {
       },
       validate: {
         title: 'Kagua masuala',
-        hint: 'Tunafanya ukaguzi wa kufuata vigezo. Masuala yanayozuia lazima yarekebishwe kabla ya kuchapisha.',
+        hint: 'Tunaendesha ukaguzi wa uwiano. Matatizo ya kuzuia lazima yarekebishwe kabla ya kuhamisha hifadhi.',
         placeholder: 'Paneli ya uhalalishaji itatolewa katika Kisa cha 3-8.'
       },
       autocorrect: {
@@ -2198,15 +2132,23 @@ export default {
       },
       review: {
         title: 'Ukaguzi',
-        hint: 'Muhtasari wa kile unachokaribia kuchapisha.',
+        hint: 'Muhtasari wa ulichojenga — kuwasilisha, idhini na uchapishaji hufanyika kwenye dashibodi na kihariri.',
         repo: 'Ghala',
         topics: 'Mada',
         labels: 'Lebo',
-        sources: 'Vyanzo'
+        sources: 'Vyanzo',
+        state: 'Lifecycle state',
+        labelsSet: 'set per topic in Curate',
+        ritualOutside: 'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        versions: 'Versions',
+        logs: 'Action log',
+        rename: 'Rename',
+        noVersions: 'No versions yet — versions are minted during the approval ritual.',
+        versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
-        title: 'Chapisha ghala hili',
-        hint: 'Kufanya publish kunaunda toleo la v1 la ghala hili.',
+        title: 'Kuhamisha',
+        hint: 'Hifadhi hii iko tayari kwa uhakiki. Uchapishaji hufanyika hapa kamwe — iwasilishe kwa idhini kutoka kwenye dashibodi; idhini na uchapishaji hufanyika kutoka kwenye dashibodi au kihariri.',
         nameOk: 'Jina la ghala limewekwa',
         labelsOk: 'Lebo zimechaguliwa',
         topicsOk: 'Mada zimekaguliwa',
@@ -2214,8 +2156,7 @@ export default {
         topicsServing: 'Topics serving',
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
-        ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        ritual: 'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2240,8 +2181,7 @@ export default {
         emptySelection: 'Chagua angalau waraka mmoja',
         alreadyInOkf: 'Ondoa nyaraka ambazo tayari zimo katika ghala la OKF',
         alreadyIngested: 'Ondoa nyaraka ambazo tayari zimefanyiwa ingest',
-        servingWarn:
-          '{n} hati zilizochaguliwa bado zinahudumia korpus huru — hazina mpya haiwezi kuingizwa hadi zitakapotolewa.'
+        servingWarn: '{n} hati zilizochaguliwa bado zinahudumia korpus huru — hazina mpya haiwezi kuingizwa hadi zitakapotolewa.'
       },
       produce: {
         notReady: 'Mzalishaji ataunganishwa katika kisa cha baadaye.'
@@ -2252,14 +2192,11 @@ export default {
       domainPlaceholder: 'Chagua eneo la mada…',
       classLabel: 'Uainishaji wa dhana',
       classHeuristics: 'Mbinu za uzoefu (chaguomsingi)',
-      classHeuristicsHint:
-        'Uainishaji wa haraka unaozingatia kanuni — hakuna gharama ya LLM, inafaa kwa ukusanyaji uliopangwa vizuri.',
+      classHeuristicsHint: 'Uainishaji wa haraka unaozingatia kanuni — hakuna gharama ya LLM, inafaa kwa ukusanyaji uliopangwa vizuri.',
       classLlm: 'Ikisaidiwa na LLM',
-      classLlmHint:
-        'LLM inaratibu kila dhana — aina, lebo ya Muundo wa Maarifa na maelezo. Ni sahihi na kamili zaidi kuliko mbinu za uzoefu; tegemea muda wa ziada kwa kila dhana.',
+      classLlmHint: 'LLM inaratibu kila dhana — aina, lebo ya Muundo wa Maarifa na maelezo. Ni sahihi na kamili zaidi kuliko mbinu za uzoefu; tegemea muda wa ziada kwa kila dhana.',
       classHybrid: 'Mseto',
-      classHybridHint:
-        'Mbinu za uzoefu kwanza; kisha LLM hukagua kesi zisizo na uhakika na kujaza mapengo. Inasawazisha muda na ukamilifu.',
+      classHybridHint: 'Mbinu za uzoefu kwanza; kisha LLM hukagua kesi zisizo na uhakika na kujaza mapengo. Inasawazisha muda na ukamilifu.',
       targetLabel: 'Hii inapaswa kuelekezwa wapi?',
       target: {
         freeform: 'Kusanya hadi kwenye mkusanyiko huru wa matini',
@@ -2277,8 +2214,7 @@ export default {
       progressDownload: 'Inapakua maudhui yaliyokusanywa...',
       progressSplit: 'Inagawanya kuwa dhana...',
       progressIngest: 'Inaongeza dhana (kundi la [i] kati ya [n])...',
-      postCrawlHint:
-        'Baada ya ukusanyaji kukamilika, unaweza kuugeuza kuwa ghala la OKF kutoka kwenye kichupo cha Dashibodi ya faili.',
+      postCrawlHint: 'Baada ya ukusanyaji kukamilika, unaweza kuugeuza kuwa ghala la OKF kutoka kwenye kichupo cha Dashibodi ya faili.',
       creating: 'Inaunda ghala la OKF...',
       createOk: 'Ghala la OKF limeundwa. Studio inafunguliwa kwa ajili ya kuratibu.',
       createOkRenamed: 'Ghala la OKF limeundwa kama "[name]". Studio inafunguliwa kwa ajili ya kuratibu.',
@@ -2337,13 +2273,11 @@ export default {
       saveBlocked: 'Uhifadhi umezuiwa: rekebisha masuala ya ulinganifu kwanza.'
     },
     validation: {
-      frozen:
-        "Maudhui yamesitishwa kwenye toleo la {'{'}v{'}'} — hakikisho la kusoma tu. Lifanyie toleo la serving hatua ya retract ili kufanya mabadiliko.",
+      frozen: 'Maudhui yamesitishwa kwenye toleo la {\'{\'}v{\'}\'} — hakikisho la kusoma tu. Lifanyie toleo la serving hatua ya retract ili kufanya mabadiliko.',
       none: 'Hakuna',
-      expertHint:
-        'Badilisha hadi hali ya Utaalamu ili kuona JSON ghafi ya uhalalishaji, kuchuja kulingana na uzito, na kubatilisha ukaguzi.',
+      expertHint: 'Badilisha hadi hali ya Utaalamu ili kuona JSON ghafi ya uhalalishaji, kuchuja kulingana na uzito, na kubatilisha ukaguzi.',
       headline: {
-        blockers: 'Masuala {n} yanayozuia — yarekebishe kabla ya kuchapisha',
+        blockers: '{n} matatizo yanayozuia — yarekebishe kabla ya kuhamisha hifadhi',
         warnings: 'Mambo {n} yanahitaji uhakiki wako',
         ok: 'Inaonekana vizuri. Hakuna cha kurekebisha.'
       },
@@ -2454,8 +2388,7 @@ export default {
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
-      servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      servingTip: 'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
       alreadyBadge: 'already in an OKF repo',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     }

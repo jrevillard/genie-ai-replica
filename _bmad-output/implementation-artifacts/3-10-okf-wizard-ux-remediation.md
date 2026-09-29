@@ -215,3 +215,67 @@
   the artifact the container actually serves, with counts; a pipeline
   whose exit code can't fail is not a verification. David should
   hard-refresh (browser cache) before retesting.
+- 2026-09-29 (FULL SPEC AUDIT — David: "review everything against the
+  spec, NOT JUST the things I spotted in 3 minutes"): 6 parallel
+  auditors walked every D-decision and E-item against the code
+  (evidence-cited, tests distrusted). Artifact:
+  [`okf-wizard-audit-corrective-actions-2026-09-29.md`](okf-wizard-audit-corrective-actions-2026-09-29.md)
+  — 42 findings: 17 done / 15 partial / 2 wrong / 6 missing. KEY
+  CATCHES David had not seen: (A1) Auto-correct step is FUNCTIONALLY
+  DEAD — the panel's only scan trigger is a non-immediate `visible`
+  watcher and the shell remounts steps with visible already true, so no
+  dry-run ever runs; it shows a FALSE "Nothing to fix" with Apply
+  disabled (the props-only test kept it green). (A2) Produce dispatches
+  by VARIANT not per-file origin → mixed picks silently mis-convert
+  (crawl file via documents path loses slug identity; upload via crawl
+  path yields ZERO pages "done"). (A3) Mid-chain conversion failure
+  wedges Produce at "running" with Retry disabled. (A4) D4 purge
+  incomplete at the LOCALE layer: 13 non-en locales still title step 9
+  "Publish this repository" in their own language; review.hint
+  "about to publish" in all 14. (A5) Review-step strings + 3 glossary
+  keys + okf.wizard.finish never existed in en.js (hardcoded-English
+  fallbacks everywhere). (A6) Crawl handoff seeds URL/filename STRINGS
+  into document_ids → conversions kicked against garbage ids.
+  (A7) Workbench: has-index hardcoded false (duplicate index risk),
+  clone variant hides the picker (D6 violation), readOnly not threaded
+  to edit dialog/feeders, delete unconfirmed, label set dead-end.
+  (A8) Editor add-sources refreshes at kick, never at completion.
+  HONEST missing: T7 auto-label (no backend op), T9 decision point,
+  T10 checklists/mini-tree, near-dupe detection, type-grouping. PLEASANT
+  surprise: the export-zip endpoint ALREADY EXISTS (repos-routes.js:68)
+  — T8 is frontend-only. T1 picker verified genuinely done in code
+  (David's screenshot was the stale bundle). AWAITING DAVID'S GO on the
+  corrective batch (A1–A8 first, then B1 accounting, then re-planned
+  P1s) + his ruling on step-6 "before publishing" framing.
+- 2026-09-29 (CORRECTIVE BATCH EXECUTED — A1–A8 + B1 + A9): David said
+  go. All fixes landed with regression tests that fail without them:
+  (A1) immediate watcher — the scan now fires on step mount;
+  (A2) Produce dispatches per-file ORIGIN (legs: one documents batch +
+  one leg per crawl file; unknown origin → documents safely);
+  (A3) mid-chain kick failures fail the step with Retry (in-flight
+  409s retry 2s/4s/6s across the live-registry race); (A4+A5) the FULL
+  locale purge — steps.publish title/hint + review.hint + validate.hint
+  + headline.blockers + narrative.step6 rewritten in all 14 locales
+  (force-rewrite; the filler never overwrites), 9 missing en.js keys
+  added + propagated, okf.wizard.publish orphan deleted, wizard.finish
+  added; verified by extraction: ZERO publish framing in 5 key paths ×
+  14 files; (A6) crawl handoff seeds the REAL file_id (URL/filename
+  strings can no longer reach document_ids); (A7) workbench: hasIndex
+  computed (no second index), clone variant's picker un-hidden (D6),
+  readOnly threaded to the edit dialog + feeders, delete confirms via
+  dialog, KH label options loaded (Subject-Area-bounded);
+  (A8) editor add-sources watches conversion status and refreshes the
+  tree on landing (+ the same in-flight kick retry as the wizard);
+  (B1) both conversion routes persist created/updated/skipped on the
+  terminal record; Produce renders "+N new · M merged by slug",
+  excludes index rows from counts, persists the source log in the
+  draft. Suites: okf-server 719/719; frontend 1565/1565 (78 suites);
+  ESLint + Prettier clean; localeConsistency 5/5.
+  **A9 — found LIVE by David mid-batch** ("backed up to step 8 and it
+  froze... I cannot cancel it"): step 8 mounted the panel as a MODAL
+  with no @close handler — Cancel/✕ dead, overlay walls off the wizard.
+  Fixed with the panel's new inline mode (embedded card, Apply in-body);
+  the editor keeps its modal. httpService [OKF-ERR] now honors silent
+  (no more expected-404 noise from the deferred 10.5 drafts endpoint).
+  An adversarial verification workflow (6 skeptics) reviewed the batch;
+  its findings were folded in before the commit below.

@@ -2,9 +2,10 @@
   OkfStepAutocorrect — 3.10 T4 (E7.1): the step is REAL now. The full
   autocorrect stack already existed (backend POST /:repo_id/autocorrect
   with dry_run propose/apply + the editor's AutocorrectPanel) — the step
-  just never wired it and shipped placeholder text instead. The panel
-  opens on entry (the step IS the surface); after applying, the steward
-  is pointed back to Curate to review what changed.
+  just never wired it and shipped placeholder text instead. The panel is
+  EMBEDDED (A9: inline mode — the original always-open MODAL had no close
+  handler, so Cancel/✕ were dead and the overlay walled off the wizard);
+  after applying, the steward is pointed back to Curate.
 -->
 <template>
   <div class="okf-step">
@@ -36,7 +37,7 @@
         )
       }}
     </p>
-    <OkfAutocorrectPanel :visible="!!repoId" :repo-id="repoId" @applied="onApplied" />
+    <OkfAutocorrectPanel :visible="!!repoId" inline :repo-id="repoId" @applied="onApplied" />
   </div>
 </template>
 

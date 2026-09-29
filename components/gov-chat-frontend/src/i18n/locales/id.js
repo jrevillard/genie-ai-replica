@@ -412,10 +412,8 @@ export default {
       gitRepoAccess: 'Upaya Akses Repositori Git',
       gitRepoAccessDesc: 'upaya untuk mengakses file repositori .git terdeteksi',
       recommendedAction: 'Tindakan yang Direkomendasikan',
-      rateLimitRecommendation:
-        'Pertimbangkan untuk menerapkan pembatasan laju, pemblokiran IP untuk pelanggar berulang, dan pastikan pengerasan server yang tepat telah dilakukan.',
-      envFileRecommendation:
-        'Pastikan file lingkungan tidak dapat diakses dari direktori web dan konfigurasi server memblokir akses ke file sensitif dengan benar.',
+      rateLimitRecommendation: 'Pertimbangkan untuk menerapkan pembatasan laju, pemblokiran IP untuk pelanggar berulang, dan pastikan pengerasan server yang tepat telah dilakukan.',
+      envFileRecommendation: 'Pastikan file lingkungan tidak dapat diakses dari direktori web dan konfigurasi server memblokir akses ke file sensitif dengan benar.',
       gitRepoRecommendation: 'Pastikan direktori .git diamankan dengan benar dan tidak dapat diakses dari web.',
       logPatternMatches: 'Pola log ditemukan',
       patternMatchNote:
@@ -466,14 +464,11 @@ export default {
       loadError: 'Gagal memuat hierarki pengetahuan.',
       loadTranslationsError: 'Gagal memuat terjemahan.',
       confirmCancelTitle: 'Perubahan Belum Disimpan',
-      confirmCancelEdit:
-        'Anda memiliki perubahan yang belum disimpan yang akan hilang. Apakah Anda yakin ingin pindah tab?',
+      confirmCancelEdit: 'Anda memiliki perubahan yang belum disimpan yang akan hilang. Apakah Anda yakin ingin pindah tab?',
       confirmDeleteTitleCategory: 'Hapus Kategori?',
       confirmDeleteTitleService: 'Hapus Layanan?',
-      confirmDeleteCategory:
-        'Apakah Anda yakin ingin menghapus Kategori "{itemName}"? Tindakan ini tidak dapat dibatalkan.',
-      confirmDeleteService:
-        'Apakah Anda yakin ingin menghapus Layanan "{itemName}"? Tindakan ini tidak dapat dibatalkan.',
+      confirmDeleteCategory: 'Apakah Anda yakin ingin menghapus Kategori "{itemName}"? Tindakan ini tidak dapat dibatalkan.',
+      confirmDeleteService: 'Apakah Anda yakin ingin menghapus Layanan "{itemName}"? Tindakan ini tidak dapat dibatalkan.',
       deleteSuccessCategory: 'Kategori berhasil dihapus.',
       deleteSuccessService: 'Layanan berhasil dihapus.',
       deleteErrorCategory: 'Gagal menghapus Kategori.',
@@ -734,7 +729,7 @@ export default {
     chatTitle: 'Judul Obrolan',
     chatTitlePlaceholder: 'Masukkan judul untuk obrolan ini',
     deleteFolder: 'Hapus Folder',
-    deleteFolderConfirm: "Apakah Anda yakin ingin menghapus folder '{name}'?",
+    deleteFolderConfirm: 'Apakah Anda yakin ingin menghapus folder \'{name}\'?',
     chatsMoveWarning: 'Semua obrolan di folder ini akan dipindahkan ke folder default.',
     weatherTitle: 'Prakiraan Cuaca',
     weatherLoading: 'Memuat data cuaca...',
@@ -824,48 +819,39 @@ export default {
     },
     cat2: {
       name: '2. Layanan Kesehatan & Sosial',
-      children:
-        'Akses layanan kesehatan publik,Program vaksinasi,Asuransi kesehatan,Tunjangan disabilitas,Bantuan sosial dan pangan'
+      children: 'Akses layanan kesehatan publik,Program vaksinasi,Asuransi kesehatan,Tunjangan disabilitas,Bantuan sosial dan pangan'
     },
     cat3: {
       name: '3. Pendidikan & Pembelajaran',
-      children:
-        'Sekolah dan universitas negeri,Beasiswa dan pinjaman mahasiswa,Program pendidikan orang dewasa,Sumber belajar online'
+      children: 'Sekolah dan universitas negeri,Beasiswa dan pinjaman mahasiswa,Program pendidikan orang dewasa,Sumber belajar online'
     },
     cat4: {
       name: '4. Ketenagakerjaan & Layanan Buruh',
-      children:
-        'Pencarian kerja dan tunjangan pengangguran,Perlindungan dan hak pekerja,Peraturan keselamatan kerja,Pelatihan keterampilan dan magang'
+      children: 'Pencarian kerja dan tunjangan pengangguran,Perlindungan dan hak pekerja,Peraturan keselamatan kerja,Pelatihan keterampilan dan magang'
     },
     cat5: {
       name: '5. Pajak & Pendapatan',
-      children:
-        'Pelaporan pajak penghasilan dan restitusi,Pembayaran pajak properti,Kepatuhan pajak bisnis,Bea cukai dan impor'
+      children: 'Pelaporan pajak penghasilan dan restitusi,Pembayaran pajak properti,Kepatuhan pajak bisnis,Bea cukai dan impor'
     },
     cat6: {
       name: '6. Keamanan & Keadilan Publik',
-      children:
-        'Polisi dan layanan darurat,Pengadilan dan layanan bantuan hukum,Pelaporan kejahatan,Hukum perlindungan konsumen'
+      children: 'Polisi dan layanan darurat,Pengadilan dan layanan bantuan hukum,Pelaporan kejahatan,Hukum perlindungan konsumen'
     },
     cat7: {
       name: '7. Transportasi & Mobilitas',
-      children:
-        'SIM dan registrasi kendaraan,Transportasi umum dan infrastruktur,Pelanggaran lalu lintas dan denda,Program keselamatan jalan'
+      children: 'SIM dan registrasi kendaraan,Transportasi umum dan infrastruktur,Pelanggaran lalu lintas dan denda,Program keselamatan jalan'
     },
     cat8: {
       name: '8. Perumahan & Pembangunan Kota',
-      children:
-        'Bantuan perumahan rakyat,Pendaftaran properti dan catatan tanah,Pinjaman dan subsidi perumahan,Izin zonasi dan bangunan'
+      children: 'Bantuan perumahan rakyat,Pendaftaran properti dan catatan tanah,Pinjaman dan subsidi perumahan,Izin zonasi dan bangunan'
     },
     cat9: {
       name: '9. Utilitas & Lingkungan',
-      children:
-        'Layanan air dan listrik,Pengelolaan limbah dan daur ulang,Peraturan lingkungan,Inisiatif energi terbarukan'
+      children: 'Layanan air dan listrik,Pengelolaan limbah dan daur ulang,Peraturan lingkungan,Inisiatif energi terbarukan'
     },
     cat10: {
       name: '10. Bisnis & Perdagangan',
-      children:
-        'Pendaftaran dan perizinan usaha,Peraturan dan izin perdagangan,Hibah dan insentif UKM,Dukungan e-commerce dan bisnis digital'
+      children: 'Pendaftaran dan perizinan usaha,Peraturan dan izin perdagangan,Hibah dan insentif UKM,Dukungan e-commerce dan bisnis digital'
     },
     cat11: {
       name: '11. Jaminan Sosial & Pensiun',
@@ -873,8 +859,7 @@ export default {
     },
     cat12: {
       name: '12. Keterlibatan Masyarakat & Sipil',
-      children:
-        'Pemungutan suara dan pemilu,Umpan balik publik dan keluhan warga,Program sukarela dan komunitas,Partisipasi pemerintah daerah'
+      children: 'Pemungutan suara dan pemilu,Umpan balik publik dan keluhan warga,Program sukarela dan komunitas,Partisipasi pemerintah daerah'
     }
   },
   settings: {
@@ -934,22 +919,19 @@ export default {
     user: 'Pengguna',
     loadingUserInfo: 'Memuat informasi pengguna...',
     resetUserDataTitle: 'Atur Ulang Data Pengguna',
-    confirmResetUserData:
-      'Apakah Anda yakin ingin mengatur ulang semua data profil Anda? Ini akan menghapus semua informasi profil dan riwayat obrolan Anda, tetapi kredensial akun Anda akan tetap ada.',
+    confirmResetUserData: 'Apakah Anda yakin ingin mengatur ulang semua data profil Anda? Ini akan menghapus semua informasi profil dan riwayat obrolan Anda, tetapi kredensial akun Anda akan tetap ada.',
     reset: 'Atur Ulang',
     deleteAccount: 'Hapus akun saya',
     deleteAccountDesc: 'Hapus akun dan semua data secara permanen. Tindakan ini tidak dapat dibatalkan.',
     deleteAccountTitle: 'Hapus Akun',
-    confirmDeleteAccount:
-      'Apakah Anda yakin ingin menghapus akun Anda? Tindakan ini bersifat permanen dan tidak dapat dibatalkan. Semua data Anda akan dihapus.',
+    confirmDeleteAccount: 'Apakah Anda yakin ingin menghapus akun Anda? Tindakan ini bersifat permanen dan tidak dapat dibatalkan. Semua data Anda akan dihapus.',
     delete: 'Hapus',
     accountDeleted: 'Akun Anda telah dihapus.',
     failedToDeleteAccount: 'Gagal menghapus akun Anda. Silakan coba lagi nanti.'
   },
   userProfile: {
     title: 'Profil Pengguna',
-    privacyInfo:
-      'Dengan memberikan informasi lebih lanjut, Anda akan mendapatkan respons yang lebih akurat dan bermakna dari chatbot. Tinjau',
+    privacyInfo: 'Dengan memberikan informasi lebih lanjut, Anda akan mendapatkan respons yang lebih akurat dan bermakna dari chatbot. Tinjau',
     privacyPolicyLink: 'Kebijakan Privasi',
     tabComingSoon: 'Tab ini sedang dalam pengembangan dan akan segera tersedia.',
     saveSuccess: 'Profil berhasil disimpan',
@@ -1214,10 +1196,8 @@ export default {
     noMatchingCountries: 'Tidak ada negara yang cocok',
     noMatchingDisciplines: 'Tidak ada disiplin ilmu yang cocok',
     noMatchingDegrees: 'Tidak ada gelar yang cocok',
-    educationOptions:
-      'Akuntansi,Teknik Dirgantara,Ilmu Pertanian,Antropologi,Arsitektur,Sejarah Seni,Kecerdasan Buatan,Astronomi,Astrofisika,Biokimia,Teknik Biomedis,Bioteknologi,Administrasi Bisnis,Teknik Kimia,Kimia,Teknik Sipil,Komunikasi,Teknik Komputer,Ilmu Komputer,Manajemen Konstruksi,Peradilan Pidana,Keamanan Siber,Ilmu Data,Kedokteran Gigi,Ekonomi,Pendidikan,Teknik Elektro,Pendidikan Dasar,Sastra Inggris,Teknik Lingkungan,Ilmu Lingkungan,Desain Mode,Studi Film,Keuangan,Seni Rupa,Ilmu Pangan,Ilmu Forensik,Desain Game,Geografi,Geologi,Desain Grafis,Administrasi Kesehatan,Sejarah,Manajemen Perhotelan,Sumber Daya Manusia,Desain Industri,Teknik Industri,Sistem Informasi,Teknologi Informasi,Desain Interior,Bisnis Internasional,Hubungan Internasional,Jurnalisme,Hukum,Ilmu Perpustakaan,Linguistik,Manajemen,Pemasaran,Ilmu Material,Matematika,Teknik Mesin,Studi Media,Kedokteran,Meteorologi,Mikrobiologi,Musik,Nanoteknologi,Keperawatan,Gizi,Terapi Okupasi,Oseanografi,Teknik Perminyakan,Farmasi,Filsafat,Fotografi,Pendidikan Jasmani,Fisioterapi,Fisika,Ilmu Politik,Psikologi,Administrasi Publik,Kesehatan Masyarakat,Hubungan Masyarakat,Robotika,Pendidikan Menengah,Pekerjaan Sosial,Sosiologi,Rekayasa Perangkat Lunak,Pendidikan Khusus,Manajemen Olahraga,Statistik,Teknik Sistem,Seni Teater,Pariwisata,Perencanaan Kota,Kedokteran Hewan,Pengembangan Web,Biologi Satwa Liar,Zoologi',
-    degreeOptions:
-      'Diploma,Sarjana Seni (B.A.),Sarjana Sains (B.S.),Sarjana Teknik (B.Eng.),Sarjana Administrasi Bisnis (B.B.A.),Sarjana Seni Rupa (B.F.A.),Sarjana Pendidikan (B.Ed.),Sarjana Kedokteran (MBBS),Sarjana Hukum (LL.B.),Magister Seni (M.A.),Magister Sains (M.S.),Magister Administrasi Bisnis (M.B.A.),Magister Teknik (M.Eng.),Magister Seni Rupa (M.F.A.),Magister Pendidikan (M.Ed.),Magister Hukum (LL.M.),Magister Kesehatan Masyarakat (M.P.H.),Doktor Filsafat (Ph.D.),Doktor Kedokteran (M.D.),Doktor Pendidikan (Ed.D.),Doktor Administrasi Bisnis (D.B.A.),Doktor Yurisprudensi (J.D.),Diploma Profesional,Diploma Teknis,Sertifikat Kejuruan,Sertifikat Pascasarjana,Diploma Pascasarjana,Pascadoktoral',
+    educationOptions: 'Akuntansi,Teknik Dirgantara,Ilmu Pertanian,Antropologi,Arsitektur,Sejarah Seni,Kecerdasan Buatan,Astronomi,Astrofisika,Biokimia,Teknik Biomedis,Bioteknologi,Administrasi Bisnis,Teknik Kimia,Kimia,Teknik Sipil,Komunikasi,Teknik Komputer,Ilmu Komputer,Manajemen Konstruksi,Peradilan Pidana,Keamanan Siber,Ilmu Data,Kedokteran Gigi,Ekonomi,Pendidikan,Teknik Elektro,Pendidikan Dasar,Sastra Inggris,Teknik Lingkungan,Ilmu Lingkungan,Desain Mode,Studi Film,Keuangan,Seni Rupa,Ilmu Pangan,Ilmu Forensik,Desain Game,Geografi,Geologi,Desain Grafis,Administrasi Kesehatan,Sejarah,Manajemen Perhotelan,Sumber Daya Manusia,Desain Industri,Teknik Industri,Sistem Informasi,Teknologi Informasi,Desain Interior,Bisnis Internasional,Hubungan Internasional,Jurnalisme,Hukum,Ilmu Perpustakaan,Linguistik,Manajemen,Pemasaran,Ilmu Material,Matematika,Teknik Mesin,Studi Media,Kedokteran,Meteorologi,Mikrobiologi,Musik,Nanoteknologi,Keperawatan,Gizi,Terapi Okupasi,Oseanografi,Teknik Perminyakan,Farmasi,Filsafat,Fotografi,Pendidikan Jasmani,Fisioterapi,Fisika,Ilmu Politik,Psikologi,Administrasi Publik,Kesehatan Masyarakat,Hubungan Masyarakat,Robotika,Pendidikan Menengah,Pekerjaan Sosial,Sosiologi,Rekayasa Perangkat Lunak,Pendidikan Khusus,Manajemen Olahraga,Statistik,Teknik Sistem,Seni Teater,Pariwisata,Perencanaan Kota,Kedokteran Hewan,Pengembangan Web,Biologi Satwa Liar,Zoologi',
+    degreeOptions: 'Diploma,Sarjana Seni (B.A.),Sarjana Sains (B.S.),Sarjana Teknik (B.Eng.),Sarjana Administrasi Bisnis (B.B.A.),Sarjana Seni Rupa (B.F.A.),Sarjana Pendidikan (B.Ed.),Sarjana Kedokteran (MBBS),Sarjana Hukum (LL.B.),Magister Seni (M.A.),Magister Sains (M.S.),Magister Administrasi Bisnis (M.B.A.),Magister Teknik (M.Eng.),Magister Seni Rupa (M.F.A.),Magister Pendidikan (M.Ed.),Magister Hukum (LL.M.),Magister Kesehatan Masyarakat (M.P.H.),Doktor Filsafat (Ph.D.),Doktor Kedokteran (M.D.),Doktor Pendidikan (Ed.D.),Doktor Administrasi Bisnis (D.B.A.),Doktor Yurisprudensi (J.D.),Diploma Profesional,Diploma Teknis,Sertifikat Kejuruan,Sertifikat Pascasarjana,Diploma Pascasarjana,Pascadoktoral',
     aria: {
       tabList: 'Bagian formulir profil',
       nextButton: 'Lanjut ke bagian berikutnya',
@@ -1232,11 +1212,9 @@ export default {
     streamingError: 'Respons terputus. Silakan coba lagi.',
     aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen pustaka',
     welcomeMessage: 'Selamat datang! Ada yang bisa saya bantu hari ini?',
-    configMismatchWarning:
-      'Ketidakcocokan konfigurasi: {warnings}. Harap periksa Bantuan Cepat dan konfigurasi hierarki pengetahuan.',
+    configMismatchWarning: 'Ketidakcocokan konfigurasi: {warnings}. Harap periksa Bantuan Cepat dan konfigurasi hierarki pengetahuan.',
     categoryNotFound: 'Kategori "{label}" tidak ditemukan dalam hierarki pengetahuan',
-    serviceLabelMismatch:
-      'Layanan "{label}" menggunakan label antarmuka pengguna yang mungkin tidak sesuai dengan hierarki pengetahuan',
+    serviceLabelMismatch: 'Layanan "{label}" menggunakan label antarmuka pengguna yang mungkin tidak sesuai dengan hierarki pengetahuan',
     noFilterWarning: 'Tidak ada filter konteks yang aktif — kueri tidak akan difilter.',
     placeholder: 'Ketik pertanyaan Anda di sini...',
     sendButton: 'Kirim',
@@ -1266,8 +1244,7 @@ export default {
     saveConfirmTitle: 'Simpan Percakapan yang Ada',
     saveConfirmMessage: 'Simpan percakapan yang ada?',
     loadConfirmTitle: 'Muat Percakapan yang Ada',
-    loadConfirmMessage:
-      'Anda memiliki perubahan yang belum disimpan. Apakah Anda ingin membuangnya dan memuat percakapan yang dipilih, atau simpan percakapan saat ini terlebih dahulu?',
+    loadConfirmMessage: 'Anda memiliki perubahan yang belum disimpan. Apakah Anda ingin membuangnya dan memuat percakapan yang dipilih, atau simpan percakapan saat ini terlebih dahulu?',
     loadAndDiscard: 'Muat dan Buang',
     saveAndLoad: 'Simpan dan Muat',
     saveAndStartNew: 'Simpan dan Mulai Baru',
@@ -1282,24 +1259,15 @@ export default {
     removeItem: 'Hapus'
   },
   quickhelp: {
-    applyForIDPrompt:
-      "Bertindaklah sebagai pakar pendaftaran sipil Kenya yang solutif. Jelaskan langkah-langkah untuk mendapatkan KTP Nasional (Maisha Namba) atau mengganti yang hilang. PENTING: Berikan daftar dokumen yang diperlukan secara jelas (mis. Akta Kelahiran, salinan KTP orang tua) dan sarankan pengguna untuk mengunjungi Huduma Centre atau kantor Registrar of Persons terdekat. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    payTaxesPrompt:
-      "Bertindaklah sebagai pemandu KRA (Kenya Revenue Authority). Jelaskan proses pelaporan SPT, pengajuan KRA PIN, atau pengaturan ulang kata sandi di portal iTax. PENTING: Ingatkan pengguna tentang batas waktu 30 Juni untuk pelaporan tahunan dan pandu mereka tentang cara mengajukan SPT Nihil jika mereka tidak memiliki penghasilan. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    startBusinessPrompt:
-      "Bertindaklah sebagai konsultan bisnis untuk layanan eCitizen. Pandu pengguna melalui reservasi nama bisnis dan pendaftaran perusahaan di Kenya. PENTING: Jelaskan biaya terkini untuk pencarian nama dan pendaftaran, dan arahkan pengguna ke portal resmi eCitizen untuk menyelesaikan aplikasi. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    findHealthcarePrompt:
-      "Bertindaklah sebagai pemandu layanan kesehatan. Berikan informasi tentang transisi dari NHIF ke SHIF (Social Health Insurance Fund) dan cara mendaftar. PENTING: Bagikan kode USSD resmi (seperti *263#) atau tautan situs web untuk pendaftaran dan jelaskan manfaat perlindungan kesehatan masyarakat. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    educationServicesPrompt:
-      "Bertindaklah sebagai konselor pendidikan. Bahas kurikulum CBC, pendaftaran NEMIS, atau penempatan universitas melalui KUCCPS. PENTING: Jelaskan bagaimana orang tua dapat memeriksa hasil ujian nasional melalui SMS atau portal KNEC saat dirilis. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    transportLicensesPrompt:
-      "Bertindaklah sebagai pemandu layanan NTSA. Jelaskan proses pembaruan SIM, uji kelayakan kendaraan, atau pengelolaan akun TIMS. PENTING: Pandu pengguna tentang cara masuk ke portal eCitizen NTSA untuk mengajukan Smart DL mereka atau memesan jadwal uji kelayakan kendaraan. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    housingProgramsPrompt:
-      "Bertindaklah sebagai penasihat program perumahan. Jelaskan pendaftaran Program Perumahan Terjangkau (Boma Yangu) dan proses kontribusi sukarela. PENTING: Arahkan pengguna ke portal Boma Yangu untuk melihat proyek dan jelaskan kriteria kelayakan untuk alokasi. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    findJobsPrompt:
-      "Bertindaklah sebagai pelatih karier untuk pelayanan publik. Pandu pengguna dalam membuat profil dan melamar lowongan melalui portal Public Service Commission (PSC). PENTING: Sarankan pengguna untuk menyiapkan sertifikat akademik mereka dan secara rutin memeriksa situs web PSC atau harian lokal untuk iklan MyGov. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    justChatPrompt:
-      "Bertindaklah sebagai pendamping lokal yang ramah. Bersikap sopan, membantu, dan berpengetahuan luas tentang budaya dan kehidupan sehari-hari Kenya. PENTING: Ingatkan pengguna bahwa meskipun Anda dapat mengobrol tentang apa pun, kekuatan utama Anda adalah membantu mereka menavigasi layanan pemerintah Kenya seperti **KTP**, **Pajak**, dan **Pendaftaran Usaha**. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'."
+    applyForIDPrompt: 'Bertindaklah sebagai pakar pendaftaran sipil Kenya yang solutif. Jelaskan langkah-langkah untuk mendapatkan KTP Nasional (Maisha Namba) atau mengganti yang hilang. PENTING: Berikan daftar dokumen yang diperlukan secara jelas (mis. Akta Kelahiran, salinan KTP orang tua) dan sarankan pengguna untuk mengunjungi Huduma Centre atau kantor Registrar of Persons terdekat. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.',
+    payTaxesPrompt: 'Bertindaklah sebagai pemandu KRA (Kenya Revenue Authority). Jelaskan proses pelaporan SPT, pengajuan KRA PIN, atau pengaturan ulang kata sandi di portal iTax. PENTING: Ingatkan pengguna tentang batas waktu 30 Juni untuk pelaporan tahunan dan pandu mereka tentang cara mengajukan SPT Nihil jika mereka tidak memiliki penghasilan. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.',
+    startBusinessPrompt: 'Bertindaklah sebagai konsultan bisnis untuk layanan eCitizen. Pandu pengguna melalui reservasi nama bisnis dan pendaftaran perusahaan di Kenya. PENTING: Jelaskan biaya terkini untuk pencarian nama dan pendaftaran, dan arahkan pengguna ke portal resmi eCitizen untuk menyelesaikan aplikasi. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.',
+    findHealthcarePrompt: 'Bertindaklah sebagai pemandu layanan kesehatan. Berikan informasi tentang transisi dari NHIF ke SHIF (Social Health Insurance Fund) dan cara mendaftar. PENTING: Bagikan kode USSD resmi (seperti *263#) atau tautan situs web untuk pendaftaran dan jelaskan manfaat perlindungan kesehatan masyarakat. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.',
+    educationServicesPrompt: 'Bertindaklah sebagai konselor pendidikan. Bahas kurikulum CBC, pendaftaran NEMIS, atau penempatan universitas melalui KUCCPS. PENTING: Jelaskan bagaimana orang tua dapat memeriksa hasil ujian nasional melalui SMS atau portal KNEC saat dirilis. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.',
+    transportLicensesPrompt: 'Bertindaklah sebagai pemandu layanan NTSA. Jelaskan proses pembaruan SIM, uji kelayakan kendaraan, atau pengelolaan akun TIMS. PENTING: Pandu pengguna tentang cara masuk ke portal eCitizen NTSA untuk mengajukan Smart DL mereka atau memesan jadwal uji kelayakan kendaraan. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.',
+    housingProgramsPrompt: 'Bertindaklah sebagai penasihat program perumahan. Jelaskan pendaftaran Program Perumahan Terjangkau (Boma Yangu) dan proses kontribusi sukarela. PENTING: Arahkan pengguna ke portal Boma Yangu untuk melihat proyek dan jelaskan kriteria kelayakan untuk alokasi. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.',
+    findJobsPrompt: 'Bertindaklah sebagai pelatih karier untuk pelayanan publik. Pandu pengguna dalam membuat profil dan melamar lowongan melalui portal Public Service Commission (PSC). PENTING: Sarankan pengguna untuk menyiapkan sertifikat akademik mereka dan secara rutin memeriksa situs web PSC atau harian lokal untuk iklan MyGov. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.',
+    justChatPrompt: 'Bertindaklah sebagai pendamping lokal yang ramah. Bersikap sopan, membantu, dan berpengetahuan luas tentang budaya dan kehidupan sehari-hari Kenya. PENTING: Ingatkan pengguna bahwa meskipun Anda dapat mengobrol tentang apa pun, kekuatan utama Anda adalah membantu mereka menavigasi layanan pemerintah Kenya seperti **KTP**, **Pajak**, dan **Pendaftaran Usaha**. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.'
   },
   common: {
     cancel: 'Batal',
@@ -1366,14 +1334,10 @@ export default {
     tabs: {
       details: 'Detail',
       ingestionLog: 'Log Pemrosesan',
-      detailsHint:
-        'Metadata untuk berkas ini: nama, penulis, dan label hierarki pengetahuan yang digunakan AI untuk mengarahkan pertanyaan. Proses ingest membutuhkan setidaknya satu label.',
-      dashboardHint:
-        'Tampilan langsung perayapan situs web berkas ini: kecepatan, antrean, kesalahan, dan kemajuan. Ketika perayapan berhasil, footer di bawah mengubahnya menjadi repositori OKF.',
-      crawlLogHint:
-        'Log per halaman perayapan situs web: URL mana yang diambil, dialihkan, atau gagal. Ditulis saat perayapan berjalan.',
-      ingestionLogHint:
-        'Kemajuan tahap demi tahap penyiapan berkas ini untuk jawaban AI: pemotongan (chunking), pelabelan, embedding, dan pengindeksan. Kesalahan di sini menunjukkan secara tepat di mana proses ingest terhenti.'
+      detailsHint: 'Metadata untuk berkas ini: nama, penulis, dan label hierarki pengetahuan yang digunakan AI untuk mengarahkan pertanyaan. Proses ingest membutuhkan setidaknya satu label.',
+      dashboardHint: 'Tampilan langsung perayapan situs web berkas ini: kecepatan, antrean, kesalahan, dan kemajuan. Ketika perayapan berhasil, footer di bawah mengubahnya menjadi repositori OKF.',
+      crawlLogHint: 'Log per halaman perayapan situs web: URL mana yang diambil, dialihkan, atau gagal. Ditulis saat perayapan berjalan.',
+      ingestionLogHint: 'Kemajuan tahap demi tahap penyiapan berkas ini untuk jawaban AI: pemotongan (chunking), pelabelan, embedding, dan pengindeksan. Kesalahan di sini menunjukkan secara tepat di mana proses ingest terhenti.'
     },
     log: {
       killActions: 'Tindakan Penghentian:',
@@ -1419,11 +1383,9 @@ export default {
       retractTitle: 'Konfirmasi Penarikan',
       deleteTitle: 'Konfirmasi Penghapusan',
       killDocTitle: 'Hentikan Pemrosesan Dokumen',
-      killDoc:
-        'Apakah Anda yakin ingin menghentikan tugas pemrosesan untuk DOKUMEN INI? Proses akan mencoba pembatalan yang aman.',
+      killDoc: 'Apakah Anda yakin ingin menghentikan tugas pemrosesan untuk DOKUMEN INI? Proses akan mencoba pembatalan yang aman.',
       killProcTitle: 'Hentikan SELURUH Proses Pemrosesan',
-      killProc:
-        'PERINGATAN: Ini akan menghentikan seluruh layanan pemrosesan backend, mempengaruhi SEMUA file yang sedang diproses. Apakah Anda benar-benar yakin?'
+      killProc: 'PERINGATAN: Ini akan menghentikan seluruh layanan pemrosesan backend, mempengaruhi SEMUA file yang sedang diproses. Apakah Anda benar-benar yakin?'
     }
   },
   uploadDialog: {
@@ -1434,8 +1396,7 @@ export default {
     remove: 'Hapus',
     uploading: 'Mengunggah...',
     notifications: {
-      dropError:
-        'Hanya file yang bisa dilepaskan. Harap periksa apakah Anda menyeret file yang valid dari komputer Anda.',
+      dropError: 'Hanya file yang bisa dilepaskan. Harap periksa apakah Anda menyeret file yang valid dari komputer Anda.',
       typeNotAllowed: 'Tipe file "{extension}" tidak diizinkan.',
       shortcutUnsupported: 'File pintasan (.url) tidak didukung. Harap seret file yang sebenarnya.',
       duplicate: 'File "{fileName}" sudah ditambahkan.',
@@ -1459,7 +1420,7 @@ export default {
       none: 'Belum ada versi yang dicetak — melakukan publish akan membuat v1.',
       notServing: 'Tidak melayani',
       publish: 'Buat versi baru',
-      published: "Versi v{'{'}v{'}'} dipublikasikan — bundel {'{'}f{'}'} disimpan di repositori dokumen.",
+      published: 'Versi v{\'{\'}v{\'}\'} dipublikasikan — bundel {\'{\'}f{\'}\'} disimpan di repositori dokumen.',
       serving: 'Di-ingest (serving)',
       title: 'Versi'
     },
@@ -1479,7 +1440,7 @@ export default {
         note: 'Entitas yang ditandai adalah bagian dari konten yang dipublikasikan. Jika Anda telah meninjaunya (mis. rincian kontak resmi), konfirmasikan dan lanjutkan.'
       },
       publish: {
-        body: "Melakukan publish akan mencetak v{'{'}n{'}'} dan menyimpan bundel \"{'{'}file{'}'}\" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.",
+        body: 'Melakukan publish akan mencetak v{\'{\'}n{\'}\'} dan menyimpan bundel "{\'{\'}file{\'}\'}" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.',
         confirm: 'Publikasikan',
         inProgress: 'Menerbitkan — mengekspor dan mentransfer bundel…',
         title: 'Publikasikan'
@@ -1493,21 +1454,21 @@ export default {
         editor: 'Editor',
         wizard: 'Wisaya'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{\'{\'}n{\'}\'}',
       versions: 'Versi',
       deleteLabel: 'Hapus'
     },
     logs: {
-      labeled: "diberi label: {'{'}n{'}'}",
-      fallbacks: "fallback LLM: {'{'}n{'}'}",
-      concepts: "konsep: {'{'}n{'}'}",
+      labeled: 'diberi label: {\'{\'}n{\'}\'}',
+      fallbacks: 'fallback LLM: {\'{\'}n{\'}\'}',
+      concepts: 'konsep: {\'{\'}n{\'}\'}',
       col: {
         action: 'Tindakan',
         description: 'Deskripsi',
         user: 'Pengguna',
         when: 'Tanggal & waktu'
       },
-      count: "{'{'}n{'}'} entri",
+      count: '{\'{\'}n{\'}\'} entri',
       loadFailed: 'Gagal memuat log aktivitas.',
       none: 'Belum ada aktivitas yang dicatat — tindakan repositori muncul di sini saat terjadi.',
       title: 'Log aktivitas'
@@ -1525,8 +1486,8 @@ export default {
       zoomIn: 'Perbesar',
       zoomOut: 'Perkecil',
       card: {
-        links: "{'{'}n{'}'} tautan",
-        chunks: "{'{'}n{'}'} potongan",
+        links: '{\'{\'}n{\'}\'} tautan',
+        chunks: '{\'{\'}n{\'}\'} potongan',
         failed: 'pengindeksan gagal',
         flagged: 'entitas ditandai',
         hub: 'Hub indeks',
@@ -1548,8 +1509,7 @@ export default {
       alreadyBadge: 'sudah di repositori OKF lain',
       servingTip: 'Dokumen ini saat ini melayani korpus bebas — repositori baru tidak dapat di-ingest sampai ditarik.',
       alreadyTip: 'Dokumen ini sudah menjadi sumber repositori OKF lain.',
-      servingWarn:
-        '{n} dokumen masih melayani korpus bebas. Impor berhasil, tetapi repositori ini tidak dapat di-ingest sampai dokumen tersebut ditarik.',
+      servingWarn: '{n} dokumen masih melayani korpus bebas. Impor berhasil, tetapi repositori ini tidak dapat di-ingest sampai dokumen tersebut ditarik.',
       cancel: 'Batal',
       importing: 'Mengimpor…',
       go: 'Impor',
@@ -1597,15 +1557,12 @@ export default {
           problem: 'Masalahnya',
           noError: 'Ditandai gagal tanpa alasan tercatat.',
           fixLabel: 'Cara memperbaiki',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {\'{\'}n{\'}\'}',
+          when: 'Last attempt {\'{\'}when{\'}\'}',
           fix: {
-            reaper:
-              'Worker ingest berhenti menunggu dalam batas waktunya (drain penuh) — konten tetap utuh. Perbaikan: edit sedikit file ini lalu simpan untuk mengantri ulang, atau retract dan ingest ulang seluruh repo.',
-            dataprep:
-              'Layanan persiapan konten gagal memproses ingest ini. Perbaikan: edit dan simpan untuk mengantri ulang; jika berulang, periksa kesehatan layanan dataprep.',
-            generic:
-              'Pengindeksan gagal. Perbaikan: edit konten dan simpan untuk mengantri ulang, atau retract dan ingest ulang seluruh repo.'
+            reaper: 'Worker ingest berhenti menunggu dalam batas waktunya (drain penuh) — konten tetap utuh. Perbaikan: edit sedikit file ini lalu simpan untuk mengantri ulang, atau retract dan ingest ulang seluruh repo.',
+            dataprep: 'Layanan persiapan konten gagal memproses ingest ini. Perbaikan: edit dan simpan untuk mengantri ulang; jika berulang, periksa kesehatan layanan dataprep.',
+            generic: 'Pengindeksan gagal. Perbaikan: edit konten dan simpan untuk mengantri ulang, atau retract dan ingest ulang seluruh repo.'
           }
         },
         indexBadge: 'indeks',
@@ -1613,8 +1570,7 @@ export default {
         loading: 'Memuat…',
         resplit: 'Pisahkan ulang',
         flagged: 'ditandai',
-        flaggedTip:
-          'Konsep dengan entitas yang ditandai — buka masing-masing, hapus atau ubah entitas, simpan (memindai ulang secara otomatis); atau konfirmasikan saat publish.',
+        flaggedTip: 'Konsep dengan entitas yang ditandai — buka masing-masing, hapus atau ubah entitas, simpan (memindai ulang secara otomatis); atau konfirmasikan saat publish.',
         piiBadge: 'PII',
         piiTip: 'Entitas yang ditandai: {k}. Buka, hapus atau ubah, lalu simpan — memindai ulang secara otomatis.',
         piiTipBare: 'Entitas yang ditandai — buka, tinjau, lalu simpan untuk memindai ulang.',
@@ -1645,7 +1601,9 @@ export default {
         title: 'Judul',
         trust: 'Tingkat kepercayaan',
         type: 'Tipe',
-        typePlaceholder: 'Pilih tipe…'
+        typePlaceholder: 'Pilih tipe…',
+        hide: 'Hide metadata',
+        show: 'Show metadata'
       },
       pane: {
         files: 'File',
@@ -1682,13 +1640,11 @@ export default {
           accept: 'Terima semua entitas yang ditandai'
         },
         body: {
-          redact:
-            'Batang tubuh setiap konsep yang ditandai diganti dengan pemberitahuan redaksi. Tindakan ini tidak dapat dibatalkan.',
+          redact: 'Batang tubuh setiap konsep yang ditandai diganti dengan pemberitahuan redaksi. Tindakan ini tidak dapat dibatalkan.',
           remove: 'Batang tubuh setiap konsep yang ditandai dikosongkan. Tindakan ini tidak dapat dibatalkan.',
-          accept:
-            'Semua entitas yang ditandai ditandai sebagai ditinjau-dan-disimpan — entitas tersebut tidak akan ditandai lagi kecuali Anda memindai ulang.'
+          accept: 'Semua entitas yang ditandai ditandai sebagai ditinjau-dan-disimpan — entitas tersebut tidak akan ditandai lagi kecuali Anda memindai ulang.'
         },
-        scope: "Konsep yang terpengaruh: {'{'}n{'}'}.",
+        scope: 'Konsep yang terpengaruh: {\'{\'}n{\'}\'}.',
         confirm: 'Terapkan',
         failed: 'Tindakan PII massal gagal — coba lagi.'
       },
@@ -1699,18 +1655,19 @@ export default {
       addSources: {
         working: 'Converting sources…',
         done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
-        failed: 'A conversion failed — check the logs; the rest may still have queued.'
+        failed: 'A conversion failed — check the logs; the rest may still have queued.',
+        landed: 'Conversions complete — {t} topics now in the tree.'
       }
     },
     dashboard: {
       bulk: {
         body: 'Setiap repositori dipublikasikan dengan pemeriksaan gerbang penuh (peninjauan PII, pengindeksan, kesesuaian). Hasil per repositori:',
         pending: 'Konfirmasikan untuk melakukan publish pada repositori yang dipilih.',
-        publishConfirm: "Publikasikan {'{'}n{'}'}",
+        publishConfirm: 'Publikasikan {\'{\'}n{\'}\'}',
         title: 'Publikasikan repositori yang dipilih'
       },
       card: {
-        actions: "Tindakan untuk {'{'}name{'}'}",
+        actions: 'Tindakan untuk {\'{\'}name{\'}\'}',
         building: 'Membangun…',
         buildingAria: 'Membangun — berkas sumber masih diproses',
         delete: 'Hapus',
@@ -1735,12 +1692,12 @@ export default {
         note: 'Entitas yang ditandai adalah bagian dari konten yang dipublikasikan. Jika Anda telah meninjaunya (mis. rincian kontak resmi), konfirmasikan dan lanjutkan.'
       },
       publish: {
-        body: "Melakukan publish akan mencetak v{'{'}n{'}'} dan menyimpan bundel \"{'{'}file{'}'}\" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.",
+        body: 'Melakukan publish akan mencetak v{\'{\'}n{\'}\'} dan menyimpan bundel "{\'{\'}file{\'}\'}" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.',
         confirm: 'Publikasikan',
         title: 'Publikasikan'
       },
       search: 'Cari...',
-      select: "Pilih {'{'}name{'}'} untuk publikasi massal",
+      select: 'Pilih {\'{\'}name{\'}\'} untuk publikasi massal',
       stage: {
         drainFailed: 'Proses ingest gagal',
         queueBehind: '{n} dalam antrean · meng-ingest {m} repo',
@@ -1748,8 +1705,8 @@ export default {
         building: 'Membangun…',
         draft: 'Draf',
         inReview: 'Dalam tinjauan',
-        ingested: "Di-ingest v{'{'}n{'}'}",
-        published: "Dipublikasikan v{'{'}n{'}'}",
+        ingested: 'Di-ingest v{\'{\'}n{\'}\'}',
+        published: 'Dipublikasikan v{\'{\'}n{\'}\'}',
         retracted: 'Ditarik',
         stepOf: 'Step '
       },
@@ -1777,7 +1734,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} lainnya",
+        more: '+ {\'{\'}n{\'}\'} lainnya',
         fixPath: 'Lakukan ingest ulang untuk mencoba lagi: retract → buat versi → ingest.'
       },
       curation: {
@@ -1791,9 +1748,9 @@ export default {
       bytes: 'Sumber dibaca',
       conceptsIndexed: 'konsep diindeks',
       elapsed: {
-        hr: "Dimulai {'{'}n{'}'} jam lalu",
+        hr: 'Dimulai {\'{\'}n{\'}\'} jam lalu',
         lt1: 'Dimulai kurang dari satu menit lalu',
-        min: "Dimulai {'{'}n{'}'} menit lalu"
+        min: 'Dimulai {\'{\'}n{\'}\'} menit lalu'
       },
       hint: {
         import: 'Repositori tetap dalam status Import hingga konversi berkas selesai.',
@@ -1836,7 +1793,7 @@ export default {
     },
     create: {
       zipOnly: 'Pilih berkas bundel .zip.',
-      stagedFile: "Disiapkan: {'{'}name{'}'}",
+      stagedFile: 'Disiapkan: {\'{\'}name{\'}\'}',
       staged: 'Bundel disiapkan — klik Buat Repositori untuk memulai impor.',
       openExisting: 'Buka repositori yang ada',
       name: 'Nama repositori',
@@ -1892,55 +1849,39 @@ export default {
       saveFailed: 'Penyimpanan frontmatter gagal'
     },
     glossary: {
-      addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      addConcept: 'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
       type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
-      title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
-      indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
-      trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
-      concept:
-        'Satu entri di repositori Anda — biasanya satu halaman atau topik tunggal. Setiap konsep memiliki frontmatter terstruktur yang dibaca asisten, ditambah teks markdown yang menjadi rujukan jawabannya.',
-      repository:
-        'Kumpulan konsep terkurasi di sekitar satu Bidang Subjek. Ini menjadi bundel OKF yang Anda publikasikan, berikan versi, dan sediakan untuk asisten.',
-      subjectArea:
-        'Di manakah pengetahuan ini berada? Bidang Subjek mengelompokkan repositori Anda dan memfokuskan label mana yang dapat Anda pilih. Tidak dapat diubah setelah pembuatan.',
+      title: 'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus: 'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier: 'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept: 'Satu entri di repositori Anda — biasanya satu halaman atau topik tunggal. Setiap konsep memiliki frontmatter terstruktur yang dibaca asisten, ditambah teks markdown yang menjadi rujukan jawabannya.',
+      repository: 'Kumpulan konsep terkurasi di sekitar satu Bidang Subjek. Ini menjadi bundel OKF yang Anda publikasikan, berikan versi, dan sediakan untuk asisten.',
+      subjectArea: 'Di manakah pengetahuan ini berada? Bidang Subjek mengelompokkan repositori Anda dan memfokuskan label mana yang dapat Anda pilih. Tidak dapat diubah setelah pembuatan.',
       selectSubjectArea: 'Pilih bidang subjek…',
-      subjectAreaMissing:
-        'Bidang Subjek dari repositori ini tidak ada dalam Hierarki Pengetahuan — menampilkan setiap label.',
-      label:
-        'Kategori dari Hierarki Pengetahuan yang memberi tahu asisten entitas macam apa konsep ini. Label adalah cara jawaban menemukan konten yang tepat.',
-      bundle:
-        'Ekspor zip dari repositori — konsep, struktur, dan metadatanya dalam satu berkas. Bundel adalah cara repositori berpindah antar-sistem.',
-      version:
-        'Cuplikan beku dari repositori pada saat publish. Pengeditan berlanjut pada versi berikutnya — versi yang dipublikasikan tidak pernah berubah.',
+      subjectAreaMissing: 'Bidang Subjek dari repositori ini tidak ada dalam Hierarki Pengetahuan — menampilkan setiap label.',
+      label: 'Kategori dari Hierarki Pengetahuan yang memberi tahu asisten entitas macam apa konsep ini. Label adalah cara jawaban menemukan konten yang tepat.',
+      bundle: 'Ekspor zip dari repositori — konsep, struktur, dan metadatanya dalam satu berkas. Bundel adalah cara repositori berpindah antar-sistem.',
+      version: 'Cuplikan beku dari repositori pada saat publish. Pengeditan berlanjut pada versi berikutnya — versi yang dipublikasikan tidak pernah berubah.',
       serving: 'Versi ini aktif: asisten membaca kontennya saat menjawab. Lakukan retract untuk membuat perubahan.',
-      ingestion:
-        'Langkah di mana versi yang dipublikasikan disiapkan untuk menjawab — teks dipecah, di-embed, dan ditautkan. Tidak ada yang sampai ke asisten sebelum proses ini.',
-      classification:
-        'Bagaimana kami menentukan entitas apa dari setiap konsep (topik, entitas, proses…). Heuristik membaca halaman secara otomatis; opsi LLM lebih lambat tetapi dapat menangani halaman yang rumit.',
-      resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      ingestion: 'Langkah di mana versi yang dipublikasikan disiapkan untuk menjawab — teks dipecah, di-embed, dan ditautkan. Tidak ada yang sampai ke asisten sebelum proses ini.',
+      classification: 'Bagaimana kami menentukan entitas apa dari setiap konsep (topik, entitas, proses…). Heuristik membaca halaman secara otomatis; opsi LLM lebih lambat tetapi dapat menangani halaman yang rumit.',
+      resplit: 'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'Gagal menyimpan',
       importFailedTitle: 'Impor gagal — berkas sumber tidak dapat dikonversi.',
       importFailedHint: 'Hapus repositori ini dan impor kembali berkas sumber.',
-      frontmatter:
-        'Informasi terstruktur di bagian atas setiap berkas — jenis, judul, label. Asisten menggunakannya untuk mengetahui tentang apa konsep tersebut.',
-      pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
-      classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      frontmatter: 'Informasi terstruktur di bagian atas setiap berkas — jenis, judul, label. Asisten menggunakannya untuk mengetahui tentang apa konsep tersebut.',
+      pickSource: 'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy: 'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
       clsHeur: 'Heuristics (fast, no LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
-      fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
-      autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
-      handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.'
+      fsPick: 'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect: 'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff: 'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      lifecycle: 'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto: 'Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.',
+      reviewHandoff: 'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview: 'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
     },
     md: {
       toolbar: 'Pemformatan',
@@ -1958,34 +1899,20 @@ export default {
       rendering: 'Merender…'
     },
     narrative: {
-      intro:
-        'Repositori OKF adalah kumpulan topik terstruktur dan berversi yang dapat dikutip oleh jawaban obrolan Anda. Anggap ini sebagai lapisan ontologis ringan untuk domain Anda — label menentukan kategori, topik menentukan entitas, sumber menentukan asal-usul.',
-      step0:
-        'Repositori OKF adalah kumpulan topik terkurasi dan berversi. Anggap ini sebagai lapisan ontologis ringan untuk domain Anda — label menentukan kategori, topik menentukan entitas, sumber menentukan asal-usul. Setelah dipublikasikan, jawaban obrolan hilir mengutip topik-topik ini berdasarkan id.',
-      step1:
-        'Tiga cara untuk mengawali repositori OKF: ambil topik dari perayapan situs web, ekstrak dari dokumen yang telah Anda unggah, atau mulai dari kanvas kosong. Mengkloning repositori yang ada akan menyalin topiknya dan memungkinkan Anda mencabangkan pekerjaan.',
-      step2:
-        'Setiap dokumen menjadi sumber topik. Produser membacanya, mengekstrak kandidat topik, dan mengusulkan hierarki. Anda akan meninjau setiap topik pada langkah berikutnya — tidak ada yang diterapkan sampai Anda menyetujuinya.',
-      step3:
-        'Kami sedang membaca sumber Anda dan mengusulkan topik. Topik dikelompokkan di bawah label kategori yang Anda pilih. Produser bersifat konservatif — ia lebih suka menyarankan topik yang lebih sedikit tetapi terstruktur rapi daripada banyak topik yang membingungkan.',
-      step4:
-        'Label adalah sumbu kategoris dari ontologi Anda — entitas macam apakah topik ini? Pilih 3-7 label yang mencakup sumbu utama; produser menggunakannya sebagai kerangka kerja untuk hierarki topik.',
-      step5:
-        'Ini adalah inti pekerjaan. Setiap topik adalah unit pengetahuan kecil yang dapat dikutip. Topik mendapatkan judul, deskripsi, dan mewarisi label yang Anda pilih. Tugas Anda adalah membuatnya teruji dan dapat dipertanggungjawabkan: ganti nama judul yang samar, gabungkan yang hampir duplikat, hapus yang tidak dapat didukung dengan sumber.',
-      step6:
-        'Kami menjalankan pemeriksaan kesesuaian: apakah setiap topik memiliki judul? Apakah labelnya valid? Apakah atribusi sumber utuh? Masalah pemblokir harus diperbaiki sebelum publikasi; peringatan dapat dikonfirmasikan.',
-      step7:
-        'Beberapa peringatan dapat diperbaiki secara otomatis: nilai status dapat disesuaikan ke enum yang valid, bidang yang hilang dapat diisi dengan default yang wajar. Terapkan perbaikan yang Anda setujui, lalu kembali ke kurator untuk meninjau.',
-      step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
-      step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
-      docMgmtEntry:
-        'Buat repositori OKF baru dari dokumen yang dipilih. Dokumen akan menjadi sumber; Anda akan meninjau dan menamai topik yang dihasilkan sebelum apa pun dipublikasikan.',
-      crawlSegment:
-        'Repositori OKF adalah kumpulan topik terstruktur dan berversi yang dapat dikutip oleh jawaban obrolan Anda.',
-      emptyDashboard:
-        'Anda belum membuat repositori OKF apa pun. Repositori OKF adalah kumpulan topik terstruktur dan dapat dikutip yang dapat dimanfaatkan oleh jawaban obrolan Anda.',
+      intro: 'Repositori OKF adalah kumpulan topik terstruktur dan berversi yang dapat dikutip oleh jawaban obrolan Anda. Anggap ini sebagai lapisan ontologis ringan untuk domain Anda — label menentukan kategori, topik menentukan entitas, sumber menentukan asal-usul.',
+      step0: 'Repositori OKF adalah kumpulan topik terkurasi dan berversi. Anggap ini sebagai lapisan ontologis ringan untuk domain Anda — label menentukan kategori, topik menentukan entitas, sumber menentukan asal-usul. Setelah dipublikasikan, jawaban obrolan hilir mengutip topik-topik ini berdasarkan id.',
+      step1: 'Tiga cara untuk mengawali repositori OKF: ambil topik dari perayapan situs web, ekstrak dari dokumen yang telah Anda unggah, atau mulai dari kanvas kosong. Mengkloning repositori yang ada akan menyalin topiknya dan memungkinkan Anda mencabangkan pekerjaan.',
+      step2: 'Setiap dokumen menjadi sumber topik. Produser membacanya, mengekstrak kandidat topik, dan mengusulkan hierarki. Anda akan meninjau setiap topik pada langkah berikutnya — tidak ada yang diterapkan sampai Anda menyetujuinya.',
+      step3: 'Kami sedang membaca sumber Anda dan mengusulkan topik. Topik dikelompokkan di bawah label kategori yang Anda pilih. Produser bersifat konservatif — ia lebih suka menyarankan topik yang lebih sedikit tetapi terstruktur rapi daripada banyak topik yang membingungkan.',
+      step4: 'Label adalah sumbu kategoris dari ontologi Anda — entitas macam apakah topik ini? Pilih 3-7 label yang mencakup sumbu utama; produser menggunakannya sebagai kerangka kerja untuk hierarki topik.',
+      step5: 'Ini adalah inti pekerjaan. Setiap topik adalah unit pengetahuan kecil yang dapat dikutip. Topik mendapatkan judul, deskripsi, dan mewarisi label yang Anda pilih. Tugas Anda adalah membuatnya teruji dan dapat dipertanggungjawabkan: ganti nama judul yang samar, gabungkan yang hampir duplikat, hapus yang tidak dapat didukung dengan sumber.',
+      step6: 'Kami menjalankan pemeriksaan kesesuaian: apakah setiap topik punya judul? Apakah label valid? Apakah atribusi sumber utuh? Masalah yang menghentikan harus diperbaiki sebelum menyerahkan repositori; peringatan dapat diakui.',
+      step7: 'Beberapa peringatan dapat diperbaiki secara otomatis: nilai status dapat disesuaikan ke enum yang valid, bidang yang hilang dapat diisi dengan default yang wajar. Terapkan perbaikan yang Anda setujui, lalu kembali ke kurator untuk meninjau.',
+      step8: 'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9: 'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry: 'Buat repositori OKF baru dari dokumen yang dipilih. Dokumen akan menjadi sumber; Anda akan meninjau dan menamai topik yang dihasilkan sebelum apa pun dipublikasikan.',
+      crawlSegment: 'Repositori OKF adalah kumpulan topik terstruktur dan berversi yang dapat dikutip oleh jawaban obrolan Anda.',
+      emptyDashboard: 'Anda belum membuat repositori OKF apa pun. Repositori OKF adalah kumpulan topik terstruktur dan dapat dikutip yang dapat dimanfaatkan oleh jawaban obrolan Anda.',
       labels: 'Label adalah sumbu kategoris dari ontologi Anda — mereka menjawab "entitas macam apakah topik ini?".',
       hide: 'Sembunyikan',
       whatIsThis: 'Apakah ini?'
@@ -2001,8 +1928,7 @@ export default {
       title: 'OKF Studio',
       help: 'Bantuan',
       helpTitle: 'Tentang OKF Studio',
-      helpBody:
-        'Repositori OKF adalah lapisan ontologis ringan — label menentukan kategori, topik menentukan entitas, sumber menentukan asal-usul. Setelah dipublikasikan, jawaban obrolan mengutip topik berdasarkan id dan memunculkan asal-usulnya.',
+      helpBody: 'Repositori OKF adalah lapisan ontologis ringan — label menentukan kategori, topik menentukan entitas, sumber menentukan asal-usul. Setelah dipublikasikan, jawaban obrolan mengutip topik berdasarkan id dan memunculkan asal-usulnya.',
       view: {
         dashboard: 'Dasbor',
         wizard: 'Wisaya'
@@ -2071,8 +1997,8 @@ export default {
         register: 'In progress',
         review: 'In review',
         approve: 'Approved',
-        publish: 'Ready to ingest',
-        retracted: 'Retracted'
+        retracted: 'Retracted',
+        publish: 'Ready to ingest'
       },
       status: {
         published: 'dipublikasikan',
@@ -2092,7 +2018,7 @@ export default {
       label: 'Wizard OKF Studio',
       back: 'Kembali',
       continue: 'Lanjutkan',
-      publish: 'Publikasikan repositori'
+      finish: 'Open the Editor'
     },
     steps: {
       entry: {
@@ -2151,7 +2077,10 @@ export default {
         benchFailed: 'Could not read the topics right now.',
         editTitle: 'Edit concept',
         deleteFailed: 'Could not delete the concept.',
-        added: '{n} topic(s) in this repository so far.'
+        added: '{n} topic(s) in this repository so far.',
+        deleteTitle: 'Delete topic',
+        deleteBody: 'This permanently removes the topic from this repository.',
+        labelFailed: 'Could not set the label.'
       },
       produce: {
         title: 'Hasilkan topik',
@@ -2165,13 +2094,15 @@ export default {
         done: '{n} topic(s) are ready — continue to review them in Curate.',
         noSources: 'No sources selected — go back to Input.',
         neverStarted: 'The conversion did not start — retry.',
-        dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        dupContent: 'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
-        sourceStat: '+{n} new (total {t})'
+        sourceStat: '+{n} new (total {t})',
+        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        docsLeg: '{n} selected document(s)',
+        legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
         title: 'Pilih label',
@@ -2181,8 +2112,7 @@ export default {
         placeholder: 'mis. Izin'
       },
       curate: {
-        embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        embedHint: 'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
         noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'Tinjau topik',
         hint: 'Setiap topik adalah unit pengetahuan kecil yang dapat dikutip. Edit judul dan deskripsi.',
@@ -2190,7 +2120,7 @@ export default {
       },
       validate: {
         title: 'Periksa masalah',
-        hint: 'Kami menjalankan pemeriksaan kesesuaian. Masalah pemblokir harus diperbaiki sebelum publikasi.',
+        hint: 'Kami menjalankan pemeriksaan kesesuaian. Masalah yang menghentikan harus diperbaiki sebelum menyerahkan repositori.',
         placeholder: 'Panel validasi hadir di Story 3-8.'
       },
       autocorrect: {
@@ -2202,15 +2132,23 @@ export default {
       },
       review: {
         title: 'Tinjau',
-        hint: 'Ringkasan tentang apa yang akan Anda publikasikan.',
+        hint: 'Ringkasan dari apa yang Anda bangun — pengiriman, persetujuan, dan penerbitan terjadi di dasbor dan editor.',
         repo: 'Repositori',
         topics: 'Topik',
         labels: 'Label',
-        sources: 'Sumber'
+        sources: 'Sumber',
+        state: 'Lifecycle state',
+        labelsSet: 'set per topic in Curate',
+        ritualOutside: 'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        versions: 'Versions',
+        logs: 'Action log',
+        rename: 'Rename',
+        noVersions: 'No versions yet — versions are minted during the approval ritual.',
+        versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
-        title: 'Publikasikan repositori ini',
-        hint: 'Melakukan publish akan membuat versi v1 dari repositori ini.',
+        title: 'Serah Terima',
+        hint: 'Repositori ini siap untuk ditinjau. Penerbitan tidak pernah terjadi di sini — kirimkan untuk persetujuan dari dasbor; persetujuan dan penerbitan dilakukan dari dasbor atau editor.',
         nameOk: 'Nama repositori ditetapkan',
         labelsOk: 'Label dipilih',
         topicsOk: 'Topik ditinjau',
@@ -2218,8 +2156,7 @@ export default {
         topicsServing: 'Topics serving',
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
-        ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        ritual: 'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2244,8 +2181,7 @@ export default {
         emptySelection: 'Pilih setidaknya satu dokumen',
         alreadyInOkf: 'Hapus dokumen yang sudah ada di repositori OKF',
         alreadyIngested: 'Hapus dokumen yang sudah di-ingest',
-        servingWarn:
-          '{n} dokumen terpilih masih melayani korpus bebas — repositori baru tidak dapat di-ingest sampai dokumen tersebut ditarik.'
+        servingWarn: '{n} dokumen terpilih masih melayani korpus bebas — repositori baru tidak dapat di-ingest sampai dokumen tersebut ditarik.'
       },
       produce: {
         notReady: 'Produser dihubungkan dalam story berikutnya.'
@@ -2256,14 +2192,11 @@ export default {
       domainPlaceholder: 'Pilih bidang subjek…',
       classLabel: 'Klasifikasi konsep',
       classHeuristics: 'Heuristik (default)',
-      classHeuristicsHint:
-        'Klasifikasi berbasis aturan yang cepat — tanpa biaya LLM, baik untuk perayapan yang terstruktur rapi.',
+      classHeuristicsHint: 'Klasifikasi berbasis aturan yang cepat — tanpa biaya LLM, baik untuk perayapan yang terstruktur rapi.',
       classLlm: 'Berbantuan LLM',
-      classLlmHint:
-        'LLM mengurasi setiap konsep — jenis, label Hierarki Pengetahuan, dan deskripsi. Jauh lebih akurat dan lengkap daripada heuristik; memerlukan waktu tambahan per konsep.',
+      classLlmHint: 'LLM mengurasi setiap konsep — jenis, label Hierarki Pengetahuan, dan deskripsi. Jauh lebih akurat dan lengkap daripada heuristik; memerlukan waktu tambahan per konsep.',
       classHybrid: 'Hibrida',
-      classHybridHint:
-        'Heuristik terlebih dahulu; LLM meninjau kasus yang belum pasti dan melengkapi celah. Seimbang antara waktu dan kelengkapan.',
+      classHybridHint: 'Heuristik terlebih dahulu; LLM meninjau kasus yang belum pasti dan melengkapi celah. Seimbang antara waktu dan kelengkapan.',
       targetLabel: 'Ke mana ini harus disimpan?',
       target: {
         freeform: 'Rayapi ke korpus bentuk bebas',
@@ -2340,13 +2273,11 @@ export default {
       saveBlocked: 'Penyimpanan diblokir: perbaiki masalah kesesuaian terlebih dahulu.'
     },
     validation: {
-      frozen:
-        "Konten dibekukan pada {'{'}v{'}'} — pratinjau hanya-baca. Lakukan retract pada versi yang sedang serving untuk membuat perubahan.",
+      frozen: 'Konten dibekukan pada {\'{\'}v{\'}\'} — pratinjau hanya-baca. Lakukan retract pada versi yang sedang serving untuk membuat perubahan.',
       none: 'Tidak ada',
-      expertHint:
-        'Beralih ke mode Pakar untuk melihat JSON validasi mentah, memfilter berdasarkan tingkat keparahan, dan mengesampingkan pemeriksaan.',
+      expertHint: 'Beralih ke mode Pakar untuk melihat JSON validasi mentah, memfilter berdasarkan tingkat keparahan, dan mengesampingkan pemeriksaan.',
       headline: {
-        blockers: '{n} masalah pemblokir — perbaiki sebelum mempublikasikan',
+        blockers: '{n} masalah penghenti — perbaiki sebelum menyerahkan repositori',
         warnings: '{n} hal memerlukan peninjauan Anda',
         ok: 'Terlihat bagus. Tidak ada yang perlu diperbaiki.'
       },
@@ -2365,8 +2296,7 @@ export default {
       scanning: 'Memindai…',
       clean: 'Tidak ada entitas yang ditandai — concept ini aman.',
       how: 'Perbaikan: hapus atau tulis ulang (misal gunakan perannya alih-alih nama), lalu simpan — pemindaian ulang akan memperbarui daftar ini.',
-      descFallback:
-        'Data pribadi terdeteksi di sini (GDPR Pasal 4(1) — terkait dengan orang yang dapat diidentifikasi).',
+      descFallback: 'Data pribadi terdeteksi di sini (GDPR Pasal 4(1) — terkait dengan orang yang dapat diidentifikasi).',
       scanError: 'Pemindaian tidak tersedia',
       type: {
         PERSON: 'Nama orang',
@@ -2458,8 +2388,7 @@ export default {
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
-      servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      servingTip: 'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
       alreadyBadge: 'already in an OKF repo',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     }

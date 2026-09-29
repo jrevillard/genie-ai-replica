@@ -467,6 +467,13 @@ async function runConversion(job) {
   let nextProgressPages = PROGRESS_PAGES;
   let tmpPath = null;
   const pagePaths = [];
+  // B1 (audit 2026-09-29): the wizard's per-source merge accounting needs
+  // WHAT THE INGEST DID (created vs slug-updated), not just a page count.
+  // ingestRepoConcepts already computes it per flush — accumulate it here and
+  // write it on the terminal record. The index concept is deliberately NOT
+  // folded in: it is a meta row, not a produced topic (the frontend counts
+  // exclude it too).
+  const ingestSummary = { created: 0, updated: 0, skipped_dedup: 0 };
 
   // (b) REPO-GONE GUARD (David, 2026-09-04): if the repository is deleted
   // mid-conversion (or was never committed), the run must self-terminate to
@@ -499,7 +506,15 @@ async function runConversion(job) {
     // per-flush it would re-run over the ever-growing row set (O(n²) LLM
     // calls). The classification still rides for per-page TYPE inference in
     // the import pipeline (_importOneConcept → classifyConcept).
-    await ingestRepoConcepts(repo_id, { concepts, classification, skipCuration: true }, actor); // IMPORT (not RAG)
+    await ingestRepoConcepts(repo_id, { concepts, classification, skipCuration: true }, actor) // IMPORT (not RAG)
+      .then((s) => {
+        if (s) {
+          ingestSummary.created += s.created || 0;
+          ingestSummary.updated += s.updated || 0;
+          ingestSummary.skipped_dedup += s.skipped_dedup || 0;
+        }
+        return s;
+      });
     batchesDone += 1;
     dlog(`flush done repo=${repo_id} batch=${batchesDone} concepts=${concepts.length} ms=${Date.now() - t0}`);
     await patchConversion(repo_id, {
@@ -702,6 +717,9 @@ async function runConversion(job) {
       bytes_total: bytesTotal,
       pages_done: pagesDone,
       batches_done: batchesDone,
+      // B1: per-source merge accounting (created vs exact-slug auto-merged) —
+      // the wizard's Produce step renders this instead of a bare count delta.
+      summary: { ...ingestSummary },
       finished_at: new Date().toISOString()
     });
     logger.info(

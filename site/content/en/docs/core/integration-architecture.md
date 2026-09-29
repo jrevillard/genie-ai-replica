@@ -40,53 +40,73 @@ GENIE.AI is a monorepo consisting of 7 main parts that communicate through
 REST APIs, SSE ([Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events)),
 and direct database connections:
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           GENIE.AI Platform                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────────────┐  │
-│  │   Vue 3      │    │   Flutter    │    │      API Gateway Layer       │  │
-│  │  Frontend    │    │    Mobile    │    │  ┌─────────┐    ┌─────────┐  │  │
-│  │              │    │              │    │  │  Kong   │ -> │  NGINX  │  │  │
-│  └──────┬───────┘    └──────┬───────┘    │  └─────────┘    └─────────┘  │  │
-│         │                   │             └──────────────┬────────────────┘  │
-│         └───────────────────┼────────────────────────────┘                   │
-│                             │                                        │      │
-│                             v                                        v      │
-│  ┌────────────────────────────────────────────────────────────────────┐   │
-│  │                     Application Layer                              │   │
-│  │  ┌────────────────┐    ┌──────────────────┐    ┌────────────────┐  │   │
-│  │  │   Express.js   │    │   Document       │    │   Keycloak     │  │   │
-│  │  │    Backend     │    │   Repository     │    │  (OIDC Provider│  │   │
-│  │  │  (BFF:3000)    │    │   (:3001)        │    │   :8080)       │  │   │
-│  │  └────────┬───────┘    └──────────────────┘    └────────┬───────┘  │   │
-│  └───────────┼──────────────────────────────────────────────┼──────────┘   │
-│              │                                              │              │
-│              v                                              v              │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                        Data Layer                                    │  │
-│  │  ┌────────────┐    ┌────────────┐    ┌──────────────┐    ┌─────────┐ │  │
-│  │  │  ArangoDB  │    │   Redis    │    │  PostgreSQL  │    │ File    │ │  │
-│  │  │ (Vector+   │    │  (Cache)   │    │ (Kong + KC)  │    │ Storage │ │  │
-│  │  │   Graph)   │    │            │    │              │    │         │ │  │
-│  │  └────────────┘    └────────────┘    └──────────────┘    └─────────┘ │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-│              │                                                              │
-│              v                                                              │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                       AI/ML Layer (OPEA)                              │  │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐ │  │
-│  │  │ ChatQnA  │  │Retriever │  │ Reranker │  │   TEI    │  │ vLLM   │ │  │
-│  │  │  :8888   │  │  :7000   │  │  :8000   │  │  :80     │  │ :8000  │ │  │
-│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └────────┘ │  │
-│  │  ┌──────────┐                                                         │  │
-│  │  │ Dataprep │                                                         │  │
-│  │  │  :5000   │                                                         │  │
-│  │  └──────────┘                                                         │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Platform["GENIE.AI Platform"]
+        direction TB
+
+        subgraph Clients["Client Layer"]
+            Vue["Vue 3<br/>Frontend"]
+            Flutter["Flutter<br/>Mobile"]
+        end
+
+        subgraph Gateway["API Gateway Layer"]
+            Nginx["NGINX<br/>TLS Termination"]
+            Kong["Kong<br/>Reverse Proxy / CORS / Rate Limit"]
+            Nginx --> Kong
+        end
+
+        subgraph App["Application Layer"]
+            Backend["Express.js<br/>Backend (BFF)<br/>:3000"]
+            DocRepo["Document<br/>Repository<br/>:3001"]
+            Keycloak["Keycloak<br/>OIDC Provider<br/>:8080"]
+        end
+
+        subgraph Data["Data Layer"]
+            Arango["ArangoDB<br/>Vector + Graph"]
+            Redis["Redis<br/>Cache"]
+            Postgres["PostgreSQL<br/>Kong + KC"]
+            Files["File Storage"]
+        end
+
+        subgraph AI["AI/ML Layer (OPEA)"]
+            ChatQnA["ChatQnA<br/>:8888"]
+            Retriever["Retriever<br/>:7000"]
+            Reranker["Reranker<br/>:8000"]
+            TEI["TEI<br/>:80"]
+            VLLM["vLLM<br/>:8000"]
+            Dataprep["Dataprep<br/>:5000"]
+        end
+
+        Vue -->|HTTPS| Nginx
+        Flutter -->|HTTPS| Nginx
+        Kong --> Backend
+        Kong --> DocRepo
+        Kong --> Keycloak
+        Backend --> Arango
+        Backend --> Redis
+        Backend --> ChatQnA
+        DocRepo --> Files
+        ChatQnA --> Retriever
+        ChatQnA --> Reranker
+        ChatQnA --> TEI
+        ChatQnA --> VLLM
+        ChatQnA --> Dataprep
+        Retriever --> Arango
+        Backend -. "JWT validation" .-> Keycloak
+    end
+
+    classDef client    fill:#e3f2fd,stroke:#1976d2,color:#0d47a1
+    classDef gateway   fill:#fff3e0,stroke:#f57c00,color:#e65100
+    classDef app       fill:#f3e5f5,stroke:#7b1fa2,color:#4a148c
+    classDef data      fill:#e8f5e9,stroke:#388e3c,color:#1b5e20
+    classDef ai        fill:#fce4ec,stroke:#c2185b,color:#880e4f
+
+    class Vue,Flutter client
+    class Nginx,Kong gateway
+    class Backend,DocRepo,Keycloak app
+    class Arango,Redis,Postgres,Files data
+    class ChatQnA,Retriever,Reranker,TEI,VLLM,Dataprep ai
 ```
 
 ---

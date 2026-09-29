@@ -279,3 +279,33 @@
   (no more expected-404 noise from the deferred 10.5 drafts endpoint).
   An adversarial verification workflow (6 skeptics) reviewed the batch;
   its findings were folded in before the commit below.
+- 2026-09-29 (VERIFIER BLOCKERS FOLDED IN; committed 775fb8ecd): the
+  6-agent adversarial pass found 7 blockers + minors — ALL fixed:
+  (B1) seeded handoff drafts (ids, no names rows) misrouted crawls
+  through the documents batch → seeds are now ORIGIN-BEARING objects
+  (AddFromLinkDialog → StudioTab builds document_names), unstamped ids
+  fall back to the draft VARIANT in buildLegs, and the URL-string
+  fallback is gone; (B2) Input destroyed document_names on every
+  Back→Continue remount → restored from the draft like the ids;
+  (B3) mid-chain reselection escaped the stale check → onSourcesConfirmed
+  drops convert_queue, resume validates legs against the current
+  selection; (B4) the leg-wait setTimeout survived unmount (status guard
+  passes on a dead instance) → handle stored, _unmounted flag guards
+  callback + poll tick; (B5) producer folded the index concept's
+  created:1 into every fresh repo's summary → index bypasses the
+  accumulator (crawl-route parity) + regression test with the REAL
+  summary shape (the old mock hid the accumulator entirely);
+  (B6) the workbench set-label was still a dead end (ConceptList emits
+  'label', Input never consumed it) → onTreeLabel wired + test;
+  (B7) editor add-sources kicked leg N+1 into a running leg N (409 after
+  ~12s of retries; conversions take MINUTES) → truly sequential: kick →
+  wait terminal → next leg, one-hour stall cap. Minors: delete-dialog
+  persistent/loading, deferred manual auto-open (no phantom second-index
+  offer), tornDown guards. R1 (David, mid-batch): step-6 layout — wizard
+  rail 240px, editor defaults concepts 230/meta 250, metadata pane
+  collapsible so the center expands across it (persisted). Final:
+  frontend 1570/1570, okf-server 720/720, localeConsistency 5/5, lint +
+  prettier clean. DEBT (queued with P1 polish): the ~23 NEW i18n keys
+  carry English values in the 13 non-en locales (filler behavior; the
+  D4-critical keys ARE fully translated). Deployed to the local build
+  (frontend + okf-server rebuilt).

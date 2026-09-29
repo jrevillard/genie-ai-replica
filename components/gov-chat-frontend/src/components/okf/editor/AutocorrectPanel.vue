@@ -11,11 +11,15 @@
   {concept_id, before, after, changes:[{field, before, after}]}.
 -->
 <template>
-  <DsDialog
-    :visible="visible"
-    :title="translate('okf.editor.autocorrect.title', 'Autocorrect (frontmatter only)')"
-    size="lg"
-    :actions="actions"
+  <!-- A9 (audit 2026-09-29): the panel renders INLINE or as a modal. The
+       wizard's step 8 used to mount the MODAL with :visible="!!repoId" and
+       NO @close listener — Cancel/✕ emitted into the void and the modal
+       overlay walled off the entire wizard ("frozen", field report). In
+       inline mode the content is a plain card: nothing to cancel, the step
+       is the surface. The editor keeps the modal (it passes @close). -->
+  <component
+    :is="inline ? 'div' : 'DsDialog'"
+    v-bind="inline ? { class: 'okf-ac__inline' } : dialogBindings"
     @close="$emit('close')"
     @action="onAction"
   >
@@ -82,7 +86,15 @@
     </template>
 
     <p v-if="error" class="okf-ac__error">{{ error }}</p>
-  </DsDialog>
+
+    <!-- Inline mode carries its own actions (the modal's live in the
+         DsDialog footer): Apply only — there is nothing to cancel. -->
+    <div v-if="inline" class="okf-ac__inline-actions">
+      <DsButton variant="primary" :disabled="applying || scanning || changeCount === 0" @click="onAction('apply')">
+        {{ translate('okf.editor.autocorrect.apply', 'Apply fixes') }}
+      </DsButton>
+    </div>
+  </component>
 </template>
 
 <script>
@@ -99,7 +111,10 @@ export default {
   mixins: [translateMixin],
   props: {
     visible: { type: Boolean, default: false },
-    repoId: { type: String, default: null }
+    repoId: { type: String, default: null },
+    // A9: render as an embedded card (wizard step 8) instead of a modal
+    // dialog. The editor host keeps the modal (default false).
+    inline: { type: Boolean, default: false }
   },
   emits: ['close', 'applied'],
   data() {
@@ -113,6 +128,17 @@ export default {
     };
   },
   computed: {
+    // A9: the DsDialog bindings apply ONLY in modal mode (inline passes a
+    // plain class — leaking visible/actions onto a div would render them
+    // as DOM attributes).
+    dialogBindings() {
+      return {
+        visible: this.visible,
+        title: this.translate('okf.editor.autocorrect.title', 'Autocorrect (frontmatter only)'),
+        size: 'lg',
+        actions: this.actions
+      };
+    },
     changeCount() {
       return this.changes.length;
     },
@@ -186,8 +212,16 @@ export default {
     }
   },
   watch: {
-    visible(v) {
-      if (v) this.runDryRun();
+    // immediate: the wizard shell remounts each step (StudioWizard :key) with
+    // visible ALREADY true — a non-immediate watcher never fired there, the
+    // panel showed a false "Nothing to fix" and Apply stayed disabled
+    // (audit A1, 2026-09-29). The editor host mounts with visible=false, so
+    // the immediate fire is a no-op there.
+    visible: {
+      immediate: true,
+      handler(v) {
+        if (v) this.runDryRun();
+      }
     }
   },
   methods: {
@@ -271,6 +305,22 @@ export default {
 </script>
 
 <style scoped>
+/* A9: inline mode — an embedded card, no dialog chrome. */
+.okf-ac__inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--space-md);
+}
+.okf-ac__inline-actions {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-sm);
+}
 .okf-ac__intro {
   margin: 0 0 var(--space-md);
   font-size: var(--text-sm);

@@ -16,6 +16,7 @@
 const mockImportConcepts = jest.fn();
 const mockListConcepts = jest.fn();
 const mockDeleteConcept = jest.fn();
+const mockGetAdminCategories = jest.fn();
 
 jest.mock('@/services/repoOkfService', () => ({
   __esModule: true,
@@ -24,6 +25,11 @@ jest.mock('@/services/repoOkfService', () => ({
     listConcepts: (...a) => mockListConcepts(...a),
     deleteConcept: (...a) => mockDeleteConcept(...a)
   }
+}));
+
+jest.mock('@/services/serviceTreeService', () => ({
+  __esModule: true,
+  default: { getAdminCategories: (...a) => mockGetAdminCategories(...a) }
 }));
 
 const { mount } = require('@vue/test-utils');
@@ -40,7 +46,7 @@ const CONCEPTS = [
   { concept_id: 'water-points-2', title: 'Water Points 2', type: 'topic' }
 ];
 
-function mountInput(draft) {
+function mountInput(draft, repoDoc) {
   return mount(OkfStepInput, {
     props: { draft: draft || { repo_id: 'r1' }, expert: false },
     global: {
@@ -51,7 +57,7 @@ function mountInput(draft) {
             okf: {
               namespaced: true,
               getters: {
-                repoById: () => (id) => (id === 'r1' ? { repo_id: 'r1', name: 'R1' } : null)
+                repoById: () => (id) => (id === 'r1' ? repoDoc || { repo_id: 'r1', name: 'R1' } : null)
               },
               actions: { fetchRepos: () => ({}) }
             }
@@ -73,6 +79,7 @@ beforeEach(() => {
   mockImportConcepts.mockResolvedValue({ ok: true });
   mockDeleteConcept.mockResolvedValue({ ok: true });
   mockListConcepts.mockResolvedValue(CONCEPTS.map((c) => ({ ...c })));
+  mockGetAdminCategories.mockResolvedValue([]);
 });
 
 it('documents: picker opens with search+upload; confirming writes back ids AND names (T3 accounting)', async () => {
@@ -85,16 +92,17 @@ it('documents: picker opens with search+upload; confirming writes back ids AND n
   await dialog.vm.$emit('confirm', {
     ids: ['f1', 'f2'],
     rows: [
-      { file_id: 'f1', file_name: 'a.pdf' },
-      { file_id: 'f2', file_name: 'b.md' }
+      { file_id: 'f1', file_name: 'a.pdf', source: 'upload' },
+      { file_id: 'f2', file_name: 'b.md', source: 'crawl' }
     ]
   });
   await wrapper.vm.$nextTick();
   const last = wrapper.emitted('update').pop()[0].input;
   expect(last.document_ids).toEqual(['f1', 'f2']);
+  // A2: each row carries its T1 origin stamp so Produce routes per origin.
   expect(last.document_names).toEqual([
-    { file_id: 'f1', file_name: 'a.pdf' },
-    { file_id: 'f2', file_name: 'b.md' }
+    { file_id: 'f1', file_name: 'a.pdf', source: 'upload' },
+    { file_id: 'f2', file_name: 'b.md', source: 'crawl' }
   ]);
   expect(wrapper.emitted('gate').pop()[0]).toBe(true);
 });
@@ -135,13 +143,107 @@ it('workbench: clicking a concept opens the EDITOR dialog; saving closes + refre
   expect(mockListConcepts.mock.calls.length).toBeGreaterThan(callsBefore); // refreshed from server truth
 });
 
-it('workbench: delete removes via the service and refreshes the tree', async () => {
+it('workbench: delete CONFIRMS via the dialog, then removes via the service (A7-4)', async () => {
   const wrapper = mountInput({ repo_id: 'r1', source: 'manual' });
   await settled(wrapper);
-  await wrapper.vm.onConceptDelete({ concept_id: 'water-points-2' });
+  // First click only ASKS — nothing is deleted until the dialog confirms.
+  await wrapper.vm.onDeleteAsk({ concept_id: 'water-points-2' });
+  expect(wrapper.vm.deleteAsk).not.toBeNull();
+  expect(mockDeleteConcept).not.toHaveBeenCalled();
+  await wrapper.vm.onDeleteAction('confirm');
   expect(mockDeleteConcept).toHaveBeenCalledWith('r1', 'water-points-2');
+  expect(wrapper.vm.deleteAsk).toBeNull();
   await settled(wrapper);
   expect(wrapper.vm.concepts.length).toBe(3); // re-fetched (mock returns the same 3)
+});
+
+it('A7-1: hasIndex reaches AddConceptModal — no second index, append offered', async () => {
+  mockListConcepts.mockResolvedValue([
+    { concept_id: 'index', title: 'Index', type: 'index', is_index: true },
+    { concept_id: 'a', title: 'A', type: 'topic' }
+  ]);
+  const wrapper = mountInput({ repo_id: 'r1', source: 'manual' });
+  await settled(wrapper);
+  expect(wrapper.vm.hasIndex).toBe(true);
+  expect(wrapper.findComponent(OkfAddConceptModal).props('hasIndex')).toBe(true);
+});
+
+it('A7-3: a SERVING repo is readOnly — feeders disabled, editor dialog threads it', async () => {
+  const wrapper = mountInput(
+    { repo_id: 'r1', source: 'manual' },
+    { repo_id: 'r1', name: 'R1', ingested_at: '2026-09-29T00:00:00Z' }
+  );
+  await settled(wrapper);
+  expect(wrapper.vm.readOnly).toBe(true);
+  const buttons = wrapper.findAll('button').map((b) => b.element.disabled);
+  // every feeder button (picker, FS import, write-a-concept) is disabled
+  expect(buttons.filter((d) => d === true).length).toBeGreaterThanOrEqual(3);
+  await wrapper.vm.onConceptSelect('water-points');
+  await wrapper.vm.$nextTick();
+  const editor = wrapper.findComponent(OkfConceptEditor);
+  expect(editor.props('readOnly')).toBe(true);
+  // delete asks are refused outright in readOnly
+  await wrapper.vm.onDeleteAsk({ concept_id: 'water-points' });
+  expect(wrapper.vm.deleteAsk).toBeNull();
+});
+
+it('A7-5: KH label options reach the tree and the edit dialog (no dead-end affordance)', async () => {
+  const okfRepoOps = require('@/services/okfRepoOps');
+  const spy = jest.spyOn(okfRepoOps, 'labelOptionsForDomain');
+  spy.mockReturnValue({ options: [{ value: 'l1', label: 'Water services' }], bounded: true });
+  const wrapper = mountInput({ repo_id: 'r1', source: 'manual' });
+  await settled(wrapper);
+  expect(spy).toHaveBeenCalled();
+  expect(wrapper.findComponent(OkfConceptList).props('labelOptions')).toEqual([
+    { value: 'l1', label: 'Water services' }
+  ]);
+  await wrapper.vm.onConceptSelect('water-points');
+  await wrapper.vm.$nextTick();
+  expect(wrapper.findComponent(OkfConceptEditor).props('labelOptions')).toEqual([
+    { value: 'l1', label: 'Water services' }
+  ]);
+  spy.mockRestore();
+});
+
+it('B2: names rows SURVIVE a Back→Continue remount (restored from the draft, load-bearing for dispatch)', async () => {
+  const names = [{ file_id: 'f1', file_name: 'a.pdf', source: 'crawl' }];
+  const wrapper = mountInput({
+    repo_id: 'r1',
+    source: 'crawl',
+    input: { document_ids: ['f1'], document_names: names }
+  });
+  expect(wrapper.vm.selectedNames).toEqual(names); // restored like the ids
+  await wrapper.vm.beforeAdvance();
+  const last = wrapper.emitted('update').pop()[0].input;
+  expect(last.document_names).toEqual(names); // writeBack did not destroy them
+});
+
+it('B3: changing the selection DROPS any queued conversion legs (no deselected file ever kicks)', async () => {
+  const wrapper = mountInput({
+    repo_id: 'r1',
+    source: 'crawl',
+    input: {
+      document_ids: ['c1'],
+      document_names: [{ file_id: 'c1', file_name: 'a.md', source: 'crawl' }],
+      convert_queue: [{ k: 'c', id: 'c1' }]
+    }
+  });
+  await wrapper.vm.onSourcesConfirmed({ ids: ['f2'], rows: [{ file_id: 'f2', file_name: 'b.pdf' }] });
+  const last = wrapper.emitted('update').pop()[0].input;
+  expect(last.document_ids).toEqual(['f2']);
+  expect(last.convert_queue).toEqual([]); // stale legs dropped with the selection
+});
+
+it('B6: the tree inline set-label WRITES via applyLabel and refreshes (no dead-end affordance)', async () => {
+  const okfRepoOps = require('@/services/okfRepoOps');
+  const spy = jest.spyOn(okfRepoOps, 'applyLabel').mockResolvedValue({});
+  const wrapper = mountInput({ repo_id: 'r1', source: 'manual' });
+  await settled(wrapper);
+  const list = wrapper.findComponent(OkfConceptList);
+  await list.vm.$emit('label', { conceptId: 'water-points', label: 'l1' });
+  await settled(wrapper);
+  expect(spy).toHaveBeenCalledWith('r1', 'water-points', ['l1']);
+  spy.mockRestore();
 });
 
 it('gate: sources OR concepts open it; an empty repo stays shut', async () => {
@@ -153,16 +255,17 @@ it('gate: sources OR concepts open it; an empty repo stays shut', async () => {
   expect(wrapper.emitted('gate').pop()[0]).toBe(true);
 });
 
-it('clone: gate open at once; the source-picker button is absent (content already landed)', () => {
+it('clone: gate open at once; the source-picker button is PRESENT (A7-2 — D6: all feeders, always)', () => {
   const wrapper = mountInput({ repo_id: 'r1', source: 'clone' });
   expect(wrapper.emitted('gate')[0][0]).toBe(true);
   const buttons = wrapper.findAll('button').map((b) => b.text());
-  expect(buttons.join(' ')).not.toContain('Choose');
+  expect(buttons.join(' ')).toContain('Choose');
 });
 
 it('manual: the editor auto-opens on FIRST arrival; editor_offered rides the draft', async () => {
+  mockListConcepts.mockResolvedValue([]); // blank canvas — resolved EMPTY (verifier A7-minor: the nudge waits for the resolved list, so hasIndex is honest)
   const wrapper = mountInput({ repo_id: 'r1', source: 'manual', input: {} });
-  await wrapper.vm.$nextTick();
+  await settled(wrapper);
   expect(wrapper.findComponent(OkfAddConceptModal).props('visible')).toBe(true);
   const updates = wrapper.emitted('update');
   const last = updates[updates.length - 1][0].input;

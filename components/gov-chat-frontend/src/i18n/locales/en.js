@@ -1643,7 +1643,8 @@ export default {
       addSources: {
         working: 'Converting sources…',
         done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
-        failed: 'A conversion failed — check the logs; the rest may still have queued.'
+        failed: 'A conversion failed — check the logs; the rest may still have queued.',
+        landed: 'Conversions complete — {t} topics now in the tree.'
       },
       concepts: {
         originTip: 'How this concept was curated',
@@ -1703,6 +1704,8 @@ export default {
         labelLabel: 'Label (Knowledge Hierarchy)',
         noLabel: 'No label',
         none: 'No concept selected',
+        hide: 'Hide metadata',
+        show: 'Show metadata',
         saveFailed: 'Metadata save failed',
         saved: 'Metadata saved',
         status: 'Index status',
@@ -1994,7 +1997,15 @@ export default {
       importFailedTitle: 'The import failed — the source file could not be converted.',
       importFailedHint: 'Delete this repository and import the source file again.',
       frontmatter:
-        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
+        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.',
+      lifecycle:
+        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto:
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+      reviewHandoff:
+        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview:
+        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
     },
     md: {
       toolbar: 'Formatting',
@@ -2027,7 +2038,7 @@ export default {
       step5:
         'This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.',
       step6:
-        'We run conformance checks: do every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before publishing; warnings can be acknowledged.',
+        'We run conformance checks: does every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before you hand the repository off; warnings can be acknowledged.',
       step7:
         'Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.',
       step8:
@@ -2145,7 +2156,7 @@ export default {
       label: 'OKF Studio wizard',
       back: 'Back',
       continue: 'Continue',
-      publish: 'Publish repository'
+      finish: 'Open the Editor'
     },
     src: {
       title: 'Choose the source documents',
@@ -2238,6 +2249,9 @@ export default {
         benchFailed: 'Could not read the topics right now.',
         editTitle: 'Edit concept',
         deleteFailed: 'Could not delete the concept.',
+        deleteTitle: 'Delete topic',
+        deleteBody: 'This permanently removes the topic from this repository.',
+        labelFailed: 'Could not set the label.',
         added: '{n} topic(s) in this repository so far.'
       },
       produce: {
@@ -2258,7 +2272,10 @@ export default {
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
-        sourceStat: '+{n} new (total {t})'
+        sourceStat: '+{n} new (total {t})',
+        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        docsLeg: '{n} selected document(s)',
+        legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
         title: 'Pick the labels',
@@ -2277,7 +2294,7 @@ export default {
       },
       validate: {
         title: 'Check for issues',
-        hint: 'We run conformance checks. Blocking issues must be fixed before publishing.',
+        hint: 'We run conformance checks. Blocking issues must be fixed before you hand the repository off.',
         placeholder: 'Validation panel ships in Story 3-8.'
       },
       autocorrect: {
@@ -2289,11 +2306,20 @@ export default {
       },
       review: {
         title: 'Review',
-        hint: 'A summary of what you are about to publish.',
+        hint: 'A summary of what you built — submit, approval and publishing happen on the dashboard and in the editor.',
         repo: 'Repository',
         topics: 'Topics',
         labels: 'Labels',
-        sources: 'Sources'
+        sources: 'Sources',
+        state: 'Lifecycle state',
+        labelsSet: 'set per topic in Curate',
+        ritualOutside:
+          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        versions: 'Versions',
+        logs: 'Action log',
+        rename: 'Rename',
+        noVersions: 'No versions yet — versions are minted during the approval ritual.',
+        versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
         title: 'Handoff',
@@ -2430,7 +2456,7 @@ export default {
       none: 'None',
       expertHint: 'Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.',
       headline: {
-        blockers: '{n} blocking issue(s) — fix before publishing',
+        blockers: '{n} blocking issue(s) — fix before you hand the repository off',
         warnings: '{n} thing(s) need your review',
         ok: 'Looks good. Nothing to fix.'
       },

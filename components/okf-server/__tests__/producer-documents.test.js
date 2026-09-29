@@ -234,6 +234,36 @@ describe('producer-service — startDocumentsConversion + run', () => {
     expect(repoDoc.source_documents).toHaveLength(1); // re-stamped to THIS repo
   });
 
+  it('B1/B5: terminal summary.created counts CONTENT topics only — the index concept is excluded', async () => {
+    // The ingest mock returns the REAL summary shape here (the file-level
+    // mock above returns {ok,count}, which silently kept the accumulator at
+    // zero — the verifier's blind-mock finding). Two single-H1 files → one
+    // flush of 2 content concepts (created:2) + ONE index call (created:1)
+    // that must NOT fold in.
+    ingestRepoConcepts.mockImplementation(async (repo_id, payload) => ({
+      ok: true,
+      created: payload.concepts.length,
+      updated: 0,
+      skipped_dedup: 0
+    }));
+    mockDocs({ f1: 'alpha.md', f2: 'beta.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    await producer.startDocumentsConversion({
+      repo_id: RID,
+      file_ids: ['f1', 'f2'],
+      requested_name: 'x',
+      classification: 'heuristics',
+      actor: { sub: 's' }
+    });
+    await producer.live.get(RID);
+    const repoDoc = await mockDb.collection('okf_repositories').document(RID);
+    expect(repoDoc.conversion.status).toBe('done');
+    // 2 content topics — NOT 3 (the folded index once over-counted by 1).
+    expect(repoDoc.conversion.summary.created).toBe(2);
+    expect(repoDoc.conversion.summary.updated).toBe(0);
+    expect(ingestRepoConcepts).toHaveBeenCalledTimes(2); // flush + index
+  });
+
   it('409s the SAME CONTENT (file_hash) already backing a LIVE other repository', async () => {
     await mockDb.collection('okf_repositories').save({
       _key: 'r-other',

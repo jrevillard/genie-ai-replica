@@ -1963,9 +1963,9 @@ export default {
       step7:
         'يمكن إصلاح بعض التحذيرات تلقائيًا: يمكن ضبط قيم الحالة إلى تعدادات صالحة، ويمكن ملء الحقول المفقودة بقيم افتراضية معقولة. طبق الإصلاحات التي توافق عليها، ثم عد إلى المسؤول للمراجعة.',
       step8:
-        'ملخص لما أنت على وشك نشره: الموضوعات، والتسميات، والمصادر، وأي مشكلات لم يتم حلها. بمجرد الموافقة، ينتقل المستودع إلى مسار النشر.',
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        'يؤدي النشر إلى إنشاء الإصدار v1 من هذا المستودع. كل تغيير لاحق — موضوع جديد، وصف منقح، إعادة تحقق دورية — يُنشر كـ v2 وv3، إلخ. تظل الإصدارات القديمة قابلة للاستشهاد بها إلى الأبد.',
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         'إنشاء مستودع OKF جديد من المستندات المحددة. ستصبح المستندات مصادر؛ وستراجع وتسمي الموضوعات التي تنتجها قبل نشر أي شيء.',
       crawlSegment: 'مستودع OKF هو مجموعة منظمة ذات إصدارات من الموضوعات التي يمكن لإجابات الدردشة الاستشهاد بها.',

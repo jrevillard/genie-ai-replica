@@ -391,19 +391,29 @@ After the marker file appears, refresh **Realm roles** in the admin console — 
 
 ### 6.6 End-to-end IdP → GENIE.AI flow
 
-```
-1. External IdP token contains "groups": ["genie-admin"]
-   └── Keycloak Identity Provider Mapper (attribute-to-role-idp-mapper)
-       └── Keycloak assigns the "admin" realm role to the local user
+```mermaid
+flowchart LR
+    subgraph step1["1. External IdP token"]
+        t1["contains<br/>groups: genie-admin"]
+        m1["Identity Provider Mapper<br/>(attribute-to-role-idp-mapper)"]
+        a1["Keycloak assigns 'admin'<br/>realm role to local user"]
+        t1 --> m1 --> a1
+    end
 
-2. Keycloak issues its own JWT
-   └── Protocol Mapper (user-realm-roles, contributed by the built-in profile scope)
-       └── JWT includes realm_access.roles = ["admin"]
+    subgraph step2["2. Keycloak JWT issuance"]
+        m2["Protocol Mapper<br/>(user-realm-roles,<br/>built-in profile scope)"]
+        t2["JWT includes<br/>realm_access.roles = [admin]"]
+        m2 --> t2
+    end
 
-3. GENIE.AI backend processes the JWT
-   └── keycloak-auth-middleware.js (authenticate): verify, attach req.claims
-   └── keycloak-auth-middleware.js (requireAdmin): read req.claims.realm_access.roles
-   └── user-provisioning-service.js: persist roles to ArangoDB
+    subgraph step3["3. GENIE.AI backend"]
+        m3["keycloak-auth-middleware.js (authenticate):<br/>verify, attach req.claims"]
+        m4["keycloak-auth-middleware.js (requireAdmin):<br/>read req.claims.realm_access.roles"]
+        m5["user-provisioning-service.js:<br/>persist roles to ArangoDB"]
+        m3 --> m4 --> m5
+    end
+
+    step1 --> step2 --> step3
 ```
 
 No GENIE.AI code change is needed to support mapped roles. The existing middleware is source-agnostic — it treats every role the same way regardless of whether it was assigned manually or via an IdP mapper.

@@ -864,15 +864,16 @@ Request path: `Browser -> NGINX (TLS) -> Kong (CORS, rate limit) -> Backend (JWT
 
 Keycloak runs behind the NGINX → Kong proxy chain with the `/auth` path prefix. The following headers are used to tell Keycloak its public URL:
 
-```
-Client → NGINX → Kong → Keycloak
-            │         │       │
-            │    X-Forwarded-Prefix: /auth
-            │    (strip_path removes /auth)
-            │         │
-     X-Forwarded-Proto: https
-     X-Forwarded-Host: <NGINX_PUBLIC_DOMAIN>
-     X-Forwarded-Port: <NGINX_HTTPS_PORT>
+```mermaid
+flowchart LR
+    C[Client]
+    N[NGINX]
+    K[Kong<br/>strip_path removes /auth]
+    KC[Keycloak]
+
+    C -- HTTPS --> N
+    N -- X-Forwarded-Proto: https<br/>X-Forwarded-Host: NGINX_PUBLIC_DOMAIN<br/>X-Forwarded-Port: NGINX_HTTPS_PORT --> K
+    K -- X-Forwarded-Prefix: /auth --> KC
 ```
 
 | Header | Set by | Value | Purpose |

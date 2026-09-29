@@ -99,6 +99,16 @@ const repoIngestCap = () => safeIntOrZero('OKF_REPO_INGEST_CAP', 0);
 // flock slots; prompt retry is correct there.
 const kickBackoffBaseMs = () => safeIntOrZero('OKF_KICK_BACKOFF_BASE_MS', 0);
 const kickBackoffMaxMs = () => safeIntOrZero('OKF_KICK_BACKOFF_MAX_MS', 900000);
+// 429 LANE COOL-DOWN (incident 2026-09-28): with dataprep's ingest slot held
+// by a long in-flight concept (vLLM-outage stall), "prompt retry" degenerated
+// into a whole-queue 1/sec hot loop — every parsed row claimed, bounced,
+// released, re-claimed: continuous Arango/dataprep load, ingestion-log spam,
+// and enough concurrent noise to push the settle's no-op rewrite scans past
+// the agent socket timeout (Indonesia could not settle for hours). The ROW
+// still never parks (a freed slot must be claimable instantly); the LANE
+// waits OKF_KICK_429_COOLDOWN_MS (default 15 s) before claiming again.
+const kick429CooldownMs = () => safeInt('OKF_KICK_429_COOLDOWN_MS', 15000);
+let _dataprepBusyUntil = 0;
 /** Park delay for a failed kick: exponential in the CURRENT attempt number
  * (job.ingest_attempts — the claim already bumped it), capped, jittered.
  * Returns null when backoff is disabled (base 0). */
@@ -589,6 +599,7 @@ async function writeBundleIngestionLog(repoId, conceptId, level, stage, message)
  * Returns the outcome: 'ingested' | 'failed' | 'busy' | 'error' | 'timeout'.
  */
 async function _processOneJob() {
+  if (Date.now() < _dataprepBusyUntil) return { outcome: 'idle' }; // 429 lane cool-down (no claim, no kick)
   const db = await getDb();
   const job = await claimNextSerialized(db);
   if (!job) return { outcome: 'idle' };
@@ -828,7 +839,11 @@ async function _processOneJob() {
         } catch {
           /* best-effort */
         }
-        logger.info('Ingest worker: dataprep busy (429) — backing off', { concept_id: conceptId });
+        logger.info('Ingest worker: dataprep busy (429) — lane cooling down', {
+          concept_id: conceptId,
+          cooldown_ms: kick429CooldownMs()
+        });
+        _dataprepBusyUntil = Date.now() + kick429CooldownMs();
         recordJob('busy', job.repo_id);
         return { outcome: 'busy', concept_id: conceptId };
       }
@@ -1487,6 +1502,12 @@ function stop() {
   _sweepTimer = null;
 }
 
+/** Test isolation: clear the 429 lane cool-down (module state otherwise
+ * leaks across jest tests within a file). */
+function _resetLaneCooldown() {
+  _dataprepBusyUntil = 0;
+}
+
 module.exports = {
   start,
   stop,
@@ -1496,6 +1517,7 @@ module.exports = {
   _deadLetterOrphanedRows,
   _reconcileArmedRepos,
   _refreshRagIngestion,
+  _resetLaneCooldown,
   claimNextJob,
   getBundleFileId,
   invalidateBundleCache,

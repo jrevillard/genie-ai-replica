@@ -2085,7 +2085,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     if not chunks:
                         raise Exception("No valid content extracted from file.")
 
-                    await self._write_ingestion_log(input.file_id, "INFO", "Chunking", f"Generated {len(chunks)} chunks.")
+                    await self._write_ingestion_log(
+                        input.file_id, "INFO", "Chunking", f"Generated {len(chunks)} chunks."
+                    )
 
                     # 3. Guardrail Check
                     gr_result = await self._run_guardrail(chunks)
@@ -2165,7 +2167,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
                         # Schedule batch processing with concurrency control
                         task = asyncio.create_task(
-                            self._process_batch(batch_docs, current_batch_num, total_batches, input, graph_name, semaphore)
+                            self._process_batch(
+                                batch_docs, current_batch_num, total_batches, input, graph_name, semaphore
+                            )
                         )
                         tasks.append(task)
 
@@ -2218,9 +2222,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # consumer polling the bundle status then reading the logs would
                     # see the settle before this final stage row landed. Log first,
                     # then announce completion.
-                    await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
+                    await self._write_ingestion_log(
+                        input.file_id, "INFO", "System", "Ingestion completed successfully."
+                    )
                     await self._update_doc_status(
-                        input.file_id, "Ingested", chunk_count=len(chunks), concept_id=getattr(input, "concept_id", None)
+                        input.file_id,
+                        "Ingested",
+                        chunk_count=len(chunks),
+                        concept_id=getattr(input, "concept_id", None),
                     )
 
                     return {
@@ -2244,7 +2253,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
 
                     # Set final status to "Killed" as per state machine specification
-                    await self._update_doc_status(input.file_id, "Killed", concept_id=getattr(input, "concept_id", None))
+                    await self._update_doc_status(
+                        input.file_id, "Killed", concept_id=getattr(input, "concept_id", None)
+                    )
 
                     await self._write_ingestion_log(
                         input.file_id, "INFO", "System", "Cleanup complete. Document state set to Killed."

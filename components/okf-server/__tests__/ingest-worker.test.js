@@ -100,6 +100,7 @@ beforeEach(() => {
   // earlier tests) — then re-pin the default happy kick.
   authedAxios.post.mockReset();
   authedAxios.post.mockResolvedValue({ status: 200 });
+  worker._resetLaneCooldown(); // 429 lane cool-down must not leak across tests
   mockDb._reset();
   process.env.OKF_INGEST_WORKER_JOB_POLL_MS = '1';
   process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS = '5000';
@@ -207,6 +208,14 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
       { concept_id: 'a', repo_id: REPO },
       { patch: { worker_claimed_at: null } }
     );
+    // 429 LANE COOL-DOWN (incident 2026-09-28): the NEXT cycle must not claim
+    // while the cool-down is armed — the old 1/sec hot loop across a saturated
+    // queue kept the machine loaded enough to wedge Indonesia's settle. The
+    // row was never parked (it stays claimable the moment the slot frees);
+    // only the lane pauses.
+    const res2 = await worker._processOneJob();
+    expect(res2).toEqual({ outcome: 'idle' });
+    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledTimes(1); // no second claim/kick
   });
 
   test('dataprep transport error → outcome error; row TOUCHED (queue advances) but NOT transitioned', async () => {

@@ -481,9 +481,12 @@ issuer, and audience.
 (`oidc-client-ts` on the web, `flutter_appauth` on mobile) calls Keycloak
 directly:
 
-```
-Client (oidc-client-ts) → Keycloak /token (grant_type=refresh_token)
-Keycloak → Client: new access_token (used silently for the next call)
+```mermaid
+sequenceDiagram
+    participant C as Client<br/>(oidc-client-ts)
+    participant K as Keycloak
+    C->>K: POST /token (grant_type=refresh_token)
+    K-->>C: new access_token (silent, next call)
 ```
 
 The `POST /api/auth/refresh-token` endpoint does **not** exist in the
@@ -877,150 +880,121 @@ through either the backend or document-repository.
 
 ### RAG pipeline flow
 
-```
-┌─────────┐       ┌─────────┐       ┌─────────┐       ┌────────────┐
-│ Client  │       │ Kong    │       │ Backend │       │ ChatQnA    │
-│ (Web/Mobile) │   │ Gateway │   │ (QuerySvc)│   │ (OPEA)     │
-└────┬────┘       └────┬────┘       └────┬────┘       └─────┬──────┘
-     │                 │                 │                   │
-     │ POST /api/queries/stream        │                   │
-     │─────────────────────────────────>│                   │
-     │                 │                 │                   │
-     │                 │                 │ POST /v1/chat/completions
-     │                 │                 │───────────────────>│
-     │                 │                 │                   │
-     │                 │                 │    Orchestration: │
-     │                 │                 │    1. Embedding   │
-     │                 │                 │    2. Retrieval (ArangoDB)
-     │                 │                 │    3. Reranking   │
-     │                 │                 │    4. LLM Inference
-     │                 │                 │                   │
-     │ SSE: chunk      │                 │<──────────────────│
-     │<─────────────────────────────────│                   │
-     │ SSE: chunk      │                 │<──────────────────│
-     │<─────────────────────────────────│                   │
-     │ SSE: metadata   │                 │<──────────────────│
-     │<─────────────────────────────────│                   │
-     │ SSE: done       │                 │<──────────────────│
-     │<─────────────────────────────────│                   │
-     │ Backend translates (if needed)    │                   │
-     │ SSE: translation                 │                   │
-     │<─────────────────────────────────│                   │
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant N as NGINX
+    participant K as Kong
+    participant B as Backend
+    participant Q as ChatQnA
+
+    C->>N: POST /api/queries/stream
+    N->>K: forward
+    K->>B: forward
+    B->>Q: POST /v1/chat/completions
+
+    Note over Q: Orchestration:<br/>1. Embedding<br/>2. Retrieval (ArangoDB)<br/>3. Reranking<br/>4. LLM Inference
+
+    Q-->>B: SSE: chunks
+    B-->>K: SSE: chunks
+    K-->>N: SSE: chunks
+    N-->>C: SSE: chunks
+
+    Note over B: Backend translates (if needed)
+    B-->>C: SSE: translation
 ```
 
 ### Authentication flow
 
-```
-┌─────────┐       ┌─────────┐       ┌─────────┐       ┌──────────┐
-│ Client  │       │ Keycloak│       │ Backend │       │ArangoDB  │
-│ (Web/Mobile) │   │ (OIDC)  │   │ (API)   │       │          │
-└────┬────┘       └────┬────┘       └────┬────┘       └────┬─────┘
-     │                 │                 │                 │
-     │ 1. OIDC Authorize (Keycloak /auth)               │
-     │────────────────>│                                 │
-     │                 │                                 │
-     │ 2. User logs in                                  │
-     │                 │                                 │
-     │ 3. Redirect + auth code                          │
-     │<────────────────│                                 │
-     │                 │                                 │
-     │ 4. Token exchange (oidc-client-ts → Keycloak)    │
-     │                 │   (NOT a backend callback —     │
-     │                 │    the OIDC client handles it)  │
-     │ 5. JWT (access + refresh)                         │
-     │<────────────────│                                 │
-     │                 │                                 │
-     │ 6. Store token in JS memory (NEVER localStorage)  │
-     │                 │                                 │
-     │ 7. API request with Authorization: Bearer <jwt>  │
-     │─────────────────────────────────>                │
-     │                 │                                 │
-     │                 │ 8. Validate JWT against JWKS    │
-     │                 │────────────────────────────────>│
-     │                 │                                 │
-     │                 │ 9. Provision user (provisionUser)│
-     │                 │────────────────────────────────>│
-     │                 │                                 │
-     │ 10. Response    │                                 │
-     │<─────────────────────────────────                 │
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant K as Keycloak
+    participant B as Backend
+    participant DB as ArangoDB
+
+    C->>K: 1. OIDC Authorize (/auth)
+    Note over C,K: 2. User logs in
+    K-->>C: 3. Redirect + auth code
+    C->>K: 4. Token exchange (oidc-client-ts)
+    Note right of K: NOT a backend callback<br/>OIDC client handles it directly
+    K-->>C: 5. JWT (access + refresh)
+
+    Note over C: 6. Store token in JS memory<br/>(NEVER localStorage)
+
+    C->>B: 7. API request with Bearer <jwt>
+    B->>DB: 8. Validate JWT against JWKS
+    B->>DB: 9. Provision user
+    DB-->>B: ok
+    B-->>C: 10. Response
 ```
 
 **Token refresh** is automatic before expiry and handled entirely
 client-side by `oidc-client-ts` / `flutter_appauth`:
 
-```
-Client (oidc-client-ts) → Keycloak /token (grant_type=refresh_token)
-Keycloak → Client: new access_token (used silently for the next call)
+```mermaid
+sequenceDiagram
+    participant C as Client<br/>(oidc-client-ts)
+    participant K as Keycloak
+    C->>K: POST /token (grant_type=refresh_token)
+    K-->>C: new access_token (silent, next call)
 ```
 
 ### SSE streaming flow
 
-```
-┌────────┐       ┌────────┐       ┌────────┐       ┌──────────┐
-│ Client │       │ Kong   │       │ Backend │       │ ChatQnA  │
-│ (SSE)  │       │ Gateway │   │ (Proxy) │       │ (OPEA)   │
-└───┬────┘       └───┬────┘       └───┬────┘       └────┬─────┘
-    │                │                │                 │
-    │ POST /api/queries/stream       │                 │
-    │────────────────────────────────>│                 │
-    │                │                │ POST /v1/chat/completions
-    │                │                │─────────────────>│
-    │                │                │                 │
-    │                │                │<─ SSE: chunk ───│
-    │ SSE: chunk     │                │                 │
-    │<───────────────│                │                 │
-    │                │                │<─ SSE: chunk ───│
-    │ SSE: chunk     │                │                 │
-    │<───────────────│                │                 │
-    │                │                │<─ SSE: metadata │
-    │ SSE: metadata  │                │                 │
-    │<───────────────│                │                 │
-    │                │                │<─ SSE: done ────│
-    │ SSE: done      │                │                 │
-    │<───────────────│                │                 │
-    │                │                │ Backend: translationService.translate()
-    │                │                │                 │
-    │ SSE: translation                │                 │
-    │<───────────────│                │                 │
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant N as NGINX
+    participant K as Kong
+    participant B as Backend
+    participant Q as ChatQnA
+
+    C->>N: POST /api/queries/stream
+    N->>K: forward
+    K->>B: forward
+    B->>Q: POST /v1/chat/completions
+
+    Q-->>B: SSE: chunk
+    B-->>K: SSE: chunk
+    K-->>N: SSE: chunk
+    N-->>C: SSE: chunk
+
+    Q-->>B: SSE: metadata
+    B-->>C: SSE: metadata
+
+    Q-->>B: SSE: done
+    B-->>C: SSE: done
+
+    Note over B: Backend: translationService.translate()
+    B-->>C: SSE: translation
 ```
 
 ### Document ingestion flow
 
-```
-┌──────────────┐       ┌──────────────────┐       ┌──────────┐
-│ Admin User   │       │ Document Repo    │       │ Dataprep │
-│ (Browser)    │       │   :3001          │       │ :5000    │
-└──────┬───────┘       └────┬─────────────┘       └────┬─────┘
-       │                     │                         │
-       │ POST /api/files     │                         │
-       │ (multipart)         │                         │
-       │────────────────────>│                         │
-       │                     │                         │
-       │                     │ 1. ClamAV scan          │
-       │                     │    (clamdscan)          │
-       │                     │                         │
-       │                     │ 2. Extract text         │
-       │                     │    (Docling, etc.)      │
-       │                     │                         │
-       │ { fileId, metadata } │                         │
-       │<────────────────────│                         │
-       │                     │                         │
-       │                     │ 3. Trigger ingestion    │
-       │                     │────────────────────────>│
-       │                     │                         │
-       │                     │ 4. Fetch labels         │
-       │                     │    GET /api/service-categories
-       │                     │    (Keycloak SA token)  │
-       │                     │                         │
-       │                     │ 5. Chunk content        │
-       │                     │ 6. Assign labels        │
-       │                     │ 7. Generate embeddings  │
-       │                     │    (TEI)                │
-       │                     │                         │
-       │                     │ 8. Store in ArangoDB    │
-       │                     │                         │
-       │ { ingestionStatus } │                         │
-       │<────────────────────│                         │
+```mermaid
+sequenceDiagram
+    participant U as Admin User<br/>(Browser)
+    participant D as Document Repo<br/>:3001
+    participant P as Dataprep<br/>:5000
+
+    U->>D: POST /api/files (multipart)
+
+    Note over D: 1. ClamAV scan<br/>(clamdscan)
+    Note over D: 2. Extract text<br/>(Docling, etc.)
+
+    D-->>U: { fileId, metadata }
+
+    D->>P: 3. Trigger ingestion
+
+    Note over P: 4. Fetch labels<br/>GET /api/service-categories<br/>(Keycloak SA token)
+    Note over P: 5. Chunk content
+    Note over P: 6. Assign labels
+    Note over P: 7. Generate embeddings (TEI)
+    Note over P: 8. Store in ArangoDB
+
+    P-->>D: ingestionStatus
+    D-->>U: { ingestionStatus }
 ```
 
 ---

@@ -53,20 +53,24 @@
         v-else
         :concepts="concepts"
         :selected-id="editConceptId"
-        :label-options="[]"
+        :label-options="labelOptions"
         :read-only="readOnly"
         @select="onConceptSelect"
         @add="addOpen = true"
-        @delete="onConceptDelete"
+        @delete="onDeleteAsk"
+        @label="onTreeLabel"
       />
     </div>
     <p v-else class="okf-step__note">
       {{ translate('okf.steps.input.noRepoYet', 'Create the repository first (go back to Entry).') }}
     </p>
 
-    <!-- ALL FEEDERS, ALWAYS (D6) -->
+    <!-- ALL FEEDERS, ALWAYS (D6): the picker renders in EVERY variant —
+         audit A7-2 removed the clone exclusion; the variant only shapes the
+         label and the picker's default scope. readOnly (serving repo) still
+         gates every mutating feeder, matching Curate/RepoEditor. -->
     <div class="okf-step__feeders">
-      <DsButton v-if="variant !== 'clone'" variant="primary" small @click="pickOpen = true">
+      <DsButton variant="primary" small :disabled="readOnly" @click="pickOpen = true">
         {{
           variant === 'crawl'
             ? translate('okf.steps.input.chooseCrawl', 'Choose crawled documents')
@@ -82,7 +86,7 @@
         />
       </DsButton>
       <label class="okf-step__fs">
-        <DsButton variant="secondary" small :disabled="fsBusy || !repoId" @click="pickFiles">
+        <DsButton variant="secondary" small :disabled="fsBusy || !repoId || readOnly" @click="pickFiles">
           {{ translate('okf.steps.input.fsPick', '+ Import markdown from this computer') }}
         </DsButton>
         <input
@@ -94,7 +98,7 @@
           @change="onFsFiles"
         />
       </label>
-      <DsButton variant="secondary" small :disabled="!repoId" @click="addOpen = true">
+      <DsButton variant="secondary" small :disabled="!repoId || readOnly" @click="addOpen = true">
         {{ translate('okf.steps.input.writeOne', '+ Write a concept') }}
       </DsButton>
     </div>
@@ -131,19 +135,45 @@
     <OkfAddConceptModal
       :visible="addOpen"
       :repo-id="repoId"
-      :has-index="false"
+      :has-index="hasIndex"
       @close="addOpen = false"
       @created="onConceptCreated"
     />
 
-    <!-- Click-to-edit (D5): a saved concept is never a dead end -->
+    <!-- Click-to-edit (D5): a saved concept is never a dead end. readOnly is
+         threaded (audit A7-3): a serving repo's steward must retract before
+         editing — the dialog's Save/autosave otherwise stayed live. -->
     <DsDialog :visible="editOpen" :title="editTitle" size="xl" scrollable @close="editOpen = false">
       <OkfConceptEditor
         v-if="editOpen && editConceptId"
         :repo-id="repoId"
         :concept-id="editConceptId"
+        :read-only="readOnly"
+        :label-options="labelOptions"
         @saved="onConceptSaved"
       />
+    </DsDialog>
+
+    <!-- WORKBENCH DELETE CONFIRM (audit A7-4): ConceptList's contract is
+         "X → delete (parent confirms)" — RepoEditor confirms via a dialog;
+         the workbench now does the same instead of deleting on first click.
+         Verifier A7-minor: persistent + loading gate the backdrop/Esc while
+         the delete request is in flight — dismissing mid-delete no longer
+         leaves the deletion running behind a closed dialog. -->
+    <DsDialog
+      :visible="deleteAsk !== null"
+      :title="translate('okf.steps.input.deleteTitle', 'Delete topic')"
+      size="sm"
+      :persistent="deleting"
+      :loading="deleting"
+      :actions="deleteActions"
+      @close="deleteAsk = null"
+      @action="onDeleteAction"
+    >
+      <p>
+        {{ translate('okf.steps.input.deleteBody', 'This permanently removes the topic from this repository.') }}
+        <strong>{{ deleteAsk && (deleteAsk.title || deleteAsk.concept_id) }}</strong>
+      </p>
     </DsDialog>
 
     <p v-if="inputError" class="okf-step__error">{{ inputError }}</p>
@@ -162,7 +192,8 @@ import OkfConceptList from '../editor/ConceptList.vue';
 import OkfSourceDialog from '../wizard/OkfSourceDialog.vue';
 import { mapGetters } from 'vuex';
 import repoOkfService from '../../../services/repoOkfService';
-import { buildConceptPayload } from '../../../services/okfRepoOps';
+import serviceTreeService from '../../../services/serviceTreeService';
+import { buildConceptPayload, labelOptionsForDomain, applyLabel } from '../../../services/okfRepoOps';
 import translateMixin from '../../../mixins/translateMixin';
 
 export default {
@@ -184,7 +215,12 @@ export default {
   data() {
     return {
       selectedIds: ((this.draft && this.draft.input && this.draft.input.document_ids) || []).slice(),
-      selectedNames: [],
+      // Verifier B2 (2026-09-29): the names rows are LOAD-BEARING now —
+      // Produce routes each conversion leg by the row's origin. Restore them
+      // from the draft exactly like the ids, or every Back→Continue
+      // round-trip (steps remount on :key) destroyed them and unstamped ids
+      // misrouted at Produce.
+      selectedNames: ((this.draft && this.draft.input && this.draft.input.document_names) || []).slice(),
       pickOpen: false,
       classification: (this.draft && this.draft.classification) || 'heuristics',
       fsBusy: false,
@@ -197,6 +233,13 @@ export default {
       conceptsError: '',
       editOpen: false,
       editConceptId: null,
+      // WORKBENCH DELETE CONFIRM (audit A7-4) + KH label options (audit
+      // A7-5): the set-label affordance was a dead end with zero options —
+      // the workbench now loads the SAME Subject-Area-bounded KH options
+      // the editor rail uses.
+      deleteAsk: null,
+      deleting: false,
+      labelOptions: [],
       addedCount: (this.draft && this.draft.input && this.draft.input.concepts_added) || 0
     };
   },
@@ -211,6 +254,27 @@ export default {
     readOnly() {
       const repo = this.repoId && this.repoById(this.repoId);
       return !!(repo && repo.ingested_at);
+    },
+    // A7-1: mirror RepoEditor — AddConceptModal must not offer a SECOND
+    // index, and must show "Append to the index" once one exists.
+    hasIndex() {
+      return this.concepts.some((c) => c.is_index);
+    },
+    deleteActions() {
+      return [
+        {
+          key: 'cancel',
+          label: this.translate('common.cancel', 'Cancel'),
+          variant: 'secondary',
+          disabled: this.deleting
+        },
+        {
+          key: 'confirm',
+          label: this.translate('common.delete', 'Delete'),
+          variant: 'danger',
+          disabled: this.deleting
+        }
+      ];
     },
     editTitle() {
       const c = this.concepts.find((x) => x.concept_id === this.editConceptId);
@@ -276,16 +340,7 @@ export default {
   mounted() {
     this.emitGate();
     this.refreshConcepts();
-    // First-visit nudge for the blank-canvas steward (editor_offered rides
-    // the draft so Back/Forward never re-pops a declined modal).
-    if (
-      this.variant === 'manual' &&
-      this.concepts.length === 0 &&
-      !((this.draft && this.draft.input && this.draft.input.editor_offered) || false)
-    ) {
-      this.addOpen = true;
-      this.writeBack({ editor_offered: true });
-    }
+    this.loadLabelOptions();
   },
   methods: {
     emitGate() {
@@ -299,6 +354,20 @@ export default {
       try {
         this.concepts = await repoOkfService.listConcepts(this.repoId);
         this.addedCount = this.concepts.length;
+        // First-visit nudge for the blank-canvas steward (editor_offered
+        // rides the draft so Back/Forward never re-pops a declined modal).
+        // Verifier A7-minor: this waits for the RESOLVED list — mounted()
+        // opened the modal against an empty array, so hasIndex was false
+        // even when createRepo had already seeded an index skeleton and the
+        // modal offered a second index type.
+        if (
+          this.variant === 'manual' &&
+          this.concepts.length === 0 &&
+          !((this.draft && this.draft.input && this.draft.input.editor_offered) || false)
+        ) {
+          this.addOpen = true;
+          this.writeBack({ editor_offered: true });
+        }
       } catch {
         this.conceptsError = this.translate('okf.steps.input.benchFailed', 'Could not read the topics right now.');
       } finally {
@@ -331,9 +400,20 @@ export default {
       const rows = Array.isArray(payload) ? payload : (payload && payload.rows) || [];
       const ids = Array.isArray(payload) ? payload : (payload && payload.ids) || rows.map((r) => r.file_id);
       this.selectedIds = ids.slice();
-      this.selectedNames = rows.map((r) => ({ file_id: r.file_id, file_name: r.file_name }));
+      // A2 (audit): each row carries its T1 origin stamp so Produce routes
+      // crawl files through the per-file crawl converter and everything else
+      // through the documents batch — dispatch must key on the FILE's
+      // origin, not the draft variant (mixed picks are legal in any variant).
+      this.selectedNames = rows.map((r) => ({
+        file_id: r.file_id,
+        file_name: r.file_name,
+        source: r.source || null
+      }));
       this.pickOpen = false;
-      this.writeBack();
+      // Verifier B3: the selection CHANGED — any queued conversion legs from
+      // a previous selection are dead; drop them so a mid-chain Back→
+      // Continue can never kick a deselected file.
+      this.writeBack({ convert_queue: [], converted_ids: null });
       this.emitGate();
     },
     pickFiles() {
@@ -392,8 +472,49 @@ export default {
       this.editConceptId = conceptId;
       this.editOpen = true;
     },
-    async onConceptDelete(node) {
-      if (!node || !node.concept_id || !this.repoId) return;
+    // Verifier B6 (2026-09-29): the tree's inline set-label was a dead end —
+    // ConceptList emits 'label' but the workbench never consumed it. Same
+    // contract as the editor rail: write via applyLabel, refresh, persist.
+    async onTreeLabel({ conceptId, label }) {
+      if (this.readOnly || !this.repoId || !conceptId) return;
+      try {
+        await applyLabel(this.repoId, conceptId, label ? [label] : []);
+        await this.refreshConcepts();
+        this.writeBack();
+      } catch {
+        this.conceptsError = this.translate('okf.steps.input.labelFailed', 'Could not set the label.');
+      }
+    },
+    // A7-5: the SAME Subject-Area-bounded KH label options the editor rail
+    // loads (okfRepoOps.labelOptionsForDomain over the admin service tree).
+    // A legacy domain with no KH match falls back to the full tree.
+    async loadLabelOptions() {
+      try {
+        const categories = await serviceTreeService.getAdminCategories('en');
+        const repo = this.repoId ? this.repoById(this.repoId) || {} : {};
+        const { options } = labelOptionsForDomain(categories, repo.domain || '');
+        this.labelOptions = options;
+      } catch {
+        this.labelOptions = []; // hierarchy unavailable — picker stays empty
+      }
+    },
+    // A7-4: confirm-before-delete, mirroring the editor's contract.
+    onDeleteAsk(node) {
+      if (this.readOnly) return;
+      this.deleteAsk = node;
+    },
+    async onDeleteAction(key) {
+      if (key === 'cancel') {
+        this.deleteAsk = null;
+        return;
+      }
+      if (key !== 'confirm' || !this.deleteAsk || this.deleting) return;
+      const node = this.deleteAsk;
+      if (!node || !node.concept_id || !this.repoId) {
+        this.deleteAsk = null;
+        return;
+      }
+      this.deleting = true;
       try {
         await repoOkfService.deleteConcept(this.repoId, node.concept_id);
         if (this.editConceptId === node.concept_id) {
@@ -404,6 +525,9 @@ export default {
         this.writeBack();
       } catch {
         this.conceptsError = this.translate('okf.steps.input.deleteFailed', 'Could not delete the concept.');
+      } finally {
+        this.deleting = false;
+        this.deleteAsk = null;
       }
     },
     async onConceptSaved() {

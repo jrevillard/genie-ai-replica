@@ -324,11 +324,22 @@ async function runDocumentsConversion(job) {
   const allDrafts = [];
   const perFile = [];
   let filesDone = 0;
+  // B1 parity (audit 2026-09-29): the terminal record's summary now carries
+  // the slug-merge counts too, so the wizard's accounting renders
+  // "N new · M merged by slug" for BOTH conversion routes (the crawl path
+  // writes the same shape). Index/meta rows are not special-cased here —
+  // the documents route produces none.
+  const ingestSummary = { created: 0, updated: 0, skipped_dedup: 0 };
 
   const flush = async (batch) => {
     if (batch.length === 0) return;
     await assertRepoAlive();
-    await ingestRepoConcepts(repo_id, { concepts: batch, classification, skipCuration: true }, actor); // IMPORT (not RAG)
+    const s = await ingestRepoConcepts(repo_id, { concepts: batch, classification, skipCuration: true }, actor); // IMPORT (not RAG)
+    if (s) {
+      ingestSummary.created += s.created || 0;
+      ingestSummary.updated += s.updated || 0;
+      ingestSummary.skipped_dedup += s.skipped_dedup || 0;
+    }
   };
 
   try {
@@ -414,24 +425,36 @@ async function runDocumentsConversion(job) {
     }
 
     // Rooted-graph index concept LAST (links resolve per-path) — the file set
-    // becomes the repository's table of contents.
+    // becomes the repository's table of contents. Bypasses the accumulating
+    // flush() on purpose (verifier B5, 2026-09-29): the index is a meta row,
+    // not a produced topic — folding its created:1 into ingestSummary
+    // over-counted every fresh repo's summary by exactly one. Mirrors the
+    // crawl route, which never folds its index in.
     const indexTitle = requested_name || 'Imported knowledge base';
     const contents = allDrafts
       .map((d) => `- [${(d.frontmatter && d.frontmatter.title) || d.path.replace(/\.md$/, '')}](./${d.path})`)
       .join('\n');
-    await flush([
+    await ingestRepoConcepts(
+      repo_id,
       {
-        path: 'index.md',
-        frontmatter: {
-          type: 'index',
-          title: indexTitle,
-          sources: file_ids.map((file_id) => ({ kind: 'document', file_id }))
-        },
-        body:
-          `# ${indexTitle}\n\nThis repository was imported from ${file_ids.length} document(s). ` +
-          `The concepts below are the imported content, linked where the documents reference each other.\n\n## Contents\n\n${contents}\n`
-      }
-    ]);
+        concepts: [
+          {
+            path: 'index.md',
+            frontmatter: {
+              type: 'index',
+              title: indexTitle,
+              sources: file_ids.map((file_id) => ({ kind: 'document', file_id }))
+            },
+            body:
+              `# ${indexTitle}\n\nThis repository was imported from ${file_ids.length} document(s). ` +
+              `The concepts below are the imported content, linked where the documents reference each other.\n\n## Contents\n\n${contents}\n`
+          }
+        ],
+        classification,
+        skipCuration: true
+      },
+      actor
+    );
     batches += 1;
 
     // WHOLE-CORPUS LABELING: ONE curation pass over the whole import — the
@@ -462,7 +485,10 @@ async function runDocumentsConversion(job) {
         files_imported: filesDone - failedFiles,
         files_failed: failedFiles,
         concepts: allDrafts.length,
-        links: linkCount
+        links: linkCount,
+        created: ingestSummary.created,
+        updated: ingestSummary.updated,
+        skipped_dedup: ingestSummary.skipped_dedup
       },
       finished_at: new Date().toISOString()
     });

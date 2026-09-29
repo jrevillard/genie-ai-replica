@@ -286,19 +286,32 @@ export default {
       return this.$refs.activeStep || null;
     },
     async onAdvance() {
-      if (this.advancing) return;
+      if (this.advancing) {
+        console.debug('[okf-finish] advance ignored — already advancing');
+        return;
+      }
       const step = this.activeStepVm();
-      if (this.gateOpen === false) return;
+      if (this.gateOpen === false) {
+        // FIELD BUG #1028 breadcrumb: a closed gate makes this click a
+        // no-op — the button should be disabled, not silent.
+        console.debug('[okf-finish] advance refused — gate closed at step', this.activeStep);
+        return;
+      }
       if (step && typeof step.beforeAdvance === 'function') {
         this.advancing = true;
         let ok;
         try {
           ok = (await step.beforeAdvance()) !== false;
-        } catch {
+        } catch (err) {
+          // #1028: the old bare catch swallowed the reason — log it.
+          console.debug('[okf-finish] beforeAdvance threw at step', this.activeStep, err && err.message);
           ok = false;
         }
         this.advancing = false;
-        if (!ok) return;
+        if (!ok) {
+          console.debug('[okf-finish] beforeAdvance refused advance at step', this.activeStep);
+          return;
+        }
       }
       if (this.activeStep < 9) {
         this.gateOpen = true; // F9: same rationale as onStepClick

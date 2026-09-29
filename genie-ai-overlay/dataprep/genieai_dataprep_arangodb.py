@@ -4,7 +4,11 @@
 
 import asyncio
 import contextvars
-import fcntl  # Added for file locking
+
+try:
+    import fcntl  # POSIX file locking — the service runs in a Linux container
+except ModuleNotFoundError:  # Windows dev checkout: locking degrades to a no-op
+    fcntl = None  # type: ignore[assignment]
 import json
 import os
 import re
@@ -2290,7 +2294,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # --- LOCK MANAGEMENT ---
             # Release the file lock so the next document can be processed
             if lock_file:
-                fcntl.flock(lock_file, fcntl.LOCK_UN)
+                if fcntl is not None:  # Windows dev checkout: no-op
+                    fcntl.flock(lock_file, fcntl.LOCK_UN)
                 lock_file.close()
 
     async def retract_file(self, file_id: str, graph_name: str):

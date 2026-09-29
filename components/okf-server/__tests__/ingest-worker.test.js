@@ -334,7 +334,6 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   });
 
   test('graph present → pre-flight is a no-op (the await must not flip the happy path)', async () => {
-    const graphLifecycle = require('../services/graph-lifecycle-service');
     mockDb._stores.okf_repositories = {
       [REPO]: {
         _key: REPO,

@@ -596,59 +596,32 @@ api-gateway-solution/
 
 ### Cross-Part Communication Flow
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        NGINX (api-gateway-solution/)            │
-│  SSL termination, static files, reverse proxy, ModSecurity      │
-└─────────────────────────────────────────────────────────────────┘
-         │                    │                    │
-         ▼                    ▼                    ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│ Frontend (Vue)  │  │  Backend API    │  │   Mobile App    │
-│ gov-chat-.../   │  │ gov-chat-.../   │  │ genie_ai_.../   │
-│ Port: 5173      │  │ Port: 3000      │  │ (native app)    │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
-         │                    │                    │
-         │                    ▼                    │
-         │         ┌───────────────────────────┐   │
-         │         │  Keycloak (OIDC)          │   │
-         │         │  /auth/* routes           │   │
-         │         └───────────────────────────┘   │
-         │                    │                    │
-         │                    ▼                    │
-         │         ┌───────────────────────────┐   │
-         │         │  ArangoDB (Data Layer)    │   │
-         │         │  - users                  │   │
-         │         │  - conversations          │   │
-         │         │  - messages               │   │
-         │         │  - serviceCategories      │   │
-         │         │  - vector search          │   │
-         │         └───────────────────────────┘   │
-         │                    │                    │
-         │                    ▼                    │
-         │         ┌───────────────────────────┐   │
-         │         │  Document Repository      │   │
-         │         │  Port: 3001              │   │
-         │         │  /api/files/*            │   │
-         │         └───────────────────────────┘   │
-         │                    │                    │
-         │                    ▼                    │
-         │         ┌───────────────────────────┐   │
-         │         │  OPEA Microservices       │   │
-         │         │  - ChatQnA (Port 8888)    │   │
-         │         │  - Retriever (Port 7000)  │   │
-         │         │  - Reranker (Port 8000)   │   │
-         │         │  - Dataprep (Port 5000)   │   │
-         │         └───────────────────────────┘   │
-         │                    │                    │
-         ▼                    ▼                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      External Services                           │
-│  - vLLM (LLM inference)                                          │
-│  - TEI (embeddings/reranking)                                   │
-│  - ClamAV (virus scanning)                                      │
-│  - Redis (cache/sessions)                                       │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    Nginx["NGINX<br/>(api-gateway-solution/)<br/>SSL termination, static files,<br/>reverse proxy, ModSecurity"]
+    Kong["Kong<br/>(reverse proxy, CORS,<br/>rate limit, OIDC)"]
+    FE["Frontend (Vue)<br/>gov-chat-frontend/<br/>Port: 5173"]
+    BE["Backend API<br/>gov-chat-backend/<br/>Port: 3000"]
+    Mobile["Mobile App<br/>genie_ai_mobile/<br/>(native app)"]
+    KC["Keycloak (OIDC)<br/>/auth/* routes"]
+    Arango["ArangoDB (Data Layer)<br/>users, conversations,<br/>messages, serviceCategories,<br/>vector search"]
+    DocRepo["Document Repository<br/>Port: 3001<br/>/api/files/*"]
+    OPEA["OPEA Microservices<br/>ChatQnA :8888<br/>Retriever :7000<br/>Reranker :8000<br/>Dataprep :5000"]
+    Ext["External Services<br/>vLLM (LLM inference)<br/>TEI (embeddings/reranking)<br/>ClamAV (virus scanning)<br/>Redis (cache/sessions)"]
+
+    Nginx --> Kong
+    Kong --> FE
+    Kong --> BE
+    Kong --> Mobile
+    BE --> KC
+    KC --> Arango
+    BE --> Arango
+    BE --> DocRepo
+    BE --> OPEA
+    OPEA --> Ext
+    Arango --> Ext
+    DocRepo --> Ext
+    FE --> Ext
 ```
 
 ### Authentication Flow

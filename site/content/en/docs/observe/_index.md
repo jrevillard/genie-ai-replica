@@ -23,15 +23,27 @@ observability` in Compose, or `ENABLE_OBSERVABILITY=1` in Swarm.
 
 ## Architecture at a glance
 
-```
-App services (Node.js, Python/OPEA, Kong)
-  │  OTLP traces/metrics ──┐
-  │  fluentd logs ─────────┤
-  ▼                        ▼
- OpenTelemetry Collector (mode: global — one per node)
-   ├── VictoriaMetrics  (metrics)   ─┐
-   ├── VictoriaLogs     (logs)       ├─ Grafana (Kong /grafana/, Keycloak SSO)
-   └── VictoriaTraces   (traces)    ─┘
+```mermaid
+flowchart LR
+    subgraph Apps["App services (Node.js, Python/OPEA, Kong)"]
+        App
+    end
+    subgraph Collector["OpenTelemetry Collector<br/>(mode: global — one per node)"]
+        Coll
+    end
+    VM["VictoriaMetrics<br/>(metrics)"]
+    VL["VictoriaLogs<br/>(logs)"]
+    VT["VictoriaTraces<br/>(traces)"]
+    Grafana["Grafana<br/>(Kong /grafana/, Keycloak SSO)"]
+
+    Apps -- OTLP traces/metrics --> Collector
+    Apps -- fluentd logs --> Collector
+    Collector --> VM
+    Collector --> VL
+    Collector --> VT
+    VM --> Grafana
+    VL --> Grafana
+    VT --> Grafana
 ```
 
 Three signals, three stores, one query layer. Each store is a single-node

@@ -39,24 +39,28 @@ sitting between NGINX/Kong (the only host-exposed entry points) and every
 other service. In dev mode Compose brings up the whole stack on a single
 overlay network; only NGINX publishes ports 80/443 to the host.
 
-```text
-                  ┌──────────────────────────────────────────────┐
-   Browser ─────► │ nginx  (host: 80, 443)                       │
-                  │   └─► kong  (8000)  ─► routes by path prefix │
-                  └──────────────────────────────────────────────┘
-                                          │
-              ┌───────────────────────────┼─────────────────────────────────┐
-              ▼                           ▼                                 ▼
-   ┌────────────────────┐    ┌────────────────────────┐    ┌────────────────────────┐
-   │ backend  (3000)    │    │ frontend (5173)        │    │ document-repository    │
-   │ Node.js / Express  │    │ Vue 3 SPA, served      │    │ (3001) — file uploads  │
-   │ THE THING YOU EDIT │    │ as static assets       │    └────────────────────────┘
-   └────────────────────┘    └────────────────────────┘
-              │
-   ┌──────────┴───────────┐   ┌─────────────────────┐   ┌─────────────────────┐
-   ▼                      ▼   ▼                     ▼   ▼                     ▼
-arango-vector-db (8529)  redis-cache (6379)   keycloak (8080)         clamav (3310)
-  Graph + vectors          Cache             OIDC issuer             AV scanner
+```mermaid
+flowchart TB
+    Browser["Browser"]
+    Nginx["NGINX<br/>(host: 80, 443)"]
+    Kong["Kong<br/>(8000) — routes by path prefix"]
+    Backend["backend (3000)<br/>Node.js / Express<br/>THE THING YOU EDIT"]
+    Frontend["frontend (5173)<br/>Vue 3 SPA<br/>served as static assets"]
+    DocRepo["document-repository<br/>(3001) — file uploads"]
+    Arango["arango-vector-db (8529)<br/>Graph + vectors"]
+    Redis["redis-cache (6379)<br/>Cache"]
+    Keycloak["keycloak (8080)<br/>OIDC issuer"]
+    ClamAV["clamav (3310)<br/>AV scanner"]
+
+    Browser --> Nginx
+    Nginx --> Kong
+    Kong --> Backend
+    Kong --> Frontend
+    Kong --> DocRepo
+    Backend --> Arango
+    Backend --> Redis
+    Backend --> Keycloak
+    DocRepo --> ClamAV
 ```
 
 `docker-compose.yaml` declares the full topology. The backend's `depends_on:`

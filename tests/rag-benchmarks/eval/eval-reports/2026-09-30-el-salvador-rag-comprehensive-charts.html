@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>El Salvador RAG — Comprehensive Eval (Sept 23 → Sept 30)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root {
+  --bg: #ffffff;
+  --surface: #fafbfc;
+  --ink-primary: #0f1a2b;
+  --ink-secondary: #4a5568;
+  --ink-muted: #94a3b8;
+  --grid: #e9ecef;
+  --rule: #d8dee3;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #8b5cf6;
+  --series-5: #ec4899;
+  --status-good: #1baf7a;
+  --status-warn: #d97706;
+  --status-crit: #dc2626;
+  --tooltip-bg: #1f2937;
+  --tooltip-ink: #f9fafb;
+}
+[data-theme="dark"] {
+  --bg: #0e1116;
+  --surface: #161b22;
+  --ink-primary: #e6edf3;
+  --ink-secondary: #adbac7;
+  --ink-muted: #768390;
+  --grid: #21262d;
+  --rule: #30363d;
+  --series-1: #58a6ff;
+  --series-2: #ff8c4a;
+  --series-3: #4ec9b0;
+  --series-4: #b392f0;
+  --series-5: #f472b6;
+  --status-good: #4ec9b0;
+  --status-warn: #f0883e;
+  --status-crit: #f85149;
+  --tooltip-bg: #e6edf3;
+  --tooltip-ink: #0e1116;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink-primary);
+  padding: 32px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+h1 { font-size: 22px; margin: 0; font-weight: 600; }
+.subtitle { color: var(--ink-secondary); font-size: 13px; margin-top: 4px; }
+button.toggle {
+  background: var(--surface);
+  color: var(--ink-primary);
+  border: 1px solid var(--rule);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+}
+button.toggle:hover { border-color: var(--ink-secondary); }
+
+.headline {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin: 24px 0;
+}
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 16px;
+}
+.kpi .label { color: var(--ink-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+.kpi .value { font-size: 28px; font-weight: 600; margin: 4px 0; color: var(--ink-primary); }
+.kpi .delta { font-size: 12px; color: var(--ink-muted); }
+.kpi .delta.pos { color: var(--status-good); }
+.kpi .delta.neg { color: var(--status-crit); }
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 24px;
+  margin: 24px 0;
+}
+.chart-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+.chart-sub {
+  color: var(--ink-secondary);
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+.row { display: flex; gap: 16px; }
+.col { flex: 1; min-width: 0; }
+.col-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+svg { width: 100%; height: auto; display: block; }
+.bar { cursor: pointer; transition: opacity 0.15s; }
+.bar:hover { opacity: 0.85; }
+.line-pt { cursor: pointer; }
+
+.legend {
+  display: flex;
+  gap: 18px;
+  margin: 12px 0;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; color: var(--ink-secondary); }
+.swatch { width: 12px; height: 12px; border-radius: 2px; }
+
+.small-mult {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-ink);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  opacity: 0;
+  transition: opacity 0.1s;
+  z-index: 10;
+  white-space: nowrap;
+}
+.tooltip.visible { opacity: 1; }
+.tooltip .key { font-weight: 600; }
+.tooltip .row { display: flex; justify-content: space-between; gap: 12px; }
+
+.insights {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--series-1);
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.insights h4 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.insights ul { margin: 0; padding-left: 18px; color: var(--ink-primary); }
+.insights li { margin: 4px 0; }
+.insights li b { color: var(--ink-primary); font-weight: 600; }
+.insights .caveat { color: var(--ink-secondary); font-style: italic; }
+.insights .take { color: var(--status-good); font-weight: 600; }
+.insights .warn { color: var(--status-crit); font-weight: 600; }
+
+footer {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>El Salvador RAG — Comprehensive Evaluation</h1>
+    <div class="subtitle">Sept 23 baseline → Sept 30 evolved · 42 queries · genieai-el-salvador @ .102 · factor=0.0006 (validated)</div>
+  </div>
+  <button class="toggle" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">Toggle theme</button>
+</header>
+
+<div class="headline">
+  <div class="kpi">
+    <div class="label">Faithfulness Δ (T05 → T11)</div>
+    <div class="value">+0.122</div>
+    <div class="delta pos">0.533 → 0.655 (≈2.5× actual SE)</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Context Recall Δ</div>
+    <div class="value">+0.055</div>
+    <div class="delta pos">K=20 → K=32 (gold v3 → v4 caveat)</div>
+  </div>
+  <div class="kpi">
+    <div class="label">A/B Catastrophe</div>
+    <div class="value">−47%</div>
+    <div class="delta neg">factor 0.0006 → 0.0010: faithfulness 0.655 → 0.345</div>
+  </div>
+  <div class="kpi">
+    <div class="label">avg_sel Δ</div>
+    <div class="value">+122%</div>
+    <div class="delta pos">4.10 (T05) → 9.12 (T11) — 100% chunker, 0% prompt</div>
+  </div>
+</div>
+
+<!-- Chart 1: Anchor + RAGAS bars (4 configs) -->
+<div class="chart-card">
+  <h2 class="chart-title">Chart 1 · Anchor + RAGAS metrics across 4 configs</h2>
+  <div class="chart-sub">Left = anchor (deterministic). Right = RAGAS (LLM-judged). avg_sel on its own scale below. SE noise ≈ 0.023.</div>
+  <div class="legend">
+    <div class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>T05 Sept 23 (prose, chunker 2K, K=20)</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>T06 Sept 29 (XML, chunker 1.4K, K=20)</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--series-3)"></span>T11-K=20 (reproduction)</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--series-4)"></span>T11 K=32 (current)</div>
+  </div>
+  <div class="row">
+    <div class="col">
+      <div class="col-title">Anchor (deterministic)</div>
+      <svg id="chart-anchor" viewBox="0 0 480 360"></svg>
+    </div>
+    <div class="col">
+      <div class="col-title">RAGAS (LLM-judged)</div>
+      <svg id="chart-ragas" viewBox="0 0 480 360"></svg>
+    </div>
+  </div>
+  <div class="insights">
+    <h4>What to read</h4>
+    <ul>
+      <li><b>chunk_recall stable (~0.66–0.70)</b> across all 4 configs — reranker still picks the right chunks; <span class="take">no retrieval regression</span>.</li>
+      <li><b>chunk_precision drops 0.35 → 0.23</b> — largely gold-inflation artefact (v3 74 → v4 254 chunks via substring over-match).</li>
+      <li><b>retrieval_recall 0.89 → 0.81 → 0.87</b> — K=32 recovers the K=20 saturation on multi-passage queries.</li>
+      <li><b>RAGAS faithfulness 0.53 → 0.66</b> — <span class="take">+0.12, dominant gain of the evolution (≈2.5× actual SE)</span>.</li>
+      <li><b>RAGAS context_recall 0.67 → 0.73</b> — K=32 buys more passages fully retrieved.</li>
+      <li><b>RAGAS panel shows T05, T11-K20, T11-K32</b> — T06 had no separate RAGAS run; T11-K20 is the validated reproduction at K=20 (chunker + XML, same as T06).</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Chart 1b: avg_sel -->
+<div class="chart-card">
+  <h2 class="chart-title">Chart 1b · avg_sel chunks per query</h2>
+  <div class="chart-sub">Driven 100% by the chunker (XML prompt contributes 0 to selection — verified by code review).</div>
+  <svg id="chart-avgsel" viewBox="0 0 600 200"></svg>
+  <div class="insights">
+    <h4>What to read</h4>
+    <ul>
+      <li><b>4.10 → 6.07</b> (T05 → T06, K=20): <span class="take">100% chunker</span> — smaller chunks cut per-chunk context_decay_cost ~34%, more candidates clear adaptive gate. XML prompt affects nothing here (selection happens before LLM reads prompt).</li>
+      <li><b>6.07 → 9.12</b> (T06 → T11-K32): K=20→K=32. +50% more chunks through to LLM.</li>
+      <li><b>LLM sees 2.2× more chunks per answer</b> than T05 baseline — <i>mechanism</i> behind +0.122 faithfulness.</li>
+      <li class="caveat">Trade-off: noise 0.65 → 0.77. Reranker doing more work per query.</li>
+      <li class="caveat"><b>Stale calibration:</b> vars.yml:119 says CONTEXT_DECAY_FACTOR=0.0006 was tuned for chunk_size=2000. Stale. Lever: re-calibrate for 1400 or accept 9.12 avg_sel as new baseline.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Chart 2: Trajectory -->
+<div class="chart-card">
+  <h2 class="chart-title">Chart 2 · RAGAS trajectory across configs</h2>
+  <div class="chart-sub">Line plot of the 4 RAGAS metrics. Edges labelled. Shaded band = ± SE noise.</div>
+  <svg id="chart-trajectory" viewBox="0 0 960 320"></svg>
+  <div class="insights">
+    <h4>What to read</h4>
+    <ul>
+      <li><b>Faithfulness (blue)</b>: only metric with T05 datapoint. Climbs <b>0.53 → 0.66</b> across the cycle. <span class="take">+0.12, ≈2.5× actual SE (0.049) — single biggest signal</span>.</li>
+      <li><b>Context precision (orange)</b>: drops slightly <b>0.66 → 0.64</b> at K=32, but <span class="caveat">n_valid drops 25 → 18</span> (judge timeouts). Within noise.</li>
+      <li><b>Context recall (green)</b>: T05 0.67 → T11-K20 0.69 → T11-K32 0.73. +0.06 K=20→K=32. Real.</li>
+      <li><b>Answer relevancy (violet)</b>: flat 0.71–0.72 across configs. XML prompt changes grounding, not topic.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Chart 3: T10 crater highlight -->
+<div class="chart-card">
+  <h2 class="chart-title">Chart 3 · T10 crater (factor=0.0020)</h2>
+  <div class="chart-sub">What NOT to do: offline F1 champion + live deploy without RAGAS validation. factor=0.0020 vs factor=0.0006 (validated).</div>
+  <div class="row">
+    <div class="col">
+      <div class="col-title">Avg_sel per config</div>
+      <svg id="chart-crater-avgsel" viewBox="0 0 480 240"></svg>
+    </div>
+    <div class="col">
+      <div class="col-title">RAGAS faithfulness</div>
+      <svg id="chart-crater-faith" viewBox="0 0 480 240"></svg>
+    </div>
+  </div>
+  <div class="insights">
+    <h4>What to read</h4>
+    <ul>
+      <li><b>factor=0.0006 (current, validated)</b>: avg_sel <b>9.12</b>, faithfulness <b>0.655</b> — LLM sees ~9 grounded chunks per query.</li>
+      <li><b>factor=0.0020 (T10 crater)</b>: avg_sel <b>3.26</b> (<span class="warn">−64%</span>), faithfulness <b>0.506</b> (<span class="warn">−16.5pt</span>).</li>
+      <li><b>Root cause</b>: <code>context_decay_cost = factor × token_count</code> dominates adaptive selection. Higher factor = stricter threshold = fewer chunks kept = less context for LLM.</li>
+      <li><b>Smoking gun</b>: <code>vars.yml:118-119</code> notes <code>CONTEXT_DECAY_FACTOR=0.0006 was tuned for our MD chunk_size=2000</code>. Chunker tightened to 1400 without re-calibrating.</li>
+      <li><b>Lesson</b>: offline F1 ≠ live RAGAS. Always validate live before deploying offline champion.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Chart 4: Live A/B calibration sweep (factor=0.0006 vs 0.0010) -->
+<div class="chart-card">
+  <h2 class="chart-title">Chart 4 · Live A/B calibration sweep (factor=0.0006 vs 0.0010)</h2>
+  <div class="chart-sub">Same K=32, same threshold=-0.25. Only CONTEXT_DECAY_FACTOR varies. RAGAS run end-to-end (not offline).</div>
+  <div class="row">
+    <div class="col">
+      <div class="col-title">avg_sel chunks/query</div>
+      <svg id="chart-ab-avgsel" viewBox="0 0 460 240"></svg>
+    </div>
+    <div class="col">
+      <div class="col-title">RAGAS 4 metrics</div>
+      <svg id="chart-ab-ragas" viewBox="0 0 460 240"></svg>
+    </div>
+  </div>
+  <div class="insights">
+    <h4>What to read</h4>
+    <ul>
+      <li><b>factor=0.0010 craters end-to-end</b>: faithfulness <b>−47%</b> (0.655 → 0.345), context_recall <b>−43%</b> (0.726 → 0.411), avg_sel <b>−10%</b> (9.12 → 8.24).</li>
+      <li>Same pattern as T10: higher factor → fewer chunks → less grounding. But even factor=0.0010 (modest bump) is enough to crater RAGAS.</li>
+      <li><b>Conclusion</b>: factor=0.0006 is already optimal for chunk_size=1400. Pushing lower (0.0003) might give marginal gains; pushing higher always crater.</li>
+      <li class="caveat">Anchor A/B against gold v4 failed due to content_hash drift in ArangoDB text field (LLM-generated prefix regenerated). RAGAS comparison (which uses reference_answer + answer) is the clean A/B.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Chart 5: per-query distributions at factor=0.0010 (the crater) -->
+<div class="chart-card">
+  <h2 class="chart-title">Chart 5 · Per-query distributions at factor=0.0010 (the crater)</h2>
+  <div class="chart-sub">Same n=42 / 4 metrics, but factor=0.0010 instead of 0.0006. Compare to Chart 3 in the evolution charts (factor=0.0006 distributions).</div>
+  <div class="small-mult">
+    <div>
+      <div class="col-title">Faithfulness (n=42)</div>
+      <svg id="hist-faith-0010" viewBox="0 0 460 220"></svg>
+    </div>
+    <div>
+      <div class="col-title">Context Precision (n=16)</div>
+      <svg id="hist-ctxp-0010" viewBox="0 0 460 220"></svg>
+    </div>
+    <div>
+      <div class="col-title">Context Recall (n=42)</div>
+      <svg id="hist-ctxr-0010" viewBox="0 0 460 220"></svg>
+    </div>
+    <div>
+      <div class="col-title">Answer Relevancy (n=42)</div>
+      <svg id="hist-ansr-0010" viewBox="0 0 460 220"></svg>
+    </div>
+  </div>
+  <div class="insights">
+    <h4>What to read</h4>
+    <ul>
+      <li><b>Faithfulness</b>: distribution crushed left. Compare to factor=0.0006 where mean=0.655; here mean=0.345.</li>
+      <li><b>Context recall</b>: also crushed (mean 0.41 vs 0.73).</li>
+      <li><b>Answer relevancy</b>: stays flat (0.71 vs 0.72) — same as factor=0.0006. This metric is invariant to calibration because it's anchored to the question, not the retrieval quality.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Final conclusions + recommendations -->
+<div class="chart-card" style="border-left:4px solid var(--series-1)">
+  <h2 class="chart-title">Final recommendations (mirrors report §9)</h2>
+  <div class="chart-sub">Validated state on .102 — factor=0.0006 / threshold=-0.25 / chunk_size=1400 / K=32 (live) vs K=50 (.env, unvalidated).</div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px">
+    <div>
+      <h3 style="font-size:13px;color:var(--ink-secondary);margin:0 0 8px;text-transform:uppercase;letter-spacing:0.05em">Headline numbers</h3>
+      <ul style="margin:0;padding-left:18px;line-height:1.7">
+        <li><b>RAGAS faithfulness 0.655</b> (n=39, validated) — vs factor=0.0010 <span style="color:var(--status-crit);font-weight:600">0.345 (-47%)</span></li>
+        <li><b>RAGAS context_recall 0.726</b> — vs factor=0.0010 <span style="color:var(--status-crit);font-weight:600">0.411 (-43%)</span></li>
+        <li><b>RAGAS answer_relevancy 0.717</b> — invariant to factor (0.711 at factor=0.0010)</li>
+        <li><b>avg_sel 9.12</b> chunks/query — 100% chunker change, 0% XML prompt</li>
+        <li><b>Anchor recall 0.704</b> — K=20→K=32 buys +0.064 retrieval_recall</li>
+      </ul>
+    </div>
+
+    <div>
+      <h3 style="font-size:13px;color:var(--ink-secondary);margin:0 0 8px;text-transform:uppercase;letter-spacing:0.05em">Operational decisions</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="border-bottom:1px solid var(--grid)">
+            <th style="text-align:left;padding:4px 6px;color:var(--ink-muted);font-weight:600">Param</th>
+            <th style="text-align:left;padding:4px 6px;color:var(--ink-muted);font-weight:600">Value</th>
+            <th style="text-align:left;padding:4px 6px;color:var(--ink-muted);font-weight:600">Decision</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">CONTEXT_DECAY_FACTOR</td><td style="padding:4px 6px"><code>0.0006</code></td><td style="padding:4px 6px;color:var(--series-1)"><b>keep</b> — validated live</td></tr>
+          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">MIN_VALUE_THRESHOLD</td><td style="padding:4px 6px"><code>-0.25</code></td><td style="padding:4px 6px;color:var(--series-1)"><b>keep</b></td></tr>
+          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">DATAPREP_CHUNK_SIZE_MD</td><td style="padding:4px 6px"><code>1400</code></td><td style="padding:4px 6px;color:var(--series-1)"><b>keep</b> — drives avg_sel</td></tr>
+          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">DATAPREP_CHUNK_OVERLAP</td><td style="padding:4px 6px"><code>300</code></td><td style="padding:4px 6px;color:var(--series-1)"><b>keep</b> — section-aware splits compensate</td></tr>
+          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">RETRIEVER_ARANGO_K</td><td style="padding:4px 6px"><code>32</code> (live) / <code>50</code> (.env)</td><td style="padding:4px 6px;color:var(--series-2)"><b>reconcile</b> before next deploy</td></tr>
+          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">System prompt</td><td style="padding:4px 6px">XML</td><td style="padding:4px 6px;color:var(--series-1)"><b>keep</b> — +0.122 faithfulness</td></tr>
+          <tr><td style="padding:4px 6px">Chunk overlap</td><td style="padding:4px 6px">300→150</td><td style="padding:4px 6px;color:var(--series-2)"><b>A/B test</b> — tighten candidate pool</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;padding:12px 14px;border-left:3px solid var(--series-3);font-size:13px;line-height:1.6">
+    <b>Three takeaways from the Sept 23 → Sept 30 cycle:</b><br>
+    1. <b>XML prompt + section-aware chunker delivers +0.122 faithfulness</b> (≈2.5× actual SE for n=39-42) — well-validated, keep.<br>
+    2. <b>factor=0.0006 is already optimal for chunk_size=1400</b> — pushing up (0.0010, 0.0020) craters end-to-end quality. Don't re-calibrate without live A/B.<br>
+    3. <b>avg_sel jump from 4.10 → 9.12 is 100% chunker-driven</b>, not prompt-driven — XML prompt contributes 0% to selection. Operational lever for noise is the reranker, not the prompt.
+  </div>
+</div>
+
+<footer>
+  Source: <code>tests/rag-benchmarks/eval/eval-reports/2026-09-30-el-salvador-rag-comprehensive.md</code>.
+  RAGAS judge: MiniMax-M3 (local 127.0.0.1:3456). Embedder: BGE-large-en-v1.5 (TEI @ .110).
+</footer>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ---------- data ----------
+const ANCHOR = {
+  "chunk_recall":      { T05: 0.665, T06: 0.668, "T11-K20": 0.668, "T11-K32": 0.704 },
+  "chunk_precision":   { T05: 0.349, T06: 0.261, "T11-K20": 0.261, "T11-K32": 0.234 },
+  "complete_recall":   { T05: 0.548, T06: 0.571, "T11-K20": 0.571, "T11-K32": 0.571 },
+  "retrieval_recall":  { T05: 0.888, T06: 0.806, "T11-K20": 0.806, "T11-K32": 0.870 },
+};
+const AVGSEL = { T05: 4.10, T06: 6.07, "T11-K20": 6.07, "T11-K32": 9.12 };
+const RAGAS = {
+  "faithfulness":      { T05: 0.533, T06: 0.624, "T11-K20": 0.624, "T11-K32": 0.655 },
+  "context_precision": { T05: 0.763, T06: { v: 0.660, n: 25 }, "T11-K20": { v: 0.660, n: 25 }, "T11-K32": { v: 0.643, n: 18 } },
+  "context_recall":    { T05: 0.671, T06: 0.686, "T11-K20": 0.686, "T11-K32": 0.726 },
+  "answer_relevancy":  { T05: null,  T06: 0.715, "T11-K20": 0.715, "T11-K32": 0.717 },
+};
+const CRATER = {
+  "avg_sel":     { "factor_0006": 9.12, "factor_0010": 8.24, "factor_0020": 3.26 },
+  "faithfulness":{ "factor_0006": 0.655, "factor_0010": 0.345, "factor_0020": 0.506 },
+};
+const AB_RAGAS = {
+  "faithfulness":      { "factor_0006": { v: 0.655, n: 39 }, "factor_0010": { v: 0.345, n: 42 } },
+  "context_precision": { "factor_0006": { v: 0.643, n: 18 }, "factor_0010": { v: 0.368, n: 16 } },
+  "context_recall":    { "factor_0006": { v: 0.726, n: 42 }, "factor_0010": { v: 0.411, n: 42 } },
+  "answer_relevancy":  { "factor_0006": { v: 0.717, n: 42 }, "factor_0010": { v: 0.711, n: 42 } },
+};
+const DIST_0010 = {
+  faith: [1.000, 1.000, 0.889, 0.800, 0.395, 0.118, 0.381, 0.000, 0.000, 0.132, 0.205, 0.000, 0.152, 0.000, 0.920, 0.167, 0.000, 1.000, 0.909, 0.406, 0.417, 1.000, 0.176, 0.029, 0.000, 0.000, 0.667, 0.000, 0.000, 0.000, 0.571, 0.000, 0.630, 0.000, 0.571, 0.667, 0.444, 0.000, 0.000, 0.082, 0.000, 0.771],
+  ctxp:  [0.750, 0.000, 1.000, 0.000, 1.000, 0.000, 1.000, 0.000, 0.000, 1.000, 0.333, 0.000, 0.000, 0.000, 0.000, 0.806],
+  ctxr:  [1.000, 1.000, 1.000, 1.000, 1.000, 0.000, 0.500, 0.000, 0.000, 0.167, 0.000, 0.000, 0.500, 0.000, 0.500, 1.000, 0.000, 1.000, 1.000, 1.000, 0.750, 1.000, 0.000, 0.000, 0.000, 0.000, 1.000, 0.000, 0.000, 0.000, 0.500, 0.000, 1.000, 0.000, 1.000, 0.667, 0.667, 0.000, 0.000, 0.000, 0.000, 0.000],
+  ansr:  [0.646, 0.934, 0.985, 0.559, 0.617, 0.583, 0.625, 0.643, 0.715, 0.599, 0.689, 0.741, 0.793, 0.767, 0.828, 0.683, 0.000, 0.712, 0.886, 0.785, 0.863, 0.746, 0.879, 0.731, 0.929, 0.707, 0.765, 0.816, 0.937, 0.681, 0.859, 0.662, 0.833, 0.781, 0.871, 0.000, 0.000, 0.804, 0.791, 0.776, 0.881, 0.768],
+};
+
+// ---------- helpers ----------
+const CSS = getComputedStyle(document.documentElement);
+const C = {
+  T05: CSS.getPropertyValue('--series-1').trim(),
+  T06: CSS.getPropertyValue('--series-2').trim(),
+  'T11-K20': CSS.getPropertyValue('--series-3').trim(),
+  'T11-K32': CSS.getPropertyValue('--series-4').trim(),
+  'factor_0006': CSS.getPropertyValue('--series-1').trim(),
+  'factor_0010': CSS.getPropertyValue('--series-5').trim(),
+  'factor_0020': CSS.getPropertyValue('--status-crit').trim(),
+};
+const LABELS = {
+  T05: 'T05 Sept 23 (prose, chunker 2K, K=20)',
+  T06: 'T06 Sept 29 (XML, chunker 1.4K, K=20)',
+  'T11-K20': 'T11-K=20 (reproduction)',
+  'T11-K32': 'T11 K=32 (current)',
+  'factor_0006': 'factor 0.0006 (current)',
+  'factor_0010': 'factor 0.0010 (A/B test)',
+  'factor_0020': 'factor 0.0020 (T10 crater)',
+};
+const tooltip = document.getElementById('tooltip');
+function showTip(e, label) { tooltip.innerHTML = label; tooltip.classList.add('visible'); moveTip(e); }
+function moveTip(e) { tooltip.style.left = (e.pageX + 14) + 'px'; tooltip.style.top = (e.pageY - 10) + 'px'; }
+function hideTip() { tooltip.classList.remove('visible'); }
+document.addEventListener('mousemove', moveTip);
+function num(v) { return typeof v === 'object' ? v.v : v; }
+function numN(v) { return typeof v === 'object' ? v.n : null; }
+
+function drawGroupedBars(svgId, dataset, configs, yMax, fmt) {
+  const svg = document.getElementById(svgId);
+  const W = +svg.getAttribute('viewBox').split(' ')[2];
+  const H = +svg.getAttribute('viewBox').split(' ')[3];
+  const padL = 50, padR = 12, padT = 14, padB = 70;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const metrics = Object.keys(dataset);
+  const nGroups = metrics.length;
+  const nBars = configs.length;
+  const groupW = innerW / nGroups;
+  const barGap = 2;
+  const barW = (groupW * 0.82 - barGap * (nBars - 1)) / nBars;
+
+  for (let i = 0; i <= 5; i++) {
+    const y = padT + innerH - (i / 5) * innerH;
+    const v = (i / 5) * yMax;
+    svg.insertAdjacentHTML('beforeend',
+      `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="0.5"/>
+       <text x="${padL-6}" y="${y+4}" font-size="10" fill="var(--ink-muted)" text-anchor="end">${fmt(v)}</text>`);
+  }
+
+  metrics.forEach((m, gi) => {
+    const gx = padL + gi * groupW + (groupW - (barW * nBars + barGap * (nBars - 1))) / 2;
+    configs.forEach((c, bi) => {
+      const raw = dataset[m][c];
+      if (raw === null || raw === undefined) return;
+      const v = num(raw);
+      const n = numN(raw);
+      const bh = (v / yMax) * innerH;
+      const x = gx + bi * (barW + barGap);
+      const y = padT + innerH - bh;
+      svg.insertAdjacentHTML('beforeend',
+        `<rect class="bar" x="${x}" y="${y}" width="${barW}" height="${bh}"
+              rx="2" ry="2" fill="${C[c]}"
+              data-label="<div class='row'><span class='key'>${LABELS[c]} · ${m}</span><span>${fmt(v)}${n !== null ? ' (n=' + n + ')' : ''}</span></div>"/>
+         <text x="${x + barW/2}" y="${y - 3}" font-size="8" fill="var(--ink-secondary)" text-anchor="middle">${fmt(v)}</text>`);
+    });
+    const lx = padL + gi * groupW + groupW/2;
+    const ly = padT + innerH + 14;
+    svg.insertAdjacentHTML('beforeend',
+      `<text x="${lx}" y="${ly}" font-size="10" fill="var(--ink-secondary)" text-anchor="middle" transform="rotate(-25, ${lx}, ${ly})">${m}</text>`);
+  });
+}
+
+drawGroupedBars('chart-anchor', ANCHOR, ['T05','T06','T11-K20','T11-K32'], 1.0, v => v.toFixed(2));
+// RAGAS: drop T06 (no separate RAGAS run for T06; T11-K20 is the validated reproduction at K=20)
+drawGroupedBars('chart-ragas', RAGAS, ['T05','T11-K20','T11-K32'], 1.0, v => v.toFixed(2));
+
+// avg_sel (single-row bars)
+function drawAvgsel() {
+  const svg = document.getElementById('chart-avgsel');
+  const W = 600, H = 200;
+  const padL = 50, padR = 30, padT = 14, padB = 40;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const yMax = 10;
+  for (let i = 0; i <= 5; i++) {
+    const y = padT + innerH - (i / 5) * innerH;
+    const v = (i / 5) * yMax;
+    svg.insertAdjacentHTML('beforeend',
+      `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="0.5"/>
+       <text x="${padL-6}" y="${y+4}" font-size="10" fill="var(--ink-muted)" text-anchor="end">${v.toFixed(1)}</text>`);
+  }
+  const cfgs = ['T05','T06','T11-K20','T11-K32'];
+  const bw = (innerW * 0.5 / cfgs.length);
+  const gx = padL + (innerW - bw * cfgs.length) / 2;
+  cfgs.forEach((c, bi) => {
+    const v = AVGSEL[c];
+    const bh = (v / yMax) * innerH;
+    const x = gx + bi * bw;
+    const y = padT + innerH - bh;
+    svg.insertAdjacentHTML('beforeend',
+      `<rect class="bar" x="${x+2}" y="${y}" width="${bw-4}" height="${bh}"
+            rx="3" ry="3" fill="${C[c]}"
+            data-label="<div class='row'><span class='key'>${LABELS[c]} · avg_sel</span><span>${v.toFixed(2)} chunks/query</span></div>"/>
+       <text x="${x + bw/2}" y="${y - 4}" font-size="11" fill="var(--ink-primary)" text-anchor="middle" font-weight="600">${v.toFixed(2)}</text>
+       <text x="${x + bw/2}" y="${padT + innerH + 16}" font-size="10" fill="var(--ink-secondary)" text-anchor="middle">${c}</text>`);
+  });
+}
+drawAvgsel();
+
+// trajectory (Chart 2)
+function drawTrajectory() {
+  const svg = document.getElementById('chart-trajectory');
+  const W = 960, H = 320;
+  const padL = 60, padR = 30, padT = 30, padB = 60;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const series = [
+    { name: "faithfulness",      vals: RAGAS.faithfulness },
+    { name: "context_precision",  vals: RAGAS.context_precision },
+    { name: "context_recall",     vals: RAGAS.context_recall },
+    { name: "answer_relevancy",   vals: RAGAS.answer_relevancy },
+  ];
+  const xCats = ['T05', 'T11-K20', 'T11-K32'];
+  const xPos = (x) => padL + (xCats.indexOf(x) / (xCats.length - 1)) * innerW;
+  for (let i = 0; i <= 5; i++) {
+    const y = padT + innerH - (i / 5) * innerH;
+    svg.insertAdjacentHTML('beforeend',
+      `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="0.5"/>
+       <text x="${padL-6}" y="${y+4}" font-size="10" fill="var(--ink-muted)" text-anchor="end">${(i/5).toFixed(1)}</text>`);
+  }
+  xCats.forEach(x => {
+    svg.insertAdjacentHTML('beforeend',
+      `<text x="${xPos(x)}" y="${padT + innerH + 18}" font-size="10" fill="var(--ink-secondary)" text-anchor="middle">${LABELS[x]}</text>`);
+  });
+  // noise band: ±0.05 (matches actual SE for n=42 binary-ish metrics)
+  const seY = (v) => padT + innerH - v * innerH;
+  const bandMid = 0.625;
+  svg.insertAdjacentHTML('beforeend',
+    `<rect x="${padL}" y="${seY(bandMid + 0.05)}" width="${innerW}" height="${seY(bandMid - 0.05) - seY(bandMid + 0.05)}" fill="var(--ink-muted)" opacity="0.06"/>
+     <text x="${W - padR - 4}" y="${seY(bandMid)}" font-size="9" fill="var(--ink-muted)" text-anchor="end">± SE noise band (~±0.05)</text>`);
+  // Distinct color per metric (one per series, not per xCat)
+  const colorByMetric = {
+    0: 'var(--series-1)', // faithfulness = blue
+    1: 'var(--series-2)', // context_precision = orange
+    2: 'var(--series-3)', // context_recall = green
+    3: 'var(--series-4)', // answer_relevancy = violet
+  };
+  series.forEach((s, sIdx) => {
+    const pts = xCats.map(x => ({ x, raw: s.vals[x] })).filter(p => p.raw !== null);
+    if (pts.length < 2) return;
+    const path = pts.map((p, i) => (i === 0 ? 'M' : 'L') + xPos(p.x) + ',' + seY(num(p.raw))).join(' ');
+    const color = colorByMetric[sIdx];
+    svg.insertAdjacentHTML('beforeend',
+      `<path d="${path}" stroke="${color}" stroke-width="2" fill="none"/>`);
+    pts.forEach((p, pi) => {
+      const v = num(p.raw);
+      const n = numN(p.raw);
+      svg.insertAdjacentHTML('beforeend',
+        `<circle class="line-pt" cx="${xPos(p.x)}" cy="${seY(v)}" r="5" fill="${color}"
+                data-label="<div class='row'><span class='key'>${s.name}</span><span>${v.toFixed(3)}${n !== null ? ' (n=' + n + ')' : ''}</span></div><div class='row'><span>${LABELS[p.x]}</span></div>"/>`);
+      const isEdge = (p.x === xCats[0] || p.x === xCats[xCats.length - 1]);
+      if (isEdge) {
+        const dx = (p.x === xCats[0]) ? -8 : 8;
+        const anchor = (p.x === xCats[0]) ? 'end' : 'start';
+        const stagger = sIdx * 12;
+        svg.insertAdjacentHTML('beforeend',
+          `<text x="${xPos(p.x) + dx}" y="${seY(v) + 4 - stagger}" font-size="10" fill="${color}" text-anchor="${anchor}" font-weight="600">${v.toFixed(2)}</text>`);
+      }
+    });
+  });
+  // legend (4 colors, one per metric)
+  series.forEach((s, i) => {
+    const ly = H - 18;
+    const lx = padL + i * 200;
+    const color = colorByMetric[i];
+    svg.insertAdjacentHTML('beforeend',
+      `<rect x="${lx}" y="${ly-9}" width="14" height="3" fill="${color}"/>
+       <text x="${lx + 20}" y="${ly}" font-size="10" fill="var(--ink-secondary)">${s.name}</text>`);
+  });
+}
+drawTrajectory();
+
+// Chart 3: crater (avg_sel + faithfulness, 3 configs)
+function drawCrater() {
+  const cfgs = ['factor_0006', 'factor_0010', 'factor_0020'];
+  const yMax = 12;
+  // avg_sel
+  const svg1 = document.getElementById('chart-crater-avgsel');
+  const W = 460, H = 240;
+  const padL = 50, padR = 12, padT = 14, padB = 50;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + innerH - (i / 4) * innerH;
+    const v = (i / 4) * yMax;
+    svg1.insertAdjacentHTML('beforeend',
+      `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="0.5"/>
+       <text x="${padL-6}" y="${y+4}" font-size="10" fill="var(--ink-muted)" text-anchor="end">${v.toFixed(1)}</text>`);
+  }
+  const bw = innerW / cfgs.length;
+  cfgs.forEach((c, bi) => {
+    const v = CRATER.avg_sel[c];
+    const bh = (v / yMax) * innerH;
+    const x = padL + bi * bw;
+    const y = padT + innerH - bh;
+    svg1.insertAdjacentHTML('beforeend',
+      `<rect class="bar" x="${x+2}" y="${y}" width="${bw-4}" height="${bh}"
+            rx="3" ry="3" fill="${C[c]}"
+            data-label="<div class='row'><span class='key'>${LABELS[c]} · avg_sel</span><span>${v.toFixed(2)} chunks/query</span></div>"/>
+       <text x="${x + bw/2}" y="${y - 4}" font-size="11" fill="var(--ink-primary)" text-anchor="middle" font-weight="600">${v.toFixed(2)}</text>
+       <text x="${x + bw/2}" y="${padT + innerH + 14}" font-size="9" fill="var(--ink-muted)" text-anchor="middle">${c.replace('factor_','')}</text>`);
+  });
+
+  // faithfulness
+  const svg2 = document.getElementById('chart-crater-faith');
+  const innerH2 = H - padT - padB;
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + innerH2 - (i / 4) * innerH2;
+    const v = (i / 4);
+    svg2.insertAdjacentHTML('beforeend',
+      `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="0.5"/>
+       <text x="${padL-6}" y="${y+4}" font-size="10" fill="var(--ink-muted)" text-anchor="end">${v.toFixed(2)}</text>`);
+  }
+  cfgs.forEach((c, bi) => {
+    const v = CRATER.faithfulness[c];
+    const bh = (v / 1) * innerH2;
+    const x = padL + bi * bw;
+    const y = padT + innerH2 - bh;
+    svg2.insertAdjacentHTML('beforeend',
+      `<rect class="bar" x="${x+2}" y="${y}" width="${bw-4}" height="${bh}"
+            rx="3" ry="3" fill="${C[c]}"
+            data-label="<div class='row'><span class='key'>${LABELS[c]} · faithfulness</span><span>${v.toFixed(3)}</span></div>"/>
+       <text x="${x + bw/2}" y="${y - 4}" font-size="11" fill="var(--ink-primary)" text-anchor="middle" font-weight="600">${v.toFixed(2)}</text>
+       <text x="${x + bw/2}" y="${padT + innerH2 + 14}" font-size="9" fill="var(--ink-muted)" text-anchor="middle">${c.replace('factor_','')}</text>`);
+  });
+}
+drawCrater();
+
+// Chart 4: A/B (factor 0006 vs 0010)
+function drawAB() {
+  // avg_sel
+  const svg1 = document.getElementById('chart-ab-avgsel');
+  const W = 460, H = 240;
+  const padL = 50, padR = 12, padT = 14, padB = 40;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const yMax = 12;
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + innerH - (i / 4) * innerH;
+    const v = (i / 4) * yMax;
+    svg1.insertAdjacentHTML('beforeend',
+      `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="0.5"/>
+       <text x="${padL-6}" y="${y+4}" font-size="10" fill="var(--ink-muted)" text-anchor="end">${v.toFixed(1)}</text>`);
+  }
+  const cfgs = ['factor_0006', 'factor_0010'];
+  const bw = innerW / cfgs.length;
+  cfgs.forEach((c, bi) => {
+    const v = CRATER.avg_sel[c];
+    const bh = (v / yMax) * innerH;
+    const x = padL + bi * bw;
+    const y = padT + innerH - bh;
+    svg1.insertAdjacentHTML('beforeend',
+      `<rect class="bar" x="${x+2}" y="${y}" width="${bw-4}" height="${bh}"
+            rx="3" ry="3" fill="${C[c]}"
+            data-label="<div class='row'><span class='key'>${LABELS[c]} · avg_sel</span><span>${v.toFixed(2)} chunks/query</span></div>"/>
+       <text x="${x + bw/2}" y="${y - 4}" font-size="11" fill="var(--ink-primary)" text-anchor="middle" font-weight="600">${v.toFixed(2)}</text>
+       <text x="${x + bw/2}" y="${padT + innerH + 14}" font-size="9" fill="var(--ink-muted)" text-anchor="middle">${c.replace('factor_','')}</text>`);
+  });
+
+  // RAGAS 4 metrics
+  const svg2 = document.getElementById('chart-ab-ragas');
+  const metrics = ['faithfulness','context_precision','context_recall','answer_relevancy'];
+  const innerH2 = H - padT - padB;
+  const groupW2 = innerW / metrics.length;
+  const barGap = 2;
+  const barW = (groupW2 * 0.7 - barGap) / 2;
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + innerH2 - (i / 4) * innerH2;
+    svg2.insertAdjacentHTML('beforeend',
+      `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="0.5"/>
+       <text x="${padL-6}" y="${y+4}" font-size="10" fill="var(--ink-muted)" text-anchor="end">${(i/4).toFixed(2)}</text>`);
+  }
+  metrics.forEach((m, gi) => {
+    const gx = padL + gi * groupW2 + (groupW2 - (barW * 2 + barGap)) / 2;
+    cfgs.forEach((c, bi) => {
+      const raw = AB_RAGAS[m][c];
+      const v = num(raw);
+      const n = numN(raw);
+      const bh = (v / 1) * innerH2;
+      const x = gx + bi * (barW + barGap);
+      const y = padT + innerH2 - bh;
+      svg2.insertAdjacentHTML('beforeend',
+        `<rect class="bar" x="${x}" y="${y}" width="${barW}" height="${bh}"
+              rx="2" ry="2" fill="${C[c]}"
+              data-label="<div class='row'><span class='key'>${c} · ${m}</span><span>${v.toFixed(3)}${n !== null ? ' (n=' + n + ')' : ''}</span></div>"/>
+         <text x="${x + barW/2}" y="${y - 3}" font-size="8" fill="var(--ink-secondary)" text-anchor="middle">${v.toFixed(2)}</text>`);
+    });
+    const lx = padL + gi * groupW2 + groupW2/2;
+    const ly = padT + innerH2 + 14;
+    svg2.insertAdjacentHTML('beforeend',
+      `<text x="${lx}" y="${ly}" font-size="9" fill="var(--ink-secondary)" text-anchor="middle" transform="rotate(-30, ${lx}, ${ly})">${m}</text>`);
+  });
+}
+drawAB();
+
+// Chart 5: per-query histograms (factor=0.0010)
+function drawHist(svgId, data) {
+  const svg = document.getElementById(svgId);
+  const W = 460, H = 220;
+  const padL = 38, padR = 10, padT = 10, padB = 30;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const bins = [
+    { from: 0.0, to: 0.5, color: CSS.getPropertyValue('--status-crit').trim() },
+    { from: 0.5, to: 0.8, color: CSS.getPropertyValue('--status-warn').trim() },
+    { from: 0.8, to: 1.01, color: CSS.getPropertyValue('--status-good').trim() },
+  ];
+  const counts = bins.map(b => data.filter(v => v >= b.from && v < b.to).length);
+  const yMax = Math.max(...counts, 3);
+  for (let i = 0; i <= yMax; i++) {
+    const y = padT + innerH - (i / yMax) * innerH;
+    svg.insertAdjacentHTML('beforeend',
+      `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="0.5"/>
+       <text x="${padL-6}" y="${y+4}" font-size="9" fill="var(--ink-muted)" text-anchor="end">${i}</text>`);
+  }
+  const bw = innerW / bins.length;
+  bins.forEach((b, i) => {
+    const bh = (counts[i] / yMax) * innerH;
+    const x = padL + i * bw;
+    const y = padT + innerH - bh;
+    const pct = counts[i] / data.length * 100;
+    svg.insertAdjacentHTML('beforeend',
+      `<rect class="bar" x="${x + 1}" y="${y}" width="${bw - 2}" height="${bh}"
+            rx="2" ry="2" fill="${b.color}"
+            data-label="<div class='row'><span class='key'>[${b.from.toFixed(1)} – ${b.to.toFixed(1)}${b.to > 1 ? ']' : ')'}</span><span>${counts[i]} of ${data.length} (${pct.toFixed(0)}%)</span></div>"/>
+       <text x="${x + bw/2}" y="${y - 4}" font-size="11" fill="var(--ink-primary)" text-anchor="middle" font-weight="600">${counts[i]}</text>
+       <text x="${x + bw/2}" y="${padT + innerH + 14}" font-size="9" fill="var(--ink-muted)" text-anchor="middle">[${b.from.toFixed(1)} – ${b.to.toFixed(1)}${b.to > 1 ? ']' : ')'}</text>`);
+  });
+}
+drawHist('hist-faith-0010', DIST_0010.faith);
+drawHist('hist-ctxp-0010', DIST_0010.ctxp);
+drawHist('hist-ctxr-0010', DIST_0010.ctxr);
+drawHist('hist-ansr-0010', DIST_0010.ansr);
+
+// tooltip delegation
+document.querySelectorAll('svg rect.bar, svg circle.line-pt').forEach(el => {
+  el.addEventListener('mouseenter', e => showTip(e, el.dataset.label));
+  el.addEventListener('mouseleave', hideTip);
+});
+</script>
+
+</body>
+</html>

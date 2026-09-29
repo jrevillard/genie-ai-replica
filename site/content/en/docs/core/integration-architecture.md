@@ -91,7 +91,6 @@ flowchart TB
         ChatQnA --> Reranker
         ChatQnA --> TEI
         ChatQnA --> VLLM
-        ChatQnA --> Dataprep
         Retriever --> Arango
         Backend -. "JWT validation" .-> Keycloak
     end
@@ -923,10 +922,11 @@ sequenceDiagram
     Note over C: 6. Store token in JS memory<br/>(NEVER localStorage)
 
     C->>B: 7. API request with Bearer <jwt>
-    B->>DB: 8. Validate JWT against JWKS
-    B->>DB: 9. Provision user
+    B->>K: 8. Fetch JWKS (cached)
+    B->>B: 9. Validate JWT signature + claims
+    B->>DB: 10. Provision user (UPSERT by iss#sub)
     DB-->>B: ok
-    B-->>C: 10. Response
+    B-->>C: 11. Response
 ```
 
 **Token refresh** is automatic before expiry and handled entirely

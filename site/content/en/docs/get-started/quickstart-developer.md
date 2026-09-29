@@ -54,8 +54,8 @@ flowchart TB
 
     Browser --> Nginx
     Nginx --> Kong
+    Nginx -- "/ → static SPA" --> Frontend
     Kong --> Backend
-    Kong --> Frontend
     Kong --> DocRepo
     Backend --> Arango
     Backend --> Redis

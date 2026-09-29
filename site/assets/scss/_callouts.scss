@@ -1,12 +1,45 @@
+// Callout shortcode — theme-aware (uses DS tokens so dark mode auto-adapts)
+
 .callout {
+  --callout-accent: var(--ds-accent);
+  --callout-bg: var(--ds-surface);
+  --callout-fg: var(--ds-fg);
+  --callout-code-bg: oklch(from var(--ds-fg) l c h / 0.12);
+  --callout-code-fg: var(--ds-fg);
+
   padding: 1rem 1.25rem;
   margin: 1.5rem 0;
-  border-left: 4px solid #4071cb;
+  border-left: 4px solid var(--callout-accent);
   border-radius: 0.25rem;
-  background: #f5f8fc;
+  background: var(--callout-bg);
+  color: var(--callout-fg);
 }
-.callout-info { border-color: #4071cb; background: #f5f8fc; }
-.callout-tip { border-color: #1f7a4d; background: #f0faf4; }
-.callout-warning { border-color: #c44b1a; background: #fdf4ef; }
+
+.callout-info    { --callout-accent: oklch(58% 0.14 250); }
+.callout-tip     { --callout-accent: oklch(58% 0.13 155); }
+.callout-warning { --callout-accent: oklch(62% 0.16 35); }
+.callout-danger  { --callout-accent: oklch(58% 0.20 25); }
+
+// Tighten default Bootstrap spacing inside the box.
 .callout p:first-child { margin-top: 0; }
-.callout p:last-child { margin-bottom: 0; }
+.callout p:last-child  { margin-bottom: 0; }
+.callout ol,
+.callout ul            { margin: 0.5rem 0 0; }
+.callout li            { margin: 0.25rem 0; }
+.callout li > p        { margin: 0; }
+
+// Inline code chips — override Bootstrap's near-black default so they read in
+// both light and dark themes. The DS bg/fg vars give us the contrast pair
+// without hardcoding colors per theme.
+.callout code {
+  background: var(--callout-code-bg);
+  color: var(--callout-code-fg);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.2rem;
+  font-size: 0.92em;
+  font-weight: 500;
+}
+
+// Bold + link readability inside the box.
+.callout strong  { color: var(--ds-fg); }
+.callout a       { color: var(--ds-accent); }

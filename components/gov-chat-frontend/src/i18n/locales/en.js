@@ -1,3 +1,4 @@
+// i18n English source of truth (newest keys safe-added by add-amendmenta-keys.cjs)
 export default {
   countries: {
     AF: 'Afghanistan',
@@ -1433,7 +1434,9 @@ export default {
       duplicate: 'File "{fileName}" has already been added.',
       uploadSuccess: 'Successfully uploaded {fileName}',
       uploadFailed: 'Failed to upload {fileName}.'
-    }
+    },
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
     versions: {
@@ -2158,40 +2161,6 @@ export default {
       continue: 'Continue',
       finish: 'Open the Editor'
     },
-    src: {
-      title: 'Choose the source documents',
-      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
-      repoSec: 'From the document repository',
-      searchPh: 'Search by name or site…',
-      chipsLabel: 'Filter by origin',
-      chipAll: 'All',
-      chipCrawl: 'Crawls',
-      chipUpload: 'Uploads',
-      noMatches: 'Nothing matches this search or filter.',
-      crawlBadge: 'crawl',
-      crawlTip: 'Crawled from: {url}',
-      total: '{n} document(s)',
-      loading: 'Loading documents…',
-      retry: 'Retry',
-      empty: 'No documents in the repository yet — upload some below.',
-      more: 'Load more',
-      fsSec: 'From this computer',
-      fsPick: '+ Upload files',
-      uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
-      uploadFailed: 'An upload failed — check the files and retry.',
-      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: 'Selected: {n}',
-      needOne: 'Select at least one source.',
-      confirm: 'Use {n} source(s)',
-      cancel: 'Cancel',
-      loadFailed: 'Could not load the document list.',
-      servingBadge: 'serving free-form RAG',
-      servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
-      alreadyBadge: 'already in an OKF repo',
-      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
-    },
     steps: {
       entry: {
         createdHint: 'Repository created — rename it later from the editor.',
@@ -2221,7 +2190,13 @@ export default {
             title: 'Clone of an existing repository',
             desc: 'Fork the topics and structure from another OKF repository.'
           }
-        }
+        },
+        cloneSource: 'Source repository (not yet serving)',
+        clonePh: 'Select the repository to clone from',
+        cloning: 'Cloning topics into this repository…',
+        cloneNeed: 'Pick the repository to clone from first.',
+        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
+        cloneFailed: 'The clone failed — try again.'
       },
       input: {
         title: 'Inputs',
@@ -2252,7 +2227,8 @@ export default {
         deleteTitle: 'Delete topic',
         deleteBody: 'This permanently removes the topic from this repository.',
         labelFailed: 'Could not set the label.',
-        added: '{n} topic(s) in this repository so far.'
+        added: '{n} topic(s) in this repository so far.',
+        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
       },
       produce: {
         title: 'Generate topics',
@@ -2266,6 +2242,8 @@ export default {
         done: '{n} topic(s) are ready — continue to review them in Curate.',
         noSources: 'No sources selected — go back to Input.',
         neverStarted: 'The conversion did not start — retry.',
+        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        labelDone: 'Conversion complete',
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
@@ -2282,7 +2260,12 @@ export default {
         hint: 'Labels are the categorical axes of your ontology — what kinds of things are these topics? Choose 3-7.',
         add: '+ Add label',
         addConfirm: 'Add',
-        placeholder: 'e.g. Permits'
+        placeholder: 'e.g. Permits',
+        loading: 'Reading labels…',
+        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        unlabeled: 'no labels yet',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        loadFailed: 'Could not read the labels right now.'
       },
       curate: {
         embedHint:
@@ -2466,7 +2449,8 @@ export default {
       },
       run: {
         notReady: 'Validation wires in a later story.'
-      }
+      },
+      piiTitle: 'Personal data — review each flagged concept'
     },
     lifecycle: {
       submit: 'Submit for review',
@@ -2475,6 +2459,45 @@ export default {
       ingest: 'Ingest',
       retract: 'Retract',
       unpublish: 'Unpublish'
+    },
+    src: {
+      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
+      title: 'Choose the source documents',
+      titleSingle: 'Choose the crawled document',
+      repoSec: 'From the document repository',
+      loading: 'Loading documents…',
+      retry: 'Retry',
+      empty: 'No documents in the repository yet — upload some below.',
+      more: 'Load more',
+      loadFailed: 'Could not load the document list.',
+      fsSec: 'From this computer',
+      fsPick: '+ Upload files',
+      uploading: 'Uploading…',
+      uploaded: '{n} file(s) uploaded.',
+      uploadFailed: 'An upload failed — check the files and retry.',
+      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      count: 'Selected: {n}',
+      needOne: 'Select at least one source.',
+      confirm: 'Use {n} source(s)',
+      cancel: 'Cancel',
+      servingBadge: 'serving free-form RAG',
+      alreadyBadge: 'already in an OKF repo',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.',
+      searchPh: 'Search by name or site…',
+      chipsLabel: 'Filter by origin',
+      chipAll: 'All',
+      chipCrawl: 'Crawls',
+      chipUpload: 'Uploads',
+      noMatches: 'Nothing matches this search or filter.',
+      crawlBadge: 'crawl',
+      crawlTip: 'Crawled from: {url}',
+      total: '{n} document(s)'
     }
+  },
+  link: {
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

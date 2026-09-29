@@ -18,6 +18,18 @@ epics.md).
 
 ## A. Work list (what stands between here and the E2E pass)
 
+> **STATUS UPDATE 2026-09-27 (execution pass):** W4 was found ALREADY
+> LANDED (all five workstreams shipped 2026-09-25 — the plan file and
+> handoff memory were stale; verified in code: sweep guard, WS2 delete
+> protection [no batch route exists — guard moot], supersede removed,
+> linkBundleToVersion + ingest_status fields, always-retract, worker
+> test coverage). W5 leg 1 PASSED live (5-concept repo created via API →
+> submit/approve/publish v1 → ingest → settled serving 5/5). W5 leg 2
+> verified live: retract → edit (re-scan re-flagged → gate correctly
+> blocked until re-accept — the PII gate works) → publish v2 →
+> **v1 zip SURVIVES** (live-forever confirmed) → re-ingest settled.
+> W1/W2/W3/W6 implemented this pass. W5 findings recorded below §A/W5.
+
 ### W1 — OkfSourceDialog preflight pills (frontend, small)
 
 The deleted 7.7 dialog carried per-file warnings the wizard's picker now

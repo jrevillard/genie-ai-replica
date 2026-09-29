@@ -51,6 +51,14 @@
       </div>
       <p class="form-hint">
         {{ translate('uploadDialog.allowedTypesLabel', 'Allowed types:') }} {{ allowedExtensions.join(', ') }}
+        <DsInfoTip
+          :text="
+            translate(
+              'uploadDialog.ragTip',
+              'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+            )
+          "
+        />
       </p>
 
       <div v-if="files.length > 0" class="file-list-container">
@@ -87,11 +95,13 @@ import documentFileService from '../services/documentFileService.js';
 import { eventBus } from '../eventBus.js';
 import { formatFileSize } from '../utils/fileUtils.js';
 import DsButton from './ds/Button.vue';
+import DsInfoTip from './ds/InfoTip.vue';
 
 export default {
   name: 'UploadFilesDialog',
   components: {
-    DsButton
+    DsButton,
+    DsInfoTip
   },
   emits: ['close', 'files-uploaded'],
   data() {

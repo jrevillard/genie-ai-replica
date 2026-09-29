@@ -10,11 +10,15 @@ document repository ingestion and retraction, using ArangoDB as the backend.
 
 import asyncio
 import base64
-import fcntl
 import hashlib
 import importlib
 import os
 import time
+
+try:
+    import fcntl  # POSIX file locking — the service runs in a Linux container
+except ModuleNotFoundError:  # Windows dev checkout: locking degrades to a no-op
+    fcntl = None  # type: ignore[assignment]
 
 from opentelemetry.trace import Status, StatusCode
 
@@ -117,6 +121,8 @@ def acquire_ingest_slot():
     for i in range(DATAPREP_INGEST_CONCURRENCY):
         path = LOCK_FILE_PATH if i == 0 else f"{LOCK_FILE_PATH}.{i}"
         lock_file = open(path, "w")  # noqa: SIM115 — held across the request task
+        if fcntl is None:  # Windows dev checkout — single-process, no locking
+            return lock_file
         try:
             fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
             return lock_file
@@ -270,7 +276,8 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 # If the task is still alive and owns the slot, leave it.
                 if _slot_owner_task and not _slot_owner_task[0].done():
                     return
-                fcntl.flock(lock_file, fcntl.LOCK_UN)
+                if fcntl is not None:  # Windows dev checkout: no-op
+                    fcntl.flock(lock_file, fcntl.LOCK_UN)
                 lock_file.close()
                 logger.info("[ ingest ] Released slot FD synchronously — task never claimed or already done")
             except Exception as e:  # noqa: BLE001 — last-resort cleanup
@@ -413,7 +420,8 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             span.set_status(Status(StatusCode.ERROR, str(e)))
             logger.error(f"Error initiating dataprep ingest: {e}")
             # Cleanup lock if we fail before task starts
-            fcntl.flock(lock_file, fcntl.LOCK_UN)
+            if fcntl is not None:  # Windows dev checkout: no-op
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
             lock_file.close()
 
             if os.path.exists(save_path):

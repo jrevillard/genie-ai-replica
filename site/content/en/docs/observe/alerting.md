@@ -81,7 +81,7 @@ recipe ends with a cross-link to the full debugging doc for that subsystem.
 3. Restart the collector (Swarm: `docker service update --force genieai_otel-collector` |
    Compose: `docker compose restart otel-collector`) to re-establish the
    fluent_forward TCP connection.
-4. Escalate: see [Admin Logs → Failure modes and debugging](../../operate/admin-logs/#failure-modes-and-debugging)
+4. Escalate: see [Admin Logs → Failure modes and debugging](../operate/admin-logs/#failure-modes-and-debugging)
 
 ### When `vtraces_export_failures` fires
 1. Query VictoriaTraces HTTP error metric:
@@ -109,7 +109,7 @@ recipe ends with a cross-link to the full debugging doc for that subsystem.
    `docker inspect <container> | jq '.[0].HostConfig.LogConfig.Config["fluentd-address"]'`
 3. Confirm `transform/stamp_service_name_from_container` is enabled in
    `configs/otel/otel-collector-config.yaml:605`
-4. Escalate: see [Admin Logs → Failure modes and debugging](../../operate/admin-logs/#failure-modes-and-debugging)
+4. Escalate: see [Admin Logs → Failure modes and debugging](../operate/admin-logs/#failure-modes-and-debugging)
    and [Tracing → Reading a trace](./tracing/#reading-a-trace)
 
 ### When `otel-pii-redact-fail` fires

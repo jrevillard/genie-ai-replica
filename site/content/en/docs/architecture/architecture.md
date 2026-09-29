@@ -77,7 +77,7 @@ graph TB
 
     subgraph Data Layer
         ADB[(ArangoDB<br/>Documents / Graph / Vector)]
-        REDIS[(Redis<br/>Cache)]
+        REDIS[(Redis<br/>(translation-service only))]
         PG[(PostgreSQL<br/>Kong + Keycloak)]
     end
 
@@ -117,7 +117,7 @@ graph TB
     DATAPREP -->|client_credentials| KC
     DATAPREP --> BE
     DATAPREP --> ADB
-    DATAPREP --> DR
+    DR --> DATAPREP
 ```
 
 ### Layer Descriptions
@@ -266,6 +266,8 @@ sequenceDiagram
     participant K as Kong
     participant BE as Backend
     participant ChatQnA as OPEA ChatQnA
+    participant Emb as Embedding wrapper
+    participant TEI as TEI
     participant Ret as Retriever
     participant ADB as ArangoDB
     participant LLM as vLLM
@@ -533,8 +535,10 @@ sequenceDiagram
     ChatQnA->>ChatQnA: Validate JWT (JWKS)
     ChatQnA->>BE: GET /api/me/context (user profile for AI enrichment)
     BE->>ChatQnA: User context (name, role, emailVerified)
-    ChatQnA->>TEI: Generate embedding
-    TEI->>ChatQnA: Embedding vector
+    ChatQnA->>Emb: POST /v1/embeddings
+    Emb->>TEI: Forward (Hugging Face Inference API)
+    TEI->>Emb: Embedding vector
+    Emb->>ChatQnA: Embedding vector
     ChatQnA->>Ret: Query with embedding
     Ret->>ADB: Vector + graph search
     ADB->>Ret: Ranked chunks
@@ -559,6 +563,7 @@ sequenceDiagram
     participant FE as Vue Frontend
     participant BE as Backend
     participant ChatQnA as OPEA ChatQnA
+    participant Emb as Embedding wrapper
     participant TEI as TEI Embedding
     participant Ret as Retriever
     participant ADB as ArangoDB
@@ -576,7 +581,9 @@ sequenceDiagram
     ChatQnA->>ChatQnA: [SPAN: chatqna.process]
     ChatQnA->>Collector: Export span
     
-    ChatQnA->>TEI: Generate embedding (traceparent)
+    ChatQnA->>Emb: POST /v1/embeddings (traceparent)
+    Emb->>Emb: [SPAN: embedding.wrapper]
+    Emb->>TEI: Forward (Hugging Face Inference API)
     TEI->>TEI: [SPAN: tei.embedding]
     TEI->>Collector: Export span
     TEI->>ChatQnA: Vector

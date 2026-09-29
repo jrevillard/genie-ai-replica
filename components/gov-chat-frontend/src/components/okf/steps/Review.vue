@@ -53,6 +53,36 @@
       </p>
     </div>
 
+    <!-- FINAL VISUAL REVIEW (David, 2026-09-29): the whole repo as a last
+      look before the handoff — the file list, each file's markdown and its
+      labels, exactly as the assistant will cite them. Read-only by
+      definition: the ritual lives outside the wizard (see the handoff note). -->
+    <div class="okf-step__browser">
+      <p class="okf-step__browser-hint">
+        {{
+          translate(
+            'okf.steps.review.browserHint',
+            'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.'
+          )
+        }}
+      </p>
+      <OkfRepoEditor
+        v-if="browserRepoId"
+        :key="browserRepoId"
+        class="okf-step__browser-editor"
+        :repo-id="browserRepoId"
+        :read-only="true"
+      />
+      <p v-else class="okf-step__browser-empty">
+        {{
+          translate(
+            'okf.steps.review.noRepo',
+            'No repository yet — the file review appears here once a repository exists.'
+          )
+        }}
+      </p>
+    </div>
+
     <div class="okf-step__handoff">
       <p class="okf-step__note">
         {{
@@ -105,12 +135,13 @@ import DsInfoTip from '../../ds/InfoTip.vue';
 import OkfVersionsDialog from '../editor/VersionsDialog.vue';
 import OkfLogsDialog from '../editor/LogsDialog.vue';
 import OkfRenameRepoDialog from '../editor/RenameRepoDialog.vue';
+import OkfRepoEditor from '../editor/RepoEditor.vue';
 import repoOkfService from '../../../services/repoOkfService';
 import translateMixin from '../../../mixins/translateMixin';
 
 export default {
   name: 'OkfStepReview',
-  components: { DsButton, DsInfoTip, OkfVersionsDialog, OkfLogsDialog, OkfRenameRepoDialog },
+  components: { DsButton, DsInfoTip, OkfVersionsDialog, OkfLogsDialog, OkfRenameRepoDialog, OkfRepoEditor },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   emits: ['gate'],
@@ -121,6 +152,9 @@ export default {
     ...mapGetters('okf', ['repoById']),
     repo() {
       return (this.draft && this.draft.repo_id && this.repoById(this.draft.repo_id)) || null;
+    },
+    browserRepoId() {
+      return (this.draft && this.draft.repo_id) || '';
     },
     repoName() {
       return (this.repo && this.repo.name) || (this.draft && this.draft.name) || '—';
@@ -181,6 +215,30 @@ export default {
   flex-direction: column;
   gap: var(--space-xs);
   font-size: var(--text-sm);
+}
+.okf-step__browser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.okf-step__browser-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+/* The read-only editor fills the step's dead space but never swallows the
+   page — bounded height, internal scrolling (the shell handles its panes). */
+.okf-step__browser-editor {
+  flex: 1 1 auto;
+  min-height: 420px;
+  max-height: 640px;
+}
+.okf-step__browser-empty {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  padding: var(--space-md);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
 }
 .okf-step__handoff {
   padding: var(--space-sm) var(--space-md);

@@ -362,8 +362,13 @@ export default {
      * ghost action in the wizard footer.
      */
     onWizardFinish(evt) {
+      // FIELD BUG #1028 ("Open in the Editor does nothing" — live-only, jest
+      // green): breadcrumbs at every branch so the browser console shows
+      // exactly where the hand-off dies.
       const repoId = (evt && evt.repo_id) || (this.activeDraft && this.activeDraft.repo_id);
+      console.debug('[okf-finish] handler entered', { repoId, hasDraft: !!this.activeDraft });
       if (!repoId) {
+        console.debug('[okf-finish] no repo_id — falling back to dashboard');
         this.onBackToDashboard();
         return;
       }
@@ -376,6 +381,11 @@ export default {
       }
       this.$store.dispatch('okf/setEditorSubTab', 'editor');
       this.view = 'repo';
+      console.debug('[okf-finish] view=repo set', {
+        activeRepoId: this.activeRepoId,
+        draftInStore: !!draft,
+        editorSubTab: this.$store.getters['okf/editorSubTab']
+      });
     },
     /**
      * A1 write-back (Amendment A): the wizard's step selections flow up here —

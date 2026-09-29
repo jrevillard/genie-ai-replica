@@ -3,6 +3,10 @@ title: "Source Tree Analysis"
 description: "A walk-through of the GENIE.AI repository structure: every component, its purpose, and its dependencies."
 weight: 2
 section: "core"
+mode: reference
+persona: contributor
+owner: docs-stewards
+last_reviewed: 2026-09-29
 ---
 
 > **For developers.** A walk-through of the repository layout — use it to find where a component lives and what it depends on. Operators and content managers do not need this page.

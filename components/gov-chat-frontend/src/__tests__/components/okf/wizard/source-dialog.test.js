@@ -130,7 +130,9 @@ it('the crawl chip filters by origin; All clears the param (D1)', async () => {
 
 it('crawl rows show the crawl pill with the seed URL tooltip (D1 provenance)', async () => {
   mockGetFiles.mockResolvedValue({
-    data: [{ file_id: 'c1', file_name: 'naat.digital_full_crawl.md', source: 'crawl', source_url: 'https://naat.digital' }],
+    data: [
+      { file_id: 'c1', file_name: 'naat.digital_full_crawl.md', source: 'crawl', source_url: 'https://naat.digital' }
+    ],
     total: 1
   });
   const wrapper = mountDialog({});

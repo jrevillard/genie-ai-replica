@@ -96,14 +96,24 @@ export default {
       return !!(this.repo && this.repo.ingested_at);
     },
     // F1: concept_count lives on the METRICS payload, not the repo doc —
-    // fetch it live; fall back to any count the draft legitimately carries
-    // (the clone path writes one).
+    // fetch it live; fall back to the workbench's live count and any count
+    // the draft legitimately carries (the clone path writes one).
+    // FIELD BUG 2026-09-29 ("Open the Editor does nothing"): the action
+    // returns the ENVELOPE { ok, metrics } — reading concept_count off the
+    // envelope left liveConceptCount null forever, topicsOk fell back to 0,
+    // and the finish button stayed DISABLED at step 10. The unit test
+    // mocked the action with a bare {concept_count} — the mis-shaped mock
+    // kept it green (doc-repo envelope lesson, 7.7, again).
     topicsOk() {
       if (this.frozen) return true; // serving content exists by definition
       const n =
         this.liveConceptCount != null
           ? this.liveConceptCount
-          : (this.repo && this.repo.concept_count) || (this.draft && this.draft.concept_count) || 0;
+          : (this.repo && this.repo.concept_count) ||
+            (this.draft && this.draft.input && this.draft.input.concepts_added) ||
+            0 ||
+            (this.draft && this.draft.concept_count) ||
+            0;
       return n > 0;
     },
     topicsLabel() {
@@ -139,7 +149,13 @@ export default {
       const repoId = this.draft && this.draft.repo_id;
       if (!repoId) return;
       try {
-        const metrics = await this.$store.dispatch('okf/fetchRepoMetrics', repoId);
+        // The action returns the ENVELOPE { ok, metrics } — unwrap it
+        // tolerantly (accept the envelope OR a bare metrics payload; the
+        // doc-repo envelope lesson, 7.7). Reading concept_count off the
+        // envelope left the finish button permanently disabled (field:
+        // "Open the Editor does nothing", 2026-09-29).
+        const res = await this.$store.dispatch('okf/fetchRepoMetrics', repoId);
+        const metrics = (res && res.metrics) || res;
         if (metrics && typeof metrics.concept_count === 'number') this.liveConceptCount = metrics.concept_count;
       } catch {
         /* the fallbacks stand */

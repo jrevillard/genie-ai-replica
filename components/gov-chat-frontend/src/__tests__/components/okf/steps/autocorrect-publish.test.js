@@ -18,6 +18,7 @@ const OkfAutocorrectPanel = require('@/components/okf/editor/AutocorrectPanel.vu
 const DsDialog = require('@/components/ds/Dialog.vue').default;
 
 const mockAutocorrectRepo = jest.fn();
+const mockFetchRepoMetrics = jest.fn();
 
 function store() {
   return new Vuex.Store({
@@ -26,7 +27,11 @@ function store() {
         namespaced: true,
         getters: { repoById: () => (id) => (id === 'r1' ? { repo_id: 'r1', name: 'R1' } : null) },
         actions: {
-          fetchRepoMetrics: () => ({ concept_count: 3 }),
+          // A10: the action returns the ENVELOPE { ok, metrics } — the old
+          // mock returned a bare {concept_count}, hiding that Publish read
+          // concept_count off the envelope and left the finish button
+          // permanently disabled ("Open the Editor does nothing").
+          fetchRepoMetrics: (...a) => mockFetchRepoMetrics(...a),
           autocorrectRepo: (...a) => mockAutocorrectRepo(...a)
         }
       }
@@ -49,9 +54,33 @@ async function drained(wrapper) {
 beforeEach(() => {
   mockAutocorrectRepo.mockReset();
   mockAutocorrectRepo.mockResolvedValue({ ok: true, changes: [], warnings: [] });
+  mockFetchRepoMetrics.mockReset();
+  mockFetchRepoMetrics.mockResolvedValue({ ok: true, metrics: { concept_count: 3 } });
 });
 
 describe('T4 — autocorrect step', () => {
+  it('A10: the finish gate OPENS — the metrics envelope is unwrapped (the disabled-footer bug)', async () => {
+    const wrapper = mountStep(OkfStepPublish);
+    await drained(wrapper);
+    // loadCount unwrapped { ok, metrics } → liveConceptCount 3 → topicsOk
+    // → canPublish true. The old envelope-blind code left the gate shut.
+    const gates = wrapper.emitted('gate') || [];
+    expect(gates.length).toBeGreaterThan(0);
+    expect(gates[gates.length - 1][0]).toBe(true);
+  });
+
+  it('A10: with metrics UNAVAILABLE the workbench count still opens the gate (no dead hand-off)', async () => {
+    mockFetchRepoMetrics.mockResolvedValue({ ok: true, metrics: null });
+    const wrapper = mountStep(OkfStepPublish, {
+      repo_id: 'r1',
+      name: 'R1',
+      input: { concepts_added: 2 }
+    });
+    await drained(wrapper);
+    const gates = wrapper.emitted('gate') || [];
+    expect(gates[gates.length - 1][0]).toBe(true);
+  });
+
   it('embeds the REAL AutocorrectPanel, open, scoped to the repo', () => {
     const wrapper = mountStep(OkfStepAutocorrect);
     const panel = wrapper.findComponent(OkfAutocorrectPanel);

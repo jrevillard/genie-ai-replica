@@ -6,7 +6,7 @@ weight: 5
 
 The observability stack is **disabled by default**. Enabling it is a single
 environment variable, but a handful of related variables control access,
-retention, and sampling.
+retention, sampling, and log volume.
 
 ## Enabling
 
@@ -20,6 +20,18 @@ How it is enabled per deployment mode:
 - **Docker Compose** — `docker compose --profile observability up -d`
 - **Docker Swarm** — `ENABLE_OBSERVABILITY=1` in `.env`
 - **Ansible** — `enable_observability: "1"` in `group_vars/all.yml`
+
+## Log volume
+
+| Variable | Default | Notes |
+|---|---|---|
+| `LOG_LEVEL` | `info` | Log verbosity for the OPEA Python services and the Node.js backend/doc-repo. Set to `debug` to increase volume for troubleshooting; set to `warning` (Python) or `warn` (Node) to quiet noisy deployments. |
+
+> **Troubleshooting.** When chasing a specific bug, raise `LOG_LEVEL=debug` on
+> the affected service(s) and reproduce. The increased log volume is visible
+> in the *Service logs* dashboard the same way `info`-level lines are — the
+> extra detail is in the log message itself. Remember to revert afterwards,
+> or accept the higher VictoriaLogs storage cost.
 
 ## Sampling
 
@@ -62,22 +74,11 @@ with Keycloak OIDC SSO.
 The collector runs in Docker Swarm `mode: global` with **no node placement
 constraint**, so one collector runs on **every** node (gateway, genieai, gpu).
 This guarantees all container logs are collected regardless of where a service
-lands. The collector's fluent_forward receiver (port 24224) is bound to localhost
-only.
+lands.
 
 ## Disabling
 
 Set `ENABLE_OBSERVABILITY=0` (Swarm) or omit the `observability` profile
-(Compose). Application services continue to run; they simply attempt to export to
-a collector that is not there, which OTel handles gracefully (telemetry is
+(Compose). Application services continue to run; they simply attempt to export
+to a collector that is not there, which OTel handles gracefully (telemetry is
 dropped, not buffered indefinitely).
-
-## Config file locations
-
-| Artifact | Path |
-|---|---|
-| Collector config | `configs/otel/otel-collector-config.yaml` |
-| Grafana datasources | `configs/grafana/provisioning/datasources/` |
-| Grafana dashboards | `configs/grafana/provisioning/dashboards/` |
-| Grafana alerting | `configs/grafana/provisioning/alerting/` |
-| OTel integration guide | `configs/otel/README.md` |

@@ -233,7 +233,7 @@ export default {
     contentManagement: 'การจัดการเนื้อหา',
     knowledgeHierarchy: 'ลำดับชั้นความรู้',
     documentManagement: 'การจัดการเอกสาร',
-    noLogsFound: 'ไม่พบบันทึกสำหรับวันนี้',
+    noErrorsOrWarnings: 'วันนี้ไม่มีข้อผิดพลาดหรือคำเตือน',
     invalidLogsResponse: 'โครงสร้างการตอบสนองสรุปบันทึกไม่ถูกต้อง',
     logsSummaryError: 'ล้มเหลวในการโหลดสรุปบันทึก',
     buttons: {
@@ -268,7 +268,6 @@ export default {
     databaseSize: 'ขนาดฐานข้อมูล',
     totalTables: 'ตารางทั้งหมด',
     logManagement: 'การจัดการบันทึก',
-    rolloverLogs: 'โรลโอเวอร์บันทึก',
     searchLogs: 'ค้นหาบันทึก',
     logTime: 'เวลา',
     logLevel: 'ระดับ',
@@ -325,10 +324,6 @@ export default {
         error: 'ข้อผิดพลาดระหว่างปรับปรุงฐานข้อมูล',
         loading: 'กำลังปรับปรุงฐานข้อมูล...'
       },
-      rolloverLogs: {
-        success: 'โรลโอเวอร์บันทึกเสร็จสิ้นสำเร็จ',
-        loading: 'กำลังโรลโอเวอร์บันทึก...'
-      },
       searchLogs: {
         success: 'ค้นหาบันทึกเสร็จสิ้น',
         loading: 'กำลังค้นหาบันทึก...'
@@ -376,7 +371,6 @@ export default {
       warningLogs: 'บันทึกเตือน',
       noErrorLogs: 'ไม่มีบันทึกข้อผิดพลาดที่บันทึกวันนี้',
       noWarningLogs: 'ไม่มีบันทึกเตือนที่บันทึกวันนี้',
-      infoLogsNote: 'บันทึกข้อมูลไม่แสดงในสรุป ใช้ฟังก์ชันค้นหาเพื่อดูบันทึกทุกประเภท',
       searchResults: 'ผลการค้นหาล่าสุด',
       entriesFound: 'รายการที่พบ',
       viewAllResults: 'ดูผลลัพธ์ทั้งหมด',
@@ -388,11 +382,14 @@ export default {
         authFailed: 'การตรวจสอบสิทธิ์ล้มเหลว',
         lowDiskSpace: 'พื้นที่ดิสก์ต่ำกว่าเกณฑ์',
         slowQuery: 'ประสิทธิภาพการสอบถามช้า',
-        rateLimit: 'ใกล้ถึงขีดจำกัดอัตรา'
+        rateLimit: 'ใกล้ถึงขีดจำกัดอัตรา',
+        invalidToken: 'โทเค็นไม่ถูกต้อง',
+        fileNotFound: 'ไม่พบไฟล์'
       },
       logSearch: {
         noResultsFound: 'ไม่มีบันทึกที่ตรงกับเกณฑ์การค้นหาของคุณ',
-        resultsFound: 'พบ {count} รายการบันทึก'
+        resultsFound: 'พบ {count} รายการบันทึก',
+        degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {
@@ -426,6 +423,9 @@ export default {
         'ตรวจสอบให้แน่ใจว่าไฟล์สภาพแวดล้อมไม่สามารถเข้าถึงได้จากไดเรกทอรีเว็บ และการกำหนดค่าเซิร์ฟเวอร์บล็อกการเข้าถึงไฟล์ที่ละเอียดอ่อนอย่างเหมาะสม',
       gitRepoRecommendation:
         'ตรวจสอบให้แน่ใจว่าไดเรกทอรี .git ถูกรักษาความปลอดภัยอย่างเหมาะสมและไม่สามารถเข้าถึงได้จากเว็บ',
+      logPatternMatches: 'รูปแบบบันทึกที่พบ',
+      patternMatchNote: 'คำที่พบในข้อความบันทึก การสแกนรายงานสตริงย่อย ไม่ใช่การโจมตีที่ยืนยันแล้ว — ดูบรรทัดจริง',
+      patternMatchSummaryNote: '(พบสตริงย่อยในข้อความบันทึก ไม่ใช่การโจมตีที่ยืนยันแล้ว)',
       noVulnerabilitiesFound: 'ไม่พบช่องโหว่',
       systemSecure: 'ระบบของคุณดูเหมือนจะปลอดภัย ตรวจสอบต่อเนื่องอย่างสม่ำเสมอ',
       loadingScan: 'กำลังโหลดผลสแกน...',

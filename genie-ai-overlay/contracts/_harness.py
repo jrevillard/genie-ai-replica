@@ -254,12 +254,17 @@ def import_docarray(attr: str):
 # configs/grafana/provisioning/dashboards/rag-pipeline-trace-waterfall.json).
 # Telemetry assertions are DERIVED from the dashboard provisioning so a
 # telemetry rename cannot silently empty a dashboard.
+#
+# Updated to match the post-unification service.name stamps (commit
+# 75fc48393 unified service.name across all OTel emission paths):
+# the compose service names are now the canonical names, not the legacy
+# 'genie-*' / 'genieai-*' aliases that lived only in the BFF.
 EXPECTED_DASHBOARD_SERVICES = (
-    "genie-backend",
-    "genieai-chatqna",
-    "genieai-retriever",
-    "genieai-reranker",
-    "genieai-dataprep",
+    "backend",
+    "chatqna-xeon-backend-server",
+    "dataprep-arango-service",
+    "retriever-arango-service",
+    "reranker",
 )
 
 # Span operation names the overlay emits (from code, matched against the
@@ -279,8 +284,13 @@ def extract_dashboard_services(dashboards_dir: str | os.PathLike) -> set[str]:
     """Parse Grafana dashboard JSON for ``service_name`` label values.
 
     Scans every ``*.json`` under ``dashboards_dir`` for PromQL/VictoriaMetrics
-    expressions containing ``service_name=~"...|..."`` / ``service_name="..."``
-    and returns the set of service names the dashboards actually reference.
+    expressions containing ``service_name=~"...|..."`` / ``service_name="..."``,
+    plus the ``allValue`` field of any templating variable that drives a
+    ``service_name=~$var`` matcher (the rag-pipeline waterfall keeps its full
+    canonical service list in the ``pipeline`` variable — without expanding it,
+    only the few dashboards that inline ``service_name=~"..."`` patterns
+    would be caught).
+    Returns the set of service names the dashboards actually reference.
     Used by the telemetry contract test to derive its assertion source — a
     hardcoded list that happens to match today's dashboards would not catch a
     silent telemetry rename.
@@ -292,13 +302,26 @@ def extract_dashboard_services(dashboards_dir: str | os.PathLike) -> set[str]:
     # as `\"`. Normalize them so `service_name=~"a|b"` / `service_name="a"`
     # both match regardless of JSON-escaping.
     pattern = re.compile(r'service_name=~?"([^"]+)"')
+    allvalue_pattern = re.compile(r'"allValue"\s*:\s*"([^"]+)"')
     for path in sorted(Path(dashboards_dir).glob("*.json")):
         try:
             text = path.read_text(encoding="utf-8").replace('\\"', '"')
         except OSError:
             continue
+        # Inline regex patterns in PromQL expressions
         for m in pattern.finditer(text):
             raw = m.group(1)
+            if "|" in raw:
+                services.update(s.strip() for s in raw.split("|") if s.strip())
+            else:
+                services.add(raw.strip())
+        # Templating variable defaults bound to a `service_name=~$var` matcher
+        # — these define the canonical service set when the dashboard defers
+        # the choice to the user via a Grafana variable.
+        for m in allvalue_pattern.finditer(text):
+            raw = m.group(1)
+            if raw.startswith("$"):
+                continue  # `$__all` etc. — not a service name
             if "|" in raw:
                 services.update(s.strip() for s in raw.split("|") if s.strip())
             else:

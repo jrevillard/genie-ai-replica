@@ -30,7 +30,6 @@ jest.mock('../../services/admin-dashboard-service', () => ({
   getSystemHealth: jest.fn(),
   getDatabaseStats: jest.fn(),
   getLogs: jest.fn(),
-  rolloverLogs: jest.fn(),
   getUserStats: jest.fn(),
   searchLogs: jest.fn(),
   debugYesterdayLogs: jest.fn(),
@@ -40,10 +39,15 @@ jest.mock('../../services/admin-dashboard-service', () => ({
   runDiagnostics: jest.fn()
 }));
 
-// Mock logsService
-jest.mock('../../services/logs-service', () => ({
-  getLogsSummary: jest.fn()
-}));
+// Mock logsService — VlUnavailableError must be a real class so the route
+// test can `new VlUnavailableError(...)` and assert the 503 envelope shape.
+jest.mock('../../services/logs-service', () => {
+  const { VlUnavailableError } = jest.requireActual('../../services/logs-service');
+  return {
+    getLogsSummary: jest.fn(),
+    VlUnavailableError
+  };
+});
 
 // Mock securityScanService (imported directly by admin-routes.js)
 jest.mock('../../services/security-scan-service', () => ({
@@ -267,31 +271,29 @@ describe('AC3: Log management endpoints', () => {
       expect(adminService.getLogs).toHaveBeenCalledWith({ limit: '50', level: 'ERROR', service: 'backend' });
     });
 
+    // MR !343 round-2 follow-up: /api/admin/logs must forward the free-text
+    // search box (`q`) and pagination offset to AdminDashboardService.getLogs.
+    // Without this, the half-wired state (service accepts q/offset but route
+    // doesn't forward them) means the admin UI search + pagination break.
+    it('should forward q and offset to AdminDashboardService.getLogs', async () => {
+      adminService.getLogs.mockResolvedValue([]);
+
+      const response = await authGet('/api/admin/logs?q=database_error&offset=200&limit=25');
+
+      expect(response.status).toBe(200);
+      expect(adminService.getLogs).toHaveBeenCalledWith({
+        q: 'database_error',
+        offset: '200',
+        limit: '25',
+        level: undefined,
+        service: undefined
+      });
+    });
+
     it('should call next(error) on service failure', async () => {
       adminService.getLogs.mockRejectedValue(new Error('Logs fetch failed'));
 
       const response = await authGet('/api/admin/logs');
-
-      expect(response.status).toBe(500);
-    });
-  });
-
-  describe('POST /api/admin/logs/rollover', () => {
-    it('should return 200 after rollover', async () => {
-      const result = { success: true, message: 'Logs rolled over' };
-      adminService.rolloverLogs.mockResolvedValue(result);
-
-      const response = await authPost('/api/admin/logs/rollover', {});
-
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual(result);
-      expect(adminService.rolloverLogs).toHaveBeenCalled();
-    });
-
-    it('should call next(error) on service failure', async () => {
-      adminService.rolloverLogs.mockRejectedValue(new Error('Rollover failed'));
-
-      const response = await authPost('/api/admin/logs/rollover', {});
 
       expect(response.status).toBe(500);
     });
@@ -305,7 +307,10 @@ describe('AC3: Log management endpoints', () => {
       const response = await authGet('/api/admin/logs/summary?date=2025-01-15&level=ERROR');
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ data: summary });
+      // MR !343 round-2 finding #6b: /logs/summary now returns the result
+      // directly (consistent with /logs, /logs/search, /logs/debug-yesterday).
+      // The prior {data: summary} wrapper created wire-contract inconsistency.
+      expect(response.body).toEqual(summary);
       expect(logsService.getLogsSummary).toHaveBeenCalledWith({ date: '2025-01-15', level: 'ERROR' });
     });
 
@@ -315,6 +320,22 @@ describe('AC3: Log management endpoints', () => {
       const response = await authGet('/api/admin/logs/summary');
 
       expect(response.status).toBe(500);
+    });
+
+    it('should forward VlUnavailableError body to HTTP client (503 + error/message)', async () => {
+      // T8: the typed `VlUnavailableError` carries the standard
+      // `{error: 'vl_unreachable', message}` envelope. The global error
+      // middleware at `index.js` reads `err.statusCode` + `err.body` and
+      // renders the response verbatim.
+      const { VlUnavailableError } = require('../../services/logs-service');
+      const err = new VlUnavailableError('VictoriaLogs is currently unreachable');
+      logsService.getLogsSummary.mockRejectedValue(err);
+
+      const response = await authGet('/api/admin/logs/summary');
+
+      expect(response.status).toBe(503);
+      expect(response.body.error).toBe('vl_unreachable');
+      expect(response.body.message).toMatch(/VictoriaLogs is currently unreachable/);
     });
   });
 
@@ -438,6 +459,23 @@ describe('AC4: Security endpoints', () => {
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({ success: false, message: 'Failed to run security scan' });
+    });
+
+    it('should forward VlUnavailableError body on /security-scan (503 + error/message)', async () => {
+      // T8: the typed `VlUnavailableError` carries the standard
+      // `{error: 'vl_unreachable', message}` envelope. The inline route
+      // catch at `admin-routes.js` reads `err.statusCode` + `err.body`
+      // and renders the response verbatim (parallel to the global error
+      // middleware at `index.js`).
+      const { VlUnavailableError } = require('../../services/logs-service');
+      const err = new VlUnavailableError('VictoriaLogs is currently unreachable');
+      securityScanService.runSecurityScan.mockRejectedValue(err);
+
+      const response = await authPost('/api/admin/security-scan', {});
+
+      expect(response.status).toBe(503);
+      expect(response.body.error).toBe('vl_unreachable');
+      expect(response.body.message).toMatch(/VictoriaLogs is currently unreachable/);
     });
   });
 

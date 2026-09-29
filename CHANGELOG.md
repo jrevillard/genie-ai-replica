@@ -40,6 +40,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **chatqna rejects unauthenticated requests:** `handle_request` now requires a `Bearer` token in the `Authorization` header and validates it against the Keycloak JWKS before reaching any business logic. Missing, malformed, or invalid tokens raise `HTTPException(status_code=401)`. The Bearer scheme is matched case-insensitively per RFC 7235 §2.1. The validated token is threaded as a function argument through `fetch_file_metadata`, `get_user_profile`, `_assemble_source_documents`, and `_stream_with_metadata`; no token state lives on the service instance or `request.state`, so concurrent requests cannot leak each other's tokens on outbound service-to-service calls. The legacy `tests/testing_genieai_chatqna.py` (a manual end-to-end CLI harness with its own copy of the old `set_token`/`_token` API) is removed.
 
+### Added
+
+- **Admin Logs panel powered by VictoriaLogs.** The admin logs UI now reads every container log from VictoriaLogs via the `/api/admin/logs/*` endpoints (search, range, summary, services). The previous file-rotation viewer is gone — operators get one queryable, time-bounded, service/level-filterable view across the whole stack from a single panel, with the same `trace_id` link to VictoriaTraces that already exists for the rest of the observability stack. A service-level inventory powers the panel's service dropdown from a single live VL query.
+- **Trace correlation between logs and traces.** Each VictoriaLogs row carries the originating OTel `trace_id` / `span_id`, so clicking a trace id from the logs panel (or the LogQL `trace_id:` filter in Grafana) jumps directly to the matching span in VictoriaTraces. Applies to every service that emits through fluentd (backend, document-repository, all OPEA overlay services). Upstream images we do not fork (vLLM, TEI, ArangoDB, Kong, …) keep their plain-text logs and remain uncorrelated.
+- **Per-service per-level error-rate metrics in the admin dashboard.** The admin system-health tile surfaces live error/warning rates per service (backed by OTel collector self-telemetry over VictoriaLogs), so an operator can spot a degraded service without opening Grafana.
+- **VictoriaLogs health in the observability dashboards.** New tiles in the Observability Grafana folder expose ingest rate, query latency, storage size, and retention — previously these were implicit in the admin logs UI's response time.
+- **Alert rule for silent PII-redaction regression.** `otel-pii-redact-fail` fires critical if the OTel collector's PII redaction transform drops anything or stops accepting records for 15 minutes — a safety net for the new collector-edge redaction pipeline.
+
+### Changed
+
+- **Single log ingestion channel.** Every log line from every service now flows through `stdout → Docker fluentd driver → OTel Collector → VictoriaLogs`. The previous dual-channel architecture (an in-process OTel SDK LoggerProvider exporting directly to VL alongside the fluentd driver) is gone. Deployers no longer need to configure `LOG_TO_VICTORIALOGS` or `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` — the docker logging driver carries every record to the collector regardless of env.
+- **Admin logs outage behaviour is now a typed HTTP 503.** When VictoriaLogs is unreachable, `/api/admin/logs/*` returns `503` with `{error: "vl_unreachable", message}` instead of the previous soft-fail empty-state envelope. The frontend renders this as an explicit "VL unreachable" banner with the underlying error message — operators always know whether they are looking at "no data" or "VL is down". The previous `VL_FAIL_OPEN` env-var escape hatch is dropped.
+- **Morgan HTTP access logs (Node services) normalised in the admin TYPE column.** The collector rewrites the raw morgan format into `METHOD PATH STATUS TIME` so the admin TYPE column shows a usable request summary instead of the raw `HTTP_REQUEST:` line.
+- **Python log-level prefixes stripped at the collector.** The OTel collector strips the `ERROR:` / `WARNING:` / `INFO:` / `DEBUG:` prefix that Python's `logging` module (and uvicorn) prepends to every message, so the admin TYPE column shows the actual error message instead of bare severity words.
+
+### Removed
+
+- **`LOG_TO_VICTORIALOGS` env var.** No longer read by the runtime; safe to leave set in `.env`. Removed from `env`, the Ansible template, and `docker-compose.yaml`.
+- **`OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` env var.** No longer read; the docker fluentd driver has its own collector address.
+- **`ADMIN_LOGS_SOURCE` env var.** No longer read; VictoriaLogs is the only source. Setting it has no effect.
+- **`VL_FAIL_OPEN` env var.** Replaced by the typed `503 / vl_unreachable` contract — there is no longer a soft-fail mode.
+- **`LOG_TO_FILE` host bind mounts.** The `${DATA_DIR}/logs/{backend,doc-repo}:/app/logs` bind mounts are removed from `docker-compose.yaml`. The runtime `LOG_TO_FILE` boolean env var still works as an audit-retention escape hatch for operators who want to re-enable local file rotation, but they must now manually re-add the `/app/logs` bind mount if they do so (a comment in `env` documents this).
+
+### Fixed
+
+- **Trace correlation across services we control.** Logs from backend, document-repository, and every OPEA overlay service now carry `trace_id` / `span_id` end-to-end, so clicking a log row opens the originating trace in VictoriaTraces. (#343)
+- **Python `uvicorn.access` logs correlated with traces.** uvicorn HTTP access logs from OPEA services now include `trace_id` / `span_id` (previously they were plain text and uncorrelatable). (#343)
+- **Log loss under burst ingest.** The docker fluentd driver buffer was saturated at 1 MB during ingest peaks and dropped records before they reached the collector. Bumped to 8 MB / 5 retries / 2 s backoff in the `x-logging` compose anchor. (#343)
+- **Bare-severity rows in the admin logs TYPE column.** Python uvicorn / `logging` module messages no longer surface as `ERROR`, `WARNING`, `INFO` in the admin TYPE column — the leading level prefix is stripped at the collector and the column now shows the actual message head. (#343)
+
+### Security
+
+- **PII redaction enforced at the OTel collector edge.** The 19-key PII list (`configs/otel/pii-key-list.md`, CODEOWNER @jrevillard) is now applied at the export boundary into VictoriaLogs, covering every log path: docker fluentd driver (non-Node services, crashed-process edge cases), Winston envelope, and any ingestion route that bypasses the in-process SDK. Previously only services with a working in-process OTel SDK LoggerProvider had redaction; the collector-edge transform closes the gap and protects services that historically bypassed it. The new `otel-pii-redact-fail` alert rule (see Added) detects silent regressions. (#343)
+
+
 ## [2.1.0] - 2026-08-31
 
 ### Changed

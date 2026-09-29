@@ -233,7 +233,7 @@ export default {
     contentManagement: '内容管理',
     knowledgeHierarchy: '知识层级',
     documentManagement: '文档管理',
-    noLogsFound: '今天未找到日志',
+    noErrorsOrWarnings: '今天没有错误或警告。',
     invalidLogsResponse: '无效的日志摘要响应结构',
     logsSummaryError: '加载日志摘要失败',
     buttons: {
@@ -268,7 +268,6 @@ export default {
     databaseSize: '数据库大小',
     totalTables: '总表数',
     logManagement: '日志管理',
-    rolloverLogs: '日志轮转',
     searchLogs: '搜索日志',
     logTime: '时间',
     logLevel: '级别',
@@ -325,10 +324,6 @@ export default {
         error: '数据库优化过程中出错',
         loading: '正在优化数据库...'
       },
-      rolloverLogs: {
-        success: '日志轮转成功完成',
-        loading: '正在轮转日志...'
-      },
       searchLogs: {
         success: '日志搜索完成',
         loading: '正在搜索日志...'
@@ -376,7 +371,6 @@ export default {
       warningLogs: '警告日志',
       noErrorLogs: '今天未记录错误日志。',
       noWarningLogs: '今天未记录警告日志。',
-      infoLogsNote: '信息日志未显示在摘要中。使用搜索功能查看所有日志类型。',
       searchResults: '最新搜索结果',
       entriesFound: '找到的条目',
       viewAllResults: '查看所有结果',
@@ -388,11 +382,14 @@ export default {
         authFailed: '认证失败',
         lowDiskSpace: '磁盘空间低于阈值',
         slowQuery: '查询性能缓慢',
-        rateLimit: '接近速率限制'
+        rateLimit: '接近速率限制',
+        invalidToken: '无效令牌',
+        fileNotFound: '文件未找到'
       },
       logSearch: {
         noResultsFound: '未找到匹配搜索条件的日志',
-        resultsFound: '找到 {count} 条日志条目'
+        resultsFound: '找到 {count} 条日志条目',
+        degraded: '由于 VictoriaLogs 故障,正在显示部分结果。某些最近的日志条目可能缺失。'
       }
     },
     security: {
@@ -423,6 +420,9 @@ export default {
       rateLimitRecommendation: '考虑实施速率限制、对持久违规者的 IP 阻塞，并确保服务器强化到位。',
       envFileRecommendation: '确保环境文件无法从 Web 目录访问，并且服务器配置正确阻止对敏感文件的访问。',
       gitRepoRecommendation: '确保 .git 目录正确保护且无法从 Web 访问。',
+      logPatternMatches: '日志匹配模式',
+      patternMatchNote: '在日志文本中找到的词条。扫描报告的是子字符串，而非已确认的攻击——请阅读该行。',
+      patternMatchSummaryNote: '（在日志文本中找到的子字符串，非已确认的攻击）',
       noVulnerabilitiesFound: '未发现漏洞',
       systemSecure: '您的系统似乎安全。请继续定期监控。',
       loadingScan: '正在加载扫描结果...',

@@ -233,7 +233,7 @@ export default {
     contentManagement: 'GESTIÓN DE CONTENIDO',
     knowledgeHierarchy: 'Jerarquía de Conocimiento',
     documentManagement: 'Gestión de Documentos',
-    noLogsFound: 'No se encontraron registros para hoy',
+    noErrorsOrWarnings: 'Hoy no hay errores ni advertencias',
     invalidLogsResponse: 'Estructura de respuesta de resumen de registros no válida',
     logsSummaryError: 'Error al cargar el resumen de registros',
     buttons: {
@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Tamaño de la Base de Datos',
     totalTables: 'Tablas Totales',
     logManagement: 'Gestión de Registros',
-    rolloverLogs: 'Rotar Registros',
     searchLogs: 'Buscar Registros',
     logTime: 'Tiempo',
     logLevel: 'Nivel',
@@ -324,10 +323,6 @@ export default {
         error: 'Error durante la optimización de la base de datos',
         loading: 'Optimizando base de datos...'
       },
-      rolloverLogs: {
-        success: 'Rotación de registros completada con éxito',
-        loading: 'Rotando registros...'
-      },
       searchLogs: {
         success: 'Búsqueda de registros completada',
         loading: 'Buscando registros...'
@@ -375,8 +370,6 @@ export default {
       warningLogs: 'Registros de Advertencias',
       noErrorLogs: 'No se registraron registros de errores hoy.',
       noWarningLogs: 'No se registraron registros de advertencias hoy.',
-      infoLogsNote:
-        'Los registros de información no se muestran en el resumen. Use la función de búsqueda para ver todos los tipos de registros.',
       searchResults: 'Resultados de Búsqueda Más Recientes',
       entriesFound: 'entradas encontradas',
       viewAllResults: 'Ver Todos los Resultados',
@@ -388,11 +381,15 @@ export default {
         authFailed: 'Fallo de autenticación',
         lowDiskSpace: 'Espacio en disco por debajo del umbral',
         slowQuery: 'Rendimiento de consulta lenta',
-        rateLimit: 'Límite de tasa acercándose'
+        rateLimit: 'Límite de tasa acercándose',
+        invalidToken: 'Token inválido',
+        fileNotFound: 'Archivo no encontrado'
       },
       logSearch: {
         noResultsFound: 'No se encontraron registros que coincidan con sus criterios de búsqueda',
-        resultsFound: 'Encontradas {count} entradas de registro'
+        resultsFound: 'Encontradas {count} entradas de registro',
+        degraded:
+          'Mostrando resultados parciales debido a una interrupción de VictoriaLogs. Es posible que falten algunas entradas de registro recientes.'
       }
     },
     security: {
@@ -426,6 +423,10 @@ export default {
         'Asegúrese de que los archivos de entorno no sean accesibles desde directorios web y que las configuraciones del servidor bloqueen adecuadamente el acceso a archivos sensibles.',
       gitRepoRecommendation:
         'Asegúrese de que los directorios .git estén debidamente asegurados y no accesibles desde la web.',
+      logPatternMatches: 'Patrones de log coincidencias',
+      patternMatchNote:
+        'Términos encontrados en el texto de los logs. El escaneo reporta la subcadena, no un ataque verificado: lea la línea.',
+      patternMatchSummaryNote: '(subcadena encontrada en el texto de los logs, no un ataque verificado)',
       noVulnerabilitiesFound: 'No se Encontraron Vulnerabilidades',
       systemSecure: 'Su sistema parece ser seguro. Continúe monitoreando regularmente.',
       loadingScan: 'Cargando resultados de escaneo...',

@@ -232,7 +232,7 @@ export default {
     contentManagement: 'MANAJEMEN KONTEN',
     knowledgeHierarchy: 'Hierarki Pengetahuan',
     documentManagement: 'Manajemen Dokumen',
-    noLogsFound: 'Tidak ada log yang ditemukan hari ini',
+    noErrorsOrWarnings: 'Tidak ada error atau peringatan hari ini',
     invalidLogsResponse: 'Struktur respons ringkasan log tidak valid',
     logsSummaryError: 'Gagal memuat ringkasan log',
     buttons: {
@@ -267,7 +267,6 @@ export default {
     databaseSize: 'Ukuran Database',
     totalTables: 'Total Tabel',
     logManagement: 'Manajemen Log',
-    rolloverLogs: 'Rollover Log',
     searchLogs: 'Cari Log',
     logTime: 'Waktu',
     logLevel: 'Level',
@@ -324,10 +323,6 @@ export default {
         error: 'Kesalahan saat optimasi database',
         loading: 'Mengoptimalkan database...'
       },
-      rolloverLogs: {
-        success: 'Rollover log berhasil diselesaikan',
-        loading: 'Melakukan rollover log...'
-      },
       searchLogs: {
         success: 'Pencarian log selesai',
         loading: 'Mencari log...'
@@ -375,8 +370,6 @@ export default {
       warningLogs: 'Log Peringatan',
       noErrorLogs: 'Tidak ada log kesalahan yang tercatat hari ini.',
       noWarningLogs: 'Tidak ada log peringatan yang tercatat hari ini.',
-      infoLogsNote:
-        'Log info tidak ditampilkan dalam ringkasan. Gunakan fungsi pencarian untuk melihat semua jenis log.',
       searchResults: 'Hasil Pencarian Terbaru',
       entriesFound: 'entri ditemukan',
       viewAllResults: 'Lihat Semua Hasil',
@@ -388,11 +381,14 @@ export default {
         authFailed: 'Otentikasi gagal',
         lowDiskSpace: 'Ruang disk di bawah ambang batas',
         slowQuery: 'Kinerja query lambat',
-        rateLimit: 'Batas laju mendekat'
+        rateLimit: 'Batas laju mendekat',
+        invalidToken: 'Token tidak valid',
+        fileNotFound: 'File tidak ditemukan'
       },
       logSearch: {
         noResultsFound: 'Tidak ada log yang cocok dengan kriteria pencarian Anda',
-        resultsFound: 'Ditemukan {count} entri log'
+        resultsFound: 'Ditemukan {count} entri log',
+        degraded: 'Menampilkan hasil sebagian karena gangguan VictoriaLogs. Beberapa entri log terbaru mungkin hilang.'
       }
     },
     security: {
@@ -425,6 +421,10 @@ export default {
       envFileRecommendation:
         'Pastikan file lingkungan tidak dapat diakses dari direktori web dan konfigurasi server memblokir akses ke file sensitif dengan benar.',
       gitRepoRecommendation: 'Pastikan direktori .git diamankan dengan benar dan tidak dapat diakses dari web.',
+      logPatternMatches: 'Pola log ditemukan',
+      patternMatchNote:
+        'Istilah yang ditemukan pada teks log. Pemindaian melaporkan substring, bukan serangan terverifikasi — baca barisnya.',
+      patternMatchSummaryNote: '(substring ditemukan pada teks log, bukan serangan terverifikasi)',
       noVulnerabilitiesFound: 'Tidak Ada Kerentanan Ditemukan',
       systemSecure: 'Sistem Anda tampaknya aman. Lanjutkan pemantauan secara teratur.',
       loadingScan: 'Memuat hasil pemindaian...',

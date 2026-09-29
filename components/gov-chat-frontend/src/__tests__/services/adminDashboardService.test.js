@@ -177,39 +177,40 @@ describe('adminDashboardService', () => {
     });
   });
 
-  describe('rolloverLogs', () => {
-    it('triggers log rotation', async () => {
-      mockPost.mockResolvedValue({ data: { success: true } });
-
-      await adminDashboardService.rolloverLogs();
-
-      expect(mockPost).toHaveBeenCalledWith('admin/logs/rollover');
-    });
-
-    it('throws on API failure', async () => {
-      mockPost.mockRejectedValue(new Error('Server error'));
-
-      await expect(adminDashboardService.rolloverLogs()).rejects.toThrow('Server error');
-    });
-  });
-
   describe('getLogsSummary', () => {
-    it('fetches logs summary', async () => {
+    it('fetches logs summary and returns the full axios response (canonical /admin/* wire contract)', async () => {
       const summary = { errors: [], warnings: [], date: '2026-05-26' };
       mockGet.mockResolvedValue({ data: summary });
 
       const result = await adminDashboardService.getLogsSummary({ date: '2026-05-26' });
 
       expect(mockGet).toHaveBeenCalledWith('/admin/logs/summary', { params: { date: '2026-05-26' } });
-      expect(result).toEqual(summary);
+      // Returns the full axios response — AdminDashboard.vue:2196 reads
+      // `response.data.errors` / `response.data.warnings`. Extracting `.data`
+      // here broke the summary panel silently when backend /admin/logs/summary
+      // switched to the raw envelope in MR !343 round-2 (finding #6b).
+      expect(result).toEqual({ data: summary });
     });
 
-    it('returns fallback data on API failure', async () => {
+    it('returns fallback envelope on API failure', async () => {
       mockGet.mockRejectedValue(new Error('Server error'));
 
       const result = await adminDashboardService.getLogsSummary();
 
-      expect(result).toEqual({ data: { errors: [], warnings: [], date: expect.any(String) } });
+      // F9 — the fallback must match the success envelope shape (it needs
+      // `services: []` and `degraded: true`) so LogSearchDialog.vue's
+      // `summary?.data?.services` reader doesn't return `undefined` on
+      // error. It deliberately carries no `infos`: the summary stopped
+      // returning one when INFO was dropped from the roll-up.
+      expect(result).toEqual({
+        data: {
+          errors: [],
+          warnings: [],
+          services: [],
+          date: expect.any(String),
+          degraded: true
+        }
+      });
     });
   });
 

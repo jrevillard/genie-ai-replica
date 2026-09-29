@@ -233,7 +233,7 @@ export default {
     contentManagement: 'GESTION DE CONTENU',
     knowledgeHierarchy: 'Hiérarchie des connaissances',
     documentManagement: 'Gestion de documents',
-    noLogsFound: "Aucun journal trouvé pour aujourd'hui",
+    noErrorsOrWarnings: "Aucune erreur ni aucun avertissement aujourd'hui",
     invalidLogsResponse: 'Structure de réponse du résumé des journaux invalide',
     logsSummaryError: 'Échec du chargement du résumé des journaux',
     buttons: {
@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Taille de la base de données',
     totalTables: 'Nombre total de tables',
     logManagement: 'Gestion des journaux',
-    rolloverLogs: 'Rotation des journaux',
     searchLogs: 'Rechercher dans les journaux',
     logTime: 'Heure',
     logLevel: 'Niveau',
@@ -325,10 +324,6 @@ export default {
         error: "Erreur lors de l'optimisation de la base de données",
         loading: 'Optimisation de la base de données...'
       },
-      rolloverLogs: {
-        success: 'Rotation des journaux terminée avec succès',
-        loading: 'Rotation des journaux en cours...'
-      },
       searchLogs: {
         success: 'Recherche dans les journaux terminée',
         loading: 'Recherche dans les journaux en cours...'
@@ -376,8 +371,6 @@ export default {
       warningLogs: "Journaux d'avertissements",
       noErrorLogs: "Aucun journal d'erreur enregistré aujourd'hui.",
       noWarningLogs: "Aucun journal d'avertissement enregistré aujourd'hui.",
-      infoLogsNote:
-        "Les journaux d'information ne sont pas affichés dans le résumé. Utilisez la fonction de recherche pour voir tous les types de journaux.",
       searchResults: 'Derniers résultats de recherche',
       entriesFound: 'entrées trouvées',
       viewAllResults: 'Voir tous les résultats',
@@ -389,11 +382,15 @@ export default {
         authFailed: "Échec d'authentification",
         lowDiskSpace: 'Espace disque faible',
         slowQuery: 'Requête lente',
-        rateLimit: 'Limite de débit atteinte'
+        rateLimit: 'Limite de débit atteinte',
+        invalidToken: 'Jeton invalide',
+        fileNotFound: 'Fichier introuvable'
       },
       logSearch: {
         noResultsFound: 'Aucun journal ne correspond à vos critères de recherche',
-        resultsFound: '{count} entrées de journal trouvées'
+        resultsFound: '{count} entrées de journal trouvées',
+        degraded:
+          "Affichage de résultats partiels en raison d'une panne de VictoriaLogs. Certaines entrées de journal récentes peuvent être manquantes."
       }
     },
     security: {
@@ -427,6 +424,10 @@ export default {
         "Assurez-vous que les fichiers d'environnement ne sont pas accessibles depuis les répertoires web et que les configurations du serveur bloquent correctement l'accès aux fichiers sensibles.",
       gitRepoRecommendation:
         'Assurez-vous que les répertoires .git sont correctement sécurisés et non accessibles depuis le web.',
+      logPatternMatches: 'Motifs de log détectés',
+      patternMatchNote:
+        'Termes trouvés dans le texte des logs. Le scan rapporte la sous-chaîne, pas une attaque vérifiée — lisez la ligne.',
+      patternMatchSummaryNote: '(sous-chaîne trouvée dans le texte des logs, pas une attaque vérifiée)',
       noVulnerabilitiesFound: 'Aucune vulnérabilité trouvée',
       systemSecure: 'Votre système semble être sécurisé. Continuez à le surveiller régulièrement.',
       loadingScan: "Chargement des résultats de l'analyse...",

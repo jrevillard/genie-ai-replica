@@ -1,33 +1,61 @@
 const { createLogger, format, transports } = require('winston');
-const DailyRotateFile = require('winston-daily-rotate-file');
-const fs = require('fs');
-const path = require('path');
 
 const { trace, context } = require('@opentelemetry/api');
 
-// Winston format that injects trace_id, span_id, and service from the active OTel span
+// Winston format that injects trace_id, span_id, and service from the active OTel span.
+//
+// Service-name resolution (priority order):
+//   1. `process.env.OTEL_SERVICE_NAME` — production source of truth. Set by
+//      docker-compose.yaml per-service (backend → `backend`, doc-repo →
+//      `document-repository`). Wins because the OTel Resource + fluentd
+//      driver both read it; Winston writes it into the LogRecord envelope
+//      so VictoriaLogs and the OTel collector agree on identity.
+//   2. `process.env.npm_package_name` — defensive only. The npm CLI sets
+//      this when running `npm run <script>`; production Docker entrypoints
+//      invoke `node` directly (`CMD ["node", "index.js"]`) so it is
+//      typically undefined at runtime. Useful for local dev / npm-spawned
+//      tooling where OTEL_SERVICE_NAME is not forwarded.
+//   3. `'genie-shared'` — fallback for any consumer outside a known
+//      component (CLI scripts, ad-hoc tools).
+//
+// Why this priority: the OTel Resource (from tracing.js) stamps
+// `service.name` on traces + metrics; the fluentd driver stamps
+// `service.name` on logs from the Compose label. Both paths converge on
+// `OTEL_SERVICE_NAME` in production. Reading the same env here keeps the
+// three channels (trace, metric, log) aligned on one identifier without
+// duplicating a Compose override.
+//
+// trace_id / span_id semantics: when no active OTel span exists (background
+// work, worker threads, db-connection-service called outside a request span
+// context), the keys are OMITTED rather than zeroed. All-zero trace_ids
+// were a regression — VL's `_stream:{trace_id=...}` filter treats zeros as
+// a real bucket and groups every orphan log under one false stream.
 const traceFormat = format((info) => {
   const span = trace.getSpan(context.active());
   if (span) {
     const { traceId, spanId } = span.spanContext();
     info.trace_id = traceId;
     info.span_id = spanId;
-  } else {
-    info.trace_id = '00000000000000000000000000000000';
-    info.span_id = '0000000000000000';
   }
-  info.service = process.env.SERVICE_NAME || 'genie-backend';
+  info.service = process.env.OTEL_SERVICE_NAME || process.env.npm_package_name || 'genie-shared';
   return info;
 });
 
-// Default log format
-const logFormat = format.printf(({ level, message, timestamp, trace_id, span_id }) => {
-  const base = `${timestamp} [${level.toUpperCase()}]: ${message}`;
-  if (trace_id && trace_id !== '00000000000000000000000000000000') {
-    return `${base} trace_id="${trace_id}" span_id="${span_id}"`;
-  }
-  return base;
-});
+// Single source of truth for the transport list — used by both the initial
+// `loggerConfig` and `reconfigureLogger` so a reconfigure cannot produce a
+// different transport shape than the one the logger booted with.
+//
+// Console is the ONLY transport. Log shipping to VictoriaLogs goes through
+// the Docker fluentd driver → OTel Collector → VL, not through winston, so
+// a second in-process transport would duplicate every line.
+const buildTransports = () => [
+  new transports.Console({
+    handleExceptions: true, // Log unhandled exceptions
+    json: false,
+    colorize: true, // Colorize output for readability
+    stderrLevels: ['error'] // Write error logs to stderr
+  })
+];
 
 // Default configuration for the logger
 const loggerConfig = {
@@ -35,39 +63,10 @@ const loggerConfig = {
   format: format.combine(
     format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     format.errors({ stack: true }),
-    traceFormat(),
-    logFormat
+    traceFormat(), // injects info.trace_id / info.span_id / info.service; json() picks them up as keys
+    format.json()
   ),
-  transports: [
-    new transports.Console({
-      handleExceptions: true, // Log unhandled exceptions
-      json: false,
-      colorize: true, // Colorize output for readability
-      stderrLevels: ['error'] // Write error logs to stderr
-    }),
-    new DailyRotateFile({
-      filename: 'logs/error-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      level: 'error',
-      maxSize: '10m',
-      maxFiles: '30d',
-      zippedArchive: true
-    }),
-    new DailyRotateFile({
-      filename: 'logs/combined-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      maxSize: '10m',
-      maxFiles: '30d',
-      zippedArchive: true
-    }),
-    new transports.File({
-      filename: 'logs/combined.log',
-      maxsize: 5242880, // 5MB
-      maxFiles: 1,
-      tailable: true, // Recreate log file when max size is reached
-      handleExceptions: true
-    })
-  ]
+  transports: buildTransports()
 };
 
 // Create the initial logger instance
@@ -77,36 +76,7 @@ const logger = createLogger(loggerConfig);
 const reconfigureLogger = (newConfig) => {
   // Update the configuration with new values (if provided)
   loggerConfig.level = newConfig.level || loggerConfig.level;
-  loggerConfig.transports = [
-    new transports.Console({
-      handleExceptions: true,
-      json: false,
-      colorize: true,
-      stderrLevels: ['error']
-    }),
-    new DailyRotateFile({
-      filename: 'logs/error-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      level: 'error',
-      maxSize: newConfig.errorMaxSize || '10m',
-      maxFiles: newConfig.errorMaxFiles || '30d',
-      zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true
-    }),
-    new DailyRotateFile({
-      filename: 'logs/combined-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      maxSize: newConfig.combinedMaxSize || '10m',
-      maxFiles: newConfig.combinedMaxFiles || '30d',
-      zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true
-    }),
-    new transports.File({
-      filename: 'logs/combined.log',
-      maxsize: newConfig.combinedLogMaxSize || 5242880, // 5MB
-      maxFiles: newConfig.combinedLogMaxFiles || 1,
-      tailable: true,
-      handleExceptions: true
-    })
-  ];
+  loggerConfig.transports = buildTransports();
 
   // Clear existing transports
   logger.clear();
@@ -121,70 +91,9 @@ const reconfigureLogger = (newConfig) => {
   logger.info('Logger configuration updated');
 };
 
-// Function to trigger an immediate log rollover
-const triggerLogRollover = () => {
-  try {
-    const currentErrorTransport = logger.transports.find(
-      (transport) => transport instanceof DailyRotateFile && transport.level === 'error'
-    );
-    const currentCombinedTransport = logger.transports.find(
-      (transport) => transport instanceof DailyRotateFile && !transport.level
-    );
-
-    if (currentErrorTransport && typeof currentErrorTransport.rotate === 'function') {
-      currentErrorTransport.rotate();
-      logger.info('Error log rolled over manually');
-    } else {
-      logger.warn('Error log transport not found or does not support rotation');
-    }
-
-    if (currentCombinedTransport && typeof currentCombinedTransport.rotate === 'function') {
-      currentCombinedTransport.rotate();
-      logger.info('Combined log rolled over manually');
-    } else {
-      logger.warn('Combined log transport not found or does not support rotation');
-    }
-
-    logger.info('Log rollover operation completed');
-  } catch (error) {
-    logger.error(`Error during log rollover: ${error.message}`);
-    throw error;
-  }
-};
-
-// Function to clean up the large combined.log file
-const cleanupCombinedLog = () => {
-  try {
-    const combinedLogPath = path.join(process.cwd(), 'logs/combined.log');
-
-    if (fs.existsSync(combinedLogPath)) {
-      fs.unlinkSync(combinedLogPath);
-      logger.info('Large combined.log file has been removed');
-    } else {
-      logger.info('combined.log file not found, no cleanup needed');
-    }
-  } catch (error) {
-    logger.error(`Error cleaning up combined.log: ${error.message}`);
-    throw error;
-  }
-};
-
-// Function to flush logs immediately
-const flushLogs = () => {
-  logger.transports.forEach((transport) => {
-    if (transport.flush && typeof transport.flush === 'function') {
-      transport.flush();
-    }
-  });
-  logger.info('Logs flushed immediately');
-};
-
 // Export the logger and the functions
 module.exports = {
   logger,
   traceFormat: traceFormat(),
-  reconfigureLogger,
-  triggerLogRollover,
-  cleanupCombinedLog,
-  flushLogs
+  reconfigureLogger
 };

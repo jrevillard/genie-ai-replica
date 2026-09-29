@@ -31,13 +31,24 @@ App services (Node.js, Python/OPEA, Kong)
 Three signals, three stores, one query layer. Each store is a single-node
 Victoria* binary — operationally simple, no separate cluster to run.
 
+## Cross-signal pivots
+
+Traces, logs, and metrics share identifiers, so you can move between them in
+either direction:
+
+- **trace_id** on every log line touched by a request — see
+  [Trace ↔ log correlation]({{< relref "tracing" >}}#trace-log-correlation).
+- **service.name** on every log line (used as the dedup key for the
+  cross-service admin/logs view).
+
 ## Pages in this section
 
 - [Overview]({{< relref "overview" >}}) — the full stack, data flow, and how it
   is wired together.
 - [Tracing]({{< relref "tracing" >}}) — W3C `traceparent` propagation, the RAG
-  pipeline span taxonomy, and PII filtering.
-- [Dashboards]({{< relref "dashboards" >}}) — the pre-built Grafana dashboards.
+  pipeline span taxonomy, and how a `trace_id` links traces and logs.
+- [Dashboards]({{< relref "dashboards" >}}) — the pre-built Grafana dashboards
+  (9 in total) and how to pivot between them.
 - [Alerting]({{< relref "alerting" >}}) — built-in alert rules and what they
   catch.
 - [Configuration]({{< relref "configuration" >}}) — environment variables,

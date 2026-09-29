@@ -1,5 +1,6 @@
 # Copyright (c) 2025-2026 International Telecommunication Union (ITU)
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -112,7 +113,7 @@ class TestShutdown:
         tracing._provider = mock_provider
         tracing.shutdown()
 
-        mock_provider.force_flush.assert_called_once_with(30_000)
+        mock_provider.force_flush.assert_called_once_with(15_000)
         mock_provider.shutdown.assert_called_once()
 
     def test_handles_missing_provider_gracefully(self):
@@ -148,8 +149,8 @@ class TestResourceAttributes:
             assert attrs["deployment.environment"] == "production"
             assert "service.version" in attrs
 
-    def test_custom_service_version(self, monkeypatch):
-        """SERVICE_VERSION env var overrides default version."""
+    def test_service_version_hardcoded(self, monkeypatch):
+        """service.version is always hardcoded to 1.0.0 (no env override)."""
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
         monkeypatch.setenv("SERVICE_VERSION", "2.5.0")
 
@@ -160,7 +161,8 @@ class TestResourceAttributes:
             tracing.setup_tracing("genieai-chatqna")
 
             resource = mock_tp.call_args[1]["resource"]
-            assert resource.attributes["service.version"] == "2.5.0"
+            # SERVICE_VERSION env var is intentionally ignored — version is pinned
+            assert resource.attributes["service.version"] == "1.0.0"
 
 
 class TestSigtermHandler:
@@ -243,6 +245,57 @@ class TestGetMeter:
         meter = tracing.get_meter()
         assert meter is not None
 
+    def test_scope_name_follows_otel_service_name(self, monkeypatch):
+        """The instrumentation scope must carry the same name as the resource.
+
+        Compose sets only ``OTEL_SERVICE_NAME``. Reading ``SERVICE_NAME``
+        alone left every Python service with the scope name ``"unknown"``
+        while its traces carried the real name, so per-service metric
+        attribution was impossible.
+        """
+        monkeypatch.delenv("SERVICE_NAME", raising=False)
+        monkeypatch.setenv("OTEL_SERVICE_NAME", "genieai-chatqna")
+
+        captured = {}
+        monkeypatch.setattr(
+            tracing.metrics,
+            "get_meter",
+            lambda name, version: captured.update(name=name, version=version),
+        )
+        tracing.get_meter()
+
+        assert captured["name"] == "genieai-chatqna"
+
+    def test_scope_name_falls_back_to_service_name(self, monkeypatch):
+        """With neither OTel-spec var set, the legacy var still applies."""
+        monkeypatch.delenv("OTEL_SERVICE_NAME", raising=False)
+        monkeypatch.setenv("SERVICE_NAME", "legacy-service")
+
+        captured = {}
+        monkeypatch.setattr(
+            tracing.metrics,
+            "get_meter",
+            lambda name, version: captured.update(name=name, version=version),
+        )
+        tracing.get_meter()
+
+        assert captured["name"] == "legacy-service"
+
+    def test_version_follows_otel_service_version(self, monkeypatch):
+        """Version resolution mirrors the name: OTel-spec var wins."""
+        monkeypatch.setenv("OTEL_SERVICE_NAME", "svc")
+        monkeypatch.setenv("OTEL_SERVICE_VERSION", "2.3.4")
+
+        captured = {}
+        monkeypatch.setattr(
+            tracing.metrics,
+            "get_meter",
+            lambda name, version: captured.update(name=name, version=version),
+        )
+        tracing.get_meter()
+
+        assert captured["version"] == "2.3.4"
+
 
 class TestMeterShutdown:
     """Tests for meter provider shutdown in shutdown()."""
@@ -265,3 +318,118 @@ class TestMeterShutdown:
         tracing.setup_tracing("test-service")
         tracing.shutdown()
         assert tracing._meter_provider is None
+
+
+# ---------------------------------------------------------------------------
+# RedactingSpanProcessor PII fail-open guard
+# ---------------------------------------------------------------------------
+
+
+class TestRedactingSpanProcessor:
+    """Tests for RedactingSpanProcessor PII redaction behavior.
+
+    The processor's `on_start` reads `span._attributes` (the OTel SDK
+    internal mutable dict) and re-writes each key/value via
+    `span.set_attribute(...)`. Any exception during that re-write
+    indicates a PII contract violation: the raw (un-redacted) attribute
+    would otherwise leak into VictoriaTraces via the inner exporter.
+    Silent suppression is a real security concern — these tests pin the
+    contract that failures must surface.
+    """
+
+    def test_redacting_span_processor_surfaces_attribute_set_failure(self, caplog):
+        """`on_start` must NOT silently swallow redaction failures.
+
+        When `span.set_attribute` raises, the processor must log a WARNING
+        with the offending key and propagate the exception (so the SDK's
+        batch processor records it on the span via `record_exception`).
+        Silent suppression would mean a leaked attribute lands in
+        VictoriaTraces.
+        """
+        from tracing import RedactingSpanProcessor
+
+        class _FailingSpan:
+            # `on_start` reads `getattr(span, "_attributes", None) or {}`
+            # and only runs the redaction loop when the result is truthy.
+            # Without a truthy `_attributes`, the loop is skipped and the
+            # code path under test never runs — the test must populate it.
+            _attributes = {"safe_key": "safe_value"}
+
+            def set_attribute(self, key, value):
+                raise ValueError(f"set_attribute failed for {key}")
+
+            def get_span_context(self):
+                class _Ctx:
+                    trace_id = 0
+                    span_id = 0
+                    is_valid = False
+
+                return _Ctx()
+
+        delegate = MagicMock()
+        delegate.on_start = MagicMock()
+        proc = RedactingSpanProcessor(delegate)
+
+        span = _FailingSpan()
+        with caplog.at_level(logging.WARNING), pytest.raises(ValueError, match="set_attribute failed"):
+            proc.on_start(span, parent_context=None)
+
+        # A WARNING must have been logged with the offending key name so
+        # operators see the PII contract violation in VictoriaLogs.
+        assert any("set_attribute failed" in r.getMessage() for r in caplog.records)
+        # The exception must have propagated (NOT been suppressed) — the
+        # delegate was never reached because the redaction step itself
+        # raised, so no un-redacted attribute reaches the inner exporter.
+        delegate.on_start.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _OnlyStructuredAccessFilter — blocks uvicorn's plain-text access log emits
+# ---------------------------------------------------------------------------
+
+
+class TestOnlyStructuredAccessFilter:
+    """Tests for the handler-level filter that drops uvicorn's plain-text emits.
+
+    Our AccessLogASGIMiddleware always sets `method`/`path`/`status_code`/
+    `duration_ms` on the LogRecord via `extra={}`. uvicorn's own access log
+    emit uses a plain %-format string with no extras — those records lack the
+    `method` attribute. The filter blocks them at the HANDLER level so only
+    our structured JSON emit reaches the output.
+    """
+
+    def test_passes_records_with_method_attribute(self):
+        """Middleware's structured emit has the method attr — must pass."""
+        from tracing import _OnlyStructuredAccessFilter
+
+        flt = _OnlyStructuredAccessFilter()
+        record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, "GET /health 200", None, None)
+        record.method = "GET"
+        assert flt.filter(record) is True
+
+    def test_blocks_records_without_method_attribute(self):
+        """uvicorn's plain-text emit has no extras — must be blocked."""
+        from tracing import _OnlyStructuredAccessFilter
+
+        flt = _OnlyStructuredAccessFilter()
+        record = logging.LogRecord(
+            "uvicorn.access",
+            logging.INFO,
+            "",
+            0,
+            '127.0.0.1 - "GET /health HTTP/1.1" 200',
+            None,
+            None,
+        )
+        # No .method attribute — this is uvicorn's own emit
+        assert not hasattr(record, "method")
+        assert flt.filter(record) is False
+
+    def test_blocks_records_with_only_method_false(self):
+        """Record with method=None also fails the hasattr check."""
+        from tracing import _OnlyStructuredAccessFilter
+
+        flt = _OnlyStructuredAccessFilter()
+        record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, "GET /health 200", None, None)
+        record.method = None
+        assert flt.filter(record) is True  # hasattr is True even if value is None

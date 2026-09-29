@@ -8,14 +8,6 @@ Alerting is auto-provisioned alongside the dashboards, so a fresh deployment
 already watches the failures that matter most: **the stack going silent, storage
 filling up, the log pipeline breaking, and trace export failing**.
 
-Three files under `configs/grafana/provisioning/alerting/` define the setup:
-
-| File | Purpose |
-|---|---|
-| `alert-rules.yml` | The alert definitions (condition + for-duration). |
-| `notification-policies.yml` | Which alerts route to which contact points, and grouping/escalation. |
-| `contact-points.yml` | Where notifications are sent. The shipped default is a single webhook contact point; Slack/SMTP/PagerDuty are added per environment. |
-
 ## Built-in alert rules
 
 The rules target the failure modes that would otherwise make the observability
@@ -23,11 +15,13 @@ stack *itself* lie to you.
 
 | Alert | Catches |
 |---|---|
-| **Collector down / unhealthy** | The collector stopped scraping or exporting — the single most critical condition, since everything else depends on it. |
-| **Storage filling up** | A Victoria store's free disk drops below threshold (`vm_free_disk_space_bytes`), before retention eviction or write failures. |
-| **Log pipeline broken** | The fluent_forward receiver stops accepting log records (`otelcol_receiver_accepted`) — container logs are no longer reaching VictoriaLogs. |
-| **Trace export failure** | VictoriaTraces reports HTTP errors on the trace insert endpoint (`/insert/opentelemetry/.../traces`). |
-| **Trace ingestion anomaly** | Trace bytes ingested (`vt_bytes_ingested` for opentelemetry_traces) drops or spikes unexpectedly. |
+| **OTel Collector pipeline down** | The collector stopped ingesting data into VictoriaMetrics for over 2 minutes — the single most critical condition, since everything else depends on it. |
+| **VictoriaMetrics storage high** | The metrics store's free disk drops below 1 GB, before retention eviction or write failures. |
+| **VictoriaLogs ingestion drop** | Container logs are no longer reaching the fluentd receiver at the expected rate — the log pipeline is broken. |
+| **VictoriaTraces export failures** | The collector is failing to send traces to VictoriaTraces (HTTP errors on the insert endpoint). |
+| **VictoriaTraces ingestion drop** | No spans are reaching the collector's OTLP receiver for 5 minutes — trace sources are down or misconfigured. |
+| **Log metadata stamping broken** | The collector is no longer stamping the `service.name` field on container logs, or has not processed any in 15 minutes. Every log line will then have empty `service.name` in VictoriaLogs — admin/logs filtering and the cross-service dedup key stop working. |
+| **PII redaction broken** | The PII redaction stage in the collector is dropping records or has not processed any in 15 minutes. Sensitive fields may leak into VictoriaLogs unredacted. |
 
 Rules use short `for` windows (a few minutes) so alerts fire on real sustained
 conditions, not transient blips.
@@ -36,17 +30,18 @@ conditions, not transient blips.
 
 Beyond stack-health, deployments can add SLO-based rules on the application
 metrics exported by the backend (error rate, latency thresholds). These are
-deployment-specific — add them to `alert-rules.yml` with the same provisioning
-pattern.
+deployment-specific — add them to `alert-rules.yml` alongside the built-in
+rules, in the same format.
 
 ## Notification routing
 
-`notification-policies.yml` groups alerts (e.g. all *VictoriaMetrics* rules
-together) and routes them to the contact points defined in
-`contact-points.yml`. Configure the actual endpoints (Slack webhook, SMTP,
-PagerDuty) per environment — do not commit real secrets to the provisioned files.
+Notifications are sent to the contact points defined in `contact-points.yml`
+(Slack, SMTP, PagerDuty, …). `notification-policies.yml` groups alerts (e.g.
+all *VictoriaMetrics* rules together) and decides which contact point each
+group reaches. Configure the actual endpoints per environment — do not commit
+real secrets to the provisioned files.
 
 > **First thing to check on a fresh deploy.** After enabling observability,
-> confirm the *Collector down* alert is **not** firing and that a test
-> notification reaches your contact point. An alerting stack that cannot alert is
-> worse than none.
+> confirm the *OTel Collector pipeline down* alert is **not** firing and that
+> a test notification reaches your contact point. An alerting stack that
+> cannot alert is worse than none.

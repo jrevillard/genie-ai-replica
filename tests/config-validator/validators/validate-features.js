@@ -46,8 +46,8 @@ const OPEA_VAR_NAMES = new Set(Object.values(OPEA_SERVICE_VARS).flat());
  * Validate feature flag interdependencies.
  *
  * @param {{ variables: Array<{ name: string, value: string }> }} envParsed - Parsed env template
- * @param {Array<{ name: string }>} composeVars - Parsed compose variables
- * @returns {{ errors: string[], warnings: string[] }}
+ * @param {Array<{ name: string, default: string|null, hasDefault: boolean }>} composeVars - Parsed compose variables
+ * @returns {{ errors: string[], warnings: string[], opeaServiceVars: Object, opeaVarNames: Set<string>, gpuOnlyVars: Set<string> }}
  */
 function validateFeatureFlags(envParsed, composeVars) {
   const errors = [];
@@ -89,4 +89,8 @@ function validateFeatureFlags(envParsed, composeVars) {
   };
 }
 
-module.exports = { validateFeatureFlags, OPEA_SERVICE_VARS, OPEA_VAR_NAMES };
+module.exports = {
+  validateFeatureFlags,
+  OPEA_SERVICE_VARS,
+  OPEA_VAR_NAMES
+};

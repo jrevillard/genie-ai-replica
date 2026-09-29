@@ -31,18 +31,6 @@ const mockExpiredPayload = {
   exp: Math.floor(Date.now() / 1000) - 3600 // Expired 1 hour ago
 };
 
-// Payload with wrong audience
-const mockWrongAudPayload = {
-  ...mockJwtPayload,
-  aud: 'wrong-client-id'
-};
-
-// Payload missing required claims
-const mockMissingClaimsPayload = {
-  sub: '12345678-1234-1234-1234-123456789012'
-  // Missing: iss, aud, exp, iat
-};
-
 /**
  * Generate a mock JWT string (3 base64url parts separated by dots)
  * This is NOT cryptographically valid — used only for testing middleware
@@ -59,7 +47,5 @@ function generateMockJwtString(payload = {}) {
 module.exports = {
   mockJwtPayload,
   mockExpiredPayload,
-  mockWrongAudPayload,
-  mockMissingClaimsPayload,
   generateMockJwtString
 };

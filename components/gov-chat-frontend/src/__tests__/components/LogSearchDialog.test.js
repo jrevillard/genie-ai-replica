@@ -99,11 +99,6 @@ describe('LogSearchDialog', () => {
       expect(wrapper.exists()).toBe(true);
     });
 
-    it('has empty props definition', () => {
-      const wrapper = createLogSearchDialogWrapper();
-      expect(wrapper.vm.$options.props).toEqual({});
-    });
-
     it('initializes adminDashboardService mock correctly', () => {
       expect(mockSearchLogs).toBeDefined();
       expect(typeof mockSearchLogs).toBe('function');
@@ -652,6 +647,153 @@ describe('LogSearchDialog', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Story 5.7 — degraded banner from 503 / vl_unreachable envelope
+  //
+  // T8 contract: the legacy `response.data.degraded` boolean is gone.
+  // VL outage surfaces as HTTP 503 + body
+  // `{error: 'vl_unreachable', message}`. The component drives the
+  // degraded banner off `response.status === 503` (axios rejected
+  // promise) OR `response.data?.error === 'vl_unreachable'` (soft
+  // error envelope that still resolved).
+  // -------------------------------------------------------------------------
+  describe('Story 5.7 — degraded banner (503 / vl_unreachable envelope)', () => {
+    it('does not render the degraded banner by default', () => {
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.hasSearched = true;
+      wrapper.vm.lastResponseDegraded = false;
+      wrapper.vm.searchResults = createMockLogs(1);
+
+      expect(wrapper.vm.banner).toBeNull();
+      expect(wrapper.find('[data-test-id="degraded-banner"]').exists()).toBe(false);
+    });
+
+    it('renders the degraded banner when response.status === 503', async () => {
+      // Soft 503 envelope — axios did NOT reject (e.g. a custom interceptor
+      // swallowed the rejection), but the body carries the canonical
+      // vl_unreachable marker.
+      mockSearchLogs.mockResolvedValueOnce({
+        status: 503,
+        data: { error: 'vl_unreachable', message: 'VictoriaLogs is currently unreachable' }
+      });
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.lastResponseDegraded).toBe(true);
+      expect(wrapper.vm.banner).toBeTruthy();
+      expect(wrapper.find('[data-test-id="degraded-banner"]').exists()).toBe(true);
+    });
+
+    it('renders the degraded banner when response.data.error === "vl_unreachable" (status 200)', async () => {
+      const mockLogs = createMockLogs(2);
+      // Soft 200 with vl_unreachable body — defensive path: a deployment
+      // proxy might return a 200 with an error envelope. The banner
+      // should still render.
+      mockSearchLogs.mockResolvedValueOnce({
+        status: 200,
+        data: { logs: mockLogs, error: 'vl_unreachable', message: '...' }
+      });
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.lastResponseDegraded).toBe(true);
+      expect(wrapper.vm.banner).toBeTruthy();
+    });
+
+    it('does not render the degraded banner when the response is a clean 200 with logs', async () => {
+      const mockLogs = createMockLogs(1);
+      mockSearchLogs.mockResolvedValueOnce({
+        status: 200,
+        data: { logs: mockLogs }
+      });
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.lastResponseDegraded).toBe(false);
+      expect(wrapper.vm.banner).toBeNull();
+      expect(wrapper.find('[data-test-id="degraded-banner"]').exists()).toBe(false);
+    });
+
+    it('does not render the banner before any search has run', () => {
+      const wrapper = createLogSearchDialogWrapper();
+      expect(wrapper.vm.hasSearched).toBe(false);
+      expect(wrapper.vm.banner).toBeNull();
+    });
+
+    it('clears the degraded flag when resetSearch is called', async () => {
+      mockSearchLogs.mockResolvedValueOnce({
+        status: 503,
+        data: { error: 'vl_unreachable', message: 'VictoriaLogs is currently unreachable' }
+      });
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      expect(wrapper.vm.lastResponseDegraded).toBe(true);
+
+      wrapper.vm.resetSearch();
+
+      expect(wrapper.vm.lastResponseDegraded).toBe(false);
+      expect(wrapper.vm.banner).toBeNull();
+    });
+
+    it('clears the degraded flag when a search fails (axios rejection)', async () => {
+      // The canonical T8 path: axios rejects on 503 by default. The catch
+      // block resets lastResponseDegraded to false (the rejected promise
+      // never reached the response.status check). The admin UI relies
+      // on a global axios interceptor to translate 5xx into the catch
+      // path — if the interceptor is removed, the banner triggers via
+      // `response.data?.error === 'vl_unreachable'`. Either way the
+      // banner does NOT show for non-VL failures (e.g. generic 500).
+      mockSearchLogs.mockRejectedValueOnce(new Error('boom'));
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.lastResponseDegraded).toBe(false);
+      expect(wrapper.vm.banner).toBeNull();
+    });
+
+    it('clears the degraded flag when the response envelope is malformed (no .data)', async () => {
+      // First, simulate a successful 503 search so the flag is sticky.
+      mockSearchLogs.mockResolvedValueOnce({
+        status: 503,
+        data: { error: 'vl_unreachable', message: '...' }
+      });
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      expect(wrapper.vm.lastResponseDegraded).toBe(true);
+
+      // Now simulate a subsequent search that returns a malformed envelope.
+      mockSearchLogs.mockResolvedValueOnce(undefined);
+      wrapper.vm.searchParams.dateRange = 'yesterday';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.lastResponseDegraded).toBe(false);
+      expect(wrapper.vm.banner).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Story 5f: Emit events
   // -------------------------------------------------------------------------
   describe('Story 5f — emit events', () => {
@@ -884,47 +1026,95 @@ describe('LogSearchDialog', () => {
 
   // -------------------------------------------------------------------------
   // Story 7.6 — Log format preservation smoke test
-  // Validates that the winston log format (YYYY-MM-DD HH:mm:ss [LEVEL]: message)
-  // is preserved after VictoriaLogs deployment. The component parses structured
-  // log objects from the API — this test verifies the format regex matches
-  // the expected pattern including trace_id and span_id fields.
+  // Validates the canonical Winston JSON shape emitted by
+  // shared/lib/logger.js (format.timestamp() + traceFormat() +
+  // format.json()): {timestamp, trace_id, span_id, service, level, message}
+  // as top-level JSON keys. The legacy printf format `YYYY-MM-DD HH:mm:ss
+  // [LEVEL]: message` was dropped with file-mode transports in T8.
   // -------------------------------------------------------------------------
   describe('Story 7.6 — log format preservation', () => {
-    const logFormatRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[(ERROR|WARN|INFO|DEBUG)\]: .+$/;
-
-    it('matches standard winston log format', () => {
-      const logLine = '2026-05-29 10:15:30 [INFO]: Request received';
-      expect(logLine).toMatch(logFormatRegex);
+    // T8 contract: shared/lib/logger.js emits Winston JSON only
+    // (format.timestamp() + traceFormat() + format.json()). The legacy printf
+    // format `YYYY-MM-DD HH:mm:ss [LEVEL]: message` was dropped with
+    // file-mode transports in T8. The component parses structured JSON
+    // objects; tests below assert the canonical {timestamp, trace_id,
+    // span_id, service, level, message} shape.
+    const canonicalWinstonLine = JSON.stringify({
+      timestamp: '2026-05-29 10:15:30',
+      trace_id: 'abc123',
+      span_id: 'def456',
+      service: 'backend',
+      level: 'info',
+      message: 'Request processed'
     });
 
-    it('matches ERROR level log lines', () => {
-      const logLine = '2026-05-29 10:15:30 [ERROR]: Connection refused';
-      expect(logLine).toMatch(logFormatRegex);
+    it('parses standard winston JSON log line into required keys', () => {
+      const parsed = JSON.parse(canonicalWinstonLine);
+      expect(Object.keys(parsed)).toEqual(
+        expect.arrayContaining(['timestamp', 'trace_id', 'span_id', 'service', 'level', 'message'])
+      );
+      expect(parsed.level).toBe('info');
+      expect(parsed.message).toBe('Request processed');
     });
 
-    it('matches WARN level log lines', () => {
-      const logLine = '2026-05-29 10:15:30 [WARN]: Slow query detected';
-      expect(logLine).toMatch(logFormatRegex);
+    it('preserves ERROR level in JSON output', () => {
+      const errorLine = JSON.stringify({
+        timestamp: '2026-05-29 10:15:30',
+        trace_id: 'abc123',
+        span_id: 'def456',
+        service: 'backend',
+        level: 'error',
+        message: 'Connection refused'
+      });
+      const parsed = JSON.parse(errorLine);
+      expect(parsed.level).toBe('error');
+      expect(parsed.message).toBe('Connection refused');
     });
 
-    it('matches DEBUG level log lines', () => {
-      const logLine = '2026-05-29 10:15:30 [DEBUG]: Cache hit for key user:123';
-      expect(logLine).toMatch(logFormatRegex);
+    it('preserves WARN level in JSON output', () => {
+      const warnLine = JSON.stringify({
+        timestamp: '2026-05-29 10:15:30',
+        trace_id: 'abc123',
+        span_id: 'def456',
+        service: 'backend',
+        level: 'warn',
+        message: 'Slow query detected'
+      });
+      const parsed = JSON.parse(warnLine);
+      expect(parsed.level).toBe('warn');
     });
 
-    it('matches log lines with JSON trace context (from story 7-4 traceFormat)', () => {
-      const logLine = '2026-05-29 10:15:30 [INFO]: Request processed';
-      expect(logLine).toMatch(logFormatRegex);
+    it('preserves DEBUG level in JSON output', () => {
+      const debugLine = JSON.stringify({
+        timestamp: '2026-05-29 10:15:30',
+        trace_id: 'abc123',
+        span_id: 'def456',
+        service: 'backend',
+        level: 'debug',
+        message: 'Cache hit for key user:123'
+      });
+      const parsed = JSON.parse(debugLine);
+      expect(parsed.level).toBe('debug');
     });
 
-    it('rejects malformed log lines', () => {
-      const badLine = '2026/05/29 10:15:30 ERROR: message';
-      expect(badLine).not.toMatch(logFormatRegex);
+    it('omits trace_id / span_id when no active OTel span (background emit)', () => {
+      // logger.js: traceFormat() omits trace_id/span_id when no active span —
+      // all-zero trace_ids were a regression (VL treats zeros as a real value).
+      const backgroundLine = JSON.stringify({
+        timestamp: '2026-05-29 10:15:30',
+        service: 'backend',
+        level: 'info',
+        message: 'Background job tick'
+      });
+      const parsed = JSON.parse(backgroundLine);
+      expect(parsed.trace_id).toBeUndefined();
+      expect(parsed.span_id).toBeUndefined();
+      expect(parsed.service).toBe('backend');
     });
 
-    it('rejects log lines without level brackets', () => {
-      const badLine = '2026-05-29 10:15:30 ERROR: message';
-      expect(badLine).not.toMatch(logFormatRegex);
+    it('rejects non-JSON log line (printf format was dropped with file-mode in T8)', () => {
+      const printfLine = '2026-05-29 10:15:30 [INFO]: Request received';
+      expect(() => JSON.parse(printfLine)).toThrow();
     });
 
     it('component renders with trace-enhanced log data', async () => {

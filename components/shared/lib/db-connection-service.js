@@ -3,6 +3,7 @@ const retry = require('async-retry');
 const http = require('http');
 const https = require('https');
 const { logger } = require('./logger');
+const { withBackgroundSpan } = require('./tracing-background');
 // Import the new translation modules. These will be built separately.
 // We are assuming they export translator functions/classes.
 const { AqlToSqlTranslator } = require('./aql-to-sql');
@@ -1231,6 +1232,28 @@ class DatabaseService {
   }
 
   async _performActiveRecovery(name, originalError) {
+    // Wrap the recovery procedure in a sub-span. When called from the
+    // healthcheck or cleanup intervals (which already run inside their
+    // own `db.healthcheck` / `db.cleanup_tick` span), this becomes a
+    // child span — visible as a sub-operation in VictoriaTraces. When
+    // called from a request handler, the recovery span becomes a child
+    // of the request span.
+    return withBackgroundSpan(
+      'db.recovery',
+      async () => {
+        return this._performActiveRecoveryInner(name, originalError);
+      },
+      { 'db.connection': name, 'db.system': this._dbType },
+      // OTel database semantic conventions: any span representing a
+      // call from the service to the database MUST use SpanKind.CLIENT
+      // (the service is the CLIENT; the DB is the implicit server).
+      // Without this, the trace explorer cannot draw the dependency
+      // arrow from the service to the DB.
+      { kind: 3 /* SpanKind.CLIENT */ }
+    );
+  }
+
+  async _performActiveRecoveryInner(name, originalError) {
     const now = Date.now();
 
     const lastAttempt = this._lastRecoveryAttempt.get(name) || 0;
@@ -1294,8 +1317,18 @@ class DatabaseService {
       clearInterval(this._healthCheckIntervals.get(name));
     }
 
-    const interval = setInterval(async () => {
-      await this._performHealthCheck(name);
+    const interval = setInterval(() => {
+      // Background emitter — wrap in a fresh OTel root span so the
+      // health-check logs (and any errors triggering recovery) carry a
+      // live trace_id in VictoriaLogs / VictoriaTraces.
+      withBackgroundSpan(
+        'db.healthcheck',
+        () => this._performHealthCheck(name),
+        { 'db.connection': name, 'db.system': this._dbType },
+        { kind: 3 /* SpanKind.CLIENT */ }
+      ).catch((err) => {
+        logger.error('db healthcheck background span failed', { error: err && err.message });
+      });
     }, this.HEALTH_CHECK_INTERVAL);
 
     this._healthCheckIntervals.set(name, interval);
@@ -1355,95 +1388,58 @@ class DatabaseService {
   _startConnectionCleanup() {
     logger.info(`[DB_CLEANUP] Starting connection cleanup routine`);
 
-    setInterval(async () => {
-      const now = Date.now();
-      const connectionsToClose = [];
+    const interval = setInterval(() => {
+      // Background emitter — wrap the cleanup tick in a root span so the
+      // [DB_CLEANUP] logs and any [DB_CLOSE] emissions inside carry a
+      // live trace_id. One trace per cleanup tick — cardinality scales
+      // with stale-connection rate, which is by definition low.
+      withBackgroundSpan(
+        'db.cleanup_tick',
+        async () => {
+          const now = Date.now();
+          const connectionsToClose = [];
 
-      for (const [name, connectionInfo] of this._connections.entries()) {
-        if (this._isConnectionStale(connectionInfo, now)) {
-          connectionsToClose.push(name);
-        }
-      }
+          for (const [name, connectionInfo] of this._connections.entries()) {
+            if (this._isConnectionStale(connectionInfo, now)) {
+              connectionsToClose.push(name);
+            }
+          }
 
-      for (const name of connectionsToClose) {
-        logger.info(`[DB_CLEANUP] Cleaning up stale connection: ${name}`);
-        await this._closeConnection(name);
+          for (const name of connectionsToClose) {
+            logger.info(`[DB_CLEANUP] Cleaning up stale connection: ${name}`);
+            await this._closeConnection(name);
 
-        if (name === 'default') {
-          logger.info(`[DB_CLEANUP] Initiating ACTIVE RECOVERY for essential connection: ${name}`);
-          await this._performActiveRecovery(name, new Error('Connection cleanup - proactive recreation'));
-        }
-      }
+            if (name === 'default') {
+              logger.info(`[DB_CLEANUP] Initiating ACTIVE RECOVERY for essential connection: ${name}`);
+              await this._performActiveRecovery(name, new Error('Connection cleanup - proactive recreation'));
+            }
+          }
 
-      if (connectionsToClose.length > 0) {
-        logger.info(`[DB_CLEANUP] Cleaned up ${connectionsToClose.length} stale connections`);
-      }
+          if (connectionsToClose.length > 0) {
+            logger.info(`[DB_CLEANUP] Cleaned up ${connectionsToClose.length} stale connections`);
+          }
+        },
+        { 'db.system': this._dbType },
+        { kind: 3 /* SpanKind.CLIENT */ }
+      ).catch((err) => {
+        logger.error('db cleanup_tick background span failed', { error: err && err.message });
+      });
     }, this.HEALTH_CHECK_INTERVAL);
+
+    // `unref()` so this housekeeping timer never keeps the process alive.
+    // The SIGTERM handler that calls `process.exit` lives in `tracing.js`
+    // and only exists when `ENABLE_OBSERVABILITY=1` — the default is off,
+    // so in the default configuration this interval was the one thing
+    // holding the event loop open and every container was SIGKILLed at
+    // `stop_grace_period` instead of exiting, losing the shutdown logs
+    // that would explain why. Ref'd-by-default is the wrong polarity for
+    // background housekeeping: nothing in the process should depend on it
+    // to reach an empty event loop.
+    interval.unref();
   }
 
   _sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  async closeConnection(name = 'default') {
-    logger.info(`Manually closing connection: ${name}`);
-    await this._closeConnection(name);
-    return true;
-  }
-
-  async closeAllConnections() {
-    const count = this._connections.size;
-    logger.info(`Closing all database connections. Total: ${count}`);
-
-    const connectionNames = Array.from(this._connections.keys());
-
-    for (const name of connectionNames) {
-      await this._closeConnection(name);
-    }
-
-    this._recoveryAttempts.clear();
-    this._lastRecoveryAttempt.clear();
-    this._connectionConfigs.clear();
-    this._activeProxies.clear();
-    this._proxyUpdateCallbacks.clear();
-
-    logger.info(`All connections closed: ${connectionNames.join(', ') || 'none'}`);
-  }
-
-  getConnectionStatus() {
-    const now = Date.now();
-    const connections = Array.from(this._connections.entries()).map(([name, info]) => ({
-      name,
-      age: now - info.createdAt,
-      idleTime: now - info.lastActivity,
-      lastHealthCheck: now - info.lastHealthCheck,
-      isStale: this._isConnectionStale(info, now),
-      recoveryAttempts: this._recoveryAttempts.get(name) || 0,
-      lastRecoveryAttempt: this._lastRecoveryAttempt.get(name) || null,
-      activeProxies: this._activeProxies.get(name)?.size || 0
-    }));
-
-    return {
-      dbType: this._dbType,
-      totalConnections: this._connections.size,
-      totalActiveProxies: Array.from(this._activeProxies.values()).reduce((sum, set) => sum + set.size, 0),
-      connections,
-      config: {
-        connectionIdleTimeout: this.CONNECTION_IDLE_TIMEOUT,
-        healthCheckInterval: this.HEALTH_CHECK_INTERVAL,
-        maxConnectionAge: this.MAX_CONNECTION_AGE,
-        recoveryRetryAttempts: this.RECOVERY_RETRY_ATTEMPTS,
-        recoveryRetryDelay: this.RECOVERY_RETRY_DELAY,
-        failedRecoveryCooldown: this.FAILED_RECOVERY_COOLDOWN
-      },
-      recoveryStatus: {
-        totalRecoveryAttempts: Array.from(this._recoveryAttempts.values()).reduce((sum, attempts) => sum + attempts, 0),
-        connectionsInRecovery: this._recoveryAttempts.size,
-        connectionsInCooldown: Array.from(this._lastRecoveryAttempt.entries()).filter(
-          ([, lastAttempt]) => Date.now() - lastAttempt < this.FAILED_RECOVERY_COOLDOWN
-        ).length
-      }
-    };
   }
 
   async pingConnections() {
@@ -1743,22 +1739,6 @@ class DatabaseService {
     );
 
     return results;
-  }
-
-  async cleanupConnection(connectionName) {
-    logger.info(`[DB_CLEANUP] Cleaning up all resources for connection: ${connectionName}`);
-
-    await this._closeConnection(connectionName);
-
-    this._recoveryAttempts.delete(connectionName);
-    this._lastRecoveryAttempt.delete(connectionName);
-
-    this._connectionConfigs.delete(connectionName);
-
-    this._activeProxies.delete(connectionName);
-    this._proxyUpdateCallbacks.delete(connectionName);
-
-    logger.info(`[DB_CLEANUP] All resources cleaned up for: ${connectionName}`);
   }
 
   setDefaultConfig(config) {

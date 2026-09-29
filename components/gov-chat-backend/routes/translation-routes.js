@@ -22,7 +22,7 @@ module.exports = (translationService) => {
 
   /**
    * @swagger
-   * /api/translate:
+   * "/api/translate":
    *   post:
    *     summary: Translate text content
    *     description: Translates an array of text strings from a specified source language to a specified target language.
@@ -95,7 +95,7 @@ module.exports = (translationService) => {
 
   /**
    * @swagger
-   * /api/translate/markdown:
+   * "/api/translate/markdown":
    *   post:
    *     summary: Translate markdown content
    *     description: Translates the text content within a markdown string from a specified source language to a specified target language, preserving the markdown structure.

@@ -17,7 +17,15 @@ import time
 
 from opentelemetry.trace import Status, StatusCode
 
-from tracing import get_meter, get_tracer, sanitize_attributes, setup_trace_logging, setup_tracing
+from tracing import (
+    get_meter,
+    get_tracer,
+    install_uvicorn_access_logging,
+    sanitize_attributes,
+    setup_json_logging,
+    setup_trace_logging,
+    setup_tracing,
+)
 
 setup_tracing("genieai-dataprep")
 
@@ -60,6 +68,8 @@ from genieai_dataprep_loader import GenieDataprepLoader
 
 logger = CustomLogger("genie_dataprep_microservice")
 setup_trace_logging("genie_dataprep_microservice")
+setup_json_logging("genie_dataprep_microservice")
+install_uvicorn_access_logging()
 logflag = os.getenv("LOGFLAG", False)
 upload_folder = "./uploaded_files/"
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"

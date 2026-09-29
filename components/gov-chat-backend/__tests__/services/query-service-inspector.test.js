@@ -4,19 +4,7 @@ require('../setup-env');
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 
-jest.mock(
-  '../../shared-lib',
-  () => ({
-    logger: {
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn()
-    },
-    dbService: { getConnection: jest.fn() }
-  }),
-  { virtual: true }
-);
+jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
 jest.mock('../../shared-lib/validation-utils', () => require('../mocks/shared-lib'), { virtual: true });
 
 jest.mock('arangojs', () => ({

@@ -1964,9 +1964,9 @@ export default {
       step7:
         'คำเตือนบางอย่างสามารถแก้ไขได้โดยอัตโนมัติ: ค่าสถานะสามารถปรับให้อยู่ใน enum ที่ถูกต้อง สามารถเติมฟิลด์ที่ขาดหายไปได้ด้วยค่าเริ่มต้นที่สมเหตุสมผล นำการแก้ไขที่คุณเห็นชอบไปปรับใช้ จากนั้นกลับไปตรวจสอบที่โมดูลดูแลจัดการ',
       step8:
-        'สรุปสิ่งที่คุณกำลังจะเผยแพร่: หัวข้อ ป้ายกำกับ แหล่งที่มา และปัญหาใดๆ ที่ยังไม่ได้รับการแก้ไข เมื่อคุณลงนามรับรอง ที่เก็บจะย้ายไปยังขั้นตอนที่เผยแพร่แล้ว',
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        'การ publish จะสร้างเวอร์ชัน v1 ของที่เก็บนี้ การเปลี่ยนแปลงในภายหลังแต่ละครั้ง — หัวข้อใหม่ คำอธิบายที่แก้ไข การตรวจสอบข้อมูลเก่าใหม่ — จะเผยแพร่เป็น v2, v3 เป็นต้น เวอร์ชันเก่าจะยังคงสามารถอ้างอิงได้ตลอดไป',
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         'สร้างที่เก็บ OKF ใหม่จากเอกสารที่เลือก เอกสารจะกลายเป็นแหล่งที่มา คุณจะได้ตรวจสอบและตั้งชื่อหัวข้อที่สร้างขึ้นก่อนที่จะเผยแพร่สิ่งใด',
       crawlSegment:

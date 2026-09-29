@@ -1938,9 +1938,10 @@ export default {
         '我们正在运行规范符合性检查：每个主题是否有标题？标签是否合规？来源归属是否完整？阻断性问题必须在发布前修复；警告项则可直接确认放行。',
       step7:
         '部分警告支持自动修复：状态值可自动对齐至有效枚举，缺失字段可由合理的默认值补齐。应用您认同的修复项，随后返回策展视图进行核对。',
-      step8: '即将发布内容的汇总概览：主题、标签、来源及所有未解决问题。一旦您完成核准，知识库即流转至已发布通道。',
+      step8:
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
       step9:
-        '执行 publish 会生成该知识库的 v1 版本。后续的每次变更 — 无论是新增主题、修订描述还是过期重新核验 — 均会发布为 v2、v3 等后续版本。旧版本永久保持可引用状态。',
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
       docMgmtEntry:
         '基于所选文档创建新的 OKF 知识库。文档将作为来源；在正式发布任何内容前，您将核对并命名由其生成的主题。',
       crawlSegment: 'OKF 知识库是一个结构化、版本化的主题集合，可供对话回答作为引用出处。',

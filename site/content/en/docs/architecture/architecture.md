@@ -83,6 +83,7 @@ graph TB
 
     subgraph AI Layer
         CHATQNA[ChatQnA]
+        EMB[Embedding wrapper<br/>:6000]
         RETRIEVER[Retriever]
         RERANKER[Reranker]
         VLLM[vLLM<br/>LLM Inference]
@@ -108,6 +109,8 @@ graph TB
     DR --> CLAMAV
     BE --> REDIS
     BE --> CHATQNA
+    CHATQNA -->|POST /v1/embeddings| EMB
+    EMB --> TEI
     CHATQNA --> RETRIEVER
     CHATQNA --> RERANKER
     RETRIEVER --> ADB
@@ -285,16 +288,32 @@ sequenceDiagram
     BE->>ChatQnA: Bearer token + traceparent
     ChatQnA->>ChatQnA: Create child span (chatqna.process)
     ChatQnA->>Collector: Export span
-    
+
+    ChatQnA->>Emb: POST /v1/embeddings (traceparent)
+    Emb->>Emb: Create child span (embedding.wrapper)
+    Emb->>TEI: Forward (Hugging Face Inference API)
+    TEI->>TEI: Create child span (tei.embedding)
+    TEI->>Collector: Export span
+    TEI-->>Emb: Embedding vector
+    Emb-->>ChatQnA: Embedding vector
+
     ChatQnA->>Ret: Query + traceparent
     Ret->>Ret: Create child span (retriever.search)
     Ret->>ADB: Vector + graph search
     Ret->>Collector: Export span
-    
+    Ret-->>ChatQnA: Ranked chunks
+
     ChatQnA->>LLM: Generate + traceparent
     LLM->>LLM: Create child span (llm.inference)
     LLM->>Collector: Export span
-    
+    LLM-->>ChatQnA: Generated text
+
+    ChatQnA-->>BE: Final response
+    BE-->>K: Reverse proxy
+    K-->>N: Proxy
+    N-->>FE: HTTPS
+    FE-->>User: Render response
+
     Collector->>VM: Store trace
     Collector->>Collector: Self-telemetry span
 ```
@@ -572,12 +591,12 @@ sequenceDiagram
     participant Collector as OTel Collector
 
     User->>FE: Send query
-    FE->>BE: POST /api/chat
+    FE->>BE: POST /api/queries/stream
     
     BE->>BE: [SPAN: backend.request]
     BE->>Collector: Export span (OTLP)
     
-    BE->>ChatQnA: POST /chat (with traceparent)
+    BE->>ChatQnA: POST /v1/chatqna (with traceparent)
     ChatQnA->>ChatQnA: [SPAN: chatqna.process]
     ChatQnA->>Collector: Export span
     
@@ -746,7 +765,8 @@ sequenceDiagram
     DP->>ADB: Generate and store vector embeddings
 
     DP->>DR: Update ingestion status + chunk count
-    DP->>FE: Ingestion complete
+    DR-->>Admin: 200 OK (Ingestion started in background)
+    Note over Admin,FE: Frontend polls DR /api/files/{fileId}/ingestion-log for status
 ```
 
 Dataprep uses a dedicated Keycloak client with the `client_credentials` grant type. This service account is separate from user tokens and has permissions scoped to document ingestion operations. The ingestion pipeline extracts content, chunks it, labels each chunk against the service taxonomy, constructs a knowledge graph (entities + relationships), generates vector embeddings, and stores everything in ArangoDB.

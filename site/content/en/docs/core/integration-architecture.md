@@ -318,7 +318,7 @@ port `8888` (`MEGA_SERVICE_PORT`).
 ```
 Backend QueryService
   ↓
-POST http://chatqna:8888/v1/chatqna
+POST http://chatqna-xeon-backend-server:8888/v1/chatqna
   ↓ (worker thread for non-blocking)
 ChatQnA Service
   ↓

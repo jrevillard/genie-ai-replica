@@ -36,7 +36,16 @@ function store() {
 function mountStep(draft) {
   return mount(OkfStepReview, {
     props: { draft: draft === undefined ? { repo_id: 'r1', name: 'R1' } : draft, expert: false },
-    global: { stubs: { DsInfoTip: true, DsButton: true, OkfVersionsDialog: true, OkfLogsDialog: true, OkfRenameRepoDialog: true }, plugins: [store()] }
+    global: {
+      stubs: {
+        DsInfoTip: true,
+        DsButton: true,
+        OkfVersionsDialog: true,
+        OkfLogsDialog: true,
+        OkfRenameRepoDialog: true
+      },
+      plugins: [store()]
+    }
   });
 }
 

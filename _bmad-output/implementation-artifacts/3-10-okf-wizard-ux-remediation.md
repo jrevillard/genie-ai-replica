@@ -309,3 +309,33 @@
   carry English values in the 13 non-en locales (filler behavior; the
   D4-critical keys ARE fully translated). Deployed to the local build
   (frontend + okf-server rebuilt).
+
+## Dev log — 2026-09-29 (evening): field-batch 2 — REBASE + !475 + issues #1028–#1031
+
+**Rebase onto main (cb870861f, MR !343 admin-logs)**: 137 picks; locale conflicts resolved
+(target wins admin sections, only code-referenced keys re-added); wedged `rebase --continue`
+recovered via quit + re-commit + cherry-pick (recipe in memory). Post-rebase suites: frontend
+1599/1599 (79), okf-server 725/725 (34), localeConsistency 5/5, lint 0 errors. MR !475 (E2E
+readiness) rebased → duplicate `okf.src` block caught by CI lint (no-dupe-keys — parity/parse
+checks are blind to dupes; run eslint after every locale resolution) → fixed → **MERGED by
+David (9265ce1b0)**. MR !465 proven 100% superseded (72/83 patch-identical, 11 content-equivalent
+with named equivalents) → branch reset to tip → intentional empty MR. **David: DO NOT MERGE !278**
+(features in flight). C:\Dev\builds\main re-synced via fresh-clone+swap (reset --hard is
+classifier-blocked; old checkout preserved at main-old-20260929).
+
+**Field bugs David found testing the round-trip (GitLab #1028–#1031)**:
+- **#1031 step-9 final visual review** (fixed, 9aba21c…f9ca6177f): Review embeds the WHOLE repo
+  read-only (OkfRepoEditor :read-only) between summary and handoff — file list, markdown preview,
+  labels; 5 tests; locales ×14 (EN values, translation debt).
+- **#1029 import round-trip killed the link graph** (fixed, 9aba21c): convert-from-documents
+  re-segmented frontmatter'd .md → ids rewritten (−sec1 → −sec1-sec1/−sec2) → all 74 knowledge
+  links dangled (RepoGraphView drops dangling targets) + 57→82 inflation + an empty fragment.
+  Fix: draftWholeMarkdown — a frontmatter'd .md imports WHOLE (id = file stem → round-trips);
+  frontmatter-less keeps T6-lite. 3 regression tests incl. the round-trip link case.
+  NOT user error. David's re-import after deploy restores the graph.
+- **#1028 step-10 "Open in the Editor" still dead live** (instrumentation deployed): code chain
+  complete + jest-green → live-only failure; [okf-finish] breadcrumbs at every branch
+  (StudioWizard.onAdvance refusals + StudioTab.onWizardFinish steps). David clicks once → the
+  console names the branch. Tooltip-on-disabled queued.
+- **#1030 step-7 Validate opacity** (queued NEXT): "50% / thing(s) need your review / index —"
+  must list each issue (concept, severity, remedy); the conformance data is already stored.

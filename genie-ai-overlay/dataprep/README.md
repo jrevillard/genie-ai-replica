@@ -61,6 +61,23 @@ This service extends the standard OPEA dataprep implementation with advanced fea
   - GPU acceleration support
   - Multiple embedding models
 
+### Chunk field semantics (`text` vs `metadata.chunk_text`)
+
+Each chunk is stored with **two text fields** that serve distinct purposes; downstream code and eval scripts MUST NOT conflate them. The contents depend on the `CONTEXTUAL_RETRIEVAL_ENABLED` flag at ingest:
+
+| ArangoDB field | When `CONTEXTUAL_RETRIEVAL_ENABLED=true` (default v1.5, MR !199) | When `CONTEXTUAL_RETRIEVAL_ENABLED=false` | Read at query time? |
+|---|---|---|---|
+| `text` (retriever reads this) | `original_chunk + LLM-generated document-context prefix` (Anthropic-style; subject propagation). This is the field that is embedded. | Verbatim chunk (no prefix). | Yes (always) |
+| `metadata.chunk_text` | Verbatim un-contextualized original chunk. | **Field not written** — dataprep guards the assignment on the flag. | No — display/debug only |
+
+The retriever (`ARANGO_TEXT_FIELD = "text"` in `genieai_retriever_arangodb.py`) deliberately reads `text` because that is what was embedded at ingest; reading a different field at retrieval time would diverge from the indexed vector space and silently break dense vs. sparse recall. The LLM therefore sees:
+- the **contextualized** chunk (`original_chunk + subject-propagation prefix`) when Contextual Retrieval is on (the default), or
+- the **verbatim** chunk when Contextual Retrieval is off.
+
+Reranker strategy (`RERANKING_STRATEGY` — `adaptive`, `slice`, `threshold`, `slice_threshold`, `knee_threshold`) operates on the documents the retriever returns and is independent of which field the retriever reads; this constant applies to all reranker modes. **No env override is exposed for `ARANGO_TEXT_FIELD`** — keeping the constant hardcoded prevents ingest/read drift.
+
+The el-salvador eval harness overrides `ARANGO_TEXT_FIELD=chunk_text` *only for offline gold-corpus matching* (the gold dataset's `content_hash` is computed from the verbatim chunk, so the eval reads verbatim text to align). This is an eval-side scoring accommodation; production retrieval always reads `text`.
+
 ### Advanced Features
 
 - **Document Ingestion**:

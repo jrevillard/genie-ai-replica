@@ -86,6 +86,29 @@ setup_json_logging("genieai_retriever_arangodb")
 install_uvicorn_access_logging()
 logflag = os.getenv("LOGFLAG", False)
 
+# ARANGO_TEXT_FIELD is the column the retriever reads on every query path
+# (BM25 via the ArangoSearch view, dense via the langchain-arangodb vector
+# store, and traversal AQL). Deliberately hardcoded (no env override) so
+# ingest and read paths cannot drift. It is **NOT** a paraphrase or summary
+# of the original chunk. What it contains depends on the
+# CONTEXTUAL_RETRIEVAL_ENABLED flag at ingest:
+#
+#   * `CONTEXTUAL_RETRIEVAL_ENABLED=true` (default since v1.5, MR !199):
+#     dataprep populates `text` with `original_chunk + LLM-generated
+#     document-context prefix` (Anthropic-style). The verbatim
+#     un-contextualized chunk is preserved separately under
+#     `metadata.chunk_text` for display/debug and is never read back at
+#     query time. Reading the contextualized field is required so dense
+#     and lexical channels index against a consistent vector-space.
+#
+#   * `CONTEXTUAL_RETRIEVAL_ENABLED=false`: `text` is just the verbatim
+#     chunk (no prefix); the `metadata.chunk_text` field is **not written**
+#     (dataprep only writes it when the flag is on).
+#
+# In both modes the retriever's read column is `text`. Reranker strategy
+# (adaptive, slice, threshold, slice_threshold, knee_threshold) operates
+# on the retrieved documents and is independent of which field the
+# retriever reads.
 ARANGO_TEXT_FIELD = "text"
 ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"

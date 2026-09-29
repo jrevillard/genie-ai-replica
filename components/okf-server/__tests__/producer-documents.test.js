@@ -123,6 +123,48 @@ describe('producer-service — segmentation + whole-corpus linking', () => {
   });
 });
 
+// ── T6-lite: flat text → structured markdown (the PDF blob-concept fix) ─────
+
+describe('producer-service — structurePlainText (flat text gains heading structure)', () => {
+  const { structurePlainText, isHeadingCandidate } = producer;
+
+  it('promotes numbered headings so segmentMarkdown splits a FLAT pdf/docx text into MULTIPLE concepts', () => {
+    const body = (seed) =>
+      `To complete this step, fill in every required field on the form and submit it to the office for review. ${seed} ` +
+      'The processing time is usually five working days, and you will receive a confirmation letter afterwards. ' +
+      'Keep a copy of every document you submit for your own records and future reference. '.repeat(2);
+    const flat = [
+      'MEWA User Guide.',
+      'This guide explains the scheme.',
+      '1. Registration',
+      body('Registration requires a valid identity document.'),
+      '2. Contributions',
+      body('Contributions are due monthly and payable in advance.'),
+      '2.1 Rates',
+      body('The applicable rates table follows for each member category.'),
+      '3. Claims',
+      body('Claims must be filed within ninety days of the incident date.')
+    ].join('\n');
+    const structured = structurePlainText(flat);
+    const drafts = producer.segmentMarkdown(structured, {
+      baseSlug: 'guide',
+      title: 'Guide',
+      meta: { file_id: 'f1', file_name: 'guide.pdf', baseResource: 'x' }
+    });
+    expect(drafts.length).toBeGreaterThanOrEqual(4); // was ONE blob before T6-lite
+    expect(drafts[0].frontmatter.title).toContain('Registration'); // the tiny preamble merges forward into section 1
+    expect(structured).toContain('## 1. Registration');
+  });
+
+  it('leaves text with REAL markdown headings untouched and prose without headings as one blob', () => {
+    const md = '# Real\n\nbody\n\n## Sub\n\nmore';
+    expect(structurePlainText(md)).toBe(md);
+    const prose = Array.from({ length: 30 }, (_, i) => `This is sentence number ${i} with words that flow.`).join('\n');
+    expect(structurePlainText(prose)).not.toMatch(/^## /m);
+    expect(isHeadingCandidate('This sentence has many words and ends normally.', 'next')).toBe(false);
+  });
+});
+
 // ── xlsx FR-42 semantics ─────────────────────────────────────────────────────
 
 describe('producer-service — xlsx converter (FR-42: dictionary + row-groups)', () => {

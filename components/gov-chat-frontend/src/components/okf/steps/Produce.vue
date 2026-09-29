@@ -142,7 +142,10 @@ export default {
       } catch {
         /* fall through to failed */
       }
-      if (liveStatus === 'running') {
+      // 'queued' and the other non-terminal stages are ACTIVE (field bug
+      // 2026-09-29: only 'running' counted, so a kick verified during the
+      // queued window was declared neverStarted while it ran to completion).
+      if (liveStatus != null && liveStatus !== 'done' && liveStatus !== 'failed') {
         this.status = 'running';
         this.poll();
         return;
@@ -506,7 +509,15 @@ export default {
             );
             this.$emit('gate', true);
             clearInterval(this.pollTimer);
-          } else if (st === 'running') {
+          } else if (st != null) {
+            // ANY registered status that is not terminal is ACTIVE — the
+            // server registers 'queued' and returns 202 BEFORE the background
+            // run flips it to downloading/running/splitting/adding/curating
+            // (producer-service :606, crawl :814). The old binary check
+            // treated 'queued' as "no conversion" and declared neverStarted
+            // on the IMMEDIATE first tick — while the conversion then ran
+            // and completed server-side (field: PDF, 2026-09-29, 8 perfectly
+            // good conversions reported as failures).
             this.status = 'running';
             this.readProgress(conv);
           } else {

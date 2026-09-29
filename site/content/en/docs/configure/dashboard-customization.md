@@ -246,12 +246,12 @@ The `adminTabs` computed uses the key `admin.tabs.<id>` for the tab strip
 label, and the sidebar uses `admin.<id>` (or `admin.<section>.<key>` for
 nested groups like `admin.tabs.security`). Add both.
 
-> {{< callout type="info" >}}
-> English (`en.js`) is the source of truth. Translations for non-English
-> locales fall back to the English label until you provide them. See
-> [Contribute → i18n guide](/docs/contribute/i18n/) for the locale parity
-> workflow and which locales are production-required.
-> {{< /callout >}}
+{{< callout type="info" >}}
+English (`en.js`) is the source of truth. Translations for non-English
+locales fall back to the English label until you provide them. See
+[Contribute → i18n guide](/docs/contribute/i18n/) for the locale parity
+workflow and which locales are production-required.
+{{< /callout >}}
 
 ### Step 6 — lint, format, and rebuild
 
@@ -309,12 +309,12 @@ For the full role / group / client model and how to assign roles in the
 Keycloak admin console, see
 [Keycloak Admin Guide → Roles and groups](/docs/configure/keycloak-admin-guide/#4-group-management).
 
-> {{< callout type="warning" >}}
-> Any role check you add inside `AdminDashboard.vue` is **client-side only**.
-> A motivated user can still hit the backend REST endpoints directly with a
-> stolen JWT. Always enforce authorization on the **backend** — the dashboard
-> gate is for UX, not security.
-> {{< /callout >}}
+{{< callout type="warning" >}}
+Any role check you add inside `AdminDashboard.vue` is **client-side only**.
+A motivated user can still hit the backend REST endpoints directly with a
+stolen JWT. Always enforce authorization on the **backend** — the dashboard
+gate is for UX, not security.
+{{< /callout >}}
 
 ## Local development workflow
 

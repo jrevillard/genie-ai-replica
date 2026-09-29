@@ -71,10 +71,10 @@ pytest tests/test_retriever.py                  # one file
 pytest contracts/                               # contract suite — real comps
 ```
 
-> {{< callout type="warning" >}}
-> The contract suite (`contracts/`) only works inside the built image where
-> the vendored `comps` library is real. From the host it is skipped.
-> {{< /callout >}}
+{{< callout type="warning" >}}
+The contract suite (`contracts/`) only works inside the built image where
+the vendored `comps` library is real. From the host it is skipped.
+{{< /callout >}}
 
 Lint / format:
 

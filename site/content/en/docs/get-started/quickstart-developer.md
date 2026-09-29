@@ -26,11 +26,11 @@ container. No GPU services, no OPEA stack required.
 | A POSIX shell | `bash`, `zsh`, or `fish` (examples use `bash`) | `echo $SHELL` |
 | A code editor with JS/Vue support | Backend is Node.js 22 / Express | VS Code, IntelliJ, Neovim, … |
 
-> {{< callout type="info" >}}
-> You **do not** install Node.js locally. The dev loop runs the backend inside
-> its own container (`node:22`), so the Node version, native deps, and
-> ArangoDB client headers match CI exactly. Skip `npm install` on the host.
-> {{< /callout >}}
+{{< callout type="info" >}}
+You **do not** install Node.js locally. The dev loop runs the backend inside
+its own container (`node:22`), so the Node version, native deps, and
+ArangoDB client headers match CI exactly. Skip `npm install` on the host.
+{{< /callout >}}
 
 ## Architecture: where the backend fits
 
@@ -165,10 +165,10 @@ router.get('/api/dev/whoami', (req, res) => {
 module.exports = router;
 ```
 
-> {{< callout type="tip" >}}
-> Use `@swagger` JSDoc above each handler — `swagger-jsdoc` picks it up and
-> publishes it on `/api-docs`. See existing route files for the pattern.
-> {{< /callout >}}
+{{< callout type="tip" >}}
+Use `@swagger` JSDoc above each handler — `swagger-jsdoc` picks it up and
+publishes it on `/api-docs`. See existing route files for the pattern.
+{{< /callout >}}
 
 ## Step 5 — Register the route in `index.js`
 
@@ -313,12 +313,12 @@ docker compose exec backend npx jest __tests__/routes/dev-routes.test.js   # one
 A green run ends with `Test Suites: N passed, N total` and `Snapshots: 0`
 (unless you changed a snapshot).
 
-> {{< callout type="warning" >}}
-> `MODULE_NOT_FOUND` inside the container means the image is older than the
-> host's `package.json`/`package-lock.json`. **Always rebuild** before
-> re-running tests: `docker compose build backend && docker compose up -d
-> backend`.
-> {{< /callout >}}
+{{< callout type="warning" >}}
+`MODULE_NOT_FOUND` inside the container means the image is older than the
+host's `package.json`/`package-lock.json`. **Always rebuild** before
+re-running tests: `docker compose build backend && docker compose up -d
+backend`.
+{{< /callout >}}
 
 ## What's next
 

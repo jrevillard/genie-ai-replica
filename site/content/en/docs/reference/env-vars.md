@@ -71,7 +71,10 @@ source first** (the file in the repo), then regenerate.
 | `GRAFANA_PORT` | `3002` | grafana | Host port; avoids Backend port conflict |
 | `VICTORIAMETRICS_RETENTION` | `30d` | victoriametrics | |
 | `VICTORIALOGS_RETENTION` | `30d` | victorialogs | |
+| `VICTORIALOGS_URL` | _(no in-code default — `VictoriaLogsClient` constructor must receive `baseURL`; Ansible `env.j2:243` sets `http://victorialogs:9428`)_ | backend | VL HTTP base URL. Injected by `env.j2`; bypass only when running outside Ansible and set it explicitly. |
+| `VICTORIALOGS_TENANT_ID` | _(no in-code default — read by `shared/lib/melt/victorialogs-client.js:105`, defaults `AccountID:0, ProjectID:0` when unset)_ | backend | Tenant header for `/select/logsql/*` (`AccountID:ProjectID`). Ansible splits `VICTORIALOGS_TENANT_ID` into `VICTORIALOGS_TENANT_ID_ACCOUNT_ID` + `VICTORIALOGS_TENANT_ID_PROJECT_ID` for the underlying VL request. |
 | `VICTORIATRACES_RETENTION` | `30d` | victoriatraces | |
+| `MELT_PROVIDER` | `victorialogs` (hardcoded constant in `components/shared/lib/melt/index.js`) | backend | Future-proof seam selector for the OTel metrics/logs/traces exporter. Whitelisted by `tests/config-validator/` so a deployer may override the env file; the runtime constant is the actual current value. Today there is only one backend implementation. |
 | `OTEL_TRACES_SAMPLER_RATE` | `100.0` | backend, opea | 0.0–100.0 |
 | `KONG_TRACING_INSTRUMENTATIONS` | `request` | kong | |
 | `KONG_TRACING_SAMPLING_RATE` | `1.0` | kong | 0.0–1.0 |

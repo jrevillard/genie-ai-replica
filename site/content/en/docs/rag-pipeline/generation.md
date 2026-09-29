@@ -149,7 +149,7 @@ For model trade-offs see
 When the UI locale differs from English (or when `original_language` is
 falsy in the request body, triggering auto-detection), the backend
 **translates prior-turn user and assistant messages to English** before
-they reach ChatQnA. This keeps the `bge-base-en-v1.5` embedding space
+they reach ChatQnA. This keeps the `bge-large-en-v1.5` embedding space
 consistent regardless of UI language and feeds the
 [multi-turn blending]({{< relref "multi-turn-retrieval" >}}) embedding
 only when `MULTI_TURN_BLEND_ENABLED=true`.

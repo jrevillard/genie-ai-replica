@@ -23,7 +23,7 @@ last_reviewed: 2026-09-18
 | **DPG** | Digital Public Goods — a UN-endorsed standard for open-source projects. GENIE.AI targets DPG compliance. |
 | **Docling** | IBM document-parser used by `dataprep` to turn PDFs / DOCX / HTML into chunks. |
 | **Docsy** | The Hugo theme this site is built on. |
-| **Embedding** | A 768-D vector representation of a text passage (BAAI/bge-base-en-v1.5 by default). |
+| **Embedding** | A 1024-D vector representation of a text passage (default model `BAAI/bge-large-en-v1.5`). See [Choosing models](/docs/rag-pipeline/choosing-models/) for the alternative-model matrix. |
 | **Fluentd** | Log forwarder used by every container (Docker `fluentd` driver) to ship stdout/stderr to the OTel Collector. |
 | **Grafana** | The dashboards + alerting UI for the observability stack. Reachable at `/grafana/`. |
 | **Hybrid retrieval** | Combines vector search (semantic) with BM25 (lexical) and fuses the scores. Enabled by `RETRIEVER_HYBRID_RETRIEVAL_ENABLED` (default `true`). `RETRIEVER_ARANGO_SEARCH_MODE` (default `vector`) is independent and selects the dense strategy — similarity vs Maximum Marginal Relevance (MMR). |

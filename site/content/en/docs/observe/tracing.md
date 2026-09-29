@@ -44,6 +44,10 @@ flowchart LR
 Every edge carries the same W3C `traceparent`; every hop becomes a child
 span under that trace.
 
+ChatQnA's aiohttp client (used for outgoing calls to
+embedding/retriever/reranker/vLLM) is instrumented to forward the W3C
+`traceparent` header, so every internal hop joins the same trace.
+
 > **How to read the diagram.** Kong opens the trace (the **root span**) and
 > tags every downstream call with the same trace id via the W3C `traceparent`
 > header. Each hop becomes a **child span** under the same trace, so the whole

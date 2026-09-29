@@ -910,8 +910,8 @@ This approach (docs option 1: X-Forwarded-Prefix) avoids hardcoding a full URL i
 - [Observability]({{< relref "/docs/observe" >}}) -- Metrics, logs, traces, dashboards, alerting
 
 - [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/) -- Realm configuration, user management, client setup
-- [Docker Compose Setup](/docs/deployment/docker-compose-setup/) -- Local development deployment with Docker Compose
-- [Docker Swarm Setup](/docs/deployment/docker-swarm-setup/) -- Production deployment with Docker Swarm and Ansible
+- [Docker Compose Setup](/docs/deploy/docker-compose-setup/) -- Local development deployment with Docker Compose
+- [Docker Swarm Setup](/docs/deploy/docker-swarm-setup/) -- Production deployment with Docker Swarm and Ansible
 - [Ansible Deployment](../deploy/ansible/README.md) -- Automated Docker Swarm deployment with per-environment secrets
 - [OTel Collector Integration](../configs/otel/README.md) -- Observability stack configuration (OTel Collector, VictoriaMetrics, VictoriaLogs, VictoriaTraces, Grafana)
 - [External IdP Integration Guide](/docs/configure/external-idp-integration-guide/) -- Connecting Google, Microsoft, and SAML identity providers

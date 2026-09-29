@@ -100,9 +100,9 @@ Translation is provided upstream by the official OPEA image
 ## Docs
 
 - `site/` — Hugo + Docsy user-facing site (published to GitLab Pages).
-- `docs/` — internal developer reference (E2E tests, RELEASE, security).
-- `site/content/en/docs/audit/` — internal docs-audit artifacts (weight 999,
-  last section in nav).
+- `docs/` — internal developer reference (E2E tests, RELEASE, security,
+  audit notes — historical wave reports live alongside their retrospective
+  docs, not in the user-facing site).
 
 ## Conventions
 

@@ -116,6 +116,14 @@ wired.
   (no contextual prefix, no labels). Investigate the per-chunk error message
   in the ingestion log to find whether it was an LLM call failure, JSON
   parsing failure, or arango write failure.
+- **Missing ArangoDB vector index on first ingest** — dataprep defensively
+  re-creates the vector index if it is missing before storing chunks, so
+  operators do not need to pre-create the index by hand on a fresh database.
+  The helper logs `ensure vector index` (see
+  [`genie-ai-overlay/dataprep/`](https://opensource.unicc.org/un/itu/genie-ai/-/tree/main/genie-ai-overlay/dataprep)
+  for the defensive guard). If the helper itself fails, the
+  `arango write failure` reason in the per-chunk log names the underlying
+  ArangoDB error code.
 
 ### Retrieval returns nothing / wrong results
 

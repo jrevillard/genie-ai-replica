@@ -121,6 +121,73 @@ describe('producer-service — segmentation + whole-corpus linking', () => {
     expect(drafts[0].frontmatter.links).toEqual([{ to_concept_id: 'b', label: 'the sheet' }]);
     expect(drafts[1].frontmatter.links).toEqual([{ to_concept_id: 'a', label: 'a' }]);
   });
+
+  // WHOLE-FILE MARKDOWN IMPORT (issue #1029 — David's slaughterhouse
+  // round-trip): a frontmatter'd .md imports WHOLE — one concept, id = the
+  // file stem — so exported repos round-trip and their links resolve.
+  it('draftWholeMarkdown: a frontmatter-bearing .md imports whole with its own frontmatter and verbatim body', () => {
+    const fileMd = [
+      '---',
+      'title: Abattoir Licensing guidance',
+      'type: process',
+      'sources:',
+      '  - kind: document',
+      '    resource: http://document-repository:3001/api/files/orig',
+      '    file_id: orig',
+      '    file_name: guidance-doc-sec1.md',
+      '    locator: "section \\"Abattoir Licensing guidance\\""',
+      '---',
+      '## Abattoir Licensing guidance',
+      '',
+      'Licensing requires annual renewal. Related: [Fees recap](./fees-recap.md)',
+      ''
+    ].join('\n');
+    const out = producer.draftWholeMarkdown(fileMd, {
+      baseSlug: 'guidance-doc-sec1',
+      title: 'fallback',
+      meta: { file_id: 'f9', file_name: 'guidance-doc-sec1.md', baseResource: 'http://x/f9' }
+    });
+    expect(out).not.toBeNull();
+    expect(out.length).toBe(1); // WHOLE — never re-split
+    expect(out[0].path).toBe('guidance-doc-sec1.md'); // id = file stem
+    expect(out[0].frontmatter.title).toBe('Abattoir Licensing guidance');
+    expect(out[0].frontmatter.type).toBe('process');
+    expect(Array.isArray(out[0].frontmatter.sources)).toBe(true);
+    expect(out[0].frontmatter.sources[0].file_id).toBe('orig'); // authorial sources untouched
+    expect(out[0].body).toContain('## Abattoir Licensing guidance');
+    expect(out[0].body).not.toContain('---');
+  });
+
+  it('draftWholeMarkdown: frontmatter without a usable title is rejected; frontmatter-less falls back; authorial-less sources get the stamp', () => {
+    expect(producer.draftWholeMarkdown('no frontmatter here\n## Head\nbody', { baseSlug: 'x', meta })).toBeNull();
+    expect(producer.draftWholeMarkdown('---\ndescription: no title key\n---\nbody', { baseSlug: 'x', meta })).toBeNull();
+
+    const stamped = producer.draftWholeMarkdown('---\ntitle: Fresh concept\n---\n\nBody text.\n', {
+      baseSlug: 'fresh',
+      meta: { file_id: 'f2', file_name: 'fresh.md', baseResource: 'http://x/f2' }
+    });
+    expect(stamped.length).toBe(1);
+    expect(stamped[0].frontmatter.sources[0]).toEqual({
+      kind: 'document',
+      resource: 'http://x/f2',
+      file_id: 'f2',
+      file_name: 'fresh.md',
+      locator: 'whole document'
+    });
+  });
+
+  it('round-trip: whole-file drafts keep their corpus links (the #1029 regression)', () => {
+    const mk = (stem, body) =>
+      producer.draftWholeMarkdown(`---\ntitle: ${stem}\n---\n${body}`, {
+        baseSlug: stem,
+        meta: { file_id: stem, file_name: `${stem}.md`, baseResource: `http://x/${stem}` }
+      })[0];
+    const a = mk('abattoir-licensing', 'See [Fees recap](./fees-recap.md) and [Missing](./ghost.md)');
+    const b = mk('fees-recap', 'Back to [Licensing](./abattoir-licensing.md)');
+    const links = producer.resolveCrossFileLinks([a, b]);
+    expect(links).toBe(2); // the old names ARE the new ids — nothing dangles
+    expect(a.frontmatter.links).toEqual([{ to_concept_id: 'fees-recap', label: 'Fees recap' }]);
+  });
 });
 
 // ── T6-lite: flat text → structured markdown (the PDF blob-concept fix) ─────

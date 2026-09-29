@@ -1,10 +1,15 @@
 // Callout shortcode — theme-aware (uses DS tokens so dark mode auto-adapts)
 
 .callout {
+  // Tinted callout surface: lighter than the page body in dark, slightly
+  // off-white in light. Always sits ~2:1 away from the body bg so the box
+  // reads as a distinct surface, not just a colored border on the page.
+  --callout-bg: oklch(96% 0.005 250);
+  // Code chip bg: opposite of callout (darker on light, lighter on dark)
+  // so inline code visually punches out of the surrounding text.
+  --callout-code-bg: oklch(88% 0.01 250);
   --callout-accent: var(--ds-accent);
-  --callout-bg: var(--ds-surface);
   --callout-fg: var(--ds-fg);
-  --callout-code-bg: oklch(from var(--ds-fg) l c h / 0.12);
   --callout-code-fg: var(--ds-fg);
 
   padding: 1rem 1.25rem;
@@ -13,6 +18,18 @@
   border-radius: 0.25rem;
   background: var(--callout-bg);
   color: var(--callout-fg);
+}
+
+// Dark-mode overrides — use brighter callout bg + brighter chip bg so both
+// pop against the dark page body (oklch(15%)). Lightness deltas tuned to
+// sit in the 2:1–5:1 contrast band vs body and chip-vs-callout-bg respectively.
+[data-bs-theme="dark"],
+[data-theme="dark"],
+html.dark {
+  .callout {
+    --callout-bg: oklch(28% 0.012 250);
+    --callout-code-bg: oklch(38% 0.015 250);
+  }
 }
 
 .callout-info    { --callout-accent: oklch(58% 0.14 250); }
@@ -28,9 +45,12 @@
 .callout li            { margin: 0.25rem 0; }
 .callout li > p        { margin: 0; }
 
-// Inline code chips — override Bootstrap's near-black default so they read in
-// both light and dark themes. The DS bg/fg vars give us the contrast pair
-// without hardcoding colors per theme.
+// Inline code chips — override Docsy's `code { background: var(--td-pre-bg) }`
+// (which paints every <code> near-black in dark mode). Specificity bumped
+// to (0,2,2) so our rule wins the cascade tie with the theme base.
+.callout > p > code,
+.callout > li > code,
+.callout > p code,
 .callout code {
   background: var(--callout-code-bg);
   color: var(--callout-code-fg);

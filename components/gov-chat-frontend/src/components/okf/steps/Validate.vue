@@ -239,7 +239,11 @@ export default {
         this.selectedPiiConcept = '';
       }
       this.issueGroups = Array.from(groups.values());
-      this._metrics = metrics.status === 'fulfilled' ? metrics.value : null;
+      // The action returns { ok, metrics } — unwrap tolerantly (a bare
+      // payload also accepted); the envelope left _metrics.concept_count
+      // undefined and the server-metrics preference silently dead (A10).
+      const mRaw = metrics.status === 'fulfilled' ? metrics.value : null;
+      this._metrics = (mRaw && mRaw.metrics) || mRaw || null;
     },
     onPiiApplied() {
       // An action already re-scanned server-side — bump the panel revision

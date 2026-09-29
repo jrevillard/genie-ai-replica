@@ -183,12 +183,12 @@ async function convertDocument(buffer, ext, meta) {
   if (ext === '.pdf') {
     const pdfParse = require('pdf-parse');
     const out = await pdfParse(buffer);
-    return { text: (out && out.text) || '' };
+    return { text: structurePlainText((out && out.text) || '') };
   }
   if (ext === '.docx') {
     const mammoth = require('mammoth');
     const out = await mammoth.extractRawText({ buffer });
-    return { text: (out && out.value) || '' };
+    return { text: structurePlainText((out && out.value) || '') };
   }
   if (ext === '.html' || ext === '.htm') {
     const TurndownService = require('turndown');
@@ -200,6 +200,64 @@ async function convertDocument(buffer, ext, meta) {
   }
   // .md / .txt and every text/* fallback
   return { text: buffer.toString('utf8') };
+}
+
+/** T6-lite (David, 2026-09-29: "I expected to see multiple markdown concept
+ * files from the imported PDF"). pdf-parse/mammoth return FLAT text — no
+ * heading structure — so segmentMarkdown kept the whole document as ONE
+ * blob concept. This pass reconstructs conservative markdown structure so
+ * the EXISTING segmenter can split:
+ *   - numbered headings ("1. Introduction", "2.4 Filing") → "## …"
+ *   - short standalone Title Case / ALL-CAPS lines → "## …"
+ * Guard rails: text that already carries markdown headings is respected
+ * (numbered headings only — never double-promote); prose lines never match
+ * (word cap + standalone-line requirement); a hard cap on promotions bounds
+ * garbage on pathological extractions. The full docling→producer pipeline
+ * (real layout/table awareness) remains the P1 T6 item. */
+function structurePlainText(text) {
+  const raw = String(text || '');
+  if (!raw.trim()) return raw;
+  const lines = raw.split(/\r?\n/);
+  // Respect real markdown: if headings already exist, leave the text alone.
+  if (/^#{1,6}\s+\S/m.test(raw)) return raw;
+  const out = [];
+  let promotions = 0;
+  const PROMOTION_CAP = 200;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const t = line.trim();
+    if (!t) {
+      out.push('');
+      continue;
+    }
+    if (promotions < PROMOTION_CAP && isHeadingCandidate(t, lines[i + 1])) {
+      out.push(`## ${t.replace(/\s+/g, ' ')}`);
+      promotions += 1;
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+/** A conservative heading candidate: numbered sections always; otherwise a
+ * SHORT standalone line in Title Case or ALL CAPS followed by body text. */
+function isHeadingCandidate(t, nextLine) {
+  if (t.length > 80) return false;
+  const words = t.split(/\s+/);
+  if (words.length > 10) return false;
+  // numbered: "1. Foo", "2.4 Bar", "3) Baz" — must carry text after the number
+  if (/^\d+(\.\d+)*[.)]\s+\S/.test(t)) return nextLine !== undefined;
+  // ALL CAPS (with digits/punct allowed), short
+  if (/^[A-Z0-9][A-Z0-9 ,'&/().-]{2,59}$/.test(t) && /[A-Z]{2,}/.test(t)) {
+    return nextLine === '' || (nextLine !== undefined && nextLine.trim().length > 0);
+  }
+  // Title Case-ish: most words capitalised, no trailing sentence punctuation
+  const capitalised = words.filter((w) => /^[A-Z0-9]/.test(w)).length;
+  if (words.length >= 2 && capitalised / words.length >= 0.6 && !/[.!?,;:]$/.test(t)) {
+    return nextLine !== undefined;
+  }
+  return false;
 }
 
 // ── segmentation + cross-file links ─────────────────────────────────────────
@@ -643,5 +701,7 @@ module.exports = {
   live,
   // exported for unit tests (pure functions)
   segmentMarkdown,
-  resolveCrossFileLinks
+  resolveCrossFileLinks,
+  structurePlainText,
+  isHeadingCandidate
 };

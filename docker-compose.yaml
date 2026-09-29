@@ -680,6 +680,11 @@ services:
       - OKF_INGEST_WORKER_INTERVAL_MS=${OKF_INGEST_WORKER_INTERVAL_MS:-15000}
       - OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=${OKF_INGEST_WORKER_SWEEP_INTERVAL_MS:-3600000}
       - OKF_INGEST_CONCURRENCY=${OKF_INGEST_CONCURRENCY:-1}
+      # Lane cool-down after a dataprep 429 (slot busy): without it a saturated
+      # queue hot-loops at ~1 claim/sec (incident 2026-09-28 — 434 rows bouncing
+      # while one slot was held for hours during a vLLM outage). Rows never
+      # park; only the lane pauses before the next claim.
+      - OKF_KICK_429_COOLDOWN_MS=${OKF_KICK_429_COOLDOWN_MS:-15000}
       # D-B curation engine (8f46b3345): okf-server owns the vLLM client
       # (DP-8 deviation). Empty values = engine fail-softs to heuristics;
       # a deployment opts IN by setting VLLM_ENDPOINT + VLLM_API_KEY and a

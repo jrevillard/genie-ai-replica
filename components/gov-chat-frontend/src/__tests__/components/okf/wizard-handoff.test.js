@@ -20,6 +20,16 @@ jest.mock('@/services/repoOkfService', () => ({
   }
 }));
 
+// Review now embeds the read-only repo editor (final visual review,
+// 2026-09-29). The handoff tests assert the step's COPY and hand-off
+// wiring — stub the heavy child instead of providing the editor's
+// whole getter surface in every store mock here.
+jest.mock('@/components/okf/editor/RepoEditor.vue', () => ({
+  name: 'OkfRepoEditor',
+  props: ['repoId', 'readOnly', 'sourceFileId'],
+  template: '<div class="repo-editor-stub" />'
+}));
+
 const OkfStepReview = require('@/components/okf/steps/Review.vue').default;
 const OkfStepLabel = require('@/components/okf/steps/LabelOnboard.vue').default;
 const OkfStudioTab = require('@/components/okf/StudioTab.vue').default;

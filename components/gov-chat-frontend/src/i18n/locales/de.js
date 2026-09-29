@@ -233,7 +233,7 @@ export default {
     contentManagement: 'INHALTSVERWALTUNG',
     knowledgeHierarchy: 'Wissenshierarchie',
     documentManagement: 'Dokumentenverwaltung',
-    noLogsFound: 'Heute keine Protokolle gefunden',
+    noErrorsOrWarnings: 'Heute keine Fehler oder Warnungen',
     invalidLogsResponse: 'Ungültige Antwortstruktur der Protokollzusammenfassung',
     logsSummaryError: 'Fehler beim Laden der Protokollzusammenfassung',
     buttons: {
@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Datenbankgröße',
     totalTables: 'Gesamttabellen',
     logManagement: 'Protokollverwaltung',
-    rolloverLogs: 'Protokolle umschalten',
     searchLogs: 'Protokolle durchsuchen',
     logTime: 'Zeit',
     logLevel: 'Ebene',
@@ -325,10 +324,6 @@ export default {
         error: 'Fehler bei der Datenbankoptimierung',
         loading: 'Datenbank wird optimiert...'
       },
-      rolloverLogs: {
-        success: 'Protokollumschaltung erfolgreich abgeschlossen',
-        loading: 'Protokolle werden umgeschaltet...'
-      },
       searchLogs: {
         success: 'Protokollsuche abgeschlossen',
         loading: 'Protokolle werden durchsucht...'
@@ -376,8 +371,6 @@ export default {
       warningLogs: 'Warnprotokolle',
       noErrorLogs: 'Heute keine Fehlerprotokolle aufgezeichnet.',
       noWarningLogs: 'Heute keine Warnprotokolle aufgezeichnet.',
-      infoLogsNote:
-        'Info-Protokolle werden in der Zusammenfassung nicht angezeigt. Verwenden Sie die Suchfunktion, um alle Protokolltypen anzuzeigen.',
       searchResults: 'Neueste Suchergebnisse',
       entriesFound: 'Einträge gefunden',
       viewAllResults: 'Alle Ergebnisse anzeigen',
@@ -389,11 +382,15 @@ export default {
         authFailed: 'Authentifizierung fehlgeschlagen',
         lowDiskSpace: 'Festplattenspeicher unter Schwellenwert',
         slowQuery: 'Langsame Abfrageleistung',
-        rateLimit: 'Ratenbegrenzung erreicht'
+        rateLimit: 'Ratenbegrenzung erreicht',
+        invalidToken: 'Ungültiges Token',
+        fileNotFound: 'Datei nicht gefunden'
       },
       logSearch: {
         noResultsFound: 'Keine Protokolle entsprechen Ihren Suchkriterien',
-        resultsFound: '{count} Protokolleinträge gefunden'
+        resultsFound: '{count} Protokolleinträge gefunden',
+        degraded:
+          'Aufgrund eines VictoriaLogs-Ausfalls werden nur teilweise Ergebnisse angezeigt. Einige kürzliche Protokolleinträge fehlen möglicherweise.'
       }
     },
     security: {
@@ -427,6 +424,10 @@ export default {
         'Stellen Sie sicher, dass Umgebungsdateien nicht über Webverzeichnisse zugänglich sind und Serverkonfigurationen den Zugriff auf sensible Dateien blockieren.',
       gitRepoRecommendation:
         'Stellen Sie sicher, dass .git-Verzeichnisse ordnungsgemäß gesichert und nicht über das Web zugänglich sind.',
+      logPatternMatches: 'Gefundene Log-Muster',
+      patternMatchNote:
+        'Im Logtext gefundene Begriffe. Der Scan meldet die Teilzeichenfolge, keinen bestätigten Angriff – lesen Sie die Zeile.',
+      patternMatchSummaryNote: '(Teilzeichenfolge im Logtext gefunden, kein bestätigter Angriff)',
       noVulnerabilitiesFound: 'Keine Schwachstellen gefunden',
       systemSecure: 'Ihr System scheint sicher zu sein. Führen Sie regelmäßige Überwachungen fort.',
       loadingScan: 'Scan-Ergebnisse werden geladen...',

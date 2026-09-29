@@ -20,7 +20,13 @@ from metrics import (
 )
 
 from core.model_cache import get_model_id
-from tracing import get_tracer, setup_trace_logging, setup_tracing
+from tracing import (
+    get_tracer,
+    install_uvicorn_access_logging,
+    setup_json_logging,
+    setup_trace_logging,
+    setup_tracing,
+)
 
 setup_tracing("genieai-chatqna")
 
@@ -39,12 +45,14 @@ from comps.cores.proto.genieai_api_protocol import (
 )
 from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
-from keycloak_token_validator import validate_token
+from keycloak_token_validator import JwksUnavailableError, validate_token
 from langdetect import detect
 from transformers import AutoTokenizer
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
 setup_trace_logging("GENIE.AI_CHATQNA")
+setup_json_logging("GENIE.AI_CHATQNA")
+install_uvicorn_access_logging()
 
 # Tracer for pipeline-node-level spans emitted from align_outputs (e.g. the
 # reranker-selection identity span used by the retrieval-quality eval harness).
@@ -2212,8 +2220,15 @@ class ChatQnAService:
             raise HTTPException(status_code=401, detail="Authorization header must use the Bearer scheme.")
         token_str = token_str.strip()
 
-        # Validate token signature via Keycloak JWKS.
-        claims = await validate_token(token_str)
+        # Validate token signature via Keycloak JWKS. Distinguish
+        # IdP-outage (JwksUnavailableError → 503) from invalid-token
+        # (None → 401) — previously both surfaced as identical 401s,
+        # masking Keycloak availability problems from operator dashboards.
+        try:
+            claims = await validate_token(token_str)
+        except JwksUnavailableError as exc:
+            logger.error(f"Keycloak JWKS unavailable: {exc}")
+            raise HTTPException(status_code=503, detail="Authentication provider unavailable") from exc
         if claims is None:
             logger.warning("Incoming Bearer token failed JWKS validation — rejecting request")
             raise HTTPException(status_code=401, detail="Token validation failed")

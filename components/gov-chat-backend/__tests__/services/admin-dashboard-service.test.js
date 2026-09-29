@@ -22,6 +22,21 @@ jest.mock('arangojs', () => ({
   aql: (strings, ...values) => ({ _aql: true, strings, values })
 }));
 
+// VictoriaLogsClient is lazily required from '../shared-lib/melt' the
+// first time AdminDashboardService needs yesterday's log/error counts.
+// Mock the whole seam so we never reach the network in tests.
+const mockVlClient = {
+  hits: jest.fn().mockResolvedValue({}),
+  query: jest.fn().mockResolvedValue([])
+};
+jest.mock(
+  '../../shared-lib/melt',
+  () => ({
+    VictoriaLogsClient: jest.fn().mockImplementation(() => mockVlClient)
+  }),
+  { virtual: true }
+);
+
 const mockFs = {
   readFile: jest.fn(),
   access: jest.fn(),
@@ -299,126 +314,253 @@ describe('AdminDashboardService', () => {
   });
 
   describe('getLogs', () => {
-    const sampleLogContent = [
-      '[2026-05-26T10:00:00.000Z] [INFO] [AuthService] User logged in',
-      '[2026-05-26T10:01:00.000Z] [ERROR] [DatabaseService] Connection failed',
-      ''
-    ].join('\n');
+    let mockLogsService;
+    const sampleLogs = [
+      { date: '2026-05-26', time: '10:00:00', level: 'INFO', service: 'AuthService', message: 'User logged in' },
+      { date: '2026-05-26', time: '10:01:00', level: 'ERROR', service: 'DatabaseService', message: 'Connection failed' }
+    ];
+
+    beforeEach(() => {
+      // Story 5.4: getLogs delegates to LogsService.getLogsInRange; the
+      // old fs.readFile + regex path is gone. Inject a stub here so each
+      // test can program its return value (the legacy tests asserted on
+      // a triple-bracket string fixture that no longer matches the
+      // NDJSON producer).
+      mockLogsService = {
+        getLogsInRange: jest
+          .fn()
+          .mockResolvedValue({ logs: sampleLogs, total: sampleLogs.length, limit: 100, offset: 0 })
+      };
+      adminDashboardService.setLogsService(mockLogsService);
+    });
 
     it('should read today logs by default', async () => {
-      mockFs.readFile.mockResolvedValueOnce(sampleLogContent);
       const result = await adminDashboardService.getLogs();
       expect(result.logs.length).toBeGreaterThan(0);
       expect(result).toHaveProperty('total');
       expect(result).toHaveProperty('limit', 100);
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(expect.objectContaining({ dateRange: 'today' }));
     });
 
     it('should filter by level', async () => {
-      mockFs.readFile.mockResolvedValueOnce(sampleLogContent);
+      mockLogsService.getLogsInRange.mockResolvedValueOnce({
+        logs: sampleLogs.filter((log) => log.level === 'ERROR'),
+        total: 1,
+        limit: 100,
+        offset: 0
+      });
       const result = await adminDashboardService.getLogs({ level: 'error' });
       expect(result.logs.every((log) => log.level === 'ERROR')).toBe(true);
     });
 
     it('should filter by service', async () => {
-      mockFs.readFile.mockResolvedValueOnce(sampleLogContent);
+      mockLogsService.getLogsInRange.mockResolvedValueOnce({
+        logs: sampleLogs.filter((log) => log.service.toLowerCase().includes('auth')),
+        total: 1,
+        limit: 100,
+        offset: 0
+      });
       const result = await adminDashboardService.getLogs({ service: 'auth' });
       expect(result.logs.every((log) => log.service.toLowerCase().includes('auth'))).toBe(true);
     });
 
     it('should handle yesterday dateRange', async () => {
-      mockFs.readFile.mockResolvedValueOnce(sampleLogContent);
       const result = await adminDashboardService.getLogs({ dateRange: 'yesterday' });
       expect(result).toHaveProperty('logs');
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(expect.objectContaining({ dateRange: 'yesterday' }));
     });
 
     it('should handle week dateRange', async () => {
-      mockFs.readFile.mockResolvedValue(sampleLogContent);
       const result = await adminDashboardService.getLogs({ dateRange: 'week' });
       expect(result).toHaveProperty('logs');
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(expect.objectContaining({ dateRange: 'week' }));
     });
 
     it('should handle month dateRange', async () => {
-      mockFs.readFile.mockResolvedValue(sampleLogContent);
       const result = await adminDashboardService.getLogs({ dateRange: 'month' });
       expect(result).toHaveProperty('logs');
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(expect.objectContaining({ dateRange: 'month' }));
     });
 
     it('should handle custom dateRange with valid dates', async () => {
       const { isValidDateStr } = require('../../services/path-sanitizer');
       isValidDateStr.mockReturnValue(true);
-      mockFs.readFile.mockResolvedValue(sampleLogContent);
       const result = await adminDashboardService.getLogs({
         dateRange: 'custom',
         startDate: '2026-05-20',
         endDate: '2026-05-26'
       });
       expect(result).toHaveProperty('logs');
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(
+        expect.objectContaining({ dateRange: 'custom', startDate: '2026-05-20', endDate: '2026-05-26' })
+      );
     });
 
     it('should return empty for invalid custom dates', async () => {
-      const { isValidDateStr } = require('../../services/path-sanitizer');
-      isValidDateStr.mockReturnValue(false);
+      // Story 5.4: the validation moved into LogsService, which returns an
+      // empty envelope on invalid dates. AdminDashboardService just
+      // forwards the call, so the mock is consulted.
+      mockLogsService.getLogsInRange.mockResolvedValueOnce({
+        logs: [],
+        total: 0,
+        limit: 100,
+        offset: 0
+      });
       const result = await adminDashboardService.getLogs({
         dateRange: 'custom',
         startDate: 'invalid',
         endDate: 'invalid'
       });
       expect(result.logs).toEqual([]);
-      expect(result.totalLogs).toBe(0);
+      expect(result.total).toBe(0);
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(
+        expect.objectContaining({ dateRange: 'custom', startDate: 'invalid', endDate: 'invalid' })
+      );
     });
 
-    it('should handle file read errors gracefully', async () => {
-      mockFs.readFile.mockRejectedValueOnce(new Error('ENOENT'));
-      const result = await adminDashboardService.getLogs({ dateRange: 'today' });
-      expect(result.logs).toEqual([]);
+    it('should throw when logsService is not configured', async () => {
+      adminDashboardService.logsService = null;
+      await expect(adminDashboardService.getLogs({ dateRange: 'today' })).rejects.toThrow(
+        'LogsService is not configured'
+      );
     });
 
     it('should respect limit option', async () => {
-      const manyLogs = Array(200).fill('[2026-05-26T10:00:00.000Z] [INFO] [TestService] Message').join('\n');
-      mockFs.readFile.mockResolvedValueOnce(manyLogs);
+      const manyLogs = Array(200).fill({
+        date: '2026-05-26',
+        time: '10:00:00',
+        level: 'INFO',
+        service: 'TestService',
+        message: 'Message'
+      });
+      mockLogsService.getLogsInRange.mockResolvedValueOnce({
+        logs: manyLogs.slice(0, 5),
+        total: manyLogs.length,
+        limit: 5,
+        offset: 0
+      });
       const result = await adminDashboardService.getLogs({ limit: 5 });
       expect(result.logs.length).toBeLessThanOrEqual(5);
-    });
-  });
-
-  describe('rolloverLogs', () => {
-    it('should rename existing log file', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
-      mockFs.rename.mockResolvedValueOnce(undefined);
-      const result = await adminDashboardService.rolloverLogs();
-      expect(result.status).toBe('success');
-      expect(mockFs.rename).toHaveBeenCalled();
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }));
     });
 
-    it('should handle missing log file gracefully', async () => {
-      const err = new Error('ENOENT');
-      err.code = 'ENOENT';
-      mockFs.access.mockRejectedValueOnce(err);
-      const result = await adminDashboardService.rolloverLogs();
-      expect(result.status).toBe('success');
-    });
-
-    it('should re-throw non-ENOENT access errors', async () => {
-      mockFs.access.mockRejectedValueOnce(new Error('Permission denied'));
-      await expect(adminDashboardService.rolloverLogs()).rejects.toThrow('Permission denied');
+    it('should propagate logsService errors', async () => {
+      mockLogsService.getLogsInRange.mockRejectedValueOnce(new Error('VL timeout'));
+      await expect(adminDashboardService.getLogs()).rejects.toThrow('VL timeout');
     });
   });
 
   describe('debugYesterdayLogs', () => {
-    it('should return debug and error logs from yesterday', async () => {
-      const logContent = [
-        '[2026-05-25T10:00:00.000Z] [DEBUG] [TestService] Debug message',
-        '[2026-05-25T10:01:00.000Z] [ERROR] [TestService] Error message',
-        '[2026-05-25T10:02:00.000Z] [INFO] [TestService] Info message'
-      ].join('\n');
-      mockFs.readFile.mockResolvedValueOnce(logContent);
-      const result = await adminDashboardService.debugYesterdayLogs();
-      expect(result.logs).toHaveLength(2);
-      expect(result.total).toBe(2);
+    beforeEach(() => {
+      mockVlClient.query.mockReset();
+      mockVlClient.query.mockResolvedValue([]);
     });
 
-    it('should handle missing log file', async () => {
-      mockFs.readFile.mockRejectedValueOnce(new Error('ENOENT'));
+    it('should return debug and error logs from yesterday via VictoriaLogs', async () => {
+      // The seam hands back rows already reshaped by
+      // `VictoriaLogsAdapter._normalizeRow()` — `{timestamp, message,
+      // stream, fields, date, time, level, service}`. The raw VL keys
+      // (`_time`, `_msg`, `severity_text`, `service.name`) are RESERVED
+      // / nested under `fields`; `_time` is stripped outright and `time`
+      // is the bare `HH:MM:SS` slice, which is not a parseable date.
+      mockVlClient.query.mockResolvedValueOnce([
+        {
+          timestamp: '2026-05-25T10:00:00.000Z',
+          date: '2026-05-25',
+          time: '10:00:00',
+          message: 'Debug message',
+          level: 'DEBUG',
+          service: 'genie-backend',
+          fields: { severity_text: 'DEBUG', 'service.name': 'genie-backend' }
+        },
+        {
+          timestamp: '2026-05-25T10:01:00.000Z',
+          date: '2026-05-25',
+          time: '10:01:00',
+          message: 'Error message',
+          level: 'ERROR',
+          service: 'genie-backend',
+          fields: { severity_text: 'ERROR', 'service.name': 'genie-backend' }
+        },
+        {
+          timestamp: '2026-05-25T10:02:00.000Z',
+          date: '2026-05-25',
+          time: '10:02:00',
+          message: 'Info message (filtered out by query)',
+          level: 'INFO',
+          service: 'genie-backend',
+          fields: { severity_text: 'INFO', 'service.name': 'genie-backend' }
+        }
+      ]);
+      const result = await adminDashboardService.debugYesterdayLogs();
+      // INFO entry comes back from VL because the test isn't actually filtering
+      // it out at the source — assert everything that came back is mapped.
+      expect(result.total).toBe(3);
+      expect(result.logs[0].level).toBe('DEBUG');
+      expect(result.logs[1].level).toBe('ERROR');
+      expect(result.logs[0].message).toBe('Debug message');
+      expect(mockVlClient.query).toHaveBeenCalledWith(
+        expect.objectContaining({
+          q: expect.stringContaining('severity_text:(DEBUG OR ERROR)'),
+          limit: 1000
+        })
+      );
+    });
+
+    it('wraps VL outage as VlUnavailableError (503, body vl_unreachable)', async () => {
+      // VL outage from `debugYesterdayLogs` is funnelled through
+      // `LogsService._vlOrThrow` so the global error middleware
+      // renders the standard 503 + `{error: 'vl_unreachable', message}`
+      // envelope — matching the other VL read paths. No `degraded`
+      // envelope, no raw VL error reaching the route layer.
+      const err = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:9428'), { code: 'ECONNREFUSED' });
+      mockVlClient.query.mockRejectedValueOnce(err);
+
+      let captured;
+      try {
+        await adminDashboardService.debugYesterdayLogs();
+      } catch (e) {
+        captured = e;
+      }
+      expect(captured).toBeDefined();
+      expect(captured.name).toBe('VlUnavailableError');
+      expect(captured.statusCode).toBe(503);
+      expect(captured.body.error).toBe('vl_unreachable');
+      expect(captured.degraded).toBeUndefined();
+    });
+
+    it('wraps VL axios timeout (ECONNABORTED) as VlUnavailableError', async () => {
+      const err = Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' });
+      mockVlClient.query.mockRejectedValueOnce(err);
+
+      let captured;
+      try {
+        await adminDashboardService.debugYesterdayLogs();
+      } catch (e) {
+        captured = e;
+      }
+      expect(captured.name).toBe('VlUnavailableError');
+      expect(captured.statusCode).toBe(503);
+    });
+
+    it('propagates validation / programmer errors unchanged', async () => {
+      // Non-VL errors must NOT be wrapped — the route layer keeps its
+      // existing 400 / 500 semantics for those.
+      const err = new TypeError('bad arg');
+      mockVlClient.query.mockRejectedValueOnce(err);
+
+      let captured;
+      try {
+        await adminDashboardService.debugYesterdayLogs();
+      } catch (e) {
+        captured = e;
+      }
+      expect(captured).toBe(err);
+      expect(captured.name).not.toBe('VlUnavailableError');
+    });
+
+    it('should return empty when VL has no records for yesterday', async () => {
+      mockVlClient.query.mockResolvedValueOnce([]);
       const result = await adminDashboardService.debugYesterdayLogs();
       expect(result.logs).toEqual([]);
       expect(result.total).toBe(0);
@@ -566,37 +708,6 @@ describe('AdminDashboardService', () => {
     it('should throw when not initialized', async () => {
       adminDashboardService.db = null;
       await expect(adminDashboardService.optimizeDatabase()).rejects.toThrow('Database not initialized');
-    });
-  });
-
-  describe('runSecurityScan', () => {
-    it('should scan log files for vulnerabilities', async () => {
-      const logContent = [
-        '[ERROR] security breach detected',
-        '[ERROR] SQL injection attempt',
-        '[WARN] invalid token detected',
-        '[INFO] login attempt from unknown IP',
-        ''
-      ].join('\n');
-      mockFs.readdir.mockResolvedValueOnce(['combined-2026-05-26.log']);
-      mockFs.readFile.mockResolvedValueOnce(logContent);
-
-      const result = await adminDashboardService.runSecurityScan();
-      expect(result.status).toBe('completed');
-      expect(result.vulnerabilities).toBeDefined();
-    });
-
-    it('should handle empty logs directory', async () => {
-      mockFs.readdir.mockResolvedValueOnce([]);
-      const result = await adminDashboardService.runSecurityScan();
-      expect(result.status).toBe('completed');
-    });
-
-    it('should handle unreadable log files', async () => {
-      mockFs.readdir.mockResolvedValueOnce(['combined-2026-05-26.log']);
-      mockFs.readFile.mockRejectedValueOnce(new Error('ENOENT'));
-      const result = await adminDashboardService.runSecurityScan();
-      expect(result.status).toBe('completed');
     });
   });
 
@@ -773,34 +884,50 @@ describe('AdminDashboardService', () => {
   });
 
   describe('getLogs - error paths', () => {
+    let errorMockLogsService;
+
+    beforeEach(() => {
+      // Story 5.4: getLogs delegates to LogsService. The legacy error-path
+      // tests for malformed lines / missing files / empty content are now
+      // expressed as the corresponding LogsService failure modes; the
+      // admin-dashboard error envelope is whatever LogsService returns.
+      errorMockLogsService = { getLogsInRange: jest.fn() };
+      adminDashboardService.setLogsService(errorMockLogsService);
+    });
+
     it('should handle missing log file', async () => {
-      mockFs.readFile.mockRejectedValueOnce(new Error('ENOENT: log file not found'));
-      const result = await adminDashboardService.getLogs();
-      expect(result.logs).toEqual([]);
+      errorMockLogsService.getLogsInRange.mockRejectedValueOnce(
+        Object.assign(new Error('ENOENT: log file not found'), { code: 'ENOENT' })
+      );
+      await expect(adminDashboardService.getLogs()).rejects.toThrow('ENOENT: log file not found');
     });
 
     it('should handle malformed log lines', async () => {
-      const malformedLogs = [
-        'Invalid log line without brackets',
-        '[2026-05-26T10:00:00.000Z] [INFO] Valid log',
-        'Another invalid line',
-        '[] [] []'
-      ].join('\n');
-      mockFs.readFile.mockResolvedValueOnce(malformedLogs);
+      errorMockLogsService.getLogsInRange.mockResolvedValueOnce({
+        logs: [],
+        total: 0,
+        limit: 100,
+        offset: 0
+      });
       const result = await adminDashboardService.getLogs();
       expect(result.logs).toBeDefined();
+      expect(result.logs).toEqual([]);
     });
 
     it('should handle empty log file', async () => {
-      mockFs.readFile.mockResolvedValueOnce('');
+      errorMockLogsService.getLogsInRange.mockResolvedValueOnce({
+        logs: [],
+        total: 0,
+        limit: 100,
+        offset: 0
+      });
       const result = await adminDashboardService.getLogs();
       expect(result.logs).toEqual([]);
     });
 
     it('should handle log file read errors', async () => {
-      mockFs.readFile.mockRejectedValueOnce(new Error('Permission denied'));
-      const result = await adminDashboardService.getLogs();
-      expect(result.logs).toEqual([]);
+      errorMockLogsService.getLogsInRange.mockRejectedValueOnce(new Error('Permission denied'));
+      await expect(adminDashboardService.getLogs()).rejects.toThrow('Permission denied');
     });
   });
 
@@ -978,5 +1105,104 @@ describe('AdminDashboardService', () => {
       expect(result.cpu).toBeDefined();
       expect(result.memory).toBeDefined();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Yesterday window alignment
+// ---------------------------------------------------------------------------
+// Four code paths resolve "yesterday": the log list, the search dialog,
+// the dashboard error-rate tile and the two debugYesterdayLogs endpoints.
+// They all have to land on the SAME window, or the count an operator reads
+// off the tile describes a different set of rows than the list beside it.
+// This is host-timezone sensitive — production containers run UTC and hide
+// the split, so the assertion here is the only guard for a UTC+2 dev box.
+describe('_yesterdayRange agrees with the LogsService window', () => {
+  const logsService = require('../../services/logs-service');
+
+  it('resolves yesterday to the local calendar day, like the log list', () => {
+    const { start, end } = adminDashboardService._yesterdayRange();
+    expect(start).toBe(logsService._defaultStartIso('yesterday'));
+    expect(end).toBe(logsService._defaultEndIso('yesterday'));
+  });
+
+  it('starts at local midnight and ends at the last ms of that same local day', () => {
+    const { start, end } = adminDashboardService._yesterdayRange();
+    const startLocal = new Date(start);
+    const endLocal = new Date(end);
+    expect(startLocal.getHours()).toBe(0);
+    expect(startLocal.getMinutes()).toBe(0);
+    expect(endLocal.getHours()).toBe(23);
+    expect(endLocal.getMinutes()).toBe(59);
+    expect(endLocal.getSeconds()).toBe(59);
+    expect(endLocal.getMilliseconds()).toBe(999);
+  });
+
+  it('covers one calendar day — the same day the start falls on', () => {
+    const { start, end } = adminDashboardService._yesterdayRange();
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    expect(endDate.getDate()).toBe(startDate.getDate());
+    expect(endDate.getMonth()).toBe(startDate.getMonth());
+    expect(endDate.getFullYear()).toBe(startDate.getFullYear());
+  });
+
+  it('is yesterday, not today', () => {
+    const { start } = adminDashboardService._yesterdayRange();
+    const startDate = new Date(start);
+    const today = new Date();
+    expect(startDate.getDate()).toBe(today.getDate() - 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A trend with nothing to compare against is null, not zero
+// ---------------------------------------------------------------------------
+// `errorRate` was made nullable (null = "not computable"), but the trend
+// ternary fell back to 0, so the payload carried `trends.errorRate: 0` and
+// the panel rendered a green "→ 0.00% from last month" next to the dash on
+// the value tile — telling the operator "unchanged" about a day nobody
+// measured. The same gap applied to the other three trends whenever the
+// previous period has no record.
+describe('trends are null when they cannot be computed', () => {
+  beforeEach(async () => {
+    mockDb.query.mockResolvedValue(createMockCursor([]));
+    await adminDashboardService.init();
+  });
+
+  const health = () => adminDashboardService.getSystemHealth();
+
+  it('never sends NaN for a trend', async () => {
+    // No analytics records exist in this fixture, so every trend is
+    // uncomputable — exactly the fresh-install case.
+    mockDb.query.mockResolvedValue(createMockCursor([]));
+    const result = await health();
+    expect(JSON.stringify(result.trends)).not.toContain('NaN');
+  });
+
+  it('leaves each trend null rather than defaulting it to zero', async () => {
+    mockDb.query.mockResolvedValue(createMockCursor([]));
+    const result = await health();
+    for (const key of ['uptime', 'responseTime', 'errorRate', 'activeUsers']) {
+      const value = result.trends[key];
+      // Either not computable (null) or a real number — never NaN, and
+      // never a hardcoded 0 standing in for "no comparison available".
+      expect(value === null || typeof value === 'number').toBe(true);
+      expect(Number.isNaN(value)).toBe(false);
+      expect(value).not.toBe(0);
+    }
+  });
+
+  it('keeps the frontend branch reachable: a null trend renders nothing', () => {
+    // Mirrors the panel's `trend()` guard — a null/undefined/NaN value
+    // yields null so the trend block is not rendered at all.
+    const trend = (value) => {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return null;
+      return Number(value);
+    };
+    expect(trend(null)).toBeNull();
+    expect(trend(undefined)).toBeNull();
+    expect(trend(NaN)).toBeNull();
+    expect(trend(-3.5)).toBe(-3.5);
   });
 });

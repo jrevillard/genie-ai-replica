@@ -231,7 +231,7 @@ export default {
     contentManagement: 'KONTENTI LATARAMOO',
     knowledgeHierarchy: 'Longo jukutol',
     documentManagement: 'Dokuuma Lataramoo',
-    noLogsFound: 'Logolu mang je bii',
+    noErrorsOrWarnings: 'Ha ho na liseme kapa likaanko mona.',
     invalidLogsResponse: 'Logolu jaabi coko mang faa',
     logsSummaryError: 'Logolu kijeraa lootoo mang ben',
     buttons: {
@@ -265,7 +265,6 @@ export default {
     databaseSize: 'Detabeesi warayaa',
     totalTables: 'Tebulol bee kafung',
     logManagement: 'Log Lataramoo',
-    rolloverLogs: 'Logolu murung',
     searchLogs: 'Logolu ñining',
     logTime: 'Waatoo',
     logLevel: 'Kafo-jukuto (Level)',
@@ -322,10 +321,6 @@ export default {
         error: 'Filiyata detabeesi dadiyaa to',
         loading: 'A ka detabeesi dadiyaa...'
       },
-      rolloverLogs: {
-        success: 'Log murung-murung benta',
-        loading: 'A ka logolu murung-murung...'
-      },
       searchLogs: {
         success: 'Log ñiningo benta',
         loading: 'A ka logolu ñining...'
@@ -373,7 +368,6 @@ export default {
       warningLogs: 'Kankutay Logolu',
       noErrorLogs: 'Filiya log mang mara bii.',
       noWarningLogs: 'Kankutay log mang mara bii.',
-      infoLogsNote: 'Kibaro logolu ti yitandi kijeraa to. Baara ñiningo la nga log suwol bee je.',
       searchResults: 'Ñining Fatal labang',
       entriesFound: 'suw je',
       viewAllResults: 'Fatal bee je',
@@ -385,11 +379,14 @@ export default {
         authFailed: 'Dung-kumpaboo ti ben',
         lowDiskSpace: 'Maradaa koto dooyata',
         slowQuery: 'Ñiningo dooyata',
-        rateLimit: 'Tambi-da ka sutiyaa'
+        rateLimit: 'Tambi-da ka sutiyaa',
+        invalidToken: 'Dung-kumpaboo ti nani',
+        fileNotFound: 'Faayi si nani'
       },
       logSearch: {
         noResultsFound: 'Log te min benta i la ñiningo to',
-        resultsFound: 'Log suw {count} jeta'
+        resultsFound: 'Log suw {count} jeta',
+        degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {
@@ -421,6 +418,10 @@ export default {
       envFileRecommendation:
         'A kumpabo ko envayro fayilolu man nanta banta web dulaa to ani ka kang ka dulaa kantata muta.',
       gitRepoRecommendation: 'A kumpabo ko .git dulaalu kantata le banta web to.',
+      logPatternMatches: 'Lipuo tsa log tse fumueng',
+      patternMatchNote:
+        'Mafoko a a fumatseng mo mongwatsi oa log. Scan e tlisa karolo e itseng, ha e na le tlhaselo e e netweng — bala kae.',
+      patternMatchSummaryNote: '(karolo e fumatseng mo mongwatsi oa log, ha e na le tlhaselo e e netweng)',
       noVulnerabilitiesFound: 'Filiyal/Koyal mang je',
       systemSecure: 'I la sistemoo kantata le baa. Hali ka kumpabo luming.',
       loadingScan: 'Ñining fatal ka looti...',

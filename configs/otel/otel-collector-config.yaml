@@ -88,10 +88,193 @@ receivers:
         - job_name: "victorialogs"
           scrape_interval: 15s
           static_configs:
-            - targets: ["victorialogs:9428"]
+            - targets: ["${env:VICTORIALOGS_URL_HOST}:9428"]
           metrics_path: "/metrics"
 
 processors:
+  # PII redactor — runs at the COLLECTOR edge so all fluentd-sourced logs
+  # are scrubbed before reaching VictoriaLogs. Today the OTel SDK LoggerProvider
+  # (Node + Python) does this in-process; T2/T3/T2b drop that provider, so
+  # the fluentd path (which has no SDK) becomes the only ingest — redaction
+  # MUST live at the collector to preserve PII integrity.
+  #
+  # Key list sourced from configs/otel/pii-key-list.md (single source of
+  # truth — any change requires CODEOWNER @jrevillard approval).
+  #
+  # Guards: replace_all_patterns/replace_pattern silently no-op on Maps, so
+  # every body statement is guarded by `where IsString(body)` and every
+  # attributes statement by `where IsMap(attributes)` — v1 plan shipped
+  # without these guards and the redactor appeared to run but did nothing.
+  #
+  # error_mode: ignore — a single malformed body MUST NOT drop the
+  # whole batch (the OTel collector rejects the entire batch under
+  # `propagate`, amplifying one bad record to a full outage of the
+  # log stream). Dropping the bad record at error_mode: ignore still
+  # increments `otelcol_processor_dropped_log_records_total`, so the
+  # `otel-pii-redact-fail` alert rule still fires critical on any
+  # silent regression (see configs/grafana/provisioning/alerting/
+  # alert-rules.yml).
+  transform/pii_redact:
+    error_mode: ignore
+    log_statements:
+      # Redact JSON-style `key":"value"` pairs in string bodies (Node Winston
+      # envelopes, raw JSON strings from the fluentd receiver).
+      #
+      # OTTL has only ONE Map-targeted `replace_all_patterns` (4-arg form,
+      # mode="key"|"value"). For String targets the only documented regex
+      # replacer is `replace_pattern` (3-arg), which replaces the FIRST match
+      # per call — RE2 has no `g` flag. To redact up to N occurrences per
+      # body we chain N identical statements: each sees the output of the
+      # previous call and replaces the next match. The `where IsString(body)`
+      # guard makes any excess calls a cheap no-op once redaction is done.
+      # 5 calls covers the test (2 occurrences) and any realistic prod log.
+      - context: log
+        statements:
+          # JSON-style `"key":"value"`. Group 1 captures only the key name
+          # (no surrounding quotes); the match consumes the value's closing
+          # quote. Replacement `"$1":"[REDACTED]"` re-adds both quotes around
+          # the placeholder so the body remains valid JSON for downstream
+          # ParseJSON (stamp_log_metadata_from_msg).
+          #
+          # ONE statement — replace_pattern uses Go regexp.ReplaceAllString
+          # semantics (global by default). The prior 5-call chain was
+          # copy-paste noise that didn't add redaction passes (5 identical
+          # global replacements are still one global replacement).
+          # PII redaction by KEY name. Catches string-valued keys:
+          # `"password":"hunter2"`, `"secret":"..."`, `"credential_id":"..."`,
+          # `"credentials":"..."`. Explicit `(?:_id|s|)` covers the three
+          # `credential` variants in `pii-key-list.md`. Misses
+          # JSON-object / array values
+          # (e.g. `"credentials":[{"type":"password","value":"hunter2"}]`)
+          # — those need JSON-aware parsing that a single regex can't
+          # express. The in-process `PIIRedactionProcessor`
+          # (backend + document-repository tracing.js) handles the
+          # structured-log case via `redactAttributes(attrs)` + body
+          # scrubbing; this collector regex is the cross-cutting
+          # string-value defense.
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential(?:_id|s|)|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          # Bearer / API key / JWT embedded in strings (e.g. Authorization header).
+          - 'replace_pattern(body, "(?i)bearer\\s+[a-z0-9\\-_]{20,}", "bearer [REDACTED_BEARER]") where IsString(body)'
+          - 'replace_pattern(body, "sk-[a-z0-9]{20,}", "[REDACTED_APIKEY]") where IsString(body)'
+          - 'replace_pattern(body, "eyJ[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+", "[REDACTED_JWT]") where IsString(body)'
+          # Map bodies are NOT redacted here. When fluentd parses the
+          # message into a Map (in_json-parsed records), the values are
+          # typed rather than JSON-quoted, so every statement above — all
+          # guarded by `where IsString(body)` — is a no-op for them.
+          # Key-based redaction for a Map is not expressible as a single
+          # OTTL statement: `replace_all_patterns` is handed the value
+          # and never sees its key, so a key-aware rewrite would need one
+          # `set()` per sensitive key (19 of them, verbose and brittle).
+          #
+          # THERE IS NO FALLBACK FOR MAP BODIES. An earlier version of
+          # this comment pointed at the in-process `PIIRedactionProcessor`
+          # in backend/document-repository tracing.js. That is a Span
+          # Processor — it sees spans, never log records — and the deep
+          # body walker that could have covered this (`redactLogRecordBody`,
+          # removed when the OTel LoggerProvider was dropped in c4ba2f41b)
+          # had no production caller even before that. So a Map-typed body
+          # is unredacted on every path.
+          #
+          # That is currently unreachable, not merely unlikely: the only
+          # log driver in this deployment is the Docker fluentd driver
+          # (docker-compose.yaml x-logging), which ships `log` as a string,
+          # and a 200-row sample of VictoriaLogs held 200 string bodies and
+          # 0 Map bodies. The exposure opens the moment a service is
+          # configured to emit `in_json`-parsed log attributes — that
+          # change needs a redaction path, not a comment.
+          #
+          # What the collector does provide for such records is the
+          # attribute-shape match below (email, JWT, API-key prefix, long
+          # base64/hex), which is a fallback, not equivalent coverage.
+          #
+          # ESCAPING: these patterns are double-escaped (`\\s`, `\\.`) on
+          # purpose. YAML single-quoted scalars are literal, so `\\s`
+          # reaches the OTTL parser verbatim; OTTL's own Go-style string
+          # literal then unescapes `\\` -> `\` and hands RE2 the correct
+          # `\s`. Single-escaping makes OTTL reject `\s` as an invalid
+          # escape sequence, which is a build-time config parse error —
+          # the whole collector exits 1 and no logs are shipped at all.
+          # Two layers sit between the file and RE2; changing one without
+          # the other is silently catastrophic.
+      # Redact attribute values for the cross-cutting PII shape match
+      # (JWT, API-key prefix, email, long base64/hex). Per-key OTTL `set()`
+      # for the 19 PII key names lives in the in-process
+      # `PIIRedactionProcessor` (backend + document-repository
+      # tracing.js) — the collector handles the shape match because
+      # per-key rewrite is not expressible as a single
+      # `replace_all_patterns` statement.
+      #
+      # OTel LogRecord.attributes is typed `map[string]any` — never a
+      # string — so a `where IsString(attributes)` guard would never
+      # fire. The previous JSON-quoted fallthrough was dead code that
+      # also missed the `credentials` / `credential_id` plural variants
+      # (see #4 fix on the body regex below); kept simple here.
+      - context: log
+        statements:
+          # The catch-all token shape uses named groups + non-capturing
+          # alternation for boundaries — RE2 (Go regex) doesn't support
+          # lookbehind/lookahead. The token must be free-standing
+          # (preceded by start-of-string OR a non-alnum char, followed
+          # by end-of-string OR a non-alnum char) so SHA-256 hashes,
+          # UUIDs without dashes, OTel trace_ids (32 hex), and base64
+          # segments that sit INSIDE a longer alnum sequence are NOT
+          # over-matched. RE2 supports `${name}` named-group refs in
+          # the replacement so the surrounding context is preserved.
+          - 'replace_all_patterns(attributes, "value", "(?i)(?<p>(?:^|[^A-Za-z0-9]))(?<t>eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]+|sk-[A-Za-z0-9]{16,}|pk-[A-Za-z0-9]{16,}|gho_[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}|[A-Za-z0-9_=-]{40,})(?<s>(?:$|[^A-Za-z0-9]))", "${p}[REDACTED]${s}") where IsMap(attributes)'
+  # Body-level trace_id/span_id lifting from the Winston JSON envelope
+  # emitted by `shared/lib/logger.js::traceFormat` (Node) or
+  # `tracing.setup_json_logging` (Python OPEA). Runs BEFORE
+  # `stamp_log_metadata_from_msg`, which replaces `body` with the inner
+  # `.message` field via `ParseJSON(body)["message"]` — if this transform
+  # runs after that replacement, the envelope keys are gone.
+  #
+  # Named capture groups (`(?P<tid>...)` / `(?P<sid>...)`) are indexed
+  # by name (`["tid"]` / `["sid"]`) — OTTL's ExtractPatterns returns
+  # only named captures in the resulting map, positional `["1"]` would
+  # silently miss. On no-match the lookup returns undefined and `set()`
+  # is a no-op. The 32-hex / 16-hex length asserts filter out
+  # unrelated fields some library might add (e.g. uuid-without-dashes
+  # is also 32 hex, but no app code emits such a field on the same
+  # key name).
+  transform/extract_envelope_trace_context:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # Lift trace_id and span_id from the Winston / OPEA JSON envelope.
+          # The pattern anchors on the KEY name (`trace_id` / `span_id`)
+          # then matches the JSON delimiter + 32-hex / 16-hex value.
+          # Use `[": ]+` (literal char class with `"`, `:`, space — NO
+          # backslash escapes) because RE2's interpretation of `\"`
+          # inside `[]` is inconsistent across versions — literal chars
+          # are always safe. Handles BOTH envelope shapes:
+          #   Winston:  `"trace_id":"abc..."`  (no space after colon)
+          #   OPEA:     `"trace_id": "abc..."` (space after colon)
+          # On no-match (uvicorn plain-text access logs, container
+          # startup banners, nginx access logs), the `["tid"]` map
+          # access throws "key not found in map" which `error_mode:
+          # ignore` then logs as a warn on EVERY non-matching log
+          # line. The `IsMatch` predicate below guards the lookup so
+          # non-matching bodies skip the `set()` cleanly — `trace_id`/
+          # `span_id` fields stay absent without flooding the
+          # collector warn stream.
+          #
+          # CRITICAL: write to the TOP-LEVEL LogRecord `trace_id` /
+          # `span_id` fields, NOT to `attributes["trace_id"]` /
+          # `attributes["span_id"]`. The OTel logs data model
+          # (opentelemetry-proto v1.5.0 §6) defines TraceId and
+          # SpanId as top-level LogRecord fields; the OTel exporter
+          # reads those fields to populate `_stream.trace_id` /
+          # `_stream.span_id` in VictoriaLogs. Writing to attributes
+          # was a no-op for trace correlation: VL had no trace_id
+          # key on any log line, so `_stream:{trace_id="..."}` joins,
+          # Grafana trace↔log pivots, and the entire audit trail
+          # via trace context were broken for the fluentd-sourced
+          # log stream. The attribute-space path is preserved below
+          # ONLY for downstream consumers that explicitly read
+          # `attributes.trace_id` (none currently).
+          - 'set(trace_id, ExtractPatterns(body, "trace_id[\": ]+(?P<tid>[0-9a-f]{32})")["tid"]) where IsString(body) and IsMatch(body, "trace_id[\": ]+[0-9a-f]{32}")'
+          - 'set(span_id, ExtractPatterns(body, "span_id[\": ]+(?P<sid>[0-9a-f]{16})")["sid"]) where IsString(body) and IsMatch(body, "span_id[\": ]+[0-9a-f]{16}")'
   batch:
     timeout: 5s
     send_batch_size: 1024
@@ -108,6 +291,226 @@ processors:
         statements:
           - set(name, Concat([attributes["http.method"], " ", attributes["http.route"]], "")) where resource.attributes["service.name"] == "kong-gateway" and attributes["http.method"] != nil and attributes["http.route"] != nil and attributes["http.route"] != ""
           - set(name, Concat([attributes["http.method"], " ", ExtractPatterns(attributes["http.url"], "https?://[^/]+(/[^?]*)")[0]], "")) where resource.attributes["service.name"] == "kong-gateway" and attributes["http.method"] != nil and name == "kong"
+
+  transform/stamp_service_name_from_container:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # Prefer the forwarded Compose service label (set by the
+          # fluentd driver's `labels:` option in `&fluent-logging`).
+          - set(resource.attributes["service.name"], attributes["com.docker.compose.service"]) where attributes["com.docker.compose.service"] != nil and attributes["com.docker.compose.service"] != "" and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
+          # Fallback: parse from fluent.tag when the Compose label was not
+          # forwarded (older Compose v1.x, custom one-shots, Swarm nodes
+          # without the fluentd logging driver's `labels:` option). The
+          # label path above is preferred — Compose auto-forwards
+          # `com.docker.compose.service`, so these regexes only fire on
+          # edge cases.
+          #
+          # Known limitation: stack-prefixed single-host tags
+          # (e.g. `admin-logs-prd-<svc>-1`) cannot be reliably parsed
+          # without knowing the project name — `logs-prd-<svc>` and
+          # `<svc>` are both valid prefix/svc splits. The label path
+          # above is the canonical source for these (Compose forwards
+          # `com.docker.compose.service` regardless of the project
+          # name); this regex chain is only defence-in-depth for label
+          # loss. Operators running a non-default project name should
+          # verify the label path covers their stack (it does in any
+          # recent Compose v2.x — `&fluent-logging` forwards
+          # `com.docker.compose.service` for every project name).
+          #
+          # Each `set` is guarded by `where` AND by `ExtractPatterns`
+          # returning a non-empty capture group — error_mode: ignore on
+          # the transform swallows the silent NO MATCH from the wrong
+          # format. Statements run in order; the first one that fires
+          # sets service.name and the rest short-circuit on the guard.
+          - set(resource.attributes["service.name"], ExtractPatterns(attributes["fluent.tag"], "^[a-z0-9_]+_(?P<svc>[a-z0-9]+(?:-[a-z0-9]+)*)\\.\\d+\\.[a-z0-9_-]+$")["svc"]) where attributes["fluent.tag"] != nil and attributes["com.docker.compose.service"] == nil and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
+          - set(resource.attributes["service.name"], ExtractPatterns(attributes["fluent.tag"], "^[a-z0-9-]+?-(?P<svc>[a-z0-9]+(?:-[a-z0-9]+)*)-\\d+$")["svc"]) where attributes["fluent.tag"] != nil and attributes["com.docker.compose.service"] == nil and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
+
+  # Stamp `severity_text` from the `_msg` payload when the record
+  # arrived via the fluentd driver (NOT through the OTel SDK's
+  # LoggingHandler, which already sets severity_text at source).
+  #
+  # Two payload shapes show up in VL under the fluentd path:
+  #   1. Winston JSON (Node.js services): `{"level":"info","message":"...",...}`
+  #   2. Uvicorn access log (Python services): `INFO: 127.0.0.1:... "GET ..."`
+  # The regex below matches BOTH formats via alternation. The captured
+  # group is the canonical uppercase form (INFO/WARN/ERROR/DEBUG/FATAL/TRACE)
+  # so the admin panel + Grafana dashboards can filter by it directly
+  # without re-parsing the JSON envelope client-side.
+  #
+  # Idempotent: only writes when severity_text is unset or `Unspecified`
+  # (the OTel SDK default for fluentd-sourced rows), so records that
+  # already carry a proper severity — from the OTel SDK `otlp` receiver —
+  # keep their original value.
+  #
+  # Also extracts the `service` field from the Winston JSON envelope
+  # (when present) and stamps `service.name` ONLY if the resource
+  # doesn't already have it from the Compose label / fluent.tag path
+  # above. This makes the service identifier consistent between the
+  # OTel LoggingHandler path (`genie-*`) and the Winston path
+  # (`genie-backend`, `genie-document-repository`, …) by preferring
+  # whatever the application's own log record declared.
+
+  transform/stamp_log_metadata_from_msg:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # Stamp `severity_text` for fluentd-sourced logs that don't go
+          # through an OTel SDK LoggingHandler (which sets severity_text
+          # at source). Two payload shapes reach the collector as `body`:
+          #
+          #   1. Node.js Winston JSON string: `{"level":"info","message":"..."}`
+          #      body is a STRING whose first char is `{`. Use ParseJSON to
+          #      read the `level` key directly (RE2 + YAML escaping made
+          #      regex on the envelope fragile — see commit history).
+          #   2. Python uvicorn access log: `INFO: 127.0.0.1:... "GET ..."`
+          #      body is a STRING that starts with the uppercase level word
+          #      followed by `:` or ` `. Use ExtractPatterns + ToUpperCase.
+          #   3. Winston JSON envelope already parsed into a MAP (when the
+          #      LogRecord was decoded by the receiver — `body.level` is
+          #      the lowercase level). Direct map access.
+          #
+          # The matched level is always uppercased to canonical OTel form
+          # (INFO/WARN/ERROR/DEBUG/FATAL/TRACE) so the admin panel and
+          # Grafana dashboards filter consistently without re-parsing.
+          #
+          # Idempotent: Path 1/2/3 are guarded by IsString/IsMap + Substring
+          # so each fires only on its matching payload shape; Path 2 is
+          # additionally guarded by `IsMatch` so the `["sev"]` map access
+          # never sees an empty result on plain-text bodies (nginx
+          # access logs, ClamAV banners) — without that guard, every
+          # non-matching line logged a "key not found in map" warn under
+          # error_mode: ignore.
+          - 'set(severity_text, ToUpperCase(ParseJSON(body)["level"])) where IsString(body) and Substring(body, 0, 1) == "{"'
+          - 'set(severity_text, ToUpperCase(ExtractPatterns(body, "(?i)^(?P<sev>info|warn|warning|error|debug|fatal|trace)[: ]")["sev"])) where IsString(body) and IsMatch(body, "(?i)^(info|warn|warning|error|debug|fatal|trace)[: ]")'
+          - 'set(severity_text, ToUpperCase(body["level"])) where IsMap(body) and IsString(body["level"])'
+          # Normalise Winston JSON envelopes: replace `body` with the inner
+          # `.message` field so VictoriaLogs `_msg` carries the human-readable
+          # log line instead of the JSON envelope. Without this transform the
+          # admin /logs search filter `_msg:"DB"` matches every URL fragment
+          # containing the search term (the access-log middleware writes the
+          # full URL including the query string into its `HTTP_REQUEST:` log
+          # line — so searching for `term=DB` finds its OWN prior request
+          # rows, drowning out the actual `[DB_CONNECTION]` rows).
+          #
+          # Cardinality: the inner message becomes the indexed VL field
+          # `_msg`, which is full-text searchable but NOT indexed as a
+          # stream field — so unbounded message distinctness does NOT
+          # blow up the VL stream index the way an indexed `log.message`
+          # stream field would. The other envelope fields (`level`,
+          # `service`, `trace_id`, `span_id`, ...) are already routed
+          # to OTel LogRecord attributes / resource attributes by the
+          # SDK + the transforms above, so the envelope structure is
+          # preserved for downstream tools that want to inspect it via
+          # OTel collector debug exporters / span correlation.
+          #
+          # Idempotent: only fires when the envelope actually parses
+          # AND has a string `.message` field. Plain-text bodies
+          # (uvicorn access logs, container startup banners) pass
+          # through untouched — `set(body, ...)` would either no-op
+          # (when ParseJSON fails) or set body to nil (when the
+          # envelope parses but lacks `.message`); the IsString guard
+          # filters both cases out.
+          - 'set(body, ParseJSON(body)["message"]) where IsString(body) and Substring(body, 0, 1) == "{" and IsString(ParseJSON(body)["message"])'
+          - 'set(body, body["message"]) where IsMap(body) and IsString(body["message"])'
+          # Stamp `severity_number` alongside `severity_text` — VL's OTLP
+          # exporter maps severity_number → severity_text at export time, so
+          # leaving severity_number at 0 (the fluentd default) causes VL to
+          # overwrite the stamped severity_text back to "Unspecified".
+          # Canonical OTel severity numbers (OTel logs data-model spec):
+          # TRACE=1, DEBUG=5, INFO=9, WARN=13, ERROR=17, FATAL=21.
+          - 'set(severity_number, 9) where severity_text == "INFO"'
+          - 'set(severity_number, 13) where severity_text == "WARN"'
+          - 'set(severity_number, 13) where severity_text == "WARNING"'
+          - 'set(severity_number, 17) where severity_text == "ERROR"'
+          - 'set(severity_number, 5) where severity_text == "DEBUG"'
+          - 'set(severity_number, 21) where severity_text == "FATAL"'
+          - 'set(severity_number, 1) where severity_text == "TRACE"'
+          # Note: `service.name` is NOT stamped from the Winston JSON
+          # envelope's `service` field here. The Compose label
+          # transform (`stamp_service_name_from_container`) is the
+          # single canonical source — stamping from both produced
+  # Normalise the `body` field to a human-readable message and
+  # extract structured `http.*` attributes from plain-text access
+  # logs (morgan on Node, uvicorn on Python OPEA).
+  #
+  # Runs AFTER `stamp_log_metadata_from_msg` so severity_text +
+  # severity_number are already stamped (the rewrite would otherwise
+  # lose the level prefix that the prior transform parsed). Runs
+  # AFTER `stamp_service_name_from_container` so the rows are
+  # correctly grouped by service before body normalisation.
+  #
+  # Idempotent: every rule is guarded by an exact-substring check on
+  # the body prefix. Rows that don't match ANY of the patterns pass
+  # through untouched (tag-prefixed logs, startup banners, Go
+  # internal logs from VictoriaMetrics/Logs, etc. — all already
+  # human-readable). If the upstream format string changes (morgan
+  # version bump, uvicorn config switch) the rule simply no-ops and
+  # the row lands in VL with the legacy format — no data loss.
+  #
+  # NOTE: this collector's RE2 regex parser does NOT accept \?
+  # as a literal-question-mark escape (only [?] works in a char
+  # class). All morgan status/path patterns below use [?] for the
+  # query-string separator instead of \?.
+
+  transform/normalize_log_body:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - 'set(severity_text, "INFO") where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          - 'set(severity_number, 9) where severity_text == "INFO" and severity_number == 0'
+          - 'set(attributes["http.method"], ExtractPatterns(body, "^HTTP_REQUEST: (?P<m>[A-Z]+) ")["m"]) where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          - 'set(attributes["http.path"], ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ (?P<p>[^ ?]+)")["p"]) where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          - 'set(attributes["http.status_code"], ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ [^ ]+( [?] [^ ]*)? (?P<s>[0-9]+) ")["s"]) where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          - 'set(attributes["http.response_time_ms"], ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ [^ ]+( [?] [^ ]*)? [0-9]+ (?P<ms>[0-9.]+) ms")["ms"]) where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          - 'set(attributes["http.user_agent"], ExtractPatterns(body, "Headers:[ ](?:-|[^ ]+)[ ](?P<ua>.+)$")["ua"]) where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          - 'set(body, Concat([ExtractPatterns(body, "^HTTP_REQUEST: (?P<m>[A-Z]+) ")["m"], " ", ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ (?P<p>[^ ?]+)")["p"], " ", ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ [^ ]+( [?] [^ ]*)? (?P<s>[0-9]+) ")["s"], " ", ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ [^ ]+( [?] [^ ]*)? [0-9]+ (?P<ms>[0-9.]+) ms")["ms"], " ms"], "")) where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          # ===== Uvicorn HTTP access logs (Python OPEA services) =====
+          # body = 'INFO:     IP:PORT - "METHOD PATH[?QUERY] HTTP/x.x" STATUS [MSG]'
+          # `INFO:` prefix is already handled by `stamp_log_metadata_from_msg`.
+          # Inner double-quote in regex needs \" escaping so OTTL string
+          # parser doesn't terminate early.
+          - 'set(attributes["http.client_ip"], ExtractPatterns(body, "(?P<ip>[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+):[0-9]+")["ip"]) where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+          - 'set(attributes["http.method"], ExtractPatterns(body, "\" (?P<m>[A-Z]+) (?P<p>[^ ?\"]+)")["m"]) where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+          - 'set(attributes["http.path"], ExtractPatterns(body, "\" (?P<m>[A-Z]+) (?P<p>[^ ?\"]+)")["p"]) where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+          - 'set(attributes["http.status_code"], ExtractPatterns(body, "\" (?P<s>[0-9]{3}) ")["s"]) where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+          - 'set(body, Concat([ExtractPatterns(body, "\" (?P<m>[A-Z]+) ")["m"], " ", ExtractPatterns(body, "\" (?P<m>[A-Z]+) (?P<p>[^ ?\"]+)")["p"], " ", ExtractPatterns(body, "\" (?P<s>[0-9]{3}) ")["s"]], "")) where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+          # ===== Kong / db migrations / keycloak-config =====
+          # body = "[2026-09-16 10:44:41] MESSAGE"
+          # Strip the bracketed ISO timestamp prefix — VL already indexes
+          # `_time`, the prefix is redundant. Idempotent: only fires
+          # when the body matches the `[TIMESTAMP] ` shape, otherwise
+          # pass-through (other `[tag] msg` formats like `[DB_CONNECTION]`
+          # are intentionally NOT touched — those prefixes are part of
+          # the human-readable message).
+          - 'set(body, ExtractPatterns(body, "^\\[[^]]+\\][ ](?P<m>.+)$")["m"]) where IsString(body) and IsMatch(body, "^\\[[0-9]{4}-[0-9]{2}-[0-9]{2}[ ][0-9]{2}:[0-9]{2}:[0-9]{2}\\][ ]")'
+
+  transform/strip_python_log_prefix:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # Python's logging module prepends "LEVEL:" or "LEVEL " to every
+          # non-access-log message. uvicorn follows the same pattern.
+          # Examples:
+          #   "ERROR:    Database connection lost"
+          #   "WARNING:  Slow query detected"
+          #   "INFO:     Ready"
+          # Without this rewrite, LogsService.extractType split on ':' and
+          # surfaced "ERROR" / "WARNING" / "INFO" as the message head — bare
+          # severity words with no semantic value in the admin TYPE column.
+          # Runs AFTER `normalize_log_body` (which rewrites uvicorn access
+          # logs that match the "[IP:PORT] - METHOD PATH HTTP/x.x" shape into
+          # "METHOD PATH STATUS") and AFTER `stamp_log_metadata_from_msg`
+          # (which already classifies uvicorn access lines via severity_text
+          # regex; those don't start with `CRITICAL|ERROR|WARNING|INFO|...`).
+          # Idempotent: only fires when the body matches the leading-level
+          # shape; everything else passes through untouched.
+          - 'set(body, ExtractPatterns(body, "^(CRITICAL|ERROR|WARNING|INFO|DEBUG|TRACE)[: ]+(?P<m>.*)$")["m"]) where IsString(body) and IsMatch(body, "^(CRITICAL|ERROR|WARNING|INFO|DEBUG|TRACE)[: ]+")'
+
 
 exporters:
   prometheusremotewrite:
@@ -136,7 +539,19 @@ exporters:
       max_elapsed_time: 300s
     timeout: 15s
   otlp_http:
-    endpoint: http://victorialogs:9428/insert/opentelemetry
+    # `${env:VICTORIALOGS_URL}` substitutes the FULL URL (operator
+    # provides full URL via .env, mirrors backend + doc-repo contract).
+    # The `/insert/opentelemetry` suffix is appended after substitution.
+    # Was hardcoded `http://victorialogs:9428/insert/opentelemetry` —
+    # staging-VL override silently dropped on the writer half.
+    # OTel envprovider doesn't support default-value syntax in the
+    # collector config; docker-compose sets the env vars (with
+    # `:-http://victorialogs:9428` fallback) so they're always defined
+    # by the time the collector process reads them.
+    endpoint: ${env:VICTORIALOGS_URL}/insert/opentelemetry
+    headers:
+      AccountID: ${env:VICTORIALOGS_TENANT_ID_ACCOUNT_ID}
+      ProjectID: ${env:VICTORIALOGS_TENANT_ID_PROJECT_ID}
     sending_queue:
       enabled: true
       num_consumers: 10
@@ -182,8 +597,16 @@ service:
         - otlp_http/victoriatraces
     logs:
       receivers:
+        - otlp
         - fluent_forward
       processors:
+        - transform/pii_redact
+        - transform/extract_envelope_trace_context
+        - transform/stamp_service_name_from_container
+        - transform/stamp_log_metadata_from_msg
+        - transform/normalize_log_body
+        - transform/strip_python_log_prefix
         - batch
       exporters:
         - otlp_http
+

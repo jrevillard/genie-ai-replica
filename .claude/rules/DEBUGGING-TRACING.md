@@ -8,16 +8,38 @@ file IDs).
 See [OBSERVABILITY.md](OBSERVABILITY.md) for the stack architecture; this file is
 the **operational "how to query it to debug"** companion.
 
+## Deployment mode
+
+Recipes below assume **Docker Swarm** (`docker stack deploy`, services prefixed with the stack name). For **Docker Compose** (`docker compose up`, no stack prefix), translate:
+
+| Swarm | Compose | Note |
+|---|---|---|
+| `docker service ls` | `docker compose ps` | list services |
+| `mystack_victoriatraces` (e.g. `genieai-el-salvador_victoriatraces`) | `victoriatraces` | drop the stack prefix in compose — overlay DNS resolves both forms |
+| `docker exec mystack_chatqna.1.xxx sh -c ...` | `docker exec genieai-chatqna-1 sh -c ...` | container names differ |
+| `ssh user@gateway "docker service logs mystack_xxx"` | local: `docker compose logs xxx` | compose logs are local |
+| `/opt/<stack>/.env` | `<repo>/.env` | env file location on disk |
+| `docker stack rm mystack` | `docker compose down` | teardown |
+
+`docker exec ... curl ...` and `ssh ... docker exec ...` patterns work identically in both modes — the only thing that changes is **how you address the container/service**.
+
 ## 1. Fetch a trace from VictoriaTraces (Jaeger API)
 
 ```bash
-# 1. Discover the VictoriaTraces service name for your stack
-docker service ls | grep -i victoriatrace      # e.g. genieai-<stack>_victoriatraces
+# 1. Confirm VictoriaTraces is reachable on the overlay network
+#    Swarm:    docker service ls | grep -i victoriatrace
+#              # → e.g. genieai-el-salvador_victoriastraces
+#    Compose:  docker compose ps | grep victoriastraces
+#              # → victoriastraces
 
-# 2. Fetch a trace by ID (from any container on the overlay network)
+# 2. Fetch a trace by ID (from any container on the overlay network).
+#    Swarm service names are DNS-resolvable WITH the stack prefix on the
+#    overlay network; Compose has no stack prefix.
 docker exec <chatqna-or-backend-container> sh -c \
-  "curl -s http://<stack>_victoriatraces:10428/select/jaeger/api/traces/<TRACE_ID>" \
+  "curl -s http://<SERVICE_NAME>:10428/select/jaeger/api/traces/<TRACE_ID>" \
   > /tmp/trace.json
+#    Swarm concrete example:   http://genieai-el-salvador_victoriastraces:10428
+#    Compose concrete example: http://victoriatraces:10428
 ```
 
 **Field-name gotchas (cost me real time):**
@@ -126,11 +148,15 @@ This is the single most reliable way to run analysis on a remote swarm node.
 
 ## 6. Gotchas
 
-1. **Dataprep's Python logger does NOT reach docker stdout / VictoriaLogs** in the
-   standard deployment (only uvicorn access logs do). For diagnostics that must be
-   visible, route through `_write_ingestion_log(...)` (the backend ingestion_log,
-   shown in the UI) — **not** `logger.warning/info`. (This hid exception reasons
-   from me for several iterations.)
+1. **Dataprep's Python logger reaches docker stdout / VictoriaLogs** via the
+   single-channel chain (`CustomLogger` from `comps` → stdout → fluentd driver →
+   OTel Collector → VL). There is **no** OTLPLogExporter wired in our `tracing.py`
+   — only `OTLPSpanExporter` + MeterProvider. Logs travel through stdout/fluentd,
+   not through the OTel logs signal. **For diagnostics that should be visible in
+   the admin UI** (rather than only in the VL stream), still route through
+   `_write_ingestion_log(...)` — the backend `ingestion_log` collection is the
+   canonical UI-visible channel; `logger.warning/info` go to stdout and require a
+   VL pull to view.
 2. **Image `git_sha` label ≠ commit on the branch.** The deployed image's baked-in
    `git_sha` can lag or differ from the branch tip (build pipeline artifacts).
    Verify deployed code by `docker exec ... grep <marker> <file>` rather than

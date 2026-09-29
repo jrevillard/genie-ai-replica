@@ -152,8 +152,10 @@ HUGGING_FACE_HUB_TOKEN=
 # EMBEDDING_SERVER_ENDPOINT=
 
 # Embedding model for vector search
-# Default: BAAI/bge-large-en-v1.5 (better recall, ~3× slower than bge-base, ~1.3 GB VRAM)
-# Options: BAAI/bge-base-en-v1.5 (faster, smaller), multilingual models
+# Default: BAAI/bge-large-en-v1.5  (1024-dim, set in docker-compose.yaml)
+# Options: BAAI/bge-base-en-v1.5 (768-dim, faster but lower recall)
+# Warning: changing the model requires re-ingesting all documents —
+# the ArangoDB vector index is dimension-specific.
 # EMBEDDING_MODEL_ID=
 
 # Reranking model for search result refinement
@@ -680,10 +682,59 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # Default in docker-compose: http://otel-collector:4318 — override only for external collectors
 # OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 
+# Log level threshold for the OTel Python LoggingHandler installed in
+# setup_logging(). Default INFO. DEBUG floods OPEA's comps CustomLogger
+# at production scale (~5-10x). Mirror LOG_LEVEL above (shared with
+# backend + doc-repo Node services via logger.js).
+# LOG_LEVEL=info
+
 # Grafana alerting contact points (optional — configure via Grafana UI for production)
 # Used by: grafana service (alerting notification channels)
 # GRAFANA_ALERT_WEBHOOK_URL=
 # GRAFANA_ALERT_EMAIL=
+
+# =============================================================================
+# SECTION 12D: ADMIN LOGS MIGRATION (escape hatches + behavior toggles)
+# =============================================================================
+# Backend (Node.js) + doc-repo + OPEA services ship structured logs via OTel
+# Collector to VictoriaLogs. VL is always-on core; the rest are documented for
+# review + tunable behavior. Uncomment to override defaults (all have sensible
+# defaults in docker-compose):
+
+# VictoriaLogs base URL for VictoriaLogsClient.
+# VICTORIALOGS_URL=http://victorialogs:9428
+
+# VL tenant header for /select/logsql/* — AccountID:ProjectID (VL 1.50+ canonical).
+# 0:0 = default tenant.
+# VICTORIALOGS_TENANT_ID=0:0
+#
+# The OTel collector writer (configs/otel/otel-collector-config.yaml) reads
+# these as TWO separate env vars — Compose `${VAR%%:*}` syntax is not
+# supported, so the canonical `account:project` form cannot be split at
+# compose-time. Setting `VICTORIALOGS_TENANT_ID=42:7` WITHOUT also setting
+# the matching ACCOUNT_ID / PROJECT_ID below silently routes writes to
+# default 0:0 while backend reads use 42:7 — admin /logs then returns
+# empty arrays. Keep all three in sync.
+# VICTORIALOGS_TENANT_ID_ACCOUNT_ID=0
+# VICTORIALOGS_TENANT_ID_PROJECT_ID=0
+
+# axios timeout for VictoriaLogsClient.query / .hits.
+# Raised for 7-day security scans.
+# VL_QUERY_TIMEOUT_MS=30000
+
+# MELT backend: only 'victorialogs' is shipped today (see
+# components/shared/lib/melt/victorialogs-client.js). No env selector
+# exists — adding a second backend means implementing the
+# `LogQueryRepository` port + adding the discriminator in the
+# VictoriaLogsClient factory.
+
+# VL outage surface (T8 contract): every read path goes through
+# `VictoriaLogsClient` and surfaces a typed `VlUnavailableError` (HTTP
+# 503, body `{error: 'vl_unreachable', message}`) on connection-class
+# failures (ECONNREFUSED / ENOTFOUND / ETIMEDOUT / ECONNABORTED /
+# `VictoriaLogsHealthError` / 5xx upstream). Operators see the 503
+# directly and act on it.
+
 
 # Grafana admin password (required secret, no default)
 # Used by: grafana service

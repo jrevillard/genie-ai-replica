@@ -148,7 +148,6 @@ All endpoints (except where noted) require Keycloak JWT authentication via `Auth
 | GET | `/system-health` | Admin | Get system health | Service status checks |
 | GET | `/database/stats` | Admin | Get database statistics | ArangoDB stats |
 | GET | `/logs` | Admin | Get application logs | Log retrieval |
-| POST | `/logs/rollover` | Admin | Trigger log rollover | Log rotation |
 | GET | `/user-stats` | Admin | Get user statistics | User metrics |
 | GET | `/security-metrics` | Admin | Get security metrics | Security events |
 | POST | `/security-scan` | Admin | Trigger security scan | Security audit |
@@ -228,21 +227,7 @@ All endpoints (except where noted) require Keycloak JWT authentication via `Auth
 
 ---
 
-### 11. Logger Routes (`/api/logger`)
-
-**Route File**: `routes/logger-routes.js`
-**Auth Required**: **Yes + Admin Role** (all endpoints)
-**Base Paths**: `/api/logger`
-**Middleware**: `keycloakAuthMiddleware.authenticate` + `keycloakAuthMiddleware.requireAdmin`
-
-| Method | Path | Auth Required | Description | Notes |
-|--------|------|---------------|-------------|-------|
-| POST | `/configure` | Admin | Configure logger | Update log levels |
-| POST | `/rollover` | Admin | Trigger log rollover | Log rotation |
-
----
-
-### 12. Database Operations Routes (`/api/database`)
+### 11. Database Operations Routes (`/api/database`)
 
 **Route File**: `routes/database-operations-routes.js`
 **Auth Required**: **Yes** (all endpoints, admin-level operations)

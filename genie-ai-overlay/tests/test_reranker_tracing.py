@@ -27,8 +27,30 @@ _RealSearchedDoc = type("SearchedDoc", (), {})
 class TestRerankerTracingSetup:
     """Tests that Reranker initializes tracing with the correct service name."""
 
-    def test_setup_tracing_with_reranker_service_name(self, monkeypatch):
-        """Reranker must call setup_tracing('genieai-reranker')."""
+    def test_setup_tracing_registers_the_service_name_the_microservice_passes(self, monkeypatch):
+        """The microservice's own setup_tracing() argument must be the
+        OTel service name, and must match the other overlay services.
+
+        Asserting the name here — rather than calling setup_tracing with a
+        hard-coded literal, which only ever exercised the library — is what
+        catches a rename in the microservice. A rename to a bare
+        `genieai-*`-less name splits the service's identity: with the OTel
+        SDK on it reports the new name, with the SDK off the Compose
+        service name lands on `service.name` instead, and the same service
+        answers to two names depending on ENABLE_OBSERVABILITY.
+        """
+        import importlib
+
+        monkeypatch.setenv("ENABLE_OBSERVABILITY", "1")
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+
+        with patch("tracing.setup_tracing") as spy:
+            importlib.reload(rms_module)
+        spy.assert_called_once()
+        assert spy.call_args.args[0] == "genieai-reranker"
+
+    def test_setup_tracing_builds_a_provider(self, monkeypatch):
+        """setup_tracing() wires an OTel provider when observability is on."""
         monkeypatch.setenv("ENABLE_OBSERVABILITY", "1")
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
 

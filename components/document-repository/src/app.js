@@ -1,3 +1,6 @@
+// MUST be required first (before Express + all other modules) so OTel SDK init
+// runs before any module loads that might emit logs.
+require('./tracing');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -91,12 +94,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const uploadDir = path.join(__dirname, '..', appConfig.upload.uploadDir || 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Create logs directory if it doesn't exist
-const logsDir = path.join(__dirname, '..', 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
 }
 
 // Health check endpoint

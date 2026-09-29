@@ -129,8 +129,8 @@
                 {{ translate('admin.systemUptime', 'System Uptime') }}
               </div>
               <div class="stat-value">{{ metrics.systemUptime }}%</div>
-              <div class="stat-trend trend-up">
-                <span>↑ 0.2%</span>
+              <div v-if="trend('uptime', true)" class="stat-trend" :class="trend('uptime', true).className">
+                <span>{{ trend('uptime', true).arrow }} {{ trend('uptime', true).value }}</span>
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
@@ -139,8 +139,12 @@
                 {{ translate('admin.avgResponseTime', 'Average Response Time') }}
               </div>
               <div class="stat-value">{{ metrics.avgResponseTime }}ms</div>
-              <div class="stat-trend trend-down">
-                <span>↓ 12%</span>
+              <div
+                v-if="trend('responseTime', false)"
+                class="stat-trend"
+                :class="trend('responseTime', false).className"
+              >
+                <span>{{ trend('responseTime', false).arrow }} {{ trend('responseTime', false).value }}</span>
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
@@ -148,9 +152,9 @@
               <div class="stat-title">
                 {{ translate('admin.errorRate', 'Error Rate') }}
               </div>
-              <div class="stat-value">{{ metrics.errorRate }}%</div>
-              <div class="stat-trend trend-up">
-                <span>↑ 0.01%</span>
+              <div class="stat-value">{{ errorRateLabel }}</div>
+              <div v-if="trend('errorRate', false)" class="stat-trend" :class="trend('errorRate', false).className">
+                <span>{{ trend('errorRate', false).arrow }} {{ trend('errorRate', false).value }}</span>
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
@@ -161,8 +165,8 @@
               <div class="stat-value">
                 {{ (metrics.monthlyActiveUsers ?? 0).toLocaleString() }}
               </div>
-              <div class="stat-trend trend-up">
-                <span>↑ 15%</span>
+              <div v-if="trend('activeUsers', true)" class="stat-trend" :class="trend('activeUsers', true).className">
+                <span>{{ trend('activeUsers', true).arrow }} {{ trend('activeUsers', true).value }}</span>
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
@@ -643,25 +647,6 @@
                           {{ translate('admin.searchLogs', 'Search Logs') }}
                         </span>
                       </DsButton>
-                      <DsButton variant="secondary" style="margin-left: 8px" @click="rolloverLogs">
-                        <span style="display: flex; align-items: center">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            style="margin-right: 4px"
-                          >
-                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1 -.57-8.38" />
-                          </svg>
-                          {{ translate('admin.rolloverLogs', 'Rollover Logs') }}
-                        </span>
-                      </DsButton>
                     </div>
                   </div>
 
@@ -686,7 +671,7 @@
                         <tbody>
                           <tr v-for="(log, index) in errorLogsSummary" :key="'error-' + index">
                             <td>
-                              {{ log.type }}
+                              {{ translate(`admin.logTypes.${log.type}`, log.type) }}
                             </td>
                             <td>{{ log.service }}</td>
                             <td class="log-count">{{ log.count }}</td>
@@ -722,7 +707,7 @@
                         <tbody>
                           <tr v-for="(log, index) in warningLogsSummary" :key="'warning-' + index">
                             <td>
-                              {{ log.type }}
+                              {{ translate(`admin.logTypes.${log.type}`, log.type) }}
                             </td>
                             <td>{{ log.service }}</td>
                             <td class="log-count">{{ log.count }}</td>
@@ -785,32 +770,6 @@
                     @close="showLogSearchDialog = false"
                     @search-results="handleSearchResults"
                   />
-
-                  <div class="logs-info">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="16" x2="12" y2="12" />
-                      <line x1="12" y1="8" x2="12.01" y2="8" />
-                    </svg>
-                    <span>
-                      {{
-                        translate(
-                          'admin.logsSection.infoLogsNote',
-                          'Info logs are not shown in the summary. Use the search function to view all log types.'
-                        )
-                      }}
-                    </span>
-                  </div>
                 </div>
 
                 <div v-if="activeTab === 'queryInspector'" class="dashboard-card" style="grid-column: span 2">
@@ -868,6 +827,18 @@
                       <span :class="securityMetrics.vulnerabilities.low > 0 ? 'text-info' : ''">
                         {{ securityMetrics.vulnerabilities.low }}
                         {{ translate('admin.security.low', 'low') }}
+                      </span>
+                    </div>
+                    <div v-if="securityDetails && securityDetails.patternMatches.length > 0">
+                      <strong>{{ translate('admin.security.logPatternMatches', 'Log Pattern Matches') }}:</strong>
+                      {{ securityDetails.patternMatches.length }}
+                      <span class="pattern-match-note">
+                        {{
+                          translate(
+                            'admin.security.patternMatchSummaryNote',
+                            '(substring found in log text, not a verified attack)'
+                          )
+                        }}
                       </span>
                     </div>
                   </div>
@@ -1192,6 +1163,49 @@
                               )
                             }}
                           </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      v-if="securityDetails.patternMatches && securityDetails.patternMatches.length > 0"
+                      class="vulnerability-section pattern-match-section"
+                    >
+                      <h3 class="section-title">
+                        <span class="severity-indicator neutral"></span>
+                        {{ translate('admin.security.logPatternMatches', 'Log Pattern Matches') }}
+                        <span class="pattern-match-note">
+                          {{
+                            translate(
+                              'admin.security.patternMatchNote',
+                              'Terms found in log text. The scan reports the substring, not a verified attack — read the line.'
+                            )
+                          }}
+                        </span>
+                      </h3>
+                      <div class="vulnerability-list">
+                        <div
+                          v-for="(match, index) in securityDetails.patternMatches"
+                          :key="'match-' + index"
+                          class="pattern-match-card"
+                        >
+                          <div class="vuln-detail">
+                            <strong>{{ translate('admin.security.matchedTerm', 'Matched Term') }}:</strong>
+                            {{ match.pattern }}
+                            <span class="pattern-match-count">
+                              &mdash; {{ match.occurrences }}
+                              {{ translate('admin.security.occurrences', 'occurrences') }}
+                            </span>
+                          </div>
+                          <div v-if="match.service" class="vuln-detail">
+                            <strong>{{ translate('admin.security.service', 'Service') }}:</strong>
+                            {{ match.service }}
+                          </div>
+                          <div v-if="match.sampleTimestamp" class="vuln-detail">
+                            <strong>{{ translate('admin.security.firstSeen', 'First Seen') }}:</strong>
+                            {{ match.sampleTimestamp }}
+                          </div>
+                          <code v-if="match.sample" class="pattern-match-sample">{{ match.sample }}</code>
                         </div>
                       </div>
                     </div>
@@ -1687,6 +1701,17 @@ export default {
         monthlyActiveUsers: 0
       },
 
+      // Month-over-month deltas, computed server-side against the stored
+      // analytics collection. `null` means "not computable" (the previous
+      // period has no record, or the metric itself was unavailable) and
+      // renders no trend at all rather than a fabricated one.
+      trends: {
+        uptime: null,
+        responseTime: null,
+        errorRate: null,
+        activeUsers: null
+      },
+
       securityMetrics: {
         failedLoginAttempts: 23,
         suspiciousActivities: 5,
@@ -1741,6 +1766,11 @@ export default {
       documentFilters: {
         status: 'all'
       },
+      // Debounce timer for the document search box. Without this, every
+      // keystroke fires loadDocuments() in parallel — the response for
+      // "c" can arrive after the response for "cucu" and overwrite the
+      // results with stale data (see documentSearchTerm watcher).
+      searchDebounceTimer: null,
       selectedDocuments: [],
 
       // --- END: DOCUMENT and HIERARCHY DATA ---
@@ -1763,6 +1793,15 @@ export default {
     };
   },
   computed: {
+    // The backend reports `null` when the error rate could not be
+    // computed (VictoriaLogs unreachable, or answering a body the
+    // adapter cannot read). Rendering that as `0%` would be a green
+    // tile for a day nobody measured, so it gets a dash instead.
+    errorRateLabel() {
+      return this.metrics.errorRate === null || this.metrics.errorRate === undefined
+        ? '\u2014'
+        : `${this.metrics.errorRate}%`;
+    },
     adminTabs() {
       return this.tabs.map((t) => ({
         label: this.translate(`admin.tabs.${t.id}`, t.label),
@@ -1900,9 +1939,18 @@ export default {
     },
 
     documentSearchTerm() {
-      // A debounce would be ideal here in a real app, but this works
-      this.documentPagination.page = 1; // Reset to first page on new search
-      this.loadDocuments();
+      // 250ms debounce — collapses a typed query ("c","cu","cuc","cucu")
+      // into a single loadDocuments() call. The page reset is immediate
+      // (UI feedback) but the network call is deferred until the user
+      // stops typing. Filters use deep:true so they get their own path
+      // without debounce (one change → one fetch is the desired contract
+      // for filters; multiple rapid keystrokes is what we collapse here).
+      this.documentPagination.page = 1;
+      if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = setTimeout(() => {
+        this.searchDebounceTimer = null;
+        this.loadDocuments();
+      }, 250);
     },
     documentFilters: {
       handler() {
@@ -1937,8 +1985,35 @@ export default {
   beforeUnmount() {
     // Clean up event listeners when component is destroyed
     window.removeEventListener('themeChange', this.handleThemeChange);
+    // Cancel any in-flight search debounce so a timer firing after the
+    // component unmounts doesn't call loadDocuments() on a destroyed
+    // Vue instance (Vue 'target is readonly' warn + orphaned backend
+    // request racing with the new view's data load).
+    if (this.searchDebounceTimer) {
+      clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = null;
+    }
   },
   methods: {
+    /**
+     * Month-over-month delta for a tile, or null when the backend could
+     * not compute one. `higherIsBetter` decides the colour: a rising error
+     * rate is bad news and wears the danger colour, a rising uptime is
+     * good news and wears the success one. The template previously
+     * hardcoded "↑ 0.01%", "↑ 0.2%", "↓ 12%" and "↑ 15%" on all four
+     * tiles, so every operator read a constant regardless of the data.
+     */
+    trend(key, higherIsBetter) {
+      const value = this.trends[key];
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return null;
+      const delta = Number(value);
+      return {
+        arrow: delta > 0 ? '\u2191' : delta < 0 ? '\u2193' : '\u2192',
+        value: `${Math.abs(delta).toFixed(2)}%`,
+        className: delta === 0 || delta > 0 === higherIsBetter ? 'trend-up' : 'trend-down'
+      };
+    },
+
     formatFileSize,
     // --- ADDED: Methods for ConfirmDialog ---
     /**
@@ -2148,6 +2223,13 @@ export default {
             monthlyActiveUsers: data.metrics.monthlyActiveUsers
           };
 
+          this.trends = {
+            uptime: data.trends?.uptime ?? null,
+            responseTime: data.trends?.responseTime ?? null,
+            errorRate: data.trends?.errorRate ?? null,
+            activeUsers: data.trends?.activeUsers ?? null
+          };
+
           // Update health services
           this.healthServices = data.healthServices;
 
@@ -2187,8 +2269,13 @@ export default {
           limit: 20 // Get more logs than we'll display in the summary
         });
 
-        if (response && response.data && response.data.data) {
-          this.logs = response.data.data.logs || [];
+        // Backend envelope is `{logs: [...], total, limit, offset}` — the
+        // previous `response.data.data.logs` path was reading `undefined`
+        // and silently emptying the panel. Access the envelope directly.
+        if (response && response.data && Array.isArray(response.data.logs)) {
+          this.logs = response.data.logs;
+        } else {
+          this.logs = [];
         }
       } catch (error) {
         console.error('Error loading logs:', error);
@@ -2209,8 +2296,14 @@ export default {
         if (response && response.data && Array.isArray(response.data.errors) && Array.isArray(response.data.warnings)) {
           this.errorLogsSummary = response.data.errors || [];
           this.warningLogsSummary = response.data.warnings || [];
+          // The summary covers ERROR and WARN only — INFO is deliberately
+          // not queried (see LogsService.getLogsSummary), so "empty" means
+          // "no errors or warnings", never "no logs at all". Saying
+          // "no logs found" here claimed the whole log pipeline was dead
+          // on any day without an error or a warning, which is a normal
+          // day, and invited an operator to restart a healthy stack.
           if (this.errorLogsSummary.length === 0 && this.warningLogsSummary.length === 0) {
-            this.showNotification(this.translate('admin.noLogsFound', 'No logs found for today'), 'info');
+            this.showNotification(this.translate('admin.noErrorsOrWarnings', 'No errors or warnings today'), 'info');
           }
         } else {
           console.error('[AdminDashboard] Invalid logs summary response structure:', response);
@@ -2242,6 +2335,21 @@ export default {
         const response = await adminDashboardService.runSecurityScan();
 
         if (response.success) {
+          // Branch on `data.skipped` — VL mode returns `{skipped: true,
+          // reason: 'vl_mode_no_file_scan'}` because the file-source
+          // pipeline is gone (admin-logs/T8). Without this branch the
+          // UI shows a green 'Security scan completed successfully' toast
+          // for a scan that never actually ran — silent mis-attribution.
+          if (response.data && response.data.skipped) {
+            this.showNotification(
+              this.translate(
+                'admin.operations.runSecurityScan.skipped',
+                `Security scan skipped: ${response.data.reason || 'no file source available'} — review via VL LogSQL instead.`
+              ),
+              'warning'
+            );
+            return;
+          }
           await this.loadSecurityDetails(); // This fetches all necessary details
           this.securityMetrics.lastScan = this.translate('admin.security.lastScanJustNow', 'Just now'); // Update last scan time
           // Update vulnerability counts from the detailed response
@@ -2280,7 +2388,7 @@ export default {
       // Show the log search dialog
       this.showLogSearchDialog = true;
 
-      // Load error and warning log summaries if they haven't been loaded yet
+      // Load log summaries if they haven't been loaded yet
       if (this.activeTab === 'logs' && !this.errorLogsSummary.length && !this.warningLogsSummary.length) {
         this.loadLogsSummary();
       }
@@ -2314,16 +2422,6 @@ export default {
     },
 
     // Log operations
-    async rolloverLogs() {
-      this.executeOperation('rolloverLogs', async () => {
-        const response = await adminDashboardService.rolloverLogs();
-        // Refresh logs after rollover
-        if (response.data && response.data.success) {
-          await Promise.all([this.loadLogsSummary(), this.loadLogs()]);
-        }
-        return response.data;
-      });
-    },
 
     // Load security metrics
     async loadSecurityMetrics() {
@@ -2559,22 +2657,51 @@ export default {
     // Load security metrics from the service
 
     /**
-     * Parses a log message string to extract the log level.
-     * @param {string} logString - The raw log message.
-     * @returns {{type: string, message: string}}
+     * Parses a single JSON-encoded log line to extract the log level.
+     * Uses JSON.parse with try/catch; malformed input, arrays, primitives, and
+     * objects missing `level` or `message` fall back to UNKNOWN with the raw payload.
+     * @param {string} logString - The raw log line (expected JSON with `level` + `message` keys).
+     * @returns {{type: string, message: string}} `type` is the upper-cased `level` (or 'UNKNOWN');
+     *   `message` is the original `message` field, or the raw input when no parseable message exists.
      */
     parseLogMessage(logString) {
       if (typeof logString !== 'string') {
         return { type: 'UNKNOWN', message: String(logString) };
       }
-      const match = logString.match(/^\[([A-Z]+)\]:?\s*/);
-      if (match) {
-        return {
-          type: match[1], // e.g., "INFO", "ERROR"
-          message: logString.substring(match[0].length)
-        };
+      // JSON envelope FIRST — Winston / python-json-logger produce
+      // `{"level":"ERROR","message":"…"}` envelopes. Parsing these lets
+      // us surface the inner message text rather than the raw envelope
+      // shape. The previous implementation tried JSON first too; the
+      // regex fallback below handles the non-JSON paths (Winston npm
+      // format `[INFO]: …`, console-format `… INFO …`) that would
+      // otherwise land on the catch branch as UNKNOWN.
+      if (logString.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse(logString);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            const level =
+              typeof parsed.level === 'string' && parsed.level !== '' ? parsed.level.toUpperCase() : 'UNKNOWN';
+            const message = typeof parsed.message === 'string' && parsed.message !== '' ? parsed.message : logString;
+            return { type: level, message };
+          }
+        } catch {
+          // Malformed JSON envelope — fall through to regex on the raw
+          // string. The level keywords `INFO`, `ERROR`, etc. may still
+          // appear in the raw bytes.
+        }
       }
-      return { type: 'INFO', message: logString }; // Default if no prefix
+      // Regex fallback for non-JSON console-format log strings.
+      const formatMatch = logString.match(/(?:\[(\w+)\][:\s]*|.*?\b(INFO|WARN|WARNING|ERROR|DEBUG|TRACE|FATAL)\b)/);
+      if (formatMatch) {
+        const raw = (formatMatch[1] || formatMatch[2] || '').toUpperCase();
+        // Map WARNING → WARN to align with the canonical log level
+        // used by VL severity_text (mirrors backend `_normalizeLevelFilter`).
+        const level = raw === 'WARNING' ? 'WARN' : raw;
+        if (level) {
+          return { type: level, message: logString };
+        }
+      }
+      return { type: 'UNKNOWN', message: logString };
     },
 
     // Load detailed security information
@@ -2600,11 +2727,22 @@ export default {
           lineNumbers: v.lineNumbers
         });
 
-        // REVISED: Define a helper to map and parse log details
+        // REVISED: Define a helper to map and parse log details.
+        // Backend (`security-scan-service.js`) emits { timestamp, level, message };
+        // prefer `log.level` when present so the structured level reaches the UI table,
+        // and fall back to parsing `log.message` for legacy/printf payloads.
         const mapAndParseLogDetail = (log) => {
-          const parsed = this.parseLogMessage(log.message || '');
+          if (log && typeof log.level === 'string' && log.level !== '') {
+            return {
+              timestamp: log.timestamp || '',
+              type: log.level.toUpperCase(),
+              message: typeof log.message === 'string' ? log.message : ''
+            };
+          }
+          const message = log && typeof log.message === 'string' ? log.message : '';
+          const parsed = this.parseLogMessage(message);
           return {
-            timestamp: log.timestamp,
+            timestamp: (log && log.timestamp) || '',
             type: parsed.type,
             message: parsed.message
           };
@@ -2629,6 +2767,17 @@ export default {
               ? response.vulnerabilityDetails.low.map(mapVulnerability)
               : []
           },
+          patternMatches: Array.isArray(response.patternMatches)
+            ? response.patternMatches.map((m) => ({
+                type: m.type,
+                pattern: m.pattern,
+                occurrences: m.occurrences,
+                sample: m.sample || '',
+                sampleTimestamp: m.sampleTimestamp || '',
+                service: m.service,
+                lastSeen: m.lastSeen
+              }))
+            : [],
           failedLoginDetails: Array.isArray(response.failedLoginDetails)
             ? response.failedLoginDetails.map(mapAndParseLogDetail)
             : [],
@@ -2642,6 +2791,7 @@ export default {
           lastScan: 'Never',
           vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
           vulnerabilityDetails: { critical: [], medium: [], low: [] },
+          patternMatches: [],
           failedLoginDetails: [],
           suspiciousDetails: []
         };
@@ -4009,21 +4159,6 @@ input:checked + .slider:before {
   text-align: center;
 }
 
-.logs-info {
-  display: flex;
-  align-items: center;
-  padding: var(--space-md);
-  background-color: var(--bg-tertiary);
-  border-radius: var(--radius-md);
-  font-size: var(--text-base);
-  color: var(--muted);
-}
-
-.logs-info svg {
-  margin-right: var(--space-sm);
-  color: var(--accent);
-}
-
 .empty-logs {
   text-align: center;
   color: var(--muted-soft);
@@ -4190,6 +4325,61 @@ input:checked + .slider:before {
 
 .severity-indicator.info {
   background-color: var(--accent);
+}
+/* Pattern matches carry no severity, so the dot is a neutral marker
+   rather than one of the severity colours. Every other section in the
+   panel opens with a dot; omitting it read as a rendering fault, and
+   colouring it would re-assert the claim the backend just withdrew.
+   The palette has no "no-severity" grey, so this is the same neutral
+   the low indicator uses — the difference is the class name, which is
+   what the template and the tests key on. */
+.severity-indicator.neutral {
+  background-color: var(--muted-soft);
+}
+
+/* Pattern matches are deliberately unstyled by severity: the scan
+   cannot tell a config line from an attack, so the card shows the raw
+   log line and stays neutral. Colouring it would re-assert the claim
+   the backend just stopped making. */
+/* `.section-title` is a flex row, so the note needs `flex-basis: 100%`
+   to drop onto its own line — `display: block` alone does nothing to a
+   flex item. */
+.pattern-match-note {
+  flex-basis: 100%;
+  margin-left: 0;
+  margin-top: var(--space-xs);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.pattern-match-card {
+  padding: var(--space-md);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted-soft);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  overflow-wrap: anywhere;
+}
+
+.pattern-match-count {
+  color: var(--muted);
+}
+
+.pattern-match-sample {
+  display: block;
+  margin-top: var(--space-xs);
+  padding: var(--space-sm);
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .vulnerability-list {

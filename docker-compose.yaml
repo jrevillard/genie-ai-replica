@@ -25,8 +25,14 @@
 #   - Local GPU: --profile opea --profile gpu-models; Remote GPU: --profile opea only
 #   - GPU_MODEL_REPLICAS: set to 0 to skip GPU-heavy containers in Swarm (remote GPU node)
 #   - Orchestrator endpoints use ${VAR:-default} pattern; override from .env for remote GPU
-#   - profiles: [observability] controls Observability stack in compose up; Swarm ignores
-#     them and uses ENABLE_OBSERVABILITY env var instead (default: 0 = disabled)
+#   - profiles: [observability] controls the optional Observability stack
+#     (VictoriaMetrics, VictoriaTraces, tempo-proxy, Grafana) in compose up;
+#     Swarm ignores profiles and uses ENABLE_OBSERVABILITY env var instead
+#     (default: 0 = disabled)
+#   - the admin-logs substrate (VictoriaLogs + OTel Collector + otel-collector-init)
+#     is always-on — no profile label, starts by default in compose up and runs
+#     unconditionally in Swarm so admin endpoints stay functional regardless of
+#     ENABLE_OBSERVABILITY
 #   - build: enables local builds (docker compose up); Swarm ignores it and uses image:
 #   - GPU access via NVIDIA_VISIBLE_DEVICES env var (no runtime: nvidia)
 #
@@ -44,8 +50,6 @@
 #
 # All nodes:
 #   ./data/logs/kong            (Kong gateway logs)
-#   ./data/logs/backend         (Backend API logs)
-#   ./data/logs/doc-repo        (Document Repository logs)
 #   ./data/database_backups     (Backend DB dumps)
 #   ./data/huggingface          (TEI model cache, GPU nodes only)
 #   ./secrets/ssl/              (server.crt, server.key)
@@ -77,7 +81,18 @@ x-logging: &fluent-logging
   options:
     fluentd-address: "localhost:24224"
     fluentd-async: "true"
+    fluentd-buffer-limit: 8MB       # was implicit 1MB default; bumped because single-channel load
+    fluentd-max-retries: 5          # was implicit 1 retry
+    fluentd-retry-wait: 2s          # was implicit 1s
     tag: "genie.{{.Name}}"
+    # Forward the Compose-managed `com.docker.compose.service` label as a
+    # log attribute. The OTel Collector then reads it to stamp the
+    # canonical `service.name` on every fluentd-sourced log record.
+    # Without this, the collector must regex-parse `<service>` from the
+    # project-prefixed container name (which embeds the deployment
+    # project — `admin-logs-prd-document-repository` instead of just
+    # `document-repository`).
+    labels: "com.docker.compose.service,com.docker.compose.project"
 
 services:
 
@@ -501,7 +516,6 @@ services:
     #   - "${BACKEND_PORT:-3000}:3000"
     volumes:
       - "${DATA_DIR:-./data}/database_backups:/app/database_backups"
-      - "${DATA_DIR:-./data}/logs/backend:/app/logs"
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
     # Allow backend to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the Docker host,
@@ -563,12 +577,30 @@ services:
       - CONTEXT_OPTION=${CONTEXT_OPTION:-conversation-with-context-labels}
       # Logging (error, warn, info, debug)
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      - VL_QUERY_TIMEOUT_MS=${VL_QUERY_TIMEOUT_MS:-30000}
+      # Forwarded so operator overrides in .env (or Ansible group_vars via
+      # env.j2 lines 243-244) actually reach the container — without
+      # these entries, shared/lib/melt/victorialogs-client.js silently
+      # falls back to the code defaults `http://victorialogs:9428` and
+      # tenant `0:0`, defeating staging-VL routing.
+      - VICTORIALOGS_URL=${VICTORIALOGS_URL:-http://victorialogs:9428}
+      - VICTORIALOGS_TENANT_ID=${VICTORIALOGS_TENANT_ID:-0:0}
       # CORS (deployment-specific, localhost defaults)
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}}
       - CSP_CONNECT_SRC=${CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      # OTel Resource `service.name` is HARDCODED in tracing.js + logger.js
+      # to match the Compose block name (`backend`). The OTel-standard
+      # `OTEL_SERVICE_NAME` env var also picks up `backend` here so the
+      # shared `logger.js` service label and the OTel meter scope
+      # (`metrics.js` getMeter) both resolve to the right service, instead
+      # of the hardcoded `'genie-backend'` that mis-attributed doc-repo's
+      # HTTP metrics to the backend.
+      - OTEL_SERVICE_NAME=backend
+      # Operators who want a different name for a canary should rename
+      # the Compose block AND the source-code constants together.
     networks:
       - genieai_network
     deploy:
@@ -611,10 +643,33 @@ services:
       - ARANGO_URL=http://arango-vector-db:8529
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       - KC_REALM=${KEYCLOAK_REALM:-genie}
+      - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      - VL_QUERY_TIMEOUT_MS=${VL_QUERY_TIMEOUT_MS:-30000}
+      # Mirrors the backend block — same operator-override path for
+      # VICTORIALOGS_URL + VICTORIALOGS_TENANT_ID so a staging-VL override
+      # applies to both services that read from the MELT seam.
+      - VICTORIALOGS_URL=${VICTORIALOGS_URL:-http://victorialogs:9428}
+      - VICTORIALOGS_TENANT_ID=${VICTORIALOGS_TENANT_ID:-0:0}
       # TLS verification for document-repository → NGINX OIDC discovery/JWKS fetches.
       # Default: 1 (strict, for production). Set to 0 in .env for dev with self-signed certs.
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}
+      # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1. Both
+      # flags must mirror the backend block; the doc-repo Winston VL
+      # transport depends on the OTel LoggerProvider being initialised or
+      # it pushes to a null sink. The Collector's fluentd receiver still
+      # ships the doc-repo stdout regardless (resource processor on the
+      # Collector side stamps service.name from container attributes).
+      - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      # OTel Resource `service.name` is HARDCODED in tracing.js to match
+      # the Compose block name (`document-repository`). The
+      # OTel-standard `OTEL_SERVICE_NAME` env var mirrors it so the
+      # shared `logger.js` OTel meter resolves to the right scope.
+      - OTEL_SERVICE_NAME=document-repository
+      # Source code constants are the single source of truth; renaming
+      # requires updating the Compose block AND the tracing.js constant
+      # together.
     # Allow document-repository to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the
     # Docker host, so OIDC discovery and JWKS fetches reach NGINX for JWT validation.
     extra_hosts:
@@ -625,7 +680,6 @@ services:
     networks:
       - genieai_network
     volumes:
-      - "${DATA_DIR:-./data}/logs/doc-repo:/app/logs"
       - doc_repo_uploads:/app/uploads
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
@@ -737,7 +791,7 @@ services:
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.29.0
+    image: vllm/vllm-openai:v0.10.0
     # Swarm: internal only - access via Kong or docker exec
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"
@@ -746,7 +800,7 @@ services:
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
       --served-model-name ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
       --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
-      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
+      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-64}
       --dtype=${VLLM_DTYPE:-half}
       --enforce-eager
     environment:
@@ -820,7 +874,7 @@ services:
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.29.0
+    image: vllm/vllm-openai:v0.10.0
     # Internal only
     # ports:
     #   - "${VLLM_TRANSLATION_SERVICE_PORT:-9031}:${VLLM_TRANSLATION_SERVICE_PORT:-9031}"
@@ -869,7 +923,7 @@ services:
     logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
-    image: opea/translation:1.5
+    image: opea/translation:1.3
     environment:
       - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
@@ -1068,6 +1122,9 @@ services:
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      # Log level threshold for the OTel Python LoggingHandler installed in
+      # setup_logging(). Mirror LOG_LEVEL above (Node side via logger.js).
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       # Adaptive utility-cost selection (read at reranker startup; only used
       # when RERANKING_STRATEGY=adaptive)
       - NOVELTY_SIGMOID_A=${NOVELTY_SIGMOID_A:-20.0}
@@ -1158,6 +1215,9 @@ services:
       DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL: ${DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL:-100000}
       DATAPREP_CONTEXTUAL_MAX_TOKENS: ${DATAPREP_CONTEXTUAL_MAX_TOKENS:-512}
       CONTEXTUAL_RETRIEVAL_PROMPT: ${CONTEXTUAL_RETRIEVAL_PROMPT:-}
+      # Log level threshold for the OTel Python LoggingHandler installed in
+      # setup_logging(). Mirror LOG_LEVEL above (Node side via logger.js).
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       CONTEXTUAL_STRATEGY: ${CONTEXTUAL_STRATEGY:-per_chunk}
       CONTEXTUAL_LABEL_RAW: ${CONTEXTUAL_LABEL_RAW:-true}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
@@ -1233,6 +1293,9 @@ services:
       RETRIEVER_ARANGO_SEARCH_START: ${RETRIEVER_ARANGO_SEARCH_START:-chunk}
       RETRIEVER_ARANGO_SEARCH_MODE: ${RETRIEVER_ARANGO_SEARCH_MODE:-vector}
       RETRIEVER_ARANGO_USE_APPROX_SEARCH: ${RETRIEVER_ARANGO_USE_APPROX_SEARCH:-false}
+      # Log level threshold for the OTel Python LoggingHandler installed in
+      # setup_logging(). Mirror LOG_LEVEL above (Node side via logger.js).
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       RETRIEVER_ARANGO_DISTANCE_STRATEGY: ${RETRIEVER_ARANGO_DISTANCE_STRATEGY:-COSINE}
       RETRIEVER_ARANGO_NUM_CENTROIDS: ${RETRIEVER_ARANGO_NUM_CENTROIDS:-1}
       RETRIEVER_HYBRID_RETRIEVAL_ENABLED: ${RETRIEVER_HYBRID_RETRIEVAL_ENABLED:-true}
@@ -1349,6 +1412,7 @@ services:
       BACKEND_SERVICE_URL: http://backend:3000
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       KC_REALM: ${KEYCLOAK_REALM:-genie}
+      KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
       # Confidence scoring — rank-weighted aggregate of calibrated reranker scores.
@@ -1629,9 +1693,14 @@ services:
   # ===========================================================================
   # Observability Stack (node.labels.genieai == true)
   # ===========================================================================
-  # Disabled by default. Enable via:
-  #   docker compose: --profile observability flag
-  #   Docker Swarm:   ENABLE_OBSERVABILITY=1 in .env
+  # Split into an always-on substrate and an opt-in bucket:
+  #   no profile       otel-collector-init + otel-collector + victorialogs
+  #                    → always-on, admin endpoints stay functional regardless
+  #                      of ENABLE_OBSERVABILITY (compose up brings them by
+  #                      default; Swarm runs them via deploy.replicas / mode)
+  #   [observability]  victoriametrics + victoriatraces + tempo-proxy + grafana
+  #                    → optional, gated by ENABLE_OBSERVABILITY in Swarm;
+  #                      require --profile observability in compose
   # ===========================================================================
 
   # One-shot init container: sets otel-queue volume ownership for the nonroot
@@ -1640,16 +1709,14 @@ services:
   # restart policy handles the race condition until init completes.
   otel-collector-init:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    # Exception: cap_add CHOWN — the init's only job is chown 10001 on /var/lib/otelcol;
+    # cap_drop ALL strips CAP_CHOWN, so we add it back scoped to this one-shot init.
     cap_drop:
       - ALL
-    # Init job chowns the bind-mounted volume to the otelcol user (10001).
-    # SAST wave-4 cap_drop:ALL stripped CAP_CHOWN — re-add it here only.
-    # The runtime otel-collector keeps cap_drop:ALL (read/write only).
     cap_add:
       - CHOWN
     security_opt:
       - no-new-privileges:true
-    profiles: [observability]
     image: busybox:1.38.0
     command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol"]
     volumes:
@@ -1670,7 +1737,6 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    profiles: [observability]
     restart: unless-stopped
     image: otel/opentelemetry-collector-contrib:0.152.0
     # Expose fluentforward receiver on localhost so the Docker daemon can
@@ -1690,6 +1756,21 @@ services:
     # Rely on restart policy + health_check extension (port 13133) for programmatic probes.
     environment:
       - OTEL_TRACES_SAMPLER_RATE=${OTEL_TRACES_SAMPLER_RATE:-100.0}
+      # Mirror backend + doc-repo escape hatch on the writer half so a
+      # staging-VL override applies to the OTel collector too. The
+      # collector does not split `VICTORIALOGS_TENANT_ID` (format
+      # `account:project`) for the AccountID/ProjectID HTTP headers —
+      # pre-split values are sourced from the .env file (Compose
+      # `${VAR%%:*}` syntax is not supported, bash variable expansion
+      # happens at .env load time). Operators setting
+      # `VICTORIALOGS_TENANT_ID=42:7` MUST also set the matching
+      # `VICTORIALOGS_TENANT_ID_ACCOUNT_ID=42` and
+      # `VICTORIALOGS_TENANT_ID_PROJECT_ID=7` vars; otherwise writes go
+      # to the default 0:0 tenant while backend reads use 42:7.
+      - VICTORIALOGS_URL=${VICTORIALOGS_URL:-http://victorialogs:9428}
+      - VICTORIALOGS_URL_HOST=${VICTORIALOGS_URL_HOST:-victorialogs}
+      - VICTORIALOGS_TENANT_ID_ACCOUNT_ID=${VICTORIALOGS_TENANT_ID_ACCOUNT_ID:-0}
+      - VICTORIALOGS_TENANT_ID_PROJECT_ID=${VICTORIALOGS_TENANT_ID_PROJECT_ID:-0}
     volumes:
       - ./configs/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
       - otel-queue:/var/lib/otelcol
@@ -1749,7 +1830,6 @@ services:
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
-    profiles: [observability]
     restart: unless-stopped
     image: victoriametrics/victoria-logs:v1.50.0
     command:
@@ -1763,11 +1843,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 60s
     networks:
       - genieai_network
     deploy:
-      replicas: ${ENABLE_OBSERVABILITY:-0}
+      # Always-on core: pinned to 1 replica so admin endpoints stay functional regardless of ENABLE_OBSERVABILITY.
+      replicas: 1
       placement:
         constraints:
           - node.labels.genieai == true

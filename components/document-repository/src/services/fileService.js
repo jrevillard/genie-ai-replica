@@ -207,7 +207,7 @@ class FileService {
       // Perform virus scan if enabled
       if (appConfig.virusScanning) {
         logger.debug(`[FILE-SERVICE] Performing virus scan`);
-        const scanResult = await securityService.scanBuffer(fileData.buffer);
+        const scanResult = await securityService.scanFile(fileId, fileData.buffer);
         logger.info(`[FILE-SERVICE] VIRUS SCAN result for ${originalFileName}: ${JSON.stringify(scanResult, null, 2)}`);
 
         if (scanResult.isInfected) {

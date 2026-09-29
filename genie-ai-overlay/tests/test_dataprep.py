@@ -947,7 +947,7 @@ class TestLabelWithLlm:
         with (
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
-            patch.object(dp_module, "with_span", return_value=cm) as ws,
+            patch.object(dp_module, "background_span", return_value=cm) as ws,
         ):
             await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
 

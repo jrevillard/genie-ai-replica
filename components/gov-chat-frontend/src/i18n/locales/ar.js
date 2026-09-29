@@ -232,7 +232,7 @@ export default {
     contentManagement: 'إدارة المحتوى',
     knowledgeHierarchy: 'هرمية المعرفة',
     documentManagement: 'إدارة المستندات',
-    noLogsFound: 'لم يتم العثور على سجلات لليوم',
+    noErrorsOrWarnings: 'لا توجد أخطاء ولا تحذيرات اليوم',
     invalidLogsResponse: 'هيكل استجابة ملخص السجلات غير صالح',
     logsSummaryError: 'فشل تحميل ملخص السجلات',
     buttons: {
@@ -267,7 +267,6 @@ export default {
     databaseSize: 'حجم قاعدة البيانات',
     totalTables: 'إجمالي الجداول',
     logManagement: 'إدارة السجلات',
-    rolloverLogs: 'تدوير السجلات',
     searchLogs: 'البحث في السجلات',
     logTime: 'الوقت',
     logLevel: 'المستوى',
@@ -324,10 +323,6 @@ export default {
         error: 'خطأ أثناء تحسين قاعدة البيانات',
         loading: 'جاري تحسين قاعدة البيانات...'
       },
-      rolloverLogs: {
-        success: 'تم إكمال تدوير السجلات بنجاح',
-        loading: 'جاري تدوير السجلات...'
-      },
       searchLogs: {
         success: 'تم إكمال البحث في السجلات',
         loading: 'جاري البحث في السجلات...'
@@ -375,7 +370,6 @@ export default {
       warningLogs: 'سجلات التحذيرات',
       noErrorLogs: 'لم يتم تسجيل سجلات أخطاء اليوم.',
       noWarningLogs: 'لم يتم تسجيل سجلات تحذيرات اليوم.',
-      infoLogsNote: 'سجلات المعلومات لا تظهر في الملخص. استخدم وظيفة البحث لعرض جميع أنواع السجلات.',
       searchResults: 'أحدث نتائج البحث',
       entriesFound: 'مدخلات تم العثور عليها',
       viewAllResults: 'عرض جميع النتائج',
@@ -387,11 +381,14 @@ export default {
         authFailed: 'فشل المصادقة',
         lowDiskSpace: 'مساحة القرص أقل من العتبة',
         slowQuery: 'أداء استعلام بطيء',
-        rateLimit: 'الاقتراب من حد السرعة'
+        rateLimit: 'الاقتراب من حد السرعة',
+        invalidToken: 'رمز غير صالح',
+        fileNotFound: 'الملف غير موجود'
       },
       logSearch: {
         noResultsFound: 'لم يتم العثور على سجلات مطابقة لمعايير البحث الخاصة بك',
-        resultsFound: 'تم العثور على {count} مدخلات سجل'
+        resultsFound: 'تم العثور على {count} مدخلات سجل',
+        degraded: 'يتم عرض نتائج جزئية بسبب انقطاع VictoriaLogs. قد تكون بعض إدخالات السجل الحديثة مفقودة.'
       }
     },
     security: {
@@ -424,6 +421,10 @@ export default {
       envFileRecommendation:
         'تأكد من أن ملفات البيئة غير متاحة من دلائل الويب وأن تكوينات الخادم تمنع الوصول إلى الملفات الحساسة بشكل صحيح.',
       gitRepoRecommendation: 'تأكد من أن أدلة .git مؤمنة بشكل صحيح وغير متاحة من الويب.',
+      logPatternMatches: 'أنماط السجلات المكتشفة',
+      patternMatchNote:
+        'مصطلحات عُثر عليها في نص السجل. يفحص التقرير عن السلسلة الفرعية، لا عن هجوم مؤكد — اقرأ السطر.',
+      patternMatchSummaryNote: '(سلسلة فرعية عُثر عليها في نص السجل، ليست هجومًا مؤكدًا)',
       noVulnerabilitiesFound: 'لم يتم العثور على ثغرات أمنية',
       systemSecure: 'يبدو نظامك آمنًا. واصل المراقبة بانتظام.',
       loadingScan: 'جاري تحميل نتائج الفحص...',

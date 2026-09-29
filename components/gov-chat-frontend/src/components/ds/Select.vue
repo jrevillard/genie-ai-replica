@@ -7,7 +7,16 @@
     v-bind="$attrs"
     @change="$emit('update:modelValue', $event.target.value)"
   >
-    <option v-if="placeholder" value="" disabled>
+    <!-- Placeholder is a REAL option (value=""), not disabled. This is
+         how the user resets a DsSelect to "no value" after picking one
+         — e.g. the admin /logs filters must be re-selectable back to
+         "All Levels" / "All Services" once a specific level / service
+         has been picked. Disabling the placeholder option made the
+         reset state unreachable (the option appeared in the dropdown
+         but clicking it did nothing). The browser still displays the
+         placeholder text as the SELECTED text when `modelValue` is
+         empty, so the visual cue is preserved. -->
+    <option v-if="placeholder" value="">
       {{ placeholder }}
     </option>
     <slot />

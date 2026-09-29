@@ -79,6 +79,36 @@ async def test_validate_token_jwks_unavailable_returns_none():
 
 
 @pytest.mark.asyncio
+async def test_validate_token_jwks_unavailable_raises():
+    """Round-5 F1: when _fetch_jwks raises JwksUnavailableError (cold cache
+    + Keycloak down + first request), validate_token must propagate the
+    typed error so the route layer at genieai_chatqna.py:2229 renders the
+    canonical 503 envelope — NOT swallow it into a generic 401
+    'Token validation failed' that masks the outage from monitoring."""
+    # Import JwksUnavailableError + validate_token locally so the test
+    # stays self-contained (matches the style of the other tests in this
+    # file, which also import inside the test body). Ruff F811 flags
+    # duplicates only when the same symbol is imported in the SAME
+    # scope; importing inside the test avoids any conflict with
+    # sibling tests that also import `validate_token`.
+    import chatqna.keycloak_token_validator as v
+    from chatqna.keycloak_token_validator import JwksUnavailableError
+
+    with (
+        patch(
+            "chatqna.keycloak_token_validator.jwt.get_unverified_header", return_value={"kid": "abc", "alg": "RS256"}
+        ),
+        patch(
+            "chatqna.keycloak_token_validator._fetch_jwks",
+            new=AsyncMock(side_effect=JwksUnavailableError("Keycloak JWKS unreachable")),
+        ),
+    ):
+        v._jwks_keys = None
+        with pytest.raises(JwksUnavailableError):
+            await v.validate_token("any-token")
+
+
+@pytest.mark.asyncio
 async def test_validate_token_unknown_kid_returns_none():
     """A kid that doesn't match any JWKS key is rejected."""
     from chatqna.keycloak_token_validator import validate_token

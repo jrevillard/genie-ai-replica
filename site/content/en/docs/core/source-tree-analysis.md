@@ -228,8 +228,7 @@ components/gov-chat-backend/
 │   ├── service-category-routes.js # /api/categories/* (category hierarchy)
 │   ├── translation-routes.js     # /api/translation/* (translation proxy)
 │   ├── database-operations-routes.js # /api/database-operations/* (DB ops)
-│   ├── weather-routes.js         # /api/weather/* (weather widget)
-│   └── logger-routes.js          # /api/logger/* (log aggregation)
+│   └── weather-routes.js         # /api/weather/* (weather widget)
 ├── services/                     # Business logic layer
 │   ├── keycloak-auth-service.js  # Keycloak token validation
 │   ├── keycloak-proxy-service.js # Keycloak Admin API proxy
@@ -250,7 +249,6 @@ components/gov-chat-backend/
 │   ├── database-operations-service.js # DB operations
 │   ├── security-scan-service.js  # ClamAV integration
 │   ├── path-sanitizer.js         # File path sanitization
-│   ├── key-handler.js            # Encryption key management
 │   └── opea-worker.js            # OPEA service orchestration
 ├── utils/                        # Utility functions
 ├── workers/                      # Background workers

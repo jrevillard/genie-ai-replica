@@ -31,12 +31,26 @@ module.exports = (adminService, logsService) => {
       : 'undefined'
   });
 
-  // Debug: Log request entry before middleware
+  // Admin access is logged by TWO middlewares, one before auth and one
+  // after, and they deliberately log different fields. Keep them apart.
+  //
+  // SECURITY NOTE (applies to both): an earlier version dumped raw
+  // `req.headers` / `req.query` / `req.body` into the structured log body.
+  // The `headers` top-level key matches no SENSITIVE_KEY_PATTERN, so a
+  // shallow `redactAttributes` let the raw `authorization: Bearer …` JWT
+  // reach the OTel LogRecord attributes and from there the admin /logs
+  // search dialog. Fixed in 6851023b5. Never re-add headers / query /
+  // body here — query strings leak JWTs passed as ?token=... into
+  // VictoriaLogs.
+
+  // Pre-auth entry: method + path only. `userSub` is deliberately ABSENT
+  // — auth has not run, so `req.user` is undefined, and stamping
+  // `userSub: undefined` on every request would poison forensic
+  // correlation for the whole admin surface.
   router.use((req, res, next) => {
-    logger.info(`[ADMIN-ROUTES] Request received: ${req.method} ${req.originalUrl}`, {
-      headers: req.headers,
-      query: req.query,
-      body: req.body
+    logger.info(`[ADMIN-ROUTES] Request received: ${req.method} ${req.path}`, {
+      method: req.method,
+      url: req.path
     });
     next();
   });
@@ -44,9 +58,25 @@ module.exports = (adminService, logsService) => {
   router.use(keycloakAuthMiddleware.authenticate);
   router.use(keycloakAuthMiddleware.requireAdmin);
 
+  // Post-auth audit log: method + path + the JWT subject
+  // (`req.user.sub`). Fires AFTER auth + the admin gate, so only
+  // requests that actually passed authorisation are audited here —
+  // failures land in the keycloak middleware's own warn path instead
+  // of polluting the trail of successful admin work.
+  router.use((req, res, next) => {
+    if (req.user && req.user.sub) {
+      logger.info(`[ADMIN-ROUTES] Admin request: ${req.method} ${req.path}`, {
+        method: req.method,
+        url: req.path,
+        userSub: req.user.sub
+      });
+    }
+    next();
+  });
+
   /**
    * @swagger
-   * /api/admin/system-health:
+   * "/api/admin/system-health":
    *   get:
    *     summary: Get system health metrics
    *     tags: [Admin]
@@ -54,13 +84,67 @@ module.exports = (adminService, logsService) => {
    *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
-   *         description: System health metrics retrieved successfully
+   *         description: 'System health metrics retrieved successfully. metrics.errorRate is the only VL-derived field; per the OBSERVABILITY carve-out it stays null when VictoriaLogs is unreachable and this endpoint deliberately does NOT raise 503 on VL outage (the dashboard tile stays well-formed with errorRate=0 in that tile). trends.* fields are nullable by design (no-prior-month-history becomes null rather than NaN).'
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 metrics:
+   *                   type: object
+   *                   properties:
+   *                     systemUptime:
+   *                       type: number
+   *                     avgResponseTime:
+   *                       type: number
+   *                     errorRate:
+   *                       type: number
+   *                       nullable: true
+   *                       description: 'Percentage of ERROR+FATAL severity_text rows in the last 24h. null when VL is unreachable.'
+   *                     monthlyActiveUsers:
+   *                       type: integer
+   *                 trends:
+   *                   type: object
+   *                   description: 'All fields nullable by design (no-prior-month-history renders as null, never NaN).'
+   *                   properties:
+   *                     uptime:
+   *                       type: number
+   *                       nullable: true
+   *                     responseTime:
+   *                       type: number
+   *                       nullable: true
+   *                     errorRate:
+   *                       type: number
+   *                       nullable: true
+   *                     activeUsers:
+   *                       type: number
+   *                       nullable: true
+   *                 resourceUsage:
+   *                   type: object
+   *                   properties:
+   *                     cpu:
+   *                       type: number
+   *                     memory:
+   *                       type: number
+   *                     storage:
+   *                       type: number
+   *                 healthServices:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id:
+   *                         type: string
+   *                       name:
+   *                         type: string
+   *                       status:
+   *                         type: string
    *       401:
    *         description: Unauthorized - authentication required
    *       403:
    *         description: Forbidden - admin access required
    *       500:
-   *         description: Server error
+   *         description: 'Server error during system health computation (e.g. DB failure). Note that VL outage does NOT trigger this - it produces a 200 with errorRate=null instead.'
    */
   router.get('/system-health', async (req, res, next) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/system-health route', {
@@ -78,7 +162,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /api/admin/database/stats:
+   * "/api/admin/database/stats":
    *   get:
    *     summary: Get database statistics
    *     tags: [Admin]
@@ -106,7 +190,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /api/admin/logs:
+   * "/api/admin/logs":
    *   get:
    *     summary: Get system logs
    *     tags: [Admin]
@@ -122,7 +206,8 @@ module.exports = (adminService, logsService) => {
    *         name: level
    *         schema:
    *           type: string
-   *         description: Filter logs by level (INFO, WARNING, ERROR)
+   *           enum: [TRACE, DEBUG, INFO, WARN, WARNING, ERROR, FATAL]
+   *         description: 'Filter logs by level. WARN/WARNING are synonyms (normalized to WARN before the VL query). The query is a single-value severity_text:<canonical> clause; ERROR matches only ERROR, FATAL only FATAL. Use /logs/summary for the sibling view.'
    *       - in: query
    *         name: service
    *         schema:
@@ -131,17 +216,60 @@ module.exports = (adminService, logsService) => {
    *     responses:
    *       200:
    *         description: Logs retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 logs:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                 total:
+   *                   type: integer
+   *                 limit:
+   *                   type: integer
+   *                 offset:
+   *                   type: integer
+   *       400:
+   *         description: 'Invalid filter (level outside the allowlist) - typed InvalidFilterError envelope {error: invalid_filter, message}.'
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   enum: [invalid_filter]
+   *                 message:
+   *                   type: string
    *       401:
    *         description: Unauthorized - authentication required
    *       403:
    *         description: Forbidden - admin access required
+   *       503:
+   *         description: 'VictoriaLogs unreachable - typed envelope {error: vl_unreachable, message} surfaced via the global error middleware reading err.statusCode + err.body verbatim.'
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   enum: [vl_unreachable]
+   *                 message:
+   *                   type: string
    *       500:
-   *         description: Server error
+   *         description: Untyped server error - non-VL failures (programmer errors, etc.) propagate as 500.
    */
   router.get('/logs', async (req, res, next) => {
     try {
-      const { limit, level, service } = req.query;
-      const result = await adminService.getLogs({ limit, level, service });
+      // Forward the full querystring — AdminDashboardService.getLogs forwards
+      // the options object verbatim, so any future search-box / pagination
+      // keys (q, offset) reach the service without a route widening per
+      // release. Pre-existing keys (limit, level, service) keep identical
+      // behaviour.
+      const result = await adminService.getLogs({ ...req.query });
       res.json(result);
     } catch (error) {
       logger.error(`[ADMIN-ROUTES] Error getting logs: ${error.message}`, { stack: error.stack });
@@ -151,35 +279,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /api/admin/logs/rollover:
-   *   post:
-   *     summary: Trigger log rollover
-   *     tags: [Admin]
-   *     security:
-   *       - KeycloakOAuth2: ['openid']
-   *     responses:
-   *       200:
-   *         description: Logs rolled over successfully
-   *       401:
-   *         description: Unauthorized - authentication required
-   *       403:
-   *         description: Forbidden - admin access required
-   *       500:
-   *         description: Server error
-   */
-  router.post('/logs/rollover', async (req, res, next) => {
-    try {
-      const result = await adminService.rolloverLogs();
-      res.json(result);
-    } catch (error) {
-      logger.error(`[ADMIN-ROUTES] Error rolling over logs: ${error.message}`, { stack: error.stack });
-      next(error);
-    }
-  });
-
-  /**
-   * @swagger
-   * /api/admin/user-stats:
+   * "/api/admin/user-stats":
    *   get:
    *     summary: Get user statistics
    *     tags: [Admin]
@@ -199,7 +299,6 @@ module.exports = (adminService, logsService) => {
     try {
       const result = await adminService.getUserStats();
       res.json(result);
-      logger.debug('[ADMIN-ROUTES] User stats response sent to client', { result });
     } catch (error) {
       logger.error(`[ADMIN-ROUTES] Error getting user stats: ${error.message}`, { stack: error.stack });
       next(error);
@@ -208,7 +307,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /api/admin/security-metrics:
+   * "/api/admin/security-metrics":
    *   get:
    *     summary: Get security metrics
    *     tags: [Admin]
@@ -217,6 +316,33 @@ module.exports = (adminService, logsService) => {
    *     responses:
    *       200:
    *         description: Security metrics retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   enum: [true]
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     failedLoginAttempts:
+   *                       type: integer
+   *                     suspiciousActivities:
+   *                       type: integer
+   *                     lastSecurityScan:
+   *                       type: string
+   *                       nullable: true
+   *                     vulnerabilities:
+   *                       type: object
+   *                       properties:
+   *                         critical:
+   *                           type: integer
+   *                         medium:
+   *                           type: integer
+   *                         low:
+   *                           type: integer
    *       401:
    *         description: Unauthorized - authentication required
    *       403:
@@ -249,7 +375,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /api/admin/security-scan:
+   * "/api/admin/security-scan":
    *   post:
    *     summary: Run security scan
    *     tags: [Admin]
@@ -258,12 +384,80 @@ module.exports = (adminService, logsService) => {
    *     responses:
    *       200:
    *         description: Security scan completed successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   enum: [true]
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     scanTime:
+   *                       type: string
+   *                       format: date-time
+   *                     vulnerabilities:
+   *                       type: object
+   *                       properties:
+   *                         critical:
+   *                           type: integer
+   *                         medium:
+   *                           type: integer
+   *                         low:
+   *                           type: integer
+   *                         details:
+   *                           type: array
+   *                           items:
+   *                             type: object
+   *                     status:
+   *                       type: string
+   *                       enum: [completed, skipped]
+   *                     skipped:
+   *                       type: boolean
+   *                     reason:
+   *                       type: string
+   *                       nullable: true
+   *                     vulnerabilityDetails:
+   *                       type: object
+   *                       description: 'Categorised vulnerability buckets: {critical, medium, low} arrays.'
+   *                     patternMatches:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                       description: 'All pattern-match rows (signature hits + bare-phrase hits).'
+   *                     patternMatchCount:
+   *                       type: integer
+   *                     failedLoginDetails:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                     suspiciousDetails:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                     message:
+   *                       type: string
+   *                       description: 'Human-readable scan summary; distinguishes skipped vs completed.'
    *       401:
    *         description: Unauthorized - authentication required
    *       403:
    *         description: Forbidden - admin access required
+   *       503:
+   *         description: 'VictoriaLogs unreachable - typed envelope {error: vl_unreachable, message}; the inline catch forwards err.statusCode + err.body verbatim when the throwable carries them.'
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   enum: [vl_unreachable]
+   *                 message:
+   *                   type: string
    *       500:
-   *         description: Server error
+   *         description: Untyped server error - the inline catch falls back here when the throwable has no statusCode.
    */
   router.post('/security-scan', async (req, res) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/security-scan route', {
@@ -276,14 +470,21 @@ module.exports = (adminService, logsService) => {
       res.status(200).json({ success: true, data: result });
       logger.info(`[ADMIN-ROUTES] Security scan completed successfully by user: ${req.user?.email || 'unknown'}`);
     } catch (error) {
+      // VlUnavailableError carries its own statusCode (503) + body
+      // ({error: 'vl_unreachable', message}) so monitoring/alerting can
+      // distinguish VL outages from generic 500s. Render verbatim and only
+      // fall back to 500 when the throwable is untyped.
       logger.error(`[ADMIN-ROUTES] Error running security scan: ${error.message}`, { stack: error.stack });
+      if (error.statusCode && error.body) {
+        return res.status(error.statusCode).json(error.body);
+      }
       res.status(500).json({ success: false, message: 'Failed to run security scan' });
     }
   });
 
   /**
    * @swagger
-   * /api/admin/security/last-scan:
+   * "/api/admin/security/last-scan":
    *   get:
    *     summary: Retrieve the last security scan details
    *     tags: [Admin]
@@ -291,7 +492,60 @@ module.exports = (adminService, logsService) => {
    *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
-   *         description: Last security scan details retrieved successfully
+   *         description: 'Last security scan details retrieved successfully. Unlike /security-scan and /security-metrics, this endpoint returns the unwrapped scanResult directly (NOT wrapped in {success, data}).'
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 scanTime:
+   *                   type: string
+   *                   format: date-time
+   *                 lastScan:
+   *                   type: string
+   *                   nullable: true
+   *                   description: 'Cold-start sentinel ("Never") returned by getLastScanDetails when no scan has been saved yet; null after the first successful run.'
+   *                 vulnerabilities:
+   *                   type: object
+   *                   properties:
+   *                     critical:
+   *                       type: integer
+   *                     medium:
+   *                       type: integer
+   *                     low:
+   *                       type: integer
+   *                     details:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                 vulnerabilityDetails:
+   *                   type: object
+   *                   description: 'Categorised vulnerability buckets: {critical, medium, low} arrays.'
+   *                 patternMatches:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                 patternMatchCount:
+   *                   type: integer
+   *                 failedLoginDetails:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                 suspiciousDetails:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                 status:
+   *                   type: string
+   *                   enum: [completed, skipped]
+   *                 skipped:
+   *                   type: boolean
+   *                 reason:
+   *                   type: string
+   *                   nullable: true
+   *                 message:
+   *                   type: string
+   *                   description: 'Human-readable scan summary (only present after a run; cold-start default omits it).'
    *       401:
    *         description: Unauthorized - authentication required
    *       403:
@@ -316,7 +570,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /api/admin/diagnostics:
+   * "/api/admin/diagnostics":
    *   post:
    *     summary: Run system diagnostics
    *     tags: [Admin]
@@ -344,7 +598,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /api/admin/logs/summary:
+   * "/api/admin/logs/summary":
    *   get:
    *     summary: Get logs summary by type and service
    *     tags: [Admin]
@@ -360,22 +614,73 @@ module.exports = (adminService, logsService) => {
    *         name: level
    *         schema:
    *           type: string
-   *         description: Filter by log level
+   *           enum: [ERROR, WARN, WARNING, FATAL]
+   *         description: 'Filter by log level. WARNING normalizes to WARN and is accepted; the canonical bucket keys are ERROR / WARN. WARN and WARNING are synonyms; ERROR and FATAL are siblings. The VL query OR-joins the synonyms internally. Any value outside the allowlist is rejected with 400 invalid_filter.'
    *     responses:
    *       200:
    *         description: Logs summary retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 errors:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                 warnings:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                 services:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       name:
+   *                         type: string
+   *                       count:
+   *                         type: integer
+   *                 date:
+   *                   type: string
+   *                 degraded:
+   *                   type: boolean
+   *       400:
+   *         description: 'Invalid filter (level outside the ERROR/WARN/FATAL allowlist) - typed InvalidFilterError envelope {error: invalid_filter, message}.'
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   enum: [invalid_filter]
+   *                 message:
+   *                   type: string
    *       401:
    *         description: Unauthorized - authentication required
    *       403:
    *         description: Forbidden - admin access required
+   *       503:
+   *         description: 'VictoriaLogs unreachable on a complete-outage query (all 3 buckets fail). Typed envelope {error: vl_unreachable, message}; the F11 complete-outage guard throws VlUnavailableError so the route renders 503 instead of 200 + empty arrays + degraded:true.'
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   enum: [vl_unreachable]
+   *                 message:
+   *                   type: string
    *       500:
-   *         description: Server error
+   *         description: Untyped server error - non-VL failures (programmer errors, etc.) propagate as 500.
    */
   router.get('/logs/summary', async (req, res, next) => {
     try {
       const { date, level } = req.query;
-      const result = await logsService.getLogsSummary({ date, level }); // Changed to logsService
-      res.json({ data: result }); // Wrap result in { data: ... } for frontend consistency
+      const result = await logsService.getLogsSummary({ date, level });
+      res.json(result);
     } catch (error) {
       logger.error(`[ADMIN-ROUTES] Error getting logs summary: ${error.message}`, { stack: error.stack });
       next(error);
@@ -384,7 +689,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /api/admin/logs/search:
+   * "/api/admin/logs/search":
    *   get:
    *     summary: Search logs with filtering
    *     tags: [Admin]
@@ -400,7 +705,8 @@ module.exports = (adminService, logsService) => {
    *         name: level
    *         schema:
    *           type: string
-   *         description: Filter by log level
+   *           enum: [TRACE, DEBUG, INFO, WARN, WARNING, ERROR, FATAL]
+   *         description: 'Filter by log level. WARN/WARNING are synonyms (normalized to WARN before the VL query). The query is a single-value severity_text:<canonical> clause; ERROR matches only ERROR, FATAL only FATAL. Use /logs/summary for the sibling view. The VL query uses the unquoted severity_text:<level> form. getLogsInRange is the only endpoint that uses the quoted form — these endpoints differ in shape.'
    *       - in: query
    *         name: service
    *         schema:
@@ -425,12 +731,51 @@ module.exports = (adminService, logsService) => {
    *     responses:
    *       200:
    *         description: Search completed successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 logs:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                 total:
+   *                   type: integer
+   *                 limit:
+   *                   type: integer
+   *                 offset:
+   *                   type: integer
+   *       400:
+   *         description: 'Invalid filter - typed InvalidFilterError envelope {error: invalid_filter, message} for unsupported level values.'
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   enum: [invalid_filter]
+   *                 message:
+   *                   type: string
    *       401:
    *         description: Unauthorized - authentication required
    *       403:
    *         description: Forbidden - admin access required
+   *       503:
+   *         description: 'VictoriaLogs unreachable - typed envelope {error: vl_unreachable, message} via global error middleware.'
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   enum: [vl_unreachable]
+   *                 message:
+   *                   type: string
    *       500:
-   *         description: Server error
+   *         description: Untyped server error - non-VL failures propagate as 500.
    */
   router.get('/logs/search', async (req, res, next) => {
     try {
@@ -445,7 +790,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /api/admin/logs/debug-yesterday:
+   * "/api/admin/logs/debug-yesterday":
    *   get:
    *     summary: Debug logs for yesterday to diagnose issues
    *     tags: [Admin]
@@ -454,12 +799,46 @@ module.exports = (adminService, logsService) => {
    *     responses:
    *       200:
    *         description: Debug information retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 logs:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       date:
+   *                         type: string
+   *                       time:
+   *                         type: string
+   *                       level:
+   *                         type: string
+   *                       service:
+   *                         type: string
+   *                       message:
+   *                         type: string
+   *                 total:
+   *                   type: integer
    *       401:
    *         description: Unauthorized - authentication required
    *       403:
    *         description: Forbidden - admin access required
+   *       503:
+   *         description: 'VictoriaLogs unreachable - typed envelope {error: vl_unreachable, message} via the explicit LogsService._vlOrThrow(vlErr) call in admin-dashboard-service.js.'
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   enum: [vl_unreachable]
+   *                 message:
+   *                   type: string
    *       500:
-   *         description: Server error
+   *         description: Untyped server error - non-VL failures propagate as 500.
    */
   router.get('/logs/debug-yesterday', async (req, res, next) => {
     try {
@@ -473,7 +852,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /api/admin/database-operations/backup:
+   * "/api/admin/database-operations/backup":
    *   post:
    *     summary: Backup database
    *     tags: [Admin]
@@ -501,7 +880,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /api/admin/database-operations/optimize:
+   * "/api/admin/database-operations/optimize":
    *   post:
    *     summary: Optimize database
    *     tags: [Admin]
@@ -529,7 +908,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /api/admin/users/search:
+   * "/api/admin/users/search":
    *   get:
    *     summary: Search users with filtering
    *     tags: [Admin]
@@ -585,7 +964,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/queries/inspect:
+   * "/api/admin/queries/inspect":
    *   get:
    *     summary: Get recent queries for admin inspection (Query Inspector)
    *     tags: [Admin]
@@ -669,7 +1048,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/queries/inspect/{queryId}:
+   * "/api/admin/queries/inspect/{queryId}":
    *   get:
    *     summary: Get full query details for admin inspection
    *     tags: [Admin]
@@ -691,6 +1070,17 @@ module.exports = (adminService, logsService) => {
    *         description: Forbidden - admin access required
    *       404:
    *         description: Query not found
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: 'Query not found'
    *       500:
    *         description: Server error
    */

@@ -231,7 +231,7 @@ export default {
     contentManagement: 'কনটেন্ট ম্যানেজমেন্ট',
     knowledgeHierarchy: 'জ্ঞান অনুক্রম',
     documentManagement: 'ডকুমেন্ট ম্যানেজমেন্ট',
-    noLogsFound: 'আজকের জন্য কোনো লগ পাওয়া যায়নি',
+    noErrorsOrWarnings: 'আজ কোনো ত্রুটি বা সতর্কতা নেই',
     invalidLogsResponse: 'অবৈধ লগস সারাংশ প্রতিক্রিয়া কাঠামো',
     logsSummaryError: 'লগস সারাংশ লোড করতে ব্যর্থ হয়েছে',
     buttons: {
@@ -265,7 +265,6 @@ export default {
     databaseSize: 'ডেটাবেসের আকার',
     totalTables: 'মোট টেবিল',
     logManagement: 'লগ ম্যানেজমেন্ট',
-    rolloverLogs: 'রোলওভার লগস',
     searchLogs: 'লগ অনুসন্ধান করুন',
     logTime: 'সময়',
     logLevel: 'স্তর (Level)',
@@ -322,10 +321,6 @@ export default {
         error: 'ডেটাবেস অপ্টিমাইজ করার সময় ত্রুটি',
         loading: 'ডেটাবেস অপ্টিমাইজ করা হচ্ছে...'
       },
-      rolloverLogs: {
-        success: 'লগ রোলওভার সফলভাবে সম্পন্ন হয়েছে',
-        loading: 'লগ রোলওভার করা হচ্ছে...'
-      },
       searchLogs: {
         success: 'লগ অনুসন্ধান সম্পন্ন হয়েছে',
         loading: 'লগ অনুসন্ধান করা হচ্ছে...'
@@ -373,7 +368,6 @@ export default {
       warningLogs: 'ওয়ার্নিং লগস (Warning Logs)',
       noErrorLogs: 'আজ কোনো এরর লগ রেকর্ড করা হয়নি।',
       noWarningLogs: 'আজ কোনো ওয়ার্নিং লগ রেকর্ড করা হয়নি।',
-      infoLogsNote: 'ইনফো লগগুলি সারাংশে দেখানো হয় না। সমস্ত লগ প্রকার দেখতে অনুসন্ধান ফাংশন ব্যবহার করুন।',
       searchResults: 'সর্বশেষ অনুসন্ধান ফলাফল',
       entriesFound: 'এন্ট্রি পাওয়া গেছে',
       viewAllResults: 'সমস্ত ফলাফল দেখুন',
@@ -385,11 +379,15 @@ export default {
         authFailed: 'প্রমাণীকরণ ব্যর্থতা',
         lowDiskSpace: 'ডিস্ক স্পেস থ্রেশহোল্ডের নিচে',
         slowQuery: 'ধীর কোয়েরি পারফরম্যান্স',
-        rateLimit: 'রেট লিমিট কাছাকাছি'
+        rateLimit: 'রেট লিমিট কাছাকাছি',
+        invalidToken: 'অবৈধ টোকেন',
+        fileNotFound: 'ফাইল পাওয়া যায়নি'
       },
       logSearch: {
         noResultsFound: 'আপনার অনুসন্ধানের মানদণ্ডের সাথে কোনো লগ মেলেনি',
-        resultsFound: '{count} টি লগ এন্ট্রি পাওয়া গেছে'
+        resultsFound: '{count} টি লগ এন্ট্রি পাওয়া গেছে',
+        degraded:
+          'VictoriaLogs এর বিভ্রাটের কারণে আংশিক ফলাফল দেখানো হচ্ছে। কিছু সাম্প্রতিক লগ এন্ট্রি অনুপস্থিত থাকতে পারে।'
       }
     },
     security: {
@@ -422,6 +420,10 @@ export default {
       envFileRecommendation:
         'নিশ্চিত করুন যে এনভায়রনমেন্ট ফাইলগুলি ওয়েব ডিরেক্টরি থেকে অ্যাক্সেসযোগ্য নয় এবং সার্ভার কনফিগারেশনগুলি সঠিকভাবে সংবেদনশীল ফাইলগুলিতে অ্যাক্সেস ব্লক করে।',
       gitRepoRecommendation: 'নিশ্চিত করুন যে .git ডিরেক্টরিগুলি সঠিকভাবে সুরক্ষিত এবং ওয়েব থেকে অ্যাক্সেসযোগ্য নয়।',
+      logPatternMatches: 'লগ প্যাটার্ন মিলেছে',
+      patternMatchNote:
+        'লগ টেক্সটে পাওয়া পরিভাষা। স্ক্যানটি সাবস্ট্রিং রিপোর্ট করে, যাচাই করা আক্রমণ নয় — লাইনটি পড়ুন।',
+      patternMatchSummaryNote: '(লগ টেক্সটে পাওয়া সাবস্ট্রিং, যাচাই করা আক্রমণ নয়)',
       noVulnerabilitiesFound: 'কোন দুর্বলতা পাওয়া যায়নি',
       systemSecure: 'আপনার সিস্টেম নিরাপদ বলে মনে হচ্ছে। নিয়মিত মনিটরিং চালিয়ে যান।',
       loadingScan: 'স্ক্যান ফলাফল লোড হচ্ছে...',

@@ -60,7 +60,6 @@ const mockSearchUsers = jest.fn().mockResolvedValue({
 const mockGetSecurityDetails = jest.fn().mockResolvedValue({});
 const mockRunDiagnostics = jest.fn().mockResolvedValue({});
 const mockRunSecurityScan = jest.fn().mockResolvedValue({});
-const mockRolloverLogs = jest.fn().mockResolvedValue({});
 
 jest.mock('../../services/adminDashboardService', () => ({
   getSystemHealth: mockGetSystemHealth,
@@ -72,8 +71,7 @@ jest.mock('../../services/adminDashboardService', () => ({
   searchUsers: mockSearchUsers,
   getSecurityDetails: mockGetSecurityDetails,
   runDiagnostics: mockRunDiagnostics,
-  runSecurityScan: mockRunSecurityScan,
-  rolloverLogs: mockRolloverLogs
+  runSecurityScan: mockRunSecurityScan
 }));
 
 jest.mock('../../services/serviceTreeService', () => ({
@@ -679,6 +677,28 @@ describe('AdminDashboard', () => {
       expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
     });
 
+    // MR !343 round-2 finding #6b: pin the canonical /admin/logs/summary
+    // wire contract — service returns the full axios response (`{ data:
+    // { errors, warnings, date } }`); component reads `response.data.errors`.
+    // A previous round-1 mismatch (service extracted `response.data` before
+    // returning) left the panel silently broken even on the success path.
+    it('loadLogsSummary populates error/warning lists via canonical wire', async () => {
+      mockGetLogsSummary.mockResolvedValueOnce({
+        data: {
+          errors: [{ level: 'ERROR', message: 'boom' }],
+          warnings: [{ level: 'WARN', message: 'hiss' }],
+          date: '2026-05-26'
+        }
+      });
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadLogsSummary();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.errorLogsSummary).toEqual([{ level: 'ERROR', message: 'boom' }]);
+      expect(wrapper.vm.warningLogsSummary).toEqual([{ level: 'WARN', message: 'hiss' }]);
+    });
+
     it('loadLogsSummary handles API error gracefully', async () => {
       mockGetLogsSummary.mockRejectedValueOnce(new Error('Server error'));
       const wrapper = createAdminDashboardWrapper();
@@ -703,6 +723,166 @@ describe('AdminDashboard', () => {
         suspiciousActivities: 0,
         lastSecurityScan: 'Never',
         vulnerabilities: { critical: 0, medium: 0, low: 0 }
+      });
+    });
+
+    it('loadSecurityDetails maps patternMatches out of the severity buckets', async () => {
+      // The backend stopped calling a bare substring a vulnerability.
+      // The panel must show the term, the count and the real log line —
+      // and none of it may reach the critical/medium/low lists.
+      mockGetSecurityDetails.mockReset();
+      mockGetSecurityDetails.mockResolvedValue({
+        lastScan: '2026-09-28T18:00:00Z',
+        vulnerabilities: { critical: 0, medium: 1, low: 0 },
+        vulnerabilityDetails: { critical: [], medium: [], low: [] },
+        patternMatches: [
+          {
+            type: 'attack_attempt',
+            pattern: 'CSRF',
+            occurrences: 2,
+            sample:
+              'logger=settings t=2026-09-25T08:13:01.983348506Z level=info ' +
+              'var="GF_SECURITY_CSRF_TRUSTED_ORIGINS=https://localhost:8443"',
+            sampleTimestamp: '2026-09-25T08:13:01.983348506Z',
+            service: 'grafana',
+            lastSeen: '2026-09-25T08:13:01.983348506Z'
+          }
+        ],
+        failedLoginDetails: [],
+        suspiciousDetails: []
+      });
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadSecurityDetails();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityDetails.vulnerabilityDetails.critical).toEqual([]);
+      expect(wrapper.vm.securityDetails.patternMatches).toHaveLength(1);
+      expect(wrapper.vm.securityDetails.patternMatches[0]).toEqual({
+        type: 'attack_attempt',
+        pattern: 'CSRF',
+        occurrences: 2,
+        sample:
+          'logger=settings t=2026-09-25T08:13:01.983348506Z level=info ' +
+          'var="GF_SECURITY_CSRF_TRUSTED_ORIGINS=https://localhost:8443"',
+        sampleTimestamp: '2026-09-25T08:13:01.983348506Z',
+        service: 'grafana',
+        lastSeen: '2026-09-25T08:13:01.983348506Z'
+      });
+    });
+
+    it('marks the pattern-match section with a neutral dot, not a severity colour', async () => {
+      // Every other section in the panel opens with a severity dot. This
+      // one must still have a dot or it reads as a rendering fault, but it
+      // must not borrow a severity colour — the backend withdrew the
+      // severity claim.
+      mockGetSecurityDetails.mockReset();
+      mockGetSecurityDetails.mockResolvedValue({
+        lastScan: 'Never',
+        patternMatches: [{ type: 'attack_attempt', pattern: 'CSRF', occurrences: 1, sample: 'x', service: 'grafana' }]
+      });
+      const wrapper = createAdminDashboardWrapper();
+
+      // The section only renders once the security tab is active.
+      wrapper.vm.setActiveTab('security');
+      await wrapper.vm.loadSecurityDetails();
+      await wrapper.vm.$nextTick();
+
+      const section = wrapper.find('.pattern-match-section');
+      expect(section.exists()).toBe(true);
+      const dot = section.find('.severity-indicator');
+      expect(dot.exists()).toBe(true);
+      expect(dot.classes()).toContain('neutral');
+      for (const severityClass of ['critical', 'medium', 'low', 'warning', 'info']) {
+        expect(dot.classes()).not.toContain(severityClass);
+      }
+    });
+
+    it('loadSecurityDetails defaults patternMatches to an empty list when absent', async () => {
+      // A scan result cached before this field existed must not break
+      // the panel.
+      mockGetSecurityDetails.mockReset();
+      mockGetSecurityDetails.mockResolvedValue({ lastScan: 'Never' });
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadSecurityDetails();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityDetails.patternMatches).toEqual([]);
+    });
+
+    it('loadSecurityDetails populates failedLoginDetails with backend log.level (caller-path for parseLogMessage)', async () => {
+      // Backend `security-scan-service.js` produces { timestamp, level, message };
+      // the AdminDashboard mapper must propagate `level` to the UI table — not
+      // collapse every entry to UNKNOWN via parseLogMessage(plainString).
+      // Use mockResolvedValue (persistent) rather than Once to bypass any stale
+      // once-queues left over from earlier tests in this suite.
+      mockGetSecurityDetails.mockReset();
+      mockGetSecurityDetails.mockResolvedValue({
+        lastScan: '2026-09-08T10:00:00Z',
+        vulnerabilities: { critical: 0, medium: 0, low: 0 },
+        failedLoginDetails: [
+          { timestamp: '2026-09-08T10:00:00Z', level: 'ERROR', message: 'Invalid credentials' },
+          { timestamp: '2026-09-08T10:01:00Z', level: 'WARN', message: 'Repeated failures' }
+        ],
+        suspiciousDetails: [{ timestamp: '2026-09-08T10:02:00Z', level: 'WARNING', message: 'Anomalous IP' }]
+      });
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadSecurityDetails();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityDetails.failedLoginDetails).toEqual([
+        { timestamp: '2026-09-08T10:00:00Z', type: 'ERROR', message: 'Invalid credentials' },
+        { timestamp: '2026-09-08T10:01:00Z', type: 'WARN', message: 'Repeated failures' }
+      ]);
+      expect(wrapper.vm.securityDetails.suspiciousDetails).toEqual([
+        { timestamp: '2026-09-08T10:02:00Z', type: 'WARNING', message: 'Anomalous IP' }
+      ]);
+    });
+
+    it('loadSecurityDetails falls back to parseLogMessage when log.level is missing (legacy/printf path)', async () => {
+      // Pairs with the previous test: when a backend row lacks `level`, the mapper
+      // must feed `log.message` (a JSON-encoded string) through parseLogMessage.
+      // Pins the fallback branch of mapAndParseLogDetail.
+      mockGetSecurityDetails.mockReset();
+      mockGetSecurityDetails.mockResolvedValue({
+        lastScan: '2026-09-08T11:00:00Z',
+        vulnerabilities: { critical: 0, medium: 0, low: 0 },
+        failedLoginDetails: [
+          { timestamp: '2026-09-08T11:00:00Z', message: JSON.stringify({ level: 'ERROR', message: 'Legacy failure' }) }
+        ],
+        suspiciousDetails: []
+      });
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadSecurityDetails();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityDetails.failedLoginDetails).toEqual([
+        { timestamp: '2026-09-08T11:00:00Z', type: 'ERROR', message: 'Legacy failure' }
+      ]);
+    });
+
+    it('loadSecurityDetails does not propagate literal "null" timestamp when log row is missing fields', async () => {
+      // Regression guard: mapAndParseLogDetail must coalesce a missing timestamp
+      // to an empty string rather than propagating JS null through to the UI table.
+      mockGetSecurityDetails.mockReset();
+      mockGetSecurityDetails.mockResolvedValue({
+        lastScan: '2026-09-08T12:00:00Z',
+        vulnerabilities: { critical: 0, medium: 0, low: 0 },
+        failedLoginDetails: [{ level: 'ERROR', message: 'no timestamp here' }],
+        suspiciousDetails: []
+      });
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadSecurityDetails();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityDetails.failedLoginDetails[0]).toEqual({
+        timestamp: '',
+        type: 'ERROR',
+        message: 'no timestamp here'
       });
     });
   });
@@ -1064,28 +1244,50 @@ describe('AdminDashboard', () => {
       expect(result).toEqual({ type: 'UNKNOWN', message: 'null' });
     });
 
-    it('extracts ERROR type from "[ERROR]: something went wrong"', () => {
+    it('extracts ERROR type from JSON-encoded log entry', () => {
       const wrapper = createAdminDashboardWrapper();
-      const result = wrapper.vm.parseLogMessage('[ERROR]: something went wrong');
+      const result = wrapper.vm.parseLogMessage(JSON.stringify({ level: 'ERROR', message: 'something went wrong' }));
       expect(result).toEqual({ type: 'ERROR', message: 'something went wrong' });
     });
 
-    it('extracts INFO type from "[INFO] status update" (no colon after bracket)', () => {
+    it('extracts INFO type from JSON-encoded log entry', () => {
       const wrapper = createAdminDashboardWrapper();
-      const result = wrapper.vm.parseLogMessage('[INFO] status update');
+      const result = wrapper.vm.parseLogMessage(JSON.stringify({ level: 'INFO', message: 'status update' }));
       expect(result).toEqual({ type: 'INFO', message: 'status update' });
     });
 
-    it('defaults to INFO type for plain string without prefix', () => {
+    it('returns UNKNOWN for plain string without JSON parseable shape', () => {
       const wrapper = createAdminDashboardWrapper();
       const result = wrapper.vm.parseLogMessage('plain log message');
-      expect(result).toEqual({ type: 'INFO', message: 'plain log message' });
+      expect(result).toEqual({ type: 'UNKNOWN', message: 'plain log message' });
     });
 
-    it('handles "[WARNING]:" format correctly', () => {
+    it('extracts WARNING type from JSON-encoded log entry', () => {
       const wrapper = createAdminDashboardWrapper();
-      const result = wrapper.vm.parseLogMessage('[WARNING]: this is a warning');
-      expect(result).toEqual({ type: 'WARNING', message: 'this is a warning' });
+      // Feed lowercase 'warn' so the assertion exercises parsed.level.toUpperCase() — not just an already-upper value.
+      const result = wrapper.vm.parseLogMessage(JSON.stringify({ level: 'warn', message: 'this is a warning' }));
+      expect(result).toEqual({ type: 'WARN', message: 'this is a warning' });
+    });
+
+    it('parses JSON-encoded log entries that carry extra fields', () => {
+      // The actual JSON.parse-discrimination proof is the next test (malformed JSON -> UNKNOWN).
+      // This test pins the JSON input shape: { level, message } plus any extra fields are tolerated.
+      const wrapper = createAdminDashboardWrapper();
+      const json = JSON.stringify({
+        level: 'ERROR',
+        message: 'parsed',
+        trace_id: 'abc123',
+        span_id: 'def456'
+      });
+      const result = wrapper.vm.parseLogMessage(json);
+      expect(result.type).toBe('ERROR');
+      expect(result.message).toBe('parsed');
+    });
+
+    it('falls back to UNKNOWN on malformed JSON input', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.parseLogMessage('{not valid json');
+      expect(result).toEqual({ type: 'UNKNOWN', message: '{not valid json' });
     });
   });
 
@@ -1585,5 +1787,62 @@ describe('AdminDashboard', () => {
       wrapper.vm.selectedDocuments = ['f1', 'f2'];
       expect(wrapper.vm.showRetractButton).toBe(false);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stat tile trends
+// ---------------------------------------------------------------------------
+// All four tiles used to hardcode their trend — "↑ 0.01%", "↑ 0.2%",
+// "↓ 12%", "↑ 15%" — so every operator read the same constant whatever the
+// data said. They now render `trends.*` from the /admin/system-health
+// payload, and disappear entirely when the backend could not compute one.
+describe('stat tile trends come from the payload, not from the template', () => {
+  const trendFor = (trends, key, higherIsBetter) => {
+    const wrapper = createAdminDashboardWrapper();
+    wrapper.vm.trends = trends;
+    return wrapper.vm.trend(key, higherIsBetter);
+  };
+
+  it('returns null when the trend was not computed — no fabricated number', () => {
+    expect(trendFor({ uptime: null }, 'uptime', true)).toBeNull();
+  });
+
+  it('a rising metric reads as an upward arrow', () => {
+    const t = trendFor({ uptime: 2.5 }, 'uptime', true);
+    expect(t.arrow).toBe('↑');
+    expect(t.value).toBe('2.50%');
+  });
+
+  it('a falling metric reads as a downward arrow', () => {
+    expect(trendFor({ responseTime: -12 }, 'responseTime', false).arrow).toBe('↓');
+  });
+
+  it('a flat metric is neither up nor down', () => {
+    const t = trendFor({ uptime: 0 }, 'uptime', true);
+    expect(t.arrow).toBe('→');
+    expect(t.className).toBe('trend-up');
+  });
+
+  it('colours by whether the direction is good news', () => {
+    // Uptime up and MAU up: good news.
+    expect(trendFor({ uptime: 1 }, 'uptime', true).className).toBe('trend-up');
+    expect(trendFor({ activeUsers: 15 }, 'activeUsers', true).className).toBe('trend-up');
+    // Error rate up and response time up: bad news.
+    expect(trendFor({ errorRate: 1 }, 'errorRate', false).className).toBe('trend-down');
+    expect(trendFor({ responseTime: 12 }, 'responseTime', false).className).toBe('trend-down');
+  });
+
+  it('colours a falling error rate and response time as good news', () => {
+    expect(trendFor({ errorRate: -1 }, 'errorRate', false).className).toBe('trend-up');
+    expect(trendFor({ responseTime: -12 }, 'responseTime', false).className).toBe('trend-up');
+  });
+
+  it('strips the sign from the displayed value — the arrow carries it', () => {
+    expect(trendFor({ errorRate: -3.456 }, 'errorRate', false).value).toBe('3.46%');
+  });
+
+  it('treats a non-numeric payload value as not computed', () => {
+    expect(trendFor({ uptime: 'n/a' }, 'uptime', true)).toBeNull();
   });
 });

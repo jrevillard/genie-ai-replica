@@ -19,14 +19,9 @@ through the standard OTLP protocol.
 | OPEA services | Python | FastAPI spans, per-RAG-stage spans (retrieval, reranking, labelling…), service logs. |
 | Kong gateway | Lua | OTel plugin forwards request traces. |
 
-Instrumentation helpers enforce a single way to create spans (so attributes and
-PII filtering stay consistent):
-
-- **Node.js** — `tracing.withSpan(name, fn)`. Never create spans via the global
-  tracer directly.
-- **Python** — FastAPI auto-instrumentation (enabled globally in `setup_tracing()`, no per-endpoint decorator), and `with_span(name, ...)` for inner RAG-stage spans.
-
-See [Tracing]({{< relref "tracing" >}}) for the span taxonomy.
+The result, end-to-end: **a single trace_id flows through every service a user
+request touches** (see [Tracing]({{< relref "tracing" >}})), and the same
+trace_id appears in the matching log lines.
 
 ## Layer 2 — Collection
 
@@ -34,26 +29,14 @@ The **OpenTelemetry Collector** is the hub. It runs in Docker Swarm
 `mode: global` — one instance on every node — so it collects from every service
 no matter where the scheduler places it.
 
-`configs/otel/otel-collector-config.yaml` defines its pipeline:
+What the collector receives:
 
-| Receiver | Port | Ingests |
-|---|---|---|
-| `otlp` (HTTP) | 4318 | Traces and metrics from instrumented app services. |
-| `fluentforward` | 24224 | Container stdout/stderr logs (Docker `fluentd` logging driver). |
-| `prometheus/victoriametrics_internal` | 8428 | VictoriaMetrics self-telemetry. |
-| `prometheus/victorialogs_internal` | 9428 | VictoriaLogs self-telemetry. |
-| `prometheus/victoriatraces_internal` | 10428 | VictoriaTraces self-telemetry. |
-| `prometheus/collector_self` | 8888 | The collector's own otelcol_* metrics. |
-
-| Exporter | Destination |
+| Source | Signal |
 |---|---|
-| VictoriaMetrics (remote write) | Metrics. |
-| VictoriaLogs (OTLP HTTP) | Logs. |
-| VictoriaTraces (OTLP HTTP) | Traces. |
-
-The traces pipeline includes a **probabilistic sampler** and a **batch** processor
-before export. Docker dual-logging (20.10+) keeps `docker logs` working alongside
-the fluentd driver.
+| Instrumented services (OTLP) | Traces and metrics. |
+| Container stdout/stderr (Docker fluentd driver) | Logs. |
+| Each Victoria store's own self-telemetry | Storage health. |
+| The collector's own metrics | Pipeline health. |
 
 > **Self-telemetry.** The collector also scrapes each Victoria store's own
 > metrics, so the health of the observability stack itself is observable — see
@@ -87,18 +70,20 @@ with Keycloak OIDC SSO.
 
 ## Data flow for one user query
 
-1. The client request hits Kong (span: `request`).
-2. Kong propagates a `traceparent` header to the backend.
+1. The client request hits Kong.
+2. Kong generates the trace context and passes it downstream — every service the
+   request touches joins the same trace.
 3. The backend creates spans for auth, the BFF handler, and the ArangoDB queries
    it issues directly.
-4. The backend forwards `traceparent` to ChatQnA, which propagates it to each RAG
-   stage (embedding, retriever, reranker, LLM, translation) — each emits a span
-   under the same trace.
-5. Every span is OTLP-exported to the collector, which batches and forwards it to
-   VictoriaTraces.
+4. The backend forwards the trace context to ChatQnA, which propagates it to
+   each RAG stage (embedding, retriever, reranker, LLM, translation) — each
+   emits a span under the same trace.
+5. The collector batches and forwards traces to VictoriaTraces, metrics to
+   VictoriaMetrics, and logs to VictoriaLogs.
 6. The full trace is queryable in Grafana's *Trace explorer* and the *RAG pipeline
-  trace waterfall* dashboard.
+   trace waterfall* dashboard.
 
-The same collector instance is also receiving that service's logs (fluentd) and
-metrics (OTLP), so for any span you can pivot to the matching logs and metrics in
-the same window.
+Because logs carry the same `trace_id`, you can pivot from any trace span
+straight to the matching log lines in the *Service logs* dashboard — see
+[Trace ↔ log correlation]({{< relref "tracing" >}}#trace-log-correlation) in
+the Tracing page.

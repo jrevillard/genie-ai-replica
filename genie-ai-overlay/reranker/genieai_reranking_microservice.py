@@ -7,7 +7,15 @@ import time
 
 from opentelemetry.trace import Status, StatusCode
 
-from tracing import get_meter, get_tracer, sanitize_attributes, setup_trace_logging, setup_tracing
+from tracing import (
+    get_meter,
+    get_tracer,
+    install_uvicorn_access_logging,
+    sanitize_attributes,
+    setup_json_logging,
+    setup_trace_logging,
+    setup_tracing,
+)
 
 setup_tracing("genieai-reranker")
 
@@ -42,6 +50,8 @@ from pydantic import Field
 
 logger = CustomLogger("opea_reranking_microservice")
 setup_trace_logging("opea_reranking_microservice")
+setup_json_logging("opea_reranking_microservice")
+install_uvicorn_access_logging()
 logflag = os.getenv("LOGFLAG", False)
 
 

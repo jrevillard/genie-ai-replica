@@ -24,7 +24,12 @@ from opentelemetry import propagate
 from opentelemetry.trace import Status, StatusCode
 from pydantic import Field
 
-from tracing import get_tracer, setup_trace_logging
+from tracing import (
+    get_tracer,
+    install_uvicorn_access_logging,
+    setup_json_logging,
+    setup_trace_logging,
+)
 
 tracer = get_tracer(__name__)
 
@@ -40,6 +45,8 @@ class GenieSearchedDoc(SearchedDoc):
 
 logger = CustomLogger("genie_tei_reranking")
 setup_trace_logging("genie_tei_reranking")
+setup_json_logging("genie_tei_reranking")
+install_uvicorn_access_logging()
 logflag = os.getenv("LOGFLAG", False)
 
 # Strategies: slice, threshold, slice_threshold, knee_threshold, adaptive

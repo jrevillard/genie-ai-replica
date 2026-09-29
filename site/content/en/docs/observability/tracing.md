@@ -1,6 +1,6 @@
 ---
 title: Tracing
-description: W3C traceparent propagation across the RAG pipeline, the span taxonomy, and automatic PII filtering.
+description: W3C traceparent propagation across the RAG pipeline, the span taxonomy, and how traces connect to logs.
 weight: 2
 ---
 
@@ -8,6 +8,10 @@ Tracing is what makes a GENIE.AI user query legible. Because every service
 propagates a single W3C `traceparent` header and every RAG stage emits a span,
 one user question produces one contiguous trace that can be read end-to-end in
 Grafana — revealing exactly where time went and which chunks were retrieved.
+
+The same `trace_id` also appears on every log line touched by that request, so
+a trace span and its log lines can be cross-referenced in either direction —
+see [Trace ↔ log correlation](#trace-log-correlation) below.
 
 ## Trace propagation
 
@@ -25,42 +29,50 @@ Client → Kong (root span, injects traceparent)
 This is plain W3C Trace Context — no GENIE.AI-specific protocol — so standard
 OTel tooling and Jaeger clients interoperate.
 
+## Trace ↔ log correlation
+
+A `trace_id` is not only a trace concept: the same identifier is stamped on
+every log line produced while handling that request. The connection works in
+both directions:
+
+- **From a log line to a trace.** In the *Service logs* dashboard, copy the
+  `trace_id` field out of any log row and paste it into *Trace explorer* to
+  pull up the full distributed trace that produced it.
+- **From a trace span to logs.** In *Trace explorer* (or the *RAG pipeline trace
+  waterfall* dashboard), open a span and copy its `trace_id`. Paste it into the
+  *Service logs* dashboard's filter to see every log line from every service
+  involved in that request, in order.
+
+This is the operator's main "I see an error, now what?" tool. A typical flow:
+
+1. *Service health* or *Application metrics* shows an error spike.
+2. *Trace explorer* locates a failing trace and identifies the slow / failing
+   span.
+3. The span's `trace_id` filters *Service logs* to the matching lines, where
+   the actual error message lives.
+
 ## Span taxonomy
 
-### Backend (Node.js)
+The spans you will see in *Trace explorer* cover the major services and RAG
+stages. You do not need to memorise them; the *RAG pipeline trace waterfall*
+dashboard arranges them by service so the slow stage is visible at a glance.
 
-Created with `tracing.withSpan(name, fn)`. Key spans cover Express request
-handling, middleware, and ArangoDB queries (instrumented in `tracing-db.js`).
-
-### RAG pipeline (Python/OPEA)
-
-Each RAG stage emits a named span with structured attributes:
-
-| Service | Representative spans | Key attributes |
+| Service | Representative spans | What they reveal |
 |---|---|---|
-| ChatQnA | per-stage (embed, retrieve, rerank, generate, translate) | stage name, model id, token counts |
-| Retriever | `retrieval` | `k`, `fetch_k`, hit count, fusion weights |
-| Reranker | `reranking` | strategy, `top_n`, calibrated scores |
-| Dataprep | `dataprep.ingest`, `dataprep.retract`, `dataprep.chunking` | `file_type`, `file_size_bytes`, `file_id`, `chunk_count` |
-| Dataprep LLM | `dataprep.llm.label_chunk`, `dataprep.llm.label_batch` | `chunk_index`/`chunk_indices`, `llm_model`, `labels_suggested`, `llm.completion_tokens`, `llm_batched` |
-
-The dataprep labelling spans distinguish single-chunk calls from batched calls
-(`llm_batched`), which is what makes labelling-throughput regressions visible.
-
-### Kong
-
-The OTel plugin emits a `request` span per proxied call, carrying HTTP method,
-route, and status.
+| ChatQnA | per-stage (embed, retrieve, rerank, generate, translate) | Which stage took the time; model id and token counts on the LLM stage. |
+| Retriever | `retrieval` | `k`, `fetch_k`, hit count, fusion weights. |
+| Reranker | `reranking` | Strategy used, `top_n`, calibrated scores. |
+| Dataprep | `dataprep.ingest`, `dataprep.retract`, `dataprep.chunking` | File type and size, file id, chunk count. |
+| Dataprep LLM | `dataprep.llm.label_chunk`, `dataprep.llm.label_batch` | Per-chunk vs. batched labelling (labelling-throughput regressions show up here). |
 
 ## PII filtering
 
-Telemetry must never leak secrets. The backend applies a PII filter
-(`tracing-pii.js`) that strips sensitive attributes — tokens, passwords, user
-PII — from span attributes before export. The rule for engineers:
+Telemetry never carries secrets or user PII. Sensitive attributes (tokens,
+passwords, user PII) are stripped from span attributes before export.
 
-> **Never log raw tokens, passwords, or user PII in span attributes.** Put
-> structured, non-sensitive identifiers on spans (e.g. a user id, a file id); let
-> the filter catch anything that slips through, but do not rely on it.
+> **What you will not see on a span.** Bearer tokens, user emails, raw
+> passwords, or any other PII. If a span attribute looks like it might contain
+> sensitive data, treat it as a bug — the filter should have caught it.
 
 ## Sampling
 

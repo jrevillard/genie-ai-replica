@@ -262,6 +262,52 @@ function isHeadingCandidate(t, nextLine) {
 
 // ── segmentation + cross-file links ─────────────────────────────────────────
 
+/** WHOLE-FILE MARKDOWN IMPORT (field fix 2026-09-29, David's slaughterhouse
+ * round-trip: "exported to a zip … imported the concept files … none of the
+ * concept-to-concept links were created"). A .md file that already carries
+ * frontmatter IS a curated concept file: it imports WHOLE — one concept,
+ * concept id = the file stem (so exported repos round-trip and their
+ * cross-file links resolve), frontmatter respected, body verbatim.
+ * Re-segmenting such a file renamed every concept and stranded every link
+ * (the editor graph drops dangling targets) and even produced empty
+ * pre-heading fragments. Returns null for frontmatter-less markdown —
+ * unstructured content keeps the T6-lite segmentation. */
+function draftWholeMarkdown(text, { baseSlug, title, meta }) {
+  const raw = String(text || '');
+  if (!/^---\r?\n/.test(raw)) return null; // no frontmatter block at all
+  let fm = {};
+  let content = '';
+  try {
+    const matter = require('gray-matter');
+    const parsed = matter(raw); // gray-matter wants the WHOLE document (delimiters included)
+    fm = parsed.data || {};
+    content = parsed.content || '';
+  } catch (err) {
+    logger.warn('Whole-markdown frontmatter parse failed — falling back to segmentation', {
+      baseSlug,
+      error: err.message
+    });
+    return null;
+  }
+  if (!fm || typeof fm !== 'object' || !fm.title) return null; // no usable frontmatter
+  const body = content.replace(/^\s*\n/, '').trim() + '\n';
+  const frontmatter = { ...fm, title: String(fm.title).trim() };
+  // Provenance (the standard rule — authorial sources are never touched):
+  // a file with no authorial sources gets the importing document's stamp.
+  if (!Array.isArray(frontmatter.sources) || frontmatter.sources.length === 0) {
+    frontmatter.sources = [
+      { kind: 'document', resource: meta.baseResource, file_id: meta.file_id, file_name: meta.file_name, locator: 'whole document' }
+    ];
+  }
+  return [
+    {
+      path: `${baseSlug}.md`,
+      frontmatter,
+      body
+    }
+  ];
+}
+
 /** Split markdown text into section concepts on H1/H2/H3 headings; a document
  * without usable headings stays ONE concept. Tiny sections merge forward.
  * The locator rides sources[] so popup cards can point at the exact section. */
@@ -437,7 +483,11 @@ async function runDocumentsConversion(job) {
               .replace(/\.[^.]+$/, '')
               .replace(/[-_]+/g, ' ')
               .trim() || baseSlug;
-          const drafts = segmentMarkdown(converted.text, { baseSlug, title, meta });
+          // WHOLE-FILE first: a frontmatter-bearing .md is already a curated
+          // concept (see draftWholeMarkdown) — never re-segment it.
+          const drafts =
+            (lower === '.md' && draftWholeMarkdown(converted.text, { baseSlug, title, meta })) ||
+            segmentMarkdown(converted.text, { baseSlug, title, meta });
           allDrafts.push(...drafts);
           perFile.push({ file_id, file_name: meta.file_name, status: 'imported', concepts: drafts.length });
         }
@@ -701,6 +751,7 @@ module.exports = {
   live,
   // exported for unit tests (pure functions)
   segmentMarkdown,
+  draftWholeMarkdown,
   resolveCrossFileLinks,
   structurePlainText,
   isHeadingCandidate

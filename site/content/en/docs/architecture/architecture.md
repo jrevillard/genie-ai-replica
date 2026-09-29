@@ -250,7 +250,7 @@ For operational details (invocation commands, suite maintenance), see the [Contr
 
 ## 5. Observability Architecture
 
-> For operational observability — dashboards, alerting, configuration, and tracing — see the [Observability]({{< relref "/docs/observability" >}}) section. This section covers the architecture-level design.
+> For operational observability — dashboards, alerting, configuration, and tracing — see the [Observability]({{< relref "/docs/observe" >}}) section. This section covers the architecture-level design.
 
 ### 5.1 Distributed Tracing Flow
 
@@ -740,9 +740,9 @@ sequenceDiagram
 
 Dataprep uses a dedicated Keycloak client with the `client_credentials` grant type. This service account is separate from user tokens and has permissions scoped to document ingestion operations. The ingestion pipeline extracts content, chunks it, labels each chunk against the service taxonomy, constructs a knowledge graph (entities + relationships), generates vector embeddings, and stores everything in ArangoDB.
 
-> **Contextual Retrieval (optional).** `CONTEXTUAL_RETRIEVAL_ENABLED=true` (default); the dataprep generates an LLM document-context prefix per chunk (after chunking, before embedding) so chunks carry the document's subject. `CONTEXTUAL_STRATEGY` selects `per_chunk` (one call/chunk, tailored; default) or `doc_level` (one call/document, shared). `CONTEXTUAL_LABEL_RAW=true` (default) decouples: label the **raw** chunk, use the context only for the **embedding** — keeps label precision while propagating the subject via the vector. Default on (`true`); set `false` to disable. See the [Data Labelling Strategy]({{< relref "/docs/rag/data-labeling" >}}) doc (§7).
+> **Contextual Retrieval (optional).** `CONTEXTUAL_RETRIEVAL_ENABLED=true` (default); the dataprep generates an LLM document-context prefix per chunk (after chunking, before embedding) so chunks carry the document's subject. `CONTEXTUAL_STRATEGY` selects `per_chunk` (one call/chunk, tailored; default) or `doc_level` (one call/document, shared). `CONTEXTUAL_LABEL_RAW=true` (default) decouples: label the **raw** chunk, use the context only for the **embedding** — keeps label precision while propagating the subject via the vector. Default on (`true`); set `false` to disable. See the [Data Labelling Strategy]({{< relref "/docs/rag-pipeline/data-labeling" >}}) doc (§7).
 
-> **Multi-Turn Retrieval (optional, off by default).** `MULTI_TURN_BLEND_ENABLED=false` (default). A **query-time** companion to Contextual Retrieval: blends the embedded current query with an embedding of the previous N turns (`V = α·EQ + (1-α)·EH`, default `α=0.7`, `N=1`) at the retriever's dense leg, so pronoun-heavy follow-ups ("can you elaborate on this?") retrieve the prior turn's subject. Implemented as a single batched TEI call through the existing embedding node (no side-channel embedding). Under the default dense-only config the blended vector controls all retrieval; when hybrid retrieval is explicitly enabled (opt-in), only the dense leg is blended. See [Multi-Turn Retrieval]({{< relref "/docs/rag/multi-turn-retrieval" >}}).
+> **Multi-Turn Retrieval (optional, off by default).** `MULTI_TURN_BLEND_ENABLED=false` (default). A **query-time** companion to Contextual Retrieval: blends the embedded current query with an embedding of the previous N turns (`V = α·EQ + (1-α)·EH`, default `α=0.7`, `N=1`) at the retriever's dense leg, so pronoun-heavy follow-ups ("can you elaborate on this?") retrieve the prior turn's subject. Implemented as a single batched TEI call through the existing embedding node (no side-channel embedding). Under the default dense-only config the blended vector controls all retrieval; when hybrid retrieval is explicitly enabled (opt-in), only the dense leg is blended. See [Multi-Turn Retrieval]({{< relref "/docs/rag-pipeline/multi-turn-retrieval" >}}).
 
 ### 10.3 Document Retraction
 
@@ -790,7 +790,7 @@ Unauthenticated requests to protected routes receive a 401 response. The backend
 
 On each authenticated request, the backend checks whether the user exists in ArangoDB. If not, it creates the user record using a composite key formed from the JWT issuer and subject (`iss#sub`). If the user already exists, the backend updates the user's metadata (name, email, roles) to stay in sync with Keycloak.
 
-This ensures ArangoDB always reflects the current state from the identity provider. For detailed user management procedures, see the [Keycloak Admin Guide](/docs/configuration/keycloak-admin-guide/).
+This ensures ArangoDB always reflects the current state from the identity provider. For detailed user management procedures, see the [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/).
 
 ### 12.2 User Disable and Delete Propagation
 
@@ -842,7 +842,7 @@ sequenceDiagram
 
 Keycloak acts as a broker between GENIE.AI and external identity providers. The external IdP authenticates the user, Keycloak maps the external identity to a local user, and issues a GENIE.AI-signed JWT. The frontend and backend only interact with Keycloak -- they are unaware of which external IdP was used.
 
-For configuration details, see the [External IdP Integration Guide](/docs/configuration/external-idp-integration-guide/).
+For configuration details, see the [External IdP Integration Guide](/docs/configure/external-idp-integration-guide/).
 
 ---
 
@@ -906,13 +906,13 @@ This approach (docs option 1: X-Forwarded-Prefix) avoids hardcoding a full URL i
 
 ## 16. Further Reading
 
-- [RAG Pipeline]({{< relref "/docs/rag" >}}) -- Retrieval-augmented generation: embedding, hybrid retrieval, reranking, generation, translation
-- [Observability]({{< relref "/docs/observability" >}}) -- Metrics, logs, traces, dashboards, alerting
+- [RAG Pipeline]({{< relref "/docs/rag-pipeline" >}}) -- Retrieval-augmented generation: embedding, hybrid retrieval, reranking, generation, translation
+- [Observability]({{< relref "/docs/observe" >}}) -- Metrics, logs, traces, dashboards, alerting
 
-- [Keycloak Admin Guide](/docs/configuration/keycloak-admin-guide/) -- Realm configuration, user management, client setup
+- [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/) -- Realm configuration, user management, client setup
 - [Docker Compose Setup](/docs/deployment/docker-compose-setup/) -- Local development deployment with Docker Compose
 - [Docker Swarm Setup](/docs/deployment/docker-swarm-setup/) -- Production deployment with Docker Swarm and Ansible
 - [Ansible Deployment](../deploy/ansible/README.md) -- Automated Docker Swarm deployment with per-environment secrets
 - [OTel Collector Integration](../configs/otel/README.md) -- Observability stack configuration (OTel Collector, VictoriaMetrics, VictoriaLogs, VictoriaTraces, Grafana)
-- [External IdP Integration Guide](/docs/configuration/external-idp-integration-guide/) -- Connecting Google, Microsoft, and SAML identity providers
+- [External IdP Integration Guide](/docs/configure/external-idp-integration-guide/) -- Connecting Google, Microsoft, and SAML identity providers
 - [E2E Tests](e2e-tests/README.md) -- End-to-end test procedures for authentication and session lifecycle

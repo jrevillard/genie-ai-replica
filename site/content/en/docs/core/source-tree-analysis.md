@@ -281,7 +281,7 @@ components/gov-chat-backend/
 
 - **Keycloak:** OIDC authentication, admin API proxy (`services/keycloak-auth-service.js`, `services/keycloak-proxy-service.js`)
 - **ArangoDB:** Direct connection for all data operations (users, conversations, messages, service categories)
-- **Redis:** Session store, caching
+- **Redis:** Translation-service cache only (`services/translation-service.js`) — not used for sessions or general caching
 - **OPEA ChatQnA:** Chat query orchestration (`services/query-service.js` → `genie-ai-overlay/chatqna/`)
 - **Document Repository:** File upload proxy (`services/security-scan-service.js` → `components/document-repository/`)
 - **Translation Service:** Translation backend proxy (`services/translation-service.js` → GPU/CPU backends)
@@ -624,8 +624,8 @@ flowchart TB
         OPEA["OPEA Microservices<br/>ChatQnA :8888<br/>Retriever :7000<br/>Reranker :8000<br/>Dataprep :5000"]
     end
 
-    Browser --> Nginx
-    Mobile --> Nginx
+    Browser -- "/, /api/*" --> Nginx
+    Mobile -- "HTTPS 443" --> Nginx
     Nginx -- "/ → static SPA" --> Browser
     Nginx -- "/api/*" --> Kong
     Kong --> BE
@@ -646,7 +646,7 @@ flowchart TB
 3. **Frontend/Mobile:** Stores token, sends via `Authorization: Bearer` header
 4. **Backend:** Validates token via `keycloak-auth-service.js` (Keycloak introspection endpoint)
 5. **OPEA ChatQnA:** Validates token via `keycloak_token_validator.py`
-6. **Session Management:** Backend stores session data in Redis
+6. **Session Management:** Backend stores session data in ArangoDB collections (`sessions`, `userSessions`, `sessionQueries`) via `services/session-service.js` — Redis is NOT used for sessions
 
 ### Data Flow
 
@@ -682,7 +682,7 @@ flowchart TB
    - `backend` - Node.js/Express API (`components/gov-chat-backend/`)
    - `doc-repo` - Document repository (`components/document-repository/`)
    - `arangodb` - ArangoDB database
-   - `redis` - Cache/session store
+   - `redis` - Translation cache only (`services/translation-service.js`)
 
 3. **Layer 3: API Gateway**
    - `kong` - Kong API Gateway

@@ -71,6 +71,7 @@ flowchart TB
 
         subgraph AI["AI/ML Layer (OPEA)"]
             ChatQnA["ChatQnA<br/>:8888"]
+            Embedding["Embedding wrapper<br/>:6000"]
             Retriever["Retriever<br/>:7000"]
             Reranker["Reranker<br/>:8000"]
             TEI["TEI<br/>:80"]
@@ -87,9 +88,10 @@ flowchart TB
         Backend --> Redis
         Backend --> ChatQnA
         DocRepo --> Files
+        ChatQnA --> Embedding
         ChatQnA --> Retriever
         ChatQnA --> Reranker
-        ChatQnA --> TEI
+        Embedding --> TEI
         ChatQnA --> VLLM
         Retriever --> Arango
         Backend -. "JWT validation" .-> Keycloak
@@ -478,15 +480,8 @@ issuer, and audience.
 
 **Handled client-side**, not via a backend route. The OIDC client
 (`oidc-client-ts` on the web, `flutter_appauth` on mobile) calls Keycloak
-directly:
-
-```mermaid
-sequenceDiagram
-    participant C as Client<br/>(oidc-client-ts)
-    participant K as Keycloak
-    C->>K: POST /token (grant_type=refresh_token)
-    K-->>C: new access_token (silent, next call)
-```
+directly. (See the [Token refresh](#token-refresh) section below for the
+sequence diagram.)
 
 The `POST /api/auth/refresh-token` endpoint does **not** exist in the
 backend. Kong has a placeholder route for it (legacy clients), but the
@@ -961,13 +956,19 @@ sequenceDiagram
     N-->>C: SSE: chunk
 
     Q-->>B: SSE: metadata
-    B-->>C: SSE: metadata
+    B-->>K: SSE: metadata
+    K-->>N: SSE: metadata
+    N-->>C: SSE: metadata
 
     Q-->>B: SSE: done
-    B-->>C: SSE: done
+    B-->>K: SSE: done
+    K-->>N: SSE: done
+    N-->>C: SSE: done
 
     Note over B: Backend: translationService.translate()
-    B-->>C: SSE: translation
+    B-->>K: SSE: translation
+    K-->>N: SSE: translation
+    N-->>C: SSE: translation
 ```
 
 ### Document ingestion flow

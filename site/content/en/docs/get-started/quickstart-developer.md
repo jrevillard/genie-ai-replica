@@ -45,7 +45,7 @@ flowchart TB
     Nginx["NGINX<br/>(host: 80, 443)"]
     Kong["Kong<br/>(8000) — routes by path prefix"]
     Backend["backend (3000)<br/>Node.js / Express<br/>THE THING YOU EDIT"]
-    Frontend["frontend (5173)<br/>Vue 3 SPA<br/>served as static assets"]
+    Frontend["frontend (8090)<br/>Vue 3 SPA<br/>served as static assets"]
     DocRepo["document-repository<br/>(3001) — file uploads"]
     Arango["arango-vector-db (8529)<br/>Graph + vectors"]
     Redis["redis-cache (6379)<br/>Cache"]

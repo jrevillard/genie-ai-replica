@@ -443,7 +443,7 @@ sequenceDiagram
     BE->>KC: JWKS public key (cached)
     BE->>BE: Validate JWT signature + claims
     BE->>ADB: JIT provisioning (UPSERT by iss#sub)
-    BE->>Vue: API response
+    BE-->>Vue: API response
 ```
 
 Keycloak serves as the sole identity authority. If an external IdP is configured, Keycloak brokers the authentication. On each authenticated API request, the backend validates the JWT and ensures the user exists in ArangoDB via just-in-time provisioning.
@@ -541,6 +541,8 @@ sequenceDiagram
     participant K as Kong
     participant BE as Backend
     participant ChatQnA as OPEA ChatQnA
+    participant Emb as Embedding wrapper
+    participant TEI as TEI
     participant Ret as Retriever
     participant ADB as ArangoDB
     participant LLM as vLLM
@@ -553,21 +555,21 @@ sequenceDiagram
     BE->>ChatQnA: Bearer token
     ChatQnA->>ChatQnA: Validate JWT (JWKS)
     ChatQnA->>BE: GET /api/me/context (user profile for AI enrichment)
-    BE->>ChatQnA: User context (name, role, emailVerified)
+    BE-->>ChatQnA: User context (name, role, emailVerified)
     ChatQnA->>Emb: POST /v1/embeddings
     Emb->>TEI: Forward (Hugging Face Inference API)
-    TEI->>Emb: Embedding vector
-    Emb->>ChatQnA: Embedding vector
+    TEI-->>Emb: Embedding vector
+    Emb-->>ChatQnA: Embedding vector
     ChatQnA->>Ret: Query with embedding
     Ret->>ADB: Vector + graph search
-    ADB->>Ret: Ranked chunks
-    Ret->>ChatQnA: Retrieved documents
+    ADB-->>Ret: Ranked chunks
+    Ret-->>ChatQnA: Retrieved documents
     ChatQnA->>ChatQnA: Rerank results
     ChatQnA->>LLM: Context + prompt
-    LLM->>ChatQnA: Generated response
-    ChatQnA->>BE: RAG response
-    BE->>FE: API response
-    FE->>User: Display answer
+    LLM-->>ChatQnA: Generated response
+    ChatQnA-->>BE: RAG response
+    BE-->>FE: API response
+    FE-->>User: Display answer
 ```
 
 The RAG pipeline flows through the API gateway, backend, and OPEA services. The Bearer token is forwarded to ChatQnA, which performs independent JWKS validation. ChatQnA also fetches user context from the backend via `GET /api/me/context` to enrich AI prompts with user profile data.
@@ -605,24 +607,24 @@ sequenceDiagram
     Emb->>TEI: Forward (Hugging Face Inference API)
     TEI->>TEI: [SPAN: tei.embedding]
     TEI->>Collector: Export span
-    TEI->>ChatQnA: Vector
+    TEI-->>ChatQnA: Vector
     
     ChatQnA->>Ret: Query (traceparent)
     Ret->>Ret: [SPAN: retriever.search]
     Ret->>ADB: Vector + graph search
     ADB->>ADB: [SPAN: arangodb.query]
     Ret->>Collector: Export span
-    Ret->>ChatQnA: Chunks
+    Ret-->>ChatQnA: Chunks
     
     ChatQnA->>Rerank: Rerank (traceparent)
     Rerank->>Rerank: [SPAN: reranker.score]
     Rerank->>Collector: Export span
-    Rerank->>ChatQnA: Ranked chunks
+    Rerank-->>ChatQnA: Ranked chunks
     
     ChatQnA->>LLM: Generate (traceparent)
     LLM->>LLM: [SPAN: llm.inference]
     LLM->>Collector: Export span
-    LLM->>ChatQnA: Response
+    LLM-->>ChatQnA: Response
     
     ChatQnA->>BE: RAG response
     BE->>FE: API response
@@ -726,7 +728,7 @@ sequenceDiagram
     K->>DR: POST /api/files/upload (Bearer token)
     DR->>DR: Validate file type + size
     DR->>CLAM: Scan for viruses
-    CLAM->>DR: Clean / Infected
+    CLAM-->>DR: Clean / Infected
     DR->>DR: Store file + metadata
     DR->>FE: 201 Created (file_id)
 ```
@@ -759,7 +761,7 @@ sequenceDiagram
     DP->>DP: Chunk document (dynamic size per file type)
 
     DP->>BE: GET /api/service-categories/categories
-    BE->>DP: Label hierarchy
+    BE-->>DP: Label hierarchy
     DP->>DP: Label chunks (LLM / embedding / BM25)
     DP->>ADB: Store chunks + entities + graph edges
     DP->>ADB: Generate and store vector embeddings

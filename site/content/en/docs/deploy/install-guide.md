@@ -394,7 +394,7 @@ defaults.
 |---|---|---|---|---|
 | `NGINX_PORT` | number | no | `80` | ChatQnA Nginx router port |
 | `FRONTEND_SERVICE_IP` | string | no | `chatqna-xeon-ui-server` | ChatQnA UI server hostname |
-| `FRONTEND_SERVICE_PORT` | number | no | `5173` | ChatQnA UI server port |
+| `FRONTEND_SERVICE_PORT` | number | no | `5173` | ChatQnA UI server port (OPEA UI — disabled in GENIE.AI, kept here for reference) |
 | `BACKEND_SERVICE_NAME` | string | no | `chatqna-xeon-backend-server` | ChatQnA backend service name (hardcoded in compose) |
 | `BACKEND_SERVICE_IP` | string | no | `chatqna-xeon-backend-server` | ChatQnA backend hostname |
 | `BACKEND_SERVICE_PORT` | number | no | `8888` | ChatQnA backend port |

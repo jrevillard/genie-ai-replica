@@ -626,9 +626,9 @@ sequenceDiagram
     LLM->>Collector: Export span
     LLM-->>ChatQnA: Response
     
-    ChatQnA->>BE: RAG response
-    BE->>FE: API response
-    FE->>User: Display answer
+    ChatQnA-->>BE: RAG response
+    BE-->>FE: API response
+    FE-->>User: Display answer
 ```
 
 **Key spans emitted:**
@@ -730,7 +730,7 @@ sequenceDiagram
     DR->>CLAM: Scan for viruses
     CLAM-->>DR: Clean / Infected
     DR->>DR: Store file + metadata
-    DR->>FE: 201 Created (file_id)
+    DR-->>FE: 201 Created (file_id)
 ```
 
 Users upload documents through the frontend to the Document Repository service. Files are validated (type, size), scanned by ClamAV, and stored with metadata. Upload requires an authenticated user with admin role.

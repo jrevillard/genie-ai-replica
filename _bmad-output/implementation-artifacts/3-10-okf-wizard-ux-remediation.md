@@ -196,3 +196,22 @@
   Containers healthy. The UI E2E pass (wizard crawl-pick → workbench →
   produce accounting → handoff → editor add-sources) is David's;
   /code-review max queued after it. Committed + pushed as f748e4885.
+- 2026-09-29 (STALE-DEPLOY INCIDENT — David caught it live): his E2E
+  screenshot showed the OLD wizard (step 10 "Publish this repository",
+  no picker filtering). ROOT CAUSE: my first rebuild used the wrong
+  compose service name (`doc-repository` — compose validates all names
+  and built NOTHING), and my "deployed-code verification" was a broken
+  one-liner (`grep -l ... | head -1 && echo HAS_T2` succeeds on zero
+  matches — smoke-test-integrity violated AGAIN). The frontend served
+  9-hour-old code. FIXES: narrative cards step8/step9 rewritten to
+  handoff copy in ALL 14 locales (39cafa3e5 — the filler never touched
+  existing values; fr/st use double quotes and fr lacked step9 since
+  before this story), frontend rebuilt with the correct service name,
+  force-recreated. VERIFIED ON THE RUNNING CONTAINER'S REAL DIST
+  (/app/dist — NOT the html root): T5 handoff ✓ (2 files), narrative ✓,
+  T1 chips ✓ (8), editor add-source ✓ (2), OLD "Publish this
+  repository" — 0 matches, gone. LESSON (re-earned): deployment
+  verification = assert NEW strings PRESENT and OLD strings ABSENT in
+  the artifact the container actually serves, with counts; a pipeline
+  whose exit code can't fail is not a verification. David should
+  hard-refresh (browser cache) before retesting.

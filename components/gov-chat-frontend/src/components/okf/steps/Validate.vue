@@ -53,7 +53,7 @@
           :text="
             translate(
               'okf.glossary.piiReview',
-              'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot publish with unreviewed findings.'
+              'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
             )
           "
         />
@@ -155,7 +155,7 @@ export default {
       if (blockers > 0)
         return this.translate(
           'okf.validation.headline.blockers',
-          `${blockers} blocking issue(s) — fix before publishing`
+          `${blockers} blocking issue(s) — fix before you hand the repository off`
         );
       if (warnings > 0)
         return this.translate('okf.validation.headline.warnings', `${warnings} thing(s) need your review`);

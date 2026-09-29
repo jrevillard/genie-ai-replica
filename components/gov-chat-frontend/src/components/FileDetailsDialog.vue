@@ -933,10 +933,12 @@ export default {
       const url = this.crawlJob && this.crawlJob.config && this.crawlJob.config.url;
       const crawlJobId = this.crawlJob && (this.crawlJob._key || this.crawlJob.crawl_job_id);
       if (!fileId) {
-        // No file to ingest from — fall back to the legacy seed behaviour so
-        // the steward can at least land in the Studio with the seed URL.
+        // No file to ingest from — land in the Studio with the seed URL as
+        // PREFILL ONLY (audit A6: the seed must never enter crawlSeeds, or it
+        // reaches draft.input.document_ids and Produce kicks a conversion
+        // against a filename string as a bogus file_id).
         const seed = filename || url || '';
-        await this.$store.dispatch('okf/setSelection', { crawlSeeds: [seed] });
+        await this.$store.dispatch('okf/setSelection', { crawlSeeds: [] });
         window.dispatchEvent(
           new CustomEvent('okf:create-from-crawl', {
             detail: { file_id: null, crawl_job_id: crawlJobId, seed }

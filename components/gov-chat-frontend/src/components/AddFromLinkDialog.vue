@@ -471,14 +471,34 @@ export default {
         // Dashboard tab ("Create OKF repository from this crawl"), where all
         // split options live in one place, after the file exists. The legacy
         // seed event is kept only for the async path so an already-open
-        // Studio wizard can pre-fill the URL (harmless no-op otherwise).
+        // Studio wizard can pre-fill (harmless no-op otherwise).
+        // Audit A6 + verifier B1 (2026-09-29): seed the crawl stub's REAL
+        // file_id WITH its origin stamp — StudioTab builds draft.input
+        // .document_ids AND document_names from these rows, and Produce
+        // routes each conversion leg by the row's source. A URL string here
+        // once reached convertFromCrawlInto as a bogus file_id; a bare id
+        // without a row once routed the whole crawl through the documents
+        // batch (losing per-URL slug identity). No file_id → seed nothing:
+        // an async site crawl cannot be converted from a URL string anyway.
         if (this.crawlMode !== 'single_page') {
-          await this.$store.dispatch('okf/setSelection', { crawlSeeds: [this.url.trim()] });
-          window.dispatchEvent(
-            new CustomEvent('okf:create-from-crawl', {
-              detail: { url: this.url.trim(), crawlMode: this.crawlMode, crawlDepth: this.crawlDepth }
-            })
-          );
+          const fileId = response.data && response.data.file_id;
+          if (fileId) {
+            await this.$store.dispatch('okf/setSelection', {
+              crawlSeeds: [
+                { file_id: fileId, file_name: (response.data && response.data.file_name) || fileId, source: 'crawl' }
+              ]
+            });
+            window.dispatchEvent(
+              new CustomEvent('okf:create-from-crawl', {
+                detail: {
+                  file_id: fileId,
+                  url: this.url.trim(),
+                  crawlMode: this.crawlMode,
+                  crawlDepth: this.crawlDepth
+                }
+              })
+            );
+          }
         }
         this.$emit('link-submitted', response.data);
         this.$emit('close');

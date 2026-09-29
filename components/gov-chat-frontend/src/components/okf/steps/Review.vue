@@ -10,7 +10,12 @@
   <div class="okf-step">
     <h3 class="okf-step__title">{{ translate('okf.steps.review.title', 'Review') }}</h3>
     <p class="okf-step__hint">
-      {{ translate('okf.steps.review.hint', 'A summary of what you are about to publish.') }}
+      {{
+        translate(
+          'okf.steps.review.hint',
+          'A summary of what you built — submit, approval and publishing happen on the dashboard and in the editor.'
+        )
+      }}
     </p>
     <div class="okf-step__summary">
       <p>
@@ -138,7 +143,10 @@ export default {
     },
     versionSummary() {
       if (!this.versionCount)
-        return this.translate('okf.steps.review.noVersions', 'No versions yet — publish mints v1.');
+        return this.translate(
+          'okf.steps.review.noVersions',
+          'No versions yet — versions are minted during the approval ritual.'
+        );
       return this.translate('okf.steps.review.versionSummary', '{n} version(s) · latest v{latest}')
         .replace('{n}', String(this.versionCount))
         .replace('{latest}', String(this.latestVersion || 1));

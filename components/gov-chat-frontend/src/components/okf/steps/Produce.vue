@@ -171,19 +171,33 @@ export default {
       this.$emit('gate', true);
     } else if (live === 'done' && !stale && (input.convert_queue || []).length > 0) {
       // T3: the chain finished one leg server-side but the draft still has
-      // queue — resume the remaining crawl files (seed the LOCAL queue —
-      // the running chain reads local state, not the prop).
+      // queue — resume the remaining legs (seed the LOCAL queue — the
+      // running chain reads local state, not the prop). Legacy drafts
+      // stored plain crawl-id strings; normalizeLegs maps them to crawl legs.
       this.status = 'running';
+      this.sourceLog = (input.source_log || []).slice();
       this._lastCount = await this.fetchConceptCount();
-      this.sourceQueue = input.convert_queue.slice();
+      const queued = this.validLegsOnly(this.normalizeLegs(input.convert_queue));
+      if (queued.length !== this.normalizeLegs(input.convert_queue).length) {
+        // Verifier B3: the queue contains legs that are no longer selected —
+        // the steward changed the selection mid-chain. Drop the stale queue
+        // and re-kick cleanly for the CURRENT selection (conversions upsert
+        // by slug — the re-run is idempotent).
+        this.status = 'idle';
+        this.$emit('update', { input: { ...input, convert_queue: [], conversion_kicked: false } });
+        await this.kick();
+        return;
+      }
+      this.sourceQueue = queued;
       const next = this.sourceQueue.shift();
       this.$emit('update', {
-        input: { ...input, convert_queue: this.sourceQueue.slice(), converting_id: next }
+        input: { ...input, convert_queue: this.sourceQueue.slice() }
       });
-      await this.kickNextCrawl(null, next);
+      await this.kickNextLeg(next);
     } else if (live === 'done' && !stale) {
       this.status = 'done';
       this.progressPct = 100;
+      this.sourceLog = (input.source_log || []).slice();
       this.conceptCount = await this.fetchConceptCount();
       this.$emit('gate', true);
     } else {
@@ -193,7 +207,12 @@ export default {
     }
   },
   beforeUnmount() {
+    // Verifier B4: the leg-wait timer must die with the component — its
+    // status==='running' guard alone passes on an UNMOUNTED instance
+    // (Options-API data survives), re-kicking into the void.
+    this._unmounted = true;
     if (this.pollTimer) clearInterval(this.pollTimer);
+    if (this._legWaitTimer) clearTimeout(this._legWaitTimer);
   },
   methods: {
     repoConversionStatus() {
@@ -241,35 +260,68 @@ export default {
         // before the first conversion lands.
         this._lastCount = await this.fetchConceptCount();
         const classification = (this.draft && this.draft.classification) || 'heuristics';
-        if (this.variant === 'documents') {
-          // One repo-scoped job converts ALL selected documents.
-          await repoOkfService.importDocuments({
-            file_ids: ids,
-            repo_id: repoId,
-            name: (this.draft && this.draft.name) || undefined,
-            classification
-          });
-          this.poll();
-        } else {
-          // T3 multi-crawl (D2/D3): PER-FILE conversion, sequential — each
-          // kick is repo-scoped and upserts by slug; the merge IS the repo
-          // level. The queue rides the draft so a restart resumes the tail.
-          this.sourceQueue = ids.slice(1);
-          this.$emit('update', {
-            input: { ...((this.draft && this.draft.input) || {}), convert_queue: this.sourceQueue.slice() }
-          });
-          await this.kickNextCrawl(classification, ids[0]);
-        }
+        // A2 (audit): the conversion ROUTE keys on each file's recorded
+        // ORIGIN, never on the draft variant — mixed picks are legal in any
+        // variant. Crawl files must go through the per-file crawl converter
+        // (it gives every page its URL-derived slug identity, which is what
+        // makes the cross-crawl exact-slug merge work); a crawl file sent
+        // through the documents batch is heading-segmented and loses that.
+        // A non-crawl upload sent through the crawl converter yields ZERO
+        // pages silently. Unknown-origin ids (legacy drafts without name
+        // rows) default to the documents batch — it converts any format.
+        const legs = this.buildLegs(ids);
+        this.sourceQueue = legs.slice(1);
+        this.$emit('update', {
+          input: {
+            ...((this.draft && this.draft.input) || {}),
+            convert_queue: this.sourceQueue.slice()
+          }
+        });
+        await this.kickNextLeg(legs[0], classification);
       } catch (err) {
         // F10: the producer's 409s carry the remedy — surface them instead
         // of looping a doomed Retry.
-        this.status = 'failed';
-        this.errorText = this.friendlyError(err);
-        this.$emit('update', {
-          input: { ...input, document_ids: ids, conversion_kicked: false }
-        });
-        this.$emit('gate', true);
+        this.failLeg(err);
       }
+    },
+    // A2: legs = [documents batch (once)] + [one leg per crawl file], in the
+    // order the steward picked them (documents first — the crawl chain then
+    // merges on top). Queue entries ride the draft as descriptors so a
+    // restart resumes the RIGHT route per file; legacy drafts stored plain
+    // crawl-id strings and are normalized to crawl legs.
+    // Verifier B1 (2026-09-29): an id with NO names row falls back to the
+    // DRAFT VARIANT — a crawl-variant draft's unstamped ids are crawl files
+    // (the seeded handoff path); defaulting them to the documents batch
+    // heading-segments them and destroys per-URL slug identity. Only a
+    // variant with no crawl signal defaults to documents.
+    buildLegs(ids) {
+      const names = ((this.draft && this.draft.input) || {}).document_names || [];
+      const variant = this.variant;
+      const originOf = (id) => {
+        const hit = names.find((n) => n && n.file_id === id);
+        if (hit) return hit.source === 'crawl' ? 'crawl' : 'documents';
+        return variant === 'crawl' ? 'crawl' : 'documents';
+      };
+      const crawlIds = ids.filter((id) => originOf(id) === 'crawl');
+      const docIds = ids.filter((id) => originOf(id) !== 'crawl');
+      const legs = [];
+      if (docIds.length > 0) legs.push({ k: 'd', ids: docIds });
+      for (const id of crawlIds) legs.push({ k: 'c', id });
+      return legs;
+    },
+    // Verifier B3: the queue only ever describes the CURRENT selection — a
+    // leg whose id is no longer selected is stale (selection changed
+    // mid-chain) and must not kick.
+    validLegsOnly(legs) {
+      const ids = ((this.draft && this.draft.input) || {}).document_ids || [];
+      return legs.filter((leg) =>
+        leg.k === 'c' ? ids.includes(leg.id) : (leg.ids || []).every((x) => ids.includes(x))
+      );
+    },
+    normalizeLegs(queue) {
+      return (queue || [])
+        .map((leg) => (typeof leg === 'string' ? { k: 'c', id: leg } : leg))
+        .filter((leg) => leg && (leg.k === 'c' ? !!leg.id : (leg.ids || []).length > 0));
     },
     sourceName(fileId) {
       const names = ((this.draft && this.draft.input) || {}).document_names || [];
@@ -280,61 +332,135 @@ export default {
       const repoId = this.draft && this.draft.repo_id;
       if (!repoId) return 0;
       try {
-        return (await repoOkfService.listConcepts(repoId)).length;
+        // B1 (audit): the index concept is a meta row the conversion creates,
+        // not a produced topic — counting it over-reported every total/delta.
+        const rows = await repoOkfService.listConcepts(repoId);
+        return rows.filter((c) => c && !c.is_index).length;
       } catch {
         return this._lastCount || 0;
       }
     },
-    // One leg of the multi-crawl chain: kick ONE crawl file, then poll().
-    async kickNextCrawl(classification, fileId) {
+    // A3 (audit): a leg whose kick THROWS must never wedge the step at
+    // "running" — before this guard, a mid-chain 409/5xx/network failure was
+    // swallowed by the poll's transient catch AFTER the interval cleared, so
+    // the gate stayed closed and Retry stayed disabled. Failure surfaces the
+    // F10 remedy with a live Retry. Verifier A3-minor: the abandoned chain's
+    // queue is dropped too — kick() rebuilds it from document_ids on Retry.
+    failLeg(err) {
+      this.status = 'failed';
+      this.errorText = this.friendlyError(err);
+      this.$emit('update', {
+        input: { ...((this.draft && this.draft.input) || {}), conversion_kicked: false, convert_queue: [] }
+      });
+      this.$emit('gate', true);
+      if (this.pollTimer) clearInterval(this.pollTimer);
+    },
+    isInFlightError(err) {
+      const code = err && (err.code || (err.data && err.data.error));
+      const msg = (err && (err.message || (err.data && err.data.message))) || '';
+      return code === 'CONVERSION_IN_FLIGHT' || /in flight/i.test(msg);
+    },
+    // One leg of the chain: kick it, then poll(). `classification` rides the
+    // FIRST leg (the draft already carries it for re-kicks).
+    async kickNextLeg(leg, classification) {
       const repoId = this.draft && this.draft.repo_id;
-      const id = fileId || this.sourceQueue.shift();
-      if (!id) {
+      if (!leg) {
         await this.onAllConversionsDone();
         return;
       }
-      this._currentId = id;
-      this._currentSource = this.sourceName(id);
-      await repoOkfService.convertFromCrawlInto({
-        repo_id: repoId,
-        file_id: id,
-        classification: classification || (this.draft && this.draft.classification) || 'heuristics',
-        split_mode: 'B'
-      });
+      this._currentLeg = leg;
+      this._currentSource = this.legName(leg);
+      try {
+        if (leg.k === 'c') {
+          await repoOkfService.convertFromCrawlInto({
+            repo_id: repoId,
+            file_id: leg.id,
+            classification: classification || (this.draft && this.draft.classification) || 'heuristics',
+            split_mode: 'B'
+          });
+        } else {
+          await repoOkfService.importDocuments({
+            file_ids: leg.ids,
+            repo_id: repoId,
+            name: (this.draft && this.draft.name) || undefined,
+            classification: classification || (this.draft && this.draft.classification) || 'heuristics'
+          });
+        }
+        this._legRetry = 0;
+      } catch (err) {
+        // The live-registry delete lags the "done" poll by a beat — a next-leg
+        // kick can read CONVERSION_IN_FLIGHT against the JUST-FINISHED leg.
+        // Retry briefly (2s/4s/6s) before declaring failure (audit A3).
+        if (this.isInFlightError(err) && (this._legRetry || 0) < 3) {
+          this._legRetry = (this._legRetry || 0) + 1;
+          const wait = 2000 * this._legRetry;
+          this.progressNote = this.translate(
+            'okf.steps.produce.legWait',
+            'Waiting for the previous conversion to release…'
+          );
+          // Verifier B4: store the handle and guard on _unmounted — the
+          // status check alone passes on an unmounted instance.
+          this._legWaitTimer = setTimeout(() => {
+            if (!this._unmounted && this.status === 'running') this.kickNextLeg(leg, classification);
+          }, wait);
+          return;
+        }
+        this.failLeg(err);
+        return;
+      }
       this.poll();
+    },
+    legName(leg) {
+      if (leg.k === 'c') return this.sourceName(leg.id);
+      return this.translate('okf.steps.produce.docsLeg', '{n} selected document(s)').replace(
+        '{n}',
+        String((leg.ids || []).length)
+      );
     },
     // ONE conversion finished: account it, then either continue the queue
     // (multi-crawl) or finalize. The RUNNING chain's queue is local state —
     // the draft copy exists so a restart knows a chain was mid-flight.
     async onConversionDone() {
+      // B1 (audit): prefer the server's ingest summary (created/updated) over
+      // the raw count delta — "updated" IS the exact-slug auto-merge count,
+      // and the summary excludes the index concept the delta over-counts.
+      const summary = this._lastConv && this._lastConv.summary;
       const count = await this.fetchConceptCount();
       const delta = Math.max(0, count - (this._lastCount || 0));
       this.conceptCount = count;
       this._lastCount = count;
-      if (this._currentId) {
-        this.sourceLog.push({
-          name: this._currentSource || this.sourceName(this._currentId),
-          stat: this.translate('okf.steps.produce.sourceStat', '+{n} new (total {t})')
-            .replace('{n}', String(delta))
-            .replace('{t}', String(count))
+      if (this._currentLeg) {
+        const stat =
+          summary && typeof summary.created === 'number'
+            ? this.translate('okf.steps.produce.sourceStatMerged', '+{n} new · {m} merged by slug (total {t})')
+                .replace('{n}', String(summary.created))
+                .replace('{m}', String(summary.updated || 0))
+                .replace('{t}', String(count))
+            : this.translate('okf.steps.produce.sourceStat', '+{n} new (total {t})')
+                .replace('{n}', String(delta))
+                .replace('{t}', String(count));
+        this.sourceLog.push({ name: this._currentSource, stat });
+        // The accounting survives remounts (audit B1): rows ride the draft.
+        this.$emit('update', {
+          input: { ...((this.draft && this.draft.input) || {}), source_log: this.sourceLog.slice() }
         });
       }
-      // Restart resume: a fresh mount with a draft queue seeds the local one.
+      // Restart resume: a fresh mount with a draft queue seeds the local one
+      // (verifier B3: stale legs — no longer selected — are dropped).
       if (this.sourceQueue.length === 0) {
         const input = (this.draft && this.draft.input) || {};
-        this.sourceQueue = (input.convert_queue || []).slice();
+        this.sourceQueue = this.validLegsOnly(this.normalizeLegs(input.convert_queue));
       }
       if (this.sourceQueue.length > 0) {
         const next = this.sourceQueue.shift();
         this.$emit('update', {
           input: {
             ...((this.draft && this.draft.input) || {}),
-            convert_queue: this.sourceQueue.slice(),
-            converting_id: next
+            convert_queue: this.sourceQueue.slice()
           }
         });
         this.status = 'running';
-        await this.kickNextCrawl(null, next);
+        await this.kickNextLeg(next);
         return;
       }
       await this.onAllConversionsDone();
@@ -348,7 +474,7 @@ export default {
           ...((this.draft && this.draft.input) || {}),
           converted_ids: ((this.draft && this.draft.input) || {}).document_ids || [],
           convert_queue: [],
-          converting_id: null
+          source_log: this.sourceLog.slice()
         }
       });
       this.$emit('gate', true);
@@ -363,9 +489,11 @@ export default {
       // for 3s on stale store data, and a failed-first-fetch resume is
       // detected at once.
       const tick = async () => {
+        if (this._unmounted) return; // verifier B4: a kick in flight must not poll past unmount
         try {
           const repo = await repoOkfService.get(repoId);
           const conv = repo && repo.conversion;
+          this._lastConv = conv; // B1: the done-branch accounting reads the summary
           const st = conv ? conv.status : null;
           if (st === 'done') {
             clearInterval(this.pollTimer);

@@ -169,8 +169,9 @@ export default {
     visible: { type: Boolean, default: false },
     // file_ids pre-selected from the draft (re-entry restores them)
     selected: { type: Array, default: () => [] },
-    // whether the picker shows the upload section (crawl variant hides it —
-    // crawling happens in the crawler, D3)
+    // whether the picker shows the upload section (D6: every caller passes
+    // true — ALL feeders stay available in EVERY variant; the prop exists so
+    // a future surface CAN scope the picker)
     allowUpload: { type: Boolean, default: true },
     // initial origin chip (D1/D3): the crawl variant opens scoped to crawls;
     // the steward can still switch chips — nothing is ever locked (D6).

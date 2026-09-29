@@ -567,9 +567,19 @@ export default {
       // crawl draft (mirrors onCreateFromDocuments) so the wizard never
       // mounts with a null draft — a null draft made the wizard's write-back
       // guard drop EVERY step update (max-review F4), orphaning the repo
-      // Entry created.
+      // Entry created. Verifier B1 (2026-09-29): the seeds may be OBJECT
+      // rows {file_id, file_name, source:'crawl'} — build document_names
+      // from them so Produce routes the conversion by ORIGIN (a bare id
+      // with no row once misrouted the crawl through the documents batch,
+      // losing per-URL slug identity).
       const sel = this.$store.getters['okf/selection'] || {};
-      const ids = (sel.crawlSeeds || []).map((d) => (typeof d === 'string' ? d : d.file_id)).filter(Boolean);
+      const seeds = (sel.crawlSeeds || []).map((d) =>
+        typeof d === 'string' ? { file_id: d, file_name: d, source: 'crawl' } : d
+      );
+      const ids = seeds.map((d) => d.file_id).filter(Boolean);
+      const names = seeds
+        .filter((d) => d.file_id)
+        .map((d) => ({ file_id: d.file_id, file_name: d.file_name || d.file_id, source: d.source || 'crawl' }));
       this.activeDraft = {
         repo_id: null,
         name: '',
@@ -577,7 +587,7 @@ export default {
         source: 'crawl',
         concept_count: 0,
         studio_step: 0,
-        input: { document_ids: ids, concepts_added: 0 }
+        input: { document_ids: ids, document_names: names, concepts_added: 0 }
       };
       this.view = 'wizard';
     },

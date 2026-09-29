@@ -262,7 +262,15 @@ class HttpService {
       // came back. Never throw from a logger. globalThis side effect so we can
       // inspect from the browser DevTools even if console is muted.
       try {
-        if (originalRequest && originalRequest.url && String(originalRequest.url).indexOf('/api/okf') !== -1) {
+        if (
+          originalRequest &&
+          originalRequest.url &&
+          String(originalRequest.url).indexOf('/api/okf') !== -1 &&
+          // silent callers (probe-style lookups, the deferred 10.5 drafts
+          // endpoint) already handle their own errors — a console.error per
+          // expected 404 is noise, not diagnostics (field report 2026-09-29).
+          !originalRequest.silent
+        ) {
           const headers = error.response && error.response.headers;
           const data = error.response && error.response.data;
           const t0 = originalRequest.__okfT0;

@@ -1,11 +1,13 @@
 ---
-title: "Glossary (reference copy)"
+title: "Glossary"
 weight: 7
-description: "The full glossary, mirrored from the get-started copy — every acronym from A to W."
+description: "The full glossary — every acronym from A to W."
 mode: reference
 persona: mixed
+aliases:
+  - /docs/get-started/glossary/
 owner: docs-stewards
-last_reviewed: 2026-09-18
+last_reviewed: 2026-09-29
 ---
 
 > This page mirrors [Get started → Glossary](/docs/get-started/glossary/).

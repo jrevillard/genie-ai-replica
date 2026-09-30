@@ -42,9 +42,9 @@ filtering and attribute conventions stay consistent across the codebase):
 | Backend (BFF) | Node.js | Express request spans, ArangoDB query spans, custom business spans, `http_requests_total` + `http_request_duration_seconds` metrics, OTel log records. |
 | Document-repository | Node.js | Express spans + ingestion spans for upload/retract. |
 | OPEA services (`chatqna`, `retriever`, `reranker`, `dataprep`, `embedding`) | Python | FastAPI auto-spans + manual spans `chatqna.orchestrate`, `chatqna.reranker_selection`, `retriever.hybrid_search`, `reranker.rerank`, `reranker.tei_invoke`, `dataprep.{ingest,retract,chunking}`, `dataprep.llm.label_chunk`, `dataprep.llm.label_batch`. |
-| Kong gateway | Lua (OpenResty) | OTel plugin emits a `request` span per proxied call (HTTP method, route, status). The collector renames `kong` to `METHOD /path` — see [Tracing]({{< relref "tracing" >}}). |
+| Kong gateway | Lua (OpenResty) | OTel plugin emits a `request` span per proxied call (HTTP method, route, status). The collector renames `kong` to `METHOD /path` — see [Tracing]({{< relref "tracing-howto" >}}). |
 
-See [Tracing]({{< relref "tracing" >}}) for the full span taxonomy.
+See [Tracing]({{< relref "tracing-howto" >}}) for the full span taxonomy.
 
 ## Layer 2 — Collection
 

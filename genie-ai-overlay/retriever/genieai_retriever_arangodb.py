@@ -44,6 +44,7 @@ from .config import (
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
+    BGE_QUERY_INSTRUCTION,
     HF_TOKEN,
     HYBRID_BM25_ANALYZER,
     HYBRID_BM25_CANDIDATES,
@@ -68,6 +69,7 @@ from .config import (
     VLLM_TEMPERATURE,
     VLLM_TIMEOUT,
     VLLM_TOP_P,
+    requires_bge_query_prefix,
 )
 
 
@@ -112,6 +114,41 @@ logflag = os.getenv("LOGFLAG", False)
 ARANGO_TEXT_FIELD = "text"
 ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
+
+
+class BGEQueryEmbeddingsWrapper:
+    """Prefixes queries with the BGE instruction; passages pass through untouched.
+
+    BAAI/bge-* embedding models are trained contrastively: queries and passages
+    sit on opposite sides of the vector space. The model card requires the query
+    instruction prefix ONLY for queries — applying it to passages would invert
+    the asymmetry and degrade retrieval.
+
+    langchain's Embeddings interface exposes two methods; only embed_query is
+    wrapped. embed_documents is delegated verbatim so ingest-side passage
+    encoding (dataprep via the shared TEI service) is unaffected.
+
+    Issue #1035. Wrapper lives in caller code rather than at the TEI service
+    config layer because the same TEI is used for ingest and retrieval — a
+    service-level prefix would break the BGE asymmetry.
+    """
+
+    __slots__ = ("base", "prefix")
+
+    def __init__(self, base, prefix: str):
+        self.base = base
+        self.prefix = prefix
+
+    def embed_query(self, text: str):
+        return self.base.embed_query(self.prefix + text)
+
+    def embed_documents(self, texts):
+        return self.base.embed_documents(texts)
+
+    def __getattr__(self, name):
+        # Delegate attribute access (e.g. .model_name, .dimension) to the
+        # underlying embeddings so adapters that introspect still work.
+        return getattr(self.base, name)
 
 
 def _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
@@ -948,8 +985,15 @@ class GenieaiArangoRetriever(OpeaComponent):
                     task="feature-extraction",
                     huggingfacehub_api_token=HF_TOKEN,
                 )
+                # Issue #1035: BGE-* models require a query instruction prefix
+                # at inference to preserve the contrastive asymmetry. OpenAI
+                # embeddings are not BGE-family and must receive raw text.
+                if requires_bge_query_prefix(TEI_EMBED_MODEL):
+                    embeddings = BGEQueryEmbeddingsWrapper(embeddings, BGE_QUERY_INSTRUCTION)
             else:
                 embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
+                if requires_bge_query_prefix(TEI_EMBED_MODEL):
+                    embeddings = BGEQueryEmbeddingsWrapper(embeddings, BGE_QUERY_INSTRUCTION)
 
             try:
                 vector_db = ArangoVector(

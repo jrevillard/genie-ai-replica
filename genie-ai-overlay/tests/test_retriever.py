@@ -959,3 +959,59 @@ class TestHybridInvoke:
         ):
             await retriever.invoke(create_mock_input(search_start="node"))
         bm25.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test: BGE query instruction prefix (issue #1035)
+# ---------------------------------------------------------------------------
+
+
+class TestBGEQueryPrefix:
+    """Verify that queries are prefixed with the BGE instruction string at the
+    retriever's embed_query call site (per BAAI/bge-large-en-v1.5 model card),
+    while embed_documents / passage paths are untouched.
+    """
+
+    def test_wrapper_prefixes_query_only(self):
+        """BGEQueryEmbeddingsWrapper.embed_query prepends prefix; embed_documents does not."""
+        from retriever.genieai_retriever_arangodb import BGEQueryEmbeddingsWrapper
+
+        base = MagicMock()
+        base.embed_query.return_value = [0.0]
+        base.embed_documents.return_value = [[0.0]]
+        wrapper = BGEQueryEmbeddingsWrapper(base, "PFX ")
+
+        wrapper.embed_query("hello")
+        base.embed_query.assert_called_once_with("PFX hello")
+
+        wrapper.embed_documents(["a", "b"])
+        base.embed_documents.assert_called_once_with(["a", "b"])
+
+    @pytest.mark.asyncio
+    async def test_invoke_prefixes_query_for_bge_model(self, invoke_env):
+        """Issue #1035: BGE query prefix applied when model id contains 'bge'."""
+        from retriever.genieai_retriever_arangodb import BGE_QUERY_INSTRUCTION
+
+        with patch("retriever.genieai_retriever_arangodb.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"):
+            await invoke_env["retriever"].invoke(create_mock_input(query="test query"))
+        invoke_env["embeddings"].embed_query.assert_called_once_with(BGE_QUERY_INSTRUCTION + "test query")
+
+    @pytest.mark.asyncio
+    async def test_invoke_skips_prefix_for_non_bge_model(self, invoke_env):
+        """Non-BGE embedding models (e.g. text-embedding-3-small) must NOT receive the prefix."""
+        with patch("retriever.genieai_retriever_arangodb.TEI_EMBED_MODEL", "text-embedding-3-small"):
+            await invoke_env["retriever"].invoke(create_mock_input(query="test query"))
+        invoke_env["embeddings"].embed_query.assert_called_once_with("test query")
+
+    @pytest.mark.asyncio
+    async def test_invoke_openai_branch_unchanged(self, invoke_env):
+        """OpenAI embeddings path (OPENAI_API_KEY set) is untouched by the wrapper."""
+        with (
+            patch("retriever.genieai_retriever_arangodb.OPENAI_API_KEY", "sk-test"),
+            patch("retriever.genieai_retriever_arangodb.OPENAI_EMBED_MODEL", "text-embedding-3-small"),
+            patch("retriever.genieai_retriever_arangodb.OPENAI_EMBED_ENABLED", True),
+            patch("retriever.genieai_retriever_arangodb.OpenAIEmbeddings") as openai_emb,
+        ):
+            openai_emb.return_value.embed_query.return_value = [0.0]
+            await invoke_env["retriever"].invoke(create_mock_input(query="test query"))
+        openai_emb.return_value.embed_query.assert_called_once_with("test query")

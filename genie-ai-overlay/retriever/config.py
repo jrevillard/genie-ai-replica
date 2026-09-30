@@ -239,6 +239,29 @@ TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5")
 TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT")
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN", "")
 
+# BGE query instruction prefix (issue #1035).
+#
+# BAAI/bge-large-en-v1.5 (and other bge-* embedding models) is trained
+# contrastively: queries and passages sit on opposite sides of the vector space
+# at inference. The model card specifies that queries must be prefixed with
+# this string at inference time to preserve the asymmetry, while passages MUST
+# NOT receive it. Applying the prefix in the caller (retriever/chatqna) keeps
+# the shared TEI embedding service usable by dataprep ingestion — which encodes
+# passages without the prefix — without splitting the service.
+BGE_QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
+
+
+def requires_bge_query_prefix(model_id: str) -> bool:
+    """True if the embedding model requires the BGE query instruction prefix.
+
+    Only BAAI/bge-* models follow the contrastive query/passage protocol. Other
+    embedding models (OpenAI text-embedding-3-*, Cohere embed-*, etc.) must
+    NOT receive the prefix — feeding them the string degrades retrieval and
+    wastes tokens on the input side.
+    """
+    return "bge" in (model_id or "").lower()
+
+
 # VLLM configuration
 VLLM_API_KEY = os.getenv("VLLM_API_KEY", "EMPTY")
 VLLM_ENDPOINT = os.getenv("VLLM_ENDPOINT")

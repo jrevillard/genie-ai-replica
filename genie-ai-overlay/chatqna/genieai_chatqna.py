@@ -20,6 +20,7 @@ from metrics import (
 )
 
 from core.model_cache import get_model_id
+from retriever.config import BGE_QUERY_INSTRUCTION, TEI_EMBED_MODEL, requires_bge_query_prefix
 from tracing import (
     get_tracer,
     install_uvicorn_access_logging,
@@ -911,8 +912,18 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # = single-input path (unchanged baseline behavior).
         _blend_history_text = inputs.pop("_blend_history_text", "")
         _blend_alpha = inputs.pop("_blend_alpha", None)
+        # Issue #1035: BGE-* embedding models require a query instruction
+        # prefix at inference (per BAAI model card) to preserve the
+        # contrastive asymmetry between queries and passages. Apply only to
+        # queries (and history strings, which act as queries for blending);
+        # passages are encoded without the prefix by dataprep ingestion via
+        # the same shared TEI service.
+        _apply_bge_prefix = requires_bge_query_prefix(TEI_EMBED_MODEL)
         if _blend_history_text:
-            inputs["input"] = [inputs["text"], _blend_history_text]
+            _texts = [inputs["text"], _blend_history_text]
+            if _apply_bge_prefix:
+                _texts = [BGE_QUERY_INSTRUCTION + t for t in _texts]
+            inputs["input"] = _texts
             # Stash alpha for align_outputs to use when blending the batch
             # response. `_blend_alpha` does leak into the embedding service HTTP
             # body (harmless — TEI ignores unknown JSON keys) but never reaches
@@ -921,7 +932,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             # that boundary, not by any underscore-prefix convention.
             inputs["_blend_alpha"] = _blend_alpha
         else:
-            inputs["input"] = inputs["text"]
+            inputs["input"] = BGE_QUERY_INSTRUCTION + inputs["text"] if _apply_bge_prefix else inputs["text"]
         del inputs["text"]
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:

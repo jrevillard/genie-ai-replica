@@ -124,10 +124,11 @@ repo root.
 
 **Use for:** local development, quick smoke test, no AI workload.
 
-```
-localhost (no Swarm)
-└── all 18 always-on services
-    (compose: no profiles; Swarm-equivalent: DEPLOY_OPEA=0, ENABLE_OBSERVABILITY=0)
+```mermaid
+flowchart TB
+    host["localhost<br/>(no Swarm)"]
+    services["all 18 always-on services<br/>(compose: no profiles;<br/>Swarm-equiv: DEPLOY_OPEA=0,<br/>ENABLE_OBSERVABILITY=0)"]
+    host --> services
 ```
 
 | Component | Command |
@@ -145,9 +146,11 @@ Procedure: [Docker Compose Setup → Step 6b](/docs/deploy/docker-compose-setup/
 
 **Use for:** full local RAG with a developer GPU (T4 / RTX 6000 / A40).
 
-```
-localhost (no Swarm)
-└── all 18 always-on + opea + gpu-models
+```mermaid
+flowchart TB
+    host["localhost<br/>(no Swarm)"]
+    services["all 18 always-on<br/>+ opea<br/>+ gpu-models"]
+    host --> services
 ```
 
 | Component | Command |
@@ -163,9 +166,11 @@ GPU model sizing: [GPU Deployment](/docs/deploy/gpu/).
 
 **Use for:** small production on one host, dev clusters, CI smoke tests.
 
-```
-manager (gateway=true, genieai=true, gpu=true)
-└── all 37 services (core + observability optional + opea + gpu-models + letsencrypt optional)
+```mermaid
+flowchart TB
+    mgr["manager<br/>(gateway=true,<br/>genieai=true,<br/>gpu=true)"]
+    svc["all 37 services<br/>(core + observability optional<br/>+ opea + gpu-models<br/>+ letsencrypt optional)"]
+    mgr --> svc
 ```
 
 ```bash
@@ -201,15 +206,15 @@ Full procedure:
 **Use for:** small production where GPU memory pressure should not
 threaten the gateway or app node.
 
-```
-manager (gateway=true, genieai=true)              worker (gpu=true)
-├── postgres, postgres-init, kong*, nginx,         ├── vllm, vllm-translation-guardrail
-│   keycloak*, certbot, frontend, redis-cache,    ├── tei, tei_reranker
-│   db-migrations, backend, document-repository,  ├── textgen, embedding, reranker
-│   clamav, arango-vector-db                      ├── translation, guardrail
-│   (victoria*, tempo-proxy, grafana if obsv on)  ├── dataprep-arango-service
-└── otel-collector (global, on every node)         ├── retriever-arango-service
-                                                  └── chatqna-xeon-* (disabled)
+```mermaid
+flowchart LR
+    subgraph Manager["manager<br/>(gateway=true, genieai=true)"]
+        mgr_svc["postgres, postgres-init<br/>kong*, nginx<br/>keycloak*, certbot<br/>frontend, redis-cache<br/>db-migrations, backend<br/>document-repository<br/>clamav, arango-vector-db<br/>(victoria*, tempo-proxy, grafana<br/>if obsv on)<br/>otel-collector (global)"]
+    end
+
+    subgraph Worker["worker<br/>(gpu=true)"]
+        wrk_svc["vllm, vllm-translation-guardrail<br/>tei, tei_reranker<br/>textgen, embedding, reranker<br/>translation, guardrail<br/>dataprep-arango-service<br/>retriever-arango-service<br/>chatqna-xeon-* (disabled)"]
+    end
 ```
 
 ```bash
@@ -240,17 +245,19 @@ docker service ps genieai_vllm     --format "{{.Node}} {{.Name}}"
 **Use for:** production with strict separation of concerns and predictable
 resource isolation.
 
-```
-manager (gateway=true)              worker-1 (genieai=true)             worker-2 (gpu=true)
-├── postgres, postgres-init         ├── frontend                        ├── vllm, vllm-translation-guardrail
-├── kong*, nginx                    ├── redis-cache                     ├── tei, tei_reranker
-├── keycloak*, certbot              ├── db-migrations                   ├── textgen, embedding, reranker
-└── otel-collector (global)         ├── backend                         ├── translation, guardrail
-                                    ├── document-repository             ├── dataprep-arango-service
-                                    ├── clamav                          ├── retriever-arango-service
-                                    ├── arango-vector-db                └── chatqna-xeon-* (disabled)
-                                    ├── victoria*, tempo-proxy, grafana (if ENABLE_OBSERVABILITY=1)
-                                    └── otel-collector (global)
+```mermaid
+flowchart LR
+    subgraph Manager["manager<br/>(gateway=true)"]
+        mgr_svc["postgres, postgres-init<br/>kong*, nginx<br/>keycloak*, certbot<br/>otel-collector (global)"]
+    end
+
+    subgraph W1["worker-1<br/>(genieai=true)"]
+        w1_svc["frontend<br/>redis-cache<br/>db-migrations, backend<br/>document-repository<br/>clamav, arango-vector-db<br/>victoria*, tempo-proxy, grafana<br/>(if ENABLE_OBSERVABILITY=1)<br/>otel-collector (global)"]
+    end
+
+    subgraph W2["worker-2<br/>(gpu=true)"]
+        w2_svc["vllm, vllm-translation-guardrail<br/>tei, tei_reranker<br/>textgen, embedding, reranker<br/>translation, guardrail<br/>dataprep-arango-service<br/>retriever-arango-service<br/>chatqna-xeon-* (disabled)"]
+    end
 ```
 
 ```bash
@@ -287,14 +294,27 @@ done
 **Use for:** when the GPU host is dedicated (bare-metal A40/H100, cloud
 GPU instance), and the app cluster runs elsewhere.
 
-```
-App node (Swarm, gateway+genieai+gpu)              GPU node (standalone, no Swarm)
-├── all core + observability                       └── nginx-gpu (TLS, port 443)
-├── OPEA orchestrators (chatqna, retriever,            ├── /llm/         → vLLM LLM
-│   dataprep, embedding wrapper, reranker wrapper,      ├── /translation/ → vLLM T
-│   textgen, translation, guardrail) — connect         ├── /embed/       → TEI Emb
-│   to remote GPU via HTTPS                             ├── /rerank/      → TEI Rer
-└── NO gpu-models profile containers                  └── /docling/     → docling-serve
+```mermaid
+flowchart LR
+    subgraph App["App node<br/>(Swarm, gateway+genieai+gpu)"]
+        app_svc["all core + observability<br/>OPEA orchestrators<br/>(chatqna, retriever,<br/>dataprep, embedding wrapper,<br/>reranker wrapper, textgen,<br/>translation, guardrail)<br/>NO gpu-models profile containers"]
+    end
+
+    subgraph GPU["GPU node<br/>(standalone, no Swarm)"]
+        nginx_g["nginx-gpu (TLS, port 443)"]
+        llm["/llm/         → vLLM LLM"]
+        tr["/translation/ → vLLM T"]
+        em["/embed/       → TEI Emb"]
+        rk["/rerank/      → TEI Rer"]
+        dl["/docling/     → docling-serve"]
+        nginx_g --> llm
+        nginx_g --> tr
+        nginx_g --> em
+        nginx_g --> rk
+        nginx_g --> dl
+    end
+
+    App -- "HTTPS (connect to remote GPU)" --> nginx_g
 ```
 
 The app node **must** carry all three Swarm labels (`gateway`, `genieai`,

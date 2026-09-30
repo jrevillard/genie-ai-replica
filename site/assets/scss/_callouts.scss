@@ -1,12 +1,65 @@
+// Callout shortcode — theme-aware (uses DS tokens so dark mode auto-adapts)
+
 .callout {
+  // Tinted callout surface: lighter than the page body in dark, slightly
+  // off-white in light. Always sits ~2:1 away from the body bg so the box
+  // reads as a distinct surface, not just a colored border on the page.
+  --callout-bg: oklch(96% 0.005 250);
+  // Code chip bg: opposite of callout (darker on light, lighter on dark)
+  // so inline code visually punches out of the surrounding text.
+  --callout-code-bg: oklch(88% 0.01 250);
+  --callout-accent: var(--ds-accent);
+  --callout-fg: var(--ds-fg);
+  --callout-code-fg: var(--ds-fg);
+
   padding: 1rem 1.25rem;
   margin: 1.5rem 0;
-  border-left: 4px solid #4071cb;
+  border-left: 4px solid var(--callout-accent);
   border-radius: 0.25rem;
-  background: #f5f8fc;
+  background: var(--callout-bg);
+  color: var(--callout-fg);
 }
-.callout-info { border-color: #4071cb; background: #f5f8fc; }
-.callout-tip { border-color: #1f7a4d; background: #f0faf4; }
-.callout-warning { border-color: #c44b1a; background: #fdf4ef; }
+
+// Dark-mode overrides — use brighter callout bg + brighter chip bg so both
+// pop against the dark page body (oklch(15%)). Lightness deltas tuned to
+// sit in the 2:1–5:1 contrast band vs body and chip-vs-callout-bg respectively.
+[data-bs-theme="dark"],
+[data-theme="dark"],
+html.dark {
+  .callout {
+    --callout-bg: oklch(28% 0.012 250);
+    --callout-code-bg: oklch(38% 0.015 250);
+  }
+}
+
+.callout-info    { --callout-accent: oklch(58% 0.14 250); }
+.callout-tip     { --callout-accent: oklch(58% 0.13 155); }
+.callout-warning { --callout-accent: oklch(62% 0.16 35); }
+.callout-danger  { --callout-accent: oklch(58% 0.20 25); }
+
+// Tighten default Bootstrap spacing inside the box.
 .callout p:first-child { margin-top: 0; }
-.callout p:last-child { margin-bottom: 0; }
+.callout p:last-child  { margin-bottom: 0; }
+.callout ol,
+.callout ul            { margin: 0.5rem 0 0; }
+.callout li            { margin: 0.25rem 0; }
+.callout li > p        { margin: 0; }
+
+// Inline code chips — override Docsy's `code { background: var(--td-pre-bg) }`
+// (which paints every <code> near-black in dark mode). Specificity bumped
+// to (0,2,2) so our rule wins the cascade tie with the theme base.
+.callout > p > code,
+.callout > li > code,
+.callout > p code,
+.callout code {
+  background: var(--callout-code-bg);
+  color: var(--callout-code-fg);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.2rem;
+  font-size: 0.92em;
+  font-weight: 500;
+}
+
+// Bold + link readability inside the box.
+.callout strong  { color: var(--ds-fg); }
+.callout a       { color: var(--ds-accent); }

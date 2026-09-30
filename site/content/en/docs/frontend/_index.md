@@ -1,7 +1,7 @@
 ---
 title: "Frontend (gov-chat Web)"
 description: "Vue 3 + Vuex single-page app — UI component inventory, state-management patterns, theme system, auth flow, chat UX, sidebar, and the admin dashboard."
-weight: 90
+weight: 100
 section: "frontend"
 ---
 

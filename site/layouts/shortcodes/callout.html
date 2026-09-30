@@ -1,4 +1,4 @@
 {{ $type := .Get "type" | default "info" }}
-<div class="callout callout-{{ $type }}" markdown="1">
+<div class="callout callout-{{ $type }}">
 {{ .Inner | markdownify }}
 </div>

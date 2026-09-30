@@ -1,7 +1,7 @@
 ---
 title: "Configuration"
 description: "Operator-facing configuration guides for Keycloak and external identity providers."
-weight: 40
+weight: 50
 section: "configure"
 aliases:
   - /docs/configuration/

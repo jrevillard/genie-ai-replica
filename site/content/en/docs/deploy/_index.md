@@ -1,7 +1,7 @@
 ---
 title: "Deployment"
 description: "End-to-end installation, Docker Compose / Swarm deployment, and GPU setup guides."
-weight: 10
+weight: 20
 section: "deploy"
 aliases:
   - /docs/deployment/

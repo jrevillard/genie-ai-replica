@@ -75,24 +75,23 @@ links to a 10-minute quickstart and a curated set of follow-on docs.
 
 ## Sections
 
-14 sections, ordered by the path most readers take. Each card lists the
+13 sections, ordered by the path most readers take. Each card lists the
 section's mission in one line.
 
 <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3">
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/get-started/"><div class="card-body"><h5 class="card-title">Get started</h5><p class="card-text small">Be productive in 15 minutes — quickstarts for all four personas, concepts, and FAQ.</p></div></a></div>
+  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/core/"><div class="card-body"><h5 class="card-title">Core</h5><p class="card-text small">High-level project overview, integration architecture, source tree, dev guide.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/deploy/"><div class="card-body"><h5 class="card-title">Deploy</h5><p class="card-text small">Install GENIE.AI on Docker Compose, Swarm, or a remote GPU node.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/operate/"><div class="card-body"><h5 class="card-title">Operate</h5><p class="card-text small">Run a live deployment — backup, scaling, updates, troubleshooting.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/observe/"><div class="card-body"><h5 class="card-title">Observe</h5><p class="card-text small">Metrics, logs, traces, dashboards, and alerting via VictoriaMetrics + Grafana.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/configure/"><div class="card-body"><h5 class="card-title">Configure</h5><p class="card-text small">Realm setup, IdP integration, branding, dashboard, CORS / CSP, locale whitelist.</p></div></a></div>
-  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/core/"><div class="card-body"><h5 class="card-title">Core</h5><p class="card-text small">Developer reference — source tree, integration architecture, development guide, project overview.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/architecture/"><div class="card-body"><h5 class="card-title">Architecture</h5><p class="card-text small">C4 context/container view, auth flows, trust boundaries, OPEA contract.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/rag-pipeline/"><div class="card-body"><h5 class="card-title">RAG pipeline</h5><p class="card-text small">Embedding, retrieval, reranking, generation, translation — every stage.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/knowledge-base/"><div class="card-body"><h5 class="card-title">Knowledge base</h5><p class="card-text small">Ingestion, taxonomy, document lifecycle, content quality guidance.</p></div></a></div>
-  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/backend/"><div class="card-body"><h5 class="card-title">Backend</h5><p class="card-text small">HTTP API contracts, auth flow, rate limits, defense-in-depth surface.</p></div></a></div>
+  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/reference/"><div class="card-body"><h5 class="card-title">Reference</h5><p class="card-text small">Single-source env-var table, HTTP API, OPEA extensions, glossary.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/frontend/"><div class="card-body"><h5 class="card-title">Frontend</h5><p class="card-text small">Vue 3 SPA — auth flow, chat UX, sidebar, admin dashboard, theming.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/mobile/"><div class="card-body"><h5 class="card-title">Mobile</h5><p class="card-text small">Flutter app — architecture, deployment, OIDC PKCE login, SSE chat.</p></div></a></div>
   <div class="col"><a class="card h-100 text-decoration-none" href="/docs/contribute/"><div class="card-body"><h5 class="card-title">Contribute</h5><p class="card-text small">Repo layout, dev workflow, MR guide, i18n, security triage, style.</p></div></a></div>
-  <div class="col"><a class="card h-100 text-decoration-none" href="/docs/reference/"><div class="card-body"><h5 class="card-title">Reference</h5><p class="card-text small">Single-source env-var table, HTTP API, OPEA extensions, glossary.</p></div></a></div>
 </div>
 
 ## Search the docs

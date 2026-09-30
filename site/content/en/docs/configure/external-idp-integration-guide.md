@@ -37,35 +37,25 @@ Before configuring an external IdP, make sure:
 
 ## How it works
 
-```
-Browser -> GENIE.AI Frontend (Vue)
-            |
-            v
-   Keycloak Login Page
-            |
-            +-- [Local Keycloak account] ----> Keycloak JWT --> GENIE.AI
-            |
-            +-- [External IdP button (Google, Microsoft, …)]
-                            |
-                            v
-                  External IdP authorization endpoint
-                            |
-                            v
-                  External IdP authentication + consent
-                            |
-                            v
-                  IdP redirects browser back to Keycloak broker endpoint
-                  (https://<your-domain>/auth/realms/<realm>/broker/<alias>/endpoint)
-                            |
-                            v
-                  Keycloak exchanges code with IdP, validates token,
-                  applies Identity Provider Mappers (role assignment)
-                            |
-                            v
-                  Keycloak issues its own JWT to GENIE.AI
-                            |
-                            v
-                  Frontend stores JWT and sends it on every API request
+```mermaid
+flowchart TD
+    Browser["Browser (GENIE.AI Frontend - Vue)"]
+    Login["Keycloak Login Page"]
+    Local["Local Keycloak account"]
+    ExtBtn["External IdP button (Google, Microsoft, …)"]
+    AuthEP["External IdP authorization endpoint"]
+    Auth["External IdP authentication + consent"]
+    Broker["Keycloak broker endpoint<br/>(/auth/realms/<realm>/broker/<alias>/endpoint)"]
+    Exchange["Keycloak exchanges code with IdP,<br/>validates token, applies Identity Provider Mappers (role assignment)"]
+    Issue["Keycloak issues its own JWT to GENIE.AI"]
+    Store["Frontend stores JWT and sends it on every API request"]
+
+    Browser --> Login
+    Login --> Local
+    Login --> ExtBtn
+    Local -. "Keycloak JWT" .-> Issue
+    ExtBtn --> AuthEP --> Auth --> Broker --> Exchange --> Issue
+    Issue --> Store
 ```
 
 GENIE.AI always receives a standard Keycloak-issued OIDC token. The backend's auth middleware (`keycloak-auth-middleware.js`) is completely unaware of which external IdP was used — the JWT signature, claims, and roles look identical regardless.

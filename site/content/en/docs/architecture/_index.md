@@ -1,7 +1,7 @@
 ---
 title: "Architecture"
 description: "System-wide architecture: C4 container view, authentication flows, the service-to-service auth matrix, and the OPEA microservices contract surface."
-weight: 50
+weight: 60
 section: "architecture"
 ---
 

@@ -12,25 +12,31 @@ last_reviewed: 2026-09-18
 
 ```mermaid
 flowchart LR
-    U[User] --> FE[Frontend<br/>Vue 3 / Flutter]
-    FE -->|HTTPS| KG[Kong<br/>gateway]
+    U[User] --> NG[NGINX<br/>TLS termination]
+    NG --> FE[Frontend SPA<br/>Vue 3 / Flutter<br/>port 8090]
+    NG --> KG[Kong<br/>API gateway<br/>CORS / rate limit]
     KG --> BE[Backend BFF<br/>Node.js]
     KG --> DR[Document Repository]
     BE --> KC[Keycloak<br/>OIDC]
     BE --> CQ[ChatQnA<br/>OPEA orchestrator]
-    CQ --> EM[Embedding<br/>TEI]
+    CQ --> EM[Embedding wrapper<br/>:6000]
+    EM --> TEI[TEI]
     CQ --> RT[Retriever<br/>ArangoDB]
     CQ --> RR[Reranker<br/>TEI]
     CQ --> LM[vLLM<br/>LLM]
     DR --> ADB[(ArangoDB<br/>vectors + graph + docs)]
     RT --> ADB
-    EMB_IMPL[Dataprep<br/>PDF / Word / etc.] --> ADB
+    DP[Dataprep<br/>PDF / Word / etc.] --> ADB
+    DR --> DP
 ```
 
-One request travels: User → Frontend → Kong → Backend → ChatQnA →
-{Embedding → Retriever → Reranker → vLLM} → streamed response back.
-Documents are ingested through the Document Repository / Dataprep path
-into ArangoDB.
+Two paths converge at NGINX: the SPA (Vue / Flutter, served on
+`location /` via the frontend container port 8090) and the API (Kong
+proxies `/api/*` and `/auth/*` to the backend BFF). One request then
+travels: User → Nginx → Kong → Backend → ChatQnA →
+{Embedding wrapper → TEI, Retriever, Reranker, vLLM} → streamed
+response back. Documents are ingested through the Document Repository
+/ Dataprep path into ArangoDB.
 
 ## One paragraph
 

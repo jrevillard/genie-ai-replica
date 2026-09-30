@@ -47,24 +47,23 @@ With `STREAMING_TRANSLATION_ENABLED=1`, the backend buffers the English
 stream from ChatQnA and **commits complete units** (sentences, paragraph
 breaks) to the translator as soon as they are safe to translate:
 
-```text
-ChatQnA English SSE stream:    "Sentence one. Sentence two.\n\nParagraph two begins."
-                                      ↓
-                              stream-boundary.js commits at "\n\n"
-                                      ↓
-                     ┌───────────────┴───────────────┐
-                     ▼                                ▼
-              "Sentence one. Sentence two."   "Paragraph two begins."
-                     │                                │
-                     ▼ translateMarkdown             ▼ translateMarkdown
-                     │                                │
-                     ▼                                ▼
-              "Frase uno. Frase dos."            "Comienza el párrafo dos."
-                     │                                │
-                     ▼ SSE frame                       ▼ SSE frame
-              data: {"type":"chunk",             data: {"type":"chunk",
-                     "content":"Frase uno.          "content":"Comienza
-                      Frase dos."}                    el párrafo dos."}
+```mermaid
+flowchart TB
+    Src["ChatQnA English SSE stream:<br/>\"Sentence one. Sentence two.\n\nParagraph two begins.\""]
+    Split["stream-boundary.js commits at \\n\\n"]
+    U1["\"Sentence one. Sentence two.\""]
+    U2["\"Paragraph two begins.\""]
+    Tr1["translateMarkdown"]
+    Tr2["translateMarkdown"]
+    O1["\"Frase uno. Frase dos.\""]
+    O2["\"Comienza el párrafo dos.\""]
+    F1["SSE frame:<br/>data: {type:chunk,<br/>content:\"Frase uno. Frase dos.\"}"]
+    F2["SSE frame:<br/>data: {type:chunk,<br/>content:\"Comienza el párrafo dos.\"}"]
+
+    Src --> Split --> U1
+    Split --> U2
+    U1 --> Tr1 --> O1 --> F1
+    U2 --> Tr2 --> O2 --> F2
 ```
 
 The user reads Spanish **incrementally**, in the same rhythm as English

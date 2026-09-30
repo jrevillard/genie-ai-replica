@@ -45,12 +45,12 @@ to [Docker Swarm Setup](/docs/deploy/docker-swarm-setup/).
 - **Outbound HTTPS** to `huggingface.co` and `registry.opensource.unicc.org`
   (image registry) on first run.
 
-> {{< callout type="info" >}}
-> This quickstart deploys the **core stack only**. OPEA, GPU models, and
-> observability are profile-gated and added in Step 3 / Step 6. See
-> [Compose → Profiles at a glance](/docs/deploy/docker-compose-setup/#profiles-at-a-glance)
-> for the full matrix.
-> {{< /callout >}}
+{{< callout type="info" >}}
+This quickstart deploys the **core stack only**. OPEA, GPU models, and
+observability are profile-gated and added in Step 3 / Step 6. See
+[Compose → Profiles at a glance](/docs/deploy/docker-compose-setup/#profiles-at-a-glance)
+for the full matrix.
+{{< /callout >}}
 
 ### Verify it worked
 
@@ -74,11 +74,11 @@ The `env` file is a **template**: it documents every variable and ships
 placeholder values for secrets. `.env` is your **local** file with real
 secrets and is excluded by `.gitignore`.
 
-> {{< callout type="warning" >}}
-> Quote values containing `+`, `#`, `=`, or `!` in `.env` — bash and
-> `docker compose` both interpret unquoted special chars. For Keycloak admin
-> passwords especially, prefer `KEYCLOAK_ADMIN_PASSWORD='MyP@ss+word!'`.
-> {{< /callout >}}
+{{< callout type="warning" >}}
+Quote values containing `+`, `#`, `=`, or `!` in `.env` — bash and
+`docker compose` both interpret unquoted special chars. For Keycloak admin
+passwords especially, prefer `KEYCLOAK_ADMIN_PASSWORD='MyP@ss+word!'`.
+{{< /callout >}}
 
 ## Step 2 — Set required secrets
 

@@ -1,9 +1,11 @@
 ---
-title: Tracing
+title: Distributed tracing (operator how-to)
 description: W3C traceparent propagation across the RAG pipeline, the span taxonomy, and automatic PII filtering.
 weight: 2
+section: "operate"
 aliases:
   - /docs/observability/tracing/
+  - /docs/observe/tracing/
 mode: how-to
 persona: developer
 owner: "docs-stewards"

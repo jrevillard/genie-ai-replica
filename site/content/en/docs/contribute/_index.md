@@ -1,6 +1,6 @@
 ---
 title: "Contribute"
-weight: 110
+weight: 120
 description: "How to contribute to GENIE.AI — open an MR, follow the dev workflow, add a translation, triage a CVE."
 ---
 

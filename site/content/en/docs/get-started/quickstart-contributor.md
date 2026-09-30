@@ -21,13 +21,13 @@ passes CI on a one-line change, and assigned it to a maintainer**.
 - **glab CLI** authenticated (`glab auth login --hostname opensource.unicc.org`).
 - The repository cloned (see the deployer quickstart, step 1).
 
-> {{< callout type="tip" >}}
-> The contributor workflow is **trunk-based with feature branches**: every
-> change lands through a merge request on the upstream
-> `un/itu/genie-ai` project. Direct pushes to `main` or `release/*` are
-> rejected by branch protection. See
-> [Contribute → How to open a MR](/docs/contribute/how-to-mr/).
-> {{< /callout >}}
+{{< callout type="tip" >}}
+The contributor workflow is **trunk-based with feature branches**: every
+change lands through a merge request on the upstream
+`un/itu/genie-ai` project. Direct pushes to `main` or `release/*` are
+rejected by branch protection. See
+[Contribute → How to open a MR](/docs/contribute/how-to-mr/).
+{{< /callout >}}
 
 ## Step 1 — Fork and clone
 

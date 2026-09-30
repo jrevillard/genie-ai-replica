@@ -731,16 +731,35 @@ termination and API key authentication (default port 443, configurable via
 
 ### Architecture
 
-```
-App node (gateway=true, genieai=true, gpu=true)   GPU node (standalone)
-┌─────────────────────────┐                ┌─────────────────────────────┐
-│ Frontend, Backend,      │                │ nginx-gpu (port 443)       │
-│ ArangoDB, Redis, ...    │   HTTPS 443    │   /llm/         → vLLM LLM │
-│                         │ ────────────── │   /translation/ → vLLM T   │
-│ ChatQnA ──────────────────────────────→ │   /embed/       → TEI Emb  │
-│ Retriever ────────────────────────────→ │   /rerank/      → TEI Rer  │
-│ Dataprep ────────────────────────────→ │   /docling/     → docling  │
-└─────────────────────────┘                └─────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph App["App node<br/>(gateway=true, genieai=true, gpu=true)"]
+        app_svc["Frontend, Backend,<br/>ArangoDB, Redis, ..."]
+        chatqna["ChatQnA"]
+        retriever["Retriever"]
+        dataprep["Dataprep"]
+        app_svc --- chatqna
+        app_svc --- retriever
+        app_svc --- dataprep
+    end
+
+    subgraph GPU["GPU node (standalone)"]
+        nginx_g["nginx-gpu (port 443)"]
+        llm["/llm/         → vLLM LLM"]
+        tr["/translation/ → vLLM T"]
+        em["/embed/       → TEI Emb"]
+        rk["/rerank/      → TEI Rer"]
+        dl["/docling/     → docling"]
+        nginx_g --> llm
+        nginx_g --> tr
+        nginx_g --> em
+        nginx_g --> rk
+        nginx_g --> dl
+    end
+
+    chatqna -. "HTTPS 443" .-> nginx_g
+    retriever -. "HTTPS 443" .-> nginx_g
+    dataprep -. "HTTPS 443" .-> nginx_g
 ```
 
 > **Important:** the app node must carry all three Swarm labels

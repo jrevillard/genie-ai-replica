@@ -115,8 +115,8 @@ For the full source-tree walk-through, see
 | C4 diagrams, auth flows, service matrix | [Architecture](/docs/architecture/) |
 | Deploying (Compose / Swarm / Ansible) | [Deployment](/docs/deploy/) |
 | Identity, Keycloak, external IdPs | [Configuration](/docs/configure/) |
-| Backend API contracts | [Backend](/docs/backend/) |
-| Setting up a dev environment | [Development guide](/docs/core/development-guide/) |
+| Backend API contracts | [Reference → API contracts](/docs/reference/api-contracts/) |
+| Setting up a dev environment | [Build and run locally](/docs/contribute/build-and-run/) |
 | Frontend theming & components | [Frontend](/docs/frontend/) |
 | Mobile app | [Mobile](/docs/mobile/) |
 | Managing the knowledge base | [Knowledge Base](/docs/knowledge-base/) |

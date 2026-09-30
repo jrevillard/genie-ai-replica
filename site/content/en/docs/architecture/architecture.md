@@ -77,12 +77,13 @@ graph TB
 
     subgraph Data Layer
         ADB[(ArangoDB<br/>Documents / Graph / Vector)]
-        REDIS[(Redis<br/>Cache)]
+        REDIS[(Redis<br/>(translation-service only))]
         PG[(PostgreSQL<br/>Kong + Keycloak)]
     end
 
     subgraph AI Layer
         CHATQNA[ChatQnA]
+        EMB[Embedding wrapper<br/>:6000]
         RETRIEVER[Retriever]
         RERANKER[Reranker]
         VLLM[vLLM<br/>LLM Inference]
@@ -108,6 +109,8 @@ graph TB
     DR --> CLAMAV
     BE --> REDIS
     BE --> CHATQNA
+    CHATQNA -->|POST /v1/embeddings| EMB
+    EMB --> TEI
     CHATQNA --> RETRIEVER
     CHATQNA --> RERANKER
     RETRIEVER --> ADB
@@ -117,7 +120,7 @@ graph TB
     DATAPREP -->|client_credentials| KC
     DATAPREP --> BE
     DATAPREP --> ADB
-    DATAPREP --> DR
+    DR --> DATAPREP
 ```
 
 ### Layer Descriptions
@@ -266,6 +269,8 @@ sequenceDiagram
     participant K as Kong
     participant BE as Backend
     participant ChatQnA as OPEA ChatQnA
+    participant Emb as Embedding wrapper
+    participant TEI as TEI
     participant Ret as Retriever
     participant ADB as ArangoDB
     participant LLM as vLLM
@@ -283,16 +288,32 @@ sequenceDiagram
     BE->>ChatQnA: Bearer token + traceparent
     ChatQnA->>ChatQnA: Create child span (chatqna.process)
     ChatQnA->>Collector: Export span
-    
+
+    ChatQnA->>Emb: POST /v1/embeddings (traceparent)
+    Emb->>Emb: Create child span (embedding.wrapper)
+    Emb->>TEI: Forward (Hugging Face Inference API)
+    TEI->>TEI: Create child span (tei.embedding)
+    TEI->>Collector: Export span
+    TEI-->>Emb: Embedding vector
+    Emb-->>ChatQnA: Embedding vector
+
     ChatQnA->>Ret: Query + traceparent
     Ret->>Ret: Create child span (retriever.search)
     Ret->>ADB: Vector + graph search
     Ret->>Collector: Export span
-    
+    Ret-->>ChatQnA: Ranked chunks
+
     ChatQnA->>LLM: Generate + traceparent
     LLM->>LLM: Create child span (llm.inference)
     LLM->>Collector: Export span
-    
+    LLM-->>ChatQnA: Generated text
+
+    ChatQnA-->>BE: Final response
+    BE-->>K: Reverse proxy
+    K-->>N: Proxy
+    N-->>FE: HTTPS
+    FE-->>User: Render response
+
     Collector->>VM: Store trace
     Collector->>Collector: Self-telemetry span
 ```
@@ -422,7 +443,7 @@ sequenceDiagram
     BE->>KC: JWKS public key (cached)
     BE->>BE: Validate JWT signature + claims
     BE->>ADB: JIT provisioning (UPSERT by iss#sub)
-    BE->>Vue: API response
+    BE-->>Vue: API response
 ```
 
 Keycloak serves as the sole identity authority. If an external IdP is configured, Keycloak brokers the authentication. On each authenticated API request, the backend validates the JWT and ensures the user exists in ArangoDB via just-in-time provisioning.
@@ -520,6 +541,8 @@ sequenceDiagram
     participant K as Kong
     participant BE as Backend
     participant ChatQnA as OPEA ChatQnA
+    participant Emb as Embedding wrapper
+    participant TEI as TEI
     participant Ret as Retriever
     participant ADB as ArangoDB
     participant LLM as vLLM
@@ -532,19 +555,21 @@ sequenceDiagram
     BE->>ChatQnA: Bearer token
     ChatQnA->>ChatQnA: Validate JWT (JWKS)
     ChatQnA->>BE: GET /api/me/context (user profile for AI enrichment)
-    BE->>ChatQnA: User context (name, role, emailVerified)
-    ChatQnA->>TEI: Generate embedding
-    TEI->>ChatQnA: Embedding vector
+    BE-->>ChatQnA: User context (name, role, emailVerified)
+    ChatQnA->>Emb: POST /v1/embeddings
+    Emb->>TEI: Forward (Hugging Face Inference API)
+    TEI-->>Emb: Embedding vector
+    Emb-->>ChatQnA: Embedding vector
     ChatQnA->>Ret: Query with embedding
     Ret->>ADB: Vector + graph search
-    ADB->>Ret: Ranked chunks
-    Ret->>ChatQnA: Retrieved documents
+    ADB-->>Ret: Ranked chunks
+    Ret-->>ChatQnA: Retrieved documents
     ChatQnA->>ChatQnA: Rerank results
     ChatQnA->>LLM: Context + prompt
-    LLM->>ChatQnA: Generated response
-    ChatQnA->>BE: RAG response
-    BE->>FE: API response
-    FE->>User: Display answer
+    LLM-->>ChatQnA: Generated response
+    ChatQnA-->>BE: RAG response
+    BE-->>FE: API response
+    FE-->>User: Display answer
 ```
 
 The RAG pipeline flows through the API gateway, backend, and OPEA services. The Bearer token is forwarded to ChatQnA, which performs independent JWKS validation. ChatQnA also fetches user context from the backend via `GET /api/me/context` to enrich AI prompts with user profile data.
@@ -559,6 +584,7 @@ sequenceDiagram
     participant FE as Vue Frontend
     participant BE as Backend
     participant ChatQnA as OPEA ChatQnA
+    participant Emb as Embedding wrapper
     participant TEI as TEI Embedding
     participant Ret as Retriever
     participant ADB as ArangoDB
@@ -567,40 +593,42 @@ sequenceDiagram
     participant Collector as OTel Collector
 
     User->>FE: Send query
-    FE->>BE: POST /api/chat
+    FE->>BE: POST /api/queries/stream
     
     BE->>BE: [SPAN: backend.request]
     BE->>Collector: Export span (OTLP)
     
-    BE->>ChatQnA: POST /chat (with traceparent)
+    BE->>ChatQnA: POST /v1/chatqna (with traceparent)
     ChatQnA->>ChatQnA: [SPAN: chatqna.process]
     ChatQnA->>Collector: Export span
     
-    ChatQnA->>TEI: Generate embedding (traceparent)
+    ChatQnA->>Emb: POST /v1/embeddings (traceparent)
+    Emb->>Emb: [SPAN: embedding.wrapper]
+    Emb->>TEI: Forward (Hugging Face Inference API)
     TEI->>TEI: [SPAN: tei.embedding]
     TEI->>Collector: Export span
-    TEI->>ChatQnA: Vector
+    TEI-->>ChatQnA: Vector
     
     ChatQnA->>Ret: Query (traceparent)
     Ret->>Ret: [SPAN: retriever.search]
     Ret->>ADB: Vector + graph search
     ADB->>ADB: [SPAN: arangodb.query]
     Ret->>Collector: Export span
-    Ret->>ChatQnA: Chunks
+    Ret-->>ChatQnA: Chunks
     
     ChatQnA->>Rerank: Rerank (traceparent)
     Rerank->>Rerank: [SPAN: reranker.score]
     Rerank->>Collector: Export span
-    Rerank->>ChatQnA: Ranked chunks
+    Rerank-->>ChatQnA: Ranked chunks
     
     ChatQnA->>LLM: Generate (traceparent)
     LLM->>LLM: [SPAN: llm.inference]
     LLM->>Collector: Export span
-    LLM->>ChatQnA: Response
+    LLM-->>ChatQnA: Response
     
-    ChatQnA->>BE: RAG response
-    BE->>FE: API response
-    FE->>User: Display answer
+    ChatQnA-->>BE: RAG response
+    BE-->>FE: API response
+    FE-->>User: Display answer
 ```
 
 **Key spans emitted:**
@@ -700,9 +728,9 @@ sequenceDiagram
     K->>DR: POST /api/files/upload (Bearer token)
     DR->>DR: Validate file type + size
     DR->>CLAM: Scan for viruses
-    CLAM->>DR: Clean / Infected
+    CLAM-->>DR: Clean / Infected
     DR->>DR: Store file + metadata
-    DR->>FE: 201 Created (file_id)
+    DR-->>FE: 201 Created (file_id)
 ```
 
 Users upload documents through the frontend to the Document Repository service. Files are validated (type, size), scanned by ClamAV, and stored with metadata. Upload requires an authenticated user with admin role.
@@ -733,13 +761,14 @@ sequenceDiagram
     DP->>DP: Chunk document (dynamic size per file type)
 
     DP->>BE: GET /api/service-categories/categories
-    BE->>DP: Label hierarchy
+    BE-->>DP: Label hierarchy
     DP->>DP: Label chunks (LLM / embedding / BM25)
     DP->>ADB: Store chunks + entities + graph edges
     DP->>ADB: Generate and store vector embeddings
 
     DP->>DR: Update ingestion status + chunk count
-    DP->>FE: Ingestion complete
+    DR-->>Admin: 200 OK (Ingestion started in background)
+    Note over Admin,FE: Frontend polls DR /api/files/{fileId}/ingestion-log for status
 ```
 
 Dataprep uses a dedicated Keycloak client with the `client_credentials` grant type. This service account is separate from user tokens and has permissions scoped to document ingestion operations. The ingestion pipeline extracts content, chunks it, labels each chunk against the service taxonomy, constructs a knowledge graph (entities + relationships), generates vector embeddings, and stores everything in ArangoDB.
@@ -864,15 +893,16 @@ Request path: `Browser -> NGINX (TLS) -> Kong (CORS, rate limit) -> Backend (JWT
 
 Keycloak runs behind the NGINX → Kong proxy chain with the `/auth` path prefix. The following headers are used to tell Keycloak its public URL:
 
-```
-Client → NGINX → Kong → Keycloak
-            │         │       │
-            │    X-Forwarded-Prefix: /auth
-            │    (strip_path removes /auth)
-            │         │
-     X-Forwarded-Proto: https
-     X-Forwarded-Host: <NGINX_PUBLIC_DOMAIN>
-     X-Forwarded-Port: <NGINX_HTTPS_PORT>
+```mermaid
+flowchart LR
+    C[Client]
+    N[NGINX]
+    K[Kong<br/>strip_path removes /auth]
+    KC[Keycloak]
+
+    C -- HTTPS --> N
+    N -- X-Forwarded-Proto: https<br/>X-Forwarded-Host: NGINX_PUBLIC_DOMAIN<br/>X-Forwarded-Port: NGINX_HTTPS_PORT --> K
+    K -- X-Forwarded-Prefix: /auth --> KC
 ```
 
 | Header | Set by | Value | Purpose |

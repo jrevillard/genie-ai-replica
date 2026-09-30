@@ -2,7 +2,9 @@
 title: "Source Tree Analysis"
 description: "A walk-through of the GENIE.AI repository structure: every component, its purpose, and its dependencies."
 weight: 2
-section: "core"
+section: "reference"
+aliases:
+  - /docs/core/source-tree-analysis/
 mode: reference
 persona: contributor
 owner: docs-stewards
@@ -236,7 +238,7 @@ components/gov-chat-backend/
 ├── services/                     # Business logic layer
 │   ├── keycloak-auth-service.js  # Keycloak token validation
 │   ├── keycloak-proxy-service.js # Keycloak Admin API proxy
-│   ├── session-service.js        # Session management (Redis)
+│   ├── session-service.js        # Session management (ArangoDB collections: sessions, userSessions, sessionQueries)
 │   ├── user-profile-service.js   # User profile (singleton)
 │   ├── user-provisioning-service.js # User provisioning
 │   ├── query-service.js          # Chat query orchestration (OPEA ChatQnA)
@@ -281,7 +283,7 @@ components/gov-chat-backend/
 
 - **Keycloak:** OIDC authentication, admin API proxy (`services/keycloak-auth-service.js`, `services/keycloak-proxy-service.js`)
 - **ArangoDB:** Direct connection for all data operations (users, conversations, messages, service categories)
-- **Redis:** Session store, caching
+- **Redis:** Translation-service cache only (`services/translation-service.js`) — not used for sessions or general caching
 - **OPEA ChatQnA:** Chat query orchestration (`services/query-service.js` → `genie-ai-overlay/chatqna/`)
 - **Document Repository:** File upload proxy (`services/security-scan-service.js` → `components/document-repository/`)
 - **Translation Service:** Translation backend proxy (`services/translation-service.js` → GPU/CPU backends)
@@ -596,59 +598,47 @@ api-gateway-solution/
 
 ### Cross-Part Communication Flow
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        NGINX (api-gateway-solution/)            │
-│  SSL termination, static files, reverse proxy, ModSecurity      │
-└─────────────────────────────────────────────────────────────────┘
-         │                    │                    │
-         ▼                    ▼                    ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│ Frontend (Vue)  │  │  Backend API    │  │   Mobile App    │
-│ gov-chat-.../   │  │ gov-chat-.../   │  │ genie_ai_.../   │
-│ Port: 5173      │  │ Port: 3000      │  │ (native app)    │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
-         │                    │                    │
-         │                    ▼                    │
-         │         ┌───────────────────────────┐   │
-         │         │  Keycloak (OIDC)          │   │
-         │         │  /auth/* routes           │   │
-         │         └───────────────────────────┘   │
-         │                    │                    │
-         │                    ▼                    │
-         │         ┌───────────────────────────┐   │
-         │         │  ArangoDB (Data Layer)    │   │
-         │         │  - users                  │   │
-         │         │  - conversations          │   │
-         │         │  - messages               │   │
-         │         │  - serviceCategories      │   │
-         │         │  - vector search          │   │
-         │         └───────────────────────────┘   │
-         │                    │                    │
-         │                    ▼                    │
-         │         ┌───────────────────────────┐   │
-         │         │  Document Repository      │   │
-         │         │  Port: 3001              │   │
-         │         │  /api/files/*            │   │
-         │         └───────────────────────────┘   │
-         │                    │                    │
-         │                    ▼                    │
-         │         ┌───────────────────────────┐   │
-         │         │  OPEA Microservices       │   │
-         │         │  - ChatQnA (Port 8888)    │   │
-         │         │  - Retriever (Port 7000)  │   │
-         │         │  - Reranker (Port 8000)   │   │
-         │         │  - Dataprep (Port 5000)   │   │
-         │         └───────────────────────────┘   │
-         │                    │                    │
-         ▼                    ▼                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      External Services                           │
-│  - vLLM (LLM inference)                                          │
-│  - TEI (embeddings/reranking)                                   │
-│  - ClamAV (virus scanning)                                      │
-│  - Redis (cache/sessions)                                       │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Edge["Host-edge (api-gateway-solution/)"]
+        Nginx["NGINX<br/>SSL termination, static files,<br/>reverse proxy, ModSecurity"]
+    end
+
+    subgraph Client["Client layer"]
+        Browser["Browser<br/>SPA + JSON API"]
+        Mobile["Mobile App<br/>genie_ai_mobile/ (native)"]
+    end
+
+    subgraph API["API layer"]
+        Kong["Kong<br/>(CORS, rate limit, OIDC plugin)"]
+        BE["Backend API<br/>gov-chat-backend/<br/>Port: 3000"]
+        DocRepo["Document Repository<br/>Port: 3001<br/>/api/files/*"]
+        KC["Keycloak (OIDC)<br/>/auth/* routes<br/>PostgreSQL-backed"]
+    end
+
+    subgraph Data["Data layer"]
+        Arango["ArangoDB<br/>users, conversations,<br/>messages, serviceCategories,<br/>vector search"]
+        Postgres["PostgreSQL<br/>(Kong + Keycloak DBs)"]
+        Redis["Redis<br/>(translation-service only)"]
+    end
+
+    subgraph AI["AI layer (genie-ai-overlay/)"]
+        OPEA["OPEA Microservices<br/>ChatQnA :8888<br/>Retriever :7000<br/>Reranker :8000<br/>Dataprep :5000"]
+    end
+
+    Browser -- "/, /api/*" --> Nginx
+    Mobile -- "HTTPS 443" --> Nginx
+    Nginx -- "/ → static SPA" --> Browser
+    Nginx -- "/api/*" --> Kong
+    Kong --> BE
+    Kong --> KC
+    BE --> Arango
+    BE --> Redis
+    BE --> OPEA
+    DocRepo --> Arango
+    DocRepo --> ClamAV["ClamAV (sidecar)<br/>antivirus scan"]
+    KC --> Postgres
+    OPEA --> Arango
 ```
 
 ### Authentication Flow
@@ -658,7 +648,7 @@ api-gateway-solution/
 3. **Frontend/Mobile:** Stores token, sends via `Authorization: Bearer` header
 4. **Backend:** Validates token via `keycloak-auth-service.js` (Keycloak introspection endpoint)
 5. **OPEA ChatQnA:** Validates token via `keycloak_token_validator.py`
-6. **Session Management:** Backend stores session data in Redis
+6. **Session Management:** Backend stores session data in ArangoDB collections (`sessions`, `userSessions`, `sessionQueries`) via `services/session-service.js` — Redis is NOT used for sessions
 
 ### Data Flow
 
@@ -694,7 +684,7 @@ api-gateway-solution/
    - `backend` - Node.js/Express API (`components/gov-chat-backend/`)
    - `doc-repo` - Document repository (`components/document-repository/`)
    - `arangodb` - ArangoDB database
-   - `redis` - Cache/session store
+   - `redis` - Translation cache only (`services/translation-service.js`)
 
 3. **Layer 3: API Gateway**
    - `kong` - Kong API Gateway
@@ -867,7 +857,7 @@ docs/e2e-tests/
 
 | Service | Port |
 |---------|------|
-| Frontend | 5173 |
+| Frontend | 8090 |
 | Backend | 3000 |
 | Document Repository | 3001 |
 | Dataprep | 5000 |

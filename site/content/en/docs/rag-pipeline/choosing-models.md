@@ -710,29 +710,24 @@ NVIDIA_VISIBLE_DEVICES=1
 
 ### For Main Inference + Labeling + Graph Extraction (shared vLLM)
 
-```
-Do you have 48GB+ VRAM?
-├── YES → Use Qwen 2.5 7B or Llama 3.1 8B
-│         (or Llama 3.1 70B-AWQ for maximum quality)
-└── NO
-    ├── Do you have 24GB+ VRAM?
-    │   ├── YES → Use Qwen 2.5 7B or Llama 3.1 8B (INT8/AWQ)
-    │   └── NO
-    │       ├── Do you have 16GB VRAM?
-    │       │   ├── YES → Use Mistral 7B with LABELING_STRATEGY=embedding
-    │       │   │         (graph extraction will be unreliable)
-    │       │   └── NO
-    │       │       └── Use Gemma 3 4B with LABELING_STRATEGY=embedding
-    │       │           (graph extraction will NOT work)
+```mermaid
+flowchart TD
+    Q1{Do you have 48GB+ VRAM?}
+    Q1 -- YES --> A1["Use Qwen 2.5 7B or Llama 3.1 8B<br/>(or Llama 3.1 70B-AWQ for maximum quality)"]
+    Q1 -- NO --> Q2{Do you have 24GB+ VRAM?}
+    Q2 -- YES --> A2["Use Qwen 2.5 7B or Llama 3.1 8B (INT8/AWQ)"]
+    Q2 -- NO --> Q3{Do you have 16GB VRAM?}
+    Q3 -- YES --> A3["Use Mistral 7B with LABELING_STRATEGY=embedding<br/>(graph extraction will be unreliable)"]
+    Q3 -- NO --> A4["Use Gemma 3 4B with LABELING_STRATEGY=embedding<br/>(graph extraction will NOT work)"]
 ```
 
 ### For Translation (dedicated vLLM)
 
-```
-Do you need high-quality translation for many languages?
-├── YES → Use Infomaniak-AI/vllm-translategemma-4b-it
-└── NO
-    └── Use Gemma 3 4B (default, adequate for most use cases)
+```mermaid
+flowchart TD
+    Q1{Do you need high-quality translation<br/>for many languages?}
+    Q1 -- YES --> A1["Use Infomaniak-AI/vllm-translategemma-4b-it"]
+    Q1 -- NO --> A2["Use Gemma 3 4B (default, adequate for most use cases)"]
 ```
 
 ---

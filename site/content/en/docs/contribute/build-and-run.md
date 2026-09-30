@@ -1,8 +1,10 @@
 ---
-title: "Development Guide"
+title: "Build and run locally"
 description: "Setting up a local development environment across all GENIE.AI components: prerequisites, commands, tests, linting, and observability."
 weight: 4
-section: "core"
+section: "contribute"
+aliases:
+  - /docs/contribute/build-and-run/
 audience: "developer"
 mode: how-to
 persona: developer
@@ -16,7 +18,7 @@ microservices, Kong/Nginx. It also covers the daily commands you need while
 developing.
 
 For high-level orientation, see [Project Overview](/docs/core/project-overview/).
-For code layout, see [Source Tree Analysis](/docs/core/source-tree-analysis/).
+For code layout, see [Source Tree Analysis](/docs/reference/source-tree-analysis/).
 For service-to-service contracts, see
 [Integration Architecture](/docs/core/integration-architecture/).
 
@@ -202,7 +204,7 @@ genie-ai/
 ```
 
 For the per-directory walk-through, see
-[Source Tree Analysis](/docs/core/source-tree-analysis/).
+[Source Tree Analysis](/docs/reference/source-tree-analysis/).
 
 ---
 
@@ -774,7 +776,7 @@ Tracing is a no-op when `ENABLE_OBSERVABILITY` is not `1`, so adding
 
 For full architecture (collector config, dashboards, alert rules, RAG
 debugging recipes), see [Observability](/docs/observe/) and
-[Debugging with Tracing & Logs](/docs/observe/tracing/).
+[Debugging with Tracing & Logs](/docs/operate/tracing-howto/).
 
 ---
 
@@ -821,7 +823,7 @@ npm run lint:dart && npm run format:dart:check
 ```
 
 CI runs the full multi-stage pipeline on every MR — see the canonical
-[CI/CD](/docs/core/development-guide/) for the 12-stage structure
+[CI/CD](/docs/contribute/build-and-run/) for the 12-stage structure
 (`lint → test → config → build → scan → contract-in-image → e2e → promote
 → release → scheduled → manual → deploy`). Cancelling obsolete pipelines
 before triggering new ones saves runner minutes.
@@ -889,7 +891,7 @@ If it returns `command not found`, `clamav-daemon` was dropped by
 ### Keycloak login loop
 
 - ROPC is enabled but the user lacks `firstName`, `lastName`, or
-  `emailVerified=true` — see [Server Testing](/docs/core/development-guide/)
+  `emailVerified=true` — see [Server Testing](/docs/contribute/build-and-run/)
   for the canonical user-creation payload.
 - Mobile scheme mismatch — see the [Scheme Coherence Rule](#mobile-flutter).
 
@@ -926,8 +928,8 @@ interrupted, or VRAM exhaustion (drop model size or run with
 |---|---|
 | Deploy to a real environment | [Deployment](/docs/deploy/) (Ansible recommended) |
 | Add observability (OTel, Grafana, dashboards) | [Observability](/docs/observe/) |
-| Debug a slow chat / failing ingest | [Debugging with Tracing & Logs](/docs/observe/tracing/) |
-| Find the CI/CD pipeline structure | [CI/CD](/docs/core/development-guide/) |
+| Debug a slow chat / failing ingest | [Debugging with Tracing & Logs](/docs/operate/tracing-howto/) |
+| Find the CI/CD pipeline structure | [CI/CD](/docs/contribute/build-and-run/) |
 | Look up an environment variable | [Configuration](/docs/configure/) |
 | Understand the C4 architecture | [Architecture](/docs/architecture/) |
 | Run the multi-phase E2E suite | [E2E Tests](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/docs/e2e-tests/README.md) |

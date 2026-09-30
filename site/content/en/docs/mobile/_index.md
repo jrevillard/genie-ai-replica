@@ -1,7 +1,7 @@
 ---
 title: "Mobile (genie_ai_mobile)"
 description: "Flutter client docs: UI inventory, architecture, deployment, end-user auth, and chat pipeline."
-weight: 100
+weight: 110
 section: "mobile"
 ---
 

@@ -1758,7 +1758,7 @@ export default {
       select: "Sélectionner {'{'}name{'}'} pour la publication groupée",
       stage: {
         drainFailed: "Échec de l'action ingest",
-        queueBehind: '{n} en file d’attente · ingest dans {m} dépôt(s)',
+        queueBehind: "{'{'}n{'}'} en file d’attente · ingest dans {'{'}m{'}'} dépôt(s)",
         redraining: 'Redrainage…',
         building: 'Construction…',
         draft: 'Brouillon',
@@ -1766,7 +1766,7 @@ export default {
         ingested: "v{'{'}n{'}'} traitée par ingest",
         published: "v{'{'}n{'}'} publiée",
         retracted: 'Retiré',
-        stepOf: 'Step '
+        stepOf: "Step {'{'}n{'}'} of 10"
       },
       title: 'Dépôts',
       topics: 'sujets',
@@ -2050,7 +2050,7 @@ export default {
       },
       stage: {
         inReview: 'En cours de review',
-        stepOf: 'Étape {n} sur 10',
+        stepOf: "Étape {'{'}n{'}'} sur 10",
         draft: 'Brouillon'
       },
       dashboard: {
@@ -2063,7 +2063,7 @@ export default {
         stale: 'obsolète',
         stage: {
           inReview: 'En cours de review',
-          stepOf: 'Étape {n} sur 10',
+          stepOf: "Étape {'{'}n{'}'} sur 10",
           draft: 'Brouillon'
         },
         bulk: {
@@ -2174,11 +2174,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: ' +{n} more',
+        moreN: " +{'{'}n{'}'} more",
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: '{n}',
+        benchCount: "{'{'}n{'}'}",
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2421,7 +2421,7 @@ export default {
     },
     pii: {
       panel: 'Entités signalées',
-      nFlagged: '{n} trouvée(s)',
+      nFlagged: "{'{'}n{'}'} trouvée(s)",
       rescan: 'Re-scanner',
       scanning: 'Scan en cours…',
       clean: 'Aucune entité signalée — ce concept est propre.',
@@ -2502,7 +2502,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: '{n} document(s)',
+      total: "{'{'}n{'}'} document(s)",
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2511,12 +2511,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
+      uploaded: "{'{'}n{'}'} file(s) uploaded.",
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: 'Selected: {n}',
+      count: "Selected: {'{'}n{'}'}",
       needOne: 'Select at least one source.',
-      confirm: 'Use {n} source(s)',
+      confirm: "Use {'{'}n{'}'} source(s)",
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',

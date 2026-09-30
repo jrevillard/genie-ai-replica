@@ -560,3 +560,89 @@ describe('cloneRepository (Story 4.8 — D-V5)', () => {
     expect(leftover).toHaveLength(0);
   });
 });
+
+// ─── Live concept counts (David, 2026-09-30, "0 topics" on the clone) ────────
+
+describe('list concept_count attach (David 2026-09-30 "0 topics")', () => {
+  beforeEach(() => db._reset());
+
+  test('rows get the LIVE meta-row count — stale doc fields overwritten, empty repos honest 0', async () => {
+    db.query.mockImplementation(async (query) => {
+      const q = String(query || '');
+      if (q.includes('COLLECT repo_id')) {
+        // Serves both attaches (indexing_pending + concept_count) — same shape.
+        return { all: async () => [{ repo_id: 'r-with', n: 7 }] };
+      }
+      return {
+        all: async () => [
+          { repo_id: 'r-with', concept_count: 996, name: 'A', domain: 'd', created_at: 't1', _key: 'r-with' },
+          { repo_id: 'r-empty', name: 'B', domain: 'd', created_at: 't2', _key: 'r-empty' }
+        ]
+      };
+    });
+    const result = await repoService.list({});
+    const byId = new Map(result.items.map((r) => [r.repo_id, r.concept_count]));
+    expect(byId.get('r-with')).toBe(7); // the stale denormalized 996 is overwritten by truth
+    expect(byId.get('r-empty')).toBe(0); // a repo with no meta rows reads 0, not undefined
+  });
+
+  test('count failure is fail-soft — the list still returns, doc values stand', async () => {
+    db.query.mockImplementation(async (query) => {
+      if (String(query || '').includes('COLLECT repo_id')) throw new Error('count exploded');
+      return {
+        all: async () => [{ repo_id: 'r1', concept_count: 42, name: 'A', domain: 'd', created_at: 't', _key: 'r1' }]
+      };
+    });
+    const result = await repoService.list({});
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].concept_count).toBe(42);
+  });
+
+  test('empty page → no count query at all (same guard as indexing_pending)', async () => {
+    db.query.mockResolvedValue({ all: async () => [] });
+    await repoService.list({});
+    expect(db.query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('cloneRepository response concept_count (David 2026-09-30)', () => {
+  beforeEach(() => {
+    db._reset();
+    let n = 0;
+    db.collection('okf_concepts_meta').save.mockImplementation(async (doc) => {
+      const k = doc._key || `meta-copy-${++n}`;
+      db._stores.okf_concepts_meta[k] = { ...doc, _key: k, _id: `okf_concepts_meta/${k}`, _rev: '1' };
+      return { ...db._stores.okf_concepts_meta[k] };
+    });
+    db.query.mockImplementation(async (query, bindVars) => {
+      const q = String(query || '');
+      if (q.includes('REMOVE')) return { all: async () => [] };
+      return {
+        all: async () =>
+          Object.values(db._stores.okf_concepts_meta).filter((m) => m.repo_id === (bindVars && bindVars.source_id))
+      };
+    });
+  });
+
+  async function seedSource() {
+    const src = await repoService.create(validCreateInput({ name: 'Source KB', domain: 'smoke' }), ACTOR);
+    for (let i = 0; i < 2; i++) {
+      db._stores.okf_concepts_meta[`src-meta-${i}`] = {
+        _key: `src-meta-${i}`,
+        repo_id: src.repo_id,
+        concept_id: `c${i}`,
+        title: `C${i}`,
+        created_at: '2026-08-01T00:00:00.000Z',
+        updated_at: '2026-08-01T00:00:00.000Z'
+      };
+    }
+    return src;
+  }
+
+  test('the clone response carries concept_count = copied (Choose patches the draft from it)', async () => {
+    const src = await seedSource();
+    const clone = await repoService.cloneRepository(src.repo_id, {}, ACTOR);
+    expect(clone.copied_concepts).toBe(2);
+    expect(clone.concept_count).toBe(2);
+  });
+});

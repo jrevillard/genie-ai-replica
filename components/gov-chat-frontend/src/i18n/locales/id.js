@@ -1748,7 +1748,7 @@ export default {
       select: "Pilih {'{'}name{'}'} untuk publikasi massal",
       stage: {
         drainFailed: 'Proses ingest gagal',
-        queueBehind: '{n} dalam antrean · meng-ingest {m} repo',
+        queueBehind: "{'{'}n{'}'} dalam antrean · meng-ingest {'{'}m{'}'} repo",
         redraining: 'Mengosongkan ulang…',
         building: 'Membangun…',
         draft: 'Draf',
@@ -1756,7 +1756,7 @@ export default {
         ingested: "Di-ingest v{'{'}n{'}'}",
         published: "Dipublikasikan v{'{'}n{'}'}",
         retracted: 'Ditarik',
-        stepOf: 'Step '
+        stepOf: "Step {'{'}n{'}'} of 10"
       },
       title: 'Repositori',
       topics: 'topik',
@@ -2036,7 +2036,7 @@ export default {
       },
       stage: {
         inReview: 'Dalam status review',
-        stepOf: 'Langkah {n} dari 10',
+        stepOf: "Langkah {'{'}n{'}'} dari 10",
         draft: 'Draf'
       },
       dashboard: {
@@ -2049,7 +2049,7 @@ export default {
         stale: 'usang',
         stage: {
           inReview: 'Dalam status review',
-          stepOf: 'Langkah {n} dari 10',
+          stepOf: "Langkah {'{'}n{'}'} dari 10",
           draft: 'Draf'
         },
         bulk: {
@@ -2160,11 +2160,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: ' +{n} more',
+        moreN: " +{'{'}n{'}'} more",
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: '{n}',
+        benchCount: "{'{'}n{'}'}",
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2406,7 +2406,7 @@ export default {
     },
     pii: {
       panel: 'Entitas yang ditandai',
-      nFlagged: 'Ditemukan {n}',
+      nFlagged: "Ditemukan {'{'}n{'}'}",
       rescan: 'Pindai ulang',
       scanning: 'Memindai…',
       clean: 'Tidak ada entitas yang ditandai — concept ini aman.',
@@ -2487,7 +2487,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: '{n} document(s)',
+      total: "{'{'}n{'}'} document(s)",
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2496,12 +2496,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
+      uploaded: "{'{'}n{'}'} file(s) uploaded.",
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: 'Selected: {n}',
+      count: "Selected: {'{'}n{'}'}",
       needOne: 'Select at least one source.',
-      confirm: 'Use {n} source(s)',
+      confirm: "Use {'{'}n{'}'} source(s)",
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',

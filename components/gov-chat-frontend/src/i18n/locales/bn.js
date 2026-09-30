@@ -1743,7 +1743,7 @@ export default {
       select: "বাল্ক প্রকাশের জন্য {'{'}name{'}'} নির্বাচন করুন",
       stage: {
         drainFailed: 'Ingest ব্যর্থ হয়েছে',
-        queueBehind: '{n} সারিবদ্ধ · {m}টি রেপো ইনজেস্ট হচ্ছে',
+        queueBehind: "{'{'}n{'}'} সারিবদ্ধ · {'{'}m{'}'}টি রেপো ইনজেস্ট হচ্ছে",
         redraining: 'পুনরায় ড্রেন করা হচ্ছে…',
         building: 'তৈরি করা হচ্ছে…',
         draft: 'খসড়া',
@@ -1751,7 +1751,7 @@ export default {
         ingested: "গৃহীত সংস্করণ {'{'}n{'}'}",
         published: "প্রকাশিত সংস্করণ {'{'}n{'}'}",
         retracted: 'প্রত্যাহার করা হয়েছে',
-        stepOf: 'Step '
+        stepOf: "Step {'{'}n{'}'} of 10"
       },
       title: 'রিপোজিটরি',
       topics: 'টপিক',
@@ -2030,7 +2030,7 @@ export default {
       },
       stage: {
         inReview: 'Review-তে আছে',
-        stepOf: 'ধাপ {n}/১০',
+        stepOf: "ধাপ {'{'}n{'}'}/১০",
         draft: 'খসড়া'
       },
       dashboard: {
@@ -2043,7 +2043,7 @@ export default {
         stale: 'পুরানো',
         stage: {
           inReview: 'Review-তে আছে',
-          stepOf: 'ধাপ {n}/১০',
+          stepOf: "ধাপ {'{'}n{'}'}/১০",
           draft: 'খসড়া'
         },
         bulk: {
@@ -2154,11 +2154,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: ' +{n} more',
+        moreN: " +{'{'}n{'}'} more",
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: '{n}',
+        benchCount: "{'{'}n{'}'}",
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2400,7 +2400,7 @@ export default {
     },
     pii: {
       panel: 'চিহ্নিত সত্ত্বা',
-      nFlagged: '{n} টি পাওয়া গেছে',
+      nFlagged: "{'{'}n{'}'} টি পাওয়া গেছে",
       rescan: 'পুনরায় স্ক্যান করুন',
       scanning: 'স্ক্যান করা হচ্ছে…',
       clean: 'কোনো চিহ্নিত সত্তা নেই — এই concept পরিষ্কার।',
@@ -2481,7 +2481,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: '{n} document(s)',
+      total: "{'{'}n{'}'} document(s)",
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2490,12 +2490,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
+      uploaded: "{'{'}n{'}'} file(s) uploaded.",
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: 'Selected: {n}',
+      count: "Selected: {'{'}n{'}'}",
       needOne: 'Select at least one source.',
-      confirm: 'Use {n} source(s)',
+      confirm: "Use {'{'}n{'}'} source(s)",
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',

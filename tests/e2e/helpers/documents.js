@@ -99,31 +99,6 @@ async function getDocumentTableRows(page) {
 }
 
 /**
- * Delete a document by file name via API.
- * Uses admin token since DELETE requires Admin role.
- */
-async function deleteDocumentByName(page, fileName) {
-  const token = await getAdminToken();
-
-  const listRes = await request('GET', '/api/files?limit=100', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (listRes.status !== 200) {
-    throw new Error(`Failed to list files: ${listRes.status}`);
-  }
-
-  const files = listRes.data.files || listRes.data;
-  const match = files.find((f) => f.file_name === fileName);
-  if (match) {
-    const file_id = match.file_id || match._key || match.id;
-    await request('DELETE', `/api/files/${file_id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  }
-}
-
-/**
  * Delete all test documents matching a prefix via API.
  * Used for test cleanup.
  */
@@ -153,6 +128,5 @@ module.exports = {
   waitForDocumentInTable,
   searchDocuments,
   getDocumentTableRows,
-  deleteDocumentByName,
   deleteAllTestDocuments,
 };

@@ -6,7 +6,6 @@ const {
   waitForBotResponse,
   getMessages,
   getLastBotMessage,
-  dismissQuickHelp,
 } = require('../helpers/chatbot');
 
 test.describe('Chatbot message sending and SSE streaming', () => {
@@ -48,6 +47,23 @@ test.describe('Chatbot message sending and SSE streaming', () => {
 
     const botText = await getLastBotMessage(page);
     expect(botText.length).toBeGreaterThan(0);
+
+    // Verify the chat is in a stable state (no loading spinner) after done event
+    await expect(page.locator('.loading-spinner')).toBeHidden();
+
+    // Verify chat window contains both user and bot messages in correct order
+    const messages = await getMessages(page);
+    const userMsgs = messages.filter((m) => m.sender === 'user');
+    const botMsgs = messages.filter((m) => m.sender === 'bot');
+    expect(userMsgs.length).toBeGreaterThanOrEqual(1);
+    expect(botMsgs.length).toBeGreaterThanOrEqual(1);
+
+    // The user message should be immediately followed by a bot response
+    const firstUserIdx = messages.findIndex((m) => m.sender === 'user');
+    const nextBotIdx = messages.findIndex(
+      (m, i) => i > firstUserIdx && m.sender === 'bot',
+    );
+    expect(nextBotIdx).toBeGreaterThan(firstUserIdx);
   });
 
   test('SSE stream renders bot response progressively', async () => {
@@ -76,37 +92,5 @@ test.describe('Chatbot message sending and SSE streaming', () => {
     expect(botText.length).toBeGreaterThan(0);
     // Progressive rendering: text should have grown during streaming
     expect(textGrew).toBeTruthy();
-  });
-
-  test('done event finalizes message with queryId', async () => {
-    await sendMessage(page, 'What is the weather today?');
-    await waitForBotResponse(page, { timeout: 120000 });
-
-    // Verify bot response exists (the frontend processed the stream)
-    const botText = await getLastBotMessage(page);
-    expect(botText.length).toBeGreaterThan(0);
-
-    // Verify the chat is in a stable state (no loading spinner)
-    await expect(page.locator('.loading-spinner')).toBeHidden();
-  });
-
-  test('chat window contains both user and bot messages after exchange', async () => {
-    await sendMessage(page, 'Hello there');
-    await waitForBotResponse(page, { timeout: 120000 });
-
-    const messages = await getMessages(page);
-
-    const userMsgs = messages.filter((m) => m.sender === 'user');
-    const botMsgs = messages.filter((m) => m.sender === 'bot');
-
-    expect(userMsgs.length).toBeGreaterThanOrEqual(1);
-    expect(botMsgs.length).toBeGreaterThanOrEqual(1);
-
-    // The user message should be immediately followed by a bot response
-    const firstUserIdx = messages.findIndex((m) => m.sender === 'user');
-    const nextBotIdx = messages.findIndex(
-      (m, i) => i > firstUserIdx && m.sender === 'bot',
-    );
-    expect(nextBotIdx).toBeGreaterThan(firstUserIdx);
   });
 });

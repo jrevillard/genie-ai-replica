@@ -162,6 +162,18 @@ HUGGING_FACE_HUB_TOKEN=
 # Default: BAAI/bge-reranker-v2-m3
 # RERANKER_MODEL_ID=BAAI/bge-reranker-v2-m3
 
+# Query-instruction prefix overrides for contrastive / instruction-tuned
+# embedding models (issue #1035). Built-in table covers BAAI/bge en+zh-v1.5,
+# hkunlp/instructor, and nomic-ai/nomic-embed. Use this env var to:
+#   (a) override a built-in entry, or
+#   (b) add a finetune / non-built-in model that needs a custom prefix.
+# Comma-separated `substring=instruction` pairs; substring is matched
+# case-insensitively against TEI_EMBED_MODEL. Trailing spaces inside the
+# instruction value are preserved. Commas inside the instruction value are
+# NOT supported (the entry is truncated at the first comma).
+# Example: add a Chinese-prefix override for a deployer-specific finetune.
+# EMBEDDING_QUERY_INSTRUCTIONS=my-org/bge-finetune=Custom instruction:
+
 # ArangoDB graph traversal (used by retriever and chatqna)
 # ARANGO_GRAPH_NAME=GRAPH                  # ArangoDB graph name (was RETRIEVER_ARANGO_GRAPH_NAME in v1.3)
 # RETRIEVER_ARANGO_TRAVERSAL_ENABLED=false

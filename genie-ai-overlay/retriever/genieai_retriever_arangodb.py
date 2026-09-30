@@ -1027,6 +1027,11 @@ class GenieaiArangoRetriever(OpeaComponent):
                 # checks are unreliable in tests).
                 _query_instruction = get_query_instruction(TEI_EMBED_MODEL)
                 if _query_instruction:
+                    # Order matters: clear the langchain default BEFORE
+                    # wrapping. Reordering these two lines hits the
+                    # QueryInstructionEmbeddingsWrapper.__slots__ guard
+                    # (wrapper has only `base` and `instruction`; setting
+                    # `query_instruction` post-wrap raises AttributeError).
                     if hasattr(embeddings, "query_instruction"):
                         embeddings.query_instruction = ""
                     embeddings = QueryInstructionEmbeddingsWrapper(embeddings, _query_instruction)

@@ -261,10 +261,6 @@ _BUILTIN_QUERY_INSTRUCTIONS: tuple[tuple[str, str], ...] = (
     # BAAI/bge Chinese contrastive (different prefix — must not receive English)
     ("BAAI/bge-large-zh-v1.5", "为这个句子生成表示以用于检索相关文章："),
     ("BAAI/bge-base-zh-v1.5", "为这个句子生成表示以用于检索相关文章："),
-    # intfloat/e5 — "query: " / "passage: " asymmetry
-    ("intfloat/e5-large-v2", "query: "),
-    ("intfloat/e5-base-v2", "query: "),
-    ("intfloat/multilingual-e5", "query: "),
     # hkunlp/instructor — task-specific (configurable via prompt)
     ("hkunlp/instructor", "Represent the query for retrieving evidence documents: "),
     # nomic-ai/nomic-embed — task prefix
@@ -296,7 +292,7 @@ def _parse_query_instructions(raw: str) -> tuple[tuple[str, str], ...]:
     the corresponding model to accept that — or hardcode the override in
     this module. None of the built-in instructions contain commas.
     """
-    out: list[tuple[str, str], ...] = []
+    out: list[tuple[str, str]] = []
     for entry in raw.split(","):
         entry = entry.strip()
         if not entry or "=" not in entry:

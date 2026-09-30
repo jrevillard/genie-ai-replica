@@ -457,22 +457,6 @@ class TestAlignInputs:
                 expected + "prior turn",
             ]
 
-        def test_e5_prefix_applied_to_query(self):
-            """Generalized: intfloat/e5 uses 'query: ' prefix."""
-            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
-
-            expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["intfloat/e5-large-v2"]
-            self_mock = MagicMock()
-            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
-            llm_params = {}
-            inputs = {"text": "bean varieties"}
-            with (
-                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "intfloat/e5-large-v2"),
-            ):
-                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
-            assert result["input"] == expected + "bean varieties"
-
         def test_instructor_prefix_applied_to_query(self):
             """Generalized: hkunlp/instructor uses task-specific prefix."""
             from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
@@ -837,7 +821,9 @@ class TestAlignOutputs:
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
-            inputs = {"input": "Hello"}
+            # _original_query is stashed by align_inputs(EMBEDDING); align_outputs
+            # raises if missing (issue #1035 BM25-leak fix).
+            inputs = {"input": "Hello", "_original_query": "Hello"}
             llm_params = {}
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
                 result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
@@ -854,7 +840,12 @@ class TestAlignOutputs:
                     {"index": 1, "embedding": [0.0, 1.0]},
                 ]
             }
-            inputs = {"input": ["query", "history"], "_blend_alpha": 0.5}
+            # _original_query mirrors what align_inputs(EMBEDDING) stashes.
+            inputs = {
+                "input": ["query", "history"],
+                "_original_query": "query",
+                "_blend_alpha": 0.5,
+            }
             llm_params = {}
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
                 result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
@@ -869,11 +860,27 @@ class TestAlignOutputs:
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
-            inputs = {"input": "standalone query"}
+            inputs = {"input": "standalone query", "_original_query": "standalone query"}
             llm_params = {}
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
                 result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
             assert result["embedding"] == [0.1, 0.2, 0.3]
+
+        def test_raises_when_original_query_missing(self):
+            """Issue #1035: align_outputs MUST receive _original_query from
+            align_inputs(EMBEDDING) — the no-fallback contract prevents the
+            BM25-leak regression from re-emerging via a hand-crafted inputs
+            dict that bypassed align_inputs."""
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
+            inputs = {"input": "prefixed text"}  # no _original_query
+            llm_params = {}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                pytest.raises(ValueError, match="_original_query"),
+            ):
+                align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
 
         def test_single_path_echoes_original_query_not_prefixed(self):
             """Issue #1035 (BM25-leak fix): align_inputs may have prepended the

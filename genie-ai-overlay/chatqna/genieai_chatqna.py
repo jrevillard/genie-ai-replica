@@ -1138,25 +1138,37 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             # list — would 422 on pydantic text:str or feed garbage to BM25).
             # Only the dense leg consumes the blended embedding above.
             #
-            # Issue #1035: align_inputs may have prepended the BGE query
+            # Issue #1035: align_inputs may have prepended the query
             # instruction to the first element. The retriever's BM25 path
             # tokenizes the raw query (TOKENS(@query, ...)) and the prefix
             # would dilute TF/IDF — so use the stashed raw text instead.
-            input_val = inputs["input"]
-            if isinstance(input_val, list):
-                # List path: history was batched alongside query. Echo raw
-                # query (index 0) but the dense channel still uses the
-                # blended vector above.
-                query_text = inputs.get("_original_query", input_val[0])
-            else:
-                query_text = inputs.get("_original_query", input_val)
+            # Raise if the stash is missing (no fallback to the prefixed
+            # text — that would silently re-introduce the BM25 leak).
+            # Pop after use so the side-channel does not leak into the
+            # downstream service-graph dict (TEI / retriever / reranker
+            # all parse `inputs` and may reject unknown keys).
+            if "_original_query" not in inputs:
+                raise ValueError(
+                    "align_outputs(EMBEDDING) requires _original_query in inputs; "
+                    "align_inputs(EMBEDDING) must run first to stash the raw text."
+                )
+            query_text = inputs.pop("_original_query")
             next_data = {"text": query_text, "embedding": blended}
         else:
-            # Single-query path: align_inputs may have prepended the BGE
-            # query instruction to inputs["input"]. Echo the raw text (stashed
-            # by align_inputs as `_original_query`) so the retriever's BM25
-            # leg tokenizes the user's actual query instead of the prefix.
-            next_data = {"text": inputs.get("_original_query", inputs["input"]), "embedding": query_embedding}
+            # Single-query path: align_inputs may have prepended the model
+            # query instruction to inputs["input"]. Echo the raw text
+            # (stashed by align_inputs as `_original_query`) so the
+            # retriever's BM25 leg tokenizes the user's actual query
+            # instead of the prefix. Raise if the stash is missing — no
+            # fallback to the prefixed text (silent BM25-leak regression).
+            # Pop after use so the side-channel does not leak downstream
+            # (see batch path comment).
+            if "_original_query" not in inputs:
+                raise ValueError(
+                    "align_outputs(EMBEDDING) requires _original_query in inputs; "
+                    "align_inputs(EMBEDDING) must run first to stash the raw text."
+                )
+            next_data = {"text": inputs.pop("_original_query"), "embedding": query_embedding}
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:

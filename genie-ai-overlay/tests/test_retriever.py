@@ -1021,6 +1021,19 @@ class TestQueryInstructionWrapper:
         base.embed_query.assert_called_once_with("PFX hello")
         base.embed_documents.assert_called_once_with(["a"])
 
+    def test_wrapper_delegates_attributes_via_getattr(self):
+        """The wrapper's design promise: arbitrary attribute access on the
+        wrapper delegates to the underlying embeddings so adapters that
+        introspect (e.g. ``wrapper.model_name``, ``wrapper.dimension``) keep
+        working. Lock the contract."""
+        base = MagicMock()
+        base.model_name = "BAAI/bge-large-en-v1.5"
+        base.dimension = 1024
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        assert wrapper.model_name == "BAAI/bge-large-en-v1.5"
+        assert wrapper.dimension == 1024
+
     @pytest.mark.asyncio
     async def test_invoke_prefixes_query_for_bge_model(self, invoke_env):
         """Issue #1035: BGE-large-en-v1.5 (default) gets the BAAI prefix."""
@@ -1028,16 +1041,6 @@ class TestQueryInstructionWrapper:
 
         expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
         with patch("retriever.genieai_retriever_arangodb.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"):
-            await invoke_env["retriever"].invoke(create_mock_input(query="test query"))
-        invoke_env["embeddings"].embed_query.assert_called_once_with(expected + "test query")
-
-    @pytest.mark.asyncio
-    async def test_invoke_prefixes_query_for_e5_model(self, invoke_env):
-        """Generalized: intfloat/e5-large-v2 gets 'query: ' prefix."""
-        from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
-
-        expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["intfloat/e5-large-v2"]
-        with patch("retriever.genieai_retriever_arangodb.TEI_EMBED_MODEL", "intfloat/e5-large-v2"):
             await invoke_env["retriever"].invoke(create_mock_input(query="test query"))
         invoke_env["embeddings"].embed_query.assert_called_once_with(expected + "test query")
 
@@ -1068,6 +1071,9 @@ class TestQueryInstructionWrapper:
         instruction is the sole prefix applied — otherwise the local fallback
         path double-prefixes.
         """
+        from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
+
+        expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
         with (
             patch("retriever.genieai_retriever_arangodb.TEI_EMBEDDING_ENDPOINT", ""),
             patch("retriever.genieai_retriever_arangodb.HF_TOKEN", ""),
@@ -1080,6 +1086,11 @@ class TestQueryInstructionWrapper:
         # double-prefix on top of the wrapper's BAAI instruction.
         bge_instance = bge_cls.return_value
         assert bge_instance.query_instruction == ""
+        # Behavioral assertion: the wrapper's prefix is the only one applied
+        # to the encoded text. Without this, a regression that clears the
+        # langchain default but then fails to install the wrapper would
+        # still pass the state-only check above.
+        bge_instance.embed_query.assert_called_once_with(expected + "bean varieties")
 
 
 class TestGetQueryInstruction:
@@ -1095,8 +1106,6 @@ class TestGetQueryInstruction:
             ("BAAI/bge-base-en-v1.5", "Represent this sentence for searching relevant passages: "),
             ("BAAI/bge-small-en-v1.5", "Represent this sentence for searching relevant passages: "),
             ("BAAI/bge-large-zh-v1.5", "为这个句子生成表示以用于检索相关文章："),
-            ("intfloat/e5-large-v2", "query: "),
-            ("intfloat/e5-base-v2", "query: "),
             ("hkunlp/instructor-base", "Represent the query for retrieving evidence documents: "),
             ("nomic-ai/nomic-embed-text-v1.5", "search_query: "),
             # case-insensitive substring match

@@ -1,6 +1,6 @@
 ---
 title: "Reference"
-weight: 120
+weight: 90
 description: "Canonical lookup — env-vars, HTTP API, OPEA protocol extensions, glossary."
 ---
 

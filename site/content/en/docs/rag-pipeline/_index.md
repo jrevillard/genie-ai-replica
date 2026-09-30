@@ -1,7 +1,7 @@
 ---
 title: RAG Pipeline
 description: Sovereign retrieval-augmented generation pipeline — embedding, hybrid retrieval, reranking, generation, and optional translation.
-weight: 60
+weight: 70
 slug: rag
 aliases:
   - /docs/rag/

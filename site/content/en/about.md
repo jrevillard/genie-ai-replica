@@ -46,7 +46,7 @@ trusts:
   it is stored or processed. See [Knowledge base &rarr; Ingestion]({{< relref "/docs/knowledge-base/ingestion" >}}).
 - **PII-safe telemetry** — observability spans are filtered to strip sensitive
   attributes (tokens, passwords, user PII) before export. See
-  [Observability &rarr; Tracing]({{< relref "/docs/observe/tracing" >}}).
+  [Observability &rarr; Tracing]({{< relref "/docs/operate/tracing-howto" >}}).
 - **Hardened backend** — security headers (`helmet`), rate limiting, and
   CORS/CSP policies are applied at the backend and gateway.
 - **Data residency** — because the whole stack is self-hosted, data stays within

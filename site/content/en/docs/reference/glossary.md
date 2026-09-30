@@ -10,8 +10,7 @@ owner: docs-stewards
 last_reviewed: 2026-09-29
 ---
 
-> This page mirrors [Get started → Glossary](/docs/get-started/glossary/).
-> The two copies are kept in sync; if you add a term here, add it there too.
+GENIE.AI glossary — every acronym used across the docs.
 
 ## A–Z
 
@@ -55,8 +54,9 @@ last_reviewed: 2026-09-29
 | **VictoriaMetrics** | Single-node metrics store. |
 | **VictoriaTraces** | Single-node trace store; exposes a Jaeger-compatible API. |
 | **W3C `traceparent`** | The standard HTTP header used to propagate trace context across service boundaries. |
-| **WSS** | WebSocket Secure — used by the admin logs UI for live tailing. |
+| **WSS** | WebSocket Secure. Used in dev by the Vue dev-server HMR (websocket transport on `vue.config.js`); not used in production (admin logs tail via `/api/admin/logs/search` HTTP polling). |
 
 ## Related
 
-- [Get started → Glossary](/docs/get-started/glossary/) — the primary copy
+- [Get started → Concepts](/docs/get-started/concepts/) — five-minute tour of the GENIE.AI mental model.
+- [Architecture → Overview](/docs/architecture/architecture/) — how every acronym above fits together.

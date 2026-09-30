@@ -40,4 +40,4 @@ narrative.
   references.
 - **[Configure](/docs/configure/)** — runtime tunables that map onto the
   env-vars page.
-- **[Backend](/docs/backend/)** — narrative version of the API contracts.
+- **[API contracts](/docs/reference/api-contracts/)** — narrative version of every HTTP endpoint.

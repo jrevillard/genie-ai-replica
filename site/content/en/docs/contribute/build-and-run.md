@@ -4,7 +4,7 @@ description: "Setting up a local development environment across all GENIE.AI com
 weight: 4
 section: "contribute"
 aliases:
-  - /docs/core/development-guide/
+  - /docs/contribute/build-and-run/
 audience: "developer"
 mode: how-to
 persona: developer
@@ -776,7 +776,7 @@ Tracing is a no-op when `ENABLE_OBSERVABILITY` is not `1`, so adding
 
 For full architecture (collector config, dashboards, alert rules, RAG
 debugging recipes), see [Observability](/docs/observe/) and
-[Debugging with Tracing & Logs](/docs/observe/tracing/).
+[Debugging with Tracing & Logs](/docs/operate/tracing-howto/).
 
 ---
 
@@ -823,7 +823,7 @@ npm run lint:dart && npm run format:dart:check
 ```
 
 CI runs the full multi-stage pipeline on every MR — see the canonical
-[CI/CD](/docs/core/development-guide/) for the 12-stage structure
+[CI/CD](/docs/contribute/build-and-run/) for the 12-stage structure
 (`lint → test → config → build → scan → contract-in-image → e2e → promote
 → release → scheduled → manual → deploy`). Cancelling obsolete pipelines
 before triggering new ones saves runner minutes.
@@ -891,7 +891,7 @@ If it returns `command not found`, `clamav-daemon` was dropped by
 ### Keycloak login loop
 
 - ROPC is enabled but the user lacks `firstName`, `lastName`, or
-  `emailVerified=true` — see [Server Testing](/docs/core/development-guide/)
+  `emailVerified=true` — see [Server Testing](/docs/contribute/build-and-run/)
   for the canonical user-creation payload.
 - Mobile scheme mismatch — see the [Scheme Coherence Rule](#mobile-flutter).
 
@@ -928,8 +928,8 @@ interrupted, or VRAM exhaustion (drop model size or run with
 |---|---|
 | Deploy to a real environment | [Deployment](/docs/deploy/) (Ansible recommended) |
 | Add observability (OTel, Grafana, dashboards) | [Observability](/docs/observe/) |
-| Debug a slow chat / failing ingest | [Debugging with Tracing & Logs](/docs/observe/tracing/) |
-| Find the CI/CD pipeline structure | [CI/CD](/docs/core/development-guide/) |
+| Debug a slow chat / failing ingest | [Debugging with Tracing & Logs](/docs/operate/tracing-howto/) |
+| Find the CI/CD pipeline structure | [CI/CD](/docs/contribute/build-and-run/) |
 | Look up an environment variable | [Configuration](/docs/configure/) |
 | Understand the C4 architecture | [Architecture](/docs/architecture/) |
 | Run the multi-phase E2E suite | [E2E Tests](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/docs/e2e-tests/README.md) |

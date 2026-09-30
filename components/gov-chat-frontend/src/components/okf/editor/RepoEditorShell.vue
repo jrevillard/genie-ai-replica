@@ -137,6 +137,8 @@
           :key="draft && draft.repo_id"
           :draft="draft"
           @reset="$emit('back')"
+          @dashboard="$emit('back')"
+          @finish="onWizardFinish"
           @update-draft="$emit('update-draft', $event)"
         />
         <OkfRepoEditor
@@ -444,6 +446,15 @@ export default {
     },
     onSubTab(v) {
       this.$store.dispatch('okf/setEditorSubTab', v);
+    },
+    // WIZARD HANDOFF (field bugs #1028 + #1032): the shell's embedded wizard
+    // never wired @finish/@dashboard — step 10's "Open the Editor" and
+    // "Open the Dashboard" emitted into the void and died as silent no-ops
+    // (jest stayed green: the standalone StudioTab wizard HAS both wired,
+    // so only the card-opened shell path was dead). Amendment A: finishing
+    // hands off to the EDITOR sub-tab; "Open the Dashboard" goes back.
+    onWizardFinish() {
+      this.$store.dispatch('okf/setEditorSubTab', 'editor');
     },
     async onLifecycle() {
       if (this.building) return; // the server refuses it anyway — never even try

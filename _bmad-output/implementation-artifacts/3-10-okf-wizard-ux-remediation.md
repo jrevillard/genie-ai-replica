@@ -339,3 +339,35 @@ classifier-blocked; old checkout preserved at main-old-20260929).
   console names the branch. Tooltip-on-disabled queued.
 - **#1030 step-7 Validate opacity** (queued NEXT): "50% / thing(s) need your review / index —"
   must list each issue (concept, severity, remedy); the conformance data is already stored.
+
+**Field bugs round 2 — cloned-repo session (GitLab #1032, David 2026-09-30)**: on "Indonesia 2
+- Heuristics" (a 4.8 clone of Indonesia History - Heuristics): steps 7-10 sometimes without the
+green tick; dashboard card "0 topics Step of 10"; step-10 "Open the Dashboard"/"Open the Editor"
+dead. THREE root causes, all fixed + tested:
+- **Dead buttons = #1028 ROOT CAUSE**: RepoEditorShell embeds its OWN OkfStudioWizard and only
+  wired @reset/@update-draft — @finish/@dashboard emitted into the void. Standalone wizard had
+  both (jest green, shell-only dead — why the breadcrumbs never logged). Fixed: @finish →
+  editor sub-tab, @dashboard → back; shell-wizard-handoff.test.js mounts the SHELL and emits on
+  the embedded wizard (wiring-level, can't pass green on a regression).
+- **Rail freeze**: StudioTab.activeDraft kept the object captured at open; saveDraft REPLACES
+  the store draft each advance → wizard's draft.studio_step froze → lockedIndices never
+  unlocked → DsStepper renders complete+locked as GRAY checks (--locked rule is after
+  --complete in source order). "Sometimes" = reload (fallback studio_step 9, all green) vs
+  in-session resume (frozen). Fix: StudioTab.liveDraft computed prefers the store's live draft;
+  both wizard bindings use it; 3 tests.
+- **"Step of 10"**: okf.dashboard.stage.stepOf had a RAW {n}; translate() passes no params →
+  vue-i18n swallows it before .replace('{n}') runs. Whole bug class swept: every
+  .replace()-consumed key escaped to {'{'}x{'}'} across all 14 locales (stepOf ×3 namespaces,
+  queueBehind, pii.nFlagged, src.total/count/confirm/uploaded, input.benchCount/moreN; ar/de/
+  zh/bn/th carried a mangled 'Step ' that lost its placeholder → English carrier) + regression
+  guard in localeConsistency.test.js. Lesson: ANY key consumed via translate().replace() must
+  use the literal-escape form (ingested/published already did — that's why v17 rendered).
+- **"0 topics"**: card reads r.concept_count off list rows — a stale denormalized registry-doc
+  field nothing writes since legacy ingest (clone docs never get one; DB-verified the clone
+  actually has 996 meta rows). Fix: repositoryService.list() attaches LIVE meta-row counts
+  (one grouped COUNT, fail-soft, overwrites stale fields — Bali was showing 1002, truth 1001);
+  clone response carries concept_count=copied. Clone chip: source NAME resolved from the repo
+  list, null version omitted.
+Suites: frontend 1606/1606 (80), okf-server 729/729 (34; one CPU-pressure flake on the parallel
+run, clean rerun), prettier+eslint clean both components. Issue #1032 filed; #1028 updated with
+the root cause.

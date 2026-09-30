@@ -107,4 +107,41 @@ describe('Locale consistency', () => {
     }
     expect(dupMap).toEqual({});
   });
+
+  // PLACEHOLDER-ESCAPING GUARD (David, 2026-09-30, "Step of 10"): these keys
+  // are consumed via translate(key, fb).replace('{x}', ...) — translate()
+  // passes NO interpolation params, so vue-i18n swallows a raw {x} (renders
+  // it as empty) before the component's .replace() ever runs. Consumed keys
+  // must carry the literal-escape form {'{'}x{'}'} (the pattern already used
+  // by okf.dashboard.stage.ingested / published).
+  test('replace()-consumed keys carry escaped placeholders in every locale', () => {
+    const get = (o, d) => d.split('.').reduce((a, k) => (a && a[k] != null ? a[k] : undefined), o);
+    const RAW = /\{[a-zA-Z][a-zA-Z0-9_]*\}/;
+    const replaceConsumed = [
+      'okf.dashboard.stage.stepOf',
+      'okf.studio.stage.stepOf',
+      'okf.studio.dashboard.stage.stepOf',
+      'okf.dashboard.stage.queueBehind',
+      'okf.pii.nFlagged',
+      'okf.src.total',
+      'okf.src.count',
+      'okf.src.confirm',
+      'okf.src.uploaded',
+      'okf.steps.input.benchCount',
+      'okf.steps.input.moreN'
+    ];
+    const offenders = [];
+    for (const locale of localeFiles) {
+      const data = getLocaleData(locale);
+      for (const key of replaceConsumed) {
+        const v = get(data, key);
+        if (typeof v !== 'string') {
+          offenders.push(`${locale}:${key} missing`);
+        } else if (RAW.test(v)) {
+          offenders.push(`${locale}:${key} raw placeholder: ${v}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });

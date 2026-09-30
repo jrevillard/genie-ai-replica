@@ -148,7 +148,7 @@
     <OkfRepoEditorShell
       v-if="view === 'repo' && activeRepoId"
       :repo-id="activeRepoId"
-      :draft="activeDraft"
+      :draft="liveDraft"
       :source-file-id="activeSourceFileId"
       @back="onBackToDashboard"
       @refresh="onRepoRefresh"
@@ -156,7 +156,7 @@
     />
     <OkfStudioWizard
       v-if="view === 'wizard'"
-      :draft="activeDraft"
+      :draft="liveDraft"
       @reset="resetWizard"
       @update-draft="onDraftUpdate"
       @finish="onWizardFinish"
@@ -298,6 +298,28 @@ export default {
     },
     expertMode() {
       return this.isExpert ? 'expert' : 'basic';
+    },
+    // RAIL-FREEZE FIX (David, 2026-09-30, "sometimes steps 7-10 have no
+    // green tick"): okf/saveDraft REPLACES the store's draft object on every
+    // step advance (persistMerged → setDraft with a fresh {...merged}), but
+    // this.activeDraft kept the reference captured at open time — the
+    // wizard's draft.studio_step froze at the resume value, lockedIndices
+    // never unlocked, and DsStepper rendered those steps as gray "locked"
+    // checks (the --locked CSS rule overrides --complete by source order)
+    // while the footer's local activeStep showed 10/10. It looked
+    // random because it depended on which object identity was captured:
+    // after a page reload the fallback draft (studio_step 9 → nothing
+    // locked) rendered all-green; resuming an in-session draft froze the
+    // rail at the captured step. Prefer the store's LIVE draft; fall back
+    // to the local object until the first save lands (or for repos with no
+    // saved draft — the onResume fallback shape).
+    liveDraft() {
+      const id = this.activeDraft && this.activeDraft.repo_id;
+      if (id) {
+        const live = this.$store.getters['okf/activeDraft'](id);
+        if (live) return live;
+      }
+      return this.activeDraft;
     }
   },
   mounted() {

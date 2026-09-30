@@ -1735,7 +1735,7 @@ export default {
       select: "เลือก {'{'}name{'}'} สำหรับการเผยแพร่จำนวนมาก",
       stage: {
         drainFailed: 'การ ingest ล้มเหลว',
-        queueBehind: '{n} ในคิว · กำลัง ingest {m} repo',
+        queueBehind: "{'{'}n{'}'} ในคิว · กำลัง ingest {'{'}m{'}'} repo",
         redraining: 'กำลังระบายใหม่…',
         building: 'กำลังสร้าง…',
         draft: 'ฉบับร่าง',
@@ -1743,7 +1743,7 @@ export default {
         ingested: "ทำ ingest แล้ว v{'{'}n{'}'}",
         published: "เผยแพร่แล้ว v{'{'}n{'}'}",
         retracted: 'เพิกถอนแล้ว',
-        stepOf: 'Step '
+        stepOf: "Step {'{'}n{'}'} of 10"
       },
       title: 'ที่เก็บข้อมูล',
       topics: 'หัวข้อ',
@@ -2023,7 +2023,7 @@ export default {
       },
       stage: {
         inReview: 'อยู่ระหว่าง review',
-        stepOf: 'ขั้นตอนที่ {n} จาก 10',
+        stepOf: "ขั้นตอนที่ {'{'}n{'}'} จาก 10",
         draft: 'ฉบับร่าง'
       },
       dashboard: {
@@ -2036,7 +2036,7 @@ export default {
         stale: 'ล้าสมัย',
         stage: {
           inReview: 'อยู่ระหว่าง review',
-          stepOf: 'ขั้นตอนที่ {n} จาก 10',
+          stepOf: "ขั้นตอนที่ {'{'}n{'}'} จาก 10",
           draft: 'ฉบับร่าง'
         },
         bulk: {
@@ -2147,11 +2147,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: ' +{n} more',
+        moreN: " +{'{'}n{'}'} more",
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: '{n}',
+        benchCount: "{'{'}n{'}'}",
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2391,7 +2391,7 @@ export default {
     },
     pii: {
       panel: 'เอนทิตีที่ถูกแจ้งเตือน',
-      nFlagged: 'พบ {n} รายการ',
+      nFlagged: "พบ {'{'}n{'}'} รายการ",
       rescan: 'สแกนอีกครั้ง',
       scanning: 'กำลังสแกน…',
       clean: 'ไม่มีเอนทิตีที่ถูกตั้งค่าสถานะ — concept นี้ปลอดภัย',
@@ -2471,7 +2471,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: '{n} document(s)',
+      total: "{'{'}n{'}'} document(s)",
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2480,12 +2480,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
+      uploaded: "{'{'}n{'}'} file(s) uploaded.",
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: 'Selected: {n}',
+      count: "Selected: {'{'}n{'}'}",
       needOne: 'Select at least one source.',
-      confirm: 'Use {n} source(s)',
+      confirm: "Use {'{'}n{'}'} source(s)",
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',

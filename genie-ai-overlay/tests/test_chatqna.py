@@ -504,47 +504,6 @@ class TestAlignInputs:
                 result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
             assert result["input"] == "Custom prefix: hi"
 
-        def test_openai_branch_skips_prefix_even_when_tei_model_is_bge(self):
-            """Issue #1035 — mirror the retriever's branch selection: when
-            OpenAI embeddings are active, the active model is OPENAI_EMBED_MODEL
-            (no contrastive instruction), so chatqna MUST NOT prefix even if
-            TEI_EMBED_MODEL is set to a BGE variant. Otherwise a mixed
-            deployment prefixes the query in chatqna (TEI microservice)
-            while the retriever's OpenAI branch encodes raw — silent
-            dense-channel mismatch on the vector space."""
-            self_mock = MagicMock()
-            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
-            llm_params = {}
-            inputs = {"text": "what are drought-resistant beans?"}
-            with (
-                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"),
-                patch("chatqna.genieai_chatqna.OPENAI_EMBED_MODEL", "text-embedding-3-small"),
-                patch("chatqna.genieai_chatqna.OPENAI_EMBED_ENABLED", True),
-                patch("chatqna.genieai_chatqna.OPENAI_API_KEY", "sk-test"),
-            ):
-                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
-            assert result["input"] == "what are drought-resistant beans?"
-
-        def test_openai_disabled_falls_back_to_tei_model(self):
-            """OPENAI_EMBED_ENABLED=false (the common case) → TEI_EMBED_MODEL
-            wins, prefix applies as before."""
-            self_mock = MagicMock()
-            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
-            llm_params = {}
-            inputs = {"text": "drought"}
-            with (
-                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"),
-                patch("chatqna.genieai_chatqna.OPENAI_EMBED_MODEL", "text-embedding-3-small"),
-                patch("chatqna.genieai_chatqna.OPENAI_EMBED_ENABLED", False),
-                patch("chatqna.genieai_chatqna.OPENAI_API_KEY", "sk-test"),
-            ):
-                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
-            # BGE prefix applied (raw "drought" must NOT appear alone)
-            assert result["input"].endswith("drought")
-            assert len(result["input"]) > len("drought")
-
     # --- RETRIEVER ---
     class TestRetrieverInput:
         def test_merges_retriever_parameters(self):

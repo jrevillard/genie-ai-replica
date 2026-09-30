@@ -20,12 +20,7 @@ from metrics import (
 )
 
 from core.model_cache import get_model_id
-from retriever.config import (
-    OPENAI_EMBED_ENABLED,
-    OPENAI_EMBED_MODEL,
-    TEI_EMBED_MODEL,
-    get_query_instruction,
-)
+from retriever.config import TEI_EMBED_MODEL, get_query_instruction
 from tracing import (
     get_tracer,
     install_uvicorn_access_logging,
@@ -938,10 +933,27 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # the prefix tokens and dilute the real query terms. Stash the
         # original query in a side-channel so align_outputs(EMBEDDING) can
         # echo the RAW text to the retriever.
-        _active_embed_model = (
-            OPENAI_EMBED_MODEL if (OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED) else TEI_EMBED_MODEL
-        )
-        _query_instruction = get_query_instruction(_active_embed_model)
+        # Issue #1035 (generalized): contrastive / instruction-tuned embedding
+        # models require a query-side prefix at inference (per their model
+        # card) to preserve the query/passage asymmetry. Apply only to queries
+        # (and history strings, which act as queries for blending); passages
+        # are encoded without the prefix by dataprep ingestion via the same
+        # shared TEI service.
+        #
+        # The prefix decision is gated on `TEI_EMBED_MODEL` because chatqna
+        # always encodes via the embedding microservice (TEI in the default
+        # OPEA service graph) — the OpenAI branch in the retriever only kicks
+        # in when the retriever itself encodes (the `embedding is None`
+        # fallback). Even with OpenAI embeddings enabled deployer-side, the
+        # chatqna → TEI path is unaffected unless the deployer rewires the
+        # service graph away from the OPEA TEI wrapper.
+        #
+        # The retriever's BM25/hybrid leg (`_bm25_search` → TOKENS(@query, ...))
+        # must NOT receive the prefix — its English analyzer would tokenize
+        # the prefix tokens and dilute the real query terms. Stash the
+        # original query in a side-channel so align_outputs(EMBEDDING) can
+        # echo the RAW text to the retriever.
+        _query_instruction = get_query_instruction(TEI_EMBED_MODEL)
         _original_query = inputs["text"]
         inputs["_original_query"] = _original_query
         if _blend_history_text:

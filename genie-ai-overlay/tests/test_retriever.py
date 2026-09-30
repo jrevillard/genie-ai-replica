@@ -1034,6 +1034,27 @@ class TestQueryInstructionWrapper:
         assert wrapper.model_name == "BAAI/bge-large-en-v1.5"
         assert wrapper.dimension == 1024
 
+    def test_wrapper_getattr_raises_clear_when_base_slot_unset(self):
+        """A subclass that forgets ``super().__init__(base, instruction)``
+        would otherwise trigger infinite recursion on any attribute access
+        (the `__getattr__` re-enters itself when reading `self.base`).
+        The guard converts that into a single clear AttributeError."""
+        # Bypass __init__ to leave `base` unset on the __slots__ descriptor.
+        wrapper = QueryInstructionEmbeddingsWrapper.__new__(QueryInstructionEmbeddingsWrapper)
+
+        with pytest.raises(AttributeError, match="base is unset"):
+            wrapper.model_name  # noqa: B018
+
+    def test_wrapper_getattr_chains_attribute_error_from_base(self):
+        """If the wrapped embeddings class lacks an attribute, the error
+        message must point at the base type — not at the wrapper — so the
+        operator's debugging isn't misdirected."""
+        base = object()  # bare object, no model_name / dimension / etc.
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        with pytest.raises(AttributeError, match="also lacks it"):
+            wrapper.model_name  # noqa: B018
+
     @pytest.mark.asyncio
     async def test_invoke_prefixes_query_for_bge_model(self, invoke_env):
         """Issue #1035: BGE-large-en-v1.5 (default) gets the BAAI prefix."""

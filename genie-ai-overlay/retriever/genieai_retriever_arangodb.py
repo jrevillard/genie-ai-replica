@@ -166,7 +166,28 @@ class QueryInstructionEmbeddingsWrapper:
     def __getattr__(self, name):
         # Delegate attribute access (e.g. .model_name, .dimension) to the
         # underlying embeddings so adapters that introspect still work.
-        return getattr(self.base, name)
+        #
+        # Guard against the unset-base recursion footgun: `__slots__` makes
+        # `self.base` raise AttributeError when the slot is empty (e.g. a
+        # subclass forgot `super().__init__(base, instruction)`). Reading
+        # `self.base` here would re-enter `__getattr__("base")` and recurse
+        # to `RecursionError`. `object.__getattribute__` bypasses our
+        # `__getattr__` and lets us detect the missing slot cleanly.
+        try:
+            base = object.__getattribute__(self, "base")
+        except AttributeError as e:
+            raise AttributeError(
+                "QueryInstructionEmbeddingsWrapper.base is unset; cannot "
+                f"resolve {name!r}. A subclass likely forgot to call "
+                "super().__init__(base, instruction)."
+            ) from e
+        try:
+            return getattr(base, name)
+        except AttributeError as e:
+            raise AttributeError(
+                f"QueryInstructionEmbeddingsWrapper has no attribute {name!r} "
+                f"(wrapped base type {type(base).__name__} also lacks it)"
+            ) from e
 
 
 def _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):

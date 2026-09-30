@@ -349,7 +349,11 @@ async function cloneRepository(source_id, input, actor) {
     span.setAttribute('okf.clone.copied_concepts', copied);
     recordOp('clone', 'success');
     logger.info('OKF repository cloned', { source_id, repo_id: clone.repo_id, copied_concepts: copied });
-    return { ...clone, copied_concepts: copied };
+    // concept_count rides the response too (David, 2026-09-30): the wizard's
+    // Choose step patches the draft straight from it — the bare
+    // copied_concepts spelling left the draft at "0 topics" until the next
+    // full list refresh.
+    return { ...clone, copied_concepts: copied, concept_count: copied };
   });
 }
 
@@ -413,6 +417,7 @@ async function list({ domain, authz, cursor, limit } = {}) {
     const docs = await result.all();
     const items = docs.map(toResponse);
     await attachIndexingPending(items);
+    await attachConceptCounts(items);
     const next_cursor =
       items.length === safeLimit && items.length > 0
         ? encodeCursor(items[items.length - 1].created_at, items[items.length - 1].repo_id)
@@ -447,6 +452,37 @@ async function attachIndexingPending(rows) {
     for (const r of rows) r.indexing_pending = byRepo.get(r.repo_id) || 0;
   } catch (err) {
     logger.warn('indexing_pending attach failed (non-fatal)', { error: err.message });
+  }
+}
+
+/**
+ * LIVE CONCEPT COUNTS on every repo row (David, 2026-09-30, "0 topics" on
+ * the cloned card): the dashboard and the wizard sidebar read
+ * `concept_count` off the LIST rows, but nothing wrote that field since the
+ * legacy ingest path — the registry doc carried a stale denormalized value
+ * (or none at all: clones are born from create()'s fixed shape, so
+ * "Indonesia 2 - Heuristics" showed "0 topics" over 996 copied concepts).
+ * One grouped COUNT for the whole page — never per-repo — overwrites any
+ * stale doc field with the meta-row truth (the same honest-number source
+ * conformanceService.getRepoMetrics uses). Fail-soft: on a count failure
+ * the field is left as-is (0 on new docs) rather than failing the list.
+ * @param {object[]} rows repo response rows (mutated in place)
+ */
+async function attachConceptCounts(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  try {
+    const db = await getDb();
+    const counts = await (
+      await db.query(
+        'FOR m IN okf_concepts_meta FILTER m.repo_id IN @ids ' +
+          'COLLECT repo_id = m.repo_id WITH COUNT INTO n RETURN { repo_id, n }',
+        { ids: rows.map((r) => r.repo_id) }
+      )
+    ).all();
+    const byRepo = new Map(counts.map((c) => [c.repo_id, c.n]));
+    for (const r of rows) r.concept_count = byRepo.get(r.repo_id) || 0;
+  } catch (err) {
+    logger.warn('concept_count attach failed (non-fatal)', { error: err.message });
   }
 }
 

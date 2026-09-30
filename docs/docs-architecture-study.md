@@ -282,22 +282,88 @@ Estimated: 1 large audit wave + 2 fix waves to reach clean again.
 
 ---
 
-## 8. Recommendation summary
+## 8. SUPERSEDED — Wave 78 audit rejection
 
-**Adopt the Diataxis-aligned 4-section model (Option C formalised).**
+**Status (2026-09-29):** Wave 78 independently reviewed this study
+and rejected the proposed 4-section restructure. See
+`/tmp/audit/wave78-done.md` for the full review.
 
-**Rationale:** Diataxis is the only framework that diagnoses *why*
-mixed-mode sections are bad (the reader can't tell whether they're
-learning, looking up, or solving a problem). The proposed sidebar
-order puts Project Overview second (after the tutorials), explains
-the architecture and the AI pipeline next, then puts every recipe in
-one place, then every lookup in another. The cost is real but
-bounded; the benefit (every reader finds what they need in ≤2
-clicks) is permanent.
+### Why this study was rejected
 
-**Next step:** present this recommendation to the docs owner for
-sign-off, then implement in a single feature branch with audit waves
-on the restructure.
+- **The "Concepts" bucket is a 5th Diataxis mode I invented.** Diataxis
+  defines 4 modes (tutorial/how-to/reference/explanation). The
+  proposed `concepts/` section would absorb 5 explanation + 6 how-to
+  + 5 reference pages — i.e. **the same 3-mode mixing defect this
+  study diagnosed in `core/` and `observe/`, relocated one level up**.
+- **Internal contradiction in the moves.** The proposed moves
+  routed `observe/tracing.md` (mode: how-to) to the Concepts bucket
+  (explanation), and `observe/alerting.md` (mode: reference) to
+  how-to. The audit caught this; the study did not.
+- **The `mode:` frontmatter already classifies all 92 pages.** Every
+  body page declares its Diataxis mode in frontmatter (36 how-to /
+  35 reference / 16 explanation / 5 tutorial). A reader-pivot nav on
+  `mode:` would deliver most of the stated benefit without moving a
+  single file. The 4-section restructure solves a problem the
+  taxonomy already solves.
+- **`backend/` is an empty stub** (28-line landing, 0 body pages).
+  The study treated it as a populated reference section.
+- **Cost estimate understated by 3-4×** (10 file moves vs 2-3 audit
+  + 2-3 fix waves).
+- **Diataxis citation error** in the Divio line (Procida vs Laing).
+
+### What the audit recommended instead (lean fix)
+
+Keep the 14 sections. Adjust `weight:` values so the reader's first
+click after the quickstarts is no longer a how-to for operators.
+Move ~6 files that are misclassified in their current section.
+Reconcile the glossary duplication. Delete the empty `backend/`
+stub.
+
+No new directories. No 5th Diataxis bucket. The cost is bounded and
+the risk is minimal.
+
+### Implementation plan (lean fix)
+
+**Commit 1 — IA reorder (weight + landing-page cards).**
+
+Touch `weight:` in 10 `_index.md` files + update the 14-card grid in
+`site/content/en/docs/_index.md` + update the section table in
+`contribute/add-a-doc.md`. No file moves.
+
+**Commit 2 — file moves to remove mode-mixing.**
+
+- `core/source-tree-analysis.md` → `reference/source-tree-analysis.md`
+  (mode: reference; matches section)
+- `core/development-guide.md` → `contribute/build-and-run.md`
+  (mode: how-to; matches section)
+- `observe/tracing.md` → `operate/tracing-howto.md`
+  (mode: how-to; lives with operator how-tos)
+- Glossary reconciliation: keep `reference/glossary.md`; delete
+  `get-started/glossary.md` (or convert it to a redirect via frontmatter alias)
+- Delete `backend/_index.md` (empty stub)
+
+### Why the audit's lean fix is the right call
+
+- The 4-section restructure would have shipped an IA **less**
+  internally consistent than what exists today.
+- The reader's actual complaint ("Project Overview is buried")
+  is solved by weight reordering alone — no file moves needed.
+- The mode taxonomy makes a separate Concepts bucket redundant —
+  readers can find any tutorial/how-to/reference/explanation page
+  alphabetically via a single "By mode" index page (a 1-page
+  addition deferred to a later iteration).
+
+---
+
+## 9. References
+
+- Diataxis — https://diataxis.fr/
+- Divio — https://docs.divio.com/documentation-system/
+  (correction: the study initially attributed the "Grand Unified Theory of
+  Documentation" to Daniele Procida; canonical attribution is David Laing.
+  Procida developed Diataxis independently.)
+- Arc42 — https://arc42.org/
+- Write the Docs — https://www.writethedocs.org/
 
 ---
 

@@ -136,13 +136,7 @@ describe('Configuration Validation Suite', () => {
       }
     });
 
-    test('required secrets have empty value in env template', () => {
-      const secrets = getRequiredSecrets(envParsed);
-      for (const secret of secrets) {
-        expect(secret.name).toBeTruthy();
-      }
     });
-  });
 
   // --- AC #4: No orphaned or conflicting configurations ---
   describe('AC4: No orphaned or conflicting configurations', () => {

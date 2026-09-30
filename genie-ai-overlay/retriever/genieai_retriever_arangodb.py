@@ -44,7 +44,6 @@ from .config import (
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
-    BGE_QUERY_INSTRUCTION,
     HF_TOKEN,
     HYBRID_BM25_ANALYZER,
     HYBRID_BM25_CANDIDATES,
@@ -69,7 +68,7 @@ from .config import (
     VLLM_TEMPERATURE,
     VLLM_TIMEOUT,
     VLLM_TOP_P,
-    requires_bge_query_prefix,
+    get_query_instruction,
 )
 
 
@@ -116,34 +115,55 @@ ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
 
 
-class BGEQueryEmbeddingsWrapper:
-    """Prefixes queries with the BGE instruction; passages pass through untouched.
+class QueryInstructionEmbeddingsWrapper:
+    """Prefixes queries with a model-specific instruction; passages untouched.
 
-    BAAI/bge-* embedding models are trained contrastively: queries and passages
-    sit on opposite sides of the vector space. The model card requires the query
-    instruction prefix ONLY for queries — applying it to passages would invert
-    the asymmetry and degrade retrieval.
+    Covers any contrastive / instruction-tuned embedding model whose model
+    card specifies an asymmetric query/passage instruction (BAAI/bge en+zh,
+    intfloat/e5, hkunlp/instructor, nomic-ai/nomic-embed, …). Passages
+    (``embed_documents``) pass through verbatim so dataprep ingestion via
+    the shared TEI service stays prefix-free.
 
-    langchain's Embeddings interface exposes two methods; only embed_query is
-    wrapped. embed_documents is delegated verbatim so ingest-side passage
-    encoding (dataprep via the shared TEI service) is unaffected.
+    Apply at the caller (retriever, chatqna) rather than at the TEI service
+    layer, because the same TEI is used for ingest (passages) and retrieval
+    (queries) — a service-level prefix would invert the asymmetry.
 
-    Issue #1035. Wrapper lives in caller code rather than at the TEI service
-    config layer because the same TEI is used for ingest and retrieval — a
-    service-level prefix would break the BGE asymmetry.
+    Issue #1035 (originally BGE-only, generalized).
     """
 
-    __slots__ = ("base", "prefix")
+    __slots__ = ("base", "instruction")
 
-    def __init__(self, base, prefix: str):
+    def __init__(self, base, instruction: str):
         self.base = base
-        self.prefix = prefix
+        self.instruction = instruction
 
     def embed_query(self, text: str):
-        return self.base.embed_query(self.prefix + text)
+        return self.base.embed_query(self.instruction + text)
 
     def embed_documents(self, texts):
         return self.base.embed_documents(texts)
+
+    async def aembed_query(self, text: str):
+        # Langchain-arangodb currently uses sync embed_query, but a future
+        # upgrade could call async. Apply the prefix unconditionally so the
+        # contract holds across sync/async paths.
+        a = self.base.aembed_query
+        if callable(a):
+            result = a(self.instruction + text)
+            if hasattr(result, "__await__"):
+                return await result
+            return result
+        # Base has no async impl — fall back to sync.
+        return self.embed_query(text)
+
+    async def aembed_documents(self, texts):
+        a = self.base.aembed_documents
+        if callable(a):
+            result = a(texts)
+            if hasattr(result, "__await__"):
+                return await result
+            return result
+        return self.embed_documents(texts)
 
     def __getattr__(self, name):
         # Delegate attribute access (e.g. .model_name, .dimension) to the
@@ -978,6 +998,9 @@ class GenieaiArangoRetriever(OpeaComponent):
                 return []
 
             if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
+                # OpenAI embeddings are not contrastive / instruction-tuned —
+                # get_query_instruction(OPENAI_EMBED_MODEL) returns None for
+                # any OpenAI model id, so the wrapper is never installed here.
                 embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=dimension)
             elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
                 embeddings = HuggingFaceEndpointEmbeddings(
@@ -985,15 +1008,30 @@ class GenieaiArangoRetriever(OpeaComponent):
                     task="feature-extraction",
                     huggingfacehub_api_token=HF_TOKEN,
                 )
-                # Issue #1035: BGE-* models require a query instruction prefix
-                # at inference to preserve the contrastive asymmetry. OpenAI
-                # embeddings are not BGE-family and must receive raw text.
-                if requires_bge_query_prefix(TEI_EMBED_MODEL):
-                    embeddings = BGEQueryEmbeddingsWrapper(embeddings, BGE_QUERY_INSTRUCTION)
+                # Issue #1035 (generalized): contrastive / instruction-tuned
+                # embedding models expect a query-side prefix at inference
+                # (per their model card) to preserve the query/passage
+                # asymmetry. Apply at the caller (here + chatqna) rather than
+                # at the shared TEI service so dataprep ingestion (passages)
+                # stays prefix-free.
+                _query_instruction = get_query_instruction(TEI_EMBED_MODEL)
+                if _query_instruction:
+                    embeddings = QueryInstructionEmbeddingsWrapper(embeddings, _query_instruction)
             else:
                 embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
-                if requires_bge_query_prefix(TEI_EMBED_MODEL):
-                    embeddings = BGEQueryEmbeddingsWrapper(embeddings, BGE_QUERY_INSTRUCTION)
+                # Issue #1035: HuggingFaceBgeEmbeddings already prepends its
+                # own query_instruction (default: "Represent this question
+                # for searching relevant passages: ") inside embed_query().
+                # Clear it so the wrapper's instruction is the sole prefix
+                # applied — otherwise the local-fallback path double-prefixes.
+                # Duck-type via attribute presence (conftest replaces the
+                # langchain class with a MagicMock instance, so isinstance
+                # checks are unreliable in tests).
+                _query_instruction = get_query_instruction(TEI_EMBED_MODEL)
+                if _query_instruction:
+                    if hasattr(embeddings, "query_instruction"):
+                        embeddings.query_instruction = ""
+                    embeddings = QueryInstructionEmbeddingsWrapper(embeddings, _query_instruction)
 
             try:
                 vector_db = ArangoVector(

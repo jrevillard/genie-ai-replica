@@ -239,27 +239,98 @@ TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5")
 TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT")
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN", "")
 
-# BGE query instruction prefix (issue #1035).
+# Query instruction prefix for embedding models (issue #1035, generalized).
 #
-# BAAI/bge-large-en-v1.5 (and other bge-* embedding models) is trained
-# contrastively: queries and passages sit on opposite sides of the vector space
-# at inference. The model card specifies that queries must be prefixed with
-# this string at inference time to preserve the asymmetry, while passages MUST
-# NOT receive it. Applying the prefix in the caller (retriever/chatqna) keeps
-# the shared TEI embedding service usable by dataprep ingestion — which encodes
-# passages without the prefix — without splitting the service.
-BGE_QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
+# Many embedding models are trained contrastively or with task-specific
+# instructions: queries and passages sit on opposite sides of the vector space
+# at inference, and the model card specifies that queries must be prefixed
+# with a specific string while passages MUST NOT receive it. Applying the
+# prefix in the caller (retriever/chatqna) keeps the shared TEI embedding
+# service usable by dataprep ingestion — which encodes passages without the
+# prefix — without splitting the service.
+#
+# Built-in table covers the most common families. Order matters: substring
+# match returns the FIRST entry whose substring is found in the model id.
+# Most-specific entries go first so e.g. "intfloat/e5-large-v2" wins over a
+# generic "intfloat/e5" fallback.
+_BUILTIN_QUERY_INSTRUCTIONS: tuple[tuple[str, str], ...] = (
+    # BAAI/bge English contrastive (the issue #1035 baseline)
+    ("BAAI/bge-large-en-v1.5", "Represent this sentence for searching relevant passages: "),
+    ("BAAI/bge-base-en-v1.5", "Represent this sentence for searching relevant passages: "),
+    ("BAAI/bge-small-en-v1.5", "Represent this sentence for searching relevant passages: "),
+    # BAAI/bge Chinese contrastive (different prefix — must not receive English)
+    ("BAAI/bge-large-zh-v1.5", "为这个句子生成表示以用于检索相关文章："),
+    ("BAAI/bge-base-zh-v1.5", "为这个句子生成表示以用于检索相关文章："),
+    # intfloat/e5 — "query: " / "passage: " asymmetry
+    ("intfloat/e5-large-v2", "query: "),
+    ("intfloat/e5-base-v2", "query: "),
+    ("intfloat/multilingual-e5", "query: "),
+    # hkunlp/instructor — task-specific (configurable via prompt)
+    ("hkunlp/instructor", "Represent the query for retrieving evidence documents: "),
+    # nomic-ai/nomic-embed — task prefix
+    ("nomic-ai/nomic-embed", "search_query: "),
+)
+
+# Deployer overrides / additions. Comma-separated `substring=instruction`
+# pairs; substring matched against TEI_EMBED_MODEL (case-insensitive). The
+# user table takes priority over the built-in table — same substring
+# overridden wins; new substring added on top.
+#
+# Examples:
+#   EMBEDDING_QUERY_INSTRUCTIONS="my-org/bge-finetune=Custom instruction: "
+#   EMBEDDING_QUERY_INSTRUCTIONS="hkunlp/instructor=Legal question: ,BAAI/bge-large-zh-v1.5=自定义中文："
+_EMBEDDING_QUERY_INSTRUCTIONS_RAW = os.getenv("EMBEDDING_QUERY_INSTRUCTIONS", "").strip()
 
 
-def requires_bge_query_prefix(model_id: str) -> bool:
-    """True if the embedding model requires the BGE query instruction prefix.
+def _parse_query_instructions(raw: str) -> tuple[tuple[str, str], ...]:
+    """Parse `k=v,k=v` env override into substring→instruction pairs.
 
-    Only BAAI/bge-* models follow the contrastive query/passage protocol. Other
-    embedding models (OpenAI text-embedding-3-*, Cohere embed-*, etc.) must
-    NOT receive the prefix — feeding them the string degrades retrieval and
-    wastes tokens on the input side.
+    The value preserves trailing spaces — query instructions like
+    ``"Represent this sentence for searching relevant passages: "`` end in
+    a space that's part of the protocol.
     """
-    return "bge" in (model_id or "").lower()
+    out: list[tuple[str, str], ...] = []
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry or "=" not in entry:
+            continue
+        k, v = entry.split("=", 1)
+        k = k.strip()
+        if k and v:
+            out.append((k, v))
+    return tuple(out)
+
+
+_USER_QUERY_INSTRUCTIONS: tuple[tuple[str, str], ...] = _parse_query_instructions(_EMBEDDING_QUERY_INSTRUCTIONS_RAW)
+
+
+def get_query_instruction(model_id: str | None) -> str | None:
+    """Return the query instruction string for a model, or None if no prefix.
+
+    Resolution order (first match wins):
+      1. Deployer overrides (EMBEDDING_QUERY_INSTRUCTIONS env var) — full
+         priority over the built-in table, used to add finetunes or
+         override built-in entries.
+      2. Built-in table (substring match; most-specific entries declared
+         first so e.g. ``intfloat/e5-large-v2`` beats ``intfloat/e5``).
+
+    Returns None when no entry matches — caller must NOT wrap embeddings
+    (passages and queries both encode raw, BM25 tokenizes the bare query).
+
+    Models with no built-in or override entry (BAAI/bge-m3, mxbai-embed-large,
+    text-embedding-3-*, sentence-transformers/*, …) keep their native
+    behavior: dense vectors unchanged, BM25 tokenizes the bare query.
+    """
+    if not model_id:
+        return None
+    mid = model_id.lower()
+    for substring, instr in _USER_QUERY_INSTRUCTIONS:
+        if substring.lower() in mid:
+            return instr
+    for substring, instr in _BUILTIN_QUERY_INSTRUCTIONS:
+        if substring.lower() in mid:
+            return instr
+    return None
 
 
 # VLLM configuration

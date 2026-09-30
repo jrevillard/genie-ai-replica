@@ -68,6 +68,7 @@ from .config import (
     VLLM_TEMPERATURE,
     VLLM_TIMEOUT,
     VLLM_TOP_P,
+    get_query_instruction,
 )
 
 
@@ -112,6 +113,81 @@ logflag = os.getenv("LOGFLAG", False)
 ARANGO_TEXT_FIELD = "text"
 ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
+
+
+class QueryInstructionEmbeddingsWrapper:
+    """Prefixes queries with a model-specific instruction; passages untouched.
+
+    Covers any contrastive / instruction-tuned embedding model whose model
+    card specifies an asymmetric query/passage instruction (BAAI/bge en+zh,
+    intfloat/e5, hkunlp/instructor, nomic-ai/nomic-embed, …). Passages
+    (``embed_documents``) pass through verbatim so dataprep ingestion via
+    the shared TEI service stays prefix-free.
+
+    Apply at the caller (retriever, chatqna) rather than at the TEI service
+    layer, because the same TEI is used for ingest (passages) and retrieval
+    (queries) — a service-level prefix would invert the asymmetry.
+    """
+
+    __slots__ = ("base", "instruction")
+
+    def __init__(self, base, instruction: str):
+        self.base = base
+        self.instruction = instruction
+
+    def embed_query(self, text: str):
+        return self.base.embed_query(self.instruction + text)
+
+    def embed_documents(self, texts):
+        return self.base.embed_documents(texts)
+
+    async def aembed_query(self, text: str):
+        # Langchain-arangodb currently uses sync embed_query, but a future
+        # upgrade could call async. Apply the prefix unconditionally so the
+        # contract holds across sync/async paths.
+        a = getattr(self.base, "aembed_query", None)
+        if callable(a):
+            result = a(self.instruction + text)
+            if hasattr(result, "__await__"):
+                return await result
+            return result
+        # Base has no async impl — fall back to sync.
+        return self.embed_query(text)
+
+    async def aembed_documents(self, texts):
+        a = getattr(self.base, "aembed_documents", None)
+        if callable(a):
+            result = a(texts)
+            if hasattr(result, "__await__"):
+                return await result
+            return result
+        return self.embed_documents(texts)
+
+    def __getattr__(self, name):
+        # Delegate attribute access (e.g. .model_name, .dimension) to the
+        # underlying embeddings so adapters that introspect still work.
+        #
+        # Guard against the unset-base recursion footgun: `__slots__` makes
+        # `self.base` raise AttributeError when the slot is empty (e.g. a
+        # subclass forgot `super().__init__(base, instruction)`). Reading
+        # `self.base` here would re-enter `__getattr__("base")` and recurse
+        # to `RecursionError`. `object.__getattribute__` bypasses our
+        # `__getattr__` and lets us detect the missing slot cleanly.
+        try:
+            base = object.__getattribute__(self, "base")
+        except AttributeError as e:
+            raise AttributeError(
+                "QueryInstructionEmbeddingsWrapper.base is unset; cannot "
+                f"resolve {name!r}. A subclass likely forgot to call "
+                "super().__init__(base, instruction)."
+            ) from e
+        try:
+            return getattr(base, name)
+        except AttributeError as e:
+            raise AttributeError(
+                f"QueryInstructionEmbeddingsWrapper has no attribute {name!r} "
+                f"(wrapped base type {type(base).__name__} also lacks it)"
+            ) from e
 
 
 def _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
@@ -941,6 +1017,9 @@ class GenieaiArangoRetriever(OpeaComponent):
                 return []
 
             if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
+                # OpenAI embeddings are not contrastive / instruction-tuned —
+                # get_query_instruction(OPENAI_EMBED_MODEL) returns None for
+                # any OpenAI model id, so the wrapper is never installed here.
                 embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=dimension)
             elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
                 embeddings = HuggingFaceEndpointEmbeddings(
@@ -948,8 +1027,35 @@ class GenieaiArangoRetriever(OpeaComponent):
                     task="feature-extraction",
                     huggingfacehub_api_token=HF_TOKEN,
                 )
+                # Issue #1035 (generalized): contrastive / instruction-tuned
+                # embedding models expect a query-side prefix at inference
+                # (per their model card) to preserve the query/passage
+                # asymmetry. Apply at the caller (here + chatqna) rather than
+                # at the shared TEI service so dataprep ingestion (passages)
+                # stays prefix-free.
+                _query_instruction = get_query_instruction(TEI_EMBED_MODEL)
+                if _query_instruction:
+                    embeddings = QueryInstructionEmbeddingsWrapper(embeddings, _query_instruction)
             else:
                 embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
+                # Issue #1035: HuggingFaceBgeEmbeddings already prepends its
+                # own query_instruction (default: "Represent this question
+                # for searching relevant passages: ") inside embed_query().
+                # Clear it so the wrapper's instruction is the sole prefix
+                # applied — otherwise the local-fallback path double-prefixes.
+                # Duck-type via attribute presence (conftest replaces the
+                # langchain class with a MagicMock instance, so isinstance
+                # checks are unreliable in tests).
+                _query_instruction = get_query_instruction(TEI_EMBED_MODEL)
+                if _query_instruction:
+                    # Order matters: clear the langchain default BEFORE
+                    # wrapping. Reordering these two lines hits the
+                    # QueryInstructionEmbeddingsWrapper.__slots__ guard
+                    # (wrapper has only `base` and `instruction`; setting
+                    # `query_instruction` post-wrap raises AttributeError).
+                    if hasattr(embeddings, "query_instruction"):
+                        embeddings.query_instruction = ""
+                    embeddings = QueryInstructionEmbeddingsWrapper(embeddings, _query_instruction)
 
             try:
                 vector_db = ArangoVector(

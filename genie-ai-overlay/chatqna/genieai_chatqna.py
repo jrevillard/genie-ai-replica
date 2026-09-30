@@ -20,6 +20,7 @@ from metrics import (
 )
 
 from core.model_cache import get_model_id
+from retriever.config import TEI_EMBED_MODEL, get_query_instruction
 from tracing import (
     get_tracer,
     install_uvicorn_access_logging,
@@ -911,8 +912,55 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # = single-input path (unchanged baseline behavior).
         _blend_history_text = inputs.pop("_blend_history_text", "")
         _blend_alpha = inputs.pop("_blend_alpha", None)
+        # Issue #1035 (generalized): contrastive / instruction-tuned embedding
+        # models require a query-side prefix at inference (per their model
+        # card) to preserve the query/passage asymmetry. Apply only to queries
+        # (and history strings, which act as queries for blending); passages
+        # are encoded without the prefix by dataprep ingestion via the same
+        # shared TEI service.
+        #
+        # Mirror the retriever's branch selection: when OpenAI embeddings are
+        # active (OPENAI_API_KEY + OPENAI_EMBED_MODEL + OPENAI_EMBED_ENABLED),
+        # the active embedding model is OPENAI_EMBED_MODEL — which has no
+        # contrastive instruction entry. Without this gate, a deployment with
+        # both OpenAI enabled AND TEI_EMBED_MODEL=BAAI/... would prefix the
+        # query in chatqna (BAAI instruction → TEI microservice) while the
+        # retriever's OpenAI branch encodes raw — silent dense-channel
+        # mismatch on the embedding vector space.
+        #
+        # The retriever's BM25/hybrid leg (`_bm25_search` → TOKENS(@query, ...))
+        # must NOT receive the prefix — its English analyzer would tokenize
+        # the prefix tokens and dilute the real query terms. Stash the
+        # original query in a side-channel so align_outputs(EMBEDDING) can
+        # echo the RAW text to the retriever.
+        # Issue #1035 (generalized): contrastive / instruction-tuned embedding
+        # models require a query-side prefix at inference (per their model
+        # card) to preserve the query/passage asymmetry. Apply only to queries
+        # (and history strings, which act as queries for blending); passages
+        # are encoded without the prefix by dataprep ingestion via the same
+        # shared TEI service.
+        #
+        # The prefix decision is gated on `TEI_EMBED_MODEL` because chatqna
+        # always encodes via the embedding microservice (TEI in the default
+        # OPEA service graph) — the OpenAI branch in the retriever only kicks
+        # in when the retriever itself encodes (the `embedding is None`
+        # fallback). Even with OpenAI embeddings enabled deployer-side, the
+        # chatqna → TEI path is unaffected unless the deployer rewires the
+        # service graph away from the OPEA TEI wrapper.
+        #
+        # The retriever's BM25/hybrid leg (`_bm25_search` → TOKENS(@query, ...))
+        # must NOT receive the prefix — its English analyzer would tokenize
+        # the prefix tokens and dilute the real query terms. Stash the
+        # original query in a side-channel so align_outputs(EMBEDDING) can
+        # echo the RAW text to the retriever.
+        _query_instruction = get_query_instruction(TEI_EMBED_MODEL)
+        _original_query = inputs["text"]
+        inputs["_original_query"] = _original_query
         if _blend_history_text:
-            inputs["input"] = [inputs["text"], _blend_history_text]
+            _texts = [_original_query, _blend_history_text]
+            if _query_instruction:
+                _texts = [_query_instruction + t for t in _texts]
+            inputs["input"] = _texts
             # Stash alpha for align_outputs to use when blending the batch
             # response. `_blend_alpha` does leak into the embedding service HTTP
             # body (harmless — TEI ignores unknown JSON keys) but never reaches
@@ -921,7 +969,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             # that boundary, not by any underscore-prefix convention.
             inputs["_blend_alpha"] = _blend_alpha
         else:
-            inputs["input"] = inputs["text"]
+            inputs["input"] = _query_instruction + _original_query if _query_instruction else _original_query
         del inputs["text"]
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
@@ -1118,11 +1166,38 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             # BM25/hybrid leg needs the isolated QUERY string (it cannot use a
             # list — would 422 on pydantic text:str or feed garbage to BM25).
             # Only the dense leg consumes the blended embedding above.
-            input_val = inputs["input"]
-            query_text = input_val[0] if isinstance(input_val, list) else input_val
+            #
+            # Issue #1035: align_inputs may have prepended the query
+            # instruction to the first element. The retriever's BM25 path
+            # tokenizes the raw query (TOKENS(@query, ...)) and the prefix
+            # would dilute TF/IDF — so use the stashed raw text instead.
+            # Raise if the stash is missing (no fallback to the prefixed
+            # text — that would silently re-introduce the BM25 leak).
+            # Pop after use so the side-channel does not leak into the
+            # downstream service-graph dict (TEI / retriever / reranker
+            # all parse `inputs` and may reject unknown keys).
+            if "_original_query" not in inputs:
+                raise ValueError(
+                    "align_outputs(EMBEDDING) requires _original_query in inputs; "
+                    "align_inputs(EMBEDDING) must run first to stash the raw text."
+                )
+            query_text = inputs.pop("_original_query")
             next_data = {"text": query_text, "embedding": blended}
         else:
-            next_data = {"text": inputs["input"], "embedding": query_embedding}
+            # Single-query path: align_inputs may have prepended the model
+            # query instruction to inputs["input"]. Echo the raw text
+            # (stashed by align_inputs as `_original_query`) so the
+            # retriever's BM25 leg tokenizes the user's actual query
+            # instead of the prefix. Raise if the stash is missing — no
+            # fallback to the prefixed text (silent BM25-leak regression).
+            # Pop after use so the side-channel does not leak downstream
+            # (see batch path comment).
+            if "_original_query" not in inputs:
+                raise ValueError(
+                    "align_outputs(EMBEDDING) requires _original_query in inputs; "
+                    "align_inputs(EMBEDDING) must run first to stash the raw text."
+                )
+            next_data = {"text": inputs.pop("_original_query"), "embedding": query_embedding}
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:

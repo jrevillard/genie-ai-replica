@@ -396,11 +396,113 @@ class TestAlignInputs:
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             llm_params = {}
             inputs = {"text": "Hello", "other": "value"}
-            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            # Non-BGE embedding model → no prefix; raw query passes through.
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "text-embedding-3-small"),
+            ):
                 result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
             assert "input" in result
             assert result["input"] == "Hello"
             assert "text" not in result
+
+        def test_default_bge_model_applies_prefix(self):
+            """Issue #1035: default TEI_EMBED_MODEL is BAAI/bge-large-en-v1.5 →
+            query is prefixed before the embedding microservice call."""
+            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
+
+            expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "Hello"}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == expected + "Hello"
+
+        def test_bge_prefix_applied_to_query_single(self):
+            """Issue #1035: BGE-large-en-v1.5 requires query instruction prefix at the
+            embedding microservice call site (one prefix per query, not per passage)."""
+            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
+
+            expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "What are drought-resistant bean varieties?"}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"),
+            ):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == expected + "What are drought-resistant bean varieties?"
+
+        def test_bge_prefix_applied_to_query_batch(self):
+            """History-blend path: both query and history strings receive the prefix
+            before the batched TEI call (BGE asymmetry must hold for both vectors)."""
+            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
+
+            expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "elaborate on this", "_blend_history_text": "prior turn", "_blend_alpha": 0.5}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"),
+            ):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == [
+                expected + "elaborate on this",
+                expected + "prior turn",
+            ]
+
+        def test_instructor_prefix_applied_to_query(self):
+            """Generalized: hkunlp/instructor uses task-specific prefix."""
+            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
+
+            expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["hkunlp/instructor"]
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "legal question"}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "hkunlp/instructor-base"),
+            ):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == expected + "legal question"
+
+        def test_no_prefix_model_passes_raw_text(self):
+            """Models without an instruction entry (BGE-m3, mxbai) → raw text."""
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "plain query"}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "BAAI/bge-m3"),
+            ):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == "plain query"
+
+        def test_user_override_via_user_query_instructions(self):
+            """Deployer-supplied EMBEDDING_QUERY_INSTRUCTIONS overrides built-in."""
+            from retriever import config as retriever_config
+
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "hi"}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "my-org/bge-finetune"),
+                patch.object(
+                    retriever_config, "_USER_QUERY_INSTRUCTIONS", (("my-org/bge-finetune", "Custom prefix: "),)
+                ),
+            ):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == "Custom prefix: hi"
 
     # --- RETRIEVER ---
     class TestRetrieverInput:
@@ -428,7 +530,11 @@ class TestAlignInputs:
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             llm_params = {}
             inputs = {"text": "elaborate on this", "_blend_history_text": "prior turn", "_blend_alpha": 0.5}
-            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            # Non-BGE model → no prefix; raw strings pass through.
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "text-embedding-3-small"),
+            ):
                 result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
             # Batched input: [query, history]
             assert result["input"] == ["elaborate on this", "prior turn"]
@@ -441,7 +547,10 @@ class TestAlignInputs:
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             llm_params = {}
             inputs = {"text": "standalone query"}
-            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "text-embedding-3-small"),
+            ):
                 result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
             assert result["input"] == "standalone query"
             assert "_blend_alpha" not in result
@@ -452,7 +561,10 @@ class TestAlignInputs:
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             llm_params = {}
             inputs = {"text": "query", "_blend_history_text": "", "_blend_alpha": 0.5}
-            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "text-embedding-3-small"),
+            ):
                 result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
             assert result["input"] == "query"
             assert "_blend_alpha" not in result
@@ -709,7 +821,9 @@ class TestAlignOutputs:
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
-            inputs = {"input": "Hello"}
+            # _original_query is stashed by align_inputs(EMBEDDING); align_outputs
+            # raises if missing (issue #1035 BM25-leak fix).
+            inputs = {"input": "Hello", "_original_query": "Hello"}
             llm_params = {}
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
                 result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
@@ -726,7 +840,12 @@ class TestAlignOutputs:
                     {"index": 1, "embedding": [0.0, 1.0]},
                 ]
             }
-            inputs = {"input": ["query", "history"], "_blend_alpha": 0.5}
+            # _original_query mirrors what align_inputs(EMBEDDING) stashes.
+            inputs = {
+                "input": ["query", "history"],
+                "_original_query": "query",
+                "_blend_alpha": 0.5,
+            }
             llm_params = {}
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
                 result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
@@ -741,11 +860,76 @@ class TestAlignOutputs:
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
-            inputs = {"input": "standalone query"}
+            inputs = {"input": "standalone query", "_original_query": "standalone query"}
             llm_params = {}
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
                 result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
             assert result["embedding"] == [0.1, 0.2, 0.3]
+
+        def test_raises_when_original_query_missing(self):
+            """Issue #1035: align_outputs MUST receive _original_query from
+            align_inputs(EMBEDDING) — the no-fallback contract prevents the
+            BM25-leak regression from re-emerging via a hand-crafted inputs
+            dict that bypassed align_inputs."""
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
+            inputs = {"input": "prefixed text"}  # no _original_query
+            llm_params = {}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                pytest.raises(ValueError, match="_original_query"),
+            ):
+                align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
+
+        def test_single_path_echoes_original_query_not_prefixed(self):
+            """Issue #1035 (BM25-leak fix): align_inputs may have prepended the
+            model-specific query instruction to inputs["input"]. align_outputs
+            must echo the stashed raw text so the retriever's BM25 leg
+            (TOKENS(@query, ...)) tokenizes the user's actual query rather
+            than the instruction tokens."""
+            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
+
+            prefix = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
+            inputs = {
+                "input": prefix + "drought-resistant beans",
+                "_original_query": "drought-resistant beans",
+            }
+            llm_params = {}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
+            assert result["text"] == "drought-resistant beans"
+            assert result["embedding"] == [0.1, 0.2, 0.3]
+
+        def test_batch_path_echoes_original_query_not_prefixed(self):
+            """BM25-leak fix for the batched (history-blend) path: the
+            retriever's BM25 leg receives the isolated raw query string, not
+            the list (which would 422) and not the prefixed first element."""
+            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
+
+            prefix = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            data = {
+                "data": [
+                    {"index": 0, "embedding": [1.0, 0.0]},
+                    {"index": 1, "embedding": [0.0, 1.0]},
+                ]
+            }
+            inputs = {
+                "input": [prefix + "elaborate", prefix + "prior turn"],
+                "_original_query": "elaborate",
+                "_blend_alpha": 0.5,
+            }
+            llm_params = {}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
+            assert result["text"] == "elaborate"
+            # alpha=0.5 → midpoint (dense channel still works as before)
+            assert result["embedding"] == [0.5, 0.5]
 
     # --- RETRIEVER ---
     class TestRetrieverOutput:

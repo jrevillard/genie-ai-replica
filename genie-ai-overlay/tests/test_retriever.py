@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from retriever.genieai_retriever_arangodb import (
     ARANGO_GRAPH_NAME,
     GenieaiArangoRetriever,
+    QueryInstructionEmbeddingsWrapper,
     _chunk_passes_label_filter,
     _normalize_chunk_id,
     rrf_fuse,
@@ -959,3 +960,229 @@ class TestHybridInvoke:
         ):
             await retriever.invoke(create_mock_input(search_start="node"))
         bm25.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test: Query instruction wrapper (issue #1035, generalized)
+# ---------------------------------------------------------------------------
+
+
+class TestQueryInstructionWrapper:
+    """Verify that queries are prefixed with the model-specific instruction at
+    the retriever's embed_query call site (per the relevant model card), while
+    embed_documents / passage paths stay untouched. The same wrapper covers
+    BAAI/bge (en+zh), intfloat/e5, hkunlp/instructor, nomic-ai/nomic-embed,
+    and any deployer-supplied finetune via EMBEDDING_QUERY_INSTRUCTIONS.
+    """
+
+    def test_wrapper_prefixes_query_only(self):
+        """QueryInstructionEmbeddingsWrapper.embed_query prepends instruction;
+        embed_documents does not. Both sync and async paths are covered."""
+        base = MagicMock()
+        base.embed_query.return_value = [0.0]
+        base.embed_documents.return_value = [[0.0]]
+        base.aembed_query = AsyncMock(return_value=[0.0])
+        base.aembed_documents = AsyncMock(return_value=[[0.0]])
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        wrapper.embed_query("hello")
+        base.embed_query.assert_called_once_with("PFX hello")
+
+        wrapper.embed_documents(["a", "b"])
+        base.embed_documents.assert_called_once_with(["a", "b"])
+
+    @pytest.mark.asyncio
+    async def test_wrapper_async_prefixes_query(self):
+        """aembed_query applies the instruction; aembed_documents passes through."""
+        base = MagicMock()
+        base.aembed_query = AsyncMock(return_value=[0.0])
+        base.aembed_documents = AsyncMock(return_value=[[0.0]])
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        await wrapper.aembed_query("hello")
+        base.aembed_query.assert_awaited_once_with("PFX hello")
+
+        await wrapper.aembed_documents(["a", "b"])
+        base.aembed_documents.assert_awaited_once_with(["a", "b"])
+
+    @pytest.mark.asyncio
+    async def test_wrapper_async_falls_back_when_base_has_no_async(self):
+        """Custom embeddings classes that omit aembed_query / aembed_documents
+        must fall back to the sync impl (getattr-guard, not AttributeError)."""
+        # A bare object without aembed_query / aembed_documents attributes.
+        base = MagicMock(spec=["embed_query", "embed_documents"])
+        base.embed_query = MagicMock(return_value=[0.0])
+        base.embed_documents = MagicMock(return_value=[[0.0]])
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        # Must NOT raise AttributeError
+        assert await wrapper.aembed_query("hello") == [0.0]
+        assert await wrapper.aembed_documents(["a"]) == [[0.0]]
+        base.embed_query.assert_called_once_with("PFX hello")
+        base.embed_documents.assert_called_once_with(["a"])
+
+    def test_wrapper_delegates_attributes_via_getattr(self):
+        """The wrapper's design promise: arbitrary attribute access on the
+        wrapper delegates to the underlying embeddings so adapters that
+        introspect (e.g. ``wrapper.model_name``, ``wrapper.dimension``) keep
+        working. Lock the contract."""
+        base = MagicMock()
+        base.model_name = "BAAI/bge-large-en-v1.5"
+        base.dimension = 1024
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        assert wrapper.model_name == "BAAI/bge-large-en-v1.5"
+        assert wrapper.dimension == 1024
+
+    def test_wrapper_getattr_raises_clear_when_base_slot_unset(self):
+        """A subclass that forgets ``super().__init__(base, instruction)``
+        would otherwise trigger infinite recursion on any attribute access
+        (the `__getattr__` re-enters itself when reading `self.base`).
+        The guard converts that into a single clear AttributeError."""
+        # Bypass __init__ to leave `base` unset on the __slots__ descriptor.
+        wrapper = QueryInstructionEmbeddingsWrapper.__new__(QueryInstructionEmbeddingsWrapper)
+
+        with pytest.raises(AttributeError, match="base is unset"):
+            wrapper.model_name  # noqa: B018
+
+    def test_wrapper_getattr_chains_attribute_error_from_base(self):
+        """If the wrapped embeddings class lacks an attribute, the error
+        message must point at the base type — not at the wrapper — so the
+        operator's debugging isn't misdirected."""
+        base = object()  # bare object, no model_name / dimension / etc.
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        with pytest.raises(AttributeError, match="also lacks it"):
+            wrapper.model_name  # noqa: B018
+
+    @pytest.mark.asyncio
+    async def test_invoke_prefixes_query_for_bge_model(self, invoke_env):
+        """Issue #1035: BGE-large-en-v1.5 (default) gets the BAAI prefix."""
+        from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
+
+        expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+        with patch("retriever.genieai_retriever_arangodb.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"):
+            await invoke_env["retriever"].invoke(create_mock_input(query="test query"))
+        invoke_env["embeddings"].embed_query.assert_called_once_with(expected + "test query")
+
+    @pytest.mark.asyncio
+    async def test_invoke_skips_prefix_for_non_contrastive_model(self, invoke_env):
+        """OpenAI / mxbai / BGE-m3 / sentence-transformers must NOT receive a prefix."""
+        with patch("retriever.genieai_retriever_arangodb.TEI_EMBED_MODEL", "text-embedding-3-small"):
+            await invoke_env["retriever"].invoke(create_mock_input(query="test query"))
+        invoke_env["embeddings"].embed_query.assert_called_once_with("test query")
+
+    @pytest.mark.asyncio
+    async def test_invoke_openai_branch_unchanged(self, invoke_env):
+        """OpenAI embeddings path (OPENAI_API_KEY set) is untouched by the wrapper."""
+        with (
+            patch("retriever.genieai_retriever_arangodb.OPENAI_API_KEY", "sk-test"),
+            patch("retriever.genieai_retriever_arangodb.OPENAI_EMBED_MODEL", "text-embedding-3-small"),
+            patch("retriever.genieai_retriever_arangodb.OPENAI_EMBED_ENABLED", True),
+            patch("retriever.genieai_retriever_arangodb.OpenAIEmbeddings") as openai_emb,
+        ):
+            openai_emb.return_value.embed_query.return_value = [0.0]
+            await invoke_env["retriever"].invoke(create_mock_input(query="test query"))
+        openai_emb.return_value.embed_query.assert_called_once_with("test query")
+
+    @pytest.mark.asyncio
+    async def test_local_bge_branch_clears_default_query_instruction(self, invoke_env):
+        """HuggingFaceBgeEmbeddings already prepends its own query_instruction
+        inside embed_query(). The retriever must clear it so the wrapper's
+        instruction is the sole prefix applied — otherwise the local fallback
+        path double-prefixes.
+        """
+        from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
+
+        expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+        with (
+            patch("retriever.genieai_retriever_arangodb.TEI_EMBEDDING_ENDPOINT", ""),
+            patch("retriever.genieai_retriever_arangodb.HF_TOKEN", ""),
+            patch("retriever.genieai_retriever_arangodb.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"),
+            patch("retriever.genieai_retriever_arangodb.HuggingFaceBgeEmbeddings") as bge_cls,
+        ):
+            bge_cls.return_value.embed_query.return_value = [0.0]
+            await invoke_env["retriever"].invoke(create_mock_input(query="bean varieties"))
+        # Retriever must set query_instruction to "" so langchain doesn't
+        # double-prefix on top of the wrapper's BAAI instruction.
+        bge_instance = bge_cls.return_value
+        assert bge_instance.query_instruction == ""
+        # Behavioral assertion: the wrapper's prefix is the only one applied
+        # to the encoded text. Without this, a regression that clears the
+        # langchain default but then fails to install the wrapper would
+        # still pass the state-only check above.
+        bge_instance.embed_query.assert_called_once_with(expected + "bean varieties")
+
+
+class TestGetQueryInstruction:
+    """get_query_instruction(model_id) returns the right prefix for built-in
+    known models, applies user overrides (EMBEDDING_QUERY_INSTRUCTIONS env var),
+    and returns None for models with no entry (so callers skip the wrapper).
+    """
+
+    @pytest.mark.parametrize(
+        "model_id,expected",
+        [
+            ("BAAI/bge-large-en-v1.5", "Represent this sentence for searching relevant passages: "),
+            ("BAAI/bge-base-en-v1.5", "Represent this sentence for searching relevant passages: "),
+            ("BAAI/bge-small-en-v1.5", "Represent this sentence for searching relevant passages: "),
+            ("BAAI/bge-large-zh-v1.5", "为这个句子生成表示以用于检索相关文章："),
+            ("hkunlp/instructor-base", "Represent the query for retrieving evidence documents: "),
+            ("nomic-ai/nomic-embed-text-v1.5", "search_query: "),
+            # case-insensitive substring match
+            ("baai/bge-large-en-v1.5", "Represent this sentence for searching relevant passages: "),
+        ],
+    )
+    def test_builtin_models_return_their_instruction(self, model_id, expected):
+        from retriever.config import get_query_instruction
+
+        assert get_query_instruction(model_id) == expected
+
+    @pytest.mark.parametrize(
+        "model_id",
+        [
+            "BAAI/bge-m3",  # no instruction
+            "mxbai-embed-large-v1",
+            "text-embedding-3-small",  # OpenAI
+            "sentence-transformers/all-MiniLM-L6-v2",
+            "",
+            None,
+        ],
+    )
+    def test_unknown_models_return_none(self, model_id):
+        from retriever.config import get_query_instruction
+
+        assert get_query_instruction(model_id) is None
+
+    def test_user_override_wins_over_builtin(self):
+        """EMBEDDING_QUERY_INSTRUCTIONS env var: new model + override existing."""
+        from retriever import config as retriever_config
+
+        new_overrides = (
+            ("my-org/bge-finetune", "Custom prefix: "),
+            ("BAAI/bge-large-zh-v1.5", "自定义中文前缀："),
+        )
+        with patch.object(retriever_config, "_USER_QUERY_INSTRUCTIONS", new_overrides):
+            assert retriever_config.get_query_instruction("my-org/bge-finetune") == "Custom prefix: "
+            assert retriever_config.get_query_instruction("BAAI/bge-large-zh-v1.5") == "自定义中文前缀："
+            # Built-in English BGE still works
+            assert (
+                retriever_config.get_query_instruction("BAAI/bge-large-en-v1.5")
+                == "Represent this sentence for searching relevant passages: "
+            )
+            # Unknown still None
+            assert retriever_config.get_query_instruction("BAAI/bge-m3") is None
+
+    def test_malformed_env_value_is_skipped(self):
+        """Garbage entries (no `=`, empty key, empty value) are silently dropped."""
+        from retriever import config as retriever_config
+
+        # _parse_query_instructions drop rule: no `=`, empty k, empty v.
+        with patch.object(
+            retriever_config,
+            "_USER_QUERY_INSTRUCTIONS",
+            retriever_config._parse_query_instructions("=orphan-value,no-equals-sign,key=,=value-only,valid=ok-prefix"),
+        ):
+            assert retriever_config.get_query_instruction("valid") == "ok-prefix"
+            # nothing else got registered from the malformed entries
+            assert retriever_config.get_query_instruction("orphan-value") is None

@@ -265,6 +265,7 @@ Set in `group_vars/<env>/vars.yml`:
 |----------|---------|-------------|
 | `embedding_server_endpoint` | `/v1/embeddings` | Embedding service API endpoint path |
 | `embedding_model_id` | `BAAI/bge-large-en-v1.5` | Embedding model for vector search |
+| `embedding_query_instructions` | _(unset — built-in table applies)_ | Per-model query-instruction overrides for contrastive / instruction-tuned embedders (issue #1035). Comma-separated `substring=instruction` pairs; substring matched case-insensitively against `TEI_EMBED_MODEL`. Built-in coverage: `BAAI/bge-{large,base,small}-{en,zh}-v1.5`, `hkunlp/instructor`, `nomic-ai/nomic-embed`. Trailing spaces in the instruction value are preserved; commas inside the instruction value are not supported. Example: `"my-org/bge-finetune=Custom instruction: "`. |
 | `reranker_model_id` | `BAAI/bge-reranker-v2-m3` | Reranking model |
 | `reranking_strategy` | `slice` | Reranker strategy: `slice` (default; top-N), `threshold`, `slice_threshold`, `knee_threshold`, `adaptive` |
 | `reranker_top_n` | `3` | Chunks kept for slice/slice_threshold strategies |

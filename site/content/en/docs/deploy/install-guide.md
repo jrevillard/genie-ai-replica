@@ -406,6 +406,7 @@ defaults.
 | `EMBEDDING_SERVER_PORT` | number | no | `6000` | OPEA embedding wrapper port |
 | `EMBEDDING_MODEL_ID` | string | no | `BAAI/bge-large-en-v1.5` | Embedding model |
 | `EMBEDDING_SERVER_ENDPOINT` | string | no | `/v1/embeddings` | Embedding endpoint path |
+| `EMBEDDING_QUERY_INSTRUCTIONS` | string | no | _(built-in table)_ | Per-model query-instruction overrides for contrastive / instruction-tuned embedders (issue #1035). Comma-separated `substring=instruction` pairs; substring is matched case-insensitively against `TEI_EMBED_MODEL`. Built-in coverage: `BAAI/bge-{large,base,small}-{en,zh}-v1.5`, `hkunlp/instructor`, `nomic-ai/nomic-embed`. See [Choosing Models]({{< relref "/docs/rag-pipeline/choosing-models" >}}) for the full table and override format. |
 | `RETRIEVER_SERVICE_HOST_IP` | string | no | `retriever-arango-service` | Retriever hostname |
 | `RETRIEVER_SERVICE_PORT` | number | no | `7000` | Retriever port |
 | `RERANK_SERVER_HOST_IP` | string | no | `reranker` | OPEA reranker wrapper hostname (port 8000) |

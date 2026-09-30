@@ -385,6 +385,32 @@ EMBEDDING_MODEL_ID=BAAI/bge-large-en-v1.5
 TEI_EMBED_MODEL=BAAI/bge-large-en-v1.5
 ```
 
+### Query Instruction Prefix (Contrastive / Instruction-Tuned Models)
+
+Some embedding models are trained contrastively or with task-specific instructions: queries and passages sit on opposite sides of the vector space, and the model card specifies that **queries** must be prefixed with a specific string at inference while **passages** must NOT receive it. The retriever applies this prefix at the caller side (not at the shared TEI service) so dataprep ingestion stays prefix-free and retrieval queries are correctly encoded.
+
+The wrapper auto-detects the model and applies the right prefix. **Built-in coverage**:
+
+| Model | Query instruction applied |
+|---|---|
+| `BAAI/bge-large-en-v1.5`, `BAAI/bge-base-en-v1.5`, `BAAI/bge-small-en-v1.5` | `Represent this sentence for searching relevant passages: ` |
+| `BAAI/bge-large-zh-v1.5`, `BAAI/bge-base-zh-v1.5` | `为这个句子生成表示以用于检索相关文章：` |
+| `hkunlp/instructor-*` | `Represent the query for retrieving evidence documents: ` |
+| `nomic-ai/nomic-embed-*` | `search_query: ` |
+
+Models not in the table (`BAAI/bge-m3`, `mxbai-embed-large`, `sentence-transformers/*`, OpenAI `text-embedding-3-*`, etc.) pass through unchanged — no prefix is applied.
+
+**Deployer override** — `EMBEDDING_QUERY_INSTRUCTIONS` env var (comma-separated `substring=instruction` pairs, user table takes priority over the built-in table). Use the most specific substring available (`BAAI/bge-large-en-v1.5` rather than `bge-large`) to avoid cross-language / cross-family overrides. Trailing spaces in the instruction value are preserved; commas inside the instruction value are not supported.
+
+```bash
+# Add a finetune that needs its own prefix
+EMBEDDING_QUERY_INSTRUCTIONS="my-org/bge-finetune=Custom instruction: "
+# Or override a built-in entry
+EMBEDDING_QUERY_INSTRUCTIONS="hkunlp/instructor=Represent the legal question: "
+```
+
+Measured impact on the live corpus (42 gold queries vs 850 chunks): **+1.62% retrieval recall at K=32**, **+1.85% at K=50** for the default `BAAI/bge-large-en-v1.5` switch. No re-ingest required — only query encoding changes.
+
 ---
 
 ## Role 6: Reranking

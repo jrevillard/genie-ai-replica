@@ -20,7 +20,12 @@ from metrics import (
 )
 
 from core.model_cache import get_model_id
-from retriever.config import TEI_EMBED_MODEL, get_query_instruction
+from retriever.config import (
+    OPENAI_EMBED_ENABLED,
+    OPENAI_EMBED_MODEL,
+    TEI_EMBED_MODEL,
+    get_query_instruction,
+)
 from tracing import (
     get_tracer,
     install_uvicorn_access_logging,
@@ -919,12 +924,24 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # are encoded without the prefix by dataprep ingestion via the same
         # shared TEI service.
         #
+        # Mirror the retriever's branch selection: when OpenAI embeddings are
+        # active (OPENAI_API_KEY + OPENAI_EMBED_MODEL + OPENAI_EMBED_ENABLED),
+        # the active embedding model is OPENAI_EMBED_MODEL — which has no
+        # contrastive instruction entry. Without this gate, a deployment with
+        # both OpenAI enabled AND TEI_EMBED_MODEL=BAAI/... would prefix the
+        # query in chatqna (BAAI instruction → TEI microservice) while the
+        # retriever's OpenAI branch encodes raw — silent dense-channel
+        # mismatch on the embedding vector space.
+        #
         # The retriever's BM25/hybrid leg (`_bm25_search` → TOKENS(@query, ...))
         # must NOT receive the prefix — its English analyzer would tokenize
         # the prefix tokens and dilute the real query terms. Stash the
         # original query in a side-channel so align_outputs(EMBEDDING) can
         # echo the RAW text to the retriever.
-        _query_instruction = get_query_instruction(TEI_EMBED_MODEL)
+        _active_embed_model = (
+            OPENAI_EMBED_MODEL if (OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED) else TEI_EMBED_MODEL
+        )
+        _query_instruction = get_query_instruction(_active_embed_model)
         _original_query = inputs["text"]
         inputs["_original_query"] = _original_query
         if _blend_history_text:

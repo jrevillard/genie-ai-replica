@@ -12,6 +12,36 @@
 | E2E | Playwright | `playwright.config.js` | `tests/e2e/` |
 | Config Validation | Jest | `tests/config-validator/jest.config.js` | `tests/config-validator/` |
 
+## Local install prerequisites
+
+Tests load production modules via Node resolution. Some components require
+their shared-library sibling's `node_modules` to be installed first so the
+resolver can walk up into it. Skip this and several suites fail at load time
+with `Cannot find module '<dep>' from '../shared/lib/...'` — a confusing
+failure that looks like a code regression.
+
+Always replicate the CI install order before running tests locally:
+
+```bash
+# Backend (gov-chat-backend) — CI does shared/lib FIRST, then backend
+cd components/shared/lib && npm ci
+cd ../gov-chat-backend && npm ci
+
+# Frontend (gov-chat-frontend)
+cd components/gov-chat-frontend && npm ci
+
+# Document repository
+cd components/document-repository && npm ci
+
+# OPEA overlay (Python venv recommended — uv per project convention)
+cd genie-ai-overlay && uv venv .venv && source .venv/bin/activate && uv pip install -e .[test]
+
+# Mobile
+cd mobile/genie_ai_mobile && flutter pub get
+```
+
+CI does the same sequencing (`.gitlab-ci.yml` test jobs). Match it locally.
+
 ## Running Tests
 
 ```bash

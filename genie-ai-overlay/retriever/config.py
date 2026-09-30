@@ -288,6 +288,13 @@ def _parse_query_instructions(raw: str) -> tuple[tuple[str, str], ...]:
     The value preserves trailing spaces — query instructions like
     ``"Represent this sentence for searching relevant passages: "`` end in
     a space that's part of the protocol.
+
+    **Comma-in-value is NOT supported.** Entries are split on a literal
+    ``,``; an instruction containing a comma will be silently truncated at
+    the first comma. Deployers needing commas in their instruction should
+    swap the comma for a different separator (semicolon, pipe) and rebuild
+    the corresponding model to accept that — or hardcode the override in
+    this module. None of the built-in instructions contain commas.
     """
     out: list[tuple[str, str], ...] = []
     for entry in raw.split(","):
@@ -320,6 +327,13 @@ def get_query_instruction(model_id: str | None) -> str | None:
     Models with no built-in or override entry (BAAI/bge-m3, mxbai-embed-large,
     text-embedding-3-*, sentence-transformers/*, …) keep their native
     behavior: dense vectors unchanged, BM25 tokenizes the bare query.
+
+    **User-substring matches are first-match-wins and may be broader than
+    intended.** Use the most specific substring available (e.g.
+    ``BAAI/bge-large-en-v1.5`` rather than ``bge-large``) to avoid
+    cross-language / cross-family overrides — a deployer who writes
+    ``EMBEDDING_QUERY_INSTRUCTIONS="bge-large=Custom: "`` will silently
+    override both the English and Chinese ``BGE/bge-large-*`` variants.
     """
     if not model_id:
         return None

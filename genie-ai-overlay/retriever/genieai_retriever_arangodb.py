@@ -127,8 +127,6 @@ class QueryInstructionEmbeddingsWrapper:
     Apply at the caller (retriever, chatqna) rather than at the TEI service
     layer, because the same TEI is used for ingest (passages) and retrieval
     (queries) — a service-level prefix would invert the asymmetry.
-
-    Issue #1035 (originally BGE-only, generalized).
     """
 
     __slots__ = ("base", "instruction")
@@ -147,7 +145,7 @@ class QueryInstructionEmbeddingsWrapper:
         # Langchain-arangodb currently uses sync embed_query, but a future
         # upgrade could call async. Apply the prefix unconditionally so the
         # contract holds across sync/async paths.
-        a = self.base.aembed_query
+        a = getattr(self.base, "aembed_query", None)
         if callable(a):
             result = a(self.instruction + text)
             if hasattr(result, "__await__"):
@@ -157,7 +155,7 @@ class QueryInstructionEmbeddingsWrapper:
         return self.embed_query(text)
 
     async def aembed_documents(self, texts):
-        a = self.base.aembed_documents
+        a = getattr(self.base, "aembed_documents", None)
         if callable(a):
             result = a(texts)
             if hasattr(result, "__await__"):

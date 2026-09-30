@@ -1006,6 +1006,22 @@ class TestQueryInstructionWrapper:
         base.aembed_documents.assert_awaited_once_with(["a", "b"])
 
     @pytest.mark.asyncio
+    async def test_wrapper_async_falls_back_when_base_has_no_async(self):
+        """Custom embeddings classes that omit aembed_query / aembed_documents
+        must fall back to the sync impl (getattr-guard, not AttributeError)."""
+        # A bare object without aembed_query / aembed_documents attributes.
+        base = MagicMock(spec=["embed_query", "embed_documents"])
+        base.embed_query = MagicMock(return_value=[0.0])
+        base.embed_documents = MagicMock(return_value=[[0.0]])
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        # Must NOT raise AttributeError
+        assert await wrapper.aembed_query("hello") == [0.0]
+        assert await wrapper.aembed_documents(["a"]) == [[0.0]]
+        base.embed_query.assert_called_once_with("PFX hello")
+        base.embed_documents.assert_called_once_with(["a"])
+
+    @pytest.mark.asyncio
     async def test_invoke_prefixes_query_for_bge_model(self, invoke_env):
         """Issue #1035: BGE-large-en-v1.5 (default) gets the BAAI prefix."""
         from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS

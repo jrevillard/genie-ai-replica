@@ -306,28 +306,35 @@ Tuning knobs: `DATAPREP_MAX_CONCURRENT_BATCHES` (concurrency), `DATAPREP_LLM_LAB
 | `EMBEDDING_SERVER_PORT` | int | 6000 | Embedding server port |
 | `UPLOAD_DIR` | string | /app/uploads | Upload directory |
 | `MAX_FILE_SIZE` | int | 52428800 | Max file size (50MB) |
-| `CHUNK_SIZE` | int | 1000 | Token chunk size |
-| `CHUNK_OVERLAP` | int | 200 | Token overlap between chunks |
 | `BATCH_SIZE` | int | 32 | Embedding batch size |
 | `ENABLE_GPU` | boolean | true | Enable GPU acceleration |
 
 ### Document Processing Settings
 
-Configure chunking behavior:
+Configure chunking behavior via environment variables (characters, applied by
+`RecursiveCharacterTextSplitter`):
 
-```python
-# Chunk size (tokens)
-CHUNK_SIZE = 1000  # Default: 1000 tokens per chunk
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `DATAPREP_CHUNK_SIZE_PDF` | int | 500 | Chunk size for PDF documents |
+| `DATAPREP_CHUNK_SIZE_DOCX` | int | 1000 | Chunk size for DOCX documents |
+| `DATAPREP_CHUNK_SIZE_XLSX` | int | 1500 | Chunk size for XLSX documents |
+| `DATAPREP_CHUNK_SIZE_PPTX` | int | 500 | Chunk size for PPTX documents |
+| `DATAPREP_CHUNK_SIZE_HTML` | int | 500 | Chunk size for HTML documents |
+| `DATAPREP_CHUNK_SIZE_TXT` | int | 500 | Chunk size for plain-text documents |
+| `DATAPREP_CHUNK_SIZE_MD` | int | 500 | Chunk size for Markdown documents |
+| `DATAPREP_CHUNK_OVERLAP` | int | 50 | Character overlap between consecutive chunks |
 
-# Chunk overlap (tokens)
-CHUNK_OVERLAP = 200  # Default: 200 tokens overlap
+The per-extension `DATAPREP_CHUNK_SIZE_*` values take precedence over a global
+default; `DATAPREP_CHUNK_OVERLAP` is the only knob for overlap. The
+document-repository caller can override the overlap on a per-request basis via
+the `chunkOverlap` field of the ingest payload (see `DocRepoIngestPayload`).
+Override hierarchy: per-request `chunkOverlap` > `DATAPREP_CHUNK_OVERLAP` > 50.
 
-# Minimum chunk size
-MIN_CHUNK_SIZE = 100  # Discard chunks smaller than this
-
-# Maximum chunk size
-MAX_CHUNK_SIZE = 2000  # Split chunks larger than this
-```
+`MIN_CHUNK_SIZE` / `MAX_CHUNK_SIZE` post-filter the splitter output (chunks
+smaller than `MIN_CHUNK_SIZE` are dropped; chunks larger than `MAX_CHUNK_SIZE`
+are re-split). Both knobs live in code, not in env vars; see
+`genieai_dataprep_arangodb.py` for the current values.
 
 ### ArangoDB Configuration
 

@@ -207,6 +207,17 @@ HUGGING_FACE_HUB_TOKEN=
 #                                     #   to a remote vLLM. Raise to 8 on capable models
 #                                     #   (e.g. granite-4.1-8b); batches fall back to
 #                                     #   per-chunk on parse failure, so output is correct.
+#
+# Chunk sizing — character-based. Per-extension DATAPREP_CHUNK_SIZE_*; global
+# DATAPREP_CHUNK_OVERLAP. Override per ingest via doc-repo payload.chunkOverlap.
+# DATAPREP_CHUNK_SIZE_PDF=500
+# DATAPREP_CHUNK_SIZE_DOCX=1000
+# DATAPREP_CHUNK_SIZE_XLSX=1500
+# DATAPREP_CHUNK_SIZE_PPTX=500
+# DATAPREP_CHUNK_SIZE_HTML=500
+# DATAPREP_CHUNK_SIZE_TXT=500
+# DATAPREP_CHUNK_SIZE_MD=500
+# DATAPREP_CHUNK_OVERLAP=50
 
 # Contextual Retrieval (Anthropic-style) — OPTIONAL, default OFF.
 # When enabled, the dataprep generates a short LLM document-context prefix per

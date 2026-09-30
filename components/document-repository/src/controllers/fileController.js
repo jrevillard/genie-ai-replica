@@ -45,7 +45,9 @@ const batchFileIdsSchema = Joi.object({
     .items(Joi.string().min(1).pattern(fileIdPattern, { invert: true }))
     .min(1)
     .max(MAX_BATCH_SIZE)
-    .required()
+    .required(),
+  // Optional per-request overlap; consumed only by ingestMultipleFiles.
+  chunkOverlap: Joi.number().integer().min(0).optional()
 });
 
 // Schema for file upload validation
@@ -981,7 +983,7 @@ class FileController {
 
   // --- Helper for ingesting a single file ---
 
-  async _ingestFileById(fileId) {
+  async _ingestFileById(fileId, chunkOverlap) {
     const { file, base64String } = await this._getFileBase64(fileId);
     // Case-insensitive: dataprep persists the status capitalized ('Ingested'), not lowercase
     if (file.dataprep && (file.dataprep.status || '').toLowerCase() === 'ingested') {
@@ -995,7 +997,9 @@ class FileController {
       fileType: file.file_type,
       fileLabels: file.labels,
       storagePath: file.storage_path,
-      fileBase64: base64String
+      fileBase64: base64String,
+      // Optional per-request override; dataprep falls back to env DATAPREP_CHUNK_OVERLAP when omitted.
+      chunkOverlap: Number.isInteger(chunkOverlap) ? chunkOverlap : undefined
     });
     if (response.data.success) {
       await metadataService.updateMetadata(fileId, {
@@ -1016,7 +1020,8 @@ class FileController {
   async ingestFile(req, res) {
     try {
       const { fileId } = req.params;
-      const result = await this._ingestFileById(fileId);
+      const chunkOverlap = Number.isInteger(req?.body?.chunkOverlap) ? req.body.chunkOverlap : undefined;
+      const result = await this._ingestFileById(fileId, chunkOverlap);
       if (result.success) {
         return res.json({ success: true, message: 'File ingested successfully' });
       } else {
@@ -1047,10 +1052,11 @@ class FileController {
         return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
       const { fileIds } = value;
+      const batchOverlap = Number.isInteger(req?.body?.chunkOverlap) ? req.body.chunkOverlap : undefined;
       const results = [];
       for (const fileId of fileIds) {
         try {
-          const result = await this._ingestFileById(fileId);
+          const result = await this._ingestFileById(fileId, batchOverlap);
           results.push({ fileId, ...result });
         } catch (error) {
           results.push({ fileId, success: false, error: error.message });

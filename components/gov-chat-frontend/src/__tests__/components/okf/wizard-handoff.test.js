@@ -115,3 +115,38 @@ it('wizard finish: with no repo it falls back to the dashboard', () => {
   expect(ctx.onBackToDashboard).toHaveBeenCalled();
   expect(ctx.view).toBe('wizard'); // untouched by the fallback
 });
+
+// RAIL-FREEZE FIX (David, 2026-09-30): saveDraft REPLACES the store's draft
+// object on every step advance; the wizard's draft prop must track the LIVE
+// store object, not the reference captured at open time (the frozen
+// studio_step locked the rail at steps 7-10 while the footer showed 10/10).
+describe('StudioTab.liveDraft', () => {
+  const liveDraft = (ctx) => OkfStudioTab.computed.liveDraft.call(ctx);
+
+  it("prefers the store's LIVE draft over the captured reference", () => {
+    const live = { repo_id: 'r1', studio_step: 9 };
+    const ctx = {
+      activeDraft: { repo_id: 'r1', studio_step: 5 },
+      $store: { getters: { 'okf/activeDraft': (id) => (id === 'r1' ? live : null) } }
+    };
+    expect(liveDraft(ctx)).toBe(live);
+  });
+
+  it('falls back to the local draft while the store has none (fresh resume)', () => {
+    const local = { repo_id: 'r2', studio_step: 9 };
+    const ctx = {
+      activeDraft: local,
+      $store: { getters: { 'okf/activeDraft': () => null } }
+    };
+    expect(liveDraft(ctx)).toBe(local);
+  });
+
+  it('falls back when the draft has no repo yet (pre-Entry create)', () => {
+    const local = { repo_id: null, studio_step: 0 };
+    const ctx = {
+      activeDraft: local,
+      $store: { getters: { 'okf/activeDraft': () => ({ repo_id: 'other' }) } }
+    };
+    expect(liveDraft(ctx)).toBe(local);
+  });
+});

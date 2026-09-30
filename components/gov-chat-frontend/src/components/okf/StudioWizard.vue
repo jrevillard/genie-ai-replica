@@ -206,7 +206,14 @@ export default {
     clonedFromLabel() {
       const cf = (this.repo && this.repo.cloned_from) || (this.draft && this.draft.cloned_from);
       if (!cf || !cf.repo_id) return null;
-      return `Cloned from ${cf.name || cf.repo_id} · v${cf.version}`;
+      // FIELD BUG (David, 2026-09-30, "Cloned from <uuid> · null"): the
+      // backend stores {repo_id, version} only — no name — and an
+      // unpublished source carries version null. Resolve the source's NAME
+      // from the repo list and omit the version leg when null; the raw
+      // repo_id stays as the fallback when the source was deleted.
+      const src = this.repoById(cf.repo_id);
+      const name = (src && src.name) || cf.name || cf.repo_id;
+      return cf.version != null ? `Cloned from ${name} · v${cf.version}` : `Cloned from ${name}`;
     },
     // REAL lifecycle state, not the step counter. Missing locale keys fall
     // back to the raw state string (honest over pretty — i18n pass later).

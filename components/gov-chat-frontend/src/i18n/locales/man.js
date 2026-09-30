@@ -1731,7 +1731,7 @@ export default {
       select: "Kāālet {'{'}name{'}'} ñan l̦ap an publish",
       stage: {
         drainFailed: 'Ingest ear l̦apier',
-        queueBehind: '{n} nderi e haande · inngest wooɗɗa {m} repo',
+        queueBehind: "{'{'}n{'}'} nderi e haande · inngest wooɗɗa {'{'}m{'}'} repo",
         redraining: 'A bering bo-kuta…',
         building: 'A bering loo…',
         draft: 'Binoo',
@@ -1739,7 +1739,7 @@ export default {
         ingested: "A marata v{'{'}n{'}'}",
         published: "A keta v{'{'}n{'}'}",
         retracted: 'A sayita',
-        stepOf: 'Step '
+        stepOf: "Step {'{'}n{'}'} of 10"
       },
       title: 'Kafuolu',
       topics: 'kuuolu',
@@ -2017,7 +2017,7 @@ export default {
       },
       stage: {
         inReview: 'Pād ilo review',
-        stepOf: 'Buñtōn {n} jān 10',
+        stepOf: "Buñtōn {'{'}n{'}'} jān 10",
         draft: 'Binoo'
       },
       dashboard: {
@@ -2030,7 +2030,7 @@ export default {
         stale: 'ritto',
         stage: {
           inReview: 'Pād ilo review',
-          stepOf: 'Buñtōn {n} jān 10',
+          stepOf: "Buñtōn {'{'}n{'}'} jān 10",
           draft: 'Binoo'
         },
         bulk: {
@@ -2141,11 +2141,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: ' +{n} more',
+        moreN: " +{'{'}n{'}'} more",
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: '{n}',
+        benchCount: "{'{'}n{'}'}",
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2385,7 +2385,7 @@ export default {
     },
     pii: {
       panel: 'Men ko ewōr kakōl̦l̦e ie',
-      nFlagged: '{n} soto',
+      nFlagged: "{'{'}n{'}'} soto",
       rescan: 'Scan kuta',
       scanning: 'Scan…',
       clean: 'Flagged entities amatta yaode — concept asi clear oire.',
@@ -2465,7 +2465,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: '{n} document(s)',
+      total: "{'{'}n{'}'} document(s)",
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2474,12 +2474,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
+      uploaded: "{'{'}n{'}'} file(s) uploaded.",
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: 'Selected: {n}',
+      count: "Selected: {'{'}n{'}'}",
       needOne: 'Select at least one source.',
-      confirm: 'Use {n} source(s)',
+      confirm: "Use {'{'}n{'}'} source(s)",
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',

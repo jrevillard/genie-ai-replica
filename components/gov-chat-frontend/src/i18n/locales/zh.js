@@ -1717,7 +1717,7 @@ export default {
       select: "选择 {'{'}name{'}'} 进行批量发布",
       stage: {
         drainFailed: 'Ingest 失败',
-        queueBehind: '{n} 个排队中 · 正在从 {m} 个仓库摄取',
+        queueBehind: "{'{'}n{'}'} 个排队中 · 正在从 {'{'}m{'}'} 个仓库摄取",
         redraining: '重新排出…',
         building: '构建中…',
         draft: '草稿',
@@ -1725,7 +1725,7 @@ export default {
         ingested: "已完成 ingest v{'{'}n{'}'}",
         published: "已 publish v{'{'}n{'}'}",
         retracted: '已撤回',
-        stepOf: 'Step '
+        stepOf: "Step {'{'}n{'}'} of 10"
       },
       title: '存储库',
       topics: '主题',
@@ -1997,7 +1997,7 @@ export default {
       },
       stage: {
         inReview: '处于 review 状态',
-        stepOf: '第 {n} 步，共 10 步',
+        stepOf: "第 {'{'}n{'}'} 步，共 10 步",
         draft: '草稿'
       },
       dashboard: {
@@ -2010,7 +2010,7 @@ export default {
         stale: '已陈旧',
         stage: {
           inReview: '处于 review 状态',
-          stepOf: '第 {n} 步，共 10 步',
+          stepOf: "第 {'{'}n{'}'} 步，共 10 步",
           draft: '草稿'
         },
         bulk: {
@@ -2121,11 +2121,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: ' +{n} more',
+        moreN: " +{'{'}n{'}'} more",
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: '{n}',
+        benchCount: "{'{'}n{'}'}",
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2362,7 +2362,7 @@ export default {
     },
     pii: {
       panel: '标记的实体',
-      nFlagged: '找到 {n} 个',
+      nFlagged: "找到 {'{'}n{'}'} 个",
       rescan: '重新扫描',
       scanning: '扫描中…',
       clean: '没有标记的实体 — 此 concept 正常。',
@@ -2442,7 +2442,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: '{n} document(s)',
+      total: "{'{'}n{'}'} document(s)",
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2451,12 +2451,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
+      uploaded: "{'{'}n{'}'} file(s) uploaded.",
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: 'Selected: {n}',
+      count: "Selected: {'{'}n{'}'}",
       needOne: 'Select at least one source.',
-      confirm: 'Use {n} source(s)',
+      confirm: "Use {'{'}n{'}'} source(s)",
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',

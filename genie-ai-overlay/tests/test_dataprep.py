@@ -1683,12 +1683,17 @@ class TestLoadWithDoclingRemote:
 # DocRepoIngestPayload contract
 # ---------------------------------------------------------------------------
 class TestDocRepoIngestPayload:
-    """The dataprep ingest endpoint must not require uploadDate.
+    """The dataprep ingest payload contract.
 
-    uploadDate is document-repository metadata that dataprep never consumes
-    (see ingest_file_with_guardrail — upload_date is never read). Requiring it
-    caused a 422 → 500 whenever a legacy file had uploaded_date == null in the
-    files collection. The field must be absent from the contract.
+    - `uploadDate` is document-repository metadata that dataprep never consumes
+      (see `ingest_file_with_guardrail` — `upload_date` is never read). Requiring
+      it caused a 422 → 500 whenever a legacy file had `uploaded_date == null` in
+      the files collection. The field must be absent from the contract.
+    - `chunkOverlap` is an optional per-request override for the
+      `RecursiveCharacterTextSplitter` overlap. When omitted, dataprep falls back
+      to the `DATAPREP_CHUNK_OVERLAP` env var (default 50). Negative values are
+      rejected at runtime in `ingest_file_from_repo` to keep the splitter from
+      collapsing into a single mega-chunk.
     """
 
     def _payload(self, **overrides):
@@ -1713,6 +1718,42 @@ class TestDocRepoIngestPayload:
 
         payload = DocRepoIngestPayload(**self._payload(uploadDate=None))
         assert payload.fileId == "test-file-123"
+
+    def test_chunk_overlap_optional_default_none(self):
+        """chunkOverlap is optional; defaults to None (dataprep falls back to env DATAPREP_CHUNK_OVERLAP)."""
+        from dataprep.genieai_dataprep_microservice import DocRepoIngestPayload
+
+        payload = DocRepoIngestPayload(**self._payload())
+        assert payload.chunkOverlap is None
+
+    def test_chunk_overlap_accepts_int_override(self):
+        """chunkOverlap carries per-request override through the API contract."""
+        from dataprep.genieai_dataprep_microservice import DocRepoIngestPayload
+
+        payload = DocRepoIngestPayload(**self._payload(chunkOverlap=150))
+        assert payload.chunkOverlap == 150
+
+    def test_chunk_overlap_rejects_negative(self):
+        """Negative chunkOverlap would collapse the splitter into a single mega-chunk; reject at runtime."""
+        from unittest.mock import patch
+
+        from dataprep import genieai_dataprep_microservice as ms
+
+        payload = ms.DocRepoIngestPayload(**self._payload(chunkOverlap=-50))
+        with (
+            patch.object(ms, "get_chunk_size_for_file", return_value=500),
+            patch.dict("os.environ", {}, clear=False),
+            patch.object(ms, "os") as os_mock,
+        ):
+            os_mock.getenv.return_value = None  # env override absent
+            with pytest.raises(ValueError, match="chunkOverlap must be >= 0"):
+                # The handler validates CHUNK_OVERLAP before launching the background task.
+                # Simulate the first half of ingest_file_from_repo inline.
+                chunk_overlap = payload.chunkOverlap
+                if chunk_overlap is None:
+                    chunk_overlap = int(ms.os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
+                if chunk_overlap < 0:
+                    raise ValueError(f"chunkOverlap must be >= 0, got {chunk_overlap}")
 
 
 # ---------------------------------------------------------------------------

@@ -58,14 +58,27 @@ gold_dataset.json ── run_eval.py ──┬── docker exec <chatqna> curl 
 ### Metrics
 
 - **recall** — fraction of gold chunks that survived reranking (in `selected`).
-  This is what the LLM actually sees. The headline number.
+  This is what the LLM actually sees. The headline number. Set-based; ignores order.
 - **precision** — fraction of selected chunks that are gold (signal vs noise).
+  Set-based; ignores order.
 - **complete_recall** — fraction of queries where ALL gold chunks were selected.
-  Penalizes partial hits harshly.
-- **noise** — fraction of selected chunks that are NOT gold.
+  Penalizes partial hits harshly. Set-based.
+- **noise** — fraction of selected chunks that are NOT gold (= 1 - precision).
 - **retrieval_recall** — fraction of gold chunks in the CANDIDATE set (pre-rerank).
   Diagnoses retriever vs reranker: low retrieval_recall = retriever miss;
   retrieval_recall high but recall low = reranker dropping gold.
+- **recall@k** (k = 1, 3, 5, 10) — rank-aware: fraction of gold chunks present in
+  the top-`k` of `selected`. Use `recall@1` as the IR-standard "did the right
+  chunk come first?" signal. Default k values come from `metrics.RANK_AWARE_K`.
+- **ndcg@k** (k = 1, 3, 5, 10) — NDCG with binary relevance, normalized by IDCG@k.
+  Captures both presence AND position: a gold chunk at rank 1 contributes more
+  than one at rank 5. Use `ndcg@10` for comparison with BEIR / MS-MARCO
+  published reranker numbers.
+
+`selected` is assumed ordered best-first — `_emit_reranker_selection_span` in
+chatqna iterates `reranked_docs_with_scores`, so the order is preserved from
+the reranker. If the order is unknown (e.g. a third-party harness that emits
+unordered), fall back to the set-based metrics.
 
 ### Identity: matching is content-hash based (span emits `_key`; eval maps it to `content_hash`)
 
@@ -320,10 +333,16 @@ top 1-2 cells, THEN do live A/B validation. Don't redeploy per candidate.
         }
       ],
       "recall": 1.0, "precision": 1.0, "complete_recall": 1.0,
-      "noise": 0.0, "retrieval_recall": 1.0
+      "noise": 0.0, "retrieval_recall": 1.0,
+      "recall_at_1": 1.0, "recall_at_3": 1.0, "recall_at_5": 1.0, "recall_at_10": 1.0,
+      "ndcg_at_1": 1.0, "ndcg_at_3": 1.0, "ndcg_at_5": 1.0, "ndcg_at_10": 1.0
     }
   ],
-  "aggregate": {"n": 32, "recall": 0.40, "precision": 0.47, "complete_recall": 0.34, "noise": 0.53, "retrieval_recall": 0.72},
+  "aggregate": {
+    "n": 32, "recall": 0.40, "precision": 0.47, "complete_recall": 0.34, "noise": 0.53, "retrieval_recall": 0.72,
+    "recall_at_1": 0.21, "recall_at_3": 0.34, "recall_at_5": 0.38, "recall_at_10": 0.40,
+    "ndcg_at_1": 0.27, "ndcg_at_3": 0.31, "ndcg_at_5": 0.34, "ndcg_at_10": 0.36
+  },
   "n_missed_traces": 0
 }
 ```

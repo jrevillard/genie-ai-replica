@@ -276,6 +276,13 @@ def score_anchor(
         )
         if cand:
             row["retrieval_recall"] = metrics.retrieval_recall(gold, cand)
+        # Rank-aware: assumes `sel` is ordered best-first. chatqna's
+        # `_emit_reranker_selection_span` iterates `reranked_docs_with_scores`
+        # so the order is preserved from the reranker. See metrics.RANK_AWARE_K.
+        if sel:
+            for k in metrics.RANK_AWARE_K:
+                row[f"recall_at_{k}"] = metrics.recall_at_k(gold, sel, k)
+                row[f"ndcg_at_{k}"] = metrics.ndcg_at_k(gold, sel, k)
         # Passage-level recall: a passage (verbatim preview) counts as retrieved
         # only when ALL its chunks are in `selected`. Chunks without a passage_id
         # (older gold sets) each count as their own single-chunk passage.
@@ -285,7 +292,9 @@ def score_anchor(
     return row
 
 
-def _passage_recall(expected_chunks: list[dict], selected_hashes: list[str]) -> tuple[float, int, int]:
+def _passage_recall(
+    expected_chunks: list[dict], selected_hashes: list[str]
+) -> tuple[float, int, int]:
     """Group gold chunks by passage_id; a passage is retrieved iff every chunk hash is in `selected`.
 
     For pre-refactor gold (no passage_id on chunks), each chunk is treated as its
@@ -390,16 +399,25 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
         with open(out_path, "w") as fh:
             json.dump(report, fh, indent=2)
         print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
-        for k in (
+        set_based_keys = [
             "recall",
             "precision",
             "complete_recall",
             "noise",
             "retrieval_recall",
             "passage_recall",
-        ):
+        ]
+        for k in set_based_keys:
             if k in agg:
                 print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
+        # Rank-aware — only present when every scored row had them computed.
+        for k in metrics.RANK_AWARE_K:
+            rk = f"recall_at_{k}"
+            nk = f"ndcg_at_{k}"
+            if rk in agg:
+                print(f"  {rk:20s} {agg[rk]:.3f}", file=sys.stderr)
+            if nk in agg:
+                print(f"  {nk:20s} {agg[nk]:.3f}", file=sys.stderr)
         if agg.get("total_passages"):
             print(
                 f"  retrieved_passages   {agg['retrieved_passages']}/{agg['total_passages']}",

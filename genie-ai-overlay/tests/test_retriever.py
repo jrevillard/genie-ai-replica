@@ -17,9 +17,6 @@ from retriever.genieai_retriever_arangodb import (
     ARANGO_GRAPH_NAME,
     GenieaiArangoRetriever,
     QueryInstructionEmbeddingsWrapper,
-    _chunk_passes_label_filter,
-    _normalize_chunk_id,
-    rrf_fuse,
 )
 
 # NOTE: conftest.py mocks the langchain stack (langchain_core/community/...) via
@@ -661,101 +658,12 @@ def _mk_result(key, score=0.0):
     return {"doc": _FakeDoc(id=key), "score": score}
 
 
-class TestRrfFuse:
-    """Unit tests for the pure rrf_fuse fusion function."""
-
-    def test_doc_in_both_channels_gets_both_contributions(self):
-        fused = rrf_fuse([_mk_result("a")], [_mk_result("a")], k=60, dense_weight=1.0, lexical_weight=1.0)
-        a_score = next(r["score"] for r in fused if r["doc"].id == "a")
-        assert a_score == pytest.approx(1 / 61 + 1 / 61)
-
-    def test_doc_in_one_channel_gets_single_contribution(self):
-        fused = rrf_fuse([_mk_result("a")], [], k=60, dense_weight=1.0, lexical_weight=1.0)
-        assert fused[0]["score"] == pytest.approx(1 / 61)
-
-    def test_doc_in_both_ranks_above_doc_in_one(self):
-        # "a" is rank-1 in BOTH channels; "b" is rank-1 in dense only.
-        fused = rrf_fuse([_mk_result("a"), _mk_result("b")], [_mk_result("a")], k=60)
-        scores = {r["doc"].id: r["score"] for r in fused}
-        assert scores["a"] > scores["b"]
-
-    def test_lexical_only_doc_surfaces(self):
-        fused = rrf_fuse([_mk_result("a")], [_mk_result("b")], k=60)
-        assert {r["doc"].id for r in fused} == {"a", "b"}
-
-    def test_returns_sorted_descending(self):
-        fused = rrf_fuse([_mk_result("a"), _mk_result("b")], [_mk_result("a"), _mk_result("b")], k=60)
-        scores = [r["score"] for r in fused]
-        assert scores == sorted(scores, reverse=True)
-
-    def test_weights_applied(self):
-        fused = rrf_fuse([_mk_result("a")], [_mk_result("a")], k=60, dense_weight=2.0, lexical_weight=0.5)
-        assert fused[0]["score"] == pytest.approx(2.0 / 61 + 0.5 / 61)
-
-    def test_does_not_mutate_inputs(self):
-        dense = [_mk_result("a")]
-        bm25 = [_mk_result("a")]
-        dense_copy = list(dense)
-        rrf_fuse(dense, bm25, k=60)
-        assert dense == dense_copy
-
-    def test_dense_empty_bm25_rescues(self):
-        # The signature case for a lexical channel: dense finds nothing, BM25 does.
-        fused = rrf_fuse([], [_mk_result("a"), _mk_result("b")], k=60)
-        assert {r["doc"].id for r in fused} == {"a", "b"}
-        assert fused[0]["score"] == pytest.approx(1 / 61)  # "a" rank-1 BM25
-
-    def test_both_empty_returns_empty(self):
-        assert rrf_fuse([], [], k=60) == []
-
-    def test_dedup_within_channel_keeps_best_rank(self):
-        # A duplicate id in one channel must not double-count (best rank wins).
-        fused = rrf_fuse([_mk_result("a"), _mk_result("a")], [], k=60)
-        assert len(fused) == 1
-        assert fused[0]["score"] == pytest.approx(1 / 61)  # rank-1 only
-
-    def test_unkeyed_doc_not_dropped_or_mismerged(self):
-        none_doc = _FakeDoc(id=None)
-        fused = rrf_fuse([{"doc": none_doc, "score": 0.0}], [_mk_result("a")], k=60)
-        assert len(fused) == 2  # the unkeyed doc is kept standalone, "a" separate
-
-
-class TestNormalizeChunkId:
-    """Tests for the chunk-id normalization used by RRF cross-channel matching."""
-
-    def test_bare_key_passthrough(self):
-        assert _normalize_chunk_id(_FakeDoc(id="chunk_42")) == "chunk_42"
-
-    def test_collection_slash_key_stripped(self):
-        assert _normalize_chunk_id(_FakeDoc(id="GRAPH_SOURCE/chunk_42")) == "chunk_42"
-
-    def test_none_returns_none(self):
-        assert _normalize_chunk_id(_FakeDoc(id=None)) is None
-
-    def test_missing_id_attr_returns_none(self):
-        assert _normalize_chunk_id(_FakeDoc()) is None
-
-
-class TestChunkPassesLabelFilter:
-    """Unit tests for the Python label-filter helper (mirrors dense AQL)."""
-
-    def test_no_labels_passes(self):
-        assert _chunk_passes_label_filter(["Health"], [], "OR") is True
-
-    def test_or_strategy_any_match(self):
-        assert _chunk_passes_label_filter(["Health"], ["Health", "Education"], "OR") is True
-
-    def test_or_strategy_no_match(self):
-        assert _chunk_passes_label_filter(["Agriculture"], ["Health"], "OR") is False
-
-    def test_and_strategy_all_present(self):
-        assert _chunk_passes_label_filter(["Health", "Education"], ["Health", "Education"], "AND") is True
-
-    def test_and_strategy_missing_one(self):
-        assert _chunk_passes_label_filter(["Health"], ["Health", "Education"], "AND") is False
-
-    def test_null_chunk_labels_filtered(self):
-        assert _chunk_passes_label_filter(None, ["Health"], "OR") is False
+# NOTE: TestRrfFuse + TestNormalizeChunkId + TestChunkPassesLabelFilter
+# consolidated into contracts/test_contract_retriever_fusion.py and
+# contracts/test_contract_label_filter.py. The contracts/ suite runs
+# against the real vendored retriever module (per .claude/rules/TESTING.md
+# "OPEA contract suite"), making the mocked tests/ versions duplicated proof.
+# See test-audit campaign MR for context.
 
 
 # ---------------------------------------------------------------------------

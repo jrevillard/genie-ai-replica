@@ -33,7 +33,7 @@ function buildContentDisposition(disposition, filename) {
   const safeDisposition = String(disposition || 'attachment').replace(/[\x00-\x1F\x7F"]/g, ''); // eslint-disable-line no-control-regex
   // Null/undefined filenames are coerced to '' so callers don't get a
   // TypeError on a malformed ArangoDB document (file.file_name missing).
-  const safe = (filename == null) ? '' : String(filename).replace(/[\x00-\x1F\x7F"]/g, ''); // eslint-disable-line no-control-regex
+  const safe = filename == null ? '' : String(filename).replace(/[\x00-\x1F\x7F"]/g, ''); // eslint-disable-line no-control-regex
 
   // Check for non-ASCII characters via a single regex test (cheaper than
   // split+some walk on the hot path).

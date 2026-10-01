@@ -137,6 +137,21 @@ describe('fileUpload security tests', () => {
       const header = buildContentDisposition('attachment', undefined);
       expect(header).toBe('attachment; filename=""');
     });
+
+    // !494 follow-up: empirically Node rejects ALL C0 controls (BEL/ESC/etc.)
+    // with ERR_INVALID_CHAR, not just CR/LF/NUL. The hardened regex strips
+    // the whole 0x00-0x1F range. This test pins that contract.
+    it('should strip BEL and other C0 controls (Node ERR_INVALID_CHAR guard)', () => {
+      const header = buildContentDisposition('attachment', 'evil\u0007report.pdf');
+      expect(header).not.toContain('\u0007');
+      expect(header).toBe('attachment; filename="evilreport.pdf"');
+    });
+
+    it('should strip C0 controls from the disposition parameter', () => {
+      const header = buildContentDisposition('attach\u0007ment', 'report.pdf');
+      expect(header.startsWith('attachment; filename=')).toBe(true);
+      expect(header).not.toContain('\u0007');
+    });
   });
 
   describe('batchFileIdsSchema validation (issue #472)', () => {
@@ -190,8 +205,9 @@ describe('fileUpload security tests', () => {
     it('should reject purely numeric file IDs (anti-_key regression)', () => {
       const { error } = batchFileIdsSchema.validate({ fileIds: ['12345', '67890'] });
       expect(error).toBeDefined();
-      // Joi17 emits `string.pattern.invert.base` for inverted regex failures.
-      // Asserting on type (not the prose message) survives Joi version bumps.
+      // Assert on the structural rule identifier (Joi 17+). The string is
+      // still coupled to Joi internals — pin to current major and accept
+      // that a major version bump will require this test update too.
       expect(error.details[0].type).toBe('string.pattern.invert.base');
       expect(error.details[0].path).toEqual(['fileIds', 0]);
     });
@@ -231,6 +247,45 @@ describe('fileUpload security tests', () => {
       });
       expect(error).toBeDefined();
       expect(error.details[0].type).toBe('number.integer');
+      expect(error.details[0].path).toEqual(['chunkOverlap']);
+    });
+
+    // !494 follow-up: Joi.number() coerces strings by default ("200" -> 200).
+    // fileController.js ingestMultipleFiles reads `value.chunkOverlap` (NOT
+    // req.body) to honor that coercion. These tests pin the contract.
+    it('should coerce a numeric-string chunkOverlap to a number', () => {
+      const { error, value } = batchFileIdsSchema.validate({
+        fileIds: ['id1'],
+        chunkOverlap: '200'
+      });
+      expect(error).toBeUndefined();
+      expect(value.chunkOverlap).toBe(200);
+    });
+
+    it('should reject a non-numeric-string chunkOverlap', () => {
+      const { error } = batchFileIdsSchema.validate({
+        fileIds: ['id1'],
+        chunkOverlap: 'abc'
+      });
+      expect(error).toBeDefined();
+      expect(error.details[0].path).toEqual(['chunkOverlap']);
+    });
+
+    it('should reject an array chunkOverlap', () => {
+      const { error } = batchFileIdsSchema.validate({
+        fileIds: ['id1'],
+        chunkOverlap: [200]
+      });
+      expect(error).toBeDefined();
+      expect(error.details[0].path).toEqual(['chunkOverlap']);
+    });
+
+    it('should reject a null chunkOverlap', () => {
+      const { error } = batchFileIdsSchema.validate({
+        fileIds: ['id1'],
+        chunkOverlap: null
+      });
+      expect(error).toBeDefined();
       expect(error.details[0].path).toEqual(['chunkOverlap']);
     });
   });

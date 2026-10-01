@@ -13,29 +13,36 @@ const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of file
 
 /**
  * Sanitize a filename for use in Content-Disposition headers.
- * Strips CRLF characters to prevent header injection and applies
- * RFC 5987 encoding for non-ASCII characters.
+ * Strips header-breaking characters from BOTH the disposition token and the
+ * filename, and applies RFC 5987 encoding for non-ASCII characters.
+ * @param {string} disposition - typically 'attachment' or 'inline'
  * @param {string} filename
  * @returns {string} Sanitized header value (e.g. `attachment; filename="..."; filename*=UTF-8''...`)
  */
 function buildContentDisposition(disposition, filename) {
   // Strip characters that break the Content-Disposition header or allow
-  // header/value injection. Per RFC 7230 §3.2.4 + RFC 6266:
-  //   CR, LF  — header injection (CRLF terminator)
-  //   NUL     — forbidden in header values; crashes res.setHeader
-  //   "       — would close the quoted-string prematurely, masking
-  //             the trailing filename and leaking subsequent chars
+  // header/value injection. Empirically verified that Node's setHeader
+  // rejects ALL C0 controls (0x00-0x1F), not just CR/LF/NUL — see the
+  // ERR_INVALID_CHAR test in the !494 follow-up commit.
+  //   0x00-0x1F — forbidden in HTTP header values (Node ERR_INVALID_CHAR)
+  //   "         — would close the quoted-string prematurely, masking
+  //               the trailing filename and leaking subsequent chars
+  // Also strip from the disposition token itself: callers today hardcode
+  // 'attachment'/'inline', but the function is module-exported and may
+  // eventually receive user-controlled input — defense in depth.
+  const safeDisposition = String(disposition || 'attachment').replace(/[\x00-\x1F"]/g, ''); // eslint-disable-line no-control-regex
   // Null/undefined filenames are coerced to '' so callers don't get a
   // TypeError on a malformed ArangoDB document (file.file_name missing).
-  const safe = (filename == null) ? '' : String(filename).replace(/[\r\n\0"]/g, '');
+  const safe = (filename == null) ? '' : String(filename).replace(/[\x00-\x1F"]/g, ''); // eslint-disable-line no-control-regex
 
-  // Check for non-ASCII characters without using control characters in regex
-  const hasNonAscii = safe.split('').some((char) => char.charCodeAt(0) > 127);
+  // Check for non-ASCII characters via a single regex test (cheaper than
+  // split+some walk on the hot path).
+  const hasNonAscii = /[^\x00-\x7F]/.test(safe); // eslint-disable-line no-control-regex
   if (hasNonAscii) {
     const encoded = encodeURIComponent(safe).replace(/['()]/g, escape);
-    return `${disposition}; filename="${safe}"; filename*=UTF-8''${encoded}`;
+    return `${safeDisposition}; filename="${safe}"; filename*=UTF-8''${encoded}`;
   }
-  return `${disposition}; filename="${safe}"`;
+  return `${safeDisposition}; filename="${safe}"`;
 }
 
 // Maximum items allowed in batch fileIds operations
@@ -1058,8 +1065,11 @@ class FileController {
       if (error) {
         return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
-      const { fileIds } = value;
-      const batchOverlap = Number.isInteger(req?.body?.chunkOverlap) ? req.body.chunkOverlap : undefined;
+      const { fileIds, chunkOverlap: validatedOverlap } = value;
+      // Use the Joi-validated value rather than req.body: Joi has already
+      // coerced strings ("200" → 200) and rejected floats/negatives/strings-
+      // that-cannot-coerce. Reading from req.body bypassed that contract.
+      const batchOverlap = Number.isInteger(validatedOverlap) ? validatedOverlap : undefined;
       const results = [];
       for (const fileId of fileIds) {
         try {

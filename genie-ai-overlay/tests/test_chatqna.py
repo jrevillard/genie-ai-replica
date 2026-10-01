@@ -24,6 +24,7 @@ from chatqna.genieai_chatqna import (
     align_inputs,
     align_outputs,
 )
+from core import embedding_query_prefix as core_query_prefix
 
 
 # ---------------------------------------------------------------------------
@@ -409,9 +410,8 @@ class TestAlignInputs:
         def test_default_bge_model_applies_prefix(self):
             """Issue #1035: default TEI_EMBED_MODEL is BAAI/bge-large-en-v1.5 →
             query is prefixed before the embedding microservice call."""
-            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
 
-            expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            expected = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             llm_params = {}
@@ -423,9 +423,8 @@ class TestAlignInputs:
         def test_bge_prefix_applied_to_query_single(self):
             """Issue #1035: BGE-large-en-v1.5 requires query instruction prefix at the
             embedding microservice call site (one prefix per query, not per passage)."""
-            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
 
-            expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            expected = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             llm_params = {}
@@ -440,9 +439,8 @@ class TestAlignInputs:
         def test_bge_prefix_applied_to_query_batch(self):
             """History-blend path: both query and history strings receive the prefix
             before the batched TEI call (BGE asymmetry must hold for both vectors)."""
-            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
 
-            expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            expected = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             llm_params = {}
@@ -459,9 +457,8 @@ class TestAlignInputs:
 
         def test_instructor_prefix_applied_to_query(self):
             """Generalized: hkunlp/instructor uses task-specific prefix."""
-            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
 
-            expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["hkunlp/instructor"]
+            expected = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["hkunlp/instructor"]
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             llm_params = {}
@@ -488,7 +485,6 @@ class TestAlignInputs:
 
         def test_user_override_via_user_query_instructions(self):
             """Deployer-supplied EMBEDDING_QUERY_INSTRUCTIONS overrides built-in."""
-            from retriever import config as retriever_config
 
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
@@ -498,7 +494,7 @@ class TestAlignInputs:
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
                 patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "my-org/bge-finetune"),
                 patch.object(
-                    retriever_config, "_USER_QUERY_INSTRUCTIONS", (("my-org/bge-finetune", "Custom prefix: "),)
+                    core_query_prefix, "_USER_QUERY_INSTRUCTIONS", (("my-org/bge-finetune", "Custom prefix: "),)
                 ),
             ):
                 result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
@@ -888,9 +884,8 @@ class TestAlignOutputs:
             must echo the stashed raw text so the retriever's BM25 leg
             (TOKENS(@query, ...)) tokenizes the user's actual query rather
             than the instruction tokens."""
-            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
 
-            prefix = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            prefix = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
@@ -908,9 +903,8 @@ class TestAlignOutputs:
             """BM25-leak fix for the batched (history-blend) path: the
             retriever's BM25 leg receives the isolated raw query string, not
             the list (which would 422) and not the prefixed first element."""
-            from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
 
-            prefix = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            prefix = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             data = {

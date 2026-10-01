@@ -19,8 +19,8 @@ from metrics import (
     sanitize_attributes,
 )
 
+from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.model_cache import get_model_id
-from retriever.config import TEI_EMBED_MODEL, get_query_instruction
 from tracing import (
     get_tracer,
     install_uvicorn_access_logging,

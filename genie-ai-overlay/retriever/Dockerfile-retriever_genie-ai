@@ -88,6 +88,7 @@ COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
 
 # Copy shared label-contract decoder (chatqna encode → retriever decode)
 COPY genie-ai-overlay/core/label_contract.py /app/core/label_contract.py
+COPY genie-ai-overlay/core/embedding_query_prefix.py /app/core/embedding_query_prefix.py
 
 # Copy overlay files to their correct new locations within /app/comps/
 COPY genie-ai-overlay/retriever/genieai_retriever_arangodb.py /app/comps/retrievers/src/integrations/genieai_retriever_arangodb.py

@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from core import embedding_query_prefix as core_query_prefix
 from retriever.genieai_retriever_arangodb import (
     ARANGO_GRAPH_NAME,
     GenieaiArangoRetriever,
@@ -1058,9 +1059,8 @@ class TestQueryInstructionWrapper:
     @pytest.mark.asyncio
     async def test_invoke_prefixes_query_for_bge_model(self, invoke_env):
         """Issue #1035: BGE-large-en-v1.5 (default) gets the BAAI prefix."""
-        from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
 
-        expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+        expected = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
         with patch("retriever.genieai_retriever_arangodb.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"):
             await invoke_env["retriever"].invoke(create_mock_input(query="test query"))
         invoke_env["embeddings"].embed_query.assert_called_once_with(expected + "test query")
@@ -1092,9 +1092,8 @@ class TestQueryInstructionWrapper:
         instruction is the sole prefix applied — otherwise the local fallback
         path double-prefixes.
         """
-        from retriever.config import _BUILTIN_QUERY_INSTRUCTIONS
 
-        expected = dict(_BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+        expected = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
         with (
             patch("retriever.genieai_retriever_arangodb.TEI_EMBEDDING_ENDPOINT", ""),
             patch("retriever.genieai_retriever_arangodb.HF_TOKEN", ""),
@@ -1115,7 +1114,7 @@ class TestQueryInstructionWrapper:
 
 
 class TestGetQueryInstruction:
-    """get_query_instruction(model_id) returns the right prefix for built-in
+    """core_query_prefix.get_query_instruction(model_id) returns the right prefix for built-in
     known models, applies user overrides (EMBEDDING_QUERY_INSTRUCTIONS env var),
     and returns None for models with no entry (so callers skip the wrapper).
     """
@@ -1134,9 +1133,8 @@ class TestGetQueryInstruction:
         ],
     )
     def test_builtin_models_return_their_instruction(self, model_id, expected):
-        from retriever.config import get_query_instruction
 
-        assert get_query_instruction(model_id) == expected
+        assert core_query_prefix.get_query_instruction(model_id) == expected
 
     @pytest.mark.parametrize(
         "model_id",
@@ -1150,39 +1148,38 @@ class TestGetQueryInstruction:
         ],
     )
     def test_unknown_models_return_none(self, model_id):
-        from retriever.config import get_query_instruction
 
-        assert get_query_instruction(model_id) is None
+        assert core_query_prefix.get_query_instruction(model_id) is None
 
     def test_user_override_wins_over_builtin(self):
         """EMBEDDING_QUERY_INSTRUCTIONS env var: new model + override existing."""
-        from retriever import config as retriever_config
 
         new_overrides = (
             ("my-org/bge-finetune", "Custom prefix: "),
             ("BAAI/bge-large-zh-v1.5", "自定义中文前缀："),
         )
-        with patch.object(retriever_config, "_USER_QUERY_INSTRUCTIONS", new_overrides):
-            assert retriever_config.get_query_instruction("my-org/bge-finetune") == "Custom prefix: "
-            assert retriever_config.get_query_instruction("BAAI/bge-large-zh-v1.5") == "自定义中文前缀："
+        with patch.object(core_query_prefix, "_USER_QUERY_INSTRUCTIONS", new_overrides):
+            assert core_query_prefix.get_query_instruction("my-org/bge-finetune") == "Custom prefix: "
+            assert core_query_prefix.get_query_instruction("BAAI/bge-large-zh-v1.5") == "自定义中文前缀："
             # Built-in English BGE still works
             assert (
-                retriever_config.get_query_instruction("BAAI/bge-large-en-v1.5")
+                core_query_prefix.get_query_instruction("BAAI/bge-large-en-v1.5")
                 == "Represent this sentence for searching relevant passages: "
             )
             # Unknown still None
-            assert retriever_config.get_query_instruction("BAAI/bge-m3") is None
+            assert core_query_prefix.get_query_instruction("BAAI/bge-m3") is None
 
     def test_malformed_env_value_is_skipped(self):
         """Garbage entries (no `=`, empty key, empty value) are silently dropped."""
-        from retriever import config as retriever_config
 
         # _parse_query_instructions drop rule: no `=`, empty k, empty v.
         with patch.object(
-            retriever_config,
+            core_query_prefix,
             "_USER_QUERY_INSTRUCTIONS",
-            retriever_config._parse_query_instructions("=orphan-value,no-equals-sign,key=,=value-only,valid=ok-prefix"),
+            core_query_prefix._parse_query_instructions(
+                "=orphan-value,no-equals-sign,key=,=value-only,valid=ok-prefix"
+            ),
         ):
-            assert retriever_config.get_query_instruction("valid") == "ok-prefix"
+            assert core_query_prefix.get_query_instruction("valid") == "ok-prefix"
             # nothing else got registered from the malformed entries
-            assert retriever_config.get_query_instruction("orphan-value") is None
+            assert core_query_prefix.get_query_instruction("orphan-value") is None

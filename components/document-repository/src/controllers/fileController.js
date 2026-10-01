@@ -13,22 +13,36 @@ const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of file
 
 /**
  * Sanitize a filename for use in Content-Disposition headers.
- * Strips CRLF characters to prevent header injection and applies
- * RFC 5987 encoding for non-ASCII characters.
+ * Strips header-breaking characters from BOTH the disposition token and the
+ * filename, and applies RFC 5987 encoding for non-ASCII characters.
+ * @param {string} disposition - typically 'attachment' or 'inline'
  * @param {string} filename
  * @returns {string} Sanitized header value (e.g. `attachment; filename="..."; filename*=UTF-8''...`)
  */
 function buildContentDisposition(disposition, filename) {
-  // Strip CRLF to prevent header injection
-  const sanitized = filename.replace(/[\r\n]/g, '');
+  // Strip characters that break the Content-Disposition header or allow
+  // header/value injection. Empirically verified that Node's setHeader
+  // rejects ALL C0 controls (0x00-0x1F) AND DEL (0x7F) with ERR_INVALID_CHAR
+  // — see the !494 follow-up tests. 0x80-0xFF are accepted (latin1 range).
+  //   0x00-0x1F + 0x7F — forbidden in HTTP header values (Node ERR_INVALID_CHAR)
+  //   "               — would close the quoted-string prematurely, masking
+  //                     the trailing filename and leaking subsequent chars
+  // Also strip from the disposition token itself: callers today hardcode
+  // 'attachment'/'inline', but the function is module-exported and may
+  // eventually receive user-controlled input — defense in depth.
+  const safeDisposition = String(disposition || 'attachment').replace(/[\x00-\x1F\x7F"]/g, ''); // eslint-disable-line no-control-regex
+  // Null/undefined filenames are coerced to '' so callers don't get a
+  // TypeError on a malformed ArangoDB document (file.file_name missing).
+  const safe = filename == null ? '' : String(filename).replace(/[\x00-\x1F\x7F"]/g, ''); // eslint-disable-line no-control-regex
 
-  // Check for non-ASCII characters without using control characters in regex
-  const hasNonAscii = sanitized.split('').some((char) => char.charCodeAt(0) > 127);
+  // Check for non-ASCII characters via a single regex test (cheaper than
+  // split+some walk on the hot path).
+  const hasNonAscii = /[^\x00-\x7F]/.test(safe); // eslint-disable-line no-control-regex
   if (hasNonAscii) {
-    const encoded = encodeURIComponent(sanitized).replace(/['()]/g, escape);
-    return `${disposition}; filename="${sanitized}"; filename*=UTF-8''${encoded}`;
+    const encoded = encodeURIComponent(safe).replace(/['()]/g, escape);
+    return `${safeDisposition}; filename="${safe}"; filename*=UTF-8''${encoded}`;
   }
-  return `${disposition}; filename="${sanitized}"`;
+  return `${safeDisposition}; filename="${safe}"`;
 }
 
 // Maximum items allowed in batch fileIds operations
@@ -39,6 +53,10 @@ const MAX_BATCH_SIZE = 50;
 // (e.g. `1774623200119_e9887fa8`) while ArangoDB _keys are bare integers.
 // A frontend regression that re-sends _key would otherwise silently hit
 // "not found" instead of triggering a 400 with a diagnostic.
+//
+// chunkOverlap cap (1000) matches LangChain's RecursiveCharacterTextSplitter
+// default chunk_size — values beyond chunk_size collapse the splitter to a
+// single degenerate chunk and silently break ingestion without an error.
 const fileIdPattern = /^\d+$/;
 const batchFileIdsSchema = Joi.object({
   fileIds: Joi.array()
@@ -47,7 +65,17 @@ const batchFileIdsSchema = Joi.object({
     .max(MAX_BATCH_SIZE)
     .required(),
   // Optional per-request overlap; consumed only by ingestMultipleFiles.
-  chunkOverlap: Joi.number().integer().min(0).optional()
+  // `.allow(null)` preserves the legacy "null means env fallback" contract;
+  // `.max(...)` caps DoS via LangChain splitter collapse (see comment above).
+  chunkOverlap: Joi.number().integer().min(0).max(1000).allow(null).optional()
+});
+
+// Per-request overlap for the single-file ingest route. Same Joi contract
+// as the batch schema so both endpoints honor string coercion ("200" -> 200)
+// and reject floats/negatives identically — without a schema, ingestFile
+// would bypass the validator and silently drop string overlap values.
+const singleIngestSchema = Joi.object({
+  chunkOverlap: Joi.number().integer().min(0).max(1000).allow(null).optional()
 });
 
 // Schema for file upload validation
@@ -1020,7 +1048,10 @@ class FileController {
   async ingestFile(req, res) {
     try {
       const { fileId } = req.params;
-      const chunkOverlap = Number.isInteger(req?.body?.chunkOverlap) ? req.body.chunkOverlap : undefined;
+      // Same Joi contract as the batch endpoint — string "200" coerces to 200,
+      // floats/negatives rejected, missing field accepted as undefined.
+      const { value: singleBody } = singleIngestSchema.validate(req.body || {});
+      const chunkOverlap = Number.isInteger(singleBody.chunkOverlap) ? singleBody.chunkOverlap : undefined;
       const result = await this._ingestFileById(fileId, chunkOverlap);
       if (result.success) {
         return res.json({ success: true, message: 'File ingested successfully' });
@@ -1051,8 +1082,11 @@ class FileController {
       if (error) {
         return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
-      const { fileIds } = value;
-      const batchOverlap = Number.isInteger(req?.body?.chunkOverlap) ? req.body.chunkOverlap : undefined;
+      const { fileIds, chunkOverlap: validatedOverlap } = value;
+      // Use the Joi-validated value rather than req.body: Joi has already
+      // coerced strings ("200" → 200) and rejected floats/negatives/strings-
+      // that-cannot-coerce. Reading from req.body bypassed that contract.
+      const batchOverlap = Number.isInteger(validatedOverlap) ? validatedOverlap : undefined;
       const results = [];
       for (const fileId of fileIds) {
         try {
@@ -1411,4 +1445,5 @@ module.exports = new FileController();
 // Backwards-compatible: the default export remains the FileController instance.
 module.exports.buildContentDisposition = buildContentDisposition;
 module.exports.batchFileIdsSchema = batchFileIdsSchema;
+module.exports.singleIngestSchema = singleIngestSchema;
 module.exports.MAX_BATCH_SIZE = MAX_BATCH_SIZE;

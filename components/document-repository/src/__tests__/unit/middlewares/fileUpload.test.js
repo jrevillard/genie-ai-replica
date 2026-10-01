@@ -9,7 +9,7 @@ const multer = require('multer');
 //     (anti-_key-regression guard, see fileController.js comment)
 //   * buildContentDisposition emits RFC 5987 filename* for non-ASCII
 const fileController = require('../../../controllers/fileController');
-const { buildContentDisposition, batchFileIdsSchema, MAX_BATCH_SIZE } = fileController;
+const { buildContentDisposition, batchFileIdsSchema, singleIngestSchema, MAX_BATCH_SIZE } = fileController;
 
 // Mock config before requiring middleware
 jest.mock('../../../config/appConfig', () => ({
@@ -144,6 +144,14 @@ describe('fileUpload security tests', () => {
     it('should strip BEL and other C0 controls (Node ERR_INVALID_CHAR guard)', () => {
       const header = buildContentDisposition('attachment', 'evil\u0007report.pdf');
       expect(header).not.toContain('\u0007');
+      expect(header).toBe('attachment; filename="evilreport.pdf"');
+    });
+
+    // !494 second-pass: DEL (0x7F) is also ERR_INVALID_CHAR on setHeader,
+    // but lives outside 0x00-0x1F — must be stripped explicitly.
+    it('should strip DEL (0x7F) (Node ERR_INVALID_CHAR guard)', () => {
+      const header = buildContentDisposition('attachment', 'evil\u007Freport.pdf');
+      expect(header).not.toContain('\u007F');
       expect(header).toBe('attachment; filename="evilreport.pdf"');
     });
 
@@ -285,6 +293,39 @@ describe('fileUpload security tests', () => {
         fileIds: ['id1'],
         chunkOverlap: null
       });
+      expect(error).toBeDefined();
+      expect(error.details[0].path).toEqual(['chunkOverlap']);
+    });
+  });
+
+  // !494 second-pass: ingestFile (single) must mirror the batch endpoint's
+  // Joi contract so string-coerced overlap values flow through both paths
+  // identically (was a silent asymmetry — single read raw req.body).
+  describe('singleIngestSchema (single-file ingest endpoint)', () => {
+    it('should accept a missing chunkOverlap (env fallback)', () => {
+      const { error, value } = singleIngestSchema.validate({});
+      expect(error).toBeUndefined();
+      expect(value.chunkOverlap).toBeUndefined();
+    });
+
+    it('should accept an empty body', () => {
+      const { error } = singleIngestSchema.validate({});
+      expect(error).toBeUndefined();
+    });
+
+    it('should accept undefined body', () => {
+      const { error } = singleIngestSchema.validate(undefined);
+      expect(error).toBeUndefined();
+    });
+
+    it('should coerce a numeric-string chunkOverlap to a number', () => {
+      const { error, value } = singleIngestSchema.validate({ chunkOverlap: '200' });
+      expect(error).toBeUndefined();
+      expect(value.chunkOverlap).toBe(200);
+    });
+
+    it('should reject a negative chunkOverlap', () => {
+      const { error } = singleIngestSchema.validate({ chunkOverlap: -5 });
       expect(error).toBeDefined();
       expect(error.details[0].path).toEqual(['chunkOverlap']);
     });

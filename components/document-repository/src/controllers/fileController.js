@@ -22,18 +22,18 @@ const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of file
 function buildContentDisposition(disposition, filename) {
   // Strip characters that break the Content-Disposition header or allow
   // header/value injection. Empirically verified that Node's setHeader
-  // rejects ALL C0 controls (0x00-0x1F), not just CR/LF/NUL — see the
-  // ERR_INVALID_CHAR test in the !494 follow-up commit.
-  //   0x00-0x1F — forbidden in HTTP header values (Node ERR_INVALID_CHAR)
-  //   "         — would close the quoted-string prematurely, masking
-  //               the trailing filename and leaking subsequent chars
+  // rejects ALL C0 controls (0x00-0x1F) AND DEL (0x7F) with ERR_INVALID_CHAR
+  // — see the !494 follow-up tests. 0x80-0xFF are accepted (latin1 range).
+  //   0x00-0x1F + 0x7F — forbidden in HTTP header values (Node ERR_INVALID_CHAR)
+  //   "               — would close the quoted-string prematurely, masking
+  //                     the trailing filename and leaking subsequent chars
   // Also strip from the disposition token itself: callers today hardcode
   // 'attachment'/'inline', but the function is module-exported and may
   // eventually receive user-controlled input — defense in depth.
-  const safeDisposition = String(disposition || 'attachment').replace(/[\x00-\x1F"]/g, ''); // eslint-disable-line no-control-regex
+  const safeDisposition = String(disposition || 'attachment').replace(/[\x00-\x1F\x7F"]/g, ''); // eslint-disable-line no-control-regex
   // Null/undefined filenames are coerced to '' so callers don't get a
   // TypeError on a malformed ArangoDB document (file.file_name missing).
-  const safe = (filename == null) ? '' : String(filename).replace(/[\x00-\x1F"]/g, ''); // eslint-disable-line no-control-regex
+  const safe = (filename == null) ? '' : String(filename).replace(/[\x00-\x1F\x7F"]/g, ''); // eslint-disable-line no-control-regex
 
   // Check for non-ASCII characters via a single regex test (cheaper than
   // split+some walk on the hot path).
@@ -61,6 +61,14 @@ const batchFileIdsSchema = Joi.object({
     .max(MAX_BATCH_SIZE)
     .required(),
   // Optional per-request overlap; consumed only by ingestMultipleFiles.
+  chunkOverlap: Joi.number().integer().min(0).optional()
+});
+
+// Per-request overlap for the single-file ingest route. Same Joi contract
+// as the batch schema so both endpoints honor string coercion ("200" -> 200)
+// and reject floats/negatives identically — without a schema, ingestFile
+// would bypass the validator and silently drop string overlap values.
+const singleIngestSchema = Joi.object({
   chunkOverlap: Joi.number().integer().min(0).optional()
 });
 
@@ -1034,7 +1042,10 @@ class FileController {
   async ingestFile(req, res) {
     try {
       const { fileId } = req.params;
-      const chunkOverlap = Number.isInteger(req?.body?.chunkOverlap) ? req.body.chunkOverlap : undefined;
+      // Same Joi contract as the batch endpoint — string "200" coerces to 200,
+      // floats/negatives rejected, missing field accepted as undefined.
+      const { value: singleBody } = singleIngestSchema.validate(req.body || {});
+      const chunkOverlap = Number.isInteger(singleBody.chunkOverlap) ? singleBody.chunkOverlap : undefined;
       const result = await this._ingestFileById(fileId, chunkOverlap);
       if (result.success) {
         return res.json({ success: true, message: 'File ingested successfully' });
@@ -1428,4 +1439,5 @@ module.exports = new FileController();
 // Backwards-compatible: the default export remains the FileController instance.
 module.exports.buildContentDisposition = buildContentDisposition;
 module.exports.batchFileIdsSchema = batchFileIdsSchema;
+module.exports.singleIngestSchema = singleIngestSchema;
 module.exports.MAX_BATCH_SIZE = MAX_BATCH_SIZE;

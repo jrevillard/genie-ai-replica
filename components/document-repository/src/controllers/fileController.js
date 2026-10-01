@@ -1406,3 +1406,9 @@ class FileController {
 }
 
 module.exports = new FileController();
+// Re-export module-scoped helpers so test suites can import the canonical
+// implementations instead of re-declaring them inline (test-coupling junk).
+// Backwards-compatible: the default export remains the FileController instance.
+module.exports.buildContentDisposition = buildContentDisposition;
+module.exports.batchFileIdsSchema = batchFileIdsSchema;
+module.exports.MAX_BATCH_SIZE = MAX_BATCH_SIZE;

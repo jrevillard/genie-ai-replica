@@ -19,16 +19,23 @@ const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of file
  * @returns {string} Sanitized header value (e.g. `attachment; filename="..."; filename*=UTF-8''...`)
  */
 function buildContentDisposition(disposition, filename) {
-  // Strip CRLF to prevent header injection
-  const sanitized = filename.replace(/[\r\n]/g, '');
+  // Strip characters that break the Content-Disposition header or allow
+  // header/value injection. Per RFC 7230 §3.2.4 + RFC 6266:
+  //   CR, LF  — header injection (CRLF terminator)
+  //   NUL     — forbidden in header values; crashes res.setHeader
+  //   "       — would close the quoted-string prematurely, masking
+  //             the trailing filename and leaking subsequent chars
+  // Null/undefined filenames are coerced to '' so callers don't get a
+  // TypeError on a malformed ArangoDB document (file.file_name missing).
+  const safe = (filename == null) ? '' : String(filename).replace(/[\r\n\0"]/g, '');
 
   // Check for non-ASCII characters without using control characters in regex
-  const hasNonAscii = sanitized.split('').some((char) => char.charCodeAt(0) > 127);
+  const hasNonAscii = safe.split('').some((char) => char.charCodeAt(0) > 127);
   if (hasNonAscii) {
-    const encoded = encodeURIComponent(sanitized).replace(/['()]/g, escape);
-    return `${disposition}; filename="${sanitized}"; filename*=UTF-8''${encoded}`;
+    const encoded = encodeURIComponent(safe).replace(/['()]/g, escape);
+    return `${disposition}; filename="${safe}"; filename*=UTF-8''${encoded}`;
   }
-  return `${disposition}; filename="${sanitized}"`;
+  return `${disposition}; filename="${safe}"`;
 }
 
 // Maximum items allowed in batch fileIds operations

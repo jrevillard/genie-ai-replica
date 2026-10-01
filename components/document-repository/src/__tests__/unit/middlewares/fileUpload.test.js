@@ -288,12 +288,24 @@ describe('fileUpload security tests', () => {
       expect(error.details[0].path).toEqual(['chunkOverlap']);
     });
 
-    it('should reject a null chunkOverlap', () => {
-      const { error } = batchFileIdsSchema.validate({
+    it('should accept null chunkOverlap (legacy "use env default" opt-out)', () => {
+      // `.allow(null)` preserves the pre-schema behavior where Number.isInteger
+      // rejected null and the controller fell back to env DATAPREP_CHUNK_OVERLAP.
+      const { error, value } = batchFileIdsSchema.validate({
         fileIds: ['id1'],
         chunkOverlap: null
       });
+      expect(error).toBeUndefined();
+      expect(value.chunkOverlap).toBe(null);
+    });
+
+    it('should reject chunkOverlap above the LangChain-degenerate cap (1000)', () => {
+      const { error } = batchFileIdsSchema.validate({
+        fileIds: ['id1'],
+        chunkOverlap: 1e15
+      });
       expect(error).toBeDefined();
+      expect(error.details[0].type).toBe('number.max');
       expect(error.details[0].path).toEqual(['chunkOverlap']);
     });
   });
@@ -327,6 +339,19 @@ describe('fileUpload security tests', () => {
     it('should reject a negative chunkOverlap', () => {
       const { error } = singleIngestSchema.validate({ chunkOverlap: -5 });
       expect(error).toBeDefined();
+      expect(error.details[0].path).toEqual(['chunkOverlap']);
+    });
+
+    it('should accept null chunkOverlap (legacy "use env default" opt-out)', () => {
+      const { error, value } = singleIngestSchema.validate({ chunkOverlap: null });
+      expect(error).toBeUndefined();
+      expect(value.chunkOverlap).toBe(null);
+    });
+
+    it('should reject chunkOverlap above the LangChain-degenerate cap (1000)', () => {
+      const { error } = singleIngestSchema.validate({ chunkOverlap: 1e15 });
+      expect(error).toBeDefined();
+      expect(error.details[0].type).toBe('number.max');
       expect(error.details[0].path).toEqual(['chunkOverlap']);
     });
   });

@@ -53,6 +53,10 @@ const MAX_BATCH_SIZE = 50;
 // (e.g. `1774623200119_e9887fa8`) while ArangoDB _keys are bare integers.
 // A frontend regression that re-sends _key would otherwise silently hit
 // "not found" instead of triggering a 400 with a diagnostic.
+//
+// chunkOverlap cap (1000) matches LangChain's RecursiveCharacterTextSplitter
+// default chunk_size — values beyond chunk_size collapse the splitter to a
+// single degenerate chunk and silently break ingestion without an error.
 const fileIdPattern = /^\d+$/;
 const batchFileIdsSchema = Joi.object({
   fileIds: Joi.array()
@@ -61,7 +65,9 @@ const batchFileIdsSchema = Joi.object({
     .max(MAX_BATCH_SIZE)
     .required(),
   // Optional per-request overlap; consumed only by ingestMultipleFiles.
-  chunkOverlap: Joi.number().integer().min(0).optional()
+  // `.allow(null)` preserves the legacy "null means env fallback" contract;
+  // `.max(...)` caps DoS via LangChain splitter collapse (see comment above).
+  chunkOverlap: Joi.number().integer().min(0).max(1000).allow(null).optional()
 });
 
 // Per-request overlap for the single-file ingest route. Same Joi contract
@@ -69,7 +75,7 @@ const batchFileIdsSchema = Joi.object({
 // and reject floats/negatives identically — without a schema, ingestFile
 // would bypass the validator and silently drop string overlap values.
 const singleIngestSchema = Joi.object({
-  chunkOverlap: Joi.number().integer().min(0).optional()
+  chunkOverlap: Joi.number().integer().min(0).max(1000).allow(null).optional()
 });
 
 // Schema for file upload validation

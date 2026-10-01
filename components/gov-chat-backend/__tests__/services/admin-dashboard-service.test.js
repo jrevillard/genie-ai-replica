@@ -1151,7 +1151,16 @@ describe('_yesterdayRange agrees with the LogsService window', () => {
     const { start } = adminDashboardService._yesterdayRange();
     const startDate = new Date(start);
     const today = new Date();
-    expect(startDate.getDate()).toBe(today.getDate() - 1);
+    // Use Date subtraction that handles month roll-over correctly.
+    // `today.getDate() - 1` returns 0 on the 1st of the month — a classic
+    // off-by-one that only fails on month boundaries (the test was green
+    // every day except the 1st). Surfaced in CI on 2026-10-01; production
+    // code is correct, the test assertion was wrong.
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    expect(startDate.getDate()).toBe(yesterday.getDate());
+    expect(startDate.getMonth()).toBe(yesterday.getMonth());
+    expect(startDate.getFullYear()).toBe(yesterday.getFullYear());
   });
 });
 

@@ -87,7 +87,7 @@ function jaccard(a, b) {
 }
 
 const DUP_MIN_BODY = 400; // too short to judge similarity meaningfully
-const DUP_SIM = 0.9;
+const DUP_SIM = 0.85; // measured (David, 2026-10-02): the NCD template sets sit at 0.896 — 0.9 missed them
 const DUP_MAX_COMPARISONS = 20000; // runaway guard for pathological repos
 
 /**

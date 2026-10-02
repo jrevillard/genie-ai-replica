@@ -2376,11 +2376,11 @@ export default {
       none: 'ไม่มี',
       expertHint: 'สลับเป็นโหมดผู้เชี่ยวชาญเพื่อดู JSON การตรวจสอบแบบดิบ กรองตามระดับความรุนแรง และแทนที่ผลการตรวจสอบ',
       headline: {
-        blockers: 'มี {n} ปัญหาที่บล็อก — แก้ไขก่อนส่งมอบคลัง',
-        warnings: '{n} รายการต้องได้รับการตรวจทานจากคุณ',
+        blockers: "มี {'{'}n{'}'} ปัญหาที่บล็อก — แก้ไขก่อนส่งมอบคลัง",
+        warnings: "{'{'}n{'}'} รายการต้องได้รับการตรวจทานจากคุณ",
         ok: 'ดูเรียบร้อยดี ไม่มีส่วนที่ต้องแก้ไข'
       },
-      summary: '{clean} รายการสมบูรณ์ · {warnings} รายการต้องตรวจทาน · {blockers} รายการติดขัด',
+      summary: "{'{'}clean{'}'} รายการสมบูรณ์ · {'{'}warnings{'}'} รายการต้องตรวจทาน · {'{'}blockers{'}'} รายการติดขัด",
       formatter: {
         notReady: 'ตัวจัดรูปแบบจะพร้อมใช้งานในเรื่องราว 4.2b'
       },
@@ -2414,8 +2414,10 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: 'Create the Sources page and link {n} page(s)',
-        wireExisting: 'Link {n} page(s) to "{hub}"'
+        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
+        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        preview: 'Preview duplicates',
+        hidePreview: 'Hide preview'
       },
       actionDone: {
         done: 'Done'
@@ -2427,8 +2429,25 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: 'Linked {n} page(s) to "{hub}".',
-      wireCreated: 'Created the Sources page and linked {n} page(s).'
+      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
+      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
+      mergedPages: "{'{'}n{'}'} pages",
+      preview: {
+        loading: 'Loading page contents…',
+        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+      },
+      tip: {
+        conformance:
+          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan:
+          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate:
+          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation:
+          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed:
+          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      }
     },
     pii: {
       panel: 'เอนทิตีที่ถูกแจ้งเตือน',

@@ -2405,11 +2405,11 @@ export default {
       expertHint:
         'Wechseln Sie in den Expertenmodus, um rohes Validierungs-JSON anzuzeigen, nach Schweregrad zu filtern und Prüfungen zu überschreiben.',
       headline: {
-        blockers: '{n} blockierende(s) Problem(e) — beheben Sie es, bevor Sie das Repository übergeben',
-        warnings: '{n} Punkt(e) erfordern Ihre Überprüfung',
+        blockers: "{'{'}n{'}'} blockierende(s) Problem(e) — beheben Sie es, bevor Sie das Repository übergeben",
+        warnings: "{'{'}n{'}'} Punkt(e) erfordern Ihre Überprüfung",
         ok: 'Sieht gut aus. Nichts zu beheben.'
       },
-      summary: '{clean} fehlerfrei · {warnings} erfordert Prüfung · {blockers} blockierend',
+      summary: "{'{'}clean{'}'} fehlerfrei · {'{'}warnings{'}'} erfordert Prüfung · {'{'}blockers{'}'} blockierend",
       formatter: {
         notReady: 'Formatierer folgt in Story 4.2b.'
       },
@@ -2443,8 +2443,10 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: 'Create the Sources page and link {n} page(s)',
-        wireExisting: 'Link {n} page(s) to "{hub}"'
+        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
+        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        preview: 'Preview duplicates',
+        hidePreview: 'Hide preview'
       },
       actionDone: {
         done: 'Done'
@@ -2456,8 +2458,25 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: 'Linked {n} page(s) to "{hub}".',
-      wireCreated: 'Created the Sources page and linked {n} page(s).'
+      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
+      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
+      mergedPages: "{'{'}n{'}'} pages",
+      preview: {
+        loading: 'Loading page contents…',
+        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+      },
+      tip: {
+        conformance:
+          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan:
+          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate:
+          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation:
+          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed:
+          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      }
     },
     pii: {
       panel: 'Markierte Entitäten',

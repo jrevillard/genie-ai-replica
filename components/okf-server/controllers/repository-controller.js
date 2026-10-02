@@ -384,6 +384,119 @@ async function retiredIngestRoute(req, res) {
 }
 
 /**
+ * STEP-7 VALIDATION REPORT (David, 2026-10-02 — #1030 + #1036): the unified
+ * issue list — per-concept conformance, orphaned concepts, near-duplicate
+ * groups, and unlinked citations — each with severity and the remedy process.
+ * Read-scope: it inspects, it does not mutate.
+ */
+async function getRepoValidation(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    const validationService = require('../services/validation-service');
+    await repoService.getById(repo_id, { authz: authzForService(req) }); // 404 foreign repos
+    const report = await validationService.getValidationReport(repo_id);
+    res.status(200).json(report);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * CITATION HUB WIRING (#1036, David's rule: every citing page must LINK to
+ * the Sources hub so citations reach the graph at ingest). Creates the hub
+ * when the bundle has none; wires frontmatter links[] on every citing page.
+ * Admin-scope mutation; frozen repos refuse (same gate as other restructurings).
+ */
+async function wireRepoCitations(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    const validationService = require('../services/validation-service');
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    assertWritable(repoDoc);
+    const result = await validationService.wireCitationHub(repo_id, {
+      hub_concept_id: (req.body || {}).hub_concept_id,
+      actor: actorFrom(req)
+    });
+    await auditService.writeAudit({
+      actor: actorFrom(req).sub || 'system',
+      actor_name: actorFrom(req).name || null,
+      action: 'repo.citations.wire',
+      repo_id,
+      source_ip: actorFrom(req).source_ip || null,
+      description: `Wired ${result.wired} citing page(s) to the Sources page${result.hub_created ? ' (created)' : ''}`
+    });
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * LINK SUGGESTIONS (#1036 Class A): the LLM proposes which existing concepts
+ * an orphaned page genuinely references. Read-only — nothing is written until
+ * the steward accepts a proposal via POST .../links.
+ */
+async function suggestConceptLinks(req, res, next) {
+  try {
+    const { repo_id, concept_id } = req.params;
+    const llmCuration = require('../services/llm-curation-service');
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    const result = await llmCuration.proposeLinks(repoDoc, concept_id);
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * ACCEPT one suggested (or hand-entered) link: a frontmatter links[] append
+ * through the field-scoped patch — the born-right channel that survives body
+ * edits and feeds both the editor projection and the ingest graph. The target
+ * MUST exist in this repo (a dangling edge is never created); self-links and
+ * duplicates are refused.
+ */
+async function acceptConceptLink(req, res, next) {
+  try {
+    const { repo_id, concept_id } = req.params;
+    const to = String((req.body || {}).to_concept_id || '').replace(/^concepts\//, '');
+    if (!to) throw new ValidationError(['to_concept_id is required']);
+    if (to === concept_id) throw new ValidationError(['a concept cannot link to itself']);
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    assertWritable(repoDoc);
+    const target = await conceptMetaService.getConceptMeta(repo_id, to);
+    if (!target) throw new ValidationError([`target concept '${to}' does not exist in this repository`]);
+    const current = await conceptMetaService.getConceptMeta(repo_id, concept_id);
+    if (!current) return res.status(404).json({ error: 'NOT_FOUND', message: 'concept not found' });
+    const fmLinks = Array.isArray(current.frontmatter && current.frontmatter.links) ? current.frontmatter.links : [];
+    if (
+      fmLinks.some(
+        (l) =>
+          String((l && l.target) || '')
+            .replace(/\.md$/i, '')
+            .replace(/^concepts\//, '') === to
+      )
+    ) {
+      return res.status(200).json({ success: true, already_linked: true, concept_id, to_concept_id: to });
+    }
+    const label = String((req.body || {}).label || target.title || to).slice(0, 80);
+    await conceptMetaService.patchConceptFields(repo_id, concept_id, {
+      frontmatterPatch: { links: [...fmLinks, { target: `${to}.md`, label }] }
+    });
+    await auditService.writeAudit({
+      actor: actorFrom(req).sub || 'system',
+      actor_name: actorFrom(req).name || null,
+      action: 'concept.link.accept',
+      repo_id,
+      source_ip: actorFrom(req).source_ip || null,
+      description: `Linked "${concept_id}" → "${to}" (label: ${label})`
+    });
+    res.status(200).json({ success: true, concept_id, to_concept_id: to, label });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Story 2.9.7 — mint the repository's next version (ADR-031: repo-level,
  * monotonic, immutable manifest; a publish/crawl side-effect, never a
  * lifecycle state). Body: { trigger?: 'manual'|'publish'|'crawl', source_ref? }.
@@ -1241,6 +1354,10 @@ module.exports = {
   piiScan,
   importRepoConcepts,
   retiredIngestRoute,
+  getRepoValidation,
+  wireRepoCitations,
+  suggestConceptLinks,
+  acceptConceptLink,
   listConcepts,
   getConcept,
   inspectPii,

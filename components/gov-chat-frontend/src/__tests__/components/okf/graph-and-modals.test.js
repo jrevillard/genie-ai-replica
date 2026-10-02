@@ -436,15 +436,37 @@ describe('OkfAddConceptModal', () => {
 const OkfStepValidate = require('@/components/okf/steps/Validate.vue').default;
 
 describe('OkfStepValidate - real data wiring (was hard-coded zeros)', () => {
-  it('populates issue groups from the autocorrect dry-run + index failures', async () => {
+  it('populates the issue list from the validation report + index failures', async () => {
     const store = realStore();
     const orig = store.dispatch.bind(store);
     store.dispatch = (type, payload) => {
-      if (type === 'okf/autocorrectRepo') {
+      if (type === 'okf/fetchValidation') {
         return Promise.resolve({
           ok: true,
-          changes: [{ concept_id: 'c1', reason: 'MISSING_TYPE', before: null, after: 'topic' }],
-          warnings: [{ concept_id: 'c2', rule: 'INVALID_TYPE', severity: 'warning', message: 'bad type' }]
+          report: {
+            issues: [
+              {
+                type: 'conformance',
+                severity: 'blocker',
+                concept_id: 'c1',
+                title: 'C1',
+                code: 'MISSING_TYPE',
+                message: 'type missing',
+                remedy: 'Run Autocorrect (Step 8).'
+              },
+              {
+                type: 'conformance',
+                severity: 'warning',
+                concept_id: 'c2',
+                title: 'C2',
+                code: 'INVALID_TYPE',
+                message: 'bad type',
+                remedy: 'Run Autocorrect (Step 8).'
+              }
+            ],
+            citations: { citing: [], hub_concept_id: null, needing_link: [] },
+            summary: { total: 2, blockers: 1, warnings: 1 }
+          }
         });
       }
       if (type === 'okf/fetchConcepts') {
@@ -462,14 +484,16 @@ describe('OkfStepValidate - real data wiring (was hard-coded zeros)', () => {
     const wrapper = mountWith(OkfStepValidate, { draft: { repo_id: 'r-1', concept_count: 4 } }, store);
     await wrapper.vm.$nextTick();
     await new Promise((r) => setTimeout(r, 0));
-    const groups = wrapper.vm.issueGroups;
-    const byCode = Object.fromEntries(groups.map((g) => [g.code, g.count]));
-    expect(byCode.MISSING_TYPE).toBe(1);
-    expect(byCode.INVALID_TYPE).toBe(1);
-    expect(byCode.INDEX_FAILED).toBe(1);
+    const issues = wrapper.vm.validationIssues;
+    const count = (pred) => issues.filter(pred).length;
+    expect(count((i) => i.type === 'conformance' && i.code === 'MISSING_TYPE')).toBe(1);
+    expect(count((i) => i.type === 'conformance' && i.code === 'INVALID_TYPE')).toBe(1);
+    expect(count((i) => i.type === 'index_failed')).toBe(1);
     const text = wrapper.text();
-    expect(text).toContain('c1');
+    expect(text).toContain('C1');
     expect(text).toContain('c3');
+    // #1030 bar: every issue articulates its remedy.
+    for (const issue of issues) expect(issue.remedy).toBeTruthy();
   });
 });
 

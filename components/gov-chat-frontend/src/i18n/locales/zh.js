@@ -2358,7 +2358,48 @@ export default {
       run: {
         notReady: '校验逻辑将在后续故事中接入。'
       },
-      piiTitle: 'Personal data — review each flagged concept'
+      piiTitle: 'Personal data — review each flagged concept',
+      loading: 'Checking the repository…',
+      loadFailed: 'Could not load the validation report.',
+      retry: 'Retry',
+      issuesTitle: 'Issues to review',
+      howToFix: 'How to fix',
+      indexFailed: 'Re-index failed — edit or re-split the page.',
+      indexFailedRemedy:
+        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      severity: {
+        blocker: 'Blocking',
+        warning: 'Needs review',
+        info: 'Info'
+      },
+      type: {
+        conformance: 'Frontmatter',
+        orphan: 'Not linked',
+        near_duplicate: 'Near-duplicate',
+        citation: 'Citations',
+        index_failed: 'Index'
+      },
+      action: {
+        suggestLinks: 'Suggest links',
+        accept: 'Accept',
+        dismiss: 'Dismiss',
+        delete: 'Delete',
+        working: 'Working…',
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"'
+      },
+      actionDone: {
+        done: 'Done'
+      },
+      suggest: {
+        working: 'Asking the assistant for link suggestions…',
+        empty: 'No suggestions — link it manually in the editor.'
+      },
+      nearDup: {
+        keepHint: 'Keep one copy — delete the rest.'
+      },
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).'
     },
     pii: {
       panel: '标记的实体',

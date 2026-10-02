@@ -98,6 +98,16 @@ router.get('/:repo_id/links', requireRepoScope('repo_id', 'read'), ctrl.getRepoL
 // index-status breakdown, lifecycle mirrors. Read scope on the repo.
 router.get('/:repo_id/metrics', requireRepoScope('repo_id', 'read'), ctrl.getRepoMetrics);
 
+// STEP-7 VALIDATION REPORT (#1030 + #1036, David 2026-10-02): the unified
+// issue list — per-concept conformance, orphaned concepts, near-duplicate
+// groups, unlinked citations — each with severity + remedy. Read scope.
+router.get('/:repo_id/validation', requireRepoScope('repo_id', 'read'), ctrl.getRepoValidation);
+
+// CITATION HUB WIRING (#1036): create the Sources page when missing (from the
+// citing pages' own metadata) and link every citing page to it — frontmatter
+// links[], born right, feeding the graph at ingest. Admin-scope mutation.
+router.post('/:repo_id/citations/wire', requireRepoScope('repo_id', 'admin'), ctrl.wireRepoCitations);
+
 // Multi-domain discovery (Story E — tier 1 of the retrieval fan-out): score
 // every settled bundle manifest against the query (label overlap + name/domain
 // token match) and return the top-K candidate repos. Read-scope (it reads
@@ -144,6 +154,20 @@ router.patch('/:repo_id/concepts/:concept_id', requireRepoScope('repo_id', 'admi
 // Story #978 — delete ONE concept (meta row + indexed chunks + graph edges).
 // Admin-scope mutation; 404 when the concept isn't in this repo.
 router.delete('/:repo_id/concepts/:concept_id', requireRepoScope('repo_id', 'admin'), ctrl.deleteConcept);
+
+// LINK SUGGESTIONS (#1036 Class A): the LLM proposes which existing concepts
+// an orphaned page references. Read-only (nothing written until the steward
+// accepts via POST .../links); admin-scope because it burns one LLM call.
+router.post(
+  '/:repo_id/concepts/:concept_id/link-suggestions',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.suggestConceptLinks
+);
+
+// ACCEPT one link (steward-approved suggestion or hand entry): frontmatter
+// links[] append through the field-scoped patch — born right, survives body
+// saves, feeds the editor projection AND the ingest graph. Admin-scope.
+router.post('/:repo_id/concepts/:concept_id/links', requireRepoScope('repo_id', 'admin'), ctrl.acceptConceptLink);
 
 // Story #978 — Editor "Re-split from source" action. Deletes all concepts for
 // this repo + clears the per-repo graph collections + re-ingests from the

@@ -455,3 +455,52 @@ export async function fileActionPii(repoId, conceptId, payload) {
 export async function redactWholeFilePii(repoId, conceptId) {
   return repoOkfService.redactWholeFilePii(repoId, conceptId);
 }
+
+// ─── STEP-7 VALIDATION (#1030 + #1036, David 2026-10-02) ─────────────────────
+
+/** The unified Step-7 issue list: per-concept conformance, orphaned concepts,
+ * near-duplicate groups, unlinked citations — each with severity + remedy. */
+export async function getValidation(repoId) {
+  const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/validation`, {}, { silent: true });
+  return res && res.data ? res.data : null;
+}
+
+/** CITATION HUB WIRING (#1036): create the Sources page when missing (from
+ * the citing pages' own metadata) and link every citing page to it. */
+export async function wireCitations(repoId, hubConceptId) {
+  const res = await httpService.post(
+    `/okf/repos/${encodeURIComponent(repoId)}/citations/wire`,
+    hubConceptId ? { hub_concept_id: hubConceptId } : {},
+    { silent: true }
+  );
+  return res && res.data ? res.data : null;
+}
+
+/** LINK SUGGESTIONS (#1036 Class A): the LLM proposes which existing concepts
+ * an orphaned page references. Read-only — nothing is written on accept-less. */
+export async function suggestLinks(repoId, conceptId) {
+  const res = await httpService.post(
+    `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/link-suggestions`,
+    {},
+    { silent: true }
+  );
+  return res && res.data ? res.data : null;
+}
+
+/** ACCEPT one suggested link: a frontmatter links[] append (born right —
+ * survives body saves and feeds the editor projection + the ingest graph). */
+export async function acceptLink(repoId, conceptId, toConceptId, label) {
+  const res = await httpService.post(
+    `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/links`,
+    { to_concept_id: toConceptId, label },
+    { silent: true }
+  );
+  return res && res.data ? res.data : null;
+}
+
+// Default-object surface (the store lazy-requires .default) — the inverse of
+// the PII twin pattern above.
+repoOkfService.getValidation = getValidation;
+repoOkfService.wireCitations = wireCitations;
+repoOkfService.suggestLinks = suggestLinks;
+repoOkfService.acceptLink = acceptLink;

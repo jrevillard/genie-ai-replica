@@ -503,10 +503,101 @@ async function proposeFrontmatter(repo, concept_id, { classification } = {}) {
   return concept_id ? proposals[0] || null : proposals;
 }
 
+/**
+ * Link SUGGESTIONS for orphaned/low-degree concepts (David, 2026-10-02,
+ * #1036 Class A): given one concept and the repo's concept list, the LLM
+ * proposes which concepts this page genuinely references. Bounded by design —
+ * max 5 proposals, targets validated against the ACTUAL concept ids (the LLM
+ * can never invent a target), self and already-linked targets dropped.
+ * Read-only: nothing is written — the steward accepts/rejects in Step 7 and
+ * an accepted proposal becomes a frontmatter links[] entry (born right).
+ * Fail-soft: any error returns { proposals: [], error } — never a 500.
+ */
+const LINK_PROPOSAL_MAX = 5;
+const LINK_SNIPPET_CHARS = 4000;
+
+async function proposeLinks(repo, concept_id) {
+  const db = await dbService.getConnection('default');
+  const self = (
+    await (
+      await db.query(
+        'FOR m IN okf_concepts_meta FILTER m.repo_id == @r AND m.concept_id == @c RETURN { concept_id: m.concept_id, title: m.title, body: m.body, links: m.links }',
+        { r: repo.repo_id, c: concept_id }
+      )
+    ).all()
+  )[0];
+  if (!self) return { concept_id, proposals: [], error: 'concept not found' };
+  const peers = (
+    await (
+      await db.query(
+        'FOR m IN okf_concepts_meta FILTER m.repo_id == @r AND m.concept_id != @c SORT m.concept_id RETURN { id: m.concept_id, title: m.title }',
+        { r: repo.repo_id, c: concept_id }
+      )
+    ).all()
+  ).slice(0, 200);
+  if (peers.length === 0) return { concept_id, proposals: [] };
+
+  const alreadyLinked = new Set(
+    (Array.isArray(self.links) ? self.links : []).map((l) => String(l && l.to_concept_id).replace(/^concepts\//, ''))
+  );
+  const catalog = peers.map((p) => `- ${p.id} — ${p.title || p.id}`).join('\n');
+  const system =
+    'You are a knowledge-base curator. Answer with STRICT JSON only: ' +
+    '{"links": [{"to_concept_id": "<id from the list>", "label": "<short anchor text>"}]}. ' +
+    `Propose at most ${LINK_PROPOSAL_MAX} links, ONLY to ids from the provided list, ONLY where this document ` +
+    'genuinely references or materially relates to the target. Return {"links": []} when nothing is related. ' +
+    'Never invent ids.';
+  const user =
+    'Document: ' +
+    (self.title || concept_id) +
+    '\nContent:\n' +
+    String(self.body || '').slice(0, LINK_SNIPPET_CHARS) +
+    '\n\nAvailable concepts:\n' +
+    catalog;
+  try {
+    const raw = await withSpan('okf.llm.link-proposals', async (span) => {
+      span.setAttribute('okf.repo_id', repo.repo_id);
+      span.setAttribute('okf.concept_id', concept_id);
+      return callVllm(
+        [
+          { role: 'system', content: system },
+          { role: 'user', content: user }
+        ],
+        {
+          timeoutMs: CURATION_TIMEOUT_MS
+        }
+      );
+    });
+    let j;
+    try {
+      j = JSON.parse(raw);
+    } catch {
+      return { concept_id, proposals: [], error: 'unparseable LLM response' };
+    }
+    const peerById = new Map(peers.map((p) => [p.id, p]));
+    const proposals = [];
+    for (const l of Array.isArray(j.links) ? j.links : []) {
+      if (!l || proposals.length >= LINK_PROPOSAL_MAX) break;
+      const target = String(l.to_concept_id || '').replace(/^concepts\//, '');
+      if (!peerById.has(target) || target === concept_id || alreadyLinked.has(target)) continue;
+      proposals.push({
+        to_concept_id: target,
+        label: String(l.label || peerById.get(target).title || target).slice(0, 80),
+        title: peerById.get(target).title || target
+      });
+    }
+    return { concept_id, proposals };
+  } catch (e) {
+    logger.warn('OKF link proposals failed for ' + concept_id + ': ' + e.message);
+    return { concept_id, proposals: [], error: e.message };
+  }
+}
+
 module.exports = {
   resolveAreaContext,
   curateRepoConcepts,
   proposeFrontmatter,
+  proposeLinks,
   parseCurationResponse,
   buildCurationPrompt,
   TYPE_ENUM,

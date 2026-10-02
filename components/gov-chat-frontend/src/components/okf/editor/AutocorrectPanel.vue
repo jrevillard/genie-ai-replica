@@ -80,7 +80,16 @@
 
       <ul v-if="warnings.length" class="okf-ac__warnings">
         <li v-for="(w, i) in warnings" :key="i">
-          <code>{{ w.concept_id }}</code> — {{ w.message }}
+          <code>{{ w.concept_id }}</code> — {{ w.rule ? w.rule + ': ' : '' }}{{ w.message }}
+          <DsInfoTip
+            v-if="w.rule && w.rule.startsWith('STALE_AFTER')"
+            :text="
+              translate(
+                'okf.editor.autocorrect.staleAfterTip',
+                'stale_after is the freshness date and must be written YYYY-MM-DD. Values in another date format are normalized on apply; values that are not dates at all are cleared. Nothing else in the page changes.'
+              )
+            "
+          />
         </li>
       </ul>
     </template>
@@ -103,11 +112,12 @@ import DsDialog from '../../ds/Dialog.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 import DsButton from '../../ds/Button.vue';
 import DsPill from '../../ds/Pill.vue';
+import DsInfoTip from '../../ds/InfoTip.vue';
 import conceptService from '../../../services/conceptService';
 
 export default {
   name: 'OkfAutocorrectPanel',
-  components: { DsDialog, DsSpinner, DsButton, DsPill },
+  components: { DsDialog, DsSpinner, DsButton, DsPill, DsInfoTip },
   mixins: [translateMixin],
   props: {
     visible: { type: Boolean, default: false },
@@ -254,7 +264,20 @@ export default {
         return;
       }
       this.changes = Array.isArray(result.changes) ? result.changes : [];
-      this.warnings = Array.isArray(result.warnings) ? result.warnings : [];
+      // #1037: autocorrectRepo returns warnings NESTED ({concept_id,
+      // warnings:[{rule, severity, message}]}) but the template renders the
+      // FLAT {concept_id, rule, message} shape — the mismatch rendered bare
+      // "id —" rows with no message. Flatten (tolerating already-flat rows).
+      const nested = Array.isArray(result.warnings) ? result.warnings : [];
+      const flat = [];
+      for (const w of nested) {
+        if (w && Array.isArray(w.warnings)) {
+          for (const inner of w.warnings) flat.push({ concept_id: w.concept_id, ...inner });
+        } else if (w) {
+          flat.push(w);
+        }
+      }
+      this.warnings = flat;
     },
     // D-L: apply ONE field for ONE concept through the {frontmatter} PATCH.
     // Null `after` rides the RFC 7386 merge-delete when the contract is

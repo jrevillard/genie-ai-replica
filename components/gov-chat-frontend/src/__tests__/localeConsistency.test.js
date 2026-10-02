@@ -128,7 +128,17 @@ describe('Locale consistency', () => {
       'okf.src.confirm',
       'okf.src.uploaded',
       'okf.steps.input.benchCount',
-      'okf.steps.input.moreN'
+      'okf.steps.input.moreN',
+      // #1039 batch (2026-10-03): Step-7 keys consumed via .replace()
+      'okf.validation.headline.blockers',
+      'okf.validation.headline.warnings',
+      'okf.validation.summary',
+      'okf.validation.mergedPages',
+      'okf.validation.preview.truncated',
+      'okf.validation.action.wireCreate',
+      'okf.validation.action.wireExisting',
+      'okf.validation.wireDone',
+      'okf.validation.wireCreated'
     ];
     const offenders = [];
     for (const locale of localeFiles) {

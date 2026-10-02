@@ -2401,11 +2401,11 @@ export default {
       expertHint:
         'Fetohela ho mokhoa oa Bo-ramahlale ho bona JSON e tala ea netefatso, sefa ka botebo ba bothata, le ho hlokomoloha licheke.',
       headline: {
-        blockers: '{n} mathata a thibelang — a lokisoe pele u fana ka polokelo',
-        warnings: 'Lintho tse {n} li hloka tlhahlobo ea hau',
+        blockers: "{'{'}n{'}'} mathata a thibelang — a lokisoe pele u fana ka polokelo",
+        warnings: "Lintho tse {'{'}n{'}'} li hloka tlhahlobo ea hau",
         ok: 'E shebahala e le ntle. Ha ho letho le lokelang ho lokisoa.'
       },
-      summary: '{clean} e hloekileng · {warnings} e hloka tlhahlobo · {blockers} e thibelang',
+      summary: "{'{'}clean{'}'} e hloekileng · {'{'}warnings{'}'} e hloka tlhahlobo · {'{'}blockers{'}'} e thibelang",
       formatter: {
         notReady: 'Sehlophisi se tla fihla ho Pale ea 4.2b.'
       },
@@ -2439,8 +2439,10 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: 'Create the Sources page and link {n} page(s)',
-        wireExisting: 'Link {n} page(s) to "{hub}"'
+        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
+        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        preview: 'Preview duplicates',
+        hidePreview: 'Hide preview'
       },
       actionDone: {
         done: 'Done'
@@ -2452,8 +2454,25 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: 'Linked {n} page(s) to "{hub}".',
-      wireCreated: 'Created the Sources page and linked {n} page(s).'
+      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
+      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
+      mergedPages: "{'{'}n{'}'} pages",
+      preview: {
+        loading: 'Loading page contents…',
+        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+      },
+      tip: {
+        conformance:
+          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan:
+          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate:
+          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation:
+          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed:
+          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      }
     },
     pii: {
       panel: 'Mekhatlo e tšoailoeng',

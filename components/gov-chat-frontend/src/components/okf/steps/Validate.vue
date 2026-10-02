@@ -46,6 +46,14 @@
       <p class="okf-step-validate__issues-title">
         {{ translate('okf.validation.issuesTitle', 'Issues to review') }}
         <span class="okf-step-validate__issues-count">{{ validationIssues.length }}</span>
+        <DsInfoTip
+          :text="
+            translate(
+              'okf.validation.tip.list',
+              'This is everything that would weaken answers once the repository serves: frontmatter that misses the spec, pages no other page links to (graph retrieval cannot relate them), near-identical pages (search returns the same material repeatedly), citations that are not linked (they never reach the graph), and pages whose index build failed. Each row says what is wrong and how to fix it.'
+            )
+          "
+        />
       </p>
       <p v-if="validationIssues.length === 0" class="okf-step-validate__all-clear">
         {{ translate('okf.validation.headline.ok', 'Looks good. Nothing to fix.') }}
@@ -58,10 +66,18 @@
             </DsStatusTag>
             <span class="okf-step-validate__issue-type">
               {{ translate('okf.validation.type.' + issue.type, issue.type) }}
+              <DsInfoTip :text="typeTip(issue.type)" />
             </span>
             <span class="okf-step-validate__issue-title">{{ issue.title }}</span>
           </div>
           <p class="okf-step-validate__issue-message">{{ issue.message }}</p>
+          <!-- Merged conformance rows (#1039 density): identical findings
+            across many pages collapse into one row of concept chips (shown
+            only when merged — single rows name the page in the title). Near-dup
+            groups show their member ids the same way. -->
+          <div v-if="issue.concepts && issue.concepts.length > 1" class="okf-step-validate__issue-concepts">
+            <code v-for="c in issue.concepts" :key="c" class="okf-step-validate__concept-chip">{{ c }}</code>
+          </div>
           <p class="okf-step-validate__issue-remedy">
             <strong>{{ translate('okf.validation.howToFix', 'How to fix') }}:</strong>
             {{ issue.remedy }}
@@ -104,11 +120,41 @@
             </div>
           </div>
 
-          <!-- NEAR-DUPLICATE remedy: keep one, delete the rest. -->
+          <!-- NEAR-DUPLICATE remedy: keep one, delete the rest — with the
+            content VISIBLE before any deletion (#1039). -->
           <div v-if="issue.type === 'near_duplicate' && !frozenAt" class="okf-step-validate__issue-actions">
-            <p class="okf-step-validate__dup-hint">
-              {{ translate('okf.validation.nearDup.keepHint', 'Keep one copy — delete the rest.') }}
+            <div class="okf-step-validate__dup-toolbar">
+              <p class="okf-step-validate__dup-hint">
+                {{ translate('okf.validation.nearDup.keepHint', 'Keep one copy — delete the rest.') }}
+              </p>
+              <DsButton variant="secondary" small :disabled="!!previewBusy" @click="onTogglePreview(issue)">
+                {{
+                  previewFor === dupKey(issue)
+                    ? translate('okf.validation.action.hidePreview', 'Hide preview')
+                    : translate('okf.validation.action.preview', 'Preview duplicates')
+                }}
+              </DsButton>
+            </div>
+            <p v-if="previewFor === dupKey(issue) && previewBusy" class="okf-step-validate__dup-hint">
+              {{ translate('okf.validation.preview.loading', 'Loading page contents…') }}
             </p>
+            <div v-else-if="previewFor === dupKey(issue) && previewMembers" class="okf-step-validate__preview-grid">
+              <div v-for="m in previewMembers" :key="m.concept_id" class="okf-step-validate__preview-pane">
+                <header>
+                  <code>{{ m.concept_id }}</code>
+                  <span>{{ m.title }}</span>
+                </header>
+                <pre>{{ m.text }}</pre>
+                <footer>
+                  {{
+                    translate(
+                      'okf.validation.preview.truncated',
+                      'First {n} characters — open the editor for the full page.'
+                    ).replace('{n}', String(previewChars))
+                  }}
+                </footer>
+              </div>
+            </div>
             <ul class="okf-step-validate__dup-list">
               <li v-for="m in issue.members" :key="m" class="okf-step-validate__dup-row">
                 <span>{{ conceptTitle(m) }}</span>
@@ -203,6 +249,24 @@ import DsStatusTag from '../../ds/StatusTag.vue';
 import OkfPiiOccurrences from '../editor/PiiOccurrences.vue';
 import translateMixin from '../../../mixins/translateMixin';
 
+// #1039 near-duplicate preview: how much of each member's body to render.
+const PREVIEW_CHARS = 1500;
+
+// Per-type explanation tips (#1039): what the check looks at and why it
+// matters for RAG accuracy — one sentence a steward can act on.
+const TYPE_TIPS = {
+  conformance:
+    'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+  orphan:
+    'No page links here and this page links nowhere. Graph retrieval walks LINKS to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+  near_duplicate:
+    'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+  citation:
+    'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+  index_failed:
+    'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+};
+
 export default {
   name: 'OkfStepValidate',
   components: { DsHealthRing, DsInfoTip, DsButton, DsStatusTag, OkfPiiOccurrences },
@@ -226,7 +290,12 @@ export default {
       suggestBusy: false,
       suggestion: null,
       acceptBusy: false,
-      deleting: null
+      deleting: null,
+      // near-duplicate preview (#1039)
+      previewFor: null,
+      previewBusy: null,
+      previewMembers: null,
+      previewChars: PREVIEW_CHARS
     };
   },
   computed: {
@@ -239,11 +308,14 @@ export default {
     },
     // THE ISSUE LIST: the server report's issues + INDEX_FAILED rows from the
     // concept list (index failures are per-page operational state, not part
-    // of the server report's conformance families).
+    // of the server report's conformance families). #1039: conformance rows
+    // that share code+message merge into ONE row carrying concepts[] — the
+    // NCD bundle surfaced the same MISSING_STALE_AFTER 40× as 40 identical
+    // rows; the merged row says "40 pages" once.
     validationIssues() {
-      const issues = (this.report && Array.isArray(this.report.issues) ? this.report.issues : []).slice();
+      const raw = (this.report && Array.isArray(this.report.issues) ? this.report.issues : []).slice();
       for (const cid of this.indexFailed) {
-        issues.push({
+        raw.push({
           type: 'index_failed',
           severity: 'warning',
           concept_id: cid,
@@ -254,6 +326,25 @@ export default {
             'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.'
           )
         });
+      }
+      // Merge same-code+message rows (conformance shares the remedy anyway).
+      const issues = [];
+      const byKey = new Map();
+      const mergedTitle = (n) => this.translate('okf.validation.mergedPages', '{n} pages').replace('{n}', String(n));
+      for (const iss of raw) {
+        const mergeable = iss.type === 'conformance' && iss.code;
+        const key = mergeable ? `${iss.type}::${iss.code}::${iss.message}` : null;
+        if (mergeable && byKey.has(key)) {
+          const g = byKey.get(key);
+          g.concepts.push(iss.concept_id);
+          g.title = mergedTitle(g.concepts.length);
+          continue;
+        }
+        const row = mergeable
+          ? { ...iss, concepts: [iss.concept_id] } // title set once merged (n>1); single rows keep the concept title
+          : { ...iss, concepts: iss.concept_id ? [iss.concept_id] : iss.members || [] };
+        if (mergeable) byKey.set(key, row);
+        issues.push(row);
       }
       const rank = { blocker: 0, warning: 1, info: 2 };
       return issues.sort((a, b) => (rank[a.severity] ?? 1) - (rank[b.severity] ?? 1));
@@ -278,10 +369,13 @@ export default {
       if (blockers > 0)
         return this.translate(
           'okf.validation.headline.blockers',
-          `${blockers} blocking issue(s) — fix before you hand the repository off`
-        );
+          '{n} blocking issue(s) — fix before you hand the repository off'
+        ).replace('{n}', String(blockers));
       if (warnings > 0)
-        return this.translate('okf.validation.headline.warnings', `${warnings} thing(s) need your review`);
+        return this.translate('okf.validation.headline.warnings', '{n} thing(s) need your review').replace(
+          '{n}',
+          String(warnings)
+        );
       return this.translate('okf.validation.headline.ok', 'Looks good. Nothing to fix.');
     },
     summaryLine() {
@@ -336,7 +430,10 @@ export default {
       const rows = (cVal && cVal.concepts) || [];
       this._conceptRows = rows;
       this.indexFailed = rows.filter((row) => row.index_status === 'failed').map((r) => r.concept_id);
-      this.piiConcepts = rows.filter((row) => row.pii_state === 'flagged');
+      // #1038: the PII vocabulary is 'clean' | 'hit' | 'unknown' — the panel
+      // filtered 'flagged', a value that never occurs, so flagged pages were
+      // invisible in Step 7.
+      this.piiConcepts = rows.filter((row) => row.pii_state === 'hit');
       if (this.piiConcepts.length) {
         if (!this.selectedPiiConcept || !this.piiConcepts.some((c) => c.concept_id === this.selectedPiiConcept)) {
           this.selectedPiiConcept = this.piiConcepts[0].concept_id;
@@ -393,6 +490,44 @@ export default {
         this.deleting = null;
         this.refresh();
       }
+    },
+    // #1039 info tips: per-type explanation. TYPE_TIPS doubles as the EN
+    // default inside translate(), so missing locale keys degrade to English
+    // (same carrier pattern as the rest of the step) instead of rendering ''.
+    typeTip(type) {
+      return this.translate(`okf.validation.tip.${type}`, TYPE_TIPS[type] || '');
+    },
+    // Stable identity of a near-duplicate group (title strings can collide).
+    dupKey(issue) {
+      return (issue.members || []).join('|');
+    },
+    // #1039 near-duplicate preview: fetch each member's body before the
+    // steward decides what to delete. Capped at 5 members / PREVIEW_CHARS.
+    async onTogglePreview(issue) {
+      if (this.previewBusy) return;
+      const key = this.dupKey(issue);
+      if (this.previewFor === key) {
+        this.previewFor = null;
+        this.previewMembers = null;
+        return;
+      }
+      this.previewFor = key;
+      this.previewMembers = null;
+      this.previewBusy = key;
+      const members = (issue.members || []).slice(0, 5);
+      const loaded = await Promise.all(
+        members.map(async (cid) => {
+          const res = await this.$store.dispatch('okf/getConcept', { repoId: this.repoId, conceptId: cid });
+          const c = (res && res.ok && res.concept) || null;
+          return {
+            concept_id: cid,
+            title: (c && (c.title || cid)) || cid,
+            text: String((c && c.body) || '').slice(0, PREVIEW_CHARS)
+          };
+        })
+      );
+      this.previewMembers = loaded;
+      this.previewBusy = null;
     },
     // CITATION remedy (#1036 Option 2): one click creates (when missing) and
     // wires the Sources page.
@@ -594,6 +729,76 @@ export default {
 }
 .okf-step-validate__wire-note {
   color: var(--success, var(--accent));
+}
+/* #1039 density: merged conformance rows + near-dup groups show their page
+   ids as a wrapped chip row instead of one row per page. */
+.okf-step-validate__issue-concepts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--space-xs) / 2);
+  margin-top: var(--space-xs);
+}
+.okf-step-validate__concept-chip {
+  font-size: var(--text-xs);
+  padding: 1px var(--space-xs);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* #1039 near-duplicate preview: side-by-side panes so the steward compares
+   the copies before deleting any. */
+.okf-step-validate__dup-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  width: 100%;
+}
+.okf-step-validate__preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-sm);
+  width: 100%;
+}
+.okf-step-validate__preview-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  padding: var(--space-xs) var(--space-sm);
+  min-width: 0;
+}
+.okf-step-validate__preview-pane header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+.okf-step-validate__preview-pane header span {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.okf-step-validate__preview-pane pre {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg);
+}
+.okf-step-validate__preview-pane footer {
+  color: var(--muted);
+  font-size: var(--text-xs);
 }
 .okf-step-validate__pii {
   display: flex;

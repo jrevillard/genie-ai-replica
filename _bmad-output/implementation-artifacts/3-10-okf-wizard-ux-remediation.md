@@ -371,3 +371,64 @@ dead. THREE root causes, all fixed + tested:
 Suites: frontend 1606/1606 (80), okf-server 729/729 (34; one CPU-pressure flake on the parallel
 run, clean rerun), prettier+eslint clean both components. Issue #1032 filed; #1028 updated with
 the root cause.
+
+**Step-7 validation report — the #1030/#1036 batch (a10870a8f, 2026-10-02)**: David approved
+building the three checks into the wizard (citation handling = Option 2, wizard-ONLY — no
+import-side automation, per his decision on #1036). Validate.vue rebuilt around THE ISSUE LIST:
+every row = severity pill + type tag + concept + message + "How to fix" remedy + in-place action.
+- **Backend**: validation-service composes GET /repos/:id/validation — conformance rows (persisted
+  per-concept issues, blocker codes mapped), orphans on the AUTHOR graph (links[] in+out both zero),
+  near-duplicate groups (5%-length window + char-8-gram shingle Jaccard ≥ 0.9, union-find, capped),
+  unlinked citations (frontmatter sources[] with no link to the Sources hub; hub detected by
+  id/title). POST /citations/wire generates the hub through the SAME import pipeline (skipCuration)
+  when the bundle lacks one + wires frontmatter links[] via patchConceptFields — born right,
+  survives body saves, feeds editor projection AND ingest graph. POST /concepts/:cid/link-suggestions
+  (bounded LLM, targets validated vs the real catalog, fail-soft) + POST .../links (accept — target
+  must exist, no dangling edges, audited). Frozen repos 409.
+- **The born-right channel that makes it work**: parseConcept composes links from THREE sources
+  (body .md links, frontmatter links[], relations) and patchConceptMeta re-derives on every save —
+  a frontmatter links[] entry therefore survives every edit. Citation links and accepted suggestions
+  ride it; no body text mutation needed.
+- **Frontend**: okf store actions fetchValidation/wireCitations/suggestLinks/acceptLink;
+  repoOkfService methods; autocorrect dry-run fetch DROPPED from Validate (its findings ARE the
+  report's conformance rows; Step 8 owns fixes); PII panel + INDEX_FAILED retained; retry box on
+  report-fetch failure. i18n ×14 (EN carriers).
+- **Live evidence driving the checks** (NCD Information, d3621942): 11 orphans of 50 concepts (0
+  dangling links — the #1029 fix held; isolation is a content gap = exactly the Studio's job),
+  5×352KB same-length template variants (hash-verified DISTINCT — near-dup, not dup), 46 citing
+  pages + existing hub (who-sources) with zero inbound links.
+- Tests: validation-service.test.js 12/12; validate-step.test.js 7/7; graph-and-modals updated to
+  the new data flow (the old test asserted the removed issueGroups shape). Suites: okf-server
+  741/741, frontend 1613/1613. NOTE: two single-flake full-suite failures under parallel-suite CPU
+  pressure, both clean on immediate rerun — do not run two full jest suites simultaneously.
+
+**3-bug fix batch — #1037 + #1038 + #1039 in one MR (2026-10-03)**: David filed all three from his
+Step-7/8 UI pass and ordered one MR; hard constraint: "do not code fixes that are specific for the
+data inputs" — every rule is format/shape-level, nothing keyed to NCD content.
+- **#1037 autocorrect can't fix stale_after (+ warnings rendered empty)**: planAutocorrectForConcept
+  grew rule #5 — any parseable date (ISO timestamp string or Date) normalizes to the YYYY-MM-DD spec
+  form (STALE_AFTER_FORMAT); unparseable values are CLEARED via the RFC 7386 null patch with a
+  visible STALE_AFTER_CLEARED warning; already-spec-form untouched. This closes the loop discovered
+  live on 2026-10-02: import-time validateConcept sees the toDateOnly-normalized value while
+  patch-time re-validate sees the RAW frontmatter string → 40 UNPARSEABLE_STALE_AFTER rows autocorrect
+  could never plan a fix for. UI half: autocorrectRepo returns warnings NESTED but the panel rendered
+  the FLAT shape → bare "id —" rows; panel now flattens (tolerating both), renders RULE: message, and
+  shows a DsInfoTip for STALE_AFTER rules. Found while testing: DsInfoTip was USED in the template but
+  never imported/registered — the tip silently rendered nothing.
+- **#1038 PII panel never appears**: the vocabulary is 'clean' | 'hit' | 'unknown'; the panel filtered
+  pii_state === 'flagged' — a value that never occurs. Fixed to 'hit'; regression tests pin both
+  directions (hit renders the panel, clean renders nothing).
+- **#1039 UX**: per-type DsInfoTip on every issue row (what the check looks at + why it matters for
+  RAG); identical conformance findings MERGE into one row ("N pages" + concept chips — the NCD bundle
+  surfaced the same finding 40×); near-duplicate groups get a Preview toggle fetching member bodies
+  (cap 5 members × 1500 chars) into side-by-side panes BEFORE any delete; layout density via chips.
+- **Locale layer found broken on the shipped batch**: the Step-7 keys consumed via
+  translate().replace('{x}', ...) carried RAW {x} — vue-i18n swallows the placeholder with no params,
+  so "Link {n} page(s)…" rendered as "Link  page(s)…" live (tests stayed green — no-$i18n mounts use
+  the fallback). Escaped {'{'}x{'}'} ×14 locales for 7 keys (headline.blockers/warnings now
+  replace-consumed too), +23 new keys (mergedPages, preview.*, action.preview/hidePreview, tip.*) as
+  EN carriers, guard list extended. FIRST TRANSFORM RUN HAD TWO BUGS (missing capture group → literal
+  $1; mis-escaped braces) — reverted all 14 files and re-ran a fixed script; diff-reviewed en+fr.
+- Tests: autocorrect-conformance 9/9 (5 new stale_after cases), autocorrect-panel.test.js NEW 4/4,
+  validate-step 13/13 (PII 2, merged rows 2, preview 2 new), localeConsistency 6/6. Full suites
+  sequential: okf-server 746/746, frontend 1623/1623. ESLint + prettier --check clean (prettier LAST).

@@ -119,3 +119,78 @@ describe('autocorrect SOURCE_MISSING_RESOURCE', () => {
     expect(out.changes).toHaveLength(0);
   });
 });
+
+// #1037: stale_after normalization. Import-time parsing tolerates Date
+// objects / full ISO timestamps (toDateOnly normalizes at parse), but
+// patch-time conformance re-validates the RAW frontmatter string and flags
+// UNPARSEABLE_STALE_AFTER — the one finding autocorrect could not plan a fix
+// for. FORMAT-level rule: parseable → YYYY-MM-DD, unparseable → cleared.
+describe('autocorrect stale_after (#1037)', () => {
+  function programQuery() {
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => Object.values(mockDb._stores.okf_concepts_meta || {})
+    });
+  }
+
+  async function seed(fm) {
+    await mockDb.collection('okf_concepts_meta').save({
+      _key: 'p1',
+      repo_id: 'repoA',
+      concept_id: 'p1',
+      frontmatter: { title: 'P1', type: 'topic', ...fm },
+      body: '# P1\n',
+      conformance_issues: []
+    });
+  }
+
+  test('plan: full ISO timestamp normalizes to the YYYY-MM-DD spec form', async () => {
+    await seed({ stale_after: '2026-09-30T10:00:00.000Z' });
+    programQuery();
+    const out = await conceptMeta.autocorrectRepo('repoA', true);
+    const change = out.changes[0].changes.find((c) => c.reason === 'STALE_AFTER_FORMAT');
+    expect(change).toBeDefined();
+    expect(change.after).toBe('2026-09-30');
+  });
+
+  test('plan: a non-date string is cleared with a visible warning', async () => {
+    await seed({ stale_after: 'September 2026' });
+    programQuery();
+    const out = await conceptMeta.autocorrectRepo('repoA', true);
+    const change = out.changes[0].changes.find((c) => c.reason === 'STALE_AFTER_UNPARSEABLE');
+    expect(change).toBeDefined();
+    expect(change.after).toBeNull();
+    const warning = (out.warnings || []).find((w) => (w.warnings || []).some((x) => x.rule === 'STALE_AFTER_CLEARED'));
+    expect(warning).toBeDefined();
+  });
+
+  test('plan: already spec-form → no stale_after change planned', async () => {
+    await seed({ stale_after: '2026-09-30' });
+    programQuery();
+    const out = await conceptMeta.autocorrectRepo('repoA', true);
+    const change = (out.changes[0] && out.changes[0].changes.find((c) => c.field === 'stale_after')) || null;
+    expect(change).toBeNull();
+  });
+
+  test('plan: missing stale_after → no stale_after change planned', async () => {
+    await mockDb.collection('okf_concepts_meta').save({
+      _key: 'p1',
+      repo_id: 'repoA',
+      concept_id: 'p1',
+      status: 'draft', // top-level row field — planAutocorrectForConcept reads meta.status
+      frontmatter: { title: 'P1', type: 'topic', sources: [{ resource: 'https://ok.example', author: 'a' }] },
+      body: '# P1\n',
+      conformance_issues: []
+    });
+    programQuery();
+    const out = await conceptMeta.autocorrectRepo('repoA', true);
+    expect(out.changes).toHaveLength(0);
+  });
+
+  test('apply: the normalized value lands on the frontmatter', async () => {
+    await seed({ stale_after: '2026-09-30T10:00:00.000Z' });
+    programQuery();
+    const out = await conceptMeta.autocorrectRepo('repoA', false);
+    expect(out.applied).toBe(1);
+    expect(mockDb._stores.okf_concepts_meta.p1.frontmatter.stale_after).toBe('2026-09-30');
+  });
+});

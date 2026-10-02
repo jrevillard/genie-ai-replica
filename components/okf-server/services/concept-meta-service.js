@@ -1005,6 +1005,49 @@ function planAutocorrectForConcept(meta) {
     });
   }
 
+  // 5. stale_after — normalize any PARSEABLE date to the spec'd YYYY-MM-DD
+  // (#1037): bundles commonly carry full ISO timestamps or YAML Date objects,
+  // which import-time parsing tolerates but patch-time conformance (seeing
+  // the raw frontmatter string) flags as UNPARSEABLE_STALE_AFTER — the one
+  // issue class this panel could never fix. FORMAT-level rule only: any
+  // parseable date normalizes, an unparseable value is CLEARED (the RFC
+  // 7386 null patch deletes the key) with a visible warning. Nothing here
+  // is specific to any bundle's content.
+  if (fm.stale_after !== undefined && fm.stale_after !== null && fm.stale_after !== '') {
+    const isSpecForm = typeof fm.stale_after === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fm.stale_after.trim());
+    if (!isSpecForm) {
+      let normalized = null;
+      if (fm.stale_after instanceof Date) {
+        normalized = DateTime.fromJSDate(fm.stale_after).toUTC().toISODate();
+      } else {
+        const dt = DateTime.fromISO(String(fm.stale_after).trim());
+        if (dt.isValid) normalized = dt.toUTC().toISODate();
+      }
+      if (normalized) {
+        changes.push({
+          field: 'stale_after',
+          before: fm.stale_after,
+          after: normalized,
+          reason: 'STALE_AFTER_FORMAT',
+          note: 'normalized to the YYYY-MM-DD spec form'
+        });
+      } else {
+        changes.push({
+          field: 'stale_after',
+          before: fm.stale_after,
+          after: null,
+          reason: 'STALE_AFTER_UNPARSEABLE',
+          note: 'unparseable date cleared'
+        });
+        warnings.push({
+          rule: 'STALE_AFTER_CLEARED',
+          severity: 'warning',
+          message: `stale_after "${String(fm.stale_after)}" is not a parseable date — it will be cleared`
+        });
+      }
+    }
+  }
+
   return { changes, warnings };
 }
 

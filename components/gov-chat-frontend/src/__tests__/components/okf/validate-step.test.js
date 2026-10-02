@@ -228,3 +228,141 @@ describe('OkfStepValidate — citation hub wiring (#1036 Option 2)', () => {
     expect(btn.text()).toContain('12');
   });
 });
+
+// #1038: the PII vocabulary is 'clean' | 'hit' | 'unknown' — the panel used
+// to filter 'flagged', a value that never occurs, so flagged pages were
+// invisible in Step 7.
+describe('OkfStepValidate — PII panel (#1038)', () => {
+  const conceptsShape = () => ({
+    ok: true,
+    concepts: [
+      { concept_id: 'hit-1', title: 'Flagged Page', pii_state: 'hit', index_status: 'parsed' },
+      { concept_id: 'clean-1', title: 'Clean Page', pii_state: 'clean', index_status: 'parsed' },
+      { concept_id: 'unknown-1', title: 'Unknown Page', pii_state: 'unknown', index_status: 'parsed' }
+    ]
+  });
+
+  it('shows the remediation panel for pii_state=hit pages only', async () => {
+    const { w } = mountValidate({
+      'okf/fetchConcepts': conceptsShape,
+      'okf/fetchValidation': () => Promise.resolve({ ok: true, report: reportWith([]) })
+    });
+    await settle(w);
+    expect(w.find('.okf-step-validate__pii').exists()).toBe(true);
+    expect(w.text()).toContain('Flagged Page');
+    expect(w.vm.piiConcepts.map((c) => c.concept_id)).toEqual(['hit-1']);
+    expect(w.text()).not.toContain('Clean Page');
+    // the occurrences panel mounts for the selected hit concept
+    expect(w.find('.pii-stub').exists()).toBe(true);
+  });
+
+  it('renders no PII panel when nothing was flagged', async () => {
+    const { w } = mountValidate({
+      'okf/fetchConcepts': () => ({
+        ok: true,
+        concepts: [{ concept_id: 'clean-1', title: 'Clean Page', pii_state: 'clean', index_status: 'parsed' }]
+      }),
+      'okf/fetchValidation': () => Promise.resolve({ ok: true, report: reportWith([]) })
+    });
+    await settle(w);
+    expect(w.find('.okf-step-validate__pii').exists()).toBe(false);
+  });
+});
+
+// #1039: merged conformance rows — identical findings across many pages
+// collapse into one row of concept chips instead of N identical rows.
+describe('OkfStepValidate — merged conformance rows (#1039)', () => {
+  const conformanceIssue = (cid) => ({
+    type: 'conformance',
+    severity: 'warning',
+    concept_id: cid,
+    title: cid,
+    code: 'UNPARSEABLE_STALE_AFTER',
+    message: 'stale_after is not a YYYY-MM-DD date',
+    remedy: 'Run Autocorrect (Step 8).'
+  });
+
+  it('merges same code+message into one row with a chip per page', async () => {
+    const { w } = mountValidate({
+      'okf/fetchValidation': () =>
+        Promise.resolve({ ok: true, report: reportWith([conformanceIssue('a1'), conformanceIssue('a2')]) })
+    });
+    await settle(w);
+    expect(w.vm.validationIssues).toHaveLength(1);
+    expect(w.vm.validationIssues[0].concepts).toEqual(['a1', 'a2']);
+    expect(w.text()).toContain('a1');
+    expect(w.text()).toContain('a2');
+    expect(w.text()).toContain('2 pages');
+  });
+
+  it('keeps distinct codes as separate rows', async () => {
+    const other = { ...conformanceIssue('b1'), code: 'MISSING_TYPE', message: 'type missing' };
+    const { w } = mountValidate({
+      'okf/fetchValidation': () => Promise.resolve({ ok: true, report: reportWith([conformanceIssue('a1'), other]) })
+    });
+    await settle(w);
+    expect(w.vm.validationIssues).toHaveLength(2);
+  });
+});
+
+// #1039: the steward must SEE the duplicate content before deleting anything.
+describe('OkfStepValidate — near-duplicate preview (#1039)', () => {
+  const dupIssue = () => ({
+    type: 'near_duplicate',
+    severity: 'warning',
+    concept_id: null,
+    title: '2 near-identical pages',
+    members: ['dup-a', 'dup-b'],
+    message: 'near-identical content',
+    remedy: 'Keep one copy and delete the others.'
+  });
+
+  it('fetches member bodies on toggle and renders them side by side', async () => {
+    const fetched = [];
+    const { w } = mountValidate({
+      'okf/fetchValidation': () => Promise.resolve({ ok: true, report: reportWith([dupIssue()]) }),
+      'okf/getConcept': (p) => {
+        fetched.push(p.conceptId);
+        return {
+          ok: true,
+          concept: { concept_id: p.conceptId, title: p.conceptId.toUpperCase(), body: 'BODY-OF-' + p.conceptId }
+        };
+      }
+    });
+    await settle(w);
+    const previewBtn = w.findAll('button').find((b) => b.text() === 'Preview duplicates');
+    expect(previewBtn).toBeTruthy();
+    await previewBtn.trigger('click');
+    await settle(w);
+    await settle(w);
+    expect(fetched.sort()).toEqual(['dup-a', 'dup-b']);
+    expect(w.text()).toContain('BODY-OF-dup-a');
+    expect(w.text()).toContain('First 1500 characters');
+    // toggle closed
+    const hideBtn = w.findAll('button').find((b) => b.text() === 'Hide preview');
+    await hideBtn.trigger('click');
+    await settle(w);
+    expect(w.text()).not.toContain('BODY-OF-dup-a');
+  });
+
+  it('caps the preview at 5 members', async () => {
+    const fetched = [];
+    const issue = dupIssue();
+    issue.members = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7'];
+    const { w } = mountValidate({
+      'okf/fetchValidation': () => Promise.resolve({ ok: true, report: reportWith([issue]) }),
+      'okf/getConcept': (p) => {
+        fetched.push(p.conceptId);
+        return { ok: true, concept: { concept_id: p.conceptId, title: p.conceptId, body: 'x' } };
+      }
+    });
+    await settle(w);
+    await w
+      .findAll('button')
+      .find((b) => b.text() === 'Preview duplicates')
+      .trigger('click');
+    await settle(w);
+    await settle(w);
+    expect(fetched).toHaveLength(5);
+  });
+});

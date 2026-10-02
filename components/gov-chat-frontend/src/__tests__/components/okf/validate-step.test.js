@@ -53,7 +53,11 @@ const settle = async (w) => {
 };
 
 function reportWith(issues) {
-  return { issues, citations: { citing: [], hub_concept_id: null, needing_link: [] }, summary: { total: issues.length } };
+  return {
+    issues,
+    citations: { citing: [], hub_concept_id: null, needing_link: [] },
+    summary: { total: issues.length }
+  };
 }
 
 describe('OkfStepValidate — issue list (#1030)', () => {
@@ -118,15 +122,11 @@ describe('OkfStepValidate — orphan link suggestions (#1036 Class A)', () => {
     await settle(w);
     expect(dispatched.some((d) => d.type === 'okf/suggestLinks' && d.payload.conceptId === 'lonely')).toBe(true);
     expect(w.text()).toContain('PEN package');
-    const acceptBtn = w
-      .findAll('button')
-      .find((b) => b.text() === 'Accept');
+    const acceptBtn = w.findAll('button').find((b) => b.text() === 'Accept');
     expect(acceptBtn).toBeTruthy();
     await acceptBtn.trigger('click');
     await settle(w);
-    expect(
-      dispatched.some((d) => d.type === 'okf/acceptLink' && d.payload.toConceptId === 'who-pen')
-    ).toBe(true);
+    expect(dispatched.some((d) => d.type === 'okf/acceptLink' && d.payload.toConceptId === 'who-pen')).toBe(true);
     expect(w.text()).toContain('Done');
   });
 
@@ -168,9 +168,7 @@ describe('OkfStepValidate — near-duplicate remedy (#1036 Class B)', () => {
     expect(deleteBtns.length).toBe(5);
     await deleteBtns[2].trigger('click');
     await settle(w);
-    expect(
-      dispatched.some((d) => d.type === 'okf/deleteConcept' && d.payload.conceptId === 'set-3')
-    ).toBe(true);
+    expect(dispatched.some((d) => d.type === 'okf/deleteConcept' && d.payload.conceptId === 'set-3')).toBe(true);
   });
 });
 

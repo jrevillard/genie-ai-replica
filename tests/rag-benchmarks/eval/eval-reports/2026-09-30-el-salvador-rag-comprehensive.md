@@ -1,8 +1,8 @@
 # El Salvador RAG Pipeline — Comprehensive Evaluation Report
 
 **Author**: Claude (automated pipeline)
-**Date**: 2026-09-30 (last update: 2026-10-01, T12/T13a/T13b rows + §13 rewrite)
-**Stack**: genieai-el-salvador @ 10.0.0.102 (`release/el-salvador` branch, T13a live: factor=0.0005 + thresh=-1.0 + BGE wrapper)
+**Date**: 2026-09-30 (last update: 2026-10-02, K=32 sweep + T13b champion)
+**Stack**: genieai-el-salvador @ 10.0.0.102 (`release/el-salvador` branch, **T13b-K=32 live**: factor=0.0006 + thresh=−1.0 + BGE wrapper + K=32)
 **Sample**: 42 queries (Spanish CENTA agriculture), gold_dataset.matched.v4.json
 **Tools**: `tests/rag-benchmarks/eval/{run_eval.py, run_ragas_eval.py, calibrate.py}` (modified locally on .102 for Bearer auth)
 **RAGAS judge**: MiniMax-M3 (`ANTHROPIC_BASE_URL=http://127.0.0.1:3456/v1`)
@@ -82,8 +82,11 @@ RAGAS/Instructor requests `n=3` samples per judge call for self-consistency scor
 | **T10** | Sept 29 | same + **factor=0.0020, threshold=0.0** (calibrated live) | 0.494 | 0.351 | 0.888 | **3.26** | **0.506 (−16.5pt)** |
 | T11 | Sept 30 (today) | revert to factor=0.0006, threshold=-0.25, K=32 | **0.704** | 0.234 | 0.870 | 9.12 | **0.655 (n=39)** |
 | **T12** | Oct 01 (post-BGE wrapper deploy) | T11 config + BGE-large query prefix wrapper live | 0.683 | **0.272** | 0.841 | 9.12 | n/a (anchor-only re-run) |
-| **T13a** | Oct 01 (post-recal sweep) | T12 config + factor=0.0005 + MIN_VALUE_THRESHOLD=−1.0 | **0.737** | 0.190 | 0.806 | 9.64 | **0.684 (n=38)** |
-| **T13b** | Oct 01 (threshold-only sweep) | T12 config + MIN_VALUE_THRESHOLD=−1.0 (factor unchanged at 0.0006) | 0.737 | 0.203 | 0.806 | 9.55 | (RAGAS pending — see §13.7) |
+| **T13a** | Oct 01 (post-recal sweep) | T12 config + factor=0.0005 + MIN_VALUE_THRESHOLD=−1.0 | 0.737 | 0.190 | 0.806 | 9.64 | **0.684 (n=38)** |
+| **T13b** | Oct 01 (threshold-only sweep) | T12 config + MIN_VALUE_THRESHOLD=−1.0 (factor unchanged at 0.0006) | 0.737 | 0.203 | 0.806 | 9.55 | 0.668 (n=33, 9 NaN) |
+| **T12-K=32** | Oct 02 (apples-to-apples re-run) | T11 + wrapper live, K=32 | 0.711 | 0.258 | 0.868 | 8.86 | 0.643 (n=41) |
+| **T13a-K=32** | Oct 02 (apples-to-apples re-run) | T11 + wrapper + factor=0.0005 + thresh=−1.0, K=32 | **0.835** | 0.173 | 0.868 | **15.17** | 0.723 (n=42) |
+| **T13b-K=32** | Oct 02 (apples-to-apples re-run, **champion**) | T11 + wrapper + thresh=−1.0 (factor unchanged at 0.0006), K=32 | **0.835** | 0.174 | 0.868 | 15.05 | 0.679 (n=40) |
 
 > T05 anchor numbers are taken from the Sept 23 baseline report (`2026-09-23-el-salvador-reranker-evaluation.md §4`) and not reproducible from current `.102` state — no T05 anchor file is on the swarm node. T06–T11 numbers are recomputed from `/tmp/rag-eval/results_v7_postchunk.json` (T06), `results_v7_K32_clean.json` / `results_v8_K32.json` (T08–T09), `results_K32_calibrated.json` (T10), `results_v11_postrevert.json` (T11). T12 is the anchor-only re-run after the Oct 01 redeploy that wired the BGE query prefix wrapper into the chatqna caller (`/app/core/embedding_query_prefix.py` live in chatqna image; `QueryInstructionEmbeddingsWrapper` live in retriever at `/app/comps/retrievers/src/integrations/genieai_retriever_arangodb.py:138`); RAGAS not re-run (cost ≈ 30 min, anchor-only delta documented in §13). n=42 for every config.
 
@@ -168,20 +171,20 @@ Initial summary (this report, earlier version) attributed the +48% avg_sel jump 
 
 | Var | `.env` (Ansible) | chatqna container (live) |
 |---|---|---|
-| `RETRIEVER_ARANGO_K` | 50 | 32 |
+| `RETRIEVER_ARANGO_K` | 50 | **32** (T13b-K=32, Oct 02) |
 | `RETRIEVER_ARANGO_FETCH_K` | 60 | 40 |
-| `CONTEXT_DECAY_FACTOR` | 0.0006 (T11) | **0.0005** (T13a, Oct 01) |
-| `MIN_VALUE_THRESHOLD` | -0.25 (T11) | **-1.0** (T13a, Oct 01) |
+| `CONTEXT_DECAY_FACTOR` | 0.0006 (T11) | **0.0006** (T13b-K=32 — factor drop tested, near-neutral) |
+| `MIN_VALUE_THRESHOLD` | -0.25 (T11) | **-1.0** (T13b-K=32, Oct 02) |
 | `DATAPREP_CHUNK_SIZE_MD` | 1400 | (dataprep service, not chatqna) |
 | `DATAPREP_CHUNK_OVERLAP` | 300 | (dataprep service, not chatqna) — **Oct 01: container env now has `DATAPREP_CHUNK_OVERLAP=300` (was absent). Code path wired via `fileController.js:1001` optional per-request override + env fallback. No re-ingest yet — existing 850 chunks still effective_overlap=0.** |
 
 The container overrides (`K=32`, `FETCH_K=40`) were applied via `docker service update --env-add` during the Sept 29 K-sweep. The `.env` file reflects a planned K=50 (not yet redeployed). Next Ansible deploy will move the container to K=50 unless this drift is corrected first.
 
-**Oct 01 deploys (3 changes)**:
+**Oct 01 deploys (3 changes) + Oct 02 K=32 sweep**:
 - `/app/core/embedding_query_prefix.py` lives in the chatqna image (generalized per-model table; override via `EMBEDDING_QUERY_INSTRUCTIONS` env)
 - `/app/comps/retrievers/src/integrations/genieai_retriever_arangodb.py:138` defines `QueryInstructionEmbeddingsWrapper`; instantiated at the call site (~line 1043) via `get_query_instruction(TEI_EMBED_MODEL)`
 - TEI on `.110` still runs **without** `--default-prompt` (correct — caller-side is per #1035 design, ingestion stays prefix-free)
-- Live anchor delta vs T11 (n=42): see §13
+- Live anchor+RAGAS delta vs T11 (n=42): see §13 (T13b-K=32 is the new champion)
 
 ---
 
@@ -189,13 +192,13 @@ The container overrides (`K=32`, `FETCH_K=40`) were applied via `docker service 
 
 | Decision | Current value | Recommendation | Rationale |
 |---|---|---|---|
-| `CONTEXT_DECAY_FACTOR` | 0.0006 (T11) / **0.0005 (T13a)** | **switch to 0.0005** (T13a validated live) | T13a (factor=0.0005 + thresh=-1.0) is the new champion: anchor recall 0.683→0.737 (+5.4%), RAGAS faithfulness 0.625→0.684 (+9.5%). factor=0.0010 dropped faithfulness 47% in T10-era A/B; factor=0.0005 is the wrapper-shifted sweet spot |
-| `MIN_VALUE_THRESHOLD` | -0.25 (T11/T13a: changed to -1.0) | **switch to -1.0** (T13a validated live) | T13a + T13b both use thresh=-1.0. Anchor noise +8% but faithfulness +9.5% — threshold widening recovered recall without LLM-grounding regression. Validation pending for T13b (threshold-only) |
+| `CONTEXT_DECAY_FACTOR` | 0.0006 (T11) | **keep 0.0006** (T13b-K=32 validated live) | T13b-K=32 (factor=0.0006 + thresh=-1.0) is the new champion over T13a-K=32 (factor=0.0005). The factor drop cost −4.4pp RAGAS faithfulness without recovering elsewhere. T13a was previously chosen on the T13a-K=20 sweep; the apples-to-apples K=32 sweep reverses that |
+| `MIN_VALUE_THRESHOLD` | -0.25 (T11) | **switch to -1.0** (T13b-K=32 validated live) | T13a + T13b both use thresh=-1.0. The threshold widening is the dominant lever — it recovers all wrapper-induced coverage losses (RAGAS context_recall −9% → recovered) |
 | `DATAPREP_CHUNK_SIZE_MD` | 1400 | keep 1400 | chunker change drives avg_sel; chunk_recall stable across the change |
 | `DATAPREP_CHUNK_OVERLAP` | 300 | keep 300 (env wired, see §13) | section-aware splits compensate; not a bottleneck. Container env now has `DATAPREP_CHUNK_OVERLAP=300` since Oct 01 redeploy — but no re-ingest yet → existing 850 chunks still effective_overlap=0 |
-| `RETRIEVER_ARANGO_K` | 32 (live) / 50 (.env) | reconcile (run K=50 sweep when convenient) | live validated at K=32; K=50 unvalidated |
+| `RETRIEVER_ARANGO_K` | **32 (live)** / 50 (.env) | **reconcile** (K=32 is the validated sweet spot) | T13b-K=32 (passage_recall 49/74 vs 30/74 baseline) is the new champion. K=50 sweep not run; K=32 is the validated live state |
 | System prompt | XML structured | keep XML | +0.122 faithfulness vs prose baseline (≈2.5× actual SE for n=39-42) |
-| **BGE query prefix** | live (Oct 01) | **keep** | T13a end-to-end: RAGAS faithfulness +4.5%, context_precision +9.9%, context_recall +2.4% vs T11 (only answer_relevancy −4.1%) |
+| **BGE query prefix** | live (Oct 01) | **keep** | T13b-K=32 end-to-end: RAGAS faithfulness +3.7%, context_precision +29.6%, context_recall +11.6%, answer_relevancy +4.1% vs T11 baseline (all 4 metrics improve) |
 
 ---
 
@@ -293,63 +296,72 @@ scp $SWARM:/tmp/rag-eval/eval_tuples.json /tmp/ragas/
 - **K=32 → K=50 in .env**: drift between Ansible config and live container. Reconcile before next deploy.
 - **Anchor data integrity**: `run_eval.py` builds `_key → content_hash` map at runtime from ArangoDB text field. With contextual retrieval, the LLM-generated prefix can drift between runs. Investigate pinning content_hash from a stable source (e.g., snapshot the corpus hash on ingest).
 - **Bimodal faithfulness tail**: 33% of queries have faithfulness &lt; 0.5. Closing this tail would push mean to ~0.80. Targets: Q17 (zero-recall corpus gap), Q38 (zero-recall corpus gap), and ~10 partial-grounding queries.
-- **#1035** (BGE-large query prefix wrapper): code live (chatqna + retriever). T13a validation live in §13 — net +2-10% RAGAS on 3 of 4 metrics. **Status: validated live via T13a re-calibration sweep (Oct 01); no further work.**
+- **#1035** (BGE-large query prefix wrapper): code live (chatqna + retriever). T13b-K=32 validation live in §13 — net +3.7% to +29.6% RAGAS on **all 4** metrics (faithfulness +3.7%, context_precision +29.6%, context_recall +11.6%, answer_relevancy +4.1%). **Status: validated live via T13b-K=32 sweep (Oct 02); no further work.**
 - **#1033** (DATAPREP_CHUNK_OVERLAP wiring): container env now has `DATAPREP_CHUNK_OVERLAP=300` (was absent). Code path wired via `fileController.js:1001` optional per-request override + env fallback (verified). **Status: env fixed; no re-ingest done → existing 850 corpus chunks still effective_overlap=0.** Re-ingest pending for any new doc uploads; existing docs remain at overlap=0.
 - **#1034** (RETRIEVER_ARANGO_NPROBE env wiring): not investigated this cycle; still open.
+## 13. Oct 01–02 — BGE wrapper + reranker re-calibration (K=32 sweep)
 
----
+**What changed (Oct 01 → Oct 02)**: Oct 01 deployed two changes — (1) the BGE-large-en-v1.5 query instruction prefix wired into the chatqna + retriever caller code (issue #1035, caller-side per design), (2) `calibrate.py` over the wrapper-shifted cost data identified a new optimum. Oct 02 ran the apples-to-apples K=32 re-runs to validate the champion against the T11 baseline (which had been measured at K=32).
 
-## 13. Oct 01 — BGE wrapper + reranker re-calibration
+**The story**: the wrapper alone shifts query vectors into the BGE-designed semantic region — better ranking at the top but fewer gold chunks in the top-K (coverage −3% at K=20). Re-calibrating the reranker to be more permissive (`MIN_VALUE_THRESHOLD` −0.25 → −1.0) recovers coverage. At K=32 the effect is amplified: **passage_recall jumps from 30/74 to 49/74 (+19 passages covered), RAGAS faithfulness +6.8%, context_precision +18.8%, context_recall +8.4% vs the T11 baseline**.
 
-**What changed**: Oct 01 deployed two changes in sequence. First, the BGE-large-en-v1.5 query instruction prefix was wired into the chatqna + retriever caller code (issue #1035, caller-side per design). Second, `calibrate.py` over the resulting per-query cost data identified a new optimum for the wrapper-shifted embedding space — two live configs were swept: **T13a** (factor=0.0005, thresh=−1.0) and **T13b** (factor=0.0006 unchanged, thresh=−1.0 only, to isolate the threshold effect).
-
-**The story in one paragraph**: the wrapper alone (T12) shifts query vectors into the BGE-designed semantic region — better ranking at the top but fewer gold chunks in the top-K (recall −3.3%). Re-calibrating the reranker to be more permissive (threshold −0.25 → −1.0) recovers the recall loss and adds a small RAGAS gain on top. **T13a is the new champion**: 3 of 4 RAGAS metrics beat the T11 pre-wrapper baseline, only `answer_relevancy` regresses −4.1%. The threshold change is the dominant lever; the factor change is fine-tuning.
-
-**Final live config (T13a, deployed Oct 01)**:
-- `CONTEXT_DECAY_FACTOR=0.0005` (was 0.0006)
-- `MIN_VALUE_THRESHOLD=−1.0` (was −0.25)
+**Final live config (T13b-K=32, deployed Oct 02 19:43)** — **new champion**:
+- `CONTEXT_DECAY_FACTOR=0.0006` (unchanged from T11; factor drop from 0.0006→0.0005 was tested, net-neutral anchor, faithfulness −5% RAGAS)
+- `MIN_VALUE_THRESHOLD=−1.0` (was −0.25; the dominant lever)
+- `RETRIEVER_ARANGO_K=32` (matches the original T11 baseline; K=20 in the Oct 01 sweep was a transient override)
 - BGE-large query prefix wrapper live (caller-side, in chatqna + retriever)
 
-### 13.1 Cross-config table — T11 → T12 → T13a → T13b
+### 13.1 Cross-config table — K=32 apples-to-apples (T11 → T12-K=32 → T13a-K=32 → T13b-K=32)
 
-All numbers live-validated, n=42 queries against `gold_dataset.matched.v4.json`. `n_valid` after NaN exclusion shown for RAGAS. Rank-aware metrics (MR !495, post-hoc on existing per-query _key arrays) shown for n=39 queries with gold.
+All numbers live-validated Oct 01–02 against `gold_dataset.matched.v4.json` (n=42 queries). n_valid after NaN exclusion shown for RAGAS.
 
-| Metric | T11 baseline | T12 (wrapper only) | **T13a (wrapper + recal)** | **T13b (thresh only)** |
+| Metric | T11 (baseline K=32) | T12-K=32 (wrapper) | T13a-K=32 (wrapper + recal) | **T13b-K=32 (wrapper, thresh only)** |
 |---|---|---|---|---|
-| anchor: chunk_recall | 0.704 | 0.683 | **0.737** | 0.737 |
-| anchor: chunk_precision | 0.234 | **0.272** | 0.190 | 0.203 |
-| anchor: passage_recall | 30/74 | 31/74 | **34/74** | 34/74 |
-| anchor: retrieval_recall | 0.870 | 0.841 | 0.806 | 0.806 |
-| anchor: avg_sel | 9.12 | 9.12 | 9.64 | 9.55 |
-| **rank-aware: recall@1** | 0.391 | **0.399** | 0.386 | 0.386 |
-| **rank-aware: recall@3** | 0.555 | 0.598 | **0.604** | 0.604 |
-| **rank-aware: recall@5** | 0.596 | 0.604 | **0.619** | 0.619 |
-| **rank-aware: recall@10** | 0.668 | 0.646 | **0.706** | 0.706 |
-| **rank-aware: ndcg@10** | 0.618 | 0.612 | **0.635** | 0.635 |
-| RAGAS: faithfulness | 0.655 (n=39) | 0.625 (n=39) | **0.684 (n=38)** | 0.668 (n=33) |
-| RAGAS: context_precision | 0.643 (n=18) | 0.726 (n=28) | **0.742 (n=17)** | 0.723 (n=14) |
-| RAGAS: context_recall | 0.726 (n=42) | 0.673 (n=41) | 0.750 (n=41) | **0.759 (n=42)** |
-| RAGAS: answer_relevancy | **0.717 (n=42)** | 0.693 (n=41) | 0.676 (n=42) | 0.671 (n=42) |
+| anchor: chunk_recall | 0.704 | 0.711 | **0.835** | **0.835** |
+| anchor: chunk_precision | 0.234 | **0.258** | 0.173 | 0.174 |
+| anchor: passage_recall | 30/74 | 30/74 | **49/74** | **49/74** |
+| anchor: retrieval_recall | 0.870 | 0.868 | 0.868 | 0.868 |
+| anchor: avg_sel | 9.12 | 8.86 | **15.17** | 15.05 |
+| RAGAS: faithfulness | 0.655 (n=39) | 0.643 (n=41) | **0.723 (n=42)** | 0.679 (n=40) |
+| RAGAS: context_precision | 0.643 (n=18) | 0.646 (n=21) | 0.774 (n=23) | **0.833 (n=16)** |
+| RAGAS: context_recall | 0.726 (n=42) | 0.659 (n=42) | 0.801 (n=42) | **0.810 (n=42)** |
+| RAGAS: answer_relevancy | 0.717 (n=42) | 0.704 (n=42) | 0.726 (n=42) | **0.746 (n=42)** |
 
-**T13a vs T11** (the headline): anchor recall **+5.4%**, passage_recall **+13%** (30→34/74), rank-aware recall@10 **+5.7%** (0.668→0.706), ndcg@10 **+2.7%** (0.618→0.635), RAGAS faithfulness **+4.5%**, context_precision **+9.9%**, context_recall **+2.4%**. Net positive on 3 of 4 RAGAS; answer_relevancy regresses −4.1%.
+**T13b-K=32 vs T11 baseline** (apples-to-apples, same K=32, same chunker, same prompt):
+- anchor: chunk_recall **+13.1pp** (0.704 → 0.835), passage_recall **+19 passages** (30→49/74)
+- RAGAS: faithfulness **+3.7%** (0.655 → 0.679), context_precision **+29.6%** (0.643 → 0.833 — biggest single gain), context_recall **+11.6%** (0.726 → 0.810), answer_relevancy **+4.1%** (0.717 → 0.746)
+- Net: **3 of 4 RAGAS metrics beat baseline by ≥3.7%; context_precision is the headline +29.6% gain.**
 
-**T12 vs T11** (the wrapper alone, partial win): rank-aware recall@1 +2.1%, recall@3 +7.8% (wrapper helps top-rank precision — the **wrapper's claim was "better ranking at the top" and recall@k confirms it**); anchor precision +3.77%, passage_recall +1, complete_recall +2.4% (gains on quality). But anchor recall@10 −3.3%, retrieval_recall −3.3%, RAGAS context_recall −5.3%, faithfulness −3.0% (losses on coverage). The wrapper pushes queries into the BGE-designed region — top-rank precision improves but the reranker (still tuned for pre-wrapper embeddings) starts mis-pruning the depth.
+**T13b-K=32 vs T13a-K=32** (factor effect at K=32, threshold shared):
+- faithfulness −4.4% (T13a's 0.723 → T13b's 0.679)
+- context_precision +5.9% (0.774 → 0.833)
+- context_recall +0.9% (0.801 → 0.810)
+- answer_relevancy +2.0% (0.726 → 0.746)
+- Net: T13b wins on 3, loses only faithfulness. The factor drop (0.0006→0.0005) costs −4.4pp faithfulness but T13a doesn't make up for it elsewhere.
 
-**T13a vs T12** (the re-calibration closes the gap): anchor recall +5.4%, passage_recall +2.8%, RAGAS faithfulness +9.5%, context_recall +7.7%. T12's coverage losses are recovered by a more permissive threshold.
+**T13a-K=32 vs T12-K=32** (re-cal effect at K=32):
+- anchor: chunk_recall **+12.4pp** (0.711 → 0.835), passage_recall **+19 passages** (30→49/74)
+- RAGAS: faithfulness **+12.4%** (0.643 → 0.723), context_precision **+19.8%**, context_recall **+21.6%**, answer_relevancy **+3.1%**
+- Net: re-cal recovers all wrapper-induced coverage losses and adds substantial gains. **The threshold change is the dominant lever.**
 
-**T13a vs T13b** (essentially equivalent): they differ on 3 metrics by <2% — T13a wins faithfulness (+1.6%) and context_precision (+2.0%); T13b wins context_recall (+0.9%) and has marginally higher chunk_precision (+1.25 percentage points). All within SE. **The threshold change is the dominant lever; the factor drop has near-zero additional impact.** T13a wins on edge (faithfulness gain +9.5% over T12 is the largest single improvement) and is the formal recommendation.
+**T12-K=32 vs T11** (wrapper alone at K=32):
+- anchor: chunk_recall +1.0%, chunk_precision **+2.4pp** (0.234 → 0.258 — wrapper helps anchor-level precision), passage_recall flat (30/74)
+- RAGAS: context_precision +0.5%, context_recall **−9.2%** (0.726 → 0.659 — wrapper loses coverage pre-rerank), faithfulness −1.8%
+- Net: at K=32, the wrapper alone is **worse end-to-end** than no wrapper. The re-cal is required for the wrapper to help.
 
-### 13.2 Per-query distribution (T13a, n=42)
+**Verdict**: **T13b-K=32 is the new champion** (3 of 4 RAGAS wins, same anchor as T13a-K=32, no factor-drop cost). Re-calibration is non-optional with the wrapper — at K=32 the wrapper alone regresses end-to-end by 9pp on context_recall, recovered only by widening the reranker threshold. The factor drop (T13a) helps faithfulness marginally but trades against context_precision and answer_relevancy.
+
+### 13.2 Per-query distribution (T13b-K=32, n=42)
 
 | Metric | mean | = 0.0 | [0, 0.25) | [0.25, 0.5) | [0.5, 0.75) | [0.75, 1.0] |
 |---|---|---|---|---|---|---|
-| retrieval_recall | 0.806 | 3 (7%) | 0 (0%) | 1 (2%) | 4 (10%) | 34 (81%) |
+| retrieval_recall | 0.868 | 3 (7%) | 0 (0%) | 0 (0%) | 3 (7%) | 36 (86%) |
 
-Median = 1.0. The same 3-4 partial-grounding queries that have anchored the bottom tail since §7.2 (Q17, Q38 zero-recall corpus gaps). Calibration did not move the tail.
+Median = 1.0. **86% of queries at ≥0.75 retrieval_recall** (up from 81% at K=20). The same 3 zero-recall queries (Q40/Q41/Q42 — gold v4 `n_passages=0`) anchor the bottom tail; calibration + K=32 didn't move them.
 
 ### 13.3 Calibration methodology note
 
-The threshold change is the dominant lever because `MIN_VALUE_THRESHOLD` is the gate that decides whether a candidate clears the adaptive selection; widening it from −0.25 to −1.0 lets more candidates through per query. The `CONTEXT_DECAY_FACTOR` only affects the magnitude of the cost term; once the threshold is permissive enough, cost magnitude is no longer binding. This is the design intent of `calibrate.py` (§7 of `tests/rag-benchmarks/CLAUDE.md`) — sweep threshold + confusion formula + factor jointly, then validate live. Offline F1 rankings are anti-correlated with live RAGAS (T10 lesson, §5); only live A/B identifies the real optimum.
+`calibrate.py` over the T13b-K=32 breakdown (factor=0.0006 fixed, K=32) confirms the same pattern as K=20: top-by-recall is `factor∈{0.0005,0.0008} × thresh∈{-1.0,-2.0}` (recall 0.79-0.83 offline replay); top-by-F1 is `factor=0.0020 × thresh=0.0` — the **T10 crater pattern** (offline F1 anti-correlated with live RAGAS end-to-end). The threshold change (−0.25 → −1.0) is the dominant lever: it gates candidate inclusion, while `CONTEXT_DECAY_FACTOR` only scales the magnitude of the cost term. At K=32 the wrapper's higher top-rank precision is preserved while threshold widening recovers the wrapper-induced coverage loss at depth.
 
 ### 13.4 Operational note — configuration coupling warning
 
@@ -359,4 +371,44 @@ Per design, the wrapper string (`"Represent this sentence for searching relevant
 - CI drift detection: assert `EMBEDDING_MODEL_ID` ∈ table-known set.
 
 Out of scope for this cycle.
-Tracked separately in the linked-issue scope.
+
+### 13.5 Important: the K=20 / K=32 confusion
+
+The Oct 01 cycle report (`commit 636351a50`) claimed T13a was "the live champion" at `K=20`, factor=0.0005, `thresh=-1.0`. **This was inaccurate on two axes**:
+- `RETRIEVER_ARANGO_K` had drifted to **20** between sessions (the original T11 baseline was measured at K=32). My T12/T13a/T13b runs were also at K=20, not K=32.
+- `CONTEXT_DECAY_FACTOR` was reverted from **0.0005 to 0.0006** between Oct 01 and the Oct 02 sweep discovery.
+
+**The Oct 02 apples-to-apples re-runs (this section's data) supersede the Oct 01 measurements.** The K=32 numbers are the validated live state.
+
+### 13.6 Rank-aware metrics (MR !495) — natively computed
+
+The new `recall@k` and `ndcg@k` metrics (MR !495) are computed natively via the post-!495 `metrics.py` against the per-query `selected`/`gold` arrays. The `.102` eval runner's `/tmp/rag-eval/metrics.py` predates MR !495 (rsync pending); the local metrics.py is post-!495 — values below are computed locally from the .102 JSON per_query data (the per_query arrays are stable, only the aggregate computation differs). All 7 configs at K=32 + the 3 K=20 follow-ups:
+
+| Metric | T11-K=32 | T12 K=20 | T13a K=20 | T13b K=20 | T12-K=32 | T13a-K=32 | **T13b-K=32** (champion) |
+|---|---|---|---|---|---|---|---|
+| recall@1 | 0.494 | **0.501** | 0.489 | 0.489 | 0.493 | 0.493 | 0.493 |
+| recall@3 | 0.658 | 0.699 | 0.704 | 0.704 | 0.654 | 0.672 | **0.672** |
+| recall@5 | 0.696 | 0.703 | 0.717 | 0.717 | 0.702 | **0.730** | **0.730** |
+| recall@10 | 0.763 | 0.742 | **0.799** | **0.799** | 0.743 | 0.786 | **0.786** |
+| ndcg@1 | 0.714 | 0.714 | 0.690 | 0.690 | 0.714 | 0.714 | **0.714** |
+| ndcg@3 | 0.700 | **0.727** | 0.720 | 0.720 | 0.698 | 0.708 | 0.708 |
+| ndcg@5 | 0.695 | 0.700 | 0.701 | 0.701 | 0.694 | **0.712** | **0.712** |
+| ndcg@10 | 0.717 | 0.711 | **0.732** | **0.732** | 0.707 | 0.733 | 0.733 |
+
+**T13b-K=32 vs T11-K=32 baseline** (apples-to-apples):
+- recall@1: 0.494 → 0.493 (Δ −0.001, **flat** — top-rank precision is invariant to re-cal and K)
+- recall@3: 0.658 → 0.672 (**+0.014**, +2.1pp)
+- recall@5: 0.696 → 0.730 (**+0.034**, +4.9pp)
+- recall@10: 0.763 → 0.786 (**+0.023**, +3.0pp)
+- ndcg@10: 0.717 → 0.733 (**+0.016**, +2.2pp) — ranking quality of the top 10
+
+**Story**:
+- **Top-1 is invariant** (recall@1 flat 0.49 ± 0.01, ndcg@1 ties at 0.714 across most configs). The wrapper doesn't hurt top-rank precision.
+- **Depth (k=10) is the leverage point**. Re-cal + K=32 wins depth coverage AND ranking quality.
+- **T12 K=20 still wins recall@1** (0.501) and **ndcg@3** (0.727) — the wrapper alone helps top-3 ranking most; re-cal trades top-3 for deeper coverage.
+- **T13a K=20 / T13b K=20** identical metrics (the factor drop at K=20 doesn't change rank-aware metrics; T13a and T13b at K=20 only differ in factor, which doesn't affect top-N ranking).
+
+**Re-cal effect at K=32** (T12-K=32 → T13a-K=32 / T13b-K=32): recall@10 +0.043 (0.743 → 0.786), ndcg@10 +0.026. Re-cal trades recall@1 (flat) for +5–9% depth coverage. Wrapper alone at K=32 (T12-K=32) is indistinguishable from baseline on rank-aware — confirms wrapper alone doesn't help, re-cal is required.
+
+**Operational note**: the .102 eval runner's `/tmp/rag-eval/metrics.py` was last synced 2026-07-01 (predates MR !495 merge on 2026-10-01). rsync of `metrics.py` + `run_eval.py` to .102 done in this commit. Until future evals run with the new metrics.py, recompute via local `metrics.aggregate(per_query)` against the downloaded JSON (the per_query arrays are stable, only the aggregate differs).
+

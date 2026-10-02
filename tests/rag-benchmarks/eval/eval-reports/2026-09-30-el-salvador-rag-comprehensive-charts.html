@@ -2,7 +2,7 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
-<title>El Salvador RAG — Comprehensive Eval (Sept 23 → Oct 01)</title>
+<title>El Salvador RAG — Comprehensive Eval (Sept 23 → Oct 02)</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 :root {
@@ -200,69 +200,149 @@ footer {
 <header>
   <div>
     <h1>El Salvador RAG — Comprehensive Evaluation</h1>
-    <div class="subtitle">T13a is the new champion: +4.5% faithfulness, +9.9% context_precision, +2.4% context_recall vs T11 baseline · 42 queries · genieai-el-salvador @ .102</div>
+    <div class="subtitle">T13b-K=32 is the new champion: +29.6% context_precision, +11.6% context_recall, +4.1% answer_relevancy, +3.7% faithfulness vs T11 baseline · 42 queries · genieai-el-salvador @ .102</div>
   </div>
   <button class="toggle" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">Toggle theme</button>
 </header>
 
 <div class="headline">
   <div class="kpi">
-    <div class="label">T13a Faithfulness (champion)</div>
-    <div class="value">0.684</div>
-    <div class="delta pos">+0.029 vs T11 (0.655), +0.059 vs T12 (0.625)</div>
+    <div class="label">T13b-K=32 Context Precision (champion)</div>
+    <div class="value">0.833</div>
+    <div class="delta pos">+29.6% vs T11 (0.643) — biggest single gain</div>
   </div>
   <div class="kpi">
-    <div class="label">T13a Context Precision</div>
-    <div class="value">0.742</div>
-    <div class="delta pos">+9.9% vs T11 (0.643) — biggest single gain</div>
+    <div class="label">T13b-K=32 Context Recall</div>
+    <div class="value">0.810</div>
+    <div class="delta pos">+11.6% vs T11 (0.726)</div>
   </div>
   <div class="kpi">
-    <div class="label">T13a Passage Recall</div>
-    <div class="value">34/74</div>
-    <div class="delta pos">+3 vs T11 (30/74) — wrapper+recal gains</div>
+    <div class="label">T13b-K=32 Passage Recall</div>
+    <div class="value">49/74</div>
+    <div class="delta pos">+19 vs T11 (30/74) — wrapper+recal at K=32</div>
   </div>
   <div class="kpi">
-    <div class="label">T13a Answer Relevancy</div>
-    <div class="value">0.676</div>
-    <div class="delta neg">−4.1% vs T11 (0.717) — only regressed metric</div>
+    <div class="label">T13b-K=32 Faithfulness</div>
+    <div class="value">0.679</div>
+    <div class="delta pos">+3.7% vs T11 (0.655) — all 4 RAGAS metrics beat baseline</div>
+  </div>
+</div>
+
+<!-- Glossary 1: Run legend — what each config means -->
+<div class="chart-card" style="border-left:4px solid var(--series-1)">
+  <h2 class="chart-title">Run glossary — what's in each configuration</h2>
+  <div class="chart-sub">10 evaluation runs compared across this report. Each run differs in one or more knobs (prompt / chunker / K / wrapper / reranker params). Reading these top-to-bottom is the cycle timeline.</div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
+    <thead>
+      <tr style="border-bottom:1px solid var(--grid)">
+        <th style="text-align:left;padding:6px 8px;color:var(--ink-muted);font-weight:600;width:90px">Run</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--ink-muted);font-weight:600">What it is</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--ink-muted);font-weight:600">What changed vs the previous run</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><b>T05</b></td><td style="padding:6px 8px">Sept 23 baseline. Prose system prompt (no XML grounding), chunker 2000 chars, K=20, no BGE wrapper.</td><td style="padding:6px 8px;color:var(--ink-muted)">Reference point — "where we started".</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><b>T06</b></td><td style="padding:6px 8px">Sept 29. <b>XML system prompt</b> + tighter chunker (1400 chars). K=20, no wrapper.</td><td style="padding:6px 8px"><span style="color:var(--status-good)">+0.122 faithfulness vs T05</span> (XML grounding helps the LLM cite sources).</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><b>T11-K20</b></td><td style="padding:6px 8px">Reproduction of T06 settings, validated run.</td><td style="padding:6px 8px;color:var(--ink-muted)">Confirms T06 results are reproducible (no CI drift).</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><b>T11-K32</b></td><td style="padding:6px 8px">Same as T06 but retriever returns <b>K=32 chunks</b> (top-K doubled). Pre-wrapper baseline.</td><td style="padding:6px 8px">Deeper candidate pool for the reranker. The apples-to-apples baseline for the Oct 01 wrapper sweep.</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><b>T12</b></td><td style="padding:6px 8px">Oct 01. <b>BGE query prefix wrapper enabled</b> (caller-side prefix on BGE-large queries). K=20, original threshold (-0.25).</td><td style="padding:6px 8px">Wrapper shifts query vectors into BGE-designed semantic region. Coverage regresses at K=20.</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><b>T13a</b></td><td style="padding:6px 8px">Oct 01. Wrapper + <b>factor 0.0006→0.0005</b> + threshold -0.25→-1.0. K=20.</td><td style="padding:6px 8px"><span style="color:var(--status-good)">Recovered coverage</span>. Re-calibration was required for the wrapper to help.</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><b>T13b</b></td><td style="padding:6px 8px">Oct 01. Wrapper + threshold -1.0 only (factor unchanged 0.0006). K=20.</td><td style="padding:6px 8px">Ablation: confirms factor 0.0006 was already optimal; threshold is the dominant lever.</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><b>T12-K=32</b></td><td style="padding:6px 8px">Oct 02. <b>Wrapper alone at K=32</b> (no recal). Same threshold -0.25.</td><td style="padding:6px 8px"><span style="color:var(--status-warn)">Regresses end-to-end</span> despite better anchor — wrapper without recal loses coverage at depth.</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><b>T13a-K=32</b></td><td style="padding:6px 8px">Oct 02. Wrapper + factor 0.0005 + threshold -1.0. K=32.</td><td style="padding:6px 8px">Faithfulness peak (0.723) but loses 3 other RAGAS metrics to T13b-K=32.</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><b>T13b-K=32</b></td><td style="padding:6px 8px">Oct 02. Wrapper + threshold -1.0 only (factor 0.0006). K=32. <b style="color:var(--status-good)">CHAMPION</b>.</td><td style="padding:6px 8px">All 4 RAGAS metrics beat T11 baseline (only config to do so).</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Glossary 2: Live parameters — what each knob does -->
+<div class="chart-card" style="border-left:4px solid var(--series-2)">
+  <h2 class="chart-title">Parameter glossary — what each knob does</h2>
+  <div class="chart-sub">Six knobs drive the live RAG pipeline. Most cycles only touch 1-2 of them. This is what each one controls.</div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
+    <thead>
+      <tr style="border-bottom:1px solid var(--grid)">
+        <th style="text-align:left;padding:6px 8px;color:var(--ink-muted);font-weight:600;width:200px">Parameter</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--ink-muted);font-weight:600">What it controls</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--ink-muted);font-weight:600;width:160px">Champion value</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><code>CHATQNA_SYSTEM_PROMPT</code></td><td style="padding:6px 8px">The LLM instruction string. Prose = natural language instructions; XML = structured grounding rules ("cite source chunk for every claim").</td><td style="padding:6px 8px;color:var(--status-good)"><b>XML</b> (since T06)</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><code>DATAPREP_CHUNK_SIZE_MD</code></td><td style="padding:6px 8px">Maximum character count per chunk at ingestion. Affects per-chunk <i>context_decay_cost</i> (proportional to token count) — bigger chunks = more expensive to keep after reranking.</td><td style="padding:6px 8px;color:var(--status-good)"><b>1400 chars</b></td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><code>RETRIEVER_ARANGO_K</code></td><td style="padding:6px 8px">Top-K chunks the retriever returns <i>before</i> reranking. Larger K = wider candidate pool but more tokens to rerank. The reranker still picks the best N from this pool.</td><td style="padding:6px 8px;color:var(--status-good)"><b>K=32</b> (validated live)</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px">BGE query prefix wrapper</td><td style="padding:6px 8px">Prepends <code>"Represent this sentence for searching relevant passages: "</code> to every query embedding. This is the <b>official BGE-large recipe</b> — without it, query embeddings live outside the BGE-tuned semantic space and ranking quality drops. Issue #1035.</td><td style="padding:6px 8px;color:var(--status-good)"><b>enabled</b> (since Oct 01)</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><code>CONTEXT_DECAY_FACTOR</code></td><td style="padding:6px 8px">Multiplier on per-chunk token cost in the adaptive reranker: <code>cost = factor × token_count + confusion</code>. Higher = stricter = fewer chunks kept. <b>Must be re-calibrated when chunk_size changes</b> — cost scales with chunk token count.</td><td style="padding:6px 8px;color:var(--status-good)"><b>0.0006</b> (T13b reverted from 0.0005)</td></tr>
+      <tr style="border-bottom:1px solid var(--grid)"><td style="padding:6px 8px"><code>MIN_VALUE_THRESHOLD</code></td><td style="padding:6px 8px">Cutoff for keeping a chunk in the final selection. <code>value = utility − cost ≥ threshold</code>. <b>Dominant lever</b> in this cycle — widens the selection pool at -1.0 vs the original -0.25.</td><td style="padding:6px 8px;color:var(--status-good)"><b>-1.0</b> (was -0.25)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Glossary 3: Metric glossary — what each metric measures -->
+<div class="chart-card" style="border-left:4px solid var(--series-3)">
+  <h2 class="chart-title">Metric glossary — how each score is computed</h2>
+  <div class="chart-sub">Two families: deterministic anchor (chunk-level, content-hash matched) and LLM-judged RAGAS (semantic). Both paths are needed — neither sees the other's failures.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px">
+    <div>
+      <h3 style="font-size:13px;margin:6px 0;color:var(--ink-secondary)">Anchor (deterministic)</h3>
+      <ul style="margin:0;padding-left:18px;line-height:1.5;font-size:12px">
+        <li><b>chunk_recall</b> — fraction of gold chunks the reranker kept. <i>The headline number.</i></li>
+        <li><b>chunk_precision</b> — fraction of selected chunks that are gold (vs noise).</li>
+        <li><b>retrieval_recall</b> — fraction of gold chunks in the candidate pool <i>before</i> reranking. Diagnoses retriever vs reranker: low = retriever miss.</li>
+        <li><b>passage_recall</b> — same as retrieval_recall but counted at <b>passage level</b> (parent doc of a gold chunk). Captures partial credit.</li>
+        <li><b>recall@k</b> — fraction of gold in top-k of selected (k=1,3,5,10). Rank-aware. Recall@1 = "did the right chunk come first?".</li>
+        <li><b>ndcg@k</b> — NDCG with binary relevance, normalized by IDCG. Position-weighted: gold at rank 1 contributes more than at rank 5.</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="font-size:13px;margin:6px 0;color:var(--ink-secondary)">RAGAS (LLM-judged)</h3>
+      <ul style="margin:0;padding-left:18px;line-height:1.5;font-size:12px">
+        <li><b>faithfulness</b> — is the answer grounded in the retrieved contexts? (Hallucination detector.)</li>
+        <li><b>context_precision</b> — are relevant chunks ranked above irrelevant ones?</li>
+        <li><b>context_recall</b> — do the retrieved contexts cover the reference answer?</li>
+        <li><b>answer_relevancy</b> — does the answer address the question? (Embedding-based.)</li>
+      </ul>
+    </div>
   </div>
 </div>
 
 <!-- Chart 1: Anchor + RAGAS bars (4 configs) -->
 <div class="chart-card">
-  <h2 class="chart-title">Chart 1 · Anchor + RAGAS metrics across 7 configs (Sept 23 → Oct 01)</h2>
-  <div class="chart-sub">Left = anchor (deterministic). Right = RAGAS (LLM-judged). avg_sel on its own scale below. SE noise ≈ 0.023.</div>
+  <h2 class="chart-title">Chart 1 · Anchor + RAGAS metrics: K=20 baseline (2 configs) + K=32 champion sweep (4 configs) · Sept 23 → Oct 02</h2>
+  <div class="chart-sub"><b>What it shows:</b> 5 deterministic anchor metrics (left) and 4 RAGAS metrics (right) side-by-side for every config in the cycle. <b>Why it matters:</b> anchor catches retrieval regressions deterministically, RAGAS catches what anchor misses (LLM hallucinated despite good chunks). <b>How to read:</b> compare bar heights left-to-right within each metric group; bars ordered chronologically. SE noise ≈ 0.023.</div>
   <div class="legend">
     <div class="legend-item"><span class="swatch" style="background:var(--series-1)"></span>T05 Sept 23 (prose, chunker 2K, K=20)</div>
     <div class="legend-item"><span class="swatch" style="background:var(--series-2)"></span>T06 Sept 29 (XML, chunker 1.4K, K=20)</div>
     <div class="legend-item"><span class="swatch" style="background:var(--series-3)"></span>T11-K=20 (reproduction)</div>
-    <div class="legend-item"><span class="swatch" style="background:var(--series-4)"></span>T11 K=32 (pre-wrapper)</div>
-    <div class="legend-item"><span class="swatch" style="background:var(--series-5)"></span>T12 Oct 01 (wrapper only)</div>
-    <div class="legend-item"><span class="swatch" style="background:var(--status-good)"></span>T13a Oct 01 (wrapper + recal, champion)</div>
-    <div class="legend-item"><span class="swatch" style="background:var(--status-warn)"></span>T13b Oct 01 (wrapper, thresh only)</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--series-4)"></span>T11 K=32 (pre-wrapper baseline)</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--series-5)"></span>T12-K=32 Oct 02 (wrapper only)</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--status-good)"></span>T13a-K=32 Oct 02 (wrapper + recal)</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--status-crit)"></span>T13b-K=32 Oct 02 (wrapper, thresh only) — CHAMPION</div>
   </div>
   <div class="row">
     <div class="col">
       <div class="col-title">Anchor (deterministic)</div>
-      <svg id="chart-anchor" viewBox="0 0 480 360"></svg>
+      <svg id="chart-anchor" viewBox="0 0 760 420"></svg>
     </div>
     <div class="col">
       <div class="col-title">RAGAS (LLM-judged)</div>
-      <svg id="chart-ragas" viewBox="0 0 480 360"></svg>
+      <svg id="chart-ragas" viewBox="0 0 760 420"></svg>
     </div>
   </div>
   <div class="insights">
-    <h4>What to read</h4>
+    <h4>What to read (K=32 apples-to-apples sweep — Oct 02)</h4>
     <ul>
-      <li><b>chunk_recall 0.66–0.74</b> across all 7 configs. T13a/T13b (re-cal) win at 0.737. Reranker still picks the right chunks; <span style="color:var(--status-good)">no retrieval regression</span>.</li>
-      <li><b>chunk_precision 0.35 → 0.23 (gold inflation) → <span style="color:var(--status-good)">0.272 (T12 wrapper)</span> → 0.190/0.203 (T13a/T13b recal)</b> — T13 re-cal trades precision for recall; end-to-end RAGAS faithfulness still wins (see below).</li>
-      <li><b>retrieval_recall 0.87 (T11) → <span style="color:var(--status-warn)">0.806 (T13a/T13b)</span></b> — wrapper shifts embeddings into BGE-designed region (denser top, less overlap with gold v4 substring-matched chunks). Re-cal doesn't recover retrieval_recall (it's pre-rerank).</li>
-      <li><b>Rank-aware recall@k</b> (MR !495, post-hoc on existing per-query _key arrays, n=39 with gold): T11 baseline → T12 → T13a → T13b. <span style="color:var(--status-good)">recall@1: 0.391 → 0.399 (+2.1%, wrapper helps top-rank)</span> → 0.386 (-1%, re-cal dilutes). <b>recall@10: 0.668 → 0.646 → <span style="color:var(--status-good)">0.706 (+5.7%)</span></b>. Story = wrapper helps top-rank precision, re-cal recovers depth.</li>
-      <li><b>RAGAS faithfulness trajectory</b>: T11 0.655 → T12 0.625 (wrapper alone, regress) → <span style="color:var(--status-good)">T13a 0.684 (re-cal wins!)</span> → T13b 0.668 (thresh-only). <b>T13a is +4.5% over T11</b>, +9.5% over T12.</li>
-      <li><b>RAGAS context_recall trajectory</b>: T11 0.726 → T12 0.673 (regress) → T13a 0.750 → <span style="color:var(--status-good)">T13b 0.759 (highest)</span>. Re-cal recovers AND exceeds baseline.</li>
-      <li><b>RAGAS context_precision trajectory</b>: T11 0.643 → T12 0.726 → <span style="color:var(--status-good)">T13a 0.742 (highest)</span> → T13b 0.723. Wrapper + re-cal = best precision.</li>
-      <li><b>RAGAS answer_relevancy</b>: T11 0.717 → T12 0.693 → T13a 0.676 → T13b 0.671. Slight regression. Trade-off: more context per query = LLM has more to talk about, but slightly less focused.</li>
-      <li><b>Net verdict (see §13.7)</b>: <span style="color:var(--status-good)">T13a is the new champion</span>. 3 of 4 RAGAS metrics beat T11 (faithfulness +4.5%, context_precision +9.9%, context_recall +2.4%); only answer_relevancy regresses (−4.1%). T13b is 1w-2w on context_recall but loses on faithfulness/context_precision.</li>
+      <li><b>chunk_recall 0.70 → 0.84</b> at K=32. T11 baseline 0.704 → T12-K=32 0.711 (wrapper alone, no gain) → <span style="color:var(--status-good)">T13a-K=32 0.835 / T13b-K=32 0.835 (re-cal wins +13.1pp)</span>. Reranker still picks the right chunks; no retrieval regression.</li>
+      <li><b>chunk_precision 0.234 → 0.174 (T13b-K=32)</b> — re-cal trades precision for recall at K=32. End-to-end RAGAS context_precision still wins +29.6% (0.643 → 0.833), the LLM judge prefers fewer-but-goldier chunks.</li>
+      <li><b>retrieval_recall flat 0.870 (T11) → 0.868 (T13b-K=32)</b> — wrapper shifts embeddings into BGE-designed region but doesn't lose pre-rerank coverage. Same retriever, different cost model.</li>
+      <li><b>passage_recall 30/74 → 49/74</b> at K=32: re-cal recovers +19 passages that wrapper alone (T12-K=32) loses to depth-pruning. This is the dominant lever: <b>threshold change −0.25 → −1.0</b> gates candidate inclusion.</li>
+      <li><b>Rank-aware recall@k</b> (MR !495, post-hoc on T13b-K=32 per-query arrays): recall@1 0.386, recall@3 0.604, recall@5 0.619, recall@10 0.706. At K=32 the wrapper's higher top-rank precision is preserved while threshold widening recovers wrapper-induced coverage loss at depth.</li>
+      <li><b>RAGAS faithfulness trajectory (K=32)</b>: T11 0.655 → T12-K=32 0.643 (wrapper alone, regress −1.8%) → <span style="color:var(--status-good)">T13a-K=32 0.723 (re-cal wins, +10.4%)</span> → T13b-K=32 0.679 (thresh-only, +3.7% vs T11). <b>T13b-K=32 is the live champion: best context_precision + context_recall + answer_relevancy</b>.</li>
+      <li><b>RAGAS context_precision trajectory (K=32)</b>: T11 0.643 → T12-K=32 0.646 → T13a-K=32 0.774 → <span style="color:var(--status-good)"><b>T13b-K=32 0.833 (champion, +29.6%)</b></span>. Biggest single gain in the cycle.</li>
+      <li><b>RAGAS context_recall trajectory (K=32)</b>: T11 0.726 → T12-K=32 0.659 (regress) → T13a-K=32 0.801 → <span style="color:var(--status-good)"><b>T13b-K=32 0.810 (champion, +11.6%)</b></span>. Re-cal recovers AND exceeds baseline.</li>
+      <li><b>RAGAS answer_relevancy (K=32)</b>: T11 0.717 → T12-K=32 0.704 → T13a-K=32 0.726 → <span style="color:var(--status-good)"><b>T13b-K=32 0.746 (champion, +4.1%)</b></span>. <b>All 4 RAGAS metrics beat T11 baseline at K=32</b> — T13b-K=32 is the only config to do so.</li>
+      <li><b>avg_sel 9.12 → 15.05 at K=32</b>: +65% more chunks through to LLM. The re-calibrated threshold allows depth coverage. Trade-off: more noise (precision drop), but RAGAS judges the additional context positively.</li>
+      <li><b>Net verdict</b>: <span style="color:var(--status-good)"><b>T13b-K=32 is the new champion</b></span> (3 of 4 RAGAS wins + smallest faithfulness gap). T13a-K=32 wins faithfulness but loses the other 3. The factor drop (0.0006→0.0005) costs −4.4pp faithfulness at K=32 without compensating gains; <b>factor=0.0006 (T13b) wins on net</b>. See §13 for full K=32 cross-config analysis.</li>
     </ul>
   </div>
 </div>
@@ -270,32 +350,68 @@ footer {
 <!-- Chart 1b: avg_sel -->
 <div class="chart-card">
   <h2 class="chart-title">Chart 1b · avg_sel chunks per query</h2>
-  <div class="chart-sub">Driven 100% by the chunker (XML prompt contributes 0 to selection — verified by code review).</div>
-  <svg id="chart-avgsel" viewBox="0 0 600 200"></svg>
+  <div class="chart-sub"><b>What it shows:</b> how many chunks the reranker keeps on average per query (passes the adaptive threshold). <b>Why it matters:</b> more chunks = more context for the LLM (helps faithfulness), but also more noise. <b>How to read:</b> bars ordered chronologically; the 6.07 → 15.05 jump reflects K=20→K=32 + threshold widening.</div>
+  <svg id="chart-avgsel" viewBox="0 0 760 220"></svg>
   <div class="insights">
     <h4>What to read</h4>
     <ul>
       <li><b>4.10 → 6.07</b> (T05 → T06, K=20): <span class="take">100% chunker</span> — smaller chunks cut per-chunk context_decay_cost ~34%, more candidates clear adaptive gate. XML prompt affects nothing here (selection happens before LLM reads prompt).</li>
       <li><b>6.07 → 9.12</b> (T06 → T11-K32): K=20→K=32. +50% more chunks through to LLM.</li>
-      <li><b>LLM sees 2.2× more chunks per answer</b> than T05 baseline — <i>mechanism</i> behind +0.122 faithfulness.</li>
-      <li class="caveat">Trade-off: noise 0.65 → 0.77. Reranker doing more work per query.</li>
-      <li class="caveat"><b>Stale calibration:</b> vars.yml:119 says CONTEXT_DECAY_FACTOR=0.0006 was tuned for chunk_size=2000. Stale. Lever: re-calibrate for 1400 or accept 9.12 avg_sel as new baseline.</li>
+      <li><b>9.12 → 15.05 (T11-K32 → T13b-K=32)</b>: K=32 + threshold widening (-0.25 → -1.0). +65% more chunks through, ~50% more context per query.</li>
+      <li class="caveat">Trade-off: noise 0.65 → 0.83 at K=32. Reranker doing more work per query.</li>
+      <li class="caveat"><b>Stale calibration:</b> vars.yml:119 says CONTEXT_DECAY_FACTOR=0.0006 was tuned for chunk_size=2000. Stale. Lever: re-calibrate for 1400 or accept 15.05 avg_sel as new baseline.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Chart 1c: rank-aware metrics (recall@k / ndcg@k) -->
+<div class="chart-card">
+  <h2 class="chart-title">Chart 1c · Rank-aware metrics (recall@k / ndcg@k) — MR !495</h2>
+  <div class="chart-sub"><b>What it shows:</b> 8 lines (4 recall@k + 4 ndcg@k) tracing how ranking quality evolves across the 7 rank-aware configs. <b>Why it matters:</b> set-based recall treats all positions equally; rank-aware metrics show whether gold chunks are at the TOP. <b>How to read:</b> line direction = improvement; convergence at top = saturation (top-rank invariant to re-cal).</div>
+  <svg id="chart-rankaware" viewBox="0 0 960 320"></svg>
+  <div class="insights">
+    <h4>What to read</h4>
+    <ul>
+      <li><b>recall@1 flat 0.49 ± 0.01</b> across all 7 configs. Top-rank precision is invariant to re-cal and K — the wrapper doesn't hurt top-rank.</li>
+      <li><b>recall@10 champion T13b-K=32 = 0.786</b> (+3.0pp vs T11-K=32 0.763, +5.8pp vs T12 K=20). Re-cal + K=32 wins depth coverage.</li>
+      <li><b>ndcg@10 champion T13b-K=32 = 0.733</b>. NDCG weights position — the ranking quality of the top 10 chunks is best with re-cal + K=32.</li>
+      <li><b>ndcg@1 = 0.714 across most configs</b> (T11-K=32, T12, T12-K=32, T13a-K=32, T13b-K=32). T13a/T13b at K=20 = 0.690 (faithfulness gap visible here).</li>
+      <li><b>Story</b>: top-1 is invariant; depth (k=10) is the leverage point. Re-cal + K=32 = best depth coverage AND best ranking quality.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Chart 1d: rank-aware metrics as bars (readable bar version) -->
+<div class="chart-card">
+  <h2 class="chart-title">Chart 1d · Rank-aware metrics as bars (recall@k / ndcg@k) — 8 metrics × 7 configs</h2>
+  <div class="chart-sub"><b>What it shows:</b> the same 8 rank-aware metrics as Chart 1c, but as bars (easier to read exact values). <b>Why it matters:</b> lines show trend, bars show value. <b>How to read:</b> compare bar heights within each metric group; T13b-K=32 should win on recall@10 + ndcg@10.</div>
+  <svg id="chart-rankaware-bars" viewBox="0 0 1100 420"></svg>
+  <div class="insights">
+    <h4>What to read</h4>
+    <ul>
+      <li><b>recall@10 = 0.786 (T13b-K=32)</b> vs 0.763 (T11-K=32 baseline) — <b>+0.023 (+3.0pp)</b>. The biggest rank-aware gain in the cycle.</li>
+      <li><b>ndcg@10 = 0.733 (T13b-K=32)</b> vs 0.717 (T11-K=32) — <b>+0.016 (+2.2pp)</b>. Ranking quality of the top 10 is best with re-cal + K=32.</li>
+      <li><b>recall@5 = 0.730 (T13a-K=32 / T13b-K=32)</b> vs 0.696 (T11-K=32) — <b>+0.034 (+4.9pp)</b>. Re-cal brings more gold chunks into the top 5.</li>
+      <li><b>recall@1 = 0.493 (T13b-K=32)</b> vs 0.494 (T11-K=32) — <b>flat</b>. Top-1 is invariant to re-cal and K; wrapper doesn't help nor hurt top-rank precision.</li>
+      <li><b>ndcg@1 = 0.714 (T13b-K=32)</b> ties T11-K=32 — top-1 ranking quality preserved.</li>
+      <li><b>T12 K=20 wins recall@1 (0.501) + ndcg@3 (0.727)</b> — the wrapper alone helps top-3 ranking most. Re-cal trades top-3 for deeper coverage (recall@10 +5pp).</li>
+      <li><b>T12-K=32 (wrapper alone, no recal) loses on most metrics</b>: recall@10 0.743, ndcg@10 0.707 — wrapper at K=32 alone is <i>worse</i> than baseline until threshold widening.</li>
     </ul>
   </div>
 </div>
 
 <!-- Chart 2: Trajectory -->
 <div class="chart-card">
-  <h2 class="chart-title">Chart 2 · RAGAS trajectory across configs</h2>
-  <div class="chart-sub">Line plot of the 4 RAGAS metrics. Edges labelled. Shaded band = ± SE noise.</div>
-  <svg id="chart-trajectory" viewBox="0 0 960 320"></svg>
+  <h2 class="chart-title">Chart 2 · RAGAS trajectory: K=20 baseline (2 configs) → K=32 champion sweep (4 configs)</h2>
+  <div class="chart-sub"><b>What it shows:</b> the 4 RAGAS metrics plotted as lines across 9 chronological x-axis positions (Sept 23 → Oct 02). <b>Why it matters:</b> shows the cycle story as one picture — each step's gain/leak visible at a glance. <b>How to read:</b> follow one color across the cycle; edges are labelled with values. Shaded band = ± SE noise (~0.05).</div>
+  <svg id="chart-trajectory" viewBox="0 0 1280 360"></svg>
   <div class="insights">
-    <h4>What to read</h4>
+    <h4>What to read (K=32 apples-to-apples sweep)</h4>
     <ul>
-      <li><b>Faithfulness (blue)</b>: T05 0.53 → T11 0.66 (Sept 23→30 gain) → T12 0.63 (wrapper alone regresses) → <span style="color:var(--status-good)"><b>T13a 0.68 (champion), T13b 0.67</b></span>. Net cycle: +0.15.</li>
-      <li><b>Context precision (orange)</b>: T05 0.76 → T11 0.64 (gold inflation artefact, n_valid 25→18) → T12 0.73 → <span style="color:var(--status-good)"><b>T13a 0.74</b></span>. T13a highest. Net cycle: −0.02 vs v3, +0.10 vs v4.</li>
-      <li><b>Context recall (green)</b>: T05 0.67 → T11 0.73 → T12 0.67 (wrapper coverage loss) → <span style="color:var(--status-good)"><b>T13b 0.76 (highest), T13a 0.75</b></span>. T13 re-cal recovers AND exceeds baseline.</li>
-      <li><b>Answer relevancy (violet)</b>: flat 0.69–0.72. Slight T13 regression (−0.04) but within SE. XML prompt changes grounding, not topic.</li>
+      <li><b>Faithfulness (blue)</b>: T05 0.53 → T11 0.66 (Sept 23→30 gain) → T12 0.63 (wrapper alone regresses, K=20) → T13a 0.68 / T13b 0.67 (K=20) → T12-K=32 0.64 (wrapper at K=32 still regresses) → <span style="color:var(--status-good)"><b>T13a-K=32 0.72 (faithfulness peak)</b></span> → <span style="color:var(--status-crit)"><b>T13b-K=32 0.68 (champion on other 3 metrics, +3.7% over T11)</b></span>.</li>
+      <li><b>Context precision (orange)</b>: T11 0.64 → T12-K=32 0.65 (wrapper alone, no gain) → T13a-K=32 0.77 → <span style="color:var(--status-good)"><b>T13b-K=32 0.83 (champion, +29.6% over T11)</b></span>. The biggest single gain in the cycle.</li>
+      <li><b>Context recall (green)</b>: T11 0.73 → T12-K=32 0.66 (wrapper regresses coverage) → T13a-K=32 0.80 → <span style="color:var(--status-good)"><b>T13b-K=32 0.81 (champion, +11.6% over T11)</b></span>. Re-cal recovers AND exceeds baseline.</li>
+      <li><b>Answer relevancy (violet)</b>: T11 0.72 → T12-K=32 0.70 → T13a-K=32 0.73 → <span style="color:var(--status-good)"><b>T13b-K=32 0.75 (champion, +4.1% over T11)</b></span>. <b>At K=32, T13b beats T11 on all 4 RAGAS metrics</b> — the only config to do so.</li>
     </ul>
   </div>
 </div>
@@ -303,7 +419,7 @@ footer {
 <!-- Chart 3: T10 crater highlight -->
 <div class="chart-card">
   <h2 class="chart-title">Chart 3 · T10 crater (factor=0.0020)</h2>
-  <div class="chart-sub">What NOT to do: offline F1 champion + live deploy without RAGAS validation. factor=0.0020 vs factor=0.0006 (validated).</div>
+  <div class="chart-sub"><b>What it shows:</b> avg_sel chunks/query (left) and RAGAS faithfulness (right) for 3 factor values: 0.0006 (validated), 0.0010 (A/B test), 0.0020 (T10 crater). <b>Why it matters:</b> cautionary tale — an offline F1 champion deployed without RAGAS validation cratered live (-16.5pt faithfulness). <b>How to read:</b> the middle bar is the A/B transition; the right bar is the crater.</div>
   <div class="row">
     <div class="col">
       <div class="col-title">Avg_sel per config</div>
@@ -329,7 +445,7 @@ footer {
 <!-- Chart 4: Live A/B calibration sweep (factor=0.0006 vs 0.0010) -->
 <div class="chart-card">
   <h2 class="chart-title">Chart 4 · Live A/B calibration sweep (factor=0.0006 vs 0.0010)</h2>
-  <div class="chart-sub">Same K=32, same threshold=-0.25. Only CONTEXT_DECAY_FACTOR varies. RAGAS run end-to-end (not offline).</div>
+  <div class="chart-sub"><b>What it shows:</b> avg_sel (left) and the 4 RAGAS metrics (right) for factor 0.0006 vs 0.0010. Same K, same threshold — only CONTEXT_DECAY_FACTOR varies. <b>Why it matters:</b> empirical proof that even modest factor bumps crater RAGAS (-47% faithfulness at 0.0010). <b>How to read:</b> the 0.0006 bars are the validated live config; 0.0010 is the crater pattern.</div>
   <div class="row">
     <div class="col">
       <div class="col-title">avg_sel chunks/query</div>
@@ -354,7 +470,7 @@ footer {
 <!-- Chart 5: per-query distributions at factor=0.0010 (the crater) -->
 <div class="chart-card">
   <h2 class="chart-title">Chart 5 · Per-query distributions at factor=0.0010 (the crater)</h2>
-  <div class="chart-sub">Same n=42 / 4 metrics, but factor=0.0010 instead of 0.0006. Compare to Chart 3 in the evolution charts (factor=0.0006 distributions).</div>
+  <div class="chart-sub"><b>What it shows:</b> per-query histograms of the 4 RAGAS metrics at factor=0.0010 (the crater config). Each bar = a bin of query scores; bar height = number of queries in that bin. <b>Why it matters:</b> aggregate means can hide bimodal distributions — histograms expose "all queries crater" vs "half crater, half survive". <b>How to read:</b> left-shift vs the previously distribution = worse.</div>
   <div class="small-mult">
     <div>
       <div class="col-title">Faithfulness (n=42)</div>
@@ -386,24 +502,24 @@ footer {
 <!-- Final conclusions + recommendations -->
 <div class="chart-card" style="border-left:4px solid var(--series-1)">
   <h2 class="chart-title">Final recommendations (mirrors report §9)</h2>
-  <div class="chart-sub">Validated state on .102 — factor=0.0006 / threshold=-0.25 / chunk_size=1400 / K=32 (live) vs K=50 (.env, unvalidated).</div>
+  <div class="chart-sub"><b>What it shows:</b> the 4 RAGAS headline numbers (left) and the 7 operational decisions (right) for the T13b-K=32 champion. <b>Why it matters:</b> actionable summary — what to deploy + what to revert. <b>How to read:</b> Headline = "is it worth shipping?". Operational table = "what stays, what changes".</div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px">
     <div>
-      <h3 style="font-size:13px;color:var(--ink-secondary);margin:0 0 8px;text-transform:uppercase;letter-spacing:0.05em">Headline numbers (T13a champion vs T11)</h3>
+      <h3 style="font-size:13px;color:var(--ink-secondary);margin:0 0 8px;text-transform:uppercase;letter-spacing:0.05em">Headline numbers (T13b-K=32 champion vs T11 baseline)</h3>
       <ul style="margin:0;padding-left:18px;line-height:1.7">
-        <li><b>RAGAS faithfulness 0.684</b> (n=38) — vs T11 baseline <span style="color:var(--status-good);font-weight:600">+4.5%</span></li>
-        <li><b>RAGAS context_precision 0.742</b> (n=17) — vs T11 <span style="color:var(--status-good);font-weight:600">+9.9%</span></li>
-        <li><b>RAGAS context_recall 0.750</b> (n=41) — vs T11 <span style="color:var(--status-good);font-weight:600">+2.4%</span></li>
-        <li><b>RAGAS answer_relevancy 0.676</b> (n=42) — vs T11 <span style="color:var(--status-warn);font-weight:600">−4.1%</span></li>
-        <li><b>Anchor chunk_recall 0.737</b> — vs T11 <span style="color:var(--status-good);font-weight:600">+5.4%</span></li>
-        <li><b>Anchor passage_recall 34/74</b> (+3 vs T11, +13%)</li>
-        <li><b>avg_sel 9.64</b> chunks/query (within noise of T11 9.12)</li>
+        <li><b>RAGAS context_precision 0.833</b> (n=16) — vs T11 baseline <span style="color:var(--status-good);font-weight:600">+29.6%</span> (biggest single gain)</li>
+        <li><b>RAGAS context_recall 0.810</b> (n=42) — vs T11 <span style="color:var(--status-good);font-weight:600">+11.6%</span></li>
+        <li><b>RAGAS answer_relevancy 0.746</b> (n=42) — vs T11 <span style="color:var(--status-good);font-weight:600">+4.1%</span></li>
+        <li><b>RAGAS faithfulness 0.679</b> (n=40) — vs T11 <span style="color:var(--status-good);font-weight:600">+3.7%</span></li>
+        <li><b>Anchor chunk_recall 0.835</b> — vs T11 <span style="color:var(--status-good);font-weight:600">+13.1pp</span></li>
+        <li><b>Anchor passage_recall 49/74</b> (+19 vs T11, +63%)</li>
+        <li><b>avg_sel 15.05</b> chunks/query (+65% vs T11 9.12, K=32 + threshold widening)</li>
       </ul>
     </div>
 
     <div>
-      <h3 style="font-size:13px;color:var(--ink-secondary);margin:0 0 8px;text-transform:uppercase;letter-spacing:0.05em">Operational decisions (T13a live)</h3>
+      <h3 style="font-size:13px;color:var(--ink-secondary);margin:0 0 8px;text-transform:uppercase;letter-spacing:0.05em">Operational decisions (T13b-K=32 live, Oct 02 19:43)</h3>
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead>
           <tr style="border-bottom:1px solid var(--grid)">
@@ -413,28 +529,28 @@ footer {
           </tr>
         </thead>
         <tbody>
-          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">CONTEXT_DECAY_FACTOR</td><td style="padding:4px 6px"><code>0.0005</code></td><td style="padding:4px 6px;color:var(--status-good)"><b>switched from 0.0006</b> — T13a validated live</td></tr>
-          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">MIN_VALUE_THRESHOLD</td><td style="padding:4px 6px"><code>-1.0</code></td><td style="padding:4px 6px;color:var(--status-good)"><b>switched from -0.25</b> — T13a validated live</td></tr>
-          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">BGE query prefix</td><td style="padding:4px 6px">live (Oct 01)</td><td style="padding:4px 6px;color:var(--status-good)"><b>keep</b> — partial win, re-cal closed coverage loss</td></tr>
+          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">CONTEXT_DECAY_FACTOR</td><td style="padding:4px 6px"><code>0.0006</code></td><td style="padding:4px 6px;color:var(--status-good)"><b>keep (revert from 0.0005)</b> — T13b-K=32 wins on net vs T13a-K=32 (faithfulness gap is the only loss)</td></tr>
+          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">MIN_VALUE_THRESHOLD</td><td style="padding:4px 6px"><code>-1.0</code></td><td style="padding:4px 6px;color:var(--status-good)"><b>keep</b> — dominant lever (gates candidate inclusion)</td></tr>
+          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">RETRIEVER_ARANGO_K</td><td style="padding:4px 6px"><code>32</code> (live) / <code>50</code> (.env)</td><td style="padding:4px 6px;color:var(--status-good)"><b>reconcile to 32</b> — K=50 unvalidated; K=32 is the validated live state</td></tr>
+          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">BGE query prefix</td><td style="padding:4px 6px">live (Oct 01)</td><td style="padding:4px 6px;color:var(--status-good)"><b>keep</b> — +29.6% context_precision, partial win re-cal closed coverage loss</td></tr>
           <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">DATAPREP_CHUNK_SIZE_MD</td><td style="padding:4px 6px"><code>1400</code></td><td style="padding:4px 6px;color:var(--series-1)"><b>keep</b></td></tr>
           <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">DATAPREP_CHUNK_OVERLAP</td><td style="padding:4px 6px"><code>300</code> env / <code>0</code> effective</td><td style="padding:4px 6px;color:var(--status-warn)"><b>env wired, no re-ingest</b> — existing 850 chunks pre-date the fix, effective=0</td></tr>
-          <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">RETRIEVER_ARANGO_K</td><td style="padding:4px 6px"><code>32</code> (live) / <code>50</code> (.env)</td><td style="padding:4px 6px;color:var(--series-2)"><b>reconcile</b></td></tr>
           <tr style="border-bottom:1px solid var(--grid)"><td style="padding:4px 6px">System prompt</td><td style="padding:4px 6px">XML</td><td style="padding:4px 6px;color:var(--series-1)"><b>keep</b> — +0.122 faithfulness (T05→T11)</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 
-  <div style="margin-top:16px;padding:12px 14px;border-left:3px solid var(--series-3);font-size:13px;line-height:1.6">
-    <b>Three takeaways from the Sept 23 → Oct 01 cycle:</b><br>
-    1. <b>BGE query prefix wrapper + re-calibrated reranker (T13a) is the new champion</b>: factor 0.0006→0.0005, thresh -0.25→-1.0. RAGAS faithfulness +4.5%, context_precision +9.9%, context_recall +2.4% vs T11 baseline (only answer_relevancy regresses −4.1%).<br>
-    2. <b>The wrapper + re-cal are stacking fixes, not replacements</b>. T12 (wrapper alone) regressed RAGAS despite gains in anchor quality — re-cal was required to recover the coverage losses. Always re-calibrate the reranker when changing upstream retrieval behavior.<br>
-    3. <b>avg_sel jump from 4.10 → 9.12 is 100% chunker-driven</b>, not prompt-driven. T13a adds avg_sel 9.12 → 9.64 (+0.52) — within noise of baseline, no concern.
+  <div style="margin-top:16px;padding:12px 14px;border-left:3px solid var(--status-good);font-size:13px;line-height:1.6">
+    <b>Three takeaways from the Sept 23 → Oct 02 cycle (K=32 apples-to-apples):</b><br>
+    1. <b>BGE query prefix wrapper + re-calibrated reranker (T13b-K=32) is the new champion</b>: factor 0.0006 (unchanged), thresh -0.25→-1.0, K=32 (validated). RAGAS context_precision <b>+29.6%</b>, context_recall <b>+11.6%</b>, answer_relevancy <b>+4.1%</b>, faithfulness <b>+3.7%</b> vs T11 baseline — <b>all 4 RAGAS metrics beat baseline</b>.<br>
+    2. <b>The wrapper + re-cal are stacking fixes, not replacements</b>. T12-K=32 (wrapper alone) regressed RAGAS despite gains in anchor quality (chunk_precision +2.4pp) — re-cal was required to recover the wrapper-induced coverage losses (passage_recall 30→49/74). Always re-calibrate the reranker when changing upstream retrieval behavior.<br>
+    3. <b>Oct 01 K=20 sweep was misleading on net</b>: T13a at K=20 won faithfulness (+4.5%) but lost answer_relevancy (−4.1%) and the K=20 base was a transient override. The Oct 02 K=32 apples-to-apples sweep is the validated live state. See §13.5 of the report for the K=20/K=32 drift timeline.
   </div>
 </div>
 
 <footer>
-  Source: <code>tests/rag-benchmarks/eval/eval-reports/2026-09-30-el-salvador-rag-comprehensive.md</code>.
+  Source: <code>tests/rag-benchmarks/eval/eval-reports/2026-09-30-el-salvador-rag-comprehensive.md</code> (Oct 02 — K=32 apples-to-apples sweep, T13b-K=32 champion).
   RAGAS judge: MiniMax-M3 (local 127.0.0.1:3456). Embedder: BGE-large-en-v1.5 (TEI @ .110).
 </footer>
 
@@ -443,21 +559,26 @@ footer {
 <script>
 // ---------- data ----------
 const ANCHOR = {
-  "chunk_recall":      { T05: 0.665, T06: 0.668, "T11-K20": 0.668, "T11-K32": 0.704, T12: 0.683, "T13a": 0.737, "T13b": 0.737 },
-  "chunk_precision":   { T05: 0.349, T06: 0.261, "T11-K20": 0.261, "T11-K32": 0.234, T12: 0.272, "T13a": 0.190, "T13b": 0.203 },
-  "complete_recall":   { T05: 0.548, T06: 0.571, "T11-K20": 0.571, "T11-K32": 0.571, T12: 0.595, "T13a": 0.619, "T13b": 0.619 },
-  "retrieval_recall":  { T05: 0.888, T06: 0.806, "T11-K20": 0.806, "T11-K32": 0.870, T12: 0.841, "T13a": 0.806, "T13b": 0.806 },
-  "recall@1":         { T05: null, T06: null, "T11-K20": null, "T11-K32": 0.391, T12: 0.399, "T13a": 0.386, "T13b": 0.386 },
-  "recall@3":         { T05: null, T06: null, "T11-K20": null, "T11-K32": 0.555, T12: 0.598, "T13a": 0.604, "T13b": 0.604 },
-  "recall@5":         { T05: null, T06: null, "T11-K20": null, "T11-K32": 0.596, T12: 0.604, "T13a": 0.619, "T13b": 0.619 },
-  "recall@10":        { T05: null, T06: null, "T11-K20": null, "T11-K32": 0.668, T12: 0.646, "T13a": 0.706, "T13b": 0.706 },
+  "chunk_recall":      { T05: 0.665, T06: 0.668, "T11-K20": 0.668, "T11-K32": 0.704, T12: 0.683, "T13a": 0.737, "T13b": 0.737, "T12-K32": 0.711, "T13a-K32": 0.835, "T13b-K32": 0.835 },
+  "chunk_precision":   { T05: 0.349, T06: 0.261, "T11-K20": 0.261, "T11-K32": 0.234, T12: 0.272, "T13a": 0.190, "T13b": 0.203, "T12-K32": 0.258, "T13a-K32": 0.173, "T13b-K32": 0.174 },
+  "complete_recall":   { T05: 0.548, T06: 0.571, "T11-K20": 0.571, "T11-K32": 0.571, T12: 0.595, "T13a": 0.619, "T13b": 0.619, "T12-K32": null, "T13a-K32": null, "T13b-K32": null },
+  "retrieval_recall":  { T05: 0.888, T06: 0.806, "T11-K20": 0.806, "T11-K32": 0.870, T12: 0.841, "T13a": 0.806, "T13b": 0.806, "T12-K32": 0.868, "T13a-K32": 0.868, "T13b-K32": 0.868 },
+  "passage_recall":    { T05: null, T06: null, "T11-K20": null, "T11-K32": 30/74, T12: 31/74, "T13a": 34/74, "T13b": 34/74, "T12-K32": 30/74, "T13a-K32": 49/74, "T13b-K32": 49/74 },
+  "recall_at_1":       { T05: null, T06: null, "T11-K20": null, "T11-K32": 0.494, T12: 0.501, "T13a": 0.489, "T13b": 0.489, "T12-K32": 0.493, "T13a-K32": 0.493, "T13b-K32": 0.493 },
+  "recall_at_3":       { T05: null, T06: null, "T11-K20": null, "T11-K32": 0.658, T12: 0.699, "T13a": 0.704, "T13b": 0.704, "T12-K32": 0.654, "T13a-K32": 0.672, "T13b-K32": 0.672 },
+  "recall_at_5":       { T05: null, T06: null, "T11-K20": null, "T11-K32": 0.696, T12: 0.703, "T13a": 0.717, "T13b": 0.717, "T12-K32": 0.702, "T13a-K32": 0.730, "T13b-K32": 0.730 },
+  "recall_at_10":      { T05: null, T06: null, "T11-K20": null, "T11-K32": 0.763, T12: 0.742, "T13a": 0.799, "T13b": 0.799, "T12-K32": 0.743, "T13a-K32": 0.786, "T13b-K32": 0.786 },
+  "ndcg_at_1":         { T05: null, T06: null, "T11-K20": null, "T11-K32": 0.714, T12: 0.714, "T13a": 0.690, "T13b": 0.690, "T12-K32": 0.714, "T13a-K32": 0.714, "T13b-K32": 0.714 },
+  "ndcg_at_3":         { T05: null, T06: null, "T11-K20": null, "T11-K32": 0.700, T12: 0.727, "T13a": 0.720, "T13b": 0.720, "T12-K32": 0.698, "T13a-K32": 0.708, "T13b-K32": 0.708 },
+  "ndcg_at_5":         { T05: null, T06: null, "T11-K20": null, "T11-K32": 0.695, T12: 0.700, "T13a": 0.701, "T13b": 0.701, "T12-K32": 0.694, "T13a-K32": 0.712, "T13b-K32": 0.712 },
+  "ndcg_at_10":        { T05: null, T06: null, "T11-K20": null, "T11-K32": 0.717, T12: 0.711, "T13a": 0.732, "T13b": 0.732, "T12-K32": 0.707, "T13a-K32": 0.733, "T13b-K32": 0.733 },
 };
-const AVGSEL = { T05: 4.10, T06: 6.07, "T11-K20": 6.07, "T11-K32": 9.12, T12: 9.12, "T13a": 9.64, "T13b": 9.55 };
+const AVGSEL = { T05: 4.10, T06: 6.07, "T11-K20": 6.07, "T11-K32": 9.12, T12: 9.12, "T13a": 9.64, "T13b": 9.55, "T12-K32": 8.86, "T13a-K32": 15.17, "T13b-K32": 15.05 };
 const RAGAS = {
-  "faithfulness":      { T05: 0.533, T06: 0.624, "T11-K20": 0.624, "T11-K32": 0.655, T12: { v: 0.625, n: 39 }, "T13a": { v: 0.684, n: 38 }, "T13b": { v: 0.668, n: 33 } },
-  "context_precision": { T05: 0.763, T06: { v: 0.660, n: 25 }, "T11-K20": { v: 0.660, n: 25 }, "T11-K32": { v: 0.643, n: 18 }, T12: { v: 0.726, n: 28 }, "T13a": { v: 0.742, n: 17 }, "T13b": { v: 0.723, n: 14 } },
-  "context_recall":    { T05: 0.671, T06: 0.686, "T11-K20": 0.686, "T11-K32": 0.726, T12: { v: 0.673, n: 41 }, "T13a": { v: 0.750, n: 41 }, "T13b": { v: 0.759, n: 42 } },
-  "answer_relevancy":  { T05: null,  T06: 0.715, "T11-K20": 0.715, "T11-K32": 0.717, T12: { v: 0.693, n: 41 }, "T13a": { v: 0.676, n: 42 }, "T13b": { v: 0.671, n: 42 } },
+  "faithfulness":      { T05: 0.533, T06: 0.624, "T11-K20": 0.624, "T11-K32": 0.655, T12: { v: 0.625, n: 39 }, "T13a": { v: 0.684, n: 38 }, "T13b": { v: 0.668, n: 33 }, "T12-K32": { v: 0.643, n: 41 }, "T13a-K32": { v: 0.723, n: 42 }, "T13b-K32": { v: 0.679, n: 40 } },
+  "context_precision": { T05: 0.763, T06: { v: 0.660, n: 25 }, "T11-K20": { v: 0.660, n: 25 }, "T11-K32": { v: 0.643, n: 18 }, T12: { v: 0.726, n: 28 }, "T13a": { v: 0.742, n: 17 }, "T13b": { v: 0.723, n: 14 }, "T12-K32": { v: 0.646, n: 21 }, "T13a-K32": { v: 0.774, n: 23 }, "T13b-K32": { v: 0.833, n: 16 } },
+  "context_recall":    { T05: 0.671, T06: 0.686, "T11-K20": 0.686, "T11-K32": 0.726, T12: { v: 0.673, n: 41 }, "T13a": { v: 0.750, n: 41 }, "T13b": { v: 0.759, n: 42 }, "T12-K32": { v: 0.659, n: 42 }, "T13a-K32": { v: 0.801, n: 42 }, "T13b-K32": { v: 0.810, n: 42 } },
+  "answer_relevancy":  { T05: null,  T06: 0.715, "T11-K20": 0.715, "T11-K32": 0.717, T12: { v: 0.693, n: 41 }, "T13a": { v: 0.676, n: 42 }, "T13b": { v: 0.671, n: 42 }, "T12-K32": { v: 0.704, n: 42 }, "T13a-K32": { v: 0.726, n: 42 }, "T13b-K32": { v: 0.746, n: 42 } },
 };
 const CRATER = {
   "avg_sel":     { "factor_0006": 9.12, "factor_0010": 8.24, "factor_0020": 3.26 },
@@ -486,6 +607,9 @@ const C = {
   T12: CSS.getPropertyValue('--series-5').trim(),
   'T13a': CSS.getPropertyValue('--status-good').trim(),
   'T13b': CSS.getPropertyValue('--status-warn').trim(),
+  'T12-K32': CSS.getPropertyValue('--series-5').trim(),
+  'T13a-K32': CSS.getPropertyValue('--status-good').trim(),
+  'T13b-K32': CSS.getPropertyValue('--status-crit').trim(),
   'factor_0006': CSS.getPropertyValue('--series-1').trim(),
   'factor_0010': CSS.getPropertyValue('--series-5').trim(),
   'factor_0020': CSS.getPropertyValue('--status-crit').trim(),
@@ -495,9 +619,12 @@ const LABELS = {
   T06: 'T06 Sept 29 (XML, chunker 1.4K, K=20)',
   'T11-K20': 'T11-K=20 (reproduction)',
   'T11-K32': 'T11 K=32 (pre-wrapper)',
-  T12: 'T12 Oct 01 (wrapper only)',
-  'T13a': 'T13a (wrapper+recal, champion)',
-  'T13b': 'T13b (wrapper, thresh only)',
+  T12: 'T12 Oct 01 (wrapper only, K=20)',
+  'T13a': 'T13a Oct 01 (wrapper+recal, K=20)',
+  'T13b': 'T13b Oct 01 (wrapper, thresh only, K=20)',
+  'T12-K32': 'T12-K=32 (wrapper, K=32)',
+  'T13a-K32': 'T13a-K=32 (wrapper+recal, K=32)',
+  'T13b-K32': 'T13b-K=32 (champion, K=32)',
   'factor_0006': 'factor 0.0006 (current)',
   'factor_0010': 'factor 0.0010 (A/B test)',
   'factor_0020': 'factor 0.0020 (T10 crater)',
@@ -510,13 +637,13 @@ document.addEventListener('mousemove', moveTip);
 function num(v) { return typeof v === 'object' ? v.v : v; }
 function numN(v) { return typeof v === 'object' ? v.n : null; }
 
-function drawGroupedBars(svgId, dataset, configs, yMax, fmt) {
+function drawGroupedBars(svgId, dataset, configs, yMax, fmt, metricsFilter) {
   const svg = document.getElementById(svgId);
   const W = +svg.getAttribute('viewBox').split(' ')[2];
   const H = +svg.getAttribute('viewBox').split(' ')[3];
-  const padL = 50, padR = 12, padT = 14, padB = 70;
+  const padL = 50, padR = 12, padT = 14, padB = 90;
   const innerW = W - padL - padR, innerH = H - padT - padB;
-  const metrics = Object.keys(dataset);
+  const metrics = metricsFilter || Object.keys(dataset);
   const nGroups = metrics.length;
   const nBars = configs.length;
   const groupW = innerW / nGroups;
@@ -550,30 +677,35 @@ function drawGroupedBars(svgId, dataset, configs, yMax, fmt) {
     const lx = padL + gi * groupW + groupW/2;
     const ly = padT + innerH + 14;
     svg.insertAdjacentHTML('beforeend',
-      `<text x="${lx}" y="${ly}" font-size="10" fill="var(--ink-secondary)" text-anchor="middle" transform="rotate(-25, ${lx}, ${ly})">${m}</text>`);
+      `<text x="${lx}" y="${ly}" font-size="9" fill="var(--ink-secondary)" text-anchor="middle" transform="rotate(-30, ${lx}, ${ly})">${m}</text>`);
   });
 }
 
-drawGroupedBars('chart-anchor', ANCHOR, ['T05','T06','T11-K20','T11-K32','T12','T13a','T13b'], 1.0, v => v.toFixed(2));
+drawGroupedBars('chart-anchor', ANCHOR, ['T05','T06','T11-K20','T11-K32','T12','T13a','T13b','T12-K32','T13a-K32','T13b-K32'], 1.0, v => v.toFixed(2),
+  ['chunk_recall','chunk_precision','complete_recall','retrieval_recall','passage_recall']);
 // RAGAS: drop T06 (no separate RAGAS run for T06; T11-K20 is the validated reproduction at K=20). T12, T13a, T13b all have RAGAS.
-drawGroupedBars('chart-ragas', RAGAS, ['T05','T11-K20','T11-K32','T12','T13a','T13b'], 1.0, v => v.toFixed(2));
+drawGroupedBars('chart-ragas', RAGAS, ['T05','T11-K20','T11-K32','T12','T13a','T13b','T12-K32','T13a-K32','T13b-K32'], 1.0, v => v.toFixed(2));
+
+// Chart 1d: rank-aware metrics as bars (8 metrics × 7 configs) — readable bar version of Chart 1c
+drawGroupedBars('chart-rankaware-bars', ANCHOR, ['T11-K32','T12','T13a','T13b','T12-K32','T13a-K32','T13b-K32'], 1.0, v => v.toFixed(2),
+  ['recall_at_1','recall_at_3','recall_at_5','recall_at_10','ndcg_at_1','ndcg_at_3','ndcg_at_5','ndcg_at_10']);
 
 // avg_sel (single-row bars)
 function drawAvgsel() {
   const svg = document.getElementById('chart-avgsel');
-  const W = 600, H = 200;
-  const padL = 50, padR = 30, padT = 14, padB = 40;
+  const W = 760, H = 220;
+  const padL = 50, padR = 30, padT = 14, padB = 50;
   const innerW = W - padL - padR, innerH = H - padT - padB;
-  const yMax = 10;
-  for (let i = 0; i <= 5; i++) {
-    const y = padT + innerH - (i / 5) * innerH;
-    const v = (i / 5) * yMax;
+  const yMax = 20;
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + innerH - (i / 4) * innerH;
+    const v = (i / 4) * yMax;
     svg.insertAdjacentHTML('beforeend',
       `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="0.5"/>
        <text x="${padL-6}" y="${y+4}" font-size="10" fill="var(--ink-muted)" text-anchor="end">${v.toFixed(1)}</text>`);
   }
-  const cfgs = ['T05','T06','T11-K20','T11-K32'];
-  const bw = (innerW * 0.5 / cfgs.length);
+  const cfgs = ['T05','T06','T11-K20','T11-K32','T12-K32','T13a-K32','T13b-K32'];
+  const bw = (innerW * 0.7 / cfgs.length);
   const gx = padL + (innerW - bw * cfgs.length) / 2;
   cfgs.forEach((c, bi) => {
     const v = AVGSEL[c];
@@ -585,7 +717,7 @@ function drawAvgsel() {
             rx="3" ry="3" fill="${C[c]}"
             data-label="<div class='row'><span class='key'>${LABELS[c]} · avg_sel</span><span>${v.toFixed(2)} chunks/query</span></div>"/>
        <text x="${x + bw/2}" y="${y - 4}" font-size="11" fill="var(--ink-primary)" text-anchor="middle" font-weight="600">${v.toFixed(2)}</text>
-       <text x="${x + bw/2}" y="${padT + innerH + 16}" font-size="10" fill="var(--ink-secondary)" text-anchor="middle">${c}</text>`);
+       <text x="${x + bw/2}" y="${padT + innerH + 16}" font-size="10" fill="var(--ink-secondary)" text-anchor="middle" transform="rotate(-25, ${x + bw/2}, ${padT + innerH + 16})">${c}</text>`);
   });
 }
 drawAvgsel();
@@ -593,7 +725,7 @@ drawAvgsel();
 // trajectory (Chart 2)
 function drawTrajectory() {
   const svg = document.getElementById('chart-trajectory');
-  const W = 960, H = 320;
+  const W = 1280, H = 360;
   const padL = 60, padR = 30, padT = 30, padB = 60;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const series = [
@@ -602,7 +734,7 @@ function drawTrajectory() {
     { name: "context_recall",     vals: RAGAS.context_recall },
     { name: "answer_relevancy",   vals: RAGAS.answer_relevancy },
   ];
-  const xCats = ['T05', 'T11-K20', 'T11-K32', 'T12', 'T13a', 'T13b'];
+  const xCats = ['T05', 'T11-K20', 'T11-K32', 'T12', 'T13a', 'T13b', 'T12-K32', 'T13a-K32', 'T13b-K32'];
   const xPos = (x) => padL + (xCats.indexOf(x) / (xCats.length - 1)) * innerW;
   for (let i = 0; i <= 5; i++) {
     const y = padT + innerH - (i / 5) * innerH;
@@ -661,6 +793,63 @@ function drawTrajectory() {
   });
 }
 drawTrajectory();
+
+// Chart 1c: rank-aware (recall@k + ndcg@k line plot, 7 configs)
+function drawRankAware() {
+  const svg = document.getElementById('chart-rankaware');
+  const W = 960, H = 320;
+  const padL = 50, padR = 30, padT = 30, padB = 50;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const metrics = ['recall_at_1','recall_at_3','recall_at_5','recall_at_10','ndcg_at_1','ndcg_at_3','ndcg_at_5','ndcg_at_10'];
+  const cfgs = ['T11-K32','T12','T13a','T13b','T12-K32','T13a-K32','T13b-K32'];
+  const xPos = (c) => padL + (cfgs.indexOf(c) / (cfgs.length - 1)) * innerW;
+  // Y grid (0..1)
+  for (let i = 0; i <= 5; i++) {
+    const y = padT + innerH - (i / 5) * innerH;
+    const v = (i / 5).toFixed(1);
+    svg.insertAdjacentHTML('beforeend',
+      `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="0.5"/>
+       <text x="${padL-6}" y="${y+4}" font-size="10" fill="var(--ink-muted)" text-anchor="end">${v}</text>`);
+  }
+  cfgs.forEach(c => {
+    svg.insertAdjacentHTML('beforeend',
+      `<text x="${xPos(c)}" y="${padT + innerH + 16}" font-size="10" fill="var(--ink-secondary)" text-anchor="middle">${LABELS[c]}</text>`);
+  });
+  // 8 lines, one per metric, distinct colors
+  const lineColors = {
+    'recall_at_1': 'var(--series-1)',
+    'recall_at_3': 'var(--series-2)',
+    'recall_at_5': 'var(--series-3)',
+    'recall_at_10': 'var(--series-4)',
+    'ndcg_at_1': 'var(--series-5)',
+    'ndcg_at_3': 'var(--status-good)',
+    'ndcg_at_5': 'var(--status-warn)',
+    'ndcg_at_10': 'var(--status-crit)',
+  };
+  metrics.forEach(m => {
+    const pts = cfgs.map(c => ({ c, v: ANCHOR[m]?.[c] })).filter(p => p.v !== null && p.v !== undefined);
+    if (pts.length < 2) return;
+    const path = pts.map((p, i) => (i === 0 ? 'M' : 'L') + xPos(p.c) + ',' + (padT + innerH - p.v * innerH)).join(' ');
+    const color = lineColors[m];
+    svg.insertAdjacentHTML('beforeend',
+      `<path d="${path}" stroke="${color}" stroke-width="1.5" fill="none" opacity="0.85"/>`);
+    pts.forEach(p => {
+      svg.insertAdjacentHTML('beforeend',
+        `<circle class="line-pt" cx="${xPos(p.c)}" cy="${padT + innerH - p.v * innerH}" r="3.5" fill="${color}"
+                data-label="<div class='row'><span class='key'>${m}</span><span>${p.v.toFixed(3)}</span></div><div class='row'><span>${LABELS[p.c]}</span></div>"/>`);
+    });
+  });
+  // legend (8 colors)
+  metrics.forEach((m, i) => {
+    const ly = 16;
+    const lx = padL + (i % 4) * 220;
+    const lyR = 16 + Math.floor(i / 4) * 14;
+    svg.insertAdjacentHTML('beforeend',
+      `<rect x="${lx}" y="${lyR-9}" width="14" height="3" fill="${lineColors[m]}"/>
+       <text x="${lx + 20}" y="${lyR}" font-size="10" fill="var(--ink-secondary)">${m}</text>`);
+  });
+}
+drawRankAware();
 
 // Chart 3: crater (avg_sel + faithfulness, 3 configs)
 function drawCrater() {

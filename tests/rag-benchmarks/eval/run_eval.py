@@ -3,6 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 """Retrieval eval driver. Two modes, one collection path.
 
+WARNING — chatqna enforces OIDC authentication. Requests without a valid
+Bearer token are rejected with HTTP 401, even from in-network containers.
+Calling this script directly via `python3 run_eval.py anchor ...` against
+a production-deployed chatqna returns 401 on every query and the report's
+`n_missed_traces` shows all queries as missed. For ANY live-stack eval use
+the wrapper at `../scripts/run_anchor_with_cleanup.sh` which enables ROPC
+temporarily, fetches a realm token, and disables ROPC again on exit
+(signal-safe trap). Leaving ROPC enabled in production is a security
+vulnerability. See `tests/rag-benchmarks/eval/CLAUDE.md` for the full story
+(auth, score threshold, diagnostic mode).
+
 Both modes drive gold queries through chatqna via docker exec (internal service,
 NO OIDC — faithful label-filtered retrieval) and pull the selection from the
 chatqna.reranker_selection span in VictoriaTraces.
@@ -97,7 +108,16 @@ def drive_query(entry: dict) -> tuple[float, str]:
     }
     payload_json = json.dumps(payload).replace("'", "'\\''")
     start = time.time()
-    cmd = f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json' -d '{payload_json}'"
+    # Auth: chatqna enforces OIDC. When E2E_BEARER_TOKEN is set, inject it
+    # as a Bearer header. When unset, the request relies on chatqna being
+    # open in-network — only valid on legacy pre-prod harnesses; returns
+    # 401 on a production-deployed chatqna. The wrapper script
+    # (`../scripts/run_anchor_with_cleanup.sh`) handles the token lifecycle.
+    auth_header = ""
+    _token = os.getenv("E2E_BEARER_TOKEN")
+    if _token:
+        auth_header = f" -H 'Authorization: Bearer {_token}'"
+    cmd = f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'{auth_header} -d '{payload_json}'"
     body = _docker_exec(CHATQNA_CONTAINER, cmd, timeout=150)
     return start, body
 

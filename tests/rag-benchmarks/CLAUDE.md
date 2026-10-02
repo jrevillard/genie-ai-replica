@@ -28,9 +28,14 @@ tests/rag-benchmarks/
 
 ## Two eval paths — use both
 
+> **For live-stack eval, ALWAYS use the wrapper script** at `scripts/run_anchor_with_cleanup.sh`.
+> Calling `run_eval.py` directly against a production-deployed chatqna returns HTTP 401
+> (chatqna's auth gate, post-MR-!445). See `tests/rag-benchmarks/eval/CLAUDE.md` for
+> auth + score-threshold + diagnostic details.
+
 | Path | Command | Trait | Catches |
 |------|---------|-------|---------|
-| **Anchor (deterministic)** | `run_eval.py anchor gold.json out.json` | No LLM, reproducible | "chunk X stopped getting retrieved/selected" regressions |
+| **Anchor (deterministic)** | `run_anchor_with_cleanup.sh gold.json out.json` | No LLM, reproducible | "chunk X stopped getting retrieved/selected" regressions |
 | **Semantic (LLM-judged)** | `run_eval.py dump-tuples ...` → `run_ragas_eval.py` | LLM judge | "answer hallucinated / off-topic despite good chunks" |
 
 Retrieval quality is invisible end-to-end: a confident answer can hide a

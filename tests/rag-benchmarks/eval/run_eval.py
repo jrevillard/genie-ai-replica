@@ -3,6 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 """Retrieval eval driver. Two modes, one collection path.
 
+WARNING (post-MR-!445): chatqna rejects requests without a valid Bearer
+token, even from in-network containers. Calling this script directly via
+`python3 run_eval.py anchor ...` against a production-deployed chatqna
+returns HTTP 401 on every query and the report's `n_missed_traces` shows
+all 42 queries as missed. For ANY live-stack eval use the wrapper at
+`../scripts/run_anchor_with_cleanup.sh` which enables ROPC, fetches a
+realm token, and disables ROPC again on exit (signal-safe trap). See
+`tests/rag-benchmarks/eval/CLAUDE.md` for the full story (auth, score
+threshold, diagnostic mode).
+
 Both modes drive gold queries through chatqna via docker exec (internal service,
 NO OIDC — faithful label-filtered retrieval) and pull the selection from the
 chatqna.reranker_selection span in VictoriaTraces.

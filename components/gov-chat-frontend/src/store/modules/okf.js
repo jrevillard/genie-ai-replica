@@ -770,6 +770,50 @@ const actions = {
     }
   },
 
+  // ─── Step-7 validation (#1030 + #1036, David 2026-10-02) ──────────────────
+
+  /** The unified Validate issue list — conformance, orphans, near-duplicates,
+   * unlinked citations — each with severity + remedy. */
+  async fetchValidation(_ctx, repoId) {
+    try {
+      const report = await repoOkfService.getValidation(repoId);
+      return { ok: true, report };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Citation hub wiring (#1036): create the Sources page when missing and
+   * link every citing page to it (born-right frontmatter links). */
+  async wireCitations(_ctx, { repoId, hubConceptId } = {}) {
+    try {
+      const result = await repoOkfService.wireCitations(repoId, hubConceptId);
+      return { ok: true, result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** LLM link suggestions for an orphaned page (read-only proposals). */
+  async suggestLinks(_ctx, { repoId, conceptId }) {
+    try {
+      const result = await repoOkfService.suggestLinks(repoId, conceptId);
+      return { ok: true, result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Accept one suggested link — a frontmatter links[] append (born right). */
+  async acceptLink(_ctx, { repoId, conceptId, toConceptId, label }) {
+    try {
+      const result = await repoOkfService.acceptLink(repoId, conceptId, toConceptId, label);
+      return { ok: true, result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
   setEditorSubTab({ commit }, subTab) {
     commit('setEditorSubTab', subTab === 'wizard' ? 'wizard' : 'editor');
   }

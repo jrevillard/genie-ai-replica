@@ -1,7 +1,7 @@
 # El Salvador RAG Pipeline — Comprehensive Evaluation Report
 
 **Author**: Claude (automated pipeline)
-**Date**: 2026-09-30 (last update: 2026-10-02, K=32 sweep + T13b champion)
+**Date**: 2026-09-30 (last update: 2026-10-02, K=32 sweep + T13b champion + file_coverage 0.898)
 **Stack**: genieai-el-salvador @ 10.0.0.102 (`release/el-salvador` branch, **T13b-K=32 live**: factor=0.0006 + thresh=−1.0 + BGE wrapper + K=32)
 **Sample**: 42 queries (Spanish CENTA agriculture), gold_dataset.matched.v4.json
 **Tools**: `tests/rag-benchmarks/eval/{run_eval.py, run_ragas_eval.py, calibrate.py}` (modified locally on .102 for Bearer auth)
@@ -317,10 +317,11 @@ All numbers live-validated Oct 01–02 against `gold_dataset.matched.v4.json` (n
 
 | Metric | T11 (baseline K=32) | T12-K=32 (wrapper) | T13a-K=32 (wrapper + recal) | **T13b-K=32 (wrapper, thresh only)** |
 |---|---|---|---|---|
-| anchor: chunk_recall | 0.704 | 0.711 | **0.835** | **0.835** |
+| anchor: chunk_recall | 0.704 | 0.711 | **0.817** | **0.817** |
 | anchor: chunk_precision | 0.234 | **0.258** | 0.173 | 0.174 |
 | anchor: passage_recall | 30/74 | 30/74 | **49/74** | **49/74** |
 | anchor: retrieval_recall | 0.870 | 0.868 | 0.868 | 0.868 |
+| anchor: **file_coverage** (T13b fresh only) | n/a | n/a | n/a | **0.898** |
 | anchor: avg_sel | 9.12 | 8.86 | **15.17** | 15.05 |
 | RAGAS: faithfulness | 0.655 (n=39) | 0.643 (n=41) | **0.723 (n=42)** | 0.679 (n=40) |
 | RAGAS: context_precision | 0.643 (n=18) | 0.646 (n=21) | 0.774 (n=23) | **0.833 (n=16)** |
@@ -328,7 +329,7 @@ All numbers live-validated Oct 01–02 against `gold_dataset.matched.v4.json` (n
 | RAGAS: answer_relevancy | 0.717 (n=42) | 0.704 (n=42) | 0.726 (n=42) | **0.746 (n=42)** |
 
 **T13b-K=32 vs T11 baseline** (apples-to-apples, same K=32, same chunker, same prompt):
-- anchor: chunk_recall **+13.1pp** (0.704 → 0.835), passage_recall **+19 passages** (30→49/74)
+- anchor: chunk_recall **+11.3pp** (0.704 → 0.817), passage_recall **+19 passages** (30→49/74), **file_coverage 0.898** (44/49 files hit across 39/42 queries with gold files; see §13.7)
 - RAGAS: faithfulness **+3.7%** (0.655 → 0.679), context_precision **+29.6%** (0.643 → 0.833 — biggest single gain), context_recall **+11.6%** (0.726 → 0.810), answer_relevancy **+4.1%** (0.717 → 0.746)
 - Net: **3 of 4 RAGAS metrics beat baseline by ≥3.7%; context_precision is the headline +29.6% gain.**
 
@@ -340,7 +341,7 @@ All numbers live-validated Oct 01–02 against `gold_dataset.matched.v4.json` (n
 - Net: T13b wins on 3, loses only faithfulness. The factor drop (0.0006→0.0005) costs −4.4pp faithfulness but T13a doesn't make up for it elsewhere.
 
 **T13a-K=32 vs T12-K=32** (re-cal effect at K=32):
-- anchor: chunk_recall **+12.4pp** (0.711 → 0.835), passage_recall **+19 passages** (30→49/74)
+- anchor: chunk_recall **+10.6pp** (0.711 → 0.817), passage_recall **+19 passages** (30→49/74)
 - RAGAS: faithfulness **+12.4%** (0.643 → 0.723), context_precision **+19.8%**, context_recall **+21.6%**, answer_relevancy **+3.1%**
 - Net: re-cal recovers all wrapper-induced coverage losses and adds substantial gains. **The threshold change is the dominant lever.**
 
@@ -411,4 +412,32 @@ The new `recall@k` and `ndcg@k` metrics (MR !495) are computed natively via the 
 **Re-cal effect at K=32** (T12-K=32 → T13a-K=32 / T13b-K=32): recall@10 +0.043 (0.743 → 0.786), ndcg@10 +0.026. Re-cal trades recall@1 (flat) for +5–9% depth coverage. Wrapper alone at K=32 (T12-K=32) is indistinguishable from baseline on rank-aware — confirms wrapper alone doesn't help, re-cal is required.
 
 **Operational note**: the .102 eval runner's `/tmp/rag-eval/metrics.py` was last synced 2026-07-01 (predates MR !495 merge on 2026-10-01). rsync of `metrics.py` + `run_eval.py` to .102 done in this commit. Until future evals run with the new metrics.py, recompute via local `metrics.aggregate(per_query)` against the downloaded JSON (the per_query arrays are stable, only the aggregate differs).
+
+### 13.7 File-level coverage (T13b-K=32 fresh, n=42)
+
+Distinct from chunk-recall (which counts individual chunk hits), **file_coverage** measures whether the SELECTED chunk set touches every RAG-relevant file the query depends on. A query scores 1.0 on file_coverage when at least one chunk from each gold source file is selected (partial chunk recall within a file still counts as full file coverage).
+
+| Metric | T13b-K=32 fresh |
+|---|---|
+| file_coverage | **0.898** (44/49 file-query pairs hit) |
+| queries with ≥1 gold file | 39/42 (Q40/Q41/Q42 have `n_passages=0` in v4 gold, excluded) |
+| queries with unhit files | **3/39** (Q09, Q17, Q39) |
+| total file-query pairs | 49 (sum of unique gold files per query across 39 evaluated) |
+
+**Per-query unhit files** (queries where at least one gold file was missed):
+
+| Query | lang | chunk_recall | unhit gold files |
+|---|---|---|---|
+| Q09 | en | 0.00 | 3 files (`1790018197394_4d39bfa1`, `1790018197664_b57cd74c`, `1790019996974_ef67c47c`) |
+| Q17 | en | 0.00 | 1 file (`1790018728999_983e1829`) |
+| Q39 | es | 0.50 | 1 file (`1790021678109_92beb47d`) |
+
+**Distribution by language** (unhit file queries): 2 en + 1 es. The ES query (Q39) is the only one with partial chunk-level coverage AND a missed file — the wrapper's bilingual behaviour may be picking up partial ES content but missing a second source.
+
+**Story**:
+- **chunk_recall ≠ file_coverage**. T13b's chunk_recall 0.817 means 81.7% of gold chunks retrieved per query (set-based). File_coverage 0.898 means 89.8% of gold files touched per query. Both numbers are valid; file_coverage is the IR-correct measure for "did the system find the right sources?", chunk_recall for "how many of the right chunks did it find per query?". A query with 5 gold chunks from 3 files can have chunk_recall=0.4 but file_coverage=1.0.
+- **Q09 + Q17 are total misses** (chunk_recall=0 AND file miss). These are retriever failures — neither file made it into the candidate set at all. Worth investigating label coverage for the source corpora; may be an upstream corpus-ingestion issue, not a retrieval-quality issue.
+- **Q39 is a partial hit** (chunk_recall=0.5 + 1 file missed). Likely an L2 retrieval edge case at K=32 (the missed file may have ranked just below the cutoff). The other gold file was hit.
+
+Computation: per-query `score = |gold_files ∩ selected_files| / |gold_files|` aggregated as a micro-average over the 39 evaluated queries. File mapping from `GRAPH_TEST_SOURCE` (850 chunks → 43 unique files). Excludes the 3 zero-passage queries (Q40/Q41/Q42) per the report's prior convention (these are "no gold" out-of-scope queries).
 

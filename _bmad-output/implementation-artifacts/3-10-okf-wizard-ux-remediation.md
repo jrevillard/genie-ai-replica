@@ -451,3 +451,17 @@ npm script carries --experimental-vm-modules), okf-server 746/746 (1 flake clean
 artifacts, not regressions. Force-pushed with-lease (dd0489258 → 4e7a47665), CI 11852 watched.
 Local build hard-reset to 4e7a47665 (kong_config.json local patch preserved), backend/frontend/
 doc-repo/okf-server/dataprep images rebuilt + recreated.
+
+**#1040 — Step 3 workbench bulk PII buttons dead (16d4d2ff4, 2026-10-04)**: David clicked Accept all
+on the re-imported NCD bundle's 41 flagged entities — nothing. Evidence-first diagnosis: ZERO
+repo.pii_bulk_* audit rows + ZERO HTTP hits for the new repo (64c83d0c) proved the click never left
+the browser (the OLD NCD repo's accept had run fine — 37 processed — before David deleted it).
+Root cause: ConceptList emits `pii-bulk`, RepoEditor binds it (Curate/editor work), but
+steps/Input.vue mounted <OkfConceptList> with only @select/@add/@delete/@label — the event went
+into the void. Fix: same ask → confirm dialog → bulkPiiAction → refreshConcepts contract in Input,
+reusing the okf.editor.piiBulk.* keys (no new locale keys); flagged pill + PII badges + buttons
+clear as refreshed rows come back clean. 4 regression tests (teleport gotcha: DsDialog renders to
+document.body — DOM asserts read body, state asserts use the vm). Suite 1625/1625, lint+prettier
+clean, frontend rebuilt + recreated in the local build. DIAGNOSTIC PATTERNS that paid: audit rows
+as request-arrival proof; `COLLECT state = m.pii_state WITH COUNT INTO n` per repo for the hit
+distribution; AQL `desc` is a reserved keyword (use descr).

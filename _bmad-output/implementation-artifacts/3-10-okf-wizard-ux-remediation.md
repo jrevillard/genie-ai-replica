@@ -432,3 +432,22 @@ data inputs" — every rule is format/shape-level, nothing keyed to NCD content.
 - Tests: autocorrect-conformance 9/9 (5 new stale_after cases), autocorrect-panel.test.js NEW 4/4,
   validate-step 13/13 (PII 2, merged rows 2, preview 2 new), localeConsistency 6/6. Full suites
   sequential: okf-server 746/746, frontend 1623/1623. ESLint + prettier --check clean (prettier LAST).
+
+**Regular rebase feat/okf-server → main (2026-10-04, tip 4e7a47665)**: 72 main commits absorbed, 153
+branch commits replayed, 3 conflicts — all both-sides-added unions or old-path→new-path ports:
+1. `genieai_dataprep_microservice.py` DocRepoIngestPayload: main's `chunkOverlap` + OKF's
+   graphName/bundleVersion/conceptId/repoId — union.
+2. doc-repo `fileController._ingestFileById`: branch's try/catch (429-busy no-poison + Ingestion Error
+   state machine) with graphName/bundleVersion, main's chunkOverlap inside the POST — union.
+3. docs: main's 66-wave overhaul renamed sections (configuration/→configure/ etc.) — branch's
+   okf-variables.md MOVED to configure/, link added to configure/_index.md item 9, old paths
+   respected as deleted.
+Post-rebase verification: main-only content diff vs new tip = ZERO (only configure/_index.md diverges,
+by the intended OKF link); OKF-owned paths byte-identical to pre-rebase tip. Gates: doc-repo 509/509
+(via `npm test` — NOTE: bare `npx jest` FAILS 5 tests on main's new ESM file-type middleware; the
+npm script carries --experimental-vm-modules), okf-server 746/746 (1 flake clean rerun), frontend
+1621/1621, ruff+prettier+eslint clean. Local pytest 5 env-specific failures (trace_logging %f strftime
++ docarray shim tmp-shadowing) — CI test:python GREEN on identical code pre-rebase = Windows-venv
+artifacts, not regressions. Force-pushed with-lease (dd0489258 → 4e7a47665), CI 11852 watched.
+Local build hard-reset to 4e7a47665 (kong_config.json local patch preserved), backend/frontend/
+doc-repo/okf-server/dataprep images rebuilt + recreated.

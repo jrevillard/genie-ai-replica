@@ -1686,6 +1686,10 @@ export default {
       paneLabel: 'Painel de exibição',
       saveFailed: 'Falha ao salvar — tente novamente',
       piiBulk: {
+        done_accept:
+          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
+        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
+        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
         title: {
           redact: 'Ocultar todo o conteúdo sinalizado',
           remove: 'Remover todo o conteúdo sinalizado',

@@ -357,7 +357,12 @@ describe('Input workbench — bulk PII actions (#1040)', () => {
     await settled(wrapper);
     await settled(wrapper);
     expect(mockBulkPiiAction).toHaveBeenCalledWith('r1', 'accept');
-    expect(wrapper.text()).not.toContain('flagged');
+    // the "{n} flagged" pill and the per-row PII badges are gone
+    expect(wrapper.text()).not.toContain('2 flagged');
+    // #1040 follow-up: explicit post-action feedback — what ran and on how
+    // many concepts (the pill vanishing alone was too subtle for the user).
+    expect(wrapper.vm.piiBulkNote).toContain('2');
+    expect(wrapper.find('.okf-step__pii-note').exists()).toBe(true);
     expect(wrapper.vm.piiBulkAsk).toBeNull();
   });
 

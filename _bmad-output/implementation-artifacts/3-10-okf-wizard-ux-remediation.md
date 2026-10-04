@@ -465,3 +465,18 @@ document.body — DOM asserts read body, state asserts use the vm). Suite 1625/1
 clean, frontend rebuilt + recreated in the local build. DIAGNOSTIC PATTERNS that paid: audit rows
 as request-arrival proof; `COLLECT state = m.pii_state WITH COUNT INTO n` per repo for the hit
 distribution; AQL `desc` is a reserved keyword (use descr).
+
+**#1041 — taxonomy typo 'Intervantions' propagated onto LLM-curated labels (2026-10-04, issue filed)**: NCD
+Information re-import (repo 26a180ae, 50 concepts) surfaced 11 concepts with `labels[0] = 'Intervantions'`.
+Evidence chain: zero JS source mentions it (`grep -r Intervantions` empty); the typo lives in exactly ONE
+DB row (`services/60923297.nameEN`), 0 translation rows in any of the 4 serviceTranslation collections,
+11 concept rows in 1 repo. The LLM is bounded to the area's KH L2 list — the bounded-list code rejects
+anything not on the list, so the LLM faithfully propagated a typo that originated in the taxonomy itself.
+Fix: renamed the service `nameEN` (`Intervantions` -> `Interventions`), re-ran `curateRepoConcepts` on
+the affected repo (49 of 50 concepts re-curated; the index row carries no label). Post-rename label
+distribution makes clinical sense (acei-arb `Cardiovascular`, statins `Cardiovascular`, pen-package
+`Interventions`, etc.) — the LLM correctly distributed where the typo had forced everything into one
+bad bucket. Re-verification: zero 'Intervantions' rows anywhere in the DB. Added `KNOWN_BAD_SPELLINGS`
++ edit-distance-1 guard test in `__tests__/llm-curation-service.test.js` so a future admin typo (1-char
+diff vs another entry in the same collection) fails the build at the SOURCE, not at every concept
+that would inherit it. Suite 747/747.

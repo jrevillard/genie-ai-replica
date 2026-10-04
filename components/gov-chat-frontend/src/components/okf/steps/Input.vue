@@ -59,6 +59,7 @@
         @add="addOpen = true"
         @delete="onDeleteAsk"
         @label="onTreeLabel"
+        @pii-bulk="onPiiBulkAsk"
       />
     </div>
     <p v-else class="okf-step__note">
@@ -176,6 +177,24 @@
       </p>
     </DsDialog>
 
+    <!-- BULK PII CONFIRM (#1040): ConceptList's Redact all / Remove all /
+         Accept all emitted `pii-bulk` but the workbench never bound the
+         event — the buttons rendered and did NOTHING (live: 41 flagged
+         entities, zero requests, zero audit rows). Same confirm + action +
+         refresh contract as RepoEditor, reusing its i18n keys. -->
+    <DsDialog
+      :visible="piiBulkAsk !== null"
+      :title="piiBulkTitle"
+      size="sm"
+      :persistent="piiBulkBusy"
+      :loading="piiBulkBusy"
+      :actions="piiBulkActions"
+      @close="piiBulkAsk = null"
+      @action="onPiiBulkAction"
+    >
+      <p>{{ piiBulkBody }}</p>
+    </DsDialog>
+
     <p v-if="inputError" class="okf-step__error">{{ inputError }}</p>
   </div>
 </template>
@@ -240,7 +259,10 @@ export default {
       deleteAsk: null,
       deleting: false,
       labelOptions: [],
-      addedCount: (this.draft && this.draft.input && this.draft.input.concepts_added) || 0
+      addedCount: (this.draft && this.draft.input && this.draft.input.concepts_added) || 0,
+      // #1040 bulk PII state (mirrors RepoEditor)
+      piiBulkAsk: null,
+      piiBulkBusy: false
     };
   },
   computed: {
@@ -325,6 +347,53 @@ export default {
     canAdvance() {
       if (this.variant === 'clone') return true;
       return this.selectedIds.length > 0 || this.concepts.length > 0;
+    },
+    // #1040 bulk PII confirm strings — same keys/fallbacks as RepoEditor.
+    piiFlaggedCount() {
+      return this.concepts.filter((c) => c && c.pii_state === 'hit').length;
+    },
+    piiBulkTitle() {
+      const action = this.piiBulkAsk || 'accept';
+      const key = 'okf.editor.piiBulk.title.' + action;
+      const fallback = {
+        redact: 'Redact all flagged content',
+        remove: 'Remove all flagged content',
+        accept: 'Accept all flagged entities'
+      }[action];
+      return this.translate(key, fallback);
+    },
+    piiBulkBody() {
+      const action = this.piiBulkAsk || 'accept';
+      const key = 'okf.editor.piiBulk.body.' + action;
+      const fallback = {
+        redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
+        remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+        accept: 'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+      }[action];
+      return (
+        this.translate(key, fallback) +
+        ' ' +
+        this.translate('okf.editor.piiBulk.scope', 'Concepts affected: {n}.').replace(
+          '{n}',
+          String(this.piiFlaggedCount)
+        )
+      );
+    },
+    piiBulkActions() {
+      return [
+        {
+          key: 'cancel',
+          label: this.translate('common.cancel', 'Cancel'),
+          variant: 'secondary',
+          disabled: this.piiBulkBusy
+        },
+        {
+          key: 'confirm',
+          label: this.translate('okf.editor.piiBulk.confirm', 'Apply'),
+          variant: this.piiBulkAsk === 'accept' ? 'primary' : 'danger',
+          disabled: this.piiBulkBusy
+        }
+      ];
     }
   },
   watch: {
@@ -345,6 +414,34 @@ export default {
   methods: {
     emitGate() {
       this.$emit('gate', this.canAdvance);
+    },
+    // #1040 bulk PII — same contract as RepoEditor: ask (the ConceptList
+    // click), confirm dialog action, service call, tree refresh. The flagged
+    // pill and the bulk buttons disappear as the refreshed rows come back
+    // clean (pii_state 'clean' server-side on every flagged concept).
+    onPiiBulkAsk(action) {
+      if (this.piiBulkBusy || !this.piiFlaggedCount) return;
+      this.piiBulkAsk = action;
+    },
+    async onPiiBulkAction(key) {
+      if (key === 'cancel') {
+        this.piiBulkAsk = null;
+        return;
+      }
+      if (key !== 'confirm' || !this.piiBulkAsk || this.piiBulkBusy) return;
+      this.piiBulkBusy = true;
+      this.inputError = '';
+      try {
+        const result = await repoOkfService.bulkPiiAction(this.repoId, this.piiBulkAsk);
+        if (!result || !result.ok) {
+          this.inputError = this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.');
+          return;
+        }
+        await this.refreshConcepts();
+      } finally {
+        this.piiBulkBusy = false;
+        this.piiBulkAsk = null;
+      }
     },
     // T2: the tree is the live truth — refreshed after EVERY mutation.
     async refreshConcepts() {

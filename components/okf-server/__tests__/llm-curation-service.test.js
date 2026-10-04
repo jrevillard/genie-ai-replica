@@ -208,14 +208,21 @@ describe('proposeFrontmatter (#990 D-L)', () => {
   });
 
   test('repo-wide CURATED propose over the cap is refused, not hung (gov-uk 997-concept regression)', async () => {
-    mockDb = makeDb(Array.from({ length: 26 }, (_, i) => metaRow({ concept_id: 'c' + i })), []);
-    await expect(
-      service.proposeFrontmatter(REPO, null, { classification: 'llm' })
-    ).rejects.toMatchObject({ code: 'CURATED_PROPOSE_TOO_BROAD', status: 409 });
+    mockDb = makeDb(
+      Array.from({ length: 26 }, (_, i) => metaRow({ concept_id: 'c' + i })),
+      []
+    );
+    await expect(service.proposeFrontmatter(REPO, null, { classification: 'llm' })).rejects.toMatchObject({
+      code: 'CURATED_PROPOSE_TOO_BROAD',
+      status: 409
+    });
     // Zero LLM calls — the refusal happens before any curation work.
     expect(axios.post).not.toHaveBeenCalled();
     // Heuristics over the same rows stays unbounded (pure planning).
-    mockDb = makeDb(Array.from({ length: 26 }, (_, i) => metaRow({ concept_id: 'c' + i })), []);
+    mockDb = makeDb(
+      Array.from({ length: 26 }, (_, i) => metaRow({ concept_id: 'c' + i })),
+      []
+    );
     const out = await service.proposeFrontmatter(REPO, null, { classification: 'heuristics' });
     expect(Array.isArray(out) ? out.length : 1).toBeGreaterThan(0);
   });
@@ -250,5 +257,59 @@ describe('proposeFrontmatter (#990 D-L)', () => {
     expect(out.changes.filter((c) => c.reason.startsWith('CURATED'))).toHaveLength(0);
     mockDb = makeDb([], []);
     expect(await service.proposeFrontmatter(REPO, 'ghost', { classification: 'llm' })).toBeNull();
+  });
+});
+
+// #1041 — taxonomy-typo guard. The LLM is bounded to the area's KH L2 list,
+// so a misspelled label in the source-of-truth taxonomy propagates verbatim
+// onto every curated concept. This guard fails the build if any service's
+// nameEN looks like a typo of a known-good spelling — same idea as the
+// concept-editor's "common typos" reject (a typo needs to be caught at the
+// source, not at every concept that inherits it).
+describe('taxonomy spelling — services.nameEN vs the bounded list the LLM uses (#1041)', () => {
+  // The typo the LLM silently propagated was 'Intervantions' (missing 'e').
+  // Pin the known misspellings here; the guard fails on a hit.
+  const KNOWN_BAD_SPELLINGS = ['Intervantions'];
+
+  // A "looks-like-X" edit-distance: a 1-letter diff where the result is a
+  // real word in our list is a typo; a totally different word is not.
+  function levenshtein(a, b) {
+    const m = a.length;
+    const n = b.length;
+    const d = Array.from({ length: m + 1 }, () => new Array(n + 1));
+    for (let i = 0; i <= m; i += 1) d[i][0] = i;
+    for (let j = 0; j <= n; j += 1) d[0][j] = j;
+    for (let i = 1; i <= m; i += 1) {
+      for (let j = 1; j <= n; j += 1) {
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      }
+    }
+    return d[m][n];
+  }
+
+  test('every services.nameEN matches its canonical spelling (edit-distance <= 1 vs a "close" peer is rejected)', async () => {
+    const dbService = require('../shared-lib/db-connection-service');
+    const db = await dbService.getConnection('default');
+    const services = await (await db.query('FOR s IN services RETURN s.nameEN')).all();
+    expect(services.length).toBeGreaterThan(0);
+
+    const failures = [];
+    for (const name of services.map((r) => r.nameEN)) {
+      if (KNOWN_BAD_SPELLINGS.includes(name)) {
+        failures.push(name + ' is a known typo');
+        continue;
+      }
+      // No comparator list here — we only fail on the known-bad pin AND on
+      // 1-char-diff matches vs OTHER names in the same collection (catches
+      // a NEW typo introduced by a future admin edit). A brand-new correctly
+      // spelled entry is fine.
+      for (const peer of services) {
+        if (peer.nameEN === name) continue;
+        if (Math.abs(peer.nameEN.length - name.length) > 1) continue;
+        const d = levenshtein(name.toLowerCase(), peer.nameEN.toLowerCase());
+        if (d === 1) failures.push(name + ' is edit-distance 1 from ' + peer.nameEN);
+      }
+    }
+    expect(failures).toEqual([]);
   });
 });

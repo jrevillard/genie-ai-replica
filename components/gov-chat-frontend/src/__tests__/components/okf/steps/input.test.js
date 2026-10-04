@@ -16,6 +16,7 @@
 const mockImportConcepts = jest.fn();
 const mockListConcepts = jest.fn();
 const mockDeleteConcept = jest.fn();
+const mockBulkPiiAction = jest.fn();
 const mockGetAdminCategories = jest.fn();
 
 jest.mock('@/services/repoOkfService', () => ({
@@ -23,7 +24,8 @@ jest.mock('@/services/repoOkfService', () => ({
   default: {
     importConcepts: (...a) => mockImportConcepts(...a),
     listConcepts: (...a) => mockListConcepts(...a),
-    deleteConcept: (...a) => mockDeleteConcept(...a)
+    deleteConcept: (...a) => mockDeleteConcept(...a),
+    bulkPiiAction: (...a) => mockBulkPiiAction(...a)
   }
 }));
 
@@ -304,4 +306,83 @@ it('documents: beforeAdvance refuses when the draft has no repo to land in', asy
   await settled(wrapper);
   await expect(wrapper.vm.beforeAdvance()).resolves.toBe(false);
   expect(wrapper.vm.inputError).toBeTruthy();
+});
+
+// #1040 — the workbench's bulk PII buttons (Redact all / Remove all /
+// Accept all in ConceptList's header) emitted `pii-bulk` with NO listener:
+// live on the re-imported NCD bundle, 41 flagged entities, clicking Accept
+// all produced zero requests and zero audit rows. The workbench now runs the
+// same ask → confirm → bulkPiiAction → refresh contract as RepoEditor.
+// NOTE: DsDialog teleports to document.body — DOM assertions read the body,
+// component assertions use findComponent (vnode tree), actions call the
+// handler the dialog binds (onPiiBulkAction) directly.
+describe('Input workbench — bulk PII actions (#1040)', () => {
+  const FLAGGED = [
+    { concept_id: 'index', title: 'Index', type: 'index', pii_state: 'clean' },
+    { concept_id: 'page-a', title: 'Page A', type: 'topic', pii_state: 'hit' },
+    { concept_id: 'page-b', title: 'Page B', type: 'topic', pii_state: 'hit' }
+  ];
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('flagged rows show the count pill; Accept all opens the confirm dialog', async () => {
+    mockListConcepts.mockResolvedValue(FLAGGED.map((c) => ({ ...c })));
+    const wrapper = mountInput({ repo_id: 'r1', source: 'documents' });
+    await settled(wrapper);
+    expect(wrapper.text()).toContain('2 flagged');
+    const acceptBtn = wrapper.findAll('button').find((b) => b.text() === 'Accept all');
+    expect(acceptBtn).toBeTruthy();
+    await acceptBtn.trigger('click');
+    await settled(wrapper);
+    expect(wrapper.vm.piiBulkAsk).toBe('accept');
+    expect(document.body.textContent).toContain('Concepts affected: 2.');
+    expect(mockBulkPiiAction).not.toHaveBeenCalled(); // confirm-gated
+  });
+
+  it('confirming calls the bulk action and the tree comes back clean', async () => {
+    mockListConcepts.mockResolvedValueOnce(FLAGGED.map((c) => ({ ...c })));
+    // post-action refresh returns clean rows — the pill and buttons vanish
+    mockListConcepts.mockResolvedValueOnce(FLAGGED.map((c) => ({ ...c, pii_state: 'clean' })));
+    mockBulkPiiAction.mockResolvedValue({ ok: true, action: 'accept', concepts_affected: 2 });
+    const wrapper = mountInput({ repo_id: 'r1', source: 'documents' });
+    await settled(wrapper);
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Accept all')
+      .trigger('click');
+    await settled(wrapper);
+    await wrapper.vm.onPiiBulkAction('confirm'); // the dialog's Apply action
+    await settled(wrapper);
+    await settled(wrapper);
+    expect(mockBulkPiiAction).toHaveBeenCalledWith('r1', 'accept');
+    expect(wrapper.text()).not.toContain('flagged');
+    expect(wrapper.vm.piiBulkAsk).toBeNull();
+  });
+
+  it('a failed bulk action surfaces the error and keeps the dialog flow intact', async () => {
+    mockListConcepts.mockResolvedValue(FLAGGED.map((c) => ({ ...c })));
+    mockBulkPiiAction.mockResolvedValue({ ok: false });
+    const wrapper = mountInput({ repo_id: 'r1', source: 'documents' });
+    await settled(wrapper);
+    await wrapper.vm.onPiiBulkAsk('remove');
+    await settled(wrapper);
+    await wrapper.vm.onPiiBulkAction('confirm');
+    await settled(wrapper);
+    expect(wrapper.vm.inputError).toBeTruthy();
+    expect(mockListConcepts).toHaveBeenCalledTimes(1); // no refresh on failure
+  });
+
+  it('cancel closes the dialog without touching the server', async () => {
+    mockListConcepts.mockResolvedValue(FLAGGED.map((c) => ({ ...c })));
+    const wrapper = mountInput({ repo_id: 'r1', source: 'documents' });
+    await settled(wrapper);
+    await wrapper.vm.onPiiBulkAsk('redact');
+    await settled(wrapper);
+    await wrapper.vm.onPiiBulkAction('cancel');
+    await settled(wrapper);
+    expect(wrapper.vm.piiBulkAsk).toBeNull();
+    expect(mockBulkPiiAction).not.toHaveBeenCalled();
+  });
 });

@@ -1675,6 +1675,10 @@ export default {
       paneLabel: 'প্যান ভিউ',
       saveFailed: 'সংরক্ষণ ব্যর্থ হয়েছে — আবার চেষ্টা করুন',
       piiBulk: {
+        done_accept:
+          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
+        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
+        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
         title: {
           redact: 'সমস্ত চিহ্নিত সামগ্রী সেন্সর (redact) করুন',
           remove: 'সমস্ত চিহ্নিত সামগ্রী সরান',

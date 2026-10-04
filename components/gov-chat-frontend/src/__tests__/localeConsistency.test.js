@@ -138,7 +138,13 @@ describe('Locale consistency', () => {
       'okf.validation.action.wireCreate',
       'okf.validation.action.wireExisting',
       'okf.validation.wireDone',
-      'okf.validation.wireCreated'
+      'okf.validation.wireCreated',
+      // #1040 follow-up: the workbench bulk-PII success lines (consumed via
+      // translate().replace('{n}') — the done_accept multiline wrap slipped a
+      // raw {n} past a scripted escape once; the guard now pins all three).
+      'okf.editor.piiBulk.done_accept',
+      'okf.editor.piiBulk.done_redact',
+      'okf.editor.piiBulk.done_remove'
     ];
     const offenders = [];
     for (const locale of localeFiles) {

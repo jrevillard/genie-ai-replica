@@ -1665,6 +1665,10 @@ export default {
       paneLabel: 'Juube-dulaa',
       saveFailed: 'Kōjparok ear l̦apier — bar kajjieon̦',
       piiBulk: {
+        done_accept:
+          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
+        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
+        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
         title: {
           redact: 'Bwōbwe aolep men ko ewōr kakōl̦l̦e ie',
           remove: 'Jol̦o̦k aolep kobba ko ewōr kakōl̦l̦e ie',

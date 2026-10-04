@@ -61,6 +61,9 @@
         @label="onTreeLabel"
         @pii-bulk="onPiiBulkAsk"
       />
+      <!-- POST-ACTION FEEDBACK (#1040): a success line in a live region —
+           what ran, on how many concepts, and what changed in the list. -->
+      <p v-if="piiBulkNote" class="okf-step__pii-note" role="status">{{ piiBulkNote }}</p>
     </div>
     <p v-else class="okf-step__note">
       {{ translate('okf.steps.input.noRepoYet', 'Create the repository first (go back to Entry).') }}
@@ -262,7 +265,11 @@ export default {
       addedCount: (this.draft && this.draft.input && this.draft.input.concepts_added) || 0,
       // #1040 bulk PII state (mirrors RepoEditor)
       piiBulkAsk: null,
-      piiBulkBusy: false
+      piiBulkBusy: false,
+      // Explicit post-action feedback (David: "no visual feedback in step 3"):
+      // the dialog closes and the flagged pill vanishes — without this line
+      // nothing TELLS the user what just happened.
+      piiBulkNote: ''
     };
   },
   computed: {
@@ -431,13 +438,24 @@ export default {
       if (key !== 'confirm' || !this.piiBulkAsk || this.piiBulkBusy) return;
       this.piiBulkBusy = true;
       this.inputError = '';
+      const action = this.piiBulkAsk;
       try {
-        const result = await repoOkfService.bulkPiiAction(this.repoId, this.piiBulkAsk);
+        const result = await repoOkfService.bulkPiiAction(this.repoId, action);
         if (!result || !result.ok) {
           this.inputError = this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.');
           return;
         }
         await this.refreshConcepts();
+        // Explicit post-action confirmation (David, #1040 follow-up): what
+        // ran, on how many concepts — the pill clearing alone is too subtle.
+        const affected = String((result && result.concepts_affected) || this.piiFlaggedCount || 0);
+        const doneFallback = {
+          accept:
+            'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+          redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+          remove: 'Done — the flagged content on {n} concept(s) is removed.'
+        }[action];
+        this.piiBulkNote = this.translate('okf.editor.piiBulk.done_' + action, doneFallback).replace('{n}', affected);
       } finally {
         this.piiBulkBusy = false;
         this.piiBulkAsk = null;
@@ -726,6 +744,12 @@ export default {
 .okf-step__error {
   margin: 0;
   color: var(--danger);
+  font-size: var(--text-sm);
+}
+/* #1040 post-action success line (role=status live region) */
+.okf-step__pii-note {
+  margin: 0;
+  color: var(--success, var(--accent));
   font-size: var(--text-sm);
 }
 </style>

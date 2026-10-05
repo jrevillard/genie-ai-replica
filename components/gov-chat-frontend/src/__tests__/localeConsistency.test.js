@@ -144,7 +144,13 @@ describe('Locale consistency', () => {
       // raw {n} past a scripted escape once; the guard now pins all three).
       'okf.editor.piiBulk.done_accept',
       'okf.editor.piiBulk.done_redact',
-      'okf.editor.piiBulk.done_remove'
+      'okf.editor.piiBulk.done_remove',
+      // #1042 batch delete: confirm/result toasts all carry replace() params.
+      'admin.documents.confirmDeleteSelected',
+      'admin.documents.deleteQueuedSuccess',
+      'admin.documents.deletePartialFailure',
+      'admin.documents.deleteAllFailed',
+      'admin.documents.deleteRefuseReason'
     ];
     const offenders = [];
     for (const locale of localeFiles) {

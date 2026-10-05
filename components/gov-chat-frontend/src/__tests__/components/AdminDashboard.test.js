@@ -107,6 +107,12 @@ jest.mock('../../services/documentFileService', () => ({
     successCount: 2,
     failureCount: 0,
     results: []
+  }),
+  // #1042: batch delete — defaults to the all-success shape so existing
+  // tests pass; individual tests override to exercise partial/all-failure.
+  deleteMultipleFiles: jest.fn().mockResolvedValue({
+    success: true,
+    results: []
   })
 }));
 
@@ -1626,6 +1632,75 @@ describe('AdminDashboard', () => {
         '1774623200119_e9887fa8',
         '1774620171830_9589f57b'
       ]);
+    });
+
+    // #1042 BATCH DELETE — the Delete Selected button (Document Management).
+    it('delete: passes file_id values to documentFileService.deleteMultipleFiles', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', file_id: 'a-1', dataprep: { status: 'pending' } },
+        { _key: 'b', file_id: 'b-1', dataprep: { status: 'retracted' } }
+      ];
+      wrapper.vm.selectedDocuments = ['a-1', 'b-1'];
+
+      await wrapper.vm.handleBatchAction('delete');
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(documentFileService.deleteMultipleFiles).toHaveBeenCalledWith(['a-1', 'b-1']);
+      // All-success default: selection clears, success toast fires.
+      const ok = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'success');
+      expect(ok).toBeTruthy();
+      expect(ok[1].message).toMatch(/deleted/i);
+      expect(wrapper.vm.selectedDocuments).toEqual([]);
+    });
+
+    it('delete: disabled with hover title when any selected file is ingested', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', file_id: 'a-1', dataprep: { status: 'pending' } },
+        { _key: 'b', file_id: 'b-1', dataprep: { status: 'ingested' } }
+      ];
+      wrapper.vm.selectedDocuments = ['a-1', 'b-1'];
+
+      expect(wrapper.vm.showDeleteButton).toBe(true);
+      expect(wrapper.vm.deleteRefuseReason).toMatch(/ingested/i);
+      expect(wrapper.vm.deleteRefuseReason).toMatch(/1/);
+
+      // Pure PENDING selection — button enabled, no refuse reason.
+      wrapper.vm.documents = [{ _key: 'a', file_id: 'a-1', dataprep: { status: 'pending' } }];
+      wrapper.vm.selectedDocuments = ['a-1'];
+      expect(wrapper.vm.deleteRefuseReason).toBeNull();
+    });
+
+    it('delete: 403 BUNDLE_PROTECTED surfaces the verbatim backend message', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      // Simulate the 403 shape doc-repo returns for bundles
+      documentFileService.deleteMultipleFiles.mockRejectedValueOnce({
+        response: {
+          status: 403,
+          data: {
+            success: false,
+            code: 'BUNDLE_PROTECTED',
+            error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
+            message: 'Bundle zip "x-1" is owned by the OKF repository lifecycle.'
+          }
+        }
+      });
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [{ _key: 'x', file_id: 'x-1', dataprep: { status: 'pending' } }];
+      wrapper.vm.selectedDocuments = ['x-1'];
+
+      await wrapper.vm.handleBatchAction('delete');
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      const err = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'error');
+      expect(err).toBeTruthy();
+      // Verbatim backend message — not the generic deleteQueuedError
+      expect(err[1].message).toMatch(/OKF repository lifecycle/);
     });
 
     it('ingest all-failure: keeps failed selections, error toast, real failureCount', async () => {

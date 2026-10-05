@@ -480,3 +480,15 @@ bad bucket. Re-verification: zero 'Intervantions' rows anywhere in the DB. Added
 + edit-distance-1 guard test in `__tests__/llm-curation-service.test.js` so a future admin typo (1-char
 diff vs another entry in the same collection) fails the build at the SOURCE, not at every concept
 that would inherit it. Suite 747/747.
+
+**#1042 — Document Management Batch Delete (2026-10-05)**: Delete Selected button next to Retract.
+Disabled (with hover title 'N file(s) are still ingested — retract them first.') whenever any
+selection is INGESTED. Bundle zips fail server-side (WS2 403 BUNDLE_PROTECTED) and the toast
+surfaces the verbatim message. 9 new locale keys ×14; AdminDashboard +3 tests. **LESSON: the JS
+literal-escape form `{\'{'}x{\'}\'}` fails ESLint's no-useless-escape rule (the leading
+backslash on `{`/`}` is redundant inside a single-quoted JS literal). The eslint-CLEAN form is
+`{\'{'}x{\'}\'}`  — same runtime string, no lint failure. I introduced the bad form in #1039
+and #1042 both times; a fixer script that drops `chr(92)+chr(123)`/`chr(125)` to `chr(123)`/`chr(125)`
+inside the affected lines (line-scoped to the #1042/#1039 keys) cleans it up. Worth a
+locale-transform pass that always emits the clean form, written into the
+`tools/okf-locale-transform.js` runner the next time i18n is added.

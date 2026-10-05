@@ -467,6 +467,23 @@
                         ({{ selectedDocuments.length }})
                       </DsButton>
                     </div>
+                    <div v-if="showDeleteButton" class="card-actions">
+                      <!-- #1042 BATCH DELETE: adjacent to Retract per David's UX
+                           rule. DISABLED while any selected file is INGESTED
+                           (would orphan indexed chunks + audit trail) — the
+                           hover title tells the steward to retract first.
+                           Bundle-zip refusal happens via 403 BUNDLE_PROTECTED
+                           on the server; the toast surfaces that text. -->
+                      <DsButton
+                        variant="danger"
+                        :disabled="!!deleteRefuseReason"
+                        :title="deleteRefuseReason"
+                        @click="handleBatchAction('delete')"
+                      >
+                        {{ translate('admin.documents.deleteSelected', 'Delete Selected') }}
+                        ({{ selectedDocuments.length }})
+                      </DsButton>
+                    </div>
                   </div>
 
                   <div class="table-container">
@@ -1940,6 +1957,29 @@ export default {
 
       return !hasRetractedFile;
     },
+    // #1042 BATCH DELETE: gate. Visible as soon as the steward picks any
+    // file — the disabled+title state carries INGESTED-blocked messages.
+    showDeleteButton() {
+      return this.selectedDocuments.length > 0;
+    },
+    // #1042 BATCH DELETE: refuse-reason string for the disabled button's
+    // hover title. Null = allowed; non-null = button greyed out, this
+    // string explains why in the UI's active locale. Counts the rejected
+    // files so the message is actionable.
+    deleteRefuseReason() {
+      if (this.selectedDocuments.length === 0) return null;
+      const ids = new Set(this.selectedDocuments);
+      const blocked = this.documents.filter((doc) => {
+        if (!ids.has(doc.file_id)) return false;
+        const s = doc.dataprep && String(doc.dataprep.status).toLowerCase().trim();
+        return s === 'ingested' || s === 'ingesting';
+      });
+      if (!blocked.length) return null;
+      return this.translate(
+        'admin.documents.deleteRefuseReason',
+        '{count} file(s) are still ingested — retract them first.'
+      ).replace('{count}', String(blocked.length));
+    },
 
     // Gate for the "Create OKF repository" button. AMENDED (Story 7.7,
     // David 2026-09-14): INGESTED documents are now IMPORTABLE — the old
@@ -3343,6 +3383,101 @@ export default {
                 'error'
               );
               console.error('Batch retract error:', error);
+            } finally {
+              this.isLoading = false;
+            }
+          },
+          onCancel: () => {
+            // User canceled, do nothing
+          }
+        });
+      } else if (action === 'delete') {
+        // #1042 BATCH DELETE: same toast-shape as retract. The backend
+        // refuses bundles with 403 BUNDLE_PROTECTED and an ingested
+        // selection is filtered out client-side (deleteRefuseReason disables
+        // the button), so the per-file result list usually has 0 failures.
+        const count = this.selectedDocuments.length;
+        if (this.deleteRefuseReason) {
+          // Belt-and-braces: the button is :disabled too, but if they reached
+          // here some other path triggered the action, refuse clearly.
+          this.showNotification(this.deleteRefuseReason, 'error');
+          return;
+        }
+        this.showConfirmDialog({
+          title: this.translate('admin.documents.confirmDeleteTitle', 'Confirm Batch Deletion'),
+          message: this.translate(
+            'admin.documents.confirmDeleteSelected',
+            `Are you sure you want to permanently delete {count} file(s)? This cannot be undone.`
+          ).replace('{count}', count),
+          confirmText: this.translate('admin.documents.delete', 'Delete'),
+          cancelText: this.translate('common.cancel', 'Cancel'),
+          onConfirm: async () => {
+            this.isLoading = true;
+            try {
+              const res = await documentFileService.deleteMultipleFiles(this.selectedDocuments);
+              const results = (res && res.results) || [];
+              const successCount = results.filter((r) => r.success).length;
+              const failed = results.filter((r) => !r.success);
+              const failureCount = failed.length;
+
+              if (failureCount === 0) {
+                this.showNotification(
+                  this.translate('admin.documents.deleteQueuedSuccess', '{count} file(s) deleted.').replace(
+                    '{count}',
+                    String(successCount)
+                  ),
+                  'success'
+                );
+                this.selectedDocuments = [];
+              } else if (successCount === 0) {
+                const detail = failed.map((r) => r.error || 'unknown error').join('; ');
+                this.showNotification(
+                  this.translate('admin.documents.deleteAllFailed', 'All {count} file(s) failed: {detail}')
+                    .replace('{count}', String(count))
+                    .replace('{detail}', detail),
+                  'error'
+                );
+                this.selectedDocuments = failed.map((r) => r.fileId);
+              } else {
+                const detail = failed.map((r) => r.error || 'unknown error').join('; ');
+                this.showNotification(
+                  this.translate(
+                    'admin.documents.deletePartialFailure',
+                    '{successCount} of {count} deleted. Failed: {detail}'
+                  )
+                    .replace('{successCount}', String(successCount))
+                    .replace('{count}', String(count))
+                    .replace('{detail}', detail),
+                  'warning'
+                );
+                this.selectedDocuments = failed.map((r) => r.fileId);
+              }
+              try {
+                await this.loadDocuments();
+              } catch (reloadErr) {
+                console.warn('Reload after delete failed (toast already shown):', reloadErr);
+              }
+            } catch (error) {
+              // BUNDLE_PROTECTED surfaces server-side as 403 — surface the
+              // verbatim backend message so the steward knows the cause.
+              const code = error && error.response && error.response.data && error.response.data.code;
+              const msg =
+                (error &&
+                  error.response &&
+                  error.response.data &&
+                  (error.response.data.message || error.response.data.error)) ||
+                (error && error.message) ||
+                'unknown error';
+              this.showNotification(
+                code === 'BUNDLE_PROTECTED'
+                  ? msg
+                  : this.translate(
+                      'admin.documents.deleteQueuedError',
+                      'An error occurred during the batch deletion process.'
+                    ),
+                'error'
+              );
+              console.error('Batch delete error:', error);
             } finally {
               this.isLoading = false;
             }

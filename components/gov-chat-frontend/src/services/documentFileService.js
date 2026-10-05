@@ -174,6 +174,24 @@ const documentFileService = {
   },
 
   /**
+   * Deletes multiple files in one batch (Document Management tab — Batch
+   * Delete button). Admin-only on the server (route guards it); bundles are
+   * refused with 403 BUNDLE_PROTECTED server-side so the UI never needs
+   * to know about them.
+   * @param {string[]} fileIds - An array of file IDs to delete.
+   * @returns {Promise<{results: Array<{fileId: string, success: boolean, error?: string}>}>}
+   */
+  async deleteMultipleFiles(fileIds) {
+    try {
+      const response = await httpService.delete('/files', { data: { fileIds } });
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting multiple files:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Gets all ingestion logs for a specific file.
    * @param {string} fileId - The ID of the file.
    * @returns {Promise<Object>} The API response containing the list of logs.

@@ -512,7 +512,7 @@ export default {
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'\{'}count{'}'} file(s)? This cannot be undone.",
+        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
       deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
       deleteQueuedError: 'An error occurred during the batch deletion process.',
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",

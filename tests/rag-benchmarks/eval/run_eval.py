@@ -95,8 +95,8 @@ def _as_list(v) -> list:
     return []
 
 
-def drive_query(entry: dict) -> tuple[float, str]:
-    """POST the gold query to chatqna. Returns (start_time, response_body)."""
+def drive_query(entry: dict) -> tuple[float, str, int]:
+    """POST the gold query to chatqna. Returns (start_time, body, http_status)."""
     payload = {
         "messages": [{"role": "user", "content": entry["query"]}],
         "context": {
@@ -117,9 +117,14 @@ def drive_query(entry: dict) -> tuple[float, str]:
     _token = os.getenv("E2E_BEARER_TOKEN")
     if _token:
         auth_header = f" -H 'Authorization: Bearer {_token}'"
-    cmd = f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'{auth_header} -d '{payload_json}'"
-    body = _docker_exec(CHATQNA_CONTAINER, cmd, timeout=150)
-    return start, body
+    cmd = (
+        f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'"
+        f"{auth_header} -d '{payload_json}' -w '\\n%{{http_code}}'"
+    )
+    raw = _docker_exec(CHATQNA_CONTAINER, cmd, timeout=150)
+    body, _, code = raw.rpartition("\n")
+    status = int(code) if code.strip().isdigit() else 0
+    return start, body, status
 
 
 def _extract_answer(body: str) -> str:
@@ -196,11 +201,20 @@ def fetch_selection(start_s: float) -> tuple[list[str], list[str], list[dict]]:
     quirky boundary semantics; the trace is disambiguated by startTime in
     _extract_selection. Indexing lag on a busy VT node can exceed a minute.
 
+    The sleep is clamped to ``remaining`` so we never sleep past the deadline
+    (finding 11). On deadline, returns without a final query.
+
     Returns ``(candidates, selected, adaptive_breakdown)``.
     """
     deadline = time.time() + TRACE_FETCH_TIMEOUT
+    delay = 0.0  # check immediately — spans are often indexed by the time curl returns
     while True:
-        time.sleep(TRACE_FLUSH_WAIT)
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            return [], [], []
+        if delay:
+            time.sleep(min(delay, remaining))
+        delay = 1.0 if delay < 1.0 else (2.0 if delay < 2.0 else TRACE_FLUSH_WAIT)
         start_us = int((start_s - 3600) * 1e6)
         end_us = int((time.time() + 60) * 1e6)
         url = (
@@ -348,16 +362,50 @@ def make_tuple(entry, sel_hashes, hash_to_text, answer) -> dict:
     }
 
 
-def main(mode: str, gold_path: str, out_path: str) -> None:
+def main(mode: str, gold_path: str, out_path: str) -> int:
     with open(gold_path) as fh:
         gold = json.load(fh)
     entries = gold["entries"]
     hash_to_text = build_hash_to_text() if mode == "dump-tuples" else {}
     key_to_hash = build_key_to_content_hash() if mode == "anchor" else {}
 
-    tuples, rows, missed, unmapped = [], [], 0, 0
+    tuples, rows, missed, unmapped, http_errors = [], [], 0, 0, 0
+    skipped_entries: list[str] = []
     for entry in entries:
-        start, body = drive_query(entry)
+        start, body, status = drive_query(entry)
+        # Non-2xx catchall (finding 5): any status outside 200..299 takes the
+        # error path — skip the entry, count it, and avoid the expensive VT
+        # poll that would otherwise burn TRACE_FETCH_TIMEOUT on a dead query.
+        # 401/403 keep their distinct auth-failure hint; everything else uses
+        # the generic skipped message.
+        if status < 200 or status >= 300:
+            http_errors += 1
+            skipped_entries.append(entry["id"])
+            if status in (401, 403):
+                print(
+                    f"[{entry['id']}] AUTH-FAILURE (HTTP {status}) — bearer expired or "
+                    "invalid. Use the wrapper (token lifecycle) or refresh E2E_BEARER_TOKEN.",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"[{entry['id']}] HTTP {status} from chatqna — skipped",
+                    file=sys.stderr,
+                )
+            if mode == "anchor":
+                # Anchor mode (finding 1): also append the error-row shape so
+                # the report carries signal for the degraded entries — a
+                # partial run with silent gaps exited 0 before this fix.
+                rows.append(
+                    {
+                        "id": entry["id"],
+                        "query": entry["query"],
+                        "trace_found": False,
+                        "error": f"HTTP {status}",
+                    }
+                )
+                missed += 1
+            continue
         answer = _extract_answer(body)
         cand_keys, sel_keys, adaptive_breakdown = fetch_selection(start)
         trace_found = bool(cand_keys or sel_keys)
@@ -396,59 +444,118 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
     if mode == "dump-tuples":
         with open(out_path, "w") as fh:
             json.dump(tuples, fh, ensure_ascii=False, indent=2)
-        print(f"\nWrote {len(tuples)} eval tuples → {out_path}", file=sys.stderr)
-        print("Feed to: run_ragas_eval.py eval_tuples.json", file=sys.stderr)
-    else:
-        scored = [r for r in rows if r.get("trace_found")]
-        agg = metrics.aggregate(scored)
-        # Aggregate passage-level metrics across queries (only queries that
-        # actually had gold passages; queries with all-unresolved gold are
-        # excluded from the denominator to avoid skewing toward zero).
-        p_recalls = [r["passage_recall"] for r in scored if r.get("n_passages")]
-        total_passages = sum(r.get("n_passages", 0) for r in scored)
-        retrieved_passages = sum(r.get("passages_retrieved", 0) for r in scored)
-        agg["passage_recall"] = sum(p_recalls) / len(p_recalls) if p_recalls else 0.0
-        agg["total_passages"] = total_passages
-        agg["retrieved_passages"] = retrieved_passages
-        report = {
-            "per_query": rows,
-            "aggregate": agg,
+        sidecar = {
+            "n_entries": len(entries),
+            "n_tuples": len(tuples),
+            "n_http_errors": http_errors,
             "n_missed_traces": missed,
-            "n_unmapped_chunk_keys": unmapped,
+            "skipped": skipped_entries,
         }
-        with open(out_path, "w") as fh:
-            json.dump(report, fh, indent=2)
-        print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
-        set_based_keys = [
-            "recall",
-            "precision",
-            "complete_recall",
-            "noise",
-            "retrieval_recall",
-            "passage_recall",
-        ]
-        for k in set_based_keys:
-            if k in agg:
-                print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
-        # Rank-aware — only present when every scored row had them computed.
-        for k in metrics.RANK_AWARE_K:
-            rk = f"recall_at_{k}"
-            nk = f"ndcg_at_{k}"
-            if rk in agg:
-                print(f"  {rk:20s} {agg[rk]:.3f}", file=sys.stderr)
-            if nk in agg:
-                print(f"  {nk:20s} {agg[nk]:.3f}", file=sys.stderr)
-        if agg.get("total_passages"):
+        with open(f"{out_path}.meta.json", "w") as fh:
+            json.dump(sidecar, fh, ensure_ascii=False, indent=2)
+        print(f"\nWrote {len(tuples)} eval tuples → {out_path}", file=sys.stderr)
+        print(f"Wrote sidecar → {out_path}.meta.json", file=sys.stderr)
+        print("Feed to: run_ragas_eval.py eval_tuples.json", file=sys.stderr)
+        # Sidecar is already on disk — downstream readers (capture_baseline) can
+        # inspect skipped/http_errors even on degraded runs. Now classify.
+        if not tuples:
+            return 4
+        if (len(tuples) < len(entries)) and not os.getenv("EVAL_ALLOW_PARTIAL"):
             print(
-                f"  retrieved_passages   {agg['retrieved_passages']}/{agg['total_passages']}",
+                f"EXIT 3: {len(entries) - len(tuples)} entries skipped "
+                f"(see {out_path}.meta.json)",
                 file=sys.stderr,
             )
-        if missed:
+            return 3
+        # Finding 2: VT down → all-empty contexts but tuples were written.
+        # The sidecar carries n_missed_traces; surface it as a degraded run
+        # via the same threshold knob as anchor mode.
+        max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
+        if missed > max_missed:
             print(
-                f"  {missed} trace(s) missed and excluded — see per_query[].trace_found",
+                f"EXIT 3: {missed} missed traces > EVAL_MAX_MISSED_TRACES={max_missed}",
                 file=sys.stderr,
             )
-        print(f"\nReport → {out_path}", file=sys.stderr)
+            return 3
+        return 0
+
+    # Anchor branch.
+    scored = [r for r in rows if r.get("trace_found")]
+    agg = metrics.aggregate(scored)
+    # Aggregate passage-level metrics across queries (only queries that
+    # actually had gold passages; queries with all-unresolved gold are
+    # excluded from the denominator to avoid skewing toward zero).
+    p_recalls = [r["passage_recall"] for r in scored if r.get("n_passages")]
+    total_passages = sum(r.get("n_passages", 0) for r in scored)
+    retrieved_passages = sum(r.get("passages_retrieved", 0) for r in scored)
+    agg["passage_recall"] = sum(p_recalls) / len(p_recalls) if p_recalls else 0.0
+    agg["total_passages"] = total_passages
+    agg["retrieved_passages"] = retrieved_passages
+    report = {
+        "per_query": rows,
+        "aggregate": agg,
+        "n_missed_traces": missed,
+        "n_unmapped_chunk_keys": unmapped,
+        "n_http_errors": http_errors,
+        "skipped_entries": skipped_entries,
+    }
+    with open(out_path, "w") as fh:
+        json.dump(report, fh, indent=2)
+    print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
+    set_based_keys = [
+        "recall",
+        "precision",
+        "complete_recall",
+        "noise",
+        "retrieval_recall",
+        "passage_recall",
+    ]
+    for k in set_based_keys:
+        if k in agg:
+            print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
+    # Rank-aware — only present when every scored row had them computed.
+    for k in metrics.RANK_AWARE_K:
+        rk = f"recall_at_{k}"
+        nk = f"ndcg_at_{k}"
+        if rk in agg:
+            print(f"  {rk:20s} {agg[rk]:.3f}", file=sys.stderr)
+        if nk in agg:
+            print(f"  {nk:20s} {agg[nk]:.3f}", file=sys.stderr)
+    if agg.get("total_passages"):
+        print(
+            f"  retrieved_passages   {agg['retrieved_passages']}/{agg['total_passages']}",
+            file=sys.stderr,
+        )
+    if missed:
+        print(
+            f"  {missed} trace(s) missed and excluded — see per_query[].trace_found",
+            file=sys.stderr,
+        )
+    print(f"\nReport → {out_path}", file=sys.stderr)
+    # Report is already on disk — classify the run for capture_baseline (MR-D).
+    max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
+    if skipped_entries and not os.getenv("EVAL_ALLOW_PARTIAL"):
+        print(
+            f"EXIT 3: {len(skipped_entries)} entries skipped (HTTP errors); "
+            "set EVAL_ALLOW_PARTIAL=1 to ignore. See report.skipped_entries.",
+            file=sys.stderr,
+        )
+        return 3
+    if not scored:
+        return 4
+    if missed > max_missed:
+        print(
+            f"EXIT 3: {missed} missed traces > EVAL_MAX_MISSED_TRACES={max_missed}",
+            file=sys.stderr,
+        )
+        return 3
+    if unmapped and not os.getenv("EVAL_ALLOW_UNMAPPED"):
+        print(
+            f"EXIT 3: {unmapped} unmapped chunk keys (wrong GRAPH_SOURCE?)",
+            file=sys.stderr,
+        )
+        return 3
+    return 0
 
 
 if __name__ == "__main__":
@@ -460,4 +567,4 @@ if __name__ == "__main__":
     gold = sys.argv[2] if len(sys.argv) > 2 else "gold_dataset.json"
     default_out = "eval_tuples.json" if mode == "dump-tuples" else "eval_report.json"
     out = sys.argv[3] if len(sys.argv) > 3 else default_out
-    main(mode, gold, out)
+    sys.exit(main(mode, gold, out))

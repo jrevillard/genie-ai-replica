@@ -1,6 +1,6 @@
 {
   "_doc": "Auto-generated from RAG_Evaluation_Test_Dataset_El_Salvador_updated.xlsx (sheet 'Test Dataset') by xlsx_to_gold.py. expected_chunks[].content_hash and chunk_key are filled by match_gold_chunks.py AFTER the corpus is ingested into ArangoDB. Schema matches gold_dataset.example.json.",
-  "source_xlsx": "/home/jerome/Téléchargements/RAG_Evaluation_Test_Dataset_El_Salvador_updated.xlsx",
+  "source_xlsx": "RAG_Evaluation_Test_Dataset_El_Salvador_updated.xlsx",
   "source_sheet": "Test Dataset",
   "generated_at": "2026-09-23T11:01:16+00:00",
   "n_entries": 42,

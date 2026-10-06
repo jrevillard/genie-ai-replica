@@ -6,7 +6,7 @@
 **Sample**: 42 queries (Spanish CENTA agriculture), gold_dataset.matched.v4.json
 **Tools**: `tests/rag-benchmarks/eval/{run_eval.py, run_ragas_eval.py, calibrate.py}` (Bearer-auth wrapper: `tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh`)
 **RAGAS judge**: MiniMax-M3 (`ANTHROPIC_BASE_URL=http://127.0.0.1:3456/v1`)
-**RAGAS embedder**: BGE-large-en-v1.5 via TEI (`EVAL_EMBED_BASE_URL=https://10.0.0.110:444/embed/v1`)
+**RAGAS embedder**: BGE-large-en-v1.5 via TEI (`EVAL_EMBED_BASE_URL=https://<gpu-host>:444/embed/v1`)
 
 ---
 

@@ -23,8 +23,9 @@ import sys
 from arango import cursor
 from chunk_identity import content_hash
 
-GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "genieai_graph_SOURCE")
-TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "text")
+GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "GRAPH_TEST_SOURCE")
+TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "chunk_text")
+_FALLBACK_TEXT_FIELD = "text"
 
 
 def main(out_path: str = "chunks_registry.json") -> None:
@@ -41,6 +42,26 @@ def main(out_path: str = "chunks_registry.json") -> None:
             }}
         """
     )
+    if not rows and TEXT_FIELD != _FALLBACK_TEXT_FIELD:
+        # Legacy deployments (CONTEXTUAL_RETRIEVAL_ENABLED=false) store the
+        # chunk body under `text` instead of `chunk_text` — retry once with
+        # the legacy field so the operator does not need to set
+        # ARANGO_TEXT_FIELD explicitly.
+        sys.stderr.write(
+            "WARNING: empty on chunk_text — set ARANGO_TEXT_FIELD=text for "
+            "CONTEXTUAL_RETRIEVAL_ENABLED=false deployments\n"
+        )
+        rows = cursor(
+            f"""
+            FOR doc IN {GRAPH_SOURCE}
+                SORT doc._key
+                RETURN {{
+                    "key": doc._key,
+                    "text": doc.{_FALLBACK_TEXT_FIELD},
+                    "labels": doc.chunk_labels || []
+                }}
+            """
+        )
     out = [
         {
             "key": r["key"],

@@ -39,7 +39,7 @@ def cursor(
         f"{user or ARANGO_USER}:{password or ARANGO_PASSWORD}".encode()
     ).decode()
     cursor_url = f"{base}/_db/{urllib.parse.quote(database)}/_api/cursor"
-    body: dict | str = {
+    body: dict = {
         "query": aql,
         "bindVars": bind_vars or {},
         "batchSize": batch_size,
@@ -47,7 +47,7 @@ def cursor(
     }
     rows: list = []
     expected: int | None = None
-    while True:
+    for _ in range(10_000):
         req = urllib.request.Request(
             cursor_url,
             data=json.dumps(body).encode(),
@@ -56,14 +56,19 @@ def cursor(
         )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = json.load(resp)
+        prev_len = len(rows)
         if expected is None:
             expected = payload.get("count")
         rows.extend(payload.get("result", []))
+        if payload.get("hasMore") and payload.get("result") is not None and len(rows) == prev_len:
+            raise RuntimeError("Arango cursor made no progress (hasMore with empty result)")
         cid = payload.get("id")
         if not payload.get("hasMore") or not cid:
             break
-        cursor_url = f"{base}/_db/{urllib.parse.quote(database)}/_api/cursor/{cid}"
+        cursor_url = f"{base}/_db/{urllib.parse.quote(database)}/_api/cursor/{urllib.parse.quote(cid)}"
         body = {}  # PUT continuation takes an empty body
+    else:
+        raise RuntimeError("Arango cursor pagination exceeded 10000 iterations")
     if expected is not None and len(rows) != expected:
         raise RuntimeError(
             f"Arango cursor count mismatch: got {len(rows)} rows, server count {expected}"

@@ -38,7 +38,6 @@ import base64
 import datetime as dt
 import json
 import os
-import re
 import sys
 import urllib.parse
 import urllib.request
@@ -49,8 +48,6 @@ from typing import Any
 # the gold set.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from chunk_identity import content_hash, normalize
-
-_WHITESPACE = re.compile(r"\s+")
 
 
 def parse_args() -> argparse.Namespace:
@@ -146,6 +143,43 @@ def load_chunks(args: argparse.Namespace) -> list[dict[str, Any]]:
     )
 
 
+def atomic_write_json(out_path: Path, payload: Any) -> None:
+    """Write ``payload`` to ``out_path`` atomically.
+
+    Writes to ``<out_path>.tmp`` first and then ``os.replace`` onto the final
+    path so a crash or a serialization error never leaves a half-written gold
+    dataset on disk. The temp file is removed on any failure.
+    """
+    tmp = out_path.with_suffix(out_path.suffix + ".tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2, ensure_ascii=False)
+        os.replace(tmp, out_path)
+    except BaseException:
+        # Cleanup the temp file (best-effort — itself may be missing on
+        # some failure modes); re-raise so the caller sees the real error.
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        finally:
+            raise
+
+
+def write_with_backup(out_path: Path, payload: Any) -> None:
+    """Write ``payload`` to ``out_path`` atomically, keeping a one-generation backup.
+
+    The backup is the ORIGINAL contents (copied before the new payload is
+    written) so a botched match run can be reverted by ``mv
+    <path>.bak.json <path>``. Only created when ``out_path`` matches the
+    input gold dataset — explicit ``--output`` paths do not get a backup
+    because the operator chose a separate target.
+    """
+    if out_path.is_file():
+        backup = out_path.with_suffix(out_path.suffix + ".bak.json")
+        backup.write_bytes(out_path.read_bytes())
+    atomic_write_json(out_path, payload)
+
+
 def find_matches(preview: str, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return chunks that contain (or are contained in) the normalised preview.
 
@@ -189,7 +223,7 @@ def main() -> int:
         sys.stderr.write(f"ERROR: gold dataset not found: {args.gold_dataset}\n")
         return 2
 
-    payload = json.loads(args.gold_dataset.read_text())
+    payload = json.loads(args.gold_dataset.read_text(encoding="utf-8"))
     entries: list[dict[str, Any]] = payload.get("entries", [])
     if not entries:
         sys.stderr.write("ERROR: gold dataset has no entries\n")
@@ -207,6 +241,7 @@ def main() -> int:
         "unresolved": 0,
         "skipped_short": 0,
         "total_previews": 0,
+        "deduped_passages": 0,
     }
     for entry in entries:
         expected = entry.get("expected_chunks", [])
@@ -244,6 +279,36 @@ def main() -> int:
                 stats["unresolved"] += 1
         entry["expected_chunks"] = new_expected
 
+    # F7 (MR !505 review): when two previews resolve to the SAME chunk-key
+    # set, the second is a near-duplicate of the first and would inflate
+    # passage-level recall (the eval would credit two gold passages for one
+    # retrieved set). Drop duplicates across the WHOLE payload, keeping the
+    # first passage_id seen. Operates at the passage_id level (a passage
+    # that was split into N chunks is a single unit, not N).
+    seen_passage_keys: set[frozenset[str]] = set()
+    deduped_entries: list[dict[str, Any]] = []
+    for entry in entries:
+        new_expected: list[dict[str, Any]] = []
+        for ec in entry.get("expected_chunks", []):
+            pid = ec.get("passage_id")
+            if pid is None:
+                # Unresolved / skipped rows have no passage; pass through.
+                new_expected.append(ec)
+                continue
+            keys = frozenset(
+                c["chunk_key"] for c in entry["expected_chunks"]
+                if c.get("passage_id") == pid and c.get("chunk_key")
+            )
+            if not keys:
+                new_expected.append(ec)
+                continue
+            if keys in seen_passage_keys:
+                stats["deduped_passages"] += 1
+                continue
+            seen_passage_keys.add(keys)
+            new_expected.append(ec)
+        entry["expected_chunks"] = new_expected
+
     payload["match_run"] = {
         "ran_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "graph_source": args.graph_source,
@@ -255,10 +320,14 @@ def main() -> int:
         return 0
 
     out_path = args.output or args.gold_dataset
-    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+    if out_path == args.gold_dataset:
+        write_with_backup(out_path, payload)
+    else:
+        atomic_write_json(out_path, payload)
     sys.stderr.write(
         f"[match] resolved={stats['resolved']} split_passages={stats['split_passages']} "
         f"unresolved={stats['unresolved']} skipped_short={stats['skipped_short']} "
+        f"deduped_passages={stats['deduped_passages']} "
         f"total_previews={stats['total_previews']} -> {out_path}\n"
     )
     return 0

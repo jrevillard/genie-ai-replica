@@ -382,16 +382,21 @@ def test_resume_skips_already_done_entries(tmp_path, monkeypatch):
     import json as _json
     _clear_eval_env(monkeypatch)
     gold = _write_gold(tmp_path, [
-        {"id": "q1", "query": "a"},
-        {"id": "q2", "query": "b"},
+        {"id": "q1", "query": "a", "expected_chunks": [
+            {"chunk_key": "k1", "content_hash": "h1"}
+        ]},
+        {"id": "q2", "query": "b", "expected_chunks": [
+            {"chunk_key": "k2", "content_hash": "h2"}
+        ]},
     ])
     out = tmp_path / "o.json"
     # Pre-write report: q1 done, q2 not present
     pre_rows = [{
         "id": "q1", "query": "a", "trace_found": True,
-        "selected": [], "candidates": [], "gold": [],
-        "gold_hashes": [], "selected_hashes": [], "candidate_hashes": [],
-        "expected_chunks": [], "adaptive_breakdown": [],
+        "selected": ["k1"], "candidates": ["k1"], "gold": ["k1"],
+        "gold_hashes": ["h1"], "selected_hashes": ["h1"], "candidate_hashes": ["h1"],
+        "expected_chunks": [{"chunk_key": "k1", "content_hash": "h1"}],
+        "adaptive_breakdown": [],
         "recall": 1.0, "precision": 1.0, "complete_recall": 1.0, "noise": 0.0,
         "retrieval_recall": 1.0, "passage_recall": 1.0,
         "n_passages": 1, "passages_retrieved": 1,
@@ -887,12 +892,18 @@ def test_w7_eval_fresh_overwrites_existing(tmp_path, monkeypatch):
     _clear_eval_env(monkeypatch)
     monkeypatch.setenv("EVAL_FRESH", "1")
     monkeypatch.setenv("EVAL_ALLOW_UNMAPPED", "1")  # test injects no key_to_hash
-    gold = _write_gold(tmp_path, [{"id": "q1", "query": "a", "expected_chunks": []}])
+    gold = _write_gold(tmp_path, [{"id": "q1", "query": "a", "expected_chunks": [
+        {"chunk_key": "k1", "content_hash": "h1"}
+    ]}])
     out = tmp_path / "o.json"
     # Pre-existing report claiming q1 finished
     out.write_text(_json.dumps({
         "per_query": [{"id": "q1", "query": "a", "trace_found": True,
-                       "selected": [], "candidates": []}],
+                       "selected": ["k1"], "candidates": ["k1"],
+                       "gold": ["k1"], "gold_hashes": ["h1"],
+                       "selected_hashes": ["h1"], "candidate_hashes": ["h1"],
+                       "expected_chunks": [{"chunk_key": "k1", "content_hash": "h1"}],
+                       "adaptive_breakdown": []}],
         "aggregate": {"n": 1}, "n_missed_traces": 0,
         "n_unmapped_chunk_keys": 0, "n_http_errors": 0,
         "skipped_entries": [],
@@ -951,9 +962,11 @@ def test_w9_pre_loop_refresh_when_no_static_token(tmp_path, monkeypatch):
     monkeypatch.setenv("EVAL_ALLOW_UNMAPPED", "1")  # test injects no key_to_hash
     monkeypatch.setattr(_re, "_token_ts", 0.0)
 
-    gold = _write_gold(tmp_path, [{"id": "q1", "query": "a", "expected_chunks": []}])
+    gold = _write_gold(tmp_path, [{"id": "q1", "query": "a", "expected_chunks": [
+        {"chunk_key": "k1", "content_hash": "h1"}
+    ]}])
     monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
-    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k"], ["k"], []))
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k1"], ["k1"], []))
 
     fetch_calls = []
     def fake_fetch(*a, **kw):
@@ -985,9 +998,11 @@ def test_w9_pre_loop_refresh_skipped_when_static_token_present(tmp_path, monkeyp
     monkeypatch.setenv("E2E_BEARER_TOKEN", "operator-seeded")
     monkeypatch.setattr(_re, "_token_ts", 0.0)
 
-    gold = _write_gold(tmp_path, [{"id": "q1", "query": "a", "expected_chunks": []}])
+    gold = _write_gold(tmp_path, [{"id": "q1", "query": "a", "expected_chunks": [
+        {"chunk_key": "k1", "content_hash": "h1"}
+    ]}])
     monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
-    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k"], ["k"], []))
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k1"], ["k1"], []))
 
     fetch_calls = []
     def fake_fetch(*a, **kw):
@@ -1047,15 +1062,23 @@ def test_w13_no_op_resume_skips_map_build(tmp_path, monkeypatch):
     import json as _json
     _clear_eval_env(monkeypatch)
     gold = _write_gold(tmp_path, [
-        {"id": "q1", "query": "a", "expected_chunks": []},
-        {"id": "q2", "query": "b", "expected_chunks": []},
+        {"id": "q1", "query": "a", "expected_chunks": [
+            {"chunk_key": f"k{i+1}", "content_hash": f"h{i+1}"}
+            for i in range(1)
+        ]},
+        {"id": "q2", "query": "b", "expected_chunks": [
+            {"chunk_key": f"k{i+1}", "content_hash": f"h{i+1}"}
+            for i in range(1, 2)
+        ]},
     ])
     out = tmp_path / "o.json"
     rows = [{
         "id": f"q{i+1}", "query": f"Q{i+1}?", "trace_found": True,
-        "selected": [], "candidates": [],
-        "gold": [], "gold_hashes": [], "selected_hashes": [], "candidate_hashes": [],
-        "expected_chunks": [], "adaptive_breakdown": [],
+        "selected": [f"k{i+1}"], "candidates": [f"k{i+1}"],
+        "gold": [f"k{i+1}"], "gold_hashes": [f"h{i+1}"],
+        "selected_hashes": [f"h{i+1}"], "candidate_hashes": [f"h{i+1}"],
+        "expected_chunks": [{"chunk_key": f"k{i+1}", "content_hash": f"h{i+1}"}],
+        "adaptive_breakdown": [],
         "recall": 1.0, "precision": 1.0, "complete_recall": 1.0, "noise": 0.0,
         "retrieval_recall": 1.0, "passage_recall": 1.0,
         "n_passages": 1, "passages_retrieved": 1,
@@ -1082,4 +1105,102 @@ def test_w13_no_op_resume_skips_map_build(tmp_path, monkeypatch):
     # No work to do → neither build fires
     assert build_calls["k"] == 0
     assert build_calls["h"] == 0
+
+
+# --- F2 (MR !505 review): non-evaluable gold rows must not skew the aggregate ---
+
+def test_f2_empty_gold_excluded_from_aggregate(tmp_path, monkeypatch):
+    """F2: an entry whose expected_chunks is [] scores vacuous recall=1.0 in
+    the legacy path (empty-set intersection). The fix excludes such rows
+    from the aggregate and counts them in n_empty_gold instead. The rc 4
+    gate fires when zero entries are evaluable."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": "q_empty", "query": "no gold", "expected_chunks": []},
+    ])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+    monkeypatch.setattr(run_eval, "drive_query", lambda e: (0.0, '{"text":"x"}', 200))
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k"], ["k"], []))
+    monkeypatch.setattr(run_eval.time, "sleep", lambda s: None)
+    out = tmp_path / "o.json"
+    rc = run_eval.main("anchor", str(gold), str(out))
+    rep = _json.loads(out.read_text())
+    agg = rep["aggregate"]
+    # The only row is non-evaluable (empty expected_chunks) → zero evaluable
+    assert agg["n_evaluable"] == 0
+    assert agg["n_empty_gold"] == 1
+    assert agg["n_unresolved_gold"] == 0
+    assert agg["n"] == 0
+    # Per-query row kept for traceability
+    assert len(rep["per_query"]) == 1
+    assert rep["per_query"][0]["id"] == "q_empty"
+    # rc 4: zero evaluable → gate fires (per the F2 ruling)
+    assert rc == 4
+
+
+def test_f2_unresolved_gold_excluded_from_aggregate(tmp_path, monkeypatch):
+    """F2: an entry whose expected_chunks are ALL unresolved (no content_hash)
+    forces recall=0.0 and corrupts the mean. Excluded from the aggregate and
+    counted in n_unresolved_gold."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": "q_unresolved", "query": "no match", "expected_chunks": [
+            {"preview": "x" * 30, "match_status": "unresolved"},
+        ]},
+    ])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+    monkeypatch.setattr(run_eval, "drive_query", lambda e: (0.0, '{"text":"x"}', 200))
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k"], ["k"], []))
+    monkeypatch.setattr(run_eval.time, "sleep", lambda s: None)
+    out = tmp_path / "o.json"
+    rc = run_eval.main("anchor", str(gold), str(out))
+    rep = _json.loads(out.read_text())
+    agg = rep["aggregate"]
+    assert agg["n_evaluable"] == 0
+    assert agg["n_empty_gold"] == 0
+    assert agg["n_unresolved_gold"] == 1
+    assert rc == 4
+
+
+def test_f2_mixed_aggregate_over_evaluable_only(tmp_path, monkeypatch):
+    """F2: a mixed gold set aggregates ONLY over evaluable rows. The non-
+    evaluable rows stay in per_query (traceability) but are not in the mean."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        # evaluable
+        {"id": "q_ok", "query": "ok", "expected_chunks": [
+            {"chunk_key": "k1", "content_hash": "h1"},
+        ]},
+        # non-evaluable: empty
+        {"id": "q_empty", "query": "empty", "expected_chunks": []},
+        # non-evaluable: all unresolved
+        {"id": "q_unr", "query": "unr", "expected_chunks": [
+            {"preview": "x" * 30, "match_status": "unresolved"},
+        ]},
+        # evaluable
+        {"id": "q_ok2", "query": "ok2", "expected_chunks": [
+            {"chunk_key": "k2", "content_hash": "h2"},
+        ]},
+    ])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash",
+                        lambda: {"k1": "h1", "k2": "h2"})
+    monkeypatch.setattr(run_eval, "drive_query", lambda e: (0.0, '{"text":"x"}', 200))
+    monkeypatch.setattr(run_eval, "fetch_selection",
+                        lambda s: (["k1", "k2"], ["k1", "k2"], []))
+    monkeypatch.setattr(run_eval.time, "sleep", lambda s: None)
+    out = tmp_path / "o.json"
+    rc = run_eval.main("anchor", str(gold), str(out))
+    rep = _json.loads(out.read_text())
+    agg = rep["aggregate"]
+    # Only the two evaluable rows feed the aggregate (n=2)
+    assert agg["n_evaluable"] == 2
+    assert agg["n_empty_gold"] == 1
+    assert agg["n_unresolved_gold"] == 1
+    assert agg["n"] == 2
+    # Per-query still has all 4 rows (traceability)
+    assert len(rep["per_query"]) == 4
+    assert rc == 0
 

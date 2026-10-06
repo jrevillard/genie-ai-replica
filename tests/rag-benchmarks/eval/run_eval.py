@@ -565,13 +565,38 @@ def _write_out_post(
         _write_out(out_path, tuples, mode)
         return None
     scored = [r for r in rows if r.get("trace_found")]
-    agg = metrics.aggregate(scored)
-    p_recalls = [r["passage_recall"] for r in scored if r.get("n_passages")]
-    total_passages = sum(r.get("n_passages", 0) for r in scored)
-    retrieved_passages = sum(r.get("passages_retrieved", 0) for r in scored)
+    # F2 (MR !505 review): a scored row whose gold set is empty or fully
+    # unresolved skews the aggregate — empty gold scores vacuous recall=1.0
+    # and all-unresolved gold forces recall=0.0, both of which are
+    # uninformative and corrupt the mean. Classify them out of the aggregate
+    # but keep them in per_query (traceability) and count them separately.
+    # ``evaluable`` requires at least one resolved (truthy) gold hash — a
+    # list of Nones from a fully-unresolved row is not evaluable either.
+    evaluable = [
+        r for r in scored
+        if r.get("gold_hashes") and any(r["gold_hashes"])
+    ]
+    n_empty_gold = sum(1 for r in scored if not r.get("expected_chunks"))
+    n_unresolved_gold = sum(
+        1
+        for r in scored
+        if r.get("expected_chunks")
+        and not any(c.get("content_hash") for c in r["expected_chunks"])
+    )
+    agg = metrics.aggregate(evaluable)
+    p_recalls = [
+        r["passage_recall"] for r in evaluable if r.get("n_passages")
+    ]
+    total_passages = sum(r.get("n_passages", 0) for r in evaluable)
+    retrieved_passages = sum(
+        r.get("passages_retrieved", 0) for r in evaluable
+    )
     agg["passage_recall"] = sum(p_recalls) / len(p_recalls) if p_recalls else 0.0
     agg["total_passages"] = total_passages
     agg["retrieved_passages"] = retrieved_passages
+    agg["n_evaluable"] = len(evaluable)
+    agg["n_empty_gold"] = n_empty_gold
+    agg["n_unresolved_gold"] = n_unresolved_gold
     report = {
         "per_query": rows,
         "aggregate": agg,

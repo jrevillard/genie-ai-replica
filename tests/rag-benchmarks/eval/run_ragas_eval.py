@@ -16,7 +16,7 @@ endpoint (env vars). The deployment stays sovereign; only the eval tuples (which
 you choose to export) reach the judge.
 
 Requires (install where you run this — NOT a repo dependency):
-    pip install ragas langchain-openai
+    pip install -r requirements.txt
 
 Run locally, not in the deployment.
 """
@@ -27,11 +27,28 @@ import json
 import os
 import sys
 
+# ragas (<0.5) eagerly imports langchain_community.chat_models.vertexai, removed
+# in langchain-community 0.4.x. Stub it when absent so the import chain survives.
+try:  # pragma: no cover - depends on installed versions
+    from langchain_community.chat_models import vertexai  # noqa: F401
+except ImportError:
+    import sys as _sys
+    import types as _types
+
+    _vertexai = _types.ModuleType("langchain_community.chat_models.vertexai")
+
+    class _ChatVertexAI:  # noqa: D401 - stub for ragas.llms.base
+        pass
+
+    _vertexai.ChatVertexAI = _ChatVertexAI
+    _sys.modules["langchain_community.chat_models.vertexai"] = _vertexai
+
 # --- judge config (OpenAI-compatible, model-agnostic) -----------------------
 JUDGE_BASE_URL = os.getenv("EVAL_JUDGE_BASE_URL")  # e.g. https://api.openai.com/v1 or a Zhipu/self-hosted endpoint
 JUDGE_API_KEY = os.getenv("EVAL_JUDGE_API_KEY", "")
 JUDGE_MODEL = os.getenv("EVAL_JUDGE_MODEL")  # whatever model you picked
 JUDGE_TEMPERATURE = float(os.getenv("EVAL_JUDGE_TEMPERATURE", "0"))
+JUDGE_MAX_TOKENS = int(os.getenv("EVAL_JUDGE_MAX_TOKENS", "0"))
 
 # Embeddings (optional — only required for answer_relevancy). Defaults to a
 # separate endpoint so the judge LLM and embedder can differ.
@@ -61,6 +78,7 @@ def _build_judge():
             temperature=JUDGE_TEMPERATURE,
             http_client=sync_client,
             http_async_client=async_client,
+            **({"max_tokens": JUDGE_MAX_TOKENS} if JUDGE_MAX_TOKENS else {}),
         )
     )
     return llm
@@ -71,6 +89,7 @@ def _build_embeddings():
     from ragas.embeddings import LangchainEmbeddingsWrapper
 
     if not EMBED_MODEL:
+        print("WARNING: EVAL_EMBED_MODEL unset — answer_relevancy will be dropped", file=sys.stderr)
         return None  # answer_relevancy will be skipped
     import httpx
     sync_client = httpx.Client(verify=False)
@@ -103,11 +122,59 @@ def _metrics():
     return wanted
 
 
-def main(tuples_path: str, out_path: str) -> None:
-    from ragas import EvaluationDataset, evaluate
+def _load_tuples(tuples_path: str) -> list:
+    """Load and validate the eval_tuples.json input.
 
-    with open(tuples_path) as fh:
-        raw = json.load(fh)
+    Hard-fails (exit 2) on:
+      - the file cannot be read / is 0 bytes (json.JSONDecodeError)
+      - the top-level value is not a JSON list (ragas expects a list of
+        question/context tuples; a dict-shaped payload would have crashed
+        deep inside the ragas call instead of surfacing the operator error)
+
+    The exit 2 here is the right code per the F5 ruling — the prior guard
+    only covered the empty-list case and let 0-byte / dict payloads reach
+    ragas, where they crashed with a confusing traceback instead of a clear
+    operator-visible "your input is malformed" message.
+    """
+    try:
+        with open(tuples_path, encoding="utf-8") as fh:
+            raw = json.load(fh)
+    except json.JSONDecodeError as e:
+        print(
+            f"EXIT 2: could not parse {tuples_path!r} as JSON: {e}. "
+            "Is the file 0 bytes or truncated? Re-run run_eval.py to regenerate.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if not isinstance(raw, list):
+        print(
+            f"EXIT 2: {tuples_path!r} must hold a JSON list of tuples "
+            f"(got {type(raw).__name__}). Re-run run_eval.py to regenerate.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if not raw:
+        print(
+            "EXIT 2: empty eval_tuples.json — refusing to judge (Phase 3 produced nothing)",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    return raw
+
+
+def main(tuples_path: str, out_path: str) -> None:
+    # F8 (MR !505 review): single defaulting site. The __main__ block is
+    # the only place that reads sys.argv — main() trusts whatever it was
+    # handed. An explicit non-empty string opts in; an empty string is the
+    # documented sentinel for "use the default" and is resolved here.
+    if not tuples_path:
+        tuples_path = "eval_tuples.json"
+    if not out_path:
+        out_path = "ragas_report.json"
+
+    raw = _load_tuples(tuples_path)
+
+    from ragas import EvaluationDataset, evaluate
 
     samples = [
         {
@@ -135,7 +202,7 @@ def main(tuples_path: str, out_path: str) -> None:
         "model": JUDGE_MODEL,
         "n": len(samples),
     }
-    with open(out_path, "w") as fh:
+    with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(report, fh, ensure_ascii=False, indent=2, default=str)
     print(f"Ragas eval (judge={JUDGE_MODEL}, n={len(samples)}) → {out_path}", file=sys.stderr)
 

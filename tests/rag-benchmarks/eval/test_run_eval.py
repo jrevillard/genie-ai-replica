@@ -82,15 +82,55 @@ def test_score_anchor_empty_map_produces_no_scoring_signal():
 
 
 def test_drive_query_returns_http_status(monkeypatch):
-    monkeypatch.setattr(run_eval, "_docker_exec", lambda c, cmd, timeout=120: '{"text":"ok"}\n200')
+    monkeypatch.setattr(run_eval, "_docker_exec", lambda c, cmd, timeout=120, pass_env=(): '{"text":"ok"}\n200')
     start, body, status = run_eval.drive_query({"query": "q"})
     assert status == 200 and body == '{"text":"ok"}'
 
 
 def test_drive_query_401_detected(monkeypatch):
-    monkeypatch.setattr(run_eval, "_docker_exec", lambda c, cmd, timeout=120: '{"error":"invalid_token"}\n401')
+    monkeypatch.setattr(run_eval, "_docker_exec", lambda c, cmd, timeout=120, pass_env=(): '{"error":"invalid_token"}\n401')
     _, _, status = run_eval.drive_query({"query": "q"})
     assert status == 401
+
+
+def test_docker_exec_pass_env_forwards_flag(monkeypatch):
+    """G1 fix: pass_env inserts `-e VAR` pairs before the container name so the
+    token travels via docker exec -e (valueless = inherit from python process
+    env) — never on argv. Visible in `ps`/procfs from this test's recorded argv.
+    """
+    captured = {}
+    def fake_run(argv, **kwargs):
+        captured["argv"] = argv
+        return type("R", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+    monkeypatch.setattr(run_eval.subprocess, "run", fake_run)
+    run_eval._docker_exec("c", "echo hi", pass_env=("FOO",))
+    assert captured["argv"] == ["docker", "exec", "-e", "FOO", "c", "sh", "-c", "echo hi"]
+
+
+def test_drive_query_token_not_in_argv(monkeypatch):
+    """G1 fix: bearer token MUST NOT appear on the docker argv or in the sh -c
+    payload. The token is forwarded via docker exec -e E2E_BEARER_TOKEN
+    (valueless flag = inherit from the python process env), and the curl
+    header references it as $E2E_BEARER_TOKEN — expanded container-side only.
+    """
+    captured = []
+    def fake_docker_exec(c, cmd, timeout=120, pass_env=()):
+        captured.append({"container": c, "cmd": cmd, "pass_env": tuple(pass_env)})
+        return '{"text":"x"}\n200'
+    monkeypatch.setattr(run_eval, "_docker_exec", fake_docker_exec)
+    monkeypatch.setenv("E2E_BEARER_TOKEN", "SECRETTOKEN")
+    start, body, status = run_eval.drive_query({"query": "q"})
+    assert status == 200
+    assert len(captured) == 1
+    rec = captured[0]
+    # Token forwarded via docker exec -e, not argv
+    assert "E2E_BEARER_TOKEN" in rec["pass_env"]
+    # Token value never appears on argv
+    argv_str = " ".join([rec["container"], repr(rec["pass_env"])])
+    assert "SECRETTOKEN" not in argv_str
+    # Token value never appears in the sh -c payload (only the var NAME does)
+    assert "SECRETTOKEN" not in rec["cmd"]
+    assert "$E2E_BEARER_TOKEN" in rec["cmd"]  # shell-expands container-side
 
 
 def _clear_eval_env(monkeypatch):

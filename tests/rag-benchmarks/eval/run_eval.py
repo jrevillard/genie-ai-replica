@@ -95,8 +95,8 @@ def _as_list(v) -> list:
     return []
 
 
-def drive_query(entry: dict) -> tuple[float, str]:
-    """POST the gold query to chatqna. Returns (start_time, response_body)."""
+def drive_query(entry: dict) -> tuple[float, str, int]:
+    """POST the gold query to chatqna. Returns (start_time, body, http_status)."""
     payload = {
         "messages": [{"role": "user", "content": entry["query"]}],
         "context": {
@@ -117,9 +117,14 @@ def drive_query(entry: dict) -> tuple[float, str]:
     _token = os.getenv("E2E_BEARER_TOKEN")
     if _token:
         auth_header = f" -H 'Authorization: Bearer {_token}'"
-    cmd = f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'{auth_header} -d '{payload_json}'"
-    body = _docker_exec(CHATQNA_CONTAINER, cmd, timeout=150)
-    return start, body
+    cmd = (
+        f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'"
+        f"{auth_header} -d '{payload_json}' -w '\\n%{{http_code}}'"
+    )
+    raw = _docker_exec(CHATQNA_CONTAINER, cmd, timeout=150)
+    body, _, code = raw.rpartition("\n")
+    status = int(code) if code.strip().isdigit() else 0
+    return start, body, status
 
 
 def _extract_answer(body: str) -> str:
@@ -355,9 +360,29 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
     hash_to_text = build_hash_to_text() if mode == "dump-tuples" else {}
     key_to_hash = build_key_to_content_hash() if mode == "anchor" else {}
 
-    tuples, rows, missed, unmapped = [], [], 0, 0
+    tuples, rows, missed, unmapped, http_errors = [], [], 0, 0, 0
+    skipped_entries: list[str] = []
     for entry in entries:
-        start, body = drive_query(entry)
+        start, body, status = drive_query(entry)
+        if status in (401, 403):
+            http_errors += 1
+            print(
+                f"[{entry['id']}] AUTH-FAILURE (HTTP {status}) — bearer expired or "
+                "invalid. Use the wrapper (token lifecycle) or refresh E2E_BEARER_TOKEN.",
+                file=sys.stderr,
+            )
+            if mode == "dump-tuples":
+                skipped_entries.append(entry["id"])
+                continue
+            rows.append({"id": entry["id"], "query": entry["query"],
+                         "trace_found": False, "error": f"HTTP {status}"})
+            missed += 1
+            continue
+        if status >= 500:
+            http_errors += 1
+            print(f"[{entry['id']}] HTTP {status} from chatqna — skipped", file=sys.stderr)
+            skipped_entries.append(entry["id"])
+            continue
         answer = _extract_answer(body)
         cand_keys, sel_keys, adaptive_breakdown = fetch_selection(start)
         trace_found = bool(cand_keys or sel_keys)

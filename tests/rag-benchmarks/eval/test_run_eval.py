@@ -74,3 +74,15 @@ def test_score_anchor_empty_map_produces_no_scoring_signal():
     assert row["candidate_hashes"] == []
     assert row["recall"] == 0.0
     assert "retrieval_recall" not in row  # no hash-projected candidates at all
+
+
+def test_drive_query_returns_http_status(monkeypatch):
+    monkeypatch.setattr(run_eval, "_docker_exec", lambda c, cmd, timeout=120: '{"text":"ok"}\n200')
+    start, body, status = run_eval.drive_query({"query": "q"})
+    assert status == 200 and body == '{"text":"ok"}'
+
+
+def test_drive_query_401_detected(monkeypatch):
+    monkeypatch.setattr(run_eval, "_docker_exec", lambda c, cmd, timeout=120: '{"error":"invalid_token"}\n401')
+    _, _, status = run_eval.drive_query({"query": "q"})
+    assert status == 401

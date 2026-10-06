@@ -9,6 +9,7 @@ produce a false zero (or mixed-namespace) baseline.
 """
 
 import json
+import os
 import time
 import types
 
@@ -380,6 +381,171 @@ def test_resume_skips_already_done_entries(tmp_path, monkeypatch):
     # .done.jsonl now has both ids
     done_ids = (tmp_path / "o.json.done.jsonl").read_text().splitlines()
     assert "q1" in done_ids and "q2" in done_ids
+
+
+# --- MR-B: in-run bearer token refresh via keycloak.fetch_realm_token ---
+
+def _set_kc_env(monkeypatch):
+    """Enable the EVAL_KC_* env set so _maybe_refresh_token() refreshes."""
+    monkeypatch.setenv("EVAL_KC_URL", "https://kc.test/auth")
+    monkeypatch.setenv("EVAL_KC_REALM", "genie")
+    monkeypatch.setenv("EVAL_KC_CLIENT_ID", "genie-app")
+    monkeypatch.setenv("EVAL_KC_USER", "genie-admin")
+    monkeypatch.setenv("EVAL_KC_PASSWORD", "secret")
+    # Default static token must start defined so the first refresh call can
+    # overwrite it; production callers also set this explicitly.
+    monkeypatch.setenv("E2E_BEARER_TOKEN", "stale-static")
+
+
+def test_maybe_refresh_token_ttl(monkeypatch):
+    """TTL boundary: refresh fires only past the 180s mark. Verification
+    forces elapsed > 180 via the module-local time.time, ensuring the
+    > 180 check (not >=) is the gate."""
+    import run_eval as _re
+    _set_kc_env(monkeypatch)
+
+    # Module-local time namespace: time.time() is callable but returns a
+    # monotonically advancing fake clock; _maybe_refresh_token reads it.
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(_re, "time", types.SimpleNamespace(
+        sleep=lambda s: None,
+        time=lambda: clock["t"],
+    ))
+
+    calls = []
+    def fake_fetch(kc_url, realm, client_id, username, password, timeout=30.0):
+        calls.append((kc_url, realm, client_id, username, password, timeout))
+        return f"tok{len(calls)}"
+    # Monkeypatch fetch_realm_in in run_eval's namespace (NOT keycloak's)
+    monkeypatch.setattr(_re, "fetch_realm_token", fake_fetch)
+
+    # Just under the boundary — elapsed = 179s, must NOT refresh
+    _re._token_ts = clock["t"] - 179.0
+    _re._maybe_refresh_token()
+    assert calls == []
+    assert os.environ["E2E_BEARER_TOKEN"] == "stale-static"
+
+    # Just over the boundary — elapsed = 181s, must refresh
+    clock["t"] += 0  # baseline stays
+    _re._token_ts = clock["t"] - 181.0
+    _re._maybe_refresh_token()
+    assert len(calls) == 1
+    assert os.environ["E2E_BEARER_TOKEN"] == "tok1"
+    # _token_ts moved to current fake clock
+    assert _re._token_ts == clock["t"]
+
+    # Call again immediately — elapsed ~0, must NOT refresh
+    _re._maybe_refresh_token()
+    assert len(calls) == 1
+
+
+def test_401_triggers_refresh_and_retry(tmp_path, monkeypatch):
+    """First drive_query 401 → refresh → re-drive 200 → entry scored."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    _set_kc_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": "q1", "query": "a", "expected_chunks": [
+            {"chunk_key": "k1", "content_hash": "h1"}
+        ]},
+    ])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", lambda: {"k1": "h1"})
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k1"], ["k1"], []))
+
+    fetch_calls = []
+    def fake_fetch(kc_url, realm, client_id, username, password, timeout=30.0):
+        fetch_calls.append(1)
+        return "fresh-tok"
+    monkeypatch.setattr(run_eval, "fetch_realm_token", fake_fetch)
+
+    drive_calls = []
+    def fake_drive(entry):
+        drive_calls.append((entry["id"], os.environ.get("E2E_BEARER_TOKEN")))
+        # First call (with stale token) → 401; second call (after refresh) → 200
+        if len(drive_calls) == 1:
+            return 0.0, '{"error":"invalid_token"}', 401
+        return 0.0, '{"text":"ok"}', 200
+    monkeypatch.setattr(run_eval, "drive_query", fake_drive)
+    monkeypatch.setattr(run_eval.time, "sleep", lambda s: None)
+
+    rc = run_eval.main("anchor", str(gold), str(tmp_path / "o.json"))
+    rep = _json.loads((tmp_path / "o.json").read_text())
+    rows = [r for r in rep["per_query"] if r["id"] == "q1"]
+    assert len(rows) == 1
+    assert rows[0]["trace_found"] is True
+    assert rows[0].get("error") is None  # NOT an error row
+    # Two drive_query calls (initial 401 + refresh retry 200)
+    assert len(drive_calls) == 2
+    assert drive_calls[0][1] == "stale-static"  # pre-refresh token
+    assert drive_calls[1][1] == "fresh-tok"     # post-refresh token
+    # fetch_realm_token called exactly once (on the 401 reaction)
+    assert len(fetch_calls) == 1
+    assert os.environ["E2E_BEARER_TOKEN"] == "fresh-tok"
+    assert rc == 0
+
+
+def test_401_retry_still_fails(tmp_path, monkeypatch):
+    """Both drive_query calls 401 → AUTH-FAILURE skip path: anchor error row."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    _set_kc_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": "q1", "query": "a"},
+    ])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+    fetch_calls = []
+    def fake_fetch(kc_url, realm, client_id, username, password, timeout=30.0):
+        fetch_calls.append(1)
+        return "fresh-tok"
+    monkeypatch.setattr(run_eval, "fetch_realm_token", fake_fetch)
+    def fake_drive(entry):
+        return 0.0, '{"error":"invalid_token"}', 401
+    monkeypatch.setattr(run_eval, "drive_query", fake_drive)
+    monkeypatch.setattr(run_eval.time, "sleep", lambda s: None)
+    out = tmp_path / "o.json"
+    rc = run_eval.main("anchor", str(gold), str(out))
+    rep = _json.loads(out.read_text())
+    err_rows = [r for r in rep["per_query"] if r["id"] == "q1"]
+    assert len(err_rows) == 1
+    assert err_rows[0]["trace_found"] is False
+    assert "401" in err_rows[0]["error"]
+    # Refresh fired exactly once (only the FIRST 401 reaction refreshes; the
+    # second 401 has nothing left to retry, so it falls through to AUTH-FAILURE)
+    assert len(fetch_calls) == 1
+    assert rc == 3  # skipped_entries non-empty + EVAL_ALLOW_PARTIAL unset
+
+
+def test_static_token_path_untouched(tmp_path, monkeypatch):
+    """Without EVAL_KC_* env, _maybe_refresh_token() is a no-op and a 401
+    follows MR-A's behavior: single drive_query call, AUTH-FAILURE row, rc 3."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    # IMPORTANT: no EVAL_KC_* env → refresh path disabled
+    monkeypatch.setenv("E2E_BEARER_TOKEN", "static-only")
+    gold = _write_gold(tmp_path, [
+        {"id": "q1", "query": "a"},
+    ])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+    fetch_calls = []
+    def fake_fetch(*a, **kw):
+        fetch_calls.append(1)
+        return "should-not-be-called"
+    monkeypatch.setattr(run_eval, "fetch_realm_token", fake_fetch)
+    drive_calls = []
+    def fake_drive(entry):
+        drive_calls.append(entry["id"])
+        return 0.0, '{"error":"invalid_token"}', 401
+    monkeypatch.setattr(run_eval, "drive_query", fake_drive)
+    out = tmp_path / "o.json"
+    rc = run_eval.main("anchor", str(gold), str(out))
+    rep = _json.loads(out.read_text())
+    err_rows = [r for r in rep["per_query"] if r["id"] == "q1"]
+    assert err_rows[0]["trace_found"] is False
+    assert "401" in err_rows[0]["error"]
+    # Static path: exactly one drive_query call (NO retry, NO refresh)
+    assert drive_calls == ["q1"]
+    assert fetch_calls == []
+    assert rc == 3
 
 
 def test_retry_succeeds_on_third_attempt(tmp_path, monkeypatch):

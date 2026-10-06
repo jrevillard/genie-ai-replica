@@ -49,10 +49,12 @@ import os
 import subprocess
 import sys
 import time
+import urllib.error
 
 import metrics
 from arango import cursor
 from chunk_identity import content_hash
+from keycloak import KeycloakError, fetch_realm_token
 
 # --- stack config (env-overridable) -----------------------------------------
 # Defaults are placeholders — set these for your deployment. CHATQNA_CONTAINER
@@ -69,6 +71,16 @@ TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "chunk_text")
 TRACE_FLUSH_WAIT = float(os.getenv("TRACE_FLUSH_WAIT", "5"))
 TRACE_FETCH_TIMEOUT = float(os.getenv("TRACE_FETCH_TIMEOUT", "120"))
 
+# --- optional in-run bearer refresh (MR-B) -------------------------------
+# When EVAL_KC_URL + EVAL_KC_PASSWORD are set, _maybe_refresh_token() refreshes
+# E2E_BEARER_TOKEN in-run (TTL-bounded pre-emptively, immediate on 401). When
+# unset, the script preserves its prior static-token contract (capture_baseline
+# relies on this). Env vars are read at call time so tests (and operators) can
+# toggle them via monkeypatch / export without re-importing the module.
+_TOKEN_TTL = 240.0
+_TOKEN_REFRESH_MARGIN = 60.0
+_token_ts: float = 0.0  # set to time.time() in main() when refresh is configured
+
 
 def _docker_exec(container: str, cmd: str, timeout: float = 120) -> str:
     result = subprocess.run(
@@ -80,6 +92,45 @@ def _docker_exec(container: str, cmd: str, timeout: float = 120) -> str:
     if result.returncode != 0:
         raise RuntimeError(f"docker exec failed: {result.stderr.strip()[:300]}")
     return result.stdout
+
+
+def _refresh_configured() -> bool:
+    """True iff the operator opted into in-run refresh (EVAL_KC_URL +
+    EVAL_KC_PASSWORD both set). Defaults for realm/client/user mean the
+    other three vars do not gate activation. Re-reads env so tests can toggle."""
+    return bool(os.getenv("EVAL_KC_URL", "") and os.getenv("EVAL_KC_PASSWORD", ""))
+
+
+def _maybe_refresh_token(force: bool = False) -> bool:
+    """Refresh E2E_BEARER_TOKEN in-run when refresh is configured.
+
+    Returns True on a successful refresh (caller may retry). Returns False
+    on no-op (refresh disabled, TTL not crossed) or on transient failure —
+    failures NEVER raise: the run continues with the existing token and the
+    401/403 path takes over on the next drive_query.
+
+    ``force=True`` skips the TTL check so a 401 reaction can refresh
+    immediately regardless of how recently the last fetch happened.
+    """
+    global _token_ts
+    if not _refresh_configured():
+        return False
+    if not force and time.time() - _token_ts <= _TOKEN_TTL - _TOKEN_REFRESH_MARGIN:
+        return False
+    try:
+        token = fetch_realm_token(
+            os.getenv("EVAL_KC_URL", ""),
+            os.getenv("EVAL_KC_REALM", "genie"),
+            os.getenv("EVAL_KC_CLIENT_ID", "genie-app"),
+            os.getenv("EVAL_KC_USER", "genie-admin"),
+            os.getenv("EVAL_KC_PASSWORD", ""),
+        )
+    except (KeycloakError, urllib.error.URLError, OSError) as e:
+        print(f"[refresh] failed (run continues): {e}", file=sys.stderr)
+        return False
+    os.environ["E2E_BEARER_TOKEN"] = token
+    _token_ts = time.time()
+    return True
 
 
 def _as_list(v) -> list:
@@ -489,6 +540,11 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
         (not os.path.exists(sidecar_path) or os.path.getsize(sidecar_path) == 0)
         and (rows or tuples)
     )
+    # In-run bearer refresh: seed the TTL clock once at startup so the first
+    # top-of-loop hook sees elapsed=0 and skips refresh on entry 0.
+    global _token_ts
+    if _refresh_configured():
+        _token_ts = time.time()
     with open(sidecar_path, "a") as sidecar_fh:
         if seed_needed:
             for r in (rows if mode == "anchor" else tuples):
@@ -507,8 +563,17 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
             entry_succeeded = False
             last_error: Exception | None = None
             for attempt in range(3):
+                # TTL-bounded pre-emptive refresh (no-op when disabled or fresh).
+                _maybe_refresh_token()
                 try:
                     start, body, status = drive_query(entry)
+                    # In-run bearer refresh on 401/403: if the operator opted in,
+                    # force a refresh and re-drive ONCE before falling through
+                    # to the AUTH-FAILURE row. Static-token path is untouched
+                    # (the retry is gated on _refresh_configured()).
+                    if status in (401, 403) and _refresh_configured():
+                        if _maybe_refresh_token(force=True):
+                            start, body, status = drive_query(entry)
                     # Non-2xx catchall (finding 5): any status outside 200..299
                     # takes the error path — skip the entry, count it, avoid
                     # the expensive VT poll. HTTP errors are NOT retried: a

@@ -65,6 +65,11 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Make the eval/ subpackage importable for the shared harness primitives
+# (``docker_exec`` + atomic JSON IO) — previously duplicated locally.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "eval"))
+from harness import docker_exec as _docker_exec  # noqa: E402
+
 # Metrics where a LOWER value is the parity-relevant regression signal.
 LOWER_IS_BETTER = ("recall", "precision", "complete_recall", "retrieval_recall")
 # Metrics where a HIGHER value is the parity-relevant regression signal.
@@ -204,20 +209,6 @@ def _run(cmd: list[str], timeout: float = 60, cwd: str | None = None) -> str:
         raise RuntimeError(
             f"command failed ({result.returncode}): {' '.join(cmd)}: "
             f"{result.stderr.strip()[:300]}"
-        )
-    return result.stdout
-
-
-def _docker_exec(container: str, cmd: str, timeout: float = 60) -> str:
-    result = subprocess.run(
-        ["docker", "exec", container, "sh", "-c", cmd],
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"docker exec {container} failed: {result.stderr.strip()[:300]}"
         )
     return result.stdout
 
@@ -462,6 +453,8 @@ EVAL_IDENTITY_FILES = (
     "calibrate.py",
     "chunk_identity.py",
     "dump_chunks.py",
+    "harness.py",
+    "keycloak.py",
     "metrics.py",
     "run_eval.py",
     "run_ragas_eval.py",

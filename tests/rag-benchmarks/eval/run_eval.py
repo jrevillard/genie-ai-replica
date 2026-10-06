@@ -55,6 +55,7 @@ import urllib.error
 import metrics
 from arango import cursor
 from chunk_identity import content_hash
+from harness import docker_exec as _docker_exec
 from keycloak import KeycloakError, fetch_realm_token
 
 # --- stack config (env-overridable) -----------------------------------------
@@ -81,26 +82,6 @@ TRACE_FETCH_TIMEOUT = float(os.getenv("TRACE_FETCH_TIMEOUT", "120"))
 _TOKEN_TTL = 240.0
 _TOKEN_REFRESH_MARGIN = 60.0
 _token_ts: float = 0.0  # set to time.time() in main() when refresh is configured
-
-
-def _docker_exec(container: str, cmd: str, timeout: float = 120, pass_env: tuple = ()) -> str:
-    # G1 fix: pass_env forwards secrets to the container via `docker exec -e VAR`
-    # (valueless flag = inherit from the calling process env), keeping them
-    # off argv — tokens never appear in `ps`/procfs. Inserted BEFORE the
-    # container name so docker parses them as exec flags, not positional args.
-    args = ["docker", "exec"]
-    for var in pass_env:
-        args.extend(["-e", var])
-    args.extend([container, "sh", "-c", cmd])
-    result = subprocess.run(
-        args,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"docker exec failed: {result.stderr.strip()[:300]}")
-    return result.stdout
 
 
 def _refresh_configured() -> bool:

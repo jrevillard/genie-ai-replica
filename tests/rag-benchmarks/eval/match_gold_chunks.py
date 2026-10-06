@@ -218,7 +218,7 @@ def main() -> int:
             stats["total_previews"] += 1
             if len(preview) < args.min_preview_len:
                 stats["skipped_short"] += 1
-                new_expected.append(ec)
+                new_expected.append({**ec, "match_status": "skipped_short"})
                 continue
             matches = find_matches(preview, chunks)
             if matches:

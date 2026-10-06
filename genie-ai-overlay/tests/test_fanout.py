@@ -1,7 +1,10 @@
 """Tests for the additive multi-graph fan-out (Story 1.0/1.1/1.4/1.5).
 
-The orchestrator (invoke_fanout) lives on the GenieaiArangoRetriever class,
-but the pure helpers (_fanout_should_engage, _attach_provenance,
+The orchestrator (`invoke_fanout`) and the per-leg runner (`_invoke_leg`) are
+MODULE-level functions taking the retriever explicitly as their first argument
+(`invoke_fanout(self, ...)` — the shipped form since Story 1.0's 18b34cd13;
+the call site in `invoke()` dispatches module-style for the same reason).
+The pure helpers (_fanout_should_engage, _attach_provenance,
 _merge_per_graph_results, _legacy_single_graph_or_refuse) are testable in
 isolation. This is the layer-1 unit coverage; the live-deploy LG-5 boundary
 probe is Wave R5.

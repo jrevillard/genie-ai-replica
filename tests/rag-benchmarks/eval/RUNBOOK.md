@@ -2,9 +2,10 @@
 
 End-to-end recipe for a retrieval + semantic eval against a live GENIE.AI
 deployment. Phases run in order; each phase has explicit preconditions and a
-verification gate. Sections after the deployment and
-`/opt/<stack>/.env` style placeholders everywhere — substitute your stack
-name, hostname and database name at copy/paste time.
+verification gate. Sections after the host-artifact inventory use
+`<user>@<host>`, `<stack>`, `/opt/<stack>/.env`, `<DB>`, `<REALM>` style
+placeholders everywhere — substitute your stack name, hostname, and
+database name at copy/paste time.
 
 This runbook describes the FINAL post-MR-B pipeline:
 
@@ -72,22 +73,23 @@ ssh <user>@<host> '
 #     These are needed by Phase 5 (calibrate.py --baseline-factor/--baseline-threshold/--baseline-confusion).
 #     Capture NOW so the offline replay targets the cell that was live when
 #     the report was captured, not a stale historical default.
+#     Resolve service names on your stack via `docker service ls`. The
+#     GENIE.AI product defaults are listed in the "Wrapper / argparse
+#     defaults" table in Phase 3 below.
 ssh <user>@<host> '
-  for svc in chatqna-xeon-backend-server retriever-arango-service; do
+  for svc in <chatqna-service> <retriever-service>; do
     docker service logs --raw $(docker service ls -q -f name=$svc) --since 5m 2>/dev/null \
       | grep -oE "(CONTEXT_DECAY_FACTOR|MIN_VALUE_THRESHOLD|RERANKING_STRATEGY|RERANKER_TOP_N|RETRIEVER_ARANGO_SCORE_THRESHOLD)=[^ ]+" \
       | sort -u
   done
 '
 # Record: CONTEXT_DECAY_FACTOR, MIN_VALUE_THRESHOLD, confusion_formula (current | simple(1-s) | bounded_rel | rank_i/n).
-# For el-salvador-class deployments, the deployed confusion formula is the
-# production "current" variant. Confirm by reading
-# the reranker code at deploy time.
+# Confirm the deployed formula against the reranker code at deploy time.
 
 # 0.3 Confirm chatqna is warm — first query after a redeploy can take 60+ s
 #     (vLLM model load). Probe with a throwaway query before the real run.
 ssh <user>@<host> '
-  CN=$(docker ps --format "{{.Names}}" | grep chatqna-xeon-backend-server | head -1)
+  CN=$(docker ps --format "{{.Names}}" | grep <chatqna-container> | head -1)
   echo "chatqna container: $CN"
   docker exec "$CN" sh -c "
       t0=\$(date +%s)
@@ -141,11 +143,12 @@ ssh <user>@<host> '
 
 ### When the passages cell contains internal blank lines
 
-The default splitter is the regex `\[\n\s*\n\]` (one or more blank lines). If
-a passages cell contains `label:\\nvalue` style data, the internal newline
-will falsely split a single passage. Override with a literal sentinel that
-the gold author places BETWEEN passages (blank lines INSIDE a passage are
-preserved verbatim):
+The default splitter is the regex `\n\s*\n` (raw form `r"\n\s*\n"` in
+`xlsx_to_gold.py` — one or more blank lines). If a passages cell contains
+`label:\nvalue` style data, the internal newline will falsely split a
+single passage. Override with a literal sentinel that the gold author
+places BETWEEN passages (blank lines INSIDE a passage are preserved
+verbatim):
 
 ```bash
 ssh <user>@<host> '
@@ -229,6 +232,25 @@ canonical entry point. It:
 4. **Proves** the ROPC revert on exit (signal-safe `trap` on EXIT/INT/TERM,
    re-auth inside the trap, 3 retries, `exit 9` on failure).
 
+### Wrapper / argparse defaults (override via env)
+
+The wrapper and `run_eval.py` resolve a handful of names dynamically; the
+table below shows the GENIE.AI product defaults (stable across
+deployments of the same product). Operator commands in the surrounding
+sections use `<placeholder>` forms — leave them unset to take the
+default, or set them explicitly when your stack renames the service.
+
+| Knob | Default | Set via | Source |
+|---|---|---|---|
+| `CHATQNA_CONTAINER` | `chatqna-xeon-backend-server` (regex match) | `export CHATQNA_CONTAINER=...` | wrapper line ~48 |
+| `VICTORIATRACES_SVC` | `<stack>_victoriatraces` (`docker service ls` grep) | `export VICTORIATRACES_SVC=...` | wrapper line ~57 |
+| `CHATQNA_SERVICE_NAME` | `genieai-chatqna` (OTel span filter) | `export CHATQNA_SERVICE_NAME=...` | run_eval.py:70 |
+| `GRAPH_SOURCE` | `GRAPH_TEST_SOURCE` | `export GRAPH_SOURCE=...` | run_eval.py:71 |
+| `EVAL_KC_REALM` | `genie` | `export EVAL_KC_REALM=...` | wrapper line ~41 |
+| `EVAL_KC_CLIENT_ID` | `genie-app` | `export EVAL_KC_CLIENT_ID=...` | wrapper line ~42 |
+| `EVAL_KC_USER` | `genie-admin` | `export EVAL_KC_USER=...` | wrapper line ~43 |
+| `EVAL_DEPLOY_ENV` | `/opt/<stack>/.env` | `export EVAL_DEPLOY_ENV=...` | wrapper line ~28 |
+
 ### Two modes
 
 | Mode | Driver argv | Output | Use |
@@ -274,11 +296,11 @@ ssh <user>@<host> '
     import json
     r = json.load(open(\"/tmp/rag-eval/reports/eval_anchor_<TAG>.json\"))
     n_entries = len({e[\"id\"] for e in json.load(open(\"/tmp/rag-eval/gold/<corpus>.gold.matched.json\"))[\"entries\"]})
-    tuples    = r[\"per_query\"]
-    ids       = [t[\"id\"] for t in tuples]
-    assert len(tuples) == n_entries, f\"len(tuples)={len(tuples)} != n_entries={n_entries}\"
+    rows       = r[\"per_query\"]
+    ids        = [row[\"id\"] for row in rows]
+    assert len(rows) == n_entries, f\"len(rows)={len(rows)} != n_entries={n_entries}\"
     assert len(ids) == len(set(ids)), f\"duplicate ids in per_query: {len(ids)-len(set(ids))}\"
-    print(\"OK n=\", len(tuples), \"missed=\", r[\"n_missed_traces\"], \"skipped=\", r[\"skipped_entries\"])
+    print(\"OK n=\", len(rows), \"missed=\", r[\"n_missed_traces\"], \"skipped=\", r[\"skipped_entries\"])
   "
 '
 
@@ -334,11 +356,12 @@ Override cases:
 
 ### In-run token refresh
 
-The wrapper exports `EVAL_KC_URL` (from `KEYCLOAK_URL`), `EVAL_KC_PASSWORD`
-(from `GENIE_ADMIN_PASSWORD`), and defaults for `EVAL_KC_REALM=genie`,
-`EVAL_KC_CLIENT_ID=genie-app`, `EVAL_KC_USER=genie-admin`. When all are set,
-`run_eval.py` auto-refreshes the realm bearer every 240 s (60 s margin) and
-immediately on a 401/403 from chatqna. Operators can override the defaults:
+The wrapper exports `EVAL_KC_URL` (from `KEYCLOAK_URL`) and
+`EVAL_KC_PASSWORD` (from `GENIE_ADMIN_PASSWORD`), and takes realm / client
+/ user defaults from the "Wrapper / argparse defaults" table above.
+When all are set, `run_eval.py` auto-refreshes the realm bearer every
+240 s (60 s margin) and immediately on a 401/403 from chatqna. Operators
+can override the defaults:
 
 ```bash
 ssh <user>@<host> '
@@ -357,22 +380,21 @@ driver falls back to a static `E2E_BEARER_TOKEN` (one-shot; no refresh).
 
 ### Container resolution
 
-The wrapper resolves two service names dynamically. Override either via env
-if the auto-detect guesses wrong:
+The wrapper resolves two service names dynamically (defaults in the
+"Wrapper / argparse defaults" table above). Override either via env if
+the auto-detect guesses wrong:
 
 ```bash
 ssh <user>@<host> '
-  CHATQNA_CONTAINER=<chatqna-container-name> \
-  VICTORIATRACES_SVC=<stack>_victoriatraces \
+  CHATQNA_CONTAINER=<chatqna-container> \
+  VICTORIATRACES_SVC=<victoriatraces-service> \
     bash /tmp/rag-eval/scripts/run_anchor_with_cleanup.sh ...
 '
-# Defaults: CHATQNA_CONTAINER ← docker ps | grep chatqna-xeon-backend-server
-#           VICTORIATRACES_SVC  ← docker service ls | grep victoriatraces
 ```
 
-`GRAPH_SOURCE` (default `GRAPH_TEST_SOURCE`) and `CHATQNA_SERVICE_NAME`
-(default `genieai-chatqna`, used in VictoriaTraces span filtering) can also
-be overridden via env. See `run_eval.py:67-74` for the full knob list.
+`GRAPH_SOURCE` and `CHATQNA_SERVICE_NAME` (both with GENIE.AI defaults —
+see the table) can also be overridden via env. See `run_eval.py:67-74`
+for the full knob list.
 
 **Gate**: `n_tuples == n_entries` (dump-tuples) or `len(per_query) ==
 n_entries` (anchor). Both `n_missed_traces` and `n_http_errors` are 0 (or
@@ -409,12 +431,12 @@ ssh <user>@<host> '
 ssh <user>@<host> '
   export EVAL_JUDGE_BASE_URL=<JUDGE_OPENAI_BASE>     # e.g. https://<judge-host>/v1
   export EVAL_JUDGE_API_KEY=<JUDGE_API_KEY>          # bearer for the judge
-  export EVAL_JUDGE_MODEL=<JUDGE_MODEL_ID>           # e.g. MiniMax-M3
+  export EVAL_JUDGE_MODEL=<JUDGE_MODEL_ID>
   export EVAL_JUDGE_TEMPERATURE=0
   # Embeddings are OPTIONAL — answer_relevancy is dropped when EMBED_MODEL is unset.
   export EVAL_EMBED_BASE_URL=<EMBED_OPENAI_BASE>     # defaults to JUDGE_BASE_URL
   export EVAL_EMBED_API_KEY=<EMBED_API_KEY>          # defaults to JUDGE_API_KEY
-  export EVAL_EMBED_MODEL=<EMBED_MODEL_ID>           # e.g. bge-large
+  export EVAL_EMBED_MODEL=<EMBED_MODEL_ID>
   /tmp/rag-eval/.venv/bin/python /tmp/rag-eval/run_ragas_eval.py \
     /tmp/rag-eval/reports/eval_tuples_<TAG>.json \
     /tmp/rag-eval/reports/ragas_report_<TAG>.json
@@ -563,7 +585,7 @@ spans. If `n_missed_traces` is anomalously high on a fresh run:
 4. Rerun Phase 3 — the warm-up misses were the cause, not a regression.
 
 A persistent warm-up window (> 5 spans) usually means the reranker
-container restarted mid-run (`docker service logs <stack>_chatqna-xeon-backend-server`).
+container restarted mid-run (`docker service logs <chatqna-service>`).
 
 ### Secrets-on-argv / `ps` spot-check
 
@@ -575,7 +597,7 @@ E2E_BEARER_TOKEN` (container-side env expansion). It is NEVER on argv. Spot-chec
 #    chatqna container and read /proc/<pid>/environ — token must be absent
 #    (it lives in the WRAPPER's env, not the container's).
 ssh <user>@<host> '
-  CN=$(docker ps --format "{{.Names}}" | grep chatqna-xeon-backend-server | head -1)
+  CN=$(docker ps --format "{{.Names}}" | grep <chatqna-container> | head -1)
   docker exec "$CN" sh -c "
     for p in \$(pgrep -f run_eval.py); do
       tr '\0' '\n' < /proc/\$p/environ | grep -E "E2E_BEARER_TOKEN|EVAL_KC_PASSWORD" && echo "LEAK in \$p" || true
@@ -600,8 +622,6 @@ bug.
 
 ### `n_missed_traces > 0` — what does it mean?
 
-Per `eval/CLAUDE.md` "Diagnostic mode":
-
 | Symptom | chatqna log | Cause | Fix |
 |---|---|---|---|
 | `n_missed_traces > 0`, fast (~1 s/query) | `POST /v1/chatqna 401 ~1ms` | auth missing | rerun via wrapper |
@@ -610,7 +630,7 @@ Per `eval/CLAUDE.md` "Diagnostic mode":
 
 ```bash
 ssh <user>@<host> '
-  docker service logs <stack>_chatqna-xeon-backend-server --since 5m \
+  docker service logs <chatqna-service> --since 5m \
     | grep -E "Grounding|POST /v1/chatqna"
 '
 ```
@@ -653,15 +673,16 @@ ssh <user>@<host> '
 | Wrapper exit | Meaning | Action |
 |---|---|---|
 | 0 | clean run | proceed |
-| 2 | usage (bad args) | fix and rerun |
-| 3 | degraded (`n_missed_traces > max` OR `skipped_entries` non-empty OR `unmapped > 0`) | see "When things go wrong" |
+| 2 | usage OR gold-mismatch | wrapper usage (bad args / EVAL_MODE): fix CLI. `run_eval.py` gold-mismatch: stderr is `EXIT 2: N prefilled ids not in current gold (gold changed mid-run?)` → either pass `EVAL_FRESH=1` (fresh run) or restore the prior gold file |
+| 3 | degraded | anchor: `skipped_entries` non-empty without `EVAL_ALLOW_PARTIAL`, OR `missed > EVAL_MAX_MISSED_TRACES`, OR `unmapped > 0` without `EVAL_ALLOW_UNMAPPED`. dump-tuples: `len(tuples) < len(entries)` without `EVAL_ALLOW_PARTIAL`, OR `missed > EVAL_MAX_MISSED_TRACES`. See "When things go wrong" |
 | 4 | zero scored rows | check Phase 0 (auth, warm-up, GRAPH_SOURCE) |
 | 8 | ROPC enable failed (HTTP non-204/200) | check Keycloak admin creds |
 | 9 | ROPC revert failed after 3 retries | manual revert curl above |
 
-`run_eval.py` itself exits with the same codes 0/3/4 (plus its own 2 for
-gold/prefill mismatch); the wrapper passes through 0/3/4 and adds 8/9
-for its own setup/cleanup failures.
+The wrapper adds 8/9 for its own setup/cleanup failures and exits 2 for
+usage errors (no gold/out or bad `EVAL_MODE`); `run_eval.py` exits 2 only
+on the gold-mismatch prefilled-ids check (stderr above). Codes 0/3/4 pass
+through unchanged.
 
 ---
 

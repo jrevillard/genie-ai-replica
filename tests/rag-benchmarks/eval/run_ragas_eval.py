@@ -122,17 +122,57 @@ def _metrics():
     return wanted
 
 
-def main(tuples_path: str, out_path: str) -> None:
-    tuples_path = tuples_path if tuples_path else (sys.argv[1] if len(sys.argv) > 1 else "eval_tuples.json")
-    out_path = out_path if out_path else (sys.argv[2] if len(sys.argv) > 2 else "ragas_report.json")
+def _load_tuples(tuples_path: str) -> list:
+    """Load and validate the eval_tuples.json input.
 
-    raw = json.load(open(tuples_path))
+    Hard-fails (exit 2) on:
+      - the file cannot be read / is 0 bytes (json.JSONDecodeError)
+      - the top-level value is not a JSON list (ragas expects a list of
+        question/context tuples; a dict-shaped payload would have crashed
+        deep inside the ragas call instead of surfacing the operator error)
+
+    The exit 2 here is the right code per the F5 ruling — the prior guard
+    only covered the empty-list case and let 0-byte / dict payloads reach
+    ragas, where they crashed with a confusing traceback instead of a clear
+    operator-visible "your input is malformed" message.
+    """
+    try:
+        with open(tuples_path, encoding="utf-8") as fh:
+            raw = json.load(fh)
+    except json.JSONDecodeError as e:
+        print(
+            f"EXIT 2: could not parse {tuples_path!r} as JSON: {e}. "
+            "Is the file 0 bytes or truncated? Re-run run_eval.py to regenerate.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if not isinstance(raw, list):
+        print(
+            f"EXIT 2: {tuples_path!r} must hold a JSON list of tuples "
+            f"(got {type(raw).__name__}). Re-run run_eval.py to regenerate.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     if not raw:
         print(
             "EXIT 2: empty eval_tuples.json — refusing to judge (Phase 3 produced nothing)",
             file=sys.stderr,
         )
         sys.exit(2)
+    return raw
+
+
+def main(tuples_path: str, out_path: str) -> None:
+    # F8 (MR !505 review): single defaulting site. The __main__ block is
+    # the only place that reads sys.argv — main() trusts whatever it was
+    # handed. An explicit non-empty string opts in; an empty string is the
+    # documented sentinel for "use the default" and is resolved here.
+    if not tuples_path:
+        tuples_path = "eval_tuples.json"
+    if not out_path:
+        out_path = "ragas_report.json"
+
+    raw = _load_tuples(tuples_path)
 
     from ragas import EvaluationDataset, evaluate
 
@@ -162,7 +202,7 @@ def main(tuples_path: str, out_path: str) -> None:
         "model": JUDGE_MODEL,
         "n": len(samples),
     }
-    with open(out_path, "w") as fh:
+    with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(report, fh, ensure_ascii=False, indent=2, default=str)
     print(f"Ragas eval (judge={JUDGE_MODEL}, n={len(samples)}) → {out_path}", file=sys.stderr)
 

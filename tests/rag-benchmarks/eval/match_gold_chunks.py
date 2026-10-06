@@ -152,7 +152,7 @@ def atomic_write_json(out_path: Path, payload: Any) -> None:
     """
     tmp = out_path.with_suffix(out_path.suffix + ".tmp")
     try:
-        with open(tmp, "w") as fh:
+        with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, indent=2, ensure_ascii=False)
         os.replace(tmp, out_path)
     except BaseException:
@@ -223,7 +223,7 @@ def main() -> int:
         sys.stderr.write(f"ERROR: gold dataset not found: {args.gold_dataset}\n")
         return 2
 
-    payload = json.loads(args.gold_dataset.read_text())
+    payload = json.loads(args.gold_dataset.read_text(encoding="utf-8"))
     entries: list[dict[str, Any]] = payload.get("entries", [])
     if not entries:
         sys.stderr.write("ERROR: gold dataset has no entries\n")
@@ -241,6 +241,7 @@ def main() -> int:
         "unresolved": 0,
         "skipped_short": 0,
         "total_previews": 0,
+        "deduped_passages": 0,
     }
     for entry in entries:
         expected = entry.get("expected_chunks", [])
@@ -278,6 +279,36 @@ def main() -> int:
                 stats["unresolved"] += 1
         entry["expected_chunks"] = new_expected
 
+    # F7 (MR !505 review): when two previews resolve to the SAME chunk-key
+    # set, the second is a near-duplicate of the first and would inflate
+    # passage-level recall (the eval would credit two gold passages for one
+    # retrieved set). Drop duplicates across the WHOLE payload, keeping the
+    # first passage_id seen. Operates at the passage_id level (a passage
+    # that was split into N chunks is a single unit, not N).
+    seen_passage_keys: set[frozenset[str]] = set()
+    deduped_entries: list[dict[str, Any]] = []
+    for entry in entries:
+        new_expected: list[dict[str, Any]] = []
+        for ec in entry.get("expected_chunks", []):
+            pid = ec.get("passage_id")
+            if pid is None:
+                # Unresolved / skipped rows have no passage; pass through.
+                new_expected.append(ec)
+                continue
+            keys = frozenset(
+                c["chunk_key"] for c in entry["expected_chunks"]
+                if c.get("passage_id") == pid and c.get("chunk_key")
+            )
+            if not keys:
+                new_expected.append(ec)
+                continue
+            if keys in seen_passage_keys:
+                stats["deduped_passages"] += 1
+                continue
+            seen_passage_keys.add(keys)
+            new_expected.append(ec)
+        entry["expected_chunks"] = new_expected
+
     payload["match_run"] = {
         "ran_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "graph_source": args.graph_source,
@@ -296,6 +327,7 @@ def main() -> int:
     sys.stderr.write(
         f"[match] resolved={stats['resolved']} split_passages={stats['split_passages']} "
         f"unresolved={stats['unresolved']} skipped_short={stats['skipped_short']} "
+        f"deduped_passages={stats['deduped_passages']} "
         f"total_previews={stats['total_previews']} -> {out_path}\n"
     )
     return 0

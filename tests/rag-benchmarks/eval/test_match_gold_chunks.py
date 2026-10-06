@@ -284,3 +284,95 @@ class TestInPlaceBackup:
         assert out.is_file()
         # Input gold was not overwritten, so no backup is required.
         assert not (tmp_path / "gold.json.bak.json").exists()
+
+
+# --- F7 (MR !505 review): near-duplicate passages inflate gold ---------------
+
+class TestPassageDedup:
+    """F7: when two previews resolve to the same chunk-key set, the second
+    is a near-duplicate of the first and would inflate passage-level recall
+    (the eval would credit two gold passages for one retrieved set). The
+    fix dedups across the WHOLE payload, keeping the first passage_id seen."""
+
+    PREVIEW = "A preview string long enough to be matched verbatim in a chunk " * 3
+    CHUNK = {"key": "ck1", "text": PREVIEW}
+    GOLD = {
+        "entries": [
+            # q1 has the verbatim passage, previewed once
+            {"id": "q1", "expected_chunks": [{"preview": PREVIEW}]},
+            # q2 has the SAME verbatim passage in a second entry — should
+            # be deduped to a single passage across the dataset.
+            {"id": "q2", "expected_chunks": [{"preview": PREVIEW}]},
+        ]
+    }
+
+    def test_duplicate_passage_dropped(self, tmp_path, monkeypatch, capsys):
+        import match_gold_chunks as mgc
+        import json
+
+        gold = tmp_path / "gold.json"
+        gold.write_text(json.dumps(self.GOLD))
+        monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: [self.CHUNK])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["match_gold_chunks.py", "--gold-dataset", str(gold), "--mode", "in-place"],
+        )
+        rc = mgc.main()
+        assert rc == 0
+        payload = json.loads(gold.read_text())
+        # The dedup operates at the payload level: same chunk-key set, second
+        # occurrence dropped, first one kept.
+        kept = []
+        for entry in payload["entries"]:
+            for ec in entry["expected_chunks"]:
+                if ec.get("chunk_key"):
+                    kept.append((entry["id"], ec.get("passage_id"), ec["chunk_key"]))
+        # Exactly ONE resolved row remains — q1's passage (first seen).
+        assert len(kept) == 1, f"expected 1 kept passage, got {kept}"
+        assert kept[0][0] == "q1"
+        # Stats record the dedup
+        stats = payload["match_run"]["stats"]
+        assert stats["deduped_passages"] == 1
+        # And the stderr line surfaces the same number
+        err = capsys.readouterr().err
+        assert "deduped_passages=1" in err
+
+    def test_distinct_passages_preserved(self, tmp_path, monkeypatch):
+        """Sanity: distinct chunk-key sets (NOT duplicates) survive the dedup."""
+        import match_gold_chunks as mgc
+        import json
+
+        # Two previews, each matching a different chunk → two passages
+        preview_a = ("First preview " * 10)
+        preview_b = ("Second preview " * 10)
+        chunks = [
+            {"key": "ck1", "text": preview_a + " tail to make it a full chunk"},
+            {"key": "ck2", "text": preview_b + " tail to make it a full chunk"},
+        ]
+        gold = {
+            "entries": [
+                {"id": "q1", "expected_chunks": [{"preview": preview_a}]},
+                {"id": "q2", "expected_chunks": [{"preview": preview_b}]},
+            ]
+        }
+        gold_path = tmp_path / "gold.json"
+        gold_path.write_text(json.dumps(gold))
+        monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: chunks)
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["match_gold_chunks.py", "--gold-dataset", str(gold_path),
+             "--mode", "in-place"],
+        )
+        rc = mgc.main()
+        assert rc == 0
+        payload = json.loads(gold_path.read_text())
+        kept = [
+            ec
+            for entry in payload["entries"]
+            for ec in entry["expected_chunks"]
+            if ec.get("chunk_key")
+        ]
+        assert len(kept) == 2  # both distinct passages survive
+        assert payload["match_run"]["stats"]["deduped_passages"] == 0

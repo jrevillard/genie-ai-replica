@@ -13,7 +13,7 @@ The decision matrix is in `_bmad-output/implementation-artifacts/1-0-retriever-p
 (Decisions A–F); these tests pin the contract the orchestrator commits to.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from retriever.genieai_retriever_arangodb import (
     _attach_provenance,
@@ -80,6 +80,39 @@ class TestFanoutShouldEngage:
 
 
 # ─── Story 1.1: the legacy ARANGO_GRAPH_NAME fallback refusal ────────────────
+
+
+class TestInvokeLegSpan:
+    """Regression pin (live-caught 2026-10-06): `_invoke_leg` must hand
+    `_extract_for_graph` a REAL span — the extraction unconditionally sets
+    attributes on and ends it, so the shipped `span=None` crashed EVERY leg
+    with 'NoneType' object has no attribute 'end' (legs=9, succeeded=0,
+    fused=0) after the search had already found hits."""
+
+    async def test_invoke_leg_passes_real_span_not_none(self):
+        from retriever.genieai_retriever_arangodb import _invoke_leg
+
+        captured = {}
+
+        async def fake_extract(self, **kwargs):
+            captured.update(kwargs)
+            return [{"doc": "hit"}]
+
+        stub = type("StubRetriever", (), {"_extract_for_graph": fake_extract})()
+        with patch("tracing.get_tracer") as mock_get_tracer:
+            mock_get_tracer.return_value.start_span.return_value = MagicMock()
+            result = await _invoke_leg(
+                stub,
+                graph_name="OKF_x_v1",
+                input_dict={"input": "q"},
+                input=None,
+                query="q",
+            )
+
+        assert result == [{"doc": "hit"}]
+        assert captured["span"] is not None
+        assert captured["span"] is mock_get_tracer.return_value.start_span.return_value
+        assert captured["graph_name"] == "OKF_x_v1"
 
 
 class TestLegacyFallbackRefusal:

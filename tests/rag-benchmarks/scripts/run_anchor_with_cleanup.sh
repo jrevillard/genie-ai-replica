@@ -74,11 +74,25 @@ CHATQNA_URL="${CHATQNA_URL:-http://localhost:8888/v1/chatqna}"
 if [ -z "${CHATQNA_CONTAINER:-}" ]; then
     CHATQNA_CONTAINER=$(docker ps --format '{{.Names}}' | grep chatqna-xeon-backend-server | head -1)
 fi
+# Export so subprocesses (run_eval_chunked.py → run_eval.py) inherit it via
+# os.environ.copy(). Without export the variable stays local to this shell
+# and run_eval.py falls back to its default placeholder container name.
+export CHATQNA_CONTAINER
+export CHATQNA_SERVICE_NAME
+export VICTORIATRACES_SVC
+export GRAPH_SOURCE
+export ARANGO_URL
+export ARANGO_USER
+export TRACE_FETCH_TIMEOUT
+export TRACE_FLUSH_WAIT
+export CHATQNA_URL
+export RERANKER_SERVICE_NAME
 
 # Resolve VT service name from the chatqna stack if not pinned
 if [ -z "${VICTORIATRACES_SVC:-}" ]; then
     VICTORIATRACES_SVC=$(echo "${CHATQNA_SERVICE_NAME}" | sed 's/chatqna/victoriatraces/' | sed 's/-chatqna$/-victoriatraces/')
 fi
+export VICTORIATRACES_SVC
 
 ADMIN_TOKEN=$(curl -sk -X POST "$EVAL_KC_URL/realms/master/protocol/openid-connect/token" \
     -d "client_id=admin-cli" -d "username=admin" -d "password=$KEYCLOAK_ADMIN_PASSWORD" -d "grant_type=password" \

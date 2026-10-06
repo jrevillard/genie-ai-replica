@@ -98,7 +98,17 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--passage-separator", default=r"\n\s*\n",
-        help="Regex that splits a passages cell into multiple previews (default: blank-line).",
+        help=(
+            "Regex or literal string that splits a passages cell into multiple previews "
+            "(default: blank-line `\\n\\s*\\n`). "
+            "Use a sentinel like '@' or '@@@@@' to give the gold author explicit control "
+            "over passage boundaries — required when a passages cell contains 'label:\\nvalue' "
+            "patterns whose internal newline would falsely split a single passage (e.g. "
+            "'Days to flowering:\\n\\n36-38' would otherwise yield an isolated '36-38' preview "
+            "too short for reliable substring matching). "
+            "Example cell with sentinel: 'Para1 @@@@@ Para2 @@@@@ Para3'. "
+            "Run with: --passage-separator '@@@@@'."
+        ),
     )
     p.add_argument(
         "--source-tag",

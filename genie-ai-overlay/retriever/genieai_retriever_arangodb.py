@@ -934,7 +934,16 @@ class GenieaiArangoRetriever(OpeaComponent):
             # ≥1 graph → fan-out engages (case B).
             if _fanout_should_engage(_encoded_graphs, fanout_enabled=FANOUT_ENABLED):
                 try:
-                    return await self.invoke_fanout(
+                    # `invoke_fanout` is a MODULE-level orchestrator taking the
+                    # retriever explicitly (shipped that way in 18b34cd13; the
+                    # internal `_invoke_leg(self, ...)` call is module-style
+                    # too). The former `self.invoke_fanout(...)` raised
+                    # AttributeError on the first-ever live fan-out (2026-10-06
+                    # local build smoke) — no test exercised this branch with a
+                    # carrier, which is why it stayed latent. Fixed at the call
+                    # site; the pinned orchestrator body is untouched.
+                    return await invoke_fanout(
+                        self,
                         input=input,
                         input_dict=input_dict,
                         encoded_graph_names=_encoded_graphs,

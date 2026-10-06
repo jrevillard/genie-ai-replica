@@ -408,6 +408,31 @@ class TestInvoke:
         invoke_env["retriever"]._extract_for_graph.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_invoke_nonempty_carrier_reaches_fanout_orchestrator(self, invoke_env):
+        """Regression pin (2026-10-06 live-caught): the fan-out branch must
+        reach the MODULE-level `invoke_fanout` orchestrator with the decoded
+        carrier. Story 1.0 shipped `self.invoke_fanout(...)` against a
+        module-level function — AttributeError on the first-ever live fan-out,
+        latent because NO test executed this branch with a carrier. This test
+        closes that blind spot: a non-empty carrier MUST dispatch to the
+        orchestrator with the decoded graph list (not the raw carrier
+        string) — and the orchestrator's returned docs pass through as the
+        result."""
+        import retriever.genieai_retriever_arangodb as retriever_module
+
+        fused = [{"doc": "fused-hit", "graph_name": "OKF_x_v1"}]
+        with patch.object(retriever_module, "invoke_fanout", new=AsyncMock(return_value=fused)) as mock_fanout:
+            result = await invoke_env["retriever"].invoke(
+                create_mock_input(search_start="chunk::graphs:GRAPH,OKF_x_v1")
+            )
+
+        mock_fanout.assert_awaited_once()
+        call = mock_fanout.await_args
+        assert call.args[0] is invoke_env["retriever"]  # the retriever, explicit self
+        assert call.kwargs["encoded_graph_names"] == ["GRAPH", "OKF_x_v1"]
+        assert result == fused
+
+    @pytest.mark.asyncio
     async def test_label_filter_or_strategy(self, invoke_env):
         input_mock = create_mock_input(
             context={"categoryLabels": "health", "serviceLabels": ["education"]},

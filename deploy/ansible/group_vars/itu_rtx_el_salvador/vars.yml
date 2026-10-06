@@ -93,8 +93,12 @@ retriever_arango_traversal_max_depth: "2"
 retriever_arango_traversal_max_returned: "5"
 retriever_arango_traversal_score_threshold: "0.7"
 retriever_arango_traversal_concurrent_batches: "10"
-retriever_arango_k: "20"
-retriever_arango_fetch_k: "30"
+# T13b-K=32 champion (validated live Oct 02, see
+# tests/rag-benchmarks/eval/eval-reports/2026-09-30-el-salvador-rag-comprehensive.md §9):
+# K=32/FETCH_K=40 capture multi-passage queries K=20 saturated on
+# (+0.064 retrieval_recall, passage_recall 49/74 vs 30/74).
+retriever_arango_k: "32"
+retriever_arango_fetch_k: "40"
 retriever_arango_score_threshold: "0.2"
 # RERANKING_STRATEGY/TOP_N inherit the docker-compose defaults (slice / 3).
 # The legacy threshold override was removed — slice ignores thresholds.
@@ -116,12 +120,15 @@ dataprep_chunk_overlap: 300
 reranker_model_id: BAAI/bge-reranker-v2-m3
 # Adaptive reranker tuning (validated against the v2 gold dataset:
 # recall 0.758 [slice] → 0.900 [adaptive] on el-salvador). CONTEXT_DECAY_FACTOR
-# is tuned for our MD chunk_size=2000 override (compose default would be 500);
+# is tuned for our MD chunk_size=1400 override (compose default would be 500);
 # slice's TOP_N=3 stays in the resolved.yaml for backwards compat but is inert
 # in adaptive mode (selection is value-driven, not top-N).
+# MIN_VALUE_THRESHOLD widened to -1.0 per the T13b-K=32 champion (validated live
+# Oct 02, same report §9): the widening is the dominant lever — it recovers all
+# BGE-wrapper-induced coverage losses (RAGAS context_recall −9% → recovered).
 reranking_strategy: "adaptive"
 context_decay_factor: "0.0006"
-min_value_threshold: "-0.25"
+min_value_threshold: "-1.0"
 # Opt-in LLM self-grade: the model appends [[CONF:<0-100>]] rating how well the
 # retrieved docs support its answer; chatqna strips it before the user/translation
 # and exposes it as `self_confidence` in the metadata. Enabled on el-salvador to

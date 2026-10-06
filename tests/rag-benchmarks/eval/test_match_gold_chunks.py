@@ -142,3 +142,140 @@ class TestPassageRecall:
         # 1 of 2 passages retrieved → recall 0.5
         recall, n, retrieved = _passage_recall(chunks, ["h1", "h3"])
         assert (recall, n, retrieved) == (0.5, 2, 1)
+
+
+class TestAtomicWrite:
+    """All write modes are atomic: no .tmp file remains on success or failure."""
+
+    PREVIEW = "The quick brown fox jumps over the lazy dog " * 4
+    CHUNK = {"key": "ck1", "text": PREVIEW}
+    GOLD = {"entries": [{"id": "q1", "expected_chunks": [{"preview": PREVIEW}]}]}
+
+    def _run_main(self, tmp_path: Path, monkeypatch, mode: str, output: Path | None = None) -> int:
+        import match_gold_chunks as mgc
+
+        gold = tmp_path / "gold.json"
+        gold.write_text(__import__("json").dumps(self.GOLD))
+        # Stub the Arango round-trip with a single matching chunk.
+        monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: [self.CHUNK])
+        # Stub argparse-provided values that main() needs but parse_args
+        # would otherwise try to read from disk.
+        argv = [
+            "match_gold_chunks.py",
+            "--gold-dataset",
+            str(gold),
+            "--mode",
+            mode,
+        ]
+        if output is not None:
+            argv += ["--output", str(output)]
+        monkeypatch.setattr(sys, "argv", argv)
+        # Bypass the network — no real Arango needed for these write tests.
+        return mgc.main()
+
+    def test_in_place_writes_no_tmp(self, tmp_path, monkeypatch):
+        rc = self._run_main(tmp_path, monkeypatch, mode="in-place")
+        assert rc == 0
+        gold = tmp_path / "gold.json"
+        assert gold.is_file()
+        # The temp file the writer uses is "<out_path>.tmp"; on success the
+        # replace step has moved it, so the temp file must not exist.
+        assert not (tmp_path / "gold.json.tmp").exists()
+        # The new payload is well-formed and contains the expected match.
+        payload = __import__("json").loads(gold.read_text())
+        ec = payload["entries"][0]["expected_chunks"]
+        assert ec[0]["match_status"] == "resolved"
+        assert ec[0]["chunk_key"] == "ck1"
+
+    def test_in_place_new_writes_no_tmp(self, tmp_path, monkeypatch):
+        out = tmp_path / "fresh.json"
+        rc = self._run_main(tmp_path, monkeypatch, mode="in-place-new", output=out)
+        assert rc == 0
+        assert out.is_file()
+        assert not out.with_suffix(out.suffix + ".tmp").exists()
+
+    def test_failure_during_write_cleans_up_tmp(self, tmp_path, monkeypatch):
+        import match_gold_chunks as mgc
+
+        gold = tmp_path / "gold.json"
+        gold.write_text(__import__("json").dumps(self.GOLD))
+        monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: [self.CHUNK])
+
+        def boom(*a, **k):
+            raise RuntimeError("simulated disk full")
+
+        monkeypatch.setattr(mgc, "atomic_write_json", boom)
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["match_gold_chunks.py", "--gold-dataset", str(gold), "--mode", "in-place"],
+        )
+        with pytest.raises(RuntimeError, match="simulated disk full"):
+            mgc.main()
+        # atomic_write_json is invoked only from the in-place branch in this
+        # test, so the on-disk .tmp left behind by the original implementation
+        # would be at "<gold>.json.tmp"; the test asserts it never appears.
+        assert not (tmp_path / "gold.json.tmp").exists()
+        # Original gold file is unchanged because the writer raised.
+        original = __import__("json").loads(gold.read_text())
+        assert original == self.GOLD
+
+
+class TestInPlaceBackup:
+    """In-place mode (and in-place-new writing over the input) keeps a one-generation .bak.json."""
+
+    PREVIEW = "A preview string long enough to be matched verbatim in a chunk " * 3
+    CHUNK = {"key": "ck1", "text": PREVIEW}
+    GOLD = {"entries": [{"id": "q1", "expected_chunks": [{"preview": PREVIEW}]}]}
+
+    def test_in_place_creates_backup_of_original(self, tmp_path, monkeypatch):
+        import match_gold_chunks as mgc
+        import json
+
+        gold = tmp_path / "gold.json"
+        original_bytes = json.dumps(self.GOLD, indent=2).encode()
+        gold.write_bytes(original_bytes)
+        monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: [self.CHUNK])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["match_gold_chunks.py", "--gold-dataset", str(gold), "--mode", "in-place"],
+        )
+        rc = mgc.main()
+        assert rc == 0
+        backup = tmp_path / "gold.json.bak.json"
+        assert backup.is_file()
+        # The backup holds the ORIGINAL bytes — pre-match content, not the
+        # new payload.
+        assert backup.read_bytes() == original_bytes
+        # And the live gold now contains the match result.
+        new_payload = json.loads(gold.read_text())
+        assert new_payload["entries"][0]["expected_chunks"][0]["match_status"] == "resolved"
+
+    def test_in_place_new_with_explicit_output_does_not_backup(self, tmp_path, monkeypatch):
+        """When --output points somewhere else, no .bak.json is created for the input."""
+        import match_gold_chunks as mgc
+        import json
+
+        gold = tmp_path / "gold.json"
+        gold.write_text(json.dumps(self.GOLD))
+        out = tmp_path / "fresh.json"
+        monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: [self.CHUNK])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "match_gold_chunks.py",
+                "--gold-dataset",
+                str(gold),
+                "--output",
+                str(out),
+                "--mode",
+                "in-place-new",
+            ],
+        )
+        rc = mgc.main()
+        assert rc == 0
+        assert out.is_file()
+        # Input gold was not overwritten, so no backup is required.
+        assert not (tmp_path / "gold.json.bak.json").exists()

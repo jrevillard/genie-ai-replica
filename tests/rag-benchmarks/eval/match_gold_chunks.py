@@ -38,7 +38,6 @@ import base64
 import datetime as dt
 import json
 import os
-import re
 import sys
 import urllib.parse
 import urllib.request
@@ -49,8 +48,6 @@ from typing import Any
 # the gold set.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from chunk_identity import content_hash, normalize
-
-_WHITESPACE = re.compile(r"\s+")
 
 
 def parse_args() -> argparse.Namespace:
@@ -144,6 +141,43 @@ def load_chunks(args: argparse.Namespace) -> list[dict[str, Any]]:
     return arango_query(
         args.arango_url, args.arango_db, args.arango_user, args.arango_password, aql
     )
+
+
+def atomic_write_json(out_path: Path, payload: Any) -> None:
+    """Write ``payload`` to ``out_path`` atomically.
+
+    Writes to ``<out_path>.tmp`` first and then ``os.replace`` onto the final
+    path so a crash or a serialization error never leaves a half-written gold
+    dataset on disk. The temp file is removed on any failure.
+    """
+    tmp = out_path.with_suffix(out_path.suffix + ".tmp")
+    try:
+        with open(tmp, "w") as fh:
+            json.dump(payload, fh, indent=2, ensure_ascii=False)
+        os.replace(tmp, out_path)
+    except BaseException:
+        # Cleanup the temp file (best-effort — itself may be missing on
+        # some failure modes); re-raise so the caller sees the real error.
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        finally:
+            raise
+
+
+def write_with_backup(out_path: Path, payload: Any) -> None:
+    """Write ``payload`` to ``out_path`` atomically, keeping a one-generation backup.
+
+    The backup is the ORIGINAL contents (copied before the new payload is
+    written) so a botched match run can be reverted by ``mv
+    <path>.bak.json <path>``. Only created when ``out_path`` matches the
+    input gold dataset — explicit ``--output`` paths do not get a backup
+    because the operator chose a separate target.
+    """
+    if out_path.is_file():
+        backup = out_path.with_suffix(out_path.suffix + ".bak.json")
+        backup.write_bytes(out_path.read_bytes())
+    atomic_write_json(out_path, payload)
 
 
 def find_matches(preview: str, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -255,7 +289,10 @@ def main() -> int:
         return 0
 
     out_path = args.output or args.gold_dataset
-    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+    if out_path == args.gold_dataset:
+        write_with_backup(out_path, payload)
+    else:
+        atomic_write_json(out_path, payload)
     sys.stderr.write(
         f"[match] resolved={stats['resolved']} split_passages={stats['split_passages']} "
         f"unresolved={stats['unresolved']} skipped_short={stats['skipped_short']} "

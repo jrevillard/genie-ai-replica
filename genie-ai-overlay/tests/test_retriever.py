@@ -194,7 +194,7 @@ class TestBuildSubquery:
 
     def test_node_mode_contains_for_traversal(self):
         result = self._call(search_start="node")
-        assert "FOR node, edge IN 1..1 ANY doc GRAPH_LINKS_TO" in result
+        assert "FOR node, edge IN 1..1 ANY doc `GRAPH_LINKS_TO`" in result
 
     def test_node_mode_cosine_score_desc(self):
         result = self._call(search_start="node")
@@ -203,11 +203,31 @@ class TestBuildSubquery:
 
     def test_edge_mode_contains_document_lookup(self):
         result = self._call(search_start="edge")
-        assert "DOCUMENT(GRAPH_SOURCE, doc.source_id)" in result
+        assert "DOCUMENT(`GRAPH_SOURCE`, doc.source_id)" in result
 
     def test_chunk_mode_contains_inbound_traversal(self):
         result = self._call(search_start="chunk")
-        assert "INBOUND doc GRAPH_HAS_SOURCE" in result
+        assert "INBOUND doc `GRAPH_HAS_SOURCE`" in result
+
+    def test_hyphenated_graph_name_is_backtick_quoted(self):
+        """Regression pin (live-caught 2026-10-06): OKF graph names contain
+        hyphens (`OKF_alphabet-company-information-llm_v6`), which a bare AQL
+        identifier cannot carry — ArangoDB parsed `OKF_alphabet` as the
+        collection and `-company-information-llm_v6` as subtraction, 404-ing
+        every OKF leg at the traversal stage (the legacy `GRAPH` name has no
+        hyphens, so the legacy path never hit this). All graph-derived
+        identifiers MUST be backtick-quoted in generated AQL."""
+        hyphenated = "OKF_alphabet-company-information-llm_v6"
+        node = self._call(search_start="node", graph_name=hyphenated)
+        chunk = self._call(search_start="chunk", graph_name=hyphenated)
+        edge = self._call(search_start="edge", graph_name=hyphenated)
+        assert f"ANY doc `{hyphenated}_LINKS_TO`" in node
+        assert f"DOCUMENT(`{hyphenated}_SOURCE`" in node
+        assert f"INBOUND doc `{hyphenated}_HAS_SOURCE`" in chunk
+        assert f"DOCUMENT(`{hyphenated}_SOURCE`, doc.source_id)" in edge
+        # no bare (unquoted) hyphenated identifier anywhere
+        for aql in (node, chunk, edge):
+            assert f" {hyphenated}_" not in aql
 
     def test_chunk_mode_adds_query_embedding_bind_var(self):
         bind_vars = {"@collection": "GRAPH_SOURCE", "keys": ["key1"]}

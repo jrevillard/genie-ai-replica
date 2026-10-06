@@ -471,7 +471,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         view_name = f"{graph_name}_BM25_VIEW"
 
         aql = f"""
-            FOR doc IN {view_name}
+            FOR doc IN `{view_name}`
                 SEARCH ANALYZER(doc.{ARANGO_TEXT_FIELD} IN TOKENS(@query, @analyzer), @analyzer)
                 {aql_filter_clause}
                 LET _bm25_score = BM25(doc)
@@ -753,8 +753,8 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             return f"""
                 LET raw = (
-                    FOR node IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
-                        FOR node2, edge IN 1..{traversal_max_depth} ANY node {graph_name}_LINKS_TO
+                    FOR node IN 1..1 INBOUND doc `{graph_name}_HAS_SOURCE`
+                        FOR node2, edge IN 1..{traversal_max_depth} ANY node `{graph_name}_LINKS_TO`
                             LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
                             FILTER score >= {traversal_score_threshold}
 
@@ -775,7 +775,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         # ----------------------------
         elif search_start == "edge":
             return f"""
-                LET chunk = DOCUMENT({graph_name}_SOURCE, doc.source_id)
+                LET chunk = DOCUMENT(`{graph_name}_SOURCE`, doc.source_id)
 
                 RETURN {{
                     "chunk_text": (chunk ? chunk.{ARANGO_TEXT_FIELD} : null),
@@ -790,7 +790,7 @@ class GenieaiArangoRetriever(OpeaComponent):
             bind_vars["query_embedding"] = query_embedding
 
             return f"""
-                FOR node, edge IN 1..{traversal_max_depth} ANY doc {graph_name}_LINKS_TO
+                FOR node, edge IN 1..{traversal_max_depth} ANY doc `{graph_name}_LINKS_TO`
                     OPTIONS {{ bfs: true, uniqueVertices: "global" }}
 
                     LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
@@ -800,7 +800,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                     SORT score {sort_order}
                     LIMIT {traversal_max_returned}
 
-                    LET chunk = DOCUMENT({graph_name}_SOURCE, edge.source_id)
+                    LET chunk = DOCUMENT(`{graph_name}_SOURCE`, edge.source_id)
 
                     RETURN MERGE(
                         {{}},
@@ -1297,7 +1297,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                     chunk_id = r["doc"].id if r["doc"].id else None
                     if chunk_id:
                         aql = f"""
-                            FOR doc IN {collection_name}
+                            FOR doc IN `{collection_name}`
                                 FILTER doc._key == @chunk_id
                                 RETURN doc.{ARANGO_FILE_ID_FIELD}
                         """
@@ -1440,7 +1440,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                         if chunk_key:
                             try:
                                 aql = (
-                                    f"FOR doc IN {collection_name} FILTER doc._key == @k"
+                                    f"FOR doc IN `{collection_name}` FILTER doc._key == @k"
                                     f" RETURN doc.{ARANGO_EMBEDDING_FIELD}"
                                 )
                                 emb = next(iter(self.db.aql.execute(aql, bind_vars={"k": chunk_key})), [])

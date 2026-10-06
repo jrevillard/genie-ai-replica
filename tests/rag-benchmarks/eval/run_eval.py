@@ -204,8 +204,11 @@ def fetch_selection(start_s: float) -> tuple[list[str], list[str], list[dict]]:
     Returns ``(candidates, selected, adaptive_breakdown)``.
     """
     deadline = time.time() + TRACE_FETCH_TIMEOUT
+    delay = 0.0  # check immediately — spans are often indexed by the time curl returns
     while True:
-        time.sleep(TRACE_FLUSH_WAIT)
+        if delay:
+            time.sleep(delay)
+        delay = 1.0 if delay < 1.0 else (2.0 if delay < 2.0 else TRACE_FLUSH_WAIT)
         start_us = int((start_s - 3600) * 1e6)
         end_us = int((time.time() + 60) * 1e6)
         url = (

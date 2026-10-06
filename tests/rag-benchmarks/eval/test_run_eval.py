@@ -8,6 +8,9 @@ the ``_key -> content_hash`` projection so a regression there cannot silently
 produce a false zero (or mixed-namespace) baseline.
 """
 
+import time
+import json
+
 import run_eval
 
 
@@ -120,3 +123,36 @@ def test_exit_contract_dump_tuples_partial_skipped(tmp_path, monkeypatch):
     assert meta["n_tuples"] == 1
     assert meta["n_http_errors"] == 1
     assert meta["skipped"] == ["q2"]
+def test_fetch_selection_immediate_first_poll(monkeypatch):
+    sleeps = []
+    # _as_list expects JSON ARRAY strings (VictoriaTraces format)
+    # json.dumps("key_a") = "key_a" (valid JSON string) NOT an array
+    # json.dumps(["key_a"]) = "["key_a"]" (JSON array string) — CORRECT
+    ts = int(time.time() * 1e6) + 100_000_000
+    r2_data = {
+        "data": [{
+            "spans": [{
+                "operationName": "x.reranker_selection",
+                "startTime": ts,
+                "tags": [
+                    {"key": "rag.candidate_chunk_keys",
+                     "value": json.dumps(["key_a"])},
+                    {"key": "rag.selected_chunk_keys",
+                     "value": json.dumps(["key_a"])},
+                ]
+            }]
+        }]
+    }
+    responses = [
+        json.dumps({"data": []}),
+        json.dumps(r2_data),
+    ]
+    def my_docker(c, cmd, timeout=60):
+        return responses.pop(0)
+    monkeypatch.setattr(run_eval.time, "sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(run_eval, "_docker_exec", my_docker)
+    monkeypatch.setattr(run_eval, "TRACE_FETCH_TIMEOUT", 30)
+    cands, sels, _ = run_eval.fetch_selection(time.time())
+    assert cands == ["key_a"]
+    assert sleeps == [1.0]  # immediate check, then 1s backoff before 2nd check
+

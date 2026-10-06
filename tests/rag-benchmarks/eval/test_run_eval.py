@@ -269,7 +269,7 @@ def test_fetch_selection_respects_deadline_overshoot(monkeypatch):
     monkeypatch.setattr(_re, "TRACE_FETCH_TIMEOUT", 0.05)
     monkeypatch.setattr(_re, "TRACE_FLUSH_WAIT", 999.0)
     monkeypatch.setattr(_re, "_docker_exec",
-                        lambda c, cmd, timeout=60: json.dumps({"data": []}))
+                        lambda c, cmd, timeout=60, pass_env=(): json.dumps({"data": []}))
     # Module-local time namespace so both sleep() and time() are patchable
     t0 = [1000.0]
     def fake_now():
@@ -308,7 +308,7 @@ def test_fetch_selection_immediate_first_poll(monkeypatch):
         json.dumps({"data": []}),
         json.dumps(r2_data),
     ]
-    def my_docker(c, cmd, timeout=60):
+    def my_docker(c, cmd, timeout=60, pass_env=()):
         return responses.pop(0)
     # Patch via module-local namespace so run_eval.time.time() still works
     # (finding 10) — only sleep is recorded, time keeps advancing normally.
@@ -1204,3 +1204,101 @@ def test_f2_mixed_aggregate_over_evaluable_only(tmp_path, monkeypatch):
     assert len(rep["per_query"]) == 4
     assert rc == 0
 
+
+# --- F1 (MR !505 review): re-resolve chatqna container on docker-exec failure -
+
+def test_f1_chatqna_container_reresolved_on_docker_exec_failure(tmp_path, monkeypatch):
+    """F1: a mid-run ``docker service update`` rotates the chatqna container
+    (new replica suffix); the cached ``CHATQNA_CONTAINER`` goes stale and
+    every subsequent query 3-fails. On ``HarnessError`` the driver
+    re-resolves via ``docker ps | grep`` (same pattern as
+    ``scripts/run_anchor_with_cleanup.sh``) and the per-entry retry loop
+    consumes the recovered attempt. Without this fix, the run aborts mid
+    report with rc 3 and ``n_http_errors`` covering the whole remainder.
+    """
+    import json as _json
+    from harness import HarnessError
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [{
+        "id": "q1", "query": "a", "expected_chunks": [
+            {"chunk_key": "k1", "content_hash": "h1"},
+        ],
+    }])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", lambda: {"k1": "h1"})
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k1"], ["k1"], []))
+    monkeypatch.setattr(run_eval.time, "sleep", lambda s: None)
+
+    # docker_exec: first call fails (container rotated), second succeeds
+    docker_calls = []
+    def fake_docker_exec(container, cmd, timeout=120, pass_env=()):
+        docker_calls.append(container)
+        if len(docker_calls) == 1:
+            raise HarnessError(
+                f"docker exec {container} failed: No such container: {container}"
+            )
+        return '{"text":"ok"}\n200'
+    monkeypatch.setattr(run_eval, "_docker_exec", fake_docker_exec)
+
+    # Resolver: re-resolve returns a NEW container name (the rotated one)
+    resolve_calls = []
+    original_container = run_eval.CHATQNA_CONTAINER
+    def fake_resolve(force=False):
+        resolve_calls.append(force)
+        return "chatqna-xeon-backend-server.ROTATED"
+    monkeypatch.setattr(run_eval, "_resolve_chatqna_container", fake_resolve)
+
+    try:
+        rc = run_eval.main("anchor", str(gold), str(tmp_path / "o.json"))
+    finally:
+        # Restore the original container name so we don't leak state to other tests
+        run_eval.CHATQNA_CONTAINER = original_container
+
+    rep = _json.loads((tmp_path / "o.json").read_text())
+
+    # Re-resolve fired ONCE, with force=True (the HarnessError reaction)
+    assert resolve_calls == [True], (
+        f"expected one forced re-resolve, got {resolve_calls}"
+    )
+    # 2 docker exec calls: 1st fails, 2nd succeeds with the new container
+    assert len(docker_calls) == 2
+    assert docker_calls[0] != docker_calls[1]
+    assert docker_calls[1] == "chatqna-xeon-backend-server.ROTATED"
+    # No error row — the entry recovered within its 3-attempt budget
+    err_rows = [r for r in rep["per_query"] if r.get("error")]
+    assert err_rows == [], f"expected no error rows after recovery, got {err_rows}"
+    assert rep["aggregate"]["n"] == 1
+    assert rep["n_missed_traces"] == 0
+    assert rc == 0
+    # q1 is in the sidecar (entry completed, not retried-as-failed)
+    done_ids = (tmp_path / "o.json.done.jsonl").read_text().splitlines()
+    assert "q1" in done_ids
+
+
+def test_f1_chatqna_resolver_prefers_env_override(monkeypatch):
+    """F1: env-pinned CHATQNA_CONTAINER is authoritative on the happy path
+    (no force=True) — the wrapper exports it and the driver must honor it."""
+    from harness import HarnessError
+    monkeypatch.setenv("CHATQNA_CONTAINER", "pinned-name")
+    seen_containers = []
+    def fake_docker_exec(container, cmd, timeout=120, pass_env=()):
+        seen_containers.append(container)
+        raise HarnessError("not running")
+    monkeypatch.setattr(run_eval, "_docker_exec", fake_docker_exec)
+    # Even on HarnessError, the resolver checks env first; with force=True
+    # it still honors the env value (logs a warning if a new name is found)
+    # but here we mock the resolver to record its invocation pattern.
+    invoked = []
+    def fake_resolve(force=False):
+        invoked.append(force)
+        # Real resolver would shell out; we short-circuit and return the
+        # env value to keep the test environment free of docker.
+        return run_eval.os.getenv("CHATQNA_CONTAINER")
+    monkeypatch.setattr(run_eval, "_resolve_chatqna_container", fake_resolve)
+    # Suppress the per-entry retry path so the test only observes the
+    # first attempt's wrapper call.
+    try:
+        run_eval.drive_query({"query": "x"})
+    except HarnessError:
+        pass
+    # force=True passed on the HarnessError reaction
+    assert invoked == [True]

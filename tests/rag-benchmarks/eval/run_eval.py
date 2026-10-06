@@ -58,7 +58,7 @@ import urllib.error
 import metrics
 from arango import cursor, source_chunks
 from chunk_identity import content_hash
-from harness import docker_exec as _docker_exec, write_json
+from harness import HarnessError, docker_exec as _docker_exec, write_json
 from keycloak import KeycloakError, fetch_realm_token
 
 # --- stack config (env-overridable) -----------------------------------------
@@ -75,6 +75,91 @@ GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "GRAPH_TEST_SOURCE")
 TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "chunk_text")
 TRACE_FLUSH_WAIT = float(os.getenv("TRACE_FLUSH_WAIT", "5"))
 TRACE_FETCH_TIMEOUT = float(os.getenv("TRACE_FETCH_TIMEOUT", "120"))
+
+
+# --- chatqna container resolution (F1) --------------------------------------
+# A `docker service update` rotates the chatqna container (new replica
+# suffix), so the module-level CHATQNA_CONTAINER goes stale mid-run and
+# every subsequent query 3-fails. The fix: on HarnessError, re-resolve via
+# `docker ps | grep` (same pattern as scripts/run_anchor_with_cleanup.sh)
+# and let the per-entry retry loop (3 attempts) consume the recovered
+# attempt on its next call. VICTORIATRACES_SVC is a service DNS name and
+# stable across service updates — do not touch it.
+_CHATQNA_CONTAINER_SUBSTRING = "chatqna-xeon-backend-server"
+_chatqna_container_cache: str | None = None
+
+
+def _resolve_chatqna_container(force: bool = False) -> str | None:
+    """Return the live chatqna container name.
+
+    On the happy path: env override is authoritative; otherwise the cached
+    value (populated by an earlier call or by the wrapper) is returned.
+
+    With ``force=True`` (after a docker-exec ``HarnessError``): shell out
+    to ``docker ps | grep`` and update the cache. The env override is
+    still checked first; if the pinned name went stale, a warning is
+    logged and the discovered name is used so the run recovers even when
+    the operator pinned the name manually.
+    """
+    global _chatqna_container_cache
+    pinned = os.getenv("CHATQNA_CONTAINER")
+    if not force and pinned:
+        return pinned
+    if not force and _chatqna_container_cache:
+        return _chatqna_container_cache
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"[chatqna] re-resolve failed: {e}", file=sys.stderr)
+        return pinned or _chatqna_container_cache
+    if result.returncode != 0:
+        print(
+            f"[chatqna] docker ps failed: {result.stderr.strip()[:200]}",
+            file=sys.stderr,
+        )
+        return pinned or _chatqna_container_cache
+    for line in result.stdout.splitlines():
+        if _CHATQNA_CONTAINER_SUBSTRING in line:
+            if pinned and line != pinned:
+                print(
+                    f"[chatqna] pinned CHATQNA_CONTAINER={pinned!r} went stale; "
+                    f"using {line!r}",
+                    file=sys.stderr,
+                )
+            _chatqna_container_cache = line
+            return line
+    return pinned or _chatqna_container_cache
+
+
+def _chatqna_docker_exec(
+    cmd: str, timeout: float = 150, pass_env: tuple = ()
+) -> str:
+    """Wrap ``_docker_exec`` against the chatqna container with mid-run
+    re-resolution on ``HarnessError``.
+
+    On the first call uses ``CHATQNA_CONTAINER`` as resolved; on
+    ``HarnessError`` (container rotated), call
+    ``_resolve_chatqna_container(force=True)`` to discover the new
+    replica and update the module-level cache, then re-raise so the
+    per-entry retry loop (3 attempts) consumes the recovered attempt
+    on its next call.
+    """
+    global CHATQNA_CONTAINER
+    try:
+        return _docker_exec(
+            CHATQNA_CONTAINER, cmd, timeout=timeout, pass_env=pass_env
+        )
+    except HarnessError:
+        new = _resolve_chatqna_container(force=True)
+        if new and new != CHATQNA_CONTAINER:
+            CHATQNA_CONTAINER = new
+        raise
+
 
 # --- optional in-run bearer refresh (MR-B) -------------------------------
 # When EVAL_KC_URL + EVAL_KC_PASSWORD are set, _maybe_refresh_token() refreshes
@@ -168,13 +253,13 @@ def drive_query(entry: dict) -> tuple[float, str, int]:
             f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'"
             f" -H \"Authorization: Bearer $E2E_BEARER_TOKEN\" -d '{payload_json}' -w '\\n%{{http_code}}'"
         )
-        raw = _docker_exec(CHATQNA_CONTAINER, cmd, timeout=150, pass_env=("E2E_BEARER_TOKEN",))
+        raw = _chatqna_docker_exec(cmd, timeout=150, pass_env=("E2E_BEARER_TOKEN",))
     else:
         cmd = (
             f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'"
             f" -d '{payload_json}' -w '\\n%{{http_code}}'"
         )
-        raw = _docker_exec(CHATQNA_CONTAINER, cmd, timeout=150)
+        raw = _chatqna_docker_exec(cmd, timeout=150)
     body, _, code = raw.rpartition("\n")
     status = int(code) if code.strip().isdigit() else 0
     return start, body, status
@@ -275,7 +360,7 @@ def fetch_selection(start_s: float) -> tuple[list[str], list[str], list[dict]]:
             f"?service={CHATQNA_SERVICE_NAME}"
             f"&start={start_us}&end={end_us}&limit=50"
         )
-        raw = _docker_exec(CHATQNA_CONTAINER, f"curl -s '{url}'", timeout=60)
+        raw = _chatqna_docker_exec(f"curl -s '{url}'", timeout=60)
         candidates, selected, breakdown = _extract_selection(raw, start_s)
         if candidates or selected:
             return candidates, selected, breakdown

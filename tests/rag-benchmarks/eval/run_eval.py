@@ -362,6 +362,112 @@ def make_tuple(entry, sel_hashes, hash_to_text, answer) -> dict:
     }
 
 
+def _write_out(out_path: str, payload, mode: str) -> None:
+    """Atomic write: serialize to ``<out_path>.tmp`` then ``os.replace`` so a
+    crash mid-write can never leave a half-written ``out_path``. Used for both
+    the anchor report dict and the dump-tuples list (the same file-move
+    guarantee holds for either).
+    """
+    tmp = f"{out_path}.tmp"
+    with open(tmp, "w") as fh:
+        if mode == "dump-tuples":
+            json.dump(payload, fh, ensure_ascii=False, indent=2)
+        else:  # anchor
+            json.dump(payload, fh, indent=2)
+    os.replace(tmp, out_path)
+
+
+def _load_done(out_path: str, mode: str) -> tuple[set[str], list, list]:
+    """Return ``(done_ids, rows_or_empty, tuples_or_empty)`` for resume.
+
+    ``done_ids`` is the union of ids read from ``<out_path>.done.jsonl`` (the
+    authoritative skip-set) and ids recoverable from ``out_path`` itself
+    (per_query rows for anchor, tuple-list entries for dump-tuples). Error
+    rows (``trace_found is False`` with an ``error`` field) in the anchor
+    report are deliberately EXCLUDED from ``done`` so a resume retries them
+    — they represent transient infrastructure failures, not a final result.
+
+    Resumability rules:
+    * ``out_path`` missing → fresh start, sidecar wiped if it existed (orphan).
+    * ``out_path`` exists but fails to parse → fresh start, sidecar wiped.
+    * Both present → load both, take the union.
+    """
+    done: set[str] = set()
+    rows: list = []
+    tuples: list = []
+    sidecar = f"{out_path}.done.jsonl"
+
+    if not os.path.exists(out_path):
+        if os.path.exists(sidecar):
+            os.remove(sidecar)
+        return done, rows, tuples
+
+    try:
+        with open(out_path) as fh:
+            payload = json.load(fh)
+    except (json.JSONDecodeError, OSError):
+        if os.path.exists(sidecar):
+            os.remove(sidecar)
+        return done, rows, tuples
+
+    if mode == "dump-tuples":
+        if isinstance(payload, list):
+            tuples = payload
+            for t in tuples:
+                if isinstance(t, dict) and t.get("id"):
+                    done.add(t["id"])
+    else:  # anchor
+        if isinstance(payload, dict):
+            for r in payload.get("per_query", []):
+                if not isinstance(r, dict):
+                    continue
+                if r.get("trace_found") is False and r.get("error"):
+                    continue  # error row — must retry
+                if r.get("id"):
+                    done.add(r["id"])
+                    rows.append(r)
+
+    if os.path.exists(sidecar):
+        with open(sidecar) as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    done.add(line)
+    return done, rows, tuples
+
+
+def _write_out_post(
+    mode: str, out_path: str, tuples: list, rows: list,
+    missed: int, unmapped: int, http_errors: int,
+    skipped_entries: list, entries: list,
+) -> None:
+    """Build the current payload from accumulated state and atomic-write it.
+    Called after EVERY entry so a mid-run kill never loses progress past the
+    last completed entry. For anchor this means recomputing the aggregate; for
+    dump-tuples this is just the list.
+    """
+    if mode == "dump-tuples":
+        _write_out(out_path, tuples, mode)
+    else:
+        scored = [r for r in rows if r.get("trace_found")]
+        agg = metrics.aggregate(scored)
+        p_recalls = [r["passage_recall"] for r in scored if r.get("n_passages")]
+        total_passages = sum(r.get("n_passages", 0) for r in scored)
+        retrieved_passages = sum(r.get("passages_retrieved", 0) for r in scored)
+        agg["passage_recall"] = sum(p_recalls) / len(p_recalls) if p_recalls else 0.0
+        agg["total_passages"] = total_passages
+        agg["retrieved_passages"] = retrieved_passages
+        report = {
+            "per_query": rows,
+            "aggregate": agg,
+            "n_missed_traces": missed,
+            "n_unmapped_chunk_keys": unmapped,
+            "n_http_errors": http_errors,
+            "skipped_entries": skipped_entries,
+        }
+        _write_out(out_path, report, mode)
+
+
 def main(mode: str, gold_path: str, out_path: str) -> int:
     with open(gold_path) as fh:
         gold = json.load(fh)
@@ -369,81 +475,140 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
     hash_to_text = build_hash_to_text() if mode == "dump-tuples" else {}
     key_to_hash = build_key_to_content_hash() if mode == "anchor" else {}
 
-    tuples, rows, missed, unmapped, http_errors = [], [], 0, 0, 0
+    # --- resume: prefill from existing out + sidecar --------------------
+    done, rows, tuples = _load_done(out_path, mode)
+    sidecar_path = f"{out_path}.done.jsonl"
+    backoff = float(os.getenv("EVAL_RETRY_BACKOFF", "5"))
+    missed, unmapped, http_errors = 0, 0, 0
     skipped_entries: list[str] = []
-    for entry in entries:
-        start, body, status = drive_query(entry)
-        # Non-2xx catchall (finding 5): any status outside 200..299 takes the
-        # error path — skip the entry, count it, and avoid the expensive VT
-        # poll that would otherwise burn TRACE_FETCH_TIMEOUT on a dead query.
-        # 401/403 keep their distinct auth-failure hint; everything else uses
-        # the generic skipped message.
-        if status < 200 or status >= 300:
-            http_errors += 1
-            skipped_entries.append(entry["id"])
-            if status in (401, 403):
-                print(
-                    f"[{entry['id']}] AUTH-FAILURE (HTTP {status}) — bearer expired or "
-                    "invalid. Use the wrapper (token lifecycle) or refresh E2E_BEARER_TOKEN.",
-                    file=sys.stderr,
-                )
-            else:
-                print(
-                    f"[{entry['id']}] HTTP {status} from chatqna — skipped",
-                    file=sys.stderr,
-                )
-            if mode == "anchor":
-                # Anchor mode (finding 1): also append the error-row shape so
-                # the report carries signal for the degraded entries — a
-                # partial run with silent gaps exited 0 before this fix.
-                rows.append(
-                    {
-                        "id": entry["id"],
-                        "query": entry["query"],
+
+    # Open sidecar for the lifetime of the loop. When _load_done rebuilt done
+    # from out but the sidecar is empty/missing, seed it with the prefilled ids
+    # so a re-run finds the same skip-set via the sidecar union.
+    seed_needed = (
+        (not os.path.exists(sidecar_path) or os.path.getsize(sidecar_path) == 0)
+        and (rows or tuples)
+    )
+    with open(sidecar_path, "a") as sidecar_fh:
+        if seed_needed:
+            for r in (rows if mode == "anchor" else tuples):
+                eid = r.get("id") if isinstance(r, dict) else None
+                if eid:
+                    sidecar_fh.write(f"{eid}\n")
+            sidecar_fh.flush()
+
+        for entry in entries:
+            eid = entry["id"]
+            if eid in done:
+                # Already completed in a prior run — skip (resume).
+                continue
+
+            # Per-entry retry: 3 attempts, swallow infra errors.
+            entry_succeeded = False
+            last_error: Exception | None = None
+            for attempt in range(3):
+                try:
+                    start, body, status = drive_query(entry)
+                    # Non-2xx catchall (finding 5): any status outside 200..299
+                    # takes the error path — skip the entry, count it, avoid
+                    # the expensive VT poll. HTTP errors are NOT retried: a
+                    # 401/502/400 against chatqna is deterministic for this
+                    # query within the same run; the retry budget is reserved
+                    # for transient infra failures (RuntimeError, JSONDecode,
+                    # OSError, TimeoutExpired).
+                    if status < 200 or status >= 300:
+                        http_errors += 1
+                        skipped_entries.append(eid)
+                        if status in (401, 403):
+                            print(
+                                f"[{eid}] AUTH-FAILURE (HTTP {status}) — bearer expired or "
+                                "invalid. Use the wrapper (token lifecycle) or refresh E2E_BEARER_TOKEN.",
+                                file=sys.stderr,
+                            )
+                        else:
+                            print(
+                                f"[{eid}] HTTP {status} from chatqna — skipped",
+                                file=sys.stderr,
+                            )
+                        if mode == "anchor":
+                            rows.append({
+                                "id": eid, "query": entry["query"],
+                                "trace_found": False, "error": f"HTTP {status}",
+                            })
+                            missed += 1
+                        # Persist incrementally so a mid-run kill doesn't lose
+                        # this entry's classification.
+                        _write_out_post(mode, out_path, tuples, rows,
+                                         missed, unmapped, http_errors,
+                                         skipped_entries, entries)
+                        entry_succeeded = True
+                        break
+
+                    answer = _extract_answer(body)
+                    cand_keys, sel_keys, adaptive_breakdown = fetch_selection(start)
+                    trace_found = bool(cand_keys or sel_keys)
+                    if mode == "anchor":
+                        unmapped += sum(
+                            1 for k in sel_keys + cand_keys if k not in key_to_hash
+                        )
+                    if not trace_found:
+                        missed += 1
+                        print(
+                            f"[{eid}] WARNING: no reranker_selection span — trace missed "
+                            "(not scored). Check observability / bump TRACE_FETCH_TIMEOUT.",
+                            file=sys.stderr,
+                        )
+                    else:
+                        print(
+                            f"[{eid}] selected={len(sel_keys)} candidates={len(cand_keys)}",
+                            file=sys.stderr,
+                        )
+                    if mode == "dump-tuples":
+                        tuples.append(make_tuple(entry, sel_keys, hash_to_text, answer))
+                    else:
+                        rows.append(
+                            score_anchor(
+                                entry, cand_keys, sel_keys, trace_found,
+                                adaptive_breakdown, key_to_hash,
+                            )
+                        )
+                    # Mark done: append to sidecar + atomic write of out.
+                    sidecar_fh.write(f"{eid}\n")
+                    sidecar_fh.flush()
+                    done.add(eid)
+                    _write_out_post(mode, out_path, tuples, rows,
+                                     missed, unmapped, http_errors,
+                                     skipped_entries, entries)
+                    entry_succeeded = True
+                    break
+                except (subprocess.TimeoutExpired, RuntimeError,
+                        json.JSONDecodeError, OSError) as e:
+                    last_error = e
+                    if attempt < 2:
+                        time.sleep(backoff)
+                    continue
+
+            if not entry_succeeded:
+                # Retry budget exhausted: classify as missed + error row.
+                skipped_entries.append(eid)
+                if mode == "anchor":
+                    rows.append({
+                        "id": eid, "query": entry["query"],
                         "trace_found": False,
-                        "error": f"HTTP {status}",
-                    }
+                        "error": str(last_error)[:200] if last_error else "unknown",
+                    })
+                    missed += 1
+                # NOTE: do NOT append the failed id to .done.jsonl — a later
+                # resume must be able to retry it.
+                _write_out_post(mode, out_path, tuples, rows,
+                                 missed, unmapped, http_errors,
+                                 skipped_entries, entries)
+                print(
+                    f"[{eid}] ERROR (3 attempts): {last_error}",
+                    file=sys.stderr,
                 )
-                missed += 1
-            continue
-        answer = _extract_answer(body)
-        cand_keys, sel_keys, adaptive_breakdown = fetch_selection(start)
-        trace_found = bool(cand_keys or sel_keys)
-        if mode == "anchor":
-            # A span _key with no content-hash mapping (wrong/empty GRAPH_SOURCE,
-            # stale trace) would silently score as a miss — surface the count so
-            # the capture driver can refuse a false zero baseline. An EMPTY map
-            # (falsy) makes every key unmapped — exactly the failure to catch.
-            unmapped += sum(1 for k in sel_keys + cand_keys if k not in key_to_hash)
-        if not trace_found:
-            missed += 1
-            print(
-                f"[{entry['id']}] WARNING: no reranker_selection span — trace missed "
-                "(not scored). Check observability / bump TRACE_FETCH_TIMEOUT.",
-                file=sys.stderr,
-            )
-        else:
-            print(
-                f"[{entry['id']}] selected={len(sel_keys)} candidates={len(cand_keys)}",
-                file=sys.stderr,
-            )
-        if mode == "dump-tuples":
-            tuples.append(make_tuple(entry, sel_keys, hash_to_text, answer))
-        else:
-            rows.append(
-                score_anchor(
-                    entry,
-                    cand_keys,
-                    sel_keys,
-                    trace_found,
-                    adaptive_breakdown,
-                    key_to_hash,
-                )
-            )
 
     if mode == "dump-tuples":
-        with open(out_path, "w") as fh:
-            json.dump(tuples, fh, ensure_ascii=False, indent=2)
         sidecar = {
             "n_entries": len(entries),
             "n_tuples": len(tuples),
@@ -456,8 +621,6 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
         print(f"\nWrote {len(tuples)} eval tuples → {out_path}", file=sys.stderr)
         print(f"Wrote sidecar → {out_path}.meta.json", file=sys.stderr)
         print("Feed to: run_ragas_eval.py eval_tuples.json", file=sys.stderr)
-        # Sidecar is already on disk — downstream readers (capture_baseline) can
-        # inspect skipped/http_errors even on degraded runs. Now classify.
         if not tuples:
             return 4
         if (len(tuples) < len(entries)) and not os.getenv("EVAL_ALLOW_PARTIAL"):
@@ -467,9 +630,6 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
                 file=sys.stderr,
             )
             return 3
-        # Finding 2: VT down → all-empty contexts but tuples were written.
-        # The sidecar carries n_missed_traces; surface it as a degraded run
-        # via the same threshold knob as anchor mode.
         max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
         if missed > max_missed:
             print(
@@ -482,9 +642,6 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
     # Anchor branch.
     scored = [r for r in rows if r.get("trace_found")]
     agg = metrics.aggregate(scored)
-    # Aggregate passage-level metrics across queries (only queries that
-    # actually had gold passages; queries with all-unresolved gold are
-    # excluded from the denominator to avoid skewing toward zero).
     p_recalls = [r["passage_recall"] for r in scored if r.get("n_passages")]
     total_passages = sum(r.get("n_passages", 0) for r in scored)
     retrieved_passages = sum(r.get("passages_retrieved", 0) for r in scored)
@@ -503,17 +660,12 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
         json.dump(report, fh, indent=2)
     print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
     set_based_keys = [
-        "recall",
-        "precision",
-        "complete_recall",
-        "noise",
-        "retrieval_recall",
-        "passage_recall",
+        "recall", "precision", "complete_recall", "noise",
+        "retrieval_recall", "passage_recall",
     ]
     for k in set_based_keys:
         if k in agg:
             print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
-    # Rank-aware — only present when every scored row had them computed.
     for k in metrics.RANK_AWARE_K:
         rk = f"recall_at_{k}"
         nk = f"ndcg_at_{k}"
@@ -532,7 +684,6 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
             file=sys.stderr,
         )
     print(f"\nReport → {out_path}", file=sys.stderr)
-    # Report is already on disk — classify the run for capture_baseline (MR-D).
     max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
     if skipped_entries and not os.getenv("EVAL_ALLOW_PARTIAL"):
         print(

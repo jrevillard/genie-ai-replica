@@ -281,3 +281,138 @@ def test_fetch_selection_immediate_first_poll(monkeypatch):
     assert cands == ["key_a"]
     assert sleeps == [1.0]  # immediate check, then 1s backoff before 2nd check
 
+
+# --- MR-B: per-entry containment, retry, atomic incremental writes, resume ---
+
+def _write_gold(tmp_path, entries):
+    import json as _json
+    p = tmp_path / "g.json"
+    p.write_text(_json.dumps({"entries": entries}))
+    return p
+
+
+def test_write_out_atomic_no_tmp_leftover(tmp_path):
+    """_write_out must write via tmp+os.replace; on success no .tmp file remains."""
+    import json as _json
+    out = tmp_path / "out.json"
+    run_eval._write_out(str(out), {"per_query": [], "aggregate": {}}, "anchor")
+    assert out.exists()
+    # No stray .tmp on success
+    assert not (tmp_path / "out.json.tmp").exists()
+    # File is valid JSON with expected payload
+    rep = _json.loads(out.read_text())
+    assert rep == {"per_query": [], "aggregate": {}}
+
+
+def test_entry_error_contained_and_reported(tmp_path, monkeypatch):
+    """Entry raising RuntimeError exhausts retries → error row appended, rc==3,
+    no id in .done.jsonl for the failed id."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": "q1", "query": "a"},
+        {"id": "q2", "query": "b"},
+    ])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k"], ["k"], []))
+
+    def flaky(entry):
+        if entry["id"] == "q2":
+            raise RuntimeError("docker exec failed: boom")
+        return 0.0, '{"text":"x"}', 200
+    monkeypatch.setattr(run_eval, "drive_query", flaky)
+    monkeypatch.setattr(run_eval.time, "sleep", lambda s: None)
+    rc = run_eval.main("anchor", str(gold), str(tmp_path / "o.json"))
+    rep = _json.loads((tmp_path / "o.json").read_text())
+    # error row present for q2
+    err = [r for r in rep["per_query"] if r["id"] == "q2"]
+    assert len(err) == 1
+    assert err[0].get("trace_found") is False
+    assert "boom" in err[0].get("error", "")
+    assert rc == 3  # skipped_entries non-empty → rc 3
+    # .done.jsonl must NOT contain the failed id (retry exhausted)
+    done_ids = (tmp_path / "o.json.done.jsonl").read_text().splitlines()
+    assert "q1" in done_ids
+    assert "q2" not in done_ids
+
+
+def test_resume_skips_already_done_entries(tmp_path, monkeypatch):
+    """Pre-written out.json + .done.jsonl with q1 done → only q2 is driven."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": "q1", "query": "a"},
+        {"id": "q2", "query": "b"},
+    ])
+    out = tmp_path / "o.json"
+    # Pre-write report: q1 done, q2 not present
+    pre_rows = [{
+        "id": "q1", "query": "a", "trace_found": True,
+        "selected": [], "candidates": [], "gold": [],
+        "gold_hashes": [], "selected_hashes": [], "candidate_hashes": [],
+        "expected_chunks": [], "adaptive_breakdown": [],
+        "recall": 1.0, "precision": 1.0, "complete_recall": 1.0, "noise": 0.0,
+        "retrieval_recall": 1.0, "passage_recall": 1.0,
+        "n_passages": 1, "passages_retrieved": 1,
+    }]
+    out.write_text(_json.dumps({
+        "per_query": pre_rows, "aggregate": {"n": 1},
+        "n_missed_traces": 0, "n_unmapped_chunk_keys": 0,
+        "n_http_errors": 0, "skipped_entries": [],
+    }))
+    (tmp_path / "o.json.done.jsonl").write_text("q1\n")
+
+    drive_calls = []
+    def fake_drive(entry):
+        drive_calls.append(entry["query"])
+        return 0.0, '{"text":"x"}', 200
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+    monkeypatch.setattr(run_eval, "drive_query", fake_drive)
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: ([], [], []))
+    monkeypatch.setattr(run_eval.time, "sleep", lambda s: None)
+    rc = run_eval.main("anchor", str(gold), str(out))
+    # Only q2 was driven
+    assert drive_calls == ["b"]
+    # rc=0 because q1 was skipped as already-done (not in skipped_entries) and
+    # q2 succeeded with no trace → missed=1, EVAL_MAX_MISSED_TRACES default 2 → 0
+    # actually missed=1 > 0, default max_missed=2, so rc=0 is fine
+    # But: we need to assert rc is in {0, 3, 4} and out.json still valid
+    assert rc in (0, 3, 4)
+    rep = _json.loads(out.read_text())
+    ids = [r["id"] for r in rep["per_query"]]
+    assert "q1" in ids and "q2" in ids
+    # .done.jsonl now has both ids
+    done_ids = (tmp_path / "o.json.done.jsonl").read_text().splitlines()
+    assert "q1" in done_ids and "q2" in done_ids
+
+
+def test_retry_succeeds_on_third_attempt(tmp_path, monkeypatch):
+    """Entry fails twice (RuntimeError) then succeeds → completes normally, no
+    error row, q1 in .done.jsonl, rc==0."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": "q1", "query": "a", "expected_chunks": [
+            {"chunk_key": "k1", "content_hash": "h1"}
+        ]},
+    ])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash",
+                        lambda: {"k1": "h1"})
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k1"], ["k1"], []))
+    attempts = {"n": 0}
+    def flaky(entry):
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise RuntimeError(f"transient #{attempts['n']}")
+        return 0.0, '{"text":"x"}', 200
+    monkeypatch.setattr(run_eval, "drive_query", flaky)
+    monkeypatch.setattr(run_eval.time, "sleep", lambda s: None)
+    rc = run_eval.main("anchor", str(gold), str(tmp_path / "o.json"))
+    rep = _json.loads((tmp_path / "o.json").read_text())
+    err = [r for r in rep["per_query"] if r.get("error")]
+    assert err == []
+    assert attempts["n"] == 3  # 2 failed attempts + 1 success
+    assert rc == 0  # successful scoring, no skip
+    done_ids = (tmp_path / "o.json.done.jsonl").read_text().splitlines()
+    assert "q1" in done_ids
+

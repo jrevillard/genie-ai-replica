@@ -53,7 +53,7 @@ import time
 import urllib.error
 
 import metrics
-from arango import cursor
+from arango import cursor, source_chunks
 from chunk_identity import content_hash
 from harness import docker_exec as _docker_exec
 from keycloak import KeycloakError, fetch_realm_token
@@ -287,10 +287,7 @@ def build_hash_to_text() -> dict[str, str]:
     semantic-path context lookup must key on ``_key``. The older content_hash
     keying produced empty contexts once the span switched to ``_key``.
     """
-    rows = cursor(
-        f"FOR doc IN {GRAPH_SOURCE} RETURN {{key: doc._key, text: doc.{TEXT_FIELD}}}"
-    )
-    return {r["key"]: r["text"] for r in rows if r.get("text")}
+    return {r["key"]: r["text"] for r in source_chunks(GRAPH_SOURCE, TEXT_FIELD) if r.get("text")}
 
 
 def build_key_to_content_hash() -> dict[str, str]:
@@ -302,10 +299,11 @@ def build_key_to_content_hash() -> dict[str, str]:
     ``content_hash`` is computed Python-side (sha256 of normalized text) — it is
     NOT stored in ArangoDB — so fetch the text and hash it here.
     """
-    rows = cursor(
-        f"FOR doc IN {GRAPH_SOURCE} RETURN {{key: doc._key, text: doc.{TEXT_FIELD}}}"
-    )
-    return {r["key"]: content_hash(r["text"]) for r in rows if r.get("text")}
+    return {
+        r["key"]: content_hash(r["text"])
+        for r in source_chunks(GRAPH_SOURCE, TEXT_FIELD)
+        if r.get("text")
+    }
 
 
 def score_anchor(

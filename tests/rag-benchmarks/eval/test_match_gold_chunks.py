@@ -157,7 +157,7 @@ class TestAtomicWrite:
         gold = tmp_path / "gold.json"
         gold.write_text(__import__("json").dumps(self.GOLD))
         # Stub the Arango round-trip with a single matching chunk.
-        monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: [self.CHUNK])
+        monkeypatch.setattr(mgc, "source_chunks", lambda *a, **k: [self.CHUNK])
         # Stub argparse-provided values that main() needs but parse_args
         # would otherwise try to read from disk.
         argv = [
@@ -200,7 +200,7 @@ class TestAtomicWrite:
 
         gold = tmp_path / "gold.json"
         gold.write_text(__import__("json").dumps(self.GOLD))
-        monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: [self.CHUNK])
+        monkeypatch.setattr(mgc, "source_chunks", lambda *a, **k: [self.CHUNK])
         monkeypatch.setattr(
             sys,
             "argv",
@@ -240,7 +240,7 @@ class TestInPlaceBackup:
         gold = tmp_path / "gold.json"
         original_bytes = json.dumps(self.GOLD, indent=2).encode()
         gold.write_bytes(original_bytes)
-        monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: [self.CHUNK])
+        monkeypatch.setattr(mgc, "source_chunks", lambda *a, **k: [self.CHUNK])
         monkeypatch.setattr(
             sys,
             "argv",
@@ -265,7 +265,7 @@ class TestInPlaceBackup:
         gold = tmp_path / "gold.json"
         gold.write_text(json.dumps(self.GOLD))
         out = tmp_path / "fresh.json"
-        monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: [self.CHUNK])
+        monkeypatch.setattr(mgc, "source_chunks", lambda *a, **k: [self.CHUNK])
         monkeypatch.setattr(
             sys,
             "argv",
@@ -312,7 +312,7 @@ class TestPassageDedup:
 
         gold = tmp_path / "gold.json"
         gold.write_text(json.dumps(self.GOLD))
-        monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: [self.CHUNK])
+        monkeypatch.setattr(mgc, "source_chunks", lambda *a, **k: [self.CHUNK])
         monkeypatch.setattr(
             sys,
             "argv",
@@ -358,7 +358,7 @@ class TestPassageDedup:
         }
         gold_path = tmp_path / "gold.json"
         gold_path.write_text(json.dumps(gold))
-        monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: chunks)
+        monkeypatch.setattr(mgc, "source_chunks", lambda *a, **k: chunks)
         monkeypatch.setattr(
             sys,
             "argv",

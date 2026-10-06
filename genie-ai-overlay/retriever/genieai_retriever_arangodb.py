@@ -1643,17 +1643,31 @@ async def _invoke_leg(self, graph_name, input_dict, input, query):
 
     span = get_tracer("retriever.fanout").start_span("retriever.fanout.leg")
     span.set_attribute("okf.fanout.leg.graph_name", graph_name)
-    return await asyncio.wait_for(
-        self._extract_for_graph(
-            graph_name=graph_name,
-            input_dict=input_dict,
-            input=input,
-            query=query,
-            start_time=time.time(),
-            span=span,
-        ),
-        timeout=FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0,
-    )
+    leg_started = time.time()
+    logger.info(f"Fan-out leg start — graph_name={graph_name}")
+    try:
+        result = await asyncio.wait_for(
+            self._extract_for_graph(
+                graph_name=graph_name,
+                input_dict=input_dict,
+                input=input,
+                query=query,
+                start_time=time.time(),
+                span=span,
+            ),
+            timeout=FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0,
+        )
+        logger.info(
+            f"Fan-out leg done — graph_name={graph_name}, "
+            f"hits={len(result or [])}, elapsed={time.time() - leg_started:.2f}s"
+        )
+        return result
+    except TimeoutError:
+        logger.info(
+            f"Fan-out leg TIMED OUT after {time.time() - leg_started:.2f}s "
+            f"(limit {FANOUT_PER_GRAPH_TIMEOUT_MS}ms) — graph_name={graph_name}"
+        )
+        raise
 
 
 async def invoke_fanout(self, input, input_dict, encoded_graph_names):

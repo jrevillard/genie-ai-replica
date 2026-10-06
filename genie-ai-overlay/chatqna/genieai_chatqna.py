@@ -1322,6 +1322,21 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             if any(v != "N/A" for v in _text_to_chunk_key.values()):
                 next_data["text_to_chunk_key"] = _text_to_chunk_key
 
+            # Story 1.1 — per-hit provenance (graph_name/repo_id/concept_id)
+            # rides the retriever's parallel metadata[] array (Story 1.0
+            # fusion-time attribution). Preserve it keyed by doc id so the
+            # source-assembly step can attribute OKF concept sources WITHOUT
+            # calling okf-server (chatqna stays a service consumer — spec
+            # Never rule; the BFF is the trusted side).
+            _provenance_by_doc = {}
+            for i in range(len(retrieved_docs)):
+                md = _ck_meta[i] if i < len(_ck_meta) else {}
+                prov = {k: md[k] for k in ("graph_name", "repo_id", "concept_id") if md.get(k) is not None}
+                if prov:
+                    _provenance_by_doc[retrieved_docs[i].get("id", "")] = prov
+            if _provenance_by_doc:
+                next_data["provenance_by_doc"] = _provenance_by_doc
+
             # Expected data format if using tei_reranker directly (bypassing reranker service):
             # next_data["query"] = data["initial_query"]
             # next_data["documents"] = retrieved_docs
@@ -1689,6 +1704,9 @@ class ChatQnAService:
 
         retriever_node_output = result_dict.get(retriever_key, {})
         file_id_pairs = retriever_node_output.get("file_id_pairs", {})
+        # Story 1.1 — per-hit retrieval provenance carried from the retriever
+        # node (graph_name/repo_id/concept_id, keyed by orchestrator doc id).
+        provenance_by_doc = retriever_node_output.get("provenance_by_doc", {}) or {}
         # Retriever docs carry the orchestrator id + text + similarity score (metadata.score).
         retrieved_docs = retriever_node_output.get("retrieved_docs", [])
 
@@ -1770,10 +1788,42 @@ class ChatQnAService:
                     # the confidence mean whenever the document-repository/backend
                     # metadata call failed intermittently — the prime cause of
                     # "anormally low" confidence reported in production.
-                    logger.warning(
-                        f"Skipping document {doc_id_by_orchestrator}: metadata fetch "
-                        f"failed for file ID {file_id}; not surfacing as a source."
+                    #
+                    # OKF concept chunks (Story 4.8-amend content-only chunking)
+                    # carry file_id == concept_id — those resolve in okf-server,
+                    # NOT doc-repository, so this fetch 404s BY DESIGN for every
+                    # OKF-sourced hit. Skipping them (the old behavior) threw
+                    # away all OKF ground truth and forced is_grounded=False on
+                    # every OKF query (live-caught 2026-10-06: retriever
+                    # legs=9/fused=20 with Alphabet concepts in hand, yet zero
+                    # sources surfaced and the answer was flagged AI-generated).
+                    # Surface the hit from its IN-PAYLOAD retrieval provenance
+                    # instead — no okf-server call (chatqna stays a service
+                    # consumer; the BFF is the trusted side). Doc-repo files
+                    # keep the enriched path above verbatim.
+                    prov = provenance_by_doc.get(doc_id_by_orchestrator, {})
+                    logger.info(
+                        f"doc-repo metadata absent for file ID {file_id} — surfacing "
+                        f"as OKF concept source (graph_name={prov.get('graph_name', 'n/a')}, "
+                        f"concept_id={file_id})"
                     )
+                    source_documents_file_ids.append(file_id)
+                    okf_source = {
+                        "document_id": file_id,
+                        "document_name": str(file_id).replace("_", " ").strip(),
+                        "url": "",
+                        "categoryLabels": [],
+                        "serviceLabels": [],
+                        "score": score,
+                        "concept_id": file_id,
+                        "source": "okf-concept",
+                    }
+                    if prov.get("graph_name"):
+                        okf_source["graph_name"] = prov["graph_name"]
+                    if prov.get("repo_id"):
+                        okf_source["repo_id"] = prov["repo_id"]
+                    source_documents_formatted.append(okf_source)
+                    scores.append(score)
                     continue
 
             # Mark this file as surfaced only after a successful metadata resolution,

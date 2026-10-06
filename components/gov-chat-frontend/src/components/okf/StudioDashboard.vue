@@ -110,9 +110,14 @@
             <!-- Unpublish (2026-09-25): publish → review. A published repo
               (serving or not) can be reverted to In Review for corrections —
               stops RAG serving immediately, the bundle zip stays. Confirm
-              dialog first (it pulls live content out of the serving lane). -->
+              dialog first (it pulls live content out of the serving lane).
+              #1043: an Ingested repo MUST be retracted first — unpublishing
+              while ingested would orphan live RAG chunks. The button is
+              hidden (not greyed) to match the Delete card's invariant;
+              the contextual 'Retract' button on the same card is the
+              path forward. Reappears once the repo is retracted. -->
             <DsButton
-              v-if="r.lifecycle_state === 'publish' && !isImporting(r) && !isDraining(r)"
+              v-if="r.lifecycle_state === 'publish' && !isServing(r) && !isImporting(r) && !isDraining(r)"
               variant="ghost"
               small
               :disabled="actionBusy"

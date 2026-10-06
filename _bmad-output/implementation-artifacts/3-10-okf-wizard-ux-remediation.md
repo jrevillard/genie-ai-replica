@@ -492,3 +492,11 @@ and #1042 both times; a fixer script that drops `chr(92)+chr(123)`/`chr(125)` to
 inside the affected lines (line-scoped to the #1042/#1039 keys) cleans it up. Worth a
 locale-transform pass that always emits the clean form, written into the
 `tools/okf-locale-transform.js` runner the next time i18n is added.
+
+**#1043 (2026-10-06) — StudioDashboard Unpublish button hidden on Ingested (David's rule)**: A repo that has reached
+the Ingested lane (state=publish AND ingested_at set) must be retracted first; unpublishing while ingested would
+orphan live RAG chunks (chunks live in arango; unpublish only stops OKF Studio from publishing new versions). The
+v-if on the Unpublish DsButton now adds `&& !isServing(r)` — existing helper returns true exactly when
+state=publish && ingested_at. The contextual 'Retract' button on the same card is the path forward; once
+retracted, isServing flips false and Unpublish reappears. Tests: lifecycle-ui.test.js — old test baked in the
+bug (asserted Unpublish showed on an Ingested card); updated to encode the new rule.

@@ -174,7 +174,14 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     expect(mockOpsLifecycle).toHaveBeenCalledWith('pb', 'ingest', {});
   });
 
-  it('offers Unpublish ONLY on publish-state cards (serving or not)', async () => {
+  // #1043 (David, 2026-10-06): an Ingested repo MUST be retracted before
+  // unpublish — unpublishing while ingested would orphan live RAG chunks.
+  // The Unpublish button is HIDDEN (not greyed) on the Ingested card;
+  // the contextual 'Retract' button on the same card is the path forward.
+  // Published-not-yet-ingested repos retain Unpublish; Drafts and Retracted
+  // do not (Draft has no Unpublish action; Retracted's path is "Submit for
+  // review", not "Unpublish").
+  it('offers Unpublish on Published (not-yet-ingested); HIDES it on Ingested, Draft, Retracted', async () => {
     const store = buildStore();
     const wrapper = mount(OkfStudioDashboard, {
       global: { mocks: { $store: store }, stubs: STUBS }
@@ -187,7 +194,9 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     const drafty = cards.find((c) => c.text().includes('Drafty'));
     const retracted = cards.find((c) => c.text().includes('Pully'));
     expect(pubby.findAll('button').some((b) => b.text() === 'Unpublish')).toBe(true);
-    expect(ingesty.findAll('button').some((b) => b.text() === 'Unpublish')).toBe(true);
+    // #1043: published-but-not-yet-ingested is fine to unpublish; once
+    // ingested, the Unpublish button is hidden until the repo retracts.
+    expect(ingesty.findAll('button').some((b) => b.text() === 'Unpublish')).toBe(false);
     expect(drafty.findAll('button').some((b) => b.text() === 'Unpublish')).toBe(false);
     expect(retracted.findAll('button').some((b) => b.text() === 'Unpublish')).toBe(false);
   });
@@ -241,8 +250,10 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });
     await seedRepos(store, REPOS);
     await flush();
-    const ingesty = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('Ingesty'));
-    await ingesty
+    // #1043: Unpublish no longer renders on an Ingested card. Use the
+    // Published-not-ingested card (Pubby) for the click-happy path.
+    const pubby = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('Pubby'));
+    await pubby
       .findAll('button')
       .find((b) => b.text() === 'Unpublish')
       .trigger('click');
@@ -253,7 +264,7 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     expect(unpublishDialog).toBeTruthy();
     unpublishDialog.vm.$emit('action', 'confirm');
     await flush();
-    expect(mockOpsLifecycle).toHaveBeenCalledWith('in', 'unpublish', {});
+    expect(mockOpsLifecycle).toHaveBeenCalledWith('pb', 'unpublish', {});
   });
 
   it('Unpublish cancel closes the dialog WITHOUT dispatching', async () => {
@@ -262,13 +273,14 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });
     await seedRepos(store, REPOS);
     await flush();
-    const ingesty = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('Ingesty'));
-    await ingesty
+    // #1043: same — use the Pubby (Published-not-ingested) card.
+    const pubby = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('Pubby'));
+    await pubby
       .findAll('button')
       .find((b) => b.text() === 'Unpublish')
       .trigger('click');
     await flush();
-    expect(wrapper.vm.unpublishAsk).toMatchObject({ repo_id: 'in' });
+    expect(wrapper.vm.unpublishAsk).toMatchObject({ repo_id: 'pb' });
     // Cancel via the emitted action event (the dialog footer Cancel button).
     const dialogs = wrapper.findAllComponents({ name: 'DsDialog' });
     const unpublishDialog = dialogs.find((d) => d.props('visible') === true);

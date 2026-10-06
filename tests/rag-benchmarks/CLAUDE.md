@@ -151,14 +151,27 @@ For stack-agnostic anchor runs that handle ROPC enable/disable, container
 discovery, and VT trace timeouts automatically, use the wrapper:
 
 ```bash
-# On the swarm node, with the .env already in place at /opt/<stack>/.env:
+# On the swarm node, with the .env already in place at /opt/<stack>/.env.
+# Recommended form: pass EVAL_DEPLOY_ENV + the URL + admin password; the
+# wrapper resolves KEYCLOAK_ADMIN_PASSWORD and the Arango creds from the
+# .env. Set GENIE_ADMIN_PASSWORD directly to skip the .env read entirely.
+ssh $SWARM_NODE bash -s <<'EOF'
+export EVAL_DEPLOY_ENV=/opt/<stack>/.env
+export EVAL_KC_URL=https://kc.example.com/auth
+export KEYCLOAK_ADMIN_PASSWORD=...
+
+../scripts/run_anchor_with_cleanup.sh gold_dataset.json results.json
+EOF
+
+# Alternative — export every var directly (no .env read):
 ssh $SWARM_NODE bash -s <<'EOF'
 export EVAL_KC_URL=https://kc.example.com/auth
 export KEYCLOAK_ADMIN_PASSWORD=...
 export ARANGO_DB=<db_name>
 export ARANGO_PASSWORD=...
+export GENIE_ADMIN_PASSWORD=...
 
-scripts/run_anchor_with_cleanup.sh gold_dataset.json results.json
+../scripts/run_anchor_with_cleanup.sh gold_dataset.json results.json
 EOF
 ```
 
@@ -372,8 +385,8 @@ snapshot (AC:5), the three homes of `RERANKER_TOP_N` / `RERANKING_STRATEGY`
 python3 capture_baseline.py --runs 3 --seed 42 \
   --gold tests/rag-benchmarks/eval/gold_dataset.json \
   --out _bmad-output/implementation-artifacts/rag-baseline-v1.3.json \
-  --stack release-el-salvador \
-  --stack-prefix genieai-el-salvador_        # disambiguate on multi-stack nodes \
+  --stack <stack-name> \
+  --stack-prefix <stack-prefix>_        # disambiguate on multi-stack nodes \
   --repo-root <repo checkout>                # for code/compose/env homes
 ```
 

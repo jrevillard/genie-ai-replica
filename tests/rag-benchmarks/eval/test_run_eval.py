@@ -373,11 +373,7 @@ def test_resume_skips_already_done_entries(tmp_path, monkeypatch):
     rc = run_eval.main("anchor", str(gold), str(out))
     # Only q2 was driven
     assert drive_calls == ["b"]
-    # rc=0 because q1 was skipped as already-done (not in skipped_entries) and
-    # q2 succeeded with no trace → missed=1, EVAL_MAX_MISSED_TRACES default 2 → 0
-    # actually missed=1 > 0, default max_missed=2, so rc=0 is fine
-    # But: we need to assert rc is in {0, 3, 4} and out.json still valid
-    assert rc in (0, 3, 4)
+    assert rc == 0
     rep = _json.loads(out.read_text())
     ids = [r["id"] for r in rep["per_query"]]
     assert "q1" in ids and "q2" in ids

@@ -656,8 +656,7 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
         "n_http_errors": http_errors,
         "skipped_entries": skipped_entries,
     }
-    with open(out_path, "w") as fh:
-        json.dump(report, fh, indent=2)
+    _write_out(out_path, report, "anchor")
     print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
     set_based_keys = [
         "recall", "precision", "complete_recall", "noise",

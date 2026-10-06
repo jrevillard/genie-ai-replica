@@ -910,8 +910,7 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
             "n_missed_traces": missed,
             "skipped": skipped_meta,
         }
-        with open(f"{out_path}.meta.json", "w") as fh:
-            json.dump(sidecar, fh, ensure_ascii=False, indent=2)
+        write_json(f"{out_path}.meta.json", sidecar, ensure_ascii=False)
         print(f"\nWrote {len(tuples)} eval tuples → {out_path}", file=sys.stderr)
         print(f"Wrote sidecar → {out_path}.meta.json", file=sys.stderr)
         print("Feed to: run_ragas_eval.py eval_tuples.json", file=sys.stderr)

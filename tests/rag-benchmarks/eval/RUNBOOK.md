@@ -242,14 +242,15 @@ default, or set them explicitly when your stack renames the service.
 
 | Knob | Default | Set via | Source |
 |---|---|---|---|
-| `CHATQNA_CONTAINER` | `chatqna-xeon-backend-server` (regex match) | `export CHATQNA_CONTAINER=...` | wrapper line ~48 |
-| `VICTORIATRACES_SVC` | `<stack>_victoriatraces` (`docker service ls` grep) | `export VICTORIATRACES_SVC=...` | wrapper line ~57 |
-| `CHATQNA_SERVICE_NAME` | `genieai-chatqna` (OTel span filter) | `export CHATQNA_SERVICE_NAME=...` | run_eval.py:70 |
-| `GRAPH_SOURCE` | `GRAPH_TEST_SOURCE` | `export GRAPH_SOURCE=...` | run_eval.py:71 |
-| `EVAL_KC_REALM` | `genie` | `export EVAL_KC_REALM=...` | wrapper line ~41 |
-| `EVAL_KC_CLIENT_ID` | `genie-app` | `export EVAL_KC_CLIENT_ID=...` | wrapper line ~42 |
-| `EVAL_KC_USER` | `genie-admin` | `export EVAL_KC_USER=...` | wrapper line ~43 |
-| `EVAL_DEPLOY_ENV` | _none_ (no default — pass explicitly) | `export EVAL_DEPLOY_ENV=/opt/<stack>/.env` | wrapper line ~28 |
+| `CHATQNA_CONTAINER` | `chatqna-xeon-backend-server` (regex match) | `export CHATQNA_CONTAINER=...` | scripts/run_anchor_with_cleanup.sh (CHATQNA_CONTAINER auto-resolve) |
+| `VICTORIATRACES_SVC` | `<stack>_victoriatraces` (`docker service ls` grep) | `export VICTORIATRACES_SVC=...` | scripts/run_anchor_with_cleanup.sh (VICTORIATRACES_SVC auto-resolve) |
+| `CHATQNA_SERVICE_NAME` | `genieai-chatqna` (OTel span filter) | `export CHATQNA_SERVICE_NAME=...` | run_eval.py module-level constant (CHATQNA_SERVICE_NAME) |
+| `GRAPH_SOURCE` | `GRAPH_TEST_SOURCE` | `export GRAPH_SOURCE=...` | run_eval.py module-level constant (GRAPH_SOURCE) |
+| `CHATQNA_URL` | `http://localhost:8888/v1/chatqna` | `export CHATQNA_URL=...` | run_eval.py module-level constant (CHATQNA_URL) |
+| `EVAL_KC_REALM` | `genie` | `export EVAL_KC_REALM=...` | scripts/run_anchor_with_cleanup.sh |
+| `EVAL_KC_CLIENT_ID` | `genie-app` | `export EVAL_KC_CLIENT_ID=...` | scripts/run_anchor_with_cleanup.sh |
+| `EVAL_KC_USER` | `genie-admin` | `export EVAL_KC_USER=...` | scripts/run_anchor_with_cleanup.sh |
+| `EVAL_DEPLOY_ENV` | _none_ (no default — pass explicitly) | `export EVAL_DEPLOY_ENV=/opt/<stack>/.env` | scripts/run_anchor_with_cleanup.sh (EVAL_DEPLOY_ENV check) |
 
 ### Two modes
 
@@ -393,8 +394,18 @@ ssh <user>@<host> '
 ```
 
 `GRAPH_SOURCE` and `CHATQNA_SERVICE_NAME` (both with GENIE.AI defaults —
-see the table) can also be overridden via env. See `run_eval.py:67-74`
-for the full knob list.
+see the table) can also be overridden via env. See the module-level
+constants at the top of `run_eval.py`
+(`CHATQNA_CONTAINER`, `VICTORIATRACES_SVC`, `CHATQNA_URL`,
+`CHATQNA_SERVICE_NAME`, `GRAPH_SOURCE`, `TEXT_FIELD`) for the full
+knob list.
+
+> **Multi-stack nodes:** when two stacks run on the same swarm node
+> (e.g. dev + prod, or el-salvador + a parallel eval stack),
+> `VICTORIATRACES_SVC` auto-resolution takes the first `docker service ls`
+> match and can silently target the wrong stack. Pin both
+> `VICTORIATRACES_SVC` and `CHATQNA_CONTAINER` explicitly via env on
+> multi-stack hosts.
 
 **Gate**: `n_tuples == n_entries` (dump-tuples) or `len(per_query) ==
 n_entries` (anchor). Both `n_missed_traces` and `n_http_errors` are 0 (or

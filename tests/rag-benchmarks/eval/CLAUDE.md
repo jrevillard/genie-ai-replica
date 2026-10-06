@@ -42,9 +42,16 @@ and disables ROPC again on exit (signal-safe `trap` on EXIT/INT/TERM).
 **Forgetting to revert it is a security vulnerability** — ROPC must NEVER
 stay enabled in production.
 
+**Exit codes** (full map in `eval/RUNBOOK.md`):
+- `run_eval.py` — `0` clean, `2` usage/gold-mismatch, `3` degraded, `4` zero
+  scored rows.
+- wrapper adds `8` (ROPC enable failed — check Keycloak admin creds) and `9`
+  (ROPC revert failed after 3 retries — manual revert curl above is
+  mandatory; production is left exposed).
+
 For zero-touch auth (when ROPC is not desired), use a dedicated service
 account via `client_credentials` grant and inject it into `run_eval.py` via
-the `BEARER_TOKEN` env var. Not implemented in the wrapper yet.
+the `E2E_BEARER_TOKEN` env var. Not implemented in the wrapper yet.
 
 ## Score threshold — silent retrieval drop
 
@@ -89,12 +96,14 @@ ssh govstack@<ip> 'docker service logs genieai-el-salvador_chatqna-xeon-backend-
 
 | File | Role |
 |---|---|
-| `run_eval.py` | Eval driver. NO auth handling — always invoke via the wrapper script in prod. |
+| `run_eval.py` | Eval driver. OIDC handled by the wrapper (ROPC enable/revert) or by `E2E_BEARER_TOKEN`/`EVAL_KC_*` env vars; this script refreshes its own realm bearer in-run. |
 | `calibrate.py` | Offline adaptive-reranker parameter sweep. Pure replay, no chatqna calls. |
 | `run_ragas_eval.py` | LLM-judged semantic scoring. Reads `eval_tuples.json` (Phase 3 output). |
 | `metrics.py` | `aggregate()` (per-row → mean) + `recall_at_k` / `ndcg_at_k` (rank-aware). |
 | `chunk_identity.py` | `content_hash` (sha256[:16] of normalized text). Identity is content-based, survives re-ingest. |
 | `arango.py` | ArangoDB cursor helper. |
+| `keycloak.py` | Keycloak admin + realm token helpers (used by run_eval.py and tests). |
+| `harness.py` | `docker exec` + `curl` helpers used by run_eval.py to drive chatqna in-container. |
 | `dump_chunks.py` | Dump chunk keys + labels for gold annotation. |
 | `xlsx_to_gold.py` | Phase 1: xlsx → gold_dataset.json skeleton. |
 | `match_gold_chunks.py` | Phase 2: preview → content_hash via ArangoDB substring. |

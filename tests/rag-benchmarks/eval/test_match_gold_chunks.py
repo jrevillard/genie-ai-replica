@@ -1,6 +1,6 @@
 """Unit tests for match_gold_chunks.py.
 
-Covers the two el-salvador fixes:
+Covers the two field/window fixes:
   - default chunk-text field is `chunk_text`, not `text`
   - verbatim-substring fallback uses a sliding window for chunker-split previews
 """
@@ -63,7 +63,7 @@ class TestFindMatchesWindowFallback:
 
 
 class TestParseArgsChunkTextField:
-    """The default --chunk-text-field is `chunk_text`, matching the el-salvador schema."""
+    """The default --chunk-text-field is `chunk_text`, matching the chunk_text schema."""
 
     def test_default_is_chunk_text(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["match_gold_chunks.py", "--gold-dataset", "x.json"])

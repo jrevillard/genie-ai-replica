@@ -15,8 +15,11 @@ runner no longer exists. Leaving ROPC enabled in production is a security
 vulnerability. See `tests/rag-benchmarks/eval/CLAUDE.md` for the full story
 (auth, score threshold, diagnostic mode).
 
-Both modes drive gold queries through chatqna via docker exec (internal service,
-NO OIDC — faithful label-filtered retrieval) and pull the selection from the
+Both modes drive gold queries through chatqna via docker exec (OIDC via
+the wrapper — this driver refreshes its own realm bearer from EVAL_KC_*
+when set, or honors a pre-minted E2E_BEARER_TOKEN for service-account
+flows; the docker exec + chatqna label-filtered retrieval path is
+otherwise faithful to production) and pull the selection from the
 chatqna.reranker_selection span in VictoriaTraces.
 
 The span emits ``chunk_key`` (the ArangoDB ``_key``), recovered by the retriever

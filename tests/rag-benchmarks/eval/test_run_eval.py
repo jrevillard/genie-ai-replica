@@ -86,3 +86,37 @@ def test_drive_query_401_detected(monkeypatch):
     monkeypatch.setattr(run_eval, "_docker_exec", lambda c, cmd, timeout=120: '{"error":"invalid_token"}\n401')
     _, _, status = run_eval.drive_query({"query": "q"})
     assert status == 401
+
+
+def test_exit_contract_zero_rows(tmp_path, monkeypatch):
+    import json as _json
+    gold = tmp_path / "g.json"; gold.write_text(_json.dumps({"entries": []}))
+    # empty key maps, no queries: anchor mode with zero scored rows
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+    rc = run_eval.main("anchor", str(gold), str(tmp_path / "out.json"))
+    assert rc == 4  # zero scored rows
+
+
+def test_exit_contract_dump_tuples_partial_skipped(tmp_path, monkeypatch):
+    import json as _json
+    gold = tmp_path / "g.json"
+    gold.write_text(_json.dumps({"entries": [
+        {"id": "q1", "query": "Q1?", "expected_chunks": []},
+        {"id": "q2", "query": "Q2?", "expected_chunks": []},
+    ]}))
+    monkeypatch.setattr(run_eval, "build_hash_to_text", dict)
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda _s: ([], [], []))
+    # q1: 200 OK; q2: 401 (A2 shape: skipped in dump-tuples, not counted as miss)
+    def _fake_drive(entry):
+        if entry["id"] == "q1":
+            return 0.0, '{"text":"ok"}', 200
+        return 0.0, '{"error":"invalid_token"}', 401
+    monkeypatch.setattr(run_eval, "drive_query", _fake_drive)
+    out = tmp_path / "out.json"
+    rc = run_eval.main("dump-tuples", str(gold), str(out))
+    assert rc == 3  # partial — 1 of 2 entries skipped, EVAL_ALLOW_PARTIAL unset
+    meta = _json.loads((tmp_path / "out.json.meta.json").read_text())
+    assert meta["n_entries"] == 2
+    assert meta["n_tuples"] == 1
+    assert meta["n_http_errors"] == 1
+    assert meta["skipped"] == ["q2"]

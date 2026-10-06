@@ -353,7 +353,7 @@ def make_tuple(entry, sel_hashes, hash_to_text, answer) -> dict:
     }
 
 
-def main(mode: str, gold_path: str, out_path: str) -> None:
+def main(mode: str, gold_path: str, out_path: str) -> int:
     with open(gold_path) as fh:
         gold = json.load(fh)
     entries = gold["entries"]
@@ -421,59 +421,102 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
     if mode == "dump-tuples":
         with open(out_path, "w") as fh:
             json.dump(tuples, fh, ensure_ascii=False, indent=2)
-        print(f"\nWrote {len(tuples)} eval tuples → {out_path}", file=sys.stderr)
-        print("Feed to: run_ragas_eval.py eval_tuples.json", file=sys.stderr)
-    else:
-        scored = [r for r in rows if r.get("trace_found")]
-        agg = metrics.aggregate(scored)
-        # Aggregate passage-level metrics across queries (only queries that
-        # actually had gold passages; queries with all-unresolved gold are
-        # excluded from the denominator to avoid skewing toward zero).
-        p_recalls = [r["passage_recall"] for r in scored if r.get("n_passages")]
-        total_passages = sum(r.get("n_passages", 0) for r in scored)
-        retrieved_passages = sum(r.get("passages_retrieved", 0) for r in scored)
-        agg["passage_recall"] = sum(p_recalls) / len(p_recalls) if p_recalls else 0.0
-        agg["total_passages"] = total_passages
-        agg["retrieved_passages"] = retrieved_passages
-        report = {
-            "per_query": rows,
-            "aggregate": agg,
+        sidecar = {
+            "n_entries": len(entries),
+            "n_tuples": len(tuples),
+            "n_http_errors": http_errors,
             "n_missed_traces": missed,
-            "n_unmapped_chunk_keys": unmapped,
+            "skipped": skipped_entries,
         }
-        with open(out_path, "w") as fh:
-            json.dump(report, fh, indent=2)
-        print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
-        set_based_keys = [
-            "recall",
-            "precision",
-            "complete_recall",
-            "noise",
-            "retrieval_recall",
-            "passage_recall",
-        ]
-        for k in set_based_keys:
-            if k in agg:
-                print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
-        # Rank-aware — only present when every scored row had them computed.
-        for k in metrics.RANK_AWARE_K:
-            rk = f"recall_at_{k}"
-            nk = f"ndcg_at_{k}"
-            if rk in agg:
-                print(f"  {rk:20s} {agg[rk]:.3f}", file=sys.stderr)
-            if nk in agg:
-                print(f"  {nk:20s} {agg[nk]:.3f}", file=sys.stderr)
-        if agg.get("total_passages"):
+        with open(f"{out_path}.meta.json", "w") as fh:
+            json.dump(sidecar, fh, ensure_ascii=False, indent=2)
+        print(f"\nWrote {len(tuples)} eval tuples → {out_path}", file=sys.stderr)
+        print(f"Wrote sidecar → {out_path}.meta.json", file=sys.stderr)
+        print("Feed to: run_ragas_eval.py eval_tuples.json", file=sys.stderr)
+        # Sidecar is already on disk — downstream readers (capture_baseline) can
+        # inspect skipped/http_errors even on degraded runs. Now classify.
+        if not tuples:
+            return 4
+        if (len(tuples) < len(entries)) and not os.getenv("EVAL_ALLOW_PARTIAL"):
             print(
-                f"  retrieved_passages   {agg['retrieved_passages']}/{agg['total_passages']}",
+                f"EXIT 3: {len(entries) - len(tuples)} entries skipped "
+                f"(see {out_path}.meta.json)",
                 file=sys.stderr,
             )
-        if missed:
-            print(
-                f"  {missed} trace(s) missed and excluded — see per_query[].trace_found",
-                file=sys.stderr,
-            )
-        print(f"\nReport → {out_path}", file=sys.stderr)
+            return 3
+        return 0
+
+    # Anchor branch — guard metrics.aggregate([]): empty list raises/garbages.
+    scored = [r for r in rows if r.get("trace_found")]
+    agg = metrics.aggregate(scored) if scored else {"n": 0}
+    # Aggregate passage-level metrics across queries (only queries that
+    # actually had gold passages; queries with all-unresolved gold are
+    # excluded from the denominator to avoid skewing toward zero).
+    p_recalls = [r["passage_recall"] for r in scored if r.get("n_passages")]
+    total_passages = sum(r.get("n_passages", 0) for r in scored)
+    retrieved_passages = sum(r.get("passages_retrieved", 0) for r in scored)
+    agg["passage_recall"] = sum(p_recalls) / len(p_recalls) if p_recalls else 0.0
+    agg["total_passages"] = total_passages
+    agg["retrieved_passages"] = retrieved_passages
+    report = {
+        "per_query": rows,
+        "aggregate": agg,
+        "n_missed_traces": missed,
+        "n_unmapped_chunk_keys": unmapped,
+    }
+    with open(out_path, "w") as fh:
+        json.dump(report, fh, indent=2)
+    print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
+    set_based_keys = [
+        "recall",
+        "precision",
+        "complete_recall",
+        "noise",
+        "retrieval_recall",
+        "passage_recall",
+    ]
+    for k in set_based_keys:
+        if k in agg:
+            print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
+    # Rank-aware — only present when every scored row had them computed.
+    for k in metrics.RANK_AWARE_K:
+        rk = f"recall_at_{k}"
+        nk = f"ndcg_at_{k}"
+        if rk in agg:
+            print(f"  {rk:20s} {agg[rk]:.3f}", file=sys.stderr)
+        if nk in agg:
+            print(f"  {nk:20s} {agg[nk]:.3f}", file=sys.stderr)
+    if agg.get("total_passages"):
+        print(
+            f"  retrieved_passages   {agg['retrieved_passages']}/{agg['total_passages']}",
+            file=sys.stderr,
+        )
+    if missed:
+        print(
+            f"  {missed} trace(s) missed and excluded — see per_query[].trace_found",
+            file=sys.stderr,
+        )
+    print(f"\nReport → {out_path}", file=sys.stderr)
+    # Report is already on disk — classify the run for capture_baseline (MR-D).
+    max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
+    if not rows:
+        return 4
+    if not scored and rows:
+        # every entry missed the trace — the report has zero signal
+        return 4
+    if missed > max_missed:
+        print(
+            f"EXIT 3: {missed} missed traces > EVAL_MAX_MISSED_TRACES={max_missed}",
+            file=sys.stderr,
+        )
+        return 3
+    if unmapped and not os.getenv("EVAL_ALLOW_UNMAPPED"):
+        print(
+            f"EXIT 3: {unmapped} unmapped chunk keys (wrong GRAPH_SOURCE?)",
+            file=sys.stderr,
+        )
+        return 3
+    return 0
 
 
 if __name__ == "__main__":
@@ -485,4 +528,4 @@ if __name__ == "__main__":
     gold = sys.argv[2] if len(sys.argv) > 2 else "gold_dataset.json"
     default_out = "eval_tuples.json" if mode == "dump-tuples" else "eval_report.json"
     out = sys.argv[3] if len(sys.argv) > 3 else default_out
-    main(mode, gold, out)
+    sys.exit(main(mode, gold, out))

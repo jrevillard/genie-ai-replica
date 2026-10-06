@@ -58,7 +58,7 @@ import urllib.error
 import metrics
 from arango import cursor, source_chunks
 from chunk_identity import content_hash
-from harness import docker_exec as _docker_exec
+from harness import docker_exec as _docker_exec, write_json
 from keycloak import KeycloakError, fetch_realm_token
 
 # --- stack config (env-overridable) -----------------------------------------
@@ -414,18 +414,13 @@ def make_tuple(entry, sel_hashes, hash_to_text, answer) -> dict:
 
 
 def _write_out(out_path: str, payload, mode: str) -> None:
-    """Atomic write: serialize to ``<out_path>.tmp`` then ``os.replace`` so a
-    crash mid-write can never leave a half-written ``out_path``. Used for both
-    the anchor report dict and the dump-tuples list (the same file-move
-    guarantee holds for either).
+    """Atomic write through ``harness.write_json`` (tmp+os.replace + BaseException
+    cleanup). Used for both the anchor report dict and the dump-tuples list.
+    ``mode`` is retained for call-site symmetry with ``_write_out_post`` even
+    though the underlying write is mode-agnostic.
     """
-    tmp = f"{out_path}.tmp"
-    with open(tmp, "w") as fh:
-        if mode == "dump-tuples":
-            json.dump(payload, fh, ensure_ascii=False, indent=2)
-        else:  # anchor
-            json.dump(payload, fh, indent=2)
-    os.replace(tmp, out_path)
+    del mode  # see docstring; write_json handles indent + ensure_ascii uniformly
+    write_json(out_path, payload, ensure_ascii=False)
 
 
 def _load_done(out_path: str, mode: str) -> tuple[set[str], list, list]:

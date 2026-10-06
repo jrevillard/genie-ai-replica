@@ -46,6 +46,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from arango import source_chunks
 from chunk_identity import content_hash, normalize
+from harness import write_json
 
 
 def parse_args() -> argparse.Namespace:
@@ -132,25 +133,13 @@ def load_chunks(args: argparse.Namespace) -> list[dict[str, Any]]:
 
 
 def atomic_write_json(out_path: Path, payload: Any) -> None:
-    """Write ``payload`` to ``out_path`` atomically.
-
-    Writes to ``<out_path>.tmp`` first and then ``os.replace`` onto the final
-    path so a crash or a serialization error never leaves a half-written gold
-    dataset on disk. The temp file is removed on any failure.
+    """Thin wrapper around ``harness.write_json`` retained for the test patch
+    target (``match_gold_chunks`` tests exercise the cleanup branch by
+    patching ``os.replace``; the real atomic-write + BaseException cleanup
+    now lives in ``harness.write_json``). ``Path`` is accepted and stringified
+    for the harness call, which uses string paths throughout.
     """
-    tmp = out_path.with_suffix(out_path.suffix + ".tmp")
-    try:
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, indent=2, ensure_ascii=False)
-        os.replace(tmp, out_path)
-    except BaseException:
-        # Cleanup the temp file (best-effort — itself may be missing on
-        # some failure modes); re-raise so the caller sees the real error.
-        try:
-            if tmp.exists():
-                tmp.unlink()
-        finally:
-            raise
+    write_json(str(out_path), payload)
 
 
 def write_with_backup(out_path: Path, payload: Any) -> None:

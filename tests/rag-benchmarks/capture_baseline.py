@@ -68,7 +68,7 @@ from pathlib import Path
 # Make the eval/ subpackage importable for the shared harness primitives
 # (``docker_exec`` + atomic JSON IO) — previously duplicated locally.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "eval"))
-from harness import docker_exec as _docker_exec  # noqa: E402
+from harness import docker_exec as _docker_exec, write_json  # noqa: E402
 
 # Metrics where a LOWER value is the parity-relevant regression signal.
 LOWER_IS_BETTER = ("recall", "precision", "complete_recall", "retrieval_recall")
@@ -897,9 +897,7 @@ def main(argv: list[str] | None = None) -> int:
         k=args.tolerance_k,
         semantic_enabled=args.semantic,
     )
-    with open(out, "w") as fh:
-        json.dump(artifact, fh, indent=2)
-        fh.write("\n")
+    write_json(out, artifact)
 
     print(f"Baseline artifact → {out}", file=sys.stderr)
     print(f"  anchor runs: {args.runs}, seed: {args.seed}", file=sys.stderr)

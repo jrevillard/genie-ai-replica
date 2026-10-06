@@ -1293,18 +1293,25 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             # Retrieve file_id for each chunk using AQL (search_start == 'chunk')
             if search_start == "chunk":
-                for r in search_res:
-                    chunk_id = r["doc"].id if r["doc"].id else None
-                    if chunk_id:
-                        aql = f"""
-                            FOR doc IN `{collection_name}`
-                                FILTER doc._key == @chunk_id
-                                RETURN doc.{ARANGO_FILE_ID_FIELD}
-                        """
-                        bind_vars = {"chunk_id": chunk_id}
-                        cursor = self.db.aql.execute(aql, bind_vars=bind_vars)
-                        file_ids = list(doc for doc in cursor)
-                        r["doc"].metadata["file_ids"] = file_ids if file_ids else []
+                # ONE batched AQL for all chunks (was: one round-trip PER chunk
+                # — 20 sequential queries per leg, x9 fan-out legs; measured as
+                # a real share of per-leg latency 2026-10-06).
+                chunk_ids = [r["doc"].id for r in search_res if r["doc"].id]
+                if chunk_ids:
+                    aql = f"""
+                        FOR doc IN `{collection_name}`
+                            FILTER doc._key IN @chunk_ids
+                            RETURN {{key: doc._key, file_id: doc.{ARANGO_FILE_ID_FIELD}}}
+                    """
+                    file_id_by_key = {
+                        row["key"]: row["file_id"]
+                        for row in self.db.aql.execute(aql, bind_vars={"chunk_ids": chunk_ids})
+                    }
+                    for r in search_res:
+                        cid = r["doc"].id
+                        if cid:
+                            fid = file_id_by_key.get(cid)
+                            r["doc"].metadata["file_ids"] = [fid] if fid else []
                 logger.info(f"Adding file id metadata after similarity search: {search_res}")
 
             #######################################################################
@@ -1645,29 +1652,38 @@ async def _invoke_leg(self, graph_name, input_dict, input, query):
     span.set_attribute("okf.fanout.leg.graph_name", graph_name)
     leg_started = time.time()
     logger.info(f"Fan-out leg start — graph_name={graph_name}")
-    try:
-        result = await asyncio.wait_for(
-            self._extract_for_graph(
-                graph_name=graph_name,
-                input_dict=input_dict,
-                input=input,
-                query=query,
-                start_time=time.time(),
-                span=span,
-            ),
-            timeout=FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0,
-        )
-        logger.info(
-            f"Fan-out leg done — graph_name={graph_name}, "
-            f"hits={len(result or [])}, elapsed={time.time() - leg_started:.2f}s"
-        )
-        return result
-    except TimeoutError:
+
+    # The extraction is SYNCHRONOUS-blocking work (python-arango calls) inside
+    # an async wrapper. Awaited directly, one big repo stalled the ENTIRE event
+    # loop — every other leg, the timeout, and health checks queued behind it,
+    # and `wait_for(2s)` could never fire (live 2026-10-06: legs ran 46-94s
+    # under a 2000ms timeout). Run the coroutine on its OWN thread/loop so the
+    # main loop stays responsive; on timeout the awaiting task returns at the
+    # deadline and the worker thread is abandoned in the background (its result
+    # is discarded — the leg counts as zero-hit per Decision E).
+    coro = self._extract_for_graph(
+        graph_name=graph_name,
+        input_dict=input_dict,
+        input=input,
+        query=query,
+        start_time=time.time(),
+        span=span,
+    )
+    leg_task = asyncio.create_task(asyncio.to_thread(asyncio.run, coro))
+    done, pending = await asyncio.wait({leg_task}, timeout=FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0)
+    if pending:
         logger.info(
             f"Fan-out leg TIMED OUT after {time.time() - leg_started:.2f}s "
-            f"(limit {FANOUT_PER_GRAPH_TIMEOUT_MS}ms) — graph_name={graph_name}"
+            f"(limit {FANOUT_PER_GRAPH_TIMEOUT_MS}ms) — graph_name={graph_name}; "
+            f"worker thread abandoned in background"
         )
-        raise
+        return []
+    result = leg_task.result()
+    logger.info(
+        f"Fan-out leg done — graph_name={graph_name}, "
+        f"hits={len(result or [])}, elapsed={time.time() - leg_started:.2f}s"
+    )
+    return result
 
 
 async def invoke_fanout(self, input, input_dict, encoded_graph_names):

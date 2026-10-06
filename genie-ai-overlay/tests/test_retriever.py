@@ -589,8 +589,9 @@ class TestInvoke:
         mock_doc.page_content = "text"
         mock_doc.metadata = {}
         invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[(mock_doc, 0.9)])
+        # Batched file-id lookup (one AQL with `IN @chunk_ids`) — rows are {key, file_id}.
         file_cursor = MagicMock()
-        file_cursor.__iter__ = MagicMock(return_value=iter(["file_abc"]))
+        file_cursor.__iter__ = MagicMock(return_value=iter([{"key": "chunk1", "file_id": "file_abc"}]))
         invoke_env["db"].aql.execute.return_value = file_cursor
 
         result = await invoke_env["retriever"].invoke(create_mock_input(search_start="chunk"))

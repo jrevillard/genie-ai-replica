@@ -585,11 +585,6 @@ services:
       # The legacy graph name the BFF prepends in hybrid mode — MUST match the
       # retriever's ARANGO_GRAPH_NAME or the legacy leg diverges.
       - ARANGO_GRAPH_NAME=${ARANGO_GRAPH_NAME:-GRAPH}
-      # Story 1.1 cache tuning (code defaults 30000/3000; clamped ≥1000/≥100):
-      # the posture/authz window and per-call timeout. Defaults mirror the
-      # authz-resolver's SERVING_TTL_MS — override only for latency tuning.
-      - OKF_RETRIEVAL_CONFIG_TTL_MS=${OKF_RETRIEVAL_CONFIG_TTL_MS:-30000}
-      - OKF_RETRIEVAL_CONFIG_TIMEOUT_MS=${OKF_RETRIEVAL_CONFIG_TIMEOUT_MS:-3000}
       # Conversation mode: conversation-with-context-labels (full context) or single-message (legacy)
       - CONTEXT_OPTION=${CONTEXT_OPTION:-conversation-with-context-labels}
       # Logging (error, warn, info, debug)
@@ -705,14 +700,6 @@ services:
       - VLLM_ENDPOINT=${VLLM_ENDPOINT:-}
       - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
-      # Story 1.6 — frontmatter re-embedding on publish (David 2026-10-08).
-      # Mirrors the same env var the OPEA retriever/chatqna services read
-      # (docker-compose.yaml:1204, 1348, 1515) so a remote GPU host
-      # (https://ai.assembly.govstack.global:444/embed) and a local
-      # compose service (http://tei:80) both resolve cleanly. Without
-      # this, the okf-server patchFrontmatter path 500s with
-      # ENOTFOUND embedding-tei on the first save.
-      - EMBEDDING_SERVICE_URL=${EMBEDDING_SERVICE_URL:-}
       - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
       - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
       # Stuck-parsed reaper signals (claim-stamp semantics): a claimed row with

@@ -237,53 +237,6 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Story 1.6 — fetch the denormalized frontmatter summary for a single repo
- * (the hot-path read-model consumed by the retriever's frontmatter routing
- * stage). The BFF holds its own 60s in-memory entry so the retriever pod
- * doesn't re-fetch on every query. On failure: returns null (the retriever
- * degrades to the chunk-probe-only path; the lifecycle-service publish gate
- * is the source of truth for frontmatter existence).
- *
- * The okf-server's own 60s TTL means this client cache adds ≤60s of
- * additional staleness on top — bounded, acceptable for the routing signal
- * (which only matters during tag-set edits without a republish).
- */
-async function getRepoFrontmatterSummary(repoId, opts = {}) {
-  const correlationId = opts.correlationId || nodeCrypto.randomUUID();
-  if (!repoId) return null;
-  const window = currentWindow();
-  const key = `fm-summary|${window}|${repoId}`;
-  const hit = _cache.get(key);
-  if (hit && hit.window === window) {
-    logger.debug('RetrievalConfigClient.frontmatter_cache_hit', { repoId, correlationId });
-    return hit.value;
-  }
-  try {
-    const res = await axios.get(`${OKF_SERVER_URL}/api/okf/repos/${encodeURIComponent(repoId)}/frontmatter/summary`, {
-      headers: opts.bearerHeader ? { Authorization: opts.bearerHeader } : {},
-      timeout: REQUEST_TIMEOUT_MS
-    });
-    _cache.set(key, { window, value: res.data });
-    pruneCache(window);
-    return res.data;
-  } catch (err) {
-    const status = err?.response?.status;
-    if (status === 404) {
-      // No frontmatter row yet — legitimate for legacy repos mid-migration.
-      _cache.set(key, { window, value: null });
-      pruneCache(window);
-      return null;
-    }
-    logger.warn('RetrievalConfigClient.frontmatter_summary_unavailable', {
-      repoId,
-      correlationId,
-      status: status || err?.code || err?.message
-    });
-    return null;
-  }
-}
-
-/**
  * The retrieval posture for this caller: {config, source, serving_graph_count,
  * serving_repo_ids, serving_graphs, engaged, warnings} — the response verbatim
  * from the okf-server (the `engaged` flag is the AUTHORITATIVE engagement
@@ -387,8 +340,6 @@ function _resetCache() {
 module.exports = {
   getRetrievalConfig,
   getAuthorizedGraphs,
-  // Story 1.6 — frontmatter routing.
-  getRepoFrontmatterSummary,
   OkfAuthzUnauthorizedError,
   legacyDefaultConfig,
   _resetCache,

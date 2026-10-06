@@ -4,5 +4,15 @@ chunks_labeling_audit.csv
 eval_report.json
 eval_tuples.json
 ragas_report.json
+results*.json
+anchor_*.json
+eval_anchor_*.json
+*_calibration.json
+ragas_results.json
+report_[AB].json
+*.bak.json
+*.json.tmp
+*.done.jsonl
+*.meta.json
 __pycache__/
 .ruff_cache/

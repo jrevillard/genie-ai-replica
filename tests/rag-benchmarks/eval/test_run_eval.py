@@ -579,12 +579,122 @@ def test_retry_succeeds_on_third_attempt(tmp_path, monkeypatch):
     assert "q1" in done_ids
 
 
+# --- N1 (re-review): derive missed/skipped from rows; dedup invariant ------
+
+def test_resume_retry_success_clears_degradation(tmp_path, monkeypatch):
+    """N1: out.json prefilled with an HTTP-error row for q1, no sidecar →
+    on resume the loop re-drives q1. Retry succeeds ⇒ ONE row, no error
+    field, rc 0 (was: duplicate row + stale skipped_entries forcing rc 3).
+
+    Bug: ``_load_done`` keeps error rows in ``rows`` for seeding, but
+    excludes them from ``done``. With an empty sidecar the loop re-drives
+    those ids. The retry's success row was APPENDED alongside the existing
+    error row (duplicate) and ``skipped_entries`` retained q1 (no decrement
+    path) → exit 3 despite a fully-scored report. Fix: dedup before append
+    + derive ``skipped_entries`` from rows.
+    """
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": "q1", "query": "Q1?", "expected_chunks": [
+            {"chunk_key": "k1", "content_hash": "h1"}
+        ]},
+    ])
+    out = tmp_path / "o.json"
+    # Prefilled: q1 with a 500 error row; sidecar empty (the bug condition).
+    error_row = {
+        "id": "q1", "query": "Q1?", "trace_found": False, "error": "HTTP 500",
+        "selected": [], "candidates": [],
+        "gold": [], "gold_hashes": [], "selected_hashes": [], "candidate_hashes": [],
+        "expected_chunks": [], "adaptive_breakdown": [],
+    }
+    out.write_text(_json.dumps({
+        "per_query": [error_row], "aggregate": {"n": 0},
+        "n_missed_traces": 1, "n_unmapped_chunk_keys": 0,
+        "n_http_errors": 1, "skipped_entries": ["q1"],
+    }))
+    # NO sidecar — done doesn't contain q1 → re-drive
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", lambda: {"k1": "h1"})
+    monkeypatch.setattr(run_eval, "drive_query", lambda e: (0.0, '{"text":"ok"}', 200))
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k1"], ["k1"], []))
+
+    rc = run_eval.main("anchor", str(gold), str(out))
+    rep = _json.loads(out.read_text())
+    # Exactly ONE row for q1 (dedup invariant; no duplicate)
+    q1_rows = [r for r in rep["per_query"] if r["id"] == "q1"]
+    assert len(q1_rows) == 1, f"expected 1 row for q1, got {len(q1_rows)}"
+    # The surviving row is the success row — NOT the prefilled error row
+    assert q1_rows[0].get("error") is None
+    assert q1_rows[0]["trace_found"] is True
+    assert q1_rows[0]["recall"] == 1.0
+    # Derived metrics: 0 missed (no trace_found=False rows remain), 1 scored
+    assert rep["n_missed_traces"] == 0
+    # http_errors stays as an event counter (informational). The 1 seeded
+    # from the prefilled row persists; the retry was a 200, not a new HTTP
+    # error, so no +1. Reporting the historical event count is intentional.
+    assert rep["n_http_errors"] == 1
+    assert rep["aggregate"]["n"] == 1
+    # No error rows → skipped_entries is empty → rc 0 (the bug was rc 3 here)
+    assert rep["skipped_entries"] == []
+    assert rc == 0
+
+
+def test_resume_retry_fails_again_single_row(tmp_path, monkeypatch):
+    """N1: out.json prefilled with an HTTP-error row for q1, no sidecar →
+    on resume the loop re-drives q1. Retry fails again ⇒ ONE row (replaces
+    the old error row via dedup), rc 3."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": "q1", "query": "Q1?"},
+    ])
+    out = tmp_path / "o.json"
+    out.write_text(_json.dumps({
+        "per_query": [{
+            "id": "q1", "query": "Q1?", "trace_found": False, "error": "HTTP 500",
+            "selected": [], "candidates": [],
+            "gold": [], "gold_hashes": [], "selected_hashes": [], "candidate_hashes": [],
+            "expected_chunks": [], "adaptive_breakdown": [],
+        }],
+        "aggregate": {"n": 0},
+        "n_missed_traces": 1, "n_unmapped_chunk_keys": 0,
+        "n_http_errors": 1, "skipped_entries": ["q1"],
+    }))
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+    # Retry fails again with the same status
+    monkeypatch.setattr(run_eval, "drive_query", lambda e: (0.0, "", 500))
+
+    rc = run_eval.main("anchor", str(gold), str(out))
+    rep = _json.loads(out.read_text())
+    # Exactly ONE error row for q1 (the old one is deduped before append)
+    err_rows = [r for r in rep["per_query"] if r["id"] == "q1"]
+    assert len(err_rows) == 1, f"expected 1 row for q1, got {len(err_rows)}"
+    assert err_rows[0]["trace_found"] is False
+    assert "500" in err_rows[0]["error"]
+    # Derived metrics: 1 missed (one trace_found=False row)
+    assert rep["n_missed_traces"] == 1
+    # http_errors is an event counter: 1 seeded from the prefilled row + 1
+    # new event from this run's retry-failure = 2. (The dedup invariant does
+    # NOT change the counter — the new HTTP event genuinely happened.)
+    assert rep["n_http_errors"] == 2
+    # skipped_entries derived from rows.error → ["q1"]
+    assert rep["skipped_entries"] == ["q1"]
+    assert rc == 3
+
+
 # --- !503 review wave (W3 resume accounting) -------------------------------
 
 def test_w3_resume_seeds_missed_and_http_errors(tmp_path, monkeypatch):
     """W3: resume from a prefilled out.json with trace-miss rows (no error) + all
     ids in sidecar → n_missed_traces reflects the prior count (was being reset
-    to 0), n_http_errors stays 0 (rows had no `error` key)."""
+    to 0), n_http_errors stays 0 (rows had no `error` key).
+
+    N1 refactor: ``missed`` is DERIVED from ``rows`` (no longer seeded); the
+    5 trace-miss rows produce missed=5, which exceeds the default max (2)
+    and exits 3 from the missed-skip check. ``skipped_entries`` is now
+    derived as sorted({r["id"] for r in rows if r.get("error")}) — trace-miss
+    rows have no ``error`` field, so skipped_entries is []. The exit fires
+    from the missed check (moved ahead of the agg["n"]==0 check in N1)."""
     import json as _json
     _clear_eval_env(monkeypatch)
     gold = _write_gold(tmp_path, [
@@ -609,11 +719,13 @@ def test_w3_resume_seeds_missed_and_http_errors(tmp_path, monkeypatch):
 
     rc = run_eval.main("anchor", str(gold), str(out))
     rep = _json.loads(out.read_text())
-    # W3: n_missed_traces seeded from the 5 prefilled trace-miss rows
+    # W3: n_missed_traces derived from rows (5 trace-miss rows → 5)
     assert rep["n_missed_traces"] == 5
     # No rows have an HTTP error → n_http_errors stays 0
     assert rep["n_http_errors"] == 0
-    # Trace-miss rows seed skipped_entries → EVAL_ALLOW_PARTIAL unset → rc 3
+    # N1: trace-miss rows have no `error` → skipped_entries is empty; rc 3
+    # fires from the missed-threshold check (5 > EVAL_MAX_MISSED_TRACES=2)
+    assert rep["skipped_entries"] == []
     assert rc == 3
 
 

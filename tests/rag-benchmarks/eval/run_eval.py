@@ -493,15 +493,51 @@ def _load_done(out_path: str, mode: str) -> tuple[set[str], list, list]:
     return done, rows, tuples
 
 
+def _dedup_row(rows: list, entry_id: str) -> None:
+    """Drop any existing row with this id to keep the per-id invariant.
+
+    ``rows`` is the single source of truth for the report; the dedup guarantee
+    (at most one row per id) makes ``missed`` and ``skipped_entries`` safely
+    derivable from ``rows`` at report-build time. Without it, a resumed entry
+    that retries and succeeds appends a SECOND row with the same id — the
+    dedup invariant was the source of N1 (resume+retry-success interaction).
+    """
+    rows[:] = [r for r in rows if r.get("id") != entry_id]
+
+
+def _derive_missed(mode: str, rows: list, tuples: list) -> int:
+    """Single source of truth for n_missed_traces across both modes.
+
+    Anchor: rows with ``trace_found is False`` (covers both trace-miss and
+    HTTP-error rows — both are terminal non-scorables).
+    Dump-tuples: tuples with empty ``contexts`` (the only signal that the
+    drive returned but the trace fetch found nothing). 4xx/5xx entries do
+    NOT append a tuple — they surface via ``skipped``/``n_http_errors``,
+    not here.
+    """
+    if mode == "anchor":
+        return sum(1 for r in rows if r.get("trace_found") is False)
+    return sum(1 for t in tuples if not t.get("contexts"))
+
+
+def _derive_skipped_ids(rows: list) -> list[str]:
+    """Anchor-only: ids of rows carrying an ``error`` field (HTTP errors + retry-exhausted)."""
+    return sorted({r["id"] for r in rows if r.get("error")})
+
+
 def _write_out_post(
     mode: str, out_path: str, tuples: list, rows: list,
-    missed: int, unmapped: int, http_errors: int,
-    skipped_entries: list,
+    unmapped: int, http_errors: int,
 ) -> dict | None:
     """Build the current payload from accumulated state and atomic-write it.
     Called after EVERY entry so a mid-run kill never loses progress past the
     last completed entry. For anchor this means recomputing the aggregate; for
     dump-tuples this is just the list.
+
+    ``missed`` and ``skipped_entries`` are DERIVED from rows/tuples at write
+    time — no mutable threading, single source of truth. ``unmapped`` and
+    ``http_errors`` remain event counters (informational; the rc-3 gate runs
+    on the derived values).
 
     Returns the anchor report dict so the caller can print/inspect without
     rebuilding it (W11 — the old final block recomputed the same aggregate
@@ -522,10 +558,10 @@ def _write_out_post(
     report = {
         "per_query": rows,
         "aggregate": agg,
-        "n_missed_traces": missed,
+        "n_missed_traces": _derive_missed(mode, rows, tuples),
         "n_unmapped_chunk_keys": unmapped,
         "n_http_errors": http_errors,
-        "skipped_entries": skipped_entries,
+        "skipped_entries": _derive_skipped_ids(rows),
     }
     _write_out(out_path, report, mode)
     return report
@@ -569,25 +605,21 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
         return 2
 
     backoff = float(os.getenv("EVAL_RETRY_BACKOFF", "5"))
-    # W3: seed per-row counters from the prefilled report so a resume reflects
-    # HTTP-error / trace-miss counts from the prior run instead of restarting
-    # at 0 (the sidecar tells us which ids are done — not what classification
-    # they got). unmapped stays 0 (recomputed only for new rows; acceptable
-    # window since the metric gates the exit, not the count).
+    # W3: seed http_errors from the prefilled report so a resume reflects
+    # HTTP-error counts from the prior run instead of restarting at 0 (the
+    # sidecar tells us which ids are done — not what classification they
+    # got). ``missed`` and ``skipped_entries`` are DERIVED from ``rows`` at
+    # report time (N1 fix: dedup invariant + derivation; rows is the single
+    # source of truth). ``unmapped`` stays 0 (recomputed only for new rows;
+    # acceptable window since the metric gates the exit, not the count).
     if mode == "anchor":
-        missed = sum(1 for r in rows if r.get("trace_found") is False)
         http_errors = sum(
             1 for r in rows
             if isinstance(r.get("error"), str) and r["error"].startswith("HTTP")
         )
-        skipped_entries = [
-            r["id"] for r in rows
-            if r.get("trace_found") is False and r.get("id")
-        ]
-        unmapped = 0
     else:
-        missed, unmapped, http_errors = 0, 0, 0
-        skipped_entries = []
+        http_errors = 0
+    unmapped = 0
 
     # W13: build the hash maps only when there is at least one entry remaining
     # to drive. On a fully-covered no-op resume both dicts stay empty and we
@@ -658,7 +690,6 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
                     # OSError, TimeoutExpired).
                     if status < 200 or status >= 300:
                         http_errors += 1
-                        skipped_entries.append(eid)
                         if status in (401, 403):
                             print(
                                 f"[{eid}] AUTH-FAILURE (HTTP {status}) — bearer expired or "
@@ -671,16 +702,19 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
                                 file=sys.stderr,
                             )
                         if mode == "anchor":
+                            # N1: drop any prior row for this id before appending
+                            # the new error row — preserves the per-id invariant
+                            # that makes ``missed``/``skipped_entries`` safely
+                            # derivable from ``rows`` at write time.
+                            _dedup_row(rows, eid)
                             rows.append({
                                 "id": eid, "query": entry["query"],
                                 "trace_found": False, "error": f"HTTP {status}",
                             })
-                            missed += 1
                         # Persist incrementally so a mid-run kill doesn't lose
                         # this entry's classification.
                         _write_out_post(mode, out_path, tuples, rows,
-                                         missed, unmapped, http_errors,
-                                         skipped_entries)
+                                         unmapped, http_errors)
                         entry_succeeded = True
                         break
 
@@ -692,7 +726,6 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
                             1 for k in sel_keys + cand_keys if k not in key_to_hash
                         )
                     if not trace_found:
-                        missed += 1
                         print(
                             f"[{eid}] WARNING: no reranker_selection span — trace missed "
                             "(not scored). Check observability / bump TRACE_FETCH_TIMEOUT.",
@@ -706,6 +739,12 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
                     if mode == "dump-tuples":
                         tuples.append(make_tuple(entry, sel_keys, hash_to_text, answer))
                     else:
+                        # N1: drop any prior row for this id before appending
+                        # the new scored row. On resume, a prefilled error row
+                        # would otherwise be paired with the success row — a
+                        # duplicate in per_query and a stale skipped_entries
+                        # entry that forces rc 3 despite a fully-scored report.
+                        _dedup_row(rows, eid)
                         rows.append(
                             score_anchor(
                                 entry, cand_keys, sel_keys, trace_found,
@@ -720,8 +759,7 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
                     # Out-derived done covers the reverse window so it is safe.
                     done.add(eid)
                     _write_out_post(mode, out_path, tuples, rows,
-                                     missed, unmapped, http_errors,
-                                     skipped_entries)
+                                     unmapped, http_errors)
                     sidecar_fh.write(f"{eid}\n")
                     sidecar_fh.flush()
                     entry_succeeded = True
@@ -734,32 +772,39 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
                     continue
 
             if not entry_succeeded:
-                # Retry budget exhausted: classify as missed + error row.
-                skipped_entries.append(eid)
+                # Retry budget exhausted: classify as error.
                 if mode == "anchor":
+                    # N1: dedup before append — see http_errors path comment.
+                    _dedup_row(rows, eid)
                     rows.append({
                         "id": eid, "query": entry["query"],
                         "trace_found": False,
                         "error": str(last_error)[:200] if last_error else "unknown",
                     })
-                    missed += 1
                 # NOTE: do NOT append the failed id to .done.jsonl — a later
                 # resume must be able to retry it.
                 _write_out_post(mode, out_path, tuples, rows,
-                                 missed, unmapped, http_errors,
-                                 skipped_entries)
+                                 unmapped, http_errors)
                 print(
                     f"[{eid}] ERROR (3 attempts): {last_error}",
                     file=sys.stderr,
                 )
 
     if mode == "dump-tuples":
+        # N1: ``missed`` derived from tuples (single row per id, no mutable
+        # threading). ``skipped`` derived from entries-vs-tuples id diff —
+        # any entry that did not produce a tuple is "skipped" (covers both
+        # HTTP errors and retry-budget exhaustion).
+        missed = _derive_missed(mode, rows, tuples)
+        entry_ids = {e["id"] for e in entries}
+        tuple_ids = {t["id"] for t in tuples if t.get("id")}
+        skipped_meta = sorted(entry_ids - tuple_ids)
         sidecar = {
             "n_entries": len(entries),
             "n_tuples": len(tuples),
             "n_http_errors": http_errors,
             "n_missed_traces": missed,
-            "skipped": skipped_entries,
+            "skipped": skipped_meta,
         }
         with open(f"{out_path}.meta.json", "w") as fh:
             json.dump(sidecar, fh, ensure_ascii=False, indent=2)
@@ -789,9 +834,14 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
     # the build twice on the final iteration).
     report = _write_out_post(
         mode, out_path, tuples, rows,
-        missed, unmapped, http_errors, skipped_entries,
+        unmapped, http_errors,
     )
     agg = report["aggregate"]
+    # N1: missed and skipped_entries are derived in _write_out_post from
+    # ``rows`` (single source of truth). Read them off the report for the
+    # threshold checks; the dedup invariant guarantees they're exact.
+    missed = report["n_missed_traces"]
+    skipped_entries = report["skipped_entries"]
     print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
     set_based_keys = [
         "recall", "precision", "complete_recall", "noise",
@@ -819,6 +869,12 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
         )
     print(f"\nReport → {out_path}", file=sys.stderr)
     max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
+    # N1: order matters — skipped_entries (HTTP errors) first, then missed
+    # (trace misses), then zero-scored guard, then unmapped. Putting the
+    # missed check BEFORE the agg["n"]==0 check lets all-missed resumes exit
+    # 3 with the missed message instead of the less-informative "zero scored
+    # rows" rc 4. (Pre-refactor, skipped_entries was seeded from trace-miss
+    # rows too — derivation narrows that semantic to error rows only.)
     if skipped_entries and not os.getenv("EVAL_ALLOW_PARTIAL"):
         print(
             f"EXIT 3: {len(skipped_entries)} entries skipped (HTTP errors); "
@@ -826,14 +882,14 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
             file=sys.stderr,
         )
         return 3
-    if agg["n"] == 0:
-        return 4
     if missed > max_missed:
         print(
             f"EXIT 3: {missed} missed traces > EVAL_MAX_MISSED_TRACES={max_missed}",
             file=sys.stderr,
         )
         return 3
+    if agg["n"] == 0:
+        return 4
     if unmapped and not os.getenv("EVAL_ALLOW_UNMAPPED"):
         print(
             f"EXIT 3: {unmapped} unmapped chunk keys (wrong GRAPH_SOURCE?)",

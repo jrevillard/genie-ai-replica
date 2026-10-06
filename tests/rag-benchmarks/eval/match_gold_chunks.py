@@ -34,20 +34,19 @@ with ``xlsx_to_gold.py``.
 from __future__ import annotations
 
 import argparse
-import base64
 import datetime as dt
 import json
 import os
 import sys
-import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any
 
 # Reuse the exact same normaliser the eval uses — drift here silently breaks
 # the gold set.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from arango import source_chunks
 from chunk_identity import content_hash, normalize
+from harness import write_json
 
 
 def parse_args() -> argparse.Namespace:
@@ -112,57 +111,35 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def arango_query(
-    url: str, db: str, user: str, password: str, aql: str
-) -> list[dict[str, Any]]:
-    """Run a cursor query and return all rows. Uses Basic auth; ignores TLS (matches .102 self-signed)."""
-    endpoint = f"{url.rstrip('/')}/_db/{urllib.parse.quote(db)}/_api/cursor"
-    body = json.dumps({"query": aql, "batchSize": 1000}).encode()
-    auth = base64.b64encode(f"{user}:{password}".encode()).decode()
-    req = urllib.request.Request(
-        endpoint,
-        data=body,
-        headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        result = json.load(resp)
-    if result.get("error"):
-        raise RuntimeError(f"AQL error: {result['error']}")
-    return result.get("result", [])
-
-
 def load_chunks(args: argparse.Namespace) -> list[dict[str, Any]]:
-    """Dump (key, text) for every document in the source collection."""
-    aql = (
-        f"FOR doc IN {args.graph_source} "
-        f"RETURN {{ key: doc._key, text: doc.{args.chunk_text_field} }}"
-    )
-    return arango_query(
-        args.arango_url, args.arango_db, args.arango_user, args.arango_password, aql
+    """Dump (key, text) for every document in the source collection.
+
+    Routes through the shared ``source_chunks`` helper in ``arango.py`` — the
+    single AQL implementation lives there (gate: exactly one ``_api/cursor``
+    in the tree). The CLI ``--arango-*`` flags are forwarded as the
+    ``conn`` override so an operator can still target a non-default DB or
+    a self-signed endpoint without going through the env defaults.
+    """
+    return source_chunks(
+        args.graph_source,
+        args.chunk_text_field,
+        conn={
+            "url": args.arango_url,
+            "db": args.arango_db,
+            "user": args.arango_user,
+            "password": args.arango_password,
+        },
     )
 
 
 def atomic_write_json(out_path: Path, payload: Any) -> None:
-    """Write ``payload`` to ``out_path`` atomically.
-
-    Writes to ``<out_path>.tmp`` first and then ``os.replace`` onto the final
-    path so a crash or a serialization error never leaves a half-written gold
-    dataset on disk. The temp file is removed on any failure.
+    """Thin wrapper around ``harness.write_json`` retained for the test patch
+    target (``match_gold_chunks`` tests exercise the cleanup branch by
+    patching ``os.replace``; the real atomic-write + BaseException cleanup
+    now lives in ``harness.write_json``). ``Path`` is accepted and stringified
+    for the harness call, which uses string paths throughout.
     """
-    tmp = out_path.with_suffix(out_path.suffix + ".tmp")
-    try:
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, indent=2, ensure_ascii=False)
-        os.replace(tmp, out_path)
-    except BaseException:
-        # Cleanup the temp file (best-effort — itself may be missing on
-        # some failure modes); re-raise so the caller sees the real error.
-        try:
-            if tmp.exists():
-                tmp.unlink()
-        finally:
-            raise
+    write_json(str(out_path), payload)
 
 
 def write_with_backup(out_path: Path, payload: Any) -> None:

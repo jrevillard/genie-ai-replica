@@ -60,6 +60,7 @@ import argparse
 import itertools
 import json
 import random
+import statistics
 import sys
 from pathlib import Path
 
@@ -114,10 +115,13 @@ CONFUSION_FORMULAS = {
 }
 
 
-def replay_query(breakdown, factor, conf_fn, threshold):
-    """Recompute selected indices for one query under a given param combo.
+def _selected_positions(breakdown, factor, threshold, confusion_fn):
+    """Adaptive value-gate → set of selected rank positions.
 
-    Returns the set of selected candidate indices (positions in the breakdown).
+    The COST side depends on `factor` and the breakdown's per-candidate
+    ``score`` / ``token_count`` (already fixed at eval time). The UTILITY
+    side is also fixed (carried in each breakdown entry). Only ``factor``
+    and ``threshold`` change at sweep time. Empty breakdown → empty set.
     """
     scores = [c["score"] for c in breakdown]
     if not scores:
@@ -128,11 +132,49 @@ def replay_query(breakdown, factor, conf_fn, threshold):
     selected = set()
     for i, c in enumerate(breakdown):
         token_cost = factor * c["token_count"]
-        confusion = conf_fn(c["score"], mx, avg, i, n)
+        confusion = confusion_fn(c["score"], mx, avg, i, n)
         value = c["utility"] - (token_cost + confusion)
         if value > threshold:
             selected.add(i)
     return selected
+
+
+def _selected_hashes(breakdown, factor, threshold, confusion_fn, cands):
+    """Run the value-gate, then map selected rank positions to candidate hashes.
+
+    Returns ``(positions, sel_hashes, ok)``. ``ok`` is False when ANY
+    selected rank position fails to map (rank_pos >= len(breakdown), or
+    ``original_index`` missing/out-of-range). Callers decide the
+    unmappable-row policy: ``score_combo`` SKIPS the row from the recall
+    mean, ``_replay_recall_one`` returns 0.0 (worst-case). Both behaviors
+    are correct under their respective denominators — see
+    ``--check-baseline`` (skip = surface mapping bugs) vs ``--bootstrap``
+    (0.0 = conservative bound).
+
+    ``positions`` is returned alongside ``sel_hashes`` so callers can
+    compute their per-row counters (n_selected_total, empty_queries)
+    without re-running the value-gate.
+    """
+    positions = _selected_positions(breakdown, factor, threshold, confusion_fn)
+    sel_hashes = []
+    for rank_pos in sorted(positions):
+        if rank_pos >= len(breakdown):
+            return positions, [], False
+        oi = breakdown[rank_pos].get("original_index")
+        if oi is None or oi >= len(cands):
+            return positions, [], False
+        sel_hashes.append(cands[oi])
+    return positions, sel_hashes, True
+
+
+def replay_query(breakdown, factor, conf_fn, threshold):
+    """Recompute selected indices for one query under a given param combo.
+
+    Returns the set of selected candidate indices (positions in the breakdown).
+    Thin wrapper over ``_selected_positions`` — preserved as a public API
+    for callers that want positions without the candidate-hash mapping.
+    """
+    return _selected_positions(breakdown, factor, threshold, conf_fn)
 
 
 def score_combo(report, factor, conf_fn, threshold):
@@ -183,10 +225,6 @@ def score_combo(report, factor, conf_fn, threshold):
             # retriever empty (auth gate, score threshold), trace miss.
             n_skipped_no_breakdown += 1
             continue
-        replay_sel_pos = replay_query(bd, factor, conf_fn, threshold)
-        n_selected_total += len(replay_sel_pos)
-        if not replay_sel_pos:
-            n_empty += 1
         # Map replay-selected RANK positions -> original retrieved_docs index ->
         # candidate content hash. The breakdown carries `original_index` per
         # record (annotated by the reranker from decoded_response[i]["index"]).
@@ -195,17 +233,10 @@ def score_combo(report, factor, conf_fn, threshold):
         # the replay matches live aggregate.recall (run_eval.py scores in
         # content-hash space; pre-!495 reports fall back to raw keys).
         gold, cands = _id_arrays(row)
-        sel_hashes = []
-        ok = True
-        for rank_pos in sorted(replay_sel_pos):
-            if rank_pos >= len(bd):
-                ok = False
-                break
-            oi = bd[rank_pos].get("original_index")
-            if oi is None or oi >= len(cands):
-                ok = False
-                break
-            sel_hashes.append(cands[oi])
+        sel_pos, sel_hashes, ok = _selected_hashes(bd, factor, threshold, conf_fn, cands)
+        n_selected_total += len(sel_pos)
+        if not sel_pos:
+            n_empty += 1
         if not ok:
             n_unmappable += 1
             continue
@@ -283,27 +314,14 @@ def _baseline_replay_recall(report, factor, conf_name, threshold) -> float | Non
 # ---- Bootstrap (P2 fix) ---------------------------------------------------
 def _replay_recall_one(bd, gold, cands, factor, conf_fn, threshold):
     """Per-query replay for a SINGLE (factor, conf_fn, threshold) cell.
-    Returns recall (float) or 0.0 if the breakdown is unmappable.
+
+    Returns recall (float) or 0.0 if the breakdown is unmappable
+    (worst-case for the bootstrap CI; preserves the historical "treat
+    unmappable as a recall failure" semantics).
     """
-    scores = [c["score"] for c in bd]
-    if not scores:
+    _, sel_hashes, ok = _selected_hashes(bd, factor, threshold, conf_fn, cands)
+    if not ok:
         return 0.0
-    mx, avg, n = max(scores), sum(scores) / len(scores), len(scores)
-    sel = set()
-    for i, c in enumerate(bd):
-        tc = factor * c["token_count"]
-        cf = conf_fn(c["score"], mx, avg, i, n)
-        v = c["utility"] - (tc + cf)
-        if v > threshold:
-            sel.add(i)
-    sel_hashes = []
-    for rank_pos in sorted(sel):
-        if rank_pos >= len(bd):
-            return 0.0
-        oi = bd[rank_pos].get("original_index")
-        if oi is None or oi >= len(cands):
-            return 0.0
-        sel_hashes.append(cands[oi])
     return metrics.recall(gold, sel_hashes)
 
 
@@ -448,12 +466,6 @@ def bootstrap_pair_ci(
     lo = diffs[int(0.025 * n_d)]
     hi = diffs[int(0.975 * n_d)]
 
-    # Median for even n: average the two middles (PEP-450 convention).
-    def _median(arr):
-        s = sorted(arr)
-        m = len(s) // 2
-        return (s[m - 1] + s[m]) / 2 if len(s) % 2 == 0 else s[m]
-
     return {
         "status": "ok",
         "cell_a": {
@@ -466,8 +478,8 @@ def bootstrap_pair_ci(
             "confusion": conf_name_b,
             "threshold": threshold_b,
         },
-        "median_a": _median(a_arr),
-        "median_b": _median(b_arr),
+        "median_a": statistics.median(a_arr),
+        "median_b": statistics.median(b_arr),
         "paired_diff_obs": paired_diff_obs,
         "paired_diff_mean_boot": sum(diffs) / n_d,
         "naive_ci_low": lo,
@@ -489,14 +501,15 @@ def bootstrap_pair_ci(
 
 
 # ---- Staleness check (P3a fix) ---------------------------------------------
-def check_chunk_size_sanity(report, expected_chars_per_token=None, tolerance=0.30):
+def check_chunk_size_sanity(report, expected_chars_per_token=None):
     """Cross-check that the breakdown's median token_count is consistent with
     the deployed chunk_size.
 
     Implied chunk_size = median(token_count) × chars_per_token. The operator
     passes the expected_chars_per_token (English ≈ 4.0; languages with denser
-    orthography ≈ 3.2-3.5). If implied_chunk_size deviates by more than
-    `tolerance` from the operator-declared chunk_size, warn.
+    orthography ≈ 3.2-3.5). Tolerance is set by the caller
+    (``check_chunk_size_vs_expected``) — this function only computes the
+    implied size and returns it for the caller to compare.
 
     Returns dict with implied_chunk_size + status (ok / warn).
     """
@@ -519,7 +532,7 @@ def check_chunk_size_sanity(report, expected_chars_per_token=None, tolerance=0.3
         "interpretation": (
             f"Implied chunk_size = {implied:.0f} chars (median {median_tokens} tokens × "
             f"{expected_chars_per_token} chars/tok). Pass your live chunk_size "
-            "as --check-chunk-size N to compare. Hard fail if >20% off."
+            "as --check-chunk-size N to compare. Hard fail if >30% off."
         ),
     }
 

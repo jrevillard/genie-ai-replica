@@ -15,8 +15,11 @@ runner no longer exists. Leaving ROPC enabled in production is a security
 vulnerability. See `tests/rag-benchmarks/eval/CLAUDE.md` for the full story
 (auth, score threshold, diagnostic mode).
 
-Both modes drive gold queries through chatqna via docker exec (internal service,
-NO OIDC — faithful label-filtered retrieval) and pull the selection from the
+Both modes drive gold queries through chatqna via docker exec (OIDC via
+the wrapper — this driver refreshes its own realm bearer from EVAL_KC_*
+when set, or honors a pre-minted E2E_BEARER_TOKEN for service-account
+flows; the docker exec + chatqna label-filtered retrieval path is
+otherwise faithful to production) and pull the selection from the
 chatqna.reranker_selection span in VictoriaTraces.
 
 The span emits ``chunk_key`` (the ArangoDB ``_key``), recovered by the retriever
@@ -53,8 +56,9 @@ import time
 import urllib.error
 
 import metrics
-from arango import cursor
+from arango import cursor, source_chunks
 from chunk_identity import content_hash
+from harness import docker_exec as _docker_exec, write_json
 from keycloak import KeycloakError, fetch_realm_token
 
 # --- stack config (env-overridable) -----------------------------------------
@@ -81,26 +85,6 @@ TRACE_FETCH_TIMEOUT = float(os.getenv("TRACE_FETCH_TIMEOUT", "120"))
 _TOKEN_TTL = 240.0
 _TOKEN_REFRESH_MARGIN = 60.0
 _token_ts: float = 0.0  # set to time.time() in main() when refresh is configured
-
-
-def _docker_exec(container: str, cmd: str, timeout: float = 120, pass_env: tuple = ()) -> str:
-    # G1 fix: pass_env forwards secrets to the container via `docker exec -e VAR`
-    # (valueless flag = inherit from the calling process env), keeping them
-    # off argv — tokens never appear in `ps`/procfs. Inserted BEFORE the
-    # container name so docker parses them as exec flags, not positional args.
-    args = ["docker", "exec"]
-    for var in pass_env:
-        args.extend(["-e", var])
-    args.extend([container, "sh", "-c", cmd])
-    result = subprocess.run(
-        args,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"docker exec failed: {result.stderr.strip()[:300]}")
-    return result.stdout
 
 
 def _refresh_configured() -> bool:
@@ -306,10 +290,7 @@ def build_hash_to_text() -> dict[str, str]:
     semantic-path context lookup must key on ``_key``. The older content_hash
     keying produced empty contexts once the span switched to ``_key``.
     """
-    rows = cursor(
-        f"FOR doc IN {GRAPH_SOURCE} RETURN {{key: doc._key, text: doc.{TEXT_FIELD}}}"
-    )
-    return {r["key"]: r["text"] for r in rows if r.get("text")}
+    return {r["key"]: r["text"] for r in source_chunks(GRAPH_SOURCE, TEXT_FIELD) if r.get("text")}
 
 
 def build_key_to_content_hash() -> dict[str, str]:
@@ -321,10 +302,11 @@ def build_key_to_content_hash() -> dict[str, str]:
     ``content_hash`` is computed Python-side (sha256 of normalized text) — it is
     NOT stored in ArangoDB — so fetch the text and hash it here.
     """
-    rows = cursor(
-        f"FOR doc IN {GRAPH_SOURCE} RETURN {{key: doc._key, text: doc.{TEXT_FIELD}}}"
-    )
-    return {r["key"]: content_hash(r["text"]) for r in rows if r.get("text")}
+    return {
+        r["key"]: content_hash(r["text"])
+        for r in source_chunks(GRAPH_SOURCE, TEXT_FIELD)
+        if r.get("text")
+    }
 
 
 def score_anchor(
@@ -432,18 +414,13 @@ def make_tuple(entry, sel_hashes, hash_to_text, answer) -> dict:
 
 
 def _write_out(out_path: str, payload, mode: str) -> None:
-    """Atomic write: serialize to ``<out_path>.tmp`` then ``os.replace`` so a
-    crash mid-write can never leave a half-written ``out_path``. Used for both
-    the anchor report dict and the dump-tuples list (the same file-move
-    guarantee holds for either).
+    """Atomic write through ``harness.write_json`` (tmp+os.replace + BaseException
+    cleanup). Used for both the anchor report dict and the dump-tuples list.
+    ``mode`` is retained for call-site symmetry with ``_write_out_post`` even
+    though the underlying write is mode-agnostic.
     """
-    tmp = f"{out_path}.tmp"
-    with open(tmp, "w") as fh:
-        if mode == "dump-tuples":
-            json.dump(payload, fh, ensure_ascii=False, indent=2)
-        else:  # anchor
-            json.dump(payload, fh, indent=2)
-    os.replace(tmp, out_path)
+    del mode  # see docstring; write_json handles indent + ensure_ascii uniformly
+    write_json(out_path, payload, ensure_ascii=False)
 
 
 def _load_done(out_path: str, mode: str) -> tuple[set[str], list, list]:

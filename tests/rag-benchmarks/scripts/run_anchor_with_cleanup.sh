@@ -6,11 +6,13 @@
 # directAccessGrantsEnabled, (3) runs the driver, (4) PROVES the revert.
 # run_eval_chunked.py is RETIRED — do not recreate it.
 #
-# Required env (or present in EVAL_DEPLOY_ENV, default /opt/<stack>/.env):
+# Required env (or present in EVAL_DEPLOY_ENV, e.g. /opt/<stack>/.env):
 #   EVAL_KC_URL, KEYCLOAK_ADMIN_PASSWORD, GENIE_ADMIN_PASSWORD,
 #   ARANGO_DB, ARANGO_PASSWORD
 # Optional: EVAL_KC_REALM (genie), EVAL_KC_CLIENT_ID (genie-app),
 #   EVAL_MODE (anchor|dump-tuples), EVAL_CHUNK_* gone — see run_eval.py knobs.
+# Note: EVAL_DEPLOY_ENV has NO default — pass it explicitly or export the
+#   required vars above. See the EVAL_DEPLOY_ENV row in eval/RUNBOOK.md.
 set -euo pipefail
 
 GOLD="$1"; OUT="$2"
@@ -25,13 +27,16 @@ fi
     exit 2
 }
 
-ENV_FILE="${EVAL_DEPLOY_ENV:-/opt/genieai-el-salvador/.env}"
-env_value() { grep -m1 "^$1=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-; }
+ENV_FILE="${EVAL_DEPLOY_ENV:-}"
+env_value() {
+    [ -n "$ENV_FILE" ] || return 1
+    grep -m1 "^$1=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-
+}
 : "${EVAL_KC_URL:=$(env_value KEYCLOAK_URL)}"; : "${EVAL_KC_URL:?EVAL_KC_URL required}"
 : "${KEYCLOAK_ADMIN_PASSWORD:=$(env_value KEYCLOAK_ADMIN_PASSWORD)}"
 : "${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD required}"
 : "${GENIE_ADMIN_PASSWORD:=$(env_value GENIE_ADMIN_PASSWORD)}"
-: "${GENIE_ADMIN_PASSWORD:?GENIE_ADMIN_PASSWORD required}"
+: "${GENIE_ADMIN_PASSWORD:?GENIE_ADMIN_PASSWORD required (export it, or set EVAL_DEPLOY_ENV=/opt/<stack>/.env per ansible env.j2 layout)}"
 : "${ARANGO_DB:=$(env_value ARANGO_DB)}"; : "${ARANGO_DB:?ARANGO_DB required}"
 : "${ARANGO_PASSWORD:=$(env_value ARANGO_PASSWORD)}"
 : "${ARANGO_PASSWORD:?ARANGO_PASSWORD required}"
@@ -49,11 +54,11 @@ export CHATQNA_CONTAINER="${CHATQNA_CONTAINER:-$(docker ps --format '{{.Names}}'
 export CHATQNA_SERVICE_NAME="${CHATQNA_SERVICE_NAME:-genieai-chatqna}"
 # G1 fix: resolve VICTORIATRACES_SVC from `docker service ls` (the real swarm
 # service name carries the stack prefix + underscore, e.g.
-# `genieai-el-salvador_victoriatraces` — a sed rewrite of CHATQNA_SERVICE_NAME
-# silently produced `genieai-victoriatraces` with no prefix, and the in-container
-# curl resolved to a non-existent DNS name with RC=6 (no error output under -s),
-# so every fetch_selection errored). Prefer the env override (operators can
-# pin), then ask docker — fail loud if neither resolves, never guess.
+# `<stack-prefix>_victoriatraces` — a sed rewrite of CHATQNA_SERVICE_NAME
+# silently produced a no-prefix name, and the in-container curl resolved to
+# a non-existent DNS name with RC=6 (no error output under -s), so every
+# fetch_selection errored). Prefer the env override (operators can pin),
+# then ask docker — fail loud if neither resolves, never guess.
 export VICTORIATRACES_SVC="${VICTORIATRACES_SVC:-$(docker service ls --format '{{.Name}}' 2>/dev/null | grep victoriatraces | head -1)}"
 : "${VICTORIATRACES_SVC:?could not resolve a victoriatraces service (docker service ls) — set VICTORIATRACES_SVC explicitly}"
 export GRAPH_SOURCE="${GRAPH_SOURCE:-GRAPH_TEST_SOURCE}"

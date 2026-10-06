@@ -95,3 +95,20 @@ def cursor(
                 urllib.request.urlopen(del_req, timeout=5).read()
             except Exception:  # noqa: BLE001
                 pass
+
+
+def source_chunks(
+    graph_source: str, text_field: str, conn: dict | None = None
+) -> list[dict]:
+    """All {key, text} rows from the SOURCE collection via the paginated cursor.
+
+    ``conn`` overrides the default connection (keys: ``url``, ``db``, ``user``,
+    ``password``); absent keys fall back to the module-level env defaults.
+    Returns ``[{"key": "<_key>", "text": "<chunk text>"}, ...]``. The pair
+    of dump-tuples / anchor maps in ``run_eval`` are derived from this single
+    AQL — text is fetched ONCE and projected per-mode.
+    """
+    return cursor(
+        f"FOR doc IN {graph_source} RETURN {{key: doc._key, text: doc.{text_field}}}",
+        **(conn or {}),
+    )

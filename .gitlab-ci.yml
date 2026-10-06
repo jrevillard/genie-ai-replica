@@ -2493,7 +2493,7 @@ test:rag-benchmarks:
         - .cache/pip
   script:
     - cd tests/rag-benchmarks/eval
-    - pytest test_chunk_identity.py test_metrics.py test_match_gold_chunks.py test_arango.py test_keycloak.py test_run_eval.py -q --junitxml=../../../reports/rag-benchmarks-report.xml
+    - pytest test_chunk_identity.py test_metrics.py test_match_gold_chunks.py test_arango.py test_keycloak.py test_harness.py test_calibrate.py test_run_eval.py -q --junitxml=../../../reports/rag-benchmarks-report.xml
     - cd ..
     - pytest test_capture_baseline.py -q --junitxml=../../reports/rag-benchmarks-capture-report.xml
   artifacts:

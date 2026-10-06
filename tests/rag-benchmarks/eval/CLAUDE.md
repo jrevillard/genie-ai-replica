@@ -8,11 +8,13 @@ This directory is the **single source of truth** for the GENIE.AI retrieval/sema
 # ONE-SHOT version: ENABLE ROPC → get token → run → ALWAYS disable ROPC
 # Never call run_eval.py directly against a production-deployed chatqna:
 # it will 401 (see "Auth requirement" below).
+#
+# Recommended: let the wrapper resolve non-secret vars from the deployment
+# .env via EVAL_DEPLOY_ENV. Pass only the URL + admin password explicitly.
 
+EVAL_DEPLOY_ENV=/opt/<stack>/.env \
 EVAL_KC_URL=https://kc.example.com/auth \
 KEYCLOAK_ADMIN_PASSWORD=... \
-ARANGO_DB=el-salvador \
-ARANGO_PASSWORD=... \
   bash /tmp/rag-eval/scripts/run_anchor_with_cleanup.sh \
     /tmp/rag-eval/gold_dataset.matched.v4.json \
     /tmp/rag-eval/eval_anchor_<TAG>.json
@@ -42,16 +44,26 @@ and disables ROPC again on exit (signal-safe `trap` on EXIT/INT/TERM).
 **Forgetting to revert it is a security vulnerability** — ROPC must NEVER
 stay enabled in production.
 
+**Exit codes** (full map in `eval/RUNBOOK.md`):
+- `run_eval.py` — `0` clean, `2` usage/gold-mismatch, `3` degraded, `4` zero
+  scored rows.
+- wrapper adds `8` (ROPC enable failed — check Keycloak admin creds) and `9`
+  (ROPC revert failed after 3 retries — manual revert curl above is
+  mandatory; production is left exposed).
+
 For zero-touch auth (when ROPC is not desired), use a dedicated service
 account via `client_credentials` grant and inject it into `run_eval.py` via
-the `BEARER_TOKEN` env var. Not implemented in the wrapper yet.
+the `E2E_BEARER_TOKEN` env var. Not implemented in the wrapper yet.
 
 ## Score threshold — silent retrieval drop
 
 The retriever service drops candidates with cosine similarity below
 `RETRIEVER_ARANGO_SCORE_THRESHOLD` (default `0.2`, see
-`docker-compose.yaml:1321`). With BGE-large queries against the CENTA corpus,
-realistic values are 0.4–0.7, so the default rarely filters gold chunks.
+`docker-compose.yaml:1321`). Realistic per-corpus ranges depend on the
+embedding model and corpus — calibrate expectations against the live
+deployment, then tune. The 0.2 default rarely filters gold chunks for
+typical BGE-large embeddings but is a common silent-drop trap for lower-
+dimensional or out-of-distribution corpora.
 
 **Symptom of an over-aggressive threshold**:
 
@@ -61,7 +73,7 @@ chatqna log:    "Grounding decision: is_grounded=False (reranker_present=False, 
 ```
 
 Fix: `docker service update --env-add RETRIEVER_ARANGO_SCORE_THRESHOLD=0.0
-genieai-el-salvador_retriever-arango-service` for the duration of the eval,
+<stack>_retriever-arango-service` for the duration of the eval,
 then revert. The wrapper does NOT manage this env var — do it manually and
 remember to revert (the `TEI docker service deploy` etc. use the same
 service, so removing the override restores default 0.2).
@@ -81,7 +93,7 @@ precision), not catastrophic but visible in the recall/precision split.
 Distinguish by inspecting chatqna logs first:
 
 ```bash
-ssh govstack@<ip> 'docker service logs genieai-el-salvador_chatqna-xeon-backend-server --since 5m' \
+ssh <user>@<host> 'docker service logs <stack>_chatqna-xeon-backend-server --since 5m' \
   | grep -E 'Grounding|POST /v1/chatqna'
 ```
 
@@ -89,12 +101,14 @@ ssh govstack@<ip> 'docker service logs genieai-el-salvador_chatqna-xeon-backend-
 
 | File | Role |
 |---|---|
-| `run_eval.py` | Eval driver. NO auth handling — always invoke via the wrapper script in prod. |
+| `run_eval.py` | Eval driver. OIDC handled by the wrapper (ROPC enable/revert) or by `E2E_BEARER_TOKEN`/`EVAL_KC_*` env vars; this script refreshes its own realm bearer in-run. |
 | `calibrate.py` | Offline adaptive-reranker parameter sweep. Pure replay, no chatqna calls. |
 | `run_ragas_eval.py` | LLM-judged semantic scoring. Reads `eval_tuples.json` (Phase 3 output). |
 | `metrics.py` | `aggregate()` (per-row → mean) + `recall_at_k` / `ndcg_at_k` (rank-aware). |
 | `chunk_identity.py` | `content_hash` (sha256[:16] of normalized text). Identity is content-based, survives re-ingest. |
 | `arango.py` | ArangoDB cursor helper. |
+| `keycloak.py` | Keycloak admin + realm token helpers (used by run_eval.py and tests). |
+| `harness.py` | `docker exec` + `curl` helpers used by run_eval.py to drive chatqna in-container. |
 | `dump_chunks.py` | Dump chunk keys + labels for gold annotation. |
 | `xlsx_to_gold.py` | Phase 1: xlsx → gold_dataset.json skeleton. |
 | `match_gold_chunks.py` | Phase 2: preview → content_hash via ArangoDB substring. |

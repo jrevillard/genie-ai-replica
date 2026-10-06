@@ -28,39 +28,51 @@ TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "chunk_text")
 _FALLBACK_TEXT_FIELD = "text"
 
 
-def main(out_path: str = "chunks_registry.json") -> None:
-    # Fetch FULL text — content_hash is full-text (not prefix), so we need the
-    # whole chunk to compute the same hash the chatqna span emits.
-    rows = cursor(
+def _query_rows(text_field: str) -> list[dict]:
+    """Run the dump AQL projecting the given text field. Returns one row per
+    chunk in the source collection (always one row per doc — a missing field
+    surfaces as ``text: None``, NOT as a missing row)."""
+    return cursor(
         f"""
         FOR doc IN {GRAPH_SOURCE}
             SORT doc._key
             RETURN {{
                 "key": doc._key,
-                "text": doc.{TEXT_FIELD},
+                "text": doc.{text_field},
                 "labels": doc.chunk_labels || []
             }}
         """
     )
-    if not rows and TEXT_FIELD != _FALLBACK_TEXT_FIELD:
-        # Legacy deployments (CONTEXTUAL_RETRIEVAL_ENABLED=false) store the
-        # chunk body under `text` instead of `chunk_text` — retry once with
-        # the legacy field so the operator does not need to set
-        # ARANGO_TEXT_FIELD explicitly.
+
+
+def main(out_path: str = "chunks_registry.json") -> None:
+    # Fetch FULL text — content_hash is full-text (not prefix), so we need the
+    # whole chunk to compute the same hash the chatqna span emits.
+    rows = _query_rows(TEXT_FIELD)
+    # Row-level fallback (vs. the old collection-level check): the old
+    # `if not rows` guard never fired because the AQL above always returns
+    # one row per document — missing-field docs came back as ``text: null``
+    # and the rows list was non-empty. Every row's content_hash then
+    # collapsed to the empty-string hash and the gold set went silent-zero.
+    # Detect the symptom per-row: if EVERY row's text is null/empty the
+    # field name is wrong (legacy ``text`` vs current ``chunk_text``).
+    if rows and not any((r.get("text") or "") for r in rows):
+        if TEXT_FIELD != _FALLBACK_TEXT_FIELD:
+            sys.stderr.write(
+                "WARNING: primary field "
+                f"{TEXT_FIELD!r} returned all-null/empty rows — retrying with "
+                f"legacy field {_FALLBACK_TEXT_FIELD!r}. For "
+                "CONTEXTUAL_RETRIEVAL_ENABLED=false deployments, set "
+                "ARANGO_TEXT_FIELD=text explicitly to skip this probe.\n"
+            )
+            rows = _query_rows(_FALLBACK_TEXT_FIELD)
+    null_text_count = sum(1 for r in rows if not (r.get("text") or ""))
+    if null_text_count:
         sys.stderr.write(
-            "WARNING: empty on chunk_text — set ARANGO_TEXT_FIELD=text for "
-            "CONTEXTUAL_RETRIEVAL_ENABLED=false deployments\n"
-        )
-        rows = cursor(
-            f"""
-            FOR doc IN {GRAPH_SOURCE}
-                SORT doc._key
-                RETURN {{
-                    "key": doc._key,
-                    "text": doc.{_FALLBACK_TEXT_FIELD},
-                    "labels": doc.chunk_labels || []
-                }}
-            """
+            f"WARNING: {null_text_count}/{len(rows)} rows have null/empty text; "
+            "their content_hash collapses to the empty-string fingerprint and "
+            "they will be silently-zeroed in the gold set. Check the field "
+            "name (ARANGO_TEXT_FIELD) and the corpus ingestion log.\n"
         )
     out = [
         {
@@ -71,7 +83,7 @@ def main(out_path: str = "chunks_registry.json") -> None:
         }
         for r in rows
     ]
-    with open(out_path, "w") as fh:
+    with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False, indent=2)
     print(f"Wrote {len(out)} chunks → {out_path}", file=sys.stderr)
 

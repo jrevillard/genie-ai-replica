@@ -1622,9 +1622,21 @@ async def _invoke_leg(self, graph_name, input_dict, input, query):
     explicitly; the helper does not need to read or mutate `input.graph_name`.
     Per-leg exceptions and timeouts return [] (Decision E: zero-hit per
     missing graph, ADR-039 D8).
+
+    Each leg gets its OWN span: `_extract_for_graph` unconditionally sets
+    attributes on and ends the span it is given (its contract since the
+    extraction was pulled out of `invoke()`), so passing `span=None` crashed
+    EVERY leg with `'NoneType' object has no attribute 'end'` — after the
+    search had already found hits (live-caught 2026-10-06: legs=9,
+    succeeded=0, fused=0). The legacy single-graph path is untouched — it
+    still passes `invoke()`'s real span.
     """
     import asyncio
 
+    from tracing import get_tracer
+
+    span = get_tracer("retriever.fanout").start_span("retriever.fanout.leg")
+    span.set_attribute("okf.fanout.leg.graph_name", graph_name)
     return await asyncio.wait_for(
         self._extract_for_graph(
             graph_name=graph_name,
@@ -1632,7 +1644,7 @@ async def _invoke_leg(self, graph_name, input_dict, input, query):
             input=input,
             query=query,
             start_time=time.time(),
-            span=None,
+            span=span,
         ),
         timeout=FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0,
     )

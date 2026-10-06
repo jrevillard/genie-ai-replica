@@ -195,28 +195,33 @@ class TestAtomicWrite:
         assert not out.with_suffix(out.suffix + ".tmp").exists()
 
     def test_failure_during_write_cleans_up_tmp(self, tmp_path, monkeypatch):
+        """When os.replace raises after the tmp file exists, the tmp is cleaned up."""
         import match_gold_chunks as mgc
 
         gold = tmp_path / "gold.json"
         gold.write_text(__import__("json").dumps(self.GOLD))
         monkeypatch.setattr(mgc, "arango_query", lambda *a, **k: [self.CHUNK])
-
-        def boom(*a, **k):
-            raise RuntimeError("simulated disk full")
-
-        monkeypatch.setattr(mgc, "atomic_write_json", boom)
         monkeypatch.setattr(
             sys,
             "argv",
             ["match_gold_chunks.py", "--gold-dataset", str(gold), "--mode", "in-place"],
         )
+
+        # Monkeypatch os.replace in the match_gold_chunks namespace to raise
+        # AFTER the tmp file has been created and written — this exercises the
+        # cleanup branch rather than preventing the tmp from ever existing.
+        def fail_without_replace(src, dst):
+            # Raise without calling os.replace — the tmp file stays on disk,
+            # so atomic_write_json's cleanup branch can exercise the unlink path.
+            raise RuntimeError("simulated disk full")
+
+        monkeypatch.setattr(mgc.os, "replace", fail_without_replace)
+
         with pytest.raises(RuntimeError, match="simulated disk full"):
             mgc.main()
-        # atomic_write_json is invoked only from the in-place branch in this
-        # test, so the on-disk .tmp left behind by the original implementation
-        # would be at "<gold>.json.tmp"; the test asserts it never appears.
+        # The tmp file must have been removed by the except handler.
         assert not (tmp_path / "gold.json.tmp").exists()
-        # Original gold file is unchanged because the writer raised.
+        # Original gold file is unchanged because os.replace never succeeded.
         original = __import__("json").loads(gold.read_text())
         assert original == self.GOLD
 

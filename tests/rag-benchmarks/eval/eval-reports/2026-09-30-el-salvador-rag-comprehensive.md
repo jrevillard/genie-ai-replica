@@ -2,9 +2,9 @@
 
 **Author**: Claude (automated pipeline)
 **Date**: 2026-09-30 (last update: 2026-10-02, K=32 sweep + T13b champion + file_coverage 0.898)
-**Stack**: genieai-el-salvador @ 10.0.0.102 (`release/el-salvador` branch, **T13b-K=32 live**: factor=0.0006 + thresh=−1.0 + BGE wrapper + K=32)
+**Stack**: genieai-el-salvador @ `<swarm-host>` (`release/el-salvador` branch, **T13b-K=32 live**: factor=0.0006 + thresh=−1.0 + BGE wrapper + K=32)
 **Sample**: 42 queries (Spanish CENTA agriculture), gold_dataset.matched.v4.json
-**Tools**: `tests/rag-benchmarks/eval/{run_eval.py, run_ragas_eval.py, calibrate.py}` (modified locally on .102 for Bearer auth)
+**Tools**: `tests/rag-benchmarks/eval/{run_eval.py, run_ragas_eval.py, calibrate.py}` (Bearer-auth wrapper: `tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh`)
 **RAGAS judge**: MiniMax-M3 (`ANTHROPIC_BASE_URL=http://127.0.0.1:3456/v1`)
 **RAGAS embedder**: BGE-large-en-v1.5 via TEI (`EVAL_EMBED_BASE_URL=https://10.0.0.110:444/embed/v1`)
 

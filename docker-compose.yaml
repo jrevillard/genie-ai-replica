@@ -585,6 +585,11 @@ services:
       # The legacy graph name the BFF prepends in hybrid mode — MUST match the
       # retriever's ARANGO_GRAPH_NAME or the legacy leg diverges.
       - ARANGO_GRAPH_NAME=${ARANGO_GRAPH_NAME:-GRAPH}
+      # Story 1.1 cache tuning (code defaults 30000/3000; clamped ≥1000/≥100):
+      # the posture/authz window and per-call timeout. Defaults mirror the
+      # authz-resolver's SERVING_TTL_MS — override only for latency tuning.
+      - OKF_RETRIEVAL_CONFIG_TTL_MS=${OKF_RETRIEVAL_CONFIG_TTL_MS:-30000}
+      - OKF_RETRIEVAL_CONFIG_TIMEOUT_MS=${OKF_RETRIEVAL_CONFIG_TIMEOUT_MS:-3000}
       # Conversation mode: conversation-with-context-labels (full context) or single-message (legacy)
       - CONTEXT_OPTION=${CONTEXT_OPTION:-conversation-with-context-labels}
       # Logging (error, warn, info, debug)

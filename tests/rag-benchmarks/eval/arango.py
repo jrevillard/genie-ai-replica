@@ -47,30 +47,51 @@ def cursor(
     }
     rows: list = []
     expected: int | None = None
-    for _ in range(10_000):
-        req = urllib.request.Request(
-            cursor_url,
-            data=json.dumps(body).encode(),
-            headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
-            method="POST" if expected is None else "PUT",
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            payload = json.load(resp)
-        prev_len = len(rows)
-        if expected is None:
-            expected = payload.get("count")
-        rows.extend(payload.get("result", []))
-        if payload.get("hasMore") and payload.get("result") is not None and len(rows) == prev_len:
-            raise RuntimeError("Arango cursor made no progress (hasMore with empty result)")
-        cid = payload.get("id")
-        if not payload.get("hasMore") or not cid:
-            break
-        cursor_url = f"{base}/_db/{urllib.parse.quote(database)}/_api/cursor/{urllib.parse.quote(cid)}"
-        body = {}  # PUT continuation takes an empty body
-    else:
-        raise RuntimeError("Arango cursor pagination exceeded 10000 iterations")
-    if expected is not None and len(rows) != expected:
-        raise RuntimeError(
-            f"Arango cursor count mismatch: got {len(rows)} rows, server count {expected}"
-        )
-    return rows
+    last_cid: str | None = None  # outstanding cursor id; DELETE on exit (finding 9)
+    last_has_more = False
+    try:
+        for _ in range(10_000):
+            req = urllib.request.Request(
+                cursor_url,
+                data=json.dumps(body).encode(),
+                headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
+                method="POST" if expected is None else "PUT",
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                payload = json.load(resp)
+            prev_len = len(rows)
+            if expected is None:
+                expected = payload.get("count")
+            rows.extend(payload.get("result", []))
+            if payload.get("hasMore") and payload.get("result") is not None and len(rows) == prev_len:
+                raise RuntimeError("Arango cursor made no progress (hasMore with empty result)")
+            cid = payload.get("id")
+            last_cid = cid
+            last_has_more = bool(payload.get("hasMore"))
+            if not last_has_more or not cid:
+                break
+            cursor_url = f"{base}/_db/{urllib.parse.quote(database)}/_api/cursor/{urllib.parse.quote(cid)}"
+            body = {}  # PUT continuation takes an empty body
+        else:
+            raise RuntimeError("Arango cursor pagination exceeded 10000 iterations")
+        if expected is not None and len(rows) != expected:
+            raise RuntimeError(
+                f"Arango cursor count mismatch: got {len(rows)} rows, server count {expected}"
+            )
+        return rows
+    finally:
+        # Best-effort cursor release — Arango holds cursors in memory until TTL
+        # or explicit DELETE. Only DELETE if the last response said hasMore
+        # (a naturally-finished cursor was already closed by Arango). Swallow
+        # any error on the cleanup itself.
+        if last_cid and last_has_more:
+            try:
+                del_url = f"{base}/_db/{urllib.parse.quote(database)}/_api/cursor/{urllib.parse.quote(last_cid)}"
+                del_req = urllib.request.Request(
+                    del_url,
+                    headers={"Authorization": f"Basic {auth}"},
+                    method="DELETE",
+                )
+                urllib.request.urlopen(del_req, timeout=5).read()
+            except Exception:  # noqa: BLE001
+                pass

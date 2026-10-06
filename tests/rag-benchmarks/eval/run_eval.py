@@ -201,13 +201,19 @@ def fetch_selection(start_s: float) -> tuple[list[str], list[str], list[dict]]:
     quirky boundary semantics; the trace is disambiguated by startTime in
     _extract_selection. Indexing lag on a busy VT node can exceed a minute.
 
+    The sleep is clamped to ``remaining`` so we never sleep past the deadline
+    (finding 11). On deadline, returns without a final query.
+
     Returns ``(candidates, selected, adaptive_breakdown)``.
     """
     deadline = time.time() + TRACE_FETCH_TIMEOUT
     delay = 0.0  # check immediately — spans are often indexed by the time curl returns
     while True:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            return [], [], []
         if delay:
-            time.sleep(delay)
+            time.sleep(min(delay, remaining))
         delay = 1.0 if delay < 1.0 else (2.0 if delay < 2.0 else TRACE_FLUSH_WAIT)
         start_us = int((start_s - 3600) * 1e6)
         end_us = int((time.time() + 60) * 1e6)
@@ -367,24 +373,38 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
     skipped_entries: list[str] = []
     for entry in entries:
         start, body, status = drive_query(entry)
-        if status in (401, 403):
+        # Non-2xx catchall (finding 5): any status outside 200..299 takes the
+        # error path — skip the entry, count it, and avoid the expensive VT
+        # poll that would otherwise burn TRACE_FETCH_TIMEOUT on a dead query.
+        # 401/403 keep their distinct auth-failure hint; everything else uses
+        # the generic skipped message.
+        if status < 200 or status >= 300:
             http_errors += 1
-            print(
-                f"[{entry['id']}] AUTH-FAILURE (HTTP {status}) — bearer expired or "
-                "invalid. Use the wrapper (token lifecycle) or refresh E2E_BEARER_TOKEN.",
-                file=sys.stderr,
-            )
-            if mode == "dump-tuples":
-                skipped_entries.append(entry["id"])
-                continue
-            rows.append({"id": entry["id"], "query": entry["query"],
-                         "trace_found": False, "error": f"HTTP {status}"})
-            missed += 1
-            continue
-        if status >= 500:
-            http_errors += 1
-            print(f"[{entry['id']}] HTTP {status} from chatqna — skipped", file=sys.stderr)
             skipped_entries.append(entry["id"])
+            if status in (401, 403):
+                print(
+                    f"[{entry['id']}] AUTH-FAILURE (HTTP {status}) — bearer expired or "
+                    "invalid. Use the wrapper (token lifecycle) or refresh E2E_BEARER_TOKEN.",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"[{entry['id']}] HTTP {status} from chatqna — skipped",
+                    file=sys.stderr,
+                )
+            if mode == "anchor":
+                # Anchor mode (finding 1): also append the error-row shape so
+                # the report carries signal for the degraded entries — a
+                # partial run with silent gaps exited 0 before this fix.
+                rows.append(
+                    {
+                        "id": entry["id"],
+                        "query": entry["query"],
+                        "trace_found": False,
+                        "error": f"HTTP {status}",
+                    }
+                )
+                missed += 1
             continue
         answer = _extract_answer(body)
         cand_keys, sel_keys, adaptive_breakdown = fetch_selection(start)
@@ -447,11 +467,21 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
                 file=sys.stderr,
             )
             return 3
+        # Finding 2: VT down → all-empty contexts but tuples were written.
+        # The sidecar carries n_missed_traces; surface it as a degraded run
+        # via the same threshold knob as anchor mode.
+        max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
+        if missed > max_missed:
+            print(
+                f"EXIT 3: {missed} missed traces > EVAL_MAX_MISSED_TRACES={max_missed}",
+                file=sys.stderr,
+            )
+            return 3
         return 0
 
-    # Anchor branch — guard metrics.aggregate([]): empty list raises/garbages.
+    # Anchor branch.
     scored = [r for r in rows if r.get("trace_found")]
-    agg = metrics.aggregate(scored) if scored else {"n": 0}
+    agg = metrics.aggregate(scored)
     # Aggregate passage-level metrics across queries (only queries that
     # actually had gold passages; queries with all-unresolved gold are
     # excluded from the denominator to avoid skewing toward zero).
@@ -466,6 +496,8 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
         "aggregate": agg,
         "n_missed_traces": missed,
         "n_unmapped_chunk_keys": unmapped,
+        "n_http_errors": http_errors,
+        "skipped_entries": skipped_entries,
     }
     with open(out_path, "w") as fh:
         json.dump(report, fh, indent=2)
@@ -502,10 +534,14 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
     print(f"\nReport → {out_path}", file=sys.stderr)
     # Report is already on disk — classify the run for capture_baseline (MR-D).
     max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
-    if not rows:
-        return 4
-    if not scored and rows:
-        # every entry missed the trace — the report has zero signal
+    if skipped_entries and not os.getenv("EVAL_ALLOW_PARTIAL"):
+        print(
+            f"EXIT 3: {len(skipped_entries)} entries skipped (HTTP errors); "
+            "set EVAL_ALLOW_PARTIAL=1 to ignore. See report.skipped_entries.",
+            file=sys.stderr,
+        )
+        return 3
+    if not scored:
         return 4
     if missed > max_missed:
         print(

@@ -1502,9 +1502,12 @@ async def _legacy_single_graph_or_refuse(self, *, input_dict, input, query, star
     `_extract_for_graph`'s finally block, byte-identical to pre-1.1).
     """
     if exclude_legacy:
+        # CustomLogger.log_message(level, msg) — NO extra=/structured kwargs
+        # (live-caught 2026-10-06: extra= raised TypeError out of a handler).
+        # Context goes inline in the message, house f-string style.
         logger.info(
-            "retriever.legacy.excluded — okf_only refuses the legacy free-form corpus",
-            extra={"okf.exclude_legacy": True, "okf.refused_graph_name": ARANGO_GRAPH_NAME},
+            f"retriever.legacy.excluded — okf_only refuses the legacy free-form corpus "
+            f"(exclude_legacy=True, refused_graph_name={ARANGO_GRAPH_NAME})"
         )
         span.end()
         return []
@@ -1665,15 +1668,12 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
                 )
             except TimeoutError:
                 logger.info(
-                    "Fan-out leg timed out (skip-on-timeout, ADR-039 D8)",
-                    extra={"okf.graph_name": graph_name, "timeout_ms": FANOUT_PER_GRAPH_TIMEOUT_MS},
+                    f"Fan-out leg timed out (skip-on-timeout, ADR-039 D8) — "
+                    f"graph_name={graph_name}, timeout_ms={FANOUT_PER_GRAPH_TIMEOUT_MS}"
                 )
                 return []
             except Exception as e:
-                logger.info(
-                    "Fan-out leg failed (zero-hit, ADR-039 D8)",
-                    extra={"okf.graph_name": graph_name, "error": str(e)},
-                )
+                logger.info(f"Fan-out leg failed (zero-hit, ADR-039 D8) — graph_name={graph_name}, error={e}")
                 return []
 
     try:
@@ -1692,13 +1692,8 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
     span.set_attribute("okf.fanout.legs_failed", sum(1 for r in leg_results if not r))
     span.set_attribute("okf.fanout.fused_count", len(fused))
     logger.info(
-        "Fan-out complete",
-        extra={
-            "legs": len(encoded_graph_names),
-            "fused": len(fused),
-            "succeeded": sum(1 for r in leg_results if r),
-            "failed": sum(1 for r in leg_results if not r),
-        },
+        f"Fan-out complete — legs={len(encoded_graph_names)}, fused={len(fused)}, "
+        f"succeeded={sum(1 for r in leg_results if r)}, failed={sum(1 for r in leg_results if not r)}"
     )
     span.end()
     return fused

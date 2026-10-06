@@ -1511,7 +1511,7 @@ async def _legacy_single_graph_or_refuse(self, *, input_dict, input, query, star
         )
         span.end()
         return []
-    return await self._extract_for_graph(
+    results = await self._extract_for_graph(
         graph_name=ARANGO_GRAPH_NAME,
         input_dict=input_dict,
         input=input,
@@ -1519,6 +1519,12 @@ async def _legacy_single_graph_or_refuse(self, *, input_dict, input, query, star
         start_time=start_time,
         span=span,
     )
+    # Story 1.0 provenance contract — "EVERY retrieval hit must carry
+    # graph_name, repo_id, concept_id". The fan-out path attaches at fusion;
+    # the legacy tail never did (live-probed 2026-10-06: legacy hits came
+    # back with graph_name=None). Additive metadata only — the extraction
+    # itself (search behavior, ordering, shapes) is untouched.
+    return _attach_provenance(results, ARANGO_GRAPH_NAME)
 
 
 def _fanout_should_engage(encoded_graph_names, fanout_enabled: bool = True) -> bool:

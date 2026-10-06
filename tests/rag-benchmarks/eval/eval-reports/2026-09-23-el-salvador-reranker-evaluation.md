@@ -2,7 +2,7 @@
 
 **Author**: Claude (automated pipeline)
 **Date**: 2026-09-23 → 2026-09-24
-**Stack**: genieai-el-salvador @ 10.0.0.102
+**Stack**: genieai-el-salvador @ `<swarm-host>`
 **Gold**: `gold_dataset_el_salvador.matched.v3.json` (42 queries, 39 previews, 74 resolved chunks across 20 split passages)
 
 ---
@@ -155,7 +155,7 @@ With faithfulness stuck at 0.55, the pipeline-level problem to chase is **retrie
 | RAGAS scores (MiniMax judge) | (computed locally) | `/tmp/ragas-tuples/ragas_MiniMax_v{7,8,9}.json` |
 | Live config | `/opt/genieai-el-salvador/.env` | (currently v9 slice/top_k=5; pending decision) |
 | Gold dataset | `/tmp/gold_dataset_el_salvador.matched.v3.json` | — |
-| xlsx source | — | `~/Téléchargements/RAG_Evaluation_Test_Dataset_El_Salvador_updated.xlsx` |
+| xlsx source | — | `RAG_Evaluation_Test_Dataset_El_Salvador_updated.xlsx` |
 
 ---
 

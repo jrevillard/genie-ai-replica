@@ -9,8 +9,9 @@ Calling this script directly via `python3 run_eval.py anchor ...` against
 a production-deployed chatqna returns 401 on every query and the report's
 `n_missed_traces` shows all queries as missed. For ANY live-stack eval use
 the wrapper at `../scripts/run_anchor_with_cleanup.sh` which enables ROPC
-temporarily, fetches a realm token, and disables ROPC again on exit
-(signal-safe trap). Leaving ROPC enabled in production is a security
+temporarily, verifies the revert on exit, and lets this driver refresh its
+own realm token in-run (EVAL_KC_* env). The retired host-side chunked
+runner no longer exists. Leaving ROPC enabled in production is a security
 vulnerability. See `tests/rag-benchmarks/eval/CLAUDE.md` for the full story
 (auth, score threshold, diagnostic mode).
 

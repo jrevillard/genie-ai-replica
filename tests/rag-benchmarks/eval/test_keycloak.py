@@ -63,27 +63,3 @@ def test_fetch_realm_token_non200_raises(monkeypatch):
     except keycloak.KeycloakError:
         raised = True
     assert raised, "expected KeycloakError on HTTP 401"
-
-
-def test_fetch_master_token_posts_form(monkeypatch):
-    """Master token: POST form with client_id=admin-cli + username=admin; secret in body only."""
-    seen = {}
-
-    def fake(req, timeout=None, context=None):
-        seen["url"] = req.full_url
-        seen["data"] = req.data.decode()
-        seen["method"] = req.get_method()
-        return _Resp(token="master-tok")
-
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
-    tok = keycloak.fetch_master_token("https://kc/auth", "M4ST3R")
-    assert tok == "master-tok"
-    assert seen["method"] == "POST"
-    # master realm, admin-cli, admin user — hard-coded contract
-    assert "/realms/master/protocol/openid-connect/token" in seen["url"]
-    assert "client_id=admin-cli" in seen["data"]
-    assert "username=admin" in seen["data"]
-    assert "grant_type=password" in seen["data"]
-    # secret in body, NOT in URL
-    assert "M4ST3R" not in seen["url"], f"password leaked in URL: {seen['url']}"
-    assert "M4ST3R" in seen["data"]

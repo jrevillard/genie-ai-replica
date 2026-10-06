@@ -64,21 +64,3 @@ def fetch_realm_token(
         },
         timeout,
     )
-
-
-def fetch_master_token(
-    kc_url: str,
-    admin_password: str,
-    timeout: float = 30.0,
-) -> str:
-    """Fetch the master realm admin-cli token for the Keycloak Admin API."""
-    return _post_token(
-        f"{kc_url.rstrip('/')}/realms/master/protocol/openid-connect/token",
-        {
-            "grant_type": "password",
-            "client_id": "admin-cli",
-            "username": "admin",
-            "password": admin_password,
-        },
-        timeout,
-    )

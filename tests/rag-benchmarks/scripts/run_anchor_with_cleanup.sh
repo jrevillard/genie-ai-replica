@@ -55,17 +55,39 @@ export ARANGO_USER="${ARANGO_USER:-root}"
 # --- curl with secrets on DISK (chmod-600 cfg), never argv ------------------
 # printf %s substitutes the value as a literal — vault passwords with `$` or
 # backticks do not get re-evaluated by the shell. The cfg file is rm'd before
-# the function returns. (Curl -K still parses the value: form/JSON bodies
-# produced here contain no embedded backslashes or double-quotes in practice.)
-kc_post() {  # kc_post <url> <form-data>
+# the function returns.
+# W5: URL-encode each form value so a password like `pa+ss&wo rd` survives
+# transport intact (raw `+` decodes to space in x-www-form-urlencoded).
+urlencode() { python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$1"; }
+kc_post() {  # kc_post <url> <form-data>  (values encoded; keys literal ASCII)
     local cfg; cfg=$(mktemp); chmod 600 "$cfg"
-    printf 'request = "POST"\ndata = "%s"\n' "$2" > "$cfg"
+    local encoded
+    encoded=$(python3 -c '
+import sys, urllib.parse
+out = []
+for p in sys.argv[1].split("&"):
+    if "=" in p:
+        k, v = p.split("=", 1)
+        out.append(k + "=" + urllib.parse.quote(v, safe=""))
+    else:
+        out.append(p)
+print("&".join(out))
+' "$2")
+    printf 'request = "POST"\ndata = "%s"\n' "$encoded" > "$cfg"
     curl -sk -m 30 -K "$cfg" "$1"; local rc=$?
     rm -f "$cfg"; return $rc
 }
+# W1: curl-K double-quoted strings terminate at the first unescaped `"`. A
+# JSON body like `{"k":true}` contains two `"`s; naively printf'd into the cfg
+# the line becomes `data = "{"k":true}"` — curl parses it as data = `{` and
+# silently sends 1 byte. Escape backslashes FIRST (otherwise `\\` would double
+# to `\\\\`), then quotes. curl-K then unescapes `\"` → `"` and `\\` → `\`,
+# so the wire body matches the original JSON byte-for-byte.
 kc_put_json() {  # kc_put_json <url> <json> <bearer> -> http code
     local cfg; cfg=$(mktemp); chmod 600 "$cfg"
-    printf 'header = "Authorization: Bearer %s"\nheader = "Content-Type: application/json"\ndata = "%s"\n' "$3" "$2" > "$cfg"
+    local escaped_body
+    escaped_body=$(printf '%s' "$2" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    printf 'header = "Authorization: Bearer %s"\nheader = "Content-Type: application/json"\ndata = "%s"\n' "$3" "$escaped_body" > "$cfg"
     curl -sk -m 30 -o /dev/null -w '%{http_code}' -K "$cfg" -X PUT "$1"; local rc=$?
     rm -f "$cfg"; return $rc
 }
@@ -91,8 +113,10 @@ cleanup() {
     AT=$(master_token || true)
     if [ -n "$AT" ]; then
         for i in 1 2 3; do
+            # W2: under `set -e` a transport error in the trap-prevent the
+            # revert ROPC loop. || CODE=000 keeps the trap alive.
             CODE=$(kc_put_json "$EVAL_KC_URL/admin/realms/$EVAL_KC_REALM_S/clients/$CLIENT_UUID" \
-                '{"directAccessGrantsEnabled": false}' "$AT")
+                '{"directAccessGrantsEnabled": false}' "$AT") || CODE=000
             if [ "$CODE" = "204" ] || [ "$CODE" = "200" ]; then
                 echo "[cleanup] ROPC disabled (HTTP $CODE)"; return 0
             fi

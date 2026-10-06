@@ -578,3 +578,356 @@ def test_retry_succeeds_on_third_attempt(tmp_path, monkeypatch):
     done_ids = (tmp_path / "o.json.done.jsonl").read_text().splitlines()
     assert "q1" in done_ids
 
+
+# --- !503 review wave (W3 resume accounting) -------------------------------
+
+def test_w3_resume_seeds_missed_and_http_errors(tmp_path, monkeypatch):
+    """W3: resume from a prefilled out.json with trace-miss rows (no error) + all
+    ids in sidecar → n_missed_traces reflects the prior count (was being reset
+    to 0), n_http_errors stays 0 (rows had no `error` key)."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": f"q{i}", "query": f"Q{i}?"} for i in range(5)
+    ])
+    out = tmp_path / "o.json"
+    rows = [{
+        "id": f"q{i}", "query": f"Q{i}?", "trace_found": False,
+        "selected": [], "candidates": [],
+        "gold": [], "gold_hashes": [], "selected_hashes": [], "candidate_hashes": [],
+        "expected_chunks": [], "adaptive_breakdown": [],
+    } for i in range(5)]
+    out.write_text(_json.dumps({
+        "per_query": rows, "aggregate": {"n": 0},
+        "n_missed_traces": 5, "n_unmapped_chunk_keys": 0,
+        "n_http_errors": 0, "skipped_entries": [],
+    }))
+    (tmp_path / "o.json.done.jsonl").write_text(
+        "\n".join(f"q{i}" for i in range(5)) + "\n"
+    )
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+
+    rc = run_eval.main("anchor", str(gold), str(out))
+    rep = _json.loads(out.read_text())
+    # W3: n_missed_traces seeded from the 5 prefilled trace-miss rows
+    assert rep["n_missed_traces"] == 5
+    # No rows have an HTTP error → n_http_errors stays 0
+    assert rep["n_http_errors"] == 0
+    # Trace-miss rows seed skipped_entries → EVAL_ALLOW_PARTIAL unset → rc 3
+    assert rc == 3
+
+
+def test_w3_resume_seeds_http_errors(tmp_path, monkeypatch):
+    """W3: prefilled error rows starting with 'HTTP ' → n_http_errors reflects them."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": "q1", "query": "a"},
+        {"id": "q2", "query": "b"},
+    ])
+    out = tmp_path / "o.json"
+    rows = [
+        {"id": "q1", "query": "a", "trace_found": False, "error": "HTTP 401"},
+        {"id": "q2", "query": "b", "trace_found": False, "error": "HTTP 502"},
+    ]
+    out.write_text(_json.dumps({
+        "per_query": rows, "aggregate": {"n": 0},
+        "n_missed_traces": 2, "n_unmapped_chunk_keys": 0,
+        "n_http_errors": 2, "skipped_entries": ["q1", "q2"],
+    }))
+    (tmp_path / "o.json.done.jsonl").write_text("q1\nq2\n")
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+
+    rc = run_eval.main("anchor", str(gold), str(out))
+    rep = _json.loads(out.read_text())
+    assert rep["n_http_errors"] == 2
+    # Both prefilled ids already done → no new drives; the loader now keeps
+    # error rows in `rows` (for accounting) but excludes them from `done` so
+    # they would retry if not for the sidecar union — which DOES list them
+    # here. Seeded skipped_entries non-empty → EVAL_ALLOW_PARTIAL unset → rc 3.
+    assert rc == 3
+
+
+# --- !503 review wave (W4 sidecar order) -----------------------------------
+
+def test_w4_out_written_before_sidecar(tmp_path, monkeypatch):
+    """W4: on a successful entry, _write_out_post runs BEFORE sidecar_fh.write.
+    Regression: sidecar-first left a kill-window where a sidecar flush without
+    a matching out row would silently skip the entry on resume."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [{"id": "q1", "query": "a", "expected_chunks": []}])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+    monkeypatch.setattr(run_eval, "drive_query", lambda e: (0.0, '{"text":"x"}', 200))
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k"], ["k"], []))
+
+    events: list[str] = []
+    orig_wop = run_eval._write_out_post
+    def spy_wop(*a, **kw):
+        events.append("out_post")
+        return orig_wop(*a, **kw)
+    monkeypatch.setattr(run_eval, "_write_out_post", spy_wop)
+
+    # Spy on sidecar writes via built-in.open (the sidecar is opened in main()).
+    real_open = open
+    def spy_open(path, *a, **kw):
+        fh = real_open(path, *a, **kw)
+        if isinstance(path, str) and path.endswith(".done.jsonl"):
+            orig_write = fh.write
+            def sw(s: str):
+                events.append("sidecar_write")
+                return orig_write(s)
+            fh.write = sw
+        return fh
+    monkeypatch.setattr("builtins.open", spy_open)
+
+    run_eval.main("anchor", str(gold), str(tmp_path / "o.json"))
+    assert "out_post" in events
+    sidecar_idxs = [i for i, e in enumerate(events) if e == "sidecar_write"]
+    out_idx = events.index("out_post")
+    # EVERY sidecar write happens after the out_post call (W4 invert)
+    assert all(i > out_idx for i in sidecar_idxs), events
+
+
+# --- !503 review wave (W6 refresh hardening) --------------------------------
+
+def test_w6_json_decode_error_in_refresh_does_not_raise(monkeypatch):
+    """W6: a JSONDecodeError from fetch_realm_token must be caught by
+    _maybe_refresh_token (was uncaught → process crash). The function returns
+    False and the run continues with the existing token."""
+    import run_eval as _re
+    _set_kc_env(monkeypatch)
+    monkeypatch.setattr(_re, "fetch_realm_token",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            json.JSONDecodeError("bad", "x", 0)
+                        ))
+    # Should NOT raise — returns False (no refresh succeeded)
+    ok = _re._maybe_refresh_token(force=True)
+    assert ok is False
+
+
+def test_w6_refresh_call_inside_per_entry_try(monkeypatch):
+    """W6: the top-of-loop _maybe_refresh_token call must be INSIDE the
+    per-entry try block (was outside — a KeycloakError there would crash the
+    run before the retry budget could absorb it)."""
+    import run_eval as _re
+    import inspect
+    src = inspect.getsource(_re.main)
+    # The per-entry loop begins at 'for entry in entries:'. Inside it, the
+    # 'try:' block must contain _maybe_refresh_token(). Look for the
+    # substring: 'for entry in entries:' ... 'try:' ... '_maybe_refresh_token()'
+    loop_start = src.index("for entry in entries:")
+    # next SLOC
+    try_start = src.index('try:', loop_start)
+    try_end = src.index('except', try_start)
+    block = src[try_start:try_end]
+    assert "_maybe_refresh_token()" in block, (
+        "W6 violated: _maybe_refresh_token must be inside per-entry try block"
+    )
+
+
+# --- !503 review wave (W7 EVAL_FRESH + gold validation) ---------------------
+
+def test_w7_eval_fresh_overwrites_existing(tmp_path, monkeypatch):
+    """W7: EVAL_FRESH=1 deletes any pre-existing out + sidecar before resume,
+    so a re-run starts from zero even if a prior run left state behind."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    monkeypatch.setenv("EVAL_FRESH", "1")
+    monkeypatch.setenv("EVAL_ALLOW_UNMAPPED", "1")  # test injects no key_to_hash
+    gold = _write_gold(tmp_path, [{"id": "q1", "query": "a", "expected_chunks": []}])
+    out = tmp_path / "o.json"
+    # Pre-existing report claiming q1 finished
+    out.write_text(_json.dumps({
+        "per_query": [{"id": "q1", "query": "a", "trace_found": True,
+                       "selected": [], "candidates": []}],
+        "aggregate": {"n": 1}, "n_missed_traces": 0,
+        "n_unmapped_chunk_keys": 0, "n_http_errors": 0,
+        "skipped_entries": [],
+    }))
+    (tmp_path / "o.json.done.jsonl").write_text("q1\n")
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+
+    drive_calls = []
+    def fake_drive(entry):
+        drive_calls.append(entry["id"])
+        return 0.0, '{"text":"x"}', 200
+    monkeypatch.setattr(run_eval, "drive_query", fake_drive)
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k"], ["k"], []))
+    monkeypatch.setattr(run_eval.time, "sleep", lambda s: None)
+
+    rc = run_eval.main("anchor", str(gold), str(out))
+    # q1 was re-driven (fresh wiped the prior done set)
+    assert drive_calls == ["q1"]
+    assert rc == 0
+
+
+def test_w7_resume_validates_gold_ids(tmp_path, monkeypatch):
+    """W7: if a prefilled id is not in the current gold, exit 2 with the first
+    5 mismatches (gold changed mid-run)."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [{"id": "q1", "query": "a", "expected_chunks": []}])
+    out = tmp_path / "o.json"
+    # Pre-existing report with an id NOT in the current gold (q_legacy)
+    out.write_text(_json.dumps({
+        "per_query": [{"id": "q_legacy", "query": "old",
+                       "trace_found": True, "selected": [], "candidates": []}],
+        "aggregate": {"n": 1}, "n_missed_traces": 0,
+        "n_unmapped_chunk_keys": 0, "n_http_errors": 0,
+        "skipped_entries": [],
+    }))
+    (tmp_path / "o.json.done.jsonl").write_text("q_legacy\n")
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+
+    rc = run_eval.main("anchor", str(gold), str(out))
+    assert rc == 2
+
+
+# --- !503 review wave (W9 pre-loop refresh) --------------------------------
+
+def test_w9_pre_loop_refresh_when_no_static_token(tmp_path, monkeypatch):
+    """W9: when refresh is configured AND no static E2E_BEARER_TOKEN is seeded,
+    _maybe_refresh_token(force=True) is called ONCE before the loop so the first
+    drive carries a fresh token (was: elapsed=0 → skipped → first drive 401)."""
+    import json as _json
+    import run_eval as _re
+    _clear_eval_env(monkeypatch)
+    monkeypatch.setenv("EVAL_KC_URL", "https://kc.test/auth")
+    monkeypatch.setenv("EVAL_KC_PASSWORD", "secret")
+    monkeypatch.delenv("E2E_BEARER_TOKEN", raising=False)
+    monkeypatch.setenv("EVAL_ALLOW_UNMAPPED", "1")  # test injects no key_to_hash
+    monkeypatch.setattr(_re, "_token_ts", 0.0)
+
+    gold = _write_gold(tmp_path, [{"id": "q1", "query": "a", "expected_chunks": []}])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k"], ["k"], []))
+
+    fetch_calls = []
+    def fake_fetch(*a, **kw):
+        fetch_calls.append(1)
+        return "fresh-pre-loop-tok"
+    monkeypatch.setattr(run_eval, "fetch_realm_token", fake_fetch)
+
+    drive_tokens = []
+    def fake_drive(entry):
+        drive_tokens.append(os.environ.get("E2E_BEARER_TOKEN"))
+        return 0.0, '{"text":"ok"}', 200
+    monkeypatch.setattr(run_eval, "drive_query", fake_drive)
+
+    rc = run_eval.main("anchor", str(gold), str(tmp_path / "o.json"))
+    # Pre-loop refresh fired exactly once; first drive carried the fresh token
+    assert os.environ["E2E_BEARER_TOKEN"] == "fresh-pre-loop-tok"
+    assert drive_tokens[0] == "fresh-pre-loop-tok"
+    assert rc == 0
+
+
+def test_w9_pre_loop_refresh_skipped_when_static_token_present(tmp_path, monkeypatch):
+    """W9: when a static E2E_BEARER_TOKEN is already set, no pre-loop refresh
+    fires (the operator seeded a valid token — let the TTL/401 logic handle it)."""
+    import json as _json
+    import run_eval as _re
+    _clear_eval_env(monkeypatch)
+    monkeypatch.setenv("EVAL_KC_URL", "https://kc.test/auth")
+    monkeypatch.setenv("EVAL_KC_PASSWORD", "secret")
+    monkeypatch.setenv("E2E_BEARER_TOKEN", "operator-seeded")
+    monkeypatch.setattr(_re, "_token_ts", 0.0)
+
+    gold = _write_gold(tmp_path, [{"id": "q1", "query": "a", "expected_chunks": []}])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", dict)
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k"], ["k"], []))
+
+    fetch_calls = []
+    def fake_fetch(*a, **kw):
+        fetch_calls.append(1)
+        return "should-not-fire"
+    monkeypatch.setattr(run_eval, "fetch_realm_token", fake_fetch)
+    monkeypatch.setattr(run_eval, "drive_query",
+                        lambda e: (0.0, '{"text":"ok"}', 200))
+
+    run_eval.main("anchor", str(gold), str(tmp_path / "o.json"))
+    # No pre-loop refresh — operator-seeded token survives
+    assert os.environ["E2E_BEARER_TOKEN"] == "operator-seeded"
+    assert fetch_calls == []
+
+
+# --- !503 review wave (W11 final-block reuses report) -----------------------
+
+def test_w11_final_block_uses_returned_report(tmp_path, monkeypatch):
+    """W11: the final anchor block must reuse the dict returned by
+    _write_out_post — NOT recompute the aggregate. Verified by patching
+    metrics.aggregate: it must be called ONCE per scored row across the WHOLE
+    run (final block does not add calls)."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": "q1", "query": "a", "expected_chunks": [
+            {"chunk_key": "k1", "content_hash": "h1"}
+        ]},
+    ])
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", lambda: {"k1": "h1"})
+    monkeypatch.setattr(run_eval, "drive_query", lambda e: (0.0, '{"text":"x"}', 200))
+    monkeypatch.setattr(run_eval, "fetch_selection", lambda s: (["k1"], ["k1"], []))
+
+    import metrics as _m
+    calls = {"n": 0}
+    orig_agg = _m.aggregate
+    def spy_agg(scored):
+        calls["n"] += 1
+        return orig_agg(scored)
+    monkeypatch.setattr(_m, "aggregate", spy_agg)
+    monkeypatch.setattr(run_eval, "metrics", _m)
+
+    rc = run_eval.main("anchor", str(gold), str(tmp_path / "o.json"))
+    # 1 scored row → 1 aggregate call per _write_out_post invocation.
+    # Iterations: per-entry success (1) + final block (1) = 2 calls.
+    # W11 regression test: if final block recomputed, would be 3.
+    assert calls["n"] == 2, f"expected 2 calls, got {calls['n']} (final block may have recomputed)"
+    assert rc == 0
+
+
+# --- !503 review wave (W13 map-build guard) ---------------------------------
+
+def test_w13_no_op_resume_skips_map_build(tmp_path, monkeypatch):
+    """W13: on a no-op resume (all entries already in sidecar), the ArangoDB
+    hash-map build must NOT fire — there's nothing to score. Maintained its
+    regression: build_* always ran, wasting seconds on every restart."""
+    import json as _json
+    _clear_eval_env(monkeypatch)
+    gold = _write_gold(tmp_path, [
+        {"id": "q1", "query": "a", "expected_chunks": []},
+        {"id": "q2", "query": "b", "expected_chunks": []},
+    ])
+    out = tmp_path / "o.json"
+    rows = [{
+        "id": f"q{i+1}", "query": f"Q{i+1}?", "trace_found": True,
+        "selected": [], "candidates": [],
+        "gold": [], "gold_hashes": [], "selected_hashes": [], "candidate_hashes": [],
+        "expected_chunks": [], "adaptive_breakdown": [],
+        "recall": 1.0, "precision": 1.0, "complete_recall": 1.0, "noise": 0.0,
+        "retrieval_recall": 1.0, "passage_recall": 1.0,
+        "n_passages": 1, "passages_retrieved": 1,
+    } for i in range(2)]
+    out.write_text(_json.dumps({
+        "per_query": rows, "aggregate": {"n": 2},
+        "n_missed_traces": 0, "n_unmapped_chunk_keys": 0,
+        "n_http_errors": 0, "skipped_entries": [],
+    }))
+    (tmp_path / "o.json.done.jsonl").write_text("q1\nq2\n")
+
+    build_calls = {"k": 0, "h": 0}
+    def spy_k():
+        build_calls["k"] += 1
+        return {}
+    def spy_h():
+        build_calls["h"] += 1
+        return {}
+    monkeypatch.setattr(run_eval, "build_key_to_content_hash", spy_k)
+    monkeypatch.setattr(run_eval, "build_hash_to_text", spy_h)
+
+    rc = run_eval.main("anchor", str(gold), str(out))
+    assert rc == 0
+    # No work to do → neither build fires
+    assert build_calls["k"] == 0
+    assert build_calls["h"] == 0
+

@@ -126,7 +126,7 @@ def _maybe_refresh_token(force: bool = False) -> bool:
             os.getenv("EVAL_KC_USER", "genie-admin"),
             os.getenv("EVAL_KC_PASSWORD", ""),
         )
-    except (KeycloakError, urllib.error.URLError, OSError) as e:
+    except (KeycloakError, urllib.error.URLError, OSError, json.JSONDecodeError) as e:
         print(f"[refresh] failed (run continues): {e}", file=sys.stderr)
         return False
     os.environ["E2E_BEARER_TOKEN"] = token
@@ -473,11 +473,16 @@ def _load_done(out_path: str, mode: str) -> tuple[set[str], list, list]:
             for r in payload.get("per_query", []):
                 if not isinstance(r, dict):
                     continue
-                if r.get("trace_found") is False and r.get("error"):
-                    continue  # error row — must retry
-                if r.get("id"):
+                # W3: keep error rows in `rows` so the W3 seed can recover
+                # n_http_errors / n_missed_traces from prior classifications.
+                # Error rows are still EXCLUDED from `done` so they retry — the
+                # intent was "must retry", not "must lose accounting".
+                rows.append(r)
+                is_error_row = (
+                    r.get("trace_found") is False and r.get("error")
+                )
+                if r.get("id") and not is_error_row:
                     done.add(r["id"])
-                    rows.append(r)
 
     if os.path.exists(sidecar):
         with open(sidecar) as fh:
@@ -491,48 +496,107 @@ def _load_done(out_path: str, mode: str) -> tuple[set[str], list, list]:
 def _write_out_post(
     mode: str, out_path: str, tuples: list, rows: list,
     missed: int, unmapped: int, http_errors: int,
-    skipped_entries: list, entries: list,
-) -> None:
+    skipped_entries: list,
+) -> dict | None:
     """Build the current payload from accumulated state and atomic-write it.
     Called after EVERY entry so a mid-run kill never loses progress past the
     last completed entry. For anchor this means recomputing the aggregate; for
     dump-tuples this is just the list.
+
+    Returns the anchor report dict so the caller can print/inspect without
+    rebuilding it (W11 — the old final block recomputed the same aggregate
+    right after _write_out_post ran on the last iteration). Returns None for
+    dump-tuples (the per-iter write is the only thing that matters there).
     """
     if mode == "dump-tuples":
         _write_out(out_path, tuples, mode)
-    else:
-        scored = [r for r in rows if r.get("trace_found")]
-        agg = metrics.aggregate(scored)
-        p_recalls = [r["passage_recall"] for r in scored if r.get("n_passages")]
-        total_passages = sum(r.get("n_passages", 0) for r in scored)
-        retrieved_passages = sum(r.get("passages_retrieved", 0) for r in scored)
-        agg["passage_recall"] = sum(p_recalls) / len(p_recalls) if p_recalls else 0.0
-        agg["total_passages"] = total_passages
-        agg["retrieved_passages"] = retrieved_passages
-        report = {
-            "per_query": rows,
-            "aggregate": agg,
-            "n_missed_traces": missed,
-            "n_unmapped_chunk_keys": unmapped,
-            "n_http_errors": http_errors,
-            "skipped_entries": skipped_entries,
-        }
-        _write_out(out_path, report, mode)
+        return None
+    scored = [r for r in rows if r.get("trace_found")]
+    agg = metrics.aggregate(scored)
+    p_recalls = [r["passage_recall"] for r in scored if r.get("n_passages")]
+    total_passages = sum(r.get("n_passages", 0) for r in scored)
+    retrieved_passages = sum(r.get("passages_retrieved", 0) for r in scored)
+    agg["passage_recall"] = sum(p_recalls) / len(p_recalls) if p_recalls else 0.0
+    agg["total_passages"] = total_passages
+    agg["retrieved_passages"] = retrieved_passages
+    report = {
+        "per_query": rows,
+        "aggregate": agg,
+        "n_missed_traces": missed,
+        "n_unmapped_chunk_keys": unmapped,
+        "n_http_errors": http_errors,
+        "skipped_entries": skipped_entries,
+    }
+    _write_out(out_path, report, mode)
+    return report
 
 
 def main(mode: str, gold_path: str, out_path: str) -> int:
     with open(gold_path) as fh:
         gold = json.load(fh)
     entries = gold["entries"]
-    hash_to_text = build_hash_to_text() if mode == "dump-tuples" else {}
-    key_to_hash = build_key_to_content_hash() if mode == "anchor" else {}
+    # W13: defer the (potentially expensive) ArangoDB hash-map build until we
+    # know there's actual work to do. On a no-op resume (every id already in
+    # `done`) the loop body is skipped and the maps would be discarded —
+    # building them anyway was the regression. Mode-specific maps (anchor
+    # needs key→hash, dump-tuples needs hash→text) stay empty until needed.
+    hash_to_text: dict[str, str] = {}
+    key_to_hash: dict[str, str] = {}
 
     # --- resume: prefill from existing out + sidecar --------------------
-    done, rows, tuples = _load_done(out_path, mode)
     sidecar_path = f"{out_path}.done.jsonl"
+    # W7: EVAL_FRESH=1 forces a clean slate — overwrite any pre-existing out
+    # and sidecar so the run starts from zero (use after a corrupted resume or
+    # when re-running a changed gold against an old report).
+    if os.getenv("EVAL_FRESH") == "1":
+        for p in (out_path, sidecar_path):
+            if os.path.exists(p):
+                os.remove(p)
+    done, rows, tuples = _load_done(out_path, mode)
+    # W7: validate the resume set against the CURRENT gold. If any prefilled id
+    # is not in the gold's entry ids, the operator swapped the gold mid-run
+    # without EVAL_FRESH=1; abort with exit 2 and the first 5 mismatches so
+    # they can decide (EVAL_FRESH=1 to discard, or fix the gold).
+    gold_ids = {e["id"] for e in entries}
+    mismatched = [iid for iid in done if iid not in gold_ids]
+    if mismatched:
+        sample = mismatched[:5]
+        print(
+            f"EXIT 2: {len(mismatched)} prefilled ids not in current gold "
+            f"(gold changed mid-run?). First {len(sample)}: {sample}",
+            file=sys.stderr,
+        )
+        return 2
+
     backoff = float(os.getenv("EVAL_RETRY_BACKOFF", "5"))
-    missed, unmapped, http_errors = 0, 0, 0
-    skipped_entries: list[str] = []
+    # W3: seed per-row counters from the prefilled report so a resume reflects
+    # HTTP-error / trace-miss counts from the prior run instead of restarting
+    # at 0 (the sidecar tells us which ids are done — not what classification
+    # they got). unmapped stays 0 (recomputed only for new rows; acceptable
+    # window since the metric gates the exit, not the count).
+    if mode == "anchor":
+        missed = sum(1 for r in rows if r.get("trace_found") is False)
+        http_errors = sum(
+            1 for r in rows
+            if isinstance(r.get("error"), str) and r["error"].startswith("HTTP")
+        )
+        skipped_entries = [
+            r["id"] for r in rows
+            if r.get("trace_found") is False and r.get("id")
+        ]
+        unmapped = 0
+    else:
+        missed, unmapped, http_errors = 0, 0, 0
+        skipped_entries = []
+
+    # W13: build the hash maps only when there is at least one entry remaining
+    # to drive. On a fully-covered no-op resume both dicts stay empty and we
+    # skip the (potentially many-second) ArangoDB cursor entirely.
+    if any(e["id"] not in done for e in entries):
+        if mode == "dump-tuples":
+            hash_to_text = build_hash_to_text()
+        else:
+            key_to_hash = build_key_to_content_hash()
 
     # Open sidecar for the lifetime of the loop. When _load_done rebuilt done
     # from out but the sidecar is empty/missing, seed it with the prefilled ids
@@ -546,6 +610,12 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
     global _token_ts
     if _refresh_configured():
         _token_ts = time.time()
+        # W9: when refresh is opted in BUT no static E2E_BEARER_TOKEN was
+        # seeded, the TTL check (elapsed ≤ TTL − margin) sees elapsed=0 and
+        # skips — the first drive carries an empty/undefined token → 401.
+        # Force one refresh up front so the loop starts authenticated.
+        if not os.getenv("E2E_BEARER_TOKEN"):
+            _maybe_refresh_token(force=True)
     with open(sidecar_path, "a") as sidecar_fh:
         if seed_needed:
             for r in (rows if mode == "anchor" else tuples):
@@ -564,9 +634,13 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
             entry_succeeded = False
             last_error: Exception | None = None
             for attempt in range(3):
-                # TTL-bounded pre-emptive refresh (no-op when disabled or fresh).
-                _maybe_refresh_token()
                 try:
+                    # W6: TTL-bounded pre-emptive refresh lives INSIDE the
+                    # per-entry try block (was a top-of-loop call that ran
+                    # outside the retry budget — a KeycloakError from the
+                    # refresh itself would crash the run). First statement so
+                    # a 401 reaction on the next line still has a fresh token.
+                    _maybe_refresh_token()
                     start, body, status = drive_query(entry)
                     # In-run bearer refresh on 401/403: if the operator opted in,
                     # force a refresh and re-drive ONCE before falling through
@@ -606,7 +680,7 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
                         # this entry's classification.
                         _write_out_post(mode, out_path, tuples, rows,
                                          missed, unmapped, http_errors,
-                                         skipped_entries, entries)
+                                         skipped_entries)
                         entry_succeeded = True
                         break
 
@@ -638,13 +712,18 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
                                 adaptive_breakdown, key_to_hash,
                             )
                         )
-                    # Mark done: append to sidecar + atomic write of out.
-                    sidecar_fh.write(f"{eid}\n")
-                    sidecar_fh.flush()
+                    # W4: mark done in the OUT first, then append to the sidecar.
+                    # The previous order (sidecar then out) opened a kill-window
+                    # where a crash AFTER sidecar flush but BEFORE _write_out_post
+                    # would leave the sidecar claiming "done" but the report
+                    # missing the row — a re-run would silently skip the entry.
+                    # Out-derived done covers the reverse window so it is safe.
                     done.add(eid)
                     _write_out_post(mode, out_path, tuples, rows,
                                      missed, unmapped, http_errors,
-                                     skipped_entries, entries)
+                                     skipped_entries)
+                    sidecar_fh.write(f"{eid}\n")
+                    sidecar_fh.flush()
                     entry_succeeded = True
                     break
                 except (subprocess.TimeoutExpired, RuntimeError,
@@ -668,7 +747,7 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
                 # resume must be able to retry it.
                 _write_out_post(mode, out_path, tuples, rows,
                                  missed, unmapped, http_errors,
-                                 skipped_entries, entries)
+                                 skipped_entries)
                 print(
                     f"[{eid}] ERROR (3 attempts): {last_error}",
                     file=sys.stderr,
@@ -705,24 +784,14 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
             return 3
         return 0
 
-    # Anchor branch.
-    scored = [r for r in rows if r.get("trace_found")]
-    agg = metrics.aggregate(scored)
-    p_recalls = [r["passage_recall"] for r in scored if r.get("n_passages")]
-    total_passages = sum(r.get("n_passages", 0) for r in scored)
-    retrieved_passages = sum(r.get("passages_retrieved", 0) for r in scored)
-    agg["passage_recall"] = sum(p_recalls) / len(p_recalls) if p_recalls else 0.0
-    agg["total_passages"] = total_passages
-    agg["retrieved_passages"] = retrieved_passages
-    report = {
-        "per_query": rows,
-        "aggregate": agg,
-        "n_missed_traces": missed,
-        "n_unmapped_chunk_keys": unmapped,
-        "n_http_errors": http_errors,
-        "skipped_entries": skipped_entries,
-    }
-    _write_out(out_path, report, "anchor")
+    # Anchor branch. W11: use _write_out_post's returned report — the same
+    # aggregate we just wrote — instead of recomputing it (the old code did
+    # the build twice on the final iteration).
+    report = _write_out_post(
+        mode, out_path, tuples, rows,
+        missed, unmapped, http_errors, skipped_entries,
+    )
+    agg = report["aggregate"]
     print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
     set_based_keys = [
         "recall", "precision", "complete_recall", "noise",
@@ -757,7 +826,7 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
             file=sys.stderr,
         )
         return 3
-    if not scored:
+    if agg["n"] == 0:
         return 4
     if missed > max_missed:
         print(

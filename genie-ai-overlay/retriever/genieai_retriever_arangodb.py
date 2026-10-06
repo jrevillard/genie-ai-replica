@@ -49,13 +49,6 @@ from .config import (
     FANOUT_ENABLED,
     FANOUT_MAX_GRAPHS,
     FANOUT_PER_GRAPH_TIMEOUT_MS,
-    # Story 1.6 (2026-10-07) — frontmatter routing knobs.
-    FRONTMATTER_FORBIDDEN_PENALTY,
-    FRONTMATTER_MIN_SCORE,
-    FRONTMATTER_ROUTING_ENABLED,
-    FRONTMATTER_SUMMARY_COLLECTION,
-    FRONTMATTER_TAG_WEIGHTS,
-    FRONTMATTER_TOP_K,
     HF_TOKEN,
     HYBRID_BM25_ANALYZER,
     HYBRID_BM25_CANDIDATES,
@@ -63,7 +56,6 @@ from .config import (
     HYBRID_LEXICAL_WEIGHT,
     HYBRID_RETRIEVAL_ENABLED,
     HYBRID_RRF_K,
-    OKF_SEARCH_STYLE,
     OPENAI_API_KEY,
     OPENAI_CHAT_ENABLED,
     OPENAI_CHAT_MAX_TOKENS,
@@ -71,11 +63,6 @@ from .config import (
     OPENAI_CHAT_TEMPERATURE,
     OPENAI_EMBED_ENABLED,
     OPENAI_EMBED_MODEL,
-    ROUTE_ENABLED,
-    ROUTE_MIN_CHUNKS,
-    ROUTE_PROBE_TIMEOUT_MS,
-    ROUTE_RETRY,
-    ROUTE_TOP_K,
     SUMMARIZER_ENABLED,
     TEI_EMBED_MODEL,
     TEI_EMBEDDING_ENDPOINT,
@@ -484,7 +471,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         view_name = f"{graph_name}_BM25_VIEW"
 
         aql = f"""
-            FOR doc IN `{view_name}`
+            FOR doc IN {view_name}
                 SEARCH ANALYZER(doc.{ARANGO_TEXT_FIELD} IN TOKENS(@query, @analyzer), @analyzer)
                 {aql_filter_clause}
                 LET _bm25_score = BM25(doc)
@@ -766,8 +753,8 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             return f"""
                 LET raw = (
-                    FOR node IN 1..1 INBOUND doc `{graph_name}_HAS_SOURCE`
-                        FOR node2, edge IN 1..{traversal_max_depth} ANY node `{graph_name}_LINKS_TO`
+                    FOR node IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
+                        FOR node2, edge IN 1..{traversal_max_depth} ANY node {graph_name}_LINKS_TO
                             LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
                             FILTER score >= {traversal_score_threshold}
 
@@ -788,7 +775,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         # ----------------------------
         elif search_start == "edge":
             return f"""
-                LET chunk = DOCUMENT(`{graph_name}_SOURCE`, doc.source_id)
+                LET chunk = DOCUMENT({graph_name}_SOURCE, doc.source_id)
 
                 RETURN {{
                     "chunk_text": (chunk ? chunk.{ARANGO_TEXT_FIELD} : null),
@@ -803,7 +790,7 @@ class GenieaiArangoRetriever(OpeaComponent):
             bind_vars["query_embedding"] = query_embedding
 
             return f"""
-                FOR node, edge IN 1..{traversal_max_depth} ANY doc `{graph_name}_LINKS_TO`
+                FOR node, edge IN 1..{traversal_max_depth} ANY doc {graph_name}_LINKS_TO
                     OPTIONS {{ bfs: true, uniqueVertices: "global" }}
 
                     LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
@@ -813,7 +800,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                     SORT score {sort_order}
                     LIMIT {traversal_max_returned}
 
-                    LET chunk = DOCUMENT(`{graph_name}_SOURCE`, edge.source_id)
+                    LET chunk = DOCUMENT({graph_name}_SOURCE, edge.source_id)
 
                     RETURN MERGE(
                         {{}},
@@ -947,16 +934,7 @@ class GenieaiArangoRetriever(OpeaComponent):
             # ≥1 graph → fan-out engages (case B).
             if _fanout_should_engage(_encoded_graphs, fanout_enabled=FANOUT_ENABLED):
                 try:
-                    # `invoke_fanout` is a MODULE-level orchestrator taking the
-                    # retriever explicitly (shipped that way in 18b34cd13; the
-                    # internal `_invoke_leg(self, ...)` call is module-style
-                    # too). The former `self.invoke_fanout(...)` raised
-                    # AttributeError on the first-ever live fan-out (2026-10-06
-                    # local build smoke) — no test exercised this branch with a
-                    # carrier, which is why it stayed latent. Fixed at the call
-                    # site; the pinned orchestrator body is untouched.
-                    return await invoke_fanout(
-                        self,
+                    return await self.invoke_fanout(
                         input=input,
                         input_dict=input_dict,
                         encoded_graph_names=_encoded_graphs,
@@ -1036,14 +1014,7 @@ class GenieaiArangoRetriever(OpeaComponent):
             # Add labels encoded in search_start (parsed at the top of invoke,
             # stored in input_dict["_encoded_filter_labels"]). See the DATA
             # CONTRACT comment near model_dump() above.
-            #
-            # DO NOT pop(): input_dict is the SHARED reference passed to every
-            # fan-out leg (the pop was a single-thread artifact from before commit
-            # 854613fe6 'unblock the fan-out event loop' made legs run as
-            # concurrent asyncio.to_thread coroutines). Whichever leg raced to
-            # line 1031 first consumed the list; the rest ran unfiltered.
-            # Use get() so every leg sees the same label set.
-            labels_to_filter.extend(input_dict.get("_encoded_filter_labels", []))
+            labels_to_filter.extend(input_dict.pop("_encoded_filter_labels", []))
 
             # CONSTRUCT THE AQL FILTER CLAUSE
             aql_filter_clause = _build_aql_filter_clause(labels_to_filter, filter_strategy)
@@ -1313,25 +1284,18 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             # Retrieve file_id for each chunk using AQL (search_start == 'chunk')
             if search_start == "chunk":
-                # ONE batched AQL for all chunks (was: one round-trip PER chunk
-                # — 20 sequential queries per leg, x9 fan-out legs; measured as
-                # a real share of per-leg latency 2026-10-06).
-                chunk_ids = [r["doc"].id for r in search_res if r["doc"].id]
-                if chunk_ids:
-                    aql = f"""
-                        FOR doc IN `{collection_name}`
-                            FILTER doc._key IN @chunk_ids
-                            RETURN {{key: doc._key, file_id: doc.{ARANGO_FILE_ID_FIELD}}}
-                    """
-                    file_id_by_key = {
-                        row["key"]: row["file_id"]
-                        for row in self.db.aql.execute(aql, bind_vars={"chunk_ids": chunk_ids})
-                    }
-                    for r in search_res:
-                        cid = r["doc"].id
-                        if cid:
-                            fid = file_id_by_key.get(cid)
-                            r["doc"].metadata["file_ids"] = [fid] if fid else []
+                for r in search_res:
+                    chunk_id = r["doc"].id if r["doc"].id else None
+                    if chunk_id:
+                        aql = f"""
+                            FOR doc IN {collection_name}
+                                FILTER doc._key == @chunk_id
+                                RETURN doc.{ARANGO_FILE_ID_FIELD}
+                        """
+                        bind_vars = {"chunk_id": chunk_id}
+                        cursor = self.db.aql.execute(aql, bind_vars=bind_vars)
+                        file_ids = list(doc for doc in cursor)
+                        r["doc"].metadata["file_ids"] = file_ids if file_ids else []
                 logger.info(f"Adding file id metadata after similarity search: {search_res}")
 
             #######################################################################
@@ -1467,7 +1431,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                         if chunk_key:
                             try:
                                 aql = (
-                                    f"FOR doc IN `{collection_name}` FILTER doc._key == @k"
+                                    f"FOR doc IN {collection_name} FILTER doc._key == @k"
                                     f" RETURN doc.{ARANGO_EMBEDDING_FIELD}"
                                 )
                                 emb = next(iter(self.db.aql.execute(aql, bind_vars={"k": chunk_key})), [])
@@ -1529,16 +1493,13 @@ async def _legacy_single_graph_or_refuse(self, *, input_dict, input, query, star
     `_extract_for_graph`'s finally block, byte-identical to pre-1.1).
     """
     if exclude_legacy:
-        # CustomLogger.log_message(level, msg) — NO extra=/structured kwargs
-        # (live-caught 2026-10-06: extra= raised TypeError out of a handler).
-        # Context goes inline in the message, house f-string style.
         logger.info(
-            f"retriever.legacy.excluded — okf_only refuses the legacy free-form corpus "
-            f"(exclude_legacy=True, refused_graph_name={ARANGO_GRAPH_NAME})"
+            "retriever.legacy.excluded — okf_only refuses the legacy free-form corpus",
+            extra={"okf.exclude_legacy": True, "okf.refused_graph_name": ARANGO_GRAPH_NAME},
         )
         span.end()
         return []
-    results = await self._extract_for_graph(
+    return await self._extract_for_graph(
         graph_name=ARANGO_GRAPH_NAME,
         input_dict=input_dict,
         input=input,
@@ -1546,12 +1507,6 @@ async def _legacy_single_graph_or_refuse(self, *, input_dict, input, query, star
         start_time=start_time,
         span=span,
     )
-    # Story 1.0 provenance contract — "EVERY retrieval hit must carry
-    # graph_name, repo_id, concept_id". The fan-out path attaches at fusion;
-    # the legacy tail never did (live-probed 2026-10-06: legacy hits came
-    # back with graph_name=None). Additive metadata only — the extraction
-    # itself (search behavior, ordering, shapes) is untouched.
-    return _attach_provenance(results, ARANGO_GRAPH_NAME)
 
 
 def _fanout_should_engage(encoded_graph_names, fanout_enabled: bool = True) -> bool:
@@ -1655,541 +1610,20 @@ async def _invoke_leg(self, graph_name, input_dict, input, query):
     explicitly; the helper does not need to read or mutate `input.graph_name`.
     Per-leg exceptions and timeouts return [] (Decision E: zero-hit per
     missing graph, ADR-039 D8).
-
-    Each leg gets its OWN span: `_extract_for_graph` unconditionally sets
-    attributes on and ends the span it is given (its contract since the
-    extraction was pulled out of `invoke()`), so passing `span=None` crashed
-    EVERY leg with `'NoneType' object has no attribute 'end'` — after the
-    search had already found hits (live-caught 2026-10-06: legs=9,
-    succeeded=0, fused=0). The legacy single-graph path is untouched — it
-    still passes `invoke()`'s real span.
     """
     import asyncio
 
-    from tracing import get_tracer
-
-    span = get_tracer("retriever.fanout").start_span("retriever.fanout.leg")
-    span.set_attribute("okf.fanout.leg.graph_name", graph_name)
-    leg_started = time.time()
-    logger.info(f"Fan-out leg start — graph_name={graph_name}")
-
-    # The extraction is SYNCHRONOUS-blocking work (python-arango calls) inside
-    # an async wrapper. Awaited directly, one big repo stalled the ENTIRE event
-    # loop — every other leg, the timeout, and health checks queued behind it,
-    # and `wait_for(2s)` could never fire (live 2026-10-06: legs ran 46-94s
-    # under a 2000ms timeout). Run the coroutine on its OWN thread/loop so the
-    # main loop stays responsive; on timeout the awaiting task returns at the
-    # deadline and the worker thread is abandoned in the background (its result
-    # is discarded — the leg counts as zero-hit per Decision E).
-    coro = self._extract_for_graph(
-        graph_name=graph_name,
-        input_dict=input_dict,
-        input=input,
-        query=query,
-        start_time=time.time(),
-        span=span,
+    return await asyncio.wait_for(
+        self._extract_for_graph(
+            graph_name=graph_name,
+            input_dict=input_dict,
+            input=input,
+            query=query,
+            start_time=time.time(),
+            span=None,
+        ),
+        timeout=FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0,
     )
-    leg_task = asyncio.create_task(asyncio.to_thread(asyncio.run, coro))
-    done, pending = await asyncio.wait({leg_task}, timeout=FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0)
-    if pending:
-        logger.info(
-            f"Fan-out leg TIMED OUT after {time.time() - leg_started:.2f}s "
-            f"(limit {FANOUT_PER_GRAPH_TIMEOUT_MS}ms) — graph_name={graph_name}; "
-            f"worker thread abandoned in background"
-        )
-        return []
-    result = leg_task.result()
-    logger.info(
-        f"Fan-out leg done — graph_name={graph_name}, "
-        f"hits={len(result or [])}, elapsed={time.time() - leg_started:.2f}s"
-    )
-    return result
-
-
-async def _route_graphs(self, encoded_graph_names, query_embedding):
-    """Story 1.3 — query-affinity graph selection (global chunk competition).
-
-    One k=ROUTE_TOP_K approximate-NN probe per OKF carrier graph (parallel
-    worker threads, per-probe timeout), all rows merged into a single global
-    ranking; a graph qualifies iff it contributes >= ROUTE_MIN_CHUNKS of the
-    global top-K. Floor: the single best graph when nothing qualifies (routing
-    NEVER selects zero). The legacy ``GRAPH`` leg is excluded from routing by
-    the caller (always searched in hybrid — D8).
-
-    Returns ``(routed_graphs_in_carrier_order, degraded)``. Any infra failure
-    after ROUTE_RETRY attempts degrades to ALL carrier graphs with a loud log
-    + span attribute — the only sanctioned all-graph path.
-
-    Calibration (2026-10-06, 8 repos incl. bali 116k / indonesia 144k chunks):
-    ALPHABET-pure → {alphabet 38/40}; "Alphabet in the UK" → {uk 30, alphabet
-    6, bali 4}; KENYA-pure → {kenya 21, uk 18}; INDO-pure → {indonesia 31,
-    bali 9}. Probe wall ~0.4s (parallel, big repos dominate).
-    """
-    import asyncio
-
-    from tracing import get_tracer
-
-    route_span = get_tracer("retriever.route").start_span("retriever.route")
-    t0 = time.time()
-    okf_graphs = [g for g in encoded_graph_names if g != "GRAPH"]
-
-    async def _probe(graph_name):
-        aql = (
-            f"FOR doc IN `{graph_name}_SOURCE` "
-            f"LET s = APPROX_NEAR_COSINE(doc.{ARANGO_EMBEDDING_FIELD}, @emb) "
-            "SORT s DESC LIMIT @k RETURN s"
-        )
-        rows = self.db.aql.execute(aql, bind_vars={"emb": query_embedding, "k": ROUTE_TOP_K})
-        return graph_name, list(rows)
-
-    async def _probe_batch(graphs):
-        tasks = {asyncio.create_task(_probe(g)): g for g in graphs}
-        graph_to_task = {t: g for t, g in tasks.items()}
-        done, _pending = await asyncio.wait(tasks, timeout=ROUTE_PROBE_TIMEOUT_MS / 1000.0)
-        results, failed = {}, list(graphs)
-        for t in done:
-            try:
-                name, rows = t.result()
-                results[name] = rows
-                failed.remove(graph_to_task[t])
-            except Exception as e:
-                logger.info(f"Routing probe failed — graph_name={graph_to_task[t]}, error={e}")
-        return results, failed
-
-    all_rows = []
-    failed = list(okf_graphs)
-    for _attempt in range(ROUTE_RETRY + 1):
-        results, failed = await _probe_batch(failed)
-        for name, rows in results.items():
-            all_rows.extend((name, s) for s in rows)
-        if not failed:
-            break
-    if failed:
-        logger.error(
-            f"ROUTING DEGRADED — {len(failed)} probe(s) failed after {ROUTE_RETRY + 1} "
-            f"attempt(s): {failed}; searching ALL carrier graphs (infra fallback)"
-        )
-        route_span.set_attribute("rag.route.degraded", True)
-        route_span.set_attribute("rag.route.failed_probes", len(failed))
-        route_span.end()
-        return list(encoded_graph_names), True
-
-    # Global chunk-level competition (size-fair): every probed chunk competes on
-    # cosine regardless of corpus size; qualification is by chunk COUNT.
-    all_rows.sort(key=lambda r: r[1], reverse=True)
-    top = all_rows[:ROUTE_TOP_K]
-    counts: dict[str, int] = {}
-    for name, _s in top:
-        counts[name] = counts.get(name, 0) + 1
-    qualified = sorted(g for g, n in counts.items() if n >= ROUTE_MIN_CHUNKS)
-    floor_note = ""
-    if not qualified and top:
-        best = max(counts, key=lambda g: counts[g])
-        qualified = [best]
-        floor_note = f" (floor: top-1 → {best})"
-    selected = set(qualified)
-    routed = [g for g in encoded_graph_names if g == "GRAPH" or g in selected]
-    route_span.set_attribute("rag.route.selected", ",".join(qualified))
-    route_span.set_attribute("rag.route.dropped", ",".join(g for g in okf_graphs if g not in selected))
-    route_span.set_attribute("rag.route.probed", len(okf_graphs))
-    route_span.set_attribute("rag.route.wall_ms", int((time.time() - t0) * 1000))
-    logger.info(
-        f"Graph routing — probed={len(okf_graphs)}, global_top={len(top)}, "
-        f"counts={ {g: counts.get(g, 0) for g in okf_graphs} }, "
-        f"qualified={qualified}{floor_note}, routed={len(routed)}/{len(encoded_graph_names)}, "
-        f"wall={(time.time() - t0):.2f}s"
-    )
-    route_span.end()
-    return routed, False
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Story 1.6 (2026-10-07) — frontmatter routing.
-#
-# Three stages:
-#   1. _load_frontmatter_summaries(repo_ids) — single AQL fetch
-#   2. _score_repo_by_frontmatter(repo_id, query_emb, summaries) — pure math
-#   3. _select_repos_by_frontmatter(okf_graphs, query_emb, summaries, top_k)
-#
-# Dispatched by OKF_SEARCH_STYLE (default hybrid: frontmatter + chunk-probe UNION):
-#   hybrid              -> frontmatter + chunk-probe, UNION result
-#   frontmatter_tags    -> frontmatter only (probe SKIPPED)
-#   vector_probe        -> chunk-probe only (Story 1.3 behavior, untouched)
-# Kill switch: RETRIEVER_FRONTMATTER_ROUTING_ENABLED=false forces vector_probe.
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-def _cosine(a: list[float], b: list[float]) -> float:
-    """Plain python cosine — no numpy dependency for the hot path. Used by
-    the frontmatter scoring stage (~48 calls per query at 8 carrier graphs,
-    6 fields + forbidden). Sub-millisecond per query at the typical TEI
-    1024-dim output."""
-    if not a or not b or len(a) != len(b):
-        return 0.0
-    na = 0.0
-    nb = 0.0
-    dot = 0.0
-    for i in range(len(a)):
-        dot += a[i] * b[i]
-        na += a[i] * a[i]
-        nb += b[i] * b[i]
-    if na <= 0.0 or nb <= 0.0:
-        return 0.0
-    return dot / (na**0.5 * nb**0.5)
-
-
-async def _load_frontmatter_summaries(self, repo_ids: list[str]) -> dict[str, dict]:
-    """Single AQL fetch — loads every per-repo frontmatter doc field in one round-trip.
-
-    Story 1.7 (2026-10-08, supersedes the Story 1.6 dedicated collection):
-    the per-repo frontmatter lives in `okf_repositories.frontmatter` (a new
-    doc field, additive) — the index.md YAML frontmatter block is the
-    curator-facing projection. The retriever reads the doc field, embeds
-    the unique tag values lazily on first query per process lifetime
-    (in-process string-keyed cache), and computes the routing score from
-    the cached vectors. The precomputed summary row is gone.
-
-    Returns repo_id -> frontmatter doc (or absent from the dict if the
-    repo has no frontmatter field — the frontmatter stage filter then
-    excludes it from the candidate set, per the spec's "Stage C filter"
-    rule). The new design also adds the per-field tag VALUE LISTS
-    (so the lazy embed can compute vectors on first use).
-    """
-    from tracing import get_tracer
-
-    if not repo_ids:
-        return {}
-    tracer = get_tracer("retriever.frontmatter")
-    span = tracer.start_span("retriever.frontmatter.load_doc_fields")
-    try:
-        cursor = await self.db.aql.execute(
-            "FOR r IN okf_repositories FILTER r._key IN @repo_ids "
-            "RETURN { _key: r._key, frontmatter: r.frontmatter, name: r.name }",
-            bind_vars={"repo_ids": repo_ids},
-        )
-        rows = []
-        async for r in cursor:
-            rows.append(r)
-        # Migration-window fall-through: the local build may still have
-        # rows in the old okf_repositories_frontmatter_summary collection
-        # (one repo, ~28 tag rows from 2026-10-08). If the new doc field
-        # is empty AND the old collection has a row, return the old
-        # row's count columns so the retriever doesn't lose routing for
-        # that repo during the migration window. The retriever's
-        # score function still works on the count summary.
-        out = {}
-        for r in rows:
-            if r.get("frontmatter"):
-                out[r["_key"]] = r["frontmatter"]
-        legacy = []
-        for r in rows:
-            if r["_key"] not in out:
-                try:
-                    legacy_cursor = await self.db.aql.execute(
-                        f"FOR s IN {FRONTMATTER_SUMMARY_COLLECTION} FILTER s._key == @rid RETURN s",
-                        bind_vars={"rid": r["_key"]},
-                    )
-                    async for s in legacy_cursor:
-                        if s.get("topic_count", 0) > 0 or s.get("forbidden_count", 0) > 0:
-                            out[r["_key"]] = {
-                                "topic_count": s.get("topic_count", 0),
-                                "entity_count": s.get("entity_count", 0),
-                                "forbidden_count": s.get("forbidden_count", 0),
-                                "keyword_count": s.get("keyword_count", 0),
-                                "_legacy_collection": True,
-                            }
-                            legacy.append(r["_key"])
-                except Exception:
-                    pass
-        if legacy:
-            logger.warning(
-                f"frontmatter.legacy_fallthrough — repos={legacy} (these have rows in the "
-                "old okf_repositories_frontmatter_summary collection but no doc field; "
-                "run scripts/migrate-frontmatter-to-repo-doc.js to lift them)"
-            )
-        span.set_attribute("okf.frontmatter.requested", len(repo_ids))
-        span.set_attribute("okf.frontmatter.found", len(out))
-        span.set_attribute("okf.frontmatter.legacy", len(legacy))
-        return out
-    except Exception as e:
-        logger.error(f"frontmatter.load_doc_fields failed — degrading: {e}")
-        span.set_attribute("okf.frontmatter.error", str(e))
-        return {}
-    finally:
-        span.end()
-
-
-# In-process string-keyed cache of tag embeddings. Keyed by the tag
-# value string so a sibling repo with the same tag reuses the vector
-# without an extra TEI call. Per the design (Story 1.7 Q3): cold start
-# pays one TEI call per unique tag value across the corpus; steady
-# state is zero tag-embed cost.
-_FRONTMATTER_TAG_VECTOR_CACHE: dict[str, list[float]] = {}
-
-
-async def _embed_tag_values(unique_values: list[str]) -> dict[str, list[float]]:
-    """Embed the unique tag values via the existing TEI client.
-
-    Returns a dict value -> vector. Uses the in-process cache first;
-    only uncached values are sent to TEI in one batched call.
-    """
-    from .config import TEI_EMBED_HOST
-    import asyncio
-
-    out = {}
-    uncached = []
-    for v in unique_values:
-        key = v.lower().strip()
-        if key in _FRONTMATTER_TAG_VECTOR_CACHE:
-            out[v] = _FRONTMATTER_TAG_VECTOR_CACHE[key]
-        else:
-            uncached.append(v)
-    if not uncached:
-        return out
-    # Batched TEI call. The retriever's TEI client is the same one
-    # the OPEA embedding service uses (one shared endpoint per
-    # retriever instance). Single POST with N inputs.
-    try:
-        import aiohttp
-        timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(
-                f"{TEI_EMBED_HOST}/embed",
-                json={"inputs": uncached, "truncate": True},
-                headers={"Content-Type": "application/json"},
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    vectors = data.get("data") or data.get("embeddings") or data
-                    if isinstance(vectors, list) and len(vectors) == len(uncached):
-                        for v, vec in zip(uncached, vectors):
-                            if isinstance(vec, list):
-                                _FRONTMATTER_TAG_VECTOR_CACHE[v.lower().strip()] = vec
-                                out[v] = vec
-                else:
-                    logger.warning(
-                        f"frontmatter.embed.tei_status={resp.status} — degrading to skip"
-                    )
-    except Exception as e:
-        logger.warning(f"frontmatter.embed.tei_failed — degrading: {e}")
-    return out
-
-
-async def _ensure_tag_vectors(frontmatter: dict) -> dict[str, dict[str, list[float]]]:
-    """For one frontmatter doc, return {field: {value: vector}}.
-
-    Used by _score_repo_by_frontmatter. The score function does the
-    per-field aggregate over these vectors. Cached across repos by
-    the in-process cache in _embed_tag_values.
-    """
-    if not frontmatter:
-        return {}
-    # Collect all unique values across fields (one batched embed).
-    all_values = []
-    for field in ("topic", "entity", "forbidden", "keyword"):
-        for v in frontmatter.get(field) or []:
-            if v and v not in all_values:
-                all_values.append(v)
-    # scope + summary are single-value; include them too.
-    for field in ("scope", "summary"):
-        v = frontmatter.get(field)
-        if v and v not in all_values:
-            all_values.append(v)
-    if not all_values:
-        return {}
-    vec_by_value = await _embed_tag_values(all_values)
-    by_field = {}
-    for field in ("topic", "entity", "forbidden", "keyword"):
-        by_field[field] = {}
-        for v in frontmatter.get(field) or []:
-            if v in vec_by_value:
-                by_field[field][v] = vec_by_value[v]
-    for field in ("scope", "summary"):
-        v = frontmatter.get(field)
-        if v and v in vec_by_value:
-            by_field[field] = vec_by_value[v]
-    return by_field
-
-
-def _score_repo_by_frontmatter(
-    repo_id: str,
-    query_emb: list[float],
-    frontmatter: dict,
-    tag_vectors: dict[str, dict[str, list[float]]] | None = None,
-) -> dict:
-    """Pure math: weighted mean of per-field tag cosines minus forbidden penalty.
-
-    Story 1.7: instead of using the precomputed combination vectors
-    (which the old summary row stored), the score is the weighted mean
-    cosine over the field's individual tag values. Embedding the tag
-    values lazily is one TEI call per unique value across the corpus
-    (in-process cache), amortized across sibling repos.
-
-    Returns {"score": float, "breakdown": dict} for diagnostics.
-    """
-    breakdown = {}
-    score = 0.0
-    if not frontmatter or not query_emb:
-        return {"score": score, "breakdown": breakdown}
-    # Legacy summary row path: the count columns are still useful for
-    # an early "do we have enough tags?" gate. If tag_vectors is None
-    # (the legacy path), we can't score the repo, so the gate
-    # excludes it (Stage C filter).
-    if tag_vectors is None:
-        topic_count = frontmatter.get("topic_count", 0)
-        if topic_count >= 3:
-            return {"score": 0.0, "breakdown": {"legacy_unscored": True}}
-        return {"score": 0.0, "breakdown": {}}
-    # Weighted mean cosine per field.
-    for field in ("topic", "entity", "keyword", "scope", "summary"):
-        if field in ("scope", "summary"):
-            # Single-value fields: cosine directly.
-            v = tag_vectors.get(field)
-            if not v or not query_emb:
-                continue
-            cos = _cosine(query_emb, v)
-            weight = FRONTMATTER_TAG_WEIGHTS.get(field, 0.0)
-            breakdown[field] = cos * weight
-            score += cos * weight
-        else:
-            vecs = list((tag_vectors.get(field) or {}).values())
-            if not vecs:
-                continue
-            cosines = [max(0.0, _cosine(query_emb, vec)) for vec in vecs]
-            mean_cos = sum(cosines) / len(cosines)
-            weight = FRONTMATTER_TAG_WEIGHTS.get(field, 0.0)
-            breakdown[field] = mean_cos * weight
-            score += mean_cos * weight
-    # Subtractive: forbidden tag values are subtracted from the score
-    # when the query is close to any of them. Per-value (was: a single
-    # combination vector). The penalty sums over all forbidden tags
-    # the query is close to, weighted by FRONTMATTER_FORBIDDEN_PENALTY.
-    forbidden_vecs = list((tag_vectors.get("forbidden") or {}).values())
-    if forbidden_vecs and query_emb:
-        forbidden_cos = sum(max(0.0, _cosine(query_emb, vec)) for vec in forbidden_vecs) / len(forbidden_vecs)
-        penalty = forbidden_cos * FRONTMATTER_FORBIDDEN_PENALTY
-        breakdown["forbidden_penalty"] = -penalty
-        score -= penalty
-    return {"score": score, "breakdown": breakdown}
-
-
-async def _select_repos_by_frontmatter(
-    okf_graphs: list[str],
-    query_emb: list[float],
-    summaries: dict[str, dict],
-    top_k: int = FRONTMATTER_TOP_K,
-) -> list[str]:
-    """Score every OKF graph by frontmatter affinity and return the top-K.
-
-    Story 1.7: the score function now embeds the unique tag values
-    lazily on first use (one TEI call per unique value across the
-    corpus, cached in-process). The precomputed combination vectors
-    are gone.
-
-    Stage C filter: a graph with no frontmatter is excluded from the
-    candidate set. If no graph qualifies, returns [] — the caller logs
-    the degraded state and degrades to all-graphs.
-    """
-    if not okf_graphs or not query_emb:
-        return []
-    # Embed the tag values for every repo in this carrier set. The
-    # first call pays the TEI cost; subsequent calls are cache hits.
-    by_repo_vectors = {}
-    for g, fm in summaries.items():
-        if fm and not fm.get("_legacy_collection"):
-            by_repo_vectors[g] = await _ensure_tag_vectors(fm)
-    scored = []
-    for g in okf_graphs:
-        summary = summaries.get(g)
-        if not summary:
-            continue  # Stage C: no frontmatter, no candidate
-        if summary.get("_legacy_collection"):
-            # Legacy summary row: count-only. Use the relaxed gate —
-            # score = 0, the Stage C filter still applies.
-            r = _score_repo_by_frontmatter(g, query_emb, summary, tag_vectors=None)
-        else:
-            tag_vectors = by_repo_vectors.get(g, {})
-            r = _score_repo_by_frontmatter(g, query_emb, summary, tag_vectors=tag_vectors)
-        if r["score"] >= FRONTMATTER_MIN_SCORE:
-            scored.append((g, r["score"]))
-    scored.sort(key=lambda x: x[1], reverse=True)
-    selected = [g for g, _ in scored[:top_k]]
-    logger.info(
-        f"frontmatter.select — scored={len(scored)}, top_k={top_k}, "
-        f"selected={selected}, scores={[round(s, 3) for _, s in scored[:top_k]]}"
-    )
-    return selected
-
-
-async def _select_repos(
-    self,
-    encoded_graph_names: list[str],
-    query_embedding,
-    input_dict,
-) -> tuple[list[str], dict]:
-    """Story 1.6 — env-driven OKF search-style dispatcher.
-
-    Returns (search_set, info_dict) where info_dict carries span attributes
-    for rag.route.* observability. The legacy chunk-probe path (Story 1.3)
-    is preserved and called by this dispatcher when the style requires it.
-    """
-    from core.label_contract import decode_sticky, decode_tags
-
-    info: dict = {"style": OKF_SEARCH_STYLE, "applied": False}
-    # Master kill switch — overrides the env value.
-    effective_style = OKF_SEARCH_STYLE if FRONTMATTER_ROUTING_ENABLED else "vector_probe"
-    if not FRONTMATTER_ROUTING_ENABLED:
-        logger.warning("FRONTMATTER_ROUTING_ENABLED=false — forcing vector_probe (overrides OKF_SEARCH_STYLE)")
-        info["kill_switch"] = True
-    info["effective_style"] = effective_style
-
-    if effective_style == "vector_probe":
-        # Delegate to the Story 1.3 path unchanged.
-        routed, degraded = await _route_graphs(self, encoded_graph_names, query_embedding)
-        info["applied"] = True
-        info["degraded"] = degraded
-        info["chunk_probe_count"] = len(routed)
-        info["frontmatter_count"] = 0
-        info["union_count"] = len(routed)
-        return routed, info
-
-    # frontmatter_tags OR hybrid: load the carrier-declared tag repo IDs.
-    tag_ids = decode_tags(str(input_dict.get("search_start") or ""))
-    # Authorization still wins: intersect with the carrier's authorized set.
-    authorized = set(encoded_graph_names) - {"GRAPH"}
-    candidate_ids = [t for t in tag_ids if t in authorized]
-    info["candidate_ids"] = candidate_ids
-    if not candidate_ids:
-        info["reason"] = "no_tag_repo_ids"
-        return list(encoded_graph_names), info
-
-    summaries = await _load_frontmatter_summaries(self, candidate_ids)
-    frontmatter_set = await _select_repos_by_frontmatter(candidate_ids, query_embedding, summaries)
-    info["frontmatter_count"] = len(frontmatter_set)
-    if effective_style == "frontmatter_tags":
-        # Chunk-probe SKIPPED — return the frontmatter-selected set only
-        # (intersected with the carrier's authorized graphs).
-        result = [g for g in frontmatter_set if g in authorized]
-        info["applied"] = True
-        info["union_count"] = len(result)
-        info["chunk_probe_count"] = 0
-        return result, info
-
-    # hybrid (default): union of frontmatter + chunk-probe + sticky. The k=40
-    # chunk-probe is NEVER skipped under hybrid — that's the user's explicit
-    # "don't shelve the probe" requirement. Sticky graphs come along for
-    # free (Story 1.3 continuity contract).
-    routed, degraded = await _route_graphs(self, encoded_graph_names, query_embedding)
-    sticky = decode_sticky(str(input_dict.get("search_start") or ""))
-    sticky_valid = [g for g in sticky if g in authorized and g != "GRAPH"]
-    union = set(routed) | set(frontmatter_set) | set(sticky_valid)
-    result = [g for g in encoded_graph_names if g == "GRAPH" or g in union]
-    info["applied"] = True
-    info["degraded"] = degraded
-    info["chunk_probe_count"] = len(routed)
-    info["union_count"] = len(result)
-    info["sticky_count"] = len(sticky_valid)
-    return result, info
 
 
 async def invoke_fanout(self, input, input_dict, encoded_graph_names):
@@ -2210,55 +1644,8 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
     tracer = get_tracer("retriever.fanout")
     span = tracer.start_span("retriever.fanout")
     span.set_attribute("okf.fanout.engaged", True)
-    span.set_attribute("okf.fanout.carrier_graph_count", len(encoded_graph_names))
+    span.set_attribute("okf.fanout.graph_count", len(encoded_graph_names))
     span.set_attribute("okf.fanout.timeout_ms", FANOUT_PER_GRAPH_TIMEOUT_MS)
-
-    # Story 1.3 — query-affinity routing: prune OKF legs before extraction.
-    # The legacy GRAPH leg is always searched (hybrid) and never routed (D8);
-    # sticky conversation graphs bypass qualification (continuity contract).
-    # Failure modes degrade towards MORE recall, never less: no embedding,
-    # routing disabled, single-OKF-graph carriers, or degraded probes all fall
-    # back to the full carrier.
-    #
-    # Story 1.6 (2026-10-07) — frontmatter routing dispatches by OKF_SEARCH_STYLE
-    # (default hybrid = frontmatter + chunk-probe UNION). _select_repos calls
-    # _route_graphs internally for vector_probe / hybrid styles; frontmatter_tags
-    # style skips the probe. The k=40 chunk-probe is NEVER skipped under the
-    # default hybrid style — that's the user's explicit "don't shelve the
-    # probe" requirement (directive 2026-10-07).
-    from core.label_contract import decode_sticky
-
-    search_set = list(encoded_graph_names)
-    query_embedding = input.embedding if isinstance(input.embedding, list) and input.embedding else None
-    _sticky = decode_sticky(str(input_dict.get("search_start") or ""))
-    span.set_attribute("rag.route.sticky", ",".join(_sticky))
-    if not ROUTE_ENABLED:
-        logger.info("Graph routing disabled (RETRIEVER_ROUTE_ENABLED=false) — full carrier fan-out")
-    elif not query_embedding:
-        logger.info("Graph routing skipped — no query embedding on the request")
-    elif len([g for g in encoded_graph_names if g != "GRAPH"]) < 2:
-        logger.info("Graph routing skipped — fewer than two OKF graphs on the carrier")
-    else:
-        try:
-            # Story 1.6 — _select_repos dispatches by OKF_SEARCH_STYLE; for
-            # vector_probe / hybrid it forwards to _route_graphs (Story 1.3
-            # behavior preserved). The returned search_set is the FINAL set
-            # for this query (frontmatter-only + sticky UNION; chunk-probe
-            # already folded in when style=hybrid).
-            search_set, route_info = await _select_repos(self, encoded_graph_names, query_embedding, input_dict)
-            span.set_attribute("rag.route.style", route_info.get("effective_style", OKF_SEARCH_STYLE))
-            span.set_attribute("rag.route.applied", route_info.get("applied", False))
-            if "degraded" in route_info:
-                span.set_attribute("rag.route.degraded", route_info["degraded"])
-            span.set_attribute("rag.route.frontmatter_count", route_info.get("frontmatter_count", 0))
-            span.set_attribute("rag.route.chunk_probe_count", route_info.get("chunk_probe_count", 0))
-            span.set_attribute("rag.route.union_count", route_info.get("union_count", len(search_set)))
-            span.set_attribute("rag.route.search_set", ",".join(search_set))
-        except Exception as e:
-            # Routing must never break retrieval — degrade to the full carrier.
-            logger.error(f"Graph routing crashed — degrading to full carrier fan-out: {e}")
-            span.set_attribute("rag.route.applied", False)
-    span.set_attribute("okf.fanout.graph_count", len(search_set))
     sem = asyncio.Semaphore(FANOUT_MAX_GRAPHS)
 
     async def _leg(graph_name):
@@ -2269,21 +1656,24 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
                 )
             except TimeoutError:
                 logger.info(
-                    f"Fan-out leg timed out (skip-on-timeout, ADR-039 D8) — "
-                    f"graph_name={graph_name}, timeout_ms={FANOUT_PER_GRAPH_TIMEOUT_MS}"
+                    "Fan-out leg timed out (skip-on-timeout, ADR-039 D8)",
+                    extra={"okf.graph_name": graph_name, "timeout_ms": FANOUT_PER_GRAPH_TIMEOUT_MS},
                 )
                 return []
             except Exception as e:
-                logger.info(f"Fan-out leg failed (zero-hit, ADR-039 D8) — graph_name={graph_name}, error={e}")
+                logger.info(
+                    "Fan-out leg failed (zero-hit, ADR-039 D8)",
+                    extra={"okf.graph_name": graph_name, "error": str(e)},
+                )
                 return []
 
     try:
-        leg_results = await asyncio.gather(*[_leg(g) for g in search_set])
+        leg_results = await asyncio.gather(*[_leg(g) for g in encoded_graph_names])
     except Exception:
         span.end()
         raise
     per_graph = []
-    for graph_name, items in zip(search_set, leg_results, strict=True):
+    for graph_name, items in zip(encoded_graph_names, leg_results, strict=True):
         enriched = _attach_provenance(items, graph_name)
         per_graph.append((graph_name, enriched))
     target_k = min(int(input.k) if input.k else 10, FANOUT_CANDIDATE_CAP_GLOBAL)
@@ -2293,8 +1683,13 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
     span.set_attribute("okf.fanout.legs_failed", sum(1 for r in leg_results if not r))
     span.set_attribute("okf.fanout.fused_count", len(fused))
     logger.info(
-        f"Fan-out complete — legs={len(encoded_graph_names)}, fused={len(fused)}, "
-        f"succeeded={sum(1 for r in leg_results if r)}, failed={sum(1 for r in leg_results if not r)}"
+        "Fan-out complete",
+        extra={
+            "legs": len(encoded_graph_names),
+            "fused": len(fused),
+            "succeeded": sum(1 for r in leg_results if r),
+            "failed": sum(1 for r in leg_results if not r),
+        },
     )
     span.end()
     return fused

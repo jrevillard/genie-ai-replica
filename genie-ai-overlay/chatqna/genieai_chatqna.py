@@ -1011,26 +1011,8 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         _ctx = retrieval_context if isinstance(retrieval_context, dict) else {}
         _graph_names = (_ctx.get("authorized_graph_names") or []) or (_gp(kwargs, "authorized_graph_names", []) or [])
         _exclude_legacy = bool(_ctx.get("exclude_legacy")) or bool(_gp(kwargs, "exclude_legacy", False))
-        # Story 1.3 — conversation-continuity set (sticky routing). Read from the
-        # same wire as authorized_graph_names (the `context` object). Empty =
-        # first query of a conversation / feature absent → segment omitted and
-        # the mocked pre-1.3 encode never sees the kwarg.
-        _sticky_graph_names = (_ctx.get("sticky_graph_names") or []) or (_gp(kwargs, "sticky_graph_names", []) or [])
-        # Story 1.6 — frontmatter routing repo IDs. The BFF emits this from
-        # the authorized graph set (parallel to ::graphs:); the retriever
-        # reads the ::tags: segment and loads okf_repositories_frontmatter_summary
-        # rows for the frontmatter routing stage. The chatqna test suite mocks
-        # encode with the pre-1.1 signature on the default path, so tags is
-        # passed ONLY when set (same defensive pattern as sticky).
-        _frontmatter_repo_ids = (_ctx.get("frontmatter_repo_ids") or []) or (
-            _gp(kwargs, "frontmatter_repo_ids", []) or []
-        )
         if _exclude_legacy:
             logger.info("Carrier carries the okf_only signal (::no_legacy:) — the legacy free-form corpus is excluded")
-        if _sticky_graph_names:
-            logger.info(f"Carrier carries the sticky continuity set (::sticky:) — {len(_sticky_graph_names)} graph(s)")
-        if _frontmatter_repo_ids:
-            logger.info(f"Carrier carries the frontmatter routing set (::tags:) — {len(_frontmatter_repo_ids)} repo(s)")
         if _filter_labels and not _graph_names and not _exclude_legacy:
             # LEGACY CALL SURFACE: the chatqna test suite (test_chatqna.py)
             # mocks `core.label_contract.encode_filter_labels`; calling it
@@ -1044,47 +1026,10 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
             _base_mode = inputs.get("search_start", "chunk")
             if _exclude_legacy:
-                # no_legacy/sticky are passed ONLY when set — the mocked encode in the
+                # no_legacy is passed ONLY when true — the mocked encode in the
                 # existing test suite has the pre-1.1 signature and must never
-                # receive the kwargs on the default path.
-                if _sticky_graph_names:
-                    if _frontmatter_repo_ids:
-                        inputs["search_start"] = encode(
-                            _base_mode,
-                            labels=_filter_labels,
-                            graphs=_graph_names,
-                            no_legacy=True,
-                            sticky=_sticky_graph_names,
-                            tags=_frontmatter_repo_ids,
-                        )
-                    else:
-                        inputs["search_start"] = encode(
-                            _base_mode,
-                            labels=_filter_labels,
-                            graphs=_graph_names,
-                            no_legacy=True,
-                            sticky=_sticky_graph_names,
-                        )
-                else:
-                    inputs["search_start"] = encode(
-                        _base_mode, labels=_filter_labels, graphs=_graph_names, no_legacy=True
-                    )
-            elif _sticky_graph_names:
-                if _frontmatter_repo_ids:
-                    inputs["search_start"] = encode(
-                        _base_mode,
-                        labels=_filter_labels,
-                        graphs=_graph_names,
-                        sticky=_sticky_graph_names,
-                        tags=_frontmatter_repo_ids,
-                    )
-                else:
-                    inputs["search_start"] = encode(
-                        _base_mode,
-                        labels=_filter_labels,
-                        graphs=_graph_names,
-                        sticky=_sticky_graph_names,
-                    )
+                # receive the kwarg on the default path.
+                inputs["search_start"] = encode(_base_mode, labels=_filter_labels, graphs=_graph_names, no_legacy=True)
             else:
                 inputs["search_start"] = encode(_base_mode, labels=_filter_labels, graphs=_graph_names)
 
@@ -1376,21 +1321,6 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             }
             if any(v != "N/A" for v in _text_to_chunk_key.values()):
                 next_data["text_to_chunk_key"] = _text_to_chunk_key
-
-            # Story 1.1 — per-hit provenance (graph_name/repo_id/concept_id)
-            # rides the retriever's parallel metadata[] array (Story 1.0
-            # fusion-time attribution). Preserve it keyed by doc id so the
-            # source-assembly step can attribute OKF concept sources WITHOUT
-            # calling okf-server (chatqna stays a service consumer — spec
-            # Never rule; the BFF is the trusted side).
-            _provenance_by_doc = {}
-            for i in range(len(retrieved_docs)):
-                md = _ck_meta[i] if i < len(_ck_meta) else {}
-                prov = {k: md[k] for k in ("graph_name", "repo_id", "concept_id") if md.get(k) is not None}
-                if prov:
-                    _provenance_by_doc[retrieved_docs[i].get("id", "")] = prov
-            if _provenance_by_doc:
-                next_data["provenance_by_doc"] = _provenance_by_doc
 
             # Expected data format if using tei_reranker directly (bypassing reranker service):
             # next_data["query"] = data["initial_query"]
@@ -1759,9 +1689,6 @@ class ChatQnAService:
 
         retriever_node_output = result_dict.get(retriever_key, {})
         file_id_pairs = retriever_node_output.get("file_id_pairs", {})
-        # Story 1.1 — per-hit retrieval provenance carried from the retriever
-        # node (graph_name/repo_id/concept_id, keyed by orchestrator doc id).
-        provenance_by_doc = retriever_node_output.get("provenance_by_doc", {}) or {}
         # Retriever docs carry the orchestrator id + text + similarity score (metadata.score).
         retrieved_docs = retriever_node_output.get("retrieved_docs", [])
 
@@ -1843,42 +1770,10 @@ class ChatQnAService:
                     # the confidence mean whenever the document-repository/backend
                     # metadata call failed intermittently — the prime cause of
                     # "anormally low" confidence reported in production.
-                    #
-                    # OKF concept chunks (Story 4.8-amend content-only chunking)
-                    # carry file_id == concept_id — those resolve in okf-server,
-                    # NOT doc-repository, so this fetch 404s BY DESIGN for every
-                    # OKF-sourced hit. Skipping them (the old behavior) threw
-                    # away all OKF ground truth and forced is_grounded=False on
-                    # every OKF query (live-caught 2026-10-06: retriever
-                    # legs=9/fused=20 with Alphabet concepts in hand, yet zero
-                    # sources surfaced and the answer was flagged AI-generated).
-                    # Surface the hit from its IN-PAYLOAD retrieval provenance
-                    # instead — no okf-server call (chatqna stays a service
-                    # consumer; the BFF is the trusted side). Doc-repo files
-                    # keep the enriched path above verbatim.
-                    prov = provenance_by_doc.get(doc_id_by_orchestrator, {})
-                    logger.info(
-                        f"doc-repo metadata absent for file ID {file_id} — surfacing "
-                        f"as OKF concept source (graph_name={prov.get('graph_name', 'n/a')}, "
-                        f"concept_id={file_id})"
+                    logger.warning(
+                        f"Skipping document {doc_id_by_orchestrator}: metadata fetch "
+                        f"failed for file ID {file_id}; not surfacing as a source."
                     )
-                    source_documents_file_ids.append(file_id)
-                    okf_source = {
-                        "document_id": file_id,
-                        "document_name": str(file_id).replace("_", " ").strip(),
-                        "url": "",
-                        "categoryLabels": [],
-                        "serviceLabels": [],
-                        "score": score,
-                        "concept_id": file_id,
-                        "source": "okf-concept",
-                    }
-                    if prov.get("graph_name"):
-                        okf_source["graph_name"] = prov["graph_name"]
-                    if prov.get("repo_id"):
-                        okf_source["repo_id"] = prov["repo_id"]
-                    source_documents_formatted.append(okf_source)
-                    scores.append(score)
                     continue
 
             # Mark this file as surfaced only after a successful metadata resolution,

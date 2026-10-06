@@ -3300,13 +3300,3 @@ status: RESOLVED in MR !343 follow-up commit (test file deleted 2026-09-25)
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-retriever-multigraph-fanout-rrf.md`
   summary: `.claude/dora.json` is untracked and not gitignored (DORA tooling config with repo path/host/project id) — decide commit-vs-ignore.
   evidence: Pre-existing before the story 1-1 baseline commit e377016de (present in the conversation-start git status); pollutes every `git status` on the branch; not caused by this change (BH-3, step-04 review loop 0).
-
-## Deferred from: Story 1.6 suggest-path redesign (2026-10-08)
-
-- **Selection-based tag authoring (separate UI feature, very powerful and flexible — David 2026-10-08)**: With the suggest path now reading curator-controlled per-concept topics as the single source of truth (spec change 2026-10-08, code in `frontmatter-service.js:sampleConceptsFromRepo`), the next-step UX is: let the admin user select text in a concept file (in the editor's center markdown pane) and turn the selection into a new topic tag for the repo. Architectural sketch:
-  - **Surface**: the editor's existing center pane already renders the concept's markdown source. Add a `mouseup` selection handler that, on a non-empty selection within a rendered concept body, surfaces a floating "Add as topic tag" CTA (DS-styled, anchored to the selection bounding rect).
-  - **Write path**: the CTA calls `conceptService.update` (existing) with the new value appended to the current concept's `tags[]`. The concept's `tags` are already the aggregation input the `suggestTags` LLM uses to derive repo-level topics, so the new tag immediately becomes available at the next `Refresh suggestions` and to the editor's per-concept right-rail display.
-  - **Scope**: editor (`components/gov-chat-frontend/src/components/okf/editor/RepoEditor.vue` + `editor/ConceptEditor.vue`). The wizard's Curate step does NOT get this — the editor is the persistent authoring surface; the wizard is for one-shot review/approve.
-  - **i18n**: 14-locale copy for the CTA label + success toast. Reuse `okf.glossary.*` keys where possible; add `okf.editor.tagFromSelection.*` namespace.
-  - **Acceptance**: a tagged-concepts file produces a visibly different topic set at the next suggest run; selection works in both Source and Rendered view (or only Source — pick one and document).
-  - **Status**: NOT in scope of the Story 1.6 bug-fix MR landing today. Defer to a fresh story file under `_bmad-output/implementation-artifacts/` (e.g. `1-7-selection-based-tag-authoring.md` or similar). Touches the editor surface, which means the repo-level test plan needs the editor in addition to the wizard.

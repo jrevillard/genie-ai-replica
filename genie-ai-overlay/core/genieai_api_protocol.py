@@ -57,19 +57,6 @@ class RequestContext(BaseModel):
     authorized_graph_names: list[str] | None = None
     mode: str | None = None
     exclude_legacy: bool | None = None
-    # Story 1.3 (query-affinity routing): conversation-routed graph names the
-    # BFF persisted from previous answers' sources. The retriever searches
-    # sticky graphs unconditionally (they bypass affinity qualification) so a
-    # signal-free follow-up stays locked to the conversation's subject. Additive
-    # + None-default: legacy payloads parse byte-identically.
-    sticky_graph_names: list[str] | None = None
-    # Story 1.6 (frontmatter routing, 2026-10-07): the BFF emits a parallel
-    # list of repo IDs whose okf_repositories_frontmatter_summary rows should
-    # be loaded for the frontmatter routing stage. Additive + None-default:
-    # legacy payloads parse byte-identically. The retriever decodes this from
-    # the ::tags: segment in the carrier, parallel to how it decodes
-    # ::sticky: / ::graphs: / ::no_legacy:.
-    frontmatter_repo_ids: list[str] | None = None
 
 
 class ChatCompletionRequest(BaseModel):

@@ -18,7 +18,7 @@ threshold, diagnostic mode, scripts inventory, live vs offline).
 
 **`eval/RUNBOOK.md`** is the end-to-end phase-by-phase runbook (Phase 0
 pre-flight through Phase 5 failure attribution), including the wrapper
-`scripts/run_anchor_with_cleanup.sh` for stack-agnostic anchor runs.
+`../scripts/run_anchor_with_cleanup.sh` for stack-agnostic anchor runs.
 
 The gold dataset is corpus-independent (built from a benchmark xlsx) — the
 same `gold_dataset.json` works against any deployment. Re-run Phases 3+4 to

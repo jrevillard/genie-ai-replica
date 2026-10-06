@@ -47,7 +47,15 @@ EVAL_KC_REALM_S="$EVAL_KC_REALM"; EVAL_KC_CLIENT_ID_S="$EVAL_KC_CLIENT_ID"
 # --- dynamic resolution (exported: run_eval.py inherits) --------------------
 export CHATQNA_CONTAINER="${CHATQNA_CONTAINER:-$(docker ps --format '{{.Names}}' | grep chatqna-xeon-backend-server | head -1)}"
 export CHATQNA_SERVICE_NAME="${CHATQNA_SERVICE_NAME:-genieai-chatqna}"
-export VICTORIATRACES_SVC="${VICTORIATRACES_SVC:-$(echo "$CHATQNA_SERVICE_NAME" | sed 's/chatqna/victoriatraces/;s/-chatqna$/-victoriatraces/')}"
+# G1 fix: resolve VICTORIATRACES_SVC from `docker service ls` (the real swarm
+# service name carries the stack prefix + underscore, e.g.
+# `genieai-el-salvador_victoriatraces` — a sed rewrite of CHATQNA_SERVICE_NAME
+# silently produced `genieai-victoriatraces` with no prefix, and the in-container
+# curl resolved to a non-existent DNS name with RC=6 (no error output under -s),
+# so every fetch_selection errored). Prefer the env override (operators can
+# pin), then ask docker — fail loud if neither resolves, never guess.
+export VICTORIATRACES_SVC="${VICTORIATRACES_SVC:-$(docker service ls --format '{{.Name}}' 2>/dev/null | grep victoriatraces | head -1)}"
+: "${VICTORIATRACES_SVC:?could not resolve a victoriatraces service (docker service ls) — set VICTORIATRACES_SVC explicitly}"
 export GRAPH_SOURCE="${GRAPH_SOURCE:-GRAPH_TEST_SOURCE}"
 export ARANGO_URL="${ARANGO_URL:-http://localhost:8529}"
 export ARANGO_USER="${ARANGO_USER:-root}"

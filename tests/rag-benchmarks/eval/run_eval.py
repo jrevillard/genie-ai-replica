@@ -83,9 +83,17 @@ _TOKEN_REFRESH_MARGIN = 60.0
 _token_ts: float = 0.0  # set to time.time() in main() when refresh is configured
 
 
-def _docker_exec(container: str, cmd: str, timeout: float = 120) -> str:
+def _docker_exec(container: str, cmd: str, timeout: float = 120, pass_env: tuple = ()) -> str:
+    # G1 fix: pass_env forwards secrets to the container via `docker exec -e VAR`
+    # (valueless flag = inherit from the calling process env), keeping them
+    # off argv — tokens never appear in `ps`/procfs. Inserted BEFORE the
+    # container name so docker parses them as exec flags, not positional args.
+    args = ["docker", "exec"]
+    for var in pass_env:
+        args.extend(["-e", var])
+    args.extend([container, "sh", "-c", cmd])
     result = subprocess.run(
-        ["docker", "exec", container, "sh", "-c", cmd],
+        args,
         capture_output=True,
         text=True,
         timeout=timeout,
@@ -165,15 +173,24 @@ def drive_query(entry: dict) -> tuple[float, str, int]:
     # open in-network — only valid on legacy pre-prod harnesses; returns
     # 401 on a production-deployed chatqna. The wrapper script
     # (`../scripts/run_anchor_with_cleanup.sh`) handles the token lifecycle.
-    auth_header = ""
+    #
+    # G1 fix: token travels via `docker exec -e E2E_BEARER_TOKEN` (valueless
+    # = inherit from python process env), never on argv — the value is
+    # never visible in `ps`/procfs. The curl header references the var by
+    # NAME; the shell expands it container-side.
     _token = os.getenv("E2E_BEARER_TOKEN")
     if _token:
-        auth_header = f" -H 'Authorization: Bearer {_token}'"
-    cmd = (
-        f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'"
-        f"{auth_header} -d '{payload_json}' -w '\\n%{{http_code}}'"
-    )
-    raw = _docker_exec(CHATQNA_CONTAINER, cmd, timeout=150)
+        cmd = (
+            f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'"
+            f" -H \"Authorization: Bearer $E2E_BEARER_TOKEN\" -d '{payload_json}' -w '\\n%{{http_code}}'"
+        )
+        raw = _docker_exec(CHATQNA_CONTAINER, cmd, timeout=150, pass_env=("E2E_BEARER_TOKEN",))
+    else:
+        cmd = (
+            f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'"
+            f" -d '{payload_json}' -w '\\n%{{http_code}}'"
+        )
+        raw = _docker_exec(CHATQNA_CONTAINER, cmd, timeout=150)
     body, _, code = raw.rpartition("\n")
     status = int(code) if code.strip().isdigit() else 0
     return start, body, status

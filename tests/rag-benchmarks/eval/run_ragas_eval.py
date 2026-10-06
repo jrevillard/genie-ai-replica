@@ -16,7 +16,7 @@ endpoint (env vars). The deployment stays sovereign; only the eval tuples (which
 you choose to export) reach the judge.
 
 Requires (install where you run this — NOT a repo dependency):
-    pip install ragas langchain-openai
+    pip install -r requirements.txt
 
 Run locally, not in the deployment.
 """
@@ -27,11 +27,28 @@ import json
 import os
 import sys
 
+# ragas (<0.5) eagerly imports langchain_community.chat_models.vertexai, removed
+# in langchain-community 0.4.x. Stub it when absent so the import chain survives.
+try:  # pragma: no cover - depends on installed versions
+    from langchain_community.chat_models import vertexai  # noqa: F401
+except ImportError:
+    import sys as _sys
+    import types as _types
+
+    _vertexai = _types.ModuleType("langchain_community.chat_models.vertexai")
+
+    class _ChatVertexAI:  # noqa: D401 - stub for ragas.llms.base
+        pass
+
+    _vertexai.ChatVertexAI = _ChatVertexAI
+    _sys.modules["langchain_community.chat_models.vertexai"] = _vertexai
+
 # --- judge config (OpenAI-compatible, model-agnostic) -----------------------
 JUDGE_BASE_URL = os.getenv("EVAL_JUDGE_BASE_URL")  # e.g. https://api.openai.com/v1 or a Zhipu/self-hosted endpoint
 JUDGE_API_KEY = os.getenv("EVAL_JUDGE_API_KEY", "")
 JUDGE_MODEL = os.getenv("EVAL_JUDGE_MODEL")  # whatever model you picked
 JUDGE_TEMPERATURE = float(os.getenv("EVAL_JUDGE_TEMPERATURE", "0"))
+JUDGE_MAX_TOKENS = int(os.getenv("EVAL_JUDGE_MAX_TOKENS", "0"))
 
 # Embeddings (optional — only required for answer_relevancy). Defaults to a
 # separate endpoint so the judge LLM and embedder can differ.
@@ -61,6 +78,7 @@ def _build_judge():
             temperature=JUDGE_TEMPERATURE,
             http_client=sync_client,
             http_async_client=async_client,
+            **({"max_tokens": JUDGE_MAX_TOKENS} if JUDGE_MAX_TOKENS else {}),
         )
     )
     return llm
@@ -71,6 +89,7 @@ def _build_embeddings():
     from ragas.embeddings import LangchainEmbeddingsWrapper
 
     if not EMBED_MODEL:
+        print("WARNING: EVAL_EMBED_MODEL unset — answer_relevancy will be dropped", file=sys.stderr)
         return None  # answer_relevancy will be skipped
     import httpx
     sync_client = httpx.Client(verify=False)
@@ -104,10 +123,14 @@ def _metrics():
 
 
 def main(tuples_path: str, out_path: str) -> None:
-    from ragas import EvaluationDataset, evaluate
+    tuples_path = tuples_path if tuples_path else (sys.argv[1] if len(sys.argv) > 1 else "eval_tuples.json")
+    out_path = out_path if out_path else (sys.argv[2] if len(sys.argv) > 2 else "ragas_report.json")
 
-    with open(tuples_path) as fh:
-        raw = json.load(fh)
+    raw = json.load(open(tuples_path))
+    if not raw:
+        sys.exit("EXIT 2: empty eval_tuples.json — refusing to judge (Phase 3 produced nothing)")
+
+    from ragas import EvaluationDataset, evaluate
 
     samples = [
         {

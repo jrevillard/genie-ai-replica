@@ -128,7 +128,11 @@ def main(tuples_path: str, out_path: str) -> None:
 
     raw = json.load(open(tuples_path))
     if not raw:
-        sys.exit("EXIT 2: empty eval_tuples.json — refusing to judge (Phase 3 produced nothing)")
+        print(
+            "EXIT 2: empty eval_tuples.json — refusing to judge (Phase 3 produced nothing)",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
     from ragas import EvaluationDataset, evaluate
 

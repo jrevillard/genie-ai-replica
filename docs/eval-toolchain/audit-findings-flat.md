@@ -1,0 +1,229 @@
+1. [high|S|confirmed] tests/rag-benchmarks/eval/run_eval.py:120
+   drive_query never checks the HTTP status of the chatqna response, so an expired bearer token (HTTP 401) is silently absorbed: the 401 body becomes the 'answer', the trace is never found, and the query is still written to the output as a normal row/tuple.
+   FIX: Capture the status: append `-w '\n%{http_code}'` to the curl (or have _docker_exec return rc + body) and have drive_query return it; in main(), count non-200s, print a distinct 'AUTH-FAILURE' warning per query, record `n_http_errors` in the report, re-fetch the bearer (env hook) or abort on the first 401, and exit non-zero if any query failed at HTTP level.
+   VERDICT: Verified against the code. (1) run_eval.py:120 builds `curl -s -m 120 -X POST ...` with no `-f`/`-w %{http_code}`; `_docker_exec` (73-82) only raises on the docker-exec transport rc, and curl without `--fail` exits 0 on HTTP 401, so the 401 body flow
+
+2. [high|S|confirmed] tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh:132
+   The security-critical ROPC cleanup uses the ADMIN_TOKEN fetched ~30-60 min earlier and the PUT is never verified (curl -sk without -f, output discarded), so an expired admin token makes the revert silently no-op while the script prints '[cleanup] ROPC disabled'.
+   FIX: Inside disable_ropc, re-authenticate first (POST token endpoint with KEYCLOAK_ADMIN_PASSWORD) instead of reusing ADMIN_TOKEN; use `curl -sf -o /dev/null -w '%{http_code}'` and check for 204/2xx; retry 2-3 times; on final failure print a loud '[cleanup] FAILED to disable ROPC — DISABLE MANUALLY' and exit non-zero so CI/ssh propagates it.
+   VERDICT: Every factual claim checks out against /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/el-salvador-release/tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh. (1) ADMIN_TOKEN is fetched exactly once at lines 97-99 and never refreshed. (
+
+3. [high|M|confirmed] tests/rag-benchmarks/scripts/run_eval_chunked.py:71
+   The host-only chunked runner is fail-open: chunks with rc!=0 are skipped after a 'FAILED' print, the out_XX.json is read without existence/JSON validation, no row-count check is made against the entries read, and the script always returns 0 — a fully failed run writes an empty merged file as success (today's n=0 incident).
+   FIX: Commit the runner to scripts/ and harden: (1) raise in fetch_bearer when access_token is missing; (2) wrap the per-chunk out-file read in try/except and count failures; (3) after the loop, assert len(merged_per_query) == n (and per-chunk out exists + parses) else exit 1 without writing OUT (or write to OUT.partial); (4) add --resume that skips chunks whose out_XX.json already parses; (5) use a run
+   VERDICT: Every load-bearing claim checks out against /tmp/run_eval_chunked.py. (1) Fail-open loop: lines 71-74 skip chunks with rc!=0 after a FAILED print; line 94 returns 0 unconditionally; n (line 47) is never compared to len(merged_per_query) — today's n=0
+
+4. [high|S|partial] tests/rag-benchmarks/eval/arango.py:27
+   The shared Arango cursor helper ignores cursor pagination (`hasMore`/`id` continuation), silently returning only the first batch — on corpora larger than one batch the _key→content_hash/text maps silently truncate, unmapped span keys are silently dropped from scoring, and recall/precision are computed over a partial projection with no error.
+   FIX: Loop the cursor: POST with batchSize, then `PUT _api/cursor/{id}` while `hasMore`, accumulating rows (do it once in arango.py and have match_gold_chunks import it — also removes the duplicated client). Add a fail-fast: `RETURN LENGTH(coll)` alongside, and raise if len(rows) != count. Gate run_eval on `n_unmapped_chunk_keys == 0` (or a threshold) the way capture_baseline.capture_anchor already does
+   VERDICT: MECHANISM CONFIRMED. (1) arango.py:19-28 does one POST and returns .get("result", []) with no hasMore/id continuation — verified by reading. (2) ArangoDB truncation is real and the threshold is exactly 1000 for both clients: the server source (arango
+
+5. [high|S|confirmed] tests/rag-benchmarks/scripts/run_eval_chunked.py:83
+   In anchor mode the merged report keeps only the LAST chunk's `aggregate` (computed over ≤8 queries) while `per_query` holds all rows — downstream A/B comparisons read `aggregate` and silently compare numbers from an 8-query subsample.
+   FIX: Recompute the aggregate from the merged rows (mirror run_eval.py:402-418: filter trace_found, metrics.aggregate, passage aggregation, sum missed/unmapped) instead of carrying the last chunk's; or refuse to merge anchor mode without recomputation. Include summed n_missed_traces/n_unmapped_chunk_keys in the merged report.
+   VERDICT: Verified every claim against the code. (1) Mechanics: /tmp/run_eval_chunked.py:82-83 extends merged_per_query but overwrites last_aggregate per chunk; lines 91-92 write {"per_query": merged, "aggregate": last_aggregate} — the aggregate comes from the
+
+6. [high|M|confirmed] tests/rag-benchmarks/eval/run_eval.py:73
+   The per-entry loop has no exception containment, retry, or incremental output: one transient error (docker exec TimeoutExpired from _docker_exec, RuntimeError from a failed exec, JSONDecodeError on a non-JSON VT response at line 159) kills the entire run after 20+ minutes with nothing written.
+   FIX: Wrap the per-entry body in try/except: on transient errors (TimeoutExpired, RuntimeError, JSONDecodeError) retry the query up to N times with backoff, then record a `{id, error: str(e)}` row instead of crashing; append incremental progress to a sidecar JSONL (or write the report after every query, atomically via temp+rename) so a crashed run is resumable; validate the VT payload with try/except ar
+   VERDICT: Every mechanical claim in the finding verifies verbatim against tests/rag-benchmarks/eval/run_eval.py (repo root worktree el-salvador-release). (1) _docker_exec (lines 73-82) calls subprocess.run with timeout= but has no try/except — subprocess.Timeo
+
+7. [high|S|confirmed] tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh:98
+   Secrets transit process argv in three committed surfaces: passwords embedded in curl arguments (wrapper lines 98 and 112) and the full bearer JWT embedded in the docker exec command line in run_eval.py — all visible in ps -ef on the swarm host, matching today's incident of credentials readable in process listings.
+   FIX: Keep secrets off argv: in bash, build the token-request body in a variable and post with `curl --data @-` from a heredoc (or `curl -K -` reading config from stdin); in run_eval.py, pass the token through the container environment — `docker exec -e E2E_BEARER_TOKEN <container> sh -c 'curl ... -H "Authorization: Bearer $E2E_BEARER_TOKEN" ...'` — docker -e transmits via the API, not argv. Delete the 
+   VERDICT: Every cited line checks out verbatim. (1) Wrapper tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh:98 passes `-d "password=$KEYCLOAK_ADMIN_PASSWORD"` as curl argv (the master-admin password), and line 112 passes `--data-urlencode "password=$GE
+
+8. [high|M|confirmed] tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh:159
+   Committed wrapper invokes run_eval_chunked.py, which has never existed in the repo (no path in git log --all, no copy anywhere in the tree) — the anchor toolchain is unrunnable from a fresh clone and depends on a single hand-placed host file that any rsync --delete of the synced dir would destroy.
+   FIX: Commit a cleaned-up run_eval_chunked.py next to the wrapper (tests/rag-benchmarks/scripts/): derive the chunk dir from the OUT path instead of /tmp/rag-eval, count failed/missing chunks and exit non-zero when any chunk fails or merged rows < expected n, and fold the bearer fetch into one shared helper (the wrapper's initial token fetch at lines 107-120 is dead work — the chunked runner re-fetches 
+   VERDICT: Attempted refutation on every claim; all survive direct reading of the files and git history.
+
+1. Invocation + never-committed: tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh:159 is exactly `python3 "$SCRIPT_DIR/run_eval_chunked.py" "$GOLD" 
+
+9. [high|S|confirmed] tests/rag-benchmarks/benchmark_query.py:67
+   The chatqna request payload plus answer-extraction block is copy-pasted across four benchmark scripts and has drifted onto the dead schema: all four send "categoryLabel": "General" (old singular string) while run_eval.py:100-108 sends the current "categoryLabels" list — a drift the CLAUDE.md pitfalls log explicitly says silently deadens the label filter, so every benchmark measures unfiltered retrieval.
+   FIX: Add the canonical chatqna_post(question, rag_config, timeout) and extract_answer(resp_json) helpers to benchmark_config.py (the module all four scripts already import), using the current list schema and the CHATQNA_URL constant; benchmark_ingestion.py's hardcoded URL at line 307 disappears with it.
+   VERDICT: Every factual claim checks out, and the mechanism survives adversarial reading. (1) All four scripts send the dead singular key: benchmark_query.py:67, benchmark_rag_performance.py:80, benchmark_rag_accuracy.py:126, benchmark_ingestion.py:302 all sen
+
+10. [high|S|confirmed] tests/rag-benchmarks/eval/run_ragas_eval.py:19
+   The RAGAS import-crash workaround (langchain-community vertexai) and the bypass_n patch exist only as host-side edits; the committed script crashes on import with current library versions and pins no dependencies anywhere in tests/rag-benchmarks (no requirements file exists).
+   FIX: Add tests/rag-benchmarks/eval/requirements.txt with the verified pins from the report (ragas==0.4.3, langchain-openai==1.6.4, langchain-community<0.4, instructor, openai, httpx) and reference it from the script header and both CLAUDE.md files. Add a guarded compat shim in run_ragas_eval.py executed BEFORE any ragas import: try importing langchain_community.chat_models.vertexai and, on ImportError,
+   VERDICT: Every load-bearing claim checks out against the repo. (1) run_ragas_eval.py line 19 says 'pip install ragas langchain-openai' — unpinned; ragas is imported at lines 45 and 107 with no compat guard anywhere in the file. (2) No requirements/pyproject/l
+
+11. [high|M|confirmed] tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh:97
+   Keycloak token fetching and the ROPC enable/disable lifecycle are implemented twice in two languages: bash/curl in the wrapper (master token 97-99, realm ROPC token 106-114, client-UUID resolve 122-123, ROPC enable 127-129 / disable 132-138) and Python/curl in the uncommitted host-only /tmp/run_eval_chunked.py fetch_bearer() (lines 30-41), with EVAL_KC_REALM/EVAL_KC_CLIENT_ID defaults re-resolved independently in both (wrapper 61-62, chunked 25-26).
+   FIX: Consolidate on ONE committed Python module, tests/rag-benchmarks/eval/keycloak.py, exposing fetch_master_token(), fetch_realm_token() (urllib.request, no curl subprocess) and a ropc_enabled() context manager that reverts on exception/exit. The wrapper becomes a thin shim (or is replaced by a committed scripts/run_anchor.py) that calls one Python entry point owning the whole lifecycle; run_eval_chu
+   VERDICT: Every cited line checks out exactly. Wrapper (/tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh): master token 97-99, realm ROPC token 106-114, client-UUID resolve 122-123, ROPC enable 127-129, disable_ropc() 132-138 (trap on EXIT/INT/TERM at 
+
+12. [high|M|confirmed] tests/rag-benchmarks/eval/match_gold_chunks.py:118
+   ArangoDB access exists in three independent implementations: eval/arango.py cursor() (19-28, env-configured), match_gold_chunks.py arango_query() (118-135, which adds batchSize 1000 and an error check the canonical helper lacks), and benchmark_ingestion.py check_arango_collection_counts() (326-371) using requests + HTTPBasicAuth with hardcoded credentials root/test at line 334; match_gold_chunks' argparse (72-97) also re-resolves the exact ARANGO_* env defaults arango.py already resolves.
+   FIX: Make eval/arango.py the single Arango client: fold in batchSize and the error check from arango_query, add a small collection_count() helper for benchmark_ingestion, have match_gold_chunks import cursor (its CLI flags default via the module instead of re-reading env), and switch benchmark_ingestion to env-based creds.
+   VERDICT: Every cited fact checks out against the code. (1) eval/arango.py cursor() at lines 19-28 (env config at 13-16) is the canonical helper, imported by run_eval.py:54 and dump_chunks.py:23. (2) match_gold_chunks.py arango_query() at lines 118-135 builds 
+
+13. [high|S|confirmed] tests/rag-benchmarks/benchmark_query.py:40
+   The legacy benchmark_* family (5 scripts + run_benchmarks.sh, 2,543 lines) is dead weight superseded by the eval/ toolchain and cannot even run: benchmark_query.py uses `os` before importing it (line 40, `import os` is line 41), so the file raises NameError at import (verified empirically).
+   FIX: Delete benchmark_config.py, benchmark_ingestion.py, benchmark_query.py, benchmark_rag_accuracy.py, benchmark_rag_performance.py and run_benchmarks.sh (git history preserves them; or move to an `archive/` subdir if the team wants them browsable). The only non-script content worth keeping — MODEL_PROFILES — already lives in GENIE-AI-Model-Test-Plan.md. Update the CLAUDE.md Layout tree accordingly. T
+   VERDICT: Every checkable claim reproduced. (1) benchmark_query.py line 40 uses os before `import os` (line 41); empirically raised `NameError: name 'os' is not defined`; lines 40/43 are duplicate sys.path.insert. (2) `categoryLabel` string payload confirmed a
+
+14. [high|M|confirmed] /tmp/run_eval_chunked.py:30
+   The host-only chunked runner (98 lines) is an orchestration layer duplicating run_eval.py's I/O plus a SECOND ROPC token fetcher (python/curl here, bash/curl in the wrapper at run_anchor_with_cleanup.sh:107-114) — all to work around a bearer lifetime the driver itself could handle.
+   FIX: Fold token refresh into run_eval.py: the per-entry loop (run_eval.py:359-394) already exists — add a refresh hook (refetch via the same docker-exec curl channel used by drive_query, or urllib) every K entries or when 300s elapses, controlled by one env var (e.g. EVAL_TOKEN_TTL/EVAL_REFRESH_EVERY). Then delete run_eval_chunked.py entirely; the wrapper shrinks to ROPC enable/disable + one `python3 e
+   VERDICT: Every factual claim survives reading the code. (1) /tmp/run_eval_chunked.py lines 30-41 are a second ROPC fetcher (python/subprocess curl) duplicating the wrapper's bash/curl fetch at run_anchor_with_cleanup.sh:107-114; in the chunked path the wrappe
+
+15. [high|M|confirmed] tests/rag-benchmarks/eval/run_eval.py:359
+   The per-query loop is strictly sequential (drive chatqna query, then block on the VictoriaTraces poll) and the poll sleeps 5s before its first check, which is the root cause of the ~40s/query, ~60-min 90-query runs that the host-only chunked runner exists to compensate for.
+   FIX: Two changes: (a) check VT immediately on entry, then back off 1s->5s (cuts ~7.5 min/run alone); (b) pipeline the two stages — drive query i+1 while polling trace i (one producer thread + one poller, or asyncio), bringing per-query cost near the ~13s generation bound (~2x wall-clock, 60 min -> ~30 min at today's scale; ~10h -> ~3.5h at 10x queries). If overlapping, fix span attribution first: _extr
+   VERDICT: Every factual claim verifies against the code. (1) run_eval.py L359-362 is strictly sequential: drive_query() blocks on a docker-exec curl (subprocess.run, -m 120) for the full chatqna response (~13s per eval/CLAUDE.md's "POST /v1/chatqna 200 ~13s"),
+
+16. [high|S|confirmed] tests/rag-benchmarks/eval/README.md:8
+   The eval README — the first file a new operator reads — is stale on seven counts: it documents the `--mode` flag syntax the CLI rejects, teaches direct run_eval.py invocations that 401 against the auth-gated chatqna, shows the pre-migration categoryLabel (string) schema, names span attributes that no longer exist, shows a min_rank gold field no code consumes, gives the wrong TRACE_FLUSH_WAIT default, and presents dump_chunks.py manual gold-building as the only gold path with no mention of xlsx_to_gold.py.
+   FIX: Regenerate README.md from the current truth: correct CLI (positional), wrapper-first invocation with the auth warning up top, categoryLabels list schema, chunk_keys attribute names, drop min_rank, fix the TRACE_FLUSH_WAIT default, and reconcile the two gold-building paths (xlsx_to_gold Phase 1 as primary, dump_chunks as the manual alternative with a cross-reference). Alternatively replace the body
+   VERDICT: All seven staleness counts verified against code, each evidence line number accurate. (1) README:8/9/40-41 use `--mode anchor|dump-tuples`; run_eval.py:454-463 is positional-only (no argparse) — `--mode` fails the mode check, gold_path becomes the li
+
+17. [high|M|confirmed] tests/rag-benchmarks/CLAUDE.md:495
+   No unified end-to-end runbook and no failure-recovery procedure: the Phase 1-5 flow is scattered across a 33K methodology file and a 7K operational file, the Phase 3 recipe is pre-auth-gate (would 401 today), it hand-rolls the chunk slicing that run_eval_chunked.py automates, says per-batch outputs 'can be merged downstream' without any merge instruction, and there is zero guidance for silent chunk failure, partial-output salvage, or detecting the n=0/exit-0 failure mode from today's incident.
+   FIX: Write one RUNBOOK.md (referenced from both CLAUDE.mds) with: Phase 0 pre-flight (pytest smoke on eval/test_*.py, observability ON check, container resolution), Phases 1-5 as ordered exact commands using the wrapper for Phase 3, a post-run assertion (tuples n == gold entries n, anchor n_missed_traces == 0) BEFORE Phase 4, and a 'when things go wrong' section: re-run only failed chunks from _chunks/
+   VERDICT: Every evidence item verified against the files. (1) CLAUDE.md:495-517 runs `run_eval.py dump-tuples` with no E2E_BEARER_TOKEN and no wrapper; run_eval.py's own WARNING (lines 6-15) and drive_query (lines 111-120 — Authorization header only when E2E_B
+
+18. [medium|S|confirmed] tests/rag-benchmarks/eval/run_ragas_eval.py:43
+   The script crashes on import with current langchain-community (0.4.2) because ragas eagerly imports langchain_community.chat_models.vertexai; the sys.modules stub fix exists only as an uncommitted host-side patch, and there is no requirements pin, so the in-repo Phase 4 is broken and the working code is unversioned.
+   FIX: Commit the guarded stub (inject a stub module into sys.modules for langchain_community.chat.models.vertexai before ragas imports, wrapped in try/except ImportError so it no-ops on versions where the module exists); add `tests/rag-benchmarks/eval/requirements.txt` with pinned ragas/langchain-openai/langchain-community/httpx versions the stub was validated against; print a loud warning when answer_r
+   VERDICT: All factual claims verified against the repo. (1) /tests/rag-benchmarks/eval/run_ragas_eval.py has no vertexai stub: `_build_judge` (43-66) imports langchain_openai/ragas.llms bare; grep over tests/rag-benchmarks for `vertexai`/`sys.modules`/`sitecus
+
+19. [medium|M|confirmed] tests/rag-benchmarks/capture_baseline.py:490
+   The baseline driver invokes run_eval.py directly N times with one ambient bearer token (300 s life) for captures that take tens of minutes — anchor runs fail loudly only after wasting a full run (missed-trace gate), and the semantic dump-tuples path has NO gate at all, so 401-degraded tuples with empty contexts flow into RAGAS and get recorded as baseline variance.
+   FIX: Refresh the token per run (and per K minutes within a run) inside the driver — either by invoking the committed chunked runner once the hardening lands, or by adding a token-provider callback to _run_anchor_eval; add a semantic gate mirroring capture_anchor: count tuples with empty contexts / empty answers and refuse (or require an explicit --allow flag) above a threshold before running ragas.
+   VERDICT: Every factual claim checks out against the code. (1) capture_baseline.py invokes run_eval.py directly, N times — `_run_anchor_eval` (capture_baseline.py:490-510) and `capture_semantic`'s dump-tuples subprocess (569-577) both snapshot `dict(os.environ
+
+20. [medium|S|confirmed] tests/rag-benchmarks/eval/run_eval.py:451
+   run_eval.py has no failure exit path: n_missed_traces, n_unmapped_chunk_keys, and an empty/n=0 result never influence the exit code, so the wrapper's `set -e`, the chunked runner's rc check, and any CI integration all treat a fully degraded run (observability off, VT down, all-401) as success.
+   FIX: Adopt an exit-code contract: 0 = clean, 3 = missed traces or unmapped keys above a threshold (e.g. any), 4 = zero entries / zero scored rows; make the wrapper and chunked runner treat rc>=3 as a failed chunk and the merged-write refuse to emit OUT when any chunk failed (ties into the chunked-runner hardening).
+   VERDICT: Verified against tests/rag-benchmarks/eval/run_eval.py, /tmp/run_eval_chunked.py, tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh, capture_baseline.py, and metrics.py. (1) run_eval.py has no exit-code contract: grep for 'sys.exit|exit(' retur
+
+21. [medium|S|partial] tests/rag-benchmarks/eval/run_eval.py:212
+   fetch_selection discards the span-found signal computed inside _extract_selection (`best is not None`), so a trace that IS indexed but legitimately selected zero chunks keeps polling the full TRACE_FETCH_TIMEOUT and is then misreported as a missed trace (excluded from the aggregate and counted in n_missed_traces).
+   FIX: Have _extract_selection also return a `found` boolean (best is not None) and fetch_selection return it; stop polling as soon as found=True even with empty lists, and propagate found vs missed separately from selected-empty (report `trace_found: true, selected: []`) so empty selections are scored rather than conflated with infra failures.
+   VERDICT: The code-level mechanics are accurately described: _extract_selection (tests/rag-benchmarks/eval/run_eval.py:187-189) returns identical `[], [], breakdown` for "no span" and "span found with empty coerced lists"; fetch_selection's `if candidates or s
+
+22. [medium|S|confirmed] tests/rag-benchmarks/eval/run_eval.py:369
+   The unmapped-key counter is computed only in anchor mode; in dump-tuples mode, contexts silently come back empty when GRAPH_SOURCE/ARANGO_DB are wrong or the key map is truncated, and nothing in the tuples output or the logs records it before the data reaches RAGAS.
+   FIX: Compute the unmapped count in both modes; in dump-tuples, emit per-run stderr warnings and a summary (`n_unmapped_context_keys`, `n_empty_context_tuples`) — either as a sidecar meta file next to the tuples or a wrapper object — and optionally fail fast (exit 3) when the hash_to_text map is empty or the unmapped ratio exceeds a threshold.
+   VERDICT: Verified against /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/el-salvador-release/tests/rag-benchmarks/eval/run_eval.py. The code reading is exact: (1) the unmapped counter at line 369 sits inside `if mode == "anchor":` and is only surfac
+
+23. [medium|S|partial] tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh:66
+   The chunk text-field configuration is inconsistent across the toolchain: the wrapper sets TEXT_FIELD but never exports it (and neither script reads that name), while run_eval.py defaults ARANGO_TEXT_FIELD to 'chunk_text' and dump_chunks.py defaults the same env var to 'text' — a default-run dump_chunks against a chunk_text corpus silently emits a registry of empty-text hashes.
+   FIX: Standardize on ARANGO_TEXT_FIELD with one default ('chunk_text' — matches match_gold_chunks' --chunk-text-field default) across run_eval.py and dump_chunks.py; either export it from the wrapper or delete TEXT_FIELD from the wrapper's variable list so it stops advertising a knob that does nothing.
+   VERDICT: The structural claims are all confirmed at the cited lines: (1) run_anchor_with_cleanup.sh:66 sets TEXT_FIELD="${TEXT_FIELD:-chunk_text}" but the export block (lines 80-89, added in commit 6cd3b558d two hours ago) omits it, the wrapper's own env-var 
+
+24. [medium|S|confirmed] tests/rag-benchmarks/eval/eval-reports/2026-09-30-el-salvador-rag-comprehensive.md:245
+   The committed eval report doubles as the de-facto reproduction runbook but references host-only state: a gold_dataset.matched.v4.json the repo does not track (only v3 is committed), a third bearer-token mechanism (/tmp/bearer_token.txt 90s background refresher) inconsistent with the committed E2E_BEARER_TOKEN env flow, and embeds internal infrastructure identity (govstack@10.0.0.102) plus a literal ARANGO_PASSWORD value in an open-source repo.
+   FIX: After the orchestrator and requirements are committed (findings 1-2), refresh section 10 of the report to reference only repo artifacts (tracked gold version or a documented regeneration path, the committed runner). Replace internal usernames/IPs with the <user>@<host> placeholder convention used elsewhere in repo docs, and keep credential values out of committed reports even when trivial. Going f
+   VERDICT: Every cited line verifies against the committed file (tracked in HEAD commit 77710a47a). (1) Lines 245/253 run `run_eval.py anchor gold_dataset.matched.v4.json` while git tracks only the raw gold and matched.v3.json — no untracked v4 exists in the wo
+
+25. [medium|S|partial] tests/rag-benchmarks/eval/run_eval.py:226
+   The 'dump all (key, text) from the source collection' AQL is written four times with drifted defaults: run_eval.py build_hash_to_text (226-229) and build_key_to_content_hash (241-244) are the byte-identical query executed twice per run; dump_chunks.py (33-43) defaults GRAPH_SOURCE to 'genieai_graph_SOURCE' and the text field to 'text' versus run_eval.py's 'GRAPH_TEST_SOURCE'/'chunk_text'; match_gold_chunks.load_chunks (138-146) rebuilds it from CLI flags; and the wrapper resolves a TEXT_FIELD var (line 66) that nothing exports or reads (run_eval reads ARANGO_TEXT_FIELD).
+   FIX: Add the canonical arango.source_chunks(graph_source, text_field) helper to eval/arango.py; run_eval.py fetches the rows once and derives both the {key: text} and {key: content_hash} maps from that single fetch; dump_chunks.py and match_gold_chunks.py call the same helper with one documented default for the text field.
+   VERDICT: Verified every cited location; the finding is mostly accurate but its headline performance claim is wrong, and its fix needs two amendments.
+
+CONFIRMED:
+1. Byte-identical AQL pair in run_eval.py: lines 227 and 242 are exactly `f"FOR doc IN {GRAPH_SOU
+
+26. [medium|S|confirmed] tests/rag-benchmarks/capture_baseline.py:211
+   _docker_exec() in capture_baseline.py (211-222) is a near-verbatim copy of run_eval.py:73-82 — same subprocess.run(['docker','exec',container,'sh','-c',cmd], capture_output, text, timeout) body, differing only in default timeout (60 vs 120) and error-message prefix.
+   FIX: Create eval/harness.py (inside the rsync unit that already ships run_eval.py to the swarm node) holding the canonical docker_exec(container, cmd, timeout); run_eval.py imports it directly and capture_baseline.py imports it via a one-line sys.path insert onto eval/.
+   VERDICT: Every factual assertion verified against the code. (1) capture_baseline.py:211-222 and run_eval.py:73-82 are near-verbatim duplicates: identical subprocess.run(["docker","exec",container,"sh","-c",cmd], capture_output, text, timeout) body, differing 
+
+27. [medium|S|partial] tests/rag-benchmarks/benchmark_rag_accuracy.py:170
+   The 'Detect active model / GPU snapshot / Health check' preamble (get_active_model_info + get_translation_model_info + GPU print loop + wait_for_service) is copy-pasted verbatim in four scripts: benchmark_query.py:179-192, benchmark_rag_accuracy.py:170-199, benchmark_rag_performance.py:195-208, benchmark_ingestion.py:398-410.
+   FIX: Add the canonical print_benchmark_header(test_id, model_desc) -> (main_model, translation_model, gpu_info) helper to benchmark_config.py (already the shared module these scripts import) and call it from all four run_* functions.
+   VERDICT: The duplication exists but is not "verbatim in four scripts". Verified: the 4-line model-detect fragment (get_active_model_info + get_translation_model_info + 2 prints) is identical at all four sites (benchmark_query.py:179-183, benchmark_rag_accurac
+
+28. [medium|S|confirmed] tests/rag-benchmarks/eval/calibrate.py:284
+   The adaptive-selection replay algorithm exists twice: `_replay_recall_one` (284-307) re-implements `replay_query` (117-135) plus the position→hash mapping from `score_combo` (199-208). Any formula change must be applied in two places or the bootstrap CI silently judges a different function than the sweep.
+   FIX: Keep one `replay_query(bd, factor, conf_fn, threshold) -> set[int]` and one `_selected_hashes(bd, cands, positions)` helper; make `score_combo` and the bootstrap path both call them. Replace the 9-arg bootstrap signature with two cell dicts `{factor, confusion, threshold}` and look up conf_fn from CONFUSION_FORMULAS. Delete the dead `tolerance` param and fix the 20%/30% prose. The nested `_median`
+   VERDICT: Verified every sub-claim against tests/rag-benchmarks/eval/calibrate.py. (1) The adaptive-selection replay is genuinely duplicated: _replay_recall_one L288-298 re-implements replay_query L117-135 (identical formula: mx/avg/n, factor*token_count, conf
+
+29. [medium|S|confirmed] tests/rag-benchmarks/eval/dump_chunks.py:27
+   Stack env-var defaults are re-declared per script and have drifted: dump_chunks.py defaults ARANGO_TEXT_FIELD to "text" while run_eval.py defaults it to "chunk_text"; GRAPH_SOURCE defaults differ too (genieai_graph_SOURCE vs GRAPH_TEST_SOURCE).
+   FIX: Create one eval/config.py (or extend arango.py) holding every env-var read + default for the eval toolchain (GRAPH_SOURCE, text field, KC realm/client, trace timeouts); all scripts and the wrapper import or pass through it. dump_chunks then inherits the same chunk_text default as run_eval, and the TEXT_FIELD/ARANGO_TEXT_FIELD naming trap disappears.
+   VERDICT: Every cited fact checks out verbatim. dump_chunks.py:26-27 defaults GRAPH_SOURCE to "genieai_graph_SOURCE" and ARANGO_TEXT_FIELD to "text"; run_eval.py:67-68 uses "GRAPH_TEST_SOURCE"/"chunk_text"; match_gold_chunks.py:92-102 uses "GRAPH_TEST_SOURCE"/
+
+30. [medium|M|confirmed] tests/rag-benchmarks/capture_baseline.py:119
+   capture_baseline.py (925 lines) is three programs in one file — pure statistics, docker/regex stack inspection, and the run driver — glued by a 130-line artifact assembler; split along its existing section seams.
+   FIX: Extract `baseline_stats.py` (119-186) and `stack_snapshot.py` (188-446) as sibling modules; the driver keeps harness reuse + artifact assembly + CLI. While splitting: drop repo_relative's unused param, call statistics.median directly, collapse the parity_bound branches to `"high" if key in UPPER_IS_BETTER else "low"`, and factor one `_run_eval_subprocess(args, env)` helper used by anchor and seman
+   VERDICT: Verified line-by-line against tests/rag-benchmarks/capture_baseline.py. The core claim and every cited redundancy are factually correct: (1) file is exactly 925 lines; (2) the section seams exist precisely as cited — pure stats 119-186 (divider at 11
+
+31. [medium|S|confirmed] tests/rag-benchmarks/CLAUDE.md:45
+   Operational knowledge is triplicated (root CLAUDE.md ~33K, eval/CLAUDE.md ~7K, wrapper header) and the root copy has drifted into contradicting the code: line 45 still says chatqna is called with 'NO OIDC' and lines 103/128 give direct `python3 run_eval.py anchor` recipes with no token.
+   FIX: Make eval/CLAUDE.md the single operational source (it already contains the auth tables and diagnostic mode); reduce root CLAUDE.md to methodology (metrics, calibration theory, identity model) with links, and delete its stale run recipes and the NO-OIDC diagram annotation. When the chunked runner is folded into run_eval.py (see other finding), document the Phase 1-5 runbook + failure recovery there
+   VERDICT: Every load-bearing claim verified against the code and git history. (1) Triplication is real: root CLAUDE.md 33.0K, eval/CLAUDE.md 7.0K, wrapper header ~41 lines; ROPC/auth story appears in all three (grep line-counts 2 / 5 / 13, matching the finding
+
+32. [medium|S|partial] tests/rag-benchmarks/eval/match_gold_chunks.py:166
+   find_matches re-normalizes every chunk's full text inside the per-chunk loop, which runs once per preview — ~225K whitespace-regex + lowercase passes over KB-scale strings per gold build where 903 would suffice, making it the dominant cost of the documented 1-2 min Phase 2.
+   FIX: Normalize each chunk exactly once right after load_chunks (decorate the chunk dicts with a `norm` field, or build a parallel [(key, norm_text)] list at ~L201), and have find_matches use the precomputed value. Zero behavior change — same normalizer, same match semantics; turns the per-preview cost from O(corpus) normalization into O(corpus) substring search only.
+   VERDICT: The code-level claim is accurate: match_gold_chunks.py L165-166 re-normalizes every chunk's full text (regex \\s+ sub + lower) inside the per-chunk loop of find_matches, which main() invokes once per preview (L223) over the same chunks list loaded on
+
+33. [medium|M|confirmed] tests/rag-benchmarks/eval/run_ragas_eval.py:123
+   Phase 4 re-judges every tuple on every invocation with no per-sample cache or resume, so any partial Phase-3 failure (exactly today's chunk_00 incident: empty/short tuples file, rerun for the lost queries) forces a full 10-15 min LLM-judge re-run over tuples that are byte-identical to the previous run.
+   FIX: Persist a per-sample cache next to the output (key = sha256 of question + contexts + answer + reference + judge model + temperature). On run: load cache, pass only uncached samples to evaluate(), merge cached per-row scores into the report (all four metrics are row-independent means, so the aggregate is unchanged). This turns Phase 4 from always-full-cost into incremental, and makes judge-endpoint
+   VERDICT: Verified against the code: run_ragas_eval.py main() loads the entire tuples file and passes it to ragas evaluate() unconditionally (evaluate call is exactly at cited line 123; outputs are only the final report written at L138-139). No per-sample cach
+
+34. [medium|S|confirmed] tests/rag-benchmarks/eval/CLAUDE.md:47
+   The documented env var for injecting a service-account token into run_eval.py is wrong: docs say `BEARER_TOKEN`, the code reads `E2E_BEARER_TOKEN` — an operator following the doc gets silent 401s on every query.
+   FIX: Fix eval/CLAUDE.md:47 to `E2E_BEARER_TOKEN` and add it to the parent CLAUDE.md env-var table (tests/rag-benchmarks/CLAUDE.md:134-138) which currently lists CHATQNA_CONTAINER/CHATQNA_SERVICE_NAME/VICTORIATRACES_SVC only.
+   VERDICT: Every factual claim verified against the code. eval/CLAUDE.md:47 documents `BEARER_TOKEN` as the injection env var for run_eval.py, but run_eval.py:117 reads `os.getenv("E2E_BEARER_TOKEN")` with no fallback to the bare name (grep across the repo find
+
+35. [medium|S|partial] tests/rag-benchmarks/eval/CLAUDE.md:13
+   The documented quick-start pattern puts KEYCLOAK_ADMIN_PASSWORD, GENIE_ADMIN_PASSWORD and ARANGO_PASSWORD on the ssh command line — exactly the pattern that leaked secrets into ps -ef today — and the wrapper prints a 20-char bearer-token prefix to stdout while requiring KEYCLOAK_ADMIN_PASSWORD as exported env (no EVAL_DEPLOY_ENV fallback, unlike GENIE_ADMIN_PASSWORD).
+   FIX: Document the secret-safe invocation as the primary pattern: ssh 'bash -s' with the wrapper reading all four secrets from EVAL_DEPLOY_ENV (extend the wrapper's .env fallback to KEYCLOAK_ADMIN_PASSWORD and ARANGO_PASSWORD, keeping explicit env as override), and delete the token-prefix echo (or gate it behind a verbose flag). Update the TL;DR example to show the .env-based form.
+   VERDICT: The core is real but the summary overstates two details. CONFIRMED: (1) eval/CLAUDE.md TL;DR (line 13 cited correctly) documents the env-prefix form with KEYCLOAK_ADMIN_PASSWORD + ARANGO_PASSWORD supplied on the invocation — the shape that, when driv
+
+36. [medium|S|confirmed] tests/rag-benchmarks/CLAUDE.md:15
+   There is no smoke-test path for a new operator: the four pytest files in eval/ (test_run_eval.py, test_metrics.py, test_match_gold_chunks.py, test_chunk_identity.py) are referenced by no doc, absent from the Layout tree, and not wired into CI (.gitlab-ci.yml has zero rag-benchmarks entries) — while the perf-side run_benchmarks.sh at least offers a --smoke mode.
+   FIX: Add a Phase 0 'verify the harness' step to the runbook: `python3 -m pytest tests/rag-benchmarks/eval/ -q` (plus a 1-entry gold dry run of dump-tuples against the stack), list test_*.py, eval-reports/ and gold_datasets/ in the Layout tree, and wire the pytest suite into the CI test stage so harness regressions surface before a 28-minute live run.
+   VERDICT: Every factual claim verified against the code. (1) The four test files exist and are committed in tests/rag-benchmarks/eval/. (2) No doc references them: grep for test_/pytest across tests/rag-benchmarks/CLAUDE.md, eval/CLAUDE.md and eval/README.md y
+
+37. [medium|S|confirmed] tests/rag-benchmarks/CLAUDE.md:485
+   Two stale doc blocks misdescribe tool output: the Phase 2 section documents a match_status value 'ambiguous' that match_gold_chunks.py never emits (actual: resolved / resolved_split / unresolved / skipped_short), and the anchor-report schema omits fields the code now emits (n_unmapped_chunk_keys, per-query and aggregate passage_recall fields, gold_hashes/selected_hashes/candidate_hashes, expected_chunks).
+   FIX: Update the Phase 2 status list to the four real statuses (and note skipped_short is MR !500 behavior with the --min-preview-len default of 20), and extend the output-schema block with the passage-level and unmapped-key fields so downstream consumers (capture_baseline, reports) are documented against what the code emits.
+   VERDICT: Both claims verified against HEAD of the worktree. (1) tests/rag-benchmarks/CLAUDE.md:485-486 documents match_status values 'resolved_*, ambiguous, unresolved' plus an operator instruction to review 'ambiguous cases manually', but match_gold_chunks.p
+
+38. [low|S|partial] tests/rag-benchmarks/run_benchmarks.sh:367
+   The benchmark orchestrator counts failed benchmarks in ERRORS but always exits 0, so CI or wrapper automation sees success regardless of how many benchmark stages failed.
+   FIX: End the script with `exit "$ERRORS"` (capped at 255) so the failure count propagates; optionally fail fast per-stage is unnecessary, just propagate.
+   VERDICT: The mechanical claim is accurate: run_benchmarks.sh accumulates ERRORS via `run_x || ERRORS=$((ERRORS+1))` (lines 346-362), the final summary only echoes (lines 367-371), and the last command is `echo ""` (line 380), so the implicit exit status is 0 
+
+39. [low|S|confirmed] tests/rag-benchmarks/eval/match_gold_chunks.py:258
+   The default in-place mode overwrites the gold dataset non-atomically (direct write_text), so a crash or kill mid-write destroys the only copy of a hand-curated gold file.
+   FIX: Write to `out_path.with_suffix('.tmp')` then `os.replace` for atomicity, and keep a one-generation backup (e.g. `<name>.bak.json`) when overwriting in-place.
+   VERDICT: Code claim verified verbatim at tests/rag-benchmarks/eval/match_gold_chunks.py:257-258: `out_path = args.output or args.gold_dataset; out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))`. Defaults confirm the destructive path: `--m
+
+40. [low|S|partial] tests/rag-benchmarks/eval/.gitignore:1
+   The eval .gitignore covers six output filenames but every documented workflow produces additional untracked artifacts (results.json, anchor_results.json, *_calibration.json, ragas_results.json, eval_anchor_<TAG>.json, report_A/B.json, matched gold variants, xlsx inputs), leaving the eval directory's git status permanently dirty and one `git add .` away from committing data artifacts.
+   FIX: Either standardize all run outputs under a single ignored directory (e.g. eval/out/ with a matching eval/.gitignore entry, updating the docs' example paths), or extend eval/.gitignore with the documented patterns: results*.json, anchor_*.json, *_calibration.json, ragas_results.json, eval_anchor_*.json, report_[AB].json, *.xlsx, gold_dataset*.matched*.json (tracked files remain tracked regardless).
+   VERDICT: Core facts verified: eval/.gitignore (8 lines) covers only gold_dataset.json, chunks_registry.json, chunks_labeling_audit.csv, eval_report.json, eval_tuples.json, ragas_report.json, __pycache__/, .ruff_cache/. git check-ignore confirms results.json, 
+
+41. [low|S|confirmed] tests/rag-benchmarks/run_benchmarks.sh:10
+   run_benchmarks.sh is committed without the executable bit (git mode 100644) while its own header documents direct execution via ./run_benchmarks.sh, which fails with Permission denied from a fresh clone.
+   FIX: Run `chmod +x tests/rag-benchmarks/run_benchmarks.sh` and commit the mode change (`git update-index --chmod=+x`), or change the header usage lines to `bash run_benchmarks.sh ...` — pick one and make mode and docs agree. While at it, decide whether the legacy benchmark suite (run_benchmarks.sh + benchmark_*.py, which predate the chatqna auth gate and contain no bearer handling) is still a supported
+   VERDICT: Every claim verified against the worktree. (1) `git ls-files -s tests/rag-benchmarks/run_benchmarks.sh` shows 100644 (worktree stat 664, non-executable) while the script's own usage header (lines 10-17) instructs `./run_benchmarks.sh ...` — from a fr
+
+42. [low|S|confirmed] tests/rag-benchmarks/benchmark_rag_performance.py:148
+   Two overlapping latency-statistics helpers: compute_percentiles() here (148-159, p50/p75/p90/p95/p99) and compute_statistics() in benchmark_query.py (146-159, mean/median/min/max/p95/stdev) — two implementations of the same percentile math with subtly different index-boundary handling (perf clamps with min(idx, n-1), query does not).
+   FIX: Consolidate on one latency_stats(values) helper in benchmark_config.py emitting the union (mean/median/min/max/stdev/p50-p99 with the clamped-index semantics); both benchmark scripts consume it.
+   VERDICT: Verified by reading both files: compute_percentiles() at benchmark_rag_performance.py:148-159 and compute_statistics() at benchmark_query.py:146-159 exist exactly as cited, each with one call site in its own file, and no shared stats helper exists in
+
+43. [low|S|confirmed] tests/rag-benchmarks/eval/match_gold_chunks.py:53
+   Dead duplicate normalization constant: _WHITESPACE = re.compile(r"\s+") is defined but never used — the module correctly imports and uses normalize from chunk_identity (line 51) — leaving a second copy of the chunk-identity normalizer's internals one edit away from drifting.
+   FIX: Delete line 53; chunk_identity.normalize remains the single normalizer for preview matching (per the no-dead-code convention).
+   VERDICT: Verified directly against tests/rag-benchmarks/eval/match_gold_chunks.py (read in full): line 53 defines _WHITESPACE = re.compile(r"\s+") and it is the module's ONLY use of the re module. All normalization goes through the imported chunk_identity.nor
+
+44. [low|S|confirmed] tests/rag-benchmarks/eval/run_eval.py:420
+   JSON read/write boilerplate is hand-rolled at roughly fifteen sites with drifting serialization kwargs: run_eval.py writes tuples with ensure_ascii=False (398) but the anchor report without it (420); the host-only run_eval_chunked.py (88, 92) omits it; calibrate.py:887, dump_chunks.py:54, run_ragas_eval.py:139, match_gold_chunks.py:258 and xlsx_to_gold.py:227 each assemble their own indent/ensure_ascii/default combo, and read sites (run_eval.py:353, capture_baseline.py:510/591/882, run_ragas_eval.py:110, calibrate.py:646) repeat the open/json.load incantation.
+   FIX: Add read_json(path) and write_json(path, data) helpers (indent=2, ensure_ascii=False, plus default=str for report paths that need it) to the shared eval/harness.py and route every eval/bench script through them, making serialization uniform.
+   VERDICT: Every cited line is factually accurate. run_eval.py:398 writes tuples with ensure_ascii=False while :420 in the same main() writes the anchor report without it; /tmp/run_eval_chunked.py writes merged output with indent only (open at 88/92, dump at 89
+
+45. [low|S|partial] tests/rag-benchmarks/eval/calibrate.py:765
+   The parameter sweep re-derives per-row invariants (id arrays, max/avg scores, passage regrouping, original_index mapping) inside every grid cell — 512 cells each re-walking the full report and rebuilding data that is constant across the sweep.
+   FIX: Precompute a per-row context list once before the product loop (gold, cands, breakdown, mx, avg, n, passage_groups, and the rank_pos->hash map via original_index), then have each cell evaluate only the value = utility - (factor x token_count + confusion) > threshold comparisons and the metrics. Also folds the duplicated replay logic of replay_query (L117-135) and _replay_recall_one (L284-307) into
+   VERDICT: The MECHANISM is factually correct: the product loop (L765-775) calls score_combo once per grid cell, and per cell per row score_combo re-derives invariants — _id_arrays (L197), replay_query's max/avg (L125-127), the passage_groups regrouping (L219-2

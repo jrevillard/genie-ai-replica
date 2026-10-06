@@ -249,7 +249,7 @@ default, or set them explicitly when your stack renames the service.
 | `EVAL_KC_REALM` | `genie` | `export EVAL_KC_REALM=...` | wrapper line ~41 |
 | `EVAL_KC_CLIENT_ID` | `genie-app` | `export EVAL_KC_CLIENT_ID=...` | wrapper line ~42 |
 | `EVAL_KC_USER` | `genie-admin` | `export EVAL_KC_USER=...` | wrapper line ~43 |
-| `EVAL_DEPLOY_ENV` | `/opt/<stack>/.env` | `export EVAL_DEPLOY_ENV=...` | wrapper line ~28 |
+| `EVAL_DEPLOY_ENV` | _none_ (no default — pass explicitly) | `export EVAL_DEPLOY_ENV=/opt/<stack>/.env` | wrapper line ~28 |
 
 ### Two modes
 

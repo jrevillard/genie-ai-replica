@@ -9,8 +9,9 @@ Calling this script directly via `python3 run_eval.py anchor ...` against
 a production-deployed chatqna returns 401 on every query and the report's
 `n_missed_traces` shows all queries as missed. For ANY live-stack eval use
 the wrapper at `../scripts/run_anchor_with_cleanup.sh` which enables ROPC
-temporarily, fetches a realm token, and disables ROPC again on exit
-(signal-safe trap). Leaving ROPC enabled in production is a security
+temporarily, verifies the revert on exit, and lets this driver refresh its
+own realm token in-run (EVAL_KC_* env). The retired host-side chunked
+runner no longer exists. Leaving ROPC enabled in production is a security
 vulnerability. See `tests/rag-benchmarks/eval/CLAUDE.md` for the full story
 (auth, score threshold, diagnostic mode).
 
@@ -49,10 +50,12 @@ import os
 import subprocess
 import sys
 import time
+import urllib.error
 
 import metrics
 from arango import cursor
 from chunk_identity import content_hash
+from keycloak import KeycloakError, fetch_realm_token
 
 # --- stack config (env-overridable) -----------------------------------------
 # Defaults are placeholders — set these for your deployment. CHATQNA_CONTAINER
@@ -69,6 +72,16 @@ TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "chunk_text")
 TRACE_FLUSH_WAIT = float(os.getenv("TRACE_FLUSH_WAIT", "5"))
 TRACE_FETCH_TIMEOUT = float(os.getenv("TRACE_FETCH_TIMEOUT", "120"))
 
+# --- optional in-run bearer refresh (MR-B) -------------------------------
+# When EVAL_KC_URL + EVAL_KC_PASSWORD are set, _maybe_refresh_token() refreshes
+# E2E_BEARER_TOKEN in-run (TTL-bounded pre-emptively, immediate on 401). When
+# unset, the script preserves its prior static-token contract (capture_baseline
+# relies on this). Env vars are read at call time so tests (and operators) can
+# toggle them via monkeypatch / export without re-importing the module.
+_TOKEN_TTL = 240.0
+_TOKEN_REFRESH_MARGIN = 60.0
+_token_ts: float = 0.0  # set to time.time() in main() when refresh is configured
+
 
 def _docker_exec(container: str, cmd: str, timeout: float = 120) -> str:
     result = subprocess.run(
@@ -80,6 +93,45 @@ def _docker_exec(container: str, cmd: str, timeout: float = 120) -> str:
     if result.returncode != 0:
         raise RuntimeError(f"docker exec failed: {result.stderr.strip()[:300]}")
     return result.stdout
+
+
+def _refresh_configured() -> bool:
+    """True iff the operator opted into in-run refresh (EVAL_KC_URL +
+    EVAL_KC_PASSWORD both set). Defaults for realm/client/user mean the
+    other three vars do not gate activation. Re-reads env so tests can toggle."""
+    return bool(os.getenv("EVAL_KC_URL", "") and os.getenv("EVAL_KC_PASSWORD", ""))
+
+
+def _maybe_refresh_token(force: bool = False) -> bool:
+    """Refresh E2E_BEARER_TOKEN in-run when refresh is configured.
+
+    Returns True on a successful refresh (caller may retry). Returns False
+    on no-op (refresh disabled, TTL not crossed) or on transient failure —
+    failures NEVER raise: the run continues with the existing token and the
+    401/403 path takes over on the next drive_query.
+
+    ``force=True`` skips the TTL check so a 401 reaction can refresh
+    immediately regardless of how recently the last fetch happened.
+    """
+    global _token_ts
+    if not _refresh_configured():
+        return False
+    if not force and time.time() - _token_ts <= _TOKEN_TTL - _TOKEN_REFRESH_MARGIN:
+        return False
+    try:
+        token = fetch_realm_token(
+            os.getenv("EVAL_KC_URL", ""),
+            os.getenv("EVAL_KC_REALM", "genie"),
+            os.getenv("EVAL_KC_CLIENT_ID", "genie-app"),
+            os.getenv("EVAL_KC_USER", "genie-admin"),
+            os.getenv("EVAL_KC_PASSWORD", ""),
+        )
+    except (KeycloakError, urllib.error.URLError, OSError, json.JSONDecodeError) as e:
+        print(f"[refresh] failed (run continues): {e}", file=sys.stderr)
+        return False
+    os.environ["E2E_BEARER_TOKEN"] = token
+    _token_ts = time.time()
+    return True
 
 
 def _as_list(v) -> list:
@@ -362,129 +414,141 @@ def make_tuple(entry, sel_hashes, hash_to_text, answer) -> dict:
     }
 
 
-def main(mode: str, gold_path: str, out_path: str) -> int:
-    with open(gold_path) as fh:
-        gold = json.load(fh)
-    entries = gold["entries"]
-    hash_to_text = build_hash_to_text() if mode == "dump-tuples" else {}
-    key_to_hash = build_key_to_content_hash() if mode == "anchor" else {}
-
-    tuples, rows, missed, unmapped, http_errors = [], [], 0, 0, 0
-    skipped_entries: list[str] = []
-    for entry in entries:
-        start, body, status = drive_query(entry)
-        # Non-2xx catchall (finding 5): any status outside 200..299 takes the
-        # error path — skip the entry, count it, and avoid the expensive VT
-        # poll that would otherwise burn TRACE_FETCH_TIMEOUT on a dead query.
-        # 401/403 keep their distinct auth-failure hint; everything else uses
-        # the generic skipped message.
-        if status < 200 or status >= 300:
-            http_errors += 1
-            skipped_entries.append(entry["id"])
-            if status in (401, 403):
-                print(
-                    f"[{entry['id']}] AUTH-FAILURE (HTTP {status}) — bearer expired or "
-                    "invalid. Use the wrapper (token lifecycle) or refresh E2E_BEARER_TOKEN.",
-                    file=sys.stderr,
-                )
-            else:
-                print(
-                    f"[{entry['id']}] HTTP {status} from chatqna — skipped",
-                    file=sys.stderr,
-                )
-            if mode == "anchor":
-                # Anchor mode (finding 1): also append the error-row shape so
-                # the report carries signal for the degraded entries — a
-                # partial run with silent gaps exited 0 before this fix.
-                rows.append(
-                    {
-                        "id": entry["id"],
-                        "query": entry["query"],
-                        "trace_found": False,
-                        "error": f"HTTP {status}",
-                    }
-                )
-                missed += 1
-            continue
-        answer = _extract_answer(body)
-        cand_keys, sel_keys, adaptive_breakdown = fetch_selection(start)
-        trace_found = bool(cand_keys or sel_keys)
-        if mode == "anchor":
-            # A span _key with no content-hash mapping (wrong/empty GRAPH_SOURCE,
-            # stale trace) would silently score as a miss — surface the count so
-            # the capture driver can refuse a false zero baseline. An EMPTY map
-            # (falsy) makes every key unmapped — exactly the failure to catch.
-            unmapped += sum(1 for k in sel_keys + cand_keys if k not in key_to_hash)
-        if not trace_found:
-            missed += 1
-            print(
-                f"[{entry['id']}] WARNING: no reranker_selection span — trace missed "
-                "(not scored). Check observability / bump TRACE_FETCH_TIMEOUT.",
-                file=sys.stderr,
-            )
-        else:
-            print(
-                f"[{entry['id']}] selected={len(sel_keys)} candidates={len(cand_keys)}",
-                file=sys.stderr,
-            )
+def _write_out(out_path: str, payload, mode: str) -> None:
+    """Atomic write: serialize to ``<out_path>.tmp`` then ``os.replace`` so a
+    crash mid-write can never leave a half-written ``out_path``. Used for both
+    the anchor report dict and the dump-tuples list (the same file-move
+    guarantee holds for either).
+    """
+    tmp = f"{out_path}.tmp"
+    with open(tmp, "w") as fh:
         if mode == "dump-tuples":
-            tuples.append(make_tuple(entry, sel_keys, hash_to_text, answer))
-        else:
-            rows.append(
-                score_anchor(
-                    entry,
-                    cand_keys,
-                    sel_keys,
-                    trace_found,
-                    adaptive_breakdown,
-                    key_to_hash,
-                )
-            )
+            json.dump(payload, fh, ensure_ascii=False, indent=2)
+        else:  # anchor
+            json.dump(payload, fh, indent=2)
+    os.replace(tmp, out_path)
+
+
+def _load_done(out_path: str, mode: str) -> tuple[set[str], list, list]:
+    """Return ``(done_ids, rows_or_empty, tuples_or_empty)`` for resume.
+
+    ``done_ids`` is the union of ids read from ``<out_path>.done.jsonl`` (the
+    authoritative skip-set) and ids recoverable from ``out_path`` itself
+    (per_query rows for anchor, tuple-list entries for dump-tuples). Error
+    rows (``trace_found is False`` with an ``error`` field) in the anchor
+    report are deliberately EXCLUDED from ``done`` so a resume retries them
+    — they represent transient infrastructure failures, not a final result.
+
+    Resumability rules:
+    * ``out_path`` missing → fresh start, sidecar wiped if it existed (orphan).
+    * ``out_path`` exists but fails to parse → fresh start, sidecar wiped.
+    * Both present → load both, take the union.
+    """
+    done: set[str] = set()
+    rows: list = []
+    tuples: list = []
+    sidecar = f"{out_path}.done.jsonl"
+
+    if not os.path.exists(out_path):
+        if os.path.exists(sidecar):
+            os.remove(sidecar)
+        return done, rows, tuples
+
+    try:
+        with open(out_path) as fh:
+            payload = json.load(fh)
+    except (json.JSONDecodeError, OSError):
+        if os.path.exists(sidecar):
+            os.remove(sidecar)
+        return done, rows, tuples
 
     if mode == "dump-tuples":
-        with open(out_path, "w") as fh:
-            json.dump(tuples, fh, ensure_ascii=False, indent=2)
-        sidecar = {
-            "n_entries": len(entries),
-            "n_tuples": len(tuples),
-            "n_http_errors": http_errors,
-            "n_missed_traces": missed,
-            "skipped": skipped_entries,
-        }
-        with open(f"{out_path}.meta.json", "w") as fh:
-            json.dump(sidecar, fh, ensure_ascii=False, indent=2)
-        print(f"\nWrote {len(tuples)} eval tuples → {out_path}", file=sys.stderr)
-        print(f"Wrote sidecar → {out_path}.meta.json", file=sys.stderr)
-        print("Feed to: run_ragas_eval.py eval_tuples.json", file=sys.stderr)
-        # Sidecar is already on disk — downstream readers (capture_baseline) can
-        # inspect skipped/http_errors even on degraded runs. Now classify.
-        if not tuples:
-            return 4
-        if (len(tuples) < len(entries)) and not os.getenv("EVAL_ALLOW_PARTIAL"):
-            print(
-                f"EXIT 3: {len(entries) - len(tuples)} entries skipped "
-                f"(see {out_path}.meta.json)",
-                file=sys.stderr,
-            )
-            return 3
-        # Finding 2: VT down → all-empty contexts but tuples were written.
-        # The sidecar carries n_missed_traces; surface it as a degraded run
-        # via the same threshold knob as anchor mode.
-        max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
-        if missed > max_missed:
-            print(
-                f"EXIT 3: {missed} missed traces > EVAL_MAX_MISSED_TRACES={max_missed}",
-                file=sys.stderr,
-            )
-            return 3
-        return 0
+        if isinstance(payload, list):
+            tuples = payload
+            for t in tuples:
+                if isinstance(t, dict) and t.get("id"):
+                    done.add(t["id"])
+    else:  # anchor
+        if isinstance(payload, dict):
+            for r in payload.get("per_query", []):
+                if not isinstance(r, dict):
+                    continue
+                # W3: keep error rows in `rows` so the W3 seed can recover
+                # n_http_errors / n_missed_traces from prior classifications.
+                # Error rows are still EXCLUDED from `done` so they retry — the
+                # intent was "must retry", not "must lose accounting".
+                rows.append(r)
+                is_error_row = (
+                    r.get("trace_found") is False and r.get("error")
+                )
+                if r.get("id") and not is_error_row:
+                    done.add(r["id"])
 
-    # Anchor branch.
+    if os.path.exists(sidecar):
+        with open(sidecar) as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    done.add(line)
+    return done, rows, tuples
+
+
+def _dedup_row(rows: list, entry_id: str) -> None:
+    """Drop any existing row with this id to keep the per-id invariant.
+
+    ``rows`` is the single source of truth for the report; the dedup guarantee
+    (at most one row per id) makes ``missed`` and ``skipped_entries`` safely
+    derivable from ``rows`` at report-build time. Without it, a resumed entry
+    that retries and succeeds appends a SECOND row with the same id — the
+    dedup invariant was the source of N1 (resume+retry-success interaction).
+    """
+    rows[:] = [r for r in rows if r.get("id") != entry_id]
+
+
+def _derive_missed(mode: str, rows: list, tuples: list) -> int:
+    """Single source of truth for n_missed_traces across both modes.
+
+    Anchor: rows with ``trace_found is False`` (covers both trace-miss and
+    HTTP-error rows — both are terminal non-scorables).
+    Dump-tuples: tuples with empty ``contexts`` (the only signal that the
+    drive returned but the trace fetch found nothing). 4xx/5xx entries do
+    NOT append a tuple — they surface via ``skipped``/``n_http_errors``,
+    not here.
+    """
+    if mode == "anchor":
+        return sum(1 for r in rows if r.get("trace_found") is False)
+    return sum(1 for t in tuples if not t.get("contexts"))
+
+
+def _derive_skipped_ids(rows: list) -> list[str]:
+    """Anchor-only: ids of rows carrying an ``error`` field (HTTP errors + retry-exhausted)."""
+    return sorted({r["id"] for r in rows if r.get("error")})
+
+
+def _write_out_post(
+    mode: str, out_path: str, tuples: list, rows: list,
+    unmapped: int, http_errors: int,
+) -> dict | None:
+    """Build the current payload from accumulated state and atomic-write it.
+    Called after EVERY entry so a mid-run kill never loses progress past the
+    last completed entry. For anchor this means recomputing the aggregate; for
+    dump-tuples this is just the list.
+
+    ``missed`` and ``skipped_entries`` are DERIVED from rows/tuples at write
+    time — no mutable threading, single source of truth. ``unmapped`` and
+    ``http_errors`` remain event counters (informational; the rc-3 gate runs
+    on the derived values).
+
+    Returns the anchor report dict so the caller can print/inspect without
+    rebuilding it (W11 — the old final block recomputed the same aggregate
+    right after _write_out_post ran on the last iteration). Returns None for
+    dump-tuples (the per-iter write is the only thing that matters there).
+    """
+    if mode == "dump-tuples":
+        _write_out(out_path, tuples, mode)
+        return None
     scored = [r for r in rows if r.get("trace_found")]
     agg = metrics.aggregate(scored)
-    # Aggregate passage-level metrics across queries (only queries that
-    # actually had gold passages; queries with all-unresolved gold are
-    # excluded from the denominator to avoid skewing toward zero).
     p_recalls = [r["passage_recall"] for r in scored if r.get("n_passages")]
     total_passages = sum(r.get("n_passages", 0) for r in scored)
     retrieved_passages = sum(r.get("passages_retrieved", 0) for r in scored)
@@ -494,26 +558,298 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
     report = {
         "per_query": rows,
         "aggregate": agg,
-        "n_missed_traces": missed,
+        "n_missed_traces": _derive_missed(mode, rows, tuples),
         "n_unmapped_chunk_keys": unmapped,
         "n_http_errors": http_errors,
-        "skipped_entries": skipped_entries,
+        "skipped_entries": _derive_skipped_ids(rows),
     }
-    with open(out_path, "w") as fh:
-        json.dump(report, fh, indent=2)
+    _write_out(out_path, report, mode)
+    return report
+
+
+def main(mode: str, gold_path: str, out_path: str) -> int:
+    with open(gold_path) as fh:
+        gold = json.load(fh)
+    entries = gold["entries"]
+    # W13: defer the (potentially expensive) ArangoDB hash-map build until we
+    # know there's actual work to do. On a no-op resume (every id already in
+    # `done`) the loop body is skipped and the maps would be discarded —
+    # building them anyway was the regression. Mode-specific maps (anchor
+    # needs key→hash, dump-tuples needs hash→text) stay empty until needed.
+    hash_to_text: dict[str, str] = {}
+    key_to_hash: dict[str, str] = {}
+
+    # --- resume: prefill from existing out + sidecar --------------------
+    sidecar_path = f"{out_path}.done.jsonl"
+    # W7: EVAL_FRESH=1 forces a clean slate — overwrite any pre-existing out
+    # and sidecar so the run starts from zero (use after a corrupted resume or
+    # when re-running a changed gold against an old report).
+    if os.getenv("EVAL_FRESH") == "1":
+        for p in (out_path, sidecar_path):
+            if os.path.exists(p):
+                os.remove(p)
+    done, rows, tuples = _load_done(out_path, mode)
+    # W7: validate the resume set against the CURRENT gold. If any prefilled id
+    # is not in the gold's entry ids, the operator swapped the gold mid-run
+    # without EVAL_FRESH=1; abort with exit 2 and the first 5 mismatches so
+    # they can decide (EVAL_FRESH=1 to discard, or fix the gold).
+    gold_ids = {e["id"] for e in entries}
+    mismatched = [iid for iid in done if iid not in gold_ids]
+    if mismatched:
+        sample = mismatched[:5]
+        print(
+            f"EXIT 2: {len(mismatched)} prefilled ids not in current gold "
+            f"(gold changed mid-run?). First {len(sample)}: {sample}",
+            file=sys.stderr,
+        )
+        return 2
+
+    backoff = float(os.getenv("EVAL_RETRY_BACKOFF", "5"))
+    # W3: seed http_errors from the prefilled report so a resume reflects
+    # HTTP-error counts from the prior run instead of restarting at 0 (the
+    # sidecar tells us which ids are done — not what classification they
+    # got). ``missed`` and ``skipped_entries`` are DERIVED from ``rows`` at
+    # report time (N1 fix: dedup invariant + derivation; rows is the single
+    # source of truth). ``unmapped`` stays 0 (recomputed only for new rows;
+    # acceptable window since the metric gates the exit, not the count).
+    if mode == "anchor":
+        http_errors = sum(
+            1 for r in rows
+            if isinstance(r.get("error"), str) and r["error"].startswith("HTTP")
+        )
+    else:
+        http_errors = 0
+    unmapped = 0
+
+    # W13: build the hash maps only when there is at least one entry remaining
+    # to drive. On a fully-covered no-op resume both dicts stay empty and we
+    # skip the (potentially many-second) ArangoDB cursor entirely.
+    if any(e["id"] not in done for e in entries):
+        if mode == "dump-tuples":
+            hash_to_text = build_hash_to_text()
+        else:
+            key_to_hash = build_key_to_content_hash()
+
+    # Open sidecar for the lifetime of the loop. When _load_done rebuilt done
+    # from out but the sidecar is empty/missing, seed it with the prefilled ids
+    # so a re-run finds the same skip-set via the sidecar union.
+    seed_needed = (
+        (not os.path.exists(sidecar_path) or os.path.getsize(sidecar_path) == 0)
+        and (rows or tuples)
+    )
+    # In-run bearer refresh: seed the TTL clock once at startup so the first
+    # top-of-loop hook sees elapsed=0 and skips refresh on entry 0.
+    global _token_ts
+    if _refresh_configured():
+        _token_ts = time.time()
+        # W9: when refresh is opted in BUT no static E2E_BEARER_TOKEN was
+        # seeded, the TTL check (elapsed ≤ TTL − margin) sees elapsed=0 and
+        # skips — the first drive carries an empty/undefined token → 401.
+        # Force one refresh up front so the loop starts authenticated.
+        if not os.getenv("E2E_BEARER_TOKEN"):
+            _maybe_refresh_token(force=True)
+    with open(sidecar_path, "a") as sidecar_fh:
+        if seed_needed:
+            for r in (rows if mode == "anchor" else tuples):
+                eid = r.get("id") if isinstance(r, dict) else None
+                if eid:
+                    sidecar_fh.write(f"{eid}\n")
+            sidecar_fh.flush()
+
+        for entry in entries:
+            eid = entry["id"]
+            if eid in done:
+                # Already completed in a prior run — skip (resume).
+                continue
+
+            # Per-entry retry: 3 attempts, swallow infra errors.
+            entry_succeeded = False
+            last_error: Exception | None = None
+            for attempt in range(3):
+                try:
+                    # W6: TTL-bounded pre-emptive refresh lives INSIDE the
+                    # per-entry try block (was a top-of-loop call that ran
+                    # outside the retry budget — a KeycloakError from the
+                    # refresh itself would crash the run). First statement so
+                    # a 401 reaction on the next line still has a fresh token.
+                    _maybe_refresh_token()
+                    start, body, status = drive_query(entry)
+                    # In-run bearer refresh on 401/403: if the operator opted in,
+                    # force a refresh and re-drive ONCE before falling through
+                    # to the AUTH-FAILURE row. Static-token path is untouched
+                    # (the retry is gated on _refresh_configured()).
+                    if status in (401, 403) and _refresh_configured():
+                        if _maybe_refresh_token(force=True):
+                            start, body, status = drive_query(entry)
+                    # Non-2xx catchall (finding 5): any status outside 200..299
+                    # takes the error path — skip the entry, count it, avoid
+                    # the expensive VT poll. HTTP errors are NOT retried: a
+                    # 401/502/400 against chatqna is deterministic for this
+                    # query within the same run; the retry budget is reserved
+                    # for transient infra failures (RuntimeError, JSONDecode,
+                    # OSError, TimeoutExpired).
+                    if status < 200 or status >= 300:
+                        http_errors += 1
+                        if status in (401, 403):
+                            print(
+                                f"[{eid}] AUTH-FAILURE (HTTP {status}) — bearer expired or "
+                                "invalid. Use the wrapper (token lifecycle) or refresh E2E_BEARER_TOKEN.",
+                                file=sys.stderr,
+                            )
+                        else:
+                            print(
+                                f"[{eid}] HTTP {status} from chatqna — skipped",
+                                file=sys.stderr,
+                            )
+                        if mode == "anchor":
+                            # N1: drop any prior row for this id before appending
+                            # the new error row — preserves the per-id invariant
+                            # that makes ``missed``/``skipped_entries`` safely
+                            # derivable from ``rows`` at write time.
+                            _dedup_row(rows, eid)
+                            rows.append({
+                                "id": eid, "query": entry["query"],
+                                "trace_found": False, "error": f"HTTP {status}",
+                            })
+                        # Persist incrementally so a mid-run kill doesn't lose
+                        # this entry's classification.
+                        _write_out_post(mode, out_path, tuples, rows,
+                                         unmapped, http_errors)
+                        entry_succeeded = True
+                        break
+
+                    answer = _extract_answer(body)
+                    cand_keys, sel_keys, adaptive_breakdown = fetch_selection(start)
+                    trace_found = bool(cand_keys or sel_keys)
+                    if mode == "anchor":
+                        unmapped += sum(
+                            1 for k in sel_keys + cand_keys if k not in key_to_hash
+                        )
+                    if not trace_found:
+                        print(
+                            f"[{eid}] WARNING: no reranker_selection span — trace missed "
+                            "(not scored). Check observability / bump TRACE_FETCH_TIMEOUT.",
+                            file=sys.stderr,
+                        )
+                    else:
+                        print(
+                            f"[{eid}] selected={len(sel_keys)} candidates={len(cand_keys)}",
+                            file=sys.stderr,
+                        )
+                    if mode == "dump-tuples":
+                        tuples.append(make_tuple(entry, sel_keys, hash_to_text, answer))
+                    else:
+                        # N1: drop any prior row for this id before appending
+                        # the new scored row. On resume, a prefilled error row
+                        # would otherwise be paired with the success row — a
+                        # duplicate in per_query and a stale skipped_entries
+                        # entry that forces rc 3 despite a fully-scored report.
+                        _dedup_row(rows, eid)
+                        rows.append(
+                            score_anchor(
+                                entry, cand_keys, sel_keys, trace_found,
+                                adaptive_breakdown, key_to_hash,
+                            )
+                        )
+                    # W4: mark done in the OUT first, then append to the sidecar.
+                    # The previous order (sidecar then out) opened a kill-window
+                    # where a crash AFTER sidecar flush but BEFORE _write_out_post
+                    # would leave the sidecar claiming "done" but the report
+                    # missing the row — a re-run would silently skip the entry.
+                    # Out-derived done covers the reverse window so it is safe.
+                    done.add(eid)
+                    _write_out_post(mode, out_path, tuples, rows,
+                                     unmapped, http_errors)
+                    sidecar_fh.write(f"{eid}\n")
+                    sidecar_fh.flush()
+                    entry_succeeded = True
+                    break
+                except (subprocess.TimeoutExpired, RuntimeError,
+                        json.JSONDecodeError, OSError) as e:
+                    last_error = e
+                    if attempt < 2:
+                        time.sleep(backoff)
+                    continue
+
+            if not entry_succeeded:
+                # Retry budget exhausted: classify as error.
+                if mode == "anchor":
+                    # N1: dedup before append — see http_errors path comment.
+                    _dedup_row(rows, eid)
+                    rows.append({
+                        "id": eid, "query": entry["query"],
+                        "trace_found": False,
+                        "error": str(last_error)[:200] if last_error else "unknown",
+                    })
+                # NOTE: do NOT append the failed id to .done.jsonl — a later
+                # resume must be able to retry it.
+                _write_out_post(mode, out_path, tuples, rows,
+                                 unmapped, http_errors)
+                print(
+                    f"[{eid}] ERROR (3 attempts): {last_error}",
+                    file=sys.stderr,
+                )
+
+    if mode == "dump-tuples":
+        # N1: ``missed`` derived from tuples (single row per id, no mutable
+        # threading). ``skipped`` derived from entries-vs-tuples id diff —
+        # any entry that did not produce a tuple is "skipped" (covers both
+        # HTTP errors and retry-budget exhaustion).
+        missed = _derive_missed(mode, rows, tuples)
+        entry_ids = {e["id"] for e in entries}
+        tuple_ids = {t["id"] for t in tuples if t.get("id")}
+        skipped_meta = sorted(entry_ids - tuple_ids)
+        sidecar = {
+            "n_entries": len(entries),
+            "n_tuples": len(tuples),
+            "n_http_errors": http_errors,
+            "n_missed_traces": missed,
+            "skipped": skipped_meta,
+        }
+        with open(f"{out_path}.meta.json", "w") as fh:
+            json.dump(sidecar, fh, ensure_ascii=False, indent=2)
+        print(f"\nWrote {len(tuples)} eval tuples → {out_path}", file=sys.stderr)
+        print(f"Wrote sidecar → {out_path}.meta.json", file=sys.stderr)
+        print("Feed to: run_ragas_eval.py eval_tuples.json", file=sys.stderr)
+        if not tuples:
+            return 4
+        if (len(tuples) < len(entries)) and not os.getenv("EVAL_ALLOW_PARTIAL"):
+            print(
+                f"EXIT 3: {len(entries) - len(tuples)} entries skipped "
+                f"(see {out_path}.meta.json)",
+                file=sys.stderr,
+            )
+            return 3
+        max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
+        if missed > max_missed:
+            print(
+                f"EXIT 3: {missed} missed traces > EVAL_MAX_MISSED_TRACES={max_missed}",
+                file=sys.stderr,
+            )
+            return 3
+        return 0
+
+    # Anchor branch. W11: use _write_out_post's returned report — the same
+    # aggregate we just wrote — instead of recomputing it (the old code did
+    # the build twice on the final iteration).
+    report = _write_out_post(
+        mode, out_path, tuples, rows,
+        unmapped, http_errors,
+    )
+    agg = report["aggregate"]
+    # N1: missed and skipped_entries are derived in _write_out_post from
+    # ``rows`` (single source of truth). Read them off the report for the
+    # threshold checks; the dedup invariant guarantees they're exact.
+    missed = report["n_missed_traces"]
+    skipped_entries = report["skipped_entries"]
     print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
     set_based_keys = [
-        "recall",
-        "precision",
-        "complete_recall",
-        "noise",
-        "retrieval_recall",
-        "passage_recall",
+        "recall", "precision", "complete_recall", "noise",
+        "retrieval_recall", "passage_recall",
     ]
     for k in set_based_keys:
         if k in agg:
             print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
-    # Rank-aware — only present when every scored row had them computed.
     for k in metrics.RANK_AWARE_K:
         rk = f"recall_at_{k}"
         nk = f"ndcg_at_{k}"
@@ -532,8 +868,13 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
             file=sys.stderr,
         )
     print(f"\nReport → {out_path}", file=sys.stderr)
-    # Report is already on disk — classify the run for capture_baseline (MR-D).
     max_missed = int(os.getenv("EVAL_MAX_MISSED_TRACES", "2"))
+    # N1: order matters — skipped_entries (HTTP errors) first, then missed
+    # (trace misses), then zero-scored guard, then unmapped. Putting the
+    # missed check BEFORE the agg["n"]==0 check lets all-missed resumes exit
+    # 3 with the missed message instead of the less-informative "zero scored
+    # rows" rc 4. (Pre-refactor, skipped_entries was seeded from trace-miss
+    # rows too — derivation narrows that semantic to error rows only.)
     if skipped_entries and not os.getenv("EVAL_ALLOW_PARTIAL"):
         print(
             f"EXIT 3: {len(skipped_entries)} entries skipped (HTTP errors); "
@@ -541,14 +882,14 @@ def main(mode: str, gold_path: str, out_path: str) -> int:
             file=sys.stderr,
         )
         return 3
-    if not scored:
-        return 4
     if missed > max_missed:
         print(
             f"EXIT 3: {missed} missed traces > EVAL_MAX_MISSED_TRACES={max_missed}",
             file=sys.stderr,
         )
         return 3
+    if agg["n"] == 0:
+        return 4
     if unmapped and not os.getenv("EVAL_ALLOW_UNMAPPED"):
         print(
             f"EXIT 3: {unmapped} unmapped chunk keys (wrong GRAPH_SOURCE?)",

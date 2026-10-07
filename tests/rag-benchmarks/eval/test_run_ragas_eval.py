@@ -147,10 +147,13 @@ def _install_langchain_fakes():
             time.sleep(_FANOUT_FAKE_STATE["sleep"])
             t1 = time.monotonic()
             _FANOUT_FAKE_TIMING.append((t0, t1))
-        result = _FakeChatResult(
-            generations=[[_FakeChatGeneration(text=f"gen-{idx}", info={"idx": idx})]],
-            llm_output=_llm_output_for(idx),
-        )
+        # langchain-core 1.x (pinned) returns generations FLAT for the single
+        # input; the pre-1.x nested shape is emulated only when the
+        # "nested" fake-state flag is set (normalization coverage).
+        gens = [_FakeChatGeneration(text=f"gen-{idx}", info={"idx": idx})]
+        if _FANOUT_FAKE_STATE.get("nested"):
+            gens = [gens]
+        result = _FakeChatResult(generations=gens, llm_output=_llm_output_for(idx))
         _FANOUT_FAKE_RETURNED_RESULTS.append(result)
         return result
 
@@ -173,10 +176,10 @@ def _install_langchain_fakes():
             # siblings can interleave — the deadlock-regression test
             # exercises the real-async-IO path.
             await asyncio.sleep(0)
-        result = _FakeChatResult(
-            generations=[[_FakeChatGeneration(text=f"agen-{idx}", info={"idx": idx})]],
-            llm_output=_llm_output_for(idx),
-        )
+        gens = [_FakeChatGeneration(text=f"agen-{idx}", info={"idx": idx})]
+        if _FANOUT_FAKE_STATE.get("nested"):
+            gens = [gens]
+        result = _FakeChatResult(generations=gens, llm_output=_llm_output_for(idx))
         _FANOUT_FAKE_RETURNED_RESULTS.append(result)
         return result
 
@@ -299,7 +302,7 @@ def test_fanout_kwargs_override_no_self_n_mutation():
     assert llm.n == sentinel_n, (
         f"self.n must not be mutated during fan-out (was {sentinel_n}, now {llm.n})"
     )
-    assert len(result.generations[0]) == 3
+    assert len(result.generations) == 3
 
 
 def test_fanout_messages_deepcopied_per_call():
@@ -339,13 +342,13 @@ def test_fanout_n3_sync_three_calls_merged():
     # Each underlying call must see n=1 (single-n strictness), never n=3.
     for _kind, _msgs, kwargs, _stop in _FANOUT_FAKE_PARENT_CALLS:
         assert kwargs.get("n", 1) == 1, "underlying call must use n=1"
-    # Merged result: one input → one nested list of 3 generations.
-    assert len(result.generations) == 1
-    assert len(result.generations[0]) == 3
+    # Merged result: flat list of 3 generations (langchain-core 1.x shape —
+    # the ChatResult validator rejects anything nested here).
+    assert len(result.generations) == 3
     # Set equality — the sync fan-out uses ThreadPoolExecutor, so the
     # completion order can differ from the submission order. The async
     # test below uses asyncio.gather, which preserves submission order.
-    texts = sorted(g.text for g in result.generations[0])
+    texts = sorted(g.text for g in result.generations)
     assert texts == ["gen-1", "gen-2", "gen-3"]
     # llm_output: non-numeric first-call value preserved (the default
     # fake's sentinel string; summed-numeric is covered in the rev2 test).
@@ -358,14 +361,14 @@ def test_fanout_n1_passthrough_no_fanout():
     llm = Fanout(n=1)
     result = llm._generate(["hi"])
     assert len(_FANOUT_FAKE_PARENT_CALLS) == 1
-    assert result.generations[0][0].text == "gen-1"
+    assert result.generations[0].text == "gen-1"
 
     # Also verify n unset (default 1) is passthrough.
     _FANOUT_FAKE_PARENT_CALLS.clear()
     llm_default = Fanout()  # n defaults to 1
     result_default = llm_default._generate(["hi"])
     assert len(_FANOUT_FAKE_PARENT_CALLS) == 1
-    assert len(result_default.generations[0]) == 1
+    assert len(result_default.generations) == 1
 
 
 def test_fanout_n3_async_three_calls_merged():
@@ -380,9 +383,8 @@ def test_fanout_n3_async_three_calls_merged():
     assert kinds == ["async", "async", "async"]
     for _kind, _msgs, kwargs, _stop in _FANOUT_FAKE_PARENT_CALLS:
         assert kwargs.get("n", 1) == 1
-    assert len(result.generations) == 1
-    assert len(result.generations[0]) == 3
-    assert [g.text for g in result.generations[0]] == ["agen-1", "agen-2", "agen-3"]
+    assert len(result.generations) == 3
+    assert [g.text for g in result.generations] == ["agen-1", "agen-2", "agen-3"]
 
 
 def test_fanout_sync_siblings_overlap_no_serialization():
@@ -532,27 +534,25 @@ def test_fanout_merged_generations_have_chatgeneration_objects_not_tuples():
     Fanout = run_ragas_eval._FanoutChatOpenAI
     llm = Fanout(n=3)
     result = llm._generate(["hi"])
-    assert len(result.generations) == 1
-    merged_inner = result.generations[0]
+    merged_inner = result.generations  # flat: langchain-core 1.x shape
     assert len(merged_inner) == 3
     for j, gen in enumerate(merged_inner):
         assert not isinstance(gen, tuple), (
-            f"generations[0][{j}] is a tuple {gen!r} — _merge_results "
+            f"generations[{j}] is a tuple {gen!r} — _merge_results "
             f"over-iterated a ChatGeneration object (live v2 NaN root cause)"
         )
         assert isinstance(gen, _FakeChatGeneration), (
-            f"generations[0][{j}] is {type(gen).__name__}, expected "
+            f"generations[{j}] is {type(gen).__name__}, expected "
             f"_FakeChatGeneration"
         )
     # Identity check: every merged object IS one of the fakes the
     # underlying calls produced (no copy, no re-construction). The
     # fakes record their returned ChatResult in _FANOUT_FAKE_RETURNED_RESULTS;
-    # the merge's per-call sources are exactly the inner-list elements
-    # of those results.
+    # the merge's per-call sources are exactly those results' generations.
     all_underlying = [
         gen
         for result in _FANOUT_FAKE_RETURNED_RESULTS
-        for gen in result.generations[0]
+        for gen in result.generations
     ]
     assert len(all_underlying) == 3
     for gen in merged_inner:
@@ -686,3 +686,35 @@ def test_main_empty_string_out_path_uses_default(tmp_path, monkeypatch):
     assert not (tmp_path / "").exists() or True  # '' isn't a valid path anyway
     # The default ragas_report.json was also not created (we exited 2 first).
     assert not (tmp_path / "ragas_report.json").exists()
+
+
+def test_fanout_normalizes_pre1x_nested_generations_shape():
+    """FANOUT (shape normalization): langchain-core <1.x returned
+    ``generations=[[gen]]`` (nested per input); 1.x returns ``[gen]`` flat.
+    _merge_results must normalize BOTH — the live v3 failure mode was a
+    core returning flat while the merge assumed nested."""
+    Fanout = run_ragas_eval._FanoutChatOpenAI
+    _FANOUT_FAKE_STATE["nested"] = True  # fakes return [[gen]] (pre-1.x)
+    try:
+        llm = Fanout(n=3)
+        result = llm._generate(["hi"])
+        assert len(result.generations) == 3
+        assert all(not isinstance(g, tuple) for g in result.generations)
+        texts = sorted(g.text for g in result.generations)
+        assert texts == ["gen-1", "gen-2", "gen-3"]
+    finally:
+        _FANOUT_FAKE_STATE["nested"] = False
+
+
+def test_fanout_n5_fires_five_calls():
+    """FANOUT: the fan-out count follows n, whatever n is — 3 is merely the
+    ragas answer_relevancy default (strictness), not a contract of this
+    class. n=5 must fan out 5 single-n calls and merge 5 generations."""
+    Fanout = run_ragas_eval._FanoutChatOpenAI
+    llm = Fanout(n=5)
+    result = llm._generate(["hi"])
+    assert len(_FANOUT_FAKE_PARENT_CALLS) == 5
+    assert len(result.generations) == 5
+    assert sorted(g.text for g in result.generations) == [
+        "gen-1", "gen-2", "gen-3", "gen-4", "gen-5",
+    ]

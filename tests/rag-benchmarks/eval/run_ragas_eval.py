@@ -129,37 +129,39 @@ if ChatOpenAI is not None:
         @staticmethod
         def _merge_results(results):
             """Merge per-call ChatResults into one. All calls share the same
-            inputs (we're fanning the SAME prompt), so ``generations`` is
-            ``list[list[ChatGeneration]]`` with one nested list per input.
-            Flatten the per-call lists into one nested list of N generations
-            per input. For ``llm_output`` (token usage etc.), sum numeric
-            fields across the n calls and let the first call's value win
-            for non-numeric fields — this gives an honest total that
-            RAGAS / observability can consume without undercounting by N×.
+            single prompt (we fan ONE input), so the merged result is the
+            flat list of the n calls' generations for that input.
+            For ``llm_output`` (token usage etc.), sum numeric fields across
+            the n calls and let the first call's value win for non-numeric
+            fields — an honest total RAGAS / observability can consume
+            without undercounting by N×.
             WARNING: bool is an int in Python — a ``True`` flag would sum
             to N. Keep flags string-typed in llm_output (tests use a
             string sentinel for exactly this reason).
 
-            CRITICAL — DO NOT ITERATE A ``ChatGeneration``: pydantic models
-            yield ``(field_name, value)`` tuples when iterated (the
-            ``__iter__`` pydantic adds). A list-comprehension or ``extend``
-            that walks a ``ChatGeneration`` itself — instead of a list
-            containing it — would replace each generation with a tuple
-            of tuples, and RAGAS's ``ChatResult(generations=...)`` validator
-            would then raise ``ValidationError: input_value=[('text', ...)],
-            input_type=list`` (the live v2 NaN root cause, 2026-10-07).
-            Iterate only ``r.generations`` (outer list) and ``r.generations[i]``
-            (inner list); let the inner elements — ``ChatGeneration``
-            objects — flow through untouched."""
+            CRITICAL — GENERATIONS NESTING IS VERSION-DEPENDENT:
+            langchain-core <1.x nests per input (``list[list[ChatGeneration]]``);
+            langchain-core 1.x (pinned here) returns ``list[ChatGeneration]``
+            FLAT for the single input. ``_gens_for_input`` normalizes both,
+            and a ``ChatGeneration`` must NEVER be iterated: pydantic models
+            yield ``(field_name, value)`` tuples when iterated. Walking a
+            ``ChatGeneration`` instead of a list containing it produces
+            ``[('text', ...), ...]`` tuples and the ChatResult validator
+            raises ``ValidationError: generations.0`` (the live v2/v3 NaN
+            root cause, 2026-10-07 — caught only by an isolation test
+            against the REAL venv, not by shape-naive fakes)."""
             from langchain_core.outputs import ChatResult
 
             if not results:
                 return ChatResult(generations=[])
-            n_inputs = len(results[0].generations)
-            merged: list = [
-                [gen for r in results for gen in r.generations[i]]
-                for i in range(n_inputs)
-            ]
+
+            def _gens_for_input(r) -> list:
+                g = list(r.generations)
+                if len(g) == 1 and isinstance(g[0], (list, tuple)):
+                    g = list(g[0])
+                return g
+
+            merged: list = [gen for r in results for gen in _gens_for_input(r)]
             merged_output: dict = {}
             seen_keys: set = set()
             for r in results:

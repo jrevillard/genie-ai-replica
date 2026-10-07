@@ -62,6 +62,26 @@ install_uvicorn_access_logging()
 align_tracer = get_tracer("chatqna.align_outputs")
 
 
+class _RerankerInputTooLongError(Exception):
+    """Local marker raised in align_outputs (RERANK branch) of this service.
+
+    The reranker microservice translates the typed wrapper exception into a
+    422 HTTPException. OPEA v1.5's ServiceOrchestrator.execute() does not
+    check HTTP status (no raise_for_status), so the 422 body flows into
+    align_outputs as the reranker node's output dict; the detection there
+    raises this class, which propagates out of schedule() and is caught by
+    the abstention handler in handle_request. A secondary, defensive chain
+    walk in handle_request also maps any wrapped marker-bearing exception
+    onto this class.
+    """
+
+
+# Protocol marker carried in the reranker microservice's 422 body
+# (detail.error_type) and in wrapped exception messages. Both detection
+# points (align_outputs body check + the defensive chain walk) key on it.
+_RERANKER_INPUT_TOO_LONG_TYPE = "RerankerInputTooLong"
+
+
 def _emit_reranker_selection_span(candidate_chunk_keys, selected_chunk_keys, selected_scores):
     """Emit reranker selection identity for retrieval-quality evaluation.
 
@@ -1347,6 +1367,17 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         next_data["retrieved_docs"] = retrieved_docs
 
     elif self.services[cur_node].service_type == ServiceType.RERANK:
+        # OPEA v1.5's ServiceOrchestrator.execute() does not check HTTP status
+        # (no raise_for_status), so the reranker's 422 body arrives here as the
+        # node's "successful" output dict. Detect the typed error body and
+        # re-raise as the local marker so handle_request dispatches the
+        # reranker-input-too-long abstention instead of treating it as data.
+        if (
+            isinstance(data, dict)
+            and isinstance(data.get("detail"), dict)
+            and data["detail"].get("error_type") == _RERANKER_INPUT_TOO_LONG_TYPE
+        ):
+            raise _RerankerInputTooLongError(f"downstream service returned: {data['detail'].get('error', 'unknown')}")
         if logflag:
             logger.info(f"\n[ DEBUG ] MICROSERVICE RERANK OUTPUT: {data}")
 
@@ -2562,27 +2593,60 @@ class ChatQnAService:
             span.set_attribute("rag.model_id", _get_llm_model())
 
             _rag_start = time.time()
-            try:
-                result_dict, runtime_graph = await self.megaservice.schedule(
-                    initial_inputs={
-                        "text": last_translated_message_content,
-                        # Carried through to the embedding node so it can batch
-                        # [query, history] in ONE TEI call. Empty when blending
-                        # is disabled (flag off / first turn). Non-EmbedDoc field
-                        # is stripped before the retriever HTTP call by OPEA.
-                        "_blend_history_text": history_text,
-                        "_blend_alpha": MULTI_TURN_BLEND_ALPHA,
-                    },
-                    llm_parameters=parameters,
-                    genie_params={
-                        "retriever_parameters": retriever_parameters,
-                        "reranker_parameters": reranker_parameters,
-                        "full_chat_history_string": translated_history_string,
-                        "retrieval_context": retrieval_context,
-                        "original_language": original_language,
-                        "user_details": user_details,
-                    },
+
+            def _chat_attrs(abstained: str, error: str) -> dict:
+                """Metric attribute set shared by the success / abstention / error paths."""
+                return sanitize_attributes(
+                    {
+                        "response_type": "streaming" if chat_request.stream else "sync",
+                        "abstained": abstained,
+                        "error": error,
+                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
+                    }
                 )
+
+            try:
+                try:
+                    result_dict, runtime_graph = await self.megaservice.schedule(
+                        initial_inputs={
+                            "text": last_translated_message_content,
+                            # Carried through to the embedding node so it can batch
+                            # [query, history] in ONE TEI call. Empty when blending
+                            # is disabled (flag off / first turn). Non-EmbedDoc field
+                            # is stripped before the retriever HTTP call by OPEA.
+                            "_blend_history_text": history_text,
+                            "_blend_alpha": MULTI_TURN_BLEND_ALPHA,
+                        },
+                        llm_parameters=parameters,
+                        genie_params={
+                            "retriever_parameters": retriever_parameters,
+                            "reranker_parameters": reranker_parameters,
+                            "full_chat_history_string": translated_history_string,
+                            "retrieval_context": retrieval_context,
+                            "original_language": original_language,
+                            "user_details": user_details,
+                        },
+                    )
+                except _RerankerInputTooLongError:
+                    # Already typed by align_outputs — skip the chain walk.
+                    raise
+                except Exception as _e:
+                    # Walk the exception chain looking for the reranker input-too-long
+                    # marker. OPEA's ServiceOrchestrator wraps the underlying
+                    # HTTPException(422) with its own exception type; the marker is
+                    # preserved in the message chain (HTTPException.detail is
+                    # JSON-stringified into the wrapper message). TEI's error string
+                    # says "must have less than N tokens" — only the protocol marker
+                    # is a reliable match.
+                    _chain: list = []
+                    _cur = _e
+                    while _cur is not None and len(_chain) < 10:
+                        _chain.append(str(_cur))
+                        _cur = _cur.__cause__ or _cur.__context__
+                    _joined = " | ".join(_chain)
+                    if _RERANKER_INPUT_TOO_LONG_TYPE in _joined:
+                        raise _RerankerInputTooLongError(_joined) from _e
+                    raise
                 _rag_duration = time.time() - _rag_start
 
                 # Count the chunks fed to the LLM. (Was always 0: node outputs
@@ -2591,31 +2655,72 @@ class ChatQnAService:
                 span.set_attribute("rag.chunk_count", _count_final_chunks(result_dict))
 
                 # Record custom application metrics
-                response_type = "streaming" if chat_request.stream else "sync"
-                _metric_attrs = sanitize_attributes(
-                    {
-                        "response_type": response_type,
-                        "abstained": "false",
-                        "error": "false",
-                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
-                    }
-                )
+                _metric_attrs = _chat_attrs("false", "false")
                 chat_requests_total.add(1, _metric_attrs)
                 chat_rag_duration_seconds.record(_rag_duration, _metric_attrs)
+
+            except _RerankerInputTooLongError as e:
+                from opentelemetry.trace import StatusCode
+
+                # Graceful abstention. The caller (frontend / mobile) sent a
+                # valid request; the internal pipeline self-protected because
+                # dataprep produced input too long for the reranker's strict
+                # input cap. HTTP 200 + abstained=True mirrors the existing
+                # "no confident answer" behaviour — operators get the same UX
+                # as a low-confidence reranker outcome, but with a distinct
+                # abstention_reason so dashboards can attribute it.
+                span.set_status(
+                    StatusCode.ERROR,
+                    "Reranker input too long — abstaining",
+                )
+                span.set_attribute("abstained.reason", "reranker_input_too_long")
+                logger.warning(f"Abstaining: reranker input too long. {e}")
+
+                chat_requests_total.add(1, _chat_attrs("true", "false"))
+
+                # The reranker never returned a selection (schedule raised
+                # before result_dict was bound), so emit an empty selection
+                # span — the eval harness keys on rag.selected_chunk_keys and
+                # must see the abstention as "nothing selected", not a missing
+                # span.
+                _emit_reranker_selection_span(candidate_chunk_keys=[], selected_chunk_keys=[], selected_scores=[])
+
+                # Route the English abstention text through the same
+                # strip-before-translate finalizer as normal LLM answers so
+                # non-English users get the abstention in their language.
+                abstention_text = (
+                    "I cannot reliably answer this query because the "
+                    "retrieved documents exceed the reranker's input "
+                    "limit. This indicates a data ingestion issue."
+                )
+                final_text, _ = await self._finalize_llm_response(abstention_text, original_language)
+                metadata = {
+                    "source_documents": [],
+                    "retrieval_confidence_score": 0.0,
+                    "confidence_score": 0.0,
+                    "is_grounded": False,
+                    "abstained": True,
+                    "abstention_reason": "reranker_input_too_long",
+                }
+
+                if chat_request.stream:
+                    # Streaming callers get the same SSE envelope as a normal
+                    # answer: one content event, the metadata event, then [DONE].
+                    async def _abstention_stream():
+                        yield f"data: {final_text.encode('utf-8')!r}\n\n"
+                        yield "data: " + json.dumps({"type": "metadata", **metadata}) + "\n\n"
+                        yield "data: [DONE]\n\n"
+
+                    return StreamingResponse(_abstention_stream(), media_type="text/event-stream")
+
+                return {"response": final_text, "metadata": metadata}
 
             except Exception as e:
                 from opentelemetry.trace import StatusCode
 
                 # Record error metric
                 _err_duration = time.time() - _rag_start
-                _err_attrs = sanitize_attributes(
-                    {
-                        "response_type": "streaming" if chat_request.stream else "sync",
-                        "abstained": "false",
-                        "error": "true",
-                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
-                    }
-                )
+                _err_attrs = _chat_attrs("false", "true")
                 chat_requests_total.add(1, _err_attrs)
                 chat_rag_duration_seconds.record(_err_duration, _err_attrs)
 

@@ -198,6 +198,12 @@ HUGGING_FACE_HUB_TOKEN=
 # RERANKING_THRESHOLD=0.75
 # RERANKING_STRATEGY=slice      # slice (default) | threshold | slice_threshold | knee_threshold | adaptive
 # RERANKER_TOP_N=3              # chunks kept for slice/slice_threshold strategies (default 3)
+# TEI reranker runtime caps. TEI 1.9.3 effective per-input cap = min(model_max, --max-batch-tokens).
+# Raising --max-batch-tokens to 8192 aligns the cap with bge-reranker-v2-m3 (model_max_length=8192);
+# --auto-truncate=false forces HTTP 422 Validation on overflow instead of silent truncation.
+# TEI_RERANKING_MAX_BATCH_TOKENS=8192      # Per-batch token cap (TEI --max-batch-tokens). Also clamps per-input cap.
+# TEI_RERANKING_AUTO_TRUNCATE=false          # Fail-fast on overflow (TEI --auto-truncate)
+# TEI_RERANKING_MAX_CONCURRENT_REQUESTS=32   # In-flight requests cap. Lower if VRAM budget tighter (bench-validated safe at 32 with shared vLLM).
 # Adaptive utility-cost selection (only used when RERANKING_STRATEGY=adaptive):
 # NOVELTY_SIGMOID_A=20.0       # novelty->weight logistic steepness
 # NOVELTY_SIGMOID_B=0.25       # novelty->weight logistic midpoint
@@ -650,16 +656,15 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # SECTION 10: GPU-SPECIFIC CONFIGURATION
 # =============================================================================
 # These variables override GPU memory utilization and model settings.
-# See env.t4 (NVIDIA T4 16GB) or env.rtx6000 (RTX 6000 ADA 24GB) for examples.
 #
-# Common GPU variables (see env.t4/env.rtx6000 for full list):
+# Common GPU variables:
 # - VLLM_GPU_UTILIZATION: GPU memory fraction (0.1-1.0)
 # - VLLM_MAX_MODEL_LEN: Maximum context length (default: 65536 — granite-4.1-8b supports 128K; fits all RAG pipeline calls)
 # - VLLM_MAX_NUM_SEQS: Maximum concurrent sequences
 # - VLLM_DTYPE: Data type (half, float32, etc.)
 #
 # To use GPU-specific configuration:
-#   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
+#   set -a && source .env && docker stack deploy -c docker-compose.yaml genieai
 
 # =============================================================================
 # SECTION 11: PROXY CONFIGURATION (OPTIONAL)
@@ -859,7 +864,7 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   EMBEDDING_MODEL_ID, RERANKER_MODEL_ID, VLLM_LLM_MODEL_ID
 #
 # GPU-specific overrides work the same as Docker:
-#   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
+#   set -a && source .env && docker stack deploy -c docker-compose.yaml genieai
 
 # =============================================================================
 # SECTION 14: REMOTE GPU NODE (OPTIONAL)

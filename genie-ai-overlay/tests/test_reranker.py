@@ -1338,3 +1338,161 @@ class TestKneeLocatorEdgeCases:
             result = await reranker.invoke(input_doc)
 
         assert len(result.reranked_docs) == 2
+
+
+# ---------------------------------------------------------------------------
+# Test: RerankerInputTooLongError (Tasks 3-5)
+# ---------------------------------------------------------------------------
+
+
+class TestRerankerInputTooLong:
+    """Tests for the typed exception raised when TEI rejects an oversized input."""
+
+    @pytest.mark.asyncio
+    async def test_post_body_sends_truncate_false(self):
+        """Wrapper must force truncate=False so TEI's strict check fires
+        even if --auto-truncate is reintroduced in the compose entrypoint."""
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.95, 0.82])
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b"],
+            reranking_strategy="slice",
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            await reranker.invoke(input_doc)
+
+        payload = mock_session.post.call_args[1]["json"]
+        assert payload["truncate"] is False
+        assert payload["query"] == "test query"
+        assert payload["texts"] == ["a", "b"]
+
+    @pytest.mark.asyncio
+    async def test_tei_422_validation_raises_typed_exception(self):
+        """When TEI returns HTTP 422 + error_type=Validation, the wrapper must
+        raise RerankerInputTooLongError (not a generic RuntimeError)."""
+        from reranker.genieai_tei_reranker import RerankerInputTooLongError
+
+        reranker = create_reranker()
+        tei_422 = {
+            "error": "Input validation error: `inputs` must have less than 1024 tokens. Given: 19505",
+            "error_type": "Validation",
+        }
+        input_doc = create_mock_searched_doc(
+            texts=["x" * 50000],
+            reranking_strategy="slice",
+        )
+        mock_session = create_mock_aiohttp_session(tei_422, status=422)
+
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            pytest.raises(RerankerInputTooLongError) as exc_info,
+        ):
+            await reranker.invoke(input_doc)
+
+        assert "Given: 19505" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_tei_422_non_validation_falls_through_to_generic_runtime_error(self):
+        """A 422 with a different error_type (e.g. future PayloadTooLarge) must NOT
+        be swallowed by the input-too-long path — it should hit the existing
+        generic RuntimeError branch so existing alerts still fire."""
+        from reranker.genieai_tei_reranker import RerankerInputTooLongError
+
+        reranker = create_reranker()
+        tei_422_other = {"error": "some other 422", "error_type": "PayloadTooLarge"}
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b"],
+            reranking_strategy="slice",
+        )
+        mock_session = create_mock_aiohttp_session(tei_422_other, status=422)
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            with pytest.raises(RuntimeError) as exc_info:
+                await reranker.invoke(input_doc)
+            # Must NOT be the typed exception (that one is reserved for the
+            # specific input-too-long path; other 422s keep their existing
+            # generic handling so existing dashboards still see them).
+            assert not isinstance(exc_info.value, RerankerInputTooLongError)
+
+    @pytest.mark.asyncio
+    async def test_tei_422_validation_emits_warning_log(self, caplog):
+        """A 422 Validation must emit a structured warning carrying n_docs and tokens."""
+        import logging
+
+        from reranker.genieai_tei_reranker import RerankerInputTooLongError
+
+        reranker = create_reranker()
+        tei_422 = {
+            "error": "Input validation error: `inputs` must have less than 1024 tokens. Given: 19505",
+            "error_type": "Validation",
+        }
+        input_doc = create_mock_searched_doc(
+            texts=["a"],
+            reranking_strategy="slice",
+        )
+        mock_session = create_mock_aiohttp_session(tei_422, status=422)
+
+        # conftest mocks comps.CustomLogger as a MagicMock, so the module-level
+        # logger never reaches Python logging. Swap in a real Logger so caplog
+        # can observe the warning.
+        real_logger = logging.getLogger("genie_tei_reranking")
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            patch("reranker.genieai_tei_reranker.logger", real_logger),
+            caplog.at_level(logging.WARNING, logger="genie_tei_reranking"),
+            pytest.raises(RerankerInputTooLongError),
+        ):
+            await reranker.invoke(input_doc)
+
+        matching = [r for r in caplog.records if "Reranker input too long" in r.getMessage()]
+        assert len(matching) == 1
+        msg = matching[0].getMessage()
+        assert "1 docs" in msg
+        assert "actual=19505 tokens" in msg
+
+
+# ---------------------------------------------------------------------------
+# Test: Microservice HTTP 422 translation (Task 6)
+# ---------------------------------------------------------------------------
+
+
+class TestMicroserviceInputTooLong:
+    """Tests for the microservice-layer conversion of
+    RerankerInputTooLongError → HTTPException(422)."""
+
+    def test_microservice_raises_http_422_on_input_too_long(self):
+        """When the loader raises RerankerInputTooLongError, the microservice
+        must surface it as HTTPException(422) so chatqna's orchestrator can
+        catch the case via HTTP status."""
+        import asyncio
+
+        from fastapi import HTTPException
+
+        from reranker.genieai_reranking_microservice import reranking
+        from reranker.genieai_tei_reranker import RerankerInputTooLongError
+
+        mock_input = MagicMock()
+        mock_input.retrieved_docs = []
+
+        async def _raise_input_too_long(_):
+            raise RerankerInputTooLongError("TEI rejected input: Given: 19505")
+
+        with (
+            patch.object(
+                __import__("reranker.genieai_reranking_microservice", fromlist=["loader"]).loader,
+                "invoke",
+                side_effect=_raise_input_too_long,
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            asyncio.run(reranking(mock_input))
+
+        assert exc_info.value.status_code == 422
+        # detail body must carry the recognisable error_type so chatqna can
+        # discriminate from any other 422 (e.g. Pydantic validation).
+        detail = exc_info.value.detail
+        assert isinstance(detail, dict)
+        assert detail.get("error_type") == "RerankerInputTooLong"
+        assert "Given: 19505" in detail["error"]

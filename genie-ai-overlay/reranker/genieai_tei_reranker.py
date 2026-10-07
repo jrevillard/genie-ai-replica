@@ -5,6 +5,7 @@
 import json
 import math
 import os
+import re
 import statistics
 
 import aiohttp
@@ -25,6 +26,7 @@ from opentelemetry.trace import Status, StatusCode
 from pydantic import Field
 
 from tracing import (
+    get_meter,
     get_tracer,
     install_uvicorn_access_logging,
     setup_json_logging,
@@ -32,6 +34,30 @@ from tracing import (
 )
 
 tracer = get_tracer(__name__)
+
+
+class RerankerInputTooLongError(RuntimeError):
+    """Raised when a (query, doc) pair exceeds TEI's per-input token cap.
+
+    TEI 1.9.3 computes the effective per-input cap as
+    `min(model.max_position_embeddings, --max-batch-tokens)` and rejects
+    (HTTP 422 Validation) when the encoded length exceeds it AND
+    `--auto-truncate=false`. We raise this typed exception so the microservice
+    can re-raise it as HTTP 422 with a recognisable error_type, letting the
+    chatqna orchestrator catch it and return an abstention response instead
+    of bubbling a 500.
+    """
+
+
+# Prometheus counter incremented each time TEI rejects an input as too long,
+# so operators detect silent dataprep regressions (chunks approaching or
+# exceeding the model's context window) before they cascade into
+# user-visible abstentions.
+_meter = get_meter()
+_reranker_input_too_long_total = _meter.create_counter(
+    "rag.rerank.input_too_long",
+    description="Rerank calls rejected by TEI because input exceeded the per-input token cap",
+)
 
 
 # Defining a custom data subclass
@@ -258,7 +284,11 @@ class GenieTEIReranking(OpeaTEIReranking):
                         aiohttp.ClientSession() as session,
                         session.post(
                             f"{self.base_url}/rerank",
-                            json={"query": query, "texts": docs},
+                            # truncate=False forces TEI's strict input check;
+                            # without this the wrapper would silently receive
+                            # a saturated score and the chatqna adaptive path
+                            # would abstain without operator-visible signal.
+                            json={"query": query, "texts": docs, "truncate": False},
                             headers=headers,
                         ) as resp,
                     ):
@@ -267,6 +297,35 @@ class GenieTEIReranking(OpeaTEIReranking):
                     span.record_exception(e)
                     span.set_status(Status(StatusCode.ERROR, str(e)))
                     raise
+
+                # TEI returns HTTP 422 + a Validation error_type when the strict
+                # input-length check fires (per-input cap = min(model.max_position_embeddings,
+                # --max-batch-tokens); we set --max-batch-tokens to 8192 via the compose
+                # entrypoint). We surface it as a typed exception so the microservice
+                # can re-raise an HTTP 422 and chatqna can abstain instead of returning 500.
+                if resp.status == 422 and (
+                    isinstance(decoded_response, dict) and decoded_response.get("error_type") == "Validation"
+                ):
+                    error_message = decoded_response.get("error", "unknown")
+                    # TEI's message carries the offending token count, e.g.
+                    # "...must have less than 8192 tokens. Given: 19505".
+                    # Surfaced as a span attribute so operators can size
+                    # dataprep chunk_size from the trace.
+                    given_tokens = None
+                    if error_message:
+                        m = re.search(r"Given:\s*(\d+)", error_message)
+                        if m:
+                            given_tokens = int(m.group(1))
+                    span.set_attribute("reranker.input_too_long", True)
+                    if given_tokens is not None:
+                        span.set_attribute("reranker.rejected_tokens", given_tokens)
+                    span.set_status(Status(StatusCode.ERROR, "Reranker input exceeds per-input token cap"))
+                    _reranker_input_too_long_total.add(1)
+                    logger.warning(
+                        f"Reranker input too long: {len(docs)} docs, "
+                        f"actual={given_tokens if given_tokens is not None else 'unknown'} tokens"
+                    )
+                    raise RerankerInputTooLongError(f"TEI rejected input: {error_message}")
 
                 # Validate the TEI response contract before consuming it. TEI returns
                 # HTTP 200 + a list of {"index": int, "score": float} on success. On

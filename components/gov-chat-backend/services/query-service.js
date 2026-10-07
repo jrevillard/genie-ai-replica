@@ -6,6 +6,7 @@ const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
 const api = require('@opentelemetry/api');
 const { parsePositiveInt } = require('../shared-lib');
+const retrievalConfigClient = require('./retrieval-config-client');
 
 // Pick the user-visible question to store in queries.text for the Query Inspector.
 // Order of preference:
@@ -433,7 +434,215 @@ class QueryService {
       };
     }
 
+    // Story 1.1 — resolve the OKF retrieval posture + the caller's authorized
+    // graph set and attach the fan-out carrier to the payload context.
+    // Fail-closed: any resolver problem (except a 401, which propagates — the
+    // request itself is invalid) degrades to the legacy carrier, i.e. the
+    // payload stays byte-identical to pre-1.1.
+    await this._attachFanoutCarrier(opeaPayload, authHeaders, queryId, queryData.sessionId);
+
     return { queryId, opeaUrl, opeaPayload, authHeaders, queryData };
+  }
+
+  /**
+   * Story 1.1 (ADR-okf-039) — attach the multi-graph fan-out carrier to the
+   * chatqna payload context.
+   *
+   * The okf-server is the source of truth: the client's `engaged` flag is the
+   * AUTHORITATIVE engagement gate (mode ∈ {okf_only, hybrid} AND ≥1 serving
+   * graph for this caller, computed server-side) and is never re-computed
+   * here. Carrier rules:
+   *   - mode == 'hybrid' AND engaged → `authorized_graph_names` = legacy graph
+   *     (process.env.ARANGO_GRAPH_NAME) FIRST, then the authz-resolver's OKF
+   *     graphs (the GRAPH-injection rule — legacy first, OKF after).
+   *   - mode == 'okf_only' → NEVER prepend the legacy graph; the legacy
+   *     free-form corpus is NEVER queried (engaged or not) — signalled to
+   *     chatqna via `exclude_legacy: true`.
+   *   - engaged == false AND mode == 'hybrid' → empty `authorized_graph_names`
+   *     (the retriever stays on the legacy path).
+   *   - engaged == false AND mode == 'okf_only' → empty carrier AND
+   *     `exclude_legacy: true` — the retriever REFUSES the legacy free-form
+   *     corpus (zero hits; okf_only never falls back to legacy).
+   *   - mode == 'legacy' (or never resolved) → NOTHING is added — the payload
+   *     is byte-identical to pre-1.1 (the D8 invariant).
+   * @param {Object} opeaPayload - The payload to mutate (context carrier).
+   * @param {Object} authHeaders - {authorization: 'Bearer ...'} of the caller.
+   * @param {string} queryId - For log correlation.
+   * @returns {Promise<Object>} The same payload (mutated in place).
+   */
+  async _attachFanoutCarrier(opeaPayload, authHeaders, queryId, sessionId = null) {
+    const context = opeaPayload && opeaPayload.context;
+    // single-message mode has no context object — nothing to carry.
+    if (!context) {
+      logger.info('QueryService.fanout_carrier_skipped_no_context', { queryId });
+      return opeaPayload;
+    }
+    const bearer = authHeaders?.authorization;
+    if (!bearer) {
+      // No bearer → the authz endpoints are unreachable for this caller;
+      // legacy path (chatqna still authenticates the stream itself).
+      logger.info('QueryService.fanout_carrier_skipped_no_bearer', { queryId });
+      return opeaPayload;
+    }
+    const correlationId = crypto.randomUUID();
+    try {
+      const config = await retrievalConfigClient.getRetrievalConfig(bearer, { correlationId, queryId });
+      const mode = config?.config?.mode || 'legacy';
+      // The SERVER's engaged flag is the gate — read, never re-derived.
+      const engaged = config?.engaged === true;
+      const warnings = Array.isArray(config?.warnings) ? config.warnings : [];
+      logger.info('QueryService.fanout_config_resolved', {
+        queryId,
+        correlationId,
+        mode,
+        engaged,
+        serving_graph_count: config?.serving_graph_count,
+        serving_graphs: Array.isArray(config?.serving_graphs) ? config.serving_graphs.length : 0,
+        warnings: warnings.length
+      });
+
+      // Per-call authz — only when the server engaged the fan-out (the carrier
+      // is empty regardless when engaged is false).
+      let authorizedGraphs = [];
+      if (engaged) {
+        const authz = await retrievalConfigClient.getAuthorizedGraphs(bearer, { correlationId, queryId });
+        authorizedGraphs = Array.isArray(authz?.graph_names)
+          ? authz.graph_names.filter((g) => typeof g === 'string' && g.trim())
+          : [];
+      }
+
+      // Story 1.3 — sticky conversation-continuity set: the routed graphs that
+      // produced previous answers in THIS conversation. The retriever searches
+      // them unconditionally (they bypass affinity qualification), which keeps
+      // signal-free follow-ups ("why are they missing from the table?") locked
+      // to the conversation's subject. Authorization still wins: the sticky
+      // set is intersected with the carrier's authorized graphs and the legacy
+      // graph is never sticky (the legacy leg is outside routing entirely).
+      const legacyGraph = process.env.ARANGO_GRAPH_NAME || 'GRAPH';
+      let stickyGraphs = [];
+      if (engaged && sessionId) {
+        try {
+          stickyGraphs = await this._loadStickyGraphs(sessionId, queryId);
+        } catch (stickyErr) {
+          // Sticky is an optimization — a lookup problem must never break the query.
+          logger.warn('QueryService.sticky_load_failed', { queryId, correlationId, error: stickyErr?.message });
+          stickyGraphs = [];
+        }
+      }
+
+      if (mode === 'hybrid') {
+        context.mode = mode;
+        context.authorized_graph_names = engaged ? [...new Set([legacyGraph, ...authorizedGraphs])] : [];
+        const stickyClean = stickyGraphs.filter((g) => authorizedGraphs.includes(g) && g !== legacyGraph);
+        if (engaged && stickyClean.length) {
+          context.sticky_graph_names = stickyClean;
+          logger.info('QueryService.sticky_carrier_attached', { queryId, correlationId, sticky: stickyClean });
+        }
+        // Story 1.6 — frontmatter routing repo IDs. The retriever loads
+        // okf_repositories_frontmatter_summary rows for the union of
+        // authorized OKF graphs (legacy is excluded; frontmatter routing never
+        // includes the legacy free-form corpus). The BFF emit is a copy
+        // of authorizedGraphs (the legacy leg is in authorizedGraphs for the
+        // chunk-probe path but not for frontmatter — authorization still
+        // wins; the retriever will intersect with the carrier's authorized
+        // set as the final guard).
+        if (engaged && authorizedGraphs.length) {
+          context.frontmatter_repo_ids = [...new Set(authorizedGraphs.filter((g) => g !== legacyGraph))];
+          logger.info('QueryService.frontmatter_carrier_attached', {
+            queryId,
+            correlationId,
+            count: context.frontmatter_repo_ids.length
+          });
+        }
+      } else if (mode === 'okf_only') {
+        // okf_only LITERALLY means OKF only — the legacy free-form corpus is
+        // NEVER queried, regardless of engaged (resolved Open Question,
+        // 2026-10-06). The exclude_legacy signal enforces it retriever-side.
+        context.mode = mode;
+        context.authorized_graph_names = engaged ? [...new Set(authorizedGraphs)] : [];
+        context.exclude_legacy = true;
+        const stickyClean = stickyGraphs.filter((g) => authorizedGraphs.includes(g));
+        if (engaged && stickyClean.length) {
+          context.sticky_graph_names = stickyClean;
+          logger.info('QueryService.sticky_carrier_attached', { queryId, correlationId, sticky: stickyClean });
+        }
+        // Story 1.6 — frontmatter routing parallel to hybrid (no legacy filter
+        // because okf_only never had the legacy graph in the carrier).
+        if (engaged && authorizedGraphs.length) {
+          context.frontmatter_repo_ids = [...new Set(authorizedGraphs)];
+          logger.info('QueryService.frontmatter_carrier_attached', {
+            queryId,
+            correlationId,
+            count: context.frontmatter_repo_ids.length
+          });
+        }
+        if (!engaged) {
+          // Structured telemetry for the admin dashboard (NOT surfaced to the
+          // user chat).
+          logger.warn('QueryService.fanout_warning', {
+            queryId,
+            correlationId,
+            fanout: { warning: 'okf_only_zero_serving', mode, engaged },
+            server_warnings: warnings
+          });
+        }
+      } else {
+        // legacy (or an unknown mode) — add NOTHING; the payload stays
+        // byte-identical to pre-1.1.
+        logger.info('QueryService.fanout_carrier_empty_legacy', { queryId, correlationId, mode, engaged });
+      }
+      return opeaPayload;
+    } catch (err) {
+      if (err?.statusCode === 401) {
+        // BEARER_TOKEN_EXPIRED — the request is invalid; never silently fall
+        // back to the legacy path.
+        throw err;
+      }
+      logger.error('QueryService.fanout_carrier_failed_fail_closed', {
+        queryId,
+        correlationId,
+        error: err?.message
+      });
+      return opeaPayload; // fail-closed: legacy payload (no carrier keys added)
+    }
+  }
+
+  /**
+   * Story 1.3 — load the sticky (conversation-continuity) graph set for a
+   * session: the routed graphs persisted on the most recent query of this
+   * session that carries one. Single indexed-enough lookup; empty when the
+   * conversation has no prior OKF answer (first query → fresh routing only).
+   * @param {string} sessionId - The conversation/session id
+   * @param {string} queryId - Correlation for logs
+   * @returns {Promise<string[]>} Sticky graph names (possibly empty)
+   */
+  async _loadStickyGraphs(sessionId, queryId) {
+    const cursor = await this.db.query(
+      `FOR q IN queries
+         FILTER q.sessionId == @sessionId AND LENGTH(q.okfRoutedGraphs) > 0
+         SORT q.timestamp DESC
+         LIMIT 1
+         RETURN q.okfRoutedGraphs`,
+      { sessionId }
+    );
+    const rows = await cursor.all();
+    const sticky = Array.isArray(rows[0]) ? rows[0] : [];
+    logger.info('QueryService.sticky_loaded', { queryId, sessionId, sticky_count: sticky.length });
+    return sticky;
+  }
+
+  /**
+   * Story 1.3 — derive the routed-graph set from a finalized answer's source
+   * documents: distinct graph_name values, legacy graph excluded (it is
+   * always searched anyway and must never stick). Persisted on the query
+   * document; the NEXT query in the session reads it as its sticky set.
+   * @param {Object} metadata - Finalized metadata (source_documents)
+   * @returns {string[]} Distinct OKF graph names (possibly empty)
+   */
+  _deriveRoutedGraphs(metadata) {
+    const legacyGraph = process.env.ARANGO_GRAPH_NAME || 'GRAPH';
+    const docs = Array.isArray(metadata?.source_documents) ? metadata.source_documents : [];
+    return [...new Set(docs.map((d) => d?.graph_name).filter((g) => typeof g === 'string' && g && g !== legacyGraph))];
   }
 
   /**
@@ -452,6 +661,13 @@ class QueryService {
       isAnswered: true,
       metadata
     };
+    // Story 1.3 — persist the routed graphs so the NEXT query in this session
+    // can stick to the conversation's subject (see _loadStickyGraphs).
+    const routedGraphs = this._deriveRoutedGraphs(metadata);
+    if (routedGraphs.length) {
+      updateData.okfRoutedGraphs = routedGraphs;
+      logger.info('QueryService.sticky_routed_graphs_persisted', { queryId, routedGraphs });
+    }
     await this.queries.update(queryId, updateData);
 
     // Record analytics
@@ -641,6 +857,13 @@ class QueryService {
           isAnswered: true,
           metadata: opeaMetadata
         };
+        // Story 1.3 — sticky persistence (mock + OPEA branches, same rule as
+        // the stream finalize).
+        const routedGraphs = this._deriveRoutedGraphs(opeaMetadata);
+        if (routedGraphs.length) {
+          updateData.okfRoutedGraphs = routedGraphs;
+          logger.info('QueryService.sticky_routed_graphs_persisted', { queryId, routedGraphs });
+        }
         await this.queries.update(queryId, updateData);
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
@@ -678,6 +901,12 @@ class QueryService {
           };
         }
 
+        // Story 1.1 — attach the fan-out carrier exactly as the stream path
+        // does (initStreamQuery): okf_only must not leak into the legacy
+        // corpus and hybrid must fan out on this route too. Same 401
+        // propagation / no-bearer-skip / fail-closed semantics.
+        await this._attachFanoutCarrier(opeaPayload, headers, queryId, queryData.sessionId);
+
         logger.info('[DEBUG] Sending request to OPEA via Worker Thread...');
         logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
 
@@ -703,6 +932,12 @@ class QueryService {
           isAnswered: true,
           metadata: opeaMetadata
         };
+        // Story 1.3 — sticky persistence (OPEA branch).
+        const routedGraphs = this._deriveRoutedGraphs(opeaMetadata);
+        if (routedGraphs.length) {
+          updateData.okfRoutedGraphs = routedGraphs;
+          logger.info('QueryService.sticky_routed_graphs_persisted', { queryId, routedGraphs });
+        }
         await this.queries.update(queryId, updateData);
       }
 

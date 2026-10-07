@@ -141,6 +141,12 @@ module.exports = (queryService) => {
    *         description: Streaming is disabled
    */
   router.post('/stream', async (req, res) => {
+    // True end-to-end latency: measured from ROUTE ENTRY (request receipt) to
+    // stream completion — including fan-out posture resolution, embedding,
+    // retrieval, rerank and queueing. It was previously set after chatqna's
+    // response headers arrived, which reported only the token-stream tail and
+    // under-reported a 97s request as ~5s (live-caught 2026-10-06).
+    const streamStartTime = Date.now();
     const streamingEnabled = process.env.OPEA_STREAMING !== 'false';
     if (!streamingEnabled) {
       return res.status(501).json({
@@ -188,7 +194,6 @@ module.exports = (queryService) => {
 
       const stream = opeaResponse.data;
       let fullResponseText = '';
-      const startTime = Date.now();
       let buffer = '';
       const doneState = { handled: false };
       // Metadata emitted by chatqna in-stream (reranker-grounded source docs + is_grounded),
@@ -281,9 +286,18 @@ module.exports = (queryService) => {
             // so the chain never rejects; awaiting it just orders completion before 'done'.
             await translationChain;
           }
-          await handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, true);
+          await handleStreamDone(
+            queryId,
+            fullResponseText,
+            streamStartTime,
+            queryData,
+            req,
+            res,
+            capturedMetadata,
+            true
+          );
         } else {
-          handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, false);
+          handleStreamDone(queryId, fullResponseText, streamStartTime, queryData, req, res, capturedMetadata, false);
         }
       };
 
@@ -361,7 +375,7 @@ module.exports = (queryService) => {
           logger.info('QueryService.stream_client_disconnected', { queryId });
           if (fullResponseText) {
             queryService
-              .finalizeStreamQuery(queryId, fullResponseText, Date.now() - startTime, {
+              .finalizeStreamQuery(queryId, fullResponseText, Date.now() - streamStartTime, {
                 source_documents: [],
                 confidence_score: 0
               })
@@ -381,7 +395,12 @@ module.exports = (queryService) => {
       if (keepalive !== null) clearInterval(keepalive);
       logger.error('QueryService.stream_setup_error', { error: error.message });
       if (!res.headersSent) {
-        if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') {
+        if (error.statusCode === 401) {
+          // Story 1.1: an expired/invalid bearer caught during fan-out
+          // resolution propagates as 401 — never silently degraded to the
+          // legacy path (the request itself is invalid).
+          res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
+        } else if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') {
           res.status(504).json({ error: 'CHATQNA_UNAVAILABLE', message: 'ChatQnA service unavailable or timed out' });
         } else {
           res.status(500).json({ error: 'STREAM_ERROR', message: error.message });

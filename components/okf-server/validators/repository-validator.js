@@ -63,8 +63,21 @@ const cloneSchema = Joi.object({
 
 // Story #978 lifecycle — ONE action per request; the service owns the
 // transition map (409 INVALID_TRANSITION on a state/action mismatch).
+// Story 1.6 (2026-10-07): an OPTIONAL `frontmatter` payload accompanies the
+// `publish` action — when supplied, the frontmatter is taken as the curator's
+// reviewed set (no auto-suggest). When absent, the lifecycle service runs the
+// full LLM auto-suggest + validate + publish pipeline.
 const lifecycleSchema = Joi.object({
-  action: Joi.string().valid('submit', 'approve', 'publish', 'ingest', 'retract', 'unpublish').required()
+  action: Joi.string().valid('submit', 'approve', 'publish', 'ingest', 'retract', 'unpublish').required(),
+  frontmatter: Joi.object({
+    topic: Joi.array().items(Joi.string()).min(3).max(8),
+    entity: Joi.array().items(Joi.string()).max(10),
+    scope: Joi.string().allow(''),
+    forbidden: Joi.array().items(Joi.string()).min(2).max(6),
+    summary: Joi.string().max(1024),
+    keyword: Joi.array().items(Joi.string()).max(10),
+    comprehensive: Joi.boolean()
+  }).optional()
 });
 
 // Steward PII acknowledgement (2026-08-30): { acknowledge: true|false }.

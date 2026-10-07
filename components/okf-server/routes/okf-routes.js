@@ -6,6 +6,7 @@ const { authenticate } = require('../middleware/auth');
 const { requireScope } = require('../middleware/require-scope');
 const { requireRole } = require('../middleware/require-role');
 const retrievalConfigController = require('../controllers/retrieval-config-controller');
+const frontmatterController = require('../controllers/frontmatter-controller');
 const authzResolverController = require('../controllers/authz-resolver-controller');
 const { withSpan } = require('../shared-lib/tracing');
 
@@ -28,6 +29,16 @@ router.put('/retrieval-config', requireRole('tools-admin'), retrievalConfigContr
 // Authz resolver read side (Story 6.1b): token scopes → the caller's serving
 // graph set (zero-hit by construction). Read-scoped by the router gate.
 router.get('/authz/graphs', authzResolverController.getGraphs);
+
+// Frontmatter (Story 1.6, 2026-10-07): read-by-default for the BFF/retriever
+// hot path; the write paths (PATCH / GET suggest) require write scope, which
+// the route-level requireScope gate upgrades when a curator's session is
+// active. The summary endpoint is hot-path read by retriever pod (TTL cached
+// at the BFF; sub-millisecond cost at the row level).
+router.get('/repos/:id/frontmatter', frontmatterController.getFrontmatter);
+router.get('/repos/:id/frontmatter/summary', frontmatterController.getFrontmatterSummary);
+router.post('/repos/:id/frontmatter/suggest', requireScope('admin'), frontmatterController.suggestFrontmatter);
+router.patch('/repos/:id/frontmatter', requireScope('admin'), frontmatterController.patchFrontmatter);
 
 // Service root — confirms the service + auth are wired.
 router.get('/', async (req, res, next) => {

@@ -63,6 +63,11 @@ from .config import (
     OPENAI_CHAT_TEMPERATURE,
     OPENAI_EMBED_ENABLED,
     OPENAI_EMBED_MODEL,
+    ROUTE_ENABLED,
+    ROUTE_MIN_CHUNKS,
+    ROUTE_PROBE_TIMEOUT_MS,
+    ROUTE_RETRY,
+    ROUTE_TOP_K,
     SUMMARIZER_ENABLED,
     TEI_EMBED_MODEL,
     TEI_EMBEDDING_ENDPOINT,
@@ -1686,6 +1691,103 @@ async def _invoke_leg(self, graph_name, input_dict, input, query):
     return result
 
 
+async def _route_graphs(self, encoded_graph_names, query_embedding):
+    """Story 1.3 — query-affinity graph selection (global chunk competition).
+
+    One k=ROUTE_TOP_K approximate-NN probe per OKF carrier graph (parallel
+    worker threads, per-probe timeout), all rows merged into a single global
+    ranking; a graph qualifies iff it contributes >= ROUTE_MIN_CHUNKS of the
+    global top-K. Floor: the single best graph when nothing qualifies (routing
+    NEVER selects zero). The legacy ``GRAPH`` leg is excluded from routing by
+    the caller (always searched in hybrid — D8).
+
+    Returns ``(routed_graphs_in_carrier_order, degraded)``. Any infra failure
+    after ROUTE_RETRY attempts degrades to ALL carrier graphs with a loud log
+    + span attribute — the only sanctioned all-graph path.
+
+    Calibration (2026-10-06, 8 repos incl. bali 116k / indonesia 144k chunks):
+    ALPHABET-pure → {alphabet 38/40}; "Alphabet in the UK" → {uk 30, alphabet
+    6, bali 4}; KENYA-pure → {kenya 21, uk 18}; INDO-pure → {indonesia 31,
+    bali 9}. Probe wall ~0.4s (parallel, big repos dominate).
+    """
+    import asyncio
+
+    from tracing import get_tracer
+
+    route_span = get_tracer("retriever.route").start_span("retriever.route")
+    t0 = time.time()
+    okf_graphs = [g for g in encoded_graph_names if g != "GRAPH"]
+
+    async def _probe(graph_name):
+        aql = (
+            f"FOR doc IN `{graph_name}_SOURCE` "
+            f"LET s = APPROX_NEAR_COSINE(doc.{ARANGO_EMBEDDING_FIELD}, @emb) "
+            "SORT s DESC LIMIT @k RETURN s"
+        )
+        rows = self.db.aql.execute(aql, bind_vars={"emb": query_embedding, "k": ROUTE_TOP_K})
+        return graph_name, list(rows)
+
+    async def _probe_batch(graphs):
+        tasks = {asyncio.create_task(_probe(g)): g for g in graphs}
+        graph_to_task = {t: g for t, g in tasks.items()}
+        done, _pending = await asyncio.wait(tasks, timeout=ROUTE_PROBE_TIMEOUT_MS / 1000.0)
+        results, failed = {}, list(graphs)
+        for t in done:
+            try:
+                name, rows = t.result()
+                results[name] = rows
+                failed.remove(graph_to_task[t])
+            except Exception as e:
+                logger.info(f"Routing probe failed — graph_name={graph_to_task[t]}, error={e}")
+        return results, failed
+
+    all_rows = []
+    failed = list(okf_graphs)
+    for _attempt in range(ROUTE_RETRY + 1):
+        results, failed = await _probe_batch(failed)
+        for name, rows in results.items():
+            all_rows.extend((name, s) for s in rows)
+        if not failed:
+            break
+    if failed:
+        logger.error(
+            f"ROUTING DEGRADED — {len(failed)} probe(s) failed after {ROUTE_RETRY + 1} "
+            f"attempt(s): {failed}; searching ALL carrier graphs (infra fallback)"
+        )
+        route_span.set_attribute("rag.route.degraded", True)
+        route_span.set_attribute("rag.route.failed_probes", len(failed))
+        route_span.end()
+        return list(encoded_graph_names), True
+
+    # Global chunk-level competition (size-fair): every probed chunk competes on
+    # cosine regardless of corpus size; qualification is by chunk COUNT.
+    all_rows.sort(key=lambda r: r[1], reverse=True)
+    top = all_rows[:ROUTE_TOP_K]
+    counts: dict[str, int] = {}
+    for name, _s in top:
+        counts[name] = counts.get(name, 0) + 1
+    qualified = sorted(g for g, n in counts.items() if n >= ROUTE_MIN_CHUNKS)
+    floor_note = ""
+    if not qualified and top:
+        best = max(counts, key=lambda g: counts[g])
+        qualified = [best]
+        floor_note = f" (floor: top-1 → {best})"
+    selected = set(qualified)
+    routed = [g for g in encoded_graph_names if g == "GRAPH" or g in selected]
+    route_span.set_attribute("rag.route.selected", ",".join(qualified))
+    route_span.set_attribute("rag.route.dropped", ",".join(g for g in okf_graphs if g not in selected))
+    route_span.set_attribute("rag.route.probed", len(okf_graphs))
+    route_span.set_attribute("rag.route.wall_ms", int((time.time() - t0) * 1000))
+    logger.info(
+        f"Graph routing — probed={len(okf_graphs)}, global_top={len(top)}, "
+        f"counts={ {g: counts.get(g, 0) for g in okf_graphs} }, "
+        f"qualified={qualified}{floor_note}, routed={len(routed)}/{len(encoded_graph_names)}, "
+        f"wall={(time.time() - t0):.2f}s"
+    )
+    route_span.end()
+    return routed, False
+
+
 async def invoke_fanout(self, input, input_dict, encoded_graph_names):
     """Additive multi-graph fan-out orchestrator (Story 1.1/1.4/1.5).
 
@@ -1704,8 +1806,48 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
     tracer = get_tracer("retriever.fanout")
     span = tracer.start_span("retriever.fanout")
     span.set_attribute("okf.fanout.engaged", True)
-    span.set_attribute("okf.fanout.graph_count", len(encoded_graph_names))
+    span.set_attribute("okf.fanout.carrier_graph_count", len(encoded_graph_names))
     span.set_attribute("okf.fanout.timeout_ms", FANOUT_PER_GRAPH_TIMEOUT_MS)
+
+    # Story 1.3 — query-affinity routing: prune OKF legs before extraction.
+    # The legacy GRAPH leg is always searched (hybrid) and never routed (D8);
+    # sticky conversation graphs bypass qualification (continuity contract).
+    # Failure modes degrade towards MORE recall, never less: no embedding,
+    # routing disabled, single-OKF-graph carriers, or degraded probes all fall
+    # back to the full carrier.
+    from core.label_contract import decode_sticky
+
+    search_set = list(encoded_graph_names)
+    query_embedding = input.embedding if isinstance(input.embedding, list) and input.embedding else None
+    _sticky = decode_sticky(str(input_dict.get("search_start") or ""))
+    span.set_attribute("rag.route.sticky", ",".join(_sticky))
+    if not ROUTE_ENABLED:
+        logger.info("Graph routing disabled (RETRIEVER_ROUTE_ENABLED=false) — full carrier fan-out")
+    elif not query_embedding:
+        logger.info("Graph routing skipped — no query embedding on the request")
+    elif len([g for g in encoded_graph_names if g != "GRAPH"]) < 2:
+        logger.info("Graph routing skipped — fewer than two OKF graphs on the carrier")
+    else:
+        try:
+            _authorized = set(encoded_graph_names)
+            sticky_valid = [g for g in _sticky if g in _authorized and g != "GRAPH"]
+            if len(sticky_valid) != len(_sticky):
+                logger.info(
+                    f"Sticky graphs dropped (not in authorized set): "
+                    f"{[g for g in _sticky if g not in _authorized or g == 'GRAPH']}"
+                )
+            routed, degraded = await _route_graphs(self, encoded_graph_names, query_embedding)
+            routed_set = set(routed)
+            sticky_set = set(sticky_valid)
+            search_set = [g for g in encoded_graph_names if g == "GRAPH" or g in routed_set or g in sticky_set]
+            span.set_attribute("rag.route.applied", True)
+            span.set_attribute("rag.route.degraded", degraded)
+            span.set_attribute("rag.route.search_set", ",".join(search_set))
+        except Exception as e:
+            # Routing must never break retrieval — degrade to the full carrier.
+            logger.error(f"Graph routing crashed — degrading to full carrier fan-out: {e}")
+            span.set_attribute("rag.route.applied", False)
+    span.set_attribute("okf.fanout.graph_count", len(search_set))
     sem = asyncio.Semaphore(FANOUT_MAX_GRAPHS)
 
     async def _leg(graph_name):
@@ -1725,12 +1867,12 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
                 return []
 
     try:
-        leg_results = await asyncio.gather(*[_leg(g) for g in encoded_graph_names])
+        leg_results = await asyncio.gather(*[_leg(g) for g in search_set])
     except Exception:
         span.end()
         raise
     per_graph = []
-    for graph_name, items in zip(encoded_graph_names, leg_results, strict=True):
+    for graph_name, items in zip(search_set, leg_results, strict=True):
         enriched = _attach_provenance(items, graph_name)
         per_graph.append((graph_name, enriched))
     target_k = min(int(input.k) if input.k else 10, FANOUT_CANDIDATE_CAP_GLOBAL)

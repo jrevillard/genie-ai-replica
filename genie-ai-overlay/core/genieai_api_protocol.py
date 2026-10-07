@@ -57,6 +57,12 @@ class RequestContext(BaseModel):
     authorized_graph_names: list[str] | None = None
     mode: str | None = None
     exclude_legacy: bool | None = None
+    # Story 1.3 (query-affinity routing): conversation-routed graph names the
+    # BFF persisted from previous answers' sources. The retriever searches
+    # sticky graphs unconditionally (they bypass affinity qualification) so a
+    # signal-free follow-up stays locked to the conversation's subject. Additive
+    # + None-default: legacy payloads parse byte-identically.
+    sticky_graph_names: list[str] | None = None
 
 
 class ChatCompletionRequest(BaseModel):

@@ -30,6 +30,15 @@ to run when the segment is present. The segment never changes the fan-out
 ENGAGEMENT decision (that stays driven by the graph list alone — Story 1.0
 Decision D); it only governs the legacy fallback.
 
+``sticky`` (Story 1.3 — query-affinity routing continuity): graph names the
+BFF persisted for THIS conversation (the routed set that contributed previous
+answers). The retriever searches sticky graphs unconditionally — they bypass
+the affinity-qualification rule (≥3 chunks in the global top-40) so that a
+signal-free follow-up ("why are they missing from the table?") stays locked to
+the conversation's subject. The segment is intersected with the authorized
+graph set (authorization always wins) and never includes the legacy ``GRAPH``
+constant (the legacy leg is outside routing entirely).
+
 Graph names are always ``OKF_<slug>_v<N>`` or the legacy ``GRAPH`` constant
 (no commas, no segment markers) so the literal-string ``,`` / ``::`` splitting
 is unambiguous. The carrier is additive: a retriever that ignores a segment
@@ -55,9 +64,11 @@ _LABEL_SEPARATOR = "::labels:"
 _GRAPH_SEPARATOR = "::graphs:"
 # No-legacy signal segment marker (Story 1.1 — parallel, value is true/false)
 _NO_LEGACY_SEPARATOR = "::no_legacy:"
+# Sticky graph segment marker (Story 1.3 — conversation-routed continuity set)
+_STICKY_SEPARATOR = "::sticky:"
 
 # The markers every decode pass considers, in peel priority (earliest wins).
-_SEGMENTS = (_LABEL_SEPARATOR, _GRAPH_SEPARATOR, _NO_LEGACY_SEPARATOR)
+_SEGMENTS = (_LABEL_SEPARATOR, _GRAPH_SEPARATOR, _NO_LEGACY_SEPARATOR, _STICKY_SEPARATOR)
 
 
 def encode(
@@ -65,6 +76,7 @@ def encode(
     labels: list[str] | None = None,
     graphs: list[str] | None = None,
     no_legacy: bool = False,
+    sticky: list[str] | None = None,
 ) -> str:
     """Encode filter labels AND/OR the authorized graph set into a search_start string.
 
@@ -77,6 +89,9 @@ def encode(
                    retriever must never fall back to the legacy free-form
                    corpus). Default False = segment omitted (byte-identical
                    to the pre-1.1 contract).
+        sticky:    Story 1.3 — conversation-routed graph names the retriever must
+                   search unconditionally (affinity-continuity set). None/empty =
+                   omit segment (byte-identical to the pre-1.3 contract).
 
     Returns:
         Encoded string. Returns ``base_mode`` unchanged when all segments are
@@ -91,6 +106,9 @@ def encode(
         out = f"{out}{_GRAPH_SEPARATOR}{','.join(clean_graphs)}"
     if no_legacy:
         out = f"{out}{_NO_LEGACY_SEPARATOR}true"
+    clean_sticky = [g.strip() for g in (sticky or []) if g and g.strip()]
+    if clean_sticky:
+        out = f"{out}{_STICKY_SEPARATOR}{','.join(clean_sticky)}"
     return out
 
 
@@ -102,11 +120,11 @@ def encode_filter_labels(base_mode: str, labels: list[str]) -> str:
     return encode(base_mode, labels=labels)
 
 
-def _decode_all(search_start: str) -> tuple[str, list[str], list[str], bool]:
-    """Full parse of a search_start carrier string (all three segments).
+def _decode_all(search_start: str) -> tuple[str, list[str], list[str], bool, list[str]]:
+    """Full parse of a search_start carrier string (all four segments).
 
-    Returns ``(base_mode, labels, graphs, no_legacy)``. Missing segments are
-    empty lists / False.
+    Returns ``(base_mode, labels, graphs, no_legacy, sticky)``. Missing segments
+    are empty lists / False.
 
     The segment markers can appear in ANY order. The format is unambiguous
     because values never contain ``::`` (labels are service names, graph names
@@ -120,10 +138,11 @@ def _decode_all(search_start: str) -> tuple[str, list[str], list[str], bool]:
     labels: list[str] = []
     graphs: list[str] = []
     no_legacy = False
+    sticky: list[str] = []
 
     first = [p for p in (s.find(marker) for marker in _SEGMENTS) if p >= 0]
     if not first:
-        return s, labels, graphs, no_legacy
+        return s, labels, graphs, no_legacy, sticky
     base_mode = s[: min(first)]
     rest = s[min(first) :]
     while rest:
@@ -147,9 +166,11 @@ def _decode_all(search_start: str) -> tuple[str, list[str], list[str], bool]:
             labels = [label.strip() for label in value.split(",") if label.strip()]
         elif marker is _GRAPH_SEPARATOR:
             graphs = [g.strip() for g in value.split(",") if g.strip()]
+        elif marker is _STICKY_SEPARATOR:
+            sticky = [g.strip() for g in value.split(",") if g.strip()]
         else:  # _NO_LEGACY_SEPARATOR
             no_legacy = value.strip().lower() in ("true", "1")
-    return base_mode, labels, graphs, no_legacy
+    return base_mode, labels, graphs, no_legacy, sticky
 
 
 def decode(search_start: str) -> tuple[str, list[str], list[str]]:
@@ -169,7 +190,7 @@ def decode(search_start: str) -> tuple[str, list[str], list[str]]:
     naively. The parser is ORDER-INSENSITIVE: whichever marker appears FIRST is
     peeled first, and each value runs to the next marker.
     """
-    base_mode, labels, graphs, _no_legacy = _decode_all(search_start)
+    base_mode, labels, graphs, _no_legacy, _sticky = _decode_all(search_start)
     return base_mode, labels, graphs
 
 
@@ -183,6 +204,16 @@ def decode_no_legacy(search_start: str) -> bool:
     (the legacy path stays untouched by default).
     """
     return _decode_all(search_start)[3]
+
+
+def decode_sticky(search_start: str) -> list[str]:
+    """Read the ``::sticky:`` conversation-continuity graph set (Story 1.3).
+
+    Parallel accessor to the ``decode``/``decode_no_legacy`` family. Returns
+    the sticky graph names (possibly empty). An old caller that never reads
+    this accessor ignores the segment cleanly — the additive contract holds.
+    """
+    return _decode_all(search_start)[4]
 
 
 def decode_filter_labels(search_start: str) -> tuple[str, list[str]]:

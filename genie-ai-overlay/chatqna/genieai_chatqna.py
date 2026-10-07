@@ -1011,8 +1011,15 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         _ctx = retrieval_context if isinstance(retrieval_context, dict) else {}
         _graph_names = (_ctx.get("authorized_graph_names") or []) or (_gp(kwargs, "authorized_graph_names", []) or [])
         _exclude_legacy = bool(_ctx.get("exclude_legacy")) or bool(_gp(kwargs, "exclude_legacy", False))
+        # Story 1.3 — conversation-continuity set (sticky routing). Read from the
+        # same wire as authorized_graph_names (the `context` object). Empty =
+        # first query of a conversation / feature absent → segment omitted and
+        # the mocked pre-1.3 encode never sees the kwarg.
+        _sticky_graph_names = (_ctx.get("sticky_graph_names") or []) or (_gp(kwargs, "sticky_graph_names", []) or [])
         if _exclude_legacy:
             logger.info("Carrier carries the okf_only signal (::no_legacy:) — the legacy free-form corpus is excluded")
+        if _sticky_graph_names:
+            logger.info(f"Carrier carries the sticky continuity set (::sticky:) — {len(_sticky_graph_names)} graph(s)")
         if _filter_labels and not _graph_names and not _exclude_legacy:
             # LEGACY CALL SURFACE: the chatqna test suite (test_chatqna.py)
             # mocks `core.label_contract.encode_filter_labels`; calling it
@@ -1026,10 +1033,25 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
             _base_mode = inputs.get("search_start", "chunk")
             if _exclude_legacy:
-                # no_legacy is passed ONLY when true — the mocked encode in the
+                # no_legacy/sticky are passed ONLY when set — the mocked encode in the
                 # existing test suite has the pre-1.1 signature and must never
-                # receive the kwarg on the default path.
-                inputs["search_start"] = encode(_base_mode, labels=_filter_labels, graphs=_graph_names, no_legacy=True)
+                # receive the kwargs on the default path.
+                if _sticky_graph_names:
+                    inputs["search_start"] = encode(
+                        _base_mode,
+                        labels=_filter_labels,
+                        graphs=_graph_names,
+                        no_legacy=True,
+                        sticky=_sticky_graph_names,
+                    )
+                else:
+                    inputs["search_start"] = encode(
+                        _base_mode, labels=_filter_labels, graphs=_graph_names, no_legacy=True
+                    )
+            elif _sticky_graph_names:
+                inputs["search_start"] = encode(
+                    _base_mode, labels=_filter_labels, graphs=_graph_names, sticky=_sticky_graph_names
+                )
             else:
                 inputs["search_start"] = encode(_base_mode, labels=_filter_labels, graphs=_graph_names)
 

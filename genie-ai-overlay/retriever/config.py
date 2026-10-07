@@ -267,40 +267,6 @@ ROUTE_MIN_CHUNKS = int(os.getenv("RETRIEVER_ROUTE_MIN_CHUNKS", "3"))
 ROUTE_PROBE_TIMEOUT_MS = int(os.getenv("RETRIEVER_ROUTE_PROBE_TIMEOUT_MS", "2000"))
 ROUTE_RETRY = int(os.getenv("RETRIEVER_ROUTE_RETRY", "1"))
 
-# Story 1.6 (2026-10-07) — frontmatter-based query routing. The retriever
-# supports three styles via OKF_SEARCH_STYLE (default hybrid = frontmatter
-# primary + k=40 chunk-probe always-on validator). Tagging+vectorization
-# runs at publish time regardless of this value, so an operator can flip
-# styles without re-ingesting. FRONTMATTER_ROUTING_ENABLED is the master kill
-# switch (false forces vector_probe with a loud log).
-_OKF_SEARCH_STYLE_RAW = os.getenv("OKF_SEARCH_STYLE", "hybrid").strip().lower()
-_VALID_OKF_SEARCH_STYLES = ("hybrid", "frontmatter_tags", "vector_probe")
-if _OKF_SEARCH_STYLE_RAW not in _VALID_OKF_SEARCH_STYLES:
-    import logging
-
-    logging.getLogger(__name__).warning(
-        "retriever.invalid_okf_search_style %r — falling back to vector_probe",
-        _OKF_SEARCH_STYLE_RAW,
-    )
-    OKF_SEARCH_STYLE = "vector_probe"
-else:
-    OKF_SEARCH_STYLE = _OKF_SEARCH_STYLE_RAW
-
-FRONTMATTER_ROUTING_ENABLED = os.getenv("RETRIEVER_FRONTMATTER_ROUTING_ENABLED", "true").lower() == "true"
-FRONTMATTER_TAG_WEIGHTS = {
-    "topic": float(os.getenv("RETRIEVER_FRONTMATTER_TAG_WEIGHT_TOPIC", "1.0")),
-    "entity": float(os.getenv("RETRIEVER_FRONTMATTER_TAG_WEIGHT_ENTITY", "0.7")),
-    "keyword": float(os.getenv("RETRIEVER_FRONTMATTER_TAG_WEIGHT_KEYWORD", "0.5")),
-    "summary": float(os.getenv("RETRIEVER_FRONTMATTER_TAG_WEIGHT_SUMMARY", "0.5")),
-    "scope": float(os.getenv("RETRIEVER_FRONTMATTER_TAG_WEIGHT_SCOPE", "0.3")),
-}
-FRONTMATTER_FORBIDDEN_PENALTY = float(os.getenv("RETRIEVER_FRONTMATTER_FORBIDDEN_PENALTY", "1.5"))
-FRONTMATTER_MIN_SCORE = float(os.getenv("RETRIEVER_FRONTMATTER_MIN_SCORE", "0.25"))
-FRONTMATTER_TOP_K = int(os.getenv("RETRIEVER_FRONTMATTER_TOP_K", "5"))
-# ArangoDB collection holding the denormalized per-repo summary (set by the
-# okf-server publish pipeline — see components/okf-server/services/frontmatter-service.js).
-FRONTMATTER_SUMMARY_COLLECTION = "okf_repositories_frontmatter_summary"
-
 # Summarizer Configuration
 SUMMARIZER_ENABLED = os.getenv("RETRIEVER_SUMMARIZER_ENABLED", "false").lower() == "true"
 

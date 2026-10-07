@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -103,14 +104,10 @@ def parse_args() -> argparse.Namespace:
             "(default: blank-line `\\n\\s*\\n`). "
             "Use a sentinel like '@' or '@@@@@' to give the gold author explicit control "
             "over passage boundaries — required when a passages cell contains 'label:\\nvalue' "
-            "patterns whose internal blank-line would falsely split a single passage (e.g. "
+            "patterns whose internal newline would falsely split a single passage (e.g. "
             "'Days to flowering:\\n\\n36-38' would otherwise yield an isolated '36-38' preview "
             "too short for reliable substring matching). "
-            "IMPORTANT: the sentinel replaces blank-lines BETWEEN passages only — blank-lines "
-            "INSIDE a passage (e.g. between a label and its value) MUST be preserved as-is so "
-            "the preview text matches the corpus verbatim. Collapsing those internal newlines "
-            "to a single `\\n` would break substring matching against the source chunk. "
-            "Example cell with sentinel: 'Para1 @@@@@ Para2 @@@@@ Days to flowering:\\n\\n36-38'. "
+            "Example cell with sentinel: 'Para1 @@@@@ Para2 @@@@@ Para3'. "
             "Run with: --passage-separator '@@@@@'."
         ),
     )
@@ -220,7 +217,7 @@ def main() -> int:
             "match_gold_chunks.py AFTER the corpus is ingested into ArangoDB. Schema matches "
             "gold_dataset.example.json."
         ),
-        "source_xlsx": str(args.input_xlsx.resolve()),
+        "source_xlsx": os.path.basename(args.input_xlsx.resolve()),
         "source_sheet": args.sheet_name,
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "n_entries": len(entries),
@@ -228,7 +225,7 @@ def main() -> int:
         "entries": entries,
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(out_payload, indent=2, ensure_ascii=False))
+    out_path.write_text(json.dumps(out_payload, indent=2, ensure_ascii=False), encoding="utf-8")
     print(
         f"Wrote {len(entries)} entries ({skipped} skipped for missing query) to {out_path}"
     )

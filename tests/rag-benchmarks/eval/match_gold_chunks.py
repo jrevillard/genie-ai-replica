@@ -34,23 +34,19 @@ with ``xlsx_to_gold.py``.
 from __future__ import annotations
 
 import argparse
-import base64
 import datetime as dt
 import json
 import os
-import re
 import sys
-import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any
 
 # Reuse the exact same normaliser the eval uses — drift here silently breaks
 # the gold set.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from arango import source_chunks
 from chunk_identity import content_hash, normalize
-
-_WHITESPACE = re.compile(r"\s+")
+from harness import write_json
 
 
 def parse_args() -> argparse.Namespace:
@@ -115,35 +111,50 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def arango_query(
-    url: str, db: str, user: str, password: str, aql: str
-) -> list[dict[str, Any]]:
-    """Run a cursor query and return all rows. Uses Basic auth; ignores TLS (matches .102 self-signed)."""
-    endpoint = f"{url.rstrip('/')}/_db/{urllib.parse.quote(db)}/_api/cursor"
-    body = json.dumps({"query": aql, "batchSize": 1000}).encode()
-    auth = base64.b64encode(f"{user}:{password}".encode()).decode()
-    req = urllib.request.Request(
-        endpoint,
-        data=body,
-        headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        result = json.load(resp)
-    if result.get("error"):
-        raise RuntimeError(f"AQL error: {result['error']}")
-    return result.get("result", [])
-
-
 def load_chunks(args: argparse.Namespace) -> list[dict[str, Any]]:
-    """Dump (key, text) for every document in the source collection."""
-    aql = (
-        f"FOR doc IN {args.graph_source} "
-        f"RETURN {{ key: doc._key, text: doc.{args.chunk_text_field} }}"
+    """Dump (key, text) for every document in the source collection.
+
+    Routes through the shared ``source_chunks`` helper in ``arango.py`` — the
+    single AQL implementation lives there (gate: exactly one ``_api/cursor``
+    in the tree). The CLI ``--arango-*`` flags are forwarded as the
+    ``conn`` override so an operator can still target a non-default DB or
+    a self-signed endpoint without going through the env defaults.
+    """
+    return source_chunks(
+        args.graph_source,
+        args.chunk_text_field,
+        conn={
+            "url": args.arango_url,
+            "db": args.arango_db,
+            "user": args.arango_user,
+            "password": args.arango_password,
+        },
     )
-    return arango_query(
-        args.arango_url, args.arango_db, args.arango_user, args.arango_password, aql
-    )
+
+
+def atomic_write_json(out_path: Path, payload: Any) -> None:
+    """Thin wrapper around ``harness.write_json`` retained for the test patch
+    target (``match_gold_chunks`` tests exercise the cleanup branch by
+    patching ``os.replace``; the real atomic-write + BaseException cleanup
+    now lives in ``harness.write_json``). ``Path`` is accepted and stringified
+    for the harness call, which uses string paths throughout.
+    """
+    write_json(str(out_path), payload)
+
+
+def write_with_backup(out_path: Path, payload: Any) -> None:
+    """Write ``payload`` to ``out_path`` atomically, keeping a one-generation backup.
+
+    The backup is the ORIGINAL contents (copied before the new payload is
+    written) so a botched match run can be reverted by ``mv
+    <path>.bak.json <path>``. Only created when ``out_path`` matches the
+    input gold dataset — explicit ``--output`` paths do not get a backup
+    because the operator chose a separate target.
+    """
+    if out_path.is_file():
+        backup = out_path.with_suffix(out_path.suffix + ".bak.json")
+        backup.write_bytes(out_path.read_bytes())
+    atomic_write_json(out_path, payload)
 
 
 def find_matches(preview: str, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -189,7 +200,7 @@ def main() -> int:
         sys.stderr.write(f"ERROR: gold dataset not found: {args.gold_dataset}\n")
         return 2
 
-    payload = json.loads(args.gold_dataset.read_text())
+    payload = json.loads(args.gold_dataset.read_text(encoding="utf-8"))
     entries: list[dict[str, Any]] = payload.get("entries", [])
     if not entries:
         sys.stderr.write("ERROR: gold dataset has no entries\n")
@@ -207,6 +218,7 @@ def main() -> int:
         "unresolved": 0,
         "skipped_short": 0,
         "total_previews": 0,
+        "deduped_passages": 0,
     }
     for entry in entries:
         expected = entry.get("expected_chunks", [])
@@ -244,6 +256,36 @@ def main() -> int:
                 stats["unresolved"] += 1
         entry["expected_chunks"] = new_expected
 
+    # F7 (MR !505 review): when two previews resolve to the SAME chunk-key
+    # set, the second is a near-duplicate of the first and would inflate
+    # passage-level recall (the eval would credit two gold passages for one
+    # retrieved set). Drop duplicates across the WHOLE payload, keeping the
+    # first passage_id seen. Operates at the passage_id level (a passage
+    # that was split into N chunks is a single unit, not N).
+    seen_passage_keys: set[frozenset[str]] = set()
+    deduped_entries: list[dict[str, Any]] = []
+    for entry in entries:
+        new_expected: list[dict[str, Any]] = []
+        for ec in entry.get("expected_chunks", []):
+            pid = ec.get("passage_id")
+            if pid is None:
+                # Unresolved / skipped rows have no passage; pass through.
+                new_expected.append(ec)
+                continue
+            keys = frozenset(
+                c["chunk_key"] for c in entry["expected_chunks"]
+                if c.get("passage_id") == pid and c.get("chunk_key")
+            )
+            if not keys:
+                new_expected.append(ec)
+                continue
+            if keys in seen_passage_keys:
+                stats["deduped_passages"] += 1
+                continue
+            seen_passage_keys.add(keys)
+            new_expected.append(ec)
+        entry["expected_chunks"] = new_expected
+
     payload["match_run"] = {
         "ran_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "graph_source": args.graph_source,
@@ -255,10 +297,14 @@ def main() -> int:
         return 0
 
     out_path = args.output or args.gold_dataset
-    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+    if out_path == args.gold_dataset:
+        write_with_backup(out_path, payload)
+    else:
+        atomic_write_json(out_path, payload)
     sys.stderr.write(
         f"[match] resolved={stats['resolved']} split_passages={stats['split_passages']} "
         f"unresolved={stats['unresolved']} skipped_short={stats['skipped_short']} "
+        f"deduped_passages={stats['deduped_passages']} "
         f"total_previews={stats['total_previews']} -> {out_path}\n"
     )
     return 0

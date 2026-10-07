@@ -458,6 +458,13 @@ Ragas reads the env vars exactly as listed — see
 `run_ragas_eval.py:47-57`. SSL verify is disabled on BOTH the sync and
 async OpenAI clients (sovereign vLLM fronts nginx with a self-signed cert).
 
+**Verify no response-cache before trusting n>1 fan-out** (the judge wrapper
+fans `n>1` into parallel single-n calls to restore Ragas's strictness
+signal; if the gateway caches identical prompts the fan-out collapses to
+identical samples): fire 3 parallel identical prompts at
+`temperature>0` to `<JUDGE_OPENAI_BASE>` and assert the 3 outputs differ
+(md5s distinct). Re-run this check whenever the gateway changes.
+
 **Gate**: `ragas_report.json.aggregate` is non-empty, `n` matches
 `eval_tuples_<TAG>.json` length, every metric value in `[0, 1]`.
 

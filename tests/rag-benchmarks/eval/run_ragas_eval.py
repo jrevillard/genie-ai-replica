@@ -37,14 +37,16 @@ except ImportError:
 
     _vertexai = _types.ModuleType("langchain_community.chat_models.vertexai")
 
-    class _ChatVertexAI:  # noqa: D401 - stub for ragas.llms.base
+    class _ChatVertexAI:
         pass
 
     _vertexai.ChatVertexAI = _ChatVertexAI
     _sys.modules["langchain_community.chat_models.vertexai"] = _vertexai
 
 # --- judge config (OpenAI-compatible, model-agnostic) -----------------------
-JUDGE_BASE_URL = os.getenv("EVAL_JUDGE_BASE_URL")  # e.g. https://api.openai.com/v1 or a Zhipu/self-hosted endpoint
+JUDGE_BASE_URL = os.getenv(
+    "EVAL_JUDGE_BASE_URL"
+)  # e.g. https://api.openai.com/v1 or a Zhipu/self-hosted endpoint
 JUDGE_API_KEY = os.getenv("EVAL_JUDGE_API_KEY", "")
 JUDGE_MODEL = os.getenv("EVAL_JUDGE_MODEL")  # whatever model you picked
 JUDGE_TEMPERATURE = float(os.getenv("EVAL_JUDGE_TEMPERATURE", "0"))
@@ -130,27 +132,40 @@ if ChatOpenAI is not None:
             inputs (we're fanning the SAME prompt), so ``generations`` is
             ``list[list[ChatGeneration]]`` with one nested list per input.
             Flatten the per-call lists into one nested list of N generations
-            per input. Preserve the first call's ``llm_output`` (token usage
-            etc.) — picking a single one is the only honest answer; RAGAS
-            uses the merged generations, not the usage stats."""
+            per input. For ``llm_output`` (token usage etc.), sum numeric
+            fields across the n calls and let the first call's value win
+            for non-numeric fields — this gives an honest total that
+            RAGAS / observability can consume without undercounting by N×."""
             from langchain_core.outputs import ChatResult
 
             if not results:
                 return ChatResult(generations=[])
             n_inputs = len(results[0].generations)
             merged: list = [[] for _ in range(n_inputs)]
-            first_info = None
+            merged_output: dict = {}
+            seen_keys: set = set()
             for r in results:
                 for i in range(n_inputs):
                     if i < len(r.generations):
                         merged[i].extend(r.generations[i])
-                if first_info is None:
-                    info = getattr(r, "llm_output", None)
-                    if info:
-                        first_info = info
+                info = getattr(r, "llm_output", None)
+                if not info:
+                    continue
+                for k, v in info.items():
+                    if k in seen_keys:
+                        prev = merged_output[k]
+                        if isinstance(prev, (int, float)) and isinstance(
+                            v, (int, float)
+                        ):
+                            merged_output[k] = prev + v
+                        # Non-numeric on a duplicate key: keep the first
+                        # call's value (do not overwrite, do not concat).
+                    else:
+                        merged_output[k] = v
+                        seen_keys.add(k)
             out = ChatResult(generations=merged)
-            if first_info is not None:
-                out.llm_output = first_info
+            if merged_output:
+                out.llm_output = merged_output
             return out
 
         def _generate(self, messages, stop=None, run_manager=None, **kwargs):
@@ -211,6 +226,7 @@ def _build_judge():
     # internally; without verify=False on http_async_client, calls fail with
     # httpx2.ConnectError: CERTIFICATE_VERIFY_FAILED → OpenAIConnectionError).
     import httpx
+
     sync_client = httpx.Client(verify=False)
     async_client = httpx.AsyncClient(verify=False)
     llm = LangchainLLMWrapper(
@@ -232,9 +248,13 @@ def _build_embeddings():
     from ragas.embeddings import LangchainEmbeddingsWrapper
 
     if not EMBED_MODEL:
-        print("WARNING: EVAL_EMBED_MODEL unset — answer_relevancy will be dropped", file=sys.stderr)
+        print(
+            "WARNING: EVAL_EMBED_MODEL unset — answer_relevancy will be dropped",
+            file=sys.stderr,
+        )
         return None  # answer_relevancy will be skipped
     import httpx
+
     sync_client = httpx.Client(verify=False)
     async_client = httpx.AsyncClient(verify=False)
     return LangchainEmbeddingsWrapper(
@@ -340,14 +360,20 @@ def main(tuples_path: str, out_path: str) -> None:
     # results is a Result object; serialize per-row + aggregate.
     df = results.to_pandas() if hasattr(results, "to_pandas") else None
     report = {
-        "aggregate": {k: float(v) for k, v in (results.items() if hasattr(results, "items") else [])},
+        "aggregate": {
+            k: float(v)
+            for k, v in (results.items() if hasattr(results, "items") else [])
+        },
         "per_query": df.to_dict(orient="records") if df is not None else [],
         "model": JUDGE_MODEL,
         "n": len(samples),
     }
     with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(report, fh, ensure_ascii=False, indent=2, default=str)
-    print(f"Ragas eval (judge={JUDGE_MODEL}, n={len(samples)}) → {out_path}", file=sys.stderr)
+    print(
+        f"Ragas eval (judge={JUDGE_MODEL}, n={len(samples)}) → {out_path}",
+        file=sys.stderr,
+    )
 
 
 if __name__ == "__main__":

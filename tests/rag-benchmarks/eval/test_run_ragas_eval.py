@@ -50,7 +50,7 @@ _FANOUT_FAKE_TIMING: list = []
 # Mutable per-test knobs (the inner fakes close over this dict, so tests
 # mutate entries rather than reassigning names — reassignment would shadow
 # the module-level name and the fakes would still see the old one).
-_FANOUT_FAKE_STATE: dict = {"raise_on": None, "sleep": 0.0}
+_FANOUT_FAKE_STATE: dict = {"raise_on": None, "sleep": 0.0, "llm_output_factory": None}
 
 
 class _FakeChatGeneration:
@@ -95,6 +95,16 @@ def _install_langchain_fakes():
     _FANOUT_FAKE_TIMING.clear()
     _FANOUT_FAKE_STATE["raise_on"] = None
     _FANOUT_FAKE_STATE["sleep"] = 0.0
+    _FANOUT_FAKE_STATE["llm_output_factory"] = None
+
+    def _llm_output_for(idx):
+        factory = _FANOUT_FAKE_STATE["llm_output_factory"]
+        if factory is None:
+            # Non-bool sentinel: the rev2 sum logic treats bool as int
+            # (True == 1), which would corrupt tests that expect the
+            # merged output to equal the per-call value verbatim.
+            return {"fake": "sentinel"}
+        return factory(idx)
 
     def fake_generate(self, messages, stop=None, run_manager=None, **kwargs):
         _FANOUT_FAKE_PARENT_CALLS.append(("sync", list(messages), dict(kwargs), stop))
@@ -110,7 +120,7 @@ def _install_langchain_fakes():
             _FANOUT_FAKE_TIMING.append((t0, t1))
         return _FakeChatResult(
             generations=[[_FakeChatGeneration(text=f"gen-{idx}", info={"idx": idx})]],
-            llm_output={"fake": True},
+            llm_output=_llm_output_for(idx),
         )
 
     async def fake_agenerate(self, messages, stop=None, run_manager=None, **kwargs):
@@ -134,7 +144,7 @@ def _install_langchain_fakes():
             await asyncio.sleep(0)
         return _FakeChatResult(
             generations=[[_FakeChatGeneration(text=f"agen-{idx}", info={"idx": idx})]],
-            llm_output={"fake": True},
+            llm_output=_llm_output_for(idx),
         )
 
     class FakeChatOpenAI:
@@ -198,11 +208,12 @@ import run_ragas_eval
 def _reset_fake_state():
     """Reset all fake-module state before each test. autouse so every test
     starts with a clean call list, no timing windows, and the default
-    knobs (raise_on=None, sleep=0.0)."""
+    knobs (raise_on=None, sleep=0.0, llm_output_factory=None)."""
     _FANOUT_FAKE_PARENT_CALLS.clear()
     _FANOUT_FAKE_TIMING.clear()
     _FANOUT_FAKE_STATE["raise_on"] = None
     _FANOUT_FAKE_STATE["sleep"] = 0.0
+    _FANOUT_FAKE_STATE["llm_output_factory"] = None
     yield
 
 
@@ -297,10 +308,14 @@ def test_fanout_n3_sync_three_calls_merged():
     # Merged result: one input → one nested list of 3 generations.
     assert len(result.generations) == 1
     assert len(result.generations[0]) == 3
-    texts = [g.text for g in result.generations[0]]
+    # Set equality — the sync fan-out uses ThreadPoolExecutor, so the
+    # completion order can differ from the submission order. The async
+    # test below uses asyncio.gather, which preserves submission order.
+    texts = sorted(g.text for g in result.generations[0])
     assert texts == ["gen-1", "gen-2", "gen-3"]
-    # llm_output preserved from the first call.
-    assert result.llm_output == {"fake": True}
+    # llm_output: non-numeric first-call value preserved (the default
+    # fake's sentinel string; summed-numeric is covered in the rev2 test).
+    assert result.llm_output == {"fake": "sentinel"}
 
 
 def test_fanout_n1_passthrough_no_fanout():
@@ -417,6 +432,51 @@ def test_fanout_async_exception_propagates():
     llm = Fanout(n=3)
     with pytest.raises(RuntimeError, match="fanout-injected at call 2"):
         asyncio.run(llm._agenerate(["hi"]))
+
+
+def test_fanout_llm_output_sums_numeric_usage():
+    """FANOUT (rev2): the merged ``llm_output`` must sum numeric usage
+    fields (prompt_tokens, completion_tokens, total_tokens) across the n
+    underlying calls — not just keep the first call's value, which would
+    undercount by N×. Non-numeric fields: first call wins."""
+    Fanout = run_ragas_eval._FanoutChatOpenAI
+    # 3 fakes, each with a different usage dict + one shared non-numeric.
+    usage_per_call = [
+        {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "model_name": "fake-A"},
+        {"prompt_tokens": 12, "completion_tokens": 7, "total_tokens": 19, "model_name": "fake-B"},
+        {"prompt_tokens": 8,  "completion_tokens": 6, "total_tokens": 14, "model_name": "fake-C"},
+    ]
+    _FANOUT_FAKE_STATE["llm_output_factory"] = lambda idx: usage_per_call[idx - 1]
+
+    llm = Fanout(n=3)
+    result = llm._generate(["hi"])
+
+    out = result.llm_output
+    # Summed across 3 calls: 10+12+8, 5+7+6, 15+19+14.
+    assert out["prompt_tokens"] == 30, f"got {out['prompt_tokens']!r}"
+    assert out["completion_tokens"] == 18, f"got {out['completion_tokens']!r}"
+    assert out["total_tokens"] == 48, f"got {out['total_tokens']!r}"
+    # Non-numeric: first call wins (do NOT concatenate strings, do not
+    # overwrite with last; honest answer is "which call reported it").
+    assert out["model_name"] == "fake-A", f"got {out['model_name']!r}"
+
+
+def test_fanout_llm_output_sums_async_path():
+    """FANOUT (rev2): the same sum-usage contract must hold on the async
+    path (ragas 0.4.x drives the async fan-out)."""
+    Fanout = run_ragas_eval._FanoutChatOpenAI
+    usage_per_call = [
+        {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+        {"prompt_tokens": 110, "completion_tokens": 55, "total_tokens": 165},
+        {"prompt_tokens": 120, "completion_tokens": 60, "total_tokens": 180},
+    ]
+    _FANOUT_FAKE_STATE["llm_output_factory"] = lambda idx: usage_per_call[idx - 1]
+    llm = Fanout(n=3)
+    result = asyncio.run(llm._agenerate(["hi"]))
+    out = result.llm_output
+    assert out["prompt_tokens"] == 330
+    assert out["completion_tokens"] == 165
+    assert out["total_tokens"] == 495
 
 
 def test_fanout_build_judge_uses_subclass(monkeypatch):

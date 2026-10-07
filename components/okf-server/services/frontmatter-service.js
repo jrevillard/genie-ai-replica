@@ -256,7 +256,15 @@ function validateFrontmatterShape(fm) {
 
 // ---------- DB helpers ----------
 
+// Cached "both frontmatter collections + indexes are present" sentinel.
+// Resets to false on any create/index operation so a single cold start
+// re-runs listCollections, then all subsequent GETs are no-ops. Necessary
+// because the publish path also calls ensureCollections (cheap when cached)
+// and we need a single source of truth for "are we ready to query?".
+let _frontmatterEnsured = false;
+
 async function ensureCollections(db) {
+  if (_frontmatterEnsured) return;
   const collections = await db.listCollections();
   const existing = new Set(collections.map((c) => c.name));
   if (!existing.has(FRONTMATTER_COLLECTION)) {
@@ -275,6 +283,7 @@ async function ensureCollections(db) {
   if (!fmIdx.includes('idx_repo_field')) {
     await db.collection(FRONTMATTER_COLLECTION).ensureIndex({ type: 'persistent', fields: ['repo_id', 'field'] });
   }
+  _frontmatterEnsured = true;
 }
 
 async function sampleChunksFromRepo(db, repoId, n) {
@@ -572,12 +581,14 @@ async function publishFrontmatter(repoId, frontmatter, opts = {}) {
 
 async function getFrontmatter(repoId) {
   const db = await dbService.getConnection();
+  await ensureCollections(db);
   const q = await db.query(`FOR d IN ${FRONTMATTER_COLLECTION} FILTER d.repo_id == @rid RETURN d`, { rid: repoId });
   return q.all();
 }
 
 async function getFrontmatterSummary(repoId) {
   const db = await dbService.getConnection();
+  await ensureCollections(db);
   try {
     const doc = await db.collection(FRONTMATTER_SUMMARY_COLLECTION).document(repoId);
     return doc;

@@ -45,6 +45,31 @@ class RequestContext(BaseModel):
     categoryLabels: list[str] | None = None
     serviceLabels: list[str] | None = None
     language: str | None = None
+    # Story 1.1 (BFF fan-out wire-up) — additive carrier fields the backend BFF
+    # sets when the okf-server retrieval posture engages the multi-graph
+    # fan-out. All three default to None: a legacy payload (or a client that
+    # never sends them) parses byte-identically and the legacy single-graph
+    # path runs unchanged. These ride the application-specific `context`
+    # object on purpose (1-0 Decision A seam) — the top-level
+    # ChatCompletionRequest surface stays untouched; the gateway forwards
+    # `context` to align_inputs as `retrieval_context` via genie_params, where
+    # the carrier is encoded into search_start.
+    authorized_graph_names: list[str] | None = None
+    mode: str | None = None
+    exclude_legacy: bool | None = None
+    # Story 1.3 (query-affinity routing): conversation-routed graph names the
+    # BFF persisted from previous answers' sources. The retriever searches
+    # sticky graphs unconditionally (they bypass affinity qualification) so a
+    # signal-free follow-up stays locked to the conversation's subject. Additive
+    # + None-default: legacy payloads parse byte-identically.
+    sticky_graph_names: list[str] | None = None
+    # Story 1.6 (frontmatter routing, 2026-10-07): the BFF emits a parallel
+    # list of repo IDs whose okf_repositories_frontmatter_summary rows should
+    # be loaded for the frontmatter routing stage. Additive + None-default:
+    # legacy payloads parse byte-identically. The retriever decodes this from
+    # the ::tags: segment in the carrier, parallel to how it decodes
+    # ::sticky: / ::graphs: / ::no_legacy:.
+    frontmatter_repo_ids: list[str] | None = None
 
 
 class ChatCompletionRequest(BaseModel):

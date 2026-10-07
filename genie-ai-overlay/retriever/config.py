@@ -240,7 +240,11 @@ HYBRID_BM25_ANALYZER = os.getenv("RETRIEVER_HYBRID_BM25_ANALYZER", "text_en")
 # Defaults preserve legacy behavior — fan-out is opt-in via RETRIEVER_FANOUT_ENABLED.
 FANOUT_ENABLED = os.getenv("RETRIEVER_FANOUT_ENABLED", "true").lower() == "true"
 FANOUT_MAX_GRAPHS = int(os.getenv("RETRIEVER_FANOUT_MAX_GRAPHS", "5"))
-FANOUT_PER_GRAPH_TIMEOUT_MS = int(os.getenv("RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS", "2000"))
+# 8000ms (was 2000): with legs now running on worker threads the timeout is
+# actually enforceable — and 2s zeroed every large repo (bali/indonesia/
+# www-gov-uk need 5-20s warm). 8s bounds a fan-out at 2 semaphore waves to
+# ~16s worst-case while keeping the skip-on-timeout contract (ADR-039 D8).
+FANOUT_PER_GRAPH_TIMEOUT_MS = int(os.getenv("RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS", "8000"))
 # Story 1.5 (ADR-039 D4): tiered option-(d) fan-out caps — within a graph the
 # fused candidate pool is hard-capped per graph and globally before fusion.
 FANOUT_CANDIDATE_CAP_PER_GRAPH = int(os.getenv("RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH", "50"))
@@ -249,6 +253,53 @@ FANOUT_CANDIDATE_CAP_GLOBAL = int(os.getenv("RETRIEVER_FANOUT_CANDIDATE_CAP_GLOB
 FANOUT_SPINE_MAX_HOPS = int(os.getenv("RETRIEVER_FANOUT_SPINE_MAX_HOPS", "2"))
 # Tier-2 extracted-relation hop cap (kept low — extracted edges are noisy).
 FANOUT_EXTRACTED_HOP_CAP = int(os.getenv("RETRIEVER_FANOUT_EXTRACTED_HOP_CAP", "1"))
+
+# Story 1.3 (ADR-039 routing tier) — query-affinity graph selection. Before the
+# fan-out spawns legs, a global chunk-level competition decides which carrier
+# graphs to search: k=40 approximate-NN probes per OKF graph (parallel), merged
+# into one global top-K ranking; a graph qualifies iff it contributes >=
+# ROUTE_MIN_CHUNKS chunks. Sticky conversation graphs (carrier ::sticky:)
+# bypass qualification. Legacy GRAPH is never routed. Never all-graphs EXCEPT
+# the degraded path (probes failed after ROUTE_RETRY attempts — logged loudly).
+ROUTE_ENABLED = os.getenv("RETRIEVER_ROUTE_ENABLED", "true").lower() == "true"
+ROUTE_TOP_K = int(os.getenv("RETRIEVER_ROUTE_TOP_K", "40"))
+ROUTE_MIN_CHUNKS = int(os.getenv("RETRIEVER_ROUTE_MIN_CHUNKS", "3"))
+ROUTE_PROBE_TIMEOUT_MS = int(os.getenv("RETRIEVER_ROUTE_PROBE_TIMEOUT_MS", "2000"))
+ROUTE_RETRY = int(os.getenv("RETRIEVER_ROUTE_RETRY", "1"))
+
+# Story 1.6 (2026-10-07) — frontmatter-based query routing. The retriever
+# supports three styles via OKF_SEARCH_STYLE (default hybrid = frontmatter
+# primary + k=40 chunk-probe always-on validator). Tagging+vectorization
+# runs at publish time regardless of this value, so an operator can flip
+# styles without re-ingesting. FRONTMATTER_ROUTING_ENABLED is the master kill
+# switch (false forces vector_probe with a loud log).
+_OKF_SEARCH_STYLE_RAW = os.getenv("OKF_SEARCH_STYLE", "hybrid").strip().lower()
+_VALID_OKF_SEARCH_STYLES = ("hybrid", "frontmatter_tags", "vector_probe")
+if _OKF_SEARCH_STYLE_RAW not in _VALID_OKF_SEARCH_STYLES:
+    import logging
+
+    logging.getLogger(__name__).warning(
+        "retriever.invalid_okf_search_style %r — falling back to vector_probe",
+        _OKF_SEARCH_STYLE_RAW,
+    )
+    OKF_SEARCH_STYLE = "vector_probe"
+else:
+    OKF_SEARCH_STYLE = _OKF_SEARCH_STYLE_RAW
+
+FRONTMATTER_ROUTING_ENABLED = os.getenv("RETRIEVER_FRONTMATTER_ROUTING_ENABLED", "true").lower() == "true"
+FRONTMATTER_TAG_WEIGHTS = {
+    "topic": float(os.getenv("RETRIEVER_FRONTMATTER_TAG_WEIGHT_TOPIC", "1.0")),
+    "entity": float(os.getenv("RETRIEVER_FRONTMATTER_TAG_WEIGHT_ENTITY", "0.7")),
+    "keyword": float(os.getenv("RETRIEVER_FRONTMATTER_TAG_WEIGHT_KEYWORD", "0.5")),
+    "summary": float(os.getenv("RETRIEVER_FRONTMATTER_TAG_WEIGHT_SUMMARY", "0.5")),
+    "scope": float(os.getenv("RETRIEVER_FRONTMATTER_TAG_WEIGHT_SCOPE", "0.3")),
+}
+FRONTMATTER_FORBIDDEN_PENALTY = float(os.getenv("RETRIEVER_FRONTMATTER_FORBIDDEN_PENALTY", "1.5"))
+FRONTMATTER_MIN_SCORE = float(os.getenv("RETRIEVER_FRONTMATTER_MIN_SCORE", "0.25"))
+FRONTMATTER_TOP_K = int(os.getenv("RETRIEVER_FRONTMATTER_TOP_K", "5"))
+# ArangoDB collection holding the denormalized per-repo summary (set by the
+# okf-server publish pipeline — see components/okf-server/services/frontmatter-service.js).
+FRONTMATTER_SUMMARY_COLLECTION = "okf_repositories_frontmatter_summary"
 
 # Summarizer Configuration
 SUMMARIZER_ENABLED = os.getenv("RETRIEVER_SUMMARIZER_ENABLED", "false").lower() == "true"

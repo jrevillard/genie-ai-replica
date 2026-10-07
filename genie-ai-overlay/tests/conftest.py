@@ -160,9 +160,14 @@ sys.modules.setdefault("comps.cores.telemetry.opea_telemetry", _opea_telemetry_m
 sys.modules.setdefault("comps.rerankings", MagicMock())
 sys.modules.setdefault("comps.rerankings.src", MagicMock())
 sys.modules.setdefault("comps.rerankings.src.integrations", MagicMock())
-# Register GenieTEIReranking with the integrations namespace
-_reranker_integration = MagicMock()
-sys.modules.setdefault("comps.rerankings.src.integrations.genieai_tei_reranker", _reranker_integration)
+# Register the real reranker integration module under its vendored Docker
+# path (the Dockerfile copies reranker/genieai_tei_reranker.py there). The
+# microservice imports RerankerInputTooLongError from this path, and a bare
+# MagicMock would make `except RerankerInputTooLongError:` a TypeError rather
+# than a class match.
+import reranker.genieai_tei_reranker as _genieai_tei_reranker  # noqa: E402
+
+sys.modules.setdefault("comps.rerankings.src.integrations.genieai_tei_reranker", _genieai_tei_reranker)
 
 # Dataprep microservice base module import (opea_dataprep_microservice)
 _opea_dp_base = MagicMock()

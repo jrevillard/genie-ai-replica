@@ -117,21 +117,38 @@ class FakeAiohttpSession:
     async def __aexit__(self, *exc):
         return False
 
-    async def post(self, url, *args, **kwargs):
+    def post(self, url, *args, **kwargs):
+        """Sync like real aiohttp: returns a response usable as BOTH an
+        awaitable (``resp = await session.post(...)``) and an async context
+        manager (``async with session.post(...) as resp``).
+        """
         self.calls.append((url, kwargs))
-        for pattern, payload in self.responses.items():
+        for pattern, spec in self.responses.items():
             if pattern in str(url):
-                return _FakeResponse(payload)
+                payload, status = spec if isinstance(spec, tuple) else (spec, 200)
+                return _FakeResponse(payload, status=status)
         return _FakeResponse({})
 
 
 class _FakeResponse:
-    def __init__(self, payload):
+    def __init__(self, payload, status: int = 200):
         self.payload = payload
-        self.status = 200
-        self.status_code = 200
+        self.status = status
+        self.status_code = status
         self.content = json.dumps(payload).encode()
         self.content_type = "application/json"
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    def __await__(self):
+        async def _self():
+            return self
+
+        return _self().__await__()
 
     async def json(self):
         return self.payload

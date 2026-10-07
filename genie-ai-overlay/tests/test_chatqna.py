@@ -2,6 +2,7 @@
 
 import ast
 import copy
+import json
 from datetime import date
 from enum import Enum
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -3085,3 +3086,184 @@ class TestAbstentionDefault:
             assert chosen == sentinel
         finally:
             mod.CHATQNA_ABSTENTION_INSTRUCTIONS = original
+
+
+# ===========================================================================
+# Test reranker input-too-long abstention (422 body through align_outputs)
+# ===========================================================================
+# The 422 body the reranker microservice returns for oversized input. OPEA
+# v1.5's ServiceOrchestrator.execute() does NOT check HTTP status (no
+# raise_for_status), so this dict reaches align_outputs as the reranker
+# node's "successful" output — the detection must live there.
+RERANK_422_BODY = {
+    "detail": {
+        "error_type": chatqna_module._RERANKER_INPUT_TOO_LONG_TYPE,
+        "error": "TEI rejected input: Given: 19505 tokens, max-client-input-length 8192",
+    }
+}
+
+
+def test_align_outputs_raises_on_reranker_422_body():
+    """align_outputs(RERANK) must raise _RerankerInputTooLongError when the
+    node output is the reranker's 422 error body — schedule() never sees an
+    exception from the orchestrator, so this is the only production
+    detection point."""
+    self_mock = MagicMock()
+    self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+    with (
+        patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+        pytest.raises(chatqna_module._RerankerInputTooLongError, match="TEI rejected input"),
+    ):
+        align_outputs(self_mock, RERANK_422_BODY, "rerank_node", {}, MagicMock(), {})
+
+
+def test_align_outputs_passes_through_normal_rerank_output():
+    """The detection must not fire on normal reranker output dicts (no
+    'detail' key) — regression guard against an over-broad check."""
+    self_mock = MagicMock()
+    self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+    data = {"reranked_docs": [{"text": "doc1", "score": 0.95}]}
+    inputs = {"initial_query": "test", "retrieved_docs": [{"id": "d1", "text": "doc1"}]}
+    with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+        result = align_outputs(self_mock, data, "rerank_node", inputs, MagicMock(), {})
+    assert len(result["retrieved_docs"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_reranker_input_too_long_returns_abstention():
+    """When schedule() raises the typed marker (align_outputs detected the
+    reranker node's 422 body — see the align_outputs tests above), chatqna
+    must return an abstention response (HTTP 200, abstained=True), NOT
+    propagate the error as a 500 to the user."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def _raise_marker(*_args, **_kwargs):
+        raise chatqna_module._RerankerInputTooLongError("TEI rejected input")
+
+    svc.megaservice.schedule = _raise_marker
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=False),
+    ):
+        payload = await svc.handle_request(req)
+
+    assert payload["metadata"]["abstained"] is True
+    assert payload["metadata"]["abstention_reason"] == "reranker_input_too_long"
+    assert payload["metadata"]["is_grounded"] is False
+    assert payload["metadata"]["source_documents"] == []
+    assert payload["metadata"]["confidence_score"] == 0.0
+    assert payload["metadata"]["retrieval_confidence_score"] == 0.0
+    assert "exceed the reranker's input limit" in payload["response"]
+
+
+@pytest.mark.asyncio
+async def test_reranker_input_too_long_stream_returns_sse():
+    """stream=True abstention must use the same SSE envelope as a normal
+    streamed answer: one content event, the metadata event, then [DONE]."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def _raise_marker(*_args, **_kwargs):
+        raise chatqna_module._RerankerInputTooLongError("TEI rejected input")
+
+    svc.megaservice.schedule = _raise_marker
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    from fastapi.responses import StreamingResponse
+
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=True),
+    ):
+        resp = await svc.handle_request(req)
+
+    assert isinstance(resp, StreamingResponse)
+    events = [chunk.decode("utf-8") if isinstance(chunk, bytes) else str(chunk) async for chunk in resp.body_iterator]
+    assert any("exceed the reranker's input limit" in e for e in events)
+    metadata_events = [json.loads(e[len("data: ") :]) for e in events if e.startswith("data: {")]
+    assert metadata_events[0]["abstained"] is True
+    assert metadata_events[0]["abstention_reason"] == "reranker_input_too_long"
+    assert events[-1].strip() == "data: [DONE]"
+
+
+def _fake_parms(**_kwargs):
+    """Stand-in for the Genieai*Parms classes in handle_request tests.
+
+    Under the comps mock, subclassing a MagicMock yields a mock whose
+    side_effect allows exactly ONE call per class definition — a second
+    handle_request() in the same interpreter would raise StopIteration.
+    """
+    from types import SimpleNamespace
+
+    return SimpleNamespace(search_type="hybrid")
+
+
+def _patched_chat_request(**attrs):
+    """Patch ChatCompletionRequest.model_validate to a controllable mock.
+
+    Under the comps mock the parsed request is a bare MagicMock, so the
+    boolean/None fields handle_request branches on (``stream``, ``context``,
+    ``language``) are truthy Mocks — configure them explicitly per test.
+    """
+    defaults = {
+        "stream": False,
+        "context": None,
+        "language": None,
+        "messages": [{"role": "user", "content": "what is X?"}],
+    }
+    defaults.update(attrs)
+    return patch.object(chatqna_module.ChatCompletionRequest, "model_validate", return_value=MagicMock(**defaults))
+
+
+@pytest.mark.asyncio
+async def test_reranker_input_too_long_defensive_chain_walk():
+    """Defensive backup path: if a future OPEA version DOES raise on HTTP
+    4xx and wraps the reranker's HTTPException, the chain walk in
+    handle_request still maps the marker onto the abstention handler."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    # Simulate the orchestrator wrapping the reranker's HTTPException in
+    # an arbitrary exception whose message carries the recognisable marker.
+    class _WrappedOrchestratorError(Exception):
+        pass
+
+    async def _raise_wrapped(*_args, **_kwargs):
+        raise _WrappedOrchestratorError(
+            "downstream service returned HTTP 422: "
+            '{"error": "TEI rejected input: Given: 19505", "error_type": "RerankerInputTooLong"}'
+        )
+
+    svc.megaservice.schedule = _raise_wrapped
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=False),
+    ):
+        payload = await svc.handle_request(req)
+
+    assert payload["metadata"]["abstained"] is True
+    assert payload["metadata"]["abstention_reason"] == "reranker_input_too_long"
+    assert "exceed the reranker's input limit" in payload["response"]

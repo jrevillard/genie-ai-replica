@@ -1073,7 +1073,7 @@ services:
     profiles: [gpu-models]
     restart: unless-stopped
     image: ${TEI_RERANKING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3} --max-batch-tokens ${TEI_RERANKING_MAX_BATCH_TOKENS:-1024} --max-concurrent-requests ${TEI_RERANKING_MAX_CONCURRENT_REQUESTS:-128} --auto-truncate"
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3} --max-batch-tokens ${TEI_RERANKING_MAX_BATCH_TOKENS:-8192} --max-concurrent-requests ${TEI_RERANKING_MAX_CONCURRENT_REQUESTS:-32} --auto-truncate ${TEI_RERANKING_AUTO_TRUNCATE:-false}"
     # Internal only
     # ports:
     #   - "7100:80"

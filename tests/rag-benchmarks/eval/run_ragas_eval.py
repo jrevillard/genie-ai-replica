@@ -361,6 +361,7 @@ def main(tuples_path: str, out_path: str) -> None:
     raw = _load_tuples(tuples_path)
 
     from ragas import EvaluationDataset, evaluate
+    from ragas.run_config import RunConfig
 
     samples = [
         {
@@ -378,6 +379,14 @@ def main(tuples_path: str, out_path: str) -> None:
         llm=_build_judge(),
         embeddings=_build_embeddings(),
         metrics=_metrics(),
+        # ragas RunConfig defaults to a 180s per-operation timeout — a
+        # reasoning judge (reasoning_content + max_tokens=8k) on large
+        # context-precision prompts regularly exceeds it and the row
+        # silently becomes NaN (48/90 on the 2026-10-07 G2 run). Raise via
+        # env; keep ragas's retry defaults.
+        run_config=RunConfig(
+            timeout=int(os.getenv("EVAL_RAGAS_TIMEOUT", "600")),
+        ),
     )
 
     # results is a Result object; serialize per-row + aggregate.

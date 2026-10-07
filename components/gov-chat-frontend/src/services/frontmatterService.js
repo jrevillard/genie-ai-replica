@@ -12,6 +12,13 @@
  * httpService — no Vuex, no components. Both the Studio wizard steps and
  * the Studio editor drive this.
  *
+ * Path convention: httpService.baseURL is '/api' (see services/httpService.js
+ * + config/runtime baseURL setup), so calls here must use the route path
+ * WITHOUT a leading '/api' — the existing okfRepoOps.js / repoOkfService /
+ * conceptService all use '/okf/...' for the same reason. The first version
+ * of this service shipped with '/api/okf/...' which produced 404s at
+ * /api/api/okf/.../frontmatter in production (rebuild 2026-10-07).
+ *
  * The Studio editor's RepoEditor.vue pane is wired in a separate MR
  * (deferred — server-side API contract is in place; UI surface for the
  * persistent editor ships as a follow-up).
@@ -19,7 +26,7 @@
 import httpService from './httpService';
 
 function url(repoId, suffix = '') {
-  return `/api/okf/repos/${encodeURIComponent(repoId)}/frontmatter${suffix}`;
+  return `/okf/repos/${encodeURIComponent(repoId)}/frontmatter${suffix}`;
 }
 
 /**

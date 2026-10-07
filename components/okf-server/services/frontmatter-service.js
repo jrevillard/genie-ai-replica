@@ -318,7 +318,8 @@ async function sampleChunksFromRepo(db, repoId, n) {
 // ---------- Public methods ----------
 
 async function suggestTags(repoId, opts = {}) {
-  return withSpan('okf.frontmatter.suggest', { 'okf.repo_id': repoId }, async (span) => {
+  return withSpan('okf.frontmatter.suggest', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
     const db = await dbService.getConnection();
     const sampleN = opts.sampleN || OKF_FRONTMATTER_SAMPLE_N;
     const { chunks } = await sampleChunksFromRepo(db, repoId, sampleN);
@@ -364,7 +365,8 @@ async function suggestTags(repoId, opts = {}) {
 }
 
 async function validateFrontmatter(repoId, frontmatter, _opts = {}) {
-  return withSpan('okf.frontmatter.validate', { 'okf.repo_id': repoId }, async (span) => {
+  return withSpan('okf.frontmatter.validate', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
     const db = await dbService.getConnection();
     const { chunks } = await sampleChunksFromRepo(db, repoId, OKF_FRONTMATTER_SAMPLE_N);
     if (!chunks.length) return { validated: true, inconsistencies: [] };
@@ -412,7 +414,7 @@ async function validateFrontmatter(repoId, frontmatter, _opts = {}) {
 }
 
 async function embedAllTags(frontmatter) {
-  return withSpan('okf.frontmatter.embed', {}, async (span) => {
+  return withSpan('okf.frontmatter.embed', async (span) => {
     // Build flat list of values: each topic/entity/keyword/scope/forbidden value gets one vector;
     // summary gets one vector (whole sentence). Returns {field: [{value, vector}], ...}.
     const valuesByField = {};
@@ -463,7 +465,8 @@ function averageVectors(vectors, weight) {
 }
 
 async function publishFrontmatter(repoId, frontmatter, opts = {}) {
-  return withSpan('okf.frontmatter.publish', { 'okf.repo_id': repoId }, async (span) => {
+  return withSpan('okf.frontmatter.publish', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
     const db = await dbService.getConnection();
     await ensureCollections(db);
     // 1. shape validate

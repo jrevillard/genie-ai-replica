@@ -290,3 +290,233 @@ class TestMergePerGraphResults:
         ]
         result = _merge_per_graph_results(per_graph, k=10)
         assert len(result) == 2  # both kept (never drop, never mis-merge)
+
+
+# ─── Story 1.3: query-affinity graph routing (global chunk competition) ─────
+class _StubRoutingDb:
+    """db handle stub: aql.execute serves per-collection probe rows from a dict;
+    a collection absent from the dict raises (simulates probe failure)."""
+
+    def __init__(self, results):
+        self._results = results
+        self.calls = []
+        self.aql = self
+
+    def execute(self, aql, bind_vars=None):
+        self.calls.append(bind_vars)
+        coll = aql.split("`")[1]
+        rows = self._results.get(coll)
+        if rows is None:
+            raise RuntimeError(f"probe failed for {coll}")
+        return iter(rows)
+
+
+def _routing_stub(results):
+    return type("StubRetriever", (), {"db": _StubRoutingDb(results)})()
+
+
+class TestRouteGraphs:
+    """Story 1.3 policy pins: >=3-chunks qualification, top-1 floor, retry-
+    then-degrade, legacy GRAPH passthrough."""
+
+    async def test_qualification_by_chunk_count(self):
+        from retriever.genieai_retriever_arangodb import _route_graphs
+
+        # alphabet contributes 5 of the global rows, kenya 4, ncd 1 →
+        # {alphabet, kenya} qualify; ncd dropped (singletons cut).
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.9, 0.89, 0.88, 0.87, 0.86],
+            "OKF_kenya_v1_SOURCE": [0.85, 0.84, 0.83, 0.82],
+            "OKF_ncd_v1_SOURCE": [0.80],
+        }
+        with patch("tracing.get_tracer") as mock_tracer:
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            routed, degraded = await _route_graphs(
+                _routing_stub(results),
+                ["GRAPH", "OKF_alphabet_v1", "OKF_kenya_v1", "OKF_ncd_v1"],
+                [0.1] * 8,
+            )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_kenya_v1"]
+
+    async def test_floor_top1_when_nothing_qualifies(self):
+        from retriever.genieai_retriever_arangodb import _route_graphs
+
+        # Every graph contributes exactly 1 chunk → nothing meets >=3 → the
+        # floor routes to the single best graph. NEVER zero.
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95],
+            "OKF_kenya_v1_SOURCE": [0.60],
+        }
+        with patch("tracing.get_tracer") as mock_tracer:
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            routed, degraded = await _route_graphs(
+                _routing_stub(results), ["GRAPH", "OKF_alphabet_v1", "OKF_kenya_v1"], [0.1] * 8
+            )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1"]
+
+    async def test_probe_failure_degrades_to_full_carrier(self):
+        from retriever.genieai_retriever_arangodb import _route_graphs
+
+        # Every probe raises on every attempt → degraded=True, ALL graphs
+        # searched (the only sanctioned all-graph path).
+        carrier = ["GRAPH", "OKF_alphabet_v1", "OKF_kenya_v1"]
+        with patch("tracing.get_tracer") as mock_tracer:
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            routed, degraded = await _route_graphs(_routing_stub({}), carrier, [0.1] * 8)
+        assert degraded is True
+        assert routed == carrier
+
+    async def test_retry_succeeds_without_degrade(self):
+        from retriever.genieai_retriever_arangodb import _route_graphs
+
+        # First attempt fails for kenya, retry succeeds → NOT degraded.
+        calls = {"n": 0}
+
+        class FlakyDb:
+            def __init__(self):
+                self.aql = self
+
+            def execute(self, aql, bind_vars=None):
+                coll = aql.split("`")[1]
+                if coll == "OKF_kenya_v1_SOURCE":
+                    calls["n"] += 1
+                    if calls["n"] == 1:
+                        raise RuntimeError("transient")
+                    return iter([0.9, 0.9, 0.9])
+                return iter([0.5, 0.5, 0.5])
+
+        stub = type("StubRetriever", (), {"db": FlakyDb()})()
+        with patch("tracing.get_tracer") as mock_tracer:
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            routed, degraded = await _route_graphs(stub, ["GRAPH", "OKF_alphabet_v1", "OKF_kenya_v1"], [0.1] * 8)
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_kenya_v1"]
+
+
+class TestFanoutRoutingHook:
+    """Story 1.3 — the invoke_fanout hook: routed set + sticky union; GRAPH
+    always searched; routing skipped when disabled / no embedding / <2 OKF."""
+
+    def _fanout_stub(self):
+        async def fake_leg(self_, graph_name, input_dict, input, query=None):
+            return [{"doc": f"hit-{graph_name}"}]
+
+        return type("StubRetriever", (), {"_invoke_leg": fake_leg})()
+
+    async def test_routed_set_prunes_legs_and_sticky_unions(self):
+        """Routing dropped OKF_B_v1, but the carrier's ::sticky: restores it —
+        the search set is routed ∪ sticky (∪ GRAPH), in carrier order."""
+        import retriever.genieai_retriever_arangodb as mod
+
+        seen = []
+
+        async def fake_leg(self_, graph_name, input_dict, input, query=None):
+            seen.append(graph_name)
+            return [{"doc": f"hit-{graph_name}"}]
+
+        async def fake_route(self_, carrier, emb):
+            # Routing qualified only OKF_A_v1; OKF_B_v1 was dropped.
+            return ["GRAPH", "OKF_A_v1"], False
+
+        stub = type("StubRetriever", (), {"_invoke_leg": fake_leg})()
+        input = MagicMock()
+        input.embedding = [0.1] * 8
+        input.k = 10
+        input_dict = {
+            "search_start": "chunk::graphs:GRAPH,OKF_A_v1,OKF_B_v1::sticky:OKF_B_v1",
+            "text": "q",
+        }
+        with (
+            patch("tracing.get_tracer") as mock_tracer,
+            patch.object(mod, "_invoke_leg", fake_leg),
+            patch.object(mod, "_route_graphs", fake_route),
+        ):
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            await mod.invoke_fanout(stub, input, input_dict, ["GRAPH", "OKF_A_v1", "OKF_B_v1"])
+        assert seen == ["GRAPH", "OKF_A_v1", "OKF_B_v1"]
+
+    async def test_sticky_graph_outside_carrier_is_dropped(self):
+        """Authorization wins: a sticky graph absent from the carrier's
+        authorized set must NEVER be searched."""
+        import retriever.genieai_retriever_arangodb as mod
+
+        seen = []
+
+        async def fake_leg(self_, graph_name, input_dict, input, query=None):
+            seen.append(graph_name)
+            return [{"doc": "h"}]
+
+        async def fake_route(self_, carrier, emb):
+            return ["GRAPH", "OKF_A_v1"], False
+
+        stub = type("StubRetriever", (), {"_invoke_leg": fake_leg})()
+        input = MagicMock()
+        input.embedding = [0.1] * 8
+        input.k = 10
+        input_dict = {
+            "search_start": "chunk::graphs:GRAPH,OKF_A_v1::sticky:OKF_EVIL_v1",
+            "text": "q",
+        }
+        with (
+            patch("tracing.get_tracer") as mock_tracer,
+            patch.object(mod, "_invoke_leg", fake_leg),
+            patch.object(mod, "_route_graphs", fake_route),
+        ):
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            await mod.invoke_fanout(stub, input, input_dict, ["GRAPH", "OKF_A_v1"])
+        assert seen == ["GRAPH", "OKF_A_v1"]
+
+    async def test_no_embedding_skips_routing(self):
+        """No query embedding on the request → full carrier (degrade towards
+        recall), _route_graphs never called."""
+        import retriever.genieai_retriever_arangodb as mod
+
+        seen = []
+
+        async def fake_leg(self_, graph_name, input_dict, input, query=None):
+            seen.append(graph_name)
+            return [{"doc": "h"}]
+
+        stub = type("StubRetriever", (), {"_invoke_leg": fake_leg})()
+        input = MagicMock()
+        input.embedding = None
+        input.k = 10
+        input_dict = {"text": "q"}
+        with (
+            patch("tracing.get_tracer") as mock_tracer,
+            patch.object(mod, "_invoke_leg", fake_leg),
+            patch.object(mod, "_route_graphs") as mock_route,
+        ):
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            await mod.invoke_fanout(stub, input, input_dict, ["GRAPH", "OKF_A_v1", "OKF_B_v1"])
+        mock_route.assert_not_called()
+        assert sorted(seen) == ["GRAPH", "OKF_A_v1", "OKF_B_v1"]
+
+    async def test_routing_disabled_runs_full_carrier(self):
+        """RETRIEVER_ROUTE_ENABLED=false → byte-identical full-carrier behavior;
+        _route_graphs is never called."""
+        import retriever.genieai_retriever_arangodb as mod
+
+        seen = []
+
+        async def fake_leg(self_, graph_name, input_dict, input, query=None):
+            seen.append(graph_name)
+            return [{"doc": "h"}]
+
+        stub = type("StubRetriever", (), {"_invoke_leg": fake_leg})()
+        input = MagicMock()
+        input.embedding = [0.1] * 8
+        input.k = 10
+        input_dict = {"text": "q"}
+        with (
+            patch("tracing.get_tracer") as mock_tracer,
+            patch.object(mod, "_invoke_leg", fake_leg),
+            patch.object(mod, "ROUTE_ENABLED", False),
+            patch.object(mod, "_route_graphs") as mock_route,
+        ):
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            await mod.invoke_fanout(stub, input, input_dict, ["GRAPH", "OKF_A_v1", "OKF_B_v1"])
+        mock_route.assert_not_called()
+        assert sorted(seen) == ["GRAPH", "OKF_A_v1", "OKF_B_v1"]

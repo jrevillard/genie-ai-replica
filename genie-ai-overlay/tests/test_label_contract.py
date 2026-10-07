@@ -15,6 +15,7 @@ from core.label_contract import (
     decode,
     decode_filter_labels,
     decode_no_legacy,
+    decode_sticky,
     encode,
     encode_filter_labels,
 )
@@ -290,3 +291,39 @@ class TestNoLegacyCarrier:
         assert decode(s) == decode(reordered) == ("chunk", ["L1", "L2"], ["GRAPH", "OKF_a_v1"])
         assert decode_no_legacy(s) is True
         assert decode_no_legacy(reordered) is True
+
+
+# ─── Story 1.3: the ::sticky: continuity segment ────────────────────────────
+class TestStickySegment:
+    """Sticky = conversation-routed graph names the retriever must search
+    unconditionally (affinity-routing continuity). Additive: carriers without
+    the segment decode byte-identically to pre-1.3."""
+
+    def test_encode_sticky_roundtrip(self):
+        encoded = encode("chunk", graphs=["GRAPH", "OKF_a_v1"], sticky=["OKF_a_v1"])
+        assert encoded == "chunk::graphs:GRAPH,OKF_a_v1::sticky:OKF_a_v1"
+        assert decode_sticky(encoded) == ["OKF_a_v1"]
+
+    def test_encode_sticky_omitted_when_empty(self):
+        assert encode("chunk", graphs=["OKF_a_v1"]) == "chunk::graphs:OKF_a_v1"
+        assert decode_sticky("chunk::graphs:OKF_a_v1") == []
+
+    def test_sticky_alone(self):
+        encoded = encode("chunk", sticky=["OKF_a_v1", "OKF_b_v2"])
+        assert encoded == "chunk::sticky:OKF_a_v1,OKF_b_v2"
+        assert decode_sticky(encoded) == ["OKF_a_v1", "OKF_b_v2"]
+
+    def test_sticky_order_insensitive_multi_segment(self):
+        encoded = "chunk::sticky:OKF_b_v2::graphs:GRAPH,OKF_a_v1::no_legacy:true::labels:Onion"
+        base, labels, graphs = decode(encoded)
+        assert base == "chunk"
+        assert labels == ["Onion"]
+        assert graphs == ["GRAPH", "OKF_a_v1"]
+        assert decode_sticky(encoded) == ["OKF_b_v2"]
+        assert decode_no_legacy(encoded) is True
+
+    def test_decode_legacy_carrier_has_no_sticky(self):
+        # A pre-1.3 carrier must parse with an empty sticky set — the additive
+        # contract keeps every old producer/consumer pair working.
+        assert decode_sticky("chunk::graphs:GRAPH,OKF_a_v1::no_legacy:true") == []
+        assert decode_sticky("chunk") == []

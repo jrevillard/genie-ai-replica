@@ -37,10 +37,23 @@ const { isArangoNotFound } = require('./arango-errors');
 const { workingGraphName } = require('./graph-lifecycle-service');
 
 // ---------- Config (env-driven; env vars match the docker-compose template) ----------
-
-const VLLM_LLM_HOST = process.env.VLLM_LLM_HOST || 'http://vllm-llm-served:8000';
+//
+// David 2026-10-08: the vLLM endpoint is on a foreign host and DOES work
+// in this deployment; the previous hard-coded default
+// 'http://vllm-llm-served:8000' was a Swarm service name that doesn't
+// resolve in the local build (and the local GPU services are scaled to
+// 0 anyway per local_build_patches.md). Read the same VLLM_ENDPOINT
+// variable the existing okf-server curation engine (line 705 of
+// docker-compose.yaml) and the dataprep/embedding/reranker OPEA services
+// use — it resolves to the remote GPU URL in this deployment
+// (https://ai.assembly.govstack.global/llm) and to a local service
+// fallback (http://vllm:8000) when no GPU_NODE_HOST is configured. This
+// is the project-wide convention (per feedback_cloud-deploy-defaults:
+// env defaults must work for local Docker AND cloud Ansible, not one or
+// the other).
+const VLLM_LLM_HOST = process.env.VLLM_ENDPOINT || 'http://vllm:8000';
 const VLLM_LLM_MODEL_ID = process.env.VLLM_LLM_MODEL_ID || 'ibm-granite/granite-4.1-8b';
-const VLLM_LLM_API_KEY = process.env.VLLM_LLM_API_KEY || '';
+const VLLM_LLM_API_KEY = process.env.VLLM_API_KEY || process.env.VLLM_LLM_API_KEY || '';
 
 const TEI_EMBED_HOST = process.env.TEI_EMBED_HOST || 'http://embedding-tei:80';
 const EMBEDDING_DIM = parseInt(process.env.EMBEDDING_DIM || '1024', 10);

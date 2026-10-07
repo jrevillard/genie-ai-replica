@@ -47,6 +47,12 @@ _FANOUT_FAKE_PARENT_CALLS: list = []
 # before returning. Tests assert the windows overlap to prove fan-out
 # siblings are NOT serialized.
 _FANOUT_FAKE_TIMING: list = []
+# Per-call record of the ChatResult the fake returned (rev3). The shape
+# test needs to identity-check the merged generations against the
+# originals — without this, the only way to enumerate the underlying
+# generations would be to over-iterate the merged result.
+_FANOUT_FAKE_RETURNED_RESULTS: list = []
+
 # Mutable per-test knobs (the inner fakes close over this dict, so tests
 # mutate entries rather than reassigning names — reassignment would shadow
 # the module-level name and the fakes would still see the old one).
@@ -54,10 +60,32 @@ _FANOUT_FAKE_STATE: dict = {"raise_on": None, "sleep": 0.0, "llm_output_factory"
 
 
 class _FakeChatGeneration:
+    """Mimic a real pydantic ``ChatGeneration`` (rev3). The real class
+    yields ``(field_name, value)`` tuples when iterated, because pydantic
+    models add a ``__iter__`` that walks the field schema. If a future
+    edit to ``_merge_results`` accidentally iterates a ``ChatGeneration``
+    object — instead of a list containing one — the merged result would
+    contain tuples of tuples and RAGAS's ``ChatResult`` validator would
+    raise ``ValidationError`` (the live v2 NaN root cause, 2026-10-07).
+    This fake reproduces the iteration behavior so the SHAPE regression
+    test fails before that error reaches the live judge.
+    """
+
+    # Mirror real ChatGeneration's pydantic field set, so __iter__ below
+    # yields the same field names the real model would.
+    _PYDANTIC_FIELDS = ("text", "message", "generation_info")
+
     def __init__(self, text: str, info=None):
         self.text = text
         self.message = None  # not exercised by the merge logic
         self.generation_info = info
+
+    def __iter__(self):
+        # Pydantic-style iteration: yield (field_name, value) for each
+        # field. Any code that walks a ChatGeneration (instead of a list
+        # of them) would receive these tuples.
+        for name in self._PYDANTIC_FIELDS:
+            yield name, getattr(self, name)
 
 
 class _FakeAIMessage:
@@ -93,6 +121,7 @@ def _install_langchain_fakes():
 
     _FANOUT_FAKE_PARENT_CALLS.clear()
     _FANOUT_FAKE_TIMING.clear()
+    _FANOUT_FAKE_RETURNED_RESULTS.clear()
     _FANOUT_FAKE_STATE["raise_on"] = None
     _FANOUT_FAKE_STATE["sleep"] = 0.0
     _FANOUT_FAKE_STATE["llm_output_factory"] = None
@@ -118,10 +147,12 @@ def _install_langchain_fakes():
             time.sleep(_FANOUT_FAKE_STATE["sleep"])
             t1 = time.monotonic()
             _FANOUT_FAKE_TIMING.append((t0, t1))
-        return _FakeChatResult(
+        result = _FakeChatResult(
             generations=[[_FakeChatGeneration(text=f"gen-{idx}", info={"idx": idx})]],
             llm_output=_llm_output_for(idx),
         )
+        _FANOUT_FAKE_RETURNED_RESULTS.append(result)
+        return result
 
     async def fake_agenerate(self, messages, stop=None, run_manager=None, **kwargs):
         _FANOUT_FAKE_PARENT_CALLS.append(("async", list(messages), dict(kwargs), stop))
@@ -142,10 +173,12 @@ def _install_langchain_fakes():
             # siblings can interleave — the deadlock-regression test
             # exercises the real-async-IO path.
             await asyncio.sleep(0)
-        return _FakeChatResult(
+        result = _FakeChatResult(
             generations=[[_FakeChatGeneration(text=f"agen-{idx}", info={"idx": idx})]],
             llm_output=_llm_output_for(idx),
         )
+        _FANOUT_FAKE_RETURNED_RESULTS.append(result)
+        return result
 
     class FakeChatOpenAI:
         def __init__(self, **kwargs):
@@ -211,6 +244,7 @@ def _reset_fake_state():
     knobs (raise_on=None, sleep=0.0, llm_output_factory=None)."""
     _FANOUT_FAKE_PARENT_CALLS.clear()
     _FANOUT_FAKE_TIMING.clear()
+    _FANOUT_FAKE_RETURNED_RESULTS.clear()
     _FANOUT_FAKE_STATE["raise_on"] = None
     _FANOUT_FAKE_STATE["sleep"] = 0.0
     _FANOUT_FAKE_STATE["llm_output_factory"] = None
@@ -477,6 +511,55 @@ def test_fanout_llm_output_sums_async_path():
     assert out["prompt_tokens"] == 330
     assert out["completion_tokens"] == 165
     assert out["total_tokens"] == 495
+
+
+def test_fanout_merged_generations_have_chatgeneration_objects_not_tuples():
+    """FANOUT (rev3, live NaN root cause): the merged result's generations
+    must contain ``ChatGeneration`` OBJECTS, not pydantic-iteration tuples.
+    The fake ``_FakeChatGeneration`` mimics real pydantic iteration
+    (yields ``(field_name, value)`` tuples), so any over-iteration in the
+    merge code would surface as a list of tuples instead of objects —
+    exactly the shape that broke the live v2 run with
+    ``ValidationError: input_value=[('text', ...), ...]``.
+
+    Asserts:
+      - no element of any merged inner list is a tuple
+      - every element is a ``_FakeChatGeneration`` instance
+      - every element is identity-equal to one of the fakes seen by the
+        underlying calls (no copy, no re-construction — the merge
+        must pass the generation objects through untouched).
+    """
+    Fanout = run_ragas_eval._FanoutChatOpenAI
+    llm = Fanout(n=3)
+    result = llm._generate(["hi"])
+    assert len(result.generations) == 1
+    merged_inner = result.generations[0]
+    assert len(merged_inner) == 3
+    for j, gen in enumerate(merged_inner):
+        assert not isinstance(gen, tuple), (
+            f"generations[0][{j}] is a tuple {gen!r} — _merge_results "
+            f"over-iterated a ChatGeneration object (live v2 NaN root cause)"
+        )
+        assert isinstance(gen, _FakeChatGeneration), (
+            f"generations[0][{j}] is {type(gen).__name__}, expected "
+            f"_FakeChatGeneration"
+        )
+    # Identity check: every merged object IS one of the fakes the
+    # underlying calls produced (no copy, no re-construction). The
+    # fakes record their returned ChatResult in _FANOUT_FAKE_RETURNED_RESULTS;
+    # the merge's per-call sources are exactly the inner-list elements
+    # of those results.
+    all_underlying = [
+        gen
+        for result in _FANOUT_FAKE_RETURNED_RESULTS
+        for gen in result.generations[0]
+    ]
+    assert len(all_underlying) == 3
+    for gen in merged_inner:
+        assert gen in all_underlying, (
+            f"merged gen {gen!r} not found in underlying calls — merge "
+            f"copied or re-constructed the generation"
+        )
 
 
 def test_fanout_build_judge_uses_subclass(monkeypatch):

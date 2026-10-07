@@ -138,19 +138,31 @@ if ChatOpenAI is not None:
             RAGAS / observability can consume without undercounting by N×.
             WARNING: bool is an int in Python — a ``True`` flag would sum
             to N. Keep flags string-typed in llm_output (tests use a
-            string sentinel for exactly this reason)."""
+            string sentinel for exactly this reason).
+
+            CRITICAL — DO NOT ITERATE A ``ChatGeneration``: pydantic models
+            yield ``(field_name, value)`` tuples when iterated (the
+            ``__iter__`` pydantic adds). A list-comprehension or ``extend``
+            that walks a ``ChatGeneration`` itself — instead of a list
+            containing it — would replace each generation with a tuple
+            of tuples, and RAGAS's ``ChatResult(generations=...)`` validator
+            would then raise ``ValidationError: input_value=[('text', ...)],
+            input_type=list`` (the live v2 NaN root cause, 2026-10-07).
+            Iterate only ``r.generations`` (outer list) and ``r.generations[i]``
+            (inner list); let the inner elements — ``ChatGeneration``
+            objects — flow through untouched."""
             from langchain_core.outputs import ChatResult
 
             if not results:
                 return ChatResult(generations=[])
             n_inputs = len(results[0].generations)
-            merged: list = [[] for _ in range(n_inputs)]
+            merged: list = [
+                [gen for r in results for gen in r.generations[i]]
+                for i in range(n_inputs)
+            ]
             merged_output: dict = {}
             seen_keys: set = set()
             for r in results:
-                for i in range(n_inputs):
-                    if i < len(r.generations):
-                        merged[i].extend(r.generations[i])
                 info = getattr(r, "llm_output", None)
                 if not info:
                     continue
@@ -240,6 +252,12 @@ def _build_judge():
             temperature=JUDGE_TEMPERATURE,
             http_client=sync_client,
             http_async_client=async_client,
+            # Generous 300s request timeout: long-thinking reasoning calls
+            # on the local judge chain (MiniMax-M3) can take 60-120s; the
+            # httpx default (5s read) was killing 12/360 jobs in the
+            # 2026-10-07 v2 run. The judge is the user-facing bottleneck,
+            # not the dataset — timeouts should be rare and explicit.
+            timeout=300,
             **({"max_tokens": JUDGE_MAX_TOKENS} if JUDGE_MAX_TOKENS else {}),
         )
     )

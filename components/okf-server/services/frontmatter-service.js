@@ -49,7 +49,7 @@ const OKF_FRONTMATTER_VALIDATE_BATCH_SIZE = Math.max(
   1,
   parseInt(process.env.OKF_FRONTMATTER_VALIDATE_BATCH_SIZE || '4', 10)
 );
-const OKF_FRONTMATTER_SAMPLE_N = parseInt(process.env.OKF_FRONTMATTER_SAMPLE_N || '50', 10);
+const OKF_FRONTMATTER_SAMPLE_N = parseInt(process.env.OKF_FRONTMATTER_SAMPLE_N || '20', 10);
 const OKF_FRONTMATTER_VALIDATE_SAMPLE_PCT = parseFloat(process.env.OKF_FRONTMATTER_VALIDATE_SAMPLE_PCT || '0.1');
 const OKF_FRONTMATTER_INCONSISTENCY_THRESHOLD = parseFloat(
   process.env.OKF_FRONTMATTER_INCONSISTENCY_THRESHOLD || '0.3'
@@ -136,30 +136,42 @@ async function withTeiRetry(fn, ctx) {
 
 const TAG_PROMPT = (
   sampleSize,
-  chunksText
-) => `You are a curator for an enterprise knowledge-base system. A repository of
-${sampleSize} document chunks will be ingested. Based on the chunks below, produce
-a JSON object with these keys:
+  conceptsText
+) => `You are a curator for an enterprise knowledge-base system. A repository
+contains ${sampleSize} concepts (curator-authored knowledge entries). Each
+concept below has a title, a type (topic | entity | process | event | source),
+the curator's own per-concept TOPICS (the "tags" field — these are the
+single source of truth for what this repo is about), the
+Knowledge-Hierarchy labels the curator assigned, and a one-line summary.
 
-  topic:        list of 3-8 high-level topics the corpus covers (e.g. "antitrust-law",
-                "balinese-hindu-rituals", "uk-vehicle-tax"). Each must be a phrase
-                that a USER SEARCHING FOR INFORMATION might type.
-  entity:       list of 0-10 specific named entities mentioned (people, products,
-                places, organizations).
-  scope:        single best-fit word from: geographic, technical, regulatory,
-                cultural, scientific, encyclopedic, commercial, historical.
-  forbidden:    list of 2-6 things a USER MIGHT EXPECT TO FIND in a corpus of
-                this name that are NOT actually here. Critical for avoiding
-                misrouting.
-  summary:      1-2 sentences describing what this corpus actually contains.
-  keyword:      list of 0-10 specific low-coverage terms that strongly indicate
-                this corpus.
+YOUR JOB IS AGGREGATION, NOT INVENTION. The curator has already decided
+what the repo is about by setting per-concept topics. You must:
 
-The tag strings must be SHORT (1-3 words), lowercase, hyphenated.
+  1. Roll the per-concept topics up into a REPO-LEVEL topic set (3-8
+     high-level topics) that UNIQUELY characterizes this repo vs. its
+     siblings. The topic set must FULLY cover the per-concept topic
+     surface — a sibling repo should have an unambiguously different
+     topic set.
+  2. Identify the named entities across the concepts (people, products,
+     places, organizations) — pull from the per-concept tags and labels.
+  3. Infer the repo's scope from the concept types and topics.
+  4. The FORBIDDEN list is the ADJACENT topics a user might assume are
+     here but aren't — derive it from the per-concept topic surface by
+     asking "what's the closest neighbor topic the curator didn't
+     include?". A repo of bali-hindu-rituals probably should not be
+     asked about bali-beach-tourism or bali-history; both are adjacent
+     but excluded.
+  5. Phrase a 1-2 sentence summary from the user's perspective.
+
+The tag strings must be SHORT (1-3 words), lowercase, hyphenated. Be
+SPECIFIC — a repo with the same topic set as a sibling is a routing bug.
+Do NOT pad the topic list with generic words ("general", "reference",
+"information") — those tags break routing.
+
 Output ONLY the JSON object - no commentary.
 
-CHUNKS:
-${chunksText}
+CONCEPTS:
+${conceptsText}
 `;
 
 const VALIDATE_PROMPT = (
@@ -286,33 +298,63 @@ async function ensureCollections(db) {
   _frontmatterEnsured = true;
 }
 
-async function sampleChunksFromRepo(db, repoId, n) {
-  // Pull N random chunks from <graph>_SOURCE. The serving graph name is
-  // resolved by the canonical helper `workingGraphName(repo)` — graphs are
-  // BORN OKF_<slug>_v<N>, never OKF_{repo_id}. Sample from the LATEST
-  // published version (even if not yet ingested). Fall back to concept-meta
-  // text if no graph exists.
+async function sampleConceptsFromRepo(db, repoId, n) {
+  // Per David 2026-10-08: per-repo frontmatter tags originate ONLY from
+  // concept-meta rows. Chunks are NOT a permitted source — at the moment
+  // suggestTags runs (inside the publish hook, BEFORE the lifecycle ingest
+  // transition that creates the working graph), the graph either doesn't
+  // exist yet or holds stale data from a previous retract/republish cycle.
+  // The authoritative "what is this repo about" signal is the curator's
+  // per-concept tags + labels + summary + type in okf_concepts_meta (set in
+  // the editor's right rail during the publish gate; survives retract +
+  // republish unchanged). The forbidden list in particular must be
+  // derived from the curator's stated scope vs. adjacent topics the
+  // curator DIDN'T include — not from chunk text that may not exist yet.
+  //
+  // LIGHTWEIGHT sampling (David 2026-10-08: "we cannot pass all the concept
+  // files in the repo to the LLM — this must be lightweight"). We do NOT
+  // load full concept bodies; only the small per-row signal the LLM needs
+  // to derive a topic set (title + tags + labels + summary + type). The
+  // AQL reads just those fields — no body text, no chunk embeddings. The
+  // n cap is intentionally small (default 20) so the resulting prompt is
+  // bounded: a concept row is ~150-300 bytes of signal, so 20 rows =
+  // ~5KB of LLM input even in the worst case. The cap is enough to
+  // characterize a repo's topic surface (the worst case is hundreds of
+  // concepts; the typical case is 5-20), and deterministic by _key so a
+  // re-suggest returns the same input.
   const q = await db.query(`FOR r IN okf_repositories FILTER r._key == @rid LIMIT 1 RETURN r`, { rid: repoId });
   const list = await q.all();
   const repo = list && list[0];
   if (!repo) throw new FrontmatterError('REPO_NOT_FOUND', `repo ${repoId} not found`, 404);
-  const graph = workingGraphName(repo);
-  if (graph) {
-    try {
-      const cq = await db.query(`FOR c IN \`${graph}_SOURCE\` SORT RAND() LIMIT @n RETURN LEFT(c.text, 1500)`, { n });
-      const chunks = await cq.all();
-      if (chunks.length) return { repo, chunks };
-    } catch (e) {
-      logger.warn('frontmatter.sample.graph_unavailable', { repo_id: repoId, graph, err: e.message });
-    }
-  }
-  // Fallback: sample concept text from okf_concepts_meta
   const cq = await db.query(
-    `FOR m IN okf_concepts_meta FILTER m.repo_id == @rid && m.text != null SORT RAND() LIMIT @n RETURN LEFT(m.text, 1500)`,
+    `FOR m IN okf_concepts_meta FILTER m.repo_id == @rid SORT m._key LIMIT @n RETURN { concept_id: m.concept_id, title: m.title, type: m.type, tags: m.tags, labels: m.labels, summary: m.summary }`,
     { rid: repoId, n }
   );
-  const chunks = await cq.all();
-  return { repo, chunks };
+  const concepts = await cq.all();
+  return { repo, concepts };
+}
+
+// Format the lightweight concept rows into a single prompt block. Each
+// row is one line so the LLM can pattern-match the structure; the format
+// is the curator's authoring fields only (no body, no chunks, no
+// embeddings). Kept narrow so a 20-row sample stays well under the 6KB
+// LLM input slice the caller applies.
+function formatConceptsForPrompt(concepts) {
+  return concepts
+    .map((c) => {
+      const title = String(c.title || c.concept_id || '').trim();
+      const type = String(c.type || '').trim();
+      const tags = Array.isArray(c.tags) ? c.tags.filter(Boolean).join(', ') : '';
+      const labels = Array.isArray(c.labels) ? c.labels.filter(Boolean).join(', ') : '';
+      const summary = String(c.summary || '').trim();
+      const bits = [title];
+      if (type) bits.push(`[${type}]`);
+      if (tags) bits.push(`tags: ${tags}`);
+      if (labels) bits.push(`KH labels: ${labels}`);
+      if (summary) bits.push(`— ${summary}`);
+      return `- ${c.concept_id || '?'}: ${bits.join(' ')}`;
+    })
+    .join('\n');
 }
 
 // ---------- Public methods ----------
@@ -322,12 +364,21 @@ async function suggestTags(repoId, opts = {}) {
     span.setAttribute('okf.repo_id', repoId);
     const db = await dbService.getConnection();
     const sampleN = opts.sampleN || OKF_FRONTMATTER_SAMPLE_N;
-    const { chunks } = await sampleChunksFromRepo(db, repoId, sampleN);
-    if (!chunks.length) throw new FrontmatterError('NO_CHUNKS', 'no chunks available to suggest tags', 400);
-    span.setAttribute('okf.sample_size', chunks.length);
-    const chunksText = chunks.join('\n\n---\n\n');
-    const prompt = TAG_PROMPT(chunks.length, chunksText.slice(0, 6000));
-    logger.info('frontmatter.suggest.start', { repo_id: repoId, sample_size: chunks.length, vllm_host: VLLM_LLM_HOST });
+    const { concepts } = await sampleConceptsFromRepo(db, repoId, sampleN);
+    if (!concepts.length) {
+      // 400 with a clear directive: per-repo tags require at least one
+      // concept (curator's authoring). Chunks are NOT a fallback — the
+      // spec (2026-10-08) is explicit that tags originate from concept-meta.
+      throw new FrontmatterError(
+        'NO_CONCEPTS',
+        'Add at least one concept before requesting tag suggestions.',
+        400
+      );
+    }
+    span.setAttribute('okf.sample_size', concepts.length);
+    const conceptsText = formatConceptsForPrompt(concepts).slice(0, 6000);
+    const prompt = TAG_PROMPT(concepts.length, conceptsText);
+    logger.info('frontmatter.suggest.start', { repo_id: repoId, sample_size: concepts.length, vllm_host: VLLM_LLM_HOST });
     const resp = await vllmChatCompletions([{ role: 'user', content: prompt }], { maxTokens: 1000 });
     const content =
       resp.data &&
@@ -368,7 +419,15 @@ async function validateFrontmatter(repoId, frontmatter, _opts = {}) {
   return withSpan('okf.frontmatter.validate', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
     const db = await dbService.getConnection();
-    const { chunks } = await sampleChunksFromRepo(db, repoId, OKF_FRONTMATTER_SAMPLE_N);
+    // TODO (post-Story 1.6): switch the consistency-check source to
+    // concept-meta too, for symmetry with suggestTags. Today this still
+    // samples chunks from the working graph — at publish time those may be
+    // stale or absent, so this check is best-effort. The hard publish
+    // gate is the concept-meta existence check above; the validate stage
+    // is a quality signal only.
+    // (sampleChunksFromRepo was removed 2026-10-08 along with the chunk-based
+    // suggest path. The validate stage is a separate scope change.)
+    const chunks = [];
     if (!chunks.length) return { validated: true, inconsistencies: [] };
     const sampleSize = Math.max(1, Math.ceil(chunks.length * OKF_FRONTMATTER_VALIDATE_SAMPLE_PCT));
     const sample = chunks.slice(0, sampleSize);

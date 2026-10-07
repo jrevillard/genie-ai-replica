@@ -89,7 +89,7 @@ async function processRepo(repo, _opts) {
   logger.info('republish-with-tags.start', { repo_id: rid, dry_run: FLAGS.dryRun });
   let suggested;
   try {
-    suggested = await frontmatterService.suggestTags(rid, { sampleN: 50 });
+    suggested = await frontmatterService.suggestTags(rid, { sampleN: 20 });
   } catch (err) {
     record(rid, 'FAIL', `suggestTags failed: ${err.message}`);
     return;

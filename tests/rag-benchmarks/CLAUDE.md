@@ -25,9 +25,21 @@ tests/rag-benchmarks/
 │   ├── run_ragas_eval.py      # LLM-judged semantic eval (faithfulness etc.)
 │   ├── metrics.py             # recall / precision / complete_recall / noise / retrieval_recall
 │   ├── chunk_identity.py      # content_hash (sha256 of normalized text) — identity is content-based
-│   ├── arango.py              # ArangoDB cursor helper
+│   ├── arango.py              # ArangoDB cursor helper (source_chunks + paginated cursor)
 │   ├── dump_chunks.py         # Dump chunk keys + labels from ArangoDB for gold annotation
-│   └── gold_dataset.example.json
+│   ├── harness.py             # Shared docker_exec + atomic JSON IO (HarnessError)
+│   ├── keycloak.py            # The only Keycloak token fetcher for the eval toolchain
+│   ├── match_gold_chunks.py   # Phase 2: preview → content_hash via ArangoDB substring
+│   ├── xlsx_to_gold.py        # Phase 1: xlsx → gold_dataset.json skeleton
+│   ├── enrich_xlsx.py         # Single-run xlsx generator (legacy, back-compat)
+│   ├── enrich_xlsx_v2.py      # Multi-run per-tab xlsx generator (RUNBOOK § Phase 6)
+│   ├── gold_dataset.example.json
+│   ├── RUNBOOK.md             # End-to-end procedure (Phases 0–6) + failure recovery
+│   ├── CLAUDE.md              # Operational entry point, score threshold gotcha
+│   └── eval-reports/          # Operator-facing campaign reports (artifact, not in MRs)
+├── scripts/
+│   └── run_anchor_with_cleanup.sh  # Wrapper: ROPC enable + run + verified revert
+├── capture_baseline.py        # Multi-run driver (N runs → tolerance baseline JSON)
 └── CLAUDE.md                  # this file
 ```
 

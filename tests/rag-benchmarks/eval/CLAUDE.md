@@ -106,6 +106,10 @@ ssh <user>@<host> 'docker service logs <stack>_chatqna-xeon-backend-server --sin
 | `run_ragas_eval.py` | LLM-judged semantic scoring. Reads `eval_tuples.json` (Phase 3 output). |
 | `metrics.py` | `aggregate()` (per-row → mean) + `recall_at_k` / `ndcg_at_k` (rank-aware). |
 | `chunk_identity.py` | `content_hash` (sha256[:16] of normalized text). Identity is content-based, survives re-ingest. |
+| `harness.py` | Shared docker_exec + atomic JSON IO (`HarnessError`). Adopted by `run_eval.py`, `capture_baseline.py`, `match_gold_chunks.py` (and itself). |
+| `keycloak.py` | The only Keycloak token fetcher for the eval toolchain (form-encoded POST, SSL verify off, 240s TTL, 401 → refresh + retry). The wrapper keeps the master-token path as a fallback. |
+| `enrich_xlsx.py` | Single-run xlsx generator (legacy, kept for back-compat). Produces a 30-col workbook from one anchor + one RAGAS + one tuples run. |
+| `enrich_xlsx_v2.py` | Multi-config per-tab xlsx generator. `--runs-json` describes N runs; the output workbook has one `Run_<label>` tab per run + a `Compare` tab (aggregate + delta vs first run) + a `Calibrate` tab (top-50 combos by F1, when `--calibrate` is given) + a `Charts` tab (4 embedded matplotlib PNGs). Every enriched column has an Excel cell-comment tooltip (unit + semantics + range). See `eval/RUNBOOK.md` § Phase 6 for the per-tab layout and a worked `runs.json` example. |
 | `arango.py` | ArangoDB cursor helper. |
 | `keycloak.py` | Keycloak admin + realm token helpers (used by run_eval.py and tests). |
 | `harness.py` | `docker exec` + `curl` helpers used by run_eval.py to drive chatqna in-container. |

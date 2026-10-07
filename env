@@ -195,6 +195,30 @@ HUGGING_FACE_HUB_TOKEN=
 # RETRIEVER_ARANGO_NUM_CENTROIDS=1
 # RETRIEVER_ARANGO_FILTER_STRATEGY=OR
 # RETRIEVER_SUMMARIZER_ENABLED=false
+# Story 1.6 (2026-10-07) — env-driven OKF search style. Three values:
+#   hybrid           — frontmatter tags primary, k=40 chunk-probe always-on validator (DEFAULT; UNION result)
+#   frontmatter_tags — frontmatter primary, chunk-probe SKIPPED (latency mode)
+#   vector_probe     — Story 1.3 behavior only (transitional; for legacy repos without frontmatter)
+# Invalid value → fail-closed to vector_probe with a loud log. RETRIEVER_FRONTMATTER_ROUTING_ENABLED=false
+# is the master kill switch (forces vector_probe regardless of OKF_SEARCH_STYLE).
+# OKF_SEARCH_STYLE=hybrid
+# RETRIEVER_FRONTMATTER_ROUTING_ENABLED=true
+# RETRIEVER_FRONTMATTER_TAG_WEIGHT_TOPIC=1.0
+# RETRIEVER_FRONTMATTER_TAG_WEIGHT_ENTITY=0.7
+# RETRIEVER_FRONTMATTER_TAG_WEIGHT_KEYWORD=0.5
+# RETRIEVER_FRONTMATTER_TAG_WEIGHT_SUMMARY=0.5
+# RETRIEVER_FRONTMATTER_TAG_WEIGHT_SCOPE=0.3
+# RETRIEVER_FRONTMATTER_FORBIDDEN_PENALTY=1.5
+# RETRIEVER_FRONTMATTER_MIN_SCORE=0.25
+# RETRIEVER_FRONTMATTER_TOP_K=5
+# GPU service endpoints for the okf-server publish pipeline (Story 1.6):
+#   VLLM_LLM_HOST  — OpenAI-compatible /v1/chat/completions for tag suggest + validate (AsyncOpenAI-equivalent)
+#   TEI_EMBED_HOST — /embed for tag vectorization (1024-dim, shared embedding space with chunks)
+# VLLM_LLM_HOST=http://vllm-llm-served:8000
+# TEI_EMBED_HOST=http://embedding-tei:80
+# OKF_FRONTMATTER_TAG_BATCH_SIZE=1        # one repo at a time for suggestTags
+# OKF_FRONTMATTER_VALIDATE_BATCH_SIZE=4    # 4 parallel vLLM calls for per-tag consistency check
+# OKF_FRONTMATTER_SUMMARY_TTL_MS=60000     # 60s BFF cache for the denormalized summary
 # RERANKING_THRESHOLD=0.75
 # RERANKING_STRATEGY=slice      # slice (default) | threshold | slice_threshold | knee_threshold | adaptive
 # RERANKER_TOP_N=3              # chunks kept for slice/slice_threshold strategies (default 3)
@@ -625,6 +649,11 @@ KC_OKF_SERVER_CLIENT_SECRET=
 # OKF_RETRIEVAL_EXTRACTED_HOP_CAP=1
 # OKF_RETRIEVAL_CANDIDATE_CAP_PER_GRAPH=50
 # OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL=200
+# BFF-side carrier cache (Story 1.1): the retrieval-posture/authz window and
+# per-call okf-server timeout consumed by gov-chat-backend (code defaults
+# 30000/3000 ms). Latency tuning only — these can never engage the fan-out.
+# OKF_RETRIEVAL_CONFIG_TTL_MS=30000
+# OKF_RETRIEVAL_CONFIG_TIMEOUT_MS=3000
 
 # --- OKF content-only chunking (Story 4.8-amend) ---
 # Concepts never become doc-repo files docs — the worker POSTs the concept's

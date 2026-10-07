@@ -194,7 +194,7 @@ class TestBuildSubquery:
 
     def test_node_mode_contains_for_traversal(self):
         result = self._call(search_start="node")
-        assert "FOR node, edge IN 1..1 ANY doc GRAPH_LINKS_TO" in result
+        assert "FOR node, edge IN 1..1 ANY doc `GRAPH_LINKS_TO`" in result
 
     def test_node_mode_cosine_score_desc(self):
         result = self._call(search_start="node")
@@ -203,11 +203,31 @@ class TestBuildSubquery:
 
     def test_edge_mode_contains_document_lookup(self):
         result = self._call(search_start="edge")
-        assert "DOCUMENT(GRAPH_SOURCE, doc.source_id)" in result
+        assert "DOCUMENT(`GRAPH_SOURCE`, doc.source_id)" in result
 
     def test_chunk_mode_contains_inbound_traversal(self):
         result = self._call(search_start="chunk")
-        assert "INBOUND doc GRAPH_HAS_SOURCE" in result
+        assert "INBOUND doc `GRAPH_HAS_SOURCE`" in result
+
+    def test_hyphenated_graph_name_is_backtick_quoted(self):
+        """Regression pin (live-caught 2026-10-06): OKF graph names contain
+        hyphens (`OKF_alphabet-company-information-llm_v6`), which a bare AQL
+        identifier cannot carry — ArangoDB parsed `OKF_alphabet` as the
+        collection and `-company-information-llm_v6` as subtraction, 404-ing
+        every OKF leg at the traversal stage (the legacy `GRAPH` name has no
+        hyphens, so the legacy path never hit this). All graph-derived
+        identifiers MUST be backtick-quoted in generated AQL."""
+        hyphenated = "OKF_alphabet-company-information-llm_v6"
+        node = self._call(search_start="node", graph_name=hyphenated)
+        chunk = self._call(search_start="chunk", graph_name=hyphenated)
+        edge = self._call(search_start="edge", graph_name=hyphenated)
+        assert f"ANY doc `{hyphenated}_LINKS_TO`" in node
+        assert f"DOCUMENT(`{hyphenated}_SOURCE`" in node
+        assert f"INBOUND doc `{hyphenated}_HAS_SOURCE`" in chunk
+        assert f"DOCUMENT(`{hyphenated}_SOURCE`, doc.source_id)" in edge
+        # no bare (unquoted) hyphenated identifier anywhere
+        for aql in (node, chunk, edge):
+            assert f" {hyphenated}_" not in aql
 
     def test_chunk_mode_adds_query_embedding_bind_var(self):
         bind_vars = {"@collection": "GRAPH_SOURCE", "keys": ["key1"]}
@@ -393,6 +413,46 @@ class TestInvoke:
         invoke_env["retriever"].fetch_neighborhoods.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_invoke_no_legacy_signal_refuses_legacy_fallback(self, invoke_env):
+        """Story 1.1 — the full invoke()-level decode→refusal chain: a
+        search_start STRING carrying only the ::no_legacy: segment (okf_only
+        zero-serving — empty carrier) must come back as [] with the legacy
+        ARANGO_GRAPH_NAME extraction NEVER invoked. This is the end-to-end
+        pin for the okf_only-means-OKF-only contract (the unit-level refusal
+        cases in test_fanout.py test the extracted helper directly)."""
+        invoke_env["retriever"]._extract_for_graph = AsyncMock(return_value=[{"doc": "hit"}])
+
+        result = await invoke_env["retriever"].invoke(create_mock_input(search_start="chunk::no_legacy:true"))
+
+        assert result == []
+        invoke_env["retriever"]._extract_for_graph.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_invoke_nonempty_carrier_reaches_fanout_orchestrator(self, invoke_env):
+        """Regression pin (2026-10-06 live-caught): the fan-out branch must
+        reach the MODULE-level `invoke_fanout` orchestrator with the decoded
+        carrier. Story 1.0 shipped `self.invoke_fanout(...)` against a
+        module-level function — AttributeError on the first-ever live fan-out,
+        latent because NO test executed this branch with a carrier. This test
+        closes that blind spot: a non-empty carrier MUST dispatch to the
+        orchestrator with the decoded graph list (not the raw carrier
+        string) — and the orchestrator's returned docs pass through as the
+        result."""
+        import retriever.genieai_retriever_arangodb as retriever_module
+
+        fused = [{"doc": "fused-hit", "graph_name": "OKF_x_v1"}]
+        with patch.object(retriever_module, "invoke_fanout", new=AsyncMock(return_value=fused)) as mock_fanout:
+            result = await invoke_env["retriever"].invoke(
+                create_mock_input(search_start="chunk::graphs:GRAPH,OKF_x_v1")
+            )
+
+        mock_fanout.assert_awaited_once()
+        call = mock_fanout.await_args
+        assert call.args[0] is invoke_env["retriever"]  # the retriever, explicit self
+        assert call.kwargs["encoded_graph_names"] == ["GRAPH", "OKF_x_v1"]
+        assert result == fused
+
+    @pytest.mark.asyncio
     async def test_label_filter_or_strategy(self, invoke_env):
         input_mock = create_mock_input(
             context={"categoryLabels": "health", "serviceLabels": ["education"]},
@@ -529,8 +589,9 @@ class TestInvoke:
         mock_doc.page_content = "text"
         mock_doc.metadata = {}
         invoke_env["vector_db"].asimilarity_search_with_relevance_scores = AsyncMock(return_value=[(mock_doc, 0.9)])
+        # Batched file-id lookup (one AQL with `IN @chunk_ids`) — rows are {key, file_id}.
         file_cursor = MagicMock()
-        file_cursor.__iter__ = MagicMock(return_value=iter(["file_abc"]))
+        file_cursor.__iter__ = MagicMock(return_value=iter([{"key": "chunk1", "file_id": "file_abc"}]))
         invoke_env["db"].aql.execute.return_value = file_cursor
 
         result = await invoke_env["retriever"].invoke(create_mock_input(search_start="chunk"))

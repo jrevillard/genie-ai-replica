@@ -453,7 +453,7 @@ async function _settleIngest(db, repo, actor) {
  * @param {object} [actor] { sub, source_ip? }
  * @returns {Promise<{ok:true, action, lifecycle_state, ...transition-specific}>}
  */
-async function transition(repoId, action, actor) {
+async function transition(repoId, action, actor, opts = {}) {
   const spec = TRANSITIONS[action];
   if (!spec) {
     throw new LifecycleError('VALIDATION_ERROR', `action must be one of ${ACTIONS.join('|')}`, 400);
@@ -590,6 +590,75 @@ async function transition(repoId, action, actor) {
         await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.bundles', { rid: repoId })
       ).all();
       const prevBundles = (existingBundles && existingBundles[0]) || [];
+      // Story 1.6 — frontmatter is REQUIRED at publish time (independent of
+      // OKF_SEARCH_STYLE: tagging+vectorization must run regardless so an
+      // operator can flip the runtime search style without re-ingesting).
+      // Hook fires AFTER mintVersion + bundleExport succeed and BEFORE the
+      // lifecycle_state=publish write. A failure here leaves the repo at
+      // 'approve' with 409 FRONTMATTER_REQUIRED — operator can retry once the
+      // frontmatter is supplied (via the suggest endpoint + curator approval,
+      // or via direct PATCH on the frontmatter row).
+      logger.info('[OKF-PUBLISH] step=frontmatter gate', { repo_id: repoId });
+      try {
+        const frontmatterService = require('./frontmatter-service');
+        // Auto-suggest + validate + publish in one shot when no frontmatter
+        // is supplied by the caller. Curators who pre-supply frontmatter
+        // (via the wizard) bypass suggest and only run embedAllTags +
+        // publishFrontmatter — this branch detects that case via the
+        // `frontmatter` payload on the lifecycle event.
+        const suppliedFm = (opts && opts.payload && opts.payload.frontmatter) || null;
+        if (suppliedFm) {
+          await frontmatterService.publishFrontmatter(repoId, suppliedFm, {
+            actor,
+            version: bundle.bundle_version
+          });
+        } else {
+          const suggested = await frontmatterService.suggestTags(repoId, { sampleN: 50 });
+          const validation = await frontmatterService.validateFrontmatter(repoId, suggested);
+          if (!validation.validated) {
+            logger.warn('[OKF-PUBLISH] frontmatter validation flagged inconsistencies', {
+              repo_id: repoId,
+              inconsistencies: validation.inconsistencies.length
+            });
+            // Do NOT auto-publish if the LLM is producing inconsistent tags —
+            // require a curator pass. Surface the inconsistencies so the route
+            // can return a helpful 409 body.
+            throw new LifecycleError(
+              'FRONTMATTER_INCONSISTENT',
+              'Auto-tagged frontmatter failed consistency check (' +
+                validation.inconsistencies.length +
+                ' inconsistencies) — curator must review before publish. ' +
+                'POST /api/okf/repos/' +
+                repoId +
+                '/frontmatter with curated tags.',
+              409
+            );
+          }
+          await frontmatterService.publishFrontmatter(repoId, suggested, {
+            actor,
+            version: bundle.bundle_version
+          });
+        }
+      } catch (fmErr) {
+        if (fmErr && fmErr.code === 'FRONTMATTER_INCONSISTENT') throw fmErr;
+        logger.error('[OKF-PUBLISH] step=frontmatter gate FAILED', {
+          repo_id: repoId,
+          error_code: fmErr && fmErr.code,
+          error_message: fmErr && fmErr.message,
+          stack: fmErr && fmErr.stack
+        });
+        throw new LifecycleError(
+          'FRONTMATTER_REQUIRED',
+          'Frontmatter publish failed: ' +
+            (fmErr && fmErr.message ? fmErr.message : 'unknown error') +
+            '. A repo cannot be publish without LLM-suggested + curator-approved frontmatter. ' +
+            'POST /api/okf/repos/' +
+            repoId +
+            '/frontmatter/suggest to retry.',
+          409
+        );
+      }
+      logger.info('[OKF-PUBLISH] step=frontmatter gate OK', { repo_id: repoId });
       await db.collection(REPOS).update(repoId, {
         lifecycle_state: spec.to,
         // APPEND the new bundle entry; never overwrite.

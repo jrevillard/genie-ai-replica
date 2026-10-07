@@ -52,6 +52,30 @@ const {
   validateRetrievalConfigPatch
 } = require('../validators/retrieval-config-validator');
 
+// Story 1.6 (2026-10-07) — denormalized frontmatter summary cache. The
+// hot-path read-model is ONE row per repo (computed at publish time by
+// frontmatter-service). This cache sits in front of the BFF query layer so
+// the 60s TTL survives across retriever-pod restarts; the underlying doc is
+// read fresh on every call (ArangoDB is the source of truth).
+const FRONTMATTER_SUMMARY_TTL_MS = parseInt(process.env.OKF_FRONTMATTER_SUMMARY_TTL_MS || '60000', 10);
+const _frontmatterSummaryCache = new Map(); // repoId -> { at, doc | null }
+function _frontmatterSummaryGet(repoId) {
+  const hit = _frontmatterSummaryCache.get(repoId);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > FRONTMATTER_SUMMARY_TTL_MS) {
+    _frontmatterSummaryCache.delete(repoId);
+    return undefined;
+  }
+  return hit.doc;
+}
+function _frontmatterSummaryPut(repoId, doc) {
+  _frontmatterSummaryCache.set(repoId, { at: Date.now(), doc });
+}
+function _frontmatterSummaryInvalidate(repoId) {
+  if (repoId) _frontmatterSummaryCache.delete(repoId);
+  else _frontmatterSummaryCache.clear();
+}
+
 const COLLECTION = 'okf_system_config';
 const DOC_KEY = 'retrieval';
 const AUDIT_REPO = '_system';
@@ -88,7 +112,11 @@ function envDefaultsRaw() {
 function mergeEffective(stored) {
   const env = sanitizeConfigShape(envDefaultsRaw());
   if (!stored) {
-    return { config: { ...env, revision: 0, updated_at: null, updated_by: null }, source: 'env-defaults', stored: null };
+    return {
+      config: { ...env, revision: 0, updated_at: null, updated_by: null },
+      source: 'env-defaults',
+      stored: null
+    };
   }
   const raw = {};
   for (const key of Object.keys(env)) raw[key] = stored[key];
@@ -146,9 +174,9 @@ async function servingRepos(opts = {}) {
   const db = await getDb();
   const rows = await (
     await db.query(
-      "FOR r IN okf_repositories " +
+      'FOR r IN okf_repositories ' +
         "FILTER r.lifecycle_state == 'publish' && r.ingested_at != null && r.deleted_at == null " +
-        "SORT r.name ASC " +
+        'SORT r.name ASC ' +
         "RETURN KEEP(r, ['repo_id', 'name', 'domain', 'version', 'lifecycle_state', 'ingested_at'])"
     )
   ).all();
@@ -160,6 +188,35 @@ async function servingRepos(opts = {}) {
 /** Test hook: drop the serving-set memo (no production caller — TTL governs). */
 function _resetServingCache() {
   _servingCache = { at: 0, rows: null };
+}
+
+/**
+ * Story 1.6 — read the denormalized frontmatter summary for a single repo.
+ * The doc carries the 6 precomputed combination vectors (topic, entity,
+ * keyword, summary, scope, forbidden) plus the per-field counts. The
+ * hot-path retriever reads this on every query; the 60s TTL bounds the
+ * staleness window when a curator edits tags without going through publish.
+ */
+async function getRepoFrontmatterSummary(repoId) {
+  return withSpan('okf.retrieval_config.frontmatter_summary', { 'okf.repo_id': repoId }, async () => {
+    const cached = _frontmatterSummaryGet(repoId);
+    if (cached !== undefined) return cached;
+    const db = await dbService.getConnection();
+    let doc; // assigned in try or remains undefined on 404
+    try {
+      doc = await db.collection('okf_repositories_frontmatter_summary').document(repoId);
+    } catch (err) {
+      if (!isArangoNotFound(err)) throw err;
+      doc = null;
+    }
+    _frontmatterSummaryPut(repoId, doc);
+    return doc;
+  });
+}
+
+/** Test hook: drop the frontmatter-summary memo. */
+function _resetFrontmatterSummaryCache(repoId) {
+  _frontmatterSummaryInvalidate(repoId);
 }
 
 /**
@@ -285,6 +342,10 @@ module.exports = {
   servingRepos,
   putRetrievalConfig,
   _resetServingCache,
+  // Story 1.6 — frontmatter summary (denormalized hot-path read).
+  getRepoFrontmatterSummary,
+  _resetFrontmatterSummaryCache,
+  FRONTMATTER_SUMMARY_TTL_MS,
   SERVING_TTL_MS,
   mergeEffective,
   MODES,

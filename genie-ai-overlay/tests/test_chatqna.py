@@ -709,6 +709,66 @@ class TestAlignInputsBundledDict:
         assert result["search_start"] == "chunk::labels:Tomato"
         mock_contract.encode_filter_labels.assert_called_once_with("chunk", ["Tomato"])
 
+    def test_retriever_carrier_includes_sticky_segment(self):
+        """Story 1.3 — sticky_graph_names in retrieval_context flow into the
+        carrier encode as the ::sticky: continuity set (routed ∪ sticky at the
+        retriever)."""
+        self_mock = MagicMock()
+        self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+        llm_params = {}
+        inputs = {"text": "query", "search_start": "chunk"}
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch.dict("sys.modules", {"core.label_contract": MagicMock()}),
+        ):
+            import sys
+
+            mock_contract = sys.modules["core.label_contract"]
+            mock_contract.encode.return_value = "chunk::graphs:GRAPH,OKF_a_v1::sticky:OKF_a_v1"
+            result = align_inputs(
+                self_mock,
+                inputs,
+                "retriever_node",
+                MagicMock(),
+                llm_params,
+                genie_params={
+                    "retrieval_context": {
+                        "authorized_graph_names": ["GRAPH", "OKF_a_v1"],
+                        "sticky_graph_names": ["OKF_a_v1"],
+                    }
+                },
+            )
+        assert result["search_start"] == "chunk::graphs:GRAPH,OKF_a_v1::sticky:OKF_a_v1"
+        mock_contract.encode.assert_called_once_with(
+            "chunk", labels=[], graphs=["GRAPH", "OKF_a_v1"], sticky=["OKF_a_v1"]
+        )
+
+    def test_retriever_carrier_omits_sticky_kwarg_when_empty(self):
+        """Story 1.3 — no sticky set → encode never receives the sticky kwarg
+        (the mocked pre-1.3 encode signature keeps working on the default path)."""
+        self_mock = MagicMock()
+        self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+        llm_params = {}
+        inputs = {"text": "query", "search_start": "chunk"}
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch.dict("sys.modules", {"core.label_contract": MagicMock()}),
+        ):
+            import sys
+
+            mock_contract = sys.modules["core.label_contract"]
+            mock_contract.encode.return_value = "chunk::graphs:GRAPH,OKF_a_v1"
+            result = align_inputs(
+                self_mock,
+                inputs,
+                "retriever_node",
+                MagicMock(),
+                llm_params,
+                genie_params={"retrieval_context": {"authorized_graph_names": ["GRAPH", "OKF_a_v1"]}},
+            )
+        assert result["search_start"] == "chunk::graphs:GRAPH,OKF_a_v1"
+        mock_contract.encode.assert_called_once_with("chunk", labels=[], graphs=["GRAPH", "OKF_a_v1"])
+
     def test_rerank_extracts_reranker_parameters_from_dict(self):
         """RERANK branch reads reranker_parameters from genie_params dict."""
         self_mock = MagicMock()
@@ -1938,13 +1998,18 @@ class TestAssembleSourceDocuments:
         assert [round(d["score"], 2) for d in docs] == [0.95, 0.85]
 
     @pytest.mark.asyncio
-    async def test_metadata_failure_excludes_doc_and_does_not_zero_confidence(self):
-        """D1 regression: a failed metadata lookup must neither surface a fake
-        'error' source document nor inject score=0 into the confidence aggregation.
-        Previously the else-branch fell through to ``scores.append(0)``, which
-        tanked the mean whenever the document-repository metadata call failed."""
+    async def test_metadata_failure_surfaces_okf_concept_source_with_real_score(self):
+        """Story 1.1 (live-caught 2026-10-06): a failed doc-repo metadata lookup
+        is the DESIGNED path for OKF concept chunks (file_id == concept_id —
+        they resolve in okf-server, not doc-repository). The old D1 behavior
+        (skip entirely) discarded all OKF ground truth and forced
+        is_grounded=False on every OKF query. Now the doc is surfaced from its
+        in-payload provenance with its REAL reranker score — the D1 poison
+        (a fake 'error' doc / forced 0.0 in the aggregate) stays dead: no
+        synthetic document, no zero injected."""
         svc = create_chatqna_service()
-        # f1 metadata resolves; f2 metadata fetch fails (returns None).
+        # f1 metadata resolves; f2 metadata fetch fails (returns None) — the
+        # OKF-concept shape.
         svc.fetch_file_metadata = AsyncMock(side_effect=[{"labels": ["Beekeeping"], "file_name": "bee.pdf"}, None])
         result_dict = self._result_dict(
             rerank_verdict=[
@@ -1955,11 +2020,14 @@ class TestAssembleSourceDocuments:
             file_id_pairs={"d1": "f1", "d2": "f2"},
         )
         docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
-        # Only the resolvable doc is surfaced; no synthetic 'error' document.
-        assert [d["document_id"] for d in docs] == ["f1"]
-        assert all(d["document_id"] != "error" for d in docs)
-        # Confidence reflects the kept doc only (0.95), NOT the bug's (0.95+0.0)/2.
-        assert round(confidence, 2) == 0.95
+        # Both surfaced: f1 enriched from doc-repo, f2 as an OKF concept source.
+        assert [d["document_id"] for d in docs] == ["f1", "f2"]
+        assert docs[0]["document_name"] == "bee.pdf"
+        assert docs[1]["source"] == "okf-concept"
+        assert docs[1]["concept_id"] == "f2"
+        assert docs[1]["url"] == ""
+        # Confidence reflects BOTH real scores (0.95 dominates 0.85) — no zero injected.
+        assert 0.90 < confidence <= 0.95
         assert grounded is True
 
     @pytest.mark.asyncio
@@ -1987,10 +2055,14 @@ class TestAssembleSourceDocuments:
         assert grounded is True
 
     @pytest.mark.asyncio
-    async def test_all_metadata_fail_forces_not_grounded(self):
-        """When the reranker found docs but none resolve to sources (e.g. a
-        document-repository outage), is_grounded is forced False so the UI does
-        not claim backing that is absent."""
+    async def test_all_metadata_fail_surfaces_okf_concept_sources(self):
+        """Story 1.1: when EVERY metadata lookup fails (doc-repo outage, or all
+        hits are OKF concept chunks), the reranker's verdict still surfaces —
+        each doc as an OKF concept source with its real score. Grounding is NOT
+        forced False anymore: the answer IS backed by retrieved documents; only
+        the doc-repo enrichment (labels/filename/url) is absent. The old
+        not-grounded edge case remains reachable via an empty reranker verdict
+        (display_docs empty → is_grounded False at the top)."""
         svc = create_chatqna_service()
         svc.fetch_file_metadata = AsyncMock(return_value=None)  # every lookup fails
         result_dict = self._result_dict(
@@ -1999,16 +2071,19 @@ class TestAssembleSourceDocuments:
             file_id_pairs={"d1": "f1"},
         )
         docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
-        assert docs == []
-        assert confidence == 0.0
-        assert grounded is False
+        assert [d["document_id"] for d in docs] == ["f1"]
+        assert docs[0]["source"] == "okf-concept"
+        assert docs[0]["concept_id"] == "f1"
+        assert confidence == 0.95
+        assert grounded is True
 
     @pytest.mark.asyncio
-    async def test_duplicate_of_failed_metadata_does_not_inject_score(self):
-        """M3: a duplicate of a file whose metadata failed must not contribute its
-        score to the aggregation while the file remains invisible. The file_id is
-        marked surfaced only after a successful metadata lookup, so the duplicate
-        re-attempts (and re-fails) instead of being counted as a dedup hit."""
+    async def test_duplicate_of_failed_metadata_dedups_to_one_source(self):
+        """M3 (Story 1.1 revision): the file_id is marked surfaced on FIRST
+        surfacing — a duplicate of an already-surfaced file dedups to one
+        source entry and does not double-count in the aggregation. Since
+        Story 1.1 the failed-metadata doc IS surfaced (OKF concept source), so
+        the duplicate hits the normal dedup branch rather than re-failing."""
         svc = create_chatqna_service()
         svc.fetch_file_metadata = AsyncMock(return_value=None)  # all lookups fail
         result_dict = self._result_dict(
@@ -2020,9 +2095,9 @@ class TestAssembleSourceDocuments:
             file_id_pairs={"d1": "f1", "d2": "f1"},
         )
         docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
-        assert docs == []  # nothing surfaced
-        assert confidence == 0.0  # no invisible-doc score counted
-        assert grounded is False
+        assert [d["document_id"] for d in docs] == ["f1"]  # deduped to one
+        assert docs[0]["source"] == "okf-concept"
+        assert grounded is True
 
     @pytest.mark.asyncio
     async def test_duplicate_of_surfaced_doc_counts_score(self):

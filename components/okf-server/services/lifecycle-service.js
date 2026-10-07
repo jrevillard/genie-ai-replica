@@ -613,7 +613,7 @@ async function transition(repoId, action, actor, opts = {}) {
             version: bundle.bundle_version
           });
         } else {
-          const suggested = await frontmatterService.suggestTags(repoId, { sampleN: 50 });
+          const suggested = await frontmatterService.suggestTags(repoId, { sampleN: 20 });
           const validation = await frontmatterService.validateFrontmatter(repoId, suggested);
           if (!validation.validated) {
             logger.warn('[OKF-PUBLISH] frontmatter validation flagged inconsistencies', {

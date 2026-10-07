@@ -57,8 +57,148 @@ EMBED_API_KEY = os.getenv("EVAL_EMBED_API_KEY", JUDGE_API_KEY)
 EMBED_MODEL = os.getenv("EVAL_EMBED_MODEL")
 
 
-def _build_judge():
+# --- FANOUT: simulate n>1 via parallel single-n calls ------------------------
+#
+# Ragas 0.4.x answer_relevancy requests n=3 generations (strictness signal).
+# The local judge chain (ccr router 127.0.0.1:3456 → MiniMax-M3) rejects n>1
+# upstream (HTTP 400 "does not support n > 1 (2013)"); langchain-openai then
+# silently collapses to a single generation ("Proceeding with 1"). Other
+# router models either reject (all MiniMax) or accept-and-ignore n
+# (glm-* returns 1 choice). Restore strictness by fanning n>1 out into n
+# independent single-n calls and merging the generations.
+#
+# Cache evidence (empirical, 2026-10-07): 3 parallel identical prompts at
+# temperature 0.7 to the same endpoint returned 3 DISTINCT completions — no
+# response-cache dedup on this stack. Therefore NO prompt nonce is needed
+# (a nonce would alter judged content).
+#
+# Re-verify recipe after any gateway change: fire 3 identical prompts in
+# parallel via this class and assert 3 distinct completion strings.
+try:
     from langchain_openai import ChatOpenAI
+except ImportError:  # pragma: no cover - only meaningful for runtime, tests fake it
+    ChatOpenAI = None  # type: ignore[assignment]
+
+
+if ChatOpenAI is not None:
+    import asyncio
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    class _FanoutChatOpenAI(ChatOpenAI):
+        """ChatOpenAI subclass that simulates n>1 by fanning out into n
+        parallel single-n requests, then merging the generations.
+
+        Why: see the module-level FANOUT comment above. Briefly — the judge
+        chain rejects n>1, langchain-openai silently collapses to n=1, and
+        ragas's answer_relevancy strictness signal is lost. This subclass
+        preserves the signal by fanning n>1 out into n independent single-n
+        requests on the parent's request path.
+
+        Concurrency: sync fan-out uses ``ThreadPoolExecutor`` (ragas 0.4.x
+        drives ``_generate`` on a worker thread); async fan-out uses
+        ``asyncio.gather`` (ragas drives ``_agenerate`` on the event loop).
+        The ``_fanout_lock`` guards the temporary mutation of ``self.n`` so
+        parallel sibling calls don't observe each other's intermediate value.
+        """
+
+        _fanout_lock = threading.Lock()
+
+        @staticmethod
+        def _effective_n(kwargs_n, self_n):
+            n = kwargs_n if kwargs_n is not None else self_n
+            try:
+                return max(1, int(n)) if n is not None else 1
+            except (TypeError, ValueError):
+                return 1
+
+        def _one_sync(self, messages, stop, run_manager, kwargs):
+            with self._fanout_lock:
+                saved = self.n
+                self.n = 1
+                try:
+                    return super()._generate(
+                        messages, stop=stop, run_manager=run_manager, **kwargs
+                    )
+                finally:
+                    self.n = saved
+
+        async def _one_async(self, messages, stop, run_manager, kwargs):
+            with self._fanout_lock:
+                saved = self.n
+                self.n = 1
+                try:
+                    return await super()._agenerate(
+                        messages, stop=stop, run_manager=run_manager, **kwargs
+                    )
+                finally:
+                    self.n = saved
+
+        @staticmethod
+        def _merge_results(results):
+            """Merge per-call ChatResults into one. All calls share the same
+            inputs (we're fanning the SAME prompt), so ``generations`` is
+            ``list[list[ChatGeneration]]`` with one nested list per input.
+            Flatten the per-call lists into one nested list of N generations
+            per input. Preserve the first call's ``llm_output`` (token usage
+            etc.) — picking a single one is the only honest answer; RAGAS
+            uses the merged generations, not the usage stats."""
+            from langchain_core.outputs import ChatResult
+
+            if not results:
+                return ChatResult(generations=[])
+            n_inputs = len(results[0].generations)
+            merged: list = [[] for _ in range(n_inputs)]
+            first_info = None
+            for r in results:
+                for i in range(n_inputs):
+                    if i < len(r.generations):
+                        merged[i].extend(r.generations[i])
+                if first_info is None:
+                    info = getattr(r, "llm_output", None)
+                    if info:
+                        first_info = info
+            out = ChatResult(generations=merged)
+            if first_info is not None:
+                out.llm_output = first_info
+            return out
+
+        def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+            n = self._effective_n(kwargs.pop("n", None), self.n)
+            if n <= 1:
+                return super()._generate(
+                    messages, stop=stop, run_manager=run_manager, **kwargs
+                )
+            with ThreadPoolExecutor(max_workers=n) as ex:
+                results = list(
+                    ex.map(
+                        lambda _: self._one_sync(messages, stop, run_manager, dict(kwargs)),
+                        range(n),
+                    )
+                )
+            return self._merge_results(results)
+
+        async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
+            n = self._effective_n(kwargs.pop("n", None), self.n)
+            if n <= 1:
+                return await super()._agenerate(
+                    messages, stop=stop, run_manager=run_manager, **kwargs
+                )
+            per_call_kwargs = dict(kwargs)
+            coros = [
+                self._one_async(messages, stop, run_manager, per_call_kwargs)
+                for _ in range(n)
+            ]
+            results = await asyncio.gather(*coros)
+            return self._merge_results(results)
+
+
+def _build_judge():
+    if _FanoutChatOpenAI is None:
+        sys.exit(
+            "langchain_openai is not installed — install it (see requirements.txt) "
+            "to use the RAGAS judge."
+        )
     from ragas.llms import LangchainLLMWrapper
 
     if not (JUDGE_BASE_URL and JUDGE_MODEL):
@@ -71,7 +211,7 @@ def _build_judge():
     sync_client = httpx.Client(verify=False)
     async_client = httpx.AsyncClient(verify=False)
     llm = LangchainLLMWrapper(
-        ChatOpenAI(
+        _FanoutChatOpenAI(
             base_url=JUDGE_BASE_URL,
             api_key=JUDGE_API_KEY,
             model=JUDGE_MODEL,

@@ -82,8 +82,8 @@ except ImportError:  # pragma: no cover - only meaningful for runtime, tests fak
 
 if ChatOpenAI is not None:
     import asyncio
-    import threading
     from concurrent.futures import ThreadPoolExecutor
+    from copy import deepcopy
 
     class _FanoutChatOpenAI(ChatOpenAI):
         """ChatOpenAI subclass that simulates n>1 by fanning out into n
@@ -95,14 +95,26 @@ if ChatOpenAI is not None:
         preserves the signal by fanning n>1 out into n independent single-n
         requests on the parent's request path.
 
-        Concurrency: sync fan-out uses ``ThreadPoolExecutor`` (ragas 0.4.x
-        drives ``_generate`` on a worker thread); async fan-out uses
-        ``asyncio.gather`` (ragas drives ``_agenerate`` on the event loop).
-        The ``_fanout_lock`` guards the temporary mutation of ``self.n`` so
-        parallel sibling calls don't observe each other's intermediate value.
-        """
+        How the n=1 override is delivered: langchain-openai builds its
+        outgoing payload as ``{**self._default_params, **kwargs}`` (kwargs
+        win) and ``_default_params`` carries ``"n": self.n``. Therefore
+        passing ``n=1`` in the per-call kwargs is enough — no ``self.n``
+        mutation, no lock, no restore. Each underlying call is fully
+        independent and shares no mutable state with its siblings.
 
-        _fanout_lock = threading.Lock()
+        Concurrency: sync fan-out uses ``ThreadPoolExecutor`` (parallel
+        siblings, NOT serialized); async fan-out uses ``asyncio.gather``
+        (parallel siblings on the event loop). Both are async-deadlock-
+        free — no lock is held across ``await`` or between super calls.
+
+        Exception propagation: if any underlying call raises, the first
+        exception is propagated to the caller (``asyncio.gather`` default
+        ``return_exceptions=False``; ``ThreadPoolExecutor.map`` raises on
+        the first failing iteration). The remaining in-flight calls are
+        not cancelled — letting the OS / event loop clean them up is
+        cheaper than tracking them per call, and RAGAS retries at its
+        own layer anyway.
+        """
 
         @staticmethod
         def _effective_n(kwargs_n, self_n):
@@ -111,28 +123,6 @@ if ChatOpenAI is not None:
                 return max(1, int(n)) if n is not None else 1
             except (TypeError, ValueError):
                 return 1
-
-        def _one_sync(self, messages, stop, run_manager, kwargs):
-            with self._fanout_lock:
-                saved = self.n
-                self.n = 1
-                try:
-                    return super()._generate(
-                        messages, stop=stop, run_manager=run_manager, **kwargs
-                    )
-                finally:
-                    self.n = saved
-
-        async def _one_async(self, messages, stop, run_manager, kwargs):
-            with self._fanout_lock:
-                saved = self.n
-                self.n = 1
-                try:
-                    return await super()._agenerate(
-                        messages, stop=stop, run_manager=run_manager, **kwargs
-                    )
-                finally:
-                    self.n = saved
 
         @staticmethod
         def _merge_results(results):
@@ -169,13 +159,22 @@ if ChatOpenAI is not None:
                 return super()._generate(
                     messages, stop=stop, run_manager=run_manager, **kwargs
                 )
-            with ThreadPoolExecutor(max_workers=n) as ex:
-                results = list(
-                    ex.map(
-                        lambda _: self._one_sync(messages, stop, run_manager, dict(kwargs)),
-                        range(n),
-                    )
+            # Per-call kwargs carry n=1 so the parent's payload picks it
+            # over self.n. deepcopy(messages) per call removes the
+            # shared-reference foot-gun (some chat models mutate the
+            # messages list in place during tool-call bookkeeping).
+            per_call = {**kwargs, "n": 1}
+
+            def _one():
+                # Explicit super(_FanoutChatOpenAI, self) — bare `super()`
+                # would raise "no arguments" from inside a closure that
+                # the compiler can't statically bind to this class.
+                return super(_FanoutChatOpenAI, self)._generate(
+                    deepcopy(messages), stop=stop, run_manager=run_manager, **per_call
                 )
+
+            with ThreadPoolExecutor(max_workers=n) as ex:
+                results = list(ex.map(lambda _: _one(), range(n)))
             return self._merge_results(results)
 
         async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
@@ -184,12 +183,16 @@ if ChatOpenAI is not None:
                 return await super()._agenerate(
                     messages, stop=stop, run_manager=run_manager, **kwargs
                 )
-            per_call_kwargs = dict(kwargs)
-            coros = [
-                self._one_async(messages, stop, run_manager, per_call_kwargs)
-                for _ in range(n)
-            ]
-            results = await asyncio.gather(*coros)
+            per_call = {**kwargs, "n": 1}
+
+            async def _one():
+                # Explicit super form (see _generate for the same reason).
+                return await super(_FanoutChatOpenAI, self)._agenerate(
+                    deepcopy(messages), stop=stop, run_manager=run_manager, **per_call
+                )
+
+            # Default return_exceptions=False → first exception propagates.
+            results = await asyncio.gather(*(_one() for _ in range(n)))
             return self._merge_results(results)
 
 

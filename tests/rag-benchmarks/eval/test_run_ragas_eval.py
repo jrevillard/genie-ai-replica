@@ -43,6 +43,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # _FanoutChatOpenAI is defined against the fakes and the tests can count
 # underlying invocations. Production runtime uses the real packages.
 _FANOUT_FAKE_PARENT_CALLS: list = []
+# Timing windows (start, end) per call — populated by fakes that sleep
+# before returning. Tests assert the windows overlap to prove fan-out
+# siblings are NOT serialized.
+_FANOUT_FAKE_TIMING: list = []
+# Mutable per-test knobs (the inner fakes close over this dict, so tests
+# mutate entries rather than reassigning names — reassignment would shadow
+# the module-level name and the fakes would still see the old one).
+_FANOUT_FAKE_STATE: dict = {"raise_on": None, "sleep": 0.0}
 
 
 class _FakeChatGeneration:
@@ -81,11 +89,25 @@ def _install_langchain_fakes():
     sys.modules so _FanoutChatOpenAI can be defined in this test env (the
     real packages are NOT installed for tests; production brings them in).
     Idempotent: re-installation just refreshes the call counter."""
+    import time
+
     _FANOUT_FAKE_PARENT_CALLS.clear()
+    _FANOUT_FAKE_TIMING.clear()
+    _FANOUT_FAKE_STATE["raise_on"] = None
+    _FANOUT_FAKE_STATE["sleep"] = 0.0
 
     def fake_generate(self, messages, stop=None, run_manager=None, **kwargs):
         _FANOUT_FAKE_PARENT_CALLS.append(("sync", list(messages), dict(kwargs), stop))
         idx = len(_FANOUT_FAKE_PARENT_CALLS)
+        if _FANOUT_FAKE_STATE["raise_on"] is not None and idx == _FANOUT_FAKE_STATE["raise_on"]:
+            t0 = time.monotonic()
+            _FANOUT_FAKE_TIMING.append((t0, t0))
+            raise RuntimeError(f"fanout-injected at call {idx}")
+        if _FANOUT_FAKE_STATE["sleep"] > 0:
+            t0 = time.monotonic()
+            time.sleep(_FANOUT_FAKE_STATE["sleep"])
+            t1 = time.monotonic()
+            _FANOUT_FAKE_TIMING.append((t0, t1))
         return _FakeChatResult(
             generations=[[_FakeChatGeneration(text=f"gen-{idx}", info={"idx": idx})]],
             llm_output={"fake": True},
@@ -94,6 +116,22 @@ def _install_langchain_fakes():
     async def fake_agenerate(self, messages, stop=None, run_manager=None, **kwargs):
         _FANOUT_FAKE_PARENT_CALLS.append(("async", list(messages), dict(kwargs), stop))
         idx = len(_FANOUT_FAKE_PARENT_CALLS)
+        if _FANOUT_FAKE_STATE["raise_on"] is not None and idx == _FANOUT_FAKE_STATE["raise_on"]:
+            loop = asyncio.get_event_loop()
+            t0 = loop.time()
+            _FANOUT_FAKE_TIMING.append((t0, t0))
+            raise RuntimeError(f"fanout-injected at call {idx}")
+        if _FANOUT_FAKE_STATE["sleep"] > 0:
+            loop = asyncio.get_event_loop()
+            t0 = loop.time()
+            await asyncio.sleep(_FANOUT_FAKE_STATE["sleep"])
+            t1 = loop.time()
+            _FANOUT_FAKE_TIMING.append((t0, t1))
+        else:
+            # Even with sleep=0, yield to the event loop once so concurrent
+            # siblings can interleave — the deadlock-regression test
+            # exercises the real-async-IO path.
+            await asyncio.sleep(0)
         return _FakeChatResult(
             generations=[[_FakeChatGeneration(text=f"agen-{idx}", info={"idx": idx})]],
             llm_output={"fake": True},
@@ -156,6 +194,18 @@ _install_langchain_fakes()
 import run_ragas_eval
 
 
+@pytest.fixture(autouse=True)
+def _reset_fake_state():
+    """Reset all fake-module state before each test. autouse so every test
+    starts with a clean call list, no timing windows, and the default
+    knobs (raise_on=None, sleep=0.0)."""
+    _FANOUT_FAKE_PARENT_CALLS.clear()
+    _FANOUT_FAKE_TIMING.clear()
+    _FANOUT_FAKE_STATE["raise_on"] = None
+    _FANOUT_FAKE_STATE["sleep"] = 0.0
+    yield
+
+
 def test_fanout_class_defined():
     """FANOUT: _FanoutChatOpenAI must be exposed by the module so the judge
     can be built with it."""
@@ -163,15 +213,78 @@ def test_fanout_class_defined():
     assert run_ragas_eval._FanoutChatOpenAI is not None
 
 
-def _fanout_reset_calls():
-    _FANOUT_FAKE_PARENT_CALLS.clear()
+def test_fanout_has_no_class_lock():
+    """FANOUT (rev1 fix): the threading.Lock + self.n mutation was the root
+    cause of the async deadlock (lock held across await) and the sync
+    serialization. The redesign drops it entirely — assert the class has
+    no lock attribute (and no module-level lock either)."""
+    Fanout = run_ragas_eval._FanoutChatOpenAI
+    # Class-level lock gone.
+    assert not hasattr(Fanout, "_fanout_lock"), (
+        "_FanoutChatOpenAI must not carry a class-level lock (was the "
+        "async-deadlock / sync-serialization root cause)."
+    )
+    # No instance-level lock created in __init__ (the fake __init__ sets
+    # only what's in kwargs).
+    llm = Fanout(n=3)
+    for attr in ("_fanout_lock", "lock", "_lock"):
+        assert not hasattr(llm, attr), f"_FanoutChatOpenAI instance must not carry {attr!r}"
+
+
+def test_fanout_kwargs_override_no_self_n_mutation():
+    """FANOUT (rev1 repurpose): the n=1 override is delivered via PER-CALL
+    kwargs, not by mutating self.n. Verify:
+      - each underlying super()._generate receives kwargs with n=1
+      - self.n is NOT mutated by the fan-out (the fake self.n is the
+        marker — it would change if we ever reintroduced mutation)
+    """
+    Fanout = run_ragas_eval._FanoutChatOpenAI
+    llm = Fanout(n=3)
+    sentinel_n = llm.n
+    assert sentinel_n == 3
+    result = llm._generate(["hi"])
+
+    # All 3 underlying calls must have received n=1 in their kwargs.
+    assert len(_FANOUT_FAKE_PARENT_CALLS) == 3
+    for _kind, _msgs, kwargs, _stop in _FANOUT_FAKE_PARENT_CALLS:
+        assert kwargs.get("n") == 1, (
+            f"per-call kwargs must carry n=1 (got {kwargs.get('n')!r})"
+        )
+    # self.n unchanged (no mutation).
+    assert llm.n == sentinel_n, (
+        f"self.n must not be mutated during fan-out (was {sentinel_n}, now {llm.n})"
+    )
+    assert len(result.generations[0]) == 3
+
+
+def test_fanout_messages_deepcopied_per_call():
+    """FANOUT (M1): each underlying call receives an independent copy of the
+    messages list. If two siblings share a reference, downstream chat-model
+    code that mutates the list in place (e.g. tool-call bookkeeping) can
+    corrupt siblings mid-flight."""
+    Fanout = run_ragas_eval._FanoutChatOpenAI
+    llm = Fanout(n=3)
+    original = ["hello", "world"]
+    llm._generate(original)
+
+    # The original list object must NOT be the same object as any of the
+    # 3 messages lists seen by the underlying calls.
+    seen_lists = [c[1] for c in _FANOUT_FAKE_PARENT_CALLS]
+    assert len(seen_lists) == 3
+    for seen in seen_lists:
+        assert seen is not original, (
+            "underlying call received the original messages list (shared ref)"
+        )
+    # All 3 must be independent (mutating one doesn't affect another).
+    seen_lists[0].append("mutated")
+    for seen in seen_lists[1:]:
+        assert "mutated" not in seen, "siblings share a messages reference"
 
 
 def test_fanout_n3_sync_three_calls_merged():
     """FANOUT: n=3 on _generate must fire exactly 3 underlying single-n calls
     and merge their generations into a single ChatResult with 3 choices."""
     Fanout = run_ragas_eval._FanoutChatOpenAI
-    _fanout_reset_calls()
     llm = Fanout(n=3)
     result = llm._generate(["hello"])
 
@@ -193,14 +306,13 @@ def test_fanout_n3_sync_three_calls_merged():
 def test_fanout_n1_passthrough_no_fanout():
     """FANOUT: n=1 (or n unset) must NOT fan out — exactly 1 underlying call."""
     Fanout = run_ragas_eval._FanoutChatOpenAI
-    _fanout_reset_calls()
     llm = Fanout(n=1)
     result = llm._generate(["hi"])
     assert len(_FANOUT_FAKE_PARENT_CALLS) == 1
     assert result.generations[0][0].text == "gen-1"
 
     # Also verify n unset (default 1) is passthrough.
-    _fanout_reset_calls()
+    _FANOUT_FAKE_PARENT_CALLS.clear()
     llm_default = Fanout()  # n defaults to 1
     result_default = llm_default._generate(["hi"])
     assert len(_FANOUT_FAKE_PARENT_CALLS) == 1
@@ -211,7 +323,6 @@ def test_fanout_n3_async_three_calls_merged():
     """FANOUT: n=3 on _agenerate must fire exactly 3 async single-n calls
     and merge their generations (ragas 0.4.x drives the async path)."""
     Fanout = run_ragas_eval._FanoutChatOpenAI
-    _fanout_reset_calls()
     llm = Fanout(n=3)
     result = asyncio.run(llm._agenerate(["hello"]))
 
@@ -225,15 +336,87 @@ def test_fanout_n3_async_three_calls_merged():
     assert [g.text for g in result.generations[0]] == ["agen-1", "agen-2", "agen-3"]
 
 
-def test_fanout_n3_kwargs_n_overrides_self_n():
-    """FANOUT: per-call n in kwargs wins over self.n (ragas passes n via the
-    generate call, not always via the constructor)."""
+def test_fanout_sync_siblings_overlap_no_serialization():
+    """FANOUT (I1): sync fan-out siblings must run in PARALLEL, not
+    serialized. Under the rev0 design (lock around self.n), the lock
+    serialized the super() calls. Under rev1 (kwargs n=1, no lock) the
+    ThreadPoolExecutor runs them concurrently — their sleep windows must
+    overlap. Asserted via start/end timestamps per call."""
     Fanout = run_ragas_eval._FanoutChatOpenAI
-    _fanout_reset_calls()
-    llm = Fanout(n=1)  # self.n=1 but call requests n=3
-    result = llm._generate(["hi"], n=3)
+    _FANOUT_FAKE_STATE["sleep"] = 0.08  # 80ms per call
+    llm = Fanout(n=3)
+    llm._generate(["hi"])
+    assert len(_FANOUT_FAKE_TIMING) == 3, "all 3 calls must record timing"
+    # If serialized, total wall time = 3 * 0.08 = 0.24s. If parallel,
+    # ≈ 0.08s. The overlap assertion is the most direct: for any two of
+    # the three windows, they must share wall-clock time.
+    wins = sorted(_FANOUT_FAKE_TIMING)
+    for i in range(len(wins)):
+        for j in range(i + 1, len(wins)):
+            ai, bi = wins[i], wins[j]
+            overlap = max(0.0, min(ai[1], bi[1]) - max(ai[0], bi[0]))
+            assert overlap > 0.0, (
+                f"sync siblings serialized: windows {wins} must overlap pairwise"
+            )
+
+
+def test_fanout_async_siblings_overlap_no_serialization():
+    """FANOUT (I1): async fan-out siblings must run in PARALLEL on the
+    event loop, not serialized. asyncio.gather on n independent coroutines
+    that each await asyncio.sleep should overlap in event-loop time."""
+    Fanout = run_ragas_eval._FanoutChatOpenAI
+    _FANOUT_FAKE_STATE["sleep"] = 0.08
+    llm = Fanout(n=3)
+    asyncio.run(llm._agenerate(["hi"]))
+    assert len(_FANOUT_FAKE_TIMING) == 3
+    wins = sorted(_FANOUT_FAKE_TIMING)
+    for i in range(len(wins)):
+        for j in range(i + 1, len(wins)):
+            ai, bi = wins[i], wins[j]
+            overlap = max(0.0, min(ai[1], bi[1]) - max(ai[0], bi[0]))
+            assert overlap > 0.0, (
+                f"async siblings serialized: windows {wins} must overlap pairwise"
+            )
+
+
+def test_fanout_agenerate_completes_within_timeout():
+    """FANOUT (C2): the async fan-out must complete promptly (no deadlock).
+    The rev0 design held a threading.Lock across `await`, which would
+    hang this call indefinitely. Under rev1 (no lock), asyncio.gather
+    returns as soon as the slowest sibling finishes. Timeout = 5s is
+    generous: real completion is sub-second."""
+    Fanout = run_ragas_eval._FanoutChatOpenAI
+    _FANOUT_FAKE_STATE["sleep"] = 0.05
+    llm = Fanout(n=3)
+    # asyncio.wait_for surfaces a TimeoutError on hang; under rev1 it
+    # completes well within the budget.
+    asyncio.run(asyncio.wait_for(llm._agenerate(["hi"]), timeout=5.0))
     assert len(_FANOUT_FAKE_PARENT_CALLS) == 3
-    assert len(result.generations[0]) == 3
+
+
+def test_fanout_sync_exception_propagates():
+    """FANOUT (I2): if one of n underlying calls raises, the exception
+    propagates to the caller (no silent partial merge, no swallowed error).
+    ThreadPoolExecutor.map raises the first failing iteration's exception
+    on the calling thread."""
+    Fanout = run_ragas_eval._FanoutChatOpenAI
+    _FANOUT_FAKE_STATE["raise_on"] = 2  # 2nd call raises
+    llm = Fanout(n=3)
+    with pytest.raises(RuntimeError, match="fanout-injected at call 2"):
+        llm._generate(["hi"])
+    # The first call must have run; the third may or may not have started
+    # (ThreadPoolExecutor doesn't cancel queued work). What matters: the
+    # exception surfaced — no silent partial merge, no swallowed error.
+
+
+def test_fanout_async_exception_propagates():
+    """FANOUT (I2): same as the sync variant, but for asyncio.gather.
+    Default return_exceptions=False propagates the first exception."""
+    Fanout = run_ragas_eval._FanoutChatOpenAI
+    _FANOUT_FAKE_STATE["raise_on"] = 2
+    llm = Fanout(n=3)
+    with pytest.raises(RuntimeError, match="fanout-injected at call 2"):
+        asyncio.run(llm._agenerate(["hi"]))
 
 
 def test_fanout_build_judge_uses_subclass(monkeypatch):

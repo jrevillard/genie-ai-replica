@@ -123,6 +123,20 @@
       class="okf-re__meta"
       :aria-label="translate('okf.editor.meta.label', 'Concept metadata')"
     >
+      <!-- Story 1.6 (2026-10-08): the per-repo frontmatter panel sits above
+           the per-concept meta so the curator sees both at once. Same shared
+           component the wizard's Curate step uses (David: "this must be
+           consistent across the wizard and the editor"). The compact prop
+           keeps the panel narrow; showTitle=false because the section is
+           inside the existing right rail. -->
+      <FrontmatterPanel
+        v-if="repoId"
+        :repo-id="repoId"
+        :read-only="readOnly"
+        :show-title="true"
+        :compact="true"
+        class="okf-re__meta-frontmatter"
+      />
       <template v-if="selectedRow">
         <h4 class="okf-re__meta-title">{{ translate('okf.editor.meta.label', 'Concept metadata') }}</h4>
 
@@ -330,6 +344,7 @@ import OkfResplitModal from './ResplitModal.vue';
 import OkfAddConceptModal from './AddConceptModal.vue';
 import OkfSourceDialog from '../wizard/OkfSourceDialog.vue';
 import OkfRepoGraphView from './RepoGraphView.vue';
+import FrontmatterPanel from '../FrontmatterPanel.vue';
 import DsDialog from '../../ds/Dialog.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
 import OkfAutocorrectPanel from './AutocorrectPanel.vue';
@@ -352,7 +367,8 @@ export default {
     OkfAddConceptModal,
     OkfSourceDialog,
     OkfRepoGraphView,
-    OkfAutocorrectPanel
+    OkfAutocorrectPanel,
+    FrontmatterPanel
   },
   mixins: [translateMixin],
   props: {

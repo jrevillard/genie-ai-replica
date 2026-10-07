@@ -19,6 +19,30 @@ const DsDialog = require('@/components/ds/Dialog.vue').default;
 
 const mockAutocorrectRepo = jest.fn();
 const mockFetchRepoMetrics = jest.fn();
+const mockGetFrontmatter = jest.fn();
+
+// Story 1.6 (2026-10-07): Publish.vue requires a SECOND parallel gate
+// (frontmatterOk) alongside the existing topicsOk. The previous assertions
+// ('gate opens with topics') need the frontmatter service mocked with the
+// post-1.6 happy-path payload to keep their meaning. Tests that target
+// the new "no frontmatter" state override the mock to return [].
+jest.mock('@/services/frontmatterService', () => ({
+  getFrontmatter: (...args) => mockGetFrontmatter(...args),
+  getFrontmatterSummary: jest.fn(),
+  suggestFrontmatter: jest.fn(),
+  patchFrontmatter: jest.fn(),
+  isFrontmatterPublishReady: (rows) => {
+    if (!Array.isArray(rows) || !rows.length) return false;
+    let topicCount = 0;
+    let forbiddenCount = 0;
+    for (const row of rows) {
+      if (!row.approved_at) return false;
+      if (row.field === 'topic') topicCount += 1;
+      else if (row.field === 'forbidden') forbiddenCount += 1;
+    }
+    return topicCount >= 3 && forbiddenCount >= 1;
+  }
+}));
 
 function store() {
   return new Vuex.Store({
@@ -56,6 +80,19 @@ beforeEach(() => {
   mockAutocorrectRepo.mockResolvedValue({ ok: true, changes: [], warnings: [] });
   mockFetchRepoMetrics.mockReset();
   mockFetchRepoMetrics.mockResolvedValue({ ok: true, metrics: { concept_count: 3 } });
+  // Story 1.6 default: a curated repo with 3 topics + 1 forbidden, all
+  // approved — the post-1.6 happy-path that satisfies canPublish
+  // (topicsOk && frontmatterOk).
+  mockGetFrontmatter.mockReset();
+  mockGetFrontmatter.mockResolvedValue({
+    repo_id: 'r1',
+    frontmatter: [
+      { _key: 't1', field: 'topic', value: 'topic-1', approved_at: '2026-10-07T12:00:00Z' },
+      { _key: 't2', field: 'topic', value: 'topic-2', approved_at: '2026-10-07T12:00:00Z' },
+      { _key: 't3', field: 'topic', value: 'topic-3', approved_at: '2026-10-07T12:00:00Z' },
+      { _key: 'f1', field: 'forbidden', value: 'travel', approved_at: '2026-10-07T12:00:00Z' }
+    ]
+  });
 });
 
 describe('T4 — autocorrect step', () => {

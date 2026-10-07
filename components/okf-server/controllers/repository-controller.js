@@ -1246,9 +1246,12 @@ async function getRepoLogs(req, res, next) {
 async function transitionLifecycle(req, res, next) {
   try {
     const { repo_id } = req.params;
-    const { action } = validate(lifecycleSchema, req.body || {});
+    const body = validate(lifecycleSchema, req.body || {});
+    const { action, frontmatter } = body;
     await repoService.getById(repo_id, { authz: authzForService(req) });
-    const result = await lifecycleService.transition(repo_id, action, actorFrom(req));
+    const result = await lifecycleService.transition(repo_id, action, actorFrom(req), {
+      payload: frontmatter ? { frontmatter } : {}
+    });
     res.status(200).json(result);
   } catch (err) {
     next(err);

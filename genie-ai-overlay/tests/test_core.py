@@ -302,6 +302,32 @@ class TestChatCompletionRequest:
         assert req.context is not None
         assert req.context.categoryLabels == ["Health"]
 
+    def test_bff_fanout_carrier_survives_http_parse_boundary(self):
+        """Story 1.1: the BFF sends the fan-out carrier inside `context` —
+        exactly as it travels over the wire. RequestContext must RETAIN all
+        three carrier fields through model_validate (a renamed/dropped key
+        would silently disable the whole fan-out: the retriever would see an
+        empty carrier or, worse in okf_only, never see the ::no_legacy:
+        signal). This pins the exact BFF wire shape → gateway
+        `context.model_dump(exclude_unset=True)` hand-off."""
+        body = {
+            "messages": [{"role": "user", "content": "Que servicios hay?"}],
+            "stream": True,
+            "context": {
+                "categoryLabel": None,
+                "serviceLabels": [],
+                "language": "EN",
+                "authorized_graph_names": ["GRAPH", "OKF_agro_v1"],
+                "mode": "hybrid",
+                "exclude_legacy": True,
+            },
+        }
+        req = ChatCompletionRequest.model_validate(body)
+        retrieval_context = req.context.model_dump(exclude_unset=True)
+        assert retrieval_context["authorized_graph_names"] == ["GRAPH", "OKF_agro_v1"]
+        assert retrieval_context["mode"] == "hybrid"
+        assert retrieval_context["exclude_legacy"] is True
+
     def test_genieai_language_default(self):
         req = ChatCompletionRequest(messages="hi")
         assert req.language == "auto"

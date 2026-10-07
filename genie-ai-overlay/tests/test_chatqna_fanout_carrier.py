@@ -252,6 +252,136 @@ class TestRetrieverCarrierFanoutShape:
         assert captured["graphs"] == ["GRAPH", "OKF_kenya-gov_v3"]
 
 
+# ─── Story 1.1 — the `exclude_legacy` kwarg (okf_only literally means OKF only) ──
+
+
+class TestExcludeLegacyCarrier:
+    """Story 1.1: the BFF sets `exclude_legacy: true` inside `context` whenever
+    the runtime mode is okf_only; align_inputs threads it into the carrier as
+    the `::no_legacy:` segment. Default (absent/False) preserves the canonical
+    carrier shape byte-for-byte."""
+
+    def test_exclude_legacy_true_adds_no_legacy_segment(self):
+        self_mock = MagicMock()
+        self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+        inputs = {"text": "query", "search_start": "chunk"}
+        captured = {}
+
+        def fake_encode(base_mode, labels=None, graphs=None, no_legacy=False):
+            captured["graphs"] = graphs
+            captured["no_legacy"] = no_legacy
+            if no_legacy:
+                return f"chunk::graphs:{','.join(graphs or [])}::no_legacy:true"
+            return f"chunk::graphs:{','.join(graphs or [])}"
+
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch.dict("sys.modules", {"core.label_contract": MagicMock()}),
+        ):
+            import sys
+
+            sys.modules["core.label_contract"].encode.side_effect = fake_encode
+            sys.modules["core.label_contract"].encode_filter_labels.side_effect = lambda base, labels: fake_encode(
+                base, labels=labels, graphs=None
+            )
+            _ = align_inputs(
+                self_mock,
+                inputs,
+                "retriever_node",
+                MagicMock(),
+                {},
+                genie_params={
+                    "retrieval_context": {
+                        # The BFF's okf_only carrier: OKF graphs + the no-legacy
+                        # signal (never the legacy GRAPH).
+                        "authorized_graph_names": ["OKF_agrogenio_v2"],
+                        "exclude_legacy": True,
+                    }
+                },
+            )
+
+        assert captured["graphs"] == ["OKF_agrogenio_v2"]
+        assert captured["no_legacy"] is True
+
+    def test_exclude_legacy_absent_produces_canonical_carrier_shape(self):
+        """Without the flag, encode is called WITHOUT the no_legacy kwarg —
+        the pre-1.1 carrier shape (and the pre-1.1 mocked-encode signatures in
+        every existing test) stay untouched."""
+        self_mock = MagicMock()
+        self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+        inputs = {"text": "query", "search_start": "chunk"}
+        captured = {}
+
+        def probe_encode(base_mode, labels=None, graphs=None, no_legacy=False):
+            captured["graphs"] = graphs
+            captured["no_legacy"] = no_legacy
+            return f"chunk::graphs:{','.join(graphs or [])}"
+
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch.dict("sys.modules", {"core.label_contract": MagicMock()}),
+        ):
+            import sys
+
+            sys.modules["core.label_contract"].encode.side_effect = probe_encode
+            sys.modules["core.label_contract"].encode_filter_labels.side_effect = lambda base, labels: probe_encode(
+                base, labels=labels, graphs=None
+            )
+            _ = align_inputs(
+                self_mock,
+                inputs,
+                "retriever_node",
+                MagicMock(),
+                {},
+                genie_params={"retrieval_context": {"authorized_graph_names": ["GRAPH", "OKF_a_v1"]}},
+            )
+
+        assert captured["graphs"] == ["GRAPH", "OKF_a_v1"]
+        # The kwarg was NOT passed on the default path (align_inputs only
+        # forwards no_legacy when True) — the canonical call surface is
+        # unchanged.
+        assert captured["no_legacy"] is False
+
+    def test_exclude_legacy_routes_labels_only_queries_through_combined_encode(self):
+        """The `and not _exclude_legacy` routing term: labels WITHOUT graphs +
+        the okf_only signal must take the COMBINED encode (which carries
+        no_legacy), never the labels-only encode_filter_labels shim — the shim
+        has no no_legacy parameter and would silently drop the signal."""
+        self_mock = MagicMock()
+        self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+        inputs = {"text": "query", "search_start": "chunk"}
+        captured = {}
+
+        def probe_encode(base_mode, labels=None, graphs=None, no_legacy=False):
+            captured["labels"] = labels
+            captured["graphs"] = graphs
+            captured["no_legacy"] = no_legacy
+            return f"chunk::labels:{','.join(labels or [])}::no_legacy:true" if no_legacy else base_mode
+
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch.dict("sys.modules", {"core.label_contract": MagicMock()}),
+        ):
+            import sys
+
+            sys.modules["core.label_contract"].encode.side_effect = probe_encode
+            encode_filter_labels_mock = sys.modules["core.label_contract"].encode_filter_labels
+            _ = align_inputs(
+                self_mock,
+                inputs,
+                "retriever_node",
+                MagicMock(),
+                {},
+                # okf_only + a labelled query, NO carrier graphs (zero-serving).
+                genie_params={"retrieval_context": {"categoryLabel": "Crops", "exclude_legacy": True}},
+            )
+
+        encode_filter_labels_mock.assert_not_called()
+        assert captured["labels"] == ["Crops"]
+        assert captured["graphs"] == []
+        assert captured["no_legacy"] is True
+
+
 # ─── AC1 — chatqna's `authorized_graph_names` kwarg plumbing ─────────────────
 
 

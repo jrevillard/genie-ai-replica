@@ -245,6 +245,23 @@ For the label-driven retrieval behavior (label selector prompt, taxonomy alignme
 
 ---
 
+## 6.1 The Multi-Graph Fan-Out Carrier (Story 1.1)
+
+When the OKF runtime mode is `hybrid` or `okf_only` (governed via `GET /api/okf/retrieval-config`, ADR-okf-039), the backend BFF resolves the retrieval posture per request and attaches a fan-out carrier to the chatqna payload `context`:
+
+- `authorized_graph_names` — the graph list the retriever fans out across (one leg per entry, fused via cross-graph RRF).
+- `mode` — the resolved runtime mode (informational).
+- `exclude_legacy` — set to `true` in `okf_only` mode: the legacy free-form corpus is never queried while the okf-server posture is resolvable. (On a config outage the BFF fails closed to the last-known-good posture — legacy — per ADR-okf-039, so a prolonged okf-server outage temporarily reverts chat to the legacy corpus rather than zero results.)
+
+The engagement gate is computed **server-side** by okf-server (`engaged = mode ∈ {okf_only, hybrid} AND ≥1 serving graph for this caller`); the BFF acts on that flag and never re-computes it. Per turn, the BFF also resolves the caller's traversable graph set from `GET /api/okf/authz/graphs` (zero-hit by construction — the resolver intersects serving repos with the caller's scopes). On a cache miss this carrier resolution adds up to two sequential okf-server calls (≤3s timeout each) before chatqna is contacted; results are cached ≤30s per caller. Two carrier rules decide whether the legacy corpus joins the fan-out:
+
+- `hybrid`: the legacy graph name (`ARANGO_GRAPH_NAME`) is **prepended** — legacy first, OKF graphs after (`[GRAPH, OKF_<a>_v1, ...]`).
+- `okf_only`: never prepended; the carrier carries only OKF graphs plus `exclude_legacy: true`.
+
+chatqna encodes the carrier into the `search_start` label contract as a third segment (`::no_legacy:`) alongside `::labels:` / `::graphs:`; the retriever decodes it and treats every encoded graph as one fan-out leg. When the carrier is empty (`legacy` mode, or a config outage — the BFF fails closed to the last-known-good posture), the retriever's legacy single-graph path runs byte-identically. The retriever's own kill switch (`RETRIEVER_FANOUT_ENABLED`) overrides any carrier server-side.
+
+---
+
 ## 7. Inter-Service Failure Modes
 
 | Symptom | Likely cause | Where to look |

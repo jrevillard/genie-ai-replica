@@ -577,6 +577,19 @@ services:
       - EMAIL_FROM=${EMAIL_FROM}
       # OPEA AI/ML service override (code default is deployment-specific: 'e2e-109-198')
       - OPEA_HOST=${OPEA_HOST:-chatqna-xeon-backend-server}
+      # Story 1.1 (BFF fan-out wire-up): okf-server internal endpoint for the
+      # retrieval posture + per-caller authz graph resolution. Code default
+      # matches (http://okf-server:3002); the entry exists so an operator can
+      # override it without an image rebuild.
+      - OKF_SERVER_URL=${OKF_SERVER_URL:-http://okf-server:3002}
+      # The legacy graph name the BFF prepends in hybrid mode — MUST match the
+      # retriever's ARANGO_GRAPH_NAME or the legacy leg diverges.
+      - ARANGO_GRAPH_NAME=${ARANGO_GRAPH_NAME:-GRAPH}
+      # Story 1.1 cache tuning (code defaults 30000/3000; clamped ≥1000/≥100):
+      # the posture/authz window and per-call timeout. Defaults mirror the
+      # authz-resolver's SERVING_TTL_MS — override only for latency tuning.
+      - OKF_RETRIEVAL_CONFIG_TTL_MS=${OKF_RETRIEVAL_CONFIG_TTL_MS:-30000}
+      - OKF_RETRIEVAL_CONFIG_TIMEOUT_MS=${OKF_RETRIEVAL_CONFIG_TIMEOUT_MS:-3000}
       # Conversation mode: conversation-with-context-labels (full context) or single-message (legacy)
       - CONTEXT_OPTION=${CONTEXT_OPTION:-conversation-with-context-labels}
       # Logging (error, warn, info, debug)

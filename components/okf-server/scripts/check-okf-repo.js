@@ -17,6 +17,11 @@
  *   4. Chunk/RAG layer  — embedding coverage, orphan chunks (failed concepts
  *                         must contribute NOTHING), chunks-per-concept and
  *                         chunk-length distributions, vector-index presence.
+ *   5. Retriever e2e    — a real HTTP POST to the retriever with the
+ *                         multi-graph carrier [GRAPH, OKF_<repo>_vN]: non-empty
+ *                         result, per-hit graph_name provenance, per-leg
+ *                         contribution (Story 1.1; set RETRIEVER_URL when the
+ *                         retriever is not on localhost:7000).
  *
  * Usage (from components/okf-server):
  *   ARANGO_URL=http://localhost:8529 ARANGO_DB=genie-ai \
@@ -332,6 +337,106 @@ async function main() {
       ? 'present on SOURCE'
       : 'absent — exact brute-force cosine (by config, fine at this scale; the scale lever is RETRIEVER_ARANGO_USE_APPROX_SEARCH + an index)'
   );
+
+  // ── Step 5: retriever end-to-end (Story 1.1) ────────────────────────────
+  // Real HTTP POSTs to the retriever microservice:
+  //   5a. the hybrid multi-graph carrier [ARANGO_GRAPH_NAME, OKF_<repo>_vN] —
+  //       asserts (a) non-empty result, (b) every hit's metadata.graph_name
+  //       is in the requested set, (c) BOTH legs contributed ≥1 result.
+  //   5b. the okf_only refusal carrier (empty graph list + ::no_legacy:) —
+  //       asserts a ZERO-hit result: the legacy ARANGO_GRAPH_NAME fallback
+  //       must be refused (okf_only never leaks into the free-form corpus).
+  // NOTE: the legacy-mode regression check (pre-1-0 output-shape snapshot) is
+  // out of scope here — it needs a captured pre-change baseline (Story 8.4 /
+  // future test-cell work).
+  const retrieverUrl = (process.env.RETRIEVER_URL || 'http://localhost:7000').replace(/\/+$/, '');
+  const legacyGraph = process.env.ARANGO_GRAPH_NAME || 'GRAPH';
+  const carrier = [legacyGraph, graphName];
+  const probeQuery = process.env.OKF_CHECK_QUERY || repo.name;
+  const probeTimeoutMs = Number(process.env.RETRIEVER_PROBE_TIMEOUT_MS) || 30000;
+  const postRetrieval = async (searchStart) => {
+    const res = await fetch(`${retrieverUrl}/v1/retrieval`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: probeQuery, search_start: searchStart, search_type: 'similarity', k: 10 }),
+      signal: AbortSignal.timeout(probeTimeoutMs)
+    });
+    if (!res.ok) {
+      return { error: `HTTP ${res.status} ${res.statusText}` };
+    }
+    let body;
+    try {
+      body = await res.json();
+    } catch (err) {
+      return { error: `non-JSON 200 body: ${err.message}` };
+    }
+    // SearchedMultimodalDoc: retrieved_docs[] + the parallel metadata[] array
+    // (per-hit provenance — graph_name attached at fusion time, Story 1.0).
+    return { docs: Array.isArray(body.metadata) ? body.metadata : [] };
+  };
+
+  record(
+    '5-retriever',
+    'INFO',
+    'fan-out probe',
+    `POST ${retrieverUrl}/v1/retrieval carrier=[${carrier.join(', ')}] query="${probeQuery.slice(0, 60)}"`
+  );
+  try {
+    const probe = await postRetrieval(`chunk::graphs:${carrier.join(',')}`);
+    if (probe.error) {
+      record('5-retriever', 'FAIL', 'retriever fan-out probe', probe.error);
+      return finish();
+    }
+    const docs = probe.docs;
+    if (docs.length === 0) {
+      record('5-retriever', 'FAIL', 'empty result', 'the fan-out returned zero hits (carrier ignored? repo empty?)');
+      return finish();
+    }
+    record('5-retriever', 'PASS', 'non-empty result', `${docs.length} hits`);
+    const foreign = docs.filter((m) => !carrier.includes(m.graph_name));
+    record(
+      '5-retriever',
+      foreign.length === 0 ? 'PASS' : 'FAIL',
+      'graph_name provenance',
+      foreign.length === 0
+        ? 'every hit names a requested graph'
+        : `${foreign.length} hits name a graph OUTSIDE the carrier: ${[...new Set(foreign.map((m) => m.graph_name))].join(', ')}`
+    );
+    const perLeg = carrier.map((g) => ({ graph: g, n: docs.filter((m) => m.graph_name === g).length }));
+    const bothLegs = perLeg.every((l) => l.n > 0);
+    record(
+      '5-retriever',
+      bothLegs ? 'PASS' : 'WARN',
+      'per-leg contribution',
+      perLeg.map((l) => `${l.graph}=${l.n}`).join(', ') +
+        (bothLegs ? '' : ' (a leg contributed zero — check chunk content vs the probe query)')
+    );
+  } catch (err) {
+    record('5-retriever', 'FAIL', 'retriever unreachable', `${err.message} (set RETRIEVER_URL when running off-host)`);
+    return finish();
+  }
+
+  // 5b — okf_only refusal probe: an okf_only zero-serving carrier (EMPTY
+  // graph list + ::no_legacy:) must return ZERO hits — the legacy
+  // ARANGO_GRAPH_NAME fallback is refused. A pre-1.1 retriever would 400 on
+  // the unparsed segment; a leaky one would serve legacy hits.
+  try {
+    const probe = await postRetrieval('chunk::no_legacy:true');
+    if (probe.error) {
+      record('5-retriever', 'FAIL', 'okf_only refusal probe', probe.error);
+    } else if (probe.docs.length === 0) {
+      record('5-retriever', 'PASS', 'okf_only refusal (no_legacy)', 'zero hits — the legacy fallback was refused');
+    } else {
+      record(
+        '5-retriever',
+        'FAIL',
+        'okf_only refusal (no_legacy)',
+        `${probe.docs.length} hits came back — the legacy corpus was NOT refused`
+      );
+    }
+  } catch (err) {
+    record('5-retriever', 'FAIL', 'okf_only refusal probe', err.message);
+  }
 
   return finish();
 

@@ -3296,3 +3296,7 @@ status: RESOLVED in MR !343 follow-up commit (test file deleted 2026-09-25)
 
 - **Unused `eslint-disable` directives in `components/okf-server/services/graph-lifecycle-service.js:151,153`** — `no-await-in-loop` was disabled but the rule no longer triggers. Predates Wave R4 (last touched 2026-09-10 rebase). Two `lint:okf-server` warnings, zero errors. Fix is `// eslint-disable-next-line no-await-in-loop` deletion on those two lines. Trivial — defer to next okf-server lint pass.
 - **`test_docarray_shim.test_shim_pins_real_package_and_restores_path` fails on Windows** — `import docarray` in the shim subprocess hits a circular import (the vendored `comps/cores/proto/docarray.py` shadows the real `docarray` package; pytest's tmp-path shim triggers the cycle). Pre-existing on `feat/okf-server` baseline commit 986f4ba37 (verified 2026-09-21). Passes on Linux CI. NOT introduced by Wave R4. Document in test file or skip on Windows in CI.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-retriever-multigraph-fanout-rrf.md`
+  summary: `.claude/dora.json` is untracked and not gitignored (DORA tooling config with repo path/host/project id) — decide commit-vs-ignore.
+  evidence: Pre-existing before the story 1-1 baseline commit e377016de (present in the conversation-start git status); pollutes every `git status` on the branch; not caused by this change (BH-3, step-04 review loop 0).

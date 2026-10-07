@@ -80,24 +80,9 @@ The runtime routing pipeline runs in **one of three env-selected styles** via a 
 
 </frozen-after-approval>
 
-> **SUPERSEDED 2026-10-08 (Story 1.7):** §1, §1a, and §3.1.2 of this
-> spec are RETIRED. The per-repo tag set no longer lives in a
-> dedicated `okf_repo_frontmatter` ArangoDB collection. It now
-> lives in a new `okf_repositories.frontmatter` field (additive
-> on the existing repo doc), with the index.md YAML frontmatter
-> as the curator-facing projection. The corrected design is in
-> `_bmad-output/implementation-artifacts/1-7-frontmatter-in-index.md`.
-> The retriever's hot-path read, the publish gate, the LLM
-> suggest path, and the operator migration script are all
-> updated there. The `OKF_SEARCH_STYLE` env var + the three
-> routing modes (hybrid / frontmatter_tags / vector_probe) and
-> the LLM suggest call (concept-meta → vLLM → proposed set)
-> are unchanged from this spec. The only change is the
-> storage shape.
-
 ## Technical Design
 
-### 1. (RETIRED 2026-10-08) `okf_repo_frontmatter` collection
+### 1. New collection: `okf_repo_frontmatter`
 
 ```json
 {
@@ -163,7 +148,7 @@ This row is the ONLY thing the hot-path loads — one document per graph, one AQ
 **Resilience mandate** (per `reference_remote-llm-endpoint.md` — vllm-llm is REMOTE SHARED infra that crash-loops): every vLLM call in this service uses exponential backoff with jitter on 502/503/504 (3 retries, base 1s, max 8s); storm cool-down on consecutive failures; honest failure after exhaustion. TEI calls use a 30s single-retry timeout.
 
 `components/okf-server/services/frontmatter-service.js` (new, ~300 lines):
-- `suggestTags(repoId, sampleN=50)`: **per David 2026-10-08, the input is concept-meta rows ONLY — chunks are not a permitted source.** Tags MUST be generated at publish-time, which is BEFORE the lifecycle `ingest` transition that creates the graph. Reading chunks was the wrong source: at the moment suggestTags runs (inside the publish hook), the working graph either doesn't exist yet or holds stale data from a previous version. The authoritative "what is this repo about" signal is the curator's per-concept `tags` + `labels` + `summary` + `type` fields in `okf_concepts_meta` — these are set in the editor's right rail during curation (the publish gate) and survive retract + republish cycles unchanged. The function `sampleConceptsFromRepo(db, repoId, n)` reads concept rows (the natural corpus; deterministic order by `_key`) and formats them as `concept_id: title (tags, labels) — summary` rows; the LLM derives topic/entity/forbidden/scope/keyword from that shape. Chunks are deliberately NOT consulted, period — the forbidden list in particular must be derived from the curator's stated scope (what the concepts ARE about) vs. adjacent topics the curator DIDN'T include, not from chunk text that may not exist yet. **Defensive 400**: if `okf_concepts_meta` has zero rows for the repo, return `NO_CONCEPTS` with the message "Add at least one concept before requesting tag suggestions" — this is the same class of pre-condition as the old `NO_CHUNKS` but names the real cause. The LLM call shape, retry, and concurrency controls are unchanged. Concurrency bounded at `OKF_FRONTMATTER_TAG_BATCH_SIZE` (default 1 — one repo at a time).
+- `suggestTags(repoId, sampleN=50)`: pulls a random N chunks from the corpus, calls vLLM via `AsyncOpenAI`, returns a proposed frontmatter object. Prompt is the same shape as the 2026-10-07 dry-run probe. Concurrency bounded at `OKF_FRONTMATTER_TAG_BATCH_SIZE` (default 1 — one repo at a time).
 - `validateFrontmatter(repoId, frontmatter, samplePct=0.1)`: for each proposed tag, samples 10% of the corpus and asks vLLM "does this chunk match this tag? Y/N with one-sentence reason." If > 30% of chunks say N for a given tag, that tag is flagged inconsistent. Concurrency bounded at `OKF_FRONTMATTER_VALIDATE_BATCH_SIZE` (default 4).
 - `embedAllTags(frontmatter)`: calls TEI once per tag value (one embed call per topic/entity/keyword/summary/scope/forbidden value). With default field counts (~7-35 embed calls per repo per publish) this is wall-time-bounded at TEI's batch side, not the call count.
 - `publishFrontmatter(repoId, frontmatter)`: ATOMIC, single ArangoDB transaction. Steps in order: (1) call `embedAllTags`; (2) compute the 6 combination vectors for `okf_repositories_frontmatter_summary`; (3) write all `okf_repo_frontmatter` rows; (4) write/update the `okf_repositories_frontmatter_summary` doc; (5) invalidate the 60s BFF cache. Refuses to publish if any tag is empty, any vector is zero, or any forbidden value collides with a topic value on the same repo. **Invoked from the publish pipeline regardless of `OKF_SEARCH_STYLE`**.

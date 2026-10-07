@@ -10,6 +10,14 @@
   carry no concept_count — only conformance-service computes one). A
   serving (frozen) repo is a READ-ONLY SUMMARY (decision #11): the gate
   opens so the steward can reach the Editor — never a dead button.
+
+  Story 1.6 (2026-10-07) — frontmatter gate: a SEPARATE check from the
+  existing `topicsOk` (which counts authored concept articles). Publish stays
+  disabled until ≥3 topic tags AND ≥1 forbidden tag are approved. The
+  lifecycle-service's publishFrontmatter hook is what saves the curated tags
+  at publish time (lifecycle-service.js → 409 FRONTMATTER_REQUIRED on
+  failure). The editor's frontmatter pane (the persistent curation surface
+  for tags) ships as a follow-up — server-side API is in place.
 -->
 <template>
   <div class="okf-step">
@@ -30,6 +38,7 @@
       <DsStatusTag :variant="checklistVariants.labels">{{
         translate('okf.steps.publish.labelsOk', 'Labels assigned')
       }}</DsStatusTag>
+      <DsStatusTag :variant="checklistVariants.frontmatter">{{ frontmatterLabel }}</DsStatusTag>
     </div>
     <p class="okf-step__ritual">
       {{
@@ -63,6 +72,14 @@
     <p v-if="!topicsOk && !frozen" class="okf-step__pending">
       {{ translate('okf.steps.publish.noTopics', 'No topics yet — go back to Curate to produce or write them.') }}
     </p>
+    <p v-if="!frontmatterOk && !frozen" class="okf-step__pending">
+      {{
+        translate(
+          'okf.steps.publish.noFrontmatter',
+          'Frontmatter tags not approved — the LLM can draft them in Curate, then approve before publishing.'
+        )
+      }}
+    </p>
   </div>
 </template>
 
@@ -72,6 +89,7 @@ import DsInfoTip from '../../ds/InfoTip.vue';
 import DsStatusTag from '../../ds/StatusTag.vue';
 import { mapGetters } from 'vuex';
 import translateMixin from '../../../mixins/translateMixin';
+import { getFrontmatter, isFrontmatterPublishReady } from '../../../services/frontmatterService';
 
 export default {
   name: 'OkfStepPublish',
@@ -80,7 +98,10 @@ export default {
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   emits: ['gate', 'dashboard'],
   data() {
-    return { liveConceptCount: null };
+    return {
+      liveConceptCount: null,
+      frontmatterRows: []
+    };
   },
   computed: {
     ...mapGetters('okf', ['repoById']),
@@ -88,6 +109,9 @@ export default {
     // dead draft shapes. Each item is a real readiness signal.
     repo() {
       return (this.draft && this.draft.repo_id && this.repoById(this.draft.repo_id)) || null;
+    },
+    repoId() {
+      return (this.draft && this.draft.repo_id) || '';
     },
     nameOk() {
       return !!((this.repo && this.repo.name) || (this.draft && this.draft.name));
@@ -122,27 +146,54 @@ export default {
         ? this.translate('okf.steps.publish.topicsOk', 'Topics reviewed')
         : this.translate('okf.steps.publish.topicsPending', 'No topics yet');
     },
+    // Story 1.6 (2026-10-07): separate from topicsOk (which counts authored
+    // concept articles). frontmatterOk requires ≥3 topic tags AND ≥1 forbidden
+    // tag, all saved (approved_at set). The lifecycle-service
+    // publishFrontmatter hook enforces this server-side too (defense in depth:
+    // a repo without frontmatter cannot reach lifecycle_state=publish).
+    frontmatterOk() {
+      if (this.frozen) return true; // pre-1.6 repos are exempt; they may
+      // be re-tagged via the operator migration workflow
+      // scripts/republish-with-tags.js without re-ingesting
+      return isFrontmatterPublishReady(this.frontmatterRows);
+    },
+    frontmatterLabel() {
+      if (this.frozen) return this.translate('okf.steps.publish.frontmatterServing', 'Frontmatter tags set');
+      if (this.frontmatterOk) return this.translate('okf.steps.publish.frontmatterOk', 'Frontmatter tags approved');
+      const haveAny = this.frontmatterRows && this.frontmatterRows.length > 0;
+      return haveAny
+        ? this.translate('okf.steps.publish.frontmatterPartial', 'Frontmatter tags — needs review')
+        : this.translate('okf.steps.publish.frontmatterPending', 'Frontmatter tags not drafted');
+    },
     canPublish() {
       // F7: frozen/serving NEVER dead-ends — the gate opens onto the
-      // read-only summary and its Editor hand-off.
-      return this.nameOk && (this.topicsOk || this.frozen);
+      // read-only summary and its Editor hand-off. TopicsOk stays as the
+      // original "concepts authored" gate; frontmatterOk is the NEW gate
+      // added by Story 1.6 — both must be green for a non-frozen repo.
+      if (this.frozen) return this.nameOk;
+      return this.nameOk && this.topicsOk && this.frontmatterOk;
     },
     checklistVariants() {
       return {
         name: this.nameOk ? 'success' : 'pending',
         labels: this.frozen || this.topicsOk ? 'success' : 'pending',
-        topics: this.topicsOk ? 'success' : 'pending'
+        topics: this.topicsOk ? 'success' : 'pending',
+        frontmatter: this.frontmatterOk ? 'success' : 'pending'
       };
     }
   },
   watch: {
     canPublish() {
       this.$emit('gate', this.canPublish);
+    },
+    repoId() {
+      this.loadFrontmatter();
     }
   },
   mounted() {
     this.$emit('gate', this.canPublish);
     this.loadCount();
+    this.loadFrontmatter();
   },
   methods: {
     async loadCount() {
@@ -158,7 +209,20 @@ export default {
         const metrics = (res && res.metrics) || res;
         if (metrics && typeof metrics.concept_count === 'number') this.liveConceptCount = metrics.concept_count;
       } catch {
-        /* the fallbacks stand */
+        // The fallbacks stand
+      }
+    },
+    async loadFrontmatter() {
+      if (!this.repoId) {
+        this.frontmatterRows = [];
+        return;
+      }
+      try {
+        const res = await getFrontmatter(this.repoId);
+        this.frontmatterRows = (res && res.frontmatter) || [];
+      } catch {
+        // No frontmatter yet — leave empty so the gate stays pending
+        this.frontmatterRows = [];
       }
     }
   }

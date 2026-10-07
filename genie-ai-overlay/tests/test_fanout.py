@@ -520,3 +520,77 @@ class TestFanoutRoutingHook:
             await mod.invoke_fanout(stub, input, input_dict, ["GRAPH", "OKF_A_v1", "OKF_B_v1"])
         mock_route.assert_not_called()
         assert sorted(seen) == ["GRAPH", "OKF_A_v1", "OKF_B_v1"]
+
+
+class TestEncodedFilterLabelsSharedAcrossLegs:
+    """Fix for review finding #1 (commit 'fix/review-findings-1-2').
+
+    Before the fix, _extract_for_graph called input_dict.pop(
+    '_encoded_filter_labels', []) - destructive on the shared input_dict
+    reference passed to every fan-out leg. Once legs ran as asyncio.to_thread
+    coroutines (commit 854613fe6 'unblock the fan-out event loop'),
+    whichever leg raced to the pop first consumed the labels; the other
+    legs ran with labels_to_filter == [] and produced unfiltered hits
+    that fused into the global top-K.
+
+    The fix replaces pop() with get() so every leg sees the same label
+    set. These tests pin the no-mutation invariant.
+    """
+
+    def test_shared_input_dict_keeps_encoded_filter_labels_across_legs(self):
+        import asyncio
+
+        observed = []
+
+        async def fake_leg(self_, graph_name, input_dict, input, query=None):
+            labels = input_dict.get("_encoded_filter_labels", [])
+            observed.append((graph_name, list(labels)))
+            return []
+
+        input_dict = {
+            "text": "q",
+            "search_start": "chunk::labels:CAT-A,SVC-X",
+            "_encoded_filter_labels": ["CAT-A", "SVC-X"],
+            "_encoded_graph_names": ["GRAPH", "OKF_A_v1", "OKF_B_v1"],
+        }
+        input = MagicMock()
+        input.embedding = None
+        input.k = 10
+        with patch("tracing.get_tracer") as mock_tracer:
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            stub = type("StubRetriever", (), {"_invoke_leg": fake_leg})()
+
+            async def run_legs():
+                await fake_leg(stub, "GRAPH", input_dict, input)
+                await fake_leg(stub, "OKF_A_v1", input_dict, input)
+                await fake_leg(stub, "OKF_B_v1", input_dict, input)
+
+            asyncio.run(run_legs())
+
+        assert observed == [
+            ("GRAPH", ["CAT-A", "SVC-X"]),
+            ("OKF_A_v1", ["CAT-A", "SVC-X"]),
+            ("OKF_B_v1", ["CAT-A", "SVC-X"]),
+        ], (
+            "every fan-out leg must see the encoded filter labels - the "
+            "shared input_dict reference cannot be mutated by any single "
+            "leg extraction (review finding #1)."
+        )
+
+    def test_extract_for_graph_uses_get_not_pop_for_encoded_labels(self):
+        import inspect
+
+        from retriever import genieai_retriever_arangodb as mod
+
+        src = inspect.getsource(mod)
+        assert 'input_dict.pop("_encoded_filter_labels"' not in src, (
+            "_extract_for_graph must NOT mutate input_dict (the shared "
+            "fan-out reference). Re-reading via pop() causes a race "
+            "under asyncio.to_thread fan-out where whichever leg pops "
+            "first consumes the labels for itself - the rest run "
+            "unfiltered. See review finding #1."
+        )
+        assert 'input_dict.get("_encoded_filter_labels"' in src, (
+            "_extract_for_graph must read the encoded labels via get() so "
+            "the value is preserved across every fan-out leg."
+        )

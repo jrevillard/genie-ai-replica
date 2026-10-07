@@ -704,10 +704,99 @@ through unchanged.
 
 ---
 
+## Phase 6 — Multi-run xlsx report (`enrich_xlsx_v2.py`)
+
+After running one or more eval configurations (anchor + dump-tuples +
+RAGAS), feed the artifacts into a single operator-facing workbook for
+comparison.
+
+### 6.1 What you get
+
+Six tabs, all filterable in Excel (native `auto_filter`):
+
+| Tab | Contents |
+|---|---|
+| `Gold` | the source xlsx verbatim (8 source cols preserved, untouched) |
+| `Run_<label>` | one per run. Row 1 = `params` + `note` config block. Row 2 = the table header (8 source cols + 22 enriched cols; every enriched header has a tooltip with unit + semantics + range — hover in Excel). Rows 3+ = per-query data. The 22 enriched cols: `gold_recall` / `gold_complete_recall` / `gold_precision` / `gold_noise` / `gold_retrieval_recall` / `gold_passage_recall` / `selected_keys` / `candidate_keys` / `trace_found` / `ragas_faithfulness` / `ragas_context_precision` / `ragas_context_recall` / `ragas_answer_relevancy` / `ragas_nan` / `answer_first_200` / `abstained` / `abstention_reason` / `answer_lang` / `gold_match_status_per_chunk` / `gold_chunk_count` / `is_unresolved` / `n_evaluable_helper` |
+| `Compare` | one row per run, all aggregate metrics + delta-vs-first-run. Columns: `label`, `params`, `n_evaluable`, `n_abstained`, `n_unresolved`, `recall`, `precision`, `f1`, `complete_recall`, `retrieval_recall`, `passage_recall`, `avg_selected`, the 4 RAGAS means, `delta_recall_vs_base`, `delta_f1_vs_base`. The first run is the baseline. |
+| `Calibrate` | top-50 combos from the offline grid (when `--calibrate` is given), sorted by F1 descending |
+| `Charts` | 4 embedded matplotlib PNGs: anchor metrics bar/group, RAGAS metrics bar/group, precision/recall scatter, query-status stacked bar (answered / abstained / unresolved-excluded) |
+
+### 6.2 Build a single-run workbook (the common case)
+
+```bash
+# After Phase 3 + Phase 4 + Phase 5, you have the artifacts on the swarm
+# node. Pull them to your local machine and build the workbook.
+scp <user>@<host>:/tmp/rag-eval/{anchor,ragas,tuples}_<TAG>.json /tmp/eval-new/
+
+~/.venv/docx/bin/pip install openpyxl matplotlib
+~/.venv/docx/bin/python3 tests/rag-benchmarks/eval/enrich_xlsx_v2.py \
+  --xlsx ~/Téléchargements/New_Test_Data_AgroGenio.xlsx \
+  --gold /tmp/eval-new/gold_dataset.matched.json \
+  --output /tmp/eval-new/report.xlsx \
+  --runs-json /tmp/eval-new/runs.json
+```
+
+`runs.json` shape (one or more runs):
+
+```json
+[
+  {
+    "label": "G2_K32_FK40_th-1.0",
+    "anchor": "/tmp/eval-new/anchor.json",
+    "ragas":  "/tmp/eval-new/ragas.json",
+    "tuples": "/tmp/eval-new/tuples.json",
+    "params": {"K": 32, "FETCH_K": 40, "MIN_VALUE_THRESHOLD": -1.0},
+    "note":   "Live T13b-K=32 champion (MR !507)"
+  }
+]
+```
+
+`label` becomes both the `Run_<label>` tab name and the legend on the
+charts. `params` + `note` appear in the per-run config block (row 1) so
+the workbook is self-describing — no need to keep a separate README.
+
+### 6.3 Build a multi-run comparison
+
+List every run you want to compare in `runs.json`; the order is
+significant — the **first run is the baseline** for the `delta_*`
+columns in Compare. The two runs in the shipped demo
+(`/tmp/eval-new/runs_demo.json`) show a real G2 run plus an illustrative
+top-3 capped replay (selected[] truncated, recall forced to 0) — the
+delta-vs-base column exposes the regression at a glance.
+
+### 6.4 What it does NOT do (yet)
+
+- Does not run the eval for you — it only aggregates artifacts produced
+  by Phases 3/4/5. Run those first.
+- Does not enforce any "live vs simulated" labelling — the operator
+  should set `note: "ILLUSTRATIVE …"` in the runs spec when seeding
+  a what-if row that is NOT a real eval. The Compare tab shows the
+  numbers honestly either way; the `note` is the only signal.
+- Does not embed the markdown report / per-failure-attribution narrative
+  (Phase 5 output) — it embeds the numeric aggregates and the 4
+  charts. A future MR may add a Charts-narrative sheet that lifts
+  the markdown report into a tab.
+
+### 6.5 Generic (deployment-agnostic) — README claim check
+
+The script takes no deployment-specific inputs (no hostnames, IPs,
+stack names, DB names). The `runs.json` is operator-authored. The
+`params` dict is a free-form key/value carrier — no schema is enforced.
+
+---
+
 ## Reference
 
 - `tests/rag-benchmarks/eval/CLAUDE.md` — operational entry point, score
   threshold gotcha, auth requirement, diagnostic mode.
 - `tests/rag-benchmarks/eval/calibrate.py` — `--help` for the full
   sweep grid, `--check-baseline`, `--bootstrap`.
+- `tests/rag-benchmarks/eval/enrich_xlsx.py` — single-run generator
+  (legacy, kept for back-compat; `enrich_xlsx_v2.py` supersedes it
+  for any new run).
+- `tests/rag-benchmarks/eval/enrich_xlsx_v2.py` — `--help` for the full
+  flag set; module docstring documents the per-tab layout, the join
+  semantics (anchor / RAGAS / tuples by id and by question text), and
+  the column documentation that powers the in-xlsx tooltips.
 - `.claude/rules/SERVER-TESTING.md` — ROPC lifecycle + manual revert curl.

@@ -765,12 +765,7 @@ Prompt Variables:
 ```
 tests/
 ├── rag-benchmarks/               # RAG benchmarking tests
-│   ├── benchmark_config.py       # Benchmark configuration
-│   ├── benchmark_ingestion.py    # Document ingestion benchmark
-│   ├── benchmark_rag_accuracy.py # RAG accuracy benchmark
-│   ├── benchmark_rag_performance.py # RAG performance benchmark
-│   └── benchmark_query.py        # Query performance benchmark
-├── testing_genieai_api_protocol.py     # API protocol tests
+│   └── eval/                     # Active benchmark suite (supersedes 2026-04 legacy scripts)
 ├── testing_genieai_chatqna.py          # ChatQnA service tests
 ├── testing_genieai_retriever_arangodb.py # Retriever tests
 ├── testing_genieai_tei_reranker.py     # Reranker tests

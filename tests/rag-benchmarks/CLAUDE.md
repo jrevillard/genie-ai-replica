@@ -10,6 +10,11 @@ parameter values (CONTEXT_DECAY_FACTOR, thresholds, stack hostnames, IPs)
 change over time and live in the deployment (ansible `.env`, compose), not
 here. This file stays valid as those values evolve.
 
+> **Runbook**: for the end-to-end phase-by-phase procedure (Phase 0 pre-flight
+> through Phase 5 failure attribution, including the wrapper script and the
+> "when things go wrong" recipes), see **`eval/RUNBOOK.md`**. This file is the
+> methodology reference; the RUNBOOK is the operational guide.
+
 ## Layout
 
 ```
@@ -42,7 +47,10 @@ wrong answer (semantic catches this). Neither sees the other's failures.
 ```
 gold_dataset.json ── run_eval.py ──┬── docker exec <chatqna> curl localhost:8888/v1/chatqna
                                    │     payload: {messages, context{categoryLabels,serviceLabels,language}, stream:false}
-                                   │     (internal service — NO OIDC; faithful label-filtered retrieval)
+                                   │     (OIDC: wrapper enables ROPC + this driver refreshes its
+                                   │      own realm bearer from EVAL_KC_* when set; E2E_BEARER_TOKEN
+                                   │      is honored for service-account flows. Faithful label-filtered
+                                   │      retrieval either way.)
                                    │
                                    ├── docker exec <chatqna> curl <victoriatraces>:10428  (by service + time window)
                                    │     → harvest rag.candidate_chunk_keys / rag.selected_chunk_keys
@@ -143,14 +151,27 @@ For stack-agnostic anchor runs that handle ROPC enable/disable, container
 discovery, and VT trace timeouts automatically, use the wrapper:
 
 ```bash
-# On the swarm node, with the .env already in place at /opt/<stack>/.env:
+# On the swarm node, with the .env already in place at /opt/<stack>/.env.
+# Recommended form: pass EVAL_DEPLOY_ENV + the URL + admin password; the
+# wrapper resolves KEYCLOAK_ADMIN_PASSWORD and the Arango creds from the
+# .env. Set GENIE_ADMIN_PASSWORD directly to skip the .env read entirely.
+ssh $SWARM_NODE bash -s <<'EOF'
+export EVAL_DEPLOY_ENV=/opt/<stack>/.env
+export EVAL_KC_URL=https://kc.example.com/auth
+export KEYCLOAK_ADMIN_PASSWORD=...
+
+../scripts/run_anchor_with_cleanup.sh gold_dataset.json results.json
+EOF
+
+# Alternative — export every var directly (no .env read):
 ssh $SWARM_NODE bash -s <<'EOF'
 export EVAL_KC_URL=https://kc.example.com/auth
 export KEYCLOAK_ADMIN_PASSWORD=...
 export ARANGO_DB=<db_name>
 export ARANGO_PASSWORD=...
+export GENIE_ADMIN_PASSWORD=...
 
-scripts/run_anchor_with_cleanup.sh gold_dataset.json results.json
+../scripts/run_anchor_with_cleanup.sh gold_dataset.json results.json
 EOF
 ```
 
@@ -364,8 +385,8 @@ snapshot (AC:5), the three homes of `RERANKER_TOP_N` / `RERANKING_STRATEGY`
 python3 capture_baseline.py --runs 3 --seed 42 \
   --gold tests/rag-benchmarks/eval/gold_dataset.json \
   --out _bmad-output/implementation-artifacts/rag-baseline-v1.3.json \
-  --stack release-el-salvador \
-  --stack-prefix genieai-el-salvador_        # disambiguate on multi-stack nodes \
+  --stack <stack-name> \
+  --stack-prefix <stack-prefix>_        # disambiguate on multi-stack nodes \
   --repo-root <repo checkout>                # for code/compose/env homes
 ```
 
@@ -482,8 +503,9 @@ against chunk text via the same normaliser as `chunk_identity.normalize`
 (whitespace-collapse, lowercase). Match strategy: **substring** — preview
 appears verbatim inside chunk text (or vice versa for short previews).
 
-Reports `match_status` per entry: `resolved_*`, `ambiguous`, `unresolved`.
-Operator reviews ambiguous cases manually.
+Reports `match_status` per entry: `resolved`, `resolved_split`, `unresolved`, `skipped_short`.
+Operator reviews `unresolved` cases (and the `skipped_short` ones if the corpus
+should have longer previews).
 
 ```bash
 match_gold_chunks.py --gold-dataset gold.json \
@@ -495,7 +517,9 @@ match_gold_chunks.py --gold-dataset gold.json \
 ### Phase 3 — dump-tuples (on the swarm node)
 
 The chatqna container lives on the swarm node. Drive each gold query through
-chatqna via internal docker exec (no OIDC, faithful label-filtered retrieval).
+chatqna via internal docker exec (OIDC: wrapper enables ROPC + this driver
+refreshes its own realm bearer from EVAL_KC_* when set; faithful
+label-filtered retrieval either way).
 
 ```bash
 SWARM=<user>@<host>
@@ -518,27 +542,7 @@ EOF
 ```
 
 Time budget: ~40 s per query (chatqna roundtrip + VT trace fetch). For 42
-queries ≈ 28 min. To fit a shorter shell timeout, slice `gold.entries[]`
-into N round-robin chunks and run one `dump-tuples` per chunk:
-
-```bash
-python3 -c "
-import json, os
-gold = json.load(open('/tmp/gold_dataset.json'))
-os.makedirs('/tmp/batches', exist_ok=True)
-N = 5  # 42/5 → ~9 queries per batch
-for i in range(N):
-    chunk = dict(gold); chunk['entries'] = gold['entries'][i::N]
-    open(f'/tmp/batches/gold_{i:02d}.json', 'w').write(json.dumps(chunk))
-"
-for f in /tmp/batches/gold_*.json; do
-  python3 run_eval.py dump-tuples "$f" "/tmp/batches/tuples_$(basename "$f" .json).json"
-done
-```
-
-Per-batch outputs can be merged downstream before Phase 4.
-
-Per-query latency is dominated by the **trace fetch** — VT indexing lag on a
+queries ≈ 28 min. Per-query latency is dominated by the **trace fetch** — VT indexing lag on a
 busy node can exceed 60 s. Raise `TRACE_FETCH_TIMEOUT` (default 120) if you
 see "no reranker_selection span — trace missed" warnings.
 

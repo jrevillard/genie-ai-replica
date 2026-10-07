@@ -421,7 +421,23 @@ class QueryService {
 
     let opeaPayload;
     if (backendMode === 'single-message') {
-      opeaPayload = { messages: queryText, stream: true };
+      // Fix review finding #2 (Story 1.6 / feat/okf-server): even in
+      // single-message mode, build a context object so _attachFanoutCarrier
+      // can attach the okf_only / hybrid fan-out carrier. Without this,
+      // the stream single-message path silently skips the carrier and the
+      // retriever runs the legacy single-graph path against ARANGO_GRAPH_NAME
+      // — a leak into the legacy free-form corpus in a mode (okf_only) that
+      // explicitly forbids it. The context carries the same shape the
+      // non-stream single-message branch already builds.
+      opeaPayload = {
+        messages: queryText,
+        context: {
+          categoryLabel: queryData.context.categoryLabel,
+          serviceLabels: queryData.context.serviceLabels,
+          language: queryData.context.language
+        },
+        stream: true
+      };
     } else {
       opeaPayload = {
         messages: queryData.messages,

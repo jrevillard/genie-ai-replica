@@ -1036,7 +1036,14 @@ class GenieaiArangoRetriever(OpeaComponent):
             # Add labels encoded in search_start (parsed at the top of invoke,
             # stored in input_dict["_encoded_filter_labels"]). See the DATA
             # CONTRACT comment near model_dump() above.
-            labels_to_filter.extend(input_dict.pop("_encoded_filter_labels", []))
+            #
+            # DO NOT pop(): input_dict is the SHARED reference passed to every
+            # fan-out leg (the pop was a single-thread artifact from before commit
+            # 854613fe6 'unblock the fan-out event loop' made legs run as
+            # concurrent asyncio.to_thread coroutines). Whichever leg raced to
+            # line 1031 first consumed the list; the rest ran unfiltered.
+            # Use get() so every leg sees the same label set.
+            labels_to_filter.extend(input_dict.get("_encoded_filter_labels", []))
 
             # CONSTRUCT THE AQL FILTER CLAUSE
             aql_filter_clause = _build_aql_filter_clause(labels_to_filter, filter_strategy)

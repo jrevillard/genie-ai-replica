@@ -135,7 +135,10 @@ if ChatOpenAI is not None:
             per input. For ``llm_output`` (token usage etc.), sum numeric
             fields across the n calls and let the first call's value win
             for non-numeric fields — this gives an honest total that
-            RAGAS / observability can consume without undercounting by N×."""
+            RAGAS / observability can consume without undercounting by N×.
+            WARNING: bool is an int in Python — a ``True`` flag would sum
+            to N. Keep flags string-typed in llm_output (tests use a
+            string sentinel for exactly this reason)."""
             from langchain_core.outputs import ChatResult
 
             if not results:

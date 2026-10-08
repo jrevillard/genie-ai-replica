@@ -181,7 +181,18 @@ SPECIFIC — a repo with the same topic set as a sibling is a routing bug.
 Do NOT pad the topic list with generic words ("general", "reference",
 "information") — those tags break routing.
 
-Output ONLY the JSON object - no commentary.
+OUTPUT FORMAT (CRITICAL — the parser is strict, no synonyms):
+  { "topic":     [...],   // REP-LEVEL topic set, 3-8 items
+    "entity":    [...],   // named entities, 0-10 items
+    "scope":     "<one-word scope>",   // single word from the list above
+    "forbidden": [...],   // adjacent-but-excluded topics, 2-6 items
+    "summary":   "<1-2 sentences>",   // user-perspective summary
+    "keyword":   [...]    // specific low-coverage terms, 0-10 items
+  }
+
+Use the EXACT field names shown above (topic, entity, scope, forbidden,
+summary, keyword) — the parser does not accept synonyms. Output ONLY the
+JSON object, no prose, no markdown fences.
 
 CONCEPTS:
 ${conceptsText}
@@ -429,14 +440,42 @@ async function suggestTags(repoId, opts = {}) {
       });
       throw new FrontmatterError('LLM_PARSE', 'LLM returned unparseable JSON', 502);
     }
-    // Normalize shape
+    // Normalize shape. Per David 2026-10-08: the LLM is intelligent enough
+    // to recognize the task but used semantically-similar but not identical
+    // field names on the first live call (e.g. 'repo_level_topics' instead
+    // of 'topic', 'named_entities' instead of 'entity'). The defensive
+    // alias map accepts the common variants; the prompt below (and the
+    // change in this commit) also demands the canonical names explicitly.
+    const arr = (...keys) => {
+      for (const k of keys) {
+        const v = parsed[k];
+        if (Array.isArray(v) && v.length) return v;
+        if (Array.isArray(v)) return v; // empty array still accepted
+      }
+      return [];
+    };
     const out = {
-      topic: Array.isArray(parsed.topic) ? parsed.topic.map(normalizeTag).filter(Boolean) : [],
-      entity: Array.isArray(parsed.entity) ? parsed.entity.map(normalizeTag).filter(Boolean) : [],
-      scope: Array.isArray(parsed.scope) ? normalizeTag(parsed.scope[0] || parsed.scope) : null,
-      forbidden: Array.isArray(parsed.forbidden) ? parsed.forbidden.map(normalizeTag).filter(Boolean) : [],
-      summary: typeof parsed.summary === 'string' ? parsed.summary.slice(0, 512) : null,
-      keyword: Array.isArray(parsed.keyword) ? parsed.keyword.map(normalizeTag).filter(Boolean) : []
+      topic: arr('topic', 'topics', 'repo_level_topics', 'topic_set', 'subjects')
+        .map(normalizeTag)
+        .filter(Boolean),
+      entity: arr('entity', 'entities', 'named_entities', 'people_products_places')
+        .map(normalizeTag)
+        .filter(Boolean),
+      scope: normalizeTag(
+        parsed.scope || parsed.scope_label || parsed.scope_word || parsed.scope_kind
+      ),
+      forbidden: arr('forbidden', 'forbidden_topics', 'exclusions', 'not_about')
+        .map(normalizeTag)
+        .filter(Boolean),
+      summary:
+        typeof parsed.summary === 'string'
+          ? parsed.summary.slice(0, 512)
+          : typeof parsed.description === 'string'
+            ? parsed.description.slice(0, 512)
+            : null,
+      keyword: arr('keyword', 'keywords', 'specific_terms', 'low_coverage_terms')
+        .map(normalizeTag)
+        .filter(Boolean)
     };
     span.setAttribute('okf.suggested.topic_count', out.topic.length);
     span.setAttribute('okf.suggested.forbidden_count', out.forbidden.length);

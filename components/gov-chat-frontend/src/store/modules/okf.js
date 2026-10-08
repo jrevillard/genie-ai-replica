@@ -678,13 +678,12 @@ const actions = {
    * autosave does not overwrite the wizard's just-saved YAML with stale
    * uncommitted draft text.
    */
-  async saveFrontmatter({ commit, dispatch, state }, { repoId, shape, actor } = {}) {
+  async saveFrontmatter({ commit, dispatch }, { repoId, shape } = {}) {
     if (!repoId || !shape) return { ok: false, code: 'VALIDATION_ERROR' };
     try {
       const { mergeFrontmatterIntoIndexMarkdown } = await import(
         /* webpackChunkName: "frontmatter-merge" */ '../../services/frontmatterMerge'
       );
-      const repoOkfService = (await import(/* webpackChunkName: "repo-okf" */ '../../services/repoOkfService')).default;
       const conceptService = (await import(/* webpackChunkName: "concept" */ '../../services/conceptService')).default;
       const frontmatterService = await import(/* webpackChunkName: "fm" */ '../../services/frontmatterService');
 

@@ -44,7 +44,8 @@ Five input-class concerns the spec implies but no Plan 2 task tests explicitly. 
 
 - [ ] **Step 1: Run red-gate validator — must fail before the file is updated**
 
-Run: `helm dep list charts/genieai-umbrella 2>&1 | grep -E "cloudnative-pg|kube-arangodb|keycloak-operator|sealed-secrets" || echo "OK: no operator deps yet"`
+Run: `helm dep list charts/genieai-umbrella 2>&1 | grep -E "cloudnative-pg|kube-arangodb|sealed-secrets" || echo "OK: no data-layer deps yet"`
+Expected: prints `OK: no data-layer deps yet`. **`keycloak-operator` is intentionally NOT in the grep** — it is a cluster bootstrap prerequisite (spec §4, audit decision per Plan 5 round-7) and never appears in `helm dep list`; the previous red-gate's inclusion of `keycloak-operator` would mask a regression where someone added the keycloak-operator Helm chart back as a dep.
 
 Expected: prints `OK: no operator deps yet` (deps not declared).
 
@@ -550,7 +551,7 @@ metadata:
     # Helm 3 scans templates/ recursively for hook annotations. Subdirectory
     # name `hooks/` is irrelevant to Helm; the annotations below are what
     # matter.
-    "helm.sh/hook": pre-install
+    "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-5"          # run after clusterprofile-detect (-10)
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
@@ -952,9 +953,12 @@ spec:
         credentials:
           # Empty value on purpose: the operator cannot PATCH user passwords
           # through the CR after import (user subresource is operator-owned).
-          # Real password is set out-of-band post-install:
+          # Real password is set out-of-band post-install. NOTE: the realm
+          # name MUST match the KeycloakRealmImport's `realm:` field above
+          # (`genie` — see F4 fix on the realm name) — `-r genieai` was
+          # the wrong value the operator flow used to ship.
           #   kubectl exec deploy/keycloak -n genieai -- \
-          #     /opt/keycloak/bin/kcadm.sh set-password -r genieai \
+          #     /opt/keycloak/bin/kcadm.sh set-password -r genie \
           #     --username genie-admin -p '<password>'
           - type: password
             value: ""
@@ -1287,11 +1291,17 @@ metadata:
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "sealed-secret-validate"))) | nindent 4 }}
   annotations:
-    # Review Focus F6 fix — pre-install would fire BEFORE Helm renders the
-    # SealedSecret resources (which are regular templates, not hooks).
-    # On a fresh cluster the Job finds zero SealedSecrets and exits 0
-    # regardless of cluster key state (false PASS). Pre-upgrade only.
-    "helm.sh/hook": pre-upgrade
+    # Pre-upgrade AND pre-install. The pre-install run is the safety
+    # net that catches freshly-shipped SealedSecrets that are
+    # PLACEHOLDER sentinels (the controller marks them
+    # `status.conditions[SealedSecretHasntDecrypted]=True` at the
+    # first sync attempt). Without pre-install, a fresh install with
+    # PLACEHOLDER+ blobs leaves CNPG/ArangoDeployment pods in
+    # `Waiting for secret` forever.
+    # (Earlier drafts were pre-upgrade-only — that was wrong; the hook
+    # must run on BOTH paths. The pre-install + pre-upgrade annotation
+    # here makes the same Job handle both. Review Focus F4.)
+    "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
@@ -1305,22 +1315,25 @@ spec:
         runAsUser: 65534
       containers:
         - name: validate
-          # Review Focus F12 fix — bitnami/kubectl ships the cluster CLI;
-          # we read SealedSecret status via the Kubernetes API (no kubeseal
-          # CLI in the container, no alpine grep no-op echo). The drift
-          # check works as follows:
+          # Drift check via the K8s API. The bitnami sealed-secrets
+          # controller signals an undecryptable SealedSecret via
+          # `status.conditions[type=SealedSecretHasntDecrypted].status="True"`
+          # — NOT via the `sealedsecrets.bitnami.com/invalid` annotation
+          # (that annotation does not exist in the upstream controller).
+          # Reading the right field is the difference between a real
+          # drift check and a decorative hook that always passes.
           #
           # For each SealedSecret resource the chart rendered:
           #   kubectl get sealedsecret <name> -o json
-          #   check if annotation 'sealedsecrets.bitnami.com/invalid'
-          #       is set to 'true' (sealed-secrets controller marks
-          #       invalid sealed secrets that have been rotated away
-          #       from the cluster's current key)
+          #   jq -e '.status.conditions[] |
+          #          select(.type=="SealedSecretHasntDecrypted" and .status=="True")'
           #
-          # If any SealedSecret is invalid, the controller has already
+          # If any SealedSecret is undecryptable, the controller has
           # refused to materialise the underlying K8s Secret — pods
-          # referencing that Secret will start failing. We exit 1 so the
-          # install/upgrade is blocked and the operator re-encrypts.
+          # referencing that Secret will start failing. We exit 1 so
+          # the install/upgrade is blocked and the operator re-encrypts
+          # (or the PLACEHOLDER sentinels are replaced with real
+          # values) before re-running.
           image: bitnami/kubectl:1.33
           imagePullPolicy: IfNotPresent
           securityContext:

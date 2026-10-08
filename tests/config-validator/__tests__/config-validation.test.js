@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
+const { parseAnsibleEnvVars } = require('../validators/parse-ansible');
 const { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages, parseGitlabCiImages, parseComposeServiceContracts } = require('../validators/parse-compose');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
 const {
@@ -382,4 +383,61 @@ describe('Configuration Validation Suite', () => {
       expect(junitReporter[1].outputName).toBe('jest-config.xml');
     });
   });
+
+  // --- Story 1-8 (David 2026-10-08): Ansible stays in step with local ---
+  // 'the ansible deployment must be kept in step with the local deployment
+  // with the right env vars AND defaults' — env.j2 enumerates every var
+  // explicitly (no passthrough), so an omission silently falls back to the
+  // compose default on swarm deploys. These tests pin the OKF surface.
+  describe('AC7: OKF env parity between docker-compose and ansible env.j2', () => {
+    const ansibleVars = parseAnsibleEnvVars(
+      fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+    );
+    // The compose okf-server service block: the local-deployment truth.
+    const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
+    const okfBlock = composeText.slice(composeText.indexOf('  okf-server:'), composeText.indexOf('  pii-service:'));
+    const okfComposeVars = {};
+    for (const m of okfBlock.matchAll(new RegExp('- ([A-Z][A-Z0-9_]+)=\\$\\{[A-Z0-9_]+(?::-([^}]*))?\\}', 'g'))) {
+      okfComposeVars[m[1]] = m[2] === undefined ? '' : m[2];
+    }
+    // Parity scope: OKF feature vars + the okf-server model endpoints
+    // (topology vars like ARANGO_URL/KEYCLOAK_* are deployment-specific
+    // and intentionally compose-defaulted).
+    const PARITY_VARS = Object.keys(okfComposeVars).filter((v) =>
+      /^(OKF_|TEI_EMBED_HOST|EMBEDDING_MODEL_ID|VLLM_ENDPOINT|VLLM_MODEL_ID|VLLM_API_KEY|DATAPREP_URL)/.test(v)
+    );
+
+    // The compose VLLM_MODEL_ID entry interpolates VLLM_LLM_MODEL_ID first
+    // (`${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}`) — an env.j2 emission of
+    // the primary alias satisfies the parity for the container-side name.
+    const ANSIBLE_ALIAS = { VLLM_MODEL_ID: 'VLLM_LLM_MODEL_ID' };
+
+    test('every OKF compose var is emitted by env.j2', () => {
+      expect(PARITY_VARS.length).toBeGreaterThanOrEqual(15); // guard: block actually parsed
+      const missing = PARITY_VARS.filter((v) => !ansibleVars[v] && !ansibleVars[ANSIBLE_ALIAS[v]]);
+      expect(missing).toEqual([]);
+    });
+
+    test('literal defaults match between compose and env.j2', () => {
+      const mismatches = [];
+      for (const v of PARITY_VARS) {
+        const a = ansibleVars[v];
+        if (!a || a.defaultIsJinja || a.default === null) continue; // guarded/no-literal: presence-only
+        const composeDefault = okfComposeVars[v];
+        if (composeDefault !== '' && a.default !== composeDefault) mismatches.push(v + ': compose=' + composeDefault + ' ansible=' + a.default);
+      }
+      expect(mismatches).toEqual([]);
+    });
+
+    test('env.j2 emits each OKF var exactly once (no last-wins shadowing)', () => {
+      const dupes = Object.entries(ansibleVars).filter(([k, a]) => /^OKF_/.test(k) && a.count > 1).map(([k]) => k);
+      expect(dupes).toEqual([]);
+    });
+
+    test('TEI_EMBED_HOST defaults follow the same-host rule (Jinja-derived, presence-checked)', () => {
+      expect(ansibleVars.TEI_EMBED_HOST).toBeDefined();
+      expect(ansibleVars.TEI_EMBED_HOST.defaultIsJinja).toBe(true); // derived from gpu_node_host
+    });
+  });
+
 });

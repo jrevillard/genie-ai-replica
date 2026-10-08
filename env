@@ -1075,3 +1075,199 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Only affects dataprep-arango-service. Backend and chatqna use NODE_TLS_REJECT_UNAUTHORIZED
 #   for NGINX TLS verification instead.
 
+
+# =============================================================================
+# SECTION 15: OKF SERVICES (OPTIONAL — every default lives in code/compose;
+#              set here only to override for THIS deployment)
+# =============================================================================
+# AI-AGENT-READABLE INVENTORY (David 2026-10-08): every OKF_* variable and
+# the model-endpoint variables the OKF services read, one entry per var:
+#   Default:   the fallback when unset (code or docker-compose)
+#   Used by:   the container(s) reading it
+#   Compose:   whether the local docker-compose okf-server block declares it
+#   Ansible:   whether deploy/ansible/templates/env.j2 emits it with the
+#              SAME default (tests/config-validator enforces the parity)
+# Entries are COMMENTED because defaults apply; uncomment to override.
+
+# --- okf-server: HTTP + auth ---
+# PORT=3002
+#   Default: 3002. Used by: okf-server. Compose: no (container-internal).
+# CORS_ALLOWED_ORIGINS=https://example.org
+#   Default: unset (= allow all). Used by: okf-server. Compose: yes.
+# OKF_AUDIENCE=okf-server
+#   Default: unset (= no RFC 8707 audience check on bearer JWTs).
+#   Used by: okf-server. Compose: yes. Ansible: yes (guarded).
+
+# --- okf-server: internal service wiring (container DNS defaults) ---
+# DATAPREP_URL=http://dataprep-arango-service:5000
+#   Default: http://dataprep-arango-service:5000. Used by: okf-server
+#   (ingest worker concept kicks). Compose: yes. Ansible: yes.
+# OKF_INTERNAL_SECRET=<shared-random>
+#   Default: '' (= fail-closed: dataprep callbacks REFUSED). MUST match the
+#   dataprep side. Used by: okf-server + dataprep-arango-service.
+#   Compose: yes. Ansible: yes (vault: okf_internal_secret).
+# DOCUMENT_REPOSITORY_URL=http://document-repository:3001
+#   Default: http://document-repository:3001. Used by: okf-server
+#   (bundle store, crawl sources). Compose: no.
+# PII_SERVICE_URL=http://pii-service:8000
+#   Default: http://pii-service:8000. Used by: okf-server (concept PII
+#   scans). Compose: no.
+# PII_TIMEOUT_MS=10000
+#   Default: 10000. Used by: okf-server. Compose: no.
+# PII_RETRIES=2
+#   Default: 2. Used by: okf-server. Compose: no.
+
+# --- okf-server: lifecycle + bundle ---
+# OKF_DELETE_GRACE_HOURS=168
+#   Default: 168 (7 days soft-delete before purge). Used by: okf-server.
+#   Compose: yes. Ansible: yes.
+# OKF_BUNDLE_STORE_TIMEOUT_MS=300000
+#   Default: 300000. Used by: okf-server. Compose: yes. Ansible: yes.
+# OKF_SETTLE_LEASE_MS=600000
+#   Default: 600000 (settle-lease window serializing concurrent settlers).
+#   Used by: okf-server. Compose: no.
+# OKF_BUNDLE_MAX_MB=100
+#   Default: 100. Used by: document-repository (zip accept cap). Compose: yes.
+
+# --- okf-server: ingest worker (post-publish drain) ---
+# OKF_INGEST_WORKER_ENABLED=true
+#   Default: true (any value but 'false' = on). Compose: yes. Ansible: yes.
+# OKF_INGEST_WORKER_INTERVAL_MS=15000
+#   Default: 15000. Compose: yes. Ansible: yes.
+# OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=3600000
+#   Default: 3600000. Compose: yes. Ansible: yes.
+# OKF_INGEST_WORKER_REAP_GRACE_MS=3600000
+#   Default: 3600000 (claim-age grace before dead-letter). Compose: yes. Ansible: yes.
+# OKF_INGEST_WORKER_SWEEP_GRACE_MS=3600000
+#   Default: 3600000. Compose: no.
+# OKF_INGEST_WORKER_MAX_CLAIMS=8
+#   Default: 8 (poison-pill threshold). Compose: yes. Ansible: yes.
+# OKF_INGEST_WORKER_JOB_POLL_MS=5000
+#   Default: 5000. Compose: no.
+# OKF_INGEST_WORKER_JOB_TIMEOUT_MS=1800000
+#   Default: 1800000 (flat 30-min job window). Compose: no.
+# OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS=1800000
+#   Default: 1800000. Compose: no.
+# OKF_JOB_WINDOW_ADAPTIVE=false
+#   Default: false (size-adaptive windows off). Compose: no.
+# OKF_JOB_WINDOW_FLOOR_MS=1800000
+#   Default: 1800000. Compose: no.
+# OKF_JOB_WINDOW_MAX_MS=21600000
+#   Default: 21600000 (6 h cap). Compose: no.
+# OKF_JOB_WINDOW_SEC_PER_CHUNK_MS=5000
+#   Default: 5000. Compose: no.
+# OKF_INGEST_CONCURRENCY=1
+#   Default: 1 (drain lanes; raise with DATAPREP_INGEST_CONCURRENCY).
+#   Compose: yes. Ansible: yes.
+# OKF_CLAIM_STRATEGY=fifo
+#   Default: fifo ('fair' = least in-flight repo first). Compose: no.
+# OKF_REPO_INGEST_CAP=0
+#   Default: 0 (unlimited; fair-strategy per-repo cap). Compose: no.
+# OKF_KICK_429_COOLDOWN_MS=15000
+#   Default: 15000 (dataprep-429 lane cooldown). Compose: yes. Ansible: yes.
+# OKF_KICK_BACKOFF_BASE_MS=0
+#   Default: 0 (= 5xx backoff OFF). Compose: no.
+# OKF_KICK_BACKOFF_MAX_MS=900000
+#   Default: 900000. Compose: no.
+
+# --- okf-server: import + conversion (creation side) ---
+# OKF_IMPORT_CONCURRENCY=1
+#   Default: 1 (parallel per-concept import lanes; PII scans dominate;
+#   distinct from the drain OKF_INGEST_CONCURRENCY). Compose: yes. Ansible: yes.
+# OKF_INGEST_MAX_CONCEPTS=200
+#   Default: 200 (max concepts per import batch). Compose: no.
+# OKF_INGEST_MAX_ZIP_BYTES=26214400
+#   Default: 26214400 (25 MiB zip-bomb guard). Compose: no.
+# OKF_MAX_CRAWL_SOURCE_MB=10240
+#   Default: 10240 (10 GB crawled-source cap). Compose: yes. Ansible: yes.
+# OKF_MAX_CONCURRENT_CONVERSIONS=2
+#   Default: 2 (simultaneous crawl-to-OKF jobs). Compose: no.
+# OKF_CONVERSION_DEBUG=1
+#   Default: off unless exactly '1'. Compose: yes. Ansible: yes.
+# OKF_XLSX_ROWS_PER_CONCEPT=200
+#   Default: 200 (clamped 10..500). Compose: no.
+
+# --- okf-server: LLM curation engine (D-B, DP-8: okf-server owns the client) ---
+# VLLM_ENDPOINT=https://GPU_HOST:444/llm
+#   Default: '' (= engine fail-softs to heuristics). Compose: yes.
+#   Ansible: yes (gpu_node_host block — same host:port as TEI_EMBED_HOST).
+# VLLM_LLM_MODEL_ID=ibm-granite/granite-4.1-8b
+#   Default: '' (must support guided JSON for labeling). Compose: yes
+#   (nested VLLM_MODEL_ID fallback). Ansible: yes (guarded).
+# VLLM_API_KEY=secret
+#   Default: '' (Bearer on vLLM + TEI calls). Compose: yes. Ansible: yes.
+# OKF_CURATION_TIMEOUT_MS=30000
+#   Default: 30000 per call. Compose: yes (empty passthrough). Ansible: guarded.
+# OKF_CURATION_LANES=4
+#   Default: 4 parallel labeling lanes. Compose: yes (empty passthrough). Ansible: guarded.
+
+# --- okf-server: TEI embedding + the vectorized head (Story 1.7a / 1-8) ---
+# TEI_EMBED_HOST=https://GPU_HOST:444
+#   Default: http://tei:80 (local full stack). The TEI embed service runs
+#   on the SAME host:port as the inference server (David 2026-10-08) — the
+#   value is VLLM_ENDPOINT's scheme://host:port, path excluded; the service
+#   appends /embed. Used by: okf-server (tag embedding, head build, head
+#   tests). Compose: yes. Ansible: yes (auto-derived from gpu_node_host).
+# EMBEDDING_MODEL_ID=BAAI/bge-large-en-v1.5
+#   Default: '' (= no BGE query-instruction prefix; the Routing Lab honestly
+#   reports "unknown (no prefix)"). Used by: okf-server + embedding.
+#   Compose: yes. Ansible: yes (guarded).
+# EMBED_QUERY_PREFIX_OVERRIDE=Represent this sentence for searching relevant passages:
+#   Default: unset (prefix comes from the model-id table). Used by: okf-server
+#   head tests. Compose: no.
+# EMBEDDING_DIM=1024
+#   Default: 1024 (head vector dimension guard). Compose: no.
+# OKF_FRONTMATTER_VALIDATE_BATCH_SIZE=4
+#   Default: 4 (chunks per tag-validation LLM call). Compose: no.
+
+# --- okf-server: Routing Lab knobs (Story 1-8; mirror the retriever router) ---
+# ROUTE_TOP_K=40
+#   Default: 40 (global top-K chunk pool in the chunk-probe replay).
+#   Used by: okf-server head tests. Compose: no.
+# ROUTE_MIN_CHUNKS=3
+#   Default: 3 (graph qualifies iff it contributes at least this many chunks).
+#   Used by: okf-server head tests. Compose: no.
+# ROUTE_PROBE_TIMEOUT_MS=2000
+#   Default: 2000 per-graph probe timeout. Used by: okf-server. Compose: no.
+# ROUTE_RETRY=1
+#   Default: 1 probe retry. Used by: okf-server. Compose: no.
+
+# --- okf-server: retrieval mode governance (Story 1.7, ADR-okf-039 D3) ---
+# OKF_RETRIEVAL_MODE=legacy
+#   Default: legacy (boot default; the okf_system_config doc overrides
+#   field-by-field). Compose: no.
+# OKF_RETRIEVAL_MAX_FANOUT_GRAPHS=5
+#   Default: 5. Compose: no.
+# OKF_RETRIEVAL_SPINE_MAX_HOPS=2
+#   Default: 2. Compose: no.
+# OKF_RETRIEVAL_EXTRACTED_HOP_CAP=1
+#   Default: 1. Compose: no.
+# OKF_RETRIEVAL_CANDIDATE_CAP_PER_GRAPH=50
+#   Default: 50. Compose: no.
+# OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL=200
+#   Default: 200. Compose: no.
+
+# --- OKF retrieval-config readers (backend BFF) ---
+# OKF_SERVER_URL=http://okf-server:3002
+#   Default: http://okf-server:3002. Used by: backend + dataprep. Compose: yes.
+# OKF_RETRIEVAL_CONFIG_TTL_MS=30000
+#   Default: 30000 (read-side TTL cache). Used by: backend. Compose: yes.
+# OKF_RETRIEVAL_CONFIG_TIMEOUT_MS=3000
+#   Default: 3000. Used by: backend. Compose: yes.
+
+# --- dataprep OKF labeling (client_credentials service account) ---
+# OKF_LLM_RETRY_ATTEMPTS=3
+#   Default: 3. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_RETRY_BASE_MS=500
+#   Default: 500. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_RETRY_MAX_MS=8000
+#   Default: 8000. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_STORM_COOLDOWN_S=2
+#   Default: 2. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_STORM_COOLDOWN_MAX_S=30
+#   Default: 30. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_ROUND2_DELAY_S=10
+#   Default: 10. Used by: dataprep-arango-service. Compose: yes.
+# EMBEDDING_LABEL_THRESHOLD=0.35
+#   Default: 0.35 (cosine floor for chunk-label acceptance). Used by:
+#   dataprep-arango-service. Compose: yes.

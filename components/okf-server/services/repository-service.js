@@ -45,7 +45,14 @@ const LIFECYCLE_STATES = [
 ];
 const INITIAL_STATE = 'register';
 const IMMUTABLE_FIELDS = ['graph_name', 'repo_id', 'domain'];
-const UPDATABLE_FIELDS = ['name', 'source', 'acl', 'retention', 'studio_step'];
+// Story 1.7 (2026-10-08): `frontmatter` is now a top-level updatable
+// field on the repo doc (the canonical store for the per-repo tag
+// set). The wizard's Curate step / editor's center pane write the
+// index.md YAML and that writes through to this field (via the
+// concept-meta PATCH in the existing concept service). Adding it
+// here so a direct PATCH /api/okf/repos/:id with a `frontmatter` key
+// is also accepted (back-stop for the operator migration script).
+const UPDATABLE_FIELDS = ['name', 'source', 'acl', 'retention', 'studio_step', 'frontmatter'];
 
 // ArangoDB error codes used for control flow.
 const ARANGO_NOT_FOUND = (err) => err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404);

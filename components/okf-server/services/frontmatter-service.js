@@ -79,8 +79,19 @@ const OKF_FRONTMATTER_INCONSISTENCY_THRESHOLD = parseFloat(
 
 // ---------- Constants ----------
 
+// Story 1.7 (2026-10-08, supersedes the Story 1.6 dedicated collection):
+// the per-repo tag set lives in `okf_repositories.frontmatter` (a new
+// doc field, additive). The two collection constants below are KEPT for
+// the duration of the migration window (so the migration script can
+// read from them) but are NOT written to by this service. The service
+// surfaces a deprecation note in the audit log on every read. After
+// the migration script runs (one-shot, idempotent) and the new doc
+// field is verified live, both collections can be DROPPED in a
+// follow-up commit. Until then, the constants remain so the migration
+// and any remaining readers don't break.
 const FRONTMATTER_COLLECTION = 'okf_repo_frontmatter';
 const FRONTMATTER_SUMMARY_COLLECTION = 'okf_repositories_frontmatter_summary';
+const IS_FRONTMATTER_COLLECTION_RETIRED = true;
 
 const VALID_FIELDS = ['topic', 'entity', 'scope', 'forbidden', 'summary', 'keyword'];
 // FIELD_RANGES — soft target ranges, NOT hard validation caps.
@@ -757,23 +768,198 @@ async function publishFrontmatter(repoId, frontmatter, opts = {}) {
   });
 }
 
+// ---------- Story 1.7 — frontmatter on the repo doc ----------
+
+// Write the per-repo frontmatter to `okf_repositories.frontmatter`
+// (the canonical store). The lifecycle publish hook calls this on
+// every publish; the wizard/editor's "Save tags" CTA calls this via
+// the existing repo PATCH (which writes the same field). The
+// index.md YAML is the curator-facing projection; this function
+// is the source of truth.
+//
+// `payload` shape (matches validators/repository-validator.js
+// frontmatterSchema):
+//   { topic:[], entity:[], scope:'', forbidden:[], summary:'',
+//     keyword:[], _approved:[{field,value,approved_at,approved_by}],
+//     updated_at?, updated_by? }
+async function writeFrontmatterToRepoDoc(repoId, payload, opts = {}) {
+  const db = await dbService.getConnection();
+  const version = parseInt((opts && opts.version) || Date.now(), 10);
+  const actor = (opts && opts.actor) || { user_id: 'auto-publish' };
+  const updated_at = new Date().toISOString();
+  const updated_by = actor && actor.user_id ? actor.user_id : 'auto-publish';
+  const frontmatter = {
+    topic: Array.isArray(payload.topic) ? payload.topic : [],
+    entity: Array.isArray(payload.entity) ? payload.entity : [],
+    scope: typeof payload.scope === 'string' ? payload.scope : '',
+    forbidden: Array.isArray(payload.forbidden) ? payload.forbidden : [],
+    summary: typeof payload.summary === 'string' ? payload.summary : '',
+    keyword: Array.isArray(payload.keyword) ? payload.keyword : [],
+    _approved: Array.isArray(payload._approved) ? payload._approved : [],
+    version,
+    updated_at,
+    updated_by
+  };
+  await db.collection('okf_repositories').update(repoId, { frontmatter });
+  logger.info('frontmatter.write_to_repo_doc', {
+    repo_id: repoId,
+    topic: frontmatter.topic.length,
+    entity: frontmatter.entity.length,
+    forbidden: frontmatter.forbidden.length,
+    approved: frontmatter._approved.length,
+    version
+  });
+  return frontmatter;
+}
+
+// Read the per-repo frontmatter from the canonical store. Returns
+// null if the field is absent (the repo has never had frontmatter
+// set). The retriever, the publish gate, and the UI all call this.
+async function readFrontmatterFromRepoDoc(repoId) {
+  const db = await dbService.getConnection();
+  const rows = (
+    await db.query(
+      'FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter',
+      { rid: repoId }
+    )
+  ).all();
+  return (rows && rows[0]) || null;
+}
+
+// Story 1.7 migration window: the curator-facing GET reads the new
+// doc field by default; falls through to the old collection only
+// for the one-shot migration (which lifts the rows into the new
+// field). After the migration, the fall-through path is dead.
 async function getFrontmatter(repoId) {
   const db = await dbService.getConnection();
-  await ensureCollections(db);
-  const q = await db.query(`FOR d IN ${FRONTMATTER_COLLECTION} FILTER d.repo_id == @rid RETURN d`, { rid: repoId });
-  return q.all();
+  // Read from the new doc field. Return the rows in the same shape
+  // the old collection used (one row per (field, value)) so the
+  // editor's existing per-row UI works during the migration window.
+  const fm = await readFrontmatterFromRepoDoc(repoId);
+  if (fm) {
+    return expandFrontmatterToRows(fm);
+  }
+  // Migration-window fall-through: read from the old collection if
+  // the new field is empty. The migration script lifts these rows
+  // into the new field; once the migration is complete, this branch
+  // is unreachable.
+  if (IS_FRONTMATTER_COLLECTION_RETIRED) {
+    await ensureCollections(db);
+    const q = await db.query(
+      `FOR d IN ${FRONTMATTER_COLLECTION} FILTER d.repo_id == @rid RETURN d`,
+      { rid: repoId }
+    );
+    const rows = await q.all();
+    if (rows.length) {
+      logger.warn('frontmatter.read.legacy_collection', {
+        repo_id: repoId,
+        row_count: rows.length
+      });
+    }
+    return rows;
+  }
+  return [];
 }
 
 async function getFrontmatterSummary(repoId) {
   const db = await dbService.getConnection();
-  await ensureCollections(db);
-  try {
-    const doc = await db.collection(FRONTMATTER_SUMMARY_COLLECTION).document(repoId);
-    return doc;
-  } catch (err) {
-    if (isArangoNotFound(err)) return null;
-    throw err;
+  const fm = await readFrontmatterFromRepoDoc(repoId);
+  if (fm) {
+    return {
+      _key: repoId,
+      topic_count: Array.isArray(fm.topic) ? fm.topic.length : 0,
+      entity_count: Array.isArray(fm.entity) ? fm.entity.length : 0,
+      keyword_count: Array.isArray(fm.keyword) ? fm.keyword.length : 0,
+      forbidden_count: Array.isArray(fm.forbidden) ? fm.forbidden.length : 0,
+      summary: fm.summary || '',
+      scope: fm.scope || '',
+      version: fm.version,
+      updated_at: fm.updated_at,
+      updated_by: fm.updated_by
+    };
   }
+  // Migration-window fall-through: the old summary row still has
+  // the combination vectors. The new retriever doesn't need the
+  // combination vectors (it embeds lazily on first read), so this
+  // fall-through returns a minimal summary derived from the count
+  // columns. The retriever ignores the missing combination vectors
+  // and computes them lazily.
+  if (IS_FRONTMATTER_COLLECTION_RETIRED) {
+    await ensureCollections(db);
+    try {
+      const doc = await db.collection(FRONTMATTER_SUMMARY_COLLECTION).document(repoId);
+      return {
+        _key: repoId,
+        topic_count: doc.topic_count || 0,
+        entity_count: doc.entity_count || 0,
+        keyword_count: doc.keyword_count || 0,
+        forbidden_count: doc.forbidden_count || 0,
+        // Combination vectors intentionally omitted — the new
+        // retriever computes them lazily. A consumer that needs
+        // the OLD combination vectors reads from the old
+        // collection directly via the migration script.
+        version: doc.version,
+        updated_at: doc.updated_at
+      };
+    } catch (err) {
+      if (isArangoNotFound(err)) return null;
+      throw err;
+    }
+  }
+  return null;
+}
+
+// Pure helper: frontmatter object → row list (the same shape the
+// old collection stored: one row per (field, value) with approved_at
+// pulled from the per-row _approved list). Used by getFrontmatter
+// to keep the existing UI working during the migration window.
+function expandFrontmatterToRows(fm) {
+  const approvedByValue = new Map();
+  for (const a of Array.isArray(fm._approved) ? fm._approved : []) {
+    if (a && a.field && a.value) {
+      approvedByValue.set(`${a.field}::${a.value}`, a);
+    }
+  }
+  const rows = [];
+  for (const field of ['topic', 'entity', 'forbidden', 'keyword']) {
+    const list = Array.isArray(fm[field]) ? fm[field] : [];
+    for (const value of list) {
+      const a = approvedByValue.get(`${field}::${value}`);
+      rows.push({
+        _key: `${field}:${value}`,
+        repo_id: fm._key || '',
+        field,
+        value,
+        weight: 1.0,
+        vector: null, // Lazy: the retriever embeds on first read.
+        generated_at: fm.updated_at,
+        generated_by: fm.updated_by,
+        approved_at: a ? a.approved_at : null,
+        approved_by: a ? a.approved_by : null,
+        version: fm.version
+      });
+    }
+  }
+  for (const field of ['scope', 'summary']) {
+    const v = fm[field];
+    if (v) {
+      const a = approvedByValue.get(`${field}::${v}`);
+      rows.push({
+        _key: `${field}:${v}`,
+        repo_id: fm._key || '',
+        field,
+        value: v,
+        weight: 1.0,
+        vector: null,
+        generated_at: fm.updated_at,
+        generated_by: fm.updated_by,
+        approved_at: a ? a.approved_at : null,
+        approved_by: a ? a.approved_by : null,
+        version: fm.version
+      });
+    }
+  }
+  return rows;
 }
 
 module.exports = {
@@ -781,10 +967,11 @@ module.exports = {
   suggestTags,
   validateFrontmatter,
   embedAllTags,
-  publishFrontmatter,
+  writeFrontmatterToRepoDoc,
   // reader
   getFrontmatter,
   getFrontmatterSummary,
+  readFrontmatterFromRepoDoc,
   // constants (for tests)
   FRONTMATTER_COLLECTION,
   FRONTMATTER_SUMMARY_COLLECTION,

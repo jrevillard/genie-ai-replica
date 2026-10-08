@@ -1839,66 +1839,235 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 
 async def _load_frontmatter_summaries(self, repo_ids: list[str]) -> dict[str, dict]:
-    """Single AQL fetch — loads every per-repo summary in one round-trip.
+    """Single AQL fetch — loads every per-repo frontmatter doc field in one round-trip.
 
-    Returns repo_id -> summary doc (or absent from the dict if the repo has
-    no summary row — the frontmatter stage filter then excludes it from the
-    candidate set, per the spec's "Stage C filter" rule).
+    Story 1.7 (2026-10-08, supersedes the Story 1.6 dedicated collection):
+    the per-repo frontmatter lives in `okf_repositories.frontmatter` (a new
+    doc field, additive) — the index.md YAML frontmatter block is the
+    curator-facing projection. The retriever reads the doc field, embeds
+    the unique tag values lazily on first query per process lifetime
+    (in-process string-keyed cache), and computes the routing score from
+    the cached vectors. The precomputed summary row is gone.
+
+    Returns repo_id -> frontmatter doc (or absent from the dict if the
+    repo has no frontmatter field — the frontmatter stage filter then
+    excludes it from the candidate set, per the spec's "Stage C filter"
+    rule). The new design also adds the per-field tag VALUE LISTS
+    (so the lazy embed can compute vectors on first use).
     """
     from tracing import get_tracer
 
     if not repo_ids:
         return {}
     tracer = get_tracer("retriever.frontmatter")
-    span = tracer.start_span("retriever.frontmatter.load_summaries")
+    span = tracer.start_span("retriever.frontmatter.load_doc_fields")
     try:
         cursor = await self.db.aql.execute(
-            f"FOR s IN {FRONTMATTER_SUMMARY_COLLECTION} FILTER s._key IN @repo_ids RETURN s",
+            "FOR r IN okf_repositories FILTER r._key IN @repo_ids "
+            "RETURN { _key: r._key, frontmatter: r.frontmatter, name: r.name }",
             bind_vars={"repo_ids": repo_ids},
         )
         rows = []
         async for r in cursor:
             rows.append(r)
-        out = {r["_key"]: r for r in rows if "_key" in r}
+        # Migration-window fall-through: the local build may still have
+        # rows in the old okf_repositories_frontmatter_summary collection
+        # (one repo, ~28 tag rows from 2026-10-08). If the new doc field
+        # is empty AND the old collection has a row, return the old
+        # row's count columns so the retriever doesn't lose routing for
+        # that repo during the migration window. The retriever's
+        # score function still works on the count summary.
+        out = {}
+        for r in rows:
+            if r.get("frontmatter"):
+                out[r["_key"]] = r["frontmatter"]
+        legacy = []
+        for r in rows:
+            if r["_key"] not in out:
+                try:
+                    legacy_cursor = await self.db.aql.execute(
+                        f"FOR s IN {FRONTMATTER_SUMMARY_COLLECTION} FILTER s._key == @rid RETURN s",
+                        bind_vars={"rid": r["_key"]},
+                    )
+                    async for s in legacy_cursor:
+                        if s.get("topic_count", 0) > 0 or s.get("forbidden_count", 0) > 0:
+                            out[r["_key"]] = {
+                                "topic_count": s.get("topic_count", 0),
+                                "entity_count": s.get("entity_count", 0),
+                                "forbidden_count": s.get("forbidden_count", 0),
+                                "keyword_count": s.get("keyword_count", 0),
+                                "_legacy_collection": True,
+                            }
+                            legacy.append(r["_key"])
+                except Exception:
+                    pass
+        if legacy:
+            logger.warning(
+                f"frontmatter.legacy_fallthrough — repos={legacy} (these have rows in the "
+                "old okf_repositories_frontmatter_summary collection but no doc field; "
+                "run scripts/migrate-frontmatter-to-repo-doc.js to lift them)"
+            )
         span.set_attribute("okf.frontmatter.requested", len(repo_ids))
         span.set_attribute("okf.frontmatter.found", len(out))
+        span.set_attribute("okf.frontmatter.legacy", len(legacy))
         return out
     except Exception as e:
-        logger.error(f"frontmatter.load_summaries failed — degrading: {e}")
+        logger.error(f"frontmatter.load_doc_fields failed — degrading: {e}")
         span.set_attribute("okf.frontmatter.error", str(e))
         return {}
     finally:
         span.end()
 
 
+# In-process string-keyed cache of tag embeddings. Keyed by the tag
+# value string so a sibling repo with the same tag reuses the vector
+# without an extra TEI call. Per the design (Story 1.7 Q3): cold start
+# pays one TEI call per unique tag value across the corpus; steady
+# state is zero tag-embed cost.
+_FRONTMATTER_TAG_VECTOR_CACHE: dict[str, list[float]] = {}
+
+
+async def _embed_tag_values(unique_values: list[str]) -> dict[str, list[float]]:
+    """Embed the unique tag values via the existing TEI client.
+
+    Returns a dict value -> vector. Uses the in-process cache first;
+    only uncached values are sent to TEI in one batched call.
+    """
+    from .config import TEI_EMBED_HOST
+    import asyncio
+
+    out = {}
+    uncached = []
+    for v in unique_values:
+        key = v.lower().strip()
+        if key in _FRONTMATTER_TAG_VECTOR_CACHE:
+            out[v] = _FRONTMATTER_TAG_VECTOR_CACHE[key]
+        else:
+            uncached.append(v)
+    if not uncached:
+        return out
+    # Batched TEI call. The retriever's TEI client is the same one
+    # the OPEA embedding service uses (one shared endpoint per
+    # retriever instance). Single POST with N inputs.
+    try:
+        import aiohttp
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                f"{TEI_EMBED_HOST}/embed",
+                json={"inputs": uncached, "truncate": True},
+                headers={"Content-Type": "application/json"},
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    vectors = data.get("data") or data.get("embeddings") or data
+                    if isinstance(vectors, list) and len(vectors) == len(uncached):
+                        for v, vec in zip(uncached, vectors):
+                            if isinstance(vec, list):
+                                _FRONTMATTER_TAG_VECTOR_CACHE[v.lower().strip()] = vec
+                                out[v] = vec
+                else:
+                    logger.warning(
+                        f"frontmatter.embed.tei_status={resp.status} — degrading to skip"
+                    )
+    except Exception as e:
+        logger.warning(f"frontmatter.embed.tei_failed — degrading: {e}")
+    return out
+
+
+async def _ensure_tag_vectors(frontmatter: dict) -> dict[str, dict[str, list[float]]]:
+    """For one frontmatter doc, return {field: {value: vector}}.
+
+    Used by _score_repo_by_frontmatter. The score function does the
+    per-field aggregate over these vectors. Cached across repos by
+    the in-process cache in _embed_tag_values.
+    """
+    if not frontmatter:
+        return {}
+    # Collect all unique values across fields (one batched embed).
+    all_values = []
+    for field in ("topic", "entity", "forbidden", "keyword"):
+        for v in frontmatter.get(field) or []:
+            if v and v not in all_values:
+                all_values.append(v)
+    # scope + summary are single-value; include them too.
+    for field in ("scope", "summary"):
+        v = frontmatter.get(field)
+        if v and v not in all_values:
+            all_values.append(v)
+    if not all_values:
+        return {}
+    vec_by_value = await _embed_tag_values(all_values)
+    by_field = {}
+    for field in ("topic", "entity", "forbidden", "keyword"):
+        by_field[field] = {}
+        for v in frontmatter.get(field) or []:
+            if v in vec_by_value:
+                by_field[field][v] = vec_by_value[v]
+    for field in ("scope", "summary"):
+        v = frontmatter.get(field)
+        if v and v in vec_by_value:
+            by_field[field] = vec_by_value[v]
+    return by_field
+
+
 def _score_repo_by_frontmatter(
     repo_id: str,
     query_emb: list[float],
-    summary: dict,
+    frontmatter: dict,
+    tag_vectors: dict[str, dict[str, list[float]]] | None = None,
 ) -> dict:
-    """Pure math: weighted cosine sum minus forbidden penalty.
+    """Pure math: weighted mean of per-field tag cosines minus forbidden penalty.
 
-    Returns {"score": float, "breakdown": dict} for diagnostics. The score is
-    bounded — sums over six field combination vectors, each precomputed at
-    publish time (see components/okf-server/services/frontmatter-service.js).
+    Story 1.7: instead of using the precomputed combination vectors
+    (which the old summary row stored), the score is the weighted mean
+    cosine over the field's individual tag values. Embedding the tag
+    values lazily is one TEI call per unique value across the corpus
+    (in-process cache), amortized across sibling repos.
+
+    Returns {"score": float, "breakdown": dict} for diagnostics.
     """
     breakdown = {}
     score = 0.0
-    # Positive contributions (weighted cosine of each field combination vector).
-    for field in ("topic", "entity", "keyword", "summary", "scope"):
-        vec = summary.get(f"{field}_combined_vector" if field != "summary" else "summary_vector")
-        if not vec or not query_emb:
-            continue
-        cos = _cosine(query_emb, vec)
-        weight = FRONTMATTER_TAG_WEIGHTS.get(field, 0.0)
-        breakdown[field] = cos * weight
-        score += cos * weight
-    # Subtractive: the forbidden combination vector penalizes the repo when
-    # the query is close to anything the curator listed as out-of-corpus.
-    forbidden_vec = summary.get("forbidden_combined_vector")
-    if forbidden_vec and query_emb:
-        fcos = max(0.0, _cosine(query_emb, forbidden_vec))
-        penalty = fcos * FRONTMATTER_FORBIDDEN_PENALTY
+    if not frontmatter or not query_emb:
+        return {"score": score, "breakdown": breakdown}
+    # Legacy summary row path: the count columns are still useful for
+    # an early "do we have enough tags?" gate. If tag_vectors is None
+    # (the legacy path), we can't score the repo, so the gate
+    # excludes it (Stage C filter).
+    if tag_vectors is None:
+        topic_count = frontmatter.get("topic_count", 0)
+        if topic_count >= 3:
+            return {"score": 0.0, "breakdown": {"legacy_unscored": True}}
+        return {"score": 0.0, "breakdown": {}}
+    # Weighted mean cosine per field.
+    for field in ("topic", "entity", "keyword", "scope", "summary"):
+        if field in ("scope", "summary"):
+            # Single-value fields: cosine directly.
+            v = tag_vectors.get(field)
+            if not v or not query_emb:
+                continue
+            cos = _cosine(query_emb, v)
+            weight = FRONTMATTER_TAG_WEIGHTS.get(field, 0.0)
+            breakdown[field] = cos * weight
+            score += cos * weight
+        else:
+            vecs = list((tag_vectors.get(field) or {}).values())
+            if not vecs:
+                continue
+            cosines = [max(0.0, _cosine(query_emb, vec)) for vec in vecs]
+            mean_cos = sum(cosines) / len(cosines)
+            weight = FRONTMATTER_TAG_WEIGHTS.get(field, 0.0)
+            breakdown[field] = mean_cos * weight
+            score += mean_cos * weight
+    # Subtractive: forbidden tag values are subtracted from the score
+    # when the query is close to any of them. Per-value (was: a single
+    # combination vector). The penalty sums over all forbidden tags
+    # the query is close to, weighted by FRONTMATTER_FORBIDDEN_PENALTY.
+    forbidden_vecs = list((tag_vectors.get("forbidden") or {}).values())
+    if forbidden_vecs and query_emb:
+        forbidden_cos = sum(max(0.0, _cosine(query_emb, vec)) for vec in forbidden_vecs) / len(forbidden_vecs)
+        penalty = forbidden_cos * FRONTMATTER_FORBIDDEN_PENALTY
         breakdown["forbidden_penalty"] = -penalty
         score -= penalty
     return {"score": score, "breakdown": breakdown}
@@ -1912,20 +2081,35 @@ async def _select_repos_by_frontmatter(
 ) -> list[str]:
     """Score every OKF graph by frontmatter affinity and return the top-K.
 
-    Stage C filter: a graph with no frontmatter summary is excluded from the
-    candidate set (a repo running under vector_probe in production today has
-    no summary, and we must NOT pretend the missing frontmatter is a strong
-    signal). If no graph qualifies, returns [] — the caller logs the degraded
-    state and degrades to all-graphs.
+    Story 1.7: the score function now embeds the unique tag values
+    lazily on first use (one TEI call per unique value across the
+    corpus, cached in-process). The precomputed combination vectors
+    are gone.
+
+    Stage C filter: a graph with no frontmatter is excluded from the
+    candidate set. If no graph qualifies, returns [] — the caller logs
+    the degraded state and degrades to all-graphs.
     """
     if not okf_graphs or not query_emb:
         return []
+    # Embed the tag values for every repo in this carrier set. The
+    # first call pays the TEI cost; subsequent calls are cache hits.
+    by_repo_vectors = {}
+    for g, fm in summaries.items():
+        if fm and not fm.get("_legacy_collection"):
+            by_repo_vectors[g] = await _ensure_tag_vectors(fm)
     scored = []
     for g in okf_graphs:
         summary = summaries.get(g)
         if not summary:
             continue  # Stage C: no frontmatter, no candidate
-        r = _score_repo_by_frontmatter(g, query_emb, summary)
+        if summary.get("_legacy_collection"):
+            # Legacy summary row: count-only. Use the relaxed gate —
+            # score = 0, the Stage C filter still applies.
+            r = _score_repo_by_frontmatter(g, query_emb, summary, tag_vectors=None)
+        else:
+            tag_vectors = by_repo_vectors.get(g, {})
+            r = _score_repo_by_frontmatter(g, query_emb, summary, tag_vectors=tag_vectors)
         if r["score"] >= FRONTMATTER_MIN_SCORE:
             scored.append((g, r["score"]))
     scored.sort(key=lambda x: x[1], reverse=True)

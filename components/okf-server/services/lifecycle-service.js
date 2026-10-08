@@ -590,29 +590,69 @@ async function transition(repoId, action, actor, opts = {}) {
         await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.bundles', { rid: repoId })
       ).all();
       const prevBundles = (existingBundles && existingBundles[0]) || [];
-      // Story 1.6 — frontmatter is REQUIRED at publish time (independent of
-      // OKF_SEARCH_STYLE: tagging+vectorization must run regardless so an
-      // operator can flip the runtime search style without re-ingesting).
-      // Hook fires AFTER mintVersion + bundleExport succeed and BEFORE the
-      // lifecycle_state=publish write. A failure here leaves the repo at
+      // Story 1.7 (2026-10-08, supersedes the Story 1.6 dedicated collection):
+      // frontmatter is REQUIRED at publish time (independent of OKF_SEARCH_STYLE:
+      // tagging+vectorization must run regardless so an operator can flip the
+      // runtime search style without re-ingesting). The canonical store is now
+      // `okf_repositories.frontmatter` (a doc field, additive) — the index.md
+      // YAML is the curator-facing projection that writes through to this
+      // field. Hook fires AFTER mintVersion + bundleExport succeed and BEFORE
+      // the lifecycle_state=publish write. A failure here leaves the repo at
       // 'approve' with 409 FRONTMATTER_REQUIRED — operator can retry once the
-      // frontmatter is supplied (via the suggest endpoint + curator approval,
-      // or via direct PATCH on the frontmatter row).
+      // frontmatter is set (via the wizard's Refresh suggestions + save flow
+      // in the index.md YAML, or via direct PATCH on the repo's frontmatter
+      // field).
       logger.info('[OKF-PUBLISH] step=frontmatter gate', { repo_id: repoId });
       try {
         const frontmatterService = require('./frontmatter-service');
-        // Auto-suggest + validate + publish in one shot when no frontmatter
-        // is supplied by the caller. Curators who pre-supply frontmatter
-        // (via the wizard) bypass suggest and only run embedAllTags +
-        // publishFrontmatter — this branch detects that case via the
-        // `frontmatter` payload on the lifecycle event.
+        const db = await getDb();
         const suppliedFm = (opts && opts.payload && opts.payload.frontmatter) || null;
-        if (suppliedFm) {
-          await frontmatterService.publishFrontmatter(repoId, suppliedFm, {
+        // 1. The repo doc is the source of truth — read what's already there
+        //    (the curator may have authored via the editor's center pane in
+        //    a previous edit) and use it as the publish-time tag set.
+        const repoRow = (
+          await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter, r.name', {
+            rid: repoId
+          })
+        ).all();
+        const existingFm = (repoRow && repoRow[0] && repoRow[0].frontmatter) || null;
+        const supplied = suppliedFm || existingFm;
+        // 2. Gate: ≥3 topic + ≥1 forbidden + every row approved (per-row
+        //    approved_at — the new design's gate is the same as Story 1.6
+        //    but reads okf_repositories.frontmatter instead of the old
+        //    okf_repo_frontmatter collection).
+        if (supplied) {
+          const topicCount = Array.isArray(supplied.topic) ? supplied.topic.length : 0;
+          const forbiddenCount = Array.isArray(supplied.forbidden) ? supplied.forbidden.length : 0;
+          const approved = Array.isArray(supplied._approved) ? supplied._approved : [];
+          const unapproved = approved.length < (topicCount + forbiddenCount);
+          if (topicCount < 3 || forbiddenCount < 1 || unapproved) {
+            throw new LifecycleError(
+              'FRONTMATTER_REQUIRED',
+              'Frontmatter gate failed: need ≥3 topic, ≥1 forbidden, every row approved ' +
+                `(have topic=${topicCount}, forbidden=${forbiddenCount}, approved_rows=${approved.length}). ` +
+                'Open the repo in the editor, add frontmatter to the index.md YAML, ' +
+                'and approve every row before publish.',
+              409
+            );
+          }
+          // 3. Write-through to okf_repositories.frontmatter (canonical
+          //    store) — sets updated_at + updated_by. The retriever reads
+          //    this on the next query; the index.md YAML is the curator's
+          //    view, not the canonical store.
+          await frontmatterService.writeFrontmatterToRepoDoc(repoId, supplied, {
             actor,
             version: bundle.bundle_version
           });
+          logger.info('[OKF-PUBLISH] frontmatter write-through OK', {
+            repo_id: repoId,
+            topic: topicCount,
+            forbidden: forbiddenCount
+          });
         } else {
+          // 4. No frontmatter in the repo doc and none supplied — run the
+          //    LLM auto-suggest path (the same as Story 1.6, but the
+          //    write target is the repo doc, not the old collection).
           const suggested = await frontmatterService.suggestTags(repoId, { sampleN: 20 });
           const validation = await frontmatterService.validateFrontmatter(repoId, suggested);
           if (!validation.validated) {
@@ -620,27 +660,46 @@ async function transition(repoId, action, actor, opts = {}) {
               repo_id: repoId,
               inconsistencies: validation.inconsistencies.length
             });
-            // Do NOT auto-publish if the LLM is producing inconsistent tags —
-            // require a curator pass. Surface the inconsistencies so the route
-            // can return a helpful 409 body.
             throw new LifecycleError(
               'FRONTMATTER_INCONSISTENT',
               'Auto-tagged frontmatter failed consistency check (' +
                 validation.inconsistencies.length +
                 ' inconsistencies) — curator must review before publish. ' +
-                'POST /api/okf/repos/' +
-                repoId +
-                '/frontmatter with curated tags.',
+                'Open the repo in the editor and approve the LLM-suggested ' +
+                'frontmatter in the index.md YAML.',
               409
             );
           }
-          await frontmatterService.publishFrontmatter(repoId, suggested, {
-            actor,
-            version: bundle.bundle_version
+          // Pre-approve the LLM output (the operator is opting in to
+          // auto-suggest by going through the publish flow without
+          // supplying frontmatter) and write to the repo doc.
+          const approved = [];
+          const now = new Date().toISOString();
+          for (const field of ['topic', 'entity', 'forbidden', 'keyword']) {
+            const arr = Array.isArray(suggested[field]) ? suggested[field] : [];
+            for (const value of arr) {
+              if (value) approved.push({ field, value, approved_at: now, approved_by: actor && actor.user_id ? actor.user_id : 'auto-publish' });
+            }
+          }
+          for (const field of ['scope', 'summary']) {
+            const v = suggested[field];
+            if (v) approved.push({ field, value: v, approved_at: now, approved_by: actor && actor.user_id ? actor.user_id : 'auto-publish' });
+          }
+          await frontmatterService.writeFrontmatterToRepoDoc(
+            repoId,
+            { ...suggested, _approved: approved },
+            { actor, version: bundle.bundle_version }
+          );
+          logger.info('[OKF-PUBLISH] auto-suggested + auto-approved frontmatter', {
+            repo_id: repoId,
+            topic: Array.isArray(suggested.topic) ? suggested.topic.length : 0,
+            forbidden: Array.isArray(suggested.forbidden) ? suggested.forbidden.length : 0
           });
         }
       } catch (fmErr) {
-        if (fmErr && fmErr.code === 'FRONTMATTER_INCONSISTENT') throw fmErr;
+        if (fmErr && (fmErr.code === 'FRONTMATTER_INCONSISTENT' || fmErr.code === 'FRONTMATTER_REQUIRED')) {
+          throw fmErr;
+        }
         logger.error('[OKF-PUBLISH] step=frontmatter gate FAILED', {
           repo_id: repoId,
           error_code: fmErr && fmErr.code,
@@ -651,10 +710,7 @@ async function transition(repoId, action, actor, opts = {}) {
           'FRONTMATTER_REQUIRED',
           'Frontmatter publish failed: ' +
             (fmErr && fmErr.message ? fmErr.message : 'unknown error') +
-            '. A repo cannot be publish without LLM-suggested + curator-approved frontmatter. ' +
-            'POST /api/okf/repos/' +
-            repoId +
-            '/frontmatter/suggest to retry.',
+            '. Open the repo in the editor and add frontmatter to the index.md YAML before publish.',
           409
         );
       }

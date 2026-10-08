@@ -39,11 +39,48 @@ const createSchema = Joi.object({
   .required();
 
 // .unknown(true) lets graph_name/repo_id/domain through so the service can 409.
+// Story 1.7 (2026-10-08, supersedes the Story 1.6 dedicated collection):
+// the per-repo frontmatter lives in `okf_repositories.frontmatter` (a new
+// doc field, additive — no schema migration beyond a default). The
+// curator-facing projection is the index.md YAML frontmatter block in the
+// editor's center pane; the index.md YAML is the write target the
+// existing concept-meta PATCH updates. The repo PATCH below accepts
+// the same `frontmatter` field for symmetry so the wizard's Curate
+// step (which edits the YAML) and the lifecycle `publish` hook (which
+// reads the gate) share one shape.
+const frontmatterSchema = Joi.object({
+  topic: Joi.array().items(Joi.string().min(1).max(64)).min(0).max(8),
+  entity: Joi.array().items(Joi.string().min(1).max(64)).max(20),
+  scope: Joi.string().allow('').max(64),
+  forbidden: Joi.array().items(Joi.string().min(1).max(64)).min(0).max(6),
+  summary: Joi.string().allow('').max(1024),
+  keyword: Joi.array().items(Joi.string().min(1).max(64)).max(20),
+  // Per-row approved_at (Story 1.6 carry-over, Story 1.7 keeps it for
+  // the partial-approval option). The publish gate checks every
+  // approved_at is set.
+  _approved: Joi.array()
+    .items(
+      Joi.object({
+        field: Joi.string().valid('topic', 'entity', 'forbidden', 'summary', 'keyword').required(),
+        value: Joi.string().required(),
+        approved_at: Joi.string().isoDate().required(),
+        approved_by: Joi.string().allow(null, '').optional()
+      })
+    )
+    .optional(),
+  updated_at: Joi.string().isoDate().optional(),
+  updated_by: Joi.string().allow('').max(128).optional()
+}).optional();
+
 const updateSchema = Joi.object({
   name: Joi.string().min(1).max(200).optional(),
   source: sourceSchema.optional(),
   acl: aclSchema.optional(),
-  retention: retentionSchema.optional()
+  retention: retentionSchema.optional(),
+  // Story 1.7: per-repo frontmatter on the repo doc (the canonical store
+  // for the routing tags; the index.md YAML is the curator-facing
+  // projection that writes through to this field).
+  frontmatter: frontmatterSchema
 })
   .unknown(true)
   .required();
@@ -67,17 +104,14 @@ const cloneSchema = Joi.object({
 // `publish` action — when supplied, the frontmatter is taken as the curator's
 // reviewed set (no auto-suggest). When absent, the lifecycle service runs the
 // full LLM auto-suggest + validate + publish pipeline.
+// Story 1.7 (2026-10-08): the frontmatter payload shape matches the
+// okf_repositories.frontmatter field — same validator, same shape. The
+// publish action either accepts the curator's pre-reviewed set OR runs
+// the LLM auto-suggest + validate + write-to-repo-doc pipeline. Either
+// way, the canonical store is okf_repositories.frontmatter.
 const lifecycleSchema = Joi.object({
   action: Joi.string().valid('submit', 'approve', 'publish', 'ingest', 'retract', 'unpublish').required(),
-  frontmatter: Joi.object({
-    topic: Joi.array().items(Joi.string()).min(3).max(8),
-    entity: Joi.array().items(Joi.string()).max(10),
-    scope: Joi.string().allow(''),
-    forbidden: Joi.array().items(Joi.string()).min(2).max(6),
-    summary: Joi.string().max(1024),
-    keyword: Joi.array().items(Joi.string()).max(10),
-    comprehensive: Joi.boolean()
-  }).optional()
+  frontmatter: frontmatterSchema
 });
 
 // Steward PII acknowledgement (2026-08-30): { acknowledge: true|false }.

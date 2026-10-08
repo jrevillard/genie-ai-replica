@@ -1,84 +1,140 @@
 /**
- * frontmatterService — Story 1.6 (2026-10-07) curator-tag + vectorize UX.
+ * frontmatterService — Story 1.7 (2026-10-08) curator-tag UX wrapper.
  *
- * Thin client-side wrapper over the three new okf-server endpoints
- * (mounted at /api/okf/repos/:id/frontmatter* in components/okf-server/routes/okf-routes.js):
- *   getFrontmatter(repoId)         — GET    /api/okf/repos/:id/frontmatter
- *   getFrontmatterSummary(repoId)  — GET    /api/okf/repos/:id/frontmatter/summary
- *   suggestFrontmatter(repoId)     — POST   /api/okf/repos/:id/frontmatter/suggest  (returns the proposed set without writing)
- *   patchFrontmatter(repoId, fm)   — PATCH  /api/okf/repos/:id/frontmatter  (curator edit; re-embeds via TEI)
+ * Story 1.7 (supersedes the Story 1.6 dedicated collection): the
+ * per-repo frontmatter lives in `okf_repositories.frontmatter` (a new
+ * doc field, additive) — the index.md YAML frontmatter block is the
+ * curator-facing projection. The curator edits the index.md YAML
+ * directly via the existing concept-meta PATCH (which writes through
+ * to the doc field). This service is a thin wrapper over the
+ * read-side endpoint the Publish step's gate uses, plus the
+ * `suggestFrontmatter` POST the operator-migration script calls.
  *
- * Mirrors the existing okfRepoOps.js style: pure orchestration over
- * httpService — no Vuex, no components. Both the Studio wizard steps and
- * the Studio editor drive this.
+ * Endpoints:
+ *   getFrontmatter(repoId)         — GET  /api/okf/repos/:id (the doc
+ *                                      field is included; expanded to
+ *                                      per-row shape for the gate)
+ *   suggestFrontmatter(repoId)     — POST /api/okf/repos/:id/frontmatter/suggest
+ *                                      (kept for the operator migration
+ *                                      script + the migration window)
+ *   patchFrontmatter(repoId, fm)   — PATCH /api/okf/repos/:id
+ *                                      (the new field lives on the
+ *                                      repo doc; writes through the
+ *                                      existing repo PATCH)
  *
- * Path convention: httpService.baseURL is '/api' (see services/httpService.js
- * + config/runtime baseURL setup), so calls here must use the route path
- * WITHOUT a leading '/api' — the existing okfRepoOps.js / repoOkfService /
- * conceptService all use '/okf/...' for the same reason. The first version
- * of this service shipped with '/api/okf/...' which produced 404s at
- * /api/api/okf/.../frontmatter in production (rebuild 2026-10-07).
+ * The new design drops the dedicated okf_repo_frontmatter + summary
+ * collections; this service is the migration-window shim.
  *
- * The Studio editor's RepoEditor.vue pane is wired in a separate MR
- * (deferred — server-side API contract is in place; UI surface for the
- * persistent editor ships as a follow-up).
+ * Path convention: httpService.baseURL is '/api', so calls here use
+ * '/okf/...' without the leading '/api' (the convention used by
+ * okfRepoOps.js / repoOkfService / conceptService).
  */
 import httpService from './httpService';
 
-function url(repoId, suffix = '') {
-  return `/okf/repos/${encodeURIComponent(repoId)}/frontmatter${suffix}`;
+function repoUrl(repoId) {
+  return `/okf/repos/${encodeURIComponent(repoId)}`;
 }
 
-/**
- * Read the full per-tag frontmatter rows. Returns { repo_id, frontmatter: [...] }
- * where each row is { _key, field, value, weight, vector, generated_at,
- * generated_by, approved_at, approved_by, version }.
- *
- * Used by the wizard Curate step's "Tags" sub-card for read-only display,
- * and by the editor pane for the editable list.
- */
+// Read the per-repo frontmatter rows for the Publish step's gate.
+// Reads the repo doc (which includes the new frontmatter field) and
+// expands the { topic, entity, ..., _approved } shape into the per-row
+// { _key, field, value, approved_at } shape the gate consumes. The
+// server-side `getFrontmatter` endpoint is removed; the canonical
+// store is the doc field.
 export async function getFrontmatter(repoId) {
-  const res = await httpService.get(url(repoId));
-  return res.data;
+  const res = await httpService.get(repoUrl(repoId));
+  const repo = (res && res.data && res.data.data) || res.data || res;
+  const fm = repo && repo.frontmatter;
+  if (!fm) return { repo_id: repoId, frontmatter: [] };
+  const approvedByValue = new Map();
+  for (const a of Array.isArray(fm._approved) ? fm._approved : []) {
+    if (a && a.field && a.value) {
+      approvedByValue.set(`${a.field}::${a.value}`, a);
+    }
+  }
+  const rows = [];
+  for (const field of ['topic', 'entity', 'forbidden', 'keyword']) {
+    const list = Array.isArray(fm[field]) ? fm[field] : [];
+    for (const value of list) {
+      const a = approvedByValue.get(`${field}::${value}`);
+      rows.push({
+        _key: `${field}:${value}`,
+        repo_id: repoId,
+        field,
+        value,
+        weight: 1.0,
+        approved_at: a ? a.approved_at : null,
+        approved_by: a ? a.approved_by : null,
+        version: fm.version
+      });
+    }
+  }
+  for (const field of ['scope', 'summary']) {
+    const v = fm[field];
+    if (v) {
+      const a = approvedByValue.get(`${field}::${v}`);
+      rows.push({
+        _key: `${field}:${v}`,
+        repo_id: repoId,
+        field,
+        value: v,
+        weight: 1.0,
+        approved_at: a ? a.approved_at : null,
+        approved_by: a ? a.approved_by : null,
+        version: fm.version
+      });
+    }
+  }
+  return { repo_id: repoId, frontmatter: rows };
 }
 
-/**
- * Read the denormalized hot-path summary row that the retriever uses.
- * Returns the 6 precomputed combination vectors + per-field counts + version.
- * Used by operator-facing "publish-gate is green" indicators.
- */
+// Retained for migration-window compatibility (the operator
+// republish-with-tags script + the wizard's auto-suggest may still
+// call it). Reads come through the repo doc; the response shape is
+// unchanged for back-compat.
 export async function getFrontmatterSummary(repoId) {
-  const res = await httpService.get(url(repoId, '/summary'));
-  return res.data;
+  const res = await httpService.get(repoUrl(repoId));
+  const repo = (res && res.data && res.data.data) || res.data || res;
+  const fm = repo && repo.frontmatter;
+  if (!fm) return null;
+  return {
+    _key: repoId,
+    topic_count: Array.isArray(fm.topic) ? fm.topic.length : 0,
+    entity_count: Array.isArray(fm.entity) ? fm.entity.length : 0,
+    keyword_count: Array.isArray(fm.keyword) ? fm.keyword.length : 0,
+    forbidden_count: Array.isArray(fm.forbidden) ? fm.forbidden.length : 0,
+    summary: fm.summary || '',
+    scope: fm.scope || '',
+    version: fm.version,
+    updated_at: fm.updated_at,
+    updated_by: fm.updated_by
+  };
 }
 
 /**
  * Trigger LLM auto-suggestion. Returns { repo_id, suggested: {topic, entity, scope,
  * forbidden, summary, keyword}, validation: { validated, inconsistencies } }.
- * Does NOT write — the curator must explicitly save via patchFrontmatter (or via
- * the lifecycle publish hook in the wizard's Publish step, which passes the
- * suggested set through to the server).
+ * Does NOT write — the curator must explicitly save (via PATCH on the repo
+ * doc, or via the lifecycle publish hook which passes the suggested set
+ * through to the server).
  *
  * The backend's suggestTags runs the AsyncOpenAI-equivalent via vLLM with
  * retry+backoff per reference_remote-llm-endpoint.md — a slow call (5-15s);
  * callers should show a "Curating…" indicator with no expected quick resolution.
  */
 export async function suggestFrontmatter(repoId) {
-  const res = await httpService.post(url(repoId, '/suggest'));
+  const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/frontmatter/suggest`);
   return res.data;
 }
 
 /**
- * Curator edit endpoint. The body shape mirrors the lifecycle `frontmatter`
- * payload documented in validators/repository-validator.js (topic 3-30 values,
- * entity 0-10, scope 1 word, forbidden 2-6, summary 1 sentence, keyword 0-10,
- * comprehensive boolean for "no forbidden list because the repo is meant to be
- * comprehensive").
- *
- * The server re-embeds via TEI and re-writes both collections atomically.
+ * Curator save. Story 1.7: the canonical store is the repo doc
+ * field; the PATCH writes through. The body's `frontmatter` key is
+ * the same shape as the doc field (the validator accepts it and the
+ * service updates the doc atomically).
  */
 export async function patchFrontmatter(repoId, frontmatter) {
-  const res = await httpService.patch(url(repoId), frontmatter);
+  const res = await httpService.patch(repoUrl(repoId), { frontmatter });
   return res.data;
 }
 

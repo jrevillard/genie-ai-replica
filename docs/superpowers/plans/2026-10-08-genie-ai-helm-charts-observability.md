@@ -4,7 +4,7 @@
 
 **Goal:** Ship the observability tier of the GENIE.AI Helm chart: vmoperator (VictoriaMetrics / VictoriaLogs / VictoriaTraces official operator) + opentelemetry-operator + Grafana subchart + tempo-proxy (Swarm Jaeger-query proxy for VictoriaTraces) + per-service ServiceMonitors + PII redaction transform processor. Profile-gated (`dev=off`, `staging/prod/sovereign=on` per spec §5.2).
 
-**Architecture:** Three independent operators, each managing their own custom resources: vmoperator manages `VMSingle`/`VMCluster`/`VLSingle`/`VLCluster`/`VTSingle`/`VTCluster`/`VMAgent`/`VMRule`, opentelemetry-operator manages `OpenTelemetryCollector`, Grafana is a lightweight subchart with sidecar datasources. Tempo-proxy is a community-maintained chart that mirrors the Swarm `tempo-proxy` service (Jaeger query API in front of VictoriaTraces). ServiceMonitors, for Prometheus-style scrape, get generated per Group 5 service conditionally. PII redaction at the OpenTelemetry Collector `transform` processor (regex rules ported from the current Swarm fluentd config).
+**Architecture:** Three independent operators, each managing their own custom resources: vmoperator manages `VMSingle`/`VMCluster`/`VLSingle`/`VLCluster`/`VTSingle`/`VTCluster`/`VMAgent`/`VMRule`, opentelemetry-operator manages `OpenTelemetryCollector`, Grafana is a lightweight subchart with sidecar datasources. Tempo-proxy is a community-maintained chart that mirrors the Swarm `tempo-proxy` service (Jaeger query API in front of VictoriaTraces). ServiceMonitors, for Prometheus-style scrape, get generated per Group 5 service conditionally. PII redaction and log-metadata stamping port **verbatim** from the existing `configs/otel/otel-collector-config.yaml` (OTTL `pii_redact` + `stamp_log_metadata_from_msg`) — the chart ports, never rewrites. Collector topology: **gateway** (Deployment, OTLP traces/metrics) + **agent** (DaemonSet, filelog container logs → gateway), replacing the Swarm fluentd-driver → `fluent_forward` pipeline which does not exist on containerd/K8s. See `docs/charts/otel-migration.md`.
 
 **Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), kind 1.32, vmoperator chart `~> 0.45.0`, opentelemetry-operator chart `~> 0.50.0`, Grafana helm chart `~> 8.x`, tempo-proxy custom chart (community-maintained, ex `grokify/jaeger-query-proxy`).
 
@@ -29,6 +29,7 @@ Five input-class concerns the spec implies but no Plan 4 task tests explicitly.
 3. **tempo-proxy Jaeger query API parity with VictoriaTraces** — VictoriaTraces exposes OTLP storage but not the Jaeger query API. tempo-proxy is the bridge. Misconfigured endpoint or wrong query prefix → "Trace explorer" dashboard silently fails. **Pinned in Task 6 Step 5** — render asserts the tempo-proxy Service exposes port 16686 + Jaeger query URL path.
 4. **PII redaction YAML schema** — OpenTelemetry Collector `transform` processor schema is versioned (v0.111+ uses `error_mode: ignore`). Older syntax accepted silently. **Pinned in Task 9 Step 4** — render asserts `error_mode: ignore` + each transform context statements name parsed by `otelcol validate`.
 5. **ClusterProfile auto-derivation race** — Plan 4 implements `observability.enabled: {{ .Values.clusterProfile | default "dev" | eq "prod" | or (.Values.clusterProfile | eq "staging") | or ... }}`. Multiple boolean conditions can drift. **Pinned in Task 11 Step 4** — values.yaml tests render with `clusterProfile: dev` (observability off) and `clusterProfile: prod` (on); assert only.
+6. **Log ingestion without the fluentd driver** — containerd/K8s has no Docker fluentd logging driver, so the Swarm log pipeline (stdout → `fluent_forward` :24224 → VL) dies on arrival. Without a node-level agent, **zero container logs reach VictoriaLogs** and the admin logs UI returns empty. **Pinned in Task 4b Step 5** — render asserts BOTH collector CRs (gateway Deployment + agent DaemonSet); the agent's filelog receiver + hostPath mount are the structural fix.
 
 ---
 
@@ -339,100 +340,34 @@ git commit -m "feat(charts): vmoperator CRDs (VMSingle/Cluster + VLSingle + VTSi
 ## Task 4: OTel operator CRD + PII redaction transformation
 
 **Files:**
-- Create: `charts/genieai-umbrella/configs/otel-pii-redaction.yaml` (static data, mounted via ConfigMap)
+- Create: `charts/genieai-umbrella/configs/otel-collector-config.yaml` (ported VERBATIM from repo `configs/otel/otel-collector-config.yaml` — per `docs/charts/otel-migration.md` §5)
 - Create: `charts/genieai-umbrella/templates/_observability/otel-collector.yaml`
 
 **Interfaces:**
-- Consumes: `observability.otel.enabled`, `observability.piiRedaction.rules`.
-- Produces: 1 `OpenTelemetryCollector` + 1 supporting ConfigMap.
+- Consumes: `observability.otel.enabled`; the existing repo collector config (source of truth for PII + metadata stamping).
+- Produces: 1 `OpenTelemetryCollector` (gateway mode) whose `spec.config` is the ported file inlined via `.Files.Get`.
 
-- [ ] **Step 1: Write `charts/genieai-umbrella/configs/otel-pii-redaction.yaml`**
+**Porting rule (from code-review lessons + `docs/charts/otel-migration.md`):** the existing config is months of tuning (`pii_redact` OTTL with the double-unescape trap, `stamp_log_metadata_from_msg`, healthcheck). **Port, never rewrite.** A from-scratch config silently drops the real PII rules and the admin-logs metadata contract.
 
-```yaml
-# Operator-supplied PII redaction config for OpenTelemetry Collector.
-# This is the default; operators override per env via values.yaml
-# (observability.piiRedaction.rules). Used by the OTel Collector ConfigMap
-# in templates/_observability/otel-collector.yaml.
+- [ ] **Step 1: Copy the existing collector config into the chart**
 
-processors:
-  transform/PII:
-    error_mode: ignore   # otelcol v0.111+ stable; per Review Focus #4
-    trace_statements:
-      - context: span
-        statements:
-          - replace_all_patterns(attributes["http.url"], "(email|token|key|password)", "[REDACTED]")
-          - replace_all_patterns(attributes["http.target"], "(email|token|key|password)", "[REDACTED]")
-    log_statements:
-      - context: log
-        statements:
-          - replace_all_patterns(body, "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}", "[EMAIL REDACTED]")
-          - replace_all_patterns(body, "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b", "[IP REDACTED]")
-          - replace_all_patterns(body, "\\b[A-Fa-f0-9]{32,}\\b", "[HEX REDACTED]")
-          - replace_all_patterns(body, "\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\b", "[UUID REDACTED]")
+```bash
+cp configs/otel/otel-collector-config.yaml \
+   charts/genieai-umbrella/configs/otel-collector-config.yaml
 ```
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_observability/otel-collector.yaml`**
+- [ ] **Step 2: Apply the K8s port edits (and ONLY these)**
+
+1. **Remove** the `fluent_forward` receiver block and its entry from the logs pipeline `receivers:` list — containerd/K8s has no fluentd logging driver; logs arrive via the Task 4b agent over OTLP.
+2. **Keep verbatim** — `pii_redact` OTTL statements (do NOT touch the double-escaped regexes: YAML single-quote + OTTL unescape makes `\\s`/`\\.` load-bearing; single-escaping kills the pipeline with an OTTL parse error at collector boot), `stamp_log_metadata_from_msg`, `memory_limiter`, `batch`, healthcheck.
+3. **Retarget exporters** to K8s DNS — replace hard-coded hosts with the chart's service names: `vtraces.{{ "{{ .Values.namespace }}" }}.svc.cluster.local:10428`, `vmetrics...:8429`, `vlogs...:9428` (Helm templating is NOT evaluated in `.Files.Get` content by default — either keep plain DNS `vtraces.genieai.svc.cluster.local` fixed to the default namespace, or render through a ConfigMap and set endpoints via collector `env` substitution. For Plan 4 the plain fixed names are acceptable; per-env overrides land in Plan 6.)
+
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_observability/otel-collector.yaml`**
+
+Single source of truth: the CR's `spec.config` inlines the ported file via `.Files.Get`. No duplicated inline config, no second copy to drift.
 
 ```yaml
 {{- if .Values.observability.otel.enabled -}}
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ include "genieai-common.fullname" . }}-otel-collector
-  namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-collector"))) | nindent 4 }}
-data:
-  otelcol.yaml: |
-    receivers:
-      otlp:
-        protocols:
-          grpc:
-            endpoint: 0.0.0.0:4317
-          http:
-            endpoint: 0.0.0.0:4318
-    processors:
-      transform/PII:
-        error_mode: ignore
-        trace_statements:
-          - context: span
-            statements:
-              - replace_all_patterns(attributes["http.url"], "(email|token|key|password)", "[REDACTED]")
-              - replace_all_patterns(attributes["http.target"], "(email|token|key|password)", "[REDACTED]")
-        log_statements:
-          - context: log
-            statements:
-              - replace_all_patterns(body, "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}", "[EMAIL REDACTED]")
-              - replace_all_patterns(body, "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b", "[IP REDACTED]")
-              - replace_all_patterns(body, "\\b[A-Fa-f0-9]{32,}\\b", "[HEX REDACTED]")
-              - replace_all_patterns(body, "\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\b", "[UUID REDACTED]")
-    service:
-      pipelines:
-        traces:
-          receivers: [otlp]
-          processors: [transform/PII]
-          exporters: [otlp/vl, otlp/vt]
-        logs:
-          receivers: [otlp]
-          processors: [transform/PII]
-          exporters: [otlp/vl]
-        metrics:
-          receivers: [otlp]
-          exporters: [otlp/vm]
-    exporters:
-      otlp/vm:
-        endpoint: vmetrics.{{ .Values.namespace }}.svc.cluster.local:8429
-        tls:
-          insecure: true
-      otlp/vl:
-        endpoint: vlogs.{{ .Values.namespace }}.svc.cluster.local:9428
-        tls:
-          insecure: true
-      otlp/vt:
-        endpoint: vtraces.{{ .Values.namespace }}.svc.cluster.local:10428
-        tls:
-          insecure: true
----
 apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
 metadata:
@@ -443,40 +378,11 @@ metadata:
 spec:
   mode: deployment
   image: ghcr.io/open-telemetry/opentelemetry-collector-contrib:0.111.0
+  # The gateway's OTLP receiver port is exposed as a Service named
+  # `genieai-collector-collector` by the operator — the Task 4b agent and
+  # app SDKs (OTEL_EXPORTER_OTLP_ENDPOINT) target that name.
   config:
-    receivers:
-      otlp:
-        protocols:
-          grpc:
-            endpoint: 0.0.0.0:4317
-          http:
-            endpoint: 0.0.0.0:4318
-    exporters:
-      otlp/vm:
-        endpoint: vmetrics.{{ .Values.namespace }}.svc.cluster.local:8429
-        tls:
-          insecure: true
-      otlp/vl:
-        endpoint: vlogs.{{ .Values.namespace }}.svc.cluster.local:9428
-        tls:
-          insecure: true
-      otlp/vt:
-        endpoint: vtraces.{{ .Values.namespace }}.svc.cluster.local:10428
-        tls:
-          insecure: true
-    service:
-      pipelines:
-        traces:
-          receivers: [otlp]
-          processors: [transform/PII]
-          exporters: [otlp/vt]
-        logs:
-          receivers: [otlp]
-          processors: [transform/PII]
-          exporters: [otlp/vl]
-        metrics:
-          receivers: [otlp]
-          exporters: [otlp/vm]
+{{ .Files.Get "configs/otel-collector-config.yaml" | indent 4 }}
   env:
     - name: MY_POD_IP
       valueFrom:
@@ -485,37 +391,212 @@ spec:
 {{- end -}}
 ```
 
-- [ ] **Step 3: Render with `clusterProfile: prod` and confirm components**
+- [ ] **Step 4: Render with `clusterProfile: prod` and confirm components**
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep -E "OpenTelemetryCollector|otel-collector" | head`
-Expected: shows both the ConfigMap and the collector CR.
+Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep -E "OpenTelemetryCollector|genieai-collector" | head`
+Expected: shows the gateway collector CR with its inlined config.
 
-- [ ] **Step 4: Validate the rendered OTel config with `otelcol validate` (Review Focus #4)**
+- [ ] **Step 5: Validate the ported config survived intact (Review Focus #4 + port fidelity)**
 
 Run:
 
 ```bash
 helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | \
   python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
-  cm = next(d for d in docs if d and d.get('kind') == 'ConfigMap' and 'otel-collector' in d.get('metadata',{}).get('name','')); \
-  print(cm['data']['otelcol.yaml'])" > /tmp/otelcol-rendered.yaml
-# Validate with otelcol binary if available, else grep-based sanity check
-which otelcol >/dev/null 2>&1 && otelcol validate --config=/tmp/otelcol-rendered.yaml || \
-  grep -c "error_mode: ignore" /tmp/otelcol-rendered.yaml
+  cr = next(d for d in docs if d and d.get('kind') == 'OpenTelemetryCollector'); \
+  cfg = cr['spec']['config']; \
+  assert 'pii_redact' in str(cfg), 'pii_redact missing'; \
+  assert 'stamp_log_metadata_from_msg' in str(cfg), 'metadata stamp missing'; \
+  assert 'fluent_forward' not in str(cfg), 'fluent_forward must be removed on K8s'; \
+  import json; print(json.dumps(cfg['service']['pipelines']['logs'], indent=2))"
 ```
 
-Expected: 1 (grep count of error_mode), OR exit 0 from `otelcol validate`.
+Expected: prints the logs pipeline; the three assertions pass. If `otelcol` is available locally, additionally dump `cfg` to a file and run `otelcol validate --config=...`.
 
-- [ ] **Step 5: `helm lint --strict`**
+- [ ] **Step 6: `helm lint --strict`**
 
 Run: `helm lint charts/genieai-umbrella --strict`
 Expected: 0 errors.
 
+- [ ] **Step 7: Commit**
+
+```bash
+git add charts/genieai-umbrella/configs/otel-collector-config.yaml charts/genieai-umbrella/templates/_observability/otel-collector.yaml
+git commit -m "feat(charts): gateway OpenTelemetryCollector with verbatim-ported config (pii_redact + metadata stamp)"
+```
+
+---
+
+## Task 4b: Log-ingestion agent — OpenTelemetryCollector DaemonSet
+
+**Files:**
+- Create: `charts/genieai-umbrella/templates/_observability/otel-agent.yaml`
+- Create: `charts/genieai-umbrella/templates/_rbac/otel-agent-role.yaml`
+
+**Interfaces:**
+- Consumes: `observability.otel.enabled`; the gateway CR from Task 4 (operator-exposed Service `genieai-collector-collector`).
+- Produces: 1 `OpenTelemetryCollector` (mode: daemonset) + ServiceAccount/Role for `k8sattributes`.
+
+**Why (Review Focus #6 / `docs/charts/otel-migration.md` §3 item 1):** the Swarm pipeline shipped container logs via the Docker fluentd driver → `fluent_forward`. On containerd/K8s that driver does not exist; without a node-level filelog agent, **no container logs reach VictoriaLogs** and the admin logs UI returns empty. The agent is a dumb shipper — all transforms stay in the gateway (single PII/stamping point).
+
+- [ ] **Step 1: Run red-gate — no agent CR yet**
+
+Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep -c "mode: daemonset" || echo "0"`
+Expected: prints `0`.
+
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_rbac/otel-agent-role.yaml`**
+
+```yaml
+{{- if .Values.observability.otel.enabled -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: genieai-agent
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: genieai-agent
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
+rules:
+  # k8sattributes enrichment: resolve pod IP -> pod/namespace metadata
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: genieai-agent
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: genieai-agent
+subjects:
+  - kind: ServiceAccount
+    name: genieai-agent
+    namespace: {{ .Values.namespace }}
+{{- end -}}
+```
+
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_observability/otel-agent.yaml`**
+
+```yaml
+{{- if .Values.observability.otel.enabled -}}
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: genieai-agent
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
+spec:
+  mode: daemonset
+  serviceAccount: genieai-agent
+  image: ghcr.io/open-telemetry/opentelemetry-collector-contrib:0.111.0
+  volumes:
+    - name: varlogpods
+      hostPath:
+        path: /var/log/pods
+        type: Directory
+  volumeMounts:
+    - name: varlogpods
+      mountPath: /var/log/pods
+      readOnly: true
+  config:
+    receivers:
+      filelog:
+        # containerd CRI log layout: /var/log/pods/<ns>_<pod>_<uid>/<container>/<n>.log
+        include:
+          - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/kube-system_*/*/*.log
+        start_at: end
+        include_file_path: true
+        operators:
+          # CRI line format: "<time> <stream> <logtag> <body>"
+          - type: regex_parser
+            id: parse-cri
+            regex: '^(?P<time>[^ ]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) (?P<body>.*)$'
+            timestamp:
+              parse_from: attributes.time
+              layout_type: gotime
+              layout: '2006-01-02T15:04:05.999999999Z07:00'
+          - type: move
+            from: attributes.body
+            to: body
+          - type: move
+            from: attributes.stream
+            to: attributes["log.iostream"]
+    processors:
+      k8sattributes:
+        extract:
+          metadata:
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.namespace.name
+            - k8s.container.name
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.ip
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 15
+      batch: {}
+    exporters:
+      # Ship to the gateway — single transform point (pii_redact + stamp
+      # live there, NOT here). OTLP/HTTP to the operator-created Service.
+      otlp/gateway:
+        endpoint: http://genieai-collector-collector.{{ .Values.namespace }}.svc.cluster.local:4318
+        tls:
+          insecure: true
+    service:
+      pipelines:
+        logs:
+          receivers: [filelog]
+          processors: [k8sattributes, memory_limiter, batch]
+          exporters: [otlp/gateway]
+{{- end -}}
+```
+
+- [ ] **Step 4: `helm lint --strict`**
+
+Run: `helm lint charts/genieai-umbrella --strict`
+Expected: 0 errors.
+
+- [ ] **Step 5: Render and assert BOTH collector modes exist (Review Focus #6)**
+
+Run:
+
+```bash
+helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | \
+  python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
+  crs = [d for d in docs if d and d.get('kind') == 'OpenTelemetryCollector']; \
+  modes = sorted(c['spec']['mode'] for c in crs); \
+  assert modes == ['daemonset', 'deployment'], modes; \
+  agent = next(c for c in crs if c['spec']['mode'] == 'daemonset'); \
+  assert 'filelog' in agent['spec']['config']['receivers'], 'no filelog receiver'; \
+  assert any(v.get('hostPath', {}).get('path') == '/var/log/pods' for v in agent['spec'].get('volumes', [])), 'no hostPath'; \
+  print('PASS')"
+```
+
+Expected: prints `PASS` (gateway `deployment` + agent `daemonset`, filelog receiver, `/var/log/pods` hostPath).
+
 - [ ] **Step 6: Commit**
 
 ```bash
-git add charts/genieai-umbrella/configs/otel-pii-redaction.yaml charts/genieai-umbrella/templates/_observability/otel-collector.yaml
-git commit -m "feat(charts): OpenTelemetryCollector with PII redaction transform processor"
+git add charts/genieai-umbrella/templates/_observability/otel-agent.yaml charts/genieai-umbrella/templates/_rbac/otel-agent-role.yaml
+git commit -m "feat(charts): DaemonSet log-ingestion agent (filelog -> gateway -> VL)"
 ```
 
 ---
@@ -1088,6 +1169,7 @@ After writing all 11 tasks, run this checklist against the spec.
 | §10 opentelemetry-operator | Task 4 |
 | §10 Grafana subchart | Task 5 |
 | §10 PII redaction transform | Task 4 |
+| §10 log ingestion (agent DaemonSet replacing the fluentd-driver pipeline) | Task 4b |
 | §7 ServiceMonitors conditional | Task 7 |
 | §10 tempo-proxy (Swarm tempo-proxy equivalence, Jaeger query API) | Task 6 |
 | §8 observability SealedSecrets (grafanaAdminPassword, kcGrafanaClientSecret per §8 F14) | Task 10 |
@@ -1107,10 +1189,11 @@ Sections deferred:
 1. vmoperator CRD version compat (K8s 1.32) → Task 1 Step 4 (`helm dep list` parses pinned versions).
 2. ServiceMonitor only when observability + per-service toggle → Task 7 Step 3 (render asserts 0 ServiceMonitors when observability off).
 3. tempo-proxy Jaeger port + URL prefix → Task 6 Step 4 (Python parse of Service spec).
-4. PII redaction yaml schema (error_mode: ignore) → Task 4 Step 4 (grep + otelcol validate).
+4. PII redaction yaml schema (error_mode: ignore) → Task 4 Step 5 (assertions on ported config + otelcol validate when available).
 5. ClusterProfile-driven toggles → Task 8 Step 3-4 (render with prod AND dev; assert observable count).
+6. Log ingestion without the fluentd driver → Task 4b Step 5 (render asserts gateway `deployment` + agent `daemonset` CRs, filelog receiver, `/var/log/pods` hostPath).
 
-All five covered.
+All six covered.
 
 **5. Adversarial review note**: `/code-review` slash command recommended before executing Plan 4 Tasks 1-11.
 
@@ -1118,11 +1201,11 @@ All five covered.
 
 ## Plan Stats
 
-- **Tasks:** 11
-- **Files created:** 8 (4 CRD templates + 1 OTel template + 1 Grafana datasources + 1 tempo-proxy + 1 factory template edit + SealedSecrets + helper) + values.yaml diff
+- **Tasks:** 12
+- **Files created:** 10 (4 CRD templates + 1 ported collector config + 1 gateway OTel template + 1 agent OTel template + 1 agent RBAC + 1 Grafana datasources + 1 tempo-proxy + SealedSecrets + helper + factory edit) + values.yaml diff
 - **Files modified:** 2 (Chart.yaml + values.yaml)
-- **Commits planned:** 11
-- **Estimated review surface:** ~900 lines added (heavy CRD templates)
+- **Commits planned:** 12
+- **Estimated review surface:** ~1000 lines added (heavy CRD templates)
 
 ## What's next after Plan 4
 

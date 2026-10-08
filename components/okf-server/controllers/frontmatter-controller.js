@@ -34,13 +34,26 @@ function validate(schema, body) {
 
 // PATCH schema: a curator MAY override any per-tag value. The service
 // re-embeds via TEI when values change and re-writes both collections.
+// PATCH schema: a curator MAY override any per-tag value. The service
+// re-embeds via TEI when values change and re-writes both collections.
+//
+// Per David 2026-10-08: tags must be SUFFICIENT to semantically describe
+// what is in the OKF repository — the entity and keyword caps in
+// particular must NOT be a quality constraint disguised as a schema
+// limit. A real Alphabet/Google concept set returned 16 entities and
+// 0 keywords on the first live call (the LLM's honest answer, the 10-
+// entity cap was an arbitrary old-code bound). Bumped the entity cap
+// to 20 (any more is just list-padding) and the keyword cap to 20.
+// The topic and forbidden caps stay tight (3-8 and 2-6) because those
+// are the routing decisions: too many topics collapses sibling-repo
+// distinction, too many forbidden expands the misroute surface.
 const patchSchema = Joi.object({
   topic: Joi.array().items(Joi.string().min(1).max(64)).min(3).max(8),
-  entity: Joi.array().items(Joi.string().min(1).max(64)).max(10),
+  entity: Joi.array().items(Joi.string().min(1).max(64)).max(20),
   scope: Joi.string().allow('').max(64),
   forbidden: Joi.array().items(Joi.string().min(1).max(64)).min(2).max(6),
   summary: Joi.string().allow('').max(1024),
-  keyword: Joi.array().items(Joi.string().min(1).max(64)).max(10),
+  keyword: Joi.array().items(Joi.string().min(1).max(64)).max(20),
   comprehensive: Joi.boolean()
 }).min(1);
 

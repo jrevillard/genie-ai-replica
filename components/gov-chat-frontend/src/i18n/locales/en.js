@@ -2448,6 +2448,14 @@ export default {
         missingType: 'Concept is missing a type.',
         badActor: 'Source actor must start with agent:/human:/tool:/process:.'
       },
+      // Story 1.7 (2026-10-08): the per-repo frontmatter (the
+      // tag-set that builds the OKF bundle's vectorized head) lives
+      // in the index.md YAML. The chip UI mounts in the right rail
+      // when the index concept is selected. For non-index selections
+      // a single InfoTip explains the per-repo-on-index-only contract.
+      frontmatter: {
+        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+      },
       saveBlocked: 'Save blocked: fix conformance issues first.'
     },
     validation: {
@@ -2570,6 +2578,41 @@ export default {
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: "{'{'}n{'}'} document(s)"
+    },
+    // Story 1.7 (2026-10-08): the per-repo frontmatter chip UI
+    // (Refresh suggestions / Approve all / Save tags) used in BOTH
+    // the wizard's Curate step and the OKF Studio editor's right
+    // rail. The values match the translateMixin default strings
+    // in components/okf/FrontmatterPanel.vue so the locale tree
+    // is the source of truth and the inline fallbacks are the
+    // safety net.
+    frontmatter: {
+      title: 'Frontmatter tags — what this repo is about',
+      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. The LLM proposes from a chunk sample; review and approve before Publish.',
+      refresh: 'Refresh suggestions',
+      suggesting: 'Curating…',
+      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestFailed: 'Suggest failed.',
+      removeTag: 'Remove tag',
+      approveTag: 'Approve tag',
+      fieldEmpty: '—',
+      addPlaceholder: 'Add {field}',
+      add: 'Add',
+      none: 'No tags yet. The LLM will draft them when you click Refresh suggestions.',
+      saving: 'Saving…',
+      save: 'Save tags',
+      approveAll: 'Approve all',
+      saved: 'Saved',
+      error: 'Save failed.',
+      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      field: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      }
     }
   },
   link: {

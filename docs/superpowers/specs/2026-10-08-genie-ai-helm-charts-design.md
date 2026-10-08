@@ -87,7 +87,7 @@ genie-ai/
 | `genieai-common` | local file:// | `~> 0.1.0` | unconditional | always |
 | `postgresql` (CloudNativePG) | `https://cloudnative-pg.github.io/charts` | `~> 0.22.0` (mirrors CNPG 1.30) | `data.postgres.enabled` | Kong + Keycloak DBs |
 | `kube-arangodb` | `https://arangodb.github.io/kube-arangodb` | `~> 1.4.5` | `data.arangodb.enabled` | always |
-| `keycloak-operator` | `https://keycloak.github.io/keycloak-operator-helm` (official) | `~> 26.0.0` | `keycloak.enabled` | always |
+| `keycloak-operator` | `https://keycloak.github.io/keycloak-operator-helm` (official) | `~> 26.0.0` | `data.keycloak.enabled` | always |
 | `external-secrets-operator` (ESO) | `https://charts.external-secrets.io` | `~> 0.10.0` | `secrets.eso.enabled` | when `pluggable.secretsBackend: externalSecrets` |
 | `victoria-metrics-operator` | `https://victoriametrics.github.io/helm-charts` | `~> 0.45.0` | `observability.enabled` | profile-gated |
 | `victoria-logs-operator` | same chart family | `~> 0.10.0` | `observability.logs.enabled` | profile-gated |
@@ -292,17 +292,19 @@ Service inventory from the existing Swarm `docker-compose.yaml` (surveyed 2026-1
 - a `<name>-networkpolicy.yaml` (default-deny + explicit allowlist)
 - an entry in `tests/connectivity_test.yaml` if `enabled: true`
 
-**Group 5 (stateless app, move first)**: backend, frontend, document-repository, nginx, kong, clamav, redis.
+**Group 5 (stateless app, move first)**: backend, frontend, document-repository, nginx, kong, clamav.
 
-**Group 2 (cache, ephemeral state)**: redis, translation-cache.
+**Group 2 (cache, ephemeral state)**: redis.
 
 **Group 1 (observability)**: victoria-{metrics,logs,traces}, opentelemetry-collector, grafana (optional).
 
 **Group 4 (identity)**: keycloak, postgres cluster (CloudNativePG) — **mirror before cutover**.
 
-**Group 6 (AI/ML)**: vllm, vllm-translation-guardrail, tei, tei-reranker, chatqna-xeon-{backend,ui,nginx}, embedding, reranker, textgen, translation, guardrail, dataprep-arango-service, retriever-arango-service, httpService.
+**Group 6 (AI/ML)**: vllm, vllm-translation-guardrail, tei, tei-reranker, chatqna-xeon-{backend,ui,nginx}, embedding, reranker, textgen, translation, guardrail, dataprep-arango-service, retriever-arango-service.
 
 **Group 3 (vector DB, last)**: arangodb.
+
+**Count**: 26 services total. `redis` lives in Group 2 (cache role); it is **not** duplicated into Group 5. Services like `translation-cache` and `httpService` mentioned in earlier drafts do not appear in the current Swarm `docker-compose.yaml`; they are scoped to a later epic if reintroduced.
 
 Each group's chart enabling is independent. Day 0 install: `data.postgres.enabled=false data.arangodb.enabled=false services.*.enabled=true` for a partial install pattern during phased migration.
 
@@ -676,25 +678,41 @@ GitLab CI does the heavy lifting:
 
 **ReconciliationPolicy** (idempotency):
 
+The GitLab Agent for Kubernetes (KAS) is a thin agent; reconciliation policy is delegated to **Flux** running *behind* the KAS inside the cluster. The KAS-configurable fields are limited to:
+
+- `agent.gitlab.com/access_type` (ClusterAgent spec)
+- `agent.gitlab.com/project_id` (ClusterAgent spec)
+- `agent.gitlab.com/kubernetes_api` URL configuration
+
+For reconciliation policy knobs (`retries`, `pr-pause`, `manifest-conflict handling`), KAS delegates to **Flux `HelmRelease`** + `Kustomization` CRDs inside the cluster. The actual spec is implemented as **Flux `Kustomization` resources per env**, not as KAS Module fields:
+
 ```yaml
-# Per-env AnnotationPolicy attached to the KAS module manifest
-apiVersion: agent.gitlab.com/v1
-kind: Module
+# Per-env Flux Kustomization (lives inside the cluster)
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
 metadata:
-  name: genieai-reconciler
+  name: genieai-dev
+  namespace: flux-system
 spec:
-  reconciliation:
-    retries: 3
-    timeout: 120s
-    backoff: exponential
-    onDiff: pr-pause                # PR that changes env overlay blocks until MR rebases
-    onChartDrift: warn              # chart upgrade vs env override drift = warning, not fail
-    onManifestConflict: refuse      # same resource claimed by 2 sources = refuse
+  interval: 5m
+  retryInterval: 1m
+  retries: 5
+  sourceRef:
+    kind: GitRepository
+    name: genieai
+  path: ./deploy/environments/dev
   prune: true
-  recreateStuckPods: true
+  wait: true
+  timeout: 5m
+  force: false                       # refuse on manifest conflict; do not overwrite
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: genieai-dev-backend
+      namespace: genieai-dev
 ```
 
-This addresses the MR-rebase-during-deploy race: `onDiff: pr-pause` halts sync while the MR is open, then auto-resumes on merge. `onManifestConflict: refuse` prevents 3-way merge conflicts that would silently leave cluster in a half-state.
+Flux `force: false` addresses the MR-rebase-during-deploy concern: when a manifest conflicts with cluster state, Flux refuses to overwrite and surfaces a reconciler error to GitLab CI; the MR must rebase before the next sync. `retries: 5` handles transient API errors. `prune: true` removes stale resources on env overlays dropping a service.
 
 #### 19.3.2 ArgoCD — alternative for non-GitLab-Ultimate users, also a secondary path here
 

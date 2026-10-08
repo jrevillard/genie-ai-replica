@@ -143,6 +143,80 @@ services:
 ```markdown
 # Per-environment overlays
 
+The chart targets two K8s runtimes for `dev` (the only env that runs
+today) and the same chart runs on both unchanged. The `prod` overlay
+is a generic template (NOT el-salvador's values — those land in a
+dedicated migration plan).
+
+## dev — local K8s on a workstation
+
+Two equivalent setups:
+
+### Option A: minikube (best for laptop dev / CI)
+
+```bash
+# 1. start minikube (no GPU on minikube — disable AI/ML on dev; see overlay)
+minikube start --cpus=4 --memory=8g --driver=docker --addons=ingress
+
+# 2. install the chart with the dev overlay
+helm install test charts/genieai-umbrella \
+  --namespace genieai --create-namespace \
+  -f deploy/environments/dev/values-override.yaml
+
+# 3. expose the backend via port-forward
+kubectl port-forward -n genieai svc/backend 3000:80
+# backend available at http://localhost:3000
+```
+
+`minikube` = Docker/VirtualBox/hyperkit, single-node, ephemeral
+storage, no GPU. Good for chart-render checks + smoke tests. CI uses
+this exact flow.
+
+### Option B: k3s (best for on-prem dev / future prod)
+
+```bash
+# 1. install k3s as a systemd service (single-node dev)
+curl -sfL https://get.k3s.io | sh -s - --disable traefik --write-kubeconfig-mode 644
+# (--disable traefik leaves the ingress to our Envoy Gateway)
+
+# 2. install the chart with the dev overlay
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.0/cert-manager.yaml
+helm install test charts/genieai-umbrella \
+  --namespace genieai --create-namespace \
+  -f deploy/environments/dev/values-override.yaml
+
+# 3. expose the backend via port-forward
+sudo kubectl port-forward -n genieai svc/backend 3000:80 --address 0.0.0.0
+# backend available at http://<host-ip>:3000
+```
+
+`k3s` = single binary, persistent storage, GPU-ready (NVIDIA device
+plugin just works), air-gap friendly. Same chart, same command. Use
+this when you want persistent state (PVC), or when you want to test
+the GPU path locally on a workstation with a real GPU.
+
+## prod — generic template (no real cluster)
+
+`deploy/environments/prod/values-override.yaml` is a TEMPLATE only.
+Operators fork it for their prod cluster; the el-salvador migration
+plan will produce its own values-override when that cluster moves
+to K8s. The template's defaults are:
+
+- `clusterProfile: prod` — triggers 3-instance CNPG, VMCluster, etc.
+  (HA defaults; the operator may override per their cluster's actual
+  resources)
+- `ingress.enabled: true` — operators MUST set `ingress.host` and
+  `ingress.tls.issuerName` per their cluster's cert-manager Issuer
+- `migrate.enabled: true` — pre-install Job runs backend db-migrations
+- `uninstallPolicy.enabled: true` — the gate requires the namespace
+  annotation before `helm uninstall` (safety net for prod)
+
+The template does NOT contain: cluster IPs, GPU URLs, Issuer names,
+real SealedSecret values. Every operator-specific value is left for
+operators to fill in when they fork the file.
+
+## File layout
+
 Each `deploy/environments/<env>/` directory holds:
 
 - `values-override.yaml` — the per-env values (applied via `helm template

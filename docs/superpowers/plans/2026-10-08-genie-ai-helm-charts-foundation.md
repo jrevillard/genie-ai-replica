@@ -6,7 +6,7 @@
 
 **Architecture:** Library chart (`type: library`) provides reusable templates via `_helpers.tpl` + standalone templates, exported via `import-values:`. Umbrella chart consumes the library as a local file dependency, plus all stateful-service operators as Helm `dependencies` with `condition:` toggles. Single `helm install` deploys the whole umbrella into one namespace. ArgoCD ApplicationSet renders per-env Kustomize overlays pointing at `deploy/environments/<env>/`.
 
-**Tech Stack:** Helm 4.x, Helmfile-compatible but standalone helm-install for v1, chart-testing (`ct`), kind (k8s 1.32+), ArgoCD ApplicationSet (GitOps), kubectl 1.32+, kustomize 5.x.
+**Tech Stack:** Helm 4.x, Helmfile-compatible but standalone helm-install for v1, chart-testing (`ct`), kind (k8s 1.33+), ArgoCD ApplicationSet (GitOps), kubectl 1.33+, kustomize 5.x.
 
 **Spec:** `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` — this plan implements §3 (chart topology base), §4 (dependency model base, Keycloak URL only), §5 (values schema partial — global + namespace only), §6 (pluggability surface design only, no concrete backends yet), §13.1 partial (skip uninstall hook in foundation), §17 partial (foundation manifest only — operators and per-env configs come in later plans).
 
@@ -28,7 +28,7 @@ These five failure modes the spec implies but no plan-1 task tests explicitly. E
 
 1. **Library chart `import-values:` collision** — if two templates in `genieai-common/templates/_lib/` declare the same exported key, umbrella chart's values merge breaks. **Pinned in Task 4 step 3** (render test that fails on duplicate keys).
 2. **Helm test Pod missing `securityContext`** — the test Pod runs with default K8s `restricted` PSA; if `restricted` is enforced, the test Pod fails to schedule. **Pinned in Task 9 step 3** (test uses explicit `securityContext.runAsNonRoot: true`).
-3. **chart-testing `ct install` against kind without `--kube-version` flag** — kind defaults to an older k8s; the chart's recommended 1.30+ assumption breaks. **Pinned in Task 10 step 2** (CT config pins `kubeVersion: 1.32.0`).
+3. **chart-testing `ct install` against kind without `--kube-version` flag** — kind defaults to an older k8s; the chart's recommended 1.30+ assumption breaks. **Pinned in Task 10 step 2** (CT config pins `kubeVersion: 1.33.0`).
 4. **Chart.yaml `appVersion: latest` vs OCI tag immutable** — OCI registries reject `latest` for promotion; the chart must use explicit tags. **Pinned in Task 6 step 4** (chart-test verifies `appVersion` is not `latest`).
 5. **ArgoCD Application namespace conflict** — the Application manifest in `examples/` references `argocd` as install namespace; if applied by Helm before ArgoCD exists, install fails. **Pinned in Task 11 step 5** (helm template dry-run validates against `argocd` namespace only, not auto-applies).
 
@@ -315,7 +315,7 @@ git commit -m "feat(charts): add naming + label helpers to genieai-common"
     },
     "component": {
       "type": "string",
-      "description": "Top-level GENIE.AI component this label marks. Used by Prometheus service discovery, NetworkPolicy selectors, and Grafana dashboards. Open enum (additionalProperties tolerated); concrete values include: umbrella, namespace, data, data-postgres, data-arangodb, identity, kong, pre-install, sealed-secret, sealed-secret-validate, rbac, test, ... (per-template).",
+      "description": "Top-level GENIE.AI component this label marks. Used by Prometheus service discovery, NetworkPolicy selectors, and Grafana dashboards. Open enum (additionalProperties tolerated); concrete values include: umbrella, namespace, data, data-postgres, data-arangodb, identity, pre-install, sealed-secret, sealed-secret-validate, rbac, test, ... (per-template).",
       "default": "umbrella",
       "maxLength": 63
     }
@@ -607,13 +607,13 @@ metadata:
     # level so admission controllers refuse pods without required securityContext.
     pod-security.kubernetes.io/enforce: restricted
     # Pin to a specific version rather than `latest`. Across cluster upgrades
-    # (1.32 → 1.33), `latest` silently changes the policy version and may start
+    # (1.33 → 1.33), `latest` silently changes the policy version and may start
     # rejecting pods that previously scheduled without warning.
-    pod-security.kubernetes.io/enforce-version: v1.32
+    pod-security.kubernetes.io/enforce-version: v1.33
     pod-security.kubernetes.io/audit: restricted
-    pod-security.kubernetes.io/audit-version: v1.32
+    pod-security.kubernetes.io/audit-version: v1.33
     pod-security.kubernetes.io/warn: restricted
-    pod-security.kubernetes.io/warn-version: v1.32
+    pod-security.kubernetes.io/warn-version: v1.33
 ```
 
 - [ ] **Step 2: Render and confirm only one Namespace is produced**
@@ -630,7 +630,7 @@ metadata:
   labels:
     genieai.io/cluster-profile: "dev"
     pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/enforce-version: v1.32
+    pod-security.kubernetes.io/enforce-version: v1.33
 ```
 
 - [ ] **Step 3: Run lint strict**
@@ -642,7 +642,7 @@ Expected: 0 errors.
 
 ```bash
 git add charts/genieai-umbrella/templates/namespace.yaml
-git commit -m "feat(charts): render Namespace with cluster-profile + PSA labels (pinned v1.32)"
+git commit -m "feat(charts): render Namespace with cluster-profile + PSA labels (pinned v1.33)"
 ```
 
 ---
@@ -720,7 +720,7 @@ kind load docker-image alpine:3.20 --name genieai-test
 
 ```bash
 # Spin up kind cluster (one-time)
-kind create cluster --name genieai-test --image kindest/node:v1.32.0
+kind create cluster --name genieai-test --image kindest/node:v1.33.0
 
 # Install chart
 helm install test charts/genieai-umbrella -n genieai --create-namespace
@@ -733,7 +733,7 @@ Expected:
 - `Phase: Succeeded` for `test-namespace` pod.
 - Last log line `PASS`.
 
-If the pod fails to schedule with `forbidden: violates PodSecurity "restricted:v1.32"`, the securityContext from Step 2 is missing or incomplete — re-check.
+If the pod fails to schedule with `forbidden: violates PodSecurity "restricted:v1.33"`, the securityContext from Step 2 is missing or incomplete — re-check.
 
 - [ ] **Step 5: Tear down kind cluster (after verification)**
 
@@ -760,7 +760,7 @@ git commit -m "test(charts): helm test for Namespace + cluster-profile label"
 
 **Interfaces:**
 - Consumes: Tasks 6–9's chart structure.
-- Produces: a `ct install` config that CI runs, pinned to K8s 1.32 (Review Focus #3).
+- Produces: a `ct install` config that CI runs, pinned to K8s 1.33 (Review Focus #3).
 
 - [ ] **Step 1: Write `charts/ci/ct.yaml`**
 
@@ -783,7 +783,7 @@ charts:
     check-resource-keywords: true
     # Review Focus #3: pin a k8s version so ct runs against a known K8s.
     # The kind cluster created in CI uses matching image.
-    kubeVersion: 1.32.0
+    kubeVersion: 1.33.0
     skip-helm-dependencies: false
     helm-extra-args: --timeout 300s
     validate-changes: false
@@ -802,8 +802,8 @@ Plan 7). Locally:
 make test
 \`\`\`
 
-Pinned K8s version: **1.32.0** for chart-testing's `ct install --kube-version` flag.
-Matching kind node image: `kindest/node:v1.32.0`. Update both in lockstep.
+Pinned K8s version: **1.33.0** for chart-testing's `ct install --kube-version` flag.
+Matching kind node image: `kindest/node:v1.33.0`. Update both in lockstep.
 ```
 
 - [ ] **Step 3: Write `charts/genieai-umbrella/.helmignore`**
@@ -856,7 +856,7 @@ If `ct` is not installed: `brew install chart-testing` or download from `https:/
 
 ```bash
 git add charts/genieai-umbrella/.helmignore charts/.gitignore charts/ci/ct.yaml charts/ci/README.md
-git commit -m "ci(charts): umbrella .helmignore + .gitignore + chart-testing baseline (K8s 1.32)"
+git commit -m "ci(charts): umbrella .helmignore + .gitignore + chart-testing baseline (K8s 1.33)"
 ```
 
 Note: this is the FIRST commit; the vendored tarball + Chart.lock from Plan 1 Task 6 are intentionally included (they exist on disk) and never appear in PR diffs again, because the new `charts/.gitignore` excludes them. Future dep bumps update the same files (`git status` shows them as modified, not new) and may need `git add charts/genieai-umbrella/Chart.lock charts/genieai-umbrella/charts/*.tgz` explicitly to commit the diff (or not — common practice is to gitignore them and re-vendor locally per chart).
@@ -961,7 +961,7 @@ git commit -m "docs(charts): ArgoCD Application example (literal manifest, manua
 - [ ] **Step 1: Stand up a kind cluster**
 
 ```bash
-kind create cluster --name genieai-foundation --image kindest/node:v1.32.0
+kind create cluster --name genieai-foundation --image kindest/node:v1.33.0
 ```
 
 - [ ] **Step 2: Render umbrella with `helm template` and visually inspect output**
@@ -989,11 +989,11 @@ metadata:
     genieai.io/cluster-profile: "dev"
     app.kubernetes.io/part-of: genieai
     pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/enforce-version: v1.32
+    pod-security.kubernetes.io/enforce-version: v1.33
     pod-security.kubernetes.io/audit: restricted
-    pod-security.kubernetes.io/audit-version: v1.32
+    pod-security.kubernetes.io/audit-version: v1.33
     pod-security.kubernetes.io/warn: restricted
-    pod-security.kubernetes.io/warn-version: v1.32
+    pod-security.kubernetes.io/warn-version: v1.33
 ```
 
 - [ ] **Step 3: Install and run `helm test`**
@@ -1152,11 +1152,11 @@ Sections NOT covered by this plan, on purpose (move to Plans 2–8):
 
 1. Library `import-values:` collision → TDD red-steps in **Task 4 + Task 5** (chart fails lint without `values.yaml`; passes with it). `helm lint --strict` validates templates render without overlap but **does NOT detect duplicate `{{ define }}` keys** — explicit duplicate-define lint added in Plan 7.
 2. Helm test Pod missing securityContext → Task 9 Step 2 (test pod carries full `securityContext`) + Task 12 Step 4 (verifies post-install).
-3. chart-testing `ct install` without kube-version → Task 10 Step 1 (`ct.yaml` pins `kubeVersion: 1.32.0`).
+3. chart-testing `ct install` without kube-version → Task 10 Step 1 (`ct.yaml` pins `kubeVersion: 1.33.0`).
 4. `appVersion: latest` rejected in OCI → Task 6 Step 4 (`if grep ... ; then exit 1 ; else echo OK ; fi`, regex covers `"latest"`, `'latest'`, and `latest`).
 5. ArgoCD Application auto-render → Task 11 Step 3 (`grep "kind: Application$"` confirms not in rendered output).
 6. Tarball + Chart.lock committed in source → Task 5 Step 4 (`.helmignore` in library); Task 10 Step 3 (umbrella `.helmignore` excludes `charts/`, `*.tgz`, `*.lock`).
-7. PSA namespace labeling → Task 8 Step 1 (explicit `pod-security.kubernetes.io/enforce: restricted` + versioned `v1.32` not `latest`).
+7. PSA namespace labeling → Task 8 Step 1 (explicit `pod-security.kubernetes.io/enforce: restricted` + versioned `v1.33` not `latest`).
 8. Pluggable surface declared but unused → Task 7 Step 1–2 (values trimmed to foundation).
 9. test-utils image reference dangling → Task 9 Step 2 (`image: alpine:3.20` only).
 10. `kind load docker-image` missing → Task 9 Step 3 (pre-load `alpine:3.20` into kind).
@@ -1180,7 +1180,7 @@ All five + six follow-up concerns covered. No empty `Review Focus` lines.
 - **Files created:** 20 (committable source files; excludes generated `charts/` and `Chart.lock` which `.helmignore` keeps out of source)
 - **Commits planned:** 13 (one per task)
 - **Estimated review surface:** ~900 lines added
-- **Foundation deliverable:** `helm install genieai-umbrella` creates a namespace with `genieai.io/cluster-profile` + PSA-restricted labels; `helm test` passes against kind 1.32; `ct lint` clean; ArgoCD example documented in `examples/`; OPA policy directory scaffolded. Every later plan builds on this skeleton.
+- **Foundation deliverable:** `helm install genieai-umbrella` creates a namespace with `genieai.io/cluster-profile` + PSA-restricted labels; `helm test` passes against kind 1.33; `ct lint` clean; ArgoCD example documented in `examples/`; OPA policy directory scaffolded. Every later plan builds on this skeleton.
 
 File count breakdown (verified):
 

@@ -2463,6 +2463,10 @@ export default {
         empty: 'No labels yet.',
         notReady: 'Labels saved locally — server sync coming soon.'
       },
+      // Story 1.6→1.7 dialog fields + the per-repo-only InfoTip key
+      // (merged 2026-10-08: two `frontmatter:` literals in one object
+      // is a no-dupe-keys lint error and the second silently shadowed
+      // the first at runtime).
       frontmatter: {
         label: 'Frontmatter',
         edit: 'Edit frontmatter',
@@ -2472,20 +2476,13 @@ export default {
         staleAfter: 'lifecycle.stale_after',
         trustTier: 'trust_tier',
         attestation: 'attestation',
-        sources: 'provenance.sources'
+        sources: 'provenance.sources',
+        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
       },
       showSource: 'Show source',
       issue: {
         missingType: 'Concept is missing a type.',
         badActor: 'Source actor must start with agent:/human:/tool:/process:.'
-      },
-      // Story 1.7 (2026-10-08): the per-repo frontmatter (the
-      // tag-set that builds the OKF bundle's vectorized head) lives
-      // in the index.md YAML. The chip UI mounts in the right rail
-      // when the index concept is selected. For non-index selections
-      // a single InfoTip explains the per-repo-on-index-only contract.
-      frontmatter: {
-        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
       },
       saveBlocked: 'Save blocked: fix conformance issues first.'
     },

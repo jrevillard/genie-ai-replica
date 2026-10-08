@@ -226,12 +226,23 @@ CI runs the same Job in dry-run mode on every MR that touches `charts/` or `depl
 
 ### 5.2 ClusterProfile-based defaults
 
+**Mechanism**: `clusterProfile` is a value that drives chart-derived defaults (CNPG instances, arangodb mode, replicas, observability default). Two ways to set:
+
+1. **`values.yaml` (default `dev`)**: operator passes `--set clusterProfile=prod` at install.
+2. **Pre-install hook (`templates/hooks/pre-install-clusterprofile-detect.yaml`)**: reads namespace label `genieai.io/cluster-profile=dev|staging|prod|sovereign`, emits a Kubernetes `Event` recording the detected profile, and writes the detected profile to the release annotation `genieai.io/detected-cluster-profile=...`. **The hook does NOT mutate Helm-rendered values**: Helm does not re-render mid-install.
+
+**Practical consequence**: auto-detection is **decorative** — the namespace label feeds observability/logs/metrics, but the chart's CNPG instances / Arango mode are determined by what the operator passed to `helm install`. Labeling the namespace after install changes the next **upgrade** (if `--set clusterProfile=...` is also passed), not the current install.
+
+For an operator to make auto-detection authoritative, the operator must ALSO pass `--set clusterProfile=$(kubectl get ns $NS -o jsonpath='{.metadata.labels.genieai\.io/cluster-profile}')` at install time. The hook's job is to make that workflow more discoverable (via the Event), not to bypass Helm's rendering model.
+
 ```yaml
 # ClusterProfile from label on namespace
 # genieai.io/cluster-profile=dev|staging|prod|sovereign
 # Mutually exclusive with values.yaml bootstrapping until first install.
+# Without `--set`, the chart renders with `clusterProfile: dev` defaults
+# regardless of the namespace label.
 
-clusterProfile: dev  # set by helm hook on first install
+clusterProfile: dev  # set by helm install --set, not auto-detected at runtime
 ```
 
 When `clusterProfile: prod`:
@@ -248,7 +259,7 @@ When `clusterProfile: dev`:
 - `replicas.*: 1`
 
 When `clusterProfile: sovereign`:
-- `pluggable.secretsBackend: externalSecrets`
+- `pluggable.secretsBackend: sealedSecrets` (matches v1 ship; future `externalSecrets` toggles this)
 - `pluggable.ingressClassName: envoy`
 - `pluggable.storageClassName: ""` (operator-determined)
 - `ingress.tls.issuer: cert-manager` with DNS-01 to sovereign DNS
@@ -301,11 +312,11 @@ Service inventory from the existing Swarm `docker-compose.yaml` (surveyed 2026-1
 
 **Group 4 (identity)**: keycloak, postgres cluster (CloudNativePG) — **mirror before cutover**.
 
-**Group 6 (AI/ML)**: vllm, vllm-translation-guardrail, tei, tei-reranker, chatqna-xeon-{backend,ui,nginx}, embedding, reranker, textgen, translation, guardrail, dataprep-arango-service, retriever-arango-service.
+**Group 6 (AI/ML)**: vllm, vllm-translation-guardrail, tei, **tei-reranker dropped — no equivalent in `docker-compose.yaml`**, chatqna-xeon-{backend,ui,nginx}, embedding, reranker, textgen, translation, guardrail, dataprep-arango-service, retriever-arango-service.
 
 **Group 3 (vector DB, last)**: arangodb.
 
-**Count**: 26 services total. `redis` lives in Group 2 (cache role); it is **not** duplicated into Group 5. Services like `translation-cache` and `httpService` mentioned in earlier drafts do not appear in the current Swarm `docker-compose.yaml`; they are scoped to a later epic if reintroduced.
+**Count**: 28 services total (Group 5=6 + Group 2=1 + Group 1=5 + Group 4=2 + Group 6=13 + Group 3=1). `redis` lives in Group 2 (cache role); it is **not** duplicated into Group 5. `tei-reranker` was originally listed in earlier drafts but does not appear in the current Swarm `docker-compose.yaml` (which has separate `tei` and `reranker` services); the third-party mention had no live counterpart. Services like `translation-cache` and `httpService` do not appear in current Swarm and are scoped to a later epic if reintroduced.
 
 Each group's chart enabling is independent. Day 0 install: `data.postgres.enabled=false data.arangodb.enabled=false services.*.enabled=true` for a partial install pattern during phased migration.
 
@@ -313,7 +324,7 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
 
 **Sole pattern**: chart does NOT bake secrets into templates. Every secret reference resolves at runtime via a pluggable backend.
 
-**Default (`pluggable.secretsBackend: sealedSecrets`)**:
+**Default (`pluggable.secretsBackend: sealedSecrets`)** — **v1 ships sealedSecrets templates only** (YAGNI per §6.2 single-backend principle):
 
 `SealedSecret` CRs (per required secret) reference the in-cluster controller. Encrypted blobs ship in Git; controller decrypts on the cluster using its in-memory private key.
 
@@ -338,7 +349,11 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
 4. `helm install` re-renders the chart; controller decrypts on next sync, K8s Secret materialises.
 5. Rotation: pull latest cert, re-encrypt, commit, deploy.
 
-**Fallbacks (documented, not yet shipped — plug-point design per §6.2)**:
+**Single-backend ship (per §6.2)**:
+- **v1**: ONLY `sealedSecrets` rendered as actual templates. Spec sections + plug-point design are documented for the others.
+- **Why this matters**: §4 dep table lists sealed-secrets, §6 pluggability surface mentions both `externalSecrets` and `sealedSecrets` as plug-points. **§6.2 explicitly limits v1 templates to sealedSecrets**. Reviewing code that adds `ExternalSecret` resources is off-spec until §6.2 changes.
+
+**Fallbacks (documented, NOT shipped in v1 — plug-point design per §6.2)**:
 - `secretsBackend: externalSecrets` — chart would ship `ExternalSecret` CRs; requires HashiCorp Vault + auditor + rotation policy. Deferred to whoever needs it.
 - `secretsBackend: secretProviderClass` — chart would ship Azure CSI `SecretProviderClass`; requires AKS + AKV. Deferred.
 
@@ -432,18 +447,26 @@ Two protections:
 
 **(a) Pre-install backup hook** — a `Job` chart-hook on `pre-install` and `pre-upgrade` runs `velero backup create` (or `pg_basebackup` + `arangodump` for databases if Velero unavailable). The hook is configurable to skip on dev clusters (`clusterProfile: dev`) but **mandatory for staging/prod**.
 
-**(b) Confirmation gate** — a `pre-delete` chart-hook **blocks** `helm uninstall` unless the operator explicitly sets `--no-hooks` **AND** confirms the uninstall via label `genieai.io/allow-destructive-uninstall: "true"` on the release before running `helm uninstall`. Behavior:
+**(b) Confirmation gate** — a `pre-delete` chart-hook **blocks** `helm uninstall` unless the operator confirms via release annotation `genieai.io/allow-destructive-uninstall: "true"`. The two gating mechanisms are **mutually exclusive**:
 
 ```bash
-# Refused by hook:
+# Refused by hook (default state):
+kubectl label hr/genieai-prd genieai.io/allow-destructive-uninstall=false
 helm uninstall genieai-prd
+# helm exits with: Error: pre-delete hook failed: ...
 
-# Accepted:
-kubectl label hr/genieai-prd genieai.io/allow-destructive-uninstall=true --overwrite
-helm uninstall genieai-prd
+# Acceptable paths:
+# (1) Label the release, then uninstall — gate validates label:
+kubectl annotate hr/genieai-prd genieai.io/allow-destructive-uninstall=true --overwrite
+helm uninstall genieai-prd               # (gate accepts because annotation is set)
+
+# (2) Skip the hook entirely — destruction is the operator's call:
+helm uninstall genieai-prd --no-hooks    # (gate never fires)
 ```
 
-For non-stateful-only installs (e.g., dev cluster with all PVCs ephemeral), the hook shortcuts to "just uninstall".
+**Important**: `--no-hooks` is the **break-glass path** that bypasses the gate. Standard policy is path (1) — annotate-and-uninstall — to keep an auditable trail. `--no-hooks` is reserved for emergency operations where the gate itself is corrupted. **Both paths are supported; neither requires the other.**
+
+For non-stateful-only installs (e.g., dev cluster with all PVCs ephemeral), the hook shortcuts to "just uninstall" by checking `secrets.pvc.transient: true` annotation on the release; if set, gate immediately approves.
 
 ### 13.2 Secret-leak lint rule
 
@@ -518,15 +541,27 @@ publish:charts:
   stage: charts:publish
   script:
     - helm package charts/genieai-umbrella -d .publish/
-    - cosign sign --key env:COSIGN_KEY ${CI_REGISTRY_IMAGE}/genieai/umbrella:${CI_COMMIT_TAG}
+    # cosign uses URI schemes — `env://` is the env-var resolver.
+    # Bare `env:COSIGN_KEY` is NOT a recognized scheme; cosign errors out.
+    - cosign sign --key env://COSIGN_KEY ${CI_REGISTRY_IMAGE}/genieai/umbrella:${CI_COMMIT_TAG}
     - cosign attest --predicate release-audit.json --type slsaprovenance ${CI_REGISTRY_IMAGE}/genieai/umbrella:${CI_COMMIT_TAG}
     - helm push .publish/genieai-umbrella-${CI_COMMIT_TAG}.tgz oci://${CI_REGISTRY_IMAGE}/genieai
 ```
 
-Cluster-side enforcement via **Kyverno** policy (chart installs as part of bootstrap):
+Cluster-side enforcement via **Kyverno** policy (chart installs as part of bootstrap). Kyverno's `verifyImages.attestors.entries.keys` does NOT accept cosign-style URIs — the public key must live in a Kubernetes `Secret`. The chart renders a `Secret` containing the cosign public key, and Kyverno's policy references it:
 
 ```yaml
-# Kyverno ClusterPolicy — verified pull
+# Secret holding the cosign public key (rendered by the chart or pre-installed by CI):
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cosign-pubkey
+  namespace: kyverno
+type: Opaque
+data:
+  key: <base64-encoded-PEM>
+---
+# Kyverno ClusterPolicy — references the Secret, NOT a cosign URI
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -545,7 +580,7 @@ spec:
           attestors:
             - entries:
                 - keys:
-                    publicKeys: "env://COSIGN_PUBLIC_KEY"
+                    publicKeys: "secret:cosign-pubkey#key"
 ```
 
 Without cosign signing + Kyverno enforcement, a registry compromise yields full cluster take (research flagged CVE-2025-1974's "default-Secrets-read" as the same attack shape — chart's installer must not lower the bar).
@@ -662,48 +697,30 @@ observability:
 
 GitOps sync layer is **pluggable**, mirroring the per-env config model itself. Three valid options, ordered by **GENIE.AI-recommended**:
 
-#### 19.3.1 GitLab Agent for Kubernetes (Kas) — recommended when GitLab Ultimate is available
+#### 19.3.1 GitLab Agent for Kubernetes (KAS) + Flux — recommended when GitLab Ultimate is available
 
-GENIE.AI's instance runs on `opensource.unicc.org` with **GitLab Ultimate**, which gives us the GitLab Agent for Kubernetes (KAS). The agent runs in-cluster, registers with GitLab over an outbound connection (no inbound K8s API exposure, no webhook tokens). It enables:
+GENIE.AI's instance runs on `opensource.unicc.org` with **GitLab Ultimate**, which gives us the GitLab Agent for Kubernetes (KAS). The architecture has **two distinct layers** with separate roles — conflating them is a common mistake:
 
-- Pull-based sync, no static credentials in cluster, no Kubeconfig to leak
-- Environment-scoped CI/CD variables + secrets at the agent level (no per-cluster `.kubeconfig`)
+**Layer 1 — KAS (outbound, GitLab-side trigger)**:
+The KAS agent runs in-cluster, registers with GitLab over an outbound connection (no inbound K8s API exposure, no webhook tokens). Its role is **connection + CI/CD authentication bridge**:
+- Authenticated, scoped K8s API access from GitLab CI jobs (no `.kubeconfig` shared)
+- Environment-scoped CI/CD variables + secrets at the agent level
 - Protected environments (manual deploy approval gates by group/role)
 - Direct link from MR → environment → live state ("deployment view")
 
-For envs in this repo:
+KAS does **NOT** reconcile state on its own. It does not watch Git and apply diffs. It exposes an authenticated API that GitLab CI jobs call to push manifests.
+
+**Layer 2 — Flux (in-cluster, continuous reconciliation)**:
+After GitLab CI renders manifests via `helm template` + Kustomize, **Flux** (installed separately in the cluster by the bootstrap script) watches the Git repo and reconciles manifest state to cluster state. Flux's `Kustomization` CRDs provide the reconciliation policy knobs the chart needs:
+
+- `interval` / `retryInterval` — polling cadence
+- `retries` — transient failure tolerance
+- `force: false` — refuse on manifest conflict (no silent overwrite)
+- `prune: true` — remove stale resources on env overlays dropping services
+- `healthChecks` — block sync until key Deployments report Ready
 
 ```yaml
-# deploy/environments/dev/kustomization.yaml (with kas/sync)
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-# Pointed at by GitLab CI: "deploy:genieai:$CI_ENVIRONMENT_NAME"
-# Renders the umbrella chart against targetRevision from CI
-namespace: genieai-dev
-resources:
-  # — generated by the chart via Helm template, then Kustomize-flavored
-  # — kept here for illustrative purposes; actual resources come from CI
-  - all.yaml
-```
-
-GitLab CI does the heavy lifting:
-- `deploy:genieai:$env` job runs `helm template charts/genieai-umbrella -f deploy/environments/$env/values-override.yaml` and renders manifest
-- Renders through Kustomize base + env overlay
-- The KAS picks up changes from `targetRevision` (per env) and reconciles
-
-**ReconciliationPolicy** (idempotency):
-
-The GitLab Agent for Kubernetes (KAS) is a thin agent; reconciliation policy is delegated to **Flux** running *behind* the KAS inside the cluster. The KAS-configurable fields are limited to:
-
-- `agent.gitlab.com/access_type` (ClusterAgent spec)
-- `agent.gitlab.com/project_id` (ClusterAgent spec)
-- `agent.gitlab.com/kubernetes_api` URL configuration
-
-For reconciliation policy knobs (`retries`, `pr-pause`, `manifest-conflict handling`), KAS delegates to **Flux `HelmRelease`** + `Kustomization` CRDs inside the cluster. The actual spec is implemented as **Flux `Kustomization` resources per env**, not as KAS Module fields:
-
-```yaml
-# Per-env Flux Kustomization (lives inside the cluster)
+# Per-env Flux Kustomization (lives inside the cluster, not in this chart)
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -728,9 +745,24 @@ spec:
       namespace: genieai-dev
 ```
 
-Flux `force: false` addresses the MR-rebase-during-deploy concern: when a manifest conflicts with cluster state, Flux refuses to overwrite and surfaces a reconciler error to GitLab CI; the MR must rebase before the next sync. `retries: 5` handles transient API errors. `prune: true` removes stale resources on env overlays dropping a service.
+**The chart does NOT install Flux** (sovereign deploys that cannot tolerate an additional in-cluster controller can use KAS alone with GitLab CI pushes). Flux is a cluster-bootstrap concern; the chart ships the `Kustomization` CR manifests as **documentation only**. Operators install Flux once per cluster, separately.
 
-#### 19.3.2 ArgoCD — alternative for non-GitLab-Ultimate users, also a secondary path here
+**GitLab CI does the heavy lifting**:
+- `deploy:genieai:$env` job runs `helm template charts/genieai-umbrella -f deploy/environments/$env/values-override.yaml` and renders manifest
+- Renders through Kustomize base + env overlay
+- Pushes rendered manifest to a `gitops` repo (or branches in main + env) that Flux watches
+- KAS authenticates the push-side; Flux watches the read-side
+
+**ReconciliationPolicy** (idempotency):
+- `flux force: false` refuses to overwrite cluster state on manifest conflict; surfaces a reconciler error to GitLab CI
+- `retries: 5` handles transient API errors
+- `prune: true` removes stale resources when an env overlay drops a service
+- `healthChecks` block sync until critical Deployments report Ready
+- **KAS does not have a ReconciliationPolicy** (it's a thin transport); reconciliation knobs live on Flux
+
+`force: false` is the structural answer to "MR-rebase-during-deploy": on conflict, Flux refuses, surfaces to GitLab CI, MR must rebase before the next sync.
+
+#### 19.3.2 ArgoCD — alternative for non-GitLab-Ultimate users
 
 For teams without GitLab Ultimate, and as a fallback option:
 

@@ -145,7 +145,7 @@
                 )
               }}
             </p>
-            <div v-for="field in PER_REPO_FIELDS" :key="field" class="okf-ce__fm-perrepo-field">
+            <div v-for="field in perRepoFields" :key="field" class="okf-ce__fm-perrepo-field">
               <div class="okf-ce__fm-perrepo-field-name">
                 {{ perRepoFieldLabel(field) }}
                 <span class="okf-ce__fm-perrepo-field-count">({{ perRepoFieldValues(field).length }})</span>
@@ -499,6 +499,10 @@ export default {
     // to render scope)
     fmKinds() {
       return FM_KINDS;
+    },
+    // Story 1.7: same pattern for the per-repo field list.
+    perRepoFields() {
+      return PER_REPO_FIELDS;
     },
     // Story 1.7: only the index concept carries the per-repo frontmatter.
     // (The chip panel uses the same rule.) For other concepts the section

@@ -1890,7 +1890,31 @@ export default {
       noLabel: 'Toh nte',
       descriptionLabel: 'Kibaru',
       save: 'Kōjparok frontmatter',
-      saveFailed: 'Kōjparok frontmatter ear l̦apier'
+      saveFailed: 'Kōjparok frontmatter ear l̦apier',
+      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoHint:
+        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoField: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      },
+      perRepoPh: {
+        topic: 'One topic per line',
+        entity: 'One entity per line',
+        forbidden: 'One forbidden topic per line',
+        keyword: 'One keyword per line'
+      },
+      perRepoHelp: {
+        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
+        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
+        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
+        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+      },
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
     },
     glossary: {
       addConcept:
@@ -2368,7 +2392,8 @@ export default {
         staleAfter: 'lifecycle.stale_after',
         trustTier: 'trust_tier',
         attestation: 'attestation',
-        sources: 'provenance.sources'
+        sources: 'provenance.sources',
+        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
       },
       showSource: 'Kwal̦o̦k jikin eo ear itok jān e',
       issue: {
@@ -2560,6 +2585,31 @@ export default {
         'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
       alreadyBadge: 'already in an OKF repo',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+    },
+    frontmatter: {
+      title: 'Frontmatter tags — what this repo is about',
+      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      refresh: 'Refresh suggestions',
+      suggesting: 'Curating…',
+      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestFailed: 'Suggest failed.',
+      removeTag: 'Remove tag',
+      fieldEmpty: '—',
+      addPlaceholder: 'Add {field}',
+      add: 'Add',
+      saving: 'Saving…',
+      save: 'Save tags',
+      saved: 'Saved',
+      error: 'Save failed.',
+      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      field: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      }
     }
   },
   link: {

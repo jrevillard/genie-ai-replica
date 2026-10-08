@@ -98,7 +98,7 @@ Kong's OTel plugin produced per-request spans for the frontend→backend hop. Re
 
 ```bash
 # 1. Traces flow end-to-end (RAG chain linked by traceparent)
-#    Grafana Trace explorer (tempo-proxy) → one trace spans
+#    Grafana Trace explorer (Jaeger datasource → vtraces direct) → one trace spans
 #    frontend-req → backend → chatqna → retriever → reranker
 # 2. Logs land in VL with metadata stamped + PII redacted
 kubectl logs -n genieai deploy/genieai-collector-collector | head

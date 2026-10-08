@@ -611,11 +611,17 @@ async function transition(repoId, action, actor, opts = {}) {
         //    (the curator may have authored via the editor's center pane in
         //    a previous edit) and use it as the publish-time tag set.
         const repoRow = (
-          await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter, r.name', {
+          // LIFECYCLE-FRONT-BUGFIX (2026-10-08): the previous query was
+          // 'RETURN r.frontmatter, r.name' — AQL doesn't allow returning
+          // multiple comma-separated expressions (the parser barks at
+          // "unexpected ','"). The publish path crashed with 400 on
+          // every publish. Return a single document; we only need
+          // r.frontmatter downstream.
+          await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter', {
             rid: repoId
           })
         ).all();
-        const existingFm = (repoRow && repoRow[0] && repoRow[0].frontmatter) || null;
+        const existingFm = (repoRow && repoRow[0]) || null;
         const supplied = suppliedFm || existingFm;
         // 2. Gate: ≥3 topic + ≥1 forbidden. Story 1.7 simplified
         //    (2026-10-08, per David): every value in the frontmatter

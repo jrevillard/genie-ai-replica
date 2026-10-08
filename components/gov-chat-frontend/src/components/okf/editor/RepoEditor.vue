@@ -123,16 +123,28 @@
       class="okf-re__meta"
       :aria-label="translate('okf.editor.meta.label', 'Concept metadata')"
     >
-      <!-- Story 1.7 (2026-10-08, supersedes the Story 1.6 panel mount): the
-           per-repo frontmatter lives in the index.md YAML frontmatter
-           block, visible in the center pane (the same place the curator
-           edits every other concept's per-file frontmatter). The right
-           rail is for per-concept metadata only (type / title / KH label
-           / index status / trust tier). The per-repo tags are NOT shown
-           in the right rail — they're in the index.md YAML, which is
-           what the curator expects (David 2026-10-08: "the user should
-           be able to modify the tags in the existing frontmatter
-           editor"). -->
+      <!-- Story 1.7 (2026-10-08): the per-repo frontmatter (the
+           tag-set that builds the OKF bundle's vectorized head)
+           lives in the index.md YAML. The chip UI mounts in the
+           right rail when the index concept is selected — same UX
+           as the wizard's Curate step (single source of truth per
+           David 2026-10-08: "this must be consistent across the
+           wizard and the editor"). For non-index selections, the
+           per-concept metadata form stays; the chip UI hides with
+           an InfoTip explaining the per-repo-on-index-only contract. -->
+      <FrontmatterPanel
+        v-if="showRepoFrontmatterPanel"
+        :repo-id="repoId"
+        :read-only="readOnly"
+        :show-title="true"
+        :compact="true"
+        @saved="onFrontmatterPanelSaved"
+        @flush-before-save="flushConceptEditorSave"
+      />
+      <DsInfoTip
+        v-else-if="selectedRow && !selectedRow.is_index && repoId"
+        :text="translate('okf.editor.frontmatter.onlyOnIndex', 'Per-repo tags live on the index concept only — open the index to see them.')"
+      />
       <template v-if="selectedRow">
         <h4 class="okf-re__meta-title">{{ translate('okf.editor.meta.label', 'Concept metadata') }}</h4>
 
@@ -340,6 +352,7 @@ import OkfResplitModal from './ResplitModal.vue';
 import OkfAddConceptModal from './AddConceptModal.vue';
 import OkfSourceDialog from '../wizard/OkfSourceDialog.vue';
 import OkfRepoGraphView from './RepoGraphView.vue';
+import FrontmatterPanel from '../FrontmatterPanel.vue';
 import DsDialog from '../../ds/Dialog.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
 import OkfAutocorrectPanel from './AutocorrectPanel.vue';
@@ -362,6 +375,7 @@ export default {
     OkfAddConceptModal,
     OkfSourceDialog,
     OkfRepoGraphView,
+    FrontmatterPanel,
     OkfAutocorrectPanel
   },
   mixins: [translateMixin],
@@ -515,6 +529,16 @@ export default {
     },
     selectedRow() {
       return this.concepts.find((c) => c.concept_id === this.selectedId) || null;
+    },
+    // Story 1.7: the per-repo frontmatter lives in the index concept
+    // only. The chip UI mounts in the right rail when the index
+    // concept is selected (David 2026-10-08: "this must be consistent
+    // across the wizard and the editor"). The hidden-when-not-index
+    // contract means the curator only sees the per-repo chip UI on
+    // the index concept; for every other concept the per-concept
+    // metadata form takes the rail.
+    showRepoFrontmatterPanel() {
+      return !!(this.repoId && this.selectedRow && this.selectedRow.is_index);
     }
   },
   watch: {
@@ -553,6 +577,37 @@ export default {
     if (this._metaTimer) clearTimeout(this._metaTimer);
   },
   methods: {
+    // Story 1.7: forward the chip panel's `flush-before-save` event to
+    // the embedded ConceptEditor. The ConceptEditor has a 1.5s debounced
+    // autosave; without this drain, the panel's two-write save would race
+    // the autosave (the autosave would fire with stale uncommitted draft
+    // text, overwriting the panel's just-saved YAML).
+    flushConceptEditorSave() {
+      const ed = this.$refs.conceptEditor;
+      if (ed && typeof ed.flushPendingSave === 'function') ed.flushPendingSave();
+    },
+    // Story 1.7: when the chip panel saves, the index.md YAML has
+    // changed; refetch the concept list so the right-rail's per-concept
+    // metadata reflects the new state, and the parent's gate (Curate
+    // step in the wizard) re-evaluates on the next render.
+    onFrontmatterPanelSaved() {
+      this.$store.dispatch('okf/fetchConcepts', this.repoId);
+    },
+    // Public entry point for the wizard's Curate step. The wizard
+    // embeds the editor inside its step; the chip panel on the
+    // wizard's surface emits `flush-before-save`, which the wizard
+    // forwards to this method. (The wizard also keeps a direct
+    // ref to its own $refs.repoEditor; this method is the
+    // fallback if the wizard ever switches to a non-embedded
+    // mount.)
+    flushPendingSave() {
+      this.flushConceptEditorSave();
+    },
+    // ── LONG-ACTION STRIP (David, 2026-09-12) ─────────────────────────────
+    // Wrap any editor action that can outlive a browser/gateway response
+    // window. Non-blocking: the strip animates and the elapsed counter ticks
+    // while the panes stay interactive.
+    beginLongAction(label) {
     // ── LONG-ACTION STRIP (David, 2026-09-12) ─────────────────────────────
     // Wrap any editor action that can outlive a browser/gateway response
     // window. Non-blocking: the strip animates and the elapsed counter ticks

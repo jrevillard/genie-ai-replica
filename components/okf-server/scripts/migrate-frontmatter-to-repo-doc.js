@@ -25,7 +25,7 @@
  */
 'use strict';
 
-const { dbService, close } = require('../shared-lib/db-connection-service');
+const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 
 const FRONTMATTER_COLLECTION = 'okf_repo_frontmatter';
@@ -38,7 +38,10 @@ async function main() {
   const db = await dbService.getConnection('default');
 
   // 1. Read every row in okf_repo_frontmatter, group by repo_id.
-  const allRows = (await db.query(`FOR d IN ${FRONTMATTER_COLLECTION} RETURN d`)).all();
+  // db.query() returns an AQL cursor; call .all() (or await + iterate)
+  // to materialize the rows.
+  const cursor = await db.query(`FOR d IN ${FRONTMATTER_COLLECTION} RETURN d`);
+  const allRows = await cursor.all();
   const byRepo = new Map();
   for (const r of allRows) {
     if (!byRepo.has(r.repo_id)) byRepo.set(r.repo_id, []);
@@ -60,13 +63,12 @@ async function main() {
   let updatedRepos = 0;
   let skippedRepos = 0;
   for (const [repoId, rows] of byRepo) {
-    const repoRow = (
-      await db.query(
-        'FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter',
-        { rid: repoId }
-      )
-    ).all();
-    const existing = (repoRow && repoRow[0] && repoRow[0][0]) || null;
+    const repoCursor = await db.query(
+      'FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter',
+      { rid: repoId }
+    );
+    const repoRows = await repoCursor.all();
+    const existing = (repoRows && repoRows[0] && repoRows[0][0]) || null;
     if (existing && existing.updated_at) {
       // The repo already has frontmatter in the new field — skip
       // (idempotent: re-running the migration is a no-op once the
@@ -126,7 +128,11 @@ async function main() {
     dry_run: dryRun,
     force: force
   });
-  await close();
+  // Close the DB connection pool. dbService doesn't export a
+  // named close() — the shared db-connection-service closes its
+  // connections lazily on process exit. For the migration script
+  // (a one-shot CLI), just let the process exit.
+  // await close();
 }
 
 // Pure helper: take the per-row collection rows for a repo, return

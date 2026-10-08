@@ -102,6 +102,11 @@ export default {
     }
   },
   emits: ['update:modelValue'],
+  computed: {
+    orientationClass() {
+      return `ds-stepper--${this.orientation}`;
+    }
+  },
   methods: {
     stepKey(step, index) {
       return step.value != null ? step.value : `step-${index}`;
@@ -135,11 +140,6 @@ export default {
       if (!this.allowJumpBack && index < this.modelValue) return;
       if (index === this.modelValue) return;
       this.$emit('update:modelValue', index);
-    }
-  },
-  computed: {
-    orientationClass() {
-      return `ds-stepper--${this.orientation}`;
     }
   }
 };

@@ -80,9 +80,24 @@ The runtime routing pipeline runs in **one of three env-selected styles** via a 
 
 </frozen-after-approval>
 
+> **SUPERSEDED 2026-10-08 (Story 1.7):** §1, §1a, and §3.1.2 of this
+> spec are RETIRED. The per-repo tag set no longer lives in a
+> dedicated `okf_repo_frontmatter` ArangoDB collection. It now
+> lives in a new `okf_repositories.frontmatter` field (additive
+> on the existing repo doc), with the index.md YAML frontmatter
+> as the curator-facing projection. The corrected design is in
+> `_bmad-output/implementation-artifacts/1-7-frontmatter-in-index.md`.
+> The retriever's hot-path read, the publish gate, the LLM
+> suggest path, and the operator migration script are all
+> updated there. The `OKF_SEARCH_STYLE` env var + the three
+> routing modes (hybrid / frontmatter_tags / vector_probe) and
+> the LLM suggest call (concept-meta → vLLM → proposed set)
+> are unchanged from this spec. The only change is the
+> storage shape.
+
 ## Technical Design
 
-### 1. New collection: `okf_repo_frontmatter`
+### 1. (RETIRED 2026-10-08) `okf_repo_frontmatter` collection
 
 ```json
 {

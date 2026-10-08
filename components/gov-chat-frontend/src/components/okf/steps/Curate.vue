@@ -6,17 +6,15 @@
   autocorrect modal — the wizard wraps it in the friendlier guided frame
   (narrative hint, Basic-mode default, live context rail) and owns the gate.
 
-  Story 1.6 (2026-10-07) — frontmatter "Tags" sub-card: shows the current
-  curated tag set (topic / entity / scope / forbidden / summary / keyword)
-  and a "Refresh suggestions" CTA that calls okf-server's
-  POST /api/okf/repos/:id/frontmatter/suggest.
-
-  Story 1.6 + 2026-10-08 — extract the per-repo frontmatter UX into a
-  shared <FrontmatterPanel> used by BOTH this wizard step AND the editor's
-  right meta pane (David: "this must be consistent across the wizard and
-  the editor"). The wizard keeps the read-only + suggested-set behavior;
-  the editor mounts the same component editable. Single source of truth
-  for the per-repo frontmatter UX.
+  Story 1.7 (2026-10-08, supersedes the Story 1.6 dedicated
+  collection): the per-repo frontmatter lives in the OKF repo's
+  index.md YAML frontmatter block, in the editor's center pane
+  (the same place the curator edits every other concept's
+  per-file frontmatter). The wizard's Curate step embeds the full
+  editor; the curator edits the index.md YAML directly. No
+  separate panel — the new design is "one frontmatter, in one
+  place" (David 2026-10-08: "the user should be able to modify
+  the tags in the existing frontmatter editor").
 -->
 <template>
   <div class="okf-step-curate2">
@@ -24,16 +22,10 @@
       {{
         translate(
           'okf.steps.curate.embedHint',
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.'
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Per-repo tags (topic / entity / forbidden / summary / keyword) live in the index.md YAML frontmatter block below — edit them in the markdown source view. Everything you fix here is what the assistant will cite later.'
         )
       }}
     </p>
-    <FrontmatterPanel
-      v-if="repoId"
-      :repo-id="repoId"
-      :read-only="readOnly"
-      @gate="$emit('gate', $event)"
-    />
     <OkfRepoEditor
       v-if="repoId"
       :key="repoId"
@@ -51,12 +43,11 @@
 <script>
 import { mapGetters } from 'vuex';
 import OkfRepoEditor from '../editor/RepoEditor.vue';
-import FrontmatterPanel from '../FrontmatterPanel.vue';
 import translateMixin from '../../../mixins/translateMixin';
 
 export default {
   name: 'OkfStepCurate',
-  components: { OkfRepoEditor, FrontmatterPanel },
+  components: { OkfRepoEditor },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   emits: ['gate'],
@@ -108,3 +99,4 @@ export default {
   text-align: center;
 }
 </style>
+

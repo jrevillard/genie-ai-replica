@@ -110,8 +110,6 @@ form); it cares that the repo doc has the field set.
 
 ## Why
 
-## Why
-
 - **Authoring**. The curator's primary authoring surface for an OKF
   repo is the index.md markdown file (it exists for every repo by
   design — see `conceptService.createRepo`). The existing per-concept
@@ -296,45 +294,116 @@ gate.
   the index.md frontmatter's `frontmatter:` block.
 - §11 (migration) → REPLACED by the one-shot lift-and-merge.
 
-## Open questions (for David sign-off before code)
+## Open questions (for David sign-off before code) — DECIDED 2026-10-08
 
-1. **Markdown vs structured editing** — when the curator wants to
-   edit the per-repo tags, do they (a) edit the YAML frontmatter
-   in the index.md raw markdown view, or (b) see a structured
-   form (DS components) that writes through to the YAML on save?
-   The current editor has a "Source" / "Rendered" toggle in the
-   center pane — option (b) means the existing structured meta
-   panel absorbs the per-repo frontmatter; option (a) means the
-   curator uses the markdown view. The recommendation is (a) +
-   the structured form: the YAML is the source of truth, but the
-   editor also renders a structured form (using the existing
-   DsFormGroup patterns) that debounces a write-through to the
-   YAML on every change. Best of both.
-2. **Index.md exists for every repo, but the wizard's auto-create
-   path may not always emit a `frontmatter:` block** in the YAML
-   it generates. The migration needs to check: if `index.md` has
-   no `frontmatter:` block, ADD it (with empty arrays) so the
-   editor's center pane has a stable place to render the form.
-3. **Retriever hot-path cost**. The precomputed summary row saved
-   ~1ms per carrier graph on the embedding step. Reading
-   `okf_repositories.frontmatter` and embedding tag values
-   lazily on first query adds the same ~1ms once per repo per
-   process lifetime (cached in memory). Net cost: 1ms per repo
-   per restart. Acceptable; documented in the spec.
-4. **The `FRONTMATTER_REQUIRED` publish gate's error message**.
-   Today the lifecycle service's message says "repo frontmatter
-   not set". The new design means the check reads a doc field —
-   the message should be the same or clearer.
-5. **The new `<FrontmatterPanel>` component on the editor's
-   right rail** is being removed entirely. The per-repo tags
-   move to the center pane (where index.md is rendered). The
-   right rail keeps only the per-concept meta (type / title /
-   label / index status / trust tier). The selection-based
-   tag-authoring UX from the deferred-work entry (the curator
-   selects text in a concept body and turns it into a tag)
-   becomes natural here: the selection lives in the center
-   pane, the action targets the index.md's `frontmatter.topic`
-   list. That's a separate story after this refactor.
+### Q1. Edit surface — Markdown YAML view only
+
+The curator edits the per-repo tags directly in the YAML
+frontmatter block at the top of the OKF repo's `index.md`,
+in the existing Source / Raw markdown view of the editor's
+center pane. Same surface they already use for every other
+concept's frontmatter. No new component, no structured form
+projection, no dual-surface reconciliation.
+
+**Why this is the right answer**: the structured form was the
+option that created the original Story 1.6 confusion (two
+surfaces to keep in sync — form vs YAML). The YAML is
+already the canonical surface for every other concept's
+frontmatter; making the per-repo tags another field in the
+same block keeps the mental model to one concept.
+
+The wizard's Curate step renders the index.md body in
+Source view by default, with the existing "Refresh
+suggestions" CTA at the top. The CTA writes the proposed
+set INTO the YAML block; the curator edits the block in
+raw YAML and saves (the debounced PATCH writes through to
+`okf_repositories.frontmatter`).
+
+### Q2. Missing YAML block — On-demand, only when the curator clicks Refresh
+
+When the wizard's "Refresh suggestions" CTA runs on a
+repo whose `index.md` has no `frontmatter:` block, the
+suggest handler inserts one (empty) AND populates it with
+the proposed set in one save. The block only exists for
+repos that have used the suggest flow at least once. No
+unsolicited edits to old repos.
+
+**Why**: a repo that has never used suggest has no
+per-repo frontmatter — fine, the publish gate fails
+`FRONTMATTER_REQUIRED` and the curator is told to use
+suggest. The block's first appearance is the suggest
+response, which makes the block a meaningful authoring
+artifact, not boilerplate. Repos whose frontmatter was
+created by the old `okf_repo_frontmatter` collection
+get the block via the migration script (one-shot,
+idempotent).
+
+### Q3. Retriever hot-path read — Lazy embed on first read, cache forever
+
+The retriever reads `okf_repositories.frontmatter` on
+every routing decision (one doc per carrier repo, no
+joins, no separate collection to maintain). On the first
+read for a given repo, it embeds the unique tag values
+via the existing TEI client (one call, returns N vectors
+in one batch). The vectors are cached in-process keyed
+by the value string (so a sibling repo with the same
+tag reuses the vector). Net cost: ~1ms per repo per
+process restart, replacing the precomputed summary
+row's savings. Steady-state: zero tag-embed cost.
+
+**Why this is the right answer**: tag values are
+re-used across sibling repos (a Google-related tag
+appears in multiple Google-adjacent repos). The string-
+keyed cache means the second repo to use a tag pays
+zero embed cost. The cold-start 1-2s is acceptable —
+the first routing decision is the only one that pays.
+
+### Q4. Approval model — Per-row `approved_at` (unchanged from Story 1.6)
+
+Each tag in `okf_repositories.frontmatter` carries an
+`approved_at` timestamp (per-row). The publish gate
+checks: at least 3 topic + at least 1 forbidden + every
+row approved. The YAML block in index.md renders
+unapproved rows in a parallel `_unapproved_frontmatter:`
+block (YAML keys prefixed with `_` are conventionally
+ignored by parsers, but a comment-based representation
+is also valid; the migration handles either).
+
+**Why this is the right answer**: per-row approval
+preserves the partial-approval option (a curator who
+wants to keep one LLM-suggested tag out of the
+routing decision can decline to approve just that
+row). The publish gate is unchanged from Story 1.6
+(≥3 topic + ≥1 forbidden + every row approved) — only
+the storage location moves. The migration script
+preserves any existing `approved_at` from the old
+`okf_repo_frontmatter` collection rows so the operator
+workflow on `.102` is not disrupted.
+
+### Q5. (resolved by Q1) The new `<FrontmatterPanel>` component is removed entirely
+
+Q1 chose markdown YAML view only, so the structured
+form projection is out of scope. The
+`<FrontmatterPanel>` component, the frontmatter
+controller, the dedicated `/api/okf/repos/:id/frontmatter`
+GET/PATCH endpoints, the `okf_repo_frontmatter` collection,
+and the `okf_repositories_frontmatter_summary` collection
+are all removed by Story 1.7. The retriever's
+`_load_frontmatter_summaries` /
+`_score_repo_by_frontmatter` /
+`_select_repos_by_frontmatter` functions are
+rewritten to read `okf_repositories.frontmatter` (the
+field on the existing repo doc) and to embed lazily
+on first use.
+
+The selection-based tag-authoring UX (the
+deferred-work entry from earlier today) becomes
+natural after this refactor: the curator selects text
+in a concept body (center pane, where the markdown
+already renders), a "Add as topic tag" CTA appends
+to the index.md's `frontmatter.topic` list via the
+existing write-through. That UX is a separate
+story that DEPENDS on Story 1.7 being done first.
 
 ## Out of scope
 

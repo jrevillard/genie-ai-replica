@@ -74,12 +74,33 @@ const FRONTMATTER_COLLECTION = 'okf_repo_frontmatter';
 const FRONTMATTER_SUMMARY_COLLECTION = 'okf_repositories_frontmatter_summary';
 
 const VALID_FIELDS = ['topic', 'entity', 'scope', 'forbidden', 'summary', 'keyword'];
+// FIELD_RANGES — soft target ranges, NOT hard validation caps.
+//
+// Per David 2026-10-08: tags must be sufficient to semantically describe
+// what is in the OKF repository. The lightweight LLM suggest path (a
+// single 8s call per repo) often produces an entity-heavy, scope/summary-
+// thin result for corporate/financial repos (the live test produced 16
+// entities + 0 keywords + 0 scope + 0 summary on the first call). The
+// hard-validation cap (e.g. entity max 10) was an arbitrary old-code
+// bound, and the hard requirement for scope/summary assumed the LLM
+// always returned them — both wrong for the lightweight contract.
+//
+// Soft ranges: the range numbers above are now the LLM's prompt target
+// AND the soft floor the gate uses to decide "is the frontmatter
+// publish-ready" (the gate is in the frontmatter-controller / lifecycle
+// layer, not here). The service-level validator below enforces only the
+// hard floors that gate the publish: topic >= 3 (routing surface) and
+// forbidden >= 2 (misroute prevention). entity, keyword, scope, and
+// summary are zero-or-more — an empty scope is a routing warning, not a
+// patch rejection. The cap on the upper end is the LLM prompt target
+// (3-8 topic, 2-6 forbidden) plus a generous hard ceiling (20) so a
+// verbose LLM call doesn't get clipped.
 const FIELD_RANGES = {
   topic: { min: 3, max: 8, default_weight: 1.0 },
-  entity: { min: 0, max: 10, default_weight: 0.7 },
-  keyword: { min: 0, max: 10, default_weight: 0.5 },
-  summary: { min: 1, max: 1, default_weight: 0.5 },
-  scope: { min: 1, max: 1, default_weight: 0.3 },
+  entity: { min: 0, max: 20, default_weight: 0.7 },
+  keyword: { min: 0, max: 20, default_weight: 0.5 },
+  summary: { min: 0, max: 1, default_weight: 0.5 },
+  scope: { min: 0, max: 1, default_weight: 0.3 },
   forbidden: { min: 2, max: 6, default_weight: 0.0 } // penalty; weight unused
 };
 

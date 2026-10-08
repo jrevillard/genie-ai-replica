@@ -65,6 +65,7 @@ from .config import (
     OPENAI_EMBED_ENABLED,
     OPENAI_EMBED_MODEL,
     ROUTE_ENABLED,
+    ROUTE_HEAD_MARGIN,
     ROUTE_HEAD_WEIGHT,
     ROUTE_MIN_CHUNKS,
     ROUTE_PROBE_TIMEOUT_MS,
@@ -1785,6 +1786,7 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
     # guards; head fetch is best-effort (a failure logs and continues with
     # the probe results alone — never the degraded path).
     head_rows_injected = 0
+    heads_gated = 0
     if ROUTE_HEAD_WEIGHT > 0 and okf_graphs:
         try:
             head_rows = list(
@@ -1792,6 +1794,7 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
                     "FOR r IN okf_repositories FILTER r.deleted_at == null "
                     "FILTER r.ingested_graph_name != null FILTER r.head != null "
                     "RETURN {g: r.ingested_graph_name, v: r.head.vector, "
+                    "fv: (r.head.per_field || {}).forbidden || null, "
                     "dim: r.head.dim, model: r.head.model}"
                 )
             )
@@ -1810,6 +1813,18 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
                 score = _head_cosine(query_embedding, v)
                 if score is None:
                     continue
+                # Story 1-8a (David 2026-10-08: "under no circumstances should
+                # 'fun in Indonesia' be routed to the NCD repo"): the head only
+                # CLAIMS a query when its score clears its OWN forbidden
+                # centroid by ROUTE_HEAD_MARGIN — forbidden-dominant and
+                # noise-floor queries contribute NO head vote. A head without
+                # a forbidden centroid (pre-1.8a rebuild) claims freely.
+                fv = row.get("fv")
+                if isinstance(fv, (list, tuple)) and len(fv) == qdim:
+                    fscore = _head_cosine(query_embedding, fv)
+                    if fscore is not None and score - fscore <= ROUTE_HEAD_MARGIN:
+                        heads_gated += 1
+                        continue
                 all_rows.append((g, ROUTE_HEAD_WEIGHT * score))
                 head_rows_injected += 1
         except Exception as e:
@@ -1832,10 +1847,11 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
     route_span.set_attribute("rag.route.probed", len(okf_graphs))
     route_span.set_attribute("rag.route.head_weight", ROUTE_HEAD_WEIGHT)
     route_span.set_attribute("rag.route.head_rows", head_rows_injected)
+    route_span.set_attribute("rag.route.heads_gated", heads_gated)
     route_span.set_attribute("rag.route.wall_ms", int((time.time() - t0) * 1000))
     logger.info(
         f"Graph routing — probed={len(okf_graphs)}, global_top={len(top)}, "
-        f"head_rows={head_rows_injected}, "
+        f"head_rows={head_rows_injected}, heads_gated={heads_gated}, "
         f"counts={ {g: counts.get(g, 0) for g in okf_graphs} }, "
         f"qualified={qualified}{floor_note}, routed={len(routed)}/{len(encoded_graph_names)}, "
         f"wall={(time.time() - t0):.2f}s"

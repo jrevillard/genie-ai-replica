@@ -84,6 +84,9 @@
             :aria-label="renderLabel"
           />
         </div>
+        <!-- eslint-disable-next-line vue/no-v-html -- renderedHtml is
+             DOMPurify-sanitized at render time (see the chunked renderer,
+             OkfMarkdownEditor.vue:531) — the lint rule cannot see that. -->
         <div class="ds-okf-md__preview" @click="onPreviewClick" v-html="renderedHtml" />
       </div>
       <div v-if="showSourcePane" class="ds-okf-md__source">

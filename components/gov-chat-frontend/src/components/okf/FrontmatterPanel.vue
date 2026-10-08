@@ -94,9 +94,9 @@
         </div>
         <div v-if="!readOnly" class="okf-fmp__add">
           <input
+            v-model="addDrafts[field]"
             class="okf-fmp__add-input"
             type="text"
-            v-model="addDrafts[field]"
             :placeholder="translate('okf.frontmatter.addPlaceholder', 'Add ' + field)"
             @keydown.enter.prevent="addValue(field)"
           />

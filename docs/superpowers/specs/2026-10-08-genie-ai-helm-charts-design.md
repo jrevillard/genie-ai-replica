@@ -308,7 +308,7 @@ Per YAGNI discipline (Code Review pass, Y2): the chart ships only `externalSecre
 
 Service inventory from the existing Swarm `docker-compose.yaml` (surveyed 2026-10-08). Each service in the chart gets:
 - a `services.<name>` toggle block in values
-- a `<name>-deployment.yaml` template under `templates/_services/`
+- a `<name>-deployment.yaml` template under `templates/services/`
 - a `<name>-service.yaml` template
 - a `<name>-networkpolicy.yaml` (default-deny + explicit allowlist)
 - an entry in `tests/connectivity_test.yaml` if `enabled: true`

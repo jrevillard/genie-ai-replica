@@ -125,25 +125,20 @@
     >
       <!-- Story 1.7 (2026-10-08): the per-repo frontmatter (the
            tag-set that builds the OKF bundle's vectorized head)
-           lives in the index.md YAML. The chip UI mounts in the
-           right rail when the index concept is selected — same UX
-           as the wizard's Curate step (single source of truth per
-           David 2026-10-08: "this must be consistent across the
-           wizard and the editor"). For non-index selections, the
-           per-concept metadata form stays; the chip UI hides with
-           an InfoTip explaining the per-repo-on-index-only contract. -->
+           lives in the index.md YAML. The chip UI is ALWAYS visible
+           in the editor's right rail (per David 2026-10-08: the
+           editor must be able to perform ALL operations the wizard
+           can — including Refresh suggestions). On a non-index
+           concept the per-concept metadata form appears below the
+           chip panel. -->
       <FrontmatterPanel
-        v-if="showRepoFrontmatterPanel"
+        v-if="repoId"
         :repo-id="repoId"
         :read-only="readOnly"
         :show-title="true"
         :compact="true"
         @saved="onFrontmatterPanelSaved"
         @flush-before-save="flushConceptEditorSave"
-      />
-      <DsInfoTip
-        v-else-if="selectedRow && !selectedRow.is_index && repoId"
-        :text="translate('okf.editor.frontmatter.onlyOnIndex', 'Per-repo tags live on the index concept only — open the index to see them.')"
       />
       <template v-if="selectedRow">
         <h4 class="okf-re__meta-title">{{ translate('okf.editor.meta.label', 'Concept metadata') }}</h4>
@@ -385,7 +380,14 @@ export default {
     // server can resolve the link itself (files.okf_repo_id).
     sourceFileId: { type: String, default: null },
     // READ ONLY (serving repo): concept + metadata mutations are disabled.
-    readOnly: { type: Boolean, default: false }
+    readOnly: { type: Boolean, default: false },
+    // COMPACT (Step 9 Review embed, 2026-10-08): the editor mounted
+    // inside the wizard's narrow center column collapses the metadata
+    // rail by default + uses a wider file list, so the file names
+    // don't truncate and the PII panel has room. The curator can
+    // still toggle the metadata rail open if they want to inspect a
+    // concept's labels.
+    compact: { type: Boolean, default: false }
   },
   emits: ['resplit-done'],
   data() {
@@ -426,8 +428,11 @@ export default {
       // concepts and metadata start narrow (his screenshot-3 default), and
       // the metadata pane can collapse entirely so the editor expands
       // across it.
-      railWidth: 230,
+      railWidth: 260,
       metaWidth: 250,
+      // Compact mode (Step 9 Review embed): metadata rail starts collapsed
+      // so the file list + center pane have room. The curator can toggle
+      // it open if they need to inspect labels.
       metaCollapsed: false
     };
   },
@@ -530,16 +535,12 @@ export default {
     selectedRow() {
       return this.concepts.find((c) => c.concept_id === this.selectedId) || null;
     },
-    // Story 1.7: the per-repo frontmatter lives in the index concept
-    // only. The chip UI mounts in the right rail when the index
-    // concept is selected (David 2026-10-08: "this must be consistent
-    // across the wizard and the editor"). The hidden-when-not-index
-    // contract means the curator only sees the per-repo chip UI on
-    // the index concept; for every other concept the per-concept
-    // metadata form takes the rail.
-    showRepoFrontmatterPanel() {
-      return !!(this.repoId && this.selectedRow && this.selectedRow.is_index);
-    }
+    // Story 1.7 (2026-10-08, simplified): the per-repo frontmatter
+    // chip UI is ALWAYS visible in the right rail (per David
+    // 2026-10-08: the editor must be able to perform ALL operations
+    // the wizard can — including Refresh suggestions). The
+    // per-concept metadata form (Type / Title / Label / Description)
+    // appears below the chip panel for whichever concept is selected.
   },
   watch: {
     /** Auto-open the index file (else the first) once the list arrives —
@@ -563,6 +564,10 @@ export default {
   },
   async mounted() {
     this.restorePaneWidths();
+    // Compact mode (Step 9 Review embed): collapse the metadata rail so
+    // the file list + center pane have room in the wizard's narrow
+    // center column.
+    if (this.compact) this.metaCollapsed = true;
     await this.$store.dispatch('okf/openEditor', { repoId: this.repoId });
     this.loadLabelOptions();
   },

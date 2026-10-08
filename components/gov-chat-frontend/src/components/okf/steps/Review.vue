@@ -72,6 +72,7 @@
         class="okf-step__browser-editor"
         :repo-id="browserRepoId"
         :read-only="true"
+        :compact="true"
       />
       <p v-else class="okf-step__browser-empty">
         {{

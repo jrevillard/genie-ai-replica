@@ -888,6 +888,95 @@ const actions = {
     }
   },
 
+  // ─── Story 1-8 (2026-10-08): Head Tester / Routing Lab ─────────────────────
+  // All wrap headTestService and return {ok, code?, message?, result?} —
+  // the dialog renders err.data.error/message (server envelope) like
+  // lifecycleTransition does.
+
+  /** Re-run the vectorized head from the CURRENT stored frontmatter. */
+  async headRebuild(_ctx, { repoId } = {}) {
+    try {
+      const result = await headTestService.rebuildHead(repoId);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'REBUILD_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Two-leg routing simulation for ONE query (the Test tab). */
+  async headRoutingTest(_ctx, { repoId, query, formula } = {}) {
+    try {
+      const result = await headTestService.routingTest(repoId, { query, formula, include_probes: false });
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'ROUTING_TEST_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Generate a test suite (LLM + forbidden-derived negatives). */
+  async headSuiteGenerate(_ctx, { repoId, nPositive, nNegative } = {}) {
+    try {
+      const result = await headTestService.generateSuite(repoId, { n_positive: nPositive, n_negative: nNegative });
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'SUITE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Curator free-text additions to a suite. */
+  async headSuiteAddQueries(_ctx, { repoId, suiteKey, queries } = {}) {
+    try {
+      const result = await headTestService.addSuiteQueries(repoId, suiteKey, queries);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'SUITE_UPDATE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Run every suite query + aggregate pass rates / margins / steals. */
+  async headSuiteRun(_ctx, { repoId, suiteKey } = {}) {
+    try {
+      const result = await headTestService.runSuite(repoId, suiteKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RUN_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Analytics history across tag cycles. */
+  async headSuiteListRuns(_ctx, { repoId, kind = 'all', limit = 20 } = {}) {
+    try {
+      const runs = await headTestService.listRuns(repoId, { kind, limit });
+      return { ok: true, runs };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RUNS_FAILED',
+        message: err.message
+      };
+    }
+  },
+
   setEditorSubTab({ commit }, subTab) {
     commit('setEditorSubTab', subTab === 'wizard' ? 'wizard' : 'editor');
   }
@@ -899,12 +988,14 @@ let repoOkfService;
 let crawlerToOkfService;
 let conceptService;
 let okfRepoOps;
+let headTestService;
 function ensureServices() {
   if (!studioService) studioService = require('@/services/studioService').default;
   if (!repoOkfService) repoOkfService = require('@/services/repoOkfService').default;
   if (!crawlerToOkfService) crawlerToOkfService = require('@/services/crawlerToOkfService').default;
   if (!conceptService) conceptService = require('@/services/conceptService').default;
   if (!okfRepoOps) okfRepoOps = require('@/services/okfRepoOps');
+  if (!headTestService) headTestService = require('@/services/headTestService').default;
 }
 
 const actionsWithServices = {};

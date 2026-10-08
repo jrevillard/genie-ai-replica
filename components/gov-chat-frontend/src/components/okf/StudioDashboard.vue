@@ -125,6 +125,20 @@
             >
               {{ translate('okf.lifecycle.unpublish', 'Unpublish') }}
             </DsButton>
+            <!-- Story 1-8 (2026-10-08): the Head Tester / Routing Lab. Visible
+                 on the Published AND Ingested lanes (both are lifecycle_state
+                 'publish'; ingested_at splits them) — testing the vectorized
+                 head is the pre-ingest accuracy gate and stays available on
+                 serving repos for verification. -->
+            <DsButton
+              v-if="r.lifecycle_state === 'publish' && !isImporting(r) && !isDraining(r)"
+              variant="ghost"
+              small
+              :disabled="actionBusy"
+              @click.stop="onHeadTest(r)"
+            >
+              {{ translate('okf.dashboard.card.headTest', 'Head Test') }}
+            </DsButton>
             <DsButton variant="ghost" small :disabled="actionBusy" @click.stop="onVersions(r)">
               {{ translate('okf.dashboard.card.versions', 'Versions') }}
             </DsButton>
@@ -279,6 +293,14 @@
       @changed="onVersionsChanged"
     />
 
+    <!-- Story 1-8 (2026-10-08): the Head Tester / Routing Lab. -->
+    <OkfHeadTestDialog
+      :visible="headTestRepo !== null"
+      :repo="headTestRepo"
+      @close="headTestRepo = null"
+      @changed="onHeadTestChanged"
+    />
+
     <OkfLogsDialog :visible="logsOpen" :repo="logsRepo" @close="logsOpen = false" />
 
     <OkfRenameRepoDialog
@@ -315,6 +337,7 @@ import DsSelect from '../ds/Select.vue';
 import DsHealthRing from '../ds/HealthRing.vue';
 import DsSpinner from '../ds/Spinner.vue';
 import OkfVersionsDialog from './editor/VersionsDialog.vue';
+import OkfHeadTestDialog from './editor/HeadTestDialog.vue';
 import OkfLogsDialog from './editor/LogsDialog.vue';
 import OkfRenameRepoDialog from './editor/RenameRepoDialog.vue';
 import OkfBuildProgressCard from './editor/BuildProgressCard.vue';
@@ -351,6 +374,7 @@ export default {
     DsHealthRing,
     DsSpinner,
     OkfVersionsDialog,
+    OkfHeadTestDialog,
     OkfLogsDialog,
     OkfRenameRepoDialog,
     OkfBuildProgressCard
@@ -379,6 +403,7 @@ export default {
       versionsRepo: null,
       logsOpen: false,
       logsRepo: null,
+      headTestRepo: null,
       renameRepo: null,
       buildHover: null,
       buildPopStyle: {},
@@ -674,6 +699,14 @@ export default {
     onLogs(r) {
       this.logsRepo = r;
       this.logsOpen = true;
+    },
+    /** Story 1-8: open the Routing Lab. A rebuild inside the dialog
+     * rewrites okf_repositories.head — refresh the lane card after. */
+    onHeadTest(r) {
+      this.headTestRepo = r;
+    },
+    onHeadTestChanged() {
+      this.refreshAll();
     },
     onRenameAsk(r) {
       this.renameRepo = r;

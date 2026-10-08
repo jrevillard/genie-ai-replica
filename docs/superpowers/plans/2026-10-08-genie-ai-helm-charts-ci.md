@@ -541,11 +541,14 @@ spec:
           attestors:
             - entries:
                 - keys:
-                    # INLINE PEM only — Kyverno does NOT accept
-                    # Secret/ConfigMap references for publicKeys. The
-                    # `{{- ... | nindent 22 }}` indents the multi-line
-                    # PEM block inside the YAML scalar.
-                    publicKeys: |-
+                    # F3 fix: `keyData:` is the real Kyverno v1.13+ schema
+                    # field for inline PEM (the older `publicKeys:` is
+                    # NOT in the schema; the spec used it incorrectly for
+                    # three rounds). `keyData:` accepts an inline PEM
+                    # string only — no Secret/ConfigMap references.
+                    # The `{{- ... | nindent 22 }}` indents the
+                    # multi-line PEM block inside the YAML scalar.
+                    keyData: |-
                       {{- .Values.cosign.publicKey | nindent 22 }}
 {{- end -}}
 ```

@@ -149,9 +149,7 @@
               <DsFormGroup :label="perRepoFieldLabel(field)" :input-id="`okf-fm-perrepo-${field}`">
                 <template #label>
                   {{ perRepoFieldLabel(field) }}
-                  <span class="okf-ce__fm-perrepo-field-count">
-                    ({{ perRepoFieldValues(field).length }})
-                  </span>
+                  <span class="okf-ce__fm-perrepo-field-count"> ({{ perRepoFieldValues(field).length }}) </span>
                 </template>
                 <DsInput
                   v-if="isPerRepoScalar(field)"
@@ -959,7 +957,7 @@ export default {
     // whitespace, drops empty lines, dedupes (case-insensitive).
     commitPerRepoArrayDraft(field) {
       if (this.isPerRepoScalar(field)) return;
-      const text = (this.perRepoArrayDrafts[field] || '');
+      const text = this.perRepoArrayDrafts[field] || '';
       const lines = text
         .split('\n')
         .map((s) => s.trim())
@@ -1014,16 +1012,10 @@ export default {
         patch.frontmatter = {
           topic: Array.isArray(this.fmDraft.perRepo.topic) ? this.fmDraft.perRepo.topic : [],
           entity: Array.isArray(this.fmDraft.perRepo.entity) ? this.fmDraft.perRepo.entity : [],
-          scope:
-            typeof this.fmDraft.perRepo.scope === 'string' ? this.fmDraft.perRepo.scope : '',
-          forbidden: Array.isArray(this.fmDraft.perRepo.forbidden)
-            ? this.fmDraft.perRepo.forbidden
-            : [],
-          summary:
-            typeof this.fmDraft.perRepo.summary === 'string' ? this.fmDraft.perRepo.summary : '',
-          keyword: Array.isArray(this.fmDraft.perRepo.keyword)
-            ? this.fmDraft.perRepo.keyword
-            : []
+          scope: typeof this.fmDraft.perRepo.scope === 'string' ? this.fmDraft.perRepo.scope : '',
+          forbidden: Array.isArray(this.fmDraft.perRepo.forbidden) ? this.fmDraft.perRepo.forbidden : [],
+          summary: typeof this.fmDraft.perRepo.summary === 'string' ? this.fmDraft.perRepo.summary : '',
+          keyword: Array.isArray(this.fmDraft.perRepo.keyword) ? this.fmDraft.perRepo.keyword : []
         };
         // D-F: validate + parse the generic rows into the SAME patch.
         const seen = new Set();

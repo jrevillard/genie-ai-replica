@@ -534,7 +534,7 @@ export default {
     },
     selectedRow() {
       return this.concepts.find((c) => c.concept_id === this.selectedId) || null;
-    },
+    }
     // Story 1.7 (2026-10-08, simplified): the per-repo frontmatter
     // chip UI is ALWAYS visible in the right rail (per David
     // 2026-10-08: the editor must be able to perform ALL operations

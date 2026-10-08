@@ -686,7 +686,7 @@ const actions = {
       );
       const repoOkfService = (await import(/* webpackChunkName: "repo-okf" */ '../../services/repoOkfService')).default;
       const conceptService = (await import(/* webpackChunkName: "concept" */ '../../services/conceptService')).default;
-      const frontmatterService = (await import(/* webpackChunkName: "fm" */ '../../services/frontmatterService')).default;
+      const frontmatterService = await import(/* webpackChunkName: "fm" */ '../../services/frontmatterService');
 
       // 1. Read current index.md to merge into the existing YAML.
       const indexDoc = await conceptService.get(repoId, 'index');

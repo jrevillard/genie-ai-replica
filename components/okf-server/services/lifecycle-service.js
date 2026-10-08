@@ -617,22 +617,22 @@ async function transition(repoId, action, actor, opts = {}) {
         ).all();
         const existingFm = (repoRow && repoRow[0] && repoRow[0].frontmatter) || null;
         const supplied = suppliedFm || existingFm;
-        // 2. Gate: ≥3 topic + ≥1 forbidden + every row approved (per-row
-        //    approved_at — the new design's gate is the same as Story 1.6
-        //    but reads okf_repositories.frontmatter instead of the old
-        //    okf_repo_frontmatter collection).
+        // 2. Gate: ≥3 topic + ≥1 forbidden. Story 1.7 simplified
+        //    (2026-10-08, per David): every value in the frontmatter
+        //    counts — there is no per-row approved stamp. The curator
+        //    edits the tags either via the chip UI or directly in the
+        //    index.md YAML center pane; both routes persist to
+        //    okf_repositories.frontmatter via the same write-through.
         if (supplied) {
           const topicCount = Array.isArray(supplied.topic) ? supplied.topic.length : 0;
           const forbiddenCount = Array.isArray(supplied.forbidden) ? supplied.forbidden.length : 0;
-          const approved = Array.isArray(supplied._approved) ? supplied._approved : [];
-          const unapproved = approved.length < (topicCount + forbiddenCount);
-          if (topicCount < 3 || forbiddenCount < 1 || unapproved) {
+          if (topicCount < 3 || forbiddenCount < 1) {
             throw new LifecycleError(
               'FRONTMATTER_REQUIRED',
-              'Frontmatter gate failed: need ≥3 topic, ≥1 forbidden, every row approved ' +
-                `(have topic=${topicCount}, forbidden=${forbiddenCount}, approved_rows=${approved.length}). ` +
-                'Open the repo in the editor, add frontmatter to the index.md YAML, ' +
-                'and approve every row before publish.',
+              'Frontmatter gate failed: need ≥3 topic, ≥1 forbidden ' +
+                `(have topic=${topicCount}, forbidden=${forbiddenCount}). ` +
+                'Open the repo in the editor and add frontmatter to the index.md YAML ' +
+                'before publish.',
               409
             );
           }
@@ -649,6 +649,28 @@ async function transition(repoId, action, actor, opts = {}) {
             topic: topicCount,
             forbidden: forbiddenCount
           });
+          // 3a. Story 1.7a — build the vectorized head from the
+          //     just-written frontmatter. Embeds each tag via the
+          //     shared TEI service, averages per-field combined
+          //     vectors into a single bundle-level vector, stores
+          //     it on okf_repositories.head. The retriever reads
+          //     this for query routing (additive — doesn't replace
+          //     the existing query-affinity routing from Story 1.3).
+          //     Best-effort: a TEI outage must not block the
+          //     publish — the frontmatter is already on the doc;
+          //     a curator can re-run the head build later.
+          try {
+            await frontmatterService.buildVectorizedHead(repoId, supplied, {
+              actor,
+              version: bundle.bundle_version
+            });
+            logger.info('[OKF-PUBLISH] vectorized head built', { repo_id: repoId });
+          } catch (headErr) {
+            logger.warn('[OKF-PUBLISH] vectorized head build FAILED (continuing)', {
+              repo_id: repoId,
+              error: headErr && headErr.message
+            });
+          }
         } else {
           // 4. No frontmatter in the repo doc and none supplied — run the
           //    LLM auto-suggest path (the same as Story 1.6, but the
@@ -695,6 +717,20 @@ async function transition(repoId, action, actor, opts = {}) {
             topic: Array.isArray(suggested.topic) ? suggested.topic.length : 0,
             forbidden: Array.isArray(suggested.forbidden) ? suggested.forbidden.length : 0
           });
+          // 4a. Story 1.7a — same head build as the supplied path
+          //     (see comment block above). Best-effort.
+          try {
+            await frontmatterService.buildVectorizedHead(repoId, suggested, {
+              actor,
+              version: bundle.bundle_version
+            });
+            logger.info('[OKF-PUBLISH] vectorized head built (auto-suggest)', { repo_id: repoId });
+          } catch (headErr) {
+            logger.warn('[OKF-PUBLISH] vectorized head build FAILED (continuing, auto-suggest)', {
+              repo_id: repoId,
+              error: headErr && headErr.message
+            });
+          }
         }
       } catch (fmErr) {
         if (fmErr && (fmErr.code === 'FRONTMATTER_INCONSISTENT' || fmErr.code === 'FRONTMATTER_REQUIRED')) {

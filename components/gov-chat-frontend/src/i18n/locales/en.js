@@ -2579,29 +2579,27 @@ export default {
       crawlTip: 'Crawled from: {url}',
       total: "{'{'}n{'}'} document(s)"
     },
-    // Story 1.7 (2026-10-08): the per-repo frontmatter chip UI
-    // (Refresh suggestions / Approve all / Save tags) used in BOTH
-    // the wizard's Curate step and the OKF Studio editor's right
-    // rail. The values match the translateMixin default strings
-    // in components/okf/FrontmatterPanel.vue so the locale tree
-    // is the source of truth and the inline fallbacks are the
-    // safety net.
+    // Story 1.7 (2026-10-08, simplified 2026-10-08): the per-repo
+    // frontmatter chip UI (Refresh / Save tags) used in BOTH the
+    // wizard's Curate step and the OKF Studio editor's right rail.
+    // Per David: the tags ARE the frontmatter — no approve state.
+    // The curator can edit the chips here OR the YAML in the center
+    // pane. The values match the translateMixin default strings in
+    // components/okf/FrontmatterPanel.vue so the locale tree is the
+    // source of truth and the inline fallbacks are the safety net.
     frontmatter: {
       title: 'Frontmatter tags — what this repo is about',
-      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. The LLM proposes from a chunk sample; review and approve before Publish.',
+      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
       removeTag: 'Remove tag',
-      approveTag: 'Approve tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
       add: 'Add',
-      none: 'No tags yet. The LLM will draft them when you click Refresh suggestions.',
       saving: 'Saving…',
       save: 'Save tags',
-      approveAll: 'Approve all',
       saved: 'Saved',
       error: 'Save failed.',
       errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',

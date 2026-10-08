@@ -42,7 +42,6 @@
       :read-only="readOnly"
       :show-title="true"
       :compact="false"
-      @gate="onPanelGate"
       @saved="onPanelSaved"
       @flush-before-save="flushEmbeddedEditorSave"
     />
@@ -101,12 +100,6 @@ export default {
     this.$emit('gate', true);
   },
   methods: {
-    // Forward the panel's gate signal to the wizard. The wizard step
-    // computes its own gate from the per-row approved state; for the
-    // embedded step here, the panel is the source of truth.
-    onPanelGate(ready) {
-      this.$emit('gate', ready);
-    },
     onPanelSaved() {
       // The panel wrote the index.md YAML AND okf_repositories.frontmatter.
       // Remount the embedded editor so the center pane re-reads the

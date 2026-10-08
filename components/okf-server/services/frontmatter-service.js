@@ -812,6 +812,137 @@ async function writeFrontmatterToRepoDoc(repoId, payload, opts = {}) {
   return frontmatter;
 }
 
+// ---------- Story 1.7a — vectorized head on the repo doc ----------
+//
+// The "vectorized head" is the bundle-level embedding the retriever
+// uses to route a user query to the right OKF bundle. It's derived
+// from the per-repo frontmatter tags at publish time:
+//   1. Embed each tag value via the shared TEI service
+//      (TEI_EMBED_HOST — same env the OPEA retriever uses).
+//   2. Average the per-field embeddings into per-field combined
+//      vectors (weighted by FIELD_RANGES — topic 1.0, entity 0.7,
+//      keyword 0.5, summary 0.5, scope 0.3; forbidden is a penalty
+//      and is NOT averaged into the head).
+//   3. Average the per-field combined vectors into a single
+//      bundle-level "head" vector.
+//   4. Build a synthetic head text the curator can read in the UI.
+//   5. Store the head on okf_repositories.head (additive doc field):
+//      { text, vector, per_field, dim, model, computed_at, computed_by }.
+//
+// The retriever reads okf_repositories.head.vector for routing
+// (additive — doesn't break the existing query-affinity routing
+// from Story 1.3). The publish path calls this on every publish
+// AFTER the frontmatter gate passes, so the head always reflects
+// the published tag set.
+//
+// Storage cost: a single 1024-dim float vector (~4 KB at 32-bit
+// floats, or ~8 KB as JSON) per repo. Trivial compared to the
+// per-chunk embeddings in the existing concept ingest path.
+async function buildVectorizedHead(repoId, frontmatter, opts = {}) {
+  return withSpan('okf.frontmatter.build_head', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
+    if (!frontmatter || typeof frontmatter !== 'object') {
+      throw new FrontmatterError('EMPTY', 'frontmatter is empty — cannot build head', 400);
+    }
+    // 1. embed each tag value
+    const valuesByField = await embedAllTags(frontmatter);
+    // 2. per-field combined vectors (weighted average)
+    const perField = {
+      topic: averageVectors(valuesByField.topic, FIELD_RANGES.topic.default_weight),
+      entity: averageVectors(valuesByField.entity, FIELD_RANGES.entity.default_weight),
+      keyword: averageVectors(valuesByField.keyword, FIELD_RANGES.keyword.default_weight),
+      summary: averageVectors(valuesByField.summary, FIELD_RANGES.summary.default_weight),
+      scope: averageVectors(valuesByField.scope, FIELD_RANGES.scope.default_weight),
+      // forbidden is NOT included — it's a penalty for routing, not
+      // a positive signal of what the repo is about.
+      forbidden: averageVectors(valuesByField.forbidden, 0.0)
+    };
+    // 3. single head vector: average the non-null per-field vectors
+    //    with each field's weight. Empty result → no head (the
+    //    publish gate already requires topic>=3 + forbidden>=1 so
+    //    this case is unreachable in practice, but we guard).
+    const present = ['topic', 'entity', 'keyword', 'summary', 'scope']
+      .map((f) => ({ f, v: perField[f] }))
+      .filter((x) => Array.isArray(x.v));
+    if (!present.length) {
+      throw new FrontmatterError('VALIDATION', 'no per-field vectors after embedding — cannot build head', 400);
+    }
+    const dim = present[0].v.length;
+    const acc = new Array(dim).fill(0);
+    let totalW = 0;
+    for (const { f, v } of present) {
+      const w = FIELD_RANGES[f].default_weight;
+      for (let i = 0; i < dim; i += 1) acc[i] += v[i] * w;
+      totalW += w;
+    }
+    if (totalW === 0) {
+      throw new FrontmatterError('VALIDATION', 'all per-field weights are zero — cannot build head', 400);
+    }
+    for (let i = 0; i < dim; i += 1) acc[i] /= totalW;
+    const vector = acc;
+    // 4. synthetic head text — the human-readable form of the
+    //    frontmatter. The retriever ignores it; the UI shows it
+    //    in the editor so the curator can see what the head
+    //    summarizes.
+    const text = frontmatterToHeadText(frontmatter);
+    // 5. atomic write to okf_repositories.head (additive; doesn't
+    //    touch the frontmatter or any other doc field)
+    const db = await dbService.getConnection();
+    const now = new Date().toISOString();
+    const actor = (opts && opts.actor && opts.actor.user_id) || 'auto-publish';
+    const version = parseInt((opts && opts.version) || Date.now(), 10);
+    const head = {
+      text,
+      vector,
+      per_field: {
+        topic: perField.topic,
+        entity: perField.entity,
+        keyword: perField.keyword,
+        summary: perField.summary,
+        scope: perField.scope,
+        forbidden: perField.forbidden
+      },
+      dim,
+      model: process.env.EMBEDDING_MODEL_ID || 'tei-embed',
+      version,
+      computed_at: now,
+      computed_by: actor
+    };
+    await db.collection('okf_repositories').update(repoId, { head });
+    span.setAttribute('okf.head.dim', dim);
+    span.setAttribute('okf.head.text_chars', text.length);
+    logger.info('frontmatter.head.built', {
+      repo_id: repoId,
+      dim,
+      topic: Array.isArray(frontmatter.topic) ? frontmatter.topic.length : 0,
+      entity: Array.isArray(frontmatter.entity) ? frontmatter.entity.length : 0,
+      keyword: Array.isArray(frontmatter.keyword) ? frontmatter.keyword.length : 0,
+      forbidden: Array.isArray(frontmatter.forbidden) ? frontmatter.forbidden.length : 0,
+      version
+    });
+    return head;
+  });
+}
+
+// Synthetic head text — the human-readable form of the
+// frontmatter. Used for the UI's "head summary" tile AND as a
+// fallback in case the embed endpoint is unreachable (the text
+// alone is still useful for retrieval by substring match).
+function frontmatterToHeadText(fm) {
+  const parts = [];
+  const arr = (k) => (Array.isArray(fm[k]) ? fm[k].filter((v) => v) : []);
+  const sca = (k) => (typeof fm[k] === 'string' ? fm[k].trim() : '');
+  if (arr('topic').length) parts.push(`Topics: ${arr('topic').join(', ')}.`);
+  if (arr('entity').length) parts.push(`Entities: ${arr('entity').join(', ')}.`);
+  const scope = sca('scope');
+  if (scope) parts.push(`Scope: ${scope}.`);
+  if (arr('forbidden').length) parts.push(`Not about: ${arr('forbidden').join(', ')}.`);
+  const summary = sca('summary');
+  if (summary) parts.push(`Summary: ${summary}.`);
+  if (arr('keyword').length) parts.push(`Keywords: ${arr('keyword').join(', ')}.`);
+  return parts.join(' ').trim();
+}
+
 // Read the per-repo frontmatter from the canonical store. Returns
 // null if the field is absent (the repo has never had frontmatter
 // set). The retriever, the publish gate, and the UI all call this.
@@ -968,6 +1099,9 @@ module.exports = {
   validateFrontmatter,
   embedAllTags,
   writeFrontmatterToRepoDoc,
+  // Story 1.7a: vectorized head for retriever routing
+  buildVectorizedHead,
+  frontmatterToHeadText,
   // reader
   getFrontmatter,
   getFrontmatterSummary,

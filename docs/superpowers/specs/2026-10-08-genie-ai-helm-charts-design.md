@@ -85,18 +85,18 @@ genie-ai/
 | Helm dep | Repo | Version constraint | Default `condition:` | Pulled iff |
 |---|---|---|---|---|
 | `genieai-common` | local file:// | `~> 0.1.0` | unconditional | always |
-| `cloudnative-pg` (CNPG chart) | `https://cloudnative-pg.github.io/charts` | `~> 0.30.0` (corresponds to operator v1.30.x; chart minor tracks operator minor) | `data.postgres.enabled` | keycloak-db (Kong removed — decision 7) |
+| `cloudnative-pg` (CNPG chart) | `https://cloudnative-pg.github.io/charts` | `~> 0.30.0` (exact chart line verified at adoption; the "chart minor == operator minor" assumption is FALSE) | `data.postgres.enabled` | keycloak-db |
 | `kube-arangodb` | `https://arangodb.github.io/kube-arangodb` | `~> 1.4.5` | `data.arangodb.enabled` | always |
-| `keycloak-operator` | `https://keycloak.github.io/keycloak-operator-helm` (official) | `~> 26.0.0` | `data.keycloak.enabled` | always |
+| _(keycloak-operator — see note)_ | **cluster bootstrap prerequisite** (OLM / static YAML per keycloak.org) | operator 26.x | — | NOT a chart dep |
 | `external-secrets-operator` (ESO) | `https://charts.external-secrets.io` | `~> 0.10.0` | `secrets.eso.enabled` | when `pluggable.secretsBackend: externalSecrets` |
 | `sealed-secrets` | `https://bitnami.github.io/sealed-secrets` (NOT the deprecated `charts.bitnami.com/bitnami/sealed-secrets`) | `~> 2.20.0` (corresponds to controller v0.40.0+) | `secrets.sealedSecrets.enabled` | always (default backend) |
-| `victoria-metrics-operator` | `https://victoriametrics.github.io/helm-charts` | `~> 0.45.0` | `observability.enabled` | profile-gated |
-| `victoria-logs-operator` | same chart family | `~> 0.10.0` | `observability.logs.enabled` | profile-gated |
-| `victoria-traces-operator` | same chart family | `~> 0.5.0` | `observability.traces.enabled` | profile-gated |
+| `victoria-metrics-operator` | `https://victoriametrics.github.io/helm-charts` | `~> 0.45.0` | `observability.enabled` | single chart provides ALL CRDs: VMSingle/VMCluster, VLSingle, VTSingle, VMAgent, VMServiceScrape, VMRule… (verified against the repo index — no separate VL/VT operator charts exist) |
 | `opentelemetry-operator` | `https://open-telemetry.github.io/opentelemetry-helm-charts` | `~> 0.50.0` | `observability.otel.enabled` | profile-gated |
 | `gpu-operator` | `https://nvidia.github.io/gpu-operator` | `~> v25.x` | `gpu.enabled` | GPU clusters only |
 | `cert-manager` | `https://charts.jetstack.io` | `~> 1.21.0` | `certManager.enabled` | if `ingress.tls.issuer: cert-manager` |
 | `envoy-gateway` | `https://gateway.envoyproxy.io/charts` (or local OCI) | `~> 1.9.0` | `ingress.className: envoy` | if Envoy Gateway chosen |
+
+**Cluster bootstrap prerequisites (NOT chart dependencies)** — installed once per cluster before `helm install`: keycloak-operator (OLM or static YAML from keycloak.org), Flux (optional GitOps), Velero (opt-in backups). The chart renders only the CRs those operators manage (Keycloak, KeycloakRealmImport, VMSingle, …).
 
 **Version-pin discipline (`~>` for CRD owners)**: CRD schemas change between minor releases for `cloudnative-pg`, `kube-arangodb`, `keycloak-operator`, `external-secrets-operator`, and `vmoperator`. `>= X.Y.Z` allows silent breaking changes in CRD shape between patch bumps; `~> X.Y.Z` constrains to the same minor. `~>` is mandatory for these. **Off-CRD deps** (GPU operator, cert-manager, gateway) tolerate `~>` less strictly but use it for reproducibility.
 
@@ -225,7 +225,7 @@ dependencies:
     otel:              [observability.metrics|observability.logs]  # otel only useful if data sink exists
 ```
 
-Pre-install validation is a **chart hook** (a Job in `templates/hooks/pre-install-dependency-check.yaml`) that runs `helm template` against the merged values, parses the rendered manifests, and verifies:
+Pre-install validation is a **chart hook** (a Job in `templates/hooks/pre-install-dependency-check.yaml`) that reads two hook-mounted ConfigMaps the chart renders — `dependency-graph.json` and `enabled.json` (flattened service/data toggles, fail-safe `false` defaults) — and verifies:
 
 1. Every `services.<X>.enabled: true` has its declared dependencies `enabled: true`.
 2. If a user disables a dependency (e.g., `data.arangodb.enabled: false` with `services.backend.enabled: true`), the Job **fails** with a clear error listing the missing deps.
@@ -388,7 +388,9 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
 | `emailPassword` | _(TBD)_ | Plan 3 | SMTP password for admin notifications |
 | `grafanaAdminPassword` | _(TBD)_ | Plan 4 | Grafana admin user |
 | `kcGrafanaClientSecret` | _(TBD)_ | Plan 4 | Grafana OIDC client secret for SSO |
-| `huggingFaceHubToken` | _(TBD)_ | Plan 3 (or 5 if AI/ML boundary preferred) | Used by vLLM/TEI to pull models from HF Hub |
+| `huggingFaceHubToken` | `huggingface-hub-token` (key `HUGGING_FACE_HUB_TOKEN`) | Plan 3 | Model pulls (vLLM/TEI) |
+| `VLLM_API_KEY` | `vllm-api-key` (key `VLLM_API_KEY`) | Plan 5 | GPU-node bearer auth — consumed by backend, tei, reranker, retriever, chatqna |
+| `TRANSLATION_CACHE_PASSWORD` | `translation-cache-password` (key `TRANSLATION_CACHE_PASSWORD`) | Plan 6 | Redis translation-cache auth |
 
 The mapping is **deliberately bijective**: each K8s `Secret` resource name maps back to exactly one `.env`-style key name (or none if K8s-only). Operators can grep the chart tree for any `Secret` name and trace back to its origin via this table. Spec §8 lists the .env-side keys; this table is the canonical K8s reference.
 
@@ -491,9 +493,9 @@ Two protections:
 **(a) Pre-install backup hook** — an OPT-IN `Job` chart-hook annotated `pre-upgrade` only (NOT `pre-install`; fresh installs have no data to back up). The hook runs `velero backup create` (or `pg_basebackup` + `arangodump` for databases if Velero unavailable). Operators MUST install Velero separately as a cluster-bootstrap prerequisite — the chart does not include Velero. The hook fires only when the release annotation `genieai.io/run-backup-on-upgrade: "true"` is set; default is OFF.
 
 ```bash
-# opt-in:
-kubectl annotate hr/genieai-prd genieai.io/run-backup-on-upgrade=true --overwrite
-helm upgrade genieai-prd charts/genieai-umbrella
+# opt-in (namespace annotation — plain Helm releases carry no annotations):
+kubectl annotate ns genieai genieai.io/run-backup-on-upgrade=true --overwrite
+helm upgrade genieai-prd charts/genieai-umbrella -n genieai
 ```
 
 If Velero is not installed and the annotation is set, the hook fails the upgrade with a clear error: `velero: command not found`. Operator must install Velero first. The hook does NOT block install (annotations default to false → no backup Job runs); upgrade operators explicitly opt in.
@@ -502,17 +504,17 @@ If Velero is not installed and the annotation is set, the hook fails the upgrade
 
 ```bash
 # Refused by hook (default state):
-kubectl label hr/genieai-prd genieai.io/allow-destructive-uninstall=false
-helm uninstall genieai-prd
+helm uninstall genieai-prd -n genieai
 # helm exits with: Error: pre-delete hook failed: ...
 
 # Acceptable paths:
-# (1) Label the release, then uninstall — gate validates label:
-kubectl annotate hr/genieai-prd genieai.io/allow-destructive-uninstall=true --overwrite
-helm uninstall genieai-prd               # (gate accepts because annotation is set)
+# (1) Annotate the RELEASE NAMESPACE (plain Helm releases have no annotatable
+#     object; the namespace is the stable carrier), then uninstall:
+kubectl annotate ns genieai genieai.io/allow-destructive-uninstall=true --overwrite
+helm uninstall genieai-prd -n genieai    # (gate accepts because annotation is set)
 
 # (2) Skip the hook entirely — destruction is the operator's call:
-helm uninstall genieai-prd --no-hooks    # (gate never fires)
+helm uninstall genieai-prd -n genieai --no-hooks   # (gate never fires)
 ```
 
 **Important**: `--no-hooks` is the **break-glass path** that bypasses the gate. Standard policy is path (1) — annotate-and-uninstall — to keep an auditable trail. `--no-hooks` is reserved for emergency operations where the gate itself is corrupted. **Both paths are supported; neither requires the other.**
@@ -602,12 +604,18 @@ def load_yaml(text: str) -> dict:
     return yaml.safe_load(text) or {}
 
 
-def chart_defaults_at(branch: str) -> set:
-    return set(load_yaml(git_show(branch, CHART_VALUES)).keys())
+# Drift semantics: warn only on keys NEWLY INTRODUCED by this MR
+# (head vs merge-base), not on every default an override happens to
+# omit — sparse overrides are legitimate.
+def chart_defaults_at(rev: str) -> set:
+    return set(load_yaml(git_show(rev, CHART_VALUES)).keys())
 
+BASE = subprocess.run(["git", "merge-base", "HEAD", "origin/main"],
+                      capture_output=True, text=True, check=True).stdout.strip()
+
+new_keys = chart_defaults_at("HEAD") - chart_defaults_at(BASE)
 
 for branch in WATCHED_BRANCHES:
-    defaults = chart_defaults_at(branch)
     for path in git_ls_tree(branch, ENV_OVERRIDES_REL):
         if not path.endswith("/values-override.yaml"):
             continue
@@ -615,11 +623,11 @@ for branch in WATCHED_BRANCHES:
         override = load_yaml(git_show(branch, path))
         if not isinstance(override, dict):
             continue
-        missing_keys = defaults - set(override.keys())
+        missing_keys = new_keys - set(override.keys())
         if missing_keys:
             print(
-                f"WARN: env={env_name} on {branch} is missing key(s) "
-                f"{missing_keys} — these will use new defaults at next deploy",
+                f"WARN: env={env_name} on {branch} lacks newly-introduced key(s) "
+                f"{missing_keys} — they will silently use new defaults at next deploy",
                 file=sys.stderr,
             )
 ```
@@ -708,7 +716,7 @@ Internal ops docs under `docs/charts/` (K8s-only, dev-internal, not published):
 
 These are deliberate unknowns NOT blocking v1, but documented for follow-up:
 
-1. **Pluggable secrets delivery default**: `sealedSecrets` is current default (per research v2 sealed-secrets run, 2026-10-08). Helm dep pinned to `~> 2.20.0` (controller `>= v0.40.0`, CVE-free). Chart ships ONLY this backend in v1 (template code, no plug-point duplication). Adding `externalSecrets` (ESO + Vault) and `secretProviderClass` (Azure CSI) later is documented in `docs/charts/pluggable-backends.md`. Self-rationale (2026-10-08): sovereign public-sector posture + no Vault available + sealed-secrets v0.40.0 brings 30-day auto-rotation for cluster keys.
+1. **Pluggable secrets delivery default**: `sealedSecrets` is current default. Helm dep pinned to `~> 2.20.0` (pin rationale in `docs/charts/k8s-native-audit.md`; the CVE IDs cited by early research were NOT verified and are retracted — rotation is operator-initiated, see §8). Chart ships ONLY this backend in v1. Adding `externalSecrets` (ESO + Vault) and `secretProviderClass` (Azure CSI) later is documented in `docs/charts/pluggable-backends.md`. Self-rationale (2026-10-08): sovereign public-sector posture + no Vault infrastructure available.
 2. **Multi-cluster topology**: not v1. Documented in roadmap.
 3. **GPU sharing (MIG/MPS/time-slicing)**: per-service fine-grained control on 24GB cards is a v2 epic; v1 keeps simple `nodeSelector` and `replicas`. **GPU nodePool validation** (G2) — `gpu.enabled: true` should require `gpu.nodePoolRef` to be set against a labelled node pool; without GPU nodes, the NVIDIA operator DaemonSet crashloops. P2 to add in v1.1.
 4. **Connection pooling (PgBouncer)**: CloudNativePG has native support; whether `services.backend` connects via pooler or direct is a v1.1 decision.

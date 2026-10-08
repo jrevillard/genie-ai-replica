@@ -232,7 +232,7 @@ be rendered here.
 Usage:
   {{- include "genieai-umbrella.crossServiceURLs" (list $ctx (list
     (dict "name" "KEYCLOAK_URL" "host" "keycloak" "port" 8080 "path" "/auth")
-    (dict "name" "ARANGO_URL"    "host" "arangodb-single" "port" 8529)
+    (dict "name" "ARANGO_URL"    "host" (include "genieai-umbrella.arangoHost" .) "port" 8529)
     ...)) | nindent 12 }}
 */}}
 {{- define "genieai-umbrella.crossServiceURLs" -}}
@@ -243,10 +243,28 @@ Usage:
   value: {{ printf "http://%s.%s.svc.cluster.local:%v%s" .host $ctx.Values.namespace (int .port) (default "" .path) | quote }}
 {{- end -}}
 {{- end -}}
+
+{{/*
+ArangoDB service name — single mode renders `{{ include "genieai-umbrella.arangoHost" $ }}`, cluster
+mode renders `arangodb-cluster` (per Plan 2 Task 9 ArangoDeployment
+names). The kube-arangodb operator creates Services named after the
+ArangoDeployment, so callers MUST use the same suffix or DNS NXDOMAIN.
+Usage:
+  {{- include "genieai-umbrella.arangoHost" . }}
+*/}}
+{{- define "genieai-umbrella.arangoHost" -}}
+{{- if eq (default "single" .Values.data.arangodb.mode) "cluster" -}}
+arangodb-cluster
+{{- else -}}
+arangodb-single
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
 ```
 
 - [ ] **Step 2: Inject URLs into each per-service template** (Task 3 file edits):
-- `services/backend.yaml`: `KEYCLOAK_URL=http://keycloak.<ns>:8080/auth`, `ARANGO_URL=http://arangodb-single.<ns>:8529`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector.<ns>:4318` (the OTel operator names the gateway Service after the CR, not `<cr>-collector`).
+- `services/backend.yaml`: `KEYCLOAK_URL=http://keycloak.<ns>:8080/auth`, `ARANGO_URL=http://{{ include "genieai-umbrella.arangoHost" $ }}.<ns>:8529`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector.<ns>:4318` (the OTel operator names the gateway Service after the CR, not `<cr>-collector`).
 - `services/documentRepository.yaml`: `BACKEND_URL=http://backend.<ns>:80`, `CLAMAV_HOST=clamav`, `CLAMAV_PORT=3310`, OTEL endpoint.
 - `services/frontend.yaml`: `VUE_APP_API_URL`, OTEL endpoint.
 

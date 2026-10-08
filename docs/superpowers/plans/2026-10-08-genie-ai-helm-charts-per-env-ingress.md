@@ -387,18 +387,27 @@ spec:
       allowedRoutes:
         namespaces:
           from: Same
+    # The `https` listener is rendered ONLY when `ingress.tls.enabled`
+    # is true. The Gateway API rejects `tls: { mode: Terminate }`
+    # without a `certificateRefs` entry — so we either render the
+    # listener fully (mode + certRef) or skip it entirely. A separate
+    # `http` listener stays for the cert-manager bootstrap path (the
+    # cert-manager `http01` solver needs an HTTP listener; HTTP→HTTPS
+    # redirect is the operator's choice via the HTTPRoute's
+    # requestRedirect filter).
+    {{- if .Values.ingress.tls.enabled }}
     - name: https
       protocol: HTTPS
       port: 443
       tls:
         mode: Terminate
-        {{- if .Values.ingress.tls.enabled }}
         certificateRefs:
           - kind: Secret
             name: {{ printf "%s-tls" .Values.ingress.host | default "genieai-tls" }}
-        {{- end }}
       allowedRoutes:
         namespaces:
+          from: Same
+    {{- end }}
           from: Same
 {{- end -}}
 ```
@@ -417,6 +426,10 @@ metadata:
 spec:
   parentRefs:
     - name: genieai
+      # Bind to the https listener when TLS is on, http otherwise (the
+      # Gateway conditionally renders the `https` listener — see the
+      # gateway.yaml template — so the sectionName MUST match the
+      # listener the chart actually emitted).
       sectionName: {{ if .Values.ingress.tls.enabled }}https{{ else }}http{{ end }}
   hostnames:
     - {{ .Values.ingress.host | quote }}
@@ -429,6 +442,18 @@ spec:
       backendRefs:
         - name: backend
           port: 80
+      {{- /* CORS via the HTTPRouteFilter rendered in Task 2 Step 3. The
+             filter is opt-in (only renders when ingress.cors.allowOrigins
+             is non-empty). When the filter is absent this `filters:`
+             block emits nothing. */ -}}
+      {{- if .Values.ingress.cors.allowOrigins }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: genieai-cors
+      {{- end }}
     # SPA -> frontend
     - matches:
         - path: { type: PathPrefix, value: / }
@@ -780,7 +805,7 @@ spec:
             - name: KEYCLOAK_URL
               value: "http://keycloak.{{ .Values.namespace }}.svc.cluster.local:8080/auth"
             - name: ARANGO_URL
-              value: "http://arangodb-single.{{ .Values.namespace }}.svc.cluster.local:8529"
+              value: "http://{{ include "genieai-umbrella.arangoHost" . }}.{{ .Values.namespace }}.svc.cluster.local:8529"
             - name: KEYCLOAK_REALM
               value: genie
           envFrom:
@@ -844,7 +869,7 @@ In `docs/charts/plan-defects.md`, mark these rows as closed:
 - "db-migrations Job" → closed (Task 1 + Task 5).
 - "document-repository PVC" → closed (Plan 3 Task 1b + Task 5).
 - "NetworkPolicy label-verified peers" → closed (Task 5).
-- "ArangoDB `arangodb-single` service consumer URLs" → kept open (Task 5 note: verified by the operator after first live render of the kube-arangodb Service).
+- "ArangoDB `{{ include "genieai-umbrella.arangoHost" $ }}` service consumer URLs" → kept open (Task 5 note: verified by the operator after first live render of the kube-arangodb Service).
 
 - [ ] **Step 5: `helm lint --strict` + render assertions + commit**
 

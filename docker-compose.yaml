@@ -705,6 +705,14 @@ services:
       - VLLM_ENDPOINT=${VLLM_ENDPOINT:-}
       - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
+      # Story 1.6 — frontmatter re-embedding on publish (David 2026-10-08).
+      # Mirrors the same env var the OPEA retriever/chatqna services read
+      # (docker-compose.yaml:1204, 1348, 1515) so a remote GPU host
+      # (https://ai.assembly.govstack.global:444/embed) and a local
+      # compose service (http://tei:80) both resolve cleanly. Without
+      # this, the okf-server patchFrontmatter path 500s with
+      # ENOTFOUND embedding-tei on the first save.
+      - EMBEDDING_SERVICE_URL=${EMBEDDING_SERVICE_URL:-}
       - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
       - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
       # Stuck-parsed reaper signals (claim-stamp semantics): a claimed row with

@@ -391,7 +391,13 @@ async function suggestTags(repoId, opts = {}) {
     span.setAttribute('okf.sample_size', concepts.length);
     const conceptsText = formatConceptsForPrompt(concepts).slice(0, 6000);
     const prompt = TAG_PROMPT(concepts.length, conceptsText);
-    logger.info('frontmatter.suggest.start', { repo_id: repoId, sample_size: concepts.length, vllm_host: VLLM_LLM_HOST });
+    logger.info('frontmatter.suggest.start', {
+      repo_id: repoId,
+      sample_size: concepts.length,
+      vllm_host: VLLM_LLM_HOST,
+      model: VLLM_LLM_MODEL_ID,
+      prompt_chars: prompt.length
+    });
     const resp = await vllmChatCompletions([{ role: 'user', content: prompt }], { maxTokens: 1000 });
     const content =
       resp.data &&
@@ -399,6 +405,22 @@ async function suggestTags(repoId, opts = {}) {
       resp.data.choices[0] &&
       resp.data.choices[0].message &&
       resp.data.choices[0].message.content;
+    // DEBUG (David 2026-10-08: "read the fucking logs and figure out what
+    // happened" — suggest returned 0 tags, the log only shows counts, we
+    // need the raw LLM content + finish_reason to know whether the model
+    // returned empty by design, hit a token cap, or failed silently).
+    logger.info('frontmatter.suggest.llm_response', {
+      repo_id: repoId,
+      content_preview: (content || '').slice(0, 600),
+      content_length: (content || '').length,
+      finish_reason:
+        (resp.data &&
+          resp.data.choices &&
+          resp.data.choices[0] &&
+          resp.data.choices[0].finish_reason) ||
+        null,
+      usage: (resp.data && resp.data.usage) || null
+    });
     const parsed = extractJson(content);
     if (!parsed) {
       logger.error('frontmatter.suggest.parse_failed', {

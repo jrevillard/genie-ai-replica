@@ -47,6 +47,7 @@
 5. **VLAgent rejected** (2026-10-08). PII redaction + metadata stamping must stay in ONE place (gateway collector).
 6. **Manual SDK init retained** (2026-10-08). Same rationale as 4.
 7. **Kong removed** (2026-10-08, user-confirmed). Envoy Gateway owns the edge: `/api/*` → backend, `/` → frontend, JWT/OIDC (`envoy.filters.http.oauth2`), CORS, rate limiting. No Kong Deployment, no declarative `kong.yml`, no kong-db. K8s minimum bumped 1.32 → **1.33** (Envoy Gateway v1.9 matrix). Service count 29 → 28; Group 5 = 5.
+8. **GPU operator demoted to cluster bootstrap prerequisite** (2026-10-08, Plan 5 round-7). The chart does NOT install gpu-operator (spec §4 row amended): same posture as keycloak-operator (wave-6 #5). The chart's GPU contract is scheduling-only: nodes labeled `genieai.io/gpu=true` (+ optional taint, tolerated), `nvidia.com/gpu` resource limits, shared RWX HF-cache PVC. TEI runs non-root on `--port 8080` (the image's :80 bind needs NET_BIND_SERVICE under root).
 
 ## Review rule
 

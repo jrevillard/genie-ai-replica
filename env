@@ -1024,6 +1024,15 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # EMBEDDING_SERVICE_URL=https://${GPU_NODE_HOST}/embed
 # RERANKER_SERVICE_URL=https://${GPU_NODE_HOST}/rerank
 #
+# TEI_EMBED_HOST=https://${GPU_NODE_HOST}
+#   TEI embed endpoint BASE for okf-server (frontmatter tag embedding,
+#   vectorized-head build, Story 1-8 head tests). The service appends
+#   /embed. David 2026-10-08: the TEI service runs on the SAME host:port
+#   as the inference server — same value as VLLM_ENDPOINT's scheme://host:port,
+#   path excluded. okf-server reads ONLY this var for its embed endpoint;
+#   deployments without a remote GPU leave it unset (local full-stack
+#   default http://tei:80 applies).
+#
 # DOCLING_ENDPOINT=https://${GPU_NODE_HOST}/docling
 #   Remote docling-serve endpoint for document extraction.
 #   When set, dataprep sends documents to the remote GPU node for processing.

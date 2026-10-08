@@ -44,7 +44,7 @@ genie-ai/
 │   │   │   └── _helpers.tpl          # name/fullname/labels/selectors/annotations
 │   │   ├── values.schema.json        # JSON schema for values validation
 │   │   └── README.md
-│   └── genieai-umbrella/             # Umbrella chart (single install, 28 services)
+│   └── genieai-umbrella/             # Umbrella chart (single install, 30 services)
 │       ├── Chart.yaml                # depends on genieai-common + operators-as-deps
 │       ├── values.yaml               # DEFAULTS only (chart is generic + org-shareable)
 │       ├── templates/
@@ -306,7 +306,7 @@ Switching `pluggable.secretsBackend` between installs (`externalSecrets` → `se
 
 Per YAGNI discipline (Code Review pass, Y2): the chart ships only `externalSecrets` rendered. Templates for `sealedSecrets` and `secretProviderClass` are **not yet authored**; the plug-point design is documented in `docs/charts/pluggable-backends.md` so a later MR can add them. This avoids premature template triplication while preserving the pluggability surface area.
 
-## 7. Component surface (app tier, 28 services)
+## 7. Component surface (app tier, 30 services)
 
 Service inventory from the existing Swarm `docker-compose.yaml` (surveyed 2026-10-08). Each service in the chart gets:
 - a `services.<name>` toggle block in values
@@ -341,7 +341,7 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
 
 `SealedSecret` CRs (per required secret) reference the in-cluster controller. Encrypted blobs ship in Git; controller decrypts on the cluster using its in-memory private key.
 
-- Helm dep: `sealed-secrets/sealed-secrets` chart at `https://bitnami.github.io/sealed-secrets`, version `~> 2.20.0` (controller v0.40.0+, covers CVE-2026-22728 + CVE-2026-59341).
+- Helm dep: `sealed-secrets/sealed-secrets` chart at `https://bitnami.github.io/sealed-secrets` (the org-migrated chart repo; `bitnami/sealed-secrets` README is authoritative for this URL). Version pin `~> 2.20.0`. **NOTE: earlier drafts of this spec cited CVE-2026-22728 and CVE-2026-59341 as anchors for the 2.20.0 pin. These CVE IDs are NOT verified — the upstream sealed-secrets advisory feed and NVD should be checked at adoption time. The `~> 2.20.0` pin stands; the CVE narrative is removed pending verification.**
 - `SealedSecret` resources per service / data dependency. Each resource references the controller's public key during `kubeseal` encryption (offline workflow).
 - Service envFrom:
   ```yaml
@@ -350,10 +350,15 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
         name: {{ include "genieai-common.fullname" . }}-{{ .service.name }}
   ```
 
-**Rotation story (as of sealed-secrets v0.40.0)**:
-- **Cluster master key**: now **auto-rotates every 30 days by default** (v0.40.0 release note).
-- **Service-token secrets** (the actual K8s `Secret` resources): still manual. To rotate, re-encrypt with `kubeseal` against the current cluster public key and push the new `SealedSecret`.
+**Rotation story (HONEST — replacing earlier fabricated claims)**:
+- **Cluster master key**: rotation is **operator-initiated**, NOT auto-rotating. Workflow:
+  1. `kubeseal --fetch-cert --controller-name sealed-secrets > pub-cert.pem` (capture public)
+  2. `kubectl exec -it deploy/sealed-secrets -- kube-secrets-rotate` (controller-side; or restart with `controller flag --key-renew-period=720h` for *auto-renewal* of the in-memory key — note this is **renewal of in-controller key material**, NOT rotation of cryptographic secrets already on disk)
+  3. Pull the new public cert; **re-encrypt every committed SealedSecret** with the new public key, otherwise older ciphertexts become invalid (drift detection hook, Plan 2 Task 11, catches this).
+- **Service-token secrets** (the actual K8s `Secret` resources): manual. To rotate, re-encrypt with `kubeseal --cert pub-cert.pem --scope namespace --name secret-name` and commit.
 - **Audit**: Git history records who/what/when for each `SealedSecret` change. Sufficient for sovereignty P0; not equivalent to Vault's audit device for compliance attestations.
+
+(An earlier draft of this section claimed "v0.40.0 auto-rotates cluster master key every 30 days by default"; that claim was based on a verifier's paraphrase of release notes that did not survive a second review. The accurate position above supersedes it.)
 
 **Operational workflow** (sovereign / air-gap):
 1. CI/dev holds the cluster public key (fetched via `kubeseal --fetch-cert` against the cluster or downloaded from controller Service).
@@ -448,10 +453,13 @@ helm install genieai-edge ./genieai-umbrella -n genieai-edge \
   -f ./charts/genieai-umbrella/values.yaml \
   -f ./deploy/environments/sovereign/values-override.yaml \
   --set migration.swarmFallback=true \
-  --set migration.swarmEndpoint=http://10.0.0.102:443
+  --set migration.swarmEndpoint=http://10.0.0.102:443 \
+  --set migration.swarmAllowedCIDRs=10.0.0.0/16,192.168.0.0/16   # Review Focus F12
 ```
 
 Each pattern produces a working install. Pattern A is the v1 target. B and C exist to keep options open during phased migration.
+
+**Pattern C network requirement**: The default-deny NetworkPolicy egress (per spec §7) blocks cross-cluster traffic unless an explicit allowlist is present. When `migration.swarmFallback: true`, the chart emits an additional egress rule per app-tier service allowing TCP to the IP range(s) listed in `migration.swarmAllowedCIDRs` (operator-supplied; `10.0.0.0/16` default for the .102 cluster). Without this, Pattern C pods fail Swarm-bridge egress to `migration.swarmEndpoint` at install time. **Review Focus F12 fix.**
 
 Per-env install in practice:
 - **Plain envs** (dev, staging, prod): `values-override.yaml` lives in `deploy/environments/<env>/`. ArgoCD ApplicationSet pulls from `main` branch + renders the override file at the same ref.
@@ -644,20 +652,10 @@ publish:charts:
     - helm push .publish/genieai-umbrella-${CI_COMMIT_TAG}.tgz oci://${CI_REGISTRY_IMAGE}/genieai
 ```
 
-Cluster-side enforcement via **Kyverno** policy (chart installs as part of bootstrap). Kyverno's `verifyImages.attestors.entries.keys` does NOT accept cosign-style URIs — the public key must live in a Kubernetes `Secret`. The chart renders a `Secret` containing the cosign public key, and Kyverno's policy references it:
+Cluster-side enforcement via **Kyverno** policy (chart installs as part of bootstrap). **Review Focus F14 fix**: Kyverno's `verifyImages.attestors.entries.keys` does NOT accept cosign-style URIs (`secret:<name>#<key>` is cosign CLI syntax, not Kyverno). It accepts either inline PEM in `keyData` OR a `publicKeys:` literal. We use **inline PEM**:
 
 ```yaml
-# Secret holding the cosign public key (rendered by the chart or pre-installed by CI):
-apiVersion: v1
-kind: Secret
-metadata:
-  name: cosign-pubkey
-  namespace: kyverno
-type: Opaque
-data:
-  key: <base64-encoded-PEM>
----
-# Kyverno ClusterPolicy — references the Secret, NOT a cosign URI
+# ClusterPolicy — image signature verification (Review Focus F14)
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -676,10 +674,16 @@ spec:
           attestors:
             - entries:
                 - keys:
-                    publicKeys: "secret:cosign-pubkey#key"
+                    # Inline PEM loaded from a Secret in the kyverno namespace
+                    # via Kyverno `value` substitution. The Secret is rendered
+                    # by the chart (Plan 7 / bootstrap).
+                    # NOTE: `publicKeys:` accepts an inline PEM string; not a URI.
+                    publicKeys: "{{ '{{' }} `cat /etc/cosign/cosign.pub` | b64decode {{ '}}' }}"
 ```
 
 Without cosign signing + Kyverno enforcement, a registry compromise yields full cluster take (research flagged CVE-2025-1974's "default-Secrets-read" as the same attack shape — chart's installer must not lower the bar).
+
+**Alternative path** (Plan 7 implementation): `kyverno apply` of a chart-rendered `imagepullsecret-pubkey` ConfigMap (whose data is the PEM), and the ClusterPolicy uses a Kyverno `mutation` rule to inject the publicKeys from that ConfigMap. This avoids the helm templating escape inside the literal Kyverno policy. **Pinned in Plan 7 — flagged here so future plans don't rely on the URI syntax.**
 
 ### 14.2 Renovate for dep version bumps
 
@@ -710,7 +714,7 @@ These are deliberate unknowns NOT blocking v1, but documented for follow-up:
 5. **Sticky dev workflow**: out-of-tree dev loop (helm-up + exec into container) is not specified. Solve during Day-1 onboarding.
 6. **Vault audit logging** (V4 from review): if externalSecrets is the default backend, Vault's audit device must be enabled for compliance; cross-reference in `docs/charts/secrets-audit-compliance.md`. P2.
 7. **Library-chart vs `_helpers.tpl` naming** (Y1 from review): `genieai-common` IS conceptually the umbrella's `_helpers.tpl` plus standalone templates. Clarify in chart README: "library chart contains templates and exports them via `import-values:`, helpers.tpl contains labels/selectors/name conventions." P2 doc clarification.
-8. **Service template generator** (Y3 from review): 28 services × 4 templates = ~112 files. v1 ships them hand-authored for transparency; **v1.1 introduces `make render-services` from a single service-list YAML**. P2 deferred.
+8. **Service template generator** (Y3 from review): 30 services × 4 templates = ~120 files. v1 ships them hand-authored for transparency; **v1.1 introduces `make render-services` from a single service-list YAML**. P2 deferred.
 
 ## 17. What lands in v1.0 (this epic)
 

@@ -146,60 +146,35 @@
               }}
             </p>
             <div v-for="field in perRepoFields" :key="field" class="okf-ce__fm-perrepo-field">
-              <div class="okf-ce__fm-perrepo-field-name">
-                {{ perRepoFieldLabel(field) }}
-                <span class="okf-ce__fm-perrepo-field-count">({{ perRepoFieldValues(field).length }})</span>
-              </div>
-              <div class="okf-ce__fm-perrepo-values">
-                <span
-                  v-for="(value, idx) in perRepoFieldValues(field)"
-                  :key="`${field}:${value}`"
-                  class="okf-ce__fm-perrepo-tag"
-                >
-                  <input
-                    v-if="field === 'scope' || field === 'summary'"
-                    v-model="fmDraft.perRepo[field]"
-                    size="sm"
-                    class="okf-ce__fm-perrepo-scalar"
-                    :aria-label="perRepoFieldLabel(field)"
-                    :placeholder="perRepoFieldLabel(field)"
-                  />
-                  <span v-else class="okf-ce__fm-perrepo-tag-value">{{ value }}</span>
-                  <button
-                    v-if="!isPerRepoScalar(field)"
-                    class="okf-ce__fm-perrepo-tag-remove"
-                    type="button"
-                    :aria-label="translate('okf.fm.removeTag', 'Remove tag')"
-                    :title="translate('okf.fm.removeTag', 'Remove tag')"
-                    @click="removePerRepoValue(field, idx)"
-                  >
-                    ×
-                  </button>
-                </span>
-                <span
-                  v-if="!perRepoFieldValues(field).length && !isPerRepoScalar(field)"
-                  class="okf-ce__fm-perrepo-empty"
-                >
-                  {{ translate('okf.fm.fieldEmpty', '—') }}
-                </span>
-              </div>
-              <div v-if="!isPerRepoScalar(field)" class="okf-ce__fm-perrepo-add">
-                <input
-                  v-model="perRepoAddDrafts[field]"
-                  class="okf-ce__fm-perrepo-add-input"
-                  type="text"
-                  :placeholder="translate('okf.fm.addTagPh', 'Add ' + field)"
-                  @keydown.enter.prevent="addPerRepoValue(field)"
+              <DsFormGroup :label="perRepoFieldLabel(field)" :input-id="`okf-fm-perrepo-${field}`">
+                <template #label>
+                  {{ perRepoFieldLabel(field) }}
+                  <span class="okf-ce__fm-perrepo-field-count">
+                    ({{ perRepoFieldValues(field).length }})
+                  </span>
+                </template>
+                <DsInput
+                  v-if="isPerRepoScalar(field)"
+                  :id="`okf-fm-perrepo-${field}`"
+                  v-model="fmDraft.perRepo[field]"
+                  size="sm"
+                  :aria-label="perRepoFieldLabel(field)"
+                  :placeholder="perRepoFieldLabel(field)"
                 />
-                <DsButton
-                  variant="ghost"
-                  small
-                  :disabled="!perRepoAddDrafts[field] || !perRepoAddDrafts[field].trim()"
-                  @click="addPerRepoValue(field)"
-                >
-                  {{ translate('okf.fm.add', 'Add') }}
-                </DsButton>
-              </div>
+                <textarea
+                  v-else
+                  :id="`okf-fm-perrepo-${field}`"
+                  v-model="perRepoArrayDrafts[field]"
+                  class="okf-ce__fm-perrepo-textarea"
+                  :rows="Math.max(3, perRepoFieldValues(field).length + 1)"
+                  :aria-label="perRepoFieldLabel(field)"
+                  :placeholder="perRepoFieldPlaceholder(field)"
+                  @blur="commitPerRepoArrayDraft(field)"
+                />
+                <p v-if="!isPerRepoScalar(field)" class="okf-ce__fm-perrepo-hint-inline">
+                  {{ perRepoFieldHelp(field) }}
+                </p>
+              </DsFormGroup>
             </div>
             <p v-if="perRepoError" class="okf-ce__fm-error">{{ perRepoError }}</p>
           </div>
@@ -425,6 +400,12 @@ export default {
       },
       // Per-repo add-input drafts (one input per array field).
       perRepoAddDrafts: { topic: '', entity: '', scope: '', forbidden: '', summary: '', keyword: '' },
+      // Story 1.7 (2026-10-08, David simplification): array fields render
+      // as a single textarea with one tag per line. The textarea value
+      // lives in this draft; commitPerRepoArrayDraft() parses it back
+      // into fmDraft.perRepo[field] on blur so the user gets one form
+      // control per field — no per-field "Add" button.
+      perRepoArrayDrafts: { topic: '', entity: '', scope: '', forbidden: '', summary: '', keyword: '' },
       perRepoError: ''
     };
   },
@@ -915,6 +896,7 @@ export default {
           })
       };
       this.perRepoAddDrafts = { topic: '', entity: '', scope: '', forbidden: '', summary: '', keyword: '' };
+      this.syncPerRepoArrayDrafts();
       this.perRepoError = '';
       this.fmOpen = true;
       this.fmError = '';
@@ -927,15 +909,29 @@ export default {
     removeExtra(row) {
       this.fmDraft.extras = this.fmDraft.extras.filter((r) => r.id !== row.id);
     },
-    // Story 1.7: per-repo frontmatter helpers (dialog side; the chip panel
-    // has its own copy of these in FrontmatterPanel.vue). Both editors
-    // save to the same write-through so the concept's frontmatter sub-
-    // block AND the repo doc field stay in sync.
+    // Story 1.7: per-repo frontmatter helpers (dialog side). Each array
+    // field renders as one editable textarea — one tag per line. Modify
+    // = edit a line; Remove = delete a line; Add = add a new line. No
+    // per-field "Add" button per David 2026-10-08: "no need for the
+    // individual add buttons on the tag list — just add/modify/remove
+    // in the frontmatter editor (by displaying fields and controls not
+    // just markdown)". The textarea is the control. (The chip panel
+    // still has its own UX for quick edits; both surfaces write through
+    // to the same two-store path.)
     isPerRepoScalar(field) {
       return PER_REPO_SCALAR.has(field);
     },
     perRepoFieldLabel(field) {
       return this.translate(`okf.fm.perRepoField.${field}`, field);
+    },
+    perRepoFieldPlaceholder(field) {
+      return this.translate(`okf.fm.perRepoPh.${field}`, `One ${field} per line`);
+    },
+    perRepoFieldHelp(field) {
+      return this.translate(
+        `okf.fm.perRepoHelp.${field}`,
+        'Add, modify or remove values — one per line. Empty lines are ignored.'
+      );
     },
     perRepoFieldValues(field) {
       if (this.isPerRepoScalar(field)) {
@@ -944,29 +940,44 @@ export default {
       }
       return Array.isArray(this.fmDraft.perRepo[field]) ? this.fmDraft.perRepo[field] : [];
     },
-    addPerRepoValue(field) {
-      if (this.isPerRepoScalar(field)) return;
-      const raw = (this.perRepoAddDrafts[field] || '').trim();
-      if (!raw) return;
-      const list = Array.isArray(this.fmDraft.perRepo[field]) ? this.fmDraft.perRepo[field] : [];
-      if (list.some((v) => String(v).toLowerCase() === raw.toLowerCase())) {
-        this.perRepoError = this.translate(
-          'okf.fm.perRepoDup',
-          `Tag "${raw}" is already in ${field}.`
-        );
-        return;
+    // Seed the textarea drafts from the arrays when the dialog opens.
+    // Called from openFm().
+    syncPerRepoArrayDrafts() {
+      const drafts = { topic: '', entity: '', scope: '', forbidden: '', summary: '', keyword: '' };
+      for (const field of PER_REPO_FIELDS) {
+        if (this.isPerRepoScalar(field)) {
+          // scalar fields are bound directly to fmDraft.perRepo[field]
+          // — no separate draft needed
+          continue;
+        }
+        const list = this.fmDraft.perRepo[field];
+        drafts[field] = Array.isArray(list) ? list.join('\n') : '';
       }
-      this.fmDraft.perRepo[field] = [...list, raw];
-      this.perRepoAddDrafts[field] = '';
-      this.perRepoError = '';
+      this.perRepoArrayDrafts = drafts;
     },
-    removePerRepoValue(field, idx) {
-      if (this.isPerRepoScalar(field)) {
-        this.fmDraft.perRepo[field] = '';
-        return;
+    // Commit the textarea contents back to the array on blur. Trims
+    // whitespace, drops empty lines, dedupes (case-insensitive).
+    commitPerRepoArrayDraft(field) {
+      if (this.isPerRepoScalar(field)) return;
+      const text = (this.perRepoArrayDrafts[field] || '');
+      const lines = text
+        .split('\n')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      const seen = new Set();
+      const dedup = [];
+      for (const line of lines) {
+        const k = line.toLowerCase();
+        if (seen.has(k)) continue;
+        seen.add(k);
+        dedup.push(line);
       }
-      const list = Array.isArray(this.fmDraft.perRepo[field]) ? this.fmDraft.perRepo[field] : [];
-      this.fmDraft.perRepo[field] = list.filter((_, i) => i !== idx);
+      this.fmDraft.perRepo[field] = dedup;
+      // Re-sync the draft so the textarea reflects the normalized
+      // (trimmed, deduped) state — avoids the "I see my unsaved
+      // whitespace on save" surprise.
+      this.perRepoArrayDrafts[field] = dedup.join('\n');
+      this.perRepoError = '';
     },
     cancelFm() {
       this.fmOpen = false;
@@ -981,6 +992,12 @@ export default {
       this.fmExtraError = '';
       this.perRepoError = '';
       this.fmSaved = false;
+      // Story 1.7: commit any pending per-repo textarea drafts so the
+      // save reads the final state (the user may click Save before
+      // blurring the last field). Normalizes whitespace + dedupes.
+      for (const field of PER_REPO_FIELDS) {
+        if (!this.isPerRepoScalar(field)) this.commitPerRepoArrayDraft(field);
+      }
       try {
         const patch = {};
         if (this.fmDraft.type) patch.type = this.fmDraft.type;
@@ -1258,66 +1275,32 @@ export default {
   flex-direction: column;
   gap: var(--space-2xs, 4px);
 }
-.okf-ce__fm-perrepo-field-name {
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-medium, 500);
-  color: var(--muted, #666);
-}
 .okf-ce__fm-perrepo-field-count {
   color: var(--color-text-faint, #999);
   font-weight: var(--font-weight-regular, 400);
 }
-.okf-ce__fm-perrepo-values {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2xs, 4px);
-}
-.okf-ce__fm-perrepo-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2xs, 4px);
-  padding: 2px var(--space-xs, 8px);
-  border-radius: var(--radius-sm, 3px);
-  font-size: var(--text-xs);
-  border: 1px solid var(--color-border, #d0d0d0);
-  background: var(--color-surface-base, #fff);
-}
-.okf-ce__fm-perrepo-tag-value {
-  color: var(--fg, #222);
-}
-.okf-ce__fm-perrepo-tag-remove {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  font-size: var(--text-xs);
-  color: var(--color-text-faint, #999);
-  padding: 0 2px;
-}
-.okf-ce__fm-perrepo-empty {
-  color: var(--color-text-faint, #999);
-  font-size: var(--text-xs);
-}
-.okf-ce__fm-perrepo-scalar {
-  border: 0;
-  background: transparent;
-  font-size: var(--text-xs);
-  color: var(--fg, #222);
+.okf-ce__fm-perrepo-textarea {
   width: 100%;
-  outline: none;
-}
-.okf-ce__fm-perrepo-add {
-  display: flex;
-  gap: var(--space-xs, 8px);
-}
-.okf-ce__fm-perrepo-add-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 2px var(--space-xs, 8px);
-  font-size: var(--text-xs);
-  border: 1px solid var(--color-border-subtle, #e2e2e2);
+  min-height: 80px;
+  padding: var(--space-xs, 8px);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  border: 1px solid var(--color-border, #d0d0d0);
   border-radius: var(--radius-sm, 3px);
   background: var(--color-surface-base, #fff);
+  color: var(--fg, #222);
+  resize: vertical;
+  line-height: 1.5;
+}
+.okf-ce__fm-perrepo-textarea:focus {
+  outline: 2px solid var(--color-focus, #4a90e2);
+  outline-offset: -2px;
+  border-color: transparent;
+}
+.okf-ce__fm-perrepo-hint-inline {
+  margin: var(--space-2xs, 4px) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-faint, #999);
 }
 .okf-ce__loading,
 .okf-ce__error {

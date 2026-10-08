@@ -1978,12 +1978,22 @@ export default {
         summary: 'Summary',
         keyword: 'Keyword'
       },
-      perRepoDup: 'Tag is already in this field.',
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
-      removeTag: 'Remove tag',
-      addTagPh: 'Add {field}',
-      add: 'Add',
-      fieldEmpty: '—'
+      // Per-field placeholder + hint for the textarea control (array
+      // fields only — scalar fields reuse the field name as the
+      // placeholder).
+      perRepoPh: {
+        topic: 'One topic per line',
+        entity: 'One entity per line',
+        forbidden: 'One forbidden topic per line',
+        keyword: 'One keyword per line'
+      },
+      perRepoHelp: {
+        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
+        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
+        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
+        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+      },
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
     },
     glossary: {
       pickSource:

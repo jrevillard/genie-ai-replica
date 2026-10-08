@@ -73,7 +73,9 @@ services:
     enabled: true
     replicas: 1
     image:
-      repository: genieai-backend
+      # CI builds registry images with the genie-ai- prefix (16 images,
+      # .gitlab-ci.yml promote stage) — genieai-backend does NOT exist.
+      repository: registry.example.org/genie-ai-backend
       tag: "1.0.0"
     port: 3000
     resources:
@@ -82,15 +84,23 @@ services:
     env:
       - name: NODE_ENV
         value: production
+      # Keycloak base URL carries the /auth prefix (legacy Swarm path layout
+      # the backend expects — bare /realms/... URLs 404 without it).
       - name: KEYCLOAK_URL
-        value: http://keycloak.{{ .Values.namespace }}.svc.cluster.local:8080
+        value: http://keycloak.{{ .Values.namespace }}.svc.cluster.local:8080/auth
       - name: ARANGO_URL
         value: http://arangodb-single.{{ .Values.namespace }}.svc.cluster.local:8529
+      # OTel OTLP exporter — Plan 4 gateway collector Service
+      # (OpenTelemetryCollector CR named genieai-collector exposes
+      # Service <cr-name>-collector).
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: http://genieai-collector-collector.{{ .Values.namespace }}.svc.cluster.local:4318
+    # Each entry = a K8s Secret consumed whole via envFrom; the Secret's
+    # keys MUST be the literal env var names (KEYCLOAK_CLIENT_SECRET,
+    # HUGGING_FACE_HUB_TOKEN) — see Task 7.
     secrets:
       - name: keycloak-client-secret
-        key: password
       - name: huggingface-hub-token
-        key: token
     pvc: null
     probes:
       readiness: { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 10, periodSeconds: 10 }
@@ -103,9 +113,11 @@ services:
     enabled: true
     replicas: 1
     image:
-      repository: genieai-frontend
+      repository: registry.example.org/genie-ai-frontend
       tag: "1.0.0"
-    port: 8080
+    # The frontend image listens on 8090 (image-internal unprivileged port;
+    # NOT 8080 — verified against the Dockerfile EXPOSE).
+    port: 8090
     resources:
       requests: { cpu: 50m, memory: 128Mi }
       limits:   { cpu: 500m, memory: 512Mi }
@@ -113,8 +125,8 @@ services:
     secrets: []
     pvc: null
     probes:
-      readiness: { httpGet: { path: /health, port: 8080 }, initialDelaySeconds: 5, periodSeconds: 10 }
-      liveness:  { httpGet: { path: /health, port: 8080 }, initialDelaySeconds: 30, periodSeconds: 30 }
+      readiness: { httpGet: { path: /health, port: 8090 }, initialDelaySeconds: 5, periodSeconds: 10 }
+      liveness:  { httpGet: { path: /health, port: 8090 }, initialDelaySeconds: 30, periodSeconds: 30 }
     podDisruptionBudget: null    # single replica; PDB would block drain
     serviceMonitor: false
 
@@ -122,7 +134,7 @@ services:
     enabled: true
     replicas: 1
     image:
-      repository: genieai-document-repository
+      repository: registry.example.org/genie-ai-document-repository
       tag: "1.0.0"
     port: 3001
     resources:
@@ -131,12 +143,16 @@ services:
     env:
       - name: NODE_ENV
         value: production
+      # Services listen on port 80 (Service-level); container ports are
+      # targetPort details — in-cluster callers always use :80.
       - name: BACKEND_URL
-        value: http://backend.{{ .Values.namespace }}.svc.cluster.local:3000
+        value: http://backend.{{ .Values.namespace }}.svc.cluster.local:80
       - name: CLAMAV_HOST
         value: clamav.{{ .Values.namespace }}.svc.cluster.local
       - name: CLAMAV_PORT
         value: "3310"
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: http://genieai-collector-collector.{{ .Values.namespace }}.svc.cluster.local:4318
     secrets: []
     pvc: null
     probes:
@@ -148,10 +164,16 @@ services:
   nginx:
     enabled: true
     replicas: 1
+    # Project image (CI-built genie-ai-nginx) — carries the routing config
+    # (frontend/backend/doc-repo upstreams) baked in; no stock nginx + no
+    # hand-rolled ConfigMap. Plan 6 may env-inject host specifics.
     image:
-      repository: nginxinc/nginx-unprivileged
-      tag: "1.27"
+      repository: registry.example.org/genie-ai-nginx
+      tag: "1.0.0"
     port: 8080   # container runs on 8080 (unprivileged)
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 101            # nginx UID; needs /tmp + /var/cache/nginx writable
     resources:
       requests: { cpu: 50m, memory: 64Mi }
       limits:   { cpu: 250m, memory: 128Mi }
@@ -171,6 +193,9 @@ services:
       repository: clamav/clamav
       tag: "1.3"
     port: 3310
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 100            # clamav image UID
     resources:
       requests: { cpu: 100m, memory: 512Mi }
       limits:   { cpu: 1,    memory: 1Gi }
@@ -292,9 +317,13 @@ spec:
           env:
             {{- toYaml $svc.env | nindent 12 }}
           envFrom:
+            {{- /* Plain Secret names — SealedSecrets in this chart are named
+                   WITHOUT a namespace prefix (Task 7 / Plan 2 Task 11);
+                   envFrom consumes the whole Secret: its keys ARE the env
+                   var names. */ -}}
             {{- range $svc.secrets }}
             - secretRef:
-                name: {{ $ctx.Values.namespace }}-{{ .name }}
+                name: {{ .name }}
             {{- end }}
           resources:
             {{- toYaml $svc.resources | nindent 12 }}
@@ -356,11 +385,13 @@ ingress:
       - protocol: TCP
         port: {{ $ctx.port }}
 egress:
-  # DNS resolution — to kube-system
+  # DNS resolution — kube-system CoreDNS. The `name: kube-system` label is
+  # NOT a real namespace label; the immutable, always-present one is
+  # kubernetes.io/metadata.name (K8s >= 1.21 sets it on every namespace).
   - to:
       - namespaceSelector:
           matchLabels:
-            name: kube-system
+            kubernetes.io/metadata.name: kube-system
     ports:
       - protocol: UDP
         port: 53
@@ -435,55 +466,41 @@ spec:
     - Ingress
     - Egress
   ingress:
+    # v1 simplification: same-namespace pods on the app port. The intended
+    # `genieai.io/component: ingress` peer matched NOTHING (Envoy Gateway
+    # data-plane pods live in the gateway's OWN namespace, not this one —
+    # cross-namespace peering is wired in Plan 6 with the gateway's real
+    # labels). AuthN/AuthZ is enforced at the edge (Envoy) regardless.
     - from:
-        - podSelector:
-            matchLabels:
-              genieai.io/component: ingress
-      - podSelector:
-            matchLabels:
-              genieai.io/component: documentRepository
+        - podSelector: {}
       ports:
         - protocol: TCP
           port: 3000
   egress:
-    # DNS — kube-system
+    # DNS — kube-system (immutable label, see _networkpolicy-base.tpl)
     - to:
         - namespaceSelector:
             matchLabels:
-              name: kube-system
+              kubernetes.io/metadata.name: kube-system
       ports:
         - protocol: UDP
           port: 53
-    # Keycloak admin API
+    # v1 simplification: PORT-SCOPED any-destination egress to the data tier
+    # (8529 arango / 5432 CNPG / 8080 keycloak / 6379 redis). Pod-label
+    # peering to operator-managed pods (CNPG, kube-arangodb, keycloak-
+    # operator) requires each operator's REAL pod labels — guessed labels
+    # silently block all traffic. Plan 6 replaces these with verified
+    # namespaceSelector/podSelector peers after live label inspection.
     - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: keycloak
-      ports:
-        - protocol: TCP
-          port: 8080
-    # ArangoDB
-    - to:
-        - podSelector:
-            matchLabels:
-              genieai.io/component: data-arangodb
+        - ipBlock:
+            cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
           port: 8529
-    # CNPG Cluster keycloak-db (TCP 5432)
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: keycloak-db
-      ports:
         - protocol: TCP
           port: 5432
-    # Redis (translation cache + cache role)
-    - to:
-        - podSelector:
-            matchLabels:
-              genieai.io/component: redis
-      ports:
+        - protocol: TCP
+          port: 8080
         - protocol: TCP
           port: 6379
 {{- end -}}
@@ -499,10 +516,10 @@ Expected: prints `NetworkPolicy × 1`, `Service × 1`, `Deployment × 1` (backen
 Run:
 
 ```bash
-helm template test charts/genieai-umbrella -n genieai | grep -E "^      - secretRef|^              name: genieai-" | sort | uniq
+helm template test charts/genieai-umbrella -n genieai | grep -B 1 "name: keycloak-client-secret\|name: huggingface-hub-token" | grep secretRef
 ```
 
-Expected: lists `keycloak-client-secret` and `huggingface-hub-token` secrets referenced.
+Expected: two `secretRef` lines referencing `keycloak-client-secret` and `huggingface-hub-token` (plain names, no namespace prefix).
 
 - [ ] **Step 5: Verify NetworkPolicy egress to keycloak-db (Review Focus #2)**
 
@@ -512,7 +529,9 @@ Run:
 helm template test charts/genieai-umbrella -n genieai | \
   python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
   np = next(d for d in docs if d and d.get('kind')=='NetworkPolicy' and d['metadata'].get('name')=='backend'); \
-  assert any('keycloak-db' in str(t) for e in np['spec']['egress'] for t in e.get('to', [])), 'no keycloak-db egress'; \
+  ports = [p['port'] for e in np['spec']['egress'] for p in e.get('ports', [])]; \
+  assert 5432 in ports, 'no CNPG egress port'; \
+  assert 8529 in ports, 'no arango egress port'; \
   print('PASS')"
 ```
 
@@ -562,7 +581,7 @@ spec:
   ports:
     - name: http
       port: 80
-      targetPort: 8080
+      targetPort: 8090            # container port (NOT 8080)
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "frontend"))) | nindent 4 }}
 ---
@@ -581,34 +600,33 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # nginx routes to frontend (sub-path /spa or full), and the ingress controller
+    # nginx routes to the SPA; same-namespace peers only (the ingress
+    # controller lives elsewhere — Plan 6).
     - from:
         - podSelector:
             matchLabels:
               genieai.io/component: nginx
-        - podSelector:
-            matchLabels:
-              genieai.io/component: ingress
+        - podSelector: {}          # same-namespace any (v1; edge enforces auth)
       ports:
         - protocol: TCP
-          port: 8080
+          port: 8090
   egress:
     # DNS
     - to:
         - namespaceSelector:
             matchLabels:
-              name: kube-system
+              kubernetes.io/metadata.name: kube-system
       ports:
         - protocol: UDP
           port: 53
-    # Backend BFF (frontend → /api/*; Envoy Gateway is the edge)
+    # Backend BFF — Service port 80 (container 3000 is a targetPort detail)
     - to:
         - podSelector:
             matchLabels:
               genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: 3000
+          port: 80
 {{- end -}}
 ```
 
@@ -649,14 +667,12 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Backend (file references) + clamav (sidecar)
+    # Backend (file references) + edge; same-namespace peers
     - from:
         - podSelector:
             matchLabels:
               genieai.io/component: backend
-        - podSelector:
-            matchLabels:
-              genieai.io/component: clamav
+        - podSelector: {}          # same-namespace any (v1; edge enforces auth)
       ports:
         - protocol: TCP
           port: 3001
@@ -665,18 +681,18 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              name: kube-system
+              kubernetes.io/metadata.name: kube-system
       ports:
         - protocol: UDP
           port: 53
-    # Backend (uploaded files metadata)
+    # Backend — Service port 80
     - to:
         - podSelector:
             matchLabels:
               genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: 3000
+          port: 80
     # ClamAV (file scan calls)
     - to:
         - podSelector:
@@ -726,11 +742,10 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Ingress controller (Plan 6) routes here, then nginx proxies to /.
+    # Same-namespace any on 8080 for v1 (Envoy Gateway peering lands Plan 6
+    # with the gateway namespace's real labels).
     - from:
-        - podSelector:
-            matchLabels:
-              genieai.io/component: ingress
+        - podSelector: {}
       ports:
         - protocol: TCP
           port: 8080
@@ -739,18 +754,26 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              name: kube-system
+              kubernetes.io/metadata.name: kube-system
       ports:
         - protocol: UDP
           port: 53
-    # Frontend SPA
+    # Frontend SPA — Service port 80
     - to:
         - podSelector:
             matchLabels:
               genieai.io/component: frontend
       ports:
         - protocol: TCP
-          port: 8080
+          port: 80
+    # Backend (nginx proxies /api/*) — Service port 80
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 80
 {{- end -}}
 ```
 
@@ -802,21 +825,18 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              name: kube-system
+              kubernetes.io/metadata.name: kube-system
       ports:
         - protocol: UDP
           port: 53
-    # Review Focus F11 fix — `to: []` (empty array) was interpreted as
-    # match-any, which would let clamav hit any IP on 80/443. We restrict
-    # egress to the canonical database.clamav.net mirror set
-    # (overridable per env via values.clamav.dbUpdateCIDRs). DNS-based
-    # mirror dispatch from a configurable allowlist is the sovereign-
-    # safe pattern.
-    {{- $dbCDN := .Values.services.clamav.dbUpdateCDNs | default list "database.clamav.net" "clamav-mirror.example.org" }}
+    # CVD signature updates: port-scoped any-destination on 80/443.
+    # `host:` is NOT a valid NetworkPolicy peer (only podSelector /
+    # namespaceSelector / ipBlock exist) — the earlier `host: database.clamav.net`
+    # block was rejected by the API server. Domain allowlisting requires
+    # DNS policy engines (Cilium/Calico FQDN rules); deferred, documented.
     - to:
-        {{- range $dbCDN }}
-        - host: {{ . | quote }}
-        {{- end }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
           port: 80
@@ -844,95 +864,37 @@ git commit -m "feat(charts): Group 5 stateless app tier (frontend, documentRepo,
 
 ---
 
-## Task 5: nginx.conf ConfigMap (gateway paths)
+## Task 5: nginx — project image (no stock nginx, no ConfigMap)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_services/nginx-config.yaml`
+- Modify: `charts/genieai-umbrella/values.yaml` (nginx image block — already updated in Task 1)
 
 **Interfaces:**
-- Consumes: `nginx` service enabled toggle.
-- Produces: nginx.conf mounted as ConfigMap volume.
+- Consumes: `services.nginx` values (Task 1).
+- Produces: nothing new — this task DOCUMENTS the decision and removes the old ConfigMap step.
 
-- [ ] **Step 1: Run red-gate — no nginx config yet**
+**Decision (round-6 review)**: the Swarm stack never ran stock nginx — it runs the CI-built `genie-ai-nginx` image whose Dockerfile bakes the full routing config (frontend SPA, `/api/*` → backend, document-repository, Keycloak front/back channels). Rendering a hand-rolled `nginx.conf` ConfigMap would (a) duplicate that config, (b) drift from it, and (c) require volumeMount wiring the factory does not do. Task 1 already points `services.nginx.image` at `registry.example.org/genie-ai-nginx:1.0.0`. Any host/path customization that the image cannot absorb via env lands in Plan 6 (edge config), not in an in-chart ConfigMap.
 
-Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "nginx.conf" || echo "0"`
-Expected: prints `0`.
+- [ ] **Step 1: Confirm no nginx ConfigMap template is created**
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_services/nginx-config.yaml`**
+Run: `ls charts/genieai-umbrella/templates/_services/`
+Expected: `backend.yaml frontend.yaml documentRepository.yaml nginx.yaml clamav.yaml _pdb-bundler.yaml` — NO `nginx-config.yaml`.
 
-```yaml
-{{- if .Values.services.nginx.enabled -}}
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ include "genieai-common.fullname" . }}-nginx-conf
-  namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "nginx"))) | nindent 4 }}
-data:
-  nginx.conf: |
-    worker_processes 1;
-    pid /tmp/nginx.pid;
-    events { worker_connections 1024; }
-    http {
-      upstream backend_spa {
-        server frontend:8080 max_fails=3 fail_timeout=10s;
-      }
-      server {
-        listen 8080;
-        server_name _;
-        # Root → Vue SPA
-        location / {
-          proxy_pass http://backend_spa;
-          proxy_set_header Host $host;
-          proxy_set_header X-Real-IP $remote_addr;
-          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-          proxy_set_header X-Forwarded-Proto $scheme;
-        }
-        # API → backend BFF (Envoy Gateway is the edge; nginx proxies internally)
-        location /api/ {
-          proxy_pass http://backend:3000;
-          proxy_set_header Host $host;
-          proxy_set_header X-Real-IP $remote_addr;
-          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        }
-      }
-    }
-{{- end -}}
-```
+- [ ] **Step 2: Confirm values carry the project image**
 
-- [ ] **Step 3: Render and verify ConfigMap**
+Run: `grep -A 3 "repository: registry.example.org/genie-ai-nginx" charts/genieai-umbrella/values.yaml`
+Expected: the nginx image block with `tag: "1.0.0"`.
 
-Run: `helm template test charts/genieai-umbrella -n genieai | grep -A 5 "nginx.conf" | head -20`
-Expected: shows the ConfigMap.
+- [ ] **Step 3: `helm lint --strict`**
 
-- [ ] **Step 4: Mount config into nginx pod (Task 3 — no separate edit; nginx.yaml already does not mount this)**
+Run: `helm lint charts/genieai-umbrella --strict`
+Expected: 0 errors.
 
-Update `nginx.yaml` (Task 3) to add `volumeMounts` for the ConfigMap and a `volumes:` block. Or skip this and document in follow-up that the chart will integrate ConfMap mount in the nginx Deployment.
-
-For Plan 3, declare the mount target via spec but render volumeMounts in a follow-up template:
-
-Edit `charts/genieai-umbrella/templates/_lib/_service-factory.tpl`'s Deployment body to ALWAYS add volumeMounts for a `<svcName>-config` ConfigMap when one is defined. For nginx in Plan 3, render an additional mount block.
-
-Caveman simplification: skip the volumeMount integration in this task; document as a follow-up in Task 11 README. The chart ships the ConfigMap; nginx.conf integration is Plan 6's nginx-as-reverse-proxy responsibility.
-
-- [ ] **Step 5: Document the simplification in chart README**
-
-Run:
+- [ ] **Step 4: Commit (if values were touched in this task)**
 
 ```bash
-echo "" >> charts/genieai-umbrella/README.md
-echo "## nginx ConfigMap wiring" >> charts/genieai-umbrella/README.md
-echo "" >> charts/genieai-umbrella/README.md
-echo "The chart renders \`nginx.conf\` as a ConfigMap (\`nginx-conf\`) but does NOT mount it" >> charts/genieai-umbrella/README.md
-echo "into the nginx Pod. Plan 6 (ingress + reverse proxy) wires the mount." >> charts/genieai-umbrella/README.md
-```
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add charts/genieai-umbrella/templates/_services/nginx-config.yaml charts/genieai-umbrella/README.md
-git commit -m "feat(charts): nginx.conf ConfigMap (mount wiring deferred to Plan 6)"
+git add charts/genieai-umbrella/values.yaml
+git commit -m "feat(charts): nginx uses genie-ai-nginx project image (baked routing, no ConfigMap)"
 ```
 
 ---
@@ -966,12 +928,19 @@ Expected: prints `arango-jwt-secret`, `arango-root-secret`, `genie-admin-credent
   kcGrafanaClientSecret (Plan 4) and grafanaAdminPassword (Plan 4) are not
   in this template; they ship with observability services.
 
-  Service-to-K8s mapping:
-    emailPassword       → email-password
-    keycloakClientSecret→ keycloak-client-secret
-    huggingFaceHubToken → huggingface-hub-token
+  Service-to-K8s mapping (Secret name → encryptedData key = ENV VAR NAME):
+    emailPassword        → email-password            (key EMAIL_PASSWORD)
+    keycloakClientSecret → keycloak-client-secret    (key KEYCLOAK_CLIENT_SECRET)
+    huggingFaceHubToken  → huggingface-hub-token     (key HUGGING_FACE_HUB_TOKEN)
+  The factory consumes each Secret whole via envFrom (Task 2): every
+  encryptedData key becomes an env var verbatim — keys must BE the env
+  var names, not "password"/"token".
 */ -}}
-{{- range $secretName := list "email-password" "keycloak-client-secret" "huggingface-hub-token" -}}
+{{- $g5 := dict
+      "email-password" "EMAIL_PASSWORD"
+      "keycloak-client-secret" "KEYCLOAK_CLIENT_SECRET"
+      "huggingface-hub-token" "HUGGING_FACE_HUB_TOKEN" -}}
+{{- range $secretName, $envKey := $g5 -}}
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
 metadata:
@@ -982,7 +951,7 @@ metadata:
     app.kubernetes.io/component: {{ $secretName }}
 spec:
   encryptedData:
-    password: PLACEHOLDER_{{ $secretName }}_SEALED_KID
+    {{ $envKey }}: PLACEHOLDER_{{ $envKey }}_SEALED_KID
 {{- end -}}
 {{- end -}}
 ```
@@ -1044,9 +1013,12 @@ Caller context:
 {{- end -}}
 {{- end -}}
 {{- end -}}
-{{- if and (ge $replicas 2) (or (not (hasKey $svc "podDisruptionBudget")) $svc.podDisruptionBudget.minAvailable) -}}
-{{- if $svc.podDisruptionBudget -}}
-{{- if and (hasKey $svc.podDisruptionBudget "minAvailable") $svc.podDisruptionBudget.minAvailable -}}
+{{- /* SINGLE flat guard: replicas >= 2 AND a non-null podDisruptionBudget
+       map AND a numeric minAvailable. `and` short-circuits, so
+       $svc.podDisruptionBudget.minAvailable is never evaluated when the
+       map is null (the old nested-if version nil-pointered on
+       podDisruptionBudget: null). */ -}}
+{{- if and (ge $replicas 2) $svc.podDisruptionBudget (hasKey $svc.podDisruptionBudget "minAvailable") $svc.podDisruptionBudget.minAvailable -}}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -1059,9 +1031,6 @@ spec:
   selector:
     matchLabels:
       {{- include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" (deepCopy $ctx.Values | merge (dict "component" $ctx.component))) | nindent 6 }}
-{{- end -}}
-{{- end -}}
-{{- end -}}
 {{- end -}}
 ```
 
@@ -1082,16 +1051,12 @@ spec:
 - [ ] **Step 4: Default render (all 5 services at replicas=1) — no PDBs (Review Focus #5)**
 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: PodDisruptionBudget$"`
-Expected: prints `0` (no service has `replicas: 1` AND `podDisruptionBudget.minAvailable: 1` simultaneously with our defaults — only `backend` has minAvailable=1 with replicas=1).
-
-Actually wait — `pdbForService` emits PDB only when `replicas >= 2`. With default 1, no PDBs emit. **No fix needed** to the defaults. Exit 0.
+Expected: prints `0` — dev defaults are replicas=1 everywhere and the flat guard requires `replicas >= 2`. The explicit `podDisruptionBudget: null` entries on frontend/doc-repo/nginx/clamav must NOT nil-pointer the template (they exercise the null path of the guard).
 
 - [ ] **Step 5: Render with prod profile — backend should get PDB**
 
 Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep -c "^kind: PodDisruptionBudget$"`
-Expected: prints `2` (backend, frontend, documentRepository have clusterProfile: prod overrides → replicas 3/2/2; only the first 2 qualify if minAvailable was specified in the per-service value, but our defaults set minAvailable=1 only for backend — so 1 PDB for backend).
-
-If it prints different, the test catches the bug. Acceptable outputs: 0 (if no overrides applied) or 1 (backend only). Anything else = bug.
+Expected: prints `1` — prod raises backend to 3 replicas (frontend 2 / doc-repo 2 have `podDisruptionBudget: null`, so the guard skips them); only backend qualifies with its `minAvailable: 1`.
 
 - [ ] **Step 6: `helm lint --strict`**
 
@@ -1172,17 +1137,20 @@ spec:
               failures=$((failures+1))
             fi
           }
+          {{- /* Checks hit the SERVICE ports (80; clamav 3310), NOT the
+                 container ports — Services are the stable in-cluster
+                 contract. */ -}}
           {{- if .Values.services.backend.enabled }}
-          check backend 3000 /api/health 200
+          check backend 80 /api/health 200
           {{- end }}
           {{- if .Values.services.frontend.enabled }}
-          check frontend 8080 /health 200
+          check frontend 80 /health 200
           {{- end }}
           {{- if .Values.services.documentRepository.enabled }}
-          check document-repository 3001 / 200
+          check document-repository 80 / 200
           {{- end }}
           {{- if .Values.services.nginx.enabled }}
-          check nginx 8080 / 200
+          check nginx 80 / 200
           {{- end }}
           {{- if .Values.services.clamav.enabled }}
           check clamav 3310 / reachable
@@ -1272,10 +1240,10 @@ Plan 3 shipped:
 
 | Service | Component label | Port | Replicas (dev → prod) |
 |---|---|---|---|
-| `backend` | backend | 3000 | 1 → 3 |
-| `frontend` | frontend | 8080 | 1 → 2 |
-| `documentRepository` | documentRepository | 3001 | 1 → 2 |
-| `nginx` | nginx | 8080 | 1 |
+| `backend` | backend | 3000 (svc 80) | 1 → 3 |
+| `frontend` | frontend | 8090 (svc 80) | 1 → 2 |
+| `documentRepository` | documentRepository | 3001 (svc 80) | 1 → 2 |
+| `nginx` | nginx | 8080 (svc 80, image genie-ai-nginx) | 1 |
 | `clamav` | clamav | 3310 | 1 |
 
 Each service carries: Deployment, Service, default-deny NetworkPolicy, envFrom secrets (where applicable). 3 Group-5 SealedSecrets ship per spec §8 F14 mapping: email-password, keycloak-client-secret, huggingface-hub-token.

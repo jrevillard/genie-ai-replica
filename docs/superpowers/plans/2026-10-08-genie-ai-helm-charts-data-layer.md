@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the data tier of the GENIE.AI Helm chart: 4 new Helm `dependencies` (CloudNativePG, kube-arangodb, official Keycloak operator, sealed-secrets 2.20.0+), the rendered CRs (CNPG Postgres cluster for keycloak-db, ArangoDeployment, KeycloakRealm, and a SealedSecret framework (4 CRs here; the rest ship with their consumers in Plans 3+). Kong is REMOVED — audit decision 7), plus the dependency-graph enforcement + ClusterProfile auto-detection hook. Establishes the pattern service-tier plans (3+) build on.
+**Goal:** Ship the data tier of the GENIE.AI Helm chart: 3 new Helm `dependencies` (CloudNativePG, kube-arangodb, sealed-secrets 2.20.0+) plus the keycloak-operator as a **cluster bootstrap prerequisite** (installed via OLM/static YAML — its Helm repo URL serves no index; verified 2026-10-08), the rendered CRs (CNPG Postgres cluster for keycloak-db, ArangoDeployment, `Keycloak` + `KeycloakRealmImport`, and a SealedSecret framework (4 CRs here; the rest ship with their consumers in Plans 3+). Kong is REMOVED — audit decision 7), plus the dependency-graph enforcement + ClusterProfile auto-detection hook. Establishes the pattern service-tier plans (3+) build on.
 
-**Architecture:** The umbrella chart pulls the four operators as Helm `dependencies` with `condition:` toggles. The chart renders the operator-managed CRs (Postgres Cluster, ArangoDeployment, KeycloakRealm, SealedSecret) declaratively. A pre-install hook Job validates that the user's selected service tier (keycloak, arangodb, kong) has its declared data dependencies enabled — fails-fast at install time, not at first Pod crash. ClusterProfile is auto-detected from a namespace label when the pre-install Job runs, then inherited by templates via `--set clusterProfile=...`.
+**Architecture:** The umbrella chart pulls three operators as Helm `dependencies` with `condition:` toggles; the keycloak-operator is a documented bootstrap prerequisite (the chart renders only the CRs it manages). The chart renders the operator-managed CRs (Postgres Cluster, ArangoDeployment, KeycloakRealm, SealedSecret) declaratively. A pre-install hook Job validates that the user's selected service tier (keycloak, arangodb, kong) has its declared data dependencies enabled — fails-fast at install time, not at first Pod crash. ClusterProfile is auto-detected from a namespace label when the pre-install Job runs, then inherited by templates via `--set clusterProfile=...`.
 
-**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), CNPG operator (v1.30 / chart `~> 0.22.0`), kube-arangodb (`~> 1.4.5`), keycloak-operator (`~> 26.0.0`), sealed-secrets helm chart `~> 2.20.0` (controller v0.40.0), kind 1.33, kubectl 1.33+, kustomize 5.x.
+**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), CNPG operator (v1.30 / chart `~> 0.30.0`), kube-arangodb (`~> 1.4.5`), keycloak-operator 26.x (bootstrap prerequisite, NOT a chart dep), sealed-secrets helm chart `~> 2.20.0` (controller v0.40.0), kind 1.33, kubectl 1.33+, kustomize 5.x.
 
 **Spec:** `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` — this plan implements §4 (operator deps), §5.1 (dependency-graph + pre-install hook), §5.2 (ClusterProfile auto-detect), §8 (concrete SealedSecret rendering of the 14 required secrets minus `kongDbPassword` since Kong goes DB-less per Q1a), §17 (data-tier entries in v1.0 manifest).
 
@@ -14,7 +14,7 @@
 
 - Helm chart API version: `v2`. Helm 4.x.
 - Default operator `condition:` keys MUST match the values keys under which the toggle is exposed in `values.yaml` — spec §4 already aligned (`data.keycloak.enabled`, not bare `keycloak.enabled`).
-- Operator dep version pins: **`~> 0.1` for lib-side deps, `~> 1.4.5` for kube-arangodb, `~> 26.0.0` for keycloak-operator, `~> 2.20.0` for sealed-secrets** (anchored below CVE-2026-22728 + CVE-2026-59341 per sealed-secrets research v2 2026-10-08).
+- Operator dep version pins: **`~> 0.1` for lib-side deps, `~> 1.4.5` for kube-arangodb, `~> 0.30.0` for cloudnative-pg, `~> 2.20.0` for sealed-secrets**. NOTE: the CVE IDs cited by early research (CVE-2026-22728, CVE-2026-59341) were NOT verified and are RETRACTED — do not cite them anywhere; pin rationale lives in `docs/charts/k8s-native-audit.md` + spec §8.
 - All English documentation and comments per project CLAUDE.md.
 - Commits in English using Conventional Commits.
 - No secrets in any committed file — only encrypted SealedSecret resources ship in Git.
@@ -29,7 +29,7 @@ Five input-class concerns the spec implies but no Plan 2 task tests explicitly. 
 2. **ClusterProfile auto-detection race** — namespace label write may not propagate to the Pod quickly; the Job checks label at runtime, decides profile, mutates Helm release. Race condition if release upgrade starts before label syncs. **Pinned in Task 7 Step 4** — Job has a 30s `for` loop polling the label; aborts cleanly if missing.
 3. **`ArangoDeployment` mode switch mid-life (single → cluster)** — kube-arangodb requires PVC re-allocation + new cluster initialization when transitioning from single-node to cluster mode. **Pinned in Task 9 Step 5** — task explicitly notes "single → cluster requires fresh `helm uninstall` + `helm install`; do not in-place upgrade" + cluster-mode test skipped in foundation CI (uses single mode default).
 4. ~~Kong DB-less misconfig~~ — moot: Kong REMOVED (decision 7). Edge routing/JWT/CORS/rate-limit are Envoy Gateway concerns (Plan 6).
-5. **`SealedSecret` re-encrypt on every cluster reboot** — sealed-secrets v0.40.0 30-day auto-rotation changes the cluster key. New SealedSecret resources committed with the OLD key silently fail to decrypt. **Pinned in Task 11 Step 5** — chart renders a `Job` on `helm.sh/hook: pre-install,pre-upgrade` that runs `kubeseal --check` (verifies the cluster's current public key matches the one used to encrypt committed secrets); fails the install if drift detected.
+5. **SealedSecrets become undecryptable after cluster-key rotation** — rotation is OPERATOR-INITIATED (`kubeseal --rotate`; there is NO 30-day auto-rotation — that earlier claim was wrong). After a rotation, committed SealedSecrets silently fail to decrypt and the controller marks them via the `sealedsecrets.bitnami.com/invalid` annotation. **Pinned in Task 11 Step 4** — a pre-upgrade hook Job lists SealedSecrets and FAILS the upgrade when any carries the `invalid` annotation (no kubeseal needed inside the Job).
 
 ---
 
@@ -71,10 +71,11 @@ dependencies:
     version: "~> 1.4.5"
     repository: "https://arangodb.github.io/kube-arangodb"
     condition: data.arangodb.enabled
-  - name: keycloak-operator
-    version: "~> 26.0.0"
-    repository: "https://keycloak.github.io/keycloak-operator-helm"
-    condition: data.keycloak.enabled
+  # keycloak-operator is deliberately NOT a Helm dependency: its advertised
+  # chart repo (https://keycloak.github.io/keycloak-operator-helm) serves no
+  # index (301 -> 404; verified 2026-10-08). It is a cluster bootstrap
+  # prerequisite installed via OLM or the static YAML from keycloak.org.
+  # The chart renders only the CRs it manages (Task 8).
   - name: sealed-secrets
     version: "~> 2.20.0"
     repository: "https://bitnami.github.io/sealed-secrets"
@@ -85,12 +86,12 @@ dependencies:
 
 Run: `helm dependency update charts/genieai-umbrella`
 
-Expected: `Hang tight while we grab the latest from your chart repositories...` and 4 new tarballs land in `charts/genieai-umbrella/charts/`. Plus updated `Chart.lock`.
+Expected: `Hang tight while we grab the latest from your chart repositories...` and 3 new tarballs (cloudnative-pg, kube-arangodb, sealed-secrets) land in `charts/genieai-umbrella/charts/`. Plus updated `Chart.lock`.
 
 - [ ] **Step 4: Verify the dep list**
 
 Run: `helm dep list charts/genieai-umbrella`
-Expected output contains all 4 new entries with the pinned versions.
+Expected output contains all 3 new entries with the pinned versions.
 
 - [ ] **Step 5: Run `helm lint --strict`**
 
@@ -105,7 +106,7 @@ Expected: 0 errors.
 # stops *future* churn from entering source — this initial commit includes
 # the tarballs as a baseline. Future dep bumps update the same files.
 git add charts/genieai-umbrella/Chart.yaml charts/genieai-umbrella/Chart.lock charts/genieai-umbrella/charts/
-git commit -m "feat(charts): add data layer operator deps (CNPG, kube-arangodb, keycloak, sealed-secrets)"
+git commit -m "feat(charts): add data layer operator deps (CNPG, kube-arangodb, sealed-secrets); keycloak-operator as bootstrap prerequisite"
 ```
 
 ---
@@ -140,6 +141,8 @@ data:
     mode: single                       # cluster for prod/staging via clusterProfile
     storageSize: 50Gi
   keycloak:
+    # Gates the Keycloak + KeycloakRealmImport CRs (Task 8). The operator
+    # itself is a cluster bootstrap prerequisite — NOT a chart dependency.
     enabled: true
     realmImport: true
 
@@ -352,10 +355,15 @@ spec:
   imagePullPolicy: IfNotPresent
   storage:
     size: {{ .Values.data.postgres.storageSize | default "10Gi" }}
-    storageClass: {{ .Values.pluggable.storageClassName | default "" }}
+    {{- /* Render storageClass ONLY when set: an empty-string value would pin
+           storageClassName: "" which means "NO default storage class" and
+           strands the PVC on most clusters. */ -}}
+    {{- with .Values.pluggable.storageClassName }}
+    storageClass: {{ . }}
+    {{- end }}
     accessModes:
       - ReadWriteOnce
-  postgresConfig:
+  postgresql:
     parameters:
       max_connections: "200"
       shared_buffers: "256MB"
@@ -363,14 +371,18 @@ spec:
     initdb:
       database: keycloak
       owner: keycloak
+      # CNPG expects this Secret to carry BOTH `username` and `password`
+      # keys (username-only fails validation). The SealedSecret in Task 11
+      # emits both.
       secret:
-        name: keycloak-db-credentials   # populated by SealedSecret CR
+        name: keycloak-db-credentials
   serviceAccountTemplate:
     metadata:
       labels:
         {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "data-postgres"))) | nindent 8 }}
-  monitoring:
-    enablePodMonitor: true
+  # NOTE: no `monitoring.enablePodMonitor` — that emits a Prometheus-operator
+  # ServiceMonitor and no Prometheus operator is installed in this stack.
+  # Metrics are scraped via VMServiceScrape (Plan 4).
 {{- end -}}
 ```
 
@@ -402,7 +414,8 @@ git commit -m "feat(charts): render CNPG Postgres Cluster for keycloak-db (HA vi
 
 **Interfaces:**
 - Consumes: nothing new.
-- Produces: a ServiceAccount + ClusterRoleBinding granting list/watch access to (a) namespaces + configmaps + secrets (for dep-check + clusterprofile-detect) AND (b) all CRDs the chart depends on (SealedSecret, KeycloakRealm, ArangoDeployment, CNPG Cluster) so the drift validation hook can read `sealedsecrets.bitnami.com/invalid` annotations.
+- Produces: a ServiceAccount + ClusterRoleBinding granting list/watch access to (a) namespaces + configmaps + secrets (for dep-check + clusterprofile-detect) AND (b) all CRDs the chart depends on (SealedSecret, Keycloak, KeycloakRealmImport, ArangoDeployment, CNPG Cluster) so the drift validation hook can read `sealedsecrets.bitnami.com/invalid` annotations.
+- **Hook-ordering note (critical)**: these RBAC objects carry `helm.sh/hook: pre-install,pre-upgrade` + `helm.sh/hook-weight: "-30"` themselves. Regular (non-hook) resources are installed AFTER all pre-install hooks — a regular SA would not exist when the hook Jobs run, deadlocking every first install. Making the RBAC the lowest-weight hook resolves the chicken-and-egg: Helm creates hook resources in ascending weight order and waits for each batch (weight -30 RBAC -> -20 dep-graph ConfigMap -> -10 clusterprofile -> -5 dep-check). `before-hook-creation` delete-policy keeps them across installs (recreated only when the hook fires again).
 
 **Review Focus F7 fix**: stock `view` ClusterRole has NO access to custom resources. Using it returns 403 on `kubectl get sealedsecrets.bitnami.com/sealedsecrets` and equivalent CRDs. Drift detection is silent. **Custom ClusterRole required.**
 
@@ -421,6 +434,10 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "rbac"))) | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-30"     # created BEFORE every other hook uses it
+    "helm.sh/hook-delete-policy": before-hook-creation
 ```
 
 - [ ] **Step 3: Write `charts/genieai-umbrella/templates/_rbac/dep-check-clusterrole.yaml`** (custom ClusterRole)
@@ -432,6 +449,10 @@ metadata:
   name: {{ include "genieai-common.fullname" . }}-dep-check
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "rbac"))) | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-30"
+    "helm.sh/hook-delete-policy": before-hook-creation
 rules:
   # Read-only access to core resources the dep-check Job needs
   - apiGroups: [""]
@@ -442,7 +463,7 @@ rules:
     resources: ["sealedsecrets"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["k8s.keycloak.org"]
-    resources: ["keycloakrealms", "keycloakclients"]
+    resources: ["keycloaks", "keycloakrealmimports", "keycloakbackups"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["arango.kube.arangodb.com"]
     resources: ["arangodeployments", "arangomembers"]
@@ -465,6 +486,10 @@ metadata:
   name: {{ include "genieai-common.fullname" . }}-dep-check
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "rbac"))) | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-30"
+    "helm.sh/hook-delete-policy": before-hook-creation
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -502,7 +527,7 @@ git commit -m "feat(charts): ServiceAccount + custom ClusterRole (CRD access) + 
 - Create: `charts/genieai-umbrella/tests/test-dependency-graph.yaml`
 
 **Interfaces:**
-- Consumes: `genieai-umbrella.dependencyGraph.json` helper (Task 3), `helm.sh/hook: pre-install` annotation pattern, ServiceAccount from Task 4a.
+- Consumes: `genieai-umbrella.dependencyGraph.json` helper (Task 3), `helm.sh/hook: pre-install` annotation pattern, hook-owned ServiceAccount from Task 4a (weight -30) and the hook-owned ConfigMap below (weight -20) — Helm creates lower-weight hooks first, so both exist when the Job (-5) runs.
 - Produces: a Job that runs on install/upgrade (NOT rendered into the live deployment) and fails the install if service↔data dependencies are unmet.
 
 - [ ] **Step 1: Run red-gate — Job absent**
@@ -581,13 +606,27 @@ spec:
                   print(f"FAIL: {enabled_json} missing"); sys.exit(1)
               with open(enabled_json) as f:
                   enabled = json.load(f)
+              # Resolve a dependency name to its namespace in the graph:
+              # deps may be services (frontend -> backend) OR data tiers
+              # (backend -> arangodb). Earlier version assumed every dep was
+              # a data.* key — a service dep like "backend" resolved to
+              # data.backend.enabled=False and failed every default install.
+              def dep_enabled(dep):
+                  if dep in graph.get("services", {}):
+                      return enabled.get(f"services.{dep}.enabled", False)
+                  return enabled.get(f"data.{dep}.enabled", False)
+              def dep_kind(dep):
+                  return "service" if dep in graph.get("services", {}) else "data"
               failures = []
-              for svc, deps in graph.get("services", {}).items():
-                  if not enabled.get(f"services.{svc}.enabled", False):
-                      continue
-                  for dep in deps.get("deps", []):
-                      if not enabled.get(f"data.{dep}.enabled", False):
-                          failures.append(f"service.{svc} requires data.{dep}")
+              for tier in ("services", "data"):
+                  for svc, deps in graph.get(tier, {}).items():
+                      if not enabled.get(f"{tier}.{svc}.enabled", False):
+                          continue
+                      for dep in deps.get("deps", []):
+                          if dep == "":
+                              continue
+                          if not dep_enabled(dep):
+                              failures.append(f"{tier}.{svc} requires {dep_kind(dep)}.{dep}")
               if failures:
                   print("FAIL: unmet dependencies")
                   for f in failures:
@@ -610,6 +649,13 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "pre-install"))) | nindent 4 }}
+  annotations:
+    # Hook with weight -20: created after the RBAC (-30) and BEFORE the
+    # dep-check Job (-5) mounts it. A regular ConfigMap would not exist on
+    # first install (regular resources land after all pre-install hooks).
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-20"
+    "helm.sh/hook-delete-policy": before-hook-creation
 data:
   dependency-graph.json: |
     {{- include "genieai-umbrella.dependencyGraph.json" . | nindent 4 }}
@@ -622,18 +668,24 @@ data:
     "off"). The op-level "missing dependency" failure then surfaces in CI.
   */ -}}
   enabled.json: |
-    {
-      "services.backend.enabled": {{ .Values.services.backend.enabled | default true }},
-      "services.frontend.enabled": {{ .Values.services.frontend.enabled | default true }},
-      "services.documentRepository.enabled": {{ .Values.services.documentRepository.enabled | default true }},
-      "services.clamav.enabled": {{ .Values.services.clamav.enabled | default true }},
-      "data.postgres.enabled": {{ .Values.data.postgres.enabled | default true }},
-      "data.arangodb.enabled": {{ .Values.data.arangodb.enabled | default true }},
-      "data.keycloak.enabled": {{ .Values.data.keycloak.enabled | default true }}
-    }
+    {{- /* FAIL-SAFE flat map: every toggle defaults to FALSE when absent.
+           `| default true` would flip an explicitly disabled component back
+           on, and a bare .Values.services.backend.enabled would nil-pointer
+           at render time because Plan 2's values.yaml has NO services block
+           yet (Plan 3 adds it). `dig` walks the path safely. */ -}}
+    {{- $flat := dict -}}
+    {{- range $name := list "backend" "frontend" "documentRepository" "clamav" -}}
+    {{- $_ := set $flat (printf "services.%s.enabled" $name) (dig "services" $name "enabled" false $) -}}
+    {{- end -}}
+    {{- range $name := list "postgres" "arangodb" "keycloak" -}}
+    {{- $_ := set $flat (printf "data.%s.enabled" $name) (dig "data" $name "enabled" false $) -}}
+    {{- end -}}
+    {{ $flat | toJson }}
 ```
 
-**Review Focus F1 fix**: the script now actually evaluates enabled-vs-dependencies against the graph. It exits non-zero with a per-service list of missing deps when a service is enabled but its data dependency is not. The earlier grep-only version was decorative (always PASSED). The Python container is small (`python:3.12-alpine` ~50MB) and the script runs in under a second.
+**Note**: with the Plan 2 default values (no `services:` block), the whole services tier reads as disabled and the evaluator checks only the data tier (keycloak requires postgres — the one real Plan 2 edge). Plan 3's values block activates the service edges without touching this ConfigMap.
+
+**Review Focus F1 fix**: the script evaluates enabled-vs-dependencies against the graph, resolving each dependency to its real namespace in the graph (service dep vs data dep) and validating BOTH tiers (service→data, data→data). It exits non-zero with a per-edge list of unmet deps. The earlier grep-only version was decorative (always PASSED); the intermediate version misresolved every service dep as a data dep (default installs would all fail). The `python:3.12-alpine` image is ~50MB and the script runs in under a second.
 
 - [ ] **Step 3: Confirm both resources render**
 
@@ -759,24 +811,13 @@ spec:
                     # post-render; the Event makes the detected state visible
                     # but the operator must pass --set clusterProfile=$profile
                     # at install/upgrade.
-                    kubectl apply -f - >/dev/null 2>&1 <<EOF || true
-              apiVersion: v1
-              kind: Event
-              metadata:
-                generateName: genieai-clusterprofile-detect-
-                namespace: $ns
-              involvedObject:
-                kind: Namespace
-                name: $ns
-              reason: ClusterProfileDetected
-              message: "cluster-profile=$profile detected; pass --set clusterProfile=$profile at install/upgrade for chart to honor it"
-              type: Normal
-              source:
-                component: genieai-umbrella
-              firstTimestamp: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-              lastTimestamp: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-              count: 1
-              EOF
+                    # (`kubectl create event` one-liner: `apply` rejects
+                    # generateName manifests and an indented heredoc would
+                    # break YAML parsing inside the block scalar.)
+                    kubectl create event "genieai-profile-$(date +%s)" \
+                      --type=Normal --reason=ClusterProfileDetected \
+                      --message="cluster-profile=$profile detected; pass --set clusterProfile=$profile at install/upgrade" \
+                      --for=namespace/"$ns" -n "$ns" >/dev/null 2>&1 || true
                     exit 0
                     ;;
                 esac
@@ -807,33 +848,71 @@ git commit -m "feat(charts): pre-install cluster-profile auto-detect hook"
 
 ---
 
-## Task 8: KeycloakRealm CR (basic realm with OIDC client)
+## Task 8: Keycloak CR + KeycloakRealmImport CR (operator's REAL CRD set)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_data/keycloak-realm.yaml`
+- Create: `charts/genieai-umbrella/templates/_data/keycloak-instance.yaml`
+- Create: `charts/genieai-umbrella/templates/_data/keycloak-realm-import.yaml`
 
 **Interfaces:**
-- Consumes: `data.keycloak.enabled`, `data.keycloak.realmImport` toggle.
-- Produces: a `KeycloakRealm` resource for the `genieai` realm with `realmImport` workflow.
+- Consumes: `data.keycloak.enabled`, `data.keycloak.realmImport`, `data.keycloak.adminEmail`, CNPG `keycloak-db` cluster (Task 5), `keycloak-db-credentials` secret (Task 11).
+- Produces: a `Keycloak` CR (the managed instance, backed by keycloak-db) + a `KeycloakRealmImport` CR (imports the genieai realm with admin user + `genie-app` OIDC client).
 
-- [ ] **Step 1: Run red-gate — no Keycloak realm yet**
+**CRD reality check (round-6 review fix)**: the keycloak-operator ships exactly `Keycloak`, `KeycloakBackup`, `KeycloakRealmImport` — there is **no `KeycloakRealm` CRD** (earlier drafts rendered a CR for a CRD that does not exist; the instance would never start). Realm/users/clients live in `KeycloakRealmImport.spec.realm` (full realm JSON, same shape as the Swarm realm export). The `unsupported` block exists for fields the CRD schema does not model — we avoid it.
 
-Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: KeycloakRealm$" || echo "0"`
+- [ ] **Step 1: Run red-gate — no Keycloak CRs yet**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: Keycloak\|^kind: KeycloakRealmImport$" || echo "0"`
 Expected: prints `0`.
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_data/keycloak-realm.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_data/keycloak-instance.yaml`**
 
 ```yaml
-{{- if and .Values.data.keycloak.enabled .Values.data.keycloak.realmImport -}}
+{{- if .Values.data.keycloak.enabled -}}
 apiVersion: k8s.keycloak.org/v2alpha1
-kind: KeycloakRealm
+kind: Keycloak
 metadata:
-  name: genieai
+  name: keycloak
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "identity"))) | nindent 4 }}
     genieai.io/data-tier: identity
 spec:
+  instances: {{ .Values.data.keycloak.instances | default 1 }}
+  db:
+    # CNPG primary Service is <cluster>-rw (keycloak-db-rw), port 5432
+    vendor: postgres
+    host: keycloak-db-rw
+    database: keycloak
+    usernameSecret:
+      name: keycloak-db-credentials
+      key: username
+    passwordSecret:
+      name: keycloak-db-credentials
+      key: password
+  # The operator starts Keycloak without a reverse proxy; hostname + TLS are
+  # bound at the edge (Envoy Gateway, Plan 6) via `hostname` v2 fields once
+  # the ingress host is known. Dev default keeps localhost URLs working.
+  http:
+    httpEnabled: true
+{{- end -}}
+```
+
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_data/keycloak-realm-import.yaml`**
+
+```yaml
+{{- if and .Values.data.keycloak.enabled .Values.data.keycloak.realmImport -}}
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: KeycloakRealmImport
+metadata:
+  name: genieai-realm
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "identity"))) | nindent 4 }}
+    genieai.io/data-tier: identity
+spec:
+  # References the Keycloak CR above; import runs once the instance is Ready.
+  keycloakCRName: keycloak
   realm:
     realm: genieai
     enabled: true
@@ -850,66 +929,68 @@ spec:
     accessTokenLifespan: 1800
     ssoSessionIdleTimeout: 1800
     ssoSessionMaxLifespan: 36000
-    themes:
-      loginTheme: genieai
     internationalizationEnabled: true
     supportedLocales:
       - en
       - fr
     defaultLocale: en
-  users:
-    - username: genie-admin
-      firstName: GENIE
-      lastName: Admin
-      # Review Focus F15 fix — Keycloak user profile requires `email` for
-      # verified users (otherwise login fails with 'Account is not fully
-      # set up'). Operators override this in deploy/environments/<env>/
-      # values-override.yaml under `data.keycloak.adminEmail`.
-      email: {{ .Values.data.keycloak.adminEmail | default "genie-admin@genieai.local" | quote }}
-      emailVerified: true
-      credentials:
-        # Review Focus F3 fix — operator-side credential POST via
-        # keycloak-admin-cli (out of band) is the only way to set the
-        # admin password. Setting `value: ""` here creates a user with
-        # empty password (un-fixable after the fact because the operator
-        # cannot mutate KeycloakRealm CR's user-list subresource).
-        # Credentials are set during install via a one-shot Job (Task 8a).
-        # For local dev, set via `kubectl exec keycloak -- /opt/keycloak/bin/kcadm.sh`.
-        - type: password
-          value: ""
-          temporary: false
-  clients:
-    - clientId: genie-app
-      enabled: true
-      publicClient: false
-      directAccessGrantsEnabled: false
-      standardFlowEnabled: true
-      rootUrl: https://{{ .Values.ingress.host | default "genieai.local" }}
-      redirectUris:
-        - https://{{ .Values.ingress.host | default "genieai.local" }}/*
-        - http://localhost:*
-      webOrigins:
-        - https://{{ .Values.ingress.host | default "genieai.local" }}
-      attributes:
-        pkce.code.challenge.method: S256
+    users:
+      - username: genie-admin
+        firstName: GENIE
+        lastName: Admin
+        # Keycloak user profile requires `email` + `emailVerified: true` for
+        # login to succeed (SERVER-TESTING.md: "Account is not fully set up").
+        # Operators override via deploy/environments/<env>/values-override.yaml
+        # under `data.keycloak.adminEmail`.
+        email: {{ .Values.data.keycloak.adminEmail | default "genie-admin@genieai.local" | quote }}
+        emailVerified: true
+        credentials:
+          # Empty value on purpose: the operator cannot PATCH user passwords
+          # through the CR after import (user subresource is operator-owned).
+          # Real password is set out-of-band post-install:
+          #   kubectl exec deploy/keycloak -n genieai -- \
+          #     /opt/keycloak/bin/kcadm.sh set-password -r genieai \
+          #     --username genie-admin -p '<password>'
+          - type: password
+            value: ""
+            temporary: false
+    clients:
+      - clientId: genie-app
+        enabled: true
+        publicClient: false
+        directAccessGrantsEnabled: false
+        standardFlowEnabled: true
+        rootUrl: https://{{ .Values.ingress.host | default "genieai.local" }}
+        redirectUris:
+          - https://{{ .Values.ingress.host | default "genieai.local" }}/*
+          - http://localhost:*
+        webOrigins:
+          - https://{{ .Values.ingress.host | default "genieai.local" }}
+        attributes:
+          pkce.code.challenge.method: S256
 {{- end -}}
 ```
 
-- [ ] **Step 3: Render and verify**
+- [ ] **Step 4: Render and verify**
 
-Run: `helm template test charts/genieai-umbrella -n genieai | grep -A 20 "^kind: KeycloakRealm$" | head -25`
-Expected: shows the KeycloakRealm CR with `realm: genieai`.
+Run: `helm template test charts/genieai-umbrella -n genieai | grep "^kind: Keycloak\|^kind: KeycloakRealmImport$" | sort | uniq -c`
+Expected: one `kind: Keycloak` + one `kind: KeycloakRealmImport`.
 
-- [ ] **Step 4: `helm lint --strict`**
+- [ ] **Step 5: Verify the instance points at the CNPG rw Service**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -A 8 "^    vendor: postgres"`
+Expected: shows `host: keycloak-db-rw` and both secret refs with keys `username` / `password`.
+
+- [ ] **Step 6: `helm lint --strict`**
 
 Run: `helm lint charts/genieai-umbrella --strict`
 Expected: 0 errors.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_data/keycloak-realm.yaml
-git commit -m "feat(charts): KeycloakRealm for genieai realm + admin user placeholder"
+git add charts/genieai-umbrella/templates/_data/keycloak-instance.yaml charts/genieai-umbrella/templates/_data/keycloak-realm-import.yaml
+git commit -m "feat(charts): Keycloak CR (CNPG-backed) + KeycloakRealmImport for genieai realm"
 ```
 
 ---
@@ -957,7 +1038,10 @@ spec:
   single:
     args:
       - --server.authentication-system-only=true
-      - --server.endpoint=arangodb://arangodb-single.{{ .Values.namespace }}.svc.cluster.local:8529
+      {{- /* NO --server.endpoint: `arangodb://` is not a valid endpoint
+             scheme (arangod accepts tcp:// / ssl://). The operator sets
+             endpoint+advertising itself from the CR; hand-rolling it here
+             breaks pod startup. */ -}}
     storage:
       engine: RocksDB
       volumeClaimTemplate:
@@ -1017,7 +1101,7 @@ spec:
 - [ ] **Step 3: Render with defaults (dev profile, single mode)**
 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -A 3 "^kind: ArangoDeployment$" | head -10`
-Expected: prints `kind: ArangoDeployment`, `name: arango-single`, `mode: Single`.
+Expected: prints `kind: ArangoDeployment`, `name: arangodb-single`, `mode: Single`.
 
 - [ ] **Step 4: Render with `clusterProfile: prod` — auto-promotion to cluster**
 
@@ -1066,7 +1150,7 @@ Kong is deleted from the chart (k8s-native-audit decision 7, user-confirmed 2026
 - CORS configuration moves to Envoy Gateway policy — Plan 6.
 - Service inventory: 28 (was 29).
 
-## Task 11: SealedSecret framework (4 CRs in Plan 2; remaining 9 secrets ship in Plans 3+)
+## Task 11: SealedSecret framework (4 CRs in Plan 2; remaining secrets ship with their consumers in Plans 3–6)
 
 **Files:**
 - Create: `charts/genieai-umbrella/templates/_secrets/arango-secrets.yaml` (ArangoDB-specific: 2 SealedSecrets)
@@ -1075,13 +1159,13 @@ Kong is deleted from the chart (k8s-native-audit decision 7, user-confirmed 2026
 
 **Interfaces:**
 - Consumes: `secrets.sealedSecrets.enabled`, `secrets.sealedSecrets.publicKeyFingerprint`.
-- Produces: **4 SealedSecret CRs in Plan 2** (`arango-root-secret`, `arango-jwt-secret`, `keycloak-db-credentials`, `genie-admin-credentials`) with placeholder encrypted blobs. **The remaining 9 of the 13 spec secrets land as their consumers ship** in Plans 3+:
-  - Plan 3 service tier Group 5: `emailPassword`, `huggingFaceHubToken`, `keycloakClientSecret`, `kcGrafanaClientSecret`
-  - Plan 4 observability: `grafanaAdminPassword`
-  - Plan 5 AI/ML: `keycloakProxyClientSecret`, `kcDataprepClientSecret`
-  - Plan 6 ingress: `translationCachePassword`
-  - Spec §8 `kongDbPassword` is removed (Kong DB-less per Q1a).
-- This explicit scope prevents code-review from flagging Plan 2 as "missing 9 secrets" (Review Focus F4).
+- Produces: **4 SealedSecret CRs in Plan 2** (`arango-root-secret`, `arango-jwt-secret`, `keycloak-db-credentials`, `genie-admin-credentials`) with placeholder encrypted blobs. **Every other §8 secret lands as its consumer ships**:
+  - Plan 3 service tier Group 5: `emailPassword`, `huggingFaceHubToken`, `keycloakClientSecret`
+  - Plan 4 observability: `grafanaAdminPassword`, `kcGrafanaClientSecret`
+  - Plan 5 AI/ML: `keycloakProxyClientSecret`, `kcDataprepClientSecret`, `VLLM_API_KEY`
+  - Plan 6: `translationCachePassword`
+  - Spec §8 `kongDbPassword` is removed (Kong removed, decision 7).
+- This explicit scope prevents code-review from flagging Plan 2 as "missing the rest of the secrets" (Review Focus F4).
 
 - [ ] **Step 1: Run red-gate — no SealedSecret yet**
 
@@ -1145,13 +1229,21 @@ apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
 metadata:
   name: {{ $secretName }}
-  namespace: {{ .Values.namespace }}
+  namespace: {{ $.Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "sealed-secret"))) | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" (deepCopy $.Values | merge (dict "component" "sealed-secret"))) | nindent 4 }}
     app.kubernetes.io/component: keycloak
 spec:
+  {{- /* `$` (not `.`): inside `range`, dot is the loop string — plain
+         .Values.namespace reads a field off the STRING and errors at render. */ -}}
   encryptedData:
-    password: PLACEHOLDER_{{ $secretName }}_SEALED_KID
+    {{- if eq $secretName "keycloak-db-credentials" }}
+    # CNPG initdb.secret requires BOTH keys (Task 5)
+    username: PLACEHOLDER_keycloak-db-username_SEALED_KID
+    password: PLACEHOLDER_keycloak-db-password_SEALED_KID
+    {{- else }}
+    password: PLACEHOLDER_genie-admin-password_SEALED_KID
+    {{- end }}
 {{- end -}}
 {{- end -}}
 ```
@@ -1247,7 +1339,7 @@ spec:
 - [ ] **Step 5: Render and count SealedSecret CRs**
 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: SealedSecret$"`
-Expected: prints `4` (2 arango + 2 keycloak). The default `data.keycloak.enabled: true` in Task 2's values.yaml is intentional — Plan 2's purpose is to land the data layer including KeycloakRealm, so the Keycloak secrets ship alongside.
+Expected: prints `4` (2 arango + 2 keycloak). The default `data.keycloak.enabled: true` in Task 2's values.yaml is intentional — Plan 2's purpose is to land the data layer including the Keycloak + KeycloakRealmImport CRs, so the Keycloak secrets ship alongside.
 
 - [ ] **Step 6: Disable keycloak and verify count drops**
 
@@ -1299,6 +1391,7 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   restartPolicy: Never
+  serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
   securityContext:
     runAsNonRoot: true
     runAsUser: 65534
@@ -1306,7 +1399,9 @@ spec:
       type: RuntimeDefault
   containers:
     - name: t
-      image: alpine:3.20
+      # bitnami/kubectl: kubectl is NOT in alpine base. SA = the hook-owned
+      # dep-check SA (persists between hook fires via before-hook-creation).
+      image: bitnami/kubectl:1.33
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false
@@ -1407,7 +1502,7 @@ git commit -m "docs(charts): mark Foundation + Plan 2 complete in charts/README.
 ```markdown
 # genieai-umbrella
 
-Single-install Helm chart for GENIE.AI. Renders the entire 26-service stack
+Single-install Helm chart for GENIE.AI. Renders the entire 28-service stack
 with one `helm install`.
 
 ## Status
@@ -1415,7 +1510,7 @@ with one `helm install`.
 | Layer | Status | Plan |
 |---|---|---|
 | Foundation (namespace, ArgoCD example, chart-testing baseline) | ✅ Shipped | Plan 1 |
-| Data layer (CNPG, kube-arangodb, keycloak-operator, sealed-secrets) | ✅ Shipped | Plan 2 |
+| Data layer (CNPG, kube-arangodb, sealed-secrets; keycloak-operator = bootstrap prerequisite) | ✅ Shipped | Plan 2 |
 | Service tier Group 5 (stateless app) | ⏳ Plan 3 | |
 | Service tier Group 1 (observability) | ⏳ Plan 4 | |
 | Service tier Group 6 (AI/ML) | ⏳ Plan 5 | |
@@ -1429,14 +1524,15 @@ that directory's `README.md`.
 
 ## Pre-install hooks
 
-The chart runs 3 pre-install Job hooks in this order (lowest `hook-weight` first):
+The chart's pre-install/pre-upgrade hooks run in ascending `helm.sh/hook-weight`
+order (RBAC first — regular resources land only AFTER all hooks, so everything a
+hook needs must itself be a lower-weight hook):
 
-1. `-10` — cluster-profile auto-detect (reads namespace label)
-2. `-5` — dependency graph validation (services require data deps)
-3. `0` — SealedSecret drift validation (kubeseal `check`)
-
-The dependency check Job runs `helm.sh/hook-weight: "-5"` after cluster-profile
-detection so it can resolve which data dependencies are implied by the profile.
+1. `-30` — ServiceAccount + ClusterRole + ClusterRoleBinding (hook-owned)
+2. `-20` — dep-graph ConfigMap (dependency-graph.json + enabled.json)
+3. `-10` — cluster-profile auto-detect (reads namespace label, emits an Event)
+4. `-5`  — dependency graph validation (services/data require their deps)
+5. `0` on pre-upgrade only — SealedSecret drift validation (`sealedsecrets.bitnami.com/invalid` annotation sweep)
 
 ## Tests
 
@@ -1447,10 +1543,12 @@ helm test <release> -n genieai
 
 ## Secrets backend
 
-Default `secretsBackend: sealedSecrets`. Helm dep `sealed-secrets` pinned to
-`~> 2.20.0` (controller v0.40.0+; CVE-2026-22728 + CVE-2026-59341-free). For
-rotation, recall cluster master key auto-recerts every 30 days; service
-tokens still require `kubeseal` + redeploy.
+Default secrets backend `sealedSecrets`. Helm dep pinned to `~> 2.20.0`
+(controller v0.40.0+; pin rationale in docs/charts/k8s-native-audit.md — the
+CVE IDs from early research are RETRACTED, rotation is operator-initiated via
+`kubeseal --rotate`, NOT automatic). After any rotation, re-encrypt committed
+SealedSecrets; the pre-upgrade drift hook fails upgrades while any carry the
+`invalid` annotation.
 ```
 
 ```bash
@@ -1468,7 +1566,7 @@ After writing all 13 tasks, run this checklist against the spec.
 
 | Spec section | Task |
 |---|---|
-| §4 operator deps rendering (CNPG, kube-arangodb, keycloak, sealed-secrets) | Tasks 1, 2 |
+| §4 operator deps rendering (CNPG, kube-arangodb, sealed-secrets; keycloak-operator bootstrap) | Tasks 1, 2 |
 | §4 `~>` version pins for CRD owners | Task 1 |
 | §5.1 dependency graph + pre-install hook | Tasks 3, 6 |
 | §5.2 ClusterProfile auto-detect + hook | Task 7 |
@@ -1476,7 +1574,7 @@ After writing all 13 tasks, run this checklist against the spec.
 | §6 sealed-secrets plug-point as v1 default | Tasks 2, 11 |
 | §6.1 secrets backend migration path | Deferred to Plan 6 |
 | §8 SealedSecret rendering (default backend) | Task 11 |
-| §8 rotation story updated (30-day cluster key + manual service tokens) | Spec update (this session) |
+| §8 rotation story (operator-initiated `kubeseal --rotate`; no auto-rotation) | Task 11 Step 4 drift hook |
 | §13.1 uninstall safety + pre-install backup hook | Plan 7 |
 | §13.2 secret-leak lint + chart-schema-drift CI | Plan 7 |
 | §17 data-tier entries in v1.0 manifest | Tasks 1, 5, 8, 9, 11 |
@@ -1491,7 +1589,7 @@ After writing all 13 tasks, run this checklist against the spec.
 2. ClusterProfile auto-detection race → Task 7 Step 2 (30s polling loop).
 3. ArangoDB single → cluster in-place upgrade fails → Task 9 Step 5 (docs/charts/arangodb-mode-migration.md written).
 4. ~~Kong DB-less misconfig~~ — moot: Kong REMOVED (decision 7); edge concerns move to Envoy Gateway (Plan 6).
-5. SealedSecret re-encrypt drift after cluster key rotation → Task 11 Step 4 (pre-upgrade Job + `kubeseal --check` script reference).
+5. SealedSecrets undecryptable after operator-initiated cluster key rotation → Task 11 Step 4 (pre-upgrade Job sweeps `sealedsecrets.bitnami.com/invalid` annotations).
 
 All five covered. The helm test for #1 (Task 6 Step 5) doubles as runtime test in CI.
 

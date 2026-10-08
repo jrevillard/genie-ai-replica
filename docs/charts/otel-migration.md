@@ -51,7 +51,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector-collector.genieai.svc.clust
 |---|---|---|---|---|
 | 1 | **Log ingestion** | fluentd logging driver does not exist on containerd/K8s. Need node-level filelog collection. | **M** | Plan 4 Task 4b (agent DaemonSet) |
 | 2 | **Collector config** | Port `configs/otel/otel-collector-config.yaml` verbatim (never rewrite); drop `fluent_forward` receiver, keep `pii_redact` + `stamp_log_metadata_from_msg`; retarget exporters to K8s DNS. | **S** | Plan 4 Task 4 |
-| 3 | **Gateway request tracing** | Kong OTel plugin disappears (Kong demoted). Envoy Gateway tracing via policy (Envoy-native OTel exporter) + `traceparent` propagation. | **S** | Plan 6 |
+| 3 | **Gateway request tracing** | Kong OTel plugin disappears (Kong REMOVED — decision 7). Envoy Gateway tracing via policy (Envoy-native OTel exporter) + `traceparent` propagation. | **S** | Plan 6 |
 | 4 | **Grafana dashboards** | 9 dashboards from `configs/grafana/provisioning/` → ConfigMaps + sidecar provisioning; datasource names unchanged so queries work. | **S** | Plan 6 |
 | 5 | **Alert rules** | Grafana-provisioned rules → `VMRule` CRs (vmoperator). | **S** | Plan 6 |
 | 6 | **PII smoke test** | `run-pii-smoke.sh` targets docker compose → helm test / kind CI equivalent. Same assertions (marker-based row read-back). | **S** | Plan 7 |
@@ -111,4 +111,4 @@ kubectl logs -n genieai deploy/genieai-collector-collector | head
 
 ## 8. Decision pending (not this doc's scope)
 
-Kong demotion + Envoy Gateway v1.9 + K8s 1.33 bump — decided by research (`docs/charts/envoy-gateway-state-of-art-2026q4.md`), awaiting user confirmation to edit spec + Plans 2/3.
+**Confirmed 2026-10-08 by user**: Kong REMOVED (not demoted), K8s min 1.33, Envoy Gateway v1.9 locked. Applied to spec + Plans 2/3 (decision 7 in `docs/charts/k8s-native-audit.md`).

@@ -6,7 +6,7 @@
 
 **Architecture:** Four independent operators, each managing their own custom resources: vmoperator manages `VMSingle`/`VMCluster`/`VLSingle`/`VLCluster`/`VTSingle`/`VTCluster`/`VMAgent`/`VMRule`/`VMAlertmanager`, opentelemetry-operator manages `OpenTelemetryCollector` (gateway + agent), grafana-operator manages `Grafana`/`GrafanaDatasource`/`GrafanaDashboard`. No traces proxy — VictoriaTraces implements the Tempo HTTP API natively (verified 2026-10-08), Grafana's Jaeger datasource queries VT directly. ServiceMonitors, for Prometheus-style scrape, get generated per Group 5 service conditionally. PII redaction and log-metadata stamping port **verbatim** from the existing `configs/otel/otel-collector-config.yaml` (OTTL `pii_redact` + `stamp_log_metadata_from_msg`) — the chart ports, never rewrites. Collector topology: **gateway** (Deployment, OTLP traces/metrics) + **agent** (DaemonSet, filelog container logs → gateway), replacing the Swarm fluentd-driver → `fluent_forward` pipeline which does not exist on containerd/K8s. See `docs/charts/otel-migration.md`.
 
-**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), kind 1.32, vmoperator chart `~> 0.45.0`, opentelemetry-operator chart `~> 0.50.0`, grafana-operator chart `~> 5.22.0` (official `grafana/grafana-operator`).
+**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), kind 1.33, vmoperator chart `~> 0.45.0`, opentelemetry-operator chart `~> 0.50.0`, grafana-operator chart `~> 5.22.0` (official `grafana/grafana-operator`).
 
 **Spec:** `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` — this plan implements §10 (observability stack default + vmoperator + OTel Operator + Grafana + PII redaction), §6 pluggability (ClusterProfile-driven observability default), §11 v1.0 manifest observability entries.
 
@@ -24,7 +24,7 @@
 
 Five input-class concerns the spec implies but no Plan 4 task tests explicitly.
 
-1. **vmoperator CRD version compatibility with K8s 1.32** — `~> 0.45.0` and `~> 0.50.0` pins may not align with K8s 1.32 admission. **Pinned in Task 1 Step 3** — `helm dep list` post-update confirms both operator versions; `helm install --dry-run` validates CRD shape.
+1. **vmoperator CRD version compatibility with K8s 1.33** — `~> 0.45.0` and `~> 0.50.0` pins may not align with K8s 1.33 admission. **Pinned in Task 1 Step 3** — `helm dep list` post-update confirms both operator versions; `helm install --dry-run` validates CRD shape.
 2. **ServiceMonitor-conditional emission** — services get `serviceMonitor: true` only when `observability.enabled: true`. If a service emits monitor fields unconditionally, scrape targets reference non-existent endpoints on dev. **Pinned in Task 7 Step 4** — render asserts no ServiceMonitor resources emitted when observability off.
 3. **Traces query path must be VT-direct** — Grafana's Jaeger datasource must point at `vtraces` (Tempo HTTP API implemented natively by VictoriaTraces, verified 2026-10-08), NOT at a proxy. A stale proxy reference or wrong port makes the "Trace explorer" dashboard silently fail. **Pinned in Task 5 Step 4** — render asserts the jaeger datasource URL contains `vtraces.` and that `tempo-proxy` appears nowhere in the rendered output.
 4. **PII redaction YAML schema** — OpenTelemetry Collector `transform` processor schema is versioned (v0.111+ uses `error_mode: ignore`). Older syntax accepted silently. **Pinned in Task 9 Step 4** — render asserts `error_mode: ignore` + each transform context statements name parsed by `otelcol validate`.
@@ -684,10 +684,12 @@ spec:
     access: proxy
 ---
 # Datasource: traces — Grafana's Jaeger datasource queries VictoriaTraces
-# DIRECTLY (VT implements the Tempo HTTP API natively — verified
-# 2026-10-08, docs.victoriametrics.com/victoriatraces/querying/grafana/).
-# No tempo-proxy: the Swarm proxy component is a vestige, not ported
-# (k8s-native-audit decision 1).
+# DIRECTLY, with the /select/jaeger URL prefix (official VT Grafana guide,
+# verified 2026-10-08). The prefix replaces the old tools/tempo-proxy path
+# translation (its real job per main.go: /select/jaeger/api/* <-> /api/*).
+# VT >= 0.9.4 additionally offers the Tempo datasource + TraceQL at
+# /select/tempo — future option, not v1. Multi-service aggregation behavior
+# (the proxy's second job) is re-verified in the migration checklist.
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
 metadata:
@@ -702,7 +704,7 @@ spec:
   datasource:
     name: Jaeger
     type: jaeger
-    url: http://vtraces.{{ .Values.namespace }}.svc.cluster.local:10428
+    url: http://vtraces.{{ .Values.namespace }}.svc.cluster.local:10428/select/jaeger
     access: proxy
 {{- end -}}
 ```
@@ -740,7 +742,7 @@ helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod 
   python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
   ds = [d for d in docs if d and d.get('kind') == 'GrafanaDatasource']; \
   jaeger = next(d for d in ds if d['spec']['datasource']['type'] == 'jaeger'); \
-  assert 'vtraces.' in jaeger['spec']['datasource']['url'], jaeger['spec']['datasource']['url']; \
+  assert jaeger['spec']['datasource']['url'].endswith('/select/jaeger'), jaeger['spec']['datasource']['url']; \
   assert 'tempo-proxy' not in str(docs), 'tempo-proxy must not render'; \
   n = len([d for d in docs if d and d.get('kind') == 'GrafanaDashboard']); \
   print(f'PASS: jaeger->vtraces direct, {n} dashboards')"
@@ -1165,7 +1167,7 @@ Sections deferred:
 
 **4. Review Focus coverage**: 5 input-class concerns pinned:
 
-1. vmoperator CRD version compat (K8s 1.32) → Task 1 Step 4 (`helm dep list` parses pinned versions).
+1. vmoperator CRD version compat (K8s 1.33) → Task 1 Step 4 (`helm dep list` parses pinned versions).
 2. ServiceMonitor only when observability + per-service toggle → Task 7 Step 3 (render asserts 0 ServiceMonitors when observability off).
 3. Traces query VT-direct (no proxy) → Task 5 Step 4 (asserts jaeger datasource URL contains vtraces + zero tempo-proxy in render).
 4. PII redaction yaml schema (error_mode: ignore) → Task 4 Step 5 (assertions on ported config + otelcol validate when available).

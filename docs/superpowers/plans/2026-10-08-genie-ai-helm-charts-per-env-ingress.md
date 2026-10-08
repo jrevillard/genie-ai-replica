@@ -2,7 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the per-environment configuration layer (`values-override.yaml` per env) for the **two** envs this deployment model actually uses — `dev` (local, port-forward) and `prod` (el-salvador, the only real cluster) — plus the GitOps sync example for prod, Envoy Gateway ingress, db-migrations Job, document-repository PVC, verified-peer NetworkPolicy pass, per-env uninstallPolicy opt-in. **Removed from scope**: `staging/` and `sovereign/` as separate envs — staging is a no-op in our model (no separate tier between dev and el-salvador), and sovereign is the *identity* of prod, not a separate profile. (Earlier draft of this plan had 4 overlays; rolled back to 2 after the user confirmed the actual env inventory.)
+**Goal:** Ship the per-environment configuration layer (`values-override.yaml` per env) for `dev` (the only real env today — local minikube/k3s) and `prod` (a generic, empty-of-real-cluster-details overlay that operators can fork when a real prod cluster lands). Plus: GitOps sync examples (ArgoCD + Flux), Envoy Gateway ingress, db-migrations Job, document-repository PVC, verified-peer NetworkPolicy pass, per-env uninstallPolicy opt-in.
+
+**Removed from scope (rolled back from an earlier draft)**:
+- `staging/`: no separate tier in our model.
+- `sovereign/`: el-salvador's specific values are NOT shipped here — they will be defined in a dedicated migration plan when that cluster moves to K8s. The chart stays generic.
+- `prod/values-override.yaml`: kept as a blank template (no el-salvador IPs, no remote-GPU URLs, no Issuer names); operators fork it for their prod cluster.
 
 **Architecture:** Per-env state lives entirely OUTSIDE the chart. Two layouts, both supported (chart is GitOps-agnostic per spec §19):
 1. **ArgoCD** (recommended per user preference): an `Application` CR per env, the chart's umbrella at a per-env branch, with Kustomize overlay + `values-override.yaml` supplying the per-env values.
@@ -19,7 +24,7 @@ The chart gains NO new operators (cert-manager is a cluster bootstrap prerequisi
 - Helm chart API version: `v2`. Helm 4.x.
 - The chart NEVER installs Flux, ArgoCD, cert-manager, or the GPU operator — all are cluster bootstrap prerequisites (spec §4 + audit decisions 7/8/Plan 5 round-7). The chart renders only the CRs those operators manage.
 - Per-env overrides live in `deploy/environments/<env>/values-override.yaml` (Kustomize configMapGenerator pattern, NOT direct helm value overrides — keeps diff history tight and supports Kustomize post-render transformations like patchesStrategicMerge).
-- The `release/el-salvador` branch carries the per-env overlay for prod (the only real cluster); the `release/2.0` / `release/2.1` branches (legacy Swarm-versioned) are NOT in scope. This plan's `deploy/environments/<env>/` ships with `dev/prod` only.
+- This plan's `deploy/environments/<env>/` ships with `dev/prod` only. el-salvador lives on a dedicated migration plan; `release/2.0` / `release/2.1` (legacy Swarm-versioned) are not in scope.
 - All English documentation and comments per project CLAUDE.md. Commits in English, Conventional Commits.
 - Worktree path: `/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/k8s-migration/`. Branch: `feat/k8s-migration`.
 - Every new Deployment maps to a `docs/charts/k8s-native-audit.md` row (Tasks 1, 2, 3 each amend the table).
@@ -123,7 +128,15 @@ services:
   clamav: { enabled: false }   # virus scanning off in dev (faster CI)
 ```
 
-- [ ] **Step 2: Create `deploy/environments/prod/values-override.yaml`** — the **only** real overlay (el-salvador prod cluster, 10.0.0.102). `clusterProfile: prod`, full observability stack on, ingress enabled, remote-GPU mode (the GPU node 10.0.0.110 is reached over the WG tunnel; `ai.remoteGpu.enabled: true`), single-node defaults (1 postgres / 1 arangodb / 1 model of each kind — the operator's el-salvador hardware is single-node, not HA), TLS via cert-manager (`ingress.tls.issuerName: genieai-el-salvador` — operator-defined ClusterIssuer), `services.clamav: {enabled: true}`, `services.backend.replicas: 1` (single-node), `services.frontend.replicas: 1`, full SealedSecret suite (no PLACEHOLDER sentinels in release).
+- [ ] **Step 2: Create `deploy/environments/prod/values-override.yaml`** — a GENERIC template, NOT a real cluster's values. Operators fork it for their prod cluster (the el-salvador cluster will get its own values in a dedicated migration plan, NOT here). The template sets:
+  - `clusterProfile: prod`
+  - `observability.enabled: true` (and per-component mirrors)
+  - `ingress.enabled: true` (operators MUST set `ingress.host` and `ingress.tls.issuerName` per their cluster)
+  - `services.clamav: {enabled: true}` (default; disable in CI/smoke)
+  - `migrate.enabled: true` (pre-install Job for backend db-migrations — required in prod)
+  - `uninstallPolicy.enabled: true` (the gate requires the namespace annotation to uninstall — a safety net for prod)
+  - `secrets.sealedSecrets.enabled: true` (always)
+  - Every operator-specific value (cluster IPs, GPU URLs, Issuer name, Ingress host, real SealedSecret values) is INTENTIONALLY left for operators to fill in. The chart defaults + the per-env overlay = the contract; the operator's per-cluster fork = the reality.
 
 - [ ] **Step 3: Create `deploy/environments/README.md`**
 
@@ -143,20 +156,19 @@ Each `deploy/environments/<env>/` directory holds:
   `--cert pub-cert.pem`)
 
 Conventions:
-- Only TWO envs ship: `dev` (local port-forward, no ingress) and
-  `prod` (el-salvador — the only real cluster, 10.0.0.102). `staging` and
-  `sovereign` are NOT separate envs in this deployment model: prod
-  *is* the sovereign on-prem cluster, and we don't run a separate
-  staging tier before it.
-- `clusterProfile` MUST be set on every env (`dev | prod`)
+- TWO envs ship: `dev` (local minikube/k3s, port-forward) and `prod`
+  (GENERIC template — NOT a real cluster's values; operators fork it
+  for their prod cluster). el-salvador's specific values are NOT here
+  (dedicated migration plan when that cluster moves to K8s).
+- `clusterProfile` MUST be set on every env (`dev | prod`).
 - The umbrella's `namespace` defaults to `genieai`; per-namespace installs
   override here AND commit to per-namespace ops (see
   `docs/charts/namespace-per-env.md`).
-- `release/el-salvador` (the prod branch) carries the per-env overlay;
-  `dev` runs against `feat/k8s-migration` directly via `helm install
-  --dry-run=server`.
-- `deploy/gitops/` ships both ArgoCD and Flux sync examples for prod;
-  pick ONE, delete the other (spec §19.3 — chart is GitOps-agnostic).
+- `dev` runs against `feat/k8s-migration` directly via `helm install`
+  on a minikube/k3s cluster (local). `prod` (once forked for a real
+  cluster) is consumed by ArgoCD/Flux on the target cluster.
+- `deploy/gitops/` ships both ArgoCD and Flux sync examples; pick ONE,
+  delete the other (spec §19.3 — chart is GitOps-agnostic).
 ```
 
 - [ ] **Step 4: Create `docs/charts/namespace-per-env.md`**

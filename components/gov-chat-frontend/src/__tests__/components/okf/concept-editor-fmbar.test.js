@@ -85,7 +85,18 @@ it('expands to a per-field form and saves via the {frontmatter} PATCH', async ()
   expect(mockConceptUpdate).toHaveBeenCalledWith('r-1', 'c-1', {
     type: 'topic',
     title: 'C1',
-    labels: ['Water Supply']
+    labels: ['Water Supply'],
+    // Story 1.7 (2026-10-08): the save ALWAYS carries the per-repo
+    // frontmatter sub-block (consistent shape; empty defaults for a
+    // non-index concept — the fixture's c-1 has none authored).
+    frontmatter: {
+      topic: [],
+      entity: [],
+      scope: '',
+      forbidden: [],
+      summary: '',
+      keyword: []
+    }
   });
   // the source pane recomposed — form and source never diverge
   expect(wrapper.vm.markdown).toContain('Water Supply');

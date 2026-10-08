@@ -184,37 +184,69 @@ writable and `publish` is legal from `publish` — tag edits + direct
 re-publish skip the unpublish ceremony. Both paths land on the same
 re-mint + head rebuild.
 
-## 8. Implementation plan (MR-sized, in order)
+## 8. Implementation plan
 
-1. **MR-A backend core** — head/rebuild endpoint; forbidden-centroid
-   fix (+ migration-safe: rebuild refreshes); routing-test endpoint
-   (Leg A + Leg B + fidelity block); probe-script salvage. Tests:
-   jest unit (okf-server) with TEI/vLLM mocks; AQL probe tested
-   against the mocked Arango in the existing harness.
-2. **MR-B suites + analytics** — suite generator (vllm), run-all,
-   okf_head_test_runs collection + list endpoint; summary metrics.
-3. **MR-C frontend** — headTestService + HeadTestDialog (3 tabs) +
-   rail badge + Publish card + i18n + store actions.
-4. **MR-D (Phase 2, separate) retriever head wiring** — pseudo-rows
-   in `_route_graphs` behind `RETRIEVER_ROUTE_HEAD_WEIGHT` (default
-   0.0), dim/model guards, pytest parity tests; validated by the
-   Lab's Leg B replay before enabling anywhere.
+Superseded by §10 (revised after David's 2026-10-08 decisions —
+MR-D retriever wiring moved IN-STORY, default-on). MR order and
+content: see §10.
 
 Validation venue: local build (C:\Dev\builds\main) live cycle on the
 two real repos (NCD Information — published, Alphabet — the older
 serving repo), then the standard Path-1 MR flow.
 
-## 9. Open questions for David (decide before MR-A)
+## 9. Decisions (David, 2026-10-08 — all four gates answered)
 
-1. **Phase 2 now or later?** Ship the retriever head-wiring (MR-D)
-   inside this story behind the default-off knob, or defer to a
-   follow-up story after the Lab proves head quality on real repos?
-   (Recommendation: defer — the Lab is decision-support until head
-   quality is proven; wiring first would be cargo-cult.)
-2. **Suite storage collection** `okf_head_test_runs` — OK as
-   proposed, or extend an existing collection?
-3. **Negative-test authoring**: LLM-generated negatives
-   (confusable-sibling targeting) + forbidden-derived negatives +
-   curator free-text — all three, or trim?
-4. **Sibling bound**: 20 nearest by head score for probe replay —
-   acceptable, or cap differently?
+1. **Retriever head-wiring SHIPS NOW (in-story, not deferred).** David's
+   framing: "this does not involve graphs and chunks — it only needs
+   the head (in place after publishing) to ascertain selectivity for
+   the OKF repo graph without having the graph. It is just
+   signalling; the query would not be executed." Encoded as:
+   - **Production (`_route_graphs`)**: head-affinity contributes to
+     selection among CARRIER graphs — the repos actually on the
+     fan-out. A graph-less repo never rides the real carrier
+     (graph_names come from ingested graphs) and a head-only winner
+     would burn one of MAX_GRAPHS=5 slots on an empty repo, so
+     production selection stays graph-bearing; the head improves HOW
+     those are chosen. Knob `RETRIEVER_ROUTE_HEAD_WEIGHT` (default
+     1.0 = the signal is live; 0.0 = exact pre-1.8 behavior — the
+     rollback). Missing head on a carrier repo → that repo falls
+     back to chunk-probe-only scoring, never an error.
+   - **The Lab (routing-test)**: the pre-ingest experimentation
+     surface — head-bearing repos compete fully INCLUDING graph-less
+     ones (siblings drawn from okf_repositories, not the carrier);
+     a graph-less repo winning the head leg IS the selectivity
+     signal. Leg B (chunk-probe replay) simply reports
+     `has_graph: false` for those.
+   - **Formula experimentation** lives in the Lab: `formula`
+     parameter recomputes the head score from `head.per_field`
+     vectors under alternate weights at query time ("default" =
+     FIELD_RANGES, "uniform", or explicit overrides) — no head
+     rebuild needed to try a formula; `head/rebuild` persists a new
+     head when a formula is adopted.
+2. **`okf_head_test_runs` collection** — approved as proposed.
+3. **Negative tests: ALL THREE** (LLM-generated confusable-sibling
+   negatives + forbidden-derived negatives + curator free-text) —
+   "the negative tests are also very important for selection
+   signalling."
+4. **Sibling bound 20 nearest by head score** — approved ("also a
+   potentially valuable insight").
+
+## 10. Implementation plan (revised after decisions; MRs in order)
+
+1. **MR-A backend core** — forbidden-centroid fix; head/rebuild;
+   routing-test (Leg A incl. graph-less siblings + formula variants,
+   Leg B replay, verdict + fidelity block); probe-script salvage;
+   jest unit tests.
+2. **MR-B suites + analytics** — suite generator (positives,
+   confusable-sibling negatives, forbidden-derived negatives),
+   curator free-text additions, run-all, okf_head_test_runs, list
+   endpoint, summary metrics.
+3. **MR-C frontend** — headTestService + HeadTestDialog (Head / Test
+   / Suites tabs) + rail badge + Publish card + i18n ×14 + store.
+4. **MR-D retriever head wiring (IN-STORY)** — head-affinity in
+   `_route_graphs` for carrier graphs behind
+   `RETRIEVER_ROUTE_HEAD_WEIGHT` (default 1.0, 0.0 rollback),
+   dim/model guards, pytest parity + degradation tests.
+
+Validation: local build live cycle on NCD Information (published,
+pre-ingest) + the ingested repos as siblings; then Path-1 MR flow.

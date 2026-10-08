@@ -705,6 +705,16 @@ services:
       - VLLM_ENDPOINT=${VLLM_ENDPOINT:-}
       - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
+      # Model-endpoint externalization (David 2026-10-08: all OKF env vars
+      # live in .env with documented defaults — compose is only the pipe).
+      # TEI embed base for tag embedding + vectorized-head build + the
+      # Story 1-8 head tests (frontmatter-service appends /embed). Same
+      # host:port as the inference server; unset = local full-stack TEI.
+      - TEI_EMBED_HOST=${TEI_EMBED_HOST:-http://tei:80}
+      # Embedding model id — keys the BGE query-instruction prefix for
+      # the head-test query embeds (production chatqna parity). Unset =
+      # no prefix, honestly reported by the lab as "unknown (no prefix)".
+      - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID:-}
       - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
       - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
       # Stuck-parsed reaper signals (claim-stamp semantics): a claimed row with

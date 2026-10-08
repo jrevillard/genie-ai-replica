@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import contextlib
+import math
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -64,6 +65,7 @@ from .config import (
     OPENAI_EMBED_ENABLED,
     OPENAI_EMBED_MODEL,
     ROUTE_ENABLED,
+    ROUTE_HEAD_WEIGHT,
     ROUTE_MIN_CHUNKS,
     ROUTE_PROBE_TIMEOUT_MS,
     ROUTE_RETRY,
@@ -248,6 +250,22 @@ def _normalize_chunk_id(doc) -> str | None:
         return None
     cid = str(cid)
     return cid.rsplit("/", 1)[-1]  # COLLECTION/_key -> _key
+
+
+def _head_cosine(a, b) -> float | None:
+    """Story 1-8 MR-D — cosine(query_embedding, repo head vector).
+
+    None on degenerate input (wrong shape / zero norm) — the caller skips
+    that head rather than poisoning the routing pool with a bogus score.
+    """
+    if not isinstance(a, (list, tuple)) or not isinstance(b, (list, tuple)) or len(a) != len(b):
+        return None
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(x * x for x in b))
+    if na == 0.0 or nb == 0.0:
+        return None
+    return dot / (na * nb)
 
 
 def rrf_fuse(dense, bm25, k=HYBRID_RRF_K, dense_weight=HYBRID_DENSE_WEIGHT, lexical_weight=HYBRID_LEXICAL_WEIGHT):
@@ -1761,6 +1779,41 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
 
     # Global chunk-level competition (size-fair): every probed chunk competes on
     # cosine regardless of corpus size; qualification is by chunk COUNT.
+    # Story 1-8 MR-D — vectorized-head affinity (RETRIEVER_ROUTE_HEAD_WEIGHT,
+    # default 1.0, 0.0 = rollback): each carrier graph's okf_repositories.head
+    # contributes ONE weighted pseudo-row to this same pool. Dim + model
+    # guards; head fetch is best-effort (a failure logs and continues with
+    # the probe results alone — never the degraded path).
+    head_rows_injected = 0
+    if ROUTE_HEAD_WEIGHT > 0 and okf_graphs:
+        try:
+            head_rows = list(
+                self.db.aql.execute(
+                    "FOR r IN okf_repositories FILTER r.deleted_at == null "
+                    "FILTER r.ingested_graph_name != null FILTER r.head != null "
+                    "RETURN {g: r.ingested_graph_name, v: r.head.vector, "
+                    "dim: r.head.dim, model: r.head.model}"
+                )
+            )
+            qdim = len(query_embedding)
+            for row in head_rows:
+                g, v = row.get("g"), row.get("v")
+                if g not in okf_graphs or not isinstance(v, (list, tuple)) or len(v) != qdim:
+                    continue
+                hmodel = row.get("model") or ""
+                if hmodel and TEI_EMBED_MODEL and hmodel not in TEI_EMBED_MODEL and TEI_EMBED_MODEL not in hmodel:
+                    logger.info(
+                        f"Routing head skipped (model mismatch) — graph={g}, "
+                        f"head_model={hmodel}, service_model={TEI_EMBED_MODEL}"
+                    )
+                    continue
+                score = _head_cosine(query_embedding, v)
+                if score is None:
+                    continue
+                all_rows.append((g, ROUTE_HEAD_WEIGHT * score))
+                head_rows_injected += 1
+        except Exception as e:
+            logger.info(f"Routing head fetch failed (continuing without head signal) — error={e}")
     all_rows.sort(key=lambda r: r[1], reverse=True)
     top = all_rows[:ROUTE_TOP_K]
     counts: dict[str, int] = {}
@@ -1777,9 +1830,12 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
     route_span.set_attribute("rag.route.selected", ",".join(qualified))
     route_span.set_attribute("rag.route.dropped", ",".join(g for g in okf_graphs if g not in selected))
     route_span.set_attribute("rag.route.probed", len(okf_graphs))
+    route_span.set_attribute("rag.route.head_weight", ROUTE_HEAD_WEIGHT)
+    route_span.set_attribute("rag.route.head_rows", head_rows_injected)
     route_span.set_attribute("rag.route.wall_ms", int((time.time() - t0) * 1000))
     logger.info(
         f"Graph routing — probed={len(okf_graphs)}, global_top={len(top)}, "
+        f"head_rows={head_rows_injected}, "
         f"counts={ {g: counts.get(g, 0) for g in okf_graphs} }, "
         f"qualified={qualified}{floor_note}, routed={len(routed)}/{len(encoded_graph_names)}, "
         f"wall={(time.time() - t0):.2f}s"

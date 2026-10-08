@@ -267,6 +267,18 @@ ROUTE_MIN_CHUNKS = int(os.getenv("RETRIEVER_ROUTE_MIN_CHUNKS", "3"))
 ROUTE_PROBE_TIMEOUT_MS = int(os.getenv("RETRIEVER_ROUTE_PROBE_TIMEOUT_MS", "2000"))
 ROUTE_RETRY = int(os.getenv("RETRIEVER_ROUTE_RETRY", "1"))
 
+# Story 1-8 MR-D (David 2026-10-08: "it only needs to look at the head …
+# it is just signalling") — vectorized-head affinity joins the global chunk
+# competition: each carrier graph's okf_repositories.head contributes ONE
+# pseudo-row (RETRIEVER_ROUTE_HEAD_WEIGHT × cosine(query, head)) to the
+# top-K pool. The head row adds +1 to its graph's qualification count and
+# can crowd a competitor's chunks out of the top-K. Guards: head.dim must
+# equal the query embedding dim; a recorded head model must be consistent
+# with this service's embedding model when both are known. Head fetch is
+# BEST-EFFORT — its failure never degrades routing (the probe results
+# alone remain valid). 0.0 disables the signal entirely (rollback knob).
+ROUTE_HEAD_WEIGHT = float(os.getenv("RETRIEVER_ROUTE_HEAD_WEIGHT", "1.0"))
+
 # Summarizer Configuration
 SUMMARIZER_ENABLED = os.getenv("RETRIEVER_SUMMARIZER_ENABLED", "false").lower() == "true"
 

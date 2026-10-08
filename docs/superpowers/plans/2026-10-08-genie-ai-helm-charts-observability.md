@@ -317,7 +317,7 @@ spec:
   remoteWrite:
     # VMSingle serves 8428 (8429 is the CLUSTER vmselect port — single
     # mode remote-write hits 8428).
-    # Wave-8 F10: prod-profile renders VMCluster whose operator-created
+    # prod-profile renders VMCluster whose operator-created
     # Services are vmetrics-vminsert/vmetrics-vmselect/vmetrics-vmstorage
     # (NOT a single `vmetrics:8428` Service). The single-mode remoteWrite
     # URL silently 404s in prod. Use the cluster-aware write endpoint.

@@ -320,7 +320,7 @@ In the `spec.template.spec` block (after `securityContext:`), add:
       volumes:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- /* Wave-8 F7: podSecurityContext passthrough — required for the
+      {{- /* podSecurityContext passthrough — required for the
              HF-cache PVC to be group-writable (fsGroup: 1000/100). Without
              it the vLLM/TEI pods cannot write the first model download
              and crashloop. */ -}}
@@ -440,7 +440,7 @@ spec:
           "volumeMounts" (list (dict "name" "hf-cache" "mountPath" "/root/.cache/huggingface"))
           "volumes" (list (dict "name" "hf-cache" "persistentVolumeClaim" (dict "claimName" "genieai-hf-cache")))
           "securityContext" (dict "runAsNonRoot" true "runAsUser" 1000 "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "ALL")))
-          # Wave-8 F7: podSecurityContext passthrough (factory reads
+          # podSecurityContext passthrough (factory reads
           # `podSecurityContext` from the aiService dict) — fsGroup 1000
           # makes the RWX HF-cache PVC group-writable for vLLM.
           "podSecurityContext" (dict "fsGroup" 1000)
@@ -483,13 +483,13 @@ This keeps Group-5 rendering untouched (no `aiService` key → old path) and let
 
 `vllm-translation`: same shape as vllm with `podSecurityContext.fsGroup: 1000` (RWX cache); args gain `--port 9031`, `--no-enable-chunked-prefill`, `--chat-template-content-format openai` (gemma handling); Service targetPort 9031; component `ai-vllm-translation`.
 
-**I2 fixes baked in (round-7):**
+**TEI non-root port + cache mount (per Service-port-80 contract; compose-verified):**
 
 `tei`: command `["/bin/sh","-c"]`, args `["text-embeddings-router --json-output --model-id <ai.models.embeddingId> --auto-truncate --port 8080"]` — **`--port 8080`**: the image binds :80 as root (Swarm needed `cap_add: NET_BIND_SERVICE`); running non-root with ALL caps dropped, an unprivileged port avoids the EPERM. Service targetPort **8080** (values `port` updated). Mount the HF cache at **`/data`** (NOT `/root/.cache/huggingface` — the TEI image bakes `HUGGINGFACE_HUB_CACHE=/data`; docker-compose.yaml tei/tei_reranker mount `huggingface:/data`); `podSecurityContext.fsGroup: 100` (TEI image UID; without it the first model download EACCES's the RWX PVC); component `ai-tei`.
 
 `tei-reranker`: same `/data` mount + `podSecurityContext.fsGroup: 100` + `--port 8080` + `--max-batch-tokens <ai.gpu.teiReranker.maxBatchTokens> --max-concurrent-requests <ai.gpu.teiReranker.maxConcurrentRequests> --auto-truncate <ai.gpu.teiReranker.autoTruncate>`; Service targetPort 8080; component `ai-tei-reranker`.
 
-All four: `envFrom` BOTH `vllm-api-key` (VLLM_API_KEY/HF_TOKEN/OPENAI_API_KEY — GPU-node bearer) AND Plan 3's `huggingface-hub-token` (HUGGING_FACE_HUB_TOKEN — the REAL HF pull token; distinct value, do not conflate — round-7 I4). vLLM pair mounts the cache at `/root/.cache/huggingface`; TEI pair at `/data`. All four carry `podSecurityContext: { fsGroup: 1000 }` (vLLM) / `{ fsGroup: 100 }` (TEI image UID) so the PVC is group-writable on first download.
+All four: `envFrom` BOTH `vllm-api-key` (VLLM_API_KEY/HF_TOKEN/OPENAI_API_KEY — GPU-node bearer) AND Plan 3's `huggingface-hub-token` (HUGGING_FACE_HUB_TOKEN — the REAL HF pull token; distinct value, do not conflate — ). vLLM pair mounts the cache at `/root/.cache/huggingface`; TEI pair at `/data`. All four carry `podSecurityContext: { fsGroup: 1000 }` (vLLM) / `{ fsGroup: 100 }` (TEI image UID) so the PVC is group-writable on first download.
 
 - [ ] **Step 4: Red-gate → render all 4**
 
@@ -908,7 +908,7 @@ spec:
         - name: huggingface-hub-token
         - name: keycloak-proxy-client-secret   # Plan 5: keycloak-proxy-service
         - name: vllm-api-key                    # Plan 5: remote-GPU bearer (VLLM_API_KEY)
-          # Wave-8 F6: vllm-api-key SealedSecret is gated on ai.enabled
+          # vllm-api-key SealedSecret is gated on ai.enabled
           # in Task 6 — but backend references it for `OPEA_HOST`/VLLM_API_KEY
           # and would crashloop on the same Day-0 ai.enabled=false install
           # the C5 fix unlocked for keycloak-proxy-client-secret. Move
@@ -1075,7 +1075,7 @@ Add to `templates/ai/*` wrappers' top:
 ```gotemplate
 {{- if and .Values.ai.enabled .Values.ai.remoteGpu.enabled -}}
 {{- if or (not .Values.ai.remoteGpu.vllmUrl) (not .Values.ai.remoteGpu.teiEmbeddingUrl) -}}
-{{- /* Wave-8 F9: gates at OUTER if-level (was nested INSIDE the base
+{{- /* gates at OUTER if-level (was nested INSIDE the base
        vllm+tei guard, so optional URLs were silently accepted when the
        two base URLs were set). Now each URL check runs independently. */ -}}
 {{- $needTir := or .Values.ai.services.reranker.enabled .Values.ai.services.chatqna.enabled -}}

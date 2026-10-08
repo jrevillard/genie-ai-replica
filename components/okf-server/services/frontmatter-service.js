@@ -266,8 +266,20 @@ function extractJson(content) {
 
 async function teiEmbed(inputs) {
   const body = { inputs, truncate: true };
+  // David 2026-10-08: the remote TEI is HF-gated (same 401 path the
+  // OPEA TEI wrapper services have always used). Send Authorization
+  // Bearer with the same VLLM_API_KEY the local build propagates as
+  // HF_TOKEN into the OPEA embed service env (docker-compose.yaml:1215,
+  // 1293, 1524) — one credential, two header names (the okf-server
+  // service didn't have HF_TOKEN propagated before this fix because
+  // it owns the vLLM client, not the TEI one). Back-compat with any
+  // future HF_TOKEN-only env (the HUGGINGFACEHUB_API_TOKEN form the
+  // reranker uses at line 1432).
+  const headers = { 'Content-Type': 'application/json' };
+  const hfKey = process.env.HF_TOKEN || process.env.HUGGINGFACEHUB_API_TOKEN || VLLM_LLM_API_KEY;
+  if (hfKey) headers.Authorization = 'Bearer ' + hfKey;
   const fn = () =>
-    axios.post(`${TEI_EMBED_HOST}/embed`, body, { headers: { 'Content-Type': 'application/json' }, timeout: 30000 });
+    axios.post(`${TEI_EMBED_HOST}/embed`, body, { headers, timeout: 30000 });
   const resp = await withTeiRetry(fn, { endpoint: '/embed', batch_size: Array.isArray(inputs) ? inputs.length : 1 });
   // TEI returns either {data: [[...], ...]} (batched) or [...] depending on shape
   const out = resp.data && (resp.data.data || resp.data.embeddings || resp.data);

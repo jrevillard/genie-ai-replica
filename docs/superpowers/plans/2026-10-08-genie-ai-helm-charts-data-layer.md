@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the data tier of the GENIE.AI Helm chart: 4 new Helm `dependencies` (CloudNativePG, kube-arangodb, official Keycloak operator, sealed-secrets 2.20.0+), the rendered CRs (CNPG Postgres cluster for keycloak-db, ArangoDeployment, KeycloakRealm, Kong DB-less ConfigMap, 13 SealedSecret resources for the 14 required secrets minus the dropped `kongDbPassword`), plus the dependency-graph enforcement + ClusterProfile auto-detection hook. Establishes the pattern service-tier plans (3+) build on.
+**Goal:** Ship the data tier of the GENIE.AI Helm chart: 4 new Helm `dependencies` (CloudNativePG, kube-arangodb, official Keycloak operator, sealed-secrets 2.20.0+), the rendered CRs (CNPG Postgres cluster for keycloak-db, ArangoDeployment, KeycloakRealm, and a SealedSecret framework (4 CRs here; the rest ship with their consumers in Plans 3+). Kong is REMOVED — audit decision 7), plus the dependency-graph enforcement + ClusterProfile auto-detection hook. Establishes the pattern service-tier plans (3+) build on.
 
-**Architecture:** The umbrella chart pulls the four operators as Helm `dependencies` with `condition:` toggles. The chart renders the operator-managed CRs (Postgres Cluster, ArangoDeployment, KeycloakRealm, SealedSecret, ConfigMap) declaratively. A pre-install hook Job validates that the user's selected service tier (keycloak, arangodb, kong) has its declared data dependencies enabled — fails-fast at install time, not at first Pod crash. ClusterProfile is auto-detected from a namespace label when the pre-install Job runs, then inherited by templates via `--set clusterProfile=...`.
+**Architecture:** The umbrella chart pulls the four operators as Helm `dependencies` with `condition:` toggles. The chart renders the operator-managed CRs (Postgres Cluster, ArangoDeployment, KeycloakRealm, SealedSecret) declaratively. A pre-install hook Job validates that the user's selected service tier (keycloak, arangodb, kong) has its declared data dependencies enabled — fails-fast at install time, not at first Pod crash. ClusterProfile is auto-detected from a namespace label when the pre-install Job runs, then inherited by templates via `--set clusterProfile=...`.
 
-**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), CNPG operator (v1.30 / chart `~> 0.22.0`), kube-arangodb (`~> 1.4.5`), keycloak-operator (`~> 26.0.0`), sealed-secrets helm chart `~> 2.20.0` (controller v0.40.0), kind 1.32, kubectl 1.32+, kustomize 5.x.
+**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), CNPG operator (v1.30 / chart `~> 0.22.0`), kube-arangodb (`~> 1.4.5`), keycloak-operator (`~> 26.0.0`), sealed-secrets helm chart `~> 2.20.0` (controller v0.40.0), kind 1.33, kubectl 1.33+, kustomize 5.x.
 
 **Spec:** `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` — this plan implements §4 (operator deps), §5.1 (dependency-graph + pre-install hook), §5.2 (ClusterProfile auto-detect), §8 (concrete SealedSecret rendering of the 14 required secrets minus `kongDbPassword` since Kong goes DB-less per Q1a), §17 (data-tier entries in v1.0 manifest).
 
@@ -19,7 +19,7 @@
 - Commits in English using Conventional Commits.
 - No secrets in any committed file — only encrypted SealedSecret resources ship in Git.
 - Worktree path: `/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/k8s-migration/`. Branch: `feat/k8s-migration`.
-- Kong goes DB-less per Q1a discussion 2026-10-08 (drops `cnpg-kong-db.yaml`; adds Kong DB-less `ConfigMap`).
+- Kong is REMOVED (audit decision 7, user-confirmed 2026-10-08): Envoy Gateway owns the edge; no Kong templates anywhere.
 
 ## Review Focus
 
@@ -28,7 +28,7 @@ Five input-class concerns the spec implies but no Plan 2 task tests explicitly. 
 1. **`templates/hooks/...` directory is dead storage in Helm 3** — Helm 3 scans `templates/` recursively for `helm.sh/hook` annotations; a subdirectory named `hooks/` is irrelevant IF the file carries the annotation. **Pinned in Task 6 Step 1** — explicit `helm.sh/hook: pre-install` + `helm.sh/hook-weight: "-5"` annotations on the Job; validity test renders and asserts `kind: Job` shows up in output.
 2. **ClusterProfile auto-detection race** — namespace label write may not propagate to the Pod quickly; the Job checks label at runtime, decides profile, mutates Helm release. Race condition if release upgrade starts before label syncs. **Pinned in Task 7 Step 4** — Job has a 30s `for` loop polling the label; aborts cleanly if missing.
 3. **`ArangoDeployment` mode switch mid-life (single → cluster)** — kube-arangodb requires PVC re-allocation + new cluster initialization when transitioning from single-node to cluster mode. **Pinned in Task 9 Step 5** — task explicitly notes "single → cluster requires fresh `helm uninstall` + `helm install`; do not in-place upgrade" + cluster-mode test skipped in foundation CI (uses single mode default).
-4. **Kong DB-less misconfig: routes ConfigMap not loaded** — kong:8000 returns "no Route matched" if `KONG_DECLARATIVE_CONFIG` env not set pointing to the ConfigMap mount. **Pinned in Task 10 Step 4** — Deploy has a `lifecycle.preStop` + readiness check that fails-fast on bad config.
+4. ~~Kong DB-less misconfig~~ — moot: Kong REMOVED (decision 7). Edge routing/JWT/CORS/rate-limit are Envoy Gateway concerns (Plan 6).
 5. **`SealedSecret` re-encrypt on every cluster reboot** — sealed-secrets v0.40.0 30-day auto-rotation changes the cluster key. New SealedSecret resources committed with the OLD key silently fail to decrypt. **Pinned in Task 11 Step 5** — chart renders a `Job` on `helm.sh/hook: pre-install,pre-upgrade` that runs `kubeseal --check` (verifies the cluster's current public key matches the one used to encrypt committed secrets); fails the install if drift detected.
 
 ---
@@ -132,7 +132,7 @@ Expected: prints `OK: no data CRs rendered`.
 data:
   postgres:
     enabled: true
-    # CNPG Cluster resources for the keycloak-db; kong is DB-less (Q1a).
+    # CNPG Cluster resources for the keycloak-db; kong is REMOVED (decision 7).
     instances: 1                       # 3 for prod/staging via clusterProfile
     storageSize: 10Gi
   arangodb:
@@ -204,7 +204,6 @@ dependencyGraph:
       - arangodb
     frontend:
       - backend
-    kong: []                              # kong DB-less; no data deps
     documentRepository:
       - backend
     clamav: []
@@ -296,7 +295,7 @@ genieai.io/component: {{ .Values.component | default "umbrella" | quote }}
 {{- end -}}
 ```
 
-**Note**: the `servicePort` helper is **not added here**. It is a YAGNI candidate: every service has its own port and per-service port logic differs (TCP vs HTTP vs gRPC). Plan 3+ (service tier) adds service-specific helpers as needed rather than a generic helper that hides per-service specifics (Review Focus F4). The per-service pattern is: services.kong.port, services.backend.port, ..., each in `Values.services.<name>.port`, set in the per-env override file directly.
+**Note**: the `servicePort` helper is **not added here**. It is a YAGNI candidate: every service has its own port and per-service port logic differs (TCP vs HTTP vs gRPC). Plan 3+ (service tier) adds service-specific helpers as needed rather than a generic helper that hides per-service specifics (Review Focus F4). The per-service pattern is: services.backend.port, ..., each in `Values.services.<name>.port`, set in the per-env override file directly.
 
 - [ ] **Step 3: Confirm render of any umbrella template that uses the new helpers remains valid**
 
@@ -627,7 +626,6 @@ data:
       "services.backend.enabled": {{ .Values.services.backend.enabled | default true }},
       "services.frontend.enabled": {{ .Values.services.frontend.enabled | default true }},
       "services.documentRepository.enabled": {{ .Values.services.documentRepository.enabled | default true }},
-      "services.kong.enabled": {{ .Values.services.kong.enabled | default true }},
       "services.clamav.enabled": {{ .Values.services.clamav.enabled | default true }},
       "data.postgres.enabled": {{ .Values.data.postgres.enabled | default true }},
       "data.arangodb.enabled": {{ .Values.data.arangodb.enabled | default true }},
@@ -731,7 +729,7 @@ spec:
           # bitnami/kubectl ships kubectl + a minimal base image. alpine has
           # no kubectl; using it here would fail every install (Review
           # Focus F2).
-          image: bitnami/kubectl:1.32
+          image: bitnami/kubectl:1.33
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -1057,161 +1055,16 @@ git commit -m "feat(charts): ArangoDeployment (single default, cluster via clust
 
 ---
 
-## Task 10: Kong DB-less declarative ConfigMap + Deployment
+## Task 10: REMOVED — Kong (Envoy Gateway is the edge)
 
-**Files:**
-- Create: `charts/genieai-umbrella/templates/_services/kong-deployment.yaml` (Kong moved to Plan 2 because it depends on mode + uses declarative config)
-- Create: `charts/genieai-umbrella/templates/_services/kong-declarative-config.yaml`
+**No files. No steps.**
 
-**Interfaces:**
-- Consumes: `kong.mode` (default `dbless`), `services.kong.port` (default 8000).
-- Produces: 1 `Deployment` for Kong + 1 `ConfigMap` with declarative routes config.
+Kong is deleted from the chart (k8s-native-audit decision 7, user-confirmed 2026-10-08). Envoy Gateway (spec §9) owns the edge: L7 routing (`/api/*` → backend, `/` → frontend), JWT/OIDC via the native `envoy.filters.http.oauth2` filter, CORS, rate limiting. Consequences:
 
-- [ ] **Step 1: Run red-gate — no kong yet**
-
-Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: Deployment$" || echo "0"`
-Expected: prints `0`.
-
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_services/kong-declarative-config.yaml`**
-
-```yaml
-{{- if eq (.Values.kong.mode | default "dbless") "dbless" -}}
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ include "genieai-common.fullname" . }}-kong-declarative
-  namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "kong"))) | nindent 4 }}
-    app.kubernetes.io/component: kong
-data:
-  kong.yml: |
-    _format_version: "3.0"
-    services:
-      - name: backend
-        url: http://backend.{{ .Values.namespace }}.svc.cluster.local:3000
-        routes:
-          - name: api-routes
-            paths:
-              - /api/
-            strip_path: true
-            preserve_host: true
-    plugins:
-      - name: jwt
-      - name: rate-limiting
-        config:
-          minute: 100
-          hour: 1000
-{{- end -}}
-```
-
-- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_services/kong-deployment.yaml`**
-
-```yaml
-{{- $mode := .Values.kong.mode | default "dbless" -}}
-{{- if eq $mode "dbless" -}}
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ include "genieai-common.fullname" . }}-kong
-  namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "kong"))) | nindent 4 }}
-    app.kubernetes.io/component: kong
-spec:
-  replicas: {{ .Values.services.kong.replicas | default 1 }}
-  selector:
-    matchLabels:
-      {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "kong"))) | nindent 6 }}
-  template:
-    metadata:
-      labels:
-        {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "kong"))) | nindent 8 }}
-    spec:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 65534
-        seccompProfile:
-          type: RuntimeDefault
-      containers:
-        - name: kong
-          image: kong:3.7
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
-            capabilities:
-              drop:
-                - ALL
-          env:
-            - name: KONG_DATABASE
-              value: "off"
-            - name: KONG_DECLARATIVE_CONFIG
-              value: /etc/kong/kong.yml
-            - name: KONG_ADMIN_LISTEN
-              value: "off"
-            - name: KONG_PROXY_LISTEN
-              # Review Focus F4 fix — Kong's listen string parser rejects
-              # whitespace between the comma and the second listen.
-              # "8000, 8443 ssl" (no leading whitespace after comma) is valid.
-              value: "0.0.0.0:8000,0.0.0.0:8443 ssl"
-            # Review Focus #4 — readiness checks fail if config unparsable.
-            - name: KONG_PROXY_ERROR_TIMEOUT
-              value: "1000"
-          ports:
-            - name: proxy
-              containerPort: 8000
-            - name: proxy-ssl
-              containerPort: 8443
-          readinessProbe:
-            httpGet:
-              path: /status
-              port: 8100
-            initialDelaySeconds: 5
-            periodSeconds: 5
-            failureThreshold: 5
-          volumeMounts:
-            - name: kong-config
-              mountPath: /etc/kong
-              readOnly: true
-      volumes:
-        - name: kong-config
-          configMap:
-            name: {{ include "genieai-common.fullname" . }}-kong-declarative
-{{- end -}}
-```
-
-- [ ] **Step 4: Render and verify**
-
-Run: `helm template test charts/genieai-umbrella -n genieai | grep -E "^kind: (Deployment|ConfigMap)$" | sort | uniq`
-Expected: prints both `ConfigMap` (kong-declarative) and `Deployment` (kong).
-
-- [ ] **Step 5: Verify `KONG_DECLARATIVE_CONFIG` env points at the mounted ConfigMap path**
-
-```bash
-helm template test charts/genieai-umbrella -n genieai | \
-  python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
-  dep = next(d for d in docs if d and d.get('kind')=='Deployment' and d['metadata']['name'].endswith('-kong')); \
-  env = next(e for e in dep['spec']['template']['spec']['containers'][0]['env'] if e['name']=='KONG_DECLARATIVE_CONFIG'); \
-  assert env['value'] == '/etc/kong/kong.yml', env; \
-  print('PASS')"
-```
-
-Expected: prints `PASS`.
-
-- [ ] **Step 6: `helm lint --strict`**
-
-Run: `helm lint charts/genieai-umbrella --strict`
-Expected: 0 errors.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add charts/genieai-umbrella/templates/_services/kong-declarative-config.yaml charts/genieai-umbrella/templates/_services/kong-deployment.yaml
-git commit -m "feat(charts): Kong DB-less Deployment + declarative routes ConfigMap"
-```
-
----
+- No Kong Deployment, no declarative `kong.yml` ConfigMap, no kong-db anywhere.
+- `keycloak-db` remains the ONLY Postgres cluster (unchanged).
+- CORS configuration moves to Envoy Gateway policy — Plan 6.
+- Service inventory: 28 (was 29).
 
 ## Task 11: SealedSecret framework (4 CRs in Plan 2; remaining 9 secrets ship in Plans 3+)
 
@@ -1349,7 +1202,7 @@ spec:
           # refused to materialise the underlying K8s Secret — pods
           # referencing that Secret will start failing. We exit 1 so the
           # install/upgrade is blocked and the operator re-encrypts.
-          image: bitnami/kubectl:1.32
+          image: bitnami/kubectl:1.33
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -1530,7 +1383,7 @@ Foundation plan + Plan 2 (data layer) complete. Next: Plan 3 (service tier Group
 | Chart | Status | Purpose |
 |---|---|---|
 | `genieai-common` | foundation | Library chart (templates + helpers) |
-| `genieai-umbrella` | foundation + Plan 2 | Single-install chart with data layer (CNPG, kube-arangodb, keycloak, sealed-secrets), Kong DB-less |
+| `genieai-umbrella` | foundation + Plan 2 | Single-install chart with data layer (CNPG, kube-arangodb, keycloak, sealed-secrets) |
 
 ## Other directories
 
@@ -1637,7 +1490,7 @@ After writing all 13 tasks, run this checklist against the spec.
 1. `templates/hooks/` direct storage dead without annotation → Task 6 Step 5 (`helm.sh/hook: pre-install` annotation explicit; Step 5 asserts via Python parse).
 2. ClusterProfile auto-detection race → Task 7 Step 2 (30s polling loop).
 3. ArangoDB single → cluster in-place upgrade fails → Task 9 Step 5 (docs/charts/arangodb-mode-migration.md written).
-4. Kong DB-less misconfig not fail-fast → Task 10 Step 5 (Python parse verifies `KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml`).
+4. ~~Kong DB-less misconfig~~ — moot: Kong REMOVED (decision 7); edge concerns move to Envoy Gateway (Plan 6).
 5. SealedSecret re-encrypt drift after cluster key rotation → Task 11 Step 4 (pre-upgrade Job + `kubeseal --check` script reference).
 
 All five covered. The helm test for #1 (Task 6 Step 5) doubles as runtime test in CI.
@@ -1656,7 +1509,7 @@ All five covered. The helm test for #1 (Task 6 Step 5) doubles as runtime test i
 
 ## What's next after Plan 2
 
-- Plan 3: service tier Group 5 (stateless app: backend + frontend + document-repository + nginx + clamav + gateway; kong shipped in Plan 2)
+- Plan 3: service tier Group 5 (stateless app: backend + frontend + document-repository + nginx + clamav + gateway)
 - Plan 4: observability (vmoperator VMSingle/Cluster/VLSingle/VTCluster + OTel operator + serviceMonitors)
 - Plan 5: AI/ML (vLLM + TEI + OPEA microservices + GPU operator)
 - Plan 6: per-env Kustomize overlays + GitOps sync + ingress (Envoy Gateway + cert-manager)

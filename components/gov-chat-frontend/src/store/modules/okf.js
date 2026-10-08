@@ -659,6 +659,80 @@ const actions = {
   },
 
   /**
+   * Story 1.7 (2026-10-08) — TWO-WRITE save for the per-repo frontmatter
+   * (the chip UI's "Save tags" action). Writes the approved set to BOTH
+   * the curator-facing index.md YAML block (via concept PATCH, which the
+   * server's patchConceptFields path handles) AND the canonical
+   * okf_repositories.frontmatter doc field (via repo PATCH, which the
+   * service's writeFrontmatterToRepoDoc handles). The publish gate reads
+   * the doc field; the curator edits the YAML.
+   *
+   * Order matters: the YAML write first, the doc field second. If the
+   * YAML write fails, do NOT touch the doc field (avoids divergence). If
+   * the doc field write fails after a successful YAML write, surface the
+   * partial-success error and let the curator retry (both writes are
+   * idempotent).
+   *
+   * Pre-save flush: the caller (FrontmatterPanel) MUST call the editor's
+   * flushPendingSave() before this action so the editor's debounced
+   * autosave does not overwrite the wizard's just-saved YAML with stale
+   * uncommitted draft text.
+   */
+  async saveFrontmatter({ commit, dispatch, state }, { repoId, shape, actor } = {}) {
+    if (!repoId || !shape) return { ok: false, code: 'VALIDATION_ERROR' };
+    try {
+      const { mergeFrontmatterIntoIndexMarkdown } = await import(
+        /* webpackChunkName: "frontmatter-merge" */ '../../services/frontmatterMerge'
+      );
+      const repoOkfService = (await import(/* webpackChunkName: "repo-okf" */ '../../services/repoOkfService')).default;
+      const conceptService = (await import(/* webpackChunkName: "concept" */ '../../services/conceptService')).default;
+      const frontmatterService = (await import(/* webpackChunkName: "fm" */ '../../services/frontmatterService')).default;
+
+      // 1. Read current index.md to merge into the existing YAML.
+      const indexDoc = await conceptService.get(repoId, 'index');
+      if (!indexDoc) return { ok: false, code: 'CONCEPT_NOT_FOUND', step: 'get' };
+      // conceptService.get returns { frontmatter, body, ... } (the parsed
+      // doc). Reconstruct the markdown via gray-matter so the
+      // helper's matter() parse is symmetric.
+      const matter = (await import(/* webpackChunkName: "gm" */ 'gray-matter')).default || (await import('gray-matter'));
+      const indexMarkdown = indexDoc.frontmatter
+        ? matter.stringify(indexDoc.body || '', indexDoc.frontmatter)
+        : (indexDoc.body || '');
+
+      // 2. Build the new index.md with the approved frontmatter block
+      //    written in. Preserves the rest of the YAML + the body.
+      const nextMarkdown = mergeFrontmatterIntoIndexMarkdown(indexMarkdown, shape);
+
+      // 3. PATCH the index concept (writes the YAML).
+      const yamlResult = await dispatch('patchConcept', {
+        repoId,
+        conceptId: 'index',
+        markdown: nextMarkdown
+      });
+      if (!yamlResult || !yamlResult.ok) {
+        return { ok: false, code: 'PATCH_FAILED', step: 'yaml', error: yamlResult };
+      }
+
+      // 4. PATCH the repo doc (writes okf_repositories.frontmatter —
+      //    the canonical store the publish gate reads at
+      //    lifecycle-service.js:618).
+      const docResult = await frontmatterService.patchFrontmatter(repoId, shape);
+      // patchFrontmatter returns the doc field's summary (or 4xx on
+      // validation failure). Treat any 2xx as success.
+
+      return { ok: true, step: 'done', yaml: yamlResult, doc: docResult };
+    } catch (err) {
+      commit('setError', err.message || 'saveFrontmatter failed');
+      return {
+        ok: false,
+        code: err && err.code ? err.code : 'SAVE_FAILED',
+        step: err && err.step ? err.step : 'unknown',
+        message: err && err.message
+      };
+    }
+  },
+
+  /**
    * Re-split from source: deletes all concepts + graph, re-ingests per mode.
    * Refreshes the concept list afterwards (the old rows are all stale).
    */

@@ -30,7 +30,7 @@
 | Obs | App instrumentation | manual SDK init (`tracing.js`, `tracing.py`) | **deviation** | operator auto-instrumentation (`Instrumentation` CR) REJECTED: cannot reproduce the product span taxonomy (`dataprep.llm.label_batch`, `with_span`, …) the dashboards depend on. Deliberate, documented. |
 | Ingress | Edge | Envoy Gateway (`Gateway`/`HTTPRoute` — Gateway API) | api-native | v1.9; K8s 1.33+ prerequisite; research docs/charts/envoy-gateway-state-of-art-2026q4.md |
 | Ingress | Request tracing at edge | Envoy tracing policy (Gateway API extension) | api-native | replaces Kong OTel plugin |
-| Ingress | Kong | opt-in plug-point (default off) | chart-tier | **pending user confirm** — demotion per Envoy research |
+| Ingress | ~~Kong~~ **REMOVED** (decision 7) | — | — | Envoy Gateway covers L7 routing/JWT/CORS/rate-limit; Kong deleted from chart + inventory (29 → 28) |
 | App | SPA static server (nginx) | chart-tier Deployment | chart-tier | acceptable: it is a static file server; no operator exists worth its weight |
 | App | backend / documentRepository / clamav / Group 6 AI services | service-factory Deployments | api-native | the product itself — bespoke by nature, standard APIs used throughout (PDB, NetworkPolicy, probes) |
 | App | GPU | NVIDIA GPU Operator | operator-native | Plan 5 |
@@ -40,12 +40,13 @@
 
 ## Decisions log
 
-1. **tempo-proxy removed** (2026-10-08). VT ships Tempo HTTP API; Grafana Jaeger datasource points at `vtraces.<ns>.svc:10428` directly. Service count 30 → 29; Group 1 = 5.
+1. **tempo-proxy removed** (2026-10-08). The original tool existed for a REAL reason (`tools/tempo-proxy/main.go`: path translation `/select/jaeger/api/*` ↔ `/api/*` + multi-service aggregation). Native replacement per the official VT Grafana guide: Jaeger datasource URL `http://vtraces.<ns>:10428/select/jaeger` — the prefix does the translation. VT ≥ 0.9.4 additionally offers the Tempo datasource + TraceQL (`/select/tempo`). Multi-service aggregation re-verified in the migration checklist. Service count 30 → 29 (then 28 after decision 7).
 2. **grafana-operator adopted** (2026-10-08). Official org, v5 (chart 5.22.x), CR-managed instances/datasources/dashboards. Dashboards port as `GrafanaDashboard` CRs from the existing 9 JSON files.
 3. **Alerting → VMRule/VMAlertmanager CRs** (2026-10-08). Grafana-internal rules are not native; vmalert is the operator-native alerting path.
 4. **Auto-instrumentation rejected** (2026-10-08). Span taxonomy is product semantics; auto-injection would silently drop it.
 5. **VLAgent rejected** (2026-10-08). PII redaction + metadata stamping must stay in ONE place (gateway collector).
 6. **Manual SDK init retained** (2026-10-08). Same rationale as 4.
+7. **Kong removed** (2026-10-08, user-confirmed). Envoy Gateway owns the edge: `/api/*` → backend, `/` → frontend, JWT/OIDC (`envoy.filters.http.oauth2`), CORS, rate limiting. No Kong Deployment, no declarative `kong.yml`, no kong-db. K8s minimum bumped 1.32 → **1.33** (Envoy Gateway v1.9 matrix). Service count 29 → 28; Group 5 = 5.
 
 ## Review rule
 

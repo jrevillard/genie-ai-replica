@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the stateless-app tier of the GENIE.AI Helm chart: backend (Node.js BFF), frontend (Vue SPA), document-repository (file upload service), nginx (reverse proxy), clamav (AV scanner). Kong was already rendered in Plan 2 (DB-less). Establishes the per-service template pattern that Plans 4-6 reuse for observability, AI/ML, and ingress services.
+**Goal:** Ship the stateless-app tier of the GENIE.AI Helm chart: backend (Node.js BFF), frontend (Vue SPA), document-repository (file upload service), nginx (reverse proxy), clamav (AV scanner). Kong is REMOVED from the chart (k8s-native-audit decision 7) — Envoy Gateway is the single edge; nginx proxies `/api/` to the backend directly. Establishes the per-service template pattern that Plans 4-6 reuse for observability, AI/ML, and ingress services.
 
 **Architecture:** Five Deployment + Service + NetworkPolicy pairs under `charts/genieai-umbrella/templates/_services/<name>/`. Each service inherits from a shared template helper (`genieai-common.componentLabel` + `genieai-common.serviceSelector`) plus an inline `secrets` reference list. NetworkPolicies enforce default-deny with explicit allowlists (cross-tier: backend → arangodb; ingress → frontend; etc.). PodDisruptionBudget generated for any service with `replicas >= 2`. Per-service SealedSecret resources for the 3 Group-5 secrets from spec §8.
 
-**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), kind 1.32, kubectl 1.32+, kustomize 5.x, CNPG Cluster (from Plan 2) reachable at `keycloak-db.<namespace>.svc.cluster.local:5432`, ArangoDB (from Plan 2) at `arangodb-single.<namespace>.svc.cluster.local:8529`, Kong DB-less deployment (from Plan 2) at `kong-proxy.<namespace>.svc.cluster.local:8000`.
+**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), kind 1.33, kubectl 1.33+, kustomize 5.x, CNPG Cluster (from Plan 2) reachable at `keycloak-db.<namespace>.svc.cluster.local:5432`, ArangoDB (from Plan 2) at `arangodb-single.<namespace>.svc.cluster.local:8529.
 
 **Spec:** `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` — this plan implements §5 per-service entry shape (extended), §6 ingress view (nginx as reverse proxy in front of frontend), §7 Group 5 + cross-tier NetworkPolicy defaults, §8 Group-5 SealedSecret resources, §17 service-tier entries in v1.0 manifest.
 
@@ -28,7 +28,7 @@ Five input-class concerns the spec implies but no Plan 3 task tests explicitly.
 
 1. **Backend envFrom secret ref resolution** — backend env references keycloak, arangodb, jwt, huggingFaceHubToken; if any SealedSecret resource fails to materialise (controller drift, decryption error), backend pod crashes with missing-env. **Pinned in Task 3 Step 6** — render asserts each env secret name maps to a real SealedSecret resource the chart ships.
 2. **NetworkPolicy egress to keycloak-db CNPG Cluster** — backend needs to reach Postgres on tcp:5432. Default-deny catches it unless the NetworkPolicy's `egress` block has the cluster IP. **Pinned in Task 3 Step 5** — chart-rendered NetworkPolicy allows egress to `app.kubernetes.io/name=keycloak-db` + port 5432.
-3. **CORS for frontend SPA** — frontend (`vue`) calls Kong (`/api/*`) on a different origin if ingress rewriting changes path. CORS preflight needed. Chart doesn't ship a CORS config today; kong's DB-less config sets permissive CORS by default, but explicit `cors_origins` value lets operators lock it down. **Pinned in Task 6 Step 5** — Kong declarative ConfigMap adds explicit `cors_origins` list derived from `ingress.host`.
+3. **CORS for frontend SPA** — the SPA calls `/api/*`; if the edge splits origins, preflight needs explicit `Access-Control-Allow-Origin`. CORS lives at Envoy Gateway (policy derived from `ingress.host`) since Kong is REMOVED (decision 7). **Pinned in Plan 6** — its render gate asserts the Gateway CORS policy carries explicit origins.
 4. **clamav sidecarity** — clamav is a small AV scanner used by document-repository only. If `services.clamav.enabled: true` but `services.documentRepository.enabled: false`, clamav runs alone. **Pinned in Task 5 Step 4** — NetworkPolicy allows ingress from `app.kubernetes.io/component: documentRepository`; no other consumer.
 5. **PDB minAvailable math** — for `replicas: 1` services, `minAvailable: 1` blocks voluntary disruptions, defeating rolling restart. **Pinned in Task 8 Step 4** — chart only emits PDB when `replicas >= 2`.
 
@@ -53,7 +53,7 @@ Expected: prints `0`.
 ```yaml
 # Plan 3 — service tier Group 5 (stateless app)
 # Per spec §7: backend, frontend, documentRepository, nginx, clamav.
-# Kong was rendered in Plan 2 (DB-less, ahead of this group per Q1a).
+# Kong is REMOVED (decision 7); Envoy Gateway is the edge.
 #
 # Per-service entry shape (matches spec §5):
 #   services.<name>:
@@ -301,7 +301,6 @@ spec:
           {{- /*
             Review Focus F1 fix — upstream images ship with fixed UIDs and
             need writable scratch dirs:
-              kong:3.7          UID 1000  /tmp + /usr/local/kong writable
               nginx-unprivileged  UID  101  /var/cache/nginx + /var/run
               clamav:1.3         UID  100
               curlimages         UID  1000
@@ -310,7 +309,7 @@ spec:
             when `services.<name>.securityContext` is unset in values.
 
             Operators that ship custom UIDs set:
-              services.kong.securityContext:
+              services.backend.securityContext:
                 runAsNonRoot: true
                 runAsUser: 1000
                 allowPrivilegeEscalation: false
@@ -418,8 +417,8 @@ spec:
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "backend"))) | nindent 4 }}
 ---
-# Default-deny + allowlist: ingress from kong (or any same-namespace pod
-# carrying app.kubernetes.io/component=kong); egress to arangodb +
+# Default-deny + allowlist: ingress from the edge (Envoy Gateway pods,
+# component=ingress) + documentRepository; egress to arangodb +
 # keycloak-db CNPG + keycloak + DNS. Review Focus #2.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -439,7 +438,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              genieai.io/component: kong
+              genieai.io/component: ingress
       - podSelector:
             matchLabels:
               genieai.io/component: documentRepository
@@ -602,14 +601,14 @@ spec:
       ports:
         - protocol: UDP
           port: 53
-    # Kong (frontend → /api/* via Kong, reverse path)
+    # Backend BFF (frontend → /api/*; Envoy Gateway is the edge)
     - to:
         - podSelector:
             matchLabels:
-              genieai.io/component: kong
+              genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: 8000
+          port: 3000
 {{- end -}}
 ```
 
@@ -829,7 +828,7 @@ spec:
 - [ ] **Step 5: Render all five Group 5 services**
 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: Deployment$"`
-Expected: prints `6` (kong from Plan 2 + 5 Group 5 services).
+Expected: prints `5` (the five Group-5 services).
 
 - [ ] **Step 6: `helm lint --strict`**
 
@@ -890,9 +889,9 @@ data:
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
           proxy_set_header X-Forwarded-Proto $scheme;
         }
-        # API → Kong (DB-less — Plan 2)
+        # API → backend BFF (Envoy Gateway is the edge; nginx proxies internally)
         location /api/ {
-          proxy_pass http://kong:8000;
+          proxy_pass http://backend:3000;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -938,69 +937,11 @@ git commit -m "feat(charts): nginx.conf ConfigMap (mount wiring deferred to Plan
 
 ---
 
-## Task 6: Update Kong declarative ConfigMap with explicit CORS origins
+## Task 6: REMOVED — Kong CORS (moved to Envoy Gateway)
 
-**Files:**
-- Modify: `charts/genieai-umbrella/templates/_services/kong-declarative-config.yaml` (from Plan 2 Task 10)
+**No files. No steps.**
 
-**Interfaces:**
-- Consumes: `services.backend.port + ingress.host` (Plan 6).
-- Produces: `cors_origins` list in kong.yml.
-
-- [ ] **Step 1: Read current kong-declarative-config.yaml**
-
-Run: `cat charts/genieai-umbrella/templates/_services/kong-declarative-config.yaml`
-Expected: shows existing config from Plan 2.
-
-- [ ] **Step 2: Add explicit CORS to kong-declarative-config.yaml plugins section**
-
-Find the `plugins:` block in `data.kong.yml:` and replace with:
-
-```yaml
-  plugins:
-    - name: jwt
-    - name: rate-limiting
-      config:
-        minute: 100
-        hour: 1000
-    # Review Focus #3 — explicit CORS origins derived from ingress.host so
-    # the SPA at / can call /api/* without preflight failures. operators
-    # override `values.services.corsOrigins` per-env for additional hosts.
-    - name: cors
-      config:
-        origins:
-          - https://{{ .Values.ingress.host | default "genieai.local" }}
-          - http://localhost
-        methods:
-          - GET
-          - POST
-          - PUT
-          - DELETE
-          - OPTIONS
-        headers:
-          - Authorization
-          - Content-Type
-        credentials: true
-```
-
-- [ ] **Step 3: Render and verify CORS plugin**
-
-Run: `helm template test charts/genieai-umbrella -n genieai | grep -A 5 "name: cors"`
-Expected: prints the cors plugin block.
-
-- [ ] **Step 4: `helm lint --strict`**
-
-Run: `helm lint charts/genieai-umbrella --strict`
-Expected: 0 errors.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add charts/genieai-umbrella/templates/_services/kong-declarative-config.yaml
-git commit -m "feat(charts): explicit CORS origins on Kong declarative config"
-```
-
----
+Kong is removed from the chart (audit decision 7). CORS origins/headers are configured as an Envoy Gateway policy in Plan 6 — not as a Kong plugin. Review Focus #3 transfers to Plan 6: its render gate asserts the Gateway CORS policy carries explicit origins derived from `ingress.host`.
 
 ## Task 7: Group 5 SealedSecrets (email, keycloak-client, huggingface)
 
@@ -1341,7 +1282,7 @@ Each service carries: Deployment, Service, default-deny NetworkPolicy, envFrom s
 
 PDB emitted only when `replicas >= 2` (avoids drain block on singletons; backend in prod-profile is the first qualifying service).
 
-CORS lock-down on Kong declarative config: explicit `origins` from `ingress.host`; permissive defaults overridden via `values.services.corsOrigins` per env.
+CORS is configured at Envoy Gateway (Plan 6 policy), origins derived from `ingress.host` (Kong removed — decision 7).
 EOF
 
 git add charts/genieai-umbrella/README.md
@@ -1354,7 +1295,7 @@ git commit -m "docs(charts): genieai-umbrella README with Group 5 status table"
 helm template test charts/genieai-umbrella -n genieai | grep "^kind:" | sort | uniq -c | sort -rn
 ```
 
-Expected: confirms 8 Deployments (kong + 5 Group-5 + 2 Plan-2 data + namespace), 8 Services, multiple NetworkPolicies, multiple SealedSecrets.
+Expected: confirms 7 Deployments (5 Group-5 + Plan-2 pre-Install Jobs are not Deployments), 7 Services, multiple NetworkPolicies, multiple SealedSecrets.
 
 - [ ] **Step 4: Final `helm lint --strict` + `ct lint` (per the foundation plan CI gate)**
 
@@ -1380,7 +1321,7 @@ After writing all 10 tasks, run this checklist against the spec.
 | §7 network policy defaults | Tasks 3, 4 (each service template) |
 | §8 Group 5 SealedSecrets (spec §8 F14 mapping table) | Task 7 |
 | §9 nginx as reverse proxy | Task 5 (ConfigMap ready for Plan 6 wiring) |
-| §6 Kong DB-less CORS config | Task 6 |
+| §6 CORS via Envoy Gateway policy | Plan 6 (Task 6 tombstoned — Kong removed) |
 | §13 PDB pattern (only when replicas >= 2) | Task 8 |
 | §17 service-tier entries in v1.0 manifest | Tasks 1-9 |
 | Plan 3 cross-tier NetworkPolicy (backend → arangodb → keycloak → redis) | Tasks 3, 4 |
@@ -1400,7 +1341,7 @@ Sections NOT covered by this plan (deferred):
 
 1. Backend envFrom secret ref resolution → Task 3 Step 4 (verifies each backend `secrets:` entry references a SealedSecret the chart ships).
 2. NetworkPolicy egress to keycloak-db CNPG Cluster → Task 3 Step 5 (Python parse of egress to assert keycloak-db target).
-3. CORS explicit origins on Kong → Task 6 Step 3 (renders cors plugin block).
+3. CORS explicit origins at the edge → Plan 6 Envoy Gateway CORS policy render gate (Task 6 tombstoned).
 4. clamav NetworkPolicy ingress-only-from-documentRepository → Task 4 Step 4 (clamav template).
 5. PDB minAvailable math → Task 8 Step 4-5 (renders empty + prod profile scenarios).
 
@@ -1413,8 +1354,8 @@ All five covered with red-gate validators.
 ## Plan Stats
 
 - **Tasks:** 10
-- **Files created:** 9 (4 service templates, 1 configmap, 3 secrets/templates, 1 test pod) + values.yaml diff
-- **Files modified:** 3 (values.yaml, kong-declarative-config, README ×2)
+- **Files created:** 8 (4 service templates, 1 configmap, 3 secrets/templates, 1 test pod) + values.yaml diff
+- **Files modified:** 2 (values.yaml, README ×2)
 - **Commits planned:** 10
 - **Estimated review surface:** ~700 lines added (5 service manifests + 3 helpers + 1 test pod + README updates)
 

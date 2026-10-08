@@ -781,7 +781,13 @@ function frontmatterToHeadText(fm) {
 // set). The retriever, the publish gate, and the UI all call this.
 async function readFrontmatterFromRepoDoc(repoId) {
   const db = await dbService.getConnection();
-  const rows = (
+  // AWAIT-BUGFIX (2026-10-08, caught by the Story 1-8 live smoke): the
+  // outer await was missing — `rows` was the PROMISE from cursor.all(),
+  // `rows[0]` was always undefined, and this reader returned null for
+  // EVERY repo (publish read the same field through this shape and
+  // silently skipped the frontmatter gate; head/rebuild 409'd with
+  // NO_FRONTMATTER while the doc demonstrably had frontmatter).
+  const rows = await (
     await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter', { rid: repoId })
   ).all();
   return (rows && rows[0]) || null;
@@ -929,6 +935,9 @@ module.exports = {
   // Story 1.7a: vectorized head for retriever routing
   buildVectorizedHead,
   frontmatterToHeadText,
+  // Story 1-8: shared TEI embed primitive (head-test-service embeds
+  // queries with the same endpoint/auth/retry as tag embedding).
+  teiEmbed,
   // reader
   getFrontmatter,
   getFrontmatterSummary,

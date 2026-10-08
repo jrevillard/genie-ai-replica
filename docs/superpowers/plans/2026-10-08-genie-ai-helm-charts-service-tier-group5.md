@@ -294,7 +294,7 @@ spec:
           envFrom:
             {{- range $svc.secrets }}
             - secretRef:
-                name: {{ $.ctx.Values.namespace }}-{{ .name }}
+                name: {{ $ctx.Values.namespace }}-{{ .name }}
             {{- end }}
           resources:
             {{- toYaml $svc.resources | nindent 12 }}
@@ -807,14 +807,20 @@ spec:
       ports:
         - protocol: UDP
           port: 53
-    # Update definitions for virus DB
-    - to: []
+    # Review Focus F11 fix — `to: []` (empty array) was interpreted as
+    # match-any, which would let clamav hit any IP on 80/443. We restrict
+    # egress to the canonical database.clamav.net mirror set
+    # (overridable per env via values.clamav.dbUpdateCIDRs). DNS-based
+    # mirror dispatch from a configurable allowlist is the sovereign-
+    # safe pattern.
+    {{- $dbCDN := .Values.services.clamav.dbUpdateCDNs | default list "database.clamav.net" "clamav-mirror.example.org" }}
+    - to:
+        {{- range $dbCDN }}
+        - host: {{ . | quote }}
+        {{- end }}
       ports:
         - protocol: TCP
           port: 80
-    # HTTPS for update fetch (clamav needs to reach out to download DB)
-    - to: []
-      ports:
         - protocol: TCP
           port: 443
 {{- end -}}

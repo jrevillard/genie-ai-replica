@@ -27,6 +27,32 @@ jest.mock('../services/concept-meta-service', () => ({
   requeueRepoForRedrain: jest.fn().mockResolvedValue(0),
   stampRepoGraphName: jest.fn().mockResolvedValue(0)
 }));
+// Story 1.6/1.7 (2026-10-08): the publish path gained the frontmatter
+// gate (topic>=3 + forbidden>=1 → write-through → vectorized head).
+// Mock the service so the gate passes without TEI/LLM round-trips —
+// the gate's own unit behavior is covered by frontmatter tests and
+// the live validation; these tests assert mint/export/serving.
+jest.mock('../services/frontmatter-service', () => ({
+  writeFrontmatterToRepoDoc: jest.fn().mockResolvedValue({ topic: ['t1'], forbidden: ['f1'] }),
+  buildVectorizedHead: jest.fn().mockResolvedValue({ dim: 4, vector: [0, 1, 0, 0] }),
+  suggestTags: jest.fn().mockResolvedValue({
+    topic: ['alpha', 'beta', 'gamma'],
+    entity: [],
+    scope: 'demo',
+    forbidden: ['excluded-topic'],
+    summary: 'demo summary',
+    keyword: []
+  }),
+  validateFrontmatter: jest.fn().mockResolvedValue({ validated: true, inconsistencies: [] }),
+  readFrontmatterFromRepoDoc: jest.fn().mockResolvedValue(null),
+  FrontmatterError: class FrontmatterError extends Error {
+    constructor(code, message, status) {
+      super(message);
+      this.code = code;
+      this.status = status;
+    }
+  }
+}));
 jest.mock('../services/version-service', () => ({
   mintVersion: jest.fn().mockResolvedValue({ bundle_version: 1, okf_tag: 'okf:v1' })
 }));

@@ -391,7 +391,13 @@ export default {
   display: grid;
   grid-template-columns: 240px 1fr 280px;
   gap: var(--space-md);
-  min-height: 600px;
+  /* LAYOUT FIX (2026-10-08): the embedded editor + wizard footer need
+     a taller floor. The previous 600px was set when the step body
+     was a single component; the editor's markdown preview + PII
+     panel + frontmatter YAML render much taller, and the step
+     area (now overflow: auto) needs room to grow before scrolling. */
+  min-height: 70vh;
+  height: 70vh;
   font-family: var(--font-body);
 }
 .okf-wizard__rail {
@@ -399,6 +405,11 @@ export default {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-md);
+  /* LAYOUT FIX (2026-10-08): the right rail (repo context card) and
+     left rail (stepper) scroll inside the wizard's bounded height
+     so neither overflows past the footer. */
+  overflow-y: auto;
+  min-height: 0;
 }
 .okf-wizard__center {
   display: flex;
@@ -408,10 +419,23 @@ export default {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-md);
+  /* LAYOUT FIX (2026-10-08, David): the step area can host a tall
+     sub-component (e.g. the embedded editor with its markdown
+     preview + PII panel + frontmatter YAML). Without a height cap,
+     the step's content overflows the viewport and the wizard
+     footer (Back / Continue / step counter) ends up overlapping
+     the content visually. The center fills the available height
+     (min-height: 0 lets the flex child shrink), the step area
+     scrolls inside its box, and the footer stays at the bottom
+     with a solid background. */
+  min-height: 0;
+  overflow: hidden;
 }
 .okf-wizard__step {
   flex: 1 1 auto;
   min-height: 320px;
+  max-height: 100%;
+  overflow: auto;
 }
 .okf-wizard__footer {
   display: flex;
@@ -419,6 +443,10 @@ export default {
   align-items: center;
   border-top: 1px solid var(--border);
   padding-top: var(--space-md);
+  /* LAYOUT FIX (2026-10-08): solid background so the footer doesn't
+     bleed into any content that scrolls behind it. */
+  background: var(--surface);
+  flex: 0 0 auto;
 }
 .okf-wizard__step-counter {
   color: var(--muted);

@@ -176,8 +176,12 @@ describe('runSuite + summarizeRun', () => {
   });
 
   it('reports negative metrics as null in a one-repo universe (never fake 100%)', async () => {
+    // Story 1-8a — the gate makes negatives meaningful in any universe. A
+    // legacy response (no head_claimed) in a one-repo universe still
+    // cannot fail-select (the rank-gated floor is the honest output);
+    // the gate-era path is exercised in the two tests below.
     const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
-    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.7, 0)); // no siblings
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.7, 0)); // legacy: no head_claimed field
     const run = await svc.runSuite('me', suite._key, {});
     const s = run.payload.summary;
     expect(s.sibling_count).toBe(0);
@@ -185,6 +189,37 @@ describe('runSuite + summarizeRun', () => {
     expect(s.negative_evaluatable).toBe(0);
     expect(s.negative_pass_rate).toBeNull();
     expect(s.avg_margin).toBeNull(); // solo-race margin is an artifact
+  });
+
+  // ─── Story 1-8a: the gate makes negatives meaningful in ANY universe ───
+  it('gate-era: a negative PASSES in a one-repo universe when the head is suppressed', async () => {
+    // David's ruling: "fun in Indonesia" → head_claimed=false → negative
+    // passes (works solo). Same head-claimed, sibling_count=0.
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    const posCall = { n: 0 };
+    headTestService.routingTest.mockImplementation(async () => {
+      posCall.n += 1;
+      return posCall.n === 1 ? fakeResult(true, 0.7, 0, 'claimed') : fakeResult(false, 0.05, 0, 'suppressed');
+    });
+    const run = await svc.runSuite('me', suite._key, {});
+    const s = run.payload.summary;
+    expect(s.sibling_count).toBe(0);
+    expect(s.positive_pass_rate).toBe(1);
+    // The negative now reports a pass rate (gate works solo, not the legacy
+    // "evaluatable = 0 with no siblings" floor).
+    expect(s.negative_evaluatable).toBe(1);
+    expect(s.negative_pass_rate).toBe(1);
+    expect(s.pass_rate).toBe(1);
+  });
+
+  it('gate-era: a negative FAILS when the head claims it (borderline IN — genetics ruling)', async () => {
+    const suite = await seedSuite({ positive: 0, negativeForbidden: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.05, 0, 'claimed'));
+    const run = await svc.runSuite('me', suite._key, {});
+    const s = run.payload.summary;
+    expect(s.negative_evaluatable).toBe(1);
+    expect(s.negative_passed).toBe(0);
+    expect(s.negative_pass_rate).toBe(0);
   });
 
   it('captures per-query errors without failing the whole run', async () => {
@@ -228,22 +263,33 @@ describe('listRuns', () => {
 
 // ---------- helpers ----------
 
-function fakeResult(underTestWins, margin, siblingCount) {
+function fakeResult(underTestWins, margin, siblingCount, gate = null) {
   const winner = underTestWins ? 'me' : 'sib1';
+  // gate: null = legacy response (pre-1-8a); 'claimed' | 'suppressed' = gate era.
+  const claimed = gate === 'claimed' ? true : gate === 'suppressed' ? false : null;
   return {
     query: '',
     embedded_with: 'test',
-    under_test: { repo_id: 'me', name: 'NCD Information', head_score: 0.5, head_rank: underTestWins ? 1 : 2 },
+    under_test: {
+      repo_id: 'me',
+      name: 'NCD Information',
+      head_score: 0.5,
+      head_rank: underTestWins ? 1 : 2,
+      forbidden_cosine: gate ? 0.45 : null,
+      head_margin: gate ? (claimed ? 0.05 : -0.02) : null,
+      head_claimed: claimed
+    },
     siblings: Array.from({ length: siblingCount }, (_, i) => ({
       repo_id: i === 0 ? 'sib1' : 'sib2',
       name: i === 0 ? 'Sibling Repo' : 'Sibling Two',
       head_score: 0.4
     })),
     verdict: {
-      head_routing_winner: winner,
-      under_test_wins_head: underTestWins,
+      head_routing_winner: claimed === false ? null : winner,
+      under_test_wins_head: underTestWins && claimed !== false,
+      head_suppressed: claimed === false,
       margin,
-      provenance: 'head-only (no graph under test)'
+      provenance: claimed === false ? 'head-suppressed (forbidden/noise)' : 'head-only (no graph under test)'
     }
   };
 }

@@ -85,6 +85,16 @@ const ROUTE_TOP_K = parseInt(process.env.RETRIEVER_ROUTE_TOP_K || '40', 10);
 const ROUTE_MIN_CHUNKS = parseInt(process.env.RETRIEVER_ROUTE_MIN_CHUNKS || '3', 10);
 const ROUTE_PROBE_TIMEOUT_MS = parseInt(process.env.RETRIEVER_ROUTE_PROBE_TIMEOUT_MS || '2000', 10);
 const ROUTE_RETRY = parseInt(process.env.RETRIEVER_ROUTE_RETRY || '1', 10);
+// Story 1-8a (David 2026-10-08: "under no circumstances should 'fun in
+// Indonesia' be routed to the NCD Information repo"): a head only CLAIMS a
+// query when its score clears the forbidden centroid by this margin —
+// forbidden-dominant and noise-floor queries are structurally suppressed
+// regardless of universe size. Calibrated on NCD (2026-10-08): suppressed
+// set spans avg−forbidden ∈ [−0.062, −0.008] (mental-health, nutrition,
+// exercise, "fun in Indonesia"); selected set ≥ +0.024 ("genetic risk
+// factors for cancer" — David: "probably in, given the tags"; on-topic
+// positives +0.106..+0.122). Default 0.01 sits centered in the gap.
+const ROUTE_HEAD_MARGIN = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_MARGIN || '0.01');
 const SIBLING_LIMIT = parseInt(process.env.OKF_HEAD_TEST_SIBLING_LIMIT || '20', 10);
 
 // ---------- math helpers ----------
@@ -384,7 +394,18 @@ async function routingTest(repoId, payload = {}, opts = {}) {
     ranked.forEach((r, i) => {
       r.head_rank = i + 1;
     });
-    const headWinner = ranked.length ? ranked[0] : null;
+    // Story 1-8a — the forbidden/noise gate. A repo CLAIMS the head leg only
+    // when its score clears its own forbidden centroid by ROUTE_HEAD_MARGIN.
+    // A head whose forbidden centroid is missing (pre-1.8a rebuild) claims
+    // freely — the gate degrades open, never silently suppresses.
+    for (const r of ranked) {
+      const forb = r.per_field ? r.per_field.forbidden : null;
+      r.forbidden_cosine = typeof forb === 'number' ? forb : null;
+      r.head_margin = r.forbidden_cosine !== null ? r.score - r.forbidden_cosine : null;
+      r.head_claimed = r.forbidden_cosine === null || r.head_margin > ROUTE_HEAD_MARGIN;
+    }
+    const topRanked = ranked.length ? ranked[0] : null;
+    const headWinner = topRanked && topRanked.head_claimed ? topRanked : null;
     const utRow = headRows[0];
     const bestOther = ranked.find((r) => !r.is_under_test) || null;
     const margin = utRow.score !== null && bestOther ? utRow.score - bestOther.score : utRow.score !== null ? 1 : null;
@@ -434,6 +455,10 @@ async function routingTest(repoId, payload = {}, opts = {}) {
         has_graph: !!s.graph_name,
         head_score: row ? row.score : null,
         head_rank: row ? row.head_rank : null,
+        // 1-8a gate telemetry per sibling.
+        forbidden_cosine: row && row.forbidden_cosine !== undefined ? row.forbidden_cosine : null,
+        head_margin: row && row.head_margin !== undefined ? row.head_margin : null,
+        head_claimed: !!(row && row.head_claimed),
         probe: pr
           ? {
               probed: pr.probed,
@@ -471,12 +496,20 @@ async function routingTest(repoId, payload = {}, opts = {}) {
         head_score: utRow.score,
         head_rank: utRow.head_rank || null,
         per_field: utRow.per_field,
+        // Story 1-8a gate telemetry: does this head CLAIM the query, and by
+        // what margin over its own forbidden centroid.
+        forbidden_cosine: utRow.forbidden_cosine !== undefined ? utRow.forbidden_cosine : null,
+        head_margin: utRow.head_margin !== undefined ? utRow.head_margin : null,
+        head_claimed: !!utRow.head_claimed,
         probe: probeOutcome ? probeOutcome.per_repo[repoId] || null : null
       },
       siblings: sibDetail,
       verdict: {
         head_routing_winner: headWinner ? headWinner.repo_id : null,
+        // Gated claim (1-8a): the top scorer must ALSO clear its forbidden
+        // margin — a suppressed top scorer yields winner=null.
         under_test_wins_head: !!(headWinner && headWinner.is_under_test),
+        head_suppressed: !!topRanked && !topRanked.head_claimed,
         current_routing_winner: currentWinner,
         under_test_wins_current: !!(probeOutcome && probeOutcome.selected.includes(repoId)),
         margin,
@@ -486,11 +519,13 @@ async function routingTest(repoId, payload = {}, opts = {}) {
             : probeOutcome.floor
               ? 'floor'
               : 'qualified'
-          : 'head-only (no graph under test)'
+          : topRanked && !topRanked.head_claimed
+            ? 'head-suppressed (forbidden/noise)'
+            : 'head-only (no graph under test)'
       },
       fidelity: {
         algorithm: 'story-1.3-replay+v1',
-        knobs: { ROUTE_TOP_K, ROUTE_MIN_CHUNKS, ROUTE_PROBE_TIMEOUT_MS, ROUTE_RETRY }
+        knobs: { ROUTE_TOP_K, ROUTE_MIN_CHUNKS, ROUTE_PROBE_TIMEOUT_MS, ROUTE_RETRY, ROUTE_HEAD_MARGIN }
       }
     };
     span.setAttribute('okf.headtest.head_winner', result.verdict.head_routing_winner || '');

@@ -8,7 +8,7 @@
 
 ## 1. Goals
 
-Ship a Helm-based deployment of GENIE.AI on any CNCF-conformant Kubernetes cluster (1.30+), with:
+Ship a Helm-based deployment of GENIE.AI on any CNCF-conformant Kubernetes cluster (1.33+), with:
 
 1. **One-command install** — `helm install genieai-genie charts/genieai-umbrella` brings up the entire GENIE.AI stack in a single transaction.
 2. **Pluggable infrastructure choices** — secrets delivery, ingress controller, storage class, container runtime are all values-driven; no chart-level rebuild required.
@@ -44,7 +44,7 @@ genie-ai/
 │   │   │   └── _helpers.tpl          # name/fullname/labels/selectors/annotations
 │   │   ├── values.schema.json        # JSON schema for values validation
 │   │   └── README.md
-│   └── genieai-umbrella/             # Umbrella chart (single install, 29 services)
+│   └── genieai-umbrella/             # Umbrella chart (single install, 28 services)
 │       ├── Chart.yaml                # depends on genieai-common + operators-as-deps
 │       ├── values.yaml               # DEFAULTS only (chart is generic + org-shareable)
 │       ├── templates/
@@ -85,7 +85,7 @@ genie-ai/
 | Helm dep | Repo | Version constraint | Default `condition:` | Pulled iff |
 |---|---|---|---|---|
 | `genieai-common` | local file:// | `~> 0.1.0` | unconditional | always |
-| `cloudnative-pg` (CNPG chart) | `https://cloudnative-pg.github.io/charts` | `~> 0.30.0` (corresponds to operator v1.30.x; chart minor tracks operator minor) | `data.postgres.enabled` | Kong + Keycloak DBs |
+| `cloudnative-pg` (CNPG chart) | `https://cloudnative-pg.github.io/charts` | `~> 0.30.0` (corresponds to operator v1.30.x; chart minor tracks operator minor) | `data.postgres.enabled` | keycloak-db (Kong removed — decision 7) |
 | `kube-arangodb` | `https://arangodb.github.io/kube-arangodb` | `~> 1.4.5` | `data.arangodb.enabled` | always |
 | `keycloak-operator` | `https://keycloak.github.io/keycloak-operator-helm` (official) | `~> 26.0.0` | `data.keycloak.enabled` | always |
 | `external-secrets-operator` (ESO) | `https://charts.external-secrets.io` | `~> 0.10.0` | `secrets.eso.enabled` | when `pluggable.secretsBackend: externalSecrets` |
@@ -96,7 +96,7 @@ genie-ai/
 | `opentelemetry-operator` | `https://open-telemetry.github.io/opentelemetry-helm-charts` | `~> 0.50.0` | `observability.otel.enabled` | profile-gated |
 | `gpu-operator` | `https://nvidia.github.io/gpu-operator` | `~> v25.x` | `gpu.enabled` | GPU clusters only |
 | `cert-manager` | `https://charts.jetstack.io` | `~> 1.21.0` | `certManager.enabled` | if `ingress.tls.issuer: cert-manager` |
-| `envoy-gateway` | `https://gateway.envoyproxy.io/charts` (or local OCI) | `~> 1.0.0` | `ingress.className: envoy` | if Envoy Gateway chosen |
+| `envoy-gateway` | `https://gateway.envoyproxy.io/charts` (or local OCI) | `~> 1.9.0` | `ingress.className: envoy` | if Envoy Gateway chosen |
 
 **Version-pin discipline (`~>` for CRD owners)**: CRD schemas change between minor releases for `cloudnative-pg`, `kube-arangodb`, `keycloak-operator`, `external-secrets-operator`, and `vmoperator`. `>= X.Y.Z` allows silent breaking changes in CRD shape between patch bumps; `~> X.Y.Z` constrains to the same minor. `~>` is mandatory for these. **Off-CRD deps** (GPU operator, cert-manager, gateway) tolerate `~>` less strictly but use it for reproducibility.
 
@@ -169,7 +169,6 @@ services:
   frontend:          { enabled: true, replicas: 1, resources: {...} }
   documentRepository: { enabled: true, replicas: 1 }
   nginx:             { enabled: true, replicas: 1 }
-  kong:              { enabled: true, replicas: 1, dbMode: postgres }
   # ... 21 more service entries, each `{enabled, replicas, resources, ...}`
 
 gpu:
@@ -213,7 +212,6 @@ dependencies:
   services:
     backend:           [data.arangodb, keycloak]
     frontend:          [services.backend]            # SPA calls BFF
-    kong:              [services.backend, data.postgres]  # DB mode
     documentRepository:[services.backend]            # shared auth chain
     clamav:            []                            # standalone
     redis:             []
@@ -306,7 +304,7 @@ Switching `pluggable.secretsBackend` between installs (`externalSecrets` → `se
 
 Per YAGNI discipline (Code Review pass, Y2): the chart ships only `externalSecrets` rendered. Templates for `sealedSecrets` and `secretProviderClass` are **not yet authored**; the plug-point design is documented in `docs/charts/pluggable-backends.md` so a later MR can add them. This avoids premature template triplication while preserving the pluggability surface area.
 
-## 7. Component surface (app tier, 29 services)
+## 7. Component surface (app tier, 28 services)
 
 Service inventory from the existing Swarm `docker-compose.yaml` (surveyed 2026-10-08). Each service in the chart gets:
 - a `services.<name>` toggle block in values
@@ -315,7 +313,7 @@ Service inventory from the existing Swarm `docker-compose.yaml` (surveyed 2026-1
 - a `<name>-networkpolicy.yaml` (default-deny + explicit allowlist)
 - an entry in `tests/connectivity_test.yaml` if `enabled: true`
 
-**Group 5 (stateless app, move first)**: backend, frontend, document-repository, nginx, kong, clamav.
+**Group 5 (stateless app, move first)**: backend, frontend, document-repository, nginx, clamav.
 
 **Group 2 (cache, ephemeral state)**: redis.
 
@@ -327,7 +325,7 @@ Service inventory from the existing Swarm `docker-compose.yaml` (surveyed 2026-1
 
 **Group 3 (vector DB, last)**: arangodb.
 
-**Count**: 29 services total (Group 5=6 + Group 2=1 + Group 1=5 + Group 4=2 + Group 6=14 + Group 3=1). `redis` lives in Group 2 (cache role); it is **not** duplicated into Group 5. `tei_reranker` is rendered as a single service in Group 6 (Swarm calls it `tei_reranker`; chart uses kebab-case `tei-reranker` with the Swarm service name preserved via Helm template variables). Services like `translation-cache` and `httpService` do not appear in current Swarm and are scoped to a later epic if reintroduced.
+**Count**: 28 services total (Group 5=5 + Group 2=1 + Group 1=5 + Group 4=2 + Group 6=14 + Group 3=1). `redis` lives in Group 2 (cache role); it is **not** duplicated into Group 5. `tei_reranker` is rendered as a single service in Group 6 (Swarm calls it `tei_reranker`; chart uses kebab-case `tei-reranker` with the Swarm service name preserved via Helm template variables). Services like `translation-cache` and `httpService` do not appear in current Swarm and are scoped to a later epic if reintroduced.
 
 Each group's chart enabling is independent. Day 0 install: `data.postgres.enabled=false data.arangodb.enabled=false services.*.enabled=true` for a partial install pattern during phased migration.
 
@@ -373,14 +371,14 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
 - `secretsBackend: externalSecrets` — chart would ship `ExternalSecret` CRs; requires HashiCorp Vault + auditor + rotation policy. Deferred to whoever needs it.
 - `secretsBackend: secretProviderClass` — chart would ship Azure CSI `SecretProviderClass`; requires AKS + AKV. Deferred.
 
-**Migration input**: 13 secrets required (after kong DB-less cut removes `kongDbPassword`). The `.env`-style key names from the current Swarm stack map to K8s `Secret` names rendered by the chart as follows:
+**Migration input**: 13 secrets required (after Kong removal drops `kongDbPassword` — decision 7). The `.env`-style key names from the current Swarm stack map to K8s `Secret` names rendered by the chart as follows:
 
 | `.env` key name | K8s `Secret` resource name | Rendered in plan | Notes |
 |---|---|---|---|
 | `arangoPassword` | `arango-root-secret` (key `password`) | Plan 2 (data layer) | ArangoDB root password |
 | (Arango JWT signing key) | `arango-jwt-secret` (key `password`) | Plan 2 | Arango internal JWT signing key |
-| `postgresPassword` | _(unused after `data.postgres.enabled=false`)_ | — | Dropped with kong DB-less cut |
-| `kongDbPassword` | _(unused, Kong is DB-less)_ | — | Kong DB-less removes the only Kong DB user |
+| `postgresPassword` | _(unused after `data.postgres.enabled=false`)_ | — | Dropped with Kong removal |
+| `kongDbPassword` | _(unused)_ | — | Kong removed (decision 7) |
 | `keycloakDbPassword` | `keycloak-db-credentials` (key `password`) | Plan 2 | keycloak user's role password on CNPG `keycloak-db` cluster |
 | `keycloakAdminPassword` | `genie-admin-credentials` (key `password`) | Plan 2 | KeycloakRealm `genie-admin` user |
 | `keycloakClientSecret` | _(TBD)_ | Plan 3 (frontend SPA client secret) | Rendered under `keycloak` component |
@@ -400,8 +398,10 @@ The mapping is **deliberately bijective**: each K8s `Secret` resource name maps 
 
 **Default**: Envoy Gateway (`Gateway` + `HTTPRoute` resources).
 
+- Requires **K8s ≥ 1.33** (Envoy Gateway v1.9 support matrix — user-confirmed bump 2026-10-08).
+- CORS + rate limiting via Envoy Gateway policies (replaces the removed Kong plugin surface — audit decision 7).
 - `Gateway` listens on 80/443 with TLS termination.
-- `HTTPRoute` for `/api/*` → kong:8000 service.
+- `HTTPRoute` for `/api/*` → backend:3000 service (Kong REMOVED — audit decision 7).
 - `HTTPRoute` for `/*` → nginx:80 service (frontend SPA).
 - TLS via `cert-manager` ClusterIssuer (default) for internet-reachable CAs. Sealed Secrets does not directly cover TLS certs; for offline sovereign deploys, certificates are pre-baked into a `Secret` and the chart's `values-override.yaml` references them via `secretName` (no `cert-manager` resource emits).
 
@@ -715,7 +715,7 @@ These are deliberate unknowns NOT blocking v1, but documented for follow-up:
 5. **Sticky dev workflow**: out-of-tree dev loop (helm-up + exec into container) is not specified. Solve during Day-1 onboarding.
 6. **Vault audit logging** (V4 from review): if externalSecrets is the default backend, Vault's audit device must be enabled for compliance; cross-reference in `docs/charts/secrets-audit-compliance.md`. P2.
 7. **Library-chart vs `_helpers.tpl` naming** (Y1 from review): `genieai-common` IS conceptually the umbrella's `_helpers.tpl` plus standalone templates. Clarify in chart README: "library chart contains templates and exports them via `import-values:`, helpers.tpl contains labels/selectors/name conventions." P2 doc clarification.
-8. **Service template generator** (Y3 from review): 29 services × 4 templates = ~116 files. v1 ships them hand-authored for transparency; **v1.1 introduces `make render-services` from a single service-list YAML**. P2 deferred.
+8. **Service template generator** (Y3 from review): 28 services × 4 templates = ~112 files. v1 ships them hand-authored for transparency; **v1.1 introduces `make render-services` from a single service-list YAML**. P2 deferred.
 
 ## 17. What lands in v1.0 (this epic)
 

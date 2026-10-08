@@ -298,14 +298,28 @@ spec:
             {{- end }}
           resources:
             {{- toYaml $svc.resources | nindent 12 }}
+          {{- /*
+            Review Focus F1 fix — upstream images ship with fixed UIDs and
+            need writable scratch dirs:
+              kong:3.7          UID 1000  /tmp + /usr/local/kong writable
+              nginx-unprivileged  UID  101  /var/cache/nginx + /var/run
+              clamav:1.3         UID  100
+              curlimages         UID  1000
+            Per-service `securityContext` override at the values level; the
+            factory default is `runAsNonRoot: true` + `runAsUser: 65534` only
+            when `services.<name>.securityContext` is unset in values.
+
+            Operators that ship custom UIDs set:
+              services.kong.securityContext:
+                runAsNonRoot: true
+                runAsUser: 1000
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+          */ -}}
           securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 65534
-            capabilities:
-              drop:
-                - ALL
+            {{- $scc := $svc.securityContext | default (dict "runAsNonRoot" true "runAsUser" 65534) -}}
+            {{- toYaml $scc | nindent 12 }}
           {{- with $svc.probes.readiness }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}

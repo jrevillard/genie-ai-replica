@@ -285,13 +285,6 @@ genieai.io/component: {{ .Values.component | default "umbrella" | quote }}
 {{- end -}}
 
 {{/*
-Service port — derived from `services.<name>.port` (default: most common 80).
-*/}}
-{{- define "genieai-common.servicePort" -}}
-{{- .Values.services.port | default 80 -}}
-{{- end -}}
-
-{{/*
 Service selector — emits the right selector labels for service discovery.
 Differs from `selectorLabels` by including the component-only label so that
 network policies can target one app.
@@ -302,6 +295,8 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 genieai.io/component: {{ .Values.component | default "umbrella" | quote }}
 {{- end -}}
 ```
+
+**Note**: the `servicePort` helper is **not added here**. It is a YAGNI candidate: every service has its own port and per-service port logic differs (TCP vs HTTP vs gRPC). Plan 3+ (service tier) adds service-specific helpers as needed rather than a generic helper that hides per-service specifics (Review Focus F4). The per-service pattern is: services.kong.port, services.backend.port, ..., each in `Values.services.<name>.port`, set in the per-env override file directly.
 
 - [ ] **Step 3: Confirm render of any umbrella template that uses the new helpers remains valid**
 
@@ -1317,38 +1312,18 @@ spec:
                 exit 1
               fi
               echo "PASS: no drift detected (post sealed-secrets v0.40.0 30-day rotation)"
-      restartPolicy: Never
-      serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 65534
-      containers:
-        - name: validate
-          image: alpine:3.20
-          imagePullPolicy: IfNotPresent
-          command:
-            - /bin/sh
-            - -c
-            - |
-              set -eu
-              # Review Focus #5 — sealed-secrets v0.40.0 30-day rotation may
-              # have re-keyed the cluster. Drift detection: list SealedSecret
-              # resources committed to the cluster via the chart, fetch the
-              # controller's current public key, and run `kubeseal --check`
-              # on each committed ciphertext. Fail fast on drift.
-              echo "PASS: drift detection runs in CI (Plan 7) — see scripts/check-sealed-secret-drift.sh"
 {{- end -}}
 ```
 
 - [ ] **Step 5: Render and count SealedSecret CRs**
 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: SealedSecret$"`
-Expected: prints `2` (arango-root-secret + arango-jwt-secret by default; keycloak-secrets added only when keycloak enabled).
+Expected: prints `4` (2 arango + 2 keycloak). The default `data.keycloak.enabled: true` in Task 2's values.yaml is intentional — Plan 2's purpose is to land the data layer including KeycloakRealm, so the Keycloak secrets ship alongside.
 
-- [ ] **Step 6: Enable keycloak and verify count climbs**
+- [ ] **Step 6: Disable keycloak and verify count drops**
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set data.keycloak.enabled=true | grep -c "^kind: SealedSecret$"`
-Expected: prints `4`.
+Run: `helm template test charts/genieai-umbrella -n genieai --set data.keycloak.enabled=false | grep -c "^kind: SealedSecret$"`
+Expected: prints `2` (arango-only). Use this to validate the keycloak-side SealedSecret templates are conditioned correctly.
 
 - [ ] **Step 7: `helm lint --strict`**
 

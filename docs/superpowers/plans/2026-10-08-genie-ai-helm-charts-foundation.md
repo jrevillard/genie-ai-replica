@@ -894,6 +894,12 @@ Expected: prints `FAIL: example missing`.
 #
 # Per-env overlays (path: deploy/environments/<env>/) are populated by Plan 6.
 ---
+# Review Focus F5 + F11 fixes combined:
+# - path: deploy/environments/dev (NOT charts/genieai-umbrella) so per-env
+#   Kustomize overlay composes the chart with values-override.yaml
+#   (per spec §19.2; Review Focus F5).
+# - repoURL uses SSH form since GitLab requires auth; cluster ArgoCD has
+#   SSH key registered via GitLab Agent (Review Focus F11).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -902,9 +908,9 @@ metadata:
 spec:
   project: genieai
   source:
-    repoURL: https://opensource.unicc.org/un/itu/genie-ai.git
+    repoURL: ssh://git@opensource.unicc.org:un/itu/genie-ai.git
     targetRevision: main    # use release/el-salvador for the el-salvador env
-    path: charts/genieai-umbrella
+    path: deploy/environments/dev
   destination:
     server: https://kubernetes.default.svc
     namespace: genieai

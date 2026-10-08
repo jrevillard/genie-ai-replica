@@ -116,17 +116,38 @@ async function processRepo(repo, _opts) {
     return;
   }
   try {
-    const summary = await frontmatterService.publishFrontmatter(rid, suggested, {
+    // Story 1.7 (2026-10-08): the canonical store is now
+    // `okf_repositories.frontmatter` (a doc field, additive) — not the
+    // old okf_repo_frontmatter + okf_repositories_frontmatter_summary
+    // collections. The script writes to the new field via
+    // writeFrontmatterToRepoDoc. The LLM-suggested set is auto-approved
+    // (the script is the operator's explicit opt-in to the auto-tagger).
+    const now = new Date().toISOString();
+    const approved = [];
+    for (const field of ['topic', 'entity', 'forbidden', 'keyword']) {
+      const arr = Array.isArray(suggested[field]) ? suggested[field] : [];
+      for (const value of arr) {
+        if (value) approved.push({ field, value, approved_at: now, approved_by: 'republish-with-tags-script' });
+      }
+    }
+    for (const field of ['scope', 'summary']) {
+      const v = suggested[field];
+      if (v) approved.push({ field, value: v, approved_at: now, approved_by: 'republish-with-tags-script' });
+    }
+    const summary = await frontmatterService.writeFrontmatterToRepoDoc(rid, {
+      ...suggested,
+      _approved: approved
+    }, {
       actor: { user_id: 'republish-with-tags-script', source: 'script' },
       version: repo.version || Date.now()
     });
     record(
       rid,
       'PASS',
-      `topics=${summary.topic_count}, forbidden=${summary.forbidden_count}, version=${summary.version}`
+      `topics=${summary.topic.length}, forbidden=${summary.forbidden.length}, version=${summary.version}`
     );
   } catch (err) {
-    record(rid, 'FAIL', `publishFrontmatter failed: ${err.message}`);
+    record(rid, 'FAIL', `writeFrontmatterToRepoDoc failed: ${err.message}`);
   }
 }
 

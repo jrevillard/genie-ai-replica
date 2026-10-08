@@ -11,13 +11,16 @@
   serving (frozen) repo is a READ-ONLY SUMMARY (decision #11): the gate
   opens so the steward can reach the Editor — never a dead button.
 
-  Story 1.6 (2026-10-07) — frontmatter gate: a SEPARATE check from the
-  existing `topicsOk` (which counts authored concept articles). Publish stays
-  disabled until ≥3 topic tags AND ≥1 forbidden tag are approved. The
-  lifecycle-service's publishFrontmatter hook is what saves the curated tags
-  at publish time (lifecycle-service.js → 409 FRONTMATTER_REQUIRED on
-  failure). The editor's frontmatter pane (the persistent curation surface
-  for tags) ships as a follow-up — server-side API is in place.
+  Story 1.7 (2026-10-08, supersedes the Story 1.6 panel mount): the
+  per-repo frontmatter lives in the OKF repo's index.md YAML
+  frontmatter block, in the editor's center pane (the same place
+  the curator edits every other concept's per-file frontmatter).
+  Publish stays disabled until ≥3 topic tags AND ≥1 forbidden tag
+  are approved, all saved into the index.md YAML. The lifecycle
+  service's publish hook reads `okf_repositories.frontmatter` and
+  refuses the transition with 409 FRONTMATTER_REQUIRED on failure.
+  The wizard's gate here is a client-side mirror of the same rule
+  (defense in depth; the server is the authority).
 -->
 <template>
   <div class="okf-step">

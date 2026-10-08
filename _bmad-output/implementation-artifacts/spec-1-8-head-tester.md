@@ -250,3 +250,18 @@ serving repo), then the standard Path-1 MR flow.
 
 Validation: local build live cycle on NCD Information (published,
 pre-ingest) + the ingested repos as siblings; then Path-1 MR flow.
+
+## 11. SHIPPED (2026-10-08 — all four MRs + the env externalization)
+
+| Piece | Commit | Evidence |
+|---|---|---|
+| MR-A lab core | 1f6934473 | okf-server 762/762; live rebuild+routing-test 200 |
+| await hotfix | e3662c725 | smoke-caught: reader-null, publish-gate skip, bundle-merge loss, teiEmbed export |
+| MR-B suites+analytics | 6d8b80c0f, 22694a186 | 771/771; live gen/run/list 200, honest null negatives |
+| MR-C frontend | fb318763d | 1637/1637; bundle live on the local build; dashboard/shell/rail/wizard entry points |
+| MR-D retriever wiring | 66062714d | TestRouteGraphs 8/8; knob verified in-container |
+| env externalization | dc23689f1 | env §15 inventory; env.j2 parity + dedupe; config-validator AC7 36/36 |
+
+The pre-ingest→publish→test→re-tag→republish loop is live end-to-end on the
+local build (NCD Information carries the only head until sibling repos
+republish under the fixed publish path).

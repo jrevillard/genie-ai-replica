@@ -59,7 +59,10 @@ function mountDialog(props = {}) {
   });
 }
 
-function routingResult(wins, siblingCount = 1) {
+function routingResult(wins, siblingCount = 1, gate = null) {
+  // gate: null=legacy; 'claimed'|'suppressed' = 1-8a gate semantics.
+  const claimed = gate === 'claimed' ? true : gate === 'suppressed' ? false : null;
+  const winner = claimed === false ? null : wins ? 'r-1' : 's0';
   return {
     ok: true,
     result: {
@@ -70,20 +73,25 @@ function routingResult(wins, siblingCount = 1) {
         name: 'NCD Information',
         lifecycle_state: 'publish',
         head_score: 0.7,
-        head_rank: wins ? 1 : 2
+        head_rank: wins ? 1 : 2,
+        forbidden_cosine: gate ? 0.45 : undefined,
+        head_margin: gate ? (claimed ? 0.05 : -0.02) : undefined,
+        head_claimed: claimed
       },
       siblings: Array.from({ length: siblingCount }, (_, i) => ({
         repo_id: 's' + i,
         name: 'Sibling ' + i,
         lifecycle_state: 'publish',
         head_score: wins ? 0.4 : 0.9,
-        head_rank: wins ? 2 : 1
+        head_rank: wins ? 2 : 1,
+        head_claimed: claimed
       })),
       verdict: {
-        head_routing_winner: wins ? 'r-1' : 's0',
-        under_test_wins_head: wins,
+        head_routing_winner: winner,
+        under_test_wins_head: wins && claimed !== false,
+        head_suppressed: claimed === false,
         margin: siblingCount ? 0.3 : 1,
-        provenance: 'head-only (no graph under test)'
+        provenance: claimed === false ? 'head-suppressed (forbidden/noise)' : 'head-only (no graph under test)'
       }
     }
   };
@@ -213,4 +221,47 @@ it('dispatches headRebuild with the repo id and emits changed on success', async
   await w.vm.onRebuild();
   expect(dispatch).toHaveBeenCalledWith('okf/headRebuild', { repoId: 'r-1' });
   expect(w.emitted('changed')).toBeTruthy();
+});
+
+// ─── Story 1-8a: the forbidden/noise GATE (David: "under no circumstances
+//     should 'fun in Indonesia' be routed to the NCD repo") ────────────────
+
+it('1-8a: a suppressed head (negative wins, even in a one-repo universe)', async () => {
+  const w = mountDialog({ initialTab: 'test' });
+  await w.vm.$nextTick();
+  w.vm.query = 'fun in Indonesia';
+  dispatch.mockResolvedValueOnce(routingResult(false, 0, 'suppressed'));
+  await w.vm.onRunTest();
+  expect(w.vm.headSelected).toBe(false);
+  expect(w.vm.headSuppressed).toBe(true);
+  expect(w.vm.verdictText).toContain('suppressed by the forbidden/noise gate');
+});
+
+it('1-8a: a borderline claim (the genetics ruling — "probably in")', async () => {
+  const w = mountDialog({ initialTab: 'test' });
+  await w.vm.$nextTick();
+  w.vm.query = 'genetic risk factors for cancer';
+  dispatch.mockResolvedValueOnce(routingResult(true, 0, 'claimed'));
+  await w.vm.onRunTest();
+  expect(w.vm.headSelected).toBe(true);
+  expect(w.vm.headSuppressed).toBe(false);
+  expect(w.vm.verdictText).toContain('wins the head routing');
+  expect(w.vm.verdictText).toContain('forbidden 0.450');
+});
+
+it('1-8a: suite outcome — a negative in a one-repo universe PASSES when the head is suppressed', async () => {
+  // exercise outcomeOf in the dialog's path (mirrors the service-side
+  // summarizeRun: head_claimed===false is a pass regardless of siblings).
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  expect(w.vm.outcomeOf({ kind: 'negative', under_test_wins_head: false, head_claimed: false, sibling_count: 0 })).toBe(
+    true
+  );
+  expect(w.vm.outcomeOf({ kind: 'negative', under_test_wins_head: true, head_claimed: true, sibling_count: 0 })).toBe(
+    false
+  );
+  // Legacy (head_claimed null) — keeps the sibling-gated floor.
+  expect(
+    w.vm.outcomeOf({ kind: 'negative', under_test_wins_head: true, head_claimed: null, sibling_count: 0 })
+  ).toBeNull();
 });

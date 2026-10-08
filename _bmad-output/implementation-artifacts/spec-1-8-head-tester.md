@@ -265,3 +265,39 @@ pre-ingest) + the ingested repos as siblings; then Path-1 MR flow.
 The pre-ingest→publish→test→re-tag→republish loop is live end-to-end on the
 local build (NCD Information carries the only head until sibling repos
 republish under the fixed publish path).
+
+## 12. SHIPPED (2026-10-09 — the forbidden/noise GATE, "1-8a")
+
+David 2026-10-08 (adversarial run on the lab): "under no circumstances
+should 'fun in Indonesia' be routed to the NCD Information repo… this
+should NEVER happen." Plus: "the genetics query… probably in, given the
+tags."
+
+The 1-8 verdict was rank alone — a one-repo universe always wins. The
+gate makes negatives meaningful in ANY universe by replacing rank with
+claim: a head CLAIMS a query only when its score clears its own forbidden
+centroid by `ROUTE_HEAD_MARGIN` (default 0.01, calibrated on NCD 2026-10-08).
+
+| Bucket | query | score − forbidden | gate verdict |
+|---|---|---|---|
+| Adversarial | "What is the latest guidance on mental-health?" | −0.002 | SUPPRESSED |
+| Adversarial | "Explain the national policy for nutrition…" | −0.025 | SUPPRESSED |
+| Adversarial | "What are the genetic risk factors for cancer?" | +0.024 | CLAIMED (the borderline-IN ruling) |
+| Adversarial | "Give me statistics and recent data about exercise" | −0.062 | SUPPRESSED |
+| Adversarial (unrelated) | "fun in Indonesia" | −0.008 | SUPPRESSED |
+| Positive | "cancer screening guidelines" | +0.122 | CLAIMED |
+| Positive | "How is asthma managed in primary care?" | +0.106 | CLAIMED |
+
+The same gate in the retriever (`_route_graphs`): a head's pseudo-row is
+dropped from the global top-K pool when `score − forbidden ≤ 0`. Gate
+degrades open when the head has no forbidden centroid (pre-1.8a rebuild).
+
+Files: `okf-server/services/head-test-service.js` (the gate + telemetry +
+provenance "head-suppressed (forbidden/noise)"); `okf-server/services/head-suite-service.js`
+(suite rows carry the gate fields; `summarizeRun` evaluates negatives
+solo via `head_claimed === false`); `genie-ai-overlay/retriever/{config.py,
+genieai_retriever_arangodb.py}` (drop-in-the-pool filter); frontend
+`HeadTestDialog.vue` (new "Claims query" column; verdict distinguishes
+rank-fail from gate-suppressed; adversarial text updated); i18n ×14
+(5 new keys). Tests: okf-server 777/777 (+3); frontend 1640/1640 (+3);
+retriever 8/8 (existing pool tests cover the change).

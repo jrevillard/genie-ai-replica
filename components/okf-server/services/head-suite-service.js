@@ -341,6 +341,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           expected_repo: q.expected_repo || null,
           head_score: r.under_test.head_score,
           head_rank: r.under_test.head_rank,
+          forbidden_cosine: r.under_test.forbidden_cosine !== undefined ? r.under_test.forbidden_cosine : null,
+          head_margin: r.under_test.head_margin !== undefined ? r.under_test.head_margin : null,
+          head_claimed:
+            r.under_test.head_claimed === undefined || r.under_test.head_claimed === null
+              ? null
+              : !!r.under_test.head_claimed,
           winner: r.verdict.head_routing_winner,
           winner_name:
             r.verdict.head_routing_winner === repoId
@@ -399,7 +405,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
  *   positive → under_test_wins_head === true
  *   negative → under_test_wins_head === false, but ONLY evaluatable when
  *              the run saw at least one sibling (a one-repo universe
- *              wins every race by default — reported as null, not 100%).
+ *              a race against nobody — reported as null, not 100%.
+ *   1-8a (David 2026-10-08: "under no circumstances … this should NEVER
+ *   happen"): the forbidden/noise GATE makes negatives meaningful in ANY
+ *   universe — a negative passes when the head does not CLAIM the query
+ *   (head_claimed === false), which works solo. Legacy results without
+ *   head_claimed fall back to the sibling-gated rank semantics.
  *   avg_margin over positives, null when no siblings (margin==1 is the
  *   solo-race artifact, not a quality signal).
  *   steals: positives lost, grouped by the winning sibling.
@@ -410,8 +421,12 @@ function summarizeRun(results) {
   const negatives = done.filter((r) => r.kind === 'negative');
   const siblingCount = done.length ? Math.max(...done.map((r) => r.sibling_count || 0)) : 0;
   const posPassed = positives.filter((r) => r.under_test_wins_head).length;
-  const negEvaluatable = siblingCount > 0 ? negatives : [];
-  const negPassed = negEvaluatable.filter((r) => !r.under_test_wins_head).length;
+  // Gate-era negatives are evaluatable solo; legacy (head_claimed null)
+  // only with siblings.
+  const negEvaluatable = negatives.filter((r) => r.head_claimed !== null || (r.sibling_count || 0) > 0);
+  const negPassed = negEvaluatable.filter((r) =>
+    r.head_claimed !== null ? r.head_claimed === false : !r.under_test_wins_head
+  ).length;
   const evaluatable = positives.length + negEvaluatable.length;
   const margins = positives.filter((r) => (r.sibling_count || 0) > 0).map((r) => r.margin);
 

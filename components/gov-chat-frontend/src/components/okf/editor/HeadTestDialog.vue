@@ -145,6 +145,7 @@
                 <th>{{ translate('okf.headTest.test.col.state', 'State') }}</th>
                 <th>{{ translate('okf.headTest.test.col.headScore', 'Head score') }}</th>
                 <th>{{ translate('okf.headTest.test.col.rank', 'Rank') }}</th>
+                <th>{{ translate('okf.headTest.test.col.claimed', 'Claims query') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -163,6 +164,17 @@
                   <code>{{ (row.score || 0).toFixed(3) }}</code>
                 </td>
                 <td>{{ row.rank }}</td>
+                <td>
+                  <!-- 1-8a: the gate column — a head only CLAIMS a query
+                       when its score clears its own forbidden centroid. -->
+                  <DsPill v-if="row.claimed === true" variant="success">
+                    {{ translate('okf.headTest.test.claimed', 'claims') }}
+                  </DsPill>
+                  <DsPill v-else-if="row.claimed === false" variant="warn">
+                    {{ translate('okf.headTest.test.suppressed', 'suppressed') }}
+                  </DsPill>
+                  <span v-else class="okf-headtest__empty">—</span>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -412,6 +424,7 @@ export default {
           state: ut.lifecycle_state,
           score: ut.head_score,
           rank: ut.head_rank,
+          claimed: ut.head_claimed !== undefined ? ut.head_claimed : null,
           under_test: true
         }
       ];
@@ -422,6 +435,7 @@ export default {
           state: s.lifecycle_state,
           score: s.head_score,
           rank: s.head_rank,
+          claimed: s.head_claimed !== undefined ? s.head_claimed : null,
           under_test: false
         });
       }
@@ -429,9 +443,25 @@ export default {
     },
     verdictClass() {
       if (!this.lastResult) return '';
-      const wins = this.lastResult.verdict.under_test_wins_head;
-      const pass = this.adversarial ? !wins : wins;
+      const selected = this.headSelected;
+      const pass = this.adversarial ? !selected : selected;
       return pass ? 'okf-headtest__verdict--pass' : 'okf-headtest__verdict--fail';
+    },
+    /** 1-8a: selection = the head CLAIMS the query (top score AND it
+     * clears its own forbidden centroid by the margin gate) — the rank
+     * alone stops being the verdict, so one-repo universes are honest. */
+    headSelected() {
+      if (!this.lastResult) return false;
+      return !!this.lastResult.verdict.under_test_wins_head;
+    },
+    headSuppressed() {
+      if (!this.lastResult) return false;
+      return !!this.lastResult.verdict.head_suppressed;
+    },
+    gateDetail() {
+      const ut = this.lastResult && this.lastResult.under_test;
+      if (!ut || typeof ut.head_margin !== 'number') return '';
+      return ` (score ${ut.head_score.toFixed(3)} − forbidden ${ut.forbidden_cosine.toFixed(3)} = ${ut.head_margin.toFixed(3)})`;
     },
     verdictText() {
       if (!this.lastResult) return '';
@@ -441,19 +471,29 @@ export default {
         return wins
           ? this.translate(
               'okf.headTest.test.failAdversarial',
-              'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).'
-            )
-          : this.translate(
-              'okf.headTest.test.passAdversarial',
-              'PASS — correctly not selected (winner: {repo}).'
-            ).replace('{repo}', winner);
+              'FAIL — this query routed HERE but it should not: the head claimed it'
+            ) + this.gateDetail
+          : this.headSuppressed
+            ? this.translate(
+                'okf.headTest.test.passSuppressed',
+                'PASS — suppressed by the forbidden/noise gate: the head does not claim this query'
+              ) + this.gateDetail
+            : this.translate(
+                'okf.headTest.test.passAdversarial',
+                'PASS — correctly not selected (winner: {repo}).'
+              ).replace('{repo}', winner);
       }
       return wins
-        ? this.translate('okf.headTest.test.pass', 'PASS — this repository wins the head routing.')
-        : this.translate('okf.headTest.test.fail', 'FAIL — {repo} wins the head routing for this query.').replace(
-            '{repo}',
-            winner
-          );
+        ? this.translate('okf.headTest.test.pass', 'PASS — this repository wins the head routing.') + this.gateDetail
+        : this.headSuppressed
+          ? this.translate(
+              'okf.headTest.test.notSelectedSuppressed',
+              'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise'
+            ) + this.gateDetail
+          : this.translate('okf.headTest.test.fail', 'FAIL — {repo} wins the head routing for this query.').replace(
+              '{repo}',
+              winner
+            );
     },
     suiteResultRows() {
       if (!this.lastRunSummary || !this.lastRunSummaryRows) return [];
@@ -593,6 +633,10 @@ export default {
     outcomeOf(r) {
       if (r.error) return false;
       if (r.kind === 'positive') return !!r.under_test_wins_head;
+      // 1-8a: gate-era results know head_claimed — a negative passes when
+      // the head does NOT claim the query (works in a one-repo universe).
+      // Legacy results (head_claimed null) keep the sibling-gated rank rule.
+      if (r.head_claimed !== null && r.head_claimed !== undefined) return r.head_claimed === false;
       if (!r.sibling_count) return null;
       return !r.under_test_wins_head;
     },

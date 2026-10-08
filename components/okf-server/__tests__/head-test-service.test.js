@@ -222,6 +222,58 @@ describe('routingTest', () => {
     });
   });
 
+  // ─── Story 1-8a: the forbidden/noise GATE (David: "under no
+  // circumstances should 'fun in Indonesia' be routed to the NCD repo") ───
+
+  function soloRepoSetup(head) {
+    frontmatterService.teiEmbed.mockResolvedValue([unit(DIM, 0)]);
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'Under Test',
+      lifecycle_state: 'publish',
+      ingested_graph_name: null,
+      head,
+      frontmatter: { updated_at: '2026-10-07T00:00:00.000Z' }
+    });
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('FILTER r.head != null')) return { all: async () => [] };
+      return { all: async () => [] };
+    });
+  }
+
+  it('suppresses a forbidden-dominant top scorer even in a one-repo universe', async () => {
+    // Query aligns with BOTH the head (score 1.0) and the forbidden
+    // centroid (1.0): margin 0 ≤ ROUTE_HEAD_MARGIN → NOT claimed.
+    soloRepoSetup(makeHead({ vector: unit(DIM, 0), forbidden: unit(DIM, 0) }));
+    const res = await svc.routingTest('me', { query: 'mental health guidance' }, {});
+    expect(res.under_test.head_score).toBeCloseTo(1, 5);
+    expect(res.under_test.forbidden_cosine).toBeCloseTo(1, 5);
+    expect(res.under_test.head_margin).toBeCloseTo(0, 5);
+    expect(res.under_test.head_claimed).toBe(false);
+    expect(res.verdict.head_routing_winner).toBeNull();
+    expect(res.verdict.under_test_wins_head).toBe(false);
+    expect(res.verdict.head_suppressed).toBe(true);
+    expect(res.verdict.provenance).toContain('head-suppressed');
+  });
+
+  it('claims a borderline query whose positive margin clears the gate (the genetics ruling)', async () => {
+    // score 1.0, forbidden 0.5 → margin +0.5 > ROUTE_HEAD_MARGIN → claimed.
+    soloRepoSetup(makeHead({ vector: unit(DIM, 0), forbidden: unit(DIM, 1) }));
+    const res = await svc.routingTest('me', { query: 'genetic risk factors for cancer' }, {});
+    expect(res.under_test.head_claimed).toBe(true);
+    expect(res.verdict.under_test_wins_head).toBe(true);
+    expect(res.verdict.head_suppressed).toBe(false);
+  });
+
+  it('a head WITHOUT a forbidden centroid claims freely (gate degrades open)', async () => {
+    soloRepoSetup(makeHead({ vector: unit(DIM, 0), forbidden: null }));
+    const res = await svc.routingTest('me', { query: 'anything at all' }, {});
+    expect(res.under_test.forbidden_cosine).toBeNull();
+    expect(res.under_test.head_margin).toBeNull();
+    expect(res.under_test.head_claimed).toBe(true);
+    expect(res.verdict.under_test_wins_head).toBe(true);
+  });
+
   it('rejects an unknown formula shape', async () => {
     await expect(svc.routingTest('me', { query: 'x', formula: 'bogus' }, {})).rejects.toMatchObject({
       status: 400

@@ -278,6 +278,14 @@ ROUTE_RETRY = int(os.getenv("RETRIEVER_ROUTE_RETRY", "1"))
 # BEST-EFFORT — its failure never degrades routing (the probe results
 # alone remain valid). 0.0 disables the signal entirely (rollback knob).
 ROUTE_HEAD_WEIGHT = float(os.getenv("RETRIEVER_ROUTE_HEAD_WEIGHT", "1.0"))
+# Story 1-8a — the forbidden/noise GATE (David: "under no circumstances
+# should 'fun in Indonesia' be routed to the NCD repo"). A head's pseudo-row
+# is emitted only when cosine(q, head.vector) − cosine(q, forbidden centroid)
+# exceeds this margin; otherwise the head contributes NO vote. Calibrated on
+# NCD 2026-10-08: suppressed queries span [−0.062, −0.008], selected ≥ +0.024
+# ("genetic risk factors for cancer" — borderline IN, per David). Heads
+# without a forbidden centroid claim freely (gate degrades open).
+ROUTE_HEAD_MARGIN = float(os.getenv("RETRIEVER_ROUTE_HEAD_MARGIN", "0.01"))
 
 # Summarizer Configuration
 SUMMARIZER_ENABLED = os.getenv("RETRIEVER_SUMMARIZER_ENABLED", "false").lower() == "true"

@@ -118,7 +118,7 @@ Expected: prints `0`.
 # Plan 4 — observability
 
 # STATIC plain booleans. values.yaml is NEVER templated by Helm — an
-# `{{ include ... }}` here ships as literal text (round-6 review catch).
+# `{{ include ... }}` here ships as literal text.
 # Defaults are OFF; environments that want observability set these true in
 # deploy/environments/<env>/values-override.yaml (dev=off is the intended
 # default; prod overlays flip master + components on). Profile-driven
@@ -185,10 +185,10 @@ git commit -m "feat(charts): observability block in values (static explicit togg
 ## Task 3: vmoperator CRDs (VMSingle/Cluster + VLSingle + VTSingle + VMAgent)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_observability/vmsingle.yaml`
-- Create: `charts/genieai-umbrella/templates/_observability/vlsingle.yaml`
-- Create: `charts/genieai-umbrella/templates/_observability/vtsingle.yaml`
-- Create: `charts/genieai-umbrella/templates/_observability/vmagent.yaml`
+- Create: `charts/genieai-umbrella/templates/observability/vmsingle.yaml`
+- Create: `charts/genieai-umbrella/templates/observability/vlsingle.yaml`
+- Create: `charts/genieai-umbrella/templates/observability/vtsingle.yaml`
+- Create: `charts/genieai-umbrella/templates/observability/vmagent.yaml`
 
 **Interfaces:**
 - Consumes: vmoperator CRD types (`VMSingle`, `VLSingle`, `VTSingle`, `VMAgent`).
@@ -196,10 +196,10 @@ git commit -m "feat(charts): observability block in values (static explicit togg
 
 - [ ] **Step 1: Run red-gate — no observability CRDs yet**
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep -c "^kind: VMSingle$" || echo "0"`
+Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod --set observability.enabled=true --set observability.metrics.enabled=true | grep -c "^kind: VMCluster$"`
 Expected: prints `0`.
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_observability/vmsingle.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/observability/vmsingle.yaml`**
 
 ```yaml
 {{- if .Values.observability.metrics.enabled -}}
@@ -247,7 +247,7 @@ spec:
 {{- end -}}
 ```
 
-- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_observability/vlsingle.yaml`**
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/observability/vlsingle.yaml`**
 
 ```yaml
 {{- if .Values.observability.logs.enabled -}}
@@ -272,7 +272,7 @@ spec:
 {{- end -}}
 ```
 
-- [ ] **Step 4: Write `charts/genieai-umbrella/templates/_observability/vtsingle.yaml`**
+- [ ] **Step 4: Write `charts/genieai-umbrella/templates/observability/vtsingle.yaml`**
 
 ```yaml
 {{- if .Values.observability.traces.enabled -}}
@@ -297,7 +297,7 @@ spec:
 {{- end -}}
 ```
 
-- [ ] **Step 5: Write `charts/genieai-umbrella/templates/_observability/vmagent.yaml`**
+- [ ] **Step 5: Write `charts/genieai-umbrella/templates/observability/vmagent.yaml`**
 
 ```yaml
 {{- if .Values.observability.metrics.enabled -}}
@@ -317,13 +317,21 @@ spec:
   remoteWrite:
     # VMSingle serves 8428 (8429 is the CLUSTER vmselect port — single
     # mode remote-write hits 8428).
+    # Wave-8 F10: prod-profile renders VMCluster whose operator-created
+    # Services are vmetrics-vminsert/vmetrics-vmselect/vmetrics-vmstorage
+    # (NOT a single `vmetrics:8428` Service). The single-mode remoteWrite
+    # URL silently 404s in prod. Use the cluster-aware write endpoint.
+    {{- if eq .Values.clusterProfile "prod" }}
+    - url: http://vmetrics-vminsert.{{ .Values.namespace }}.svc.cluster.local:8480/insert/0/prom/api/v1/write
+    {{- else }}
     - url: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428/api/v1/write
+    {{- end }}
 {{- end -}}
 ```
 
 - [ ] **Step 6: Render and verify**
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep "^kind: " | sort | uniq -c | sort -rn | head`
+Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod --set observability.enabled=true --set observability.metrics.enabled=true --set observability.logs.enabled=true --set observability.traces.enabled=true --set observability.otel.enabled=true | grep "^kind: " | sort | uniq -c | sort -rn | head`
 Expected: shows `VMCluster × 1`, `VLSingle × 1`, `VTSingle × 1`, `VMAgent × 1`.
 
 - [ ] **Step 7: `helm lint --strict`**
@@ -334,7 +342,7 @@ Expected: 0 errors.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_observability/vmsingle.yaml charts/genieai-umbrella/templates/_observability/vlsingle.yaml charts/genieai-umbrella/templates/_observability/vtsingle.yaml charts/genieai-umbrella/templates/_observability/vmagent.yaml
+git add charts/genieai-umbrella/templates/observability/vmsingle.yaml charts/genieai-umbrella/templates/observability/vlsingle.yaml charts/genieai-umbrella/templates/observability/vtsingle.yaml charts/genieai-umbrella/templates/observability/vmagent.yaml
 git commit -m "feat(charts): vmoperator CRDs (VMSingle/Cluster + VLSingle + VTSingle + VMAgent)"
 ```
 
@@ -344,7 +352,7 @@ git commit -m "feat(charts): vmoperator CRDs (VMSingle/Cluster + VLSingle + VTSi
 
 **Files:**
 - Create: `charts/genieai-umbrella/configs/otel-collector-config.yaml` (ported VERBATIM from repo `configs/otel/otel-collector-config.yaml` — per `docs/charts/otel-migration.md` §5)
-- Create: `charts/genieai-umbrella/templates/_observability/otel-collector.yaml`
+- Create: `charts/genieai-umbrella/templates/observability/otel-collector.yaml`
 
 **Interfaces:**
 - Consumes: `observability.otel.enabled`; the existing repo collector config (source of truth for PII + metadata stamping).
@@ -365,7 +373,7 @@ cp configs/otel/otel-collector-config.yaml \
 2. **Keep verbatim** — `pii_redact` OTTL statements (do NOT touch the double-escaped regexes: YAML single-quote + OTTL unescape makes `\\s`/`\\.` load-bearing; single-escaping kills the pipeline with an OTTL parse error at collector boot), `stamp_log_metadata_from_msg`, `memory_limiter`, `batch`, healthcheck.
 3. **Retarget exporters** to K8s DNS — replace hard-coded hosts with the chart's service names: `vtraces.{{ "{{ .Values.namespace }}" }}.svc.cluster.local:10428`, `vmetrics...:8428`, `vlogs...:9428` (Helm templating is NOT evaluated in `.Files.Get` content by default — either keep plain DNS `vtraces.genieai.svc.cluster.local` fixed to the default namespace, or render through a ConfigMap and set endpoints via collector `env` substitution. For Plan 4 the plain fixed names are acceptable; per-env overrides land in Plan 6.)
 
-- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_observability/otel-collector.yaml`**
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/observability/otel-collector.yaml`**
 
 Single source of truth: the CR's `spec.config` inlines the ported file via `.Files.Get`. No duplicated inline config, no second copy to drift.
 
@@ -396,7 +404,7 @@ spec:
 
 - [ ] **Step 4: Render with `clusterProfile: prod` and confirm components**
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep -E "OpenTelemetryCollector|genieai-collector" | head`
+Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod --set observability.enabled=true --set observability.otel.enabled=true | grep -E "OpenTelemetryCollector|genieai-collector" | head`
 Expected: shows the gateway collector CR with its inlined config.
 
 - [ ] **Step 5: Validate the ported config survived intact (Review Focus #4 + port fidelity)**
@@ -404,7 +412,7 @@ Expected: shows the gateway collector CR with its inlined config.
 Run:
 
 ```bash
-helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | \
+helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod --set observability.enabled=true --set observability.metrics.enabled=true --set observability.logs.enabled=true --set observability.traces.enabled=true --set observability.otel.enabled=true | \
   python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
   cr = next(d for d in docs if d and d.get('kind') == 'OpenTelemetryCollector'); \
   cfg = cr['spec']['config']; \
@@ -424,7 +432,7 @@ Expected: 0 errors.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add charts/genieai-umbrella/configs/otel-collector-config.yaml charts/genieai-umbrella/templates/_observability/otel-collector.yaml
+git add charts/genieai-umbrella/configs/otel-collector-config.yaml charts/genieai-umbrella/templates/observability/otel-collector.yaml
 git commit -m "feat(charts): gateway OpenTelemetryCollector with verbatim-ported config (pii_redact + metadata stamp)"
 ```
 
@@ -433,8 +441,8 @@ git commit -m "feat(charts): gateway OpenTelemetryCollector with verbatim-ported
 ## Task 4b: Log-ingestion agent — OpenTelemetryCollector DaemonSet
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_observability/otel-agent.yaml`
-- Create: `charts/genieai-umbrella/templates/_rbac/otel-agent-role.yaml`
+- Create: `charts/genieai-umbrella/templates/observability/otel-agent.yaml`
+- Create: `charts/genieai-umbrella/templates/rbac/otel-agent-role.yaml`
 
 **Interfaces:**
 - Consumes: `observability.otel.enabled`; the gateway CR from Task 4 (operator-exposed Service `genieai-collector-collector`).
@@ -444,10 +452,10 @@ git commit -m "feat(charts): gateway OpenTelemetryCollector with verbatim-ported
 
 - [ ] **Step 1: Run red-gate — no agent CR yet**
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep -c "mode: daemonset" || echo "0"`
+Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod --set observability.enabled=true --set observability.otel.enabled=true | grep -c "mode: daemonset"`
 Expected: prints `0`.
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_rbac/otel-agent-role.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/rbac/otel-agent-role.yaml`**
 
 ```yaml
 {{- if .Values.observability.otel.enabled -}}
@@ -490,7 +498,7 @@ subjects:
 {{- end -}}
 ```
 
-- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_observability/otel-agent.yaml`**
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/observability/otel-agent.yaml`**
 
 ```yaml
 {{- if .Values.observability.otel.enabled -}}
@@ -582,7 +590,7 @@ Expected: 0 errors.
 Run:
 
 ```bash
-helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | \
+helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod --set observability.enabled=true --set observability.metrics.enabled=true --set observability.logs.enabled=true --set observability.traces.enabled=true --set observability.otel.enabled=true | \
   python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
   crs = [d for d in docs if d and d.get('kind') == 'OpenTelemetryCollector']; \
   modes = sorted(c['spec']['mode'] for c in crs); \
@@ -598,7 +606,7 @@ Expected: prints `PASS` (gateway `deployment` + agent `daemonset`, filelog recei
 - [ ] **Step 6: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_observability/otel-agent.yaml charts/genieai-umbrella/templates/_rbac/otel-agent-role.yaml
+git add charts/genieai-umbrella/templates/observability/otel-agent.yaml charts/genieai-umbrella/templates/rbac/otel-agent-role.yaml
 git commit -m "feat(charts): DaemonSet log-ingestion agent (filelog -> gateway -> VL)"
 ```
 
@@ -607,8 +615,8 @@ git commit -m "feat(charts): DaemonSet log-ingestion agent (filelog -> gateway -
 ## Task 5: Grafana via grafana-operator (instance + datasources + dashboards)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_observability/grafana-cr.yaml` (Grafana instance + 3 `GrafanaDatasource` CRs)
-- Create: `charts/genieai-umbrella/templates/_observability/grafana-dashboards.yaml` (9 `GrafanaDashboard` CRs from the existing dashboard JSONs)
+- Create: `charts/genieai-umbrella/templates/observability/grafana-cr.yaml` (Grafana instance + 3 `GrafanaDatasource` CRs)
+- Create: `charts/genieai-umbrella/templates/observability/grafana-dashboards.yaml` (9 `GrafanaDashboard` CRs from the existing dashboard JSONs)
 - Create: `charts/genieai-umbrella/configs/grafana-dashboards/.gitkeep` (the 9 ported JSONs land here — copied from `configs/grafana/provisioning/dashboards/`)
 
 **Interfaces:**
@@ -628,7 +636,7 @@ cp configs/grafana/provisioning/dashboards/**/*.json \
 ls charts/genieai-umbrella/configs/grafana-dashboards/ | wc -l   # expect 9
 ```
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_observability/grafana-cr.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/observability/grafana-cr.yaml`**
 
 ```yaml
 {{- if .Values.observability.grafana.enabled -}}
@@ -668,7 +676,7 @@ spec:
   datasource:
     name: VictoriaMetrics
     type: prometheus
-    url: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428
+    url: {{ if eq .Values.clusterProfile "prod" }}http://vmetrics-vmselect.{{ .Values.namespace }}.svc.cluster.local:8481{{ else }}http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428{{ end }}
     access: proxy
     isDefault: true
 ---
@@ -716,7 +724,7 @@ spec:
 {{- end -}}
 ```
 
-- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_observability/grafana-dashboards.yaml`** (one CR per ported JSON)
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/observability/grafana-dashboards.yaml`** (one CR per ported JSON)
 
 ```yaml
 {{- if .Values.observability.grafana.enabled -}}
@@ -745,7 +753,7 @@ spec:
 Run:
 
 ```bash
-helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | \
+helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod --set observability.enabled=true --set observability.metrics.enabled=true --set observability.logs.enabled=true --set observability.traces.enabled=true --set observability.otel.enabled=true | \
   python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
   ds = [d for d in docs if d and d.get('kind') == 'GrafanaDatasource']; \
   jaeger = next(d for d in ds if d['spec']['datasource']['type'] == 'jaeger'); \
@@ -765,7 +773,7 @@ Expected: 0 errors.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add charts/genieai-umbrella/configs/grafana-dashboards/ charts/genieai-umbrella/templates/_observability/grafana-cr.yaml charts/genieai-umbrella/templates/_observability/grafana-dashboards.yaml
+git add charts/genieai-umbrella/configs/grafana-dashboards/ charts/genieai-umbrella/templates/observability/grafana-cr.yaml charts/genieai-umbrella/templates/observability/grafana-dashboards.yaml
 git commit -m "feat(charts): grafana-operator CRs — instance, datasources (VM/VL/Jaeger->VT direct), 9 dashboards"
 ```
 
@@ -851,7 +859,7 @@ git commit -m "feat(charts): VMServiceScrape emission in service factory (condit
 
 **Interfaces:**
 - Consumes: `clusterProfile` value.
-- Produces: `genieai-umbrella.profileProduction` / `genieai-umbrella.profileDev` — used ONLY inside template conditionals (e.g. Task 3's VMCluster-vs-VMSingle switch). **No `observabilityDefault` helper**: values.yaml is static (Task 2) and observability enablement is explicit per env, so a values-level default resolver would be dead code (round-6 review: delete, do not defer).
+- Produces: `genieai-umbrella.profileProduction` / `genieai-umbrella.profileDev` — used ONLY inside template conditionals (e.g. Task 3's VMCluster-vs-VMSingle switch). **No `observabilityDefault` helper**: values.yaml is static (Task 2) and observability enablement is explicit per env, so a values-level default resolver would be dead code.
 
 - [ ] **Step 1: Write `charts/genieai-umbrella/templates/_lib/_clusterprofile-defaults.tpl`**
 
@@ -975,7 +983,7 @@ spec:
 
 - [ ] **Step 2: Render and verify**
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep -A 1 "test-observability" | head -5`
+Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod --set observability.enabled=true | grep -A 1 "test-observability" | head -5`
 Expected: shows the test pod.
 
 - [ ] **Step 3: `helm lint --strict`**
@@ -995,13 +1003,13 @@ git commit -m "test(charts): helm test for observability stack reachability"
 ## Task 10: Observability SealedSecrets (grafanaAdminPassword + kcGrafanaClientSecret)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_secrets/observability-secrets.yaml`
+- Create: `charts/genieai-umbrella/templates/secrets/observability-secrets.yaml`
 
 **Interfaces:**
 - Consumes: spec §8 F14 mapping table (Group 4 secrets).
 - Produces: 2 SealedSecret CRs.
 
-- [ ] **Step 1: Write `charts/genieai-umbrella/templates/_secrets/observability-secrets.yaml`**
+- [ ] **Step 1: Write `charts/genieai-umbrella/templates/secrets/observability-secrets.yaml`**
 
 ```yaml
 {{- if .Values.secrets.sealedSecrets.enabled -}}
@@ -1042,7 +1050,7 @@ Expected: 0 errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_secrets/observability-secrets.yaml
+git add charts/genieai-umbrella/templates/secrets/observability-secrets.yaml
 git commit -m "feat(charts): observability SealedSecrets (grafana-admin-password, kc-grafana-client-secret)"
 ```
 
@@ -1122,7 +1130,7 @@ git commit -m "docs(charts): genieai-umbrella README with observability layer st
 
 - [ ] **Step 3: Final render summary**
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep "^kind:" | sort | uniq -c | sort -rn | head -10`
+Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod --set observability.enabled=true --set observability.metrics.enabled=true --set observability.logs.enabled=true --set observability.traces.enabled=true --set observability.otel.enabled=true | grep "^kind:" | sort | uniq -c | sort -rn | head -10`
 Expected: comprehensive overview showing Services, Deployments, NetworkPolicies, SealedSecrets, VM*, V*, OTelCollector, ConfigMap, VMServiceScrape, etc.
 
 - [ ] **Step 4: Final lint + ct lint**

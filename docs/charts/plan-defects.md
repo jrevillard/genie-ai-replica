@@ -1,3 +1,25 @@
+## Code-review consolidation — applied
+
+`/code-review` xhigh pass across spec + 5 plans. 15 ranked findings, all applied:
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| 1 | Helm template syntax (`{{ .Values.namespace }}`) written into values.yaml — values files are never templated; every cross-service URL would ship as literal text | Plan 3: cross-service URL helper + per-service Deployment templates |
+| 2 | Namespace rendered as a regular resource — pre-install hooks target a namespace that does not exist yet on a fresh cluster | Plan 1: Namespace as `helm.sh/hook: pre-install,pre-upgrade, hook-weight: -40` (first in the chain) |
+| 3 | genie-ai-nginx image's baked-in upstream is `/api -> Kong`; Kong removed | Plan 3 Task 1b Step 5: per-instance ConfigMap override mounts `/etc/nginx/conf.d/override.conf` (SPA + /api + /uploads routing) |
+| 4 | DocumentRepository PVC for uploads persistence missing | Plan 3 Task 1b Step 4: PVC template + factory passthrough for `volumeMounts: [{name: uploads, mountPath: /app/uploads}]` |
+| 5 | `_pdb-bundler.yaml` (underscore prefix) — Helm skips it, no PDB ever rendered | Sweep across all plans: `templates/_<dir>/` → `templates/<dir>/`, `_<filename>` → `<filename>` (the same trap affected all live-template subdirs in Plans 2-5) |
+| 6 | Backend envFrom gains `vllm-api-key`, but the SealedSecret is gated on `ai.enabled` — same Day-0 crashloop class as the earlier `keycloak-proxy-client-secret` issue | Plan 5 Task 6: vllm-api-key + kc-dataprep + keycloak-proxy all gate only on `secrets.sealedSecrets.enabled` (not on `ai.enabled`) |
+| 7 | Plan 5 references `factory passthrough via podSecurityContext` but the factory extension list has no podSecurityContext — GPU pods cannot write the RWX PVC on first download | Plan 5: factory gains `podSecurityContext` passthrough; vllm + vllm-translation merged dicts carry `fsGroup: 1000`; tei + tei-reranker carry `fsGroup: 100` |
+| 8 | cloudnative-pg pin `~> 0.22.0` in Plan 2 Chart.yaml contradicts spec §4 + Global Constraints (`~> 0.30.0`) | Plan 2 Task 1: unified to `~> 0.30.0` |
+| 9 | Remote-GPU fail-fast nested the optional-URL checks inside the base-URL guard — when `vllmUrl+teiEmbeddingUrl` are set, missing `teiRerankingUrl`/`vllmTranslationUrl` are silently accepted | Plan 5 Task 8: each URL check sits at the outer if-level (independent gates) |
+| 10 | All VictoriaMetrics endpoints hardcode the single-node service (`vmetrics:8428`); prod profile renders VMCluster whose operator-created Services are `vmetrics-vminsert`/`vmselect`/`vmstorage` | Plan 4: VMAgent remoteWrite + Grafana datasource ternary on `clusterProfile` (vmselect:8481 + vminsert:8480 in prod) |
+| 11 | Plan 4 verification commands render with only `--set clusterProfile=prod`; observability templates gate on `observability.*.enabled` (static false) | Plan 4: every prod-profile verifier prepended with `--set observability.enabled=true --set observability.metrics.enabled=true --set observability.logs.enabled=true --set observability.traces.enabled=true --set observability.otel.enabled=true` |
+| 12 | SealedSecret encryptedData carries `PLACEHOLDER_*_SEALED_KID` — underscores outside the base64 alphabet; controller fails to decrypt, never materialises the K8s Secret; helm test always fails on a fresh kind install | Plan 2 + Plan 5: placeholders replaced with `UExBQ0VIT0xERVIr` (base64 of "PLACEHOLDER+"); chart-side conftest (Plan 7) fails release branches that ship them. Re-seal with `kubeseal` before `helm install` |
+| 13 | ArangoDeployment PVC renders `storageClassName: {{ .Values.pluggable.storageClassName | default "" }}` — empty-string pin (same trap the CNPG template guards against) | Plan 2 Task 9: `{{- with .Values.pluggable.storageClassName }}` guard in both single + cluster modes |
+| 14 | Group-5 reachability test uses `/` for document-repository (returns 404) and HTTP against the binary clamd port (hangs); can never pass | Plan 3 Task 9: document-repository check uses `/health`; clamav check uses `bash -c "echo > /dev/tcp/clamav/3310"` (TCP probe) |
+| 15 | `email-password` SealedSecret is rendered but no service's envFrom ever references it — EMAIL_PASSWORD never reaches the backend | Plan 3 Task 1b Step 3: add `email-password` to backend's `secrets:` list |
+
 # Plan Defect Ledger — Helm Migration Docs
 
 Tracks every finding from the adversarial review rounds against the spec +

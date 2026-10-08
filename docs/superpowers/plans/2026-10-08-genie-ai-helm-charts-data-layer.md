@@ -64,7 +64,7 @@ dependencies:
 
   # Plan 2 — data layer operators
   - name: cloudnative-pg
-    version: "~> 0.22.0"
+    version: "~> 0.30.0"   # unified with spec §4 + Global Constraints (wave-6 #5)
     repository: "https://cloudnative-pg.github.io/charts"
     condition: data.postgres.enabled
   - name: kube-arangodb
@@ -317,7 +317,7 @@ git commit -m "feat(charts): add componentLabel / servicePort / serviceSelector 
 ## Task 5: CNPG Cluster for keycloak-db (the only Postgres in the chart)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_data/cnpg-keycloak-db.yaml`
+- Create: `charts/genieai-umbrella/templates/data/cnpg-keycloak-db.yaml`
 
 **Interfaces:**
 - Consumes: `data.postgres.enabled` toggle; `clusterProfile` for HA instances; PVC from `genieai` namespace.
@@ -328,7 +328,7 @@ git commit -m "feat(charts): add componentLabel / servicePort / serviceSelector 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: Cluster$" || echo "0"`
 Expected: prints `0`.
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_data/cnpg-keycloak-db.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/data/cnpg-keycloak-db.yaml`**
 
 ```yaml
 {{- if .Values.data.postgres.enabled -}}
@@ -399,7 +399,7 @@ Expected: prints `instances: 3`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_data/cnpg-keycloak-db.yaml
+git add charts/genieai-umbrella/templates/data/cnpg-keycloak-db.yaml
 git commit -m "feat(charts): render CNPG Postgres Cluster for keycloak-db (HA via clusterProfile)"
 ```
 
@@ -408,9 +408,9 @@ git commit -m "feat(charts): render CNPG Postgres Cluster for keycloak-db (HA vi
 ## Task 4a: ServiceAccount + RBAC for pre-install hooks (NEW)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_rbac/dep-check-serviceaccount.yaml`
-- Create: `charts/genieai-umbrella/templates/_rbac/dep-check-clusterrole.yaml` (custom ClusterRole with CRD access — Review Focus F7)
-- Create: `charts/genieai-umbrella/templates/_rbac/dep-check-clusterrolebinding.yaml`
+- Create: `charts/genieai-umbrella/templates/rbac/dep-check-serviceaccount.yaml`
+- Create: `charts/genieai-umbrella/templates/rbac/dep-check-clusterrole.yaml` (custom ClusterRole with CRD access — Review Focus F7)
+- Create: `charts/genieai-umbrella/templates/rbac/dep-check-clusterrolebinding.yaml`
 
 **Interfaces:**
 - Consumes: nothing new.
@@ -424,7 +424,7 @@ git commit -m "feat(charts): render CNPG Postgres Cluster for keycloak-db (HA vi
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "kind: ServiceAccount" || echo "0"`
 Expected: prints `0`.
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_rbac/dep-check-serviceaccount.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/rbac/dep-check-serviceaccount.yaml`**
 
 ```yaml
 apiVersion: v1
@@ -440,7 +440,7 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation
 ```
 
-- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_rbac/dep-check-clusterrole.yaml`** (custom ClusterRole)
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/rbac/dep-check-clusterrole.yaml`** (custom ClusterRole)
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -477,7 +477,7 @@ rules:
     verbs: ["create", "patch"]
 ```
 
-- [ ] **Step 4: Write `charts/genieai-umbrella/templates/_rbac/dep-check-clusterrolebinding.yaml`**
+- [ ] **Step 4: Write `charts/genieai-umbrella/templates/rbac/dep-check-clusterrolebinding.yaml`**
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -513,7 +513,7 @@ Expected: 0 errors.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_rbac/
+git add charts/genieai-umbrella/templates/rbac/
 git commit -m "feat(charts): ServiceAccount + custom ClusterRole (CRD access) + RoleBinding for pre-install hook Jobs"
 ```
 
@@ -851,21 +851,21 @@ git commit -m "feat(charts): pre-install cluster-profile auto-detect hook"
 ## Task 8: Keycloak CR + KeycloakRealmImport CR (operator's REAL CRD set)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_data/keycloak-instance.yaml`
-- Create: `charts/genieai-umbrella/templates/_data/keycloak-realm-import.yaml`
+- Create: `charts/genieai-umbrella/templates/data/keycloak-instance.yaml`
+- Create: `charts/genieai-umbrella/templates/data/keycloak-realm-import.yaml`
 
 **Interfaces:**
 - Consumes: `data.keycloak.enabled`, `data.keycloak.realmImport`, `data.keycloak.adminEmail`, CNPG `keycloak-db` cluster (Task 5), `keycloak-db-credentials` secret (Task 11).
 - Produces: a `Keycloak` CR (the managed instance, backed by keycloak-db) + a `KeycloakRealmImport` CR (imports the genieai realm with admin user + `genie-app` OIDC client).
 
-**CRD reality check (round-6 review fix)**: the keycloak-operator ships exactly `Keycloak`, `KeycloakBackup`, `KeycloakRealmImport` — there is **no `KeycloakRealm` CRD** (earlier drafts rendered a CR for a CRD that does not exist; the instance would never start). Realm/users/clients live in `KeycloakRealmImport.spec.realm` (full realm JSON, same shape as the Swarm realm export). The `unsupported` block exists for fields the CRD schema does not model — we avoid it.
+**CRD reality check**: the keycloak-operator ships exactly `Keycloak`, `KeycloakBackup`, `KeycloakRealmImport` — there is **no `KeycloakRealm` CRD** (earlier drafts rendered a CR for a CRD that does not exist; the instance would never start). Realm/users/clients live in `KeycloakRealmImport.spec.realm` (full realm JSON, same shape as the Swarm realm export). The `unsupported` block exists for fields the CRD schema does not model — we avoid it.
 
 - [ ] **Step 1: Run red-gate — no Keycloak CRs yet**
 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: Keycloak\|^kind: KeycloakRealmImport$" || echo "0"`
 Expected: prints `0`.
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_data/keycloak-instance.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/data/keycloak-instance.yaml`**
 
 ```yaml
 {{- if .Values.data.keycloak.enabled -}}
@@ -898,7 +898,7 @@ spec:
 {{- end -}}
 ```
 
-- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_data/keycloak-realm-import.yaml`**
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/data/keycloak-realm-import.yaml`**
 
 ```yaml
 {{- if and .Values.data.keycloak.enabled .Values.data.keycloak.realmImport -}}
@@ -989,7 +989,7 @@ Expected: 0 errors.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_data/keycloak-instance.yaml charts/genieai-umbrella/templates/_data/keycloak-realm-import.yaml
+git add charts/genieai-umbrella/templates/data/keycloak-instance.yaml charts/genieai-umbrella/templates/data/keycloak-realm-import.yaml
 git commit -m "feat(charts): Keycloak CR (CNPG-backed) + KeycloakRealmImport for genieai realm"
 ```
 
@@ -998,7 +998,7 @@ git commit -m "feat(charts): Keycloak CR (CNPG-backed) + KeycloakRealmImport for
 ## Task 9: ArangoDeployment (single-node default, cluster via profile)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_data/arangodb-deployment.yaml`
+- Create: `charts/genieai-umbrella/templates/data/arangodb-deployment.yaml`
 
 **Interfaces:**
 - Consumes: `data.arangodb.enabled`, `data.arangodb.mode`, `data.arangodb.storageSize`.
@@ -1009,7 +1009,7 @@ git commit -m "feat(charts): Keycloak CR (CNPG-backed) + KeycloakRealmImport for
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: ArangoDeployment$" || echo "0"`
 Expected: prints `0`.
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_data/arangodb-deployment.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/data/arangodb-deployment.yaml`**
 
 ```yaml
 {{- if .Values.data.arangodb.enabled -}}
@@ -1046,7 +1046,12 @@ spec:
       engine: RocksDB
       volumeClaimTemplate:
         spec:
-          storageClassName: {{ .Values.pluggable.storageClassName | default "" }}
+          {{- /* Wave-8 F13: render ONLY when set — empty-string pins
+                 storageClassName: "" = "no default SC" and strands the PVC
+                 (same trap the CNPG template guards against). */ -}}
+          {{- with .Values.pluggable.storageClassName }}
+          storageClassName: {{ . }}
+          {{- end }}
           accessModes:
             - ReadWriteOnce
           resources:
@@ -1082,7 +1087,9 @@ spec:
       engine: RocksDB
       volumeClaimTemplate:
         spec:
-          storageClassName: {{ .Values.pluggable.storageClassName | default "" }}
+          {{- with .Values.pluggable.storageClassName }}
+          storageClassName: {{ . }}
+          {{- end }}
           accessModes:
             - ReadWriteOnce
           resources:
@@ -1133,7 +1140,7 @@ git commit -m "docs(charts): ArangoDB single -> cluster migration playbook"
 - [ ] **Step 6: Commit template**
 
 ```bash
-git add charts/genieai-umbrella/templates/_data/arangodb-deployment.yaml
+git add charts/genieai-umbrella/templates/data/arangodb-deployment.yaml
 git commit -m "feat(charts): ArangoDeployment (single default, cluster via clusterProfile)"
 ```
 
@@ -1153,8 +1160,8 @@ Kong is deleted from the chart (k8s-native-audit decision 7, user-confirmed 2026
 ## Task 11: SealedSecret framework (4 CRs in Plan 2; remaining secrets ship with their consumers in Plans 3–6)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_secrets/arango-secrets.yaml` (ArangoDB-specific: 2 SealedSecrets)
-- Create: `charts/genieai-umbrella/templates/_secrets/keycloak-secrets.yaml` (Keycloak bootstrap: 2 SealedSecrets)
+- Create: `charts/genieai-umbrella/templates/secrets/arango-secrets.yaml` (ArangoDB-specific: 2 SealedSecrets)
+- Create: `charts/genieai-umbrella/templates/secrets/keycloak-secrets.yaml` (Keycloak bootstrap: 2 SealedSecrets)
 - Create: `charts/genieai-umbrella/templates/hooks/pre-upgrade-sealed-secret-validate.yaml` (drift check via SealedSecret `invalid` annotation, no kubeseal CLI needed)
 
 **Interfaces:**
@@ -1172,7 +1179,7 @@ Kong is deleted from the chart (k8s-native-audit decision 7, user-confirmed 2026
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: SealedSecret$" || echo "0"`
 Expected: prints `0`.
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_secrets/arango-secrets.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/secrets/arango-secrets.yaml`**
 
 ```yaml
 {{- if .Values.secrets.sealedSecrets.enabled -}}
@@ -1204,19 +1211,32 @@ spec:
   {{- /* Review Focus F10 fix — kube-arangodb's `jwtSecretName` requires the
          key `jwt`, not `password`. The `rootPasswordSecretName` requires
          the key `password`. Each SealedSecret's encryptedData carries the
-         key the operator's `kube-arangodb` expects. */ -}}
+         key the operator's `kube-arangodb` expects.
+
+         Wave-8 F12 fix — the `PLACEHOLDER_*` literals below are not valid
+         base64 (underscores outside the alphabet). The sealed-secrets
+         controller fails to decrypt, marks the resource `invalid`, and
+         never materialises the underlying K8s Secret. The CI helm-test
+         (Task 12) would always fail on a fresh kind install until an
+         operator re-seals real values — unacceptable for green CI.
+         Fix: the chart ships a clearly-marked `PLACEHOLDER+` suffix
+         (unambiguous sentinel) AND the chart-side conftest (Plan 7) fails
+         the release branches that commit placeholders. Re-seal with
+         `kubeseal --cert pub-cert.pem --scope cluster-wide --name <name>`
+         before merging; the operator-side workflow is documented in
+         spec §8. */ -}}
   {{- if eq $secretName "arango-root-secret" }}
   encryptedData:
-    password: PLACEHOLDER_arango-root-password_SEALED_KID
+    password: UExBQ0VIT0xERVIr     # PLACEHOLDER+ — RE-SEAL before helm install
   {{- else if eq $secretName "arango-jwt-secret" }}
   encryptedData:
-    jwt: PLACEHOLDER_arango-jwt-key_SEALED_KID
+    jwt: UExBQ0VIT0xERVIr           # PLACEHOLDER+ — RE-SEAL before helm install
   {{- end }}
 {{- end -}}
 {{- end -}}
 ```
 
-- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_secrets/keycloak-secrets.yaml`**
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/secrets/keycloak-secrets.yaml`**
 
 ```yaml
 {{- if and .Values.secrets.sealedSecrets.enabled .Values.data.keycloak.enabled -}}
@@ -1238,11 +1258,14 @@ spec:
          .Values.namespace reads a field off the STRING and errors at render. */ -}}
   encryptedData:
     {{- if eq $secretName "keycloak-db-credentials" }}
-    # CNPG initdb.secret requires BOTH keys (Task 5)
-    username: PLACEHOLDER_keycloak-db-username_SEALED_KID
-    password: PLACEHOLDER_keycloak-db-password_SEALED_KID
-    {{- else }}
-    password: PLACEHOLDER_genie-admin-password_SEALED_KID
+    # CNPG initdb.secret requires BOTH keys (Task 5). Wave-8 F12:
+    # PLACEHOLDER+ sentinels (valid base64 of "PLACEHOLDER+"); conftest
+    # (Plan 7) fails release branches that ship them. Re-seal with
+    # kubeseal before helm install.
+    username: UExBQ0VIT0xERVIr
+    password: UExBQ0VIT0xERVIr
+    {- else }
+    password: UExBQ0VIT0xERVIr
     {{- end }}
 {{- end -}}
 {{- end -}}
@@ -1354,7 +1377,7 @@ Expected: 0 errors.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_secrets/ charts/genieai-umbrella/templates/hooks/pre-upgrade-sealed-secret-validate.yaml
+git add charts/genieai-umbrella/templates/secrets/ charts/genieai-umbrella/templates/hooks/pre-upgrade-sealed-secret-validate.yaml
 git commit -m "feat(charts): SealedSecret templates (Arango, Keycloak) + pre-upgrade drift validation"
 ```
 

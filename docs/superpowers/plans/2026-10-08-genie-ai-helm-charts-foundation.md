@@ -599,6 +599,19 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: {{ $ns }}
+  annotations:
+    # Wave-8 F2: the Namespace MUST be a pre-install hook. Regular resources
+    # apply only AFTER all pre-install hooks — a regular Namespace means the
+    # hook RBAC (-30) / ConfigMap (-20) / Jobs (-10/-5) target a namespace
+    # that does not exist yet on a fresh cluster ("namespaces \"genie\" not
+    # found") and every first install fails. Weight -40 puts it first in the
+    # hook chain (-40 ns -> -30 rbac -> -20 cm -> -10 profile -> -5 dep-check).
+    # before-hook-creation keeps it across installs; the namespace INTENTIONALLY
+    # survives helm uninstall — the data tier (PVCs, sealed-secrets keys)
+    # depends on the namespace existing.
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-40"
+    "helm.sh/hook-delete-policy": before-hook-creation
   labels:
     {{- include "genieai-common.labels" $componentValues | nindent 4 }}
     genieai.io/cluster-profile: {{ .Values.clusterProfile | default "dev" | quote }}
@@ -723,7 +736,7 @@ kind load docker-image alpine:3.20 --name genieai-test
 kind create cluster --name genieai-test --image kindest/node:v1.33.0
 
 # Install chart
-helm install test charts/genieai-umbrella -n genieai   # the chart renders its own Namespace — do NOT pass --create-namespace (it pre-creates an unowned namespace the chart object then collides with)
+helm install test charts/genieai-umbrella -n genieai   # the Namespace renders as a -40 pre-install HOOK (first in the chain) — no --create-namespace needed
 
 # Run test
 helm test test -n genieai

@@ -213,6 +213,16 @@ describe('listRuns', () => {
     const aql = __mockDb.query.mock.calls[0][0];
     expect(aql).toContain('okf_head_test_runs');
     expect(aql).toContain('FILTER d.kind == @kind');
+    // the @kind bind var is present when the filter clause is
+    expect(__mockDb.query.mock.calls[0][1]).toMatchObject({ rid: 'me', kind: 'run', lim: 5 });
+  });
+
+  it('kind=all OMITS the filter clause AND the unused bind var (Arango rejects undeclared bind params)', async () => {
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    await svc.listRuns('me', { kind: 'all' });
+    const [aql, bindVars] = __mockDb.query.mock.calls[0];
+    expect(aql).not.toContain('@kind');
+    expect(bindVars).not.toHaveProperty('kind');
   });
 });
 

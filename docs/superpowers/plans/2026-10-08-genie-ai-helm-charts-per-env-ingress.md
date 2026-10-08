@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the per-environment configuration layer (Kustomize overlays + `values-override.yaml` per env), the GitOps sync examples (ArgoCD + Flux), the Envoy Gateway ingress (HTTPRoute per env, optional cert-manager + ClusterIssuer), the db-migrations Job (Plan 2 deferred), the document-repository PVC (Plan 3 deferred), the verified-peer NetworkPolicy pass (Plan 3 deferred), the `_pdb-bundler` underscore sweep status (Plan 3 retro), and the related open items from `docs/charts/plan-defects.md`.
+**Goal:** Ship the per-environment configuration layer (`values-override.yaml` per env) for the **two** envs this deployment model actually uses — `dev` (local, port-forward) and `prod` (el-salvador, the only real cluster) — plus the GitOps sync example for prod, Envoy Gateway ingress, db-migrations Job, document-repository PVC, verified-peer NetworkPolicy pass, per-env uninstallPolicy opt-in. **Removed from scope**: `staging/` and `sovereign/` as separate envs — staging is a no-op in our model (no separate tier between dev and el-salvador), and sovereign is the *identity* of prod, not a separate profile. (Earlier draft of this plan had 4 overlays; rolled back to 2 after the user confirmed the actual env inventory.)
 
 **Architecture:** Per-env state lives entirely OUTSIDE the chart. Two layouts, both supported (chart is GitOps-agnostic per spec §19):
 1. **ArgoCD** (recommended per user preference): an `Application` CR per env, the chart's umbrella at a per-env branch, with Kustomize overlay + `values-override.yaml` supplying the per-env values.
@@ -19,7 +19,7 @@ The chart gains NO new operators (cert-manager is a cluster bootstrap prerequisi
 - Helm chart API version: `v2`. Helm 4.x.
 - The chart NEVER installs Flux, ArgoCD, cert-manager, or the GPU operator — all are cluster bootstrap prerequisites (spec §4 + audit decisions 7/8/Plan 5 round-7). The chart renders only the CRs those operators manage.
 - Per-env overrides live in `deploy/environments/<env>/values-override.yaml` (Kustomize configMapGenerator pattern, NOT direct helm value overrides — keeps diff history tight and supports Kustomize post-render transformations like patchesStrategicMerge).
-- The `release/<env>` branches (`release/el-salvador`, `release/2.0`, `release/2.1`) carry their own per-env overlay files; this plan's `deploy/environments/<env>/` skeleton ships with `dev/staging/prod/sovereign` as illustrative, real envs cherry-pick from those.
+- The `release/el-salvador` branch carries the per-env overlay for prod (the only real cluster); the `release/2.0` / `release/2.1` branches (legacy Swarm-versioned) are NOT in scope. This plan's `deploy/environments/<env>/` ships with `dev/prod` only.
 - All English documentation and comments per project CLAUDE.md. Commits in English, Conventional Commits.
 - Worktree path: `/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/k8s-migration/`. Branch: `feat/k8s-migration`.
 - Every new Deployment maps to a `docs/charts/k8s-native-audit.md` row (Tasks 1, 2, 3 each amend the table).
@@ -123,13 +123,9 @@ services:
   clamav: { enabled: false }   # virus scanning off in dev (faster CI)
 ```
 
-- [ ] **Step 2: Create `deploy/environments/staging/values-override.yaml`** — mirror of dev with: `clusterProfile: staging`, `observability.enabled: true` (and the per-component mirrors), `ingress.enabled: true`, `ingress.host: staging.genieai.example.org`, `ingress.tls.issuerName: genieai-staging`, `ai.gpu.vllm.count: 2` (HA), `services.clamav: {enabled: true}`.
+- [ ] **Step 2: Create `deploy/environments/prod/values-override.yaml`** — the **only** real overlay (el-salvador prod cluster, 10.0.0.102). `clusterProfile: prod`, full observability stack on, ingress enabled, remote-GPU mode (the GPU node 10.0.0.110 is reached over the WG tunnel; `ai.remoteGpu.enabled: true`), single-node defaults (1 postgres / 1 arangodb / 1 model of each kind — the operator's el-salvador hardware is single-node, not HA), TLS via cert-manager (`ingress.tls.issuerName: genieai-el-salvador` — operator-defined ClusterIssuer), `services.clamav: {enabled: true}`, `services.backend.replicas: 1` (single-node), `services.frontend.replicas: 1`, full SealedSecret suite (no PLACEHOLDER sentinels in release).
 
-- [ ] **Step 3: Create `deploy/environments/prod/values-override.yaml`** — `clusterProfile: prod`, prod HA everywhere (`postgres.instances: 3`, `arangodb.mode: cluster`, `ai.gpu.vllm.count: 4`), full observability stack on, `ingress.tls.issuerName: genieai-prod-letsencrypt`, `services.backend.replicas: 3`, `services.documentRepository.replicas: 2`, `clusterProfileReplicas.prod.backend: 3`, `clusterProfileReplicas.prod.documentRepository: 2`.
-
-- [ ] **Step 4: Create `deploy/environments/sovereign/values-override.yaml`** — `clusterProfile: sovereign` (the air-gap / no-internet variant: `ai.remoteGpu.enabled: true` with a `vllmUrl: https://gpu-sovereign.example.org/vllm` etc. — operators with a sovereign on-prem GPU cluster), `observability.enabled: true` (PII redaction mandatory), `ingress.tls.issuerName: genieai-sovereign-internal`, `data.postgres.instances: 1`, `data.arangodb.mode: single`, no `gpu.*` overrides (remote URL drives).
-
-- [ ] **Step 5: Create `deploy/environments/README.md`**
+- [ ] **Step 3: Create `deploy/environments/README.md`**
 
 ```markdown
 # Per-environment overlays
@@ -147,18 +143,23 @@ Each `deploy/environments/<env>/` directory holds:
   `--cert pub-cert.pem`)
 
 Conventions:
-- `clusterProfile` MUST be set on every env (`dev | staging | prod | sovereign`)
+- Only TWO envs ship: `dev` (local port-forward, no ingress) and
+  `prod` (el-salvador — the only real cluster, 10.0.0.102). `staging` and
+  `sovereign` are NOT separate envs in this deployment model: prod
+  *is* the sovereign on-prem cluster, and we don't run a separate
+  staging tier before it.
+- `clusterProfile` MUST be set on every env (`dev | prod`)
 - The umbrella's `namespace` defaults to `genieai`; per-namespace installs
   override here AND commit to per-namespace ops (see
   `docs/charts/namespace-per-env.md`).
-- The `release/<env>` branches (e.g. `release/el-salvador`) carry their
-  own per-env overlay; the `dev`/`staging`/`prod`/`sovereign` skeleton
-  in this directory is illustrative.
-- `deploy/gitops/` ships both ArgoCD and Flux sync examples; pick ONE,
-  delete the other (spec §19.3 — chart is GitOps-agnostic).
+- `release/el-salvador` (the prod branch) carries the per-env overlay;
+  `dev` runs against `feat/k8s-migration` directly via `helm install
+  --dry-run=server`.
+- `deploy/gitops/` ships both ArgoCD and Flux sync examples for prod;
+  pick ONE, delete the other (spec §19.3 — chart is GitOps-agnostic).
 ```
 
-- [ ] **Step 6: Create `docs/charts/namespace-per-env.md`**
+- [ ] **Step 4: Create `docs/charts/namespace-per-env.md`**
 
 ```markdown
 # Namespace-per-env — caveat
@@ -193,7 +194,7 @@ operator must verify that any env-side Kustomize patches reference the
 same namespace. The chart will not warn if the two diverge.
 ```
 
-- [ ] **Step 7: Add chart-side `values.yaml` blocks** (consumed by later tasks)
+- [ ] **Step 5: Add chart-side `values.yaml` blocks** (consumed by later tasks)
 
 ```yaml
 ingress:
@@ -253,18 +254,16 @@ pluggable:
   crossNamespaceAllowed: []
 ```
 
-- [ ] **Step 8: Render with `dev` overlay and confirm diff**
+- [ ] **Step 6: Render with `dev` overlay and confirm diff**
 
 Run: `helm template test charts/genieai-umbrella -n genieai -f deploy/environments/dev/values-override.yaml | head -30`
 Expected: renders the Namespace with `genieai` name + dev PSA labels; existing Plan 1-5 resources still emit; ingress resources do NOT render (dev's `ingress.enabled: false`).
 
-- [ ] **Step 9: `helm lint --strict` (with each overlay) + commit**
+- [ ] **Step 7: `helm lint --strict` (with each overlay) + commit**
 
 ```bash
 helm lint charts/genieai-umbrella --strict -f deploy/environments/dev/values-override.yaml
-helm lint charts/genieai-umbrella --strict -f deploy/environments/staging/values-override.yaml
 helm lint charts/genieai-umbrella --strict -f deploy/environments/prod/values-override.yaml
-helm lint charts/genieai-umbrella --strict -f deploy/environments/sovereign/values-override.yaml
 git add deploy/ docs/charts/namespace-per-env.md charts/genieai-umbrella/values.yaml
 git commit -m "feat(charts): per-env overlays (dev/staging/prod/sovereign) + ingress/migrate/netpol values"
 ```
@@ -436,13 +435,13 @@ Expected: prints the Certificate with the prod Issuer name.
 
 - [ ] **Step 3: Negative test — missing issuerName fails**
 
-Run: `helm template test charts/genieai-umbrella -n genieai -f deploy/environments/staging/values-override.yaml --set ingress.tls.enabled=true 2>&1 | tail -5`
+Run: `helm template test charts/genieai-umbrella -n genieai -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=false 2>&1 | grep "Error" | head -3`
 Expected: a Helm template error (the `required` function in Task 3 Step 1).
 
 - [ ] **Step 4: `helm lint --strict` + commit**
 
 ```bash
-helm lint charts/genieai-umbrella --strict -f deploy/environments/staging/values-override.yaml --set ingress.tls.enabled=true
+helm lint charts/genieai-umbrella --strict -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=true
 git add charts/genieai-umbrella/templates/gateway/certificate.yaml
 git commit -m "feat(charts): cert-manager Certificate (Issuer-agnostic; conftest forbids chart-side Issuer CRs)"
 ```
@@ -521,7 +520,7 @@ spec:
   revisionHistoryLimit: 10
 ```
 
-- [ ] **Step 3: Write `deploy/gitops/argocd/genieai-{staging,prod}.yaml`** — mirror of dev with `targetRevision: release/staging` / `release/prod` and `path: deploy/environments/staging` / `deploy/environments/prod`.
+- [ ] **Step 3: Write `deploy/gitops/argocd/genieai-prod.yaml`** — mirror of dev with `targetRevision: release/el-salvador` and `path: deploy/environments/prod`. (Sole real env. Other clusters — dev — use `kubectl port-forward`, not GitOps.)
 
 - [ ] **Step 4: Write `deploy/gitops/flux/gitrepository.yaml`**
 
@@ -569,7 +568,7 @@ spec:
 
 (The health check names must be LITERAL (not Helm-templated) — Flux does not evaluate `{{ .Values... }}`. Render one Flux Kustomization per env with the literal `name:` + `namespace:` values, derived from the per-env `genieai-common.fullname` template at apply time. If operators rename the release, the per-env Kustomization is re-rendered.)
 
-- [ ] **Step 6: Write `deploy/gitops/flux/kustomization-{staging,prod}.yaml`** — same shape, `path: ./deploy/environments/<env>` + literal backend name + namespace.
+- [ ] **Step 6: Skip** — Flux is the optional path (per spec §19.3.1); for el-salvador we use ArgoCD (Step 3). The `flux/kustomization-prod.yaml` is left as a reference for operators who prefer Flux; do not generate a separate `kustomization-staging.yaml` (no such env).
 
 - [ ] **Step 7: Write `deploy/gitops/README.md`**
 
@@ -587,9 +586,8 @@ follow the standard ArgoCD pattern (ApplicationSet is overkill for 4 envs).
 
 ```bash
 kubectl apply -f deploy/gitops/argocd/project.yaml
-kubectl apply -f deploy/gitops/argocd/genieai-dev.yaml
-kubectl apply -f deploy/gitops/argocd/genieai-staging.yaml
 kubectl apply -f deploy/gitops/argocd/genieai-prod.yaml
+# dev uses kubectl port-forward; no GitOps for dev.
 ```
 
 ## Option B — Flux
@@ -791,22 +789,22 @@ Read `charts/genieai-umbrella/templates/hooks/pre-delete-uninstall-gate.yaml`. P
 
 - [ ] **Step 2: Per-env `uninstallPolicy` in values-override**
 
-For each `deploy/environments/<env>/values-override.yaml`, optionally add:
+In `deploy/environments/prod/values-override.yaml` (the sole real env), add:
 ```yaml
 uninstallPolicy:
   # `enabled: true` = gate renders (the operator MUST set the annotation
   # before `helm uninstall`). `enabled: false` = gate is a no-op
   # (uninstall proceeds; spec §13.1 says this is the default for dev
-  # only — prod/staging/sovereign should keep it `true`).
+  # only — prod should keep it `true`).
   enabled: true
 ```
 
-Set `enabled: false` in `dev/values-override.yaml`; `true` for staging/prod/sovereign.
+Set `enabled: false` in `dev/values-override.yaml`; `true` for `prod/values-override.yaml`.
 
 - [ ] **Step 3: `helm template` with each overlay**
 
-Run: `for env in dev staging prod sovereign; do echo "=== $env"; helm template test charts/genieai-umbrella -n genieai -f deploy/environments/$env/values-override.yaml | grep -c "pre-delete"; done`
-Expected: dev=0; staging/prod/sovereign=1 (the Job renders when `uninstallPolicy.enabled: true`).
+Run: `for env in dev prod; do echo "=== $env"; helm template test charts/genieai-umbrella -n genieai -f deploy/environments/$env/values-override.yaml | grep -c "pre-delete"; done`
+Expected: dev=0; prod=1 (the Job renders when `uninstallPolicy.enabled: true`).
 
 - [ ] **Step 4: `helm lint --strict` + commit**
 

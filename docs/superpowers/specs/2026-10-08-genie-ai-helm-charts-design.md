@@ -89,6 +89,7 @@ genie-ai/
 | `kube-arangodb` | `https://arangodb.github.io/kube-arangodb` | `~> 1.4.5` | `data.arangodb.enabled` | always |
 | `keycloak-operator` | `https://keycloak.github.io/keycloak-operator-helm` (official) | `~> 26.0.0` | `data.keycloak.enabled` | always |
 | `external-secrets-operator` (ESO) | `https://charts.external-secrets.io` | `~> 0.10.0` | `secrets.eso.enabled` | when `pluggable.secretsBackend: externalSecrets` |
+| `sealed-secrets` | `https://bitnami.github.io/sealed-secrets` (NOT the deprecated `charts.bitnami.com/bitnami/sealed-secrets`) | `~> 2.20.0` (corresponds to controller v0.40.0+) | `secrets.sealedSecrets.enabled` | always (default backend) |
 | `victoria-metrics-operator` | `https://victoriametrics.github.io/helm-charts` | `~> 0.45.0` | `observability.enabled` | profile-gated |
 | `victoria-logs-operator` | same chart family | `~> 0.10.0` | `observability.logs.enabled` | profile-gated |
 | `victoria-traces-operator` | same chart family | `~> 0.5.0` | `observability.traces.enabled` | profile-gated |
@@ -118,7 +119,7 @@ global:
   imagePullPolicy: IfNotPresent
 
 pluggable:
-  secretsBackend: externalSecrets   # externalSecrets | sealedSecrets | secretProviderClass
+  secretsBackend: sealedSecrets     # sealedSecrets (default) | externalSecrets | secretProviderClass
   ingressClassName: envoy           # envoy | nginx-fabric | traefik
   storageClassName: ""              # default = cluster default
   containerRuntime: containerd      # containerd (K8s 1.24+ standard)
@@ -258,7 +259,7 @@ Each pluggable point has a values key, a `_lib` template that branches on it, an
 
 | Plug point | Values key | Default backend | Backends supported (v1) |
 |---|---|---|---|
-| Secrets delivery | `pluggable.secretsBackend` | `externalSecrets` | `externalSecrets` (ESO), `sealedSecrets` (Bitnami), `secretProviderClass` (Azure CSI) |
+| Secrets delivery | `pluggable.secretsBackend` | `sealedSecrets` | `sealedSecrets` (default; chart ships Bitnami-published sealed-secrets helm chart), `externalSecrets` (ESO with Vault), `secretProviderClass` (Azure CSI). Single-backend ship per YAGNI, plug-point design documented for future backends. |
 | Ingress | `pluggable.ingressClassName` | `envoy` | `envoy` (Envoy Gateway), `nginx-fabric` (NGINX Gateway Fabric), `traefik` |
 | TLS issuer | `ingress.tls.issuer` | `cert-manager` | `cert-manager`, `external` (cert volume), `none` |
 | Storage class | `pluggable.storageClassName` | cluster default | cluster-default, SC name, empty = dynamic provisioning |
@@ -312,9 +313,12 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
 
 **Sole pattern**: chart does NOT bake secrets into templates. Every secret reference resolves at runtime via a pluggable backend.
 
-**Default (`pluggable.secretsBackend: externalSecrets`)**:
-- `ExternalSecret` resources (per service) reference Vault AKV/GCP SM/etc.
-- ESO controller materialises into K8s Secret.
+**Default (`pluggable.secretsBackend: sealedSecrets`)**:
+
+`SealedSecret` CRs (per required secret) reference the in-cluster controller. Encrypted blobs ship in Git; controller decrypts on the cluster using its in-memory private key.
+
+- Helm dep: `sealed-secrets/sealed-secrets` chart at `https://bitnami.github.io/sealed-secrets`, version `~> 2.20.0` (controller v0.40.0+, covers CVE-2026-22728 + CVE-2026-59341).
+- `SealedSecret` resources per service / data dependency. Each resource references the controller's public key during `kubeseal` encryption (offline workflow).
 - Service envFrom:
   ```yaml
   envFrom:
@@ -322,11 +326,23 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
         name: {{ include "genieai-common.fullname" . }}-{{ .service.name }}
   ```
 
-**Fallbacks (documented, templates shipped)**:
-- `secretsBackend: sealedSecrets` — chart ships pre-encrypted `SealedSecret` CRs; requires `kubeseal` in CI for encryption; offline-friendly.
-- `secretsBackend: secretProviderClass` — Azure CSI SecretProviderClass, requires AKS + AKV.
+**Rotation story (as of sealed-secrets v0.40.0)**:
+- **Cluster master key**: now **auto-rotates every 30 days by default** (v0.40.0 release note).
+- **Service-token secrets** (the actual K8s `Secret` resources): still manual. To rotate, re-encrypt with `kubeseal` against the current cluster public key and push the new `SealedSecret`.
+- **Audit**: Git history records who/what/when for each `SealedSecret` change. Sufficient for sovereignty P0; not equivalent to Vault's audit device for compliance attestations.
 
-**Migration input**: 14 secrets required by current `.env`, names in `secretsVault.genieai: { arangoPassword, translationCachePassword, postgresPassword, kongDbPassword, keycloakDbPassword, keycloakAdminPassword, keycloakClientSecret, keycloakProxyClientSecret, kcDataprepClientSecret, genieAdminPassword, emailPassword, grafanaAdminPassword, kcGrafanaClientSecret, huggingFaceHubToken }`.
+**Operational workflow** (sovereign / air-gap):
+1. CI/dev holds the cluster public key (fetched via `kubeseal --fetch-cert` against the cluster or downloaded from controller Service).
+2. Engineer runs `kubeseal --cert pub-cert.pem --context=kubeseal-staging --scope namespace --name secret-name` locally to produce an encrypted blob.
+3. Encrypted blob committed in Git under `deploy/environments/<env>/secrets/<name>.yaml`.
+4. `helm install` re-renders the chart; controller decrypts on next sync, K8s Secret materialises.
+5. Rotation: pull latest cert, re-encrypt, commit, deploy.
+
+**Fallbacks (documented, not yet shipped — plug-point design per §6.2)**:
+- `secretsBackend: externalSecrets` — chart would ship `ExternalSecret` CRs; requires HashiCorp Vault + auditor + rotation policy. Deferred to whoever needs it.
+- `secretsBackend: secretProviderClass` — chart would ship Azure CSI `SecretProviderClass`; requires AKS + AKV. Deferred.
+
+**Migration input**: 14 secrets required by current `.env`, names in `secrets.genieai: { arangoPassword, translationCachePassword, postgresPassword, kongDbPassword, keycloakDbPassword, keycloakAdminPassword, keycloakClientSecret, keycloakProxyClientSecret, kcDataprepClientSecret, genieAdminPassword, emailPassword, grafanaAdminPassword, kcGrafanaClientSecret, huggingFaceHubToken }`. (Note: with kong in DB-less mode per Plan 2, `kongDbPassword` becomes unused.)
 
 ## 9. Ingress + TLS
 
@@ -335,7 +351,7 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
 - `Gateway` listens on 80/443 with TLS termination.
 - `HTTPRoute` for `/api/*` → kong:8000 service.
 - `HTTPRoute` for `/*` → nginx:80 service (frontend SPA).
-- TLS via `cert-manager` ClusterIssuer (default) or `secretsBackend: sealedSecrets` for offline.
+- TLS via `cert-manager` ClusterIssuer (default) for internet-reachable CAs. Sealed Secrets does not directly cover TLS certs; for offline sovereign deploys, certificates are pre-baked into a `Secret` and the chart's `values-override.yaml` references them via `secretName` (no `cert-manager` resource emits).
 
 **Fallback**: `nginx-fabric` for teams that need NGINX semantics; `traefik` if user fancies it.
 
@@ -556,7 +572,7 @@ Internal ops docs under `docs/charts/` (K8s-only, dev-internal, not published):
 
 These are deliberate unknowns NOT blocking v1, but documented for follow-up:
 
-1. **Pluggable secrets delivery default**: `externalSecrets` is current default. Chart ships ONLY this backend in v1 (template code, no plug-point duplication). Adding `sealedSecrets`/`secretProviderClass` later is documented in `docs/charts/pluggable-backends.md`.
+1. **Pluggable secrets delivery default**: `sealedSecrets` is current default (per research v2 sealed-secrets run, 2026-10-08). Helm dep pinned to `~> 2.20.0` (controller `>= v0.40.0`, CVE-free). Chart ships ONLY this backend in v1 (template code, no plug-point duplication). Adding `externalSecrets` (ESO + Vault) and `secretProviderClass` (Azure CSI) later is documented in `docs/charts/pluggable-backends.md`. Self-rationale (2026-10-08): sovereign public-sector posture + no Vault available + sealed-secrets v0.40.0 brings 30-day auto-rotation for cluster keys.
 2. **Multi-cluster topology**: not v1. Documented in roadmap.
 3. **GPU sharing (MIG/MPS/time-slicing)**: per-service fine-grained control on 24GB cards is a v2 epic; v1 keeps simple `nodeSelector` and `replicas`. **GPU nodePool validation** (G2) — `gpu.enabled: true` should require `gpu.nodePoolRef` to be set against a labelled node pool; without GPU nodes, the NVIDIA operator DaemonSet crashloops. P2 to add in v1.1.
 4. **Connection pooling (PgBouncer)**: CloudNativePG has native support; whether `services.backend` connects via pooler or direct is a v1.1 decision.

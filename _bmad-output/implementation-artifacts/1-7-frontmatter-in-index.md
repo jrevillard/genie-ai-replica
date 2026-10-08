@@ -421,3 +421,90 @@ story that DEPENDS on Story 1.7 being done first.
 - The selection-based tag-authoring UX (deferred-work entry
   "Selection-based tag authoring") stays deferred to a
   separate story that depends on this one.
+
+## Dev-log 2026-10-08 (live session on feat/okf-server, local build C:\Dev\builds\main)
+
+This session shipped a chain of fixes + one directive change that
+SUPERSEDES parts of the Q1/Q5 resolution above. Recorded here so the
+story stays the source of truth.
+
+### Directive change: the FrontmatterPanel chip UI is RESTORED (supersedes Q5)
+
+Q5 above resolved "FrontmatterPanel removed entirely; YAML center
+pane is the only tag surface." David reversed this live
+(2026-10-08): "the previous UX was great... it is just that it saved
+to a 2nd overlay frontmatter structure which was not necessary."
+The panel is back, mounted in BOTH the wizard Curate step AND the
+editor right rail (always visible on every concept — the editor must
+perform ALL wizard operations). Only the storage target changed:
+the two-write path (index concept PATCH + repo doc PATCH via
+`okf.js:saveFrontmatter`).
+
+### Approval UX dropped (supersedes Q4's per-row approved_at)
+
+David: "the approve button is not needed as the tags should be saved
+to the frontmatter which will be editable by the user." Existence in
+the frontmatter = approved. `approved_at`/`_approved` are no longer
+produced by the client; the publish gate (lifecycle-service.js) now
+checks only ≥3 topic + ≥1 forbidden. Refresh suggestions REPLACES
+the local view (curator re-adds what they want).
+
+### Story 1.7a — vectorized head on publish (NEW)
+
+`buildVectorizedHead(repoId, fm, opts)` in frontmatter-service.js:
+embeds every tag via the shared TEI service, per-field weighted
+averages (topic 1.0 / entity 0.7 / keyword 0.5 / summary 0.5 /
+scope 0.3; forbidden computed but excluded from the head average),
+single bundle-level vector + human-readable head text stored on
+`okf_repositories.head` (additive: {text, vector, per_field, dim,
+model, version, computed_at, computed_by}). Called from BOTH publish
+branches (supplied + auto-suggest), best-effort (TEI outage never
+blocks publish). The retriever does NOT read `head` yet — wiring it
+into routing is the follow-up (see the head-tester feature request,
+below).
+
+### Concept dialog renders the per-repo fields as form rows
+
+The per-concept frontmatter dialog decomposes the `frontmatter:`
+sub-block into labeled rows (Topic/Entity/Forbidden/Keyword as one
+textarea each — one tag per line; Scope/Summary as inputs). No
+per-field Add buttons; the textarea IS the control ("users should
+not have to modify raw markdown for this"). Save does the same
+two-write as the chip panel. `frontmatter` is a reserved extras key.
+
+### Bug chain fixed (live on the local build)
+
+1. **Save failed** — `saveFrontmatter` did `(await
+   import('frontmatterService')).default` but the module is
+   named-exports-only → `patchFrontmatter` threw before any HTTP.
+2. **Dialog rows rendered empty** — `PER_REPO_FIELDS` is a
+   module const, invisible to the template; exposed via a
+   `perRepoFields()` computed (same pattern as `fmKinds()`).
+3. **en.js duplicate `frontmatter:` key** — two literals in one
+   object; the second shadowed the first at runtime + failed
+   lint:frontend (no-dupe-keys). Merged.
+4. **Publish 409 on every publish** — the gate's AQL was
+   `RETURN r.frontmatter, r.name` (invalid multi-return AQL);
+   fixed to `RETURN r.frontmatter`. Repro'd live on repo
+   "NCD Information" (f043215b, 46 concepts).
+5. **Layout** — wizard 70vh bounded, step area scrolls internally,
+   footer pinned; Step 9 Review embeds the editor compact
+   (metadata rail collapsed, 260px file rail).
+6. **lint:frontend warnings** (max-warnings 0): v-html false
+   positive documented (DOMPurify runs in the chunked renderer),
+   Stepper computed/methods order, panel attribute order.
+
+### Commits (feat/okf-server)
+
+9eba9d7e, f5176dd3, 8169193a, 81f7f45b, f3a4bfc6, d7c88a43,
+8aa0035d, eeac48e5, 408b8086 — all pushed; local build
+C:\Dev\builds\main fast-forwarded to match (verified
+byte-identical; canonical D:\ITU-Gitlab is the source of truth).
+
+### Next (the feature request this story feeds into)
+
+Head-tester: view the stored head + vector set; test routing
+selection with keywords/queries; LLM-generated test suites +
+analytics; publish → test → revert-to-review → re-tag → republish
+cycle until accuracy is good, THEN ingest. Design in progress
+(2026-10-08).

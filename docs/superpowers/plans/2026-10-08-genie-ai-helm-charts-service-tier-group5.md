@@ -73,7 +73,7 @@ Add `email-password` to the `services.backend.secrets:` list (this plan's values
 #     podDisruptionBudget: { minAvailable: <int> }
 #     serviceMonitor: false   # if observability enabled, add Prometheus scrape
 services:
-  # Per-service entry shape. Wave-8 F1: NO Helm template syntax here —
+  # Per-service entry shape. NO Helm template syntax here —
   # values.yaml is never templated. Cross-service URLs are injected by
   # the per-service Deployment template (Task 1b).
   #   enabled: true|false
@@ -140,7 +140,7 @@ services:
   nginx:
     enabled: true
     replicas: 1
-    # Wave-8 F3: the genie-ai-nginx image's baked-in upstream IS /api -> Kong
+    # the genie-ai-nginx image's baked-in upstream IS /api -> Kong
     # (api-gateway-solution/nginx/conf/default.conf.template) — Kong is removed
     # (decision 7), so we OVERRIDE the config with a host-mounted ConfigMap
     # pointing /api at the backend Service AND the SPA at frontend. Plan 6
@@ -227,7 +227,7 @@ git commit -m "feat(charts): per-service value entries for Group 5 (backend, fro
 
 ```gotemplate
 {{/*
-Wave-8 F1: values.yaml is never templated, so cross-service URLs MUST
+values.yaml is never templated, so cross-service URLs MUST
 be rendered here.
 Usage:
   {{- include "genieai-umbrella.crossServiceURLs" (list $ctx (list
@@ -1219,7 +1219,7 @@ spec:
           {{- if .Values.services.nginx.enabled }}
           check nginx 80 /healthz 200
           {{- if .Values.services.clamav.enabled }}
-          # Wave-8 F14: clamd is a binary protocol, not HTTP — TCP probe only
+          # clamd is a binary protocol, not HTTP — TCP probe only
           timeout 3 bash -c "echo > /dev/tcp/clamav/3310" 2>/dev/null && \
             echo "PASS: clamav:3310 tcp open" || \
             { echo "FAIL: clamav:3310 tcp closed"; failures=$((failures+1)); }

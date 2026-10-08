@@ -64,7 +64,7 @@ dependencies:
 
   # Plan 2 — data layer operators
   - name: cloudnative-pg
-    version: "~> 0.30.0"   # unified with spec §4 + Global Constraints (wave-6 #5)
+    version: "~> 0.30.0"   # unified with spec §4 + Global Constraints 
     repository: "https://cloudnative-pg.github.io/charts"
     condition: data.postgres.enabled
   - name: kube-arangodb
@@ -1046,7 +1046,7 @@ spec:
       engine: RocksDB
       volumeClaimTemplate:
         spec:
-          {{- /* Wave-8 F13: render ONLY when set — empty-string pins
+          {{- /* render ONLY when set — empty-string pins
                  storageClassName: "" = "no default SC" and strands the PVC
                  (same trap the CNPG template guards against). */ -}}
           {{- with .Values.pluggable.storageClassName }}
@@ -1213,7 +1213,7 @@ spec:
          the key `password`. Each SealedSecret's encryptedData carries the
          key the operator's `kube-arangodb` expects.
 
-         Wave-8 F12 fix — the `PLACEHOLDER_*` literals below are not valid
+         — the `PLACEHOLDER_*` literals below are not valid
          base64 (underscores outside the alphabet). The sealed-secrets
          controller fails to decrypt, marks the resource `invalid`, and
          never materialises the underlying K8s Secret. The CI helm-test
@@ -1258,8 +1258,7 @@ spec:
          .Values.namespace reads a field off the STRING and errors at render. */ -}}
   encryptedData:
     {{- if eq $secretName "keycloak-db-credentials" }}
-    # CNPG initdb.secret requires BOTH keys (Task 5). Wave-8 F12:
-    # PLACEHOLDER+ sentinels (valid base64 of "PLACEHOLDER+"); conftest
+    # CNPG initdb.secret requires BOTH keys (Task 5). # PLACEHOLDER+ sentinels (valid base64 of "PLACEHOLDER+"); conftest
     # (Plan 7) fails release branches that ship them. Re-seal with
     # kubeseal before helm install.
     username: UExBQ0VIT0xERVIr

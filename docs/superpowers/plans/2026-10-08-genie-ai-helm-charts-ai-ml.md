@@ -267,7 +267,7 @@ git commit -m "feat(charts): ai.* values block (14 Group-6 services, models, gpu
 - Consumes: Plan 3 factory (`genieai-umbrella.serviceDeployment`).
 - Produces: factory support for `volumes`, `volumeMounts`, `nodeSelector`, `tolerations`, `gpu` (renders `nvidia.com/gpu` resource limit), `command`, `args` — all optional values passthrough. These fields also serve Plan 6 (document-repository PVC).
 
-- [ ] **Step 1: Fix the factory's component derivation (round-7 review C1) THEN extend**
+- [ ] **Step 1: Fix the factory's component derivation THEN extend**
 
 The Plan 3 factory derives ALL labels/selectors from `$svcName := $ctx.name` — it never reads `$ctx.component`. Model servers pass `name=vllm, component=ai-vllm`, so the factory labels pods `genieai.io/component: vllm` while the hand-written Services select `ai-vllm` → **zero endpoints**. Change the factory's first lines to:
 
@@ -320,6 +320,14 @@ In the `spec.template.spec` block (after `securityContext:`), add:
       volumes:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- /* Wave-8 F7: podSecurityContext passthrough — required for the
+             HF-cache PVC to be group-writable (fsGroup: 1000/100). Without
+             it the vLLM/TEI pods cannot write the first model download
+             and crashloop. */ -}}
+      {{- with $svc.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
 ```
 
 And in the container block (after `envFrom:`), add:
@@ -368,17 +376,17 @@ git commit -m "feat(charts): factory passthrough — volumes, scheduling, GPU re
 ### Task 3: GPU model servers ×4 + HF cache PVC
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_ai/hf-cache-pvc.yaml`
-- Create: `charts/genieai-umbrella/templates/_ai/vllm.yaml`
-- Create: `charts/genieai-umbrella/templates/_ai/vllm-translation.yaml`
-- Create: `charts/genieai-umbrella/templates/_ai/tei.yaml`
-- Create: `charts/genieai-umbrella/templates/_ai/tei-reranker.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/hf-cache-pvc.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/vllm.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/vllm-translation.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/tei.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/tei-reranker.yaml`
 
 **Interfaces:**
 - Consumes: factory (Task 2), `ai.gpu.*`, `ai.hfCache.*`, `ai.models.*`, secret `vllm-api-key` (Task 6).
 - Produces: 1 PVC + 4 GPU Deployments + 4 Services. Each mounts the HF cache at `/root/.cache/huggingface` (compose-verified path) and carries `nodeSelector`/`tolerations` from `ai.gpu`.
 
-- [ ] **Step 1: Write `charts/genieai-umbrella/templates/_ai/hf-cache-pvc.yaml`**
+- [ ] **Step 1: Write `charts/genieai-umbrella/templates/ai/hf-cache-pvc.yaml`**
 
 ```yaml
 {{- /* M7: render only when at least one GPU server actually renders */ -}}
@@ -403,7 +411,7 @@ spec:
 {{- end -}}
 ```
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_ai/vllm.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/ai/vllm.yaml`**
 
 ```yaml
 {{- if and .Values.ai.enabled .Values.ai.services.vllm.enabled (not .Values.ai.remoteGpu.enabled) -}}
@@ -432,6 +440,10 @@ spec:
           "volumeMounts" (list (dict "name" "hf-cache" "mountPath" "/root/.cache/huggingface"))
           "volumes" (list (dict "name" "hf-cache" "persistentVolumeClaim" (dict "claimName" "genieai-hf-cache")))
           "securityContext" (dict "runAsNonRoot" true "runAsUser" 1000 "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "ALL")))
+          # Wave-8 F7: podSecurityContext passthrough (factory reads
+          # `podSecurityContext` from the aiService dict) — fsGroup 1000
+          # makes the RWX HF-cache PVC group-writable for vLLM.
+          "podSecurityContext" (dict "fsGroup" 1000)
           # C2: the factory reads these keys UNGUARDED elsewhere (env,
           # envFrom-from-secrets, probes) — stub them or render nil-pointers.
           "env" (list)
@@ -469,13 +481,13 @@ This keeps Group-5 rendering untouched (no `aiService` key → old path) and let
 
 - [ ] **Step 3: Write `vllm-translation.yaml`, `tei.yaml`, `tei-reranker.yaml`** — same shape as Step 2 with these deltas (all compose-verified):
 
-`vllm-translation`: args = `--model/--served-model-name ai.models.translationId`, `--gpu_memory_utilization ai.gpu.vllmTranslation.memoryUtilization`, `--max_model_len`, `--max-num-seqs`, `--dtype`, `--port 9031`; Service targetPort 9031; component `ai-vllm-translation`.
+`vllm-translation`: same shape as vllm with `podSecurityContext.fsGroup: 1000` (RWX cache); args gain `--port 9031`, `--no-enable-chunked-prefill`, `--chat-template-content-format openai` (gemma handling); Service targetPort 9031; component `ai-vllm-translation`.
 
 **I2 fixes baked in (round-7):**
 
-`tei`: command `["/bin/sh","-c"]`, args `["text-embeddings-router --json-output --model-id <ai.models.embeddingId> --auto-truncate --port 8080"]` — **`--port 8080`**: the image binds :80 as root (Swarm needed `cap_add: NET_BIND_SERVICE`); running non-root with ALL caps dropped, an unprivileged port avoids the EPERM. Service targetPort **8080** (values `port` updated). Mount the HF cache at **`/data`** (NOT `/root/.cache/huggingface — the TEI image bakes `HUGGINGFACE_HUB_CACHE=/data`; docker-compose.yaml tei/tei_reranker mount `huggingface:/data`); component `ai-tei`.
+`tei`: command `["/bin/sh","-c"]`, args `["text-embeddings-router --json-output --model-id <ai.models.embeddingId> --auto-truncate --port 8080"]` — **`--port 8080`**: the image binds :80 as root (Swarm needed `cap_add: NET_BIND_SERVICE`); running non-root with ALL caps dropped, an unprivileged port avoids the EPERM. Service targetPort **8080** (values `port` updated). Mount the HF cache at **`/data`** (NOT `/root/.cache/huggingface` — the TEI image bakes `HUGGINGFACE_HUB_CACHE=/data`; docker-compose.yaml tei/tei_reranker mount `huggingface:/data`); `podSecurityContext.fsGroup: 100` (TEI image UID; without it the first model download EACCES's the RWX PVC); component `ai-tei`.
 
-`tei-reranker`: same `/data` mount + `--port 8080` + `--max-batch-tokens <ai.gpu.teiReranker.maxBatchTokens> --max-concurrent-requests <ai.gpu.teiReranker.maxConcurrentRequests> --auto-truncate <ai.gpu.teiReranker.autoTruncate>`; Service targetPort 8080; component `ai-tei-reranker`.
+`tei-reranker`: same `/data` mount + `podSecurityContext.fsGroup: 100` + `--port 8080` + `--max-batch-tokens <ai.gpu.teiReranker.maxBatchTokens> --max-concurrent-requests <ai.gpu.teiReranker.maxConcurrentRequests> --auto-truncate <ai.gpu.teiReranker.autoTruncate>`; Service targetPort 8080; component `ai-tei-reranker`.
 
 All four: `envFrom` BOTH `vllm-api-key` (VLLM_API_KEY/HF_TOKEN/OPENAI_API_KEY — GPU-node bearer) AND Plan 3's `huggingface-hub-token` (HUGGING_FACE_HUB_TOKEN — the REAL HF pull token; distinct value, do not conflate — round-7 I4). vLLM pair mounts the cache at `/root/.cache/huggingface`; TEI pair at `/data`. All four carry `podSecurityContext: { fsGroup: 1000 }` (vLLM) / `{ fsGroup: 100 }` (TEI image UID) so the PVC is group-writable on first download.
 
@@ -508,7 +520,7 @@ Expected: prints `PASS`.
 
 ```bash
 helm lint charts/genieai-umbrella --strict
-git add charts/genieai-umbrella/templates/_ai/ charts/genieai-umbrella/templates/_lib/_service-factory.tpl
+git add charts/genieai-umbrella/templates/ai/ charts/genieai-umbrella/templates/_lib/_service-factory.tpl
 git commit -m "feat(charts): GPU model servers (vllm, vllm-translation, tei, tei-reranker) + shared HF cache PVC"
 ```
 
@@ -517,17 +529,17 @@ git commit -m "feat(charts): GPU model servers (vllm, vllm-translation, tei, tei
 ### Task 4: CPU OPEA wrappers ×7
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_ai/embedding.yaml`
-- Create: `charts/genieai-umbrella/templates/_ai/reranker.yaml`
-- Create: `charts/genieai-umbrella/templates/_ai/retriever.yaml`
-- Create: `charts/genieai-umbrella/templates/_ai/dataprep.yaml`
-- Create: `charts/genieai-umbrella/templates/_ai/chatqna.yaml`
-- Create: `charts/genieai-umbrella/templates/_ai/textgen.yaml`
-- Create: `charts/genieai-umbrella/templates/_ai/translation.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/embedding.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/reranker.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/retriever.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/dataprep.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/chatqna.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/textgen.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/translation.yaml`
 
 **Interfaces:**
 - Consumes: factory + `aiService` merge pattern (Task 3 Step 2 note), secrets `vllm-api-key` + `kc-dataprep-client-secret` + `arango-root-secret` (Plan 2), `ai.chatqnaConfig` + `ai.arangoConfig` values (Task 1).
-- Produces: 7 Deployments + 7 Services (port 80). **Env contract = the compose env blocks, transcribed VERBATIM** with exactly two classes of change, marked inline per env: `# re-pointed` (host/port → Service DNS :80) or `# values-exposed` (tunable via ai.* values). Nothing load-bearing is silently dropped (round-7 review C3/C4/I8: dropping ARANGO creds killed retrieval+ingestion, dropping LLM env killed generation).
+- Produces: 7 Deployments + 7 Services (port 80). **Env contract = the compose env blocks, transcribed VERBATIM** with exactly two classes of change, marked inline per env: `# re-pointed` (host/port → Service DNS :80) or `# values-exposed` (tunable via ai.* values). Nothing load-bearing is silently dropped.
 
 - [ ] **Step 1: Add the `ai.arangoConfig` values block** (consumed by retriever + dataprep):
 
@@ -716,7 +728,7 @@ envFrom `vllm-api-key`.
 
 - [ ] **Step 4: Render count**
 
-Run: `helm template test charts/genieai-umbrella -n genieai --show-only 'templates/_ai/*' | grep -c "^kind: Deployment$"`
+Run: `helm template test charts/genieai-umbrella -n genieai --show-only 'templates/ai/*' | grep -c "^kind: Deployment$"`
 Expected: prints `11` (4 GPU + 7 wrappers). (`--show-only` avoids subchart-Deployment drift — see M11 convention note in Self-Review.)
 
 - [ ] **Step 5: Verify all AI Services expose port 80**
@@ -754,7 +766,7 @@ Expected: prints `2`.
 
 ```bash
 helm lint charts/genieai-umbrella --strict
-git add charts/genieai-umbrella/templates/_ai/ charts/genieai-umbrella/values.yaml
+git add charts/genieai-umbrella/templates/ai/ charts/genieai-umbrella/values.yaml
 git commit -m "feat(charts): CPU OPEA wrappers — compose-verbatim env, Service-DNS :80, secretKeyRef arango creds"
 ```
 
@@ -763,9 +775,9 @@ git commit -m "feat(charts): CPU OPEA wrappers — compose-verbatim env, Service
 ### Task 5: Disabled-tier templates ×3 (guardrail, chatqna-ui, chatqna-nginx)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_ai/guardrail.yaml`
-- Create: `charts/genieai-umbrella/templates/_ai/chatqna-ui.yaml`
-- Create: `charts/genieai-umbrella/templates/_ai/chatqna-nginx.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/guardrail.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/chatqna-ui.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/chatqna-nginx.yaml`
 
 **Interfaces:**
 - Consumes: `ai.services.{guardrail,chatqnaUi,chatqnaNginx}.enabled` (default false — Swarm replicas 0).
@@ -787,7 +799,7 @@ Expected: prints ≥ 2 (Deployment + Service labels).
 
 ```bash
 helm lint charts/genieai-umbrella --strict
-git add charts/genieai-umbrella/templates/_ai/
+git add charts/genieai-umbrella/templates/ai/
 git commit -m "feat(charts): guardrail + chatqna ui/nginx templates (off by default, Swarm replicas-0 parity)"
 ```
 
@@ -796,32 +808,40 @@ git commit -m "feat(charts): guardrail + chatqna ui/nginx templates (off by defa
 ### Task 6: AI-tier SealedSecrets ×3 + backend envFrom update
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_secrets/ai-secrets.yaml`
+- Create: `charts/genieai-umbrella/templates/secrets/ai-secrets.yaml`
 - Modify: `charts/genieai-umbrella/values.yaml` (backend `secrets:` list + `ai.chatqnaConfig` block referenced by Task 4)
 
 **Interfaces:**
 - Consumes: spec §8 rows: `VLLM_API_KEY` (Plan 5), `keycloakProxyClientSecret` (Plan 5), `kcDataprepClientSecret` (Plan 5).
 - Produces: 3 SealedSecret CRs. `vllm-api-key` carries FOUR keys (`VLLM_API_KEY`, `HF_TOKEN`, `HUGGINGFACEHUB_API_TOKEN`, `OPENAI_API_KEY`) — the GPU-node bearer under every env name the wrappers + chatqna AsyncOpenAI client read. The real HF pull token is a SEPARATE value: Plan 3 `huggingface-hub-token` (key `HUGGING_FACE_HUB_TOKEN`), envFrom-ed by the model servers alongside `vllm-api-key`. `keycloak-proxy-client-secret` (key `KEYCLOAK_PROXY_CLIENT_SECRET`) is consumed by the BACKEND (keycloak-proxy-service.js) — values update only here; its envFrom already works via Plan 3's backend secrets list. `kc-dataprep-client-secret` (key `KC_DATAPREP_CLIENT_SECRET`) feeds dataprep's client-credentials grant.
 
-- [ ] **Step 1: Write `charts/genieai-umbrella/templates/_secrets/ai-secrets.yaml`**
+- [ ] **Step 1: Write `charts/genieai-umbrella/templates/secrets/ai-secrets.yaml`**
 
 ```yaml
-{{- /* GATES (round-7 C5+I4): vllm-api-key + kc-dataprep ride on
-       .Values.ai.enabled (AI-tier consumers only). keycloak-proxy-client-secret
-       is gated ONLY on secrets.sealedSecrets.enabled — its consumer is the
-       BACKEND (Group 5), and a Day-0 ai.enabled=false install must still
-       render it or backend pods die with CreateContainerConfigError. */ -}}
-{{- if and .Values.secrets.sealedSecrets.enabled .Values.ai.enabled -}}
-{{- /* Spec §8 mapping (names DNS-1123; encryptedData keys = ENV VAR NAMES):
-       VLLM_API_KEY → vllm-api-key (keys VLLM_API_KEY + HF_TOKEN +
-       HUGGINGFACEHUB_API_TOKEN + OPENAI_API_KEY — the GPU-node bearer value
-       under every env name the WRAPPERS/chatqna-AsyncOpenAI read; I4: the
-       real HF pull token is a SEPARATE value in Plan 3's
-       huggingface-hub-token secret (HUGGING_FACE_HUB_TOKEN) — model servers
-       envFrom BOTH)
-       keycloakProxyClientSecret→ keycloak-proxy-client-secret (key KEYCLOAK_PROXY_CLIENT_SECRET — backend consumer)
-       kcDataprepClientSecret   → kc-dataprep-client-secret    (key KC_DATAPREP_CLIENT_SECRET — dataprep consumer)
+{{- /* GATES:
+       vllm-api-key + keycloak-proxy-client-secret + kc-dataprep-client-secret
+       all render whenever secrets.sealedSecrets.enabled — the AI master
+       switch is INDEPENDENT of secret presence. Reasons:
+         - vllm-api-key is also envFrom-ed by the BACKEND (VLLM_API_KEY for
+           remote-GPU bearer auth); a Day-0 ai.enabled=false install with
+           the backend on must still see the secret or backend pods
+           crashloop with CreateContainerConfigError.
+         - kc-dataprep is consumed only by dataprep (AI-tier), but having
+           it present in Day-0 lets a single env-override flip the dataprep
+           toggle without re-running kubeseal on a missing CR.
+       Spec §8 mapping (names DNS-1123; encryptedData keys = ENV VAR NAMES):
+         VLLM_API_KEY → vllm-api-key (keys VLLM_API_KEY + HF_TOKEN +
+           HUGGINGFACEHUB_API_TOKEN + OPENAI_API_KEY — the GPU-node bearer
+           value under every env name the WRAPPERS + chatqna AsyncOpenAI
+           client read; the real HF pull token is a SEPARATE value in
+           Plan 3's huggingface-hub-token secret (HUGGING_FACE_HUB_TOKEN)
+           — model servers envFrom BOTH.)
+         keycloakProxyClientSecret → keycloak-proxy-client-secret
+           (key KEYCLOAK_PROXY_CLIENT_SECRET — backend consumer)
+         kcDataprepClientSecret    → kc-dataprep-client-secret
+           (key KC_DATAPREP_CLIENT_SECRET — dataprep consumer)
 */ -}}
+{{- if .Values.secrets.sealedSecrets.enabled -}}
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
 metadata:
@@ -829,13 +849,13 @@ metadata:
   namespace: {{ $.Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" (deepCopy $.Values | merge (dict "component" "sealed-secret"))) | nindent 4 }}
-    app.kubernetes.io/component: ai
+    app.kubernetes.io/component: vllm-api-key
 spec:
   encryptedData:
-    VLLM_API_KEY: PLACEHOLDER_VLLM_API_KEY_SEALED_KID
-    HF_TOKEN: PLACEHOLDER_VLLM_API_KEY_SEALED_KID
-    HUGGINGFACEHUB_API_TOKEN: PLACEHOLDER_VLLM_API_KEY_SEALED_KID
-    OPENAI_API_KEY: PLACEHOLDER_VLLM_API_KEY_SEALED_KID   # all four = same bearer value, re-sealed
+    VLLM_API_KEY: UExBQ0VIT0xERVIr     # PLACEHOLDER+ — RE-SEAL before helm install (F12)
+    HF_TOKEN: UExBQ0VIT0xERVIr          # ditto
+    HUGGINGFACEHUB_API_TOKEN: UExBQ0VIT0xERVIr    # ditto
+    OPENAI_API_KEY: UExBQ0VIT0xERVIr     # ditto   # all four = same bearer value, re-sealed
 ---
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
@@ -847,10 +867,7 @@ metadata:
     app.kubernetes.io/component: kc-dataprep-client-secret
 spec:
   encryptedData:
-    KC_DATAPREP_CLIENT_SECRET: PLACEHOLDER_KC_DATAPREP_CLIENT_SECRET_SEALED_KID
-{{- end -}}
-{{- /* C5: backend consumer — NOT gated on ai.enabled */ -}}
-{{- if .Values.secrets.sealedSecrets.enabled -}}
+    KC_DATAPREP_CLIENT_SECRET: UExBQ0VIT0xERVIr     # PLACEHOLDER+ — RE-SEAL (F12)
 ---
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
@@ -862,11 +879,11 @@ metadata:
     app.kubernetes.io/component: keycloak-proxy-client-secret
 spec:
   encryptedData:
-    KEYCLOAK_PROXY_CLIENT_SECRET: PLACEHOLDER_KEYCLOAK_PROXY_CLIENT_SECRET_SEALED_KID
+    KEYCLOAK_PROXY_CLIENT_SECRET: UExBQ0VIT0xERVIr     # PLACEHOLDER+ — RE-SEAL (F12)
 {{- end -}}
 ```
 
-- [ ] **Step 2: Wire the backend's AI-consumer env (round-7 I3 — Plan 3's backend env predates the AI tier; without this, end-to-end chat + translation are dead on arrival)** in `values.yaml`:
+- [ ] **Step 2: Wire the backend's AI-consumer env** in `values.yaml`:
 
 ```yaml
   services:
@@ -881,7 +898,7 @@ spec:
         - name: VLLM_TRANSLATION_MODEL_ID
           value: {{ .Values.ai.models.translationId | default "google/gemma-3-4b-it" | quote }}
         - name: VLLM_TRANSLATION_ENDPOINT
-          # ternaried at template level in templates/_services/backend.yaml
+          # ternaried at template level in templates/services/backend.yaml
           # (Plan 3 file — Task 8 Step 1 covers it)
           value: http://vllm-translation.{{ .Values.namespace }}.svc.cluster.local:80
         - name: STREAMING_TRANSLATION_ENABLED
@@ -891,9 +908,18 @@ spec:
         - name: huggingface-hub-token
         - name: keycloak-proxy-client-secret   # Plan 5: keycloak-proxy-service
         - name: vllm-api-key                    # Plan 5: remote-GPU bearer (VLLM_API_KEY)
+          # Wave-8 F6: vllm-api-key SealedSecret is gated on ai.enabled
+          # in Task 6 — but backend references it for `OPEA_HOST`/VLLM_API_KEY
+          # and would crashloop on the same Day-0 ai.enabled=false install
+          # the C5 fix unlocked for keycloak-proxy-client-secret. Move
+          # vllm-api-key's secret gate out of ai.enabled (or, equivalently,
+          # add it to the `keycloak-proxy-client-secret` block which is
+          # already ai.enabled-independent). Apply this in Task 6 Step 1:
+          # split the secret gating — vllm-api-key renders when
+          # sealedSecrets.enabled (full chart), even when ai.enabled=false.
 ```
 
-NOTE: values.yaml is STATIC — the template-level remote ternary for `VLLM_TRANSLATION_ENDPOINT` is added to `templates/_services/backend.yaml` (Plan 3 file) in Task 8 Step 1, exactly like the `_ai/*` wrappers. The `{{ .Values... }}` line above shows the DEFAULT baked into the backend template, not values.yaml content.
+NOTE: values.yaml is STATIC — the template-level remote ternary for `VLLM_TRANSLATION_ENDPOINT` is added to `templates/services/backend.yaml` (Plan 3 file) in Task 8 Step 1, exactly like the `_ai/*` wrappers. The `{{ .Values... }}` line above shows the DEFAULT baked into the backend template, not values.yaml content.
 
 - [ ] **Step 3: Render count**
 
@@ -921,7 +947,7 @@ Expected: prints `1`. Plus: `grep -c "name: OPEA_HOST" ` ≥ 1 (backend AI wirin
 
 ```bash
 helm lint charts/genieai-umbrella --strict
-git add charts/genieai-umbrella/templates/_secrets/ai-secrets.yaml charts/genieai-umbrella/values.yaml
+git add charts/genieai-umbrella/templates/secrets/ai-secrets.yaml charts/genieai-umbrella/values.yaml
 git commit -m "feat(charts): AI-tier SealedSecrets (vllm-api-key dual-key, keycloak-proxy, kc-dataprep)"
 ```
 
@@ -930,13 +956,13 @@ git commit -m "feat(charts): AI-tier SealedSecrets (vllm-api-key dual-key, keycl
 ### Task 7: NetworkPolicies for the AI tier
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_ai/networkpolicies.yaml`
+- Create: `charts/genieai-umbrella/templates/ai/networkpolicies.yaml`
 
 **Interfaces:**
 - Consumes: Plan 3 NP conventions (default-deny + explicit allow; `kubernetes.io/metadata.name` for DNS; port-scoped `ipBlock` where operator labels are unverified).
 - Produces: one NetworkPolicy per enabled AI service. Wrappers egress to: arango 8529 (retriever, dataprep, chatqna), model-server Services 80 (per consumer), DNS. Model servers ingress: from wrapper peers; egress: DNS + 443 (HF model pulls) only.
 
-- [ ] **Step 1: Write `charts/genieai-umbrella/templates/_ai/networkpolicies.yaml`**
+- [ ] **Step 1: Write `charts/genieai-umbrella/templates/ai/networkpolicies.yaml`**
 
 One `NetworkPolicy` per service, following the Plan 3 shape. Key edges (per-service `egress` blocks):
 
@@ -1012,7 +1038,7 @@ Expected: prints `16` (5 Plan-3 + 11 AI tier — guardrail/ui/nginx off).
 
 ```bash
 helm lint charts/genieai-umbrella --strict
-git add charts/genieai-umbrella/templates/_ai/networkpolicies.yaml
+git add charts/genieai-umbrella/templates/ai/networkpolicies.yaml
 git commit -m "feat(charts): AI-tier NetworkPolicies (default-deny + edge matrix)"
 ```
 
@@ -1021,9 +1047,9 @@ git commit -m "feat(charts): AI-tier NetworkPolicies (default-deny + edge matrix
 ### Task 8: Remote-GPU mode
 
 **Files:**
-- Modify: `charts/genieai-umbrella/templates/_ai/{retriever,dataprep,chatqna,translation,textgen,embedding,reranker}.yaml` (endpoint env ternaries)
-- Modify: `charts/genieai-umbrella/templates/_services/backend.yaml` (Plan 3 file — `VLLM_TRANSLATION_ENDPOINT` ternary, I3)
-- Modify: `charts/genieai-umbrella/templates/_ai/networkpolicies.yaml` (remote 443 egress, I1)
+- Modify: `charts/genieai-umbrella/templates/ai/{retriever,dataprep,chatqna,translation,textgen,embedding,reranker}.yaml` (endpoint env ternaries)
+- Modify: `charts/genieai-umbrella/templates/services/backend.yaml` (Plan 3 file — `VLLM_TRANSLATION_ENDPOINT` ternary, I3)
+- Modify: `charts/genieai-umbrella/templates/ai/networkpolicies.yaml` (remote 443 egress, I1)
 
 **Interfaces:**
 - Consumes: `ai.remoteGpu.{enabled,vllmUrl,vllmTranslationUrl,teiEmbeddingUrl,teiRerankingUrl}`.
@@ -1044,23 +1070,23 @@ Mapping: `VLLM_ENDPOINT`→`vllmUrl`, `TEI_EMBEDDING_ENDPOINT`/`EMBEDDING_MODEL_
 
 - [ ] **Step 2: Fail-fast on empty remote URLs**
 
-Add to `templates/_ai/*` wrappers' top:
+Add to `templates/ai/*` wrappers' top:
 
 ```gotemplate
 {{- if and .Values.ai.enabled .Values.ai.remoteGpu.enabled -}}
 {{- if or (not .Values.ai.remoteGpu.vllmUrl) (not .Values.ai.remoteGpu.teiEmbeddingUrl) -}}
-{{- /* I12: gate OPTIONAL URLs on their consumers' enablement, not a flat
-       demand — reranker + translation default ON and would silently dial ""
-       without this. */ -}}
+{{- /* Wave-8 F9: gates at OUTER if-level (was nested INSIDE the base
+       vllm+tei guard, so optional URLs were silently accepted when the
+       two base URLs were set). Now each URL check runs independently. */ -}}
 {{- $needTir := or .Values.ai.services.reranker.enabled .Values.ai.services.chatqna.enabled -}}
 {{- $needVt := or .Values.ai.services.translation.enabled .Values.ai.services.chatqna.enabled .Values.services.backend.enabled -}}
-{{- if and $needTir (not .Values.ai.remoteGpu.teiRerankingUrl) -}}
+{{- if and .Values.ai.remoteGpu.enabled $needTir (not .Values.ai.remoteGpu.teiRerankingUrl) -}}
 {{- fail "ai.remoteGpu.enabled=true with reranker/chatqna enabled requires teiRerankingUrl" -}}
 {{- end -}}
-{{- if and $needVt (not .Values.ai.remoteGpu.vllmTranslationUrl) -}}
+{{- if and .Values.ai.remoteGpu.enabled $needVt (not .Values.ai.remoteGpu.vllmTranslationUrl) -}}
 {{- fail "ai.remoteGpu.enabled=true with translation/chatqna/backend enabled requires vllmTranslationUrl" -}}
 {{- end -}}
-{{- if or (not .Values.ai.remoteGpu.vllmUrl) (not .Values.ai.remoteGpu.teiEmbeddingUrl) -}}
+{{- if and .Values.ai.remoteGpu.enabled (or (not .Values.ai.remoteGpu.vllmUrl) (not .Values.ai.remoteGpu.teiEmbeddingUrl)) -}}
 {{- fail "ai.remoteGpu.enabled=true requires vllmUrl + teiEmbeddingUrl; doclingUrl is optional (empty = in-process docling)" -}}
 {{- end -}}
 {{- end -}}
@@ -1081,7 +1107,7 @@ Expected: prints ≥ 2 (retriever + dataprep + chatqna envs).
 
 ```bash
 helm lint charts/genieai-umbrella --strict
-git add charts/genieai-umbrella/templates/_ai/
+git add charts/genieai-umbrella/templates/ai/
 git commit -m "feat(charts): remote-GPU mode (GPU_NODE_HOST equivalent, fail-fast on missing URLs)"
 ```
 
@@ -1233,7 +1259,7 @@ dependencyGraph:
     {{- end -}}
 ```
 
-AND **rewire the evaluator loop** (round-7 I5 — Plan 2's loop gate reads `enabled.get(f"{tier}.{svc}.enabled")` directly; with AI nodes under `ai.services.*`, every AI service reads disabled and its edges are never checked — the negative test would silently pass-green). Three changes in the Job's Python:
+AND **rewire the evaluator loop**` directly; with AI nodes under `ai.services.*`, every AI service reads disabled and its edges are never checked — the negative test would silently pass-green). Three changes in the Job's Python:
 
 ```python
 def svc_enabled(name):

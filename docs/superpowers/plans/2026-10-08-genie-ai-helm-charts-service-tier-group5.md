@@ -4,7 +4,7 @@
 
 **Goal:** Ship the stateless-app tier of the GENIE.AI Helm chart: backend (Node.js BFF), frontend (Vue SPA), document-repository (file upload service), nginx (reverse proxy), clamav (AV scanner). Kong is REMOVED from the chart (k8s-native-audit decision 7) — Envoy Gateway is the single edge; nginx proxies `/api/` to the backend directly. Establishes the per-service template pattern that Plans 4-6 reuse for observability, AI/ML, and ingress services.
 
-**Architecture:** Five Deployment + Service + NetworkPolicy pairs under `charts/genieai-umbrella/templates/_services/<name>/`. Each service inherits from a shared template helper (`genieai-common.componentLabel` + `genieai-common.serviceSelector`) plus an inline `secrets` reference list. NetworkPolicies enforce default-deny with explicit allowlists (cross-tier: backend → arangodb; ingress → frontend; etc.). PodDisruptionBudget generated for any service with `replicas >= 2`. Per-service SealedSecret resources for the 3 Group-5 secrets from spec §8.
+**Architecture:** Five Deployment + Service + NetworkPolicy pairs under `charts/genieai-umbrella/templates/services/<name>/`. Each service inherits from a shared template helper (`genieai-common.componentLabel` + `genieai-common.serviceSelector`) plus an inline `secrets` reference list. NetworkPolicies enforce default-deny with explicit allowlists (cross-tier: backend → arangodb; ingress → frontend; etc.). PodDisruptionBudget generated for any service with `replicas >= 2`. Per-service SealedSecret resources for the 3 Group-5 secrets from spec §8.
 
 **Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), kind 1.33, kubectl 1.33+, kustomize 5.x, CNPG Cluster (from Plan 2) reachable at `keycloak-db.<namespace>.svc.cluster.local:5432`, ArangoDB (from Plan 2) at `arangodb-single.<namespace>.svc.cluster.local:8529.
 
@@ -14,7 +14,7 @@
 
 - Helm chart API version: `v2`. Helm 4.x.
 - Per-service entries under `values.services.<name>` must match spec §5 schema: `enabled`, `replicas`, `image.{repository,tag}`, `port`, `resources.{requests,limits}`, `env`, `secrets`, `pvc`, `probes.{readiness,liveness,startup}`, `podDisruptionBudget.{minAvailable}`, `serviceMonitor`.
-- Each service gets its own `templates/_services/<name>/` directory with `<name>.yaml` template that renders all six (Deployment, Service, NetworkPolicy, ServiceMonitor?, HPA?, PDB?). All files in one YAML multi-document template.
+- Each service gets its own `templates/services/<name>/` directory with `<name>.yaml` template that renders all six (Deployment, Service, NetworkPolicy, ServiceMonitor?, HPA?, PDB?). All files in one YAML multi-document template.
 - NetworkPolicies default-deny + explicit allowlists; per-tier clauses documented in spec §7 (Group 5 gets the strictest defaults).
 - SealedSecret entries use placeholder format per Plan 2 Task 2 convention: `PLACEHOLDER_<name>_SEALED_KID`.
 - All English documentation and comments per project CLAUDE.md.
@@ -48,6 +48,10 @@ Five input-class concerns the spec implies but no Plan 3 task tests explicitly.
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: Deployment$" || echo "0"`
 Expected: prints `0`.
 
+- [ ] **Step 1.5: Add email-password to backend envFrom**
+
+Add `email-password` to the `services.backend.secrets:` list (this plan's values block).
+
 - [ ] **Step 2: Append to `charts/genieai-umbrella/values.yaml`** (preserve YAML structure + add comments referencing spec §5)
 
 ```yaml
@@ -69,35 +73,27 @@ Expected: prints `0`.
 #     podDisruptionBudget: { minAvailable: <int> }
 #     serviceMonitor: false   # if observability enabled, add Prometheus scrape
 services:
+  # Per-service entry shape. Wave-8 F1: NO Helm template syntax here —
+  # values.yaml is never templated. Cross-service URLs are injected by
+  # the per-service Deployment template (Task 1b).
+  #   enabled: true|false
+  #   replicas: <int>
+  #   image: { repository: <name>, tag: <tag> }
+  #   port: <int>     # container port
+  #   resources: { requests: {...}, limits: {...} }
+  #   env: []         # raw env list (TEMPLATE-side URLs added in Task 1b)
+  #   secrets: []
+  #   pvc: null
+  #   probes: { readiness, liveness, startup }
+  #   podDisruptionBudget: { minAvailable: <int> }
+  #   serviceMonitor: false
   backend:
     enabled: true
     replicas: 1
-    image:
-      # CI builds registry images with the genie-ai- prefix (16 images,
-      # .gitlab-ci.yml promote stage) — genieai-backend does NOT exist.
-      repository: registry.example.org/genie-ai-backend
-      tag: "1.0.0"
+    image: { repository: registry.example.org/genie-ai-backend, tag: "1.0.0" }
     port: 3000
-    resources:
-      requests: { cpu: 100m, memory: 256Mi }
-      limits:   { cpu: 1,    memory: 1Gi }
-    env:
-      - name: NODE_ENV
-        value: production
-      # Keycloak base URL carries the /auth prefix (legacy Swarm path layout
-      # the backend expects — bare /realms/... URLs 404 without it).
-      - name: KEYCLOAK_URL
-        value: http://keycloak.{{ .Values.namespace }}.svc.cluster.local:8080/auth
-      - name: ARANGO_URL
-        value: http://arangodb-single.{{ .Values.namespace }}.svc.cluster.local:8529
-      # OTel OTLP exporter — Plan 4 gateway collector Service
-      # (OpenTelemetryCollector CR named genieai-collector exposes
-      # Service <cr-name>-collector).
-      - name: OTEL_EXPORTER_OTLP_ENDPOINT
-        value: http://genieai-collector-collector.{{ .Values.namespace }}.svc.cluster.local:4318
-    # Each entry = a K8s Secret consumed whole via envFrom; the Secret's
-    # keys MUST be the literal env var names (KEYCLOAK_CLIENT_SECRET,
-    # HUGGING_FACE_HUB_TOKEN) — see Task 7.
+    resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
+    env: []
     secrets:
       - name: keycloak-client-secret
       - name: huggingface-hub-token
@@ -105,56 +101,36 @@ services:
     probes:
       readiness: { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 10, periodSeconds: 10 }
       liveness:  { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 30, periodSeconds: 30 }
-      startup:   { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 5,  failureThreshold: 12 }
+      startup:   { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 5, failureThreshold: 12 }
     podDisruptionBudget: { minAvailable: 1 }
     serviceMonitor: false
 
   frontend:
     enabled: true
     replicas: 1
-    image:
-      repository: registry.example.org/genie-ai-frontend
-      tag: "1.0.0"
-    # The frontend image listens on 8090 (image-internal unprivileged port;
-    # NOT 8080 — verified against the Dockerfile EXPOSE).
+    image: { repository: registry.example.org/genie-ai-frontend, tag: "1.0.0" }
     port: 8090
-    resources:
-      requests: { cpu: 50m, memory: 128Mi }
-      limits:   { cpu: 500m, memory: 512Mi }
+    resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
     env: []
     secrets: []
     pvc: null
     probes:
       readiness: { httpGet: { path: /health, port: 8090 }, initialDelaySeconds: 5, periodSeconds: 10 }
       liveness:  { httpGet: { path: /health, port: 8090 }, initialDelaySeconds: 30, periodSeconds: 30 }
-    podDisruptionBudget: null    # single replica; PDB would block drain
+    podDisruptionBudget: null
     serviceMonitor: false
 
   documentRepository:
     enabled: true
     replicas: 1
-    image:
-      repository: registry.example.org/genie-ai-document-repository
-      tag: "1.0.0"
+    image: { repository: registry.example.org/genie-ai-document-repository, tag: "1.0.0" }
     port: 3001
-    resources:
-      requests: { cpu: 100m, memory: 256Mi }
-      limits:   { cpu: 1,    memory: 1Gi }
-    env:
-      - name: NODE_ENV
-        value: production
-      # Services listen on port 80 (Service-level); container ports are
-      # targetPort details — in-cluster callers always use :80.
-      - name: BACKEND_URL
-        value: http://backend.{{ .Values.namespace }}.svc.cluster.local:80
-      - name: CLAMAV_HOST
-        value: clamav.{{ .Values.namespace }}.svc.cluster.local
-      - name: CLAMAV_PORT
-        value: "3310"
-      - name: OTEL_EXPORTER_OTLP_ENDPOINT
-        value: http://genieai-collector-collector.{{ .Values.namespace }}.svc.cluster.local:4318
+    resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
+    env: []
     secrets: []
-    pvc: null
+    pvc:
+      enabled: true                     # rendered as PVC by Task 1b (F4)
+      storageSize: 20Gi
     probes:
       readiness: { httpGet: { path: /health, port: 3001 }, initialDelaySeconds: 10, periodSeconds: 10 }
       liveness:  { tcpSocket: { port: 3001 }, initialDelaySeconds: 30, periodSeconds: 30 }
@@ -164,41 +140,31 @@ services:
   nginx:
     enabled: true
     replicas: 1
-    # Project image (CI-built genie-ai-nginx) — carries the routing config
-    # (frontend/backend/doc-repo upstreams) baked in; no stock nginx + no
-    # hand-rolled ConfigMap. Plan 6 may env-inject host specifics.
-    image:
-      repository: registry.example.org/genie-ai-nginx
-      tag: "1.0.0"
-    port: 8080   # container runs on 8080 (unprivileged)
-    securityContext:
-      runAsNonRoot: true
-      runAsUser: 101            # nginx UID; needs /tmp + /var/cache/nginx writable
-    resources:
-      requests: { cpu: 50m, memory: 64Mi }
-      limits:   { cpu: 250m, memory: 128Mi }
+    # Wave-8 F3: the genie-ai-nginx image's baked-in upstream IS /api -> Kong
+    # (api-gateway-solution/nginx/conf/default.conf.template) — Kong is removed
+    # (decision 7), so we OVERRIDE the config with a host-mounted ConfigMap
+    # pointing /api at the backend Service AND the SPA at frontend. Plan 6
+    # wires the actual ConfigMap; this plan renders a per-instance override
+    # (Task 5b) so the stock image doesn't 502.
+    image: { repository: registry.example.org/genie-ai-nginx, tag: "1.0.0" }
+    port: 8080
+    resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
     env: []
     secrets: []
     pvc: null
     probes:
-      readiness: { httpGet: { path: /, port: 8080 }, initialDelaySeconds: 5, periodSeconds: 10 }
-      liveness:  { httpGet: { path: /, port: 8080 }, initialDelaySeconds: 30, periodSeconds: 30 }
+      readiness: { httpGet: { path: /healthz, port: 8080 }, initialDelaySeconds: 5, periodSeconds: 10 }
+      liveness:  { httpGet: { path: /healthz, port: 8080 }, initialDelaySeconds: 30, periodSeconds: 30 }
     podDisruptionBudget: null
     serviceMonitor: false
 
   clamav:
     enabled: true
     replicas: 1
-    image:
-      repository: clamav/clamav
-      tag: "1.3"
+    image: { repository: clamav/clamav, tag: "1.3" }
     port: 3310
-    securityContext:
-      runAsNonRoot: true
-      runAsUser: 100            # clamav image UID
-    resources:
-      requests: { cpu: 100m, memory: 512Mi }
-      limits:   { cpu: 1,    memory: 1Gi }
+    securityContext: { runAsNonRoot: true, runAsUser: 100 }
+    resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { cpu: 1, memory: 1Gi } }
     env: []
     secrets: []
     pvc: null
@@ -207,7 +173,6 @@ services:
       liveness:  { tcpSocket: { port: 3310 }, initialDelaySeconds: 120, periodSeconds: 60, failureThreshold: 5 }
     podDisruptionBudget: null
     serviceMonitor: false
-
 # Per-env clusterProfile-driven replica overrides. For prod, prod envs
 # render 2+ replicas; for dev/sovereign, stay at 1.
 clusterProfileReplicas:
@@ -242,6 +207,108 @@ Expected: 0 errors.
 ```bash
 git add charts/genieai-umbrella/values.yaml
 git commit -m "feat(charts): per-service value entries for Group 5 (backend, frontend, documentRepo, nginx, clamav)"
+```
+
+---
+
+## Task 1b: Cross-service URL injection + doc-repo PVC + nginx ConfigMap
+
+**Files:**
+- Create: `charts/genieai-umbrella/templates/_lib/_cross-service-urls.tpl` (helper)
+- Modify: `charts/genieai-umbrella/templates/services/{backend,documentRepository,frontend,nginx}.yaml` (URL + ConfigMap + PVC wiring)
+
+**Interfaces:**
+- Consumes: `.Values.namespace`.
+- Produces: a helper `genieai-umbrella.crossServiceURLs` that templates the cross-service envs (F1 — values.yaml is NEVER templated, so the URLs the backend / documentRepository / frontend Deployments need are injected HERE, not in values). Also wires:
+  - F3: nginx ConfigMap (the genie-ai-nginx image's baked-in upstream IS `/api -> Kong`; Kong is removed).
+  - F4: documentRepository PVC (uploads persistence).
+
+- [ ] **Step 1: Write `charts/genieai-umbrella/templates/_lib/_cross-service-urls.tpl`**
+
+```gotemplate
+{{/*
+Wave-8 F1: values.yaml is never templated, so cross-service URLs MUST
+be rendered here.
+Usage:
+  {{- include "genieai-umbrella.crossServiceURLs" (list $ctx (list
+    (dict "name" "KEYCLOAK_URL" "host" "keycloak" "port" 8080 "path" "/auth")
+    (dict "name" "ARANGO_URL"    "host" "arangodb-single" "port" 8529)
+    ...)) | nindent 12 }}
+*/}}
+{{- define "genieai-umbrella.crossServiceURLs" -}}
+{{- $ctx := index . 0 -}}
+{{- $urls := index . 1 -}}
+{{- range $urls -}}
+- name: {{ .name }}
+  value: {{ printf "http://%s.%s.svc.cluster.local:%v%s" .host $ctx.Values.namespace (int .port) (default "" .path) | quote }}
+{{- end -}}
+{{- end -}}
+```
+
+- [ ] **Step 2: Inject URLs into each per-service template** (Task 3 file edits):
+- `services/backend.yaml`: `KEYCLOAK_URL=http://keycloak.<ns>:8080/auth`, `ARANGO_URL=http://arangodb-single.<ns>:8529`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector-collector.<ns>:4318`.
+- `services/documentRepository.yaml`: `BACKEND_URL=http://backend.<ns>:80`, `CLAMAV_HOST=clamav`, `CLAMAV_PORT=3310`, OTEL endpoint.
+- `services/frontend.yaml`: `VUE_APP_API_URL`, OTEL endpoint.
+
+- [ ] **Step 3: Add `email-password` to backend envFrom**
+
+Add `email-password` to the `services.backend.secrets:` list. Email env vars (`EMAIL_HOST/PORT/USER/FROM`) are set in the backend template; `EMAIL_PASSWORD` arrives via this envFrom.
+
+- [ ] **Step 4: Document-repository PVC**
+
+```yaml
+{{- if and .Values.services.documentRepository.enabled .Values.services.documentRepository.pvc.enabled -}}
+{{- $pvc := .Values.services.documentRepository.pvc -}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: document-repository-uploads
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.pluggable.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $pvc.storageSize | default "20Gi" }}
+{{- end -}}
+```
++ factory passthrough for `volumeMounts: [{name: uploads, mountPath: /app/uploads}]` and `volumes: [{name: uploads, persistentVolumeClaim: {claimName: document-repository-uploads}}]`.
+
+- [ ] **Step 5: nginx ConfigMap override**
+
+```yaml
+{{- if .Values.services.nginx.enabled -}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-override
+  namespace: {{ .Values.namespace }}
+data:
+  override.conf: |
+    upstream genieai_frontend { server frontend:80; }
+    upstream genieai_backend  { server backend:80; }
+    upstream genieai_docrepo  { server document-repository:80; }
+    server {
+      listen 8080;
+      location /api/      { proxy_pass http://genieai_backend; }
+      location /api-docs/ { proxy_pass http://genieai_backend; }
+      location /uploads/  { proxy_pass http://genieai_docrepo; }
+      location /          { proxy_pass http://genieai_frontend; }
+    }
+{{- end -}}
+```
++ factory passthrough mounts it at `/etc/nginx/conf.d/override.conf` (subPath).
+
+- [ ] **Step 6: `helm lint --strict` + commit**
+
+```bash
+helm lint charts/genieai-umbrella --strict
+git add charts/genieai-umbrella/templates/_lib/_cross-service-urls.tpl charts/genieai-umbrella/templates/services/
+git commit -m "feat(charts): cross-service URL injection (F1) + doc-repo PVC (F4) + nginx Kong-leak override (F3) + email-password (F15)"
 ```
 
 ---
@@ -415,7 +482,7 @@ git commit -m "feat(charts): per-service deployment factory + NetworkPolicy base
 ## Task 3: backend Deployment + Service + NetworkPolicy
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_services/backend.yaml`
+- Create: `charts/genieai-umbrella/templates/services/backend.yaml`
 
 **Interfaces:**
 - Consumes: `services.backend` entry (Task 1) + factory helper (Task 2) + service-factory.
@@ -426,7 +493,7 @@ git commit -m "feat(charts): per-service deployment factory + NetworkPolicy base
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: Deployment$" || echo "0"`
 Expected: prints `0`.
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_services/backend.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/services/backend.yaml`**
 
 ```yaml
 {{- if .Values.services.backend.enabled -}}
@@ -545,7 +612,7 @@ Expected: 0 errors.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_services/backend.yaml
+git add charts/genieai-umbrella/templates/services/backend.yaml
 git commit -m "feat(charts): backend Deployment + Service + default-deny NetworkPolicy"
 ```
 
@@ -554,10 +621,10 @@ git commit -m "feat(charts): backend Deployment + Service + default-deny Network
 ## Task 4: frontend, documentRepository, nginx, clamav (4 services, parallel tasks)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_services/frontend.yaml`
-- Create: `charts/genieai-umbrella/templates/_services/documentRepository.yaml`
-- Create: `charts/genieai-umbrella/templates/_services/nginx.yaml`
-- Create: `charts/genieai-umbrella/templates/_services/clamav.yaml`
+- Create: `charts/genieai-umbrella/templates/services/frontend.yaml`
+- Create: `charts/genieai-umbrella/templates/services/documentRepository.yaml`
+- Create: `charts/genieai-umbrella/templates/services/nginx.yaml`
+- Create: `charts/genieai-umbrella/templates/services/clamav.yaml`
 
 **Interfaces:**
 - Consumes: per-service values (Task 1) + factory helper (Task 2).
@@ -858,7 +925,7 @@ Expected: 0 errors.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_services/frontend.yaml charts/genieai-umbrella/templates/_services/documentRepository.yaml charts/genieai-umbrella/templates/_services/nginx.yaml charts/genieai-umbrella/templates/_services/clamav.yaml
+git add charts/genieai-umbrella/templates/services/frontend.yaml charts/genieai-umbrella/templates/services/documentRepository.yaml charts/genieai-umbrella/templates/services/nginx.yaml charts/genieai-umbrella/templates/services/clamav.yaml
 git commit -m "feat(charts): Group 5 stateless app tier (frontend, documentRepo, nginx, clamav)"
 ```
 
@@ -873,12 +940,12 @@ git commit -m "feat(charts): Group 5 stateless app tier (frontend, documentRepo,
 - Consumes: `services.nginx` values (Task 1).
 - Produces: nothing new — this task DOCUMENTS the decision and removes the old ConfigMap step.
 
-**Decision (round-6 review)**: the Swarm stack never ran stock nginx — it runs the CI-built `genie-ai-nginx` image whose Dockerfile bakes the full routing config (frontend SPA, `/api/*` → backend, document-repository, Keycloak front/back channels). Rendering a hand-rolled `nginx.conf` ConfigMap would (a) duplicate that config, (b) drift from it, and (c) require volumeMount wiring the factory does not do. Task 1 already points `services.nginx.image` at `registry.example.org/genie-ai-nginx:1.0.0`. Any host/path customization that the image cannot absorb via env lands in Plan 6 (edge config), not in an in-chart ConfigMap.
+**Decision**: the Swarm stack never ran stock nginx — it runs the CI-built `genie-ai-nginx` image whose Dockerfile bakes the full routing config (frontend SPA, `/api/*` → backend, document-repository, Keycloak front/back channels). Rendering a hand-rolled `nginx.conf` ConfigMap would (a) duplicate that config, (b) drift from it, and (c) require volumeMount wiring the factory does not do. Task 1 already points `services.nginx.image` at `registry.example.org/genie-ai-nginx:1.0.0`. Any host/path customization that the image cannot absorb via env lands in Plan 6 (edge config), not in an in-chart ConfigMap.
 
 - [ ] **Step 1: Confirm no nginx ConfigMap template is created**
 
-Run: `ls charts/genieai-umbrella/templates/_services/`
-Expected: `backend.yaml frontend.yaml documentRepository.yaml nginx.yaml clamav.yaml _pdb-bundler.yaml` — NO `nginx-config.yaml`.
+Run: `ls charts/genieai-umbrella/templates/services/`
+Expected: `backend.yaml frontend.yaml documentRepository.yaml nginx.yaml clamav.yaml pdb-bundler.yaml` — NO `nginx-config.yaml`.
 
 - [ ] **Step 2: Confirm values carry the project image**
 
@@ -908,7 +975,7 @@ Kong is removed from the chart (audit decision 7). CORS origins/headers are conf
 ## Task 7: Group 5 SealedSecrets (email, keycloak-client, huggingface)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_secrets/group5-secrets.yaml`
+- Create: `charts/genieai-umbrella/templates/secrets/group5-secrets.yaml`
 
 **Interfaces:**
 - Consumes: spec §8 F14 mapping table (the 3 Group-5 secrets: `emailPassword`, `keycloakClientSecret`, `huggingFaceHubToken`).
@@ -919,7 +986,7 @@ Kong is removed from the chart (audit decision 7). CORS origins/headers are conf
 Run: `helm template test charts/genieai-umbrella -n genieai | grep "^kind: SealedSecret$" -A 1 | grep "name:" | sort -u`
 Expected: prints `arango-jwt-secret`, `arango-root-secret`, `genie-admin-credentials`, `keycloak-db-credentials` (4 Plan-2 secrets).
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_secrets/group5-secrets.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/secrets/group5-secrets.yaml`**
 
 ```yaml
 {{- if .Values.secrets.sealedSecrets.enabled -}}
@@ -969,7 +1036,7 @@ Expected: 0 errors.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_secrets/group5-secrets.yaml
+git add charts/genieai-umbrella/templates/secrets/group5-secrets.yaml
 git commit -m "feat(charts): Group 5 SealedSecrets (email-password, keycloak-client-secret, huggingface-hub-token)"
 ```
 
@@ -1034,7 +1101,7 @@ spec:
 {{- end -}}
 ```
 
-- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_services/_pdb-bundler.yaml`**
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/services/pdb-bundler.yaml`**
 
 ```yaml
 {{- if and (or .Values.services.backend.enabled .Values.services.frontend.enabled .Values.services.documentRepository.enabled .Values.services.nginx.enabled .Values.services.clamav.enabled) -}}
@@ -1066,7 +1133,7 @@ Expected: 0 errors.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_lib/_pdb-generator.tpl charts/genieai-umbrella/templates/_services/_pdb-bundler.yaml
+git add charts/genieai-umbrella/templates/_lib/_pdb-generator.tpl charts/genieai-umbrella/templates/services/pdb-bundler.yaml
 git commit -m "feat(charts): PodDisruptionBudget generator (replicas >= 2 only)"
 ```
 
@@ -1147,13 +1214,15 @@ spec:
           check frontend 80 /health 200
           {{- end }}
           {{- if .Values.services.documentRepository.enabled }}
-          check document-repository 80 / 200
+          check document-repository 80 /health 200
           {{- end }}
           {{- if .Values.services.nginx.enabled }}
-          check nginx 80 / 200
-          {{- end }}
+          check nginx 80 /healthz 200
           {{- if .Values.services.clamav.enabled }}
-          check clamav 3310 / reachable
+          # Wave-8 F14: clamd is a binary protocol, not HTTP — TCP probe only
+          timeout 3 bash -c "echo > /dev/tcp/clamav/3310" 2>/dev/null && \
+            echo "PASS: clamav:3310 tcp open" || \
+            { echo "FAIL: clamav:3310 tcp closed"; failures=$((failures+1)); }
           {{- end }}
           if [ "$failures" -gt 0 ]; then
             echo "FAIL: $failures service(s) unreachable"

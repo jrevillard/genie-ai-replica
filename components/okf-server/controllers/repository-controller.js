@@ -1385,6 +1385,79 @@ async function routingTest(req, res, next) {
   }
 }
 
+/**
+ * Story 1-8 MR-B (2026-10-08) — POST /api/okf/repos/:repo_id/routing-testsuite.
+ * Generates a test suite: ONE guided-JSON vLLM call (positives +
+ * confusable-sibling negatives + keywords) plus deterministic
+ * forbidden-derived negatives. Persists a suite doc. Admin-scoped —
+ * LLM-burning (5-15s).
+ */
+async function generateTestSuite(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const suite = await headSuiteService.generateSuite(req.params.repo_id, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(201).json(suite);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 1-8 MR-B — POST /repos/:repo_id/routing-testsuite/:suite_key/queries.
+ * Curator free-text additions to an existing suite (kind positive|negative).
+ * Admin-scoped.
+ */
+async function addTestSuiteQueries(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const suite = await headSuiteService.addQueries(req.params.repo_id, req.params.suite_key, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(suite);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 1-8 MR-B — POST /repos/:repo_id/routing-testsuite/:suite_key/run.
+ * Executes every suite query through the routing test, aggregates
+ * pass rates / margins / steals, persists a run doc. Admin-scoped
+ * (one TEI embed per query).
+ */
+async function runTestSuite(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const run = await headSuiteService.runSuite(req.params.repo_id, req.params.suite_key, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(run);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 1-8 MR-B — GET /repos/:repo_id/routing-testsuite/runs?limit&kind.
+ * Analytics history: runs (default) or suites or both — newest first,
+ * summary metrics only (the full per-query payload stays in the docs).
+ * Read scope.
+ */
+async function listTestSuiteRuns(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const runs = await headSuiteService.listRuns(req.params.repo_id, req.query || {});
+    res.status(200).json({ runs });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createRepo,
   convertFromCrawl,
@@ -1396,6 +1469,10 @@ module.exports = {
   deleteRepo,
   rebuildRepoHead,
   routingTest,
+  generateTestSuite,
+  addTestSuiteQueries,
+  runTestSuite,
+  listTestSuiteRuns,
   piiScan,
   importRepoConcepts,
   retiredIngestRoute,

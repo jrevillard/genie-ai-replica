@@ -938,6 +938,9 @@ module.exports = {
   // Story 1-8: shared TEI embed primitive (head-test-service embeds
   // queries with the same endpoint/auth/retry as tag embedding).
   teiEmbed,
+  // Story 1-8 MR-B: shared guided-JSON chat primitive (head-suite-service
+  // generates test suites through the same model/retry as tag suggestion).
+  vllmChatCompletions,
   // reader
   getFrontmatter,
   getFrontmatterSummary,

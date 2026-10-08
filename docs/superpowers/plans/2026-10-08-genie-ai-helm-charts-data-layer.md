@@ -1151,7 +1151,10 @@ spec:
             - name: KONG_ADMIN_LISTEN
               value: "off"
             - name: KONG_PROXY_LISTEN
-              value: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
+              # Review Focus F4 fix — Kong's listen string parser rejects
+              # whitespace between the comma and the second listen.
+              # "8000, 8443 ssl" (no leading whitespace after comma) is valid.
+              value: "0.0.0.0:8000,0.0.0.0:8443 ssl"
             # Review Focus #4 — readiness checks fail if config unparsable.
             - name: KONG_PROXY_ERROR_TIMEOUT
               value: "1000"

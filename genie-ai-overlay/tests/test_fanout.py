@@ -295,15 +295,24 @@ class TestMergePerGraphResults:
 # ─── Story 1.3: query-affinity graph routing (global chunk competition) ─────
 class _StubRoutingDb:
     """db handle stub: aql.execute serves per-collection probe rows from a dict;
-    a collection absent from the dict raises (simulates probe failure)."""
+    a collection absent from the dict raises (simulates probe failure).
 
-    def __init__(self, results):
+    Story 1-8 MR-D: the head-affinity query (``okf_repositories``) is served
+    from the optional ``heads`` list when provided; a RuntimeError on it when
+    ``heads`` is the sentinel "fail" (best-effort fetch must not degrade)."""
+
+    def __init__(self, results, heads=None):
         self._results = results
+        self._heads = heads
         self.calls = []
         self.aql = self
 
     def execute(self, aql, bind_vars=None):
         self.calls.append(bind_vars)
+        if "okf_repositories" in aql:
+            if self._heads == "fail":
+                raise RuntimeError("head fetch failed")
+            return iter(self._heads or [])
         coll = aql.split("`")[1]
         rows = self._results.get(coll)
         if rows is None:
@@ -311,8 +320,8 @@ class _StubRoutingDb:
         return iter(rows)
 
 
-def _routing_stub(results):
-    return type("StubRetriever", (), {"db": _StubRoutingDb(results)})()
+def _routing_stub(results, heads=None):
+    return type("StubRetriever", (), {"db": _StubRoutingDb(results, heads)})()
 
 
 class TestRouteGraphs:
@@ -393,6 +402,80 @@ class TestRouteGraphs:
             routed, degraded = await _route_graphs(stub, ["GRAPH", "OKF_alphabet_v1", "OKF_kenya_v1"], [0.1] * 8)
         assert degraded is False
         assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_kenya_v1"]
+
+    # ─── Story 1-8 MR-D: vectorized-head affinity in the global pool ────────
+
+    def _head_rows(self, g="OKF_ncd_v1", dim=8, model="BAAI/bge-large-en-v1.5", vector=None):
+        return [{"g": g, "v": vector or [0.5] * dim, "dim": dim, "model": model}]
+
+    async def _route(self, stub, graphs):
+        from retriever.genieai_retriever_arangodb import _route_graphs
+
+        with patch("tracing.get_tracer") as mock_tracer:
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            return await _route_graphs(stub, graphs, [0.1] * 8)
+
+    async def test_head_pseudo_row_lights_up_its_graph(self):
+        # ncd has only 2 chunks (< ROUTE_MIN_CHUNKS) but a strong head
+        # (cosine 1.0 × weight 1.0 → the top row of the pool): the pseudo-row
+        # adds +1 to ncd's count → 3 → QUALIFIES. kenya (2 chunks, no head)
+        # stays dropped. This is David's "the head is the signal" case.
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93, 0.92, 0.91],
+            "OKF_kenya_v1_SOURCE": [0.85, 0.84],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        routed, degraded = await self._route(
+            _routing_stub(results, heads=self._head_rows()),
+            ["GRAPH", "OKF_alphabet_v1", "OKF_kenya_v1", "OKF_ncd_v1"],
+        )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"]
+
+    async def test_head_weight_zero_disables_the_signal(self):
+        # Same universe, RETRIEVER_ROUTE_HEAD_WEIGHT=0.0 (rollback knob) →
+        # no pseudo-row → ncd dropped again (2 chunks < 3).
+        import retriever.genieai_retriever_arangodb as rmod
+
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93, 0.92, 0.91],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        with patch.object(rmod, "ROUTE_HEAD_WEIGHT", 0.0):
+            routed, degraded = await self._route(
+                _routing_stub(results, heads=self._head_rows()),
+                ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"],
+            )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1"]
+
+    async def test_head_dim_mismatch_is_skipped(self):
+        # A head of a different dimension than the query embedding is skipped
+        # (guard) — no pseudo-row, ncd stays at 2 chunks → dropped.
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        routed, degraded = await self._route(
+            _routing_stub(results, heads=self._head_rows(dim=4)),
+            ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"],
+        )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1"]
+
+    async def test_head_fetch_failure_never_degrades(self):
+        # The head query itself raises — routing continues on the probe
+        # results alone (best-effort, NOT the degraded path).
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        routed, degraded = await self._route(
+            _routing_stub(results, heads="fail"),
+            ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"],
+        )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1"]
 
 
 class TestFanoutRoutingHook:

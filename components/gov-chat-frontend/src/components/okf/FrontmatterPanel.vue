@@ -71,11 +71,7 @@
           <span class="okf-fmp__field-count">({{ fieldValues(field).length }})</span>
         </div>
         <div class="okf-fmp__values">
-          <span
-            v-for="(value, idx) in fieldValues(field)"
-            :key="`${field}:${value}`"
-            class="okf-fmp__tag"
-          >
+          <span v-for="(value, idx) in fieldValues(field)" :key="`${field}:${value}`" class="okf-fmp__tag">
             <button
               v-if="!readOnly"
               class="okf-fmp__tag-remove"
@@ -115,11 +111,7 @@
     <p v-if="error" class="okf-fmp__error">{{ error }}</p>
     <footer v-if="!readOnly" class="okf-fmp__footer">
       <DsButton variant="primary" small :disabled="!canSave || saving" @click="onSave">
-        {{
-          saving
-            ? translate('okf.frontmatter.saving', 'Saving…')
-            : translate('okf.frontmatter.save', 'Save tags')
-        }}
+        {{ saving ? translate('okf.frontmatter.saving', 'Saving…') : translate('okf.frontmatter.save', 'Save tags') }}
       </DsButton>
       <span v-if="savedAt" class="okf-fmp__saved">
         {{ translate('okf.frontmatter.saved', 'Saved') }}
@@ -133,10 +125,7 @@
 import { mapActions } from 'vuex';
 import translateMixin from '../../mixins/translateMixin';
 import DsButton from '../ds/Button.vue';
-import {
-  getFrontmatter,
-  suggestFrontmatter
-} from '../../services/frontmatterService';
+import { getFrontmatter, suggestFrontmatter } from '../../services/frontmatterService';
 
 // Frontmatter shape keys, in display order. The server's
 // writeFrontmatterToRepoDoc + lifecycle-service gate read this exact
@@ -288,9 +277,7 @@ export default {
         this.savedAt = null;
       } catch (e) {
         this.suggestionError =
-          (e && e.response && e.response.data && e.response.data.message) ||
-          (e && e.message) ||
-          'Suggest failed.';
+          (e && e.response && e.response.data && e.response.data.message) || (e && e.message) || 'Suggest failed.';
         this.$emit('error', { phase: 'suggest', error: e });
       } finally {
         this.suggesting = false;
@@ -322,10 +309,7 @@ export default {
         await this.loadFrontmatter();
       } catch (e) {
         const r = e && e.response && e.response.data;
-        const msg =
-          (r && (r.message || r.error || (r.error && r.error.message))) ||
-          (e && e.message) ||
-          'Save failed.';
+        const msg = (r && (r.message || r.error || (r.error && r.error.message))) || (e && e.message) || 'Save failed.';
         this.error = typeof msg === 'string' ? msg : JSON.stringify(msg);
         this.$emit('error', { phase: 'patch', error: e });
       } finally {

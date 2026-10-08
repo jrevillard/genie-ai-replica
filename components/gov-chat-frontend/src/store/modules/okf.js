@@ -693,10 +693,11 @@ const actions = {
       // conceptService.get returns { frontmatter, body, ... } (the parsed
       // doc). Reconstruct the markdown via gray-matter so the
       // helper's matter() parse is symmetric.
-      const matter = (await import(/* webpackChunkName: "gm" */ 'gray-matter')).default || (await import('gray-matter'));
+      const matter =
+        (await import(/* webpackChunkName: "gm" */ 'gray-matter')).default || (await import('gray-matter'));
       const indexMarkdown = indexDoc.frontmatter
         ? matter.stringify(indexDoc.body || '', indexDoc.frontmatter)
-        : (indexDoc.body || '');
+        : indexDoc.body || '';
 
       // 2. Build the new index.md with the approved frontmatter block
       //    written in. Preserves the rest of the YAML + the body.

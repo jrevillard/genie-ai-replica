@@ -320,10 +320,16 @@ In the `spec.template.spec` block (after `securityContext:`), add:
       volumes:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- /* podSecurityContext passthrough — required for the
-             HF-cache PVC to be group-writable (fsGroup: 1000/100). Without
-             it the vLLM/TEI pods cannot write the first model download
-             and crashloop. */ -}}
+      {{- /* podSecurityContext (fsGroup 1000/100 for the RWX HF-cache PVC
+             to be group-writable on first model download). Render ONLY
+             when present — Plan 3's hardcoded `securityContext:` block
+             at the same spec level was REPLACED by this `with` guard to
+             avoid the duplicate-key error the K8s API server raises
+             when two `securityContext:` keys land at the same level.
+             Plan 3 callers that previously relied on the hardcoded
+             default must now set `podSecurityContext:` on the per-service
+             values entry (the genieai-common helper sets it when the
+             values block omits it). */ -}}
       {{- with $svc.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -655,7 +661,7 @@ spec:
             - { name: BACKEND_SERVICE_URL, value: "http://backend.{{ .Values.namespace }}.svc.cluster.local:80" }
             # --- Observability (SDK no-op when 0) ---
             - { name: ENABLE_OBSERVABILITY, value: {{ ternary "1" "0" .Values.observability.enabled | quote }} }
-            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://genieai-collector-collector.{{ .Values.namespace }}.svc.cluster.local:4318" }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://genieai-collector.{{ .Values.namespace }}.svc.cluster.local:4318" }
           # OPENAI_API_KEY (+ VLLM_API_KEY) arrive via envFrom below — the
           # AsyncOpenAI client needs it for remote-GPU bearer auth.
           envFrom:
@@ -888,35 +894,19 @@ spec:
 ```yaml
   services:
     backend:
-      env:
-        # ... existing Plan 3 env ...
-        # --- Plan 5: AI consumers (compose-verified backend env block) ---
-        - name: OPEA_HOST
-          value: chatqna    # code default is a deployment-specific hostname
-        - name: KEYCLOAK_PROXY_CLIENT_ID
-          value: genie-proxy-client
-        - name: VLLM_TRANSLATION_MODEL_ID
-          value: {{ .Values.ai.models.translationId | default "google/gemma-3-4b-it" | quote }}
-        - name: VLLM_TRANSLATION_ENDPOINT
-          # ternaried at template level in templates/services/backend.yaml
-          # (Plan 3 file — Task 8 Step 1 covers it)
-          value: http://vllm-translation.{{ .Values.namespace }}.svc.cluster.local:80
-        - name: STREAMING_TRANSLATION_ENABLED
-          value: "0"
+      # NOTE: values.yaml is NEVER templated by Helm. The `env:` keys
+      # below are static strings; any value that needs a per-install
+      # substitution (URLs, model IDs, ternary on ai.remoteGpu) lives
+      # in the per-service Deployment template
+      # (templates/services/backend.yaml — Task 1b/Plan 5 Task 8). The
+      # template-side block is the ONLY place `{{ .Values... }}` /
+      # `{{ if ... }}` appears for these envs.
+      env: []      # per-service URLs are injected by the Deployment template
       secrets:
         - name: keycloak-client-secret
         - name: huggingface-hub-token
         - name: keycloak-proxy-client-secret   # Plan 5: keycloak-proxy-service
         - name: vllm-api-key                    # Plan 5: remote-GPU bearer (VLLM_API_KEY)
-          # vllm-api-key SealedSecret is gated on ai.enabled
-          # in Task 6 — but backend references it for `OPEA_HOST`/VLLM_API_KEY
-          # and would crashloop on the same Day-0 ai.enabled=false install
-          # the C5 fix unlocked for keycloak-proxy-client-secret. Move
-          # vllm-api-key's secret gate out of ai.enabled (or, equivalently,
-          # add it to the `keycloak-proxy-client-secret` block which is
-          # already ai.enabled-independent). Apply this in Task 6 Step 1:
-          # split the secret gating — vllm-api-key renders when
-          # sealedSecrets.enabled (full chart), even when ai.enabled=false.
 ```
 
 NOTE: values.yaml is STATIC — the template-level remote ternary for `VLLM_TRANSLATION_ENDPOINT` is added to `templates/services/backend.yaml` (Plan 3 file) in Task 8 Step 1, exactly like the `_ai/*` wrappers. The `{{ .Values... }}` line above shows the DEFAULT baked into the backend template, not values.yaml content.
@@ -1073,20 +1063,19 @@ Mapping: `VLLM_ENDPOINT`→`vllmUrl`, `TEI_EMBEDDING_ENDPOINT`/`EMBEDDING_MODEL_
 Add to `templates/ai/*` wrappers' top:
 
 ```gotemplate
+{{- /* Outer guard: only check anything when AI tier is on AND remote
+       mode is selected. Inner checks drop the redundant
+       `ai.remoteGpu.enabled` (already true here) for readability. */ -}}
 {{- if and .Values.ai.enabled .Values.ai.remoteGpu.enabled -}}
-{{- if or (not .Values.ai.remoteGpu.vllmUrl) (not .Values.ai.remoteGpu.teiEmbeddingUrl) -}}
-{{- /* gates at OUTER if-level (was nested INSIDE the base
-       vllm+tei guard, so optional URLs were silently accepted when the
-       two base URLs were set). Now each URL check runs independently. */ -}}
 {{- $needTir := or .Values.ai.services.reranker.enabled .Values.ai.services.chatqna.enabled -}}
 {{- $needVt := or .Values.ai.services.translation.enabled .Values.ai.services.chatqna.enabled .Values.services.backend.enabled -}}
-{{- if and .Values.ai.remoteGpu.enabled $needTir (not .Values.ai.remoteGpu.teiRerankingUrl) -}}
+{{- if and $needTir (not .Values.ai.remoteGpu.teiRerankingUrl) -}}
 {{- fail "ai.remoteGpu.enabled=true with reranker/chatqna enabled requires teiRerankingUrl" -}}
 {{- end -}}
-{{- if and .Values.ai.remoteGpu.enabled $needVt (not .Values.ai.remoteGpu.vllmTranslationUrl) -}}
+{{- if and $needVt (not .Values.ai.remoteGpu.vllmTranslationUrl) -}}
 {{- fail "ai.remoteGpu.enabled=true with translation/chatqna/backend enabled requires vllmTranslationUrl" -}}
 {{- end -}}
-{{- if and .Values.ai.remoteGpu.enabled (or (not .Values.ai.remoteGpu.vllmUrl) (not .Values.ai.remoteGpu.teiEmbeddingUrl)) -}}
+{{- if or (not .Values.ai.remoteGpu.vllmUrl) (not .Values.ai.remoteGpu.teiEmbeddingUrl) -}}
 {{- fail "ai.remoteGpu.enabled=true requires vllmUrl + teiEmbeddingUrl; doclingUrl is optional (empty = in-process docling)" -}}
 {{- end -}}
 {{- end -}}

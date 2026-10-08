@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Helm chart API version: `v2` (per spec §3 topology).
-- Chart name format: `genieai-<component>` (lowercase, ≤15 chars). Library: `genieai-common`. Umbrella: `genieai-umbrella`.
+- Chart name format: `genieai-<component>` (lowercase, library + umbrella naming — no length cap; the umbrella `genieai-umbrella` is 16 chars and is the established name across spec, ArgoCD Application, and ct.yaml). Library: `genieai-common`. Umbrella: `genieai-umbrella`.
 - Default container runtime assumption: `containerd` (post-K8s 1.24+ dockershim removal).
 - Image registry default: `docker.io`.
 - Default namespace for foundation: `genieai`.

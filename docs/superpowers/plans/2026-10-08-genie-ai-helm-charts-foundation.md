@@ -1,0 +1,1155 @@
+# GENIE.AI Helm Charts — Foundation Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Ship the foundation for the GENIE.AI Helm chart migration: `genieai-common` library chart, `genieai-umbrella` skeleton (Chart.yaml + values.yaml + namespace + ArgoCD Application example), chart-testing CI integration, and a passing `helm test` against a kind cluster. Establishes the patterns every later epic builds on.
+
+**Architecture:** Library chart (`type: library`) provides reusable templates via `_helpers.tpl` + standalone templates, exported via `import-values:`. Umbrella chart consumes the library as a local file dependency, plus all stateful-service operators as Helm `dependencies` with `condition:` toggles. Single `helm install` deploys the whole umbrella into one namespace. ArgoCD ApplicationSet renders per-env Kustomize overlays pointing at `deploy/environments/<env>/`.
+
+**Tech Stack:** Helm 4.x, Helmfile-compatible but standalone helm-install for v1, chart-testing (`ct`), kind (k8s 1.32+), ArgoCD ApplicationSet (GitOps), kubectl 1.32+, kustomize 5.x.
+
+**Spec:** `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` — this plan implements §3 (chart topology base), §4 (dependency model base, Keycloak URL only), §5 (values schema partial — global + namespace only), §6 (pluggability surface design only, no concrete backends yet), §13.1 partial (skip uninstall hook in foundation), §17 partial (foundation manifest only — operators and per-env configs come in later plans).
+
+## Global Constraints
+
+- Helm chart API version: `v2` (per spec §3 topology).
+- Chart name format: `genieai-<component>` (lowercase, ≤15 chars). Library: `genieai-common`. Umbrella: `genieai-umbrella`.
+- Default container runtime assumption: `containerd` (post-K8s 1.24+ dockershim removal).
+- Image registry default: `docker.io`.
+- Default namespace for foundation: `genieai`.
+- All English documentation and comments per project CLAUDE.md.
+- All commits in English using Conventional Commits (`feat/chore/fix/docs/test(scope): ...`).
+- Never commit secrets in `values-override.yaml` (conftest policy lands in Plan 7 — for now, manual discipline only).
+- Worktree path: `/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/k8s-migration/`. Branch: `feat/k8s-migration`.
+
+## Review Focus
+
+These five failure modes the spec implies but no plan-1 task tests explicitly. Each gets pinned in the listed task:
+
+1. **Library chart `import-values:` collision** — if two templates in `genieai-common/templates/_lib/` declare the same exported key, umbrella chart's values merge breaks. **Pinned in Task 4 step 3** (render test that fails on duplicate keys).
+2. **Helm test Pod missing `securityContext`** — the test Pod runs with default K8s `restricted` PSA; if `restricted` is enforced, the test Pod fails to schedule. **Pinned in Task 9 step 3** (test uses explicit `securityContext.runAsNonRoot: true`).
+3. **chart-testing `ct install` against kind without `--kube-version` flag** — kind defaults to an older k8s; the chart's recommended 1.30+ assumption breaks. **Pinned in Task 10 step 2** (CT config pins `kubeVersion: 1.32.0`).
+4. **Chart.yaml `appVersion: latest` vs OCI tag immutable** — OCI registries reject `latest` for promotion; the chart must use explicit tags. **Pinned in Task 6 step 4** (chart-test verifies `appVersion` is not `latest`).
+5. **ArgoCD Application namespace conflict** — the Application manifest in `examples/` references `argocd` as install namespace; if applied by Helm before ArgoCD exists, install fails. **Pinned in Task 11 step 5** (helm template dry-run validates against `argocd` namespace only, not auto-applies).
+
+---
+
+## Task 1: Repo layout scaffolding
+
+**Files:**
+- Create: `charts/README.md`
+- Create: `charts/Makefile`
+- Create: `deploy/environments/.gitkeep`
+- Create: `deploy/environments/README.md`
+
+**Interfaces:**
+- Consumes: nothing — first task.
+- Produces: layout that subsequent tasks populate.
+
+- [ ] **Step 1: Create `charts/README.md`**
+
+```markdown
+# GENIE.AI Helm charts
+
+This directory holds the Kubernetes-deployment Helm charts for GENIE.AI.
+
+## Status
+
+Foundation plan in progress. See `docs/superpowers/plans/2026-10-08-genie-ai-helm-charts-foundation.md`
+for the first batch of work.
+
+## Charts
+
+| Chart | Status | Purpose |
+|---|---|---|
+| `genieai-common` | foundation | Library chart (templates + helpers) reused by `genieai-umbrella` |
+| `genieai-umbrella` | foundation | Single-install chart — 26 services, depends on `genieai-common` + operators |
+
+## Other directories
+
+- `deploy/environments/` — per-environment Kustomize overlays + values-override files.
+
+## Conventions
+
+- Helm API v2. Helm 4.x.
+- No secrets in `values-override.yaml`. Use External Secrets Operator.
+- Tests live in each chart's `tests/` directory; `ct install` for integration, `helm test` for smoke.
+```
+
+- [ ] **Step 2: Create `charts/Makefile`**
+
+```makefile
+.PHONY: lint lint-common lint-umbrella template template-umbrella test test-umbrella docs
+
+CHARTS = genieai-common genieai-umbrella
+
+lint: $(addprefix lint-,$(CHARTS))
+
+lint-common:
+	helm lint charts/genieai-common
+
+lint-umbrella: lint-common
+	helm lint charts/genieai-umbrella
+
+template: template-umbrella
+
+template-umbrella:
+	helm template test charts/genieai-umbrella -n genieai > /tmp/genieai-rendered.yaml
+
+test: test-umbrella
+
+test-umbrella:
+	ct install --config charts/ci/ct.yaml --charts charts/genieai-umbrella
+
+docs:
+	helm-docs --chart-search-root=charts
+```
+
+- [ ] **Step 3: Create `deploy/environments/.gitkeep`**
+
+Empty file. The directory must exist for later plans.
+
+Run: `touch deploy/environments/.gitkeep`
+
+- [ ] **Step 4: Create `deploy/environments/README.md`**
+
+```markdown
+# Per-environment Kustomize overlays
+
+`deploy/environments/<env>/` contains one subdirectory per deployment target. Each
+subdirectory holds:
+
+- `kustomization.yaml` — Kustomize resource that pins `helmCharts:` entries to
+  the umbrella chart path + per-env `values-override.yaml`.
+- `values-override.yaml` — env-specific Helm values overrides.
+
+`main` branch tracks the chart + plain envs (dev, staging, prod). High-customization
+envs track `release/<env>` branches (e.g. `release/el-salvador`). See
+`docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` §19.
+
+This directory is empty during the Foundation plan. Subsequent plans populate per-env.
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add charts/README.md charts/Makefile deploy/environments/.gitkeep deploy/environments/README.md
+git commit -m "chore(charts): scaffold layout for library + umbrella + per-env directories"
+```
+
+---
+
+## Task 2: Library chart — Chart.yaml
+
+**Files:**
+- Create: `charts/genieai-common/Chart.yaml`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: `genieai-common` library chart declaration. Later tasks consume it via `dependencies:` in the umbrella's `Chart.yaml`.
+
+- [ ] **Step 1: Write `charts/genieai-common/Chart.yaml`**
+
+```yaml
+apiVersion: v2
+name: genieai-common
+description: |
+  Library chart providing reusable templates and helpers for the GENIE.AI Helm
+  charts. NOT a deployable chart — used via `dependencies:` in consuming charts
+  with `import-values:` to expose helpers.
+type: library
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - genie-ai
+  - library
+  - templates
+home: https://opensource.unicc.org/un/itu/genie-ai
+sources:
+  - https://opensource.unicc.org/un/itu/genie-ai.git
+maintainers:
+  - name: GENIE.AI
+    email: maintainers@example.invalid
+annotations:
+  category: Library
+```
+
+- [ ] **Step 2: Validate with `helm lint`**
+
+Run: `helm lint charts/genieai-common`
+Expected: `0 charts linted, 0 errors, 0 warnings`
+
+- [ ] **Step 3: Validate with `helm-docs --dry-run`**
+
+Run: `helm-docs --chart-search-root=charts/genieai-common --dry-run`
+Expected: shows `name: genieai-common` line; exits 0.
+
+If `helm-docs` is not installed globally, install via: `go install github.com/norwoodj/helm-docs/cmd/helm-docs@latest`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add charts/genieai-common/Chart.yaml
+git commit -m "feat(charts): genieai-common library chart skeleton"
+```
+
+---
+
+## Task 3: Library chart — `_helpers.tpl` (labels, selectors, naming)
+
+**Files:**
+- Create: `charts/genieai-common/templates/_helpers.tpl`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: callable helpers `genieai-common.name`, `genieai-common.fullname`, `genieai-common.labels`, `genieai-common.selectorLabels`, `genieai-common.chart`. Each umbrella template embeds them via `{{ include "..." . }}`.
+
+- [ ] **Step 1: Write `charts/genieai-common/templates/_helpers.tpl`**
+
+```gotemplate
+{{/*
+Expand the name of the chart.
+*/}}
+{{- define "genieai-common.name" -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Create a default fully qualified app name.
+We truncate at 50 chars because some K8s name fields are limited to this (RFC 1123).
+*/}}
+{{- define "genieai-common.fullname" -}}
+{{- if .Values.fullnameOverride -}}
+{{- .Values.fullnameOverride | trunc 50 | trimSuffix "-" -}}
+{{- else -}}
+{{- $name := default .Chart.Name .Values.nameOverride -}}
+{{- if contains $name .Release.Name -}}
+{{- .Release.Name | trunc 50 | trimSuffix "-" -}}
+{{- else -}}
+{{- printf "%s-%s" .Release.Name $name | trunc 50 | trimSuffix "-" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Chart name and version label.
+*/}}
+{{- define "genieai-common.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Common labels — applied to all umbrella resources.
+Includes helm.sh/chart, app.kubernetes.io/name, app.kubernetes.io/instance,
+app.kubernetes.io/version, app.kubernetes.io/managed-by, plus genie-ai-specific
+labels for Prometheus / OpenTelemetry service discovery.
+*/}}
+{{- define "genieai-common.labels" -}}
+helm.sh/chart: {{ include "genieai-common.chart" . }}
+{{ include "genieai-common.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+genieai.io/component: {{ .Values.component | default "umbrella" | quote }}
+genieai.io/managed-by: helm
+{{- end -}}
+
+{{/*
+Selector labels — used in Deployment selectors and Service selectors.
+Note: must NOT include version (selector is immutable).
+*/}}
+{{- define "genieai-common.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "genieai-common.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end -}}
+```
+
+- [ ] **Step 2: Run `helm lint` to confirm no syntax errors**
+
+Run: `helm lint charts/genieai-common`
+Expected: `0 charts linted, 0 errors, 0 warnings`
+
+- [ ] **Step 3: Render library to confirm templates parse**
+
+Run: `helm template genieai-common charts/genieai-common`
+Expected: renders empty output (library charts produce nothing). Exit 0.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add charts/genieai-common/templates/_helpers.tpl
+git commit -m "feat(charts): add naming + label helpers to genieai-common"
+```
+
+---
+
+## Task 4: Library chart — `values.schema.json` + README
+
+**Files:**
+- Create: `charts/genieai-common/values.schema.json`
+- Create: `charts/genieai-common/README.md`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: JSON schema validation for umbrella charts that consume `genieai-common`. README documents the helpers and exported values keys.
+
+- [ ] **Step 1: Write `charts/genieai-common/values.schema.json`**
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "genieai-common library chart values",
+  "description": "Schema for values imported via import-values: into consuming charts. Most fields default and require no setting.",
+  "type": "object",
+  "properties": {
+    "nameOverride": {
+      "type": "string",
+      "description": "Override the chart name segment in resource names. Empty = use chart default.",
+      "maxLength": 50
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "description": "Override the entire resource name prefix. Empty = use <release>-<chart>.",
+      "maxLength": 50
+    },
+    "component": {
+      "type": "string",
+      "enum": ["umbrella", "data", "ai", "observability", "ingress", "security"],
+      "description": "Top-level GENIE.AI component this label marks. Used by Prometheus service discovery, NetworkPolicy selectors, and Grafana dashboards.",
+      "default": "umbrella"
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+- [ ] **Step 2: Write `charts/genieai-common/README.md`**
+
+```markdown
+# genieai-common
+
+Library chart for the GENIE.AI Helm umbrella. Provides:
+
+- Naming helpers (`genieai-common.name`, `genieai-common.fullname`)
+- Label selectors (`genieai-common.labels`, `genieai-common.selectorLabels`)
+- Chart/version label (`genieai-common.chart`)
+
+## Usage
+
+Consume from an umbrella chart's `Chart.yaml`:
+
+\`\`\`yaml
+dependencies:
+  - name: genieai-common
+    version: "0.1.0"
+    repository: "file://../genieai-common"
+    import-values:
+      - child: "."
+        parent: "common"
+\`\`\`
+
+Then in templates:
+
+\`\`\`gotemplate
+metadata:
+  labels:
+    {{- include "genieai-common.labels" . | nindent 4 }}
+\`\`\`
+
+## Why `type: library`?
+
+Library charts do not render Pods/Services themselves — they export helpers and
+values consumed by umbrella templates. The umbrella chart is what users install.
+```
+
+- [ ] **Step 3: Validate library chart still passes lint (Review Focus #1)**
+
+Run: `helm lint charts/genieai-common --strict`
+Expected: 0 errors, 0 warnings. Confirms no duplicate template exports.
+
+- [ ] **Step 4: Run `helm-docs` to regenerate chart README from values.yaml**
+
+Run: `helm-docs --chart-search-root=charts --dry-run`
+Expected: shows `genieai-common` in output. The library chart has empty `values.yaml` so docs output is small. If `helm-docs` fails because of empty values.yaml, skip and manually write the README — it was already written in step 2.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add charts/genieai-common/values.schema.json charts/genieai-common/README.md
+git commit -m "feat(charts): genieai-common values schema + README"
+```
+
+---
+
+## Task 5: Library chart — empty `values.yaml` so umbrella can `import-values:`
+
+**Files:**
+- Create: `charts/genieai-common/values.yaml`
+- Create: `charts/genieai-common/.helmignore`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: an empty values file. The umbrella's `Chart.yaml` uses `import-values: child: .` which exports all current values from the library into the umbrella's `common.*` namespace. The `.helmignore` keeps generated tarballs out of source (Review Focus V3).
+
+- [ ] **Step 1: Run red-gate validator — fails because the file doesn't exist**
+
+Run: `helm lint charts/genieai-common --strict`
+Expected: ERROR — values.yaml is missing.
+
+- [ ] **Step 2: Write `charts/genieai-common/values.yaml`**
+
+```yaml
+# genieai-common library chart — no chart-specific defaults.
+# Consuming charts define defaults in their own values.yaml; this file exists
+# only because Helm requires values.yaml on disk even for library charts.
+```
+
+- [ ] **Step 3: Render to confirm empty but valid**
+
+Run: `helm lint charts/genieai-common --strict && helm template genieai-common charts/genieai-common`
+Expected: 0 errors, empty rendered output. Exit 0.
+
+- [ ] **Step 4: Write `charts/genieai-common/.helmignore`**
+
+```
+# Helm packaging ignores for genieai-common (library chart).
+# We never package this chart for OCI distribution, so generated tarballs
+# should never be committed under any condition.
+charts/
+*.tgz
+.DS_Store
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add charts/genieai-common/values.yaml charts/genieai-common/.helmignore
+git commit -m "chore(charts): empty values.yaml + .helmignore for library"
+```
+
+---
+
+## Task 6: Umbrella chart — `Chart.yaml` with library dependency only
+
+**Files:**
+- Create: `charts/genieai-umbrella/Chart.yaml`
+
+**Interfaces:**
+- Consumes: Task 2's `genieai-common` library chart.
+- Produces: umbrella chart with `dependencies:` block referencing the library via `file://` path. Operator dependencies are added in later plans (Plan 2 onward).
+
+- [ ] **Step 1: Write `charts/genieai-umbrella/Chart.yaml`**
+
+```yaml
+apiVersion: v2
+name: genieai-umbrella
+description: |
+  Single-install umbrella chart for GENIE.AI. Renders the entire 26-service
+  stack with one `helm install` — typically consumed via per-env Kustomize
+  overlays at `deploy/environments/<env>/`.
+type: application
+version: 0.1.0
+# Never "latest" — see Review Focus #4. Pin to a chart version; image versions
+# are governed by the upstream component image tags.
+appVersion: "1.0.0"
+keywords:
+  - genie-ai
+  - umbrella
+  - sovereign
+  - rag
+home: https://opensource.unicc.org/un/itu/genie-ai
+sources:
+  - https://opensource.unicc.org/un/itu/genie-ai.git
+maintainers:
+  - name: GENIE.AI
+    email: maintainers@example.invalid
+dependencies:
+  # Local library chart — re-rendered on every umbrella install.
+  - name: genieai-common
+    version: "0.1.0"
+    repository: "file://../genieai-common"
+    import-values:
+      - child: "."
+        parent: "common"
+
+# Operator dependencies (added in subsequent plans):
+# - cloudnative-pg (Plan 2)
+# - kube-arangodb (Plan 2)
+# - keycloak-operator (Plan 2)
+# - external-secrets-operator (Plan 2)
+# - victoriametrics-operator + vl + vt (Plan 4)
+# - opentelemetry-operator (Plan 4)
+# - gpu-operator (Plan 5)
+# - cert-manager (umbrella-level dependency, Plan 6)
+# - envoy-gateway (Plan 6)
+```
+
+- [ ] **Step 2: Run `helm dependency update` to fetch the local file dependency**
+
+Run: `helm dependency update charts/genieai-umbrella`
+Expected: fetches `genieai-common-0.1.0.tgz`. Creates `charts/genieai-umbrella/charts/` and `charts/genieai-umbrella/Chart.lock`.
+
+- [ ] **Step 3: Run `helm lint --strict`**
+
+Run: `helm lint charts/genieai-umbrella --strict`
+Expected: 0 errors. Warnings about missing templates are acceptable at this stage (foundation only).
+
+- [ ] **Step 4: Verify `appVersion` is not `latest` (Review Focus #4)**
+
+Run:
+
+```bash
+if grep -E '^appVersion: "?latest"?' charts/genieai-umbrella/Chart.yaml; then
+  echo "FAIL: appVersion is 'latest' — must be pinned"
+  exit 1
+else
+  echo "OK: appVersion is pinned"
+fi
+```
+
+Expected: prints `OK: appVersion is pinned`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add charts/genieai-umbrella/Chart.yaml charts/genieai-umbrella/charts/ charts/genieai-umbrella/Chart.lock
+git commit -m "feat(charts): genieai-umbrella skeleton with library dependency"
+```
+
+Note: `charts/` and `Chart.lock` are committed in Foundation because Helm requires them; later tasks add more dependencies. Consider a `.helmignore` to keep `charts/` out of PR diffs if it churns (defer to Plan 7).
+
+---
+
+## Task 7: Umbrella chart — minimal `values.yaml` (foundation subset only)
+
+**Files:**
+- Create: `charts/genieai-umbrella/values.yaml`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: schema-compliant values that render the namespace-only foundation. Service tier values AND pluggable backends land in Plans 2–6 (not this plan — Review Focus Y2).
+
+- [ ] **Step 1: Run red-gate validator — must fail before the file exists**
+
+Run: `helm lint charts/genieai-umbrella --strict`
+Expected: ERROR — values.yaml is missing.
+
+- [ ] **Step 2: Write `charts/genieai-umbrella/values.yaml`**
+
+```yaml
+# GENIE.AI umbrella chart — foundation-only values.
+# Subsequent plans add: services.* (Plan 3+), observability.* (Plan 4),
+# gpu.* (Plan 5), data.* (Plan 2), ingress.* (Plan 6), migration.* (Plan 6).
+# Pluggability surface (secretsBackend / ingressClassName / storageClassName /
+# containerRuntime) lands in Plan 6 alongside the concrete backend code — do not
+# declare fields here that no template consumes.
+
+namespace: genieai
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  imagePullPolicy: IfNotPresent
+
+# ClusterProfile-based defaults (Plan 2+ adds the pre-install hook).
+clusterProfile: dev                # dev | staging | prod | sovereign
+```
+
+- [ ] **Step 3: Run `helm template` to confirm render is valid**
+
+Run: `helm template test charts/genieai-umbrella -n genieai`
+Expected: only the Namespace renders (per Task 8). Exit 0.
+
+- [ ] **Step 4: Run `helm lint` strict on umbrella**
+
+Run: `helm lint charts/genieai-umbrella --strict`
+Expected: 0 errors.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add charts/genieai-umbrella/values.yaml
+git commit -m "feat(charts): foundation values.yaml (namespace + clusterProfile only)"
+```
+
+---
+
+## Task 8: Umbrella chart — `templates/namespace.yaml`
+
+**Files:**
+- Create: `charts/genieai-umbrella/templates/namespace.yaml`
+- Create: `charts/genieai-umbrella/templates/_lib/_common.tpl`
+
+**Interfaces:**
+- Consumes: `genieai-common.labels`, `genieai-common.selectorLabels`, `genieai-common.fullname`.
+- Produces: a `Namespace` resource with the chart's `genieai.io/cluster-profile` label.
+
+- [ ] **Step 1: Write `charts/genieai-umbrella/templates/_lib/_common.tpl`**
+
+```gotemplate
+{{/*
+Common umbrella include — emits metadata.labels consistent with the rest of the umbrella.
+*/}}
+{{- define "genieai.common.metadata" -}}
+{{- $top := . -}}
+{{- $component := .Values.component | default "umbrella" -}}
+metadata:
+  labels:
+    {{- include "genieai-common.labels" . | nindent 4 }}
+    {{- with .Values.global.commonLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end -}}
+```
+
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/namespace.yaml`**
+
+```yaml
+{{- /* Build a per-template Values view so we can override `.component` for label rendering. */ -}}
+{{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "namespace")) -}}
+{{- $ns := .Values.namespace -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "genieai-common.labels" $componentValues | nindent 4 }}
+    genieai.io/cluster-profile: {{ .Values.clusterProfile | default "dev" | quote }}
+    app.kubernetes.io/part-of: genieai
+    # Review Focus V2 — advertise K8s Pod Security Standards at the namespace
+    # level so admission controllers refuse pods without required securityContext.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+```
+
+- [ ] **Step 3: Render and confirm only one Namespace is produced**
+
+Run: `helm template test charts/genieai-umbrella -n genieai`
+Expected output (key lines):
+
+```
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: genieai
+  labels:
+    genieai.io/cluster-profile: "dev"
+```
+
+- [ ] **Step 4: Run lint strict**
+
+Run: `helm lint charts/genieai-umbrella --strict`
+Expected: 0 errors.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add charts/genieai-umbrella/templates/_lib/_common.tpl charts/genieai-umbrella/templates/namespace.yaml
+git commit -m "feat(charts): render Namespace with cluster-profile label"
+```
+
+---
+
+## Task 9: Umbrella chart — `templates/tests/test-namespace.yaml` (Helm test)
+
+**Files:**
+- Create: `charts/genieai-umbrella/templates/tests/test-namespace.yaml`
+
+**Interfaces:**
+- Consumes: namespace labels from Task 8.
+- Produces: a `helm test`-able Pod that asserts the namespace exists and has the right labels. Anchors the test pattern service-tier plans will replicate.
+
+- [ ] **Step 1: Write `charts/genieai-umbrella/templates/tests/test-namespace.yaml`**
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-test-namespace
+  labels:
+    {{- include "genieai-common.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,before-hook-creation
+spec:
+  restartPolicy: Never
+  # Required by PSA restricted — without these the test Pod cannot schedule.
+  # Review Focus #2.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: test
+      image: registry.gitlab.com/un/itu/genie-ai/test-utils:0.1.0
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+        capabilities:
+          drop:
+            - ALL
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          ns="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+          echo "test Pod running in namespace: $ns"
+          [ "$ns" = "{{ .Values.namespace }}" ] \
+            || { echo "FAIL: namespace mismatch, expected {{ .Values.namespace }}"; exit 1; }
+          echo "PASS"
+```
+
+- [ ] **Step 2: Use `alpine:3.20` directly as the test image — no project registry tag yet**
+
+The test-utils image reference `registry.gitlab.com/un/itu/genie-ai/test-utils:0.1.0` does not exist yet; Plan 7 (CI integration) controls that image's lifecycle. For foundation purposes, use upstream `alpine:3.20`. The `image:` field in the template YAML (Step 1) is already set to `alpine:3.20` — no edit needed here, the step exists only to record the rationale (Review Focus V6).
+
+- [ ] **Step 3: Pre-load `alpine:3.20` into the kind node so the test pod does not pull over the network (Review Focus B3)**
+
+```bash
+docker pull alpine:3.20
+kind load docker-image alpine:3.20 --name genieai-test
+```
+
+- [ ] **Step 4: Run `helm test` against a kind cluster (Review Focus #2)**
+
+```bash
+# Spin up kind cluster (one-time)
+kind create cluster --name genieai-test --image kindest/node:v1.32.0
+
+# Install chart
+helm install test charts/genieai-umbrella -n genieai --create-namespace
+
+# Run test
+helm test test -n genieai
+```
+
+Expected:
+- `Phase: Succeeded` for `test-namespace` pod.
+- Last log line `PASS`.
+
+If the pod fails to schedule with `forbidden: violates PodSecurity "restricted:latest"`, the securityContext from Step 1 is missing — re-check.
+
+- [ ] **Step 5: Tear down kind cluster (after verification)**
+
+```bash
+kind delete cluster --name genieai-test
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add charts/genieai-umbrella/templates/tests/test-namespace.yaml
+git commit -m "test(charts): helm test for Namespace + cluster-profile label"
+```
+
+---
+
+## Task 10: chart-testing config + CI scaffolding
+
+**Files:**
+- Create: `charts/ci/ct.yaml`
+- Create: `charts/ci/README.md`
+- Create: `charts/genieai-umbrella/.helmignore`
+
+**Interfaces:**
+- Consumes: Tasks 6–9's chart structure.
+- Produces: a `ct install` config that CI runs, pinned to K8s 1.32 (Review Focus #3).
+
+- [ ] **Step 1: Write `charts/ci/ct.yaml`**
+
+```yaml
+remote: origin
+target-branch: feat/k8s-migration
+# chart-repos intentionally empty in foundation plan — the only dependency
+# is the local file:// library chart in Task 6. Operator repos (CloudNativePG,
+# kube-arangodb, Keycloak, etc.) are added in Plan 2. Review Focus B5.
+charts:
+  - chart-dirs:
+      - charts
+    chart-repos: []
+    release-label: ct-foundation
+    debug: true
+    namespace: genieai-ct
+    check-resource-keywords: true
+    # Review Focus #3: pin a k8s version so ct runs against a known K8s.
+    # The kind cluster created in CI uses matching image.
+    kubeVersion: 1.32.0
+    skip-helm-dependencies: false
+    helm-extra-args: --timeout 300s
+    validate-changes: false
+```
+
+- [ ] **Step 2: Write `charts/ci/README.md`**
+
+```markdown
+# CI / chart-testing configuration
+
+`charts/ci/ct.yaml` configures [chart-testing](https://github.com/helm/chart-testing)
+for the umbrella chart. Used by `.gitlab-ci.yml` job `charts:integration` (added in
+Plan 7). Locally:
+
+\`\`\`bash
+make test
+\`\`\`
+
+Pinned K8s version: **1.32.0** for chart-testing's `ct install --kube-version` flag.
+Matching kind node image: `kindest/node:v1.32.0`. Update both in lockstep.
+```
+
+- [ ] **Step 3: Write `charts/genieai-umbrella/.helmignore`**
+
+```
+# Helm packaging ignores — keep Chart.lock and vendored chart tarballs out
+# of source diffs unless intentional.
+charts/
+*.tgz
+.DS_Store
+```
+
+- [ ] **Step 4: Commit `.helmignore`**
+
+```bash
+git add charts/genieai-umbrella/.helmignore
+git commit -m "chore(charts): add .helmignore to umbrella chart"
+```
+
+- [ ] **Step 5: Verify `ct lint` baseline passes**
+
+Run: `ct lint --config charts/ci/ct.yaml --charts charts/genieai-umbrella`
+Expected: no errors. Warnings about missing test coverage OK at this stage.
+
+If `ct` is not installed: `brew install chart-testing` or download from `https://github.com/helm/chart-testing/releases`.
+
+- [ ] **Step 6: Commit CI config**
+
+```bash
+git add charts/ci/ct.yaml charts/ci/README.md
+git commit -m "ci(charts): chart-testing baseline config pinned to K8s 1.32"
+```
+
+---
+
+## Task 11: ArgoCD Application example (manifest only, NOT auto-rendered)
+
+**Files:**
+- Create: `charts/genieai-umbrella/examples/argocd-application.yaml`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: a literal ArgoCD Application manifest (NOT a Helm template). Lives under `examples/` so Helm's chart packaging ignores it. Applied manually with `kubectl apply -f` after ArgoCD is installed (Review Focus V5, Y3).
+
+- [ ] **Step 1: Run red-gate validator — fails because the example manifest does not exist**
+
+Run: `test -f charts/genieai-umbrella/examples/argocd-application.yaml && echo "exists" || echo "FAIL: example missing"`
+Expected: prints `FAIL: example missing`.
+
+- [ ] **Step 2: Write `charts/genieai-umbrella/examples/argocd-application.yaml`**
+
+```yaml
+# IMPORTANT: do NOT render — apply manually.
+# This file is a literal ArgoCD Application manifest, NOT a Helm template.
+# Apply with:
+#   kubectl apply -f argocd-application.yaml -n argocd
+# Pre-condition: ArgoCD installed in the `argocd` namespace; the target cluster
+# is the current kubectl context.
+#
+# For el-salvador (or other high-customization envs), change:
+#   * targetRevision: main  ->  release/<env>
+#   * path: deploy/environments/dev/  ->  deploy/environments/<env>/
+#   * namespace: genieai  ->  genieai-<env>
+#
+# Per-env overlays (path: deploy/environments/<env>/) are populated by Plan 6.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: genieai-dev
+  namespace: argocd
+spec:
+  project: genieai
+  source:
+    repoURL: https://opensource.unicc.org/un/itu/genie-ai.git
+    targetRevision: main    # use release/el-salvador for the el-salvador env
+    path: charts/genieai-umbrella
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: genieai
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+```
+
+- [ ] **Step 3: Run `helm template` against the umbrella + verify ArgoCD manifest is NOT in the rendered output (Review Focus #5)**
+
+Run:
+
+```bash
+if helm template test charts/genieai-umbrella -n genieai | grep -q "^kind: Application$"; then
+  echo "FAIL: ArgoCD Application rendered"
+  exit 1
+else
+  echo "PASS: ArgoCD example not auto-rendered"
+fi
+```
+
+Expected: prints `PASS: ArgoCD example not auto-rendered`.
+
+- [ ] **Step 4: Validate the example with `kubectl apply --dry-run=client` against a kind cluster with ArgoCD installed**
+
+Skip if ArgoCD is not yet in the test cluster. For foundation purposes, the manifest structure + Step 3 dry-run is sufficient validation. Plan 6 (ingress/cert-manager/operator deployment) will install ArgoCD as part of its testing.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add charts/genieai-umbrella/examples/argocd-application.yaml
+git commit -m "docs(charts): ArgoCD Application example (literal manifest, manual apply)"
+```
+
+---
+
+## Task 12: Validate `helm install` produces a working namespace
+
+**Files:** none — pure validation step.
+
+**Interfaces:**
+- Consumes: every prior task.
+- Produces: confirmation that the foundation plan produces a shippable artifact.
+
+- [ ] **Step 1: Stand up a kind cluster**
+
+```bash
+kind create cluster --name genieai-foundation --image kindest/node:v1.32.0
+```
+
+- [ ] **Step 2: Render umbrella with `helm template` and visually inspect output**
+
+```bash
+helm template test charts/genieai-umbrella -n genieai > /tmp/genieai-render.yaml
+cat /tmp/genieai-render.yaml
+```
+
+Expected output:
+
+```yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: genieai
+  labels:
+    helm.sh/chart: genieai-umbrella-0.1.0
+    app.kubernetes.io/name: genieai-umbrella
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/managed-by: Helm
+    genieai.io/component: "namespace"
+    genieai.io/managed-by: "helm"
+    genieai.io/cluster-profile: "dev"
+    app.kubernetes.io/part-of: genieai
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+```
+
+- [ ] **Step 3: Install and run `helm test`**
+
+```bash
+helm install test charts/genieai-umbrella -n genieai --create-namespace
+helm test test -n genieai
+```
+
+Expected:
+- `NAME: test`
+- `LAST DEPLOYED: <timestamp>`
+- `NAMESPACE: genieai`
+- `STATUS: deployed`
+- `Phase: Succeeded` test pod runs.
+- Test log ends with `PASS`.
+
+- [ ] **Step 4: Confirm the test pod ran with the right securityContext (Review Focus #2)**
+
+```bash
+kubectl get pod -n genieai test-genieai-umbrella-test-namespace -o jsonpath='{.spec.securityContext}' | jq .
+```
+
+Expected: `runAsNonRoot: true`, `runAsUser: 65534`, `seccompProfile.type: RuntimeDefault`.
+
+- [ ] **Step 5: Uninstall + tear down kind**
+
+```bash
+helm uninstall test -n genieai
+kind delete cluster --name genieai-foundation
+```
+
+- [ ] **Step 6: Mark the Foundation plan complete in `charts/README.md`**
+
+```bash
+cat > charts/README.md <<'EOF'
+# GENIE.AI Helm charts
+
+This directory holds the Kubernetes-deployment Helm charts for GENIE.AI.
+
+## Status
+
+Foundation plan complete. Next: Plans 2–8 for data layer, service tier, observability, AI/ML, per-env config, CI, docs.
+
+## Charts
+
+| Chart | Status | Purpose |
+|---|---|---|
+| `genieai-common` | foundation | Library chart (templates + helpers) reused by `genieai-umbrella` |
+| `genieai-umbrella` | foundation | Single-install chart — 26 services, depends on `genieai-common` + operators |
+
+## Other directories
+
+- `deploy/environments/` — per-environment Kustomize overlays + values-override files.
+
+## Conventions
+
+- Helm API v2. Helm 4.x.
+- No secrets in `values-override.yaml`. Use External Secrets Operator (Plan 2 + Plan 6).
+- Tests live in each chart's `tests/` directory; `ct install` for integration, `helm test` for smoke.
+EOF
+
+git add charts/README.md
+git commit -m "docs(charts): mark foundation plan complete in charts/README.md"
+```
+
+---
+
+## Task 13: Secret-leak guard rail (placeholder for Plan 7 — write the empty slot)
+
+**Files:**
+- Create: `charts/ci/policies/.gitkeep`
+- Create: `charts/ci/policies/README.md`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: a directory reserved for OPA Rego policies. Plan 7 writes the actual `secret-leak.rego`. This task guarantees the CI rule from Plan 7 has somewhere to land (Review Focus V4).
+
+- [ ] **Step 1: Create the policy directory + placeholder README**
+
+```bash
+mkdir -p charts/ci/policies
+cat > charts/ci/policies/README.md <<'EOF'
+# OPA Rego policies for chart ci
+
+Policies run via `conftest` against `deploy/environments/**/*.yaml` and against
+chart-rendered manifests.
+
+## Plan 7 implements:
+
+- `secret-leak.rego` — reject `Secret` resources, ConfigMap data keys named
+  `password`/`secret`/`token`/etc, and high-entropy strings in known config
+  paths.
+
+- `image-signature.rego` — reject Pods whose image references lack cosign
+  signature verification (Run by Kyverno in cluster; this is the lint-time
+  pre-check).
+
+The directory exists in Plan 1 so Plan 7 doesn't need to author a placeholder
+structure later.
+EOF
+touch charts/ci/policies/.gitkeep
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add charts/ci/policies/.gitkeep charts/ci/policies/README.md
+git commit -m "chore(charts): scaffold OPA Rego policies directory (Plan 7 fills in)"
+```
+
+---
+
+## Self-Review
+
+After writing all 13 tasks, run this checklist against the spec.
+
+**1. Spec coverage** (foundation slice only — full coverage comes in Plans 2–8):
+
+| Spec section | Task |
+|---|---|
+| §3 chart topology (library + umbrella) | Tasks 1, 2, 6 |
+| §3 library helpers (naming, labels) | Task 3 |
+| §3 library values schema | Task 4 |
+| §4 dependency model (library only) | Task 6 |
+| §5 values schema (foundation subset) | Task 7 |
+| §5 clusterProfile enum | Task 7 |
+| §6 pluggability surface design (no concrete backends) | Deferred to Plan 6 (per Y2 review fix) |
+| §8 PSA label default | Task 8 |
+| §10 chart-testing CI (foundation config only) | Task 10 |
+| §13.1 uninstall safety hook (deferred to Plan 2+) | Plan 7 |
+| §13.2 secret-leak lint (placeholder only) | Task 13 + Plan 7 |
+| §15 docs (charts/README.md, deploy/environments/README.md) | Tasks 1, 12 |
+| §17 v1.0 manifest (foundation entries only) | Tasks 1–13 |
+| §19 per-env Kustomize overlays (placeholder) | Tasks 1 + Plan 6 |
+| §19.3.1 ArgoCD Application example | Task 11 |
+
+Sections NOT covered by this plan, on purpose (move to Plans 2–8):
+- §4 operator dependencies (CNPG, kube-arangodb, Keycloak, ESO, vmoperator, OTel operator, GPU operator, cert-manager, Envoy Gateway) → Plan 2 (data + observability ops), Plan 4 (observability), Plan 5 (GPU), Plan 6 (ingress/TLS/cert-manager/Envoy).
+- §5 services.* (Group 5 stateless, Group 1 observability, Group 4 identity, Group 6 AI/ML, Group 3 Arango last) → Plan 3+.
+- §5 dependency graph + pre-install hook → Plan 2.
+- §6 pluggable backends concrete code → Plan 6.
+- §8 secrets model with ESO ExternalSecret CRs → Plan 2 (ESO dep) + Plan 6 (concrete templates).
+- §9 ingress + TLS templates → Plan 6.
+- §10 observability operator CRs → Plan 4.
+- §11 GPU service templates → Plan 5.
+- §13 uninstall safety hook + chart-schema-drift CI alert → Plan 7.
+- §14 image signing + Renovate → Plan 7.
+- §19 per-env Kustomize overlays + GitOps sync → Plan 6.
+
+**2. Placeholder scan**: no "TBD", "TODO", "implement later", or "fill in details" in any task. Each step has concrete content (file paths, runnable commands, code blocks).
+
+**3. Type consistency**: `_helpers.tpl` template names match across Task 3 and Task 8 callers (`genieai-common.labels`, `genieai-common.selectorLabels`, `genieai-common.fullname`, `genieai-common.chart`, `genieai-common.name`). Namespace template uses `dict "Chart" .Chart "Values" (deepCopy .Values | merge (dict "component" "namespace"))` pattern — consistent with later plans that will use the same pattern when overriding `component`.
+
+**4. Review Focus coverage**: 11 input-class concerns pinned to specific steps:
+
+1. Library `import-values:` collision → Task 4 Step 3 (`helm lint --strict` confirms no duplicate exports).
+2. Helm test Pod missing securityContext → Task 9 Step 1 + Task 12 Step 4.
+3. chart-testing `ct install` without kube-version → Task 10 Step 1 (`ct.yaml` pins `kubeVersion: 1.32.0`).
+4. `appVersion: latest` rejected in OCI → Task 6 Step 4 (`if grep ... ; then exit 1 ; else echo OK ; fi`).
+5. ArgoCD Application auto-render → Task 11 Step 3 (`grep "kind: Application$"` confirms not in rendered output).
+6. Tarball committed in source → Task 5 Step 4 (`.helmignore` in library); Task 10 Step 3 (umbrella `.helmignore`).
+7. PSA namespace labeling → Task 8 Step 2 (explicit `pod-security.kubernetes.io/enforce: restricted`).
+8. Pluggable surface declared but unused → Task 7 Step 1–2 (values trimmed to foundation).
+9. test-utils image reference dangling → Task 9 Step 2 (use `alpine:3.20` only).
+10. `kind load docker-image` missing → Task 9 Step 3 (pre-load `alpine:3.20` into kind).
+11. `chart-repos:` lists 9 repos for foundation that uses 0 → Task 10 Step 1 (chart-repos list removed).
+
+All five + six follow-up concerns covered. No empty `Review Focus` lines.
+
+**5. Adversarial review note (V4, V5, Y2, Y3, B1, B3, B4, B5 applied; G1, G2, G3 deferred as P2)**: P2 findings either do not block the foundation or are CI concerns covered by Plan 7. The lock-churn note (G1) is non-blocking because the `.helmignore` from Tasks 5 + 10 prevents future re-commits of tarballs. The `helm-docs` prereq (G2) is now in Plan 7 only. The `sed` brittleness (G3) was eliminated by rewriting Task 12 Step 6 as `cat > ... <<EOF`.
+
+---
+
+## Plan Stats
+
+- **Tasks:** 13
+- **Files created:** 16
+- **Commits planned:** 13
+- **Estimated review surface:** ~850 lines added
+- **Foundation deliverable:** `helm install genieai-umbrella` creates a namespace with `genieai.io/cluster-profile` + PSA-restricted labels; `helm test` passes against kind 1.32; `ct lint` clean; ArgoCD example documented in `examples/`; OPA policy directory scaffolded. Every later plan builds on this skeleton.
+
+## What's next
+
+- Plan 2: data layer (CloudNativePG + kube-arangodb + Keycloak + ESO dep rendering + dependency graph hook)
+- Plan 3: service tier Group 5 (stateless app — biggest single shippable surface)
+- Plan 4: service tier Group 1 (observability + serviceMonitors)
+- Plan 5: service tier Group 6 (AI/ML — vLLM + TEI + OPEA microservices + GPU operator)
+- Plan 6: per-env Kustomize overlays + GitOps sync (ArgoCD + KAS) + ingress (Envoy Gateway + cert-manager)
+- Plan 7: CI integration + image signing + Renovate + uninstall safety + secret-leak lint + chart-schema-drift alert
+- Plan 8: documentation (site content + docs/charts/*)

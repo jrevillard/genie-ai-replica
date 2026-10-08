@@ -44,7 +44,7 @@ genie-ai/
 │   │   │   └── _helpers.tpl          # name/fullname/labels/selectors/annotations
 │   │   ├── values.schema.json        # JSON schema for values validation
 │   │   └── README.md
-│   └── genieai-umbrella/             # Umbrella chart (single install, 26 services)
+│   └── genieai-umbrella/             # Umbrella chart (single install, 28 services)
 │       ├── Chart.yaml                # depends on genieai-common + operators-as-deps
 │       ├── values.yaml               # DEFAULTS only (chart is generic + org-shareable)
 │       ├── templates/
@@ -85,7 +85,7 @@ genie-ai/
 | Helm dep | Repo | Version constraint | Default `condition:` | Pulled iff |
 |---|---|---|---|---|
 | `genieai-common` | local file:// | `~> 0.1.0` | unconditional | always |
-| `postgresql` (CloudNativePG) | `https://cloudnative-pg.github.io/charts` | `~> 0.22.0` (mirrors CNPG 1.30) | `data.postgres.enabled` | Kong + Keycloak DBs |
+| `cloudnative-pg` (CNPG chart) | `https://cloudnative-pg.github.io/charts` | `~> 0.30.0` (corresponds to operator v1.30.x; chart minor tracks operator minor) | `data.postgres.enabled` | Kong + Keycloak DBs |
 | `kube-arangodb` | `https://arangodb.github.io/kube-arangodb` | `~> 1.4.5` | `data.arangodb.enabled` | always |
 | `keycloak-operator` | `https://keycloak.github.io/keycloak-operator-helm` (official) | `~> 26.0.0` | `data.keycloak.enabled` | always |
 | `external-secrets-operator` (ESO) | `https://charts.external-secrets.io` | `~> 0.10.0` | `secrets.eso.enabled` | when `pluggable.secretsBackend: externalSecrets` |
@@ -229,7 +229,7 @@ CI runs the same Job in dry-run mode on every MR that touches `charts/` or `depl
 **Mechanism**: `clusterProfile` is a value that drives chart-derived defaults (CNPG instances, arangodb mode, replicas, observability default). Two ways to set:
 
 1. **`values.yaml` (default `dev`)**: operator passes `--set clusterProfile=prod` at install.
-2. **Pre-install hook (`templates/hooks/pre-install-clusterprofile-detect.yaml`)**: reads namespace label `genieai.io/cluster-profile=dev|staging|prod|sovereign`, emits a Kubernetes `Event` recording the detected profile, and writes the detected profile to the release annotation `genieai.io/detected-cluster-profile=...`. **The hook does NOT mutate Helm-rendered values**: Helm does not re-render mid-install.
+2. **Pre-install hook (`templates/hooks/pre-install-clusterprofile-detect.yaml`)**: reads namespace label `genieai.io/cluster-profile=dev|staging|prod|sovereign`, emits a Kubernetes `Event` of type `Normal` `reason: ClusterProfileDetected` recording the detected profile. **The hook does NOT mutate Helm-rendered values** and **does NOT write any annotation** — Helm does not re-render mid-install, and Helm releases do not have annotations in the K8s object sense (only Secrets/ConfigMaps do).
 
 **Practical consequence**: auto-detection is **decorative** — the namespace label feeds observability/logs/metrics, but the chart's CNPG instances / Arango mode are determined by what the operator passed to `helm install`. Labeling the namespace after install changes the next **upgrade** (if `--set clusterProfile=...` is also passed), not the current install.
 
@@ -295,7 +295,7 @@ Switching `pluggable.secretsBackend` between installs (`externalSecrets` → `se
 
 Per YAGNI discipline (Code Review pass, Y2): the chart ships only `externalSecrets` rendered. Templates for `sealedSecrets` and `secretProviderClass` are **not yet authored**; the plug-point design is documented in `docs/charts/pluggable-backends.md` so a later MR can add them. This avoids premature template triplication while preserving the pluggability surface area.
 
-## 7. Component surface (app tier, 26 services)
+## 7. Component surface (app tier, 28 services)
 
 Service inventory from the existing Swarm `docker-compose.yaml` (surveyed 2026-10-08). Each service in the chart gets:
 - a `services.<name>` toggle block in values
@@ -357,7 +357,28 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
 - `secretsBackend: externalSecrets` — chart would ship `ExternalSecret` CRs; requires HashiCorp Vault + auditor + rotation policy. Deferred to whoever needs it.
 - `secretsBackend: secretProviderClass` — chart would ship Azure CSI `SecretProviderClass`; requires AKS + AKV. Deferred.
 
-**Migration input**: 14 secrets required by current `.env`, names in `secrets.genieai: { arangoPassword, translationCachePassword, postgresPassword, kongDbPassword, keycloakDbPassword, keycloakAdminPassword, keycloakClientSecret, keycloakProxyClientSecret, kcDataprepClientSecret, genieAdminPassword, emailPassword, grafanaAdminPassword, kcGrafanaClientSecret, huggingFaceHubToken }`. (Note: with kong in DB-less mode per Plan 2, `kongDbPassword` becomes unused.)
+**Migration input**: 13 secrets required (after kong DB-less cut removes `kongDbPassword`). The `.env`-style key names from the current Swarm stack map to K8s `Secret` names rendered by the chart as follows:
+
+| `.env` key name | K8s `Secret` resource name | Rendered in plan | Notes |
+|---|---|---|---|
+| `arangoPassword` | `arango-root-secret` (key `password`) | Plan 2 (data layer) | ArangoDB root password |
+| (Arango JWT signing key) | `arango-jwt-secret` (key `password`) | Plan 2 | Arango internal JWT signing key |
+| `postgresPassword` | _(unused after `data.postgres.enabled=false`)_ | — | Dropped with kong DB-less cut |
+| `kongDbPassword` | _(unused, Kong is DB-less)_ | — | Kong DB-less removes the only Kong DB user |
+| `keycloakDbPassword` | `keycloak-db-credentials` (key `password`) | Plan 2 | keycloak user's role password on CNPG `keycloak-db` cluster |
+| `keycloakAdminPassword` | `genie-admin-credentials` (key `password`) | Plan 2 | KeycloakRealm `genie-admin` user |
+| `keycloakClientSecret` | _(TBD)_ | Plan 3 (frontend SPA client secret) | Rendered under `keycloak` component |
+| `keycloakProxyClientSecret` | _(TBD)_ | Plan 5 (AI/ML OPEA microservices) | `proxy` client for service-account auth |
+| `kcDataprepClientSecret` | _(TBD)_ | Plan 5 | dataprep client's secret |
+| `genieAdminPassword` | (same as `keycloakAdminPassword`) | — | alias for the Keycloak `genie-admin` user |
+| `emailPassword` | _(TBD)_ | Plan 3 | SMTP password for admin notifications |
+| `grafanaAdminPassword` | _(TBD)_ | Plan 4 | Grafana admin user |
+| `kcGrafanaClientSecret` | _(TBD)_ | Plan 4 | Grafana OIDC client secret for SSO |
+| `huggingFaceHubToken` | _(TBD)_ | Plan 3 (or 5 if AI/ML boundary preferred) | Used by vLLM/TEI to pull models from HF Hub |
+
+The mapping is **deliberately bijective**: each K8s `Secret` resource name maps back to exactly one `.env`-style key name (or none if K8s-only). Operators can grep the chart tree for any `Secret` name and trace back to its origin via this table. Spec §8 lists the .env-side keys; this table is the canonical K8s reference.
+
+(Operators migrating from Swarm run `env | grep <key>` and `kubectl get secret <kss-name> -o jsonpath='{.data.password}' | base64 -d` to confirm parity.)
 
 ## 9. Ingress + TLS
 
@@ -486,6 +507,9 @@ deny[msg] {
 deny[msg] {
   input.kind == "Secret"
   not input.metadata.annotations["genieai.io/managed-by"]
+  not input.metadata.annotations["sealedsecrets.bitnami.com/managed"]
+  not input.metadata.annotations["external-secrets.io/managed"]
+  not input.metadata.annotations["azure.workload.identity/client-id"]   # AKV/SPN CSI
   msg := "raw Secret resource; secrets must go through ESO / Sealed / SecretProviderClass"
 }
 
@@ -510,13 +534,52 @@ CI rule on every MR touching `charts/genieai-umbrella/values.yaml`:
 # keys present in deploy/environments/*/values-override.yaml on release branches.
 # Alert (PR comment) if a release-branch env override is missing the new key —
 # it'll silently fall through to the new default at the next deploy.
+#
+# Uses `git show` + PyYAML safe_load — `yaml.safe_load_all_from(branch, ...)`
+# is NOT a real PyYAML API. The git CLI returns the file's content, which
+# PyYAML parses via `yaml.safe_load`.
 
-for branch in ['release/el-salvador']:  # configurable per epic
-    env_overrides = yaml.safe_load_all_from(branch, 'deploy/environments/*/values-override.yaml')
-    for env, override in env_overrides.items():
-        missing_keys = chart_defaults.keys() - override.keys()
+import subprocess
+import yaml
+import sys
+from pathlib import Path
+
+CHART_VALUES = "charts/genieai-umbrella/values.yaml"
+ENV_OVERRIDES_GLOB = "deploy/environments/*/values-override.yaml"
+WATCHED_BRANCHES = ["release/el-salvador"]  # configurable per epic
+
+def load_yaml_at(branch: str, path: str) -> dict:
+    out = subprocess.run(
+        ["git", "show", f"{branch}:{path}"],
+        capture_output=True, check=True,
+    )
+    return yaml.safe_load(out.stdout) or {}
+
+def chart_defaults_at(branch: str) -> set:
+    return set(load_yaml_at(branch, CHART_VALUES).keys())
+
+for branch in WATCHED_BRANCHES:
+    defaults = chart_defaults_at(branch)
+    overrides = subprocess.run(
+        ["git", "show", f"{branch}:{ENV_OVERRIDES_GLOB}"],
+        capture_output=True, text=True,
+    )
+    # glob via shell expansion — paths differ per env
+    for path in subprocess.run(
+        ["sh", "-c", f"cd /tmp && git show {branch}:{ENV_OVERRIDES_GLOB}"],
+        capture_output=True, text=True,
+    ).stdout.splitlines():
+        env_name = Path(path).parent.name
+        override = yaml.safe_load(subprocess.run(
+            ["git", "show", f"{branch}:{path}"],
+            capture_output=True, text=True,
+        ).stdout)
+        if not isinstance(override, dict):
+            continue
+        missing_keys = defaults - set(override.keys())
         if missing_keys:
-            warning(f"{env} is missing key(s) {missing_keys} — these will use new defaults at next deploy")
+            print(f"WARN: env={env_name} is missing key(s) {missing_keys} — these will use new defaults at next deploy",
+                  file=sys.stderr)
 ```
 
 **P1, not blocker** — drift is silent at deploy, loud at next incident.
@@ -614,7 +677,7 @@ These are deliberate unknowns NOT blocking v1, but documented for follow-up:
 5. **Sticky dev workflow**: out-of-tree dev loop (helm-up + exec into container) is not specified. Solve during Day-1 onboarding.
 6. **Vault audit logging** (V4 from review): if externalSecrets is the default backend, Vault's audit device must be enabled for compliance; cross-reference in `docs/charts/secrets-audit-compliance.md`. P2.
 7. **Library-chart vs `_helpers.tpl` naming** (Y1 from review): `genieai-common` IS conceptually the umbrella's `_helpers.tpl` plus standalone templates. Clarify in chart README: "library chart contains templates and exports them via `import-values:`, helpers.tpl contains labels/selectors/name conventions." P2 doc clarification.
-8. **Service template generator** (Y3 from review): 26 services × 4 templates = ~100 files. v1 ships them hand-authored for transparency; **v1.1 introduces `make render-services` from a single service-list YAML**. P2 deferred.
+8. **Service template generator** (Y3 from review): 28 services × 4 templates = ~112 files. v1 ships them hand-authored for transparency; **v1.1 introduces `make render-services` from a single service-list YAML**. P2 deferred.
 
 ## 17. What lands in v1.0 (this epic)
 
@@ -651,14 +714,16 @@ GENIE.AI today uses Ansible for deployment, with `release/<env>` branches carryi
 
 ### 19.1 Branching model
 
+Per `.claude/rules/EL-SALVADOR-WORKFLOW.md`: chart source under `charts/` is **untouched** on release branches — same source across all envs, differing only in overlay values. Spec adopts this strict discipline.
+
 | Branch | Modifies | ArgoCD target |
 |---|---|---|
-| `main` | Chart source under `charts/`; `deploy/environments/{base,dev,staging,prod}/` | dev, staging, prod clusters |
-| `release/el-salvador` | Chart source under `charts/` (rarely); `deploy/environments/el-salvador/` (frequently) | el-salvador cluster (`.102`) |
+| `main` | Chart source under `charts/` (always); `deploy/environments/{base,dev,staging,prod}/` | dev, staging, prod clusters |
+| `release/el-salvador` | ONLY `deploy/environments/el-salvador/` — **never `charts/`**. Cherry-pick fixes from `main` into the release branch (if a chart change applies). | el-salvador cluster (`.102`) |
 
-`release/<env>` branches are the K8s equivalent of today's Ansible workflow: long-lived, hosting env-specific patches (custom UI keys, mobile app topology, RAG tuning constants, sovereign DNS), with cherry-picking from `main` for upstream chart fixes.
+`release/<env>` branches are the K8s equivalent of today's Ansible workflow: long-lived, hosting env-specific overlay values (custom UI keys, mobile app topology, RAG tuning constants, sovereign DNS). Upstream chart fixes flow from `main` via cherry-pick onto the release branch.
 
-`main` carries the chart + plain envs. Branches diverge only on `deploy/environments/<env>/`. This makes merge-of-env-changes into main clean: only the env-specific overlay changes, never the chart core.
+`main` carries the chart + plain envs. Branches diverge only on `deploy/environments/<env>/`. This makes merge-of-env-changes into main clean: only the env-specific overlay changes, never the chart core. The `release/<env>` workflow discipline is enforced: chart source modifications on a release branch are out-of-policy and break sovereign-deploy reproducibility.
 
 ### 19.2 Kustomize overlay pattern
 

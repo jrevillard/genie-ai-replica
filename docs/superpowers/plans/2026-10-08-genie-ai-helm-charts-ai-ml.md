@@ -1257,14 +1257,32 @@ def svc_enabled(name):
     return (enabled.get(f"services.{name}.enabled", False)
             or enabled.get(f"ai.services.{name}.enabled", False))
 
-def dep_enabled(dep):
+def data_enabled(name):
+    return enabled.get(f"data.{name}.enabled", False)
+
+def tier_enabled(tier, name):
+    # The loop gate iterates over BOTH `services` and `data` tiers;
+    # `svc_enabled` only knows the services namespaces and returns False
+    # for data nodes (keycloak/postgres/arangodb), which would silently
+    # skip every data-tier edge (F2 fix: the only real Plan 2 data edge
+    # is keycloak -> postgres; under the old loop gate, default install
+    # with keycloak enabled + postgres disabled passed the check).
+    if tier == "services":
+        return svc_enabled(name)
+    if tier == "data":
+        return data_enabled(name)
+    return False
+
+def dep_enabled(tier, dep):
     if dep in graph.get("services", {}):
         return svc_enabled(dep)
-    return enabled.get(f"data.{dep}.enabled", False)
+    if dep in graph.get("data", {}):
+        return data_enabled(dep)
+    return False
 
 for tier in ("services", "data"):
     for svc, deps in graph.get(tier, {}).items():
-        if not svc_enabled(svc):        # <- loop gate rewired through svc_enabled
+        if not tier_enabled(tier, svc):   # gate is tier-aware now
             continue
         ...
 ```

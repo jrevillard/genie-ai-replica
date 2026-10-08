@@ -349,16 +349,18 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
 **Rotation story (HONEST — replacing earlier fabricated claims)**:
 - **Cluster master key**: rotation is **operator-initiated**, NOT auto-rotating. Workflow:
   1. `kubeseal --fetch-cert --controller-name sealed-secrets > pub-cert.pem` (capture public)
-  2. `kubectl exec -it deploy/sealed-secrets -- kube-secrets-rotate` (controller-side; or restart with `controller flag --key-renew-period=720h` for *auto-renewal* of the in-memory key — note this is **renewal of in-controller key material**, NOT rotation of cryptographic secrets already on disk)
+  2. **F7 fix** (per round-8 review): there is NO `kube-secrets-rotate` in-Pod command. The real workflows are:
+     a. Controller flag `--key-renew-period=720h` at startup (auto-renewal of the in-memory controller key — **renewal of in-controller key material**, NOT rotation of cryptographic secrets on disk), OR
+     b. One-shot rotation: restart the controller with a fresh key by re-sealing every committed SealedSecret with the new public cert, then atomically swap the controller's key (the standard pattern: `kubectl rollout restart` after `kubeseal --fetch-cert` against the NEW controller)
   3. Pull the new public cert; **re-encrypt every committed SealedSecret** with the new public key, otherwise older ciphertexts become invalid (drift detection hook, Plan 2 Task 11, catches this).
-- **Service-token secrets** (the actual K8s `Secret` resources): manual. To rotate, re-encrypt with `kubeseal --cert pub-cert.pem --scope namespace --name secret-name` and commit.
+- **Service-token secrets** (the actual K8s `Secret` resources): manual. To rotate, re-encrypt with `kubeseal --cert pub-cert.pem --scope cluster-wide --name secret-name` and commit. (F6 fix: `--scope namespace` is NOT a valid scope; real values are `strict` (default) | `namespace-wide` | `cluster-wide`.)
 - **Audit**: Git history records who/what/when for each `SealedSecret` change. Sufficient for sovereignty P0; not equivalent to Vault's audit device for compliance attestations.
 
 (An earlier draft of this section claimed "v0.40.0 auto-rotates cluster master key every 30 days by default"; that claim was based on a verifier's paraphrase of release notes that did not survive a second review. The accurate position above supersedes it.)
 
 **Operational workflow** (sovereign / air-gap):
 1. CI/dev holds the cluster public key (fetched via `kubeseal --fetch-cert` against the cluster or downloaded from controller Service).
-2. Engineer runs `kubeseal --cert pub-cert.pem --context=kubeseal-staging --scope namespace --name secret-name` locally to produce an encrypted blob.
+2. Engineer runs `kubeseal --cert pub-cert.pem --context=kubeseal-staging --scope cluster-wide --name secret-name` locally to produce an encrypted blob.
 3. Encrypted blob committed in Git under `deploy/environments/<env>/secrets/<name>.yaml`.
 4. `helm install` re-renders the chart; controller decrypts on next sync, K8s Secret materialises.
 5. Rotation: pull latest cert, re-encrypt, commit, deploy.
@@ -443,13 +445,23 @@ helm install genieai-prd ./genieai-umbrella -n genieai \
   -f ./deploy/environments/prod/values-override.yaml
 
 # Pattern B — partial install during phased migration
+# F5 fix (per round-8 review): the pre-install dep-check Job fails
+# any install where a service's declared data deps are not enabled
+# (e.g. `services.backend` requires `data.arangodb`). For Pattern B
+# the operator MUST explicitly skip the dep check via the
+# `--no-hooks` flag (or, equivalently, disable the dep-check
+# ServiceAccount in the per-env values). Plan 2 Task 6 ships the
+# dep check; this flag is the documented escape hatch.
 helm install genieai-prd ./genieai-umbrella -n genieai \
   -f ./charts/genieai-umbrella/values.yaml \
   -f ./deploy/environments/migration-step1.yaml \
   --set data.postgres.enabled=true \
   --set data.arangodb.enabled=false \
   --set services.frontend.enabled=true \
-  --set services.backend.enabled=true
+  --set services.backend.enabled=true \
+  --no-hooks   # skip the dep-check pre-install Job (Pattern B is
+               # the documented exception; the prod / dev / sovereign
+               # overlays do NOT use --no-hooks)
 
 # Pattern C — Swarm bridge (legacy coexistence)
 helm install genieai-edge ./genieai-umbrella -n genieai-edge \
@@ -654,17 +666,20 @@ publish:charts:
   stage: charts:publish
   script:
     - helm package charts/genieai-umbrella -d .publish/
-    # cosign uses URI schemes — `env://` is the env-var resolver.
-    # Bare `env:COSIGN_KEY` is NOT a recognized scheme; cosign errors out.
-    - cosign sign --key env://COSIGN_KEY ${CI_REGISTRY_IMAGE}/genieai/umbrella:${CI_COMMIT_TAG}
+    # cosign 2.x URI schemes: the env-var resolver is the SINGLE-COLON
+    # form `env:COSIGN_KEY=<value>` (the value is the raw PEM; not
+    # base64-encoded, not the legacy `env://` form which is NOT
+    # recognized). The earlier draft `env://COSIGN_KEY` (F4 fix)
+    # was wrong; cosign errors with "no recognized key URI scheme".
+    - cosign sign --key env:COSIGN_KEY=$COSIGN_KEY ${CI_REGISTRY_IMAGE}/genieai/umbrella:${CI_COMMIT_TAG}
     - cosign attest --predicate release-audit.json --type slsaprovenance ${CI_REGISTRY_IMAGE}/genieai/umbrella:${CI_COMMIT_TAG}
     - helm push .publish/genieai-umbrella-${CI_COMMIT_TAG}.tgz oci://${CI_REGISTRY_IMAGE}/genieai
 ```
 
-Cluster-side enforcement via **Kyverno** policy (chart installs as part of bootstrap). **Review Focus F14 fix**: Kyverno's `verifyImages.attestors.entries.keys` does NOT accept cosign-style URIs (`secret:<name>#<key>` is cosign CLI syntax, not Kyverno). It accepts either inline PEM in `keyData` OR a `publicKeys:` literal. We use **inline PEM**:
+Cluster-side enforcement via **Kyverno** policy (chart installs as part of bootstrap). **F3 fix** (per-round-8 review): Kyverno v1.13+ accepts `keyData:` (inline PEM string) or `key:` (cosign URI). It does NOT accept `publicKeys:` — that field is not in the schema. Earlier drafts (including the line below + the chart template's `publicKeys:` block) used the wrong field name and would have failed schema validation on `kubectl apply`. We use `keyData:` with inline PEM:
 
 ```yaml
-# ClusterPolicy — image signature verification (Review Focus F14)
+# ClusterPolicy — image signature verification (F3 fix: `keyData:`, not `publicKeys:`)
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -683,11 +698,14 @@ spec:
           attestors:
             - entries:
                 - keys:
-                    # Inline PEM loaded from a Secret in the kyverno namespace
-                    # via Kyverno `value` substitution. The Secret is rendered
-                    # by the chart (Plan 7 / bootstrap).
-                    # NOTE: `publicKeys:` accepts an inline PEM string; not a URI.
-                    publicKeys: "{{ '{{' }} `cat /etc/cosign/cosign.pub` | b64decode {{ '}}' }}"
+                    # INLINE PEM only — Kyverno does NOT accept
+                    # Secret/ConfigMap references here. The
+                    # `{{- ... | nindent 22 }}` indents the multi-line
+                    # PEM block inside the YAML scalar.
+                    keyData: |-
+                      -----BEGIN PUBLIC KEY-----
+                      ...
+                      -----END PUBLIC KEY-----
 ```
 
 Without cosign signing + Kyverno enforcement, a registry compromise yields full cluster take (research flagged CVE-2025-1974's "default-Secrets-read" as the same attack shape — chart's installer must not lower the bar).

@@ -126,25 +126,26 @@ Expected: prints `0`.
 # Profile-driven default for observability per spec §5.2:
 #   dev=off, staging/prod/sovereign=on. Operators override via
 #   --set observability.enabled=... in install.
-# Default via Helm template:
+# Default via Helm template — helper `genieai-umbrella.profileProduction`
+# in templates/_lib/_clusterprofile-defaults.tpl resolves this.
 observability:
-  enabled: {{ not (or (eq .Values.clusterProfile "dev") (eq .Values.clusterProfile "")) | default false }}
+  enabled: {{ include "genieai-umbrella.observabilityDefault" . }}
   metrics:
-    enabled: false           # mirror observability.enabled; toggled separately if needed
+    enabled: {{ include "genieai-umbrella.observabilityDefault" . }}    # mirror top-level
     retention: "30d"
     storageSize: 10Gi
   logs:
-    enabled: false
+    enabled: {{ include "genieai-umbrella.observabilityDefault" . }}    # mirror top-level
     retention: "30d"
     storageSize: 20Gi
   traces:
-    enabled: false
+    enabled: {{ include "genieai-umbrella.observabilityDefault" . }}    # mirror top-level
     retention: "30d"
     storageSize: 5Gi
   otel:
-    enabled: false
+    enabled: {{ include "genieai-umbrella.observabilityDefault" . }}    # mirror top-level
   grafana:
-    enabled: false
+    enabled: {{ include "genieai-umbrella.observabilityDefault" . }}    # mirror top-level
     adminUser: admin
     adminPasswordRef: grafanaAdminPassword    # SealedSecret name (Plan 4 ship)
   # PII redaction rules (port from Swarm fluentd config). Operators edit

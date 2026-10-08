@@ -305,10 +305,18 @@ export default {
         // memory approved" — server is source of truth).
         await this.loadFrontmatter();
       } catch (e) {
-        this.error =
-          (e && e.response && e.response.data && e.response.data.message) ||
+        // Surface the server's actual error. Joi validation failures
+        // arrive as { error: 'VALIDATION_ERROR', message: '"entity" must
+        // contain less than or equal to 10 items' } — the message field
+        // is the useful one. Fall back through every plausible shape so
+        // a new error envelope (e.g. nestjs-style {message:{message:...}})
+        // is still readable to the curator.
+        const r = e && e.response && e.response.data;
+        const msg =
+          (r && (r.message || r.error || (r.error && r.error.message))) ||
           (e && e.message) ||
           'Save failed.';
+        this.error = typeof msg === 'string' ? msg : JSON.stringify(msg);
         this.$emit('error', { phase: 'patch', error: e });
       } finally {
         this.saving = false;

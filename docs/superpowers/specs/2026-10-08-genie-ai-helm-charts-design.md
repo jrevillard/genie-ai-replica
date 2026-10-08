@@ -119,7 +119,18 @@ global:
   imagePullPolicy: IfNotPresent
 
 pluggable:
-  secretsBackend: sealedSecrets     # sealedSecrets (default) | externalSecrets | secretProviderClass
+  # =========================================================================
+  # DEPRECATED in v1 — `pluggable.secretsBackend` is informational only.
+  # Canonical config in v1 lives under `secrets.<backend>.enabled`:
+  #   secrets.sealedSecrets.enabled: true      # default; what Plan 2 renders
+  #   secrets.eso.enabled: false               # plug-point, future
+  #   secrets.secretProviderClass.enabled: false # plug-point, future
+  #
+  # `pluggable.secretsBackend` value here is read ONLY for deprecation
+  # warnings at install time. It does NOT toggle condition: keys in
+  # Chart.yaml (those use `secrets.<backend>.enabled`).
+  # =========================================================================
+  secretsBackend: sealedSecrets     # DEPRECATED — see above
   ingressClassName: envoy           # envoy | nginx-fabric | traefik
   storageClassName: ""              # default = cluster default
   containerRuntime: containerd      # containerd (K8s 1.24+ standard)
@@ -312,11 +323,13 @@ Service inventory from the existing Swarm `docker-compose.yaml` (surveyed 2026-1
 
 **Group 4 (identity)**: keycloak, postgres cluster (CloudNativePG) — **mirror before cutover**.
 
-**Group 6 (AI/ML)**: vllm, vllm-translation-guardrail, tei, **tei-reranker dropped — no equivalent in `docker-compose.yaml`**, chatqna-xeon-{backend,ui,nginx}, embedding, reranker, textgen, translation, guardrail, dataprep-arango-service, retriever-arango-service.
+**Group 6 (AI/ML)**: vllm, vllm-translation-guardrail, tei, **tei-reranker / reranker** (Swarm service `tei_reranker` per `docker-compose.yaml`; env var `TEI_RERANKING_ENDPOINT=http://tei_reranker:80`), chatqna-xeon-{backend,ui,nginx}, embedding, reranker, textgen, translation, guardrail, dataprep-arango-service, retriever-arango-service.
+
+**Group 1 (observability)**: victoria-{metrics,logs,traces}, opentelemetry-collector, grafana, **tempo-proxy** (Swarm `tempo-proxy` service; Jaeger query proxy for VictoriaTraces — Grafana "Trace explorer" dashboard depends on it).
 
 **Group 3 (vector DB, last)**: arangodb.
 
-**Count**: 28 services total (Group 5=6 + Group 2=1 + Group 1=5 + Group 4=2 + Group 6=13 + Group 3=1). `redis` lives in Group 2 (cache role); it is **not** duplicated into Group 5. `tei-reranker` was originally listed in earlier drafts but does not appear in the current Swarm `docker-compose.yaml` (which has separate `tei` and `reranker` services); the third-party mention had no live counterpart. Services like `translation-cache` and `httpService` do not appear in current Swarm and are scoped to a later epic if reintroduced.
+**Count**: 30 services total (Group 5=6 + Group 2=1 + Group 1=6 + Group 4=2 + Group 6=14 + Group 3=1). `redis` lives in Group 2 (cache role); it is **not** duplicated into Group 5. `tei_reranker` is rendered as a single service in Group 6 (Swarm calls it `tei_reranker`; chart uses kebab-case `tei-reranker` with the Swarm service name preserved via Helm template variables). `tempo-proxy` is rendered as a sidecar/proxy to victoria-traces. Services like `translation-cache` and `httpService` do not appear in current Swarm and are scoped to a later epic if reintroduced.
 
 Each group's chart enabling is independent. Day 0 install: `data.postgres.enabled=false data.arangodb.enabled=false services.*.enabled=true` for a partial install pattern during phased migration.
 
@@ -466,7 +479,15 @@ Stateful chart uninstalls are a **P0 day-1 risk**. `helm uninstall` on a success
 
 Two protections:
 
-**(a) Pre-install backup hook** — a `Job` chart-hook on `pre-install` and `pre-upgrade` runs `velero backup create` (or `pg_basebackup` + `arangodump` for databases if Velero unavailable). The hook is configurable to skip on dev clusters (`clusterProfile: dev`) but **mandatory for staging/prod**.
+**(a) Pre-install backup hook** — an OPT-IN `Job` chart-hook annotated `pre-upgrade` only (NOT `pre-install`; fresh installs have no data to back up). The hook runs `velero backup create` (or `pg_basebackup` + `arangodump` for databases if Velero unavailable). Operators MUST install Velero separately as a cluster-bootstrap prerequisite — the chart does not include Velero. The hook fires only when the release annotation `genieai.io/run-backup-on-upgrade: "true"` is set; default is OFF.
+
+```bash
+# opt-in:
+kubectl annotate hr/genieai-prd genieai.io/run-backup-on-upgrade=true --overwrite
+helm upgrade genieai-prd charts/genieai-umbrella
+```
+
+If Velero is not installed and the annotation is set, the hook fails the upgrade with a clear error: `velero: command not found`. Operator must install Velero first. The hook does NOT block install (annotations default to false → no backup Job runs); upgrade operators explicitly opt in.
 
 **(b) Confirmation gate** — a `pre-delete` chart-hook **blocks** `helm uninstall` unless the operator confirms via release annotation `genieai.io/allow-destructive-uninstall: "true"`. The two gating mechanisms are **mutually exclusive**:
 
@@ -535,9 +556,9 @@ CI rule on every MR touching `charts/genieai-umbrella/values.yaml`:
 # Alert (PR comment) if a release-branch env override is missing the new key —
 # it'll silently fall through to the new default at the next deploy.
 #
-# Uses `git show` + PyYAML safe_load — `yaml.safe_load_all_from(branch, ...)`
-# is NOT a real PyYAML API. The git CLI returns the file's content, which
-# PyYAML parses via `yaml.safe_load`.
+# Uses git ls-tree + git show + PyYAML safe_load.
+# `git show <branch>:<glob>` DOES NOT EXPAND GLOBS — git treats the path
+# as a literal tree path. Must enumerate via `git ls-tree -r` first.
 
 import subprocess
 import yaml
@@ -545,41 +566,53 @@ import sys
 from pathlib import Path
 
 CHART_VALUES = "charts/genieai-umbrella/values.yaml"
-ENV_OVERRIDES_GLOB = "deploy/environments/*/values-override.yaml"
-WATCHED_BRANCHES = ["release/el-salvador"]  # configurable per epic
+ENV_OVERRIDES_REL = "deploy/environments"  # tree root; per-env file is
+                                            # {env}/values-override.yaml
+WATCHED_BRANCHES = ["release/el-salvador"]   # configurable per epic
 
-def load_yaml_at(branch: str, path: str) -> dict:
+
+def git_ls_tree(branch: str, path: str) -> list[str]:
+    """List all files under `path` at `branch` (recursive)."""
+    out = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", branch, path],
+        capture_output=True, text=True, check=True,
+    )
+    return out.stdout.splitlines()
+
+
+def git_show(branch: str, path: str) -> str:
+    """Return content of file at `path` in `branch`."""
     out = subprocess.run(
         ["git", "show", f"{branch}:{path}"],
-        capture_output=True, check=True,
+        capture_output=True, text=True, check=True,
     )
-    return yaml.safe_load(out.stdout) or {}
+    return out.stdout
+
+
+def load_yaml(text: str) -> dict:
+    return yaml.safe_load(text) or {}
+
 
 def chart_defaults_at(branch: str) -> set:
-    return set(load_yaml_at(branch, CHART_VALUES).keys())
+    return set(load_yaml(git_show(branch, CHART_VALUES)).keys())
+
 
 for branch in WATCHED_BRANCHES:
     defaults = chart_defaults_at(branch)
-    overrides = subprocess.run(
-        ["git", "show", f"{branch}:{ENV_OVERRIDES_GLOB}"],
-        capture_output=True, text=True,
-    )
-    # glob via shell expansion — paths differ per env
-    for path in subprocess.run(
-        ["sh", "-c", f"cd /tmp && git show {branch}:{ENV_OVERRIDES_GLOB}"],
-        capture_output=True, text=True,
-    ).stdout.splitlines():
+    for path in git_ls_tree(branch, ENV_OVERRIDES_REL):
+        if not path.endswith("/values-override.yaml"):
+            continue
         env_name = Path(path).parent.name
-        override = yaml.safe_load(subprocess.run(
-            ["git", "show", f"{branch}:{path}"],
-            capture_output=True, text=True,
-        ).stdout)
+        override = load_yaml(git_show(branch, path))
         if not isinstance(override, dict):
             continue
         missing_keys = defaults - set(override.keys())
         if missing_keys:
-            print(f"WARN: env={env_name} is missing key(s) {missing_keys} — these will use new defaults at next deploy",
-                  file=sys.stderr)
+            print(
+                f"WARN: env={env_name} on {branch} is missing key(s) "
+                f"{missing_keys} — these will use new defaults at next deploy",
+                file=sys.stderr,
+            )
 ```
 
 **P1, not blocker** — drift is silent at deploy, loud at next incident.

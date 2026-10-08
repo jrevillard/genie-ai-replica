@@ -64,6 +64,25 @@
         "
       />
     </div>
+    <!-- Story 1-8 (2026-10-08): read-only head status + the Routing Lab.
+         Publishing builds the vectorized head from the tags; this card tells
+         the curator what exists, and the Lab (view/test only here — the
+         wizard never mutates, D4) runs the same routing simulation as the
+         dashboard/editor entry points. -->
+    <div v-if="repo" class="okf-step__head-card">
+      <span :class="['okf-step__head-dot', 'okf-step__head-dot--' + headStatus]" />
+      <span>{{ headCardText }}</span>
+      <DsButton variant="secondary" small @click="headTestOpen = true">
+        {{ translate('okf.headTest.cta', 'Routing Lab') }}
+      </DsButton>
+      <OkfHeadTestDialog
+        :visible="headTestOpen"
+        :repo="repo"
+        :read-only="true"
+        :initial-tab="'test'"
+        @close="headTestOpen = false"
+      />
+    </div>
     <p v-if="frozen" class="okf-step__frozen">
       {{
         translate(
@@ -90,20 +109,23 @@
 import DsButton from '../../ds/Button.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import DsStatusTag from '../../ds/StatusTag.vue';
+import OkfHeadTestDialog from '../editor/HeadTestDialog.vue';
 import { mapGetters } from 'vuex';
 import translateMixin from '../../../mixins/translateMixin';
 import { getFrontmatter, isFrontmatterPublishReady } from '../../../services/frontmatterService';
 
 export default {
   name: 'OkfStepPublish',
-  components: { DsButton, DsInfoTip, DsStatusTag },
+  components: { DsButton, DsInfoTip, DsStatusTag, OkfHeadTestDialog },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   emits: ['gate', 'dashboard'],
   data() {
     return {
       liveConceptCount: null,
-      frontmatterRows: []
+      frontmatterRows: [],
+      // Story 1-8: the read-only Routing Lab mount.
+      headTestOpen: false
     };
   },
   computed: {
@@ -121,6 +143,32 @@ export default {
     },
     frozen() {
       return !!(this.repo && this.repo.ingested_at);
+    },
+    /** Story 1-8: head presence/staleness for the read-only card. */
+    headStatus() {
+      if (!this.repo || !this.repo.head || !this.repo.head.vector) return 'missing';
+      const fm = this.repo.frontmatter;
+      if (fm && fm.updated_at && this.repo.head.computed_at && fm.updated_at > this.repo.head.computed_at)
+        return 'stale';
+      return 'present';
+    },
+    headCardText() {
+      if (this.headStatus === 'present') {
+        return this.translate(
+          'okf.headTest.publishCard.present',
+          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.'
+        );
+      }
+      if (this.headStatus === 'stale') {
+        return this.translate(
+          'okf.headTest.publishCard.stale',
+          'The head is stale (tags changed after it was built) — publishing rebuilds it.'
+        );
+      }
+      return this.translate(
+        'okf.headTest.publishCard.missing',
+        'No vectorized head yet — publishing builds it from the approved tags.'
+      );
     },
     // F1: concept_count lives on the METRICS payload, not the repo doc —
     // fetch it live; fall back to the workbench's live count and any count
@@ -266,6 +314,32 @@ export default {
   display: flex;
   gap: var(--space-sm);
   align-items: center;
+}
+/* Story 1-8: read-only head card. */
+.okf-step__head-card {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+.okf-step__head-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.okf-step__head-dot--present {
+  background: var(--success);
+}
+.okf-step__head-dot--stale {
+  background: var(--warn);
+}
+.okf-step__head-dot--missing {
+  background: var(--danger);
 }
 .okf-step__frozen {
   margin: 0;

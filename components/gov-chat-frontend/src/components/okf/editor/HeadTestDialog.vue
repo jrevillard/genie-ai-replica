@@ -1,0 +1,796 @@
+<!-- HeadTestDialog.vue — Story 1-8 (2026-10-08): the OKF Head Tester /
+  Routing Lab. One dialog, three tabs (David: "test the tagging/head after
+  publishing and before ingesting, then revert to review, modify, publish,
+  test again — cycle until the desired accuracy, THEN ingest"):
+    Head    — the stored vectorized head: text as per-field tag chips,
+              dim/model/version/computed_at + staleness badge, Rebuild
+              (admin; hidden in the wizard — no repo mutations there).
+    Test    — one query against the two-leg simulation: head scores for
+              the repo under test + every sibling, verdict banner,
+              adversarial expectation (expect NOT selected).
+    Suites  — LLM-generated suites (+ forbidden-derived negatives +
+              curator free-text), run-all, pass-rate/margin history,
+              steal pairs ("kenya stole 3 of 8").
+  Entry points: StudioDashboard card actions (published + ingested), the
+  editor shell actions row, the editor right-rail badge, the wizard
+  Publish step (readOnly — view + test only). Lifecycle cycle affordances
+  (Unpublish / re-publish note) live in the footer, editor context only.
+-->
+<template>
+  <DsDialog
+    :visible="visible"
+    :title="translate('okf.headTest.title', 'Routing Lab — head test')"
+    size="lg"
+    :actions="dialogActions"
+    @close="$emit('close')"
+    @action="onDialogAction"
+  >
+    <p v-if="repo" class="okf-headtest__repo-line">
+      <strong>{{ repo.name || repo.repo_id }}</strong>
+      <span class="okf-headtest__meta-inline">
+        <DsPill :variant="serving ? 'success' : 'accent'">
+          {{ repo.lifecycle_state }}
+        </DsPill>
+        <DsPill v-if="headStatus === 'present'" variant="success">
+          {{ translate('okf.headTest.badge.present', 'head ready') }}
+        </DsPill>
+        <DsPill v-else-if="headStatus === 'stale'" variant="warn">
+          {{ translate('okf.headTest.badge.stale', 'head stale') }}
+        </DsPill>
+        <DsPill v-else variant="danger">
+          {{ translate('okf.headTest.badge.missing', 'no head') }}
+        </DsPill>
+      </span>
+    </p>
+
+    <DsTabs v-model="tab" :tabs="tabDefs" class="okf-headtest__tabs">
+      <!-- ───────────────────────── TAB 1: HEAD ───────────────────────── -->
+      <div v-show="tab === 'head'" class="okf-headtest__pane">
+        <template v-if="head">
+          <div v-for="field in headFields" :key="field.key" class="okf-headtest__field">
+            <span class="okf-headtest__field-label">{{ field.label }}</span>
+            <span v-if="field.values && field.values.length" class="okf-headtest__chips">
+              <DsTag v-for="v in field.values" :key="v">{{ v }}</DsTag>
+            </span>
+            <span v-else class="okf-headtest__empty">—</span>
+          </div>
+          <div class="okf-headtest__head-meta">
+            <span
+              >{{ translate('okf.headTest.head.dim', 'Dimensions') }}: <code>{{ head.dim }}</code></span
+            >
+            <span
+              >{{ translate('okf.headTest.head.model', 'Model') }}: <code>{{ head.model || '—' }}</code></span
+            >
+            <span
+              >{{ translate('okf.headTest.head.version', 'Head version') }}: <code>{{ head.version }}</code></span
+            >
+            <span>{{ translate('okf.headTest.head.computedAt', 'Computed') }}: {{ shortDate(head.computed_at) }}</span>
+            <span v-if="headStatus === 'stale'" class="okf-headtest__stale-note">
+              {{
+                translate(
+                  'okf.headTest.head.staleNote',
+                  'Tags changed after this head was built — rebuild before trusting the tests.'
+                )
+              }}
+            </span>
+          </div>
+        </template>
+        <p v-else class="okf-headtest__empty-pane">
+          {{
+            translate(
+              'okf.headTest.head.missingNote',
+              'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.'
+            )
+          }}
+        </p>
+        <div v-if="!readOnly" class="okf-headtest__pane-actions">
+          <DsButton variant="secondary" small :disabled="busy" @click="onRebuild">
+            {{ translate('okf.headTest.head.rebuild', 'Rebuild head') }}
+          </DsButton>
+          <DsInfoTip
+            :text="
+              translate(
+                'okf.headTest.head.rebuildTip',
+                'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.'
+              )
+            "
+          />
+        </div>
+        <DsSpinner v-if="busy === 'rebuild'" size="sm" class="okf-headtest__busy">
+          {{ translate('okf.headTest.head.rebuildBusy', 'Rebuilding — embedding the tag fields…') }}
+        </DsSpinner>
+        <p v-if="error" class="okf-headtest__error">{{ error }}</p>
+      </div>
+
+      <!-- ───────────────────────── TAB 2: TEST ───────────────────────── -->
+      <div v-show="tab === 'test'" class="okf-headtest__pane">
+        <div class="okf-headtest__query-row">
+          <DsInput
+            v-model="query"
+            type="text"
+            :placeholder="translate('okf.headTest.test.placeholder', 'e.g. cancer screening guidelines')"
+            class="okf-headtest__query-input"
+            @keyup.enter="onRunTest"
+          />
+          <DsButton variant="primary" small :disabled="busy !== null || !query.trim()" @click="onRunTest">
+            {{ translate('okf.headTest.test.run', 'Run test') }}
+          </DsButton>
+        </div>
+        <label class="okf-headtest__adversarial">
+          <input v-model="adversarial" type="checkbox" />
+          {{
+            translate(
+              'okf.headTest.test.adversarial',
+              'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)'
+            )
+          }}
+        </label>
+
+        <DsSpinner v-if="busy === 'test'" size="sm" class="okf-headtest__busy">
+          {{ translate('okf.headTest.test.running', 'Embedding the query and scoring the heads…') }}
+        </DsSpinner>
+
+        <template v-if="lastResult">
+          <p class="okf-headtest__embedded">
+            {{ translate('okf.headTest.test.embeddedWith', 'Embedded with') }}:
+            <code>{{ lastResult.embedded_with }}</code>
+          </p>
+          <div class="okf-headtest__verdict" :class="verdictClass">
+            {{ verdictText }}
+          </div>
+          <table class="okf-headtest__scores">
+            <thead>
+              <tr>
+                <th>{{ translate('okf.headTest.test.col.repo', 'Repository') }}</th>
+                <th>{{ translate('okf.headTest.test.col.state', 'State') }}</th>
+                <th>{{ translate('okf.headTest.test.col.headScore', 'Head score') }}</th>
+                <th>{{ translate('okf.headTest.test.col.rank', 'Rank') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in scoreRows"
+                :key="row.repo_id"
+                :class="{ 'okf-headtest__row-under-test': row.under_test }"
+              >
+                <td>
+                  {{ row.name }}
+                  <span v-if="row.under_test" class="okf-headtest__under-mark">◂</span>
+                </td>
+                <td>{{ row.state }}</td>
+                <td>
+                  <span class="okf-headtest__bar"><span :style="{ width: barWidth(row.score) }" /></span>
+                  <code>{{ (row.score || 0).toFixed(3) }}</code>
+                </td>
+                <td>{{ row.rank }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-if="lastResult.verdict && lastResult.verdict.provenance" class="okf-headtest__provenance">
+            {{ translate('okf.headTest.test.provenance', 'Routing provenance') }}:
+            <code>{{ lastResult.verdict.provenance }}</code>
+          </p>
+        </template>
+        <p v-else-if="busy !== 'test'" class="okf-headtest__empty-pane">
+          {{
+            translate(
+              'okf.headTest.test.empty',
+              'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.'
+            )
+          }}
+        </p>
+        <p v-if="error" class="okf-headtest__error">{{ error }}</p>
+      </div>
+
+      <!-- ─────────────────────── TAB 3: SUITES ─────────────────────── -->
+      <div v-show="tab === 'suites'" class="okf-headtest__pane">
+        <div class="okf-headtest__pane-actions">
+          <DsButton variant="primary" small :disabled="busy !== null" @click="onGenerateSuite">
+            {{ translate('okf.headTest.suites.generate', 'Generate test suite') }}
+          </DsButton>
+          <DsInfoTip
+            :text="
+              translate(
+                'okf.headTest.suites.generateTip',
+                'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.'
+              )
+            "
+          />
+        </div>
+        <DsSpinner v-if="busy === 'generate'" size="sm" class="okf-headtest__busy">
+          {{ translate('okf.headTest.suites.generating', 'Generating — the LLM is writing the queries…') }}
+        </DsSpinner>
+        <DsSpinner v-if="busy === 'run'" size="sm" class="okf-headtest__busy">
+          {{ translate('okf.headTest.suites.running', 'Running every suite query…') }}
+        </DsSpinner>
+
+        <div v-if="suite" class="okf-headtest__suite">
+          <h4 class="okf-headtest__suite-title">
+            {{ translate('okf.headTest.suites.current', 'Current suite') }}
+            <code>{{ suite.suite_key }}</code>
+          </h4>
+          <div class="okf-headtest__pane-actions">
+            <DsButton variant="secondary" small :disabled="busy !== null" @click="onRunSuite">
+              {{ translate('okf.headTest.suites.run', 'Run all queries') }}
+            </DsButton>
+          </div>
+          <table class="okf-headtest__scores">
+            <thead>
+              <tr>
+                <th>{{ translate('okf.headTest.suites.col.query', 'Query') }}</th>
+                <th>{{ translate('okf.headTest.suites.col.kind', 'Kind') }}</th>
+                <th>{{ translate('okf.headTest.suites.col.outcome', 'Outcome') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in suiteResultRows" :key="row.key">
+                <td>{{ row.query }}</td>
+                <td>
+                  <DsPill :variant="row.kind === 'positive' ? 'info' : 'warn'">
+                    {{ row.kind }}{{ row.source ? ' · ' + row.source : '' }}
+                  </DsPill>
+                </td>
+                <td>
+                  <DsPill v-if="row.error" variant="danger">{{ row.error }}</DsPill>
+                  <DsPill v-else-if="row.pass === null" variant="info">
+                    {{ translate('okf.headTest.suites.notEvaluatable', 'not evaluatable (no competitors)') }}
+                  </DsPill>
+                  <DsPill v-else-if="row.pass" variant="success">
+                    {{ translate('okf.headTest.suites.pass', 'pass') }}
+                  </DsPill>
+                  <DsPill v-else variant="danger">
+                    {{ row.failLabel }}
+                  </DsPill>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="lastRunSummary" class="okf-headtest__summary">
+            <span>
+              {{ translate('okf.headTest.suites.passRate', 'Pass rate') }}:
+              <strong>{{ pct(lastRunSummary.pass_rate) }}</strong>
+            </span>
+            <span>
+              {{ translate('okf.headTest.suites.positives', 'Positives') }}:
+              <strong>{{ lastRunSummary.positive_passed }}/{{ lastRunSummary.positive_total }}</strong>
+            </span>
+            <span>
+              {{ translate('okf.headTest.suites.negatives', 'Negatives') }}:
+              <strong>{{ negLabel }}</strong>
+            </span>
+            <span v-if="lastRunSummary.avg_margin !== null">
+              {{ translate('okf.headTest.suites.avgMargin', 'Avg margin') }}:
+              <strong>{{ (lastRunSummary.avg_margin || 0).toFixed(3) }}</strong>
+            </span>
+            <span v-for="steal in lastRunSummary.steals" :key="steal.by_repo" class="okf-headtest__steal">
+              {{
+                translate('okf.headTest.suites.steal', '{repo} stole {n} queries')
+                  .replace('{repo}', steal.by_repo)
+                  .replace('{n}', String(steal.count))
+              }}
+            </span>
+          </div>
+        </div>
+
+        <div class="okf-headtest__add-query">
+          <DsInput
+            v-model="manualQuery"
+            type="text"
+            :placeholder="translate('okf.headTest.suites.addPlaceholder', 'Your own probe query…')"
+            class="okf-headtest__query-input"
+          />
+          <DsSelect v-model="manualKind" :options="manualKindOptions" class="okf-headtest__kind-select" />
+          <DsButton
+            variant="secondary"
+            small
+            :disabled="!suite || busy !== null || !manualQuery.trim()"
+            @click="onAddQuery"
+          >
+            {{ translate('okf.headTest.suites.add', 'Add to suite') }}
+          </DsButton>
+        </div>
+
+        <h4 class="okf-headtest__suite-title">
+          {{ translate('okf.headTest.suites.history', 'Run history') }}
+        </h4>
+        <table v-if="runs.length" class="okf-headtest__scores">
+          <thead>
+            <tr>
+              <th>{{ translate('okf.headTest.suites.col.run', 'Run') }}</th>
+              <th>{{ translate('okf.headTest.suites.col.when', 'When') }}</th>
+              <th>{{ translate('okf.headTest.suites.col.passRate', 'Pass rate') }}</th>
+              <th>{{ translate('okf.headTest.suites.col.headVersion', 'Head') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in runs" :key="r._key">
+              <td>
+                <code>{{ r._key }}</code>
+              </td>
+              <td>{{ shortDate(r.created_at) }}</td>
+              <td>{{ pct(r.summary ? r.summary.pass_rate : null) }}</td>
+              <td>{{ r.head_version || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="okf-headtest__empty-pane">
+          {{ translate('okf.headTest.suites.noRuns', 'No runs yet — generate a suite and run it.') }}
+        </p>
+        <p v-if="error" class="okf-headtest__error">{{ error }}</p>
+      </div>
+    </DsTabs>
+  </DsDialog>
+</template>
+
+<script>
+import translateMixin from '../../../mixins/translateMixin';
+import DsDialog from '../../ds/Dialog.vue';
+import DsTabs from '../../ds/Tabs.vue';
+import DsButton from '../../ds/Button.vue';
+import DsInput from '../../ds/Input.vue';
+import DsSelect from '../../ds/Select.vue';
+import DsPill from '../../ds/Pill.vue';
+import DsTag from '../../ds/Tag.vue';
+import DsSpinner from '../../ds/Spinner.vue';
+import DsInfoTip from '../../ds/InfoTip.vue';
+
+// The head text is assembled server-side as "Label: v1, v2. …" lines; the
+// panel re-renders each frontmatter field from the STORED frontmatter on
+// the repo doc (the head text itself stays verbatim in the tooltip).
+const HEAD_FIELDS = [
+  { key: 'topic', labelKey: 'okf.frontmatter.field.topic', label: 'Topics' },
+  { key: 'entity', labelKey: 'okf.frontmatter.field.entity', label: 'Entities' },
+  { key: 'keyword', labelKey: 'okf.frontmatter.field.keyword', label: 'Keywords' },
+  { key: 'scope', labelKey: 'okf.frontmatter.field.scope', label: 'Scope' },
+  { key: 'forbidden', labelKey: 'okf.frontmatter.field.forbidden', label: 'Not about' }
+];
+
+export default {
+  name: 'OkfHeadTestDialog',
+  components: { DsDialog, DsTabs, DsButton, DsInput, DsSelect, DsPill, DsTag, DsSpinner, DsInfoTip },
+  mixins: [translateMixin],
+  props: {
+    visible: { type: Boolean, default: false },
+    repo: { type: Object, default: null },
+    /** Wizard Publish step mounts this readOnly: viewing + testing is fine,
+     * head REBUILD and the lifecycle footer affordances are not (D4 rule —
+     * no repo mutations from the wizard). */
+    readOnly: { type: Boolean, default: false },
+    initialTab: { type: String, default: 'head' }
+  },
+  emits: ['close', 'changed', 'request-unpublish'],
+  data() {
+    return {
+      tab: this.initialTab,
+      busy: null,
+      error: '',
+      query: '',
+      adversarial: false,
+      lastResult: null,
+      suite: null,
+      lastRunSummary: null,
+      manualQuery: '',
+      manualKind: 'positive',
+      runs: []
+    };
+  },
+  computed: {
+    serving() {
+      return !!(this.repo && this.repo.ingested_at);
+    },
+    head() {
+      return (this.repo && this.repo.head && this.repo.head.vector && this.repo.head) || null;
+    },
+    headStatus() {
+      if (!this.head) return 'missing';
+      const fm = this.repo.frontmatter;
+      if (fm && fm.updated_at && this.head.computed_at && fm.updated_at > this.head.computed_at) return 'stale';
+      return 'present';
+    },
+    tabDefs() {
+      return [
+        { value: 'head', label: this.translate('okf.headTest.tab.head', 'Head') },
+        { value: 'test', label: this.translate('okf.headTest.tab.test', 'Test') },
+        { value: 'suites', label: this.translate('okf.headTest.tab.suites', 'Suites & analytics') }
+      ];
+    },
+    headFields() {
+      const fm = (this.repo && this.repo.frontmatter) || {};
+      return HEAD_FIELDS.map((f) => ({
+        ...f,
+        label: this.translate(f.labelKey, f.label),
+        values: Array.isArray(fm[f.key]) ? fm[f.key] : fm[f.key] ? [String(fm[f.key])] : []
+      }));
+    },
+    scoreRows() {
+      if (!this.lastResult) return [];
+      const ut = this.lastResult.under_test;
+      const rows = [
+        {
+          repo_id: ut.repo_id,
+          name: ut.name,
+          state: ut.lifecycle_state,
+          score: ut.head_score,
+          rank: ut.head_rank,
+          under_test: true
+        }
+      ];
+      for (const s of this.lastResult.siblings || []) {
+        rows.push({
+          repo_id: s.repo_id,
+          name: s.name,
+          state: s.lifecycle_state,
+          score: s.head_score,
+          rank: s.head_rank,
+          under_test: false
+        });
+      }
+      return rows.sort((a, b) => (b.score || 0) - (a.score || 0));
+    },
+    verdictClass() {
+      if (!this.lastResult) return '';
+      const wins = this.lastResult.verdict.under_test_wins_head;
+      const pass = this.adversarial ? !wins : wins;
+      return pass ? 'okf-headtest__verdict--pass' : 'okf-headtest__verdict--fail';
+    },
+    verdictText() {
+      if (!this.lastResult) return '';
+      const wins = this.lastResult.verdict.under_test_wins_head;
+      const winner = this.winnerName(this.lastResult.verdict.head_routing_winner);
+      if (this.adversarial) {
+        return wins
+          ? this.translate(
+              'okf.headTest.test.failAdversarial',
+              'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).'
+            )
+          : this.translate(
+              'okf.headTest.test.passAdversarial',
+              'PASS — correctly not selected (winner: {repo}).'
+            ).replace('{repo}', winner);
+      }
+      return wins
+        ? this.translate('okf.headTest.test.pass', 'PASS — this repository wins the head routing.')
+        : this.translate('okf.headTest.test.fail', 'FAIL — {repo} wins the head routing for this query.').replace(
+            '{repo}',
+            winner
+          );
+    },
+    suiteResultRows() {
+      if (!this.lastRunSummary || !this.lastRunSummaryRows) return [];
+      return this.lastRunSummaryRows;
+    },
+    negLabel() {
+      const s = this.lastRunSummary;
+      if (!s) return '—';
+      if (s.negative_evaluatable === 0) {
+        return this.translate('okf.headTest.suites.noCompetitors', 'n/a — no competing heads yet');
+      }
+      return `${s.negative_passed}/${s.negative_evaluatable}`;
+    },
+    manualKindOptions() {
+      return [
+        { value: 'positive', label: this.translate('okf.headTest.suites.kindPositive', 'should select') },
+        { value: 'negative', label: this.translate('okf.headTest.suites.kindNegative', 'should NOT select') }
+      ];
+    },
+    dialogActions() {
+      const actions = [];
+      if (!this.readOnly && this.repo && this.repo.lifecycle_state === 'publish' && !this.serving) {
+        actions.push({
+          key: 'unpublish',
+          label: this.translate('okf.headTest.footer.unpublish', 'Unpublish to review'),
+          variant: 'secondary',
+          disabled: this.busy !== null
+        });
+      }
+      actions.push({ key: 'close', label: this.translate('common.close', 'Close'), variant: 'secondary' });
+      return actions;
+    }
+  },
+  watch: {
+    visible: {
+      immediate: true,
+      async handler(open) {
+        if (open && this.repo) {
+          this.tab = this.initialTab;
+          this.error = '';
+          this.refreshRuns();
+        }
+      }
+    }
+  },
+  methods: {
+    winnerName(repoId) {
+      if (!this.lastResult) return '';
+      if (repoId === this.lastResult.under_test.repo_id) return this.lastResult.under_test.name;
+      const s = (this.lastResult.siblings || []).find((x) => x.repo_id === repoId);
+      return s ? s.name : repoId;
+    },
+    barWidth(score) {
+      const s = Math.max(0, Math.min(1, score || 0));
+      return Math.round(s * 100) + '%';
+    },
+    pct(v) {
+      return v === null || v === undefined ? '—' : Math.round(v * 100) + '%';
+    },
+    shortDate(iso) {
+      try {
+        return new Date(iso).toLocaleString();
+      } catch {
+        return iso || '—';
+      }
+    },
+    async onRebuild() {
+      this.busy = 'rebuild';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headRebuild', { repoId: this.repo.repo_id });
+      this.busy = null;
+      if (!res.ok) {
+        this.error = res.message || this.translate('okf.headTest.error.rebuild', 'Head rebuild failed');
+        return;
+      }
+      this.$emit('changed', { head: res.result });
+    },
+    async onRunTest() {
+      if (!this.query.trim()) return;
+      this.busy = 'test';
+      this.error = '';
+      this.lastResult = null;
+      const res = await this.$store.dispatch('okf/headRoutingTest', {
+        repoId: this.repo.repo_id,
+        query: this.query.trim()
+      });
+      this.busy = null;
+      if (!res.ok) {
+        this.error = res.message || this.translate('okf.headTest.error.test', 'Routing test failed');
+        return;
+      }
+      this.lastResult = res.result;
+    },
+    async onGenerateSuite() {
+      this.busy = 'generate';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headSuiteGenerate', { repoId: this.repo.repo_id });
+      this.busy = null;
+      if (!res.ok) {
+        this.error = res.message || this.translate('okf.headTest.error.generate', 'Suite generation failed');
+        return;
+      }
+      this.suite = res.result;
+      this.lastRunSummary = null;
+      this.refreshRuns();
+    },
+    async onRunSuite() {
+      if (!this.suite) return;
+      this.busy = 'run';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headSuiteRun', {
+        repoId: this.repo.repo_id,
+        suiteKey: this.suite.suite_key
+      });
+      this.busy = null;
+      if (!res.ok) {
+        this.error = res.message || this.translate('okf.headTest.error.run', 'Suite run failed');
+        return;
+      }
+      this.lastRunSummary = res.result.payload.summary;
+      // Map the summary onto the suite's queries for the outcome column.
+      const results = (res.result.payload && res.result.payload.results) || [];
+      this.lastRunSummaryRows = results.map((r, i) => ({
+        key: r.query + ':' + i,
+        query: r.query,
+        kind: r.kind,
+        source: r.source,
+        error: r.error || null,
+        pass: this.outcomeOf(r),
+        failLabel: this.failLabelOf(r)
+      }));
+      this.refreshRuns();
+    },
+    /** Pass semantics (server-identical): positive passes when the repo
+     * wins the head leg; negative passes when it does NOT — but only if
+     * competitors exist (a one-repo race is not a real test → null). */
+    outcomeOf(r) {
+      if (r.error) return false;
+      if (r.kind === 'positive') return !!r.under_test_wins_head;
+      if (!r.sibling_count) return null;
+      return !r.under_test_wins_head;
+    },
+    failLabelOf(r) {
+      if (r.error) return r.error;
+      return this.translate('okf.headTest.suites.fail', 'fail');
+    },
+    async onAddQuery() {
+      if (!this.suite || !this.manualQuery.trim()) return;
+      this.busy = 'add';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headSuiteAddQueries', {
+        repoId: this.repo.repo_id,
+        suiteKey: this.suite.suite_key,
+        queries: [{ query: this.manualQuery.trim(), kind: this.manualKind, reason: 'curator probe' }]
+      });
+      this.busy = null;
+      if (!res.ok) {
+        this.error = res.message || this.translate('okf.headTest.error.add', 'Could not add the query');
+        return;
+      }
+      this.suite = res.result;
+      this.manualQuery = '';
+    },
+    async refreshRuns() {
+      const res = await this.$store.dispatch('okf/headSuiteListRuns', { repoId: this.repo.repo_id, kind: 'run' });
+      if (res.ok) this.runs = res.runs;
+    },
+    onDialogAction(key) {
+      if (key === 'close') this.$emit('close');
+      if (key === 'unpublish') this.$emit('request-unpublish', this.repo);
+    }
+  }
+};
+</script>
+
+<style scoped>
+.okf-headtest__repo-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin: 0 0 var(--space-md);
+}
+.okf-headtest__meta-inline {
+  display: inline-flex;
+  gap: var(--space-xs);
+  align-items: center;
+}
+.okf-headtest__tabs {
+  min-height: 320px;
+}
+.okf-headtest__pane {
+  padding-top: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.okf-headtest__field {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+.okf-headtest__field-label {
+  min-width: 90px;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.okf-headtest__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+.okf-headtest__head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.okf-headtest__stale-note {
+  width: 100%;
+  color: var(--warn);
+}
+.okf-headtest__pane-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.okf-headtest__query-row {
+  display: flex;
+  gap: var(--space-sm);
+}
+.okf-headtest__query-input {
+  flex: 1;
+}
+.okf-headtest__adversarial {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.okf-headtest__verdict {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+.okf-headtest__verdict--pass {
+  background: color-mix(in oklab, var(--success) 14%, transparent);
+  color: var(--success);
+}
+.okf-headtest__verdict--fail {
+  background: color-mix(in oklab, var(--danger) 14%, transparent);
+  color: var(--danger);
+}
+.okf-headtest__scores {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.okf-headtest__scores th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 600;
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid var(--border);
+}
+.okf-headtest__scores td {
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid var(--border);
+}
+.okf-headtest__row-under-test {
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+.okf-headtest__under-mark {
+  color: var(--accent);
+  margin-left: var(--space-xs);
+}
+.okf-headtest__bar {
+  display: inline-block;
+  width: 90px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg);
+  margin-right: var(--space-xs);
+  vertical-align: middle;
+  overflow: hidden;
+}
+.okf-headtest__bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.okf-headtest__embedded,
+.okf-headtest__provenance {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  margin: 0;
+}
+.okf-headtest__suite-title {
+  margin: var(--space-sm) 0 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.okf-headtest__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  font-size: var(--text-sm);
+  padding: var(--space-sm);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+.okf-headtest__steal {
+  color: var(--danger);
+}
+.okf-headtest__add-query {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+.okf-headtest__kind-select {
+  width: 180px;
+}
+.okf-headtest__empty,
+.okf-headtest__empty-pane {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.okf-headtest__busy {
+  align-self: flex-start;
+}
+.okf-headtest__error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+</style>

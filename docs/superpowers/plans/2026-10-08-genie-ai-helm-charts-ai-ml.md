@@ -1,0 +1,1098 @@
+# GENIE.AI Helm Charts — AI/ML Tier (Plan 5) Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Ship the AI/ML tier (spec §7 Group 6, 14 services): 4 GPU model servers (vllm, vllm-translation-guardrail, tei, tei-reranker — upstream images), 7 CPU OPEA wrappers (embedding, reranker, retriever, dataprep, chatqna-server, textgen, translation — CI-built `genie-ai-*` images), 3 shipped-but-off services (guardrail, chatqna-ui, chatqna-nginx — Swarm parity: replicas 0), GPU scheduling (nodeSelector + tolerations + `nvidia.com/gpu`), a shared HuggingFace model cache PVC, remote-GPU mode (Swarm `GPU_NODE_HOST` equivalent), the 3 remaining §8 secrets (VLLM_API_KEY, keycloakProxyClientSecret, kcDataprepClientSecret), and NetworkPolicies.
+
+**Architecture:** The Plan 3 service factory is EXTENDED (not duplicated) with volumes/volumeMounts/nodeSelector/tolerations/GPU-resource passthrough — the factory currently cannot mount a volume at all, which this tier needs for the HF cache. Model servers run only on GPU nodes (`genieai.io/gpu: "true"` + taint toleration); wrappers are ordinary stateless Deployments pointed at the model servers via Service DNS. All Services expose port 80 (Plan 3 F10 contract: container ports are targetPort details). Remote-GPU deployments skip the 4 GPU Deployments entirely and point wrapper env at external endpoints.
+
+**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), kind 1.33 (GPU tests skipped in CI — `ai.gpu.enabled=false` renders), vLLM v0.10.0, TEI 1.9.3, OPEA 1.3/1.5, NVIDIA device plugin (cluster prerequisite — the GPU OPERATOR itself is a bootstrap prerequisite, NOT a chart dep; see Task 10).
+
+**Spec:** `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` — implements §7 Group 6, §8 (VLLM_API_KEY + 2 keycloak secrets), §5.1 dependency-graph extension, §11 manifest entries. Ground truth for env/args: `docker-compose.yaml` services (`vllm`, `textgen`, `vllm-translation-guardrail`, `translation`, `guardrail`, `tei`, `tei_reranker`, `embedding`, `reranker`, `dataprep-arango-service`, `retriever-arango-service`, `chatqna-xeon-backend-server`, `chatqna-xeon-ui-server`, `chatqna-xeon-nginx-server`).
+
+## Global Constraints
+
+- Helm chart API version: `v2`. Helm 4.x.
+- All in-cluster addressing via Service DNS on port 80 (Plan 3 F10 contract). Env values copied from `docker-compose.yaml` MUST be re-pointed from container ports to Service port 80.
+- Image names: CI-built = `genie-ai-{embedding,reranker,retriever-arango,dataprep-arango,chatqna-server,textgen}`; upstream = `vllm/vllm-openai:v0.10.0`, `ghcr.io/huggingface/text-embeddings-inference:1.9.3`, `opea/translation:1.3`, `opea/guardrails:1.5` (compose-verified).
+- No secrets in any committed file — only encrypted SealedSecret resources.
+- All English documentation and comments per project CLAUDE.md. Commits in English, Conventional Commits.
+- Worktree path: `/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/k8s-migration/`. Branch: `feat/k8s-migration`.
+- Every new Deployment maps to a `docs/charts/k8s-native-audit.md` row (Task 10 amends the table).
+
+## Review Focus
+
+Five input-class concerns the spec implies but no Plan 5 task tests explicitly. Each pinned to a specific step.
+
+1. **GPU scheduling mismatch** — GPU Deployments land `Pending` forever if nodeSelector keys/toleration keys don't match the cluster's actual labels/taints (Swarm used `node.labels.gpu == true`; K8s needs label + usually a taint). **Pinned in Task 3 Step 6** — render asserts all 4 model servers carry `genieai.io/gpu: "true"`, the toleration, and `nvidia.com/gpu` limits; defaults documented as the contract GPU nodes must satisfy.
+2. **HF cache PVC access mode** — four GPU pods mount ONE model cache; `ReadWriteOnce` deadlocks multi-node clusters (each node's kubelet fights for the attach). **Pinned in Task 3 Step 7** — render asserts `accessModes: ["ReadWriteMany"]` + a README note that single-node clusters may relax it per-env.
+3. **Swarm env-port coupling** — `chatqna-xeon-backend-server` env carries `EMBEDDING_SERVER_PORT: 6000`, `RETRIEVER_SERVICE_PORT: 7000`, `RERANK_SERVER_PORT: 8000` (container ports). Porting them verbatim makes chatqna dial dead ports (Services listen on 80). **Pinned in Task 4 Step 5** — render asserts every `*_SERVICE_PORT` env is `80` / every `*_ENDPOINT` host is a Service DNS name on port 80.
+4. **Remote-GPU flip** — with `ai.remoteGpu.enabled=true` the 4 GPU Deployments must vanish AND every wrapper endpoint env must switch to the external URLs; a half-flip leaves wrappers dialing in-cluster names that no longer resolve. **Pinned in Task 8 Steps 3-4** — render asserts 0 GPU Deployments + all endpoint envs match `ai.remoteGpu.*` URLs.
+5. **Secret key collisions / cross-tier consumers** — `HF_TOKEN` and `VLLM_API_KEY` carry the SAME value under two env names (compose feeds both from `VLLM_API_KEY`); one SealedSecret must carry both keys. `KEYCLOAK_PROXY_CLIENT_SECRET` is consumed by the BACKEND (keycloak-proxy-service.js), not the AI tier — the SealedSecret ships here but the envFrom lands on backend (Plan 3 values). **Pinned in Task 6 Steps 4-5** — render asserts both keys exist in `vllm-api-key` and backend's envFrom includes `keycloak-proxy-client-secret`.
+
+---
+
+### Task 1: `ai.*` values block (14 services + models + gpu + cache + remote)
+
+**Files:**
+- Modify: `charts/genieai-umbrella/values.yaml`
+
+**Interfaces:**
+- Consumes: Plan 3 `services.*` entry shape (extended here with `gpu`, `nodeSelector`, `tolerations`, `volumes`, `volumeMounts`, `args`, `command` fields — factory support added in Task 2).
+- Produces: `ai.services.<name>` entries for all 14 Group-6 services + `ai.models` + `ai.gpu` + `ai.hfCache` + `ai.remoteGpu`. Defaults mirror Swarm: everything ON except `guardrail`, `chatqnaUi`, `chatqnaNginx` (replicas 0 in Swarm).
+
+- [ ] **Step 1: Run red-gate — no ai block yet**
+
+Run: `helm template test charts/genieai-umbrella -n genieai --set ai.enabled=true 2>&1 | grep -c "ai.services" || echo "0"`
+Expected: prints `0` (no ai values → templates in later tasks don't exist; this gate asserts the values block is absent).
+
+- [ ] **Step 2: Append to `charts/genieai-umbrella/values.yaml`**
+
+```yaml
+# Plan 5 — AI/ML tier (spec §7 Group 6; 14 services)
+#
+# Master switch: whole tier off for partial installs (Day-0 pattern: core
+# only). Per-service toggles mirror Swarm defaults (guardrail + OPEA
+# ui/nginx ran at replicas 0).
+ai:
+  enabled: true
+
+  models:
+    # IDs from `env` Section "Deployment-Specific" + compose defaults
+    llmId: meta-llama/Meta-Llama-3.1-8B-Instruct       # VLLM_LLM_MODEL_ID
+    translationId: google/gemma-3-4b-it                  # VLLM_TRANSLATION_MODEL_ID
+    embeddingId: BAAI/bge-large-en-v1.5                  # EMBEDDING_MODEL_ID
+    rerankerId: BAAI/bge-reranker-v2-m3                  # RERANKER_MODEL_ID
+
+  gpu:
+    # Contract for GPU nodes: label genieai.io/gpu=true (+ taint
+    # genieai.io/gpu=true:NoSchedule tolerated below). The NVIDIA device
+    # plugin / GPU operator is a cluster bootstrap prerequisite.
+    nodeSelector:
+      genieai.io/gpu: "true"
+    tolerations:
+      - key: genieai.io/gpu
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    vllm:
+      count: 1                       # nvidia.com/gpu limit
+      memoryUtilization: "0.55"      # --gpu_memory_utilization
+      maxModelLen: "65536"           # --max_model_len
+      maxNumSeqs: "64"               # --max_num_seqs
+      dtype: half                    # --dtype
+    vllmTranslation:
+      count: 1
+      memoryUtilization: "0.3"
+      maxModelLen: "2048"
+      maxNumSeqs: "16"
+      dtype: auto
+    tei:
+      count: 1
+    teiReranker:
+      count: 1
+      maxBatchTokens: "8192"
+      maxConcurrentRequests: "32"
+      autoTruncate: "false"
+
+  # RAG tuning knobs consumed by the chatqna wrapper env (Task 4) —
+  # defaults mirror `env` + compose (RERANKING_STRATEGY, RERANKER_TOP_N, ...)
+  chatqnaConfig:
+    rerankingStrategy: slice
+    rerankingThreshold: "0.75"
+    rerankerTopN: "3"
+    retrieverK: "20"
+    retrieverFetchK: "30"
+
+  hfCache:
+    # Shared HuggingFace model cache mounted by all 4 model servers.
+    # ReadWriteMany is REQUIRED when model servers land on different nodes.
+    enabled: true
+    storageSize: 100Gi
+    accessModes: ["ReadWriteMany"]
+
+  remoteGpu:
+    # Swarm GPU_NODE_HOST equivalent: model servers run OUTSIDE the cluster.
+    # When true: the 4 GPU Deployments are not rendered and wrapper env
+    # endpoints point at these URLs (bearer auth via VLLM_API_KEY).
+    enabled: false
+    vllmUrl: ""                      # e.g. https://gpu.example.org/vllm
+    vllmTranslationUrl: ""
+    teiEmbeddingUrl: ""
+    teiRerankingUrl: ""
+
+  services:
+    # ---- GPU model servers (upstream images) ----
+    vllm:
+      enabled: true
+      image: { repository: vllm/vllm-openai, tag: "0.10.0" }
+      port: 8000                     # container port; Service exposes 80
+    vllmTranslation:
+      enabled: true
+      image: { repository: vllm/vllm-openai, tag: "0.10.0" }
+      port: 9031
+    tei:
+      enabled: true
+      image: { repository: ghcr.io/huggingface/text-embeddings-inference, tag: "1.9.3" }
+      port: 80
+    teiReranker:
+      enabled: true
+      image: { repository: ghcr.io/huggingface/text-embeddings-inference, tag: "1.9.3" }
+      port: 80
+    # ---- CPU OPEA wrappers (CI-built images) ----
+    embedding:
+      enabled: true
+      image: { repository: registry.example.org/genie-ai-embedding, tag: "1.0.0" }
+      port: 6000
+    reranker:
+      enabled: true
+      image: { repository: registry.example.org/genie-ai-reranker, tag: "1.0.0" }
+      port: 8000
+    retriever:
+      enabled: true
+      image: { repository: registry.example.org/genie-ai-retriever-arango, tag: "1.0.0" }
+      port: 7000
+    dataprep:
+      enabled: true
+      image: { repository: registry.example.org/genie-ai-dataprep-arango, tag: "1.0.0" }
+      port: 5000
+    chatqna:
+      enabled: true
+      image: { repository: registry.example.org/genie-ai-chatqna-server, tag: "1.0.0" }
+      port: 8888
+    textgen:
+      enabled: true
+      image: { repository: registry.example.org/genie-ai-textgen, tag: "1.0.0" }
+      port: 9000
+    translation:
+      enabled: true
+      image: { repository: opea/translation, tag: "1.3" }
+      port: 8888
+    # ---- Shipped but OFF (Swarm replicas 0) ----
+    guardrail:
+      enabled: false
+      image: { repository: opea/guardrails, tag: "1.5" }
+      port: 9090
+    chatqnaUi:
+      enabled: false
+      image: { repository: opea/chatqna-xeon-ui-server, tag: "1.3" }
+      port: 5173
+    chatqnaNginx:
+      enabled: false
+      image: { repository: opea/chatqna-xeon-nginx-server, tag: "1.3" }
+      port: 5173
+```
+
+- [ ] **Step 3: `helm lint --strict`**
+
+Run: `helm lint charts/genieai-umbrella --strict`
+Expected: 0 errors.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add charts/genieai-umbrella/values.yaml
+git commit -m "feat(charts): ai.* values block (14 Group-6 services, models, gpu, hf-cache, remote-gpu)"
+```
+
+---
+
+### Task 2: Factory extensions — volumes, nodeSelector, tolerations, GPU resources, command/args
+
+**Files:**
+- Modify: `charts/genieai-umbrella/templates/_lib/_service-factory.tpl`
+
+**Interfaces:**
+- Consumes: Plan 3 factory (`genieai-umbrella.serviceDeployment`).
+- Produces: factory support for `volumes`, `volumeMounts`, `nodeSelector`, `tolerations`, `gpu` (renders `nvidia.com/gpu` resource limit), `command`, `args` — all optional values passthrough. These fields also serve Plan 6 (document-repository PVC).
+
+- [ ] **Step 1: Extend the factory Deployment body**
+
+In the `spec.template.spec` block (after `securityContext:`), add:
+
+```gotemplate
+      {{- /* Optional scheduling + storage passthrough (values-driven;
+             absent keys render nothing). GPU services set gpu.count ->
+             nvidia.com/gpu resource limit + nodeSelector + tolerations
+             come from ai.gpu defaults merged per-service. */ -}}
+      {{- with $svc.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $svc.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $svc.volumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+```
+
+And in the container block (after `envFrom:`), add:
+
+```gotemplate
+          {{- with $svc.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $svc.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $svc.volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+```
+
+And merge the GPU resource limit into the `resources:` block:
+
+```gotemplate
+          resources:
+            {{- if $svc.gpu }}
+            limits:
+              nvidia.com/gpu: {{ $svc.gpu.count | default 1 }}
+            {{- end }}
+            {{- toYaml $svc.resources | nindent 12 }}
+```
+
+- [ ] **Step 2: Verify existing renders unchanged**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "nodeSelector\|nvidia.com/gpu" || echo "0"`
+Expected: prints `0` — no Plan 3 service sets these fields; passthrough is inert until used.
+
+- [ ] **Step 3: `helm lint --strict` + commit**
+
+```bash
+helm lint charts/genieai-umbrella --strict
+git add charts/genieai-umbrella/templates/_lib/_service-factory.tpl
+git commit -m "feat(charts): factory passthrough — volumes, scheduling, GPU resources, command/args"
+```
+
+---
+
+### Task 3: GPU model servers ×4 + HF cache PVC
+
+**Files:**
+- Create: `charts/genieai-umbrella/templates/_ai/hf-cache-pvc.yaml`
+- Create: `charts/genieai-umbrella/templates/_ai/vllm.yaml`
+- Create: `charts/genieai-umbrella/templates/_ai/vllm-translation.yaml`
+- Create: `charts/genieai-umbrella/templates/_ai/tei.yaml`
+- Create: `charts/genieai-umbrella/templates/_ai/tei-reranker.yaml`
+
+**Interfaces:**
+- Consumes: factory (Task 2), `ai.gpu.*`, `ai.hfCache.*`, `ai.models.*`, secret `vllm-api-key` (Task 6).
+- Produces: 1 PVC + 4 GPU Deployments + 4 Services. Each mounts the HF cache at `/root/.cache/huggingface` (compose-verified path) and carries `nodeSelector`/`tolerations` from `ai.gpu`.
+
+- [ ] **Step 1: Write `charts/genieai-umbrella/templates/_ai/hf-cache-pvc.yaml`**
+
+```yaml
+{{- if and .Values.ai.enabled .Values.ai.hfCache.enabled (not .Values.ai.remoteGpu.enabled) -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: genieai-hf-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "ai-cache"))) | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.ai.hfCache.accessModes | nindent 4 }}
+  {{- with .Values.pluggable.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.ai.hfCache.storageSize }}
+{{- end -}}
+```
+
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_ai/vllm.yaml`**
+
+```yaml
+{{- if and .Values.ai.enabled .Values.ai.services.vllm.enabled (not .Values.ai.remoteGpu.enabled) -}}
+{{- /* The factory reads .Values.services.<name>; model servers live under
+       ai.services — pass the per-service values MERGED with the GPU/scheduling
+       extras through the `aiService` context key (factory support: Task 2
+       note) so the factory renders it unchanged. */ -}}
+{{- $merged := deepCopy .Values.ai.services.vllm
+      | merge (dict
+          "nodeSelector" .Values.ai.gpu.nodeSelector
+          "tolerations" .Values.ai.gpu.tolerations
+          "gpu" .Values.ai.gpu.vllm
+          "resources" (dict "requests" (dict "cpu" "500m" "memory" "8Gi"))
+          "command" (list "python3" "-m" "vllm.entrypoints.openai.api_server")
+          "args" (list
+            "--model" .Values.ai.models.llmId
+            "--gpu_memory_utilization" .Values.ai.gpu.vllm.memoryUtilization
+            "--served-model-name" .Values.ai.models.llmId
+            "--max_model_len" .Values.ai.gpu.vllm.maxModelLen
+            "--max_num_seqs" .Values.ai.gpu.vllm.maxNumSeqs
+            (printf "--dtype=%s" .Values.ai.gpu.vllm.dtype))
+          "volumeMounts" (list (dict "name" "hf-cache" "mountPath" "/root/.cache/huggingface"))
+          "volumes" (list (dict "name" "hf-cache" "persistentVolumeClaim" (dict "claimName" "genieai-hf-cache")))
+          "securityContext" (dict "runAsNonRoot" true "runAsUser" 1000 "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "ALL")))) -}}
+{{- include "genieai-umbrella.serviceDeployment" (dict "name" "vllm" "component" "ai-vllm" "aiService" $merged "Values" .Values "Chart" .Chart "Release" .Release) }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "ai-vllm"))) | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "ai-vllm"))) | nindent 4 }}
+{{- end -}}
+```
+
+**Note on the `aiService` context**: the factory's first line reads `index $ctx.Values.services $svcName`. Extend the factory's lookup to check `aiService` FIRST (one-line change):
+
+```gotemplate
+{{- $svc := $ctx.aiService | default (index $ctx.Values.services $svcName) -}}
+```
+
+This keeps Group-5 rendering untouched (no `aiService` key → old path) and lets AI tasks pass fully-merged dicts (image + gpu + args + volumes).
+
+- [ ] **Step 3: Write `vllm-translation.yaml`, `tei.yaml`, `tei-reranker.yaml`** — same shape as Step 2 with these deltas (all compose-verified):
+
+`vllm-translation`: args = `--model/--served-model-name ai.models.translationId`, `--gpu_memory_utilization ai.gpu.vllmTranslation.memoryUtilization`, `--max_model_len`, `--max-num-seqs`, `--dtype`, `--port 9031`; Service targetPort 9031; component `ai-vllm-translation`.
+
+`tei`: command `["/bin/sh","-c"]`, args `["text-embeddings-router --json-output --model-id <ai.models.embeddingId> --auto-truncate"]`; Service targetPort 80; component `ai-tei`.
+
+`tei-reranker`: args `["text-embeddings-router --json-output --model-id <ai.models.rerankerId> --max-batch-tokens <ai.gpu.teiReranker.maxBatchTokens> --max-concurrent-requests <ai.gpu.teiReranker.maxConcurrentRequests> --auto-truncate <ai.gpu.teiReranker.autoTruncate>"]`; component `ai-tei-reranker`.
+
+All four mount `hf-cache` and carry `env: [{name: HF_TOKEN}, {name: VLLM_API_KEY}]` via `envFrom: [{secretRef: {name: vllm-api-key}}]` (Task 6 ships both keys in that Secret).
+
+- [ ] **Step 4: Red-gate → render all 4**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -cE "^kind: (Deployment)$" `
+Expected: before this task's commit the count is `5` (Group 5); after, `9` (+4 GPU servers).
+
+- [ ] **Step 5: Verify PVC renders (Review Focus #2)**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -A 3 "kind: PersistentVolumeClaim" | grep -c "ReadWriteMany"`
+Expected: prints `1` (accessModes carries ReadWriteMany).
+
+- [ ] **Step 6: Verify GPU scheduling on all 4 (Review Focus #1)**
+
+```bash
+helm template test charts/genieai-umbrella -n genieai | \
+  python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
+  gpu = [d for d in docs if d and d.get('kind')=='Deployment' and 'ai-' in str(d['metadata']['labels'].get('genieai.io/component',''))]; \
+  assert len(gpu) == 4, f'{len(gpu)} gpu deployments'; \
+  for d in gpu: \
+    assert d['spec']['template']['spec'].get('nodeSelector',{}).get('genieai.io/gpu') == 'true', d['metadata']['name']; \
+    assert any(r.get('nvidia.com/gpu') for c in d['spec']['template']['spec']['containers'] for r in [c.get('resources',{}).get('limits',{})]), d['metadata']['name']; \
+  print('PASS')"
+```
+
+Expected: prints `PASS`.
+
+- [ ] **Step 7: `helm lint --strict` + commit**
+
+```bash
+helm lint charts/genieai-umbrella --strict
+git add charts/genieai-umbrella/templates/_ai/ charts/genieai-umbrella/templates/_lib/_service-factory.tpl
+git commit -m "feat(charts): GPU model servers (vllm, vllm-translation, tei, tei-reranker) + shared HF cache PVC"
+```
+
+---
+
+### Task 4: CPU OPEA wrappers ×7
+
+**Files:**
+- Create: `charts/genieai-umbrella/templates/_ai/embedding.yaml`
+- Create: `charts/genieai-umbrella/templates/_ai/reranker.yaml`
+- Create: `charts/genieai-umbrella/templates/_ai/retriever.yaml`
+- Create: `charts/genieai-umbrella/templates/_ai/dataprep.yaml`
+- Create: `charts/genieai-umbrella/templates/_ai/chatqna.yaml`
+- Create: `charts/genieai-umbrella/templates/_ai/textgen.yaml`
+- Create: `charts/genieai-umbrella/templates/_ai/translation.yaml`
+
+**Interfaces:**
+- Consumes: factory + `aiService` merge pattern (Task 3 Step 2 note), secret `vllm-api-key` (envFrom).
+- Produces: 7 Deployments + 7 Services (port 80). Env values are compose-verified, re-pointed to Service DNS :80.
+
+- [ ] **Step 1: Write the seven templates.** Canonical example (`chatqna.yaml` — the widest env surface); the others follow identically with their compose env:
+
+```yaml
+{{- if and .Values.ai.enabled .Values.ai.services.chatqna.enabled -}}
+{{- $ep := .Values.ai.services.chatqna -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatqna
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "ai-chatqna"))) | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "ai-chatqna"))) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "ai-chatqna"))) | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: chatqna
+          image: {{ $ep.image.repository }}:{{ $ep.image.tag }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8888
+          # Env from docker-compose.yaml chatqna-xeon-backend-server,
+          # re-pointed to Service DNS port 80 (Review Focus #3):
+          # EMBEDDING_SERVER_HOST_IP/PORT, RETRIEVER_SERVICE_HOST_IP/PORT,
+          # RERANK_SERVER_HOST_IP/PORT carried CONTAINER ports in Swarm.
+          env:
+            - name: EMBEDDING_SERVER_HOST_IP
+              value: embedding
+            - name: EMBEDDING_SERVER_PORT
+              value: "80"
+            - name: EMBEDDING_SERVER_ENDPOINT
+              value: /v1/embeddings
+            - name: RETRIEVER_SERVICE_HOST_IP
+              value: retriever
+            - name: RETRIEVER_SERVICE_PORT
+              value: "80"
+            - name: RERANK_SERVER_HOST_IP
+              value: reranker
+            - name: RERANK_SERVER_PORT
+              value: "80"
+            - name: RERANKING_STRATEGY
+              value: {{ .Values.ai.chatqnaConfig.rerankingStrategy | default "slice" | quote }}
+            - name: RERANKING_THRESHOLD
+              value: {{ .Values.ai.chatqnaConfig.rerankingThreshold | default "0.75" | quote }}
+            - name: RERANKER_TOP_N
+              value: {{ .Values.ai.chatqnaConfig.rerankerTopN | default "3" | quote }}
+            - name: RETRIEVER_ARANGO_K
+              value: {{ .Values.ai.chatqnaConfig.retrieverK | default "20" | quote }}
+            - name: RETRIEVER_ARANGO_FETCH_K
+              value: {{ .Values.ai.chatqnaConfig.retrieverFetchK | default "30" | quote }}
+            - name: RETRIEVER_ARANGO_SEARCH_START
+              value: chunk
+            - name: RETRIEVER_ARANGO_TRAVERSAL_ENABLED
+              value: "true"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://genieai-collector-collector.{{ .Values.namespace }}.svc.cluster.local:4318
+          envFrom:
+            - secretRef:
+                name: vllm-api-key
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits:   { cpu: 2, memory: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet: { path: /v1/health_check, port: 8888 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /v1/health_check, port: 8888 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatqna
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "ai-chatqna"))) | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8888
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "ai-chatqna"))) | nindent 4 }}
+{{- end -}}
+```
+
+The remaining six carry (compose-verified env, Service port 80, targetPort = container port):
+
+| Template | targetPort | env (all Service-DNS :80 unless noted) |
+|---|---|---|
+| `embedding.yaml` | 6000 | `TEI_EMBEDDING_ENDPOINT=http://tei.{{ns}}:80`, `EMBEDDING_MODEL_ID=<ai.models.embeddingId>`; envFrom `vllm-api-key` |
+| `reranker.yaml` | 8000 | `TEI_RERANKING_ENDPOINT=http://tei-reranker.{{ns}}:80`, `RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING`; envFrom `vllm-api-key` |
+| `retriever.yaml` | 7000 | `VLLM_ENDPOINT=http://vllm.{{ns}}:80`, `TEI_EMBEDDING_ENDPOINT=http://tei.{{ns}}:80`, `ARANGO_URL=http://arangodb-single.{{ns}}:8529` (+ `RETRIEVER_ARANGO_*` same defaults as chatqna); envFrom `vllm-api-key` |
+| `dataprep.yaml` | 5000 | `VLLM_MODEL_ID=<llmId>`, `VLLM_ENDPOINT=http://vllm.{{ns}}:80`, `TEI_EMBEDDING_ENDPOINT=http://tei.{{ns}}:80`, `ARANGO_URL=http://arangodb-single.{{ns}}:8529`, `CONTEXTUAL_RETRIEVAL_ENABLED=true`; envFrom `vllm-api-key` + `kc-dataprep-client-secret` |
+| `textgen.yaml` | 9000 | `LLM_ENDPOINT=http://vllm.{{ns}}:80`, `LLM_MODEL_ID=<llmId>` |
+| `translation.yaml` | 8888 | `LLM_ENDPOINT=http://vllm-translation.{{ns}}:80`, `LLM_MODEL_ID=<translationId>` |
+
+NOTE: `dataprep` mounts an `emptyDir` scratch at `/tmp` (its `readOnlyRootFilesystem` + docling temp writes) — add `volumes: [{name: tmp, emptyDir: {}}]` + matching volumeMount.
+
+- [ ] **Step 2: Render count**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: Deployment$"`
+Expected: prints `16` (5 Group-5 + 4 GPU + 7 wrappers).
+
+- [ ] **Step 3: Verify all 7 Services expose port 80**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | python3 -c "import sys,yaml; docs=list(yaml.safe_load_all(sys.stdin)); ai=[d for d in docs if d and d.get('kind')=='Service' and str(d['metadata']['labels'].get('genieai.io/component','')).startswith('ai-')]; assert len(ai)==11, len(ai); assert all(p['port']==80 for d in ai for p in d['spec']['ports']), 'non-80 service port'; print('PASS')"`
+Expected: prints `PASS` (11 = 4 model + 7 wrapper Services).
+
+- [ ] **Step 4: `helm lint --strict`**
+
+Run: `helm lint charts/genieai-umbrella --strict`
+Expected: 0 errors.
+
+- [ ] **Step 5: Env-port sweep (Review Focus #3)**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -E "SERVICE_PORT|_ENDPOINT" | grep -vE '":80"|:80"|/v1|/health|chunk|https?://[a-z0-9.-]+:80'`
+Expected: no output — every port-carrying env is Service DNS on 80; every endpoint path-only or :80. (Any `:6000`/`:7000`/`:8000`/`:9031` in env = bug.)
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add charts/genieai-umbrella/templates/_ai/
+git commit -m "feat(charts): CPU OPEA wrappers (embedding, reranker, retriever, dataprep, chatqna, textgen, translation)"
+```
+
+---
+
+### Task 5: Disabled-tier templates ×3 (guardrail, chatqna-ui, chatqna-nginx)
+
+**Files:**
+- Create: `charts/genieai-umbrella/templates/_ai/guardrail.yaml`
+- Create: `charts/genieai-umbrella/templates/_ai/chatqna-ui.yaml`
+- Create: `charts/genieai-umbrella/templates/_ai/chatqna-nginx.yaml`
+
+**Interfaces:**
+- Consumes: `ai.services.{guardrail,chatqnaUi,chatqnaNginx}.enabled` (default false — Swarm replicas 0).
+- Produces: 3 template files that render NOTHING by default; flipping the toggles in `values-override.yaml` brings them up (guardrail: `LLM_ENDPOINT=http://vllm-translation.<ns>:80`, `SAFETY_GUARD_MODEL_ID=<translationId>`; ui/nginx: OPEA defaults, nginx env points at chatqna + ui).
+
+- [ ] **Step 1: Write the three templates** — same shape as Task 4 wrappers, gated on their `enabled` flags. Guardrail Service targetPort 9090; ui/nginx 5173.
+
+- [ ] **Step 2: Default render — zero of the three**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -cE "ai-guardrail|ai-chatqna-ui|ai-chatqna-nginx" || echo "0"`
+Expected: prints `0`.
+
+- [ ] **Step 3: Flip toggle render — guardrail appears**
+
+Run: `helm template test charts/genieai-umbrella -n genieai --set ai.services.guardrail.enabled=true | grep -c "ai-guardrail"`
+Expected: prints ≥ 2 (Deployment + Service labels).
+
+- [ ] **Step 4: `helm lint --strict` + commit**
+
+```bash
+helm lint charts/genieai-umbrella --strict
+git add charts/genieai-umbrella/templates/_ai/
+git commit -m "feat(charts): guardrail + chatqna ui/nginx templates (off by default, Swarm replicas-0 parity)"
+```
+
+---
+
+### Task 6: AI-tier SealedSecrets ×3 + backend envFrom update
+
+**Files:**
+- Create: `charts/genieai-umbrella/templates/_secrets/ai-secrets.yaml`
+- Modify: `charts/genieai-umbrella/values.yaml` (backend `secrets:` list + `ai.chatqnaConfig` block referenced by Task 4)
+
+**Interfaces:**
+- Consumes: spec §8 rows: `VLLM_API_KEY` (Plan 5), `keycloakProxyClientSecret` (Plan 5), `kcDataprepClientSecret` (Plan 5).
+- Produces: 3 SealedSecret CRs. `vllm-api-key` carries BOTH `VLLM_API_KEY` and `HF_TOKEN` keys (same underlying value, two env names — compose feeds both from `VLLM_API_KEY`). `keycloak-proxy-client-secret` (key `KEYCLOAK_PROXY_CLIENT_SECRET`) is consumed by the BACKEND (keycloak-proxy-service.js) — values update only here; its envFrom already works via Plan 3's backend secrets list. `kc-dataprep-client-secret` (key `KC_DATAPREP_CLIENT_SECRET`) feeds dataprep's client-credentials grant.
+
+- [ ] **Step 1: Write `charts/genieai-umbrella/templates/_secrets/ai-secrets.yaml`**
+
+```yaml
+{{- if and .Values.secrets.sealedSecrets.enabled .Values.ai.enabled -}}
+{{- /* Spec §8 mapping (names DNS-1123; encryptedData keys = ENV VAR NAMES):
+       VLLM_API_KEY             → vllm-api-key                (keys VLLM_API_KEY + HF_TOKEN — same value, two env names)
+       keycloakProxyClientSecret→ keycloak-proxy-client-secret (key KEYCLOAK_PROXY_CLIENT_SECRET — backend consumer)
+       kcDataprepClientSecret   → kc-dataprep-client-secret    (key KC_DATAPREP_CLIENT_SECRET — dataprep consumer)
+*/ -}}
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: vllm-api-key
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" (deepCopy $.Values | merge (dict "component" "sealed-secret"))) | nindent 4 }}
+    app.kubernetes.io/component: ai
+spec:
+  encryptedData:
+    VLLM_API_KEY: PLACEHOLDER_VLLM_API_KEY_SEALED_KID
+    HF_TOKEN: PLACEHOLDER_VLLM_API_KEY_SEALED_KID   # same value, re-sealed
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: keycloak-proxy-client-secret
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" (deepCopy $.Values | merge (dict "component" "sealed-secret"))) | nindent 4 }}
+    app.kubernetes.io/component: ai
+spec:
+  encryptedData:
+    KEYCLOAK_PROXY_CLIENT_SECRET: PLACEHOLDER_KEYCLOAK_PROXY_CLIENT_SECRET_SEALED_KID
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: kc-dataprep-client-secret
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" (deepCopy $.Values | merge (dict "component" "sealed-secret"))) | nindent 4 }}
+    app.kubernetes.io/component: ai
+spec:
+  encryptedData:
+    KC_DATAPREP_CLIENT_SECRET: PLACEHOLDER_KC_DATAPREP_CLIENT_SECRET_SEALED_KID
+{{- end -}}
+```
+
+- [ ] **Step 2: Add `keycloak-proxy-client-secret` to backend's secrets list** in `values.yaml`:
+
+```yaml
+    secrets:
+      - name: keycloak-client-secret
+      - name: huggingface-hub-token
+      - name: keycloak-proxy-client-secret   # Plan 5: backend keycloak-proxy-service
+```
+
+- [ ] **Step 3: Render count**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: SealedSecret$"`
+Expected: prints `12` (4 Plan-2 + 3 Plan-3 + 2 Plan-4 + 3 Plan-5).
+
+- [ ] **Step 4: Verify dual keys in vllm-api-key (Review Focus #5)**
+
+```bash
+helm template test charts/genieai-umbrella -n genieai | \
+  python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
+  ss = next(d for d in docs if d and d.get('kind')=='SealedSecret' and d['metadata']['name']=='vllm-api-key'); \
+  keys = set(ss['spec']['encryptedData'].keys()); \
+  assert keys == {'VLLM_API_KEY','HF_TOKEN'}, keys; print('PASS')"
+```
+
+Expected: prints `PASS`.
+
+- [ ] **Step 5: Verify backend envFrom includes the proxy secret (Review Focus #5)**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -B 1 "name: keycloak-proxy-client-secret" | grep -c secretRef`
+Expected: prints `1`.
+
+- [ ] **Step 6: `helm lint --strict` + commit**
+
+```bash
+helm lint charts/genieai-umbrella --strict
+git add charts/genieai-umbrella/templates/_secrets/ai-secrets.yaml charts/genieai-umbrella/values.yaml
+git commit -m "feat(charts): AI-tier SealedSecrets (vllm-api-key dual-key, keycloak-proxy, kc-dataprep)"
+```
+
+---
+
+### Task 7: NetworkPolicies for the AI tier
+
+**Files:**
+- Create: `charts/genieai-umbrella/templates/_ai/networkpolicies.yaml`
+
+**Interfaces:**
+- Consumes: Plan 3 NP conventions (default-deny + explicit allow; `kubernetes.io/metadata.name` for DNS; port-scoped `ipBlock` where operator labels are unverified).
+- Produces: one NetworkPolicy per enabled AI service. Wrappers egress to: arango 8529 (retriever, dataprep, chatqna), model-server Services 80 (per consumer), DNS. Model servers ingress: from wrapper peers; egress: DNS + 443 (HF model pulls) only.
+
+- [ ] **Step 1: Write `charts/genieai-umbrella/templates/_ai/networkpolicies.yaml`**
+
+One `NetworkPolicy` per service, following the Plan 3 shape. Key edges (per-service `egress` blocks):
+
+```yaml
+{{- if and .Values.ai.enabled .Values.ai.services.retriever.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-retriever
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "ai-retriever"))) | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: ai-retriever
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: ai-chatqna
+      ports:
+        - { protocol: TCP, port: 7000 }
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - { protocol: UDP, port: 53 }
+    # Model servers + arango (port-scoped any-dest until Plan 6 label pass)
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0 }
+      ports:
+        - { protocol: TCP, port: 80 }     # in-cluster model Services
+        - { protocol: TCP, port: 8529 }   # arangodb
+{{- end -}}
+```
+
+Full edge matrix (replicate the shape above per service):
+
+| Service | ingress from | egress to (ports) |
+|---|---|---|
+| embedding | chatqna, dataprep, retriever (6000) | tei 80, DNS |
+| reranker | chatqna (8000) | tei-reranker 80, DNS |
+| retriever | chatqna (7000) | vllm 80, tei 80, arango 8529, DNS |
+| dataprep | backend (5000) | vllm 80, tei 80, arango 8529, DNS |
+| chatqna | backend (8888) | embedding 80, retriever 80, reranker 80, vllm 80, keycloak 8080, DNS |
+| textgen | same-ns any (9000; no verified backend consumer in compose) | vllm 80, DNS |
+| translation | same-ns any (8888; backend dials vllm-translation directly, not this wrapper) | vllm-translation 80, DNS |
+| vllm / vllm-translation | wrappers (8000 / 9031) | DNS + 443 (HF pulls) |
+| tei / tei-reranker | wrappers (80) | DNS + 443 (HF pulls, first boot) |
+
+- [ ] **Step 2: Render + count**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: NetworkPolicy$"`
+Expected: prints `16` (5 Plan-3 + 11 AI tier — guardrail/ui/nginx off).
+
+- [ ] **Step 3: `helm lint --strict` + commit**
+
+```bash
+helm lint charts/genieai-umbrella --strict
+git add charts/genieai-umbrella/templates/_ai/networkpolicies.yaml
+git commit -m "feat(charts): AI-tier NetworkPolicies (default-deny + edge matrix)"
+```
+
+---
+
+### Task 8: Remote-GPU mode
+
+**Files:**
+- Modify: `charts/genieai-umbrella/templates/_ai/{retriever,dataprep,chatqna,translation,textgen}.yaml` (endpoint env ternaries)
+
+**Interfaces:**
+- Consumes: `ai.remoteGpu.{enabled,vllmUrl,vllmTranslationUrl,teiEmbeddingUrl,teiRerankingUrl}`.
+- Produces: remote mode = 0 GPU Deployments + wrapper env pointing at external URLs (bearer auth via `VLLM_API_KEY` — the OPEA/TEI wrappers and vLLM accept `Authorization: Bearer`, matching the Swarm `GPU_NODE_HOST` + `VLLM_API_KEY` contract).
+
+- [ ] **Step 1: Ternary the endpoint envs.** Pattern per endpoint (retriever shown; apply to every wrapper that references a model server):
+
+```yaml
+            - name: VLLM_ENDPOINT
+              {{- if .Values.ai.remoteGpu.enabled }}
+              value: {{ .Values.ai.remoteGpu.vllmUrl | quote }}
+              {{- else }}
+              value: http://vllm.{{ .Values.namespace }}.svc.cluster.local:80
+              {{- end }}
+```
+
+Mapping: `VLLM_ENDPOINT`→`vllmUrl`, `TEI_EMBEDDING_ENDPOINT`→`teiEmbeddingUrl`, `TEI_RERANKING_ENDPOINT`→`teiRerankingUrl`, translation `LLM_ENDPOINT`→`vllmTranslationUrl`, textgen `LLM_ENDPOINT`→`vllmUrl`.
+
+- [ ] **Step 2: Fail-fast on empty remote URLs**
+
+Add to `templates/_ai/*` wrappers' top:
+
+```gotemplate
+{{- if and .Values.ai.enabled .Values.ai.remoteGpu.enabled -}}
+{{- if or (not .Values.ai.remoteGpu.vllmUrl) (not .Values.ai.remoteGpu.teiEmbeddingUrl) -}}
+{{- fail "ai.remoteGpu.enabled=true requires vllmUrl + teiEmbeddingUrl (and teiRerankingUrl/vllmTranslationUrl for their consumers)" -}}
+{{- end -}}
+{{- end -}}
+```
+
+- [ ] **Step 3: Render remote — zero GPU Deployments (Review Focus #4)**
+
+Run: `helm template test charts/genieai-umbrella -n genieai --set ai.remoteGpu.enabled=true --set ai.remoteGpu.vllmUrl=https://gpu.example.org/vllm --set ai.remoteGpu.teiEmbeddingUrl=https://gpu.example.org/tei --set ai.remoteGpu.teiRerankingUrl=https://gpu.example.org/teir --set ai.remoteGpu.vllmTranslationUrl=https://gpu.example.org/vllmt | grep -cE "ai-vllm$|ai-tei$|ai-vllm-translation$|ai-tei-reranker$|kind: PersistentVolumeClaim" || echo "0"`
+Expected: prints `0` — GPU Deployments + PVC all suppressed.
+
+- [ ] **Step 4: Render remote — external URLs in env (Review Focus #4)**
+
+Run: `helm template test charts/genieai-umbrella -n genieai --set ai.remoteGpu.enabled=true --set ai.remoteGpu.vllmUrl=https://gpu.example.org/vllm --set ai.remoteGpu.teiEmbeddingUrl=https://gpu.example.org/tei | grep -c "gpu.example.org"`
+Expected: prints ≥ 2 (retriever + dataprep + chatqna envs).
+
+- [ ] **Step 5: `helm lint --strict` + commit**
+
+```bash
+helm lint charts/genieai-umbrella --strict
+git add charts/genieai-umbrella/templates/_ai/
+git commit -m "feat(charts): remote-GPU mode (GPU_NODE_HOST equivalent, fail-fast on missing URLs)"
+```
+
+---
+
+### Task 9: helm test — AI-tier reachability
+
+**Files:**
+- Create: `charts/genieai-umbrella/templates/tests/test-ai-reachability.yaml`
+
+**Interfaces:**
+- Consumes: AI Services (Tasks 3-5). Skips GPU-server checks when `ai.remoteGpu.enabled=true`.
+- Produces: a `helm test` Pod curling wrapper health endpoints on Service port 80.
+
+- [ ] **Step 1: Write the test pod** (curlimages/curl:8.10.1, same skeleton as Plan 3 Task 9):
+
+```yaml
+{{- if .Values.ai.enabled -}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-test-ai-reach
+  namespace: {{ .Values.namespace }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: t
+      image: curlimages/curl:8.10.1
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+        capabilities: { drop: ["ALL"] }
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          set -eu
+          ns="{{ .Values.namespace }}"
+          failures=0
+          check() {
+            url=$1; expected=$2
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || echo 000)
+            if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then
+              echo "PASS: $url -> ${code}"
+            else
+              echo "FAIL: $url expected ${expected}, got ${code}"; failures=$((failures+1))
+            fi
+          }
+          {{- if not .Values.ai.remoteGpu.enabled }}
+          check http://vllm.${ns}.svc.cluster.local:80/health reachable
+          check http://tei.${ns}.svc.cluster.local:80/health reachable
+          {{- end }}
+          check http://chatqna.${ns}.svc.cluster.local:80/v1/health_check reachable
+          check http://retriever.${ns}.svc.cluster.local:80/health_check reachable
+          check http://dataprep.${ns}.svc.cluster.local:80/v1/health_check reachable
+          check http://embedding.${ns}.svc.cluster.local:80/v1/health_check reachable
+          [ "$failures" -eq 0 ] && echo "PASS: AI tier reachable"
+          exit $failures
+{{- end -}}
+```
+
+NOTE: verify each health path against the OPEA service source (`genie-ai-overlay/*/genieai_*.py` route definitions) at execution time — the paths above follow OPEA convention (`/v1/health_check`, `/health_check`); if a service exposes a different route, adjust the check, not the service.
+
+- [ ] **Step 2: Render + lint + commit**
+
+```bash
+helm template test charts/genieai-umbrella -n genieai | grep -c "test-ai-reach"
+helm lint charts/genieai-umbrella --strict
+git add charts/genieai-umbrella/templates/tests/test-ai-reachability.yaml
+git commit -m "test(charts): helm test for AI-tier reachability"
+```
+
+---
+
+### Task 10: Dependency graph + k8s-native-audit + inventory updates
+
+**Files:**
+- Modify: `charts/genieai-umbrella/values.yaml` (`dependencyGraph`)
+- Modify: `docs/charts/k8s-native-audit.md` (AI-tier rows)
+- Modify: `charts/genieai-umbrella/templates/hooks/pre-install-dependency-check.yaml` (`enabled.json` gains AI keys)
+
+**Interfaces:**
+- Consumes: Plan 2 dependency graph + evaluator (deps resolve against graph namespaces — AI services are SERVICE deps of backend and of each other).
+- Produces: graph edges + audit rows so the pre-install evaluator validates the AI tier and every Deployment maps to an audit row (standing review rule).
+
+- [ ] **Step 1: Extend `dependencyGraph` in values.yaml**
+
+```yaml
+dependencyGraph:
+  services:
+    backend:
+      - keycloak
+      - arangodb
+      - chatqna          # OPEA_HOST=chatqna (compose-verified)
+      - vllmTranslation  # VLLM_TRANSLATION_ENDPOINT dials vllm-translation-guardrail DIRECTLY
+      # NOTE: textgen has NO backend consumer in compose (its only env is
+      # LLM_ENDPOINT=vllm) — no backend->textgen edge; it renders as an
+      # independent OPEA service.
+    frontend:
+      - backend
+    documentRepository:
+      - backend
+    clamav: []
+    # Plan 5 — AI tier (service→service edges; evaluator resolves the
+    # namespace from the graph itself)
+    chatqna: [embedding, retriever, reranker, vllm, keycloak]
+    embedding: [tei]
+    reranker: [teiReranker]
+    retriever: [vllm, tei, arangodb]
+    dataprep: [vllm, tei, arangodb]
+    textgen: [vllm]
+    translation: [vllmTranslation]
+    vllmTranslation: [vllm]        # shares the GPU node budget
+    teiReranker: [tei]             # shares the HF cache + GPU node
+  data:
+    postgres: [""]
+    arangodb: [""]
+    keycloak: [postgres]
+```
+
+- [ ] **Step 2: Extend the `enabled.json` ConfigMap** (Plan 2 Task 6) with the AI keys — same `dig` pattern:
+
+```yaml
+    {{- range $name := list "chatqna" "embedding" "reranker" "retriever" "dataprep" "textgen" "translation" "vllm" "vllmTranslation" "tei" "teiReranker" -}}
+    {{- $_ := set $flat (printf "ai.services.%s.enabled" $name) (dig "ai" "services" $name "enabled" false $) -}}
+    {{- end -}}
+```
+
+AND update the evaluator's key builder: service-tier deps live under `services.*` OR `ai.services.*`. Extend `dep_enabled` / the tier loop in the Job's Python to consult both maps:
+
+```python
+def svc_enabled(name):
+    return (enabled.get(f"services.{name}.enabled", False)
+            or enabled.get(f"ai.services.{name}.enabled", False))
+```
+
+The graph in values uses flat names (`chatqna`, `vllmTranslation`, …); the evaluator resolves them through `svc_enabled`.
+
+- [ ] **Step 3: Amend `docs/charts/k8s-native-audit.md`** — add rows:
+
+```markdown
+| AI | vllm, vllm-translation, tei, tei-reranker (model servers) | factory Deployments (upstream images) on GPU nodes | chart-tier | upstream model servers, no operator exists; GPU scheduling via nodeSelector + nvidia.com/gpu |
+| AI | embedding, reranker, retriever, dataprep, chatqna, textgen, translation | factory Deployments (CI-built genie-ai-* images) | bespoke | the product's own OPEA wrappers — bespoke by nature |
+| AI | guardrail, chatqna-ui, chatqna-nginx | factory Deployments, OFF by default | chart-tier | Swarm replicas-0 parity; enabling is a values flip |
+| AI | GPU enablement | NVIDIA device plugin / GPU Operator = cluster bootstrap prerequisite | operator-native (prerequisite) | NOT a chart dep — same tier as keycloak-operator |
+```
+
+- [ ] **Step 4: Negative test — chatqna on, embedding off**
+
+Run: `helm template test charts/genieai-umbrella -n genieai --set ai.services.embedding.enabled=false | grep -c "kind: Deployment"`
+Expected: renders fine (Helm does not evaluate the dep graph) — then confirm the HOOK catches it: the pre-install dep-check Job's rendered `enabled.json` shows `"ai.services.embedding.enabled": false` while `chatqna` is `true`; the evaluator (Plan 2 Task 6 logic extended in Step 2) fails with `services.chatqna requires service.embedding`. Assert via the Job's rendered script text, not a live install (CI without GPU runs `helm template` only).
+
+- [ ] **Step 5: `helm lint --strict` + commit**
+
+```bash
+helm lint charts/genieai-umbrella --strict
+git add charts/genieai-umbrella/values.yaml charts/genieai-umbrella/templates/hooks/pre-install-dependency-check.yaml docs/charts/k8s-native-audit.md
+git commit -m "feat(charts): AI-tier dependency graph + audit rows + evaluator extension"
+```
+
+---
+
+### Task 11: Final validation + README
+
+**Files:**
+- Modify: `charts/README.md`
+- Modify: `charts/genieai-umbrella/README.md`
+- Modify: `docs/charts/plan-defects.md` (close the ArangoDB-URL verification row: Task 4 used `arangodb-single.<ns>:8529` — same name Plan 2 renders)
+
+**Interfaces:**
+- Consumes: every prior task.
+- Produces: documentation checkpoint + full-render validation.
+
+- [ ] **Step 1: Update `charts/README.md`** — status line "Foundation + Plans 2-5 complete"; chart table row `foundation + Plans 2-5`.
+
+- [ ] **Step 2: Append AI section to `charts/genieai-umbrella/README.md`**
+
+```markdown
+## AI/ML layer
+
+Plan 5 shipped (14 services: 4 GPU model servers, 7 CPU wrappers, 3 off-by-default):
+
+| Group | Services | Scheduling |
+|---|---|---|
+| Model servers (GPU) | vllm, vllm-translation, tei, tei-reranker | `genieai.io/gpu=true` nodes + `nvidia.com/gpu` limits; shared RWX HF-cache PVC |
+| OPEA wrappers (CPU) | embedding, reranker, retriever, dataprep, chatqna, textgen, translation | ordinary nodes; talk to model servers via Service DNS :80 |
+| Off by default | guardrail, chatqna-ui, chatqna-nginx | Swarm replicas-0 parity — enable via values-override |
+
+Remote-GPU mode (`ai.remoteGpu.enabled=true`): GPU Deployments suppressed;
+wrappers pointed at external endpoints (Swarm `GPU_NODE_HOST` equivalent;
+bearer auth via `VLLM_API_KEY`). Fail-fast when remote URLs are missing.
+
+GPU operator / device plugin = cluster bootstrap prerequisite (NOT a chart
+dependency). Cluster contract: nodes labeled `genieai.io/gpu=true` (+
+optional taint, tolerated by the chart).
+```
+
+- [ ] **Step 3: Full render summary**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep "^kind:" | sort | uniq -c | sort -rn | head -12`
+Expected: `Deployment × 16`, `Service × 16` (5 + 11), `NetworkPolicy × 16`, `SealedSecret × 12`, plus Plan 1-4 resources.
+
+- [ ] **Step 4: Remote-mode full render**
+
+Run: `helm template test charts/genieai-umbrella -n genieai --set ai.remoteGpu.enabled=true --set ai.remoteGpu.vllmUrl=https://gpu/vllm --set ai.remoteGpu.teiEmbeddingUrl=https://gpu/tei --set ai.remoteGpu.teiRerankingUrl=https://gpu/teir --set ai.remoteGpu.vllmTranslationUrl=https://gpu/vllmt | grep -c "^kind: Deployment$"`
+Expected: prints `12` (16 − 4 GPU).
+
+- [ ] **Step 5: Final lint + ct lint + commit**
+
+```bash
+helm lint charts/genieai-umbrella --strict
+ct lint --config charts/ci/ct.yaml --charts charts/genieai-umbrella
+git add charts/README.md charts/genieai-umbrella/README.md docs/charts/plan-defects.md
+git commit -m "docs(charts): mark Plans 2-5 complete; AI-tier README"
+```
+
+---
+
+## Self-Review
+
+**1. Spec coverage** (AI/ML slice):
+
+| Spec section | Task |
+|---|---|
+| §7 Group 6 (14 services) | Tasks 3, 4, 5 |
+| §7 `tei_reranker` kebab-case + Swarm name preservation | Task 1 (`teiReranker` key; env `TEI_RERANKING_ENDPOINT` unchanged) |
+| §8 VLLM_API_KEY + keycloakProxyClientSecret + kcDataprepClientSecret | Task 6 |
+| §5.1 dependency-graph extension (AI edges) | Task 10 |
+| Swarm GPU_NODE_HOST remote mode | Task 8 |
+| §11 manifest AI entries | Task 11 README |
+| GPU operator as native row | Task 10 audit rows |
+
+Sections deferred: RAG eval harness wiring (tests/rag-benchmarks) — outside chart scope; OPEA `DEPLOY_OPEA` profile gate — `ai.enabled` master switch replaces it (values-level, no compose profiles in Helm).
+
+**2. Placeholder scan**: only intentional `PLACEHOLDER_*_SEALED_KID` markers. No TBD/TODO.
+
+**3. Type consistency**: factory consumes `aiService` merged dict (Task 2 one-line extension, backward compatible); SealedSecret keys = env var names (`VLLM_API_KEY`, `HF_TOKEN`, `KEYCLOAK_PROXY_CLIENT_SECRET`, `KC_DATAPREP_CLIENT_SECRET`); Service port 80 contract holds for all 11 rendered AI Services.
+
+**4. Review Focus coverage**: all five pinned (Task 3 Steps 6-7, Task 4 Step 5, Task 8 Steps 3-4, Task 6 Steps 4-5).
+
+**5. Adversarial review note**: run `/code-review` on this plan before execution — waves 1-6 caught structural errors in every plan so far.
+
+---
+
+## Plan Stats
+
+- **Tasks:** 11
+- **New templates:** ~20 (11 AI services + PVC + NPs + secrets + test)
+- **Files modified:** 4 (values, factory, dep-check hook, audit doc)
+- **Commits planned:** 11
+- **Estimated review surface:** ~1300 lines
+
+## What's next after Plan 5
+
+- Plan 6: per-env Kustomize overlays + GitOps sync + Envoy Gateway ingress + cert-manager + deferred items (db-migrations Job, doc-repo PVC, NetworkPolicy label-verified peers)
+- Plan 7: CI (charts lint/integration/scan, cosign + Kyverno real syntax, Renovate, uninstall safety, conftest secret-leak, PII smoke K8s port)
+- Plan 8: documentation (site/content/en/docs/deployment/ + docs/charts/*)

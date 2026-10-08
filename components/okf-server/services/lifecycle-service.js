@@ -586,7 +586,10 @@ async function transition(repoId, action, actor, opts = {}) {
       // zip; older zips remain queryable via the Versions menu.
       // Read existing bundles first (publish is a single-writer path —
       // route's requireRepoScope + publish gate), then write the merge.
-      const existingBundles = (
+      // AWAIT-BUGFIX (2026-10-08, live smoke): missing outer await made
+      // existingBundles a Promise → prevBundles was ALWAYS [] and every
+      // publish's bundle merge silently dropped all prior version entries.
+      const existingBundles = await (
         await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.bundles', { rid: repoId })
       ).all();
       const prevBundles = (existingBundles && existingBundles[0]) || [];
@@ -610,13 +613,17 @@ async function transition(repoId, action, actor, opts = {}) {
         // 1. The repo doc is the source of truth — read what's already there
         //    (the curator may have authored via the editor's center pane in
         //    a previous edit) and use it as the publish-time tag set.
-        const repoRow = (
+        const repoRow = await (
           // LIFECYCLE-FRONT-BUGFIX (2026-10-08): the previous query was
           // 'RETURN r.frontmatter, r.name' — AQL doesn't allow returning
           // multiple comma-separated expressions (the parser barks at
           // "unexpected ','"). The publish path crashed with 400 on
           // every publish. Return a single document; we only need
           // r.frontmatter downstream.
+          // AWAIT-BUGFIX (2026-10-08, live smoke): the outer await was
+          // ALSO missing — repoRow was a Promise, existingFm always null,
+          // and the publish gate silently PASSED (fell to the auto-suggest
+          // branch) while the stored frontmatter was ignored.
           await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter', {
             rid: repoId
           })

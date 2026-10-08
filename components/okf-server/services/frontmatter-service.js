@@ -55,7 +55,16 @@ const VLLM_LLM_HOST = process.env.VLLM_ENDPOINT || 'http://vllm:8000';
 const VLLM_LLM_MODEL_ID = process.env.VLLM_LLM_MODEL_ID || 'ibm-granite/granite-4.1-8b';
 const VLLM_LLM_API_KEY = process.env.VLLM_API_KEY || process.env.VLLM_LLM_API_KEY || '';
 
-const TEI_EMBED_HOST = process.env.TEI_EMBED_HOST || 'http://embedding-tei:80';
+// David 2026-10-08 (sequence of three): the embed service is also on a
+// foreign host. The previous default 'http://embedding-tei:80' is a
+// Compose service name that does not resolve in this local build
+// (GPU/TEI services scaled to 0 per local_build_patches.md). Read the
+// same EMBEDDING_SERVICE_URL the OPEA retriever / chatqna / embedding
+// services use (docker-compose.yaml:1204, 1348, 1515). The compose
+// fallback 'http://tei:80' is the local-mode service name; the remote
+// URL is the same env var. Back-compat: TEI_EMBED_HOST still wins
+// when explicitly set.
+const TEI_EMBED_HOST = process.env.TEI_EMBED_HOST || process.env.EMBEDDING_SERVICE_URL || 'http://tei:80';
 const EMBEDDING_DIM = parseInt(process.env.EMBEDDING_DIM || '1024', 10);
 
 const OKF_FRONTMATTER_VALIDATE_BATCH_SIZE = Math.max(

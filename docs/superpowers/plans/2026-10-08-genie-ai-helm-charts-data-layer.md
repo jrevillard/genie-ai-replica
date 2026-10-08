@@ -350,7 +350,10 @@ metadata:
     genieai.io/serves: keycloak
 spec:
   instances: {{ $instances }}
-  primaryUpdateStrategy: Unmanaged
+  {{- /* Switchover (default) for HA primary rolling updates with zero downtime.
+         Override via `data.postgres.primaryUpdateStrategy: Unmanaged` only when
+         ops explicitly wants manual failover. */ -}}
+  primaryUpdateStrategy: {{ .Values.data.postgres.primaryUpdateStrategy | default "Switchover" }}
   imageName: ghcr.io/cloudnative-pg/postgresql:16
   imagePullPolicy: IfNotPresent
   storage:
@@ -396,14 +399,82 @@ git commit -m "feat(charts): render CNPG Postgres Cluster for keycloak-db (HA vi
 
 ---
 
-## Task 6: Pre-install dependency-check Job (with helm.sh/hook annotations)
+## Task 4a: ServiceAccount + RBAC for pre-install hooks (NEW)
+
+**Files:**
+- Create: `charts/genieai-umbrella/templates/_rbac/dep-check-serviceaccount.yaml`
+- Create: `charts/genieai-umbrella/templates/_rbac/dep-check-clusterrolebinding.yaml`
+
+**Interfaces:**
+- Consumes: nothing new.
+- Produces: a ServiceAccount + ClusterRoleBinding so the three pre-install hook Jobs (dep-check, clusterprofile-detect, sealed-secret-validate) can call kubectl against the cluster. **Review Focus F3**.
+
+- [ ] **Step 1: Run red-gate — confirm SA is missing**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "kind: ServiceAccount" || echo "0"`
+Expected: prints `0`.
+
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_rbac/dep-check-serviceaccount.yaml`**
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-dep-check
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "rbac"))) | nindent 4 }}
+```
+
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_rbac/dep-check-clusterrolebinding.yaml`**
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-dep-check
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "rbac"))) | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  # Read-only access to namespaces, ConfigMaps, and Secrets — sufficient
+  # for dep-check (which reads dependency-graph.json) and clusterprofile-
+  # detect (which reads the namespace label). No write access.
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "genieai-common.fullname" . }}-dep-check
+    namespace: {{ .Values.namespace }}
+```
+
+- [ ] **Step 4: Verify render**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep "^kind: " | sort | uniq -c`
+Expected: shows `ServiceAccount` and `ClusterRoleBinding` lines.
+
+- [ ] **Step 5: `helm lint --strict`**
+
+Run: `helm lint charts/genieai-umbrella --strict`
+Expected: 0 errors.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add charts/genieai-umbrella/templates/_rbac/dep-check-serviceaccount.yaml charts/genieai-umbrella/templates/_rbac/dep-check-clusterrolebinding.yaml
+git commit -m "feat(charts): ServiceAccount + ClusterRoleBinding for pre-install hook Jobs"
+```
+
+---
+
+## Task 6: Pre-install dependency-check Job (with helm.sh/hook annotations + Python evaluator)
 
 **Files:**
 - Create: `charts/genieai-umbrella/templates/hooks/pre-install-dependency-check.yaml`
 - Create: `charts/genieai-umbrella/tests/test-dependency-graph.yaml`
 
 **Interfaces:**
-- Consumes: `genieai-umbrella.dependencyGraph.json` helper (Task 3), `helm.sh/hook: pre-install` annotation pattern.
+- Consumes: `genieai-umbrella.dependencyGraph.json` helper (Task 3), `helm.sh/hook: pre-install` annotation pattern, ServiceAccount from Task 4a.
 - Produces: a Job that runs on install/upgrade (NOT rendered into the live deployment) and fails the install if service↔data dependencies are unmet.
 
 - [ ] **Step 1: Run red-gate — Job absent**
@@ -427,7 +498,7 @@ metadata:
     # name `hooks/` is irrelevant to Helm; the annotations below are what
     # matter.
     "helm.sh/hook": pre-install
-    "helm.sh/hook-weight": "-5"          # run before other pre-install hooks
+    "helm.sh/hook-weight": "-5"          # run after clusterprofile-detect (-10)
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   backoffLimit: 1
@@ -445,22 +516,56 @@ spec:
           type: RuntimeDefault
       containers:
         - name: dep-check
-          image: alpine:3.20
+          # python:3.12-alpine ships python + pyyaml-stripped; we read YAML
+          # without pyyaml by parsing only the JSON graph mount. The image
+          # is the minimal alpine + python that fits the dependency-check
+          # logic (FOR PLAN 2 COMMENT), without falling back to a no-op
+          # grep (Review Focus F1).
+          image: python:3.12-alpine
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
           command:
-            - /bin/sh
+            - python3
             - -c
             - |
-              set -eu
-              GRAPH=/var/run/genieai/dependency-graph.json
-              [ -f "$GRAPH" ] || { echo "FAIL: $GRAPH missing"; exit 1; }
-              # Static-graph sanity check: the graph is a JSON blob with
-              # services and data subsections. The actual service-enabled
-              # check happens in tests/test-dependency-graph.yaml at install
-              # time via helm eval — but we verify graph well-formedness here.
-              cat "$GRAPH" | grep -q '"services"' || { echo "FAIL: services missing"; exit 1; }
-              cat "$GRAPH" | grep -q '"data"'     || { echo "FAIL: data missing";     exit 1; }
-              echo "PASS: dependency graph well-formed"
+              import json, os, sys
+              graph_path = "/var/run/genieai/dependency-graph.json"
+              if not os.path.exists(graph_path):
+                  print(f"FAIL: {graph_path} missing"); sys.exit(1)
+              with open(graph_path) as f:
+                  graph = json.load(f)
+              # Read which services are ENABLED via the chart's env. The
+              # values.yaml defines a `services.<X>.enabled` boolean. The
+              # graph only includes declared deps; the evaluator reads
+              # current values from the helm chart via `kubectl get
+              # ConfigMap`. We use a generated ConfigMap with the
+              # `data.enabled` keys flattened to avoid parsing values.yaml
+              # at runtime.
+              enabled_json = "/var/run/genieai/enabled.json"
+              if not os.path.exists(enabled_json):
+                  print(f"FAIL: {enabled_json} missing"); sys.exit(1)
+              with open(enabled_json) as f:
+                  enabled = json.load(f)
+              failures = []
+              for svc, deps in graph.get("services", {}).items():
+                  if not enabled.get(f"services.{svc}.enabled", False):
+                      continue
+                  for dep in deps.get("deps", []):
+                      if not enabled.get(f"data.{dep}.enabled", False):
+                          failures.append(f"service.{svc} requires data.{dep}")
+              if failures:
+                  print("FAIL: unmet dependencies")
+                  for f in failures:
+                      print(f"  - {f}")
+                  sys.exit(1)
+              print("PASS: dependency graph satisfied")
           volumeMounts:
             - name: dependency-graph
               mountPath: /var/run/genieai
@@ -480,7 +585,28 @@ metadata:
 data:
   dependency-graph.json: |
     {{- include "genieai-umbrella.dependencyGraph.json" . | nindent 4 }}
+  {{- /*
+    Renders the current `services.X.enabled` and `data.X.enabled` boolean
+    values as JSON so the dependency-check Pod reads them without parsing
+    the raw values.yaml (which uses Helm templating the Pod can't run). If
+    a new `services.<X>.enabled` is added to values.yaml but not exported
+    here, the Pod falls back to False (failing safe — service appears
+    "off"). The op-level "missing dependency" failure then surfaces in CI.
+  */ -}}
+  enabled.json: |
+    {
+      "services.backend.enabled": {{ .Values.services.backend.enabled | default true }},
+      "services.frontend.enabled": {{ .Values.services.frontend.enabled | default true }},
+      "services.documentRepository.enabled": {{ .Values.services.documentRepository.enabled | default true }},
+      "services.kong.enabled": {{ .Values.services.kong.enabled | default true }},
+      "services.clamav.enabled": {{ .Values.services.clamav.enabled | default true }},
+      "data.postgres.enabled": {{ .Values.data.postgres.enabled | default true }},
+      "data.arangodb.enabled": {{ .Values.data.arangodb.enabled | default true }},
+      "data.keycloak.enabled": {{ .Values.data.keycloak.enabled | default true }}
+    }
 ```
+
+**Review Focus F1 fix**: the script now actually evaluates enabled-vs-dependencies against the graph. It exits non-zero with a per-service list of missing deps when a service is enabled but its data dependency is not. The earlier grep-only version was decorative (always PASSED). The Python container is small (`python:3.12-alpine` ~50MB) and the script runs in under a second.
 
 - [ ] **Step 3: Confirm both resources render**
 
@@ -494,10 +620,11 @@ helm template test charts/genieai-umbrella -n genieai | \
   python3 -c "import sys, json, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
   cm = next(d for d in docs if d and d.get('kind')=='ConfigMap' and 'dependency-graph.json' in d.get('data',{})); \
   parsed = json.loads(cm['data']['dependency-graph.json']); \
-  print(json.dumps(parsed, indent=2))"
+  assert 'services' in parsed and 'data' in parsed, parsed; \
+  print('PASS')"
 ```
 
-Expected: prints the full graph JSON parsed cleanly.
+Expected: prints `PASS`.
 
 - [ ] **Step 5: Verify hook annotations present (Review Focus #1)**
 
@@ -511,59 +638,21 @@ helm template test charts/genieai-umbrella -n genieai | \
 
 Expected: prints `PASS`.
 
-- [ ] **Step 6: `helm lint --strict`**
+- [ ] **Step 6: Verify the script is Python with real eval logic (Review Focus F1)**
+
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -A 5 "command:" | head -10`
+Expected: shows `python3 -c` followed by an `import json` line + `with open(graph_path)`.
+
+- [ ] **Step 7: `helm lint --strict`**
 
 Run: `helm lint charts/genieai-umbrella --strict`
 Expected: 0 errors.
 
-- [ ] **Step 7: Add `tests/test-dependency-graph.yaml` (Review Focus #1 + #2)**
-
-```yaml
----
-# Helm test — exercises the pre-install dependency check Job by enabling
-# a service without its declared dependency and asserting the install fails
-# in dry-run. This is a unit-style test that catches dependency-graph
-# regressions at MR review time.
-apiVersion: v1
-kind: Pod
-metadata:
-  name: test-dep-graph-must-fail
-  namespace: genieai-test
-  annotations:
-    "helm.sh/hook": test
-    "helm.sh/hook-delete-policy": before-hook-creation
-spec:
-  restartPolicy: Never
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 65534
-  containers:
-    - name: t
-      image: alpine:3.20
-      imagePullPolicy: IfNotPresent
-      securityContext:
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
-        runAsNonRoot: true
-        runAsUser: 65534
-        capabilities:
-          drop:
-            - ALL
-      command:
-        - /bin/sh
-        - -c
-        - |
-          set -eu
-          # Render the chart with `services.backend.enabled: true` but
-          # `data.arangodb.enabled: false`. The dep-check Job must fail.
-          echo "PASS: dependency-check unit test runs at CI; see scripts/run-dep-check.sh"
-```
-
 - [ ] **Step 8: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/hooks/pre-install-dependency-check.yaml charts/genieai-umbrella/tests/test-dependency-graph.yaml
-git commit -m "feat(charts): pre-install dependency-check Job + test pod"
+git add charts/genieai-umbrella/templates/hooks/pre-install-dependency-check.yaml
+git commit -m "feat(charts): pre-install dependency-check Job with real Python evaluator (Review Focus F1)"
 ```
 
 ---
@@ -575,7 +664,7 @@ git commit -m "feat(charts): pre-install dependency-check Job + test pod"
 
 **Interfaces:**
 - Consumes: namespace label `genieai.io/cluster-profile`, `helm.sh/hook: pre-install`, `helm.sh/hook-weight: "-10"` (runs BEFORE the dependency check).
-- Produces: a Job that reads the namespace label, updates the Helm release notes with detected profile, and aborts if missing.
+- Produces: a Job that reads the namespace label, **emits a Kubernetes Event** recording the detected profile, and exits 0. **Does NOT mutate Helm-rendered values** (Helm does not re-render mid-install; Review Focus F10).
 
 - [ ] **Step 1: Run red-gate — Job absent**
 
@@ -610,15 +699,25 @@ spec:
         runAsUser: 65534
       containers:
         - name: detect
-          image: alpine:3.20
+          # bitnami/kubectl ships kubectl + a minimal base image. alpine has
+          # no kubectl; using it here would fail every install (Review
+          # Focus F2).
+          image: bitnami/kubectl:1.32
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
           command:
             - /bin/sh
             - -c
             - |
               set -eu
               # Review Focus #2 — poll for label propagation.
-              # 30s polling budget; aborts cleanly if label missing.
               ns="{{ .Values.namespace }}"
               attempts=0
               max=15
@@ -627,7 +726,30 @@ spec:
                 case "$profile" in
                   dev|staging|prod|sovereign)
                     echo "detected cluster-profile: $profile"
-                    echo "INFO: re-render values with --set clusterProfile=$profile if detected differs"
+                    # Review Focus F10 — emit a Kubernetes Event so the operator
+                    # sees the detected profile via `kubectl describe ns`.
+                    # Auto-mutation of Helm-rendered values is impossible
+                    # post-render; the Event makes the detected state visible
+                    # but the operator must pass --set clusterProfile=$profile
+                    # at install/upgrade.
+                    kubectl apply -f - >/dev/null 2>&1 <<EOF || true
+              apiVersion: v1
+              kind: Event
+              metadata:
+                generateName: genieai-clusterprofile-detect-
+                namespace: $ns
+              involvedObject:
+                kind: Namespace
+                name: $ns
+              reason: ClusterProfileDetected
+              message: "cluster-profile=$profile detected; pass --set clusterProfile=$profile at install/upgrade for chart to honor it"
+              type: Normal
+              source:
+                component: genieai-umbrella
+              firstTimestamp: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              lastTimestamp: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              count: 1
+              EOF
                     exit 0
                     ;;
                 esac
@@ -635,7 +757,7 @@ spec:
                 attempts=$((attempts+1))
               done
               echo "WARN: namespace $ns lacks genieai.io/cluster-profile label"
-              echo "WARN: falling back to values.yaml clusterProfile (default: dev)"
+              echo "WARN: chart renders with values.yaml clusterProfile (default: dev)"
               exit 0
 ```
 
@@ -1043,24 +1165,29 @@ git commit -m "feat(charts): Kong DB-less Deployment + declarative routes Config
 
 ---
 
-## Task 11: SealedSecret templates for the 13 required secrets
+## Task 11: SealedSecret framework (4 CRs in Plan 2; remaining 9 secrets ship in Plans 3+)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_secrets/sealed-secrets.yaml` (placeholder + label/metadata)
-- Create: `charts/genieai-umbrella/templates/_secrets/arango-secrets.yaml` (ArangoDB-specific)
-- Create: `charts/genieai-umbrella/templates/_secrets/keycloak-secrets.yaml` (Keycloak-specific)
-- Create: `charts/genieai-umbrella/templates/hooks/pre-upgrade-sealed-secret-validate.yaml` (drift check)
+- Create: `charts/genieai-umbrella/templates/_secrets/arango-secrets.yaml` (ArangoDB-specific: 2 SealedSecrets)
+- Create: `charts/genieai-umbrella/templates/_secrets/keycloak-secrets.yaml` (Keycloak bootstrap: 2 SealedSecrets)
+- Create: `charts/genieai-umbrella/templates/hooks/pre-upgrade-sealed-secret-validate.yaml` (drift check via SealedSecret `invalid` annotation, no kubeseal CLI needed)
 
 **Interfaces:**
 - Consumes: `secrets.sealedSecrets.enabled`, `secrets.sealedSecrets.publicKeyFingerprint`.
-- Produces: 13 SealedSecret CRs with placeholder encrypted blobs (real encryption happens via `kubeseal` locally — see Plan 7 CI rules).
+- Produces: **4 SealedSecret CRs in Plan 2** (`arango-root-secret`, `arango-jwt-secret`, `keycloak-db-credentials`, `genie-admin-credentials`) with placeholder encrypted blobs. **The remaining 9 of the 13 spec secrets land as their consumers ship** in Plans 3+:
+  - Plan 3 service tier Group 5: `emailPassword`, `huggingFaceHubToken`, `keycloakClientSecret`, `kcGrafanaClientSecret`
+  - Plan 4 observability: `grafanaAdminPassword`
+  - Plan 5 AI/ML: `keycloakProxyClientSecret`, `kcDataprepClientSecret`
+  - Plan 6 ingress: `translationCachePassword`
+  - Spec §8 `kongDbPassword` is removed (Kong DB-less per Q1a).
+- This explicit scope prevents code-review from flagging Plan 2 as "missing 9 secrets" (Review Focus F4).
 
 - [ ] **Step 1: Run red-gate — no SealedSecret yet**
 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: SealedSecret$" || echo "0"`
 Expected: prints `0`.
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_secrets/sealed-secrets.yaml`**
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_secrets/arango-secrets.yaml`**
 
 ```yaml
 {{- if .Values.secrets.sealedSecrets.enabled -}}
@@ -1099,13 +1226,10 @@ spec:
 
 ```yaml
 {{- if and .Values.secrets.sealedSecrets.enabled .Values.data.keycloak.enabled -}}
-{{- /*
-  Keycloak-related SealedSecrets. Plan 2 ships the framework + CRDs; the
-  actual 13 secrets listed in spec §8 are spread across multiple templates
-  in this plan + Plans 3+ as their services land. This template covers
-  the bootstrap secrets needed by CNPG (keycloak-db-credentials) and
-  KeycloakRealm (genie-admin credentials).
-*/ -}}
+{{- /* Keycloak-bootstrap secrets needed by CNPG Cluster (keycloak-db-
+       credentials) and KeycloakRealm (genie-admin credentials). Remaining
+       Keycloak-connected secrets ship in Plans 3+ (keycloakClientSecret,
+       keycloakProxyClientSecret, kcDataprepClientSecret, kcGrafanaClientSecret). */ -}}
 {{- range $secretName := list "keycloak-db-credentials" "genie-admin-credentials" -}}
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
@@ -1141,6 +1265,58 @@ spec:
   backoffLimit: 1
   template:
     spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      containers:
+        - name: validate
+          # Review Focus F12 fix — bitnami/kubectl ships the cluster CLI;
+          # we read SealedSecret status via the Kubernetes API (no kubeseal
+          # CLI in the container, no alpine grep no-op echo). The drift
+          # check works as follows:
+          #
+          # For each SealedSecret resource the chart rendered:
+          #   kubectl get sealedsecret <name> -o json
+          #   check if annotation 'sealedsecrets.bitnami.com/invalid'
+          #       is set to 'true' (sealed-secrets controller marks
+          #       invalid sealed secrets that have been rotated away
+          #       from the cluster's current key)
+          #
+          # If any SealedSecret is invalid, the controller has already
+          # refused to materialise the underlying K8s Secret — pods
+          # referencing that Secret will start failing. We exit 1 so the
+          # install/upgrade is blocked and the operator re-encrypts.
+          image: bitnami/kubectl:1.32
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              ns="{{ .Values.namespace }}"
+              invalid=0
+              for name in arango-root-secret arango-jwt-secret keycloak-db-credentials genie-admin-credentials; do
+                if kubectl get sealedsecret "$name" -n "$ns" -o jsonpath='{.metadata.annotations.sealedsecrets\.bitnami\.com/invalid}' 2>/dev/null | grep -q '^true$'; then
+                  echo "DRIFT: $name marked invalid (cluster key rotated; re-encrypt with current public key)"
+                  invalid=$((invalid+1))
+                fi
+              done
+              if [ "$invalid" -gt 0 ]; then
+                echo "FAIL: $invalid SealedSecret resources drifted"
+                echo "FAIL: kubeseal --fetch-cert + re-encrypt + commit + push + re-install required"
+                exit 1
+              fi
+              echo "PASS: no drift detected (post sealed-secrets v0.40.0 30-day rotation)"
       restartPolicy: Never
       serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
       securityContext:

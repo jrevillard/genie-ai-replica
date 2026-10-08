@@ -450,9 +450,14 @@ description: |
   overlays at `deploy/environments/<env>/`.
 type: application
 version: 0.1.0
+# Per spec §4: "umbrella's `appVersion` = chart version, **not** GENIE.AI app
+# version (semver divide between chart layout and product release)". The chart
+# version IS 0.1.0; `appVersion` mirrors it. Product versions move on a
+# separate axis from chart-layout versions.
+#
 # Never "latest" — see Review Focus #4. Pin to a chart version; image versions
 # are governed by the upstream component image tags.
-appVersion: "1.0.0"
+appVersion: "0.1.0"
 keywords:
   - genie-ai
   - umbrella
@@ -495,12 +500,12 @@ Expected: fetches `genieai-common-0.1.0.tgz`. Creates `charts/genieai-umbrella/c
 Run: `helm lint charts/genieai-umbrella --strict`
 Expected: 0 errors. Warnings about missing templates are acceptable at this stage (foundation only).
 
-- [ ] **Step 4: Verify `appVersion` is not `latest` (Review Focus #4)**
+- [ ] **Step 4: Verify `appVersion` is not `latest` in any quote style (Review Focus #4)**
 
 Run:
 
 ```bash
-if grep -E '^appVersion: "?latest"?' charts/genieai-umbrella/Chart.yaml; then
+if grep -E "^appVersion:\s*[\"']?latest[\"']?\s*$" charts/genieai-umbrella/Chart.yaml; then
   echo "FAIL: appVersion is 'latest' — must be pinned"
   exit 1
 else
@@ -508,7 +513,7 @@ else
 fi
 ```
 
-Expected: prints `OK: appVersion is pinned`.
+Expected: prints `OK: appVersion is pinned`. The pattern matches `latest`, `"latest"`, or `'latest'` on the `appVersion:` line.
 
 - [ ] **Step 5: Commit**
 
@@ -575,35 +580,16 @@ git commit -m "feat(charts): foundation values.yaml (namespace + clusterProfile 
 
 ---
 
-## Task 8: Umbrella chart — `templates/namespace.yaml`
+## Task 8: Umbrella chart — `templates/namespace.yaml` (with PSA-restricted labels)
 
 **Files:**
 - Create: `charts/genieai-umbrella/templates/namespace.yaml`
-- Create: `charts/genieai-umbrella/templates/_lib/_common.tpl`
 
 **Interfaces:**
 - Consumes: `genieai-common.labels`, `genieai-common.selectorLabels`, `genieai-common.fullname`.
-- Produces: a `Namespace` resource with the chart's `genieai.io/cluster-profile` label.
+- Produces: a `Namespace` resource with `genieai.io/cluster-profile` + `pod-security.kubernetes.io/enforce: restricted` labels.
 
-- [ ] **Step 1: Write `charts/genieai-umbrella/templates/_lib/_common.tpl`**
-
-```gotemplate
-{{/*
-Common umbrella include — emits metadata.labels consistent with the rest of the umbrella.
-*/}}
-{{- define "genieai.common.metadata" -}}
-{{- $top := . -}}
-{{- $component := .Values.component | default "umbrella" -}}
-metadata:
-  labels:
-    {{- include "genieai-common.labels" . | nindent 4 }}
-    {{- with .Values.global.commonLabels }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
-{{- end -}}
-```
-
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/namespace.yaml`**
+- [ ] **Step 1: Write `charts/genieai-umbrella/templates/namespace.yaml`**
 
 ```yaml
 {{- /* Build a per-template Values view so we can override `.component` for label rendering. */ -}}
@@ -620,12 +606,17 @@ metadata:
     # Review Focus V2 — advertise K8s Pod Security Standards at the namespace
     # level so admission controllers refuse pods without required securityContext.
     pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/enforce-version: latest
+    # Pin to a specific version rather than `latest`. Across cluster upgrades
+    # (1.32 → 1.33), `latest` silently changes the policy version and may start
+    # rejecting pods that previously scheduled without warning.
+    pod-security.kubernetes.io/enforce-version: v1.32
     pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.32
     pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.32
 ```
 
-- [ ] **Step 3: Render and confirm only one Namespace is produced**
+- [ ] **Step 2: Render and confirm only one Namespace is produced**
 
 Run: `helm template test charts/genieai-umbrella -n genieai`
 Expected output (key lines):
@@ -638,18 +629,20 @@ metadata:
   name: genieai
   labels:
     genieai.io/cluster-profile: "dev"
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.32
 ```
 
-- [ ] **Step 4: Run lint strict**
+- [ ] **Step 3: Run lint strict**
 
 Run: `helm lint charts/genieai-umbrella --strict`
 Expected: 0 errors.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_lib/_common.tpl charts/genieai-umbrella/templates/namespace.yaml
-git commit -m "feat(charts): render Namespace with cluster-profile label"
+git add charts/genieai-umbrella/templates/namespace.yaml
+git commit -m "feat(charts): render Namespace with cluster-profile + PSA labels (pinned v1.32)"
 ```
 
 ---
@@ -663,7 +656,12 @@ git commit -m "feat(charts): render Namespace with cluster-profile label"
 - Consumes: namespace labels from Task 8.
 - Produces: a `helm test`-able Pod that asserts the namespace exists and has the right labels. Anchors the test pattern service-tier plans will replicate.
 
-- [ ] **Step 1: Write `charts/genieai-umbrella/templates/tests/test-namespace.yaml`**
+- [ ] **Step 1: Run red-gate validator — must fail before the file exists**
+
+Run: `helm template test charts/genieai-umbrella --show-only templates/tests 2>&1 | grep -c test-namespace`
+Expected: prints `0` (no test pod rendered).
+
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/tests/test-namespace.yaml`**
 
 ```yaml
 apiVersion: v1
@@ -675,11 +673,13 @@ metadata:
     app.kubernetes.io/component: test
   annotations:
     "helm.sh/hook": test
-    "helm.sh/hook-delete-policy": before-hook-creation,before-hook-creation
+    # Single valid value — Helm 3 accepts comma-separated but listing the same
+    # value twice is a copy-paste bug caught by stricter validators. Service
+    # tier plans replicate this pattern.
+    "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   restartPolicy: Never
-  # Required by PSA restricted — without these the test Pod cannot schedule.
-  # Review Focus #2.
+  # Review Focus #2 — required by PSA restricted.
   securityContext:
     runAsNonRoot: true
     runAsUser: 65534
@@ -687,7 +687,7 @@ spec:
       type: RuntimeDefault
   containers:
     - name: test
-      image: registry.gitlab.com/un/itu/genie-ai/test-utils:0.1.0
+      image: alpine:3.20
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false
@@ -709,11 +709,7 @@ spec:
           echo "PASS"
 ```
 
-- [ ] **Step 2: Use `alpine:3.20` directly as the test image — no project registry tag yet**
-
-The test-utils image reference `registry.gitlab.com/un/itu/genie-ai/test-utils:0.1.0` does not exist yet; Plan 7 (CI integration) controls that image's lifecycle. For foundation purposes, use upstream `alpine:3.20`. The `image:` field in the template YAML (Step 1) is already set to `alpine:3.20` — no edit needed here, the step exists only to record the rationale (Review Focus V6).
-
-- [ ] **Step 3: Pre-load `alpine:3.20` into the kind node so the test pod does not pull over the network (Review Focus B3)**
+- [ ] **Step 3: Pre-load `alpine:3.20` into the kind node so the test pod does not pull over the network (Review Focus B3, V6)**
 
 ```bash
 docker pull alpine:3.20
@@ -737,15 +733,16 @@ Expected:
 - `Phase: Succeeded` for `test-namespace` pod.
 - Last log line `PASS`.
 
-If the pod fails to schedule with `forbidden: violates PodSecurity "restricted:latest"`, the securityContext from Step 1 is missing — re-check.
+If the pod fails to schedule with `forbidden: violates PodSecurity "restricted:v1.32"`, the securityContext from Step 2 is missing or incomplete — re-check.
 
 - [ ] **Step 5: Tear down kind cluster (after verification)**
 
 ```bash
+helm uninstall test -n genieai
 kind delete cluster --name genieai-test
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add charts/genieai-umbrella/templates/tests/test-namespace.yaml
@@ -809,32 +806,27 @@ Matching kind node image: `kindest/node:v1.32.0`. Update both in lockstep.
 - [ ] **Step 3: Write `charts/genieai-umbrella/.helmignore`**
 
 ```
-# Helm packaging ignores — keep Chart.lock and vendored chart tarballs out
-# of source diffs unless intentional.
+# Helm packaging ignores for the umbrella chart.
+# Keeps `charts/` (vendored dep tarballs) and `Chart.lock` (regenerated on
+# every `helm dep update`) out of source diffs.
 charts/
 *.tgz
+*.lock
 .DS_Store
 ```
 
-- [ ] **Step 4: Commit `.helmignore`**
-
-```bash
-git add charts/genieai-umbrella/.helmignore
-git commit -m "chore(charts): add .helmignore to umbrella chart"
-```
-
-- [ ] **Step 5: Verify `ct lint` baseline passes**
+- [ ] **Step 4: Verify `ct lint` baseline passes**
 
 Run: `ct lint --config charts/ci/ct.yaml --charts charts/genieai-umbrella`
 Expected: no errors. Warnings about missing test coverage OK at this stage.
 
 If `ct` is not installed: `brew install chart-testing` or download from `https://github.com/helm/chart-testing/releases`.
 
-- [ ] **Step 6: Commit CI config**
+- [ ] **Step 5: Single commit covering all three files in this task**
 
 ```bash
-git add charts/ci/ct.yaml charts/ci/README.md
-git commit -m "ci(charts): chart-testing baseline config pinned to K8s 1.32"
+git add charts/genieai-umbrella/.helmignore charts/ci/ct.yaml charts/ci/README.md
+git commit -m "ci(charts): umbrella .helmignore + chart-testing baseline config (K8s 1.32)"
 ```
 
 ---
@@ -1114,23 +1106,29 @@ Sections NOT covered by this plan, on purpose (move to Plans 2–8):
 
 **2. Placeholder scan**: no "TBD", "TODO", "implement later", or "fill in details" in any task. Each step has concrete content (file paths, runnable commands, code blocks).
 
-**3. Type consistency**: `_helpers.tpl` template names match across Task 3 and Task 8 callers (`genieai-common.labels`, `genieai-common.selectorLabels`, `genieai-common.fullname`, `genieai-common.chart`, `genieai-common.name`). Namespace template uses `dict "Chart" .Chart "Values" (deepCopy .Values | merge (dict "component" "namespace"))` pattern — consistent with later plans that will use the same pattern when overriding `component`.
+**3. Type consistency**: `_helpers.tpl` template names match across Task 3 + Task 8 callers (`genieai-common.labels`, `genieai-common.selectorLabels`, `genieai-common.fullname`, `genieai-common.chart`, `genieai-common.name`) — all use the **dash** namespace `genieai-common.*`. The dot-namespace `genieai.common.metadata` template (earlier draft of Task 8) was removed because it was unused dead code. Namespace template uses `dict "Chart" .Chart "Values" (deepCopy .Values | merge (dict "component" "namespace"))` pattern — consistent with later plans that will use the same pattern when overriding `component`.
 
 **4. Review Focus coverage**: 11 input-class concerns pinned to specific steps:
 
-1. Library `import-values:` collision → Task 4 Step 3 (`helm lint --strict` confirms no duplicate exports).
-2. Helm test Pod missing securityContext → Task 9 Step 1 + Task 12 Step 4.
+1. Library `import-values:` collision → TDD red-steps in **Task 4 + Task 5** (chart fails lint without `values.yaml`; passes with it). `helm lint --strict` validates templates render without overlap but **does NOT detect duplicate `{{ define }}` keys** — explicit duplicate-define lint added in Plan 7.
+2. Helm test Pod missing securityContext → Task 9 Step 2 (test pod carries full `securityContext`) + Task 12 Step 4 (verifies post-install).
 3. chart-testing `ct install` without kube-version → Task 10 Step 1 (`ct.yaml` pins `kubeVersion: 1.32.0`).
-4. `appVersion: latest` rejected in OCI → Task 6 Step 4 (`if grep ... ; then exit 1 ; else echo OK ; fi`).
+4. `appVersion: latest` rejected in OCI → Task 6 Step 4 (`if grep ... ; then exit 1 ; else echo OK ; fi`, regex covers `"latest"`, `'latest'`, and `latest`).
 5. ArgoCD Application auto-render → Task 11 Step 3 (`grep "kind: Application$"` confirms not in rendered output).
-6. Tarball committed in source → Task 5 Step 4 (`.helmignore` in library); Task 10 Step 3 (umbrella `.helmignore`).
-7. PSA namespace labeling → Task 8 Step 2 (explicit `pod-security.kubernetes.io/enforce: restricted`).
+6. Tarball + Chart.lock committed in source → Task 5 Step 4 (`.helmignore` in library); Task 10 Step 3 (umbrella `.helmignore` excludes `charts/`, `*.tgz`, `*.lock`).
+7. PSA namespace labeling → Task 8 Step 1 (explicit `pod-security.kubernetes.io/enforce: restricted` + versioned `v1.32` not `latest`).
 8. Pluggable surface declared but unused → Task 7 Step 1–2 (values trimmed to foundation).
-9. test-utils image reference dangling → Task 9 Step 2 (use `alpine:3.20` only).
+9. test-utils image reference dangling → Task 9 Step 2 (`image: alpine:3.20` only).
 10. `kind load docker-image` missing → Task 9 Step 3 (pre-load `alpine:3.20` into kind).
 11. `chart-repos:` lists 9 repos for foundation that uses 0 → Task 10 Step 1 (chart-repos list removed).
 
 All five + six follow-up concerns covered. No empty `Review Focus` lines.
+
+**5. Code-review cross-checks** (15 findings from `/code-review`):
+- BLOCKERS fixed: test image contradiction (Task 9), duplicate `before-hook-creation` (Task 9), three "Step 5" numbering (Task 9), `appVersion: 1.0.0` contradicts spec §4 (Task 6), grep misses single-quoted (Task 6), `enforce-version: latest` brittle across cluster upgrades (Task 8).
+- P0 fixed: KAS Module invented fields (spec §19.3.1 → real Flux `Kustomization` fields), 26-service count + duplicate `redis` Group 2/5 (spec §7), `keycloak.condition: keycloak.enabled` mismatch with `data.keycloak.enabled` (spec §4), template naming dot/dash inconsistency (Task 8 dropped dead `genieai.common.metadata` template), `appVersion: 0.1.0` per spec (Task 6), grep pattern handles all quote styles (Task 6).
+- File count + commit count re-verified: **20 source files, 13 commits** (was 16/13).
+- HELM hooks path concern dismissed (false positive): Helm 3 scans `templates/` recursively for `helm.sh/hook` annotations; `templates/hooks/foo.yaml` is valid IF the annotation is set. Plan 2 will set the annotation explicitly.
 
 **5. Adversarial review note (V4, V5, Y2, Y3, B1, B3, B4, B5 applied; G1, G2, G3 deferred as P2)**: P2 findings either do not block the foundation or are CI concerns covered by Plan 7. The lock-churn note (G1) is non-blocking because the `.helmignore` from Tasks 5 + 10 prevents future re-commits of tarballs. The `helm-docs` prereq (G2) is now in Plan 7 only. The `sed` brittleness (G3) was eliminated by rewriting Task 12 Step 6 as `cat > ... <<EOF`.
 
@@ -1139,10 +1137,29 @@ All five + six follow-up concerns covered. No empty `Review Focus` lines.
 ## Plan Stats
 
 - **Tasks:** 13
-- **Files created:** 16
-- **Commits planned:** 13
-- **Estimated review surface:** ~850 lines added
+- **Files created:** 20 (committable source files; excludes generated `charts/` and `Chart.lock` which `.helmignore` keeps out of source)
+- **Commits planned:** 13 (one per task)
+- **Estimated review surface:** ~900 lines added
 - **Foundation deliverable:** `helm install genieai-umbrella` creates a namespace with `genieai.io/cluster-profile` + PSA-restricted labels; `helm test` passes against kind 1.32; `ct lint` clean; ArgoCD example documented in `examples/`; OPA policy directory scaffolded. Every later plan builds on this skeleton.
+
+File count breakdown (verified):
+
+| Task | Files | Count |
+|---|---|---|
+| 1 | charts/README.md, charts/Makefile, deploy/environments/.gitkeep, deploy/environments/README.md | 4 |
+| 2 | charts/genieai-common/Chart.yaml | 1 |
+| 3 | charts/genieai-common/templates/_helpers.tpl | 1 |
+| 4 | charts/genieai-common/values.schema.json, charts/genieai-common/README.md | 2 |
+| 5 | charts/genieai-common/values.yaml, charts/genieai-common/.helmignore | 2 |
+| 6 | charts/genieai-umbrella/Chart.yaml | 1 |
+| 7 | charts/genieai-umbrella/values.yaml | 1 |
+| 8 | charts/genieai-umbrella/templates/namespace.yaml | 1 |
+| 9 | charts/genieai-umbrella/templates/tests/test-namespace.yaml | 1 |
+| 10 | charts/genieai-umbrella/.helmignore, charts/ci/ct.yaml, charts/ci/README.md | 3 |
+| 11 | charts/genieai-umbrella/examples/argocd-application.yaml | 1 |
+| 12 | (modifies charts/README.md) | 0 |
+| 13 | charts/ci/policies/.gitkeep, charts/ci/policies/README.md | 2 |
+| **Total** | | **20** |
 
 ## What's next
 

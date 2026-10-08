@@ -122,6 +122,87 @@
               <DsInput id="okf-fm-desc" v-model="fmDraft.description" size="sm" />
             </DsFormGroup>
           </div>
+          <!-- Story 1.7 (2026-10-08): per-repo routing tags live in the
+               concept's `frontmatter:` sub-block (the curator-facing
+               projection) AND on the repo doc field (the canonical store
+               the retriever + publish gate read). The dialog renders the
+               sub-block as a dedicated form so the curator can edit topic
+               / entity / scope / forbidden / summary / keyword as proper
+               add/modify/remove rows — never as a raw JSON blob. Save
+               does the same two-write as the chip panel: concept PATCH
+               (merges the sub-block) + repo PATCH (writes the doc field).
+               Only shown for the index concept (per-repo metadata only
+               makes sense there). -->
+          <div v-if="perRepoFmVisible" class="okf-ce__fm-perrepo">
+            <h4 class="okf-ce__fm-perrepo-title">
+              {{ translate('okf.fm.perRepoTitle', 'Routing tags — what this repo is about') }}
+            </h4>
+            <p class="okf-ce__fm-perrepo-hint">
+              {{
+                translate(
+                  'okf.fm.perRepoHint',
+                  'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.'
+                )
+              }}
+            </p>
+            <div v-for="field in PER_REPO_FIELDS" :key="field" class="okf-ce__fm-perrepo-field">
+              <div class="okf-ce__fm-perrepo-field-name">
+                {{ perRepoFieldLabel(field) }}
+                <span class="okf-ce__fm-perrepo-field-count">({{ perRepoFieldValues(field).length }})</span>
+              </div>
+              <div class="okf-ce__fm-perrepo-values">
+                <span
+                  v-for="(value, idx) in perRepoFieldValues(field)"
+                  :key="`${field}:${value}`"
+                  class="okf-ce__fm-perrepo-tag"
+                >
+                  <input
+                    v-if="field === 'scope' || field === 'summary'"
+                    v-model="fmDraft.perRepo[field]"
+                    size="sm"
+                    class="okf-ce__fm-perrepo-scalar"
+                    :aria-label="perRepoFieldLabel(field)"
+                    :placeholder="perRepoFieldLabel(field)"
+                  />
+                  <span v-else class="okf-ce__fm-perrepo-tag-value">{{ value }}</span>
+                  <button
+                    v-if="!isPerRepoScalar(field)"
+                    class="okf-ce__fm-perrepo-tag-remove"
+                    type="button"
+                    :aria-label="translate('okf.fm.removeTag', 'Remove tag')"
+                    :title="translate('okf.fm.removeTag', 'Remove tag')"
+                    @click="removePerRepoValue(field, idx)"
+                  >
+                    ×
+                  </button>
+                </span>
+                <span
+                  v-if="!perRepoFieldValues(field).length && !isPerRepoScalar(field)"
+                  class="okf-ce__fm-perrepo-empty"
+                >
+                  {{ translate('okf.fm.fieldEmpty', '—') }}
+                </span>
+              </div>
+              <div v-if="!isPerRepoScalar(field)" class="okf-ce__fm-perrepo-add">
+                <input
+                  v-model="perRepoAddDrafts[field]"
+                  class="okf-ce__fm-perrepo-add-input"
+                  type="text"
+                  :placeholder="translate('okf.fm.addTagPh', 'Add ' + field)"
+                  @keydown.enter.prevent="addPerRepoValue(field)"
+                />
+                <DsButton
+                  variant="ghost"
+                  small
+                  :disabled="!perRepoAddDrafts[field] || !perRepoAddDrafts[field].trim()"
+                  @click="addPerRepoValue(field)"
+                >
+                  {{ translate('okf.fm.add', 'Add') }}
+                </DsButton>
+              </div>
+            </div>
+            <p v-if="perRepoError" class="okf-ce__fm-error">{{ perRepoError }}</p>
+          </div>
           <!-- D-F (David, 2026-09-07): ALL of the frontmatter is editable —
                generic typed rows for every non-curated key, add/remove
                freely. ONE save path: the {frontmatter} PATCH (server merge);
@@ -231,6 +312,7 @@ import DsSelect from '../../ds/Select.vue';
 import DsInput from '../../ds/Input.vue';
 import DsFormGroup from '../../ds/FormGroup.vue';
 import conceptService from '../../../services/conceptService';
+import { patchFrontmatter as patchRepoFrontmatter } from '../../../services/frontmatterService';
 import OkfPiiOccurrences from './PiiOccurrences.vue';
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
@@ -245,6 +327,11 @@ const FM_TYPE_OPTIONS = ['topic', 'entity', 'process', 'event', 'source'];
 // D-F: the generic typed rows. 'json' covers nested shapes (objects,
 // arrays-of-objects) via a JSON textarea.
 const FM_KINDS = ['string', 'number', 'boolean', 'array', 'json'];
+// Story 1.7: per-repo frontmatter (the routing tags). Same shape as
+// the chip panel's internal model. Scalar fields render as inputs;
+// array fields render as add/remove chip rows.
+const PER_REPO_FIELDS = ['topic', 'entity', 'scope', 'forbidden', 'summary', 'keyword'];
+const PER_REPO_SCALAR = new Set(['scope', 'summary']);
 // RFC 7386 null-deletes (coordinator, 2026-09-07): the {frontmatter} PATCH
 // removes a key when the patch value is null — server contract landed in
 // 273c306a9; LIVE as of the combined rebuild that serves this build.
@@ -324,7 +411,21 @@ export default {
       // for every other key (add/remove freely; one save path).
       fmExtraError: '',
       fmExtraSeq: 0,
-      fmDraft: { type: '', title: '', labels: '', description: '', extras: [] }
+      fmDraft: {
+        type: '',
+        title: '',
+        labels: '',
+        description: '',
+        // Story 1.7: per-repo frontmatter lives here as a sub-shape
+        // (topic/entity/scope/forbidden/summary/keyword). On save the
+        // dialog re-shapes this into the concept's `frontmatter:` sub-
+        // block AND writes through to the repo doc field.
+        perRepo: { topic: [], entity: [], scope: '', forbidden: [], summary: '', keyword: [] },
+        extras: []
+      },
+      // Per-repo add-input drafts (one input per array field).
+      perRepoAddDrafts: { topic: '', entity: '', scope: '', forbidden: '', summary: '', keyword: '' },
+      perRepoError: ''
     };
   },
   computed: {
@@ -398,6 +499,12 @@ export default {
     // to render scope)
     fmKinds() {
       return FM_KINDS;
+    },
+    // Story 1.7: only the index concept carries the per-repo frontmatter.
+    // (The chip panel uses the same rule.) For other concepts the section
+    // is hidden — the curator sees the per-concept fields only.
+    perRepoFmVisible() {
+      return !!(this.loadedConceptId && this.loadedConceptId === 'index');
     }
   },
   watch: {
@@ -769,14 +876,29 @@ export default {
     },
     openFm() {
       const fm = this.parsedFm || {};
+      // Story 1.7: pull the per-repo frontmatter (`frontmatter:` sub-block)
+      // into fmDraft.perRepo so the dedicated form can render its fields.
+      // If absent (a brand-new repo with no chip-panel save yet) start empty.
+      const perRepo = (fm && typeof fm.frontmatter === 'object' && fm.frontmatter) || {};
+      const perRepoShape = {
+        topic: Array.isArray(perRepo.topic) ? perRepo.topic.slice() : [],
+        entity: Array.isArray(perRepo.entity) ? perRepo.entity.slice() : [],
+        scope: typeof perRepo.scope === 'string' ? perRepo.scope : '',
+        forbidden: Array.isArray(perRepo.forbidden) ? perRepo.forbidden.slice() : [],
+        summary: typeof perRepo.summary === 'string' ? perRepo.summary : '',
+        keyword: Array.isArray(perRepo.keyword) ? perRepo.keyword.slice() : []
+      };
       this.fmDraft = {
         type: fm.type || '',
         title: fm.title || '',
         labels: (Array.isArray(fm.labels) && fm.labels[0]) || '',
         description: fm.description || '',
+        perRepo: perRepoShape,
         // D-F: every non-curated key becomes a typed, editable row.
+        // The `frontmatter` sub-key is consumed by perRepo above; do not
+        // re-show it as a generic JSON row.
         extras: Object.keys(fm)
-          .filter((k) => !['type', 'title', 'labels', 'description'].includes(k))
+          .filter((k) => !['type', 'title', 'labels', 'description', 'frontmatter'].includes(k))
           .map((k) => {
             const kind = this.kindFor(fm[k]);
             return {
@@ -788,6 +910,8 @@ export default {
             };
           })
       };
+      this.perRepoAddDrafts = { topic: '', entity: '', scope: '', forbidden: '', summary: '', keyword: '' };
+      this.perRepoError = '';
       this.fmOpen = true;
       this.fmError = '';
       this.fmExtraError = '';
@@ -799,16 +923,59 @@ export default {
     removeExtra(row) {
       this.fmDraft.extras = this.fmDraft.extras.filter((r) => r.id !== row.id);
     },
+    // Story 1.7: per-repo frontmatter helpers (dialog side; the chip panel
+    // has its own copy of these in FrontmatterPanel.vue). Both editors
+    // save to the same write-through so the concept's frontmatter sub-
+    // block AND the repo doc field stay in sync.
+    isPerRepoScalar(field) {
+      return PER_REPO_SCALAR.has(field);
+    },
+    perRepoFieldLabel(field) {
+      return this.translate(`okf.fm.perRepoField.${field}`, field);
+    },
+    perRepoFieldValues(field) {
+      if (this.isPerRepoScalar(field)) {
+        const v = this.fmDraft.perRepo[field];
+        return v ? [v] : [];
+      }
+      return Array.isArray(this.fmDraft.perRepo[field]) ? this.fmDraft.perRepo[field] : [];
+    },
+    addPerRepoValue(field) {
+      if (this.isPerRepoScalar(field)) return;
+      const raw = (this.perRepoAddDrafts[field] || '').trim();
+      if (!raw) return;
+      const list = Array.isArray(this.fmDraft.perRepo[field]) ? this.fmDraft.perRepo[field] : [];
+      if (list.some((v) => String(v).toLowerCase() === raw.toLowerCase())) {
+        this.perRepoError = this.translate(
+          'okf.fm.perRepoDup',
+          `Tag "${raw}" is already in ${field}.`
+        );
+        return;
+      }
+      this.fmDraft.perRepo[field] = [...list, raw];
+      this.perRepoAddDrafts[field] = '';
+      this.perRepoError = '';
+    },
+    removePerRepoValue(field, idx) {
+      if (this.isPerRepoScalar(field)) {
+        this.fmDraft.perRepo[field] = '';
+        return;
+      }
+      const list = Array.isArray(this.fmDraft.perRepo[field]) ? this.fmDraft.perRepo[field] : [];
+      this.fmDraft.perRepo[field] = list.filter((_, i) => i !== idx);
+    },
     cancelFm() {
       this.fmOpen = false;
       this.fmError = '';
       this.fmExtraError = '';
+      this.perRepoError = '';
     },
     async saveFm() {
       if (this.fmBusy || !this.loadedConceptId || !this.repoId) return;
       this.fmBusy = true;
       this.fmError = '';
       this.fmExtraError = '';
+      this.perRepoError = '';
       this.fmSaved = false;
       try {
         const patch = {};
@@ -816,6 +983,27 @@ export default {
         if (this.fmDraft.title) patch.title = this.fmDraft.title;
         patch.labels = this.fmDraft.labels ? [this.fmDraft.labels] : [];
         if (this.fmDraft.description) patch.description = this.fmDraft.description;
+        // Story 1.7: per-repo frontmatter is the dedicated section above.
+        // We always include the `frontmatter:` sub-block in the concept
+        // PATCH (even for non-index concepts — the merge is a no-op if
+        // the curator never opens it, and consistency wins over branching).
+        // The shape sent is exactly the server's frontmatterSchema:
+        // { topic, entity, scope, forbidden, summary, keyword, _approved }.
+        // We don't send _approved (per 2026-10-08 simplification).
+        patch.frontmatter = {
+          topic: Array.isArray(this.fmDraft.perRepo.topic) ? this.fmDraft.perRepo.topic : [],
+          entity: Array.isArray(this.fmDraft.perRepo.entity) ? this.fmDraft.perRepo.entity : [],
+          scope:
+            typeof this.fmDraft.perRepo.scope === 'string' ? this.fmDraft.perRepo.scope : '',
+          forbidden: Array.isArray(this.fmDraft.perRepo.forbidden)
+            ? this.fmDraft.perRepo.forbidden
+            : [],
+          summary:
+            typeof this.fmDraft.perRepo.summary === 'string' ? this.fmDraft.perRepo.summary : '',
+          keyword: Array.isArray(this.fmDraft.perRepo.keyword)
+            ? this.fmDraft.perRepo.keyword
+            : []
+        };
         // D-F: validate + parse the generic rows into the SAME patch.
         const seen = new Set();
         for (const row of this.fmDraft.extras) {
@@ -828,7 +1016,7 @@ export default {
             this.fmExtraError = this.translate('okf.fm.errKeyDuplicate', `Field name "${key}" is used twice.`);
             return;
           }
-          if (['type', 'title', 'labels', 'description'].includes(key)) {
+          if (['type', 'title', 'labels', 'description', 'frontmatter'].includes(key)) {
             this.fmExtraError = this.translate('okf.fm.errKeyCurated', `"${key}" is a reserved field name.`);
             return;
           }
@@ -841,9 +1029,10 @@ export default {
           patch[key] = parsedRow.value;
         }
         // Removals (RFC 7386): a null patch value deletes the key server-side.
+        // `frontmatter` is now a curated sub-key — never an extra.
         const fm = this.parsedFm || {};
         const removals = Object.keys(fm)
-          .filter((k) => !['type', 'title', 'labels', 'description'].includes(k))
+          .filter((k) => !['type', 'title', 'labels', 'description', 'frontmatter'].includes(k))
           .filter((k) => !(k in patch));
         if (removals.length) {
           if (!FM_NULL_DELETE_LIVE) {
@@ -858,6 +1047,20 @@ export default {
         // {frontmatter} PATCH mode: the server merges onto the STORED fm —
         // no snapshot round-trip, no clobber of concurrent edits.
         await conceptService.update(this.repoId, this.loadedConceptId, patch);
+        // Story 1.7: write-through to the repo doc field (canonical store
+        // the retriever + publish gate read). Best-effort: if the repo
+        // PATCH fails, the concept PATCH already landed — the curator sees
+        // a non-fatal error and can retry. We only do this for the index
+        // concept (the per-repo tags only make sense on the index).
+        if (this.loadedConceptId === 'index') {
+          try {
+            await patchRepoFrontmatter(this.repoId, patch.frontmatter);
+          } catch (repoErr) {
+            this.perRepoError =
+              (repoErr && repoErr.message) ||
+              this.translate('okf.fm.perRepoRepoErr', 'Saved locally; the repo doc field write failed — retry.');
+          }
+        }
         // Mirror the merge locally so the source pane never diverges (null
         // keys drop out of the mirror too).
         const parsed = this.parseMarkdown(this.markdown);
@@ -1024,6 +1227,93 @@ export default {
 }
 .okf-ce__fm-extra-value--json {
   font-family: var(--font-mono);
+}
+/* Story 1.7: per-repo frontmatter section in the dialog */
+.okf-ce__fm-perrepo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  margin-top: var(--space-md);
+  border: 1px solid var(--color-border-subtle, #e2e2e2);
+  border-radius: var(--radius-md, 4px);
+  background: var(--color-surface-raised, #fafafa);
+}
+.okf-ce__fm-perrepo-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold, 600);
+}
+.okf-ce__fm-perrepo-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted, #666);
+}
+.okf-ce__fm-perrepo-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs, 4px);
+}
+.okf-ce__fm-perrepo-field-name {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--muted, #666);
+}
+.okf-ce__fm-perrepo-field-count {
+  color: var(--color-text-faint, #999);
+  font-weight: var(--font-weight-regular, 400);
+}
+.okf-ce__fm-perrepo-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs, 4px);
+}
+.okf-ce__fm-perrepo-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs, 4px);
+  padding: 2px var(--space-xs, 8px);
+  border-radius: var(--radius-sm, 3px);
+  font-size: var(--text-xs);
+  border: 1px solid var(--color-border, #d0d0d0);
+  background: var(--color-surface-base, #fff);
+}
+.okf-ce__fm-perrepo-tag-value {
+  color: var(--fg, #222);
+}
+.okf-ce__fm-perrepo-tag-remove {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: var(--text-xs);
+  color: var(--color-text-faint, #999);
+  padding: 0 2px;
+}
+.okf-ce__fm-perrepo-empty {
+  color: var(--color-text-faint, #999);
+  font-size: var(--text-xs);
+}
+.okf-ce__fm-perrepo-scalar {
+  border: 0;
+  background: transparent;
+  font-size: var(--text-xs);
+  color: var(--fg, #222);
+  width: 100%;
+  outline: none;
+}
+.okf-ce__fm-perrepo-add {
+  display: flex;
+  gap: var(--space-xs, 8px);
+}
+.okf-ce__fm-perrepo-add-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px var(--space-xs, 8px);
+  font-size: var(--text-xs);
+  border: 1px solid var(--color-border-subtle, #e2e2e2);
+  border-radius: var(--radius-sm, 3px);
+  background: var(--color-surface-base, #fff);
 }
 .okf-ce__loading,
 .okf-ce__error {

@@ -1962,7 +1962,28 @@ export default {
       noLabel: 'No label',
       descriptionLabel: 'Description',
       save: 'Save frontmatter',
-      saveFailed: 'Frontmatter save failed'
+      saveFailed: 'Frontmatter save failed',
+      // Story 1.7 (2026-10-08): per-repo frontmatter rendered as a
+      // dedicated section in the dialog (topic/entity/scope/forbidden/
+      // summary/keyword). Same data as the chip panel; both editors
+      // write through to the repo doc field.
+      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoHint:
+        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoField: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      },
+      perRepoDup: 'Tag is already in this field.',
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      removeTag: 'Remove tag',
+      addTagPh: 'Add {field}',
+      add: 'Add',
+      fieldEmpty: '—'
     },
     glossary: {
       pickSource:

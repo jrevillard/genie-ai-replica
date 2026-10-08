@@ -315,9 +315,9 @@ git commit -m "feat(charts): add naming + label helpers to genieai-common"
     },
     "component": {
       "type": "string",
-      "enum": ["umbrella", "data", "ai", "observability", "ingress", "security"],
-      "description": "Top-level GENIE.AI component this label marks. Used by Prometheus service discovery, NetworkPolicy selectors, and Grafana dashboards.",
-      "default": "umbrella"
+      "description": "Top-level GENIE.AI component this label marks. Used by Prometheus service discovery, NetworkPolicy selectors, and Grafana dashboards. Open enum (additionalProperties tolerated); concrete values include: umbrella, namespace, data, data-postgres, data-arangodb, identity, kong, pre-install, sealed-secret, sealed-secret-validate, rbac, test, ... (per-template).",
+      "default": "umbrella",
+      "maxLength": 63
     }
   },
   "additionalProperties": false
@@ -983,9 +983,11 @@ metadata:
     genieai.io/cluster-profile: "dev"
     app.kubernetes.io/part-of: genieai
     pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/enforce-version: v1.32
     pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.32
     pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.32
 ```
 
 - [ ] **Step 3: Install and run `helm test`**

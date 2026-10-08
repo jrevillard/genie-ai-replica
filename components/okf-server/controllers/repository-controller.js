@@ -1345,6 +1345,46 @@ async function getRepoMetrics(req, res, next) {
   }
 }
 
+/**
+ * Story 1-8 (2026-10-08) — POST /api/okf/repos/:repo_id/head/rebuild.
+ * Re-runs buildVectorizedHead from the CURRENT stored frontmatter.
+ * Fixes a missing head (publish is warn-only on a TEI outage) or a
+ * stale one (frontmatter edited after publish). Admin-scoped.
+ */
+async function rebuildRepoHead(req, res, next) {
+  try {
+    const headTestService = require('../services/head-test-service');
+    const head = await headTestService.rebuildHead(req.params.repo_id, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json({ ok: true, repo_id: req.params.repo_id, head });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 1-8 (2026-10-08) — POST /api/okf/repos/:repo_id/routing-test.
+ * The Head Tester / Routing Lab: embeds the query with production
+ * fidelity (TEI + BGE query-instruction prefix), scores the head leg
+ * (works PRE-INGEST — graph-less repos compete on signalling), and
+ * replays the Story 1.3 chunk-probe routing for repos with graphs.
+ * Admin-scoped (LLM/TEI-burning surface).
+ */
+async function routingTest(req, res, next) {
+  try {
+    const headTestService = require('../services/head-test-service');
+    const result = await headTestService.routingTest(req.params.repo_id, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createRepo,
   convertFromCrawl,
@@ -1354,6 +1394,8 @@ module.exports = {
   getRepoMetrics,
   updateRepo,
   deleteRepo,
+  rebuildRepoHead,
+  routingTest,
   piiScan,
   importRepoConcepts,
   retiredIngestRoute,

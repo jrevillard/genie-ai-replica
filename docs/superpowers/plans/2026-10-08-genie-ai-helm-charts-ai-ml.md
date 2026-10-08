@@ -714,7 +714,7 @@ spec:
 `TEI_RERANKING_ENDPOINT` → `http://tei-reranker.<ns>:80` (+ternary), `RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING`, `OPEA_SSL_SKIP_VERIFY=0`, `ENABLE_OBSERVABILITY`/`OTEL_EXPORTER_OTLP_ENDPOINT` (same pattern as chatqna), `LOG_LEVEL=info`; **empirically-tuned knobs, values-exposed via `ai.rerankerConfig`** (add to values: `noveltySigmoidA: "20.0"`, `noveltySigmoidB: "0.25"`, `contextDecayFactor: "0.0025"`, `minValueThreshold: "-1.0"` — el-salvador calibration history lives on these; do NOT drop); envFrom `vllm-api-key`.
 
 **`retriever.yaml`** (targetPort 7000; compose 1281-1325):
-`ARANGO_URL=http://arangodb-single.<ns>:8529`, `ARANGO_DB=<ai.arangoConfig.db>`, `ARANGO_GRAPH_NAME=<ai.arangoConfig.graphName>`, `RETRIEVER_COMPONENT_NAME=GENIE_RETRIEVER_ARANGODB`, `VLLM_ENDPOINT`/`TEI_EMBEDDING_ENDPOINT` (re-pointed + ternary), `OPEA_SSL_SKIP_VERIFY=0`, `ENABLE_OBSERVABILITY`/`OTEL_*`; hybrid-retrieval block (values-exposed via `ai.retrieverConfig`, defaults from compose): `RETRIEVER_HYBRID_RETRIEVAL_ENABLED=true`, `RETRIEVER_HYBRID_RRF_K=60`, `RETRIEVER_HYBRID_BM25_CANDIDATES=50`, `RETRIEVER_HYBRID_DENSE_WEIGHT=1.0`, `RETRIEVER_HYBRID_LEXICAL_WEIGHT=1.0`, `RETRIEVER_HYBRID_BM25_ANALYZER=text_en`, `RETRIEVER_ARANGO_FILTER_STRATEGY=OR`, `RETRIEVER_SUMMARIZER_ENABLED=false` + traversal block as in chatqna. **ARANGO credentials via explicit secretKeyRef — envFrom a `password`-keyed Secret would create env `password`, not `ARANGO_PASSWORD`:**
+`ARANGO_URL=http://{{ include "genieai-umbrella.arangoHost" $ }}.<ns>:8529`, `ARANGO_DB=<ai.arangoConfig.db>`, `ARANGO_GRAPH_NAME=<ai.arangoConfig.graphName>`, `RETRIEVER_COMPONENT_NAME=GENIE_RETRIEVER_ARANGODB`, `VLLM_ENDPOINT`/`TEI_EMBEDDING_ENDPOINT` (re-pointed + ternary), `OPEA_SSL_SKIP_VERIFY=0`, `ENABLE_OBSERVABILITY`/`OTEL_*`; hybrid-retrieval block (values-exposed via `ai.retrieverConfig`, defaults from compose): `RETRIEVER_HYBRID_RETRIEVAL_ENABLED=true`, `RETRIEVER_HYBRID_RRF_K=60`, `RETRIEVER_HYBRID_BM25_CANDIDATES=50`, `RETRIEVER_HYBRID_DENSE_WEIGHT=1.0`, `RETRIEVER_HYBRID_LEXICAL_WEIGHT=1.0`, `RETRIEVER_HYBRID_BM25_ANALYZER=text_en`, `RETRIEVER_ARANGO_FILTER_STRATEGY=OR`, `RETRIEVER_SUMMARIZER_ENABLED=false` + traversal block as in chatqna. **ARANGO credentials via explicit secretKeyRef — envFrom a `password`-keyed Secret would create env `password`, not `ARANGO_PASSWORD`:**
 ```yaml
             - { name: ARANGO_USERNAME, value: {{ .Values.ai.arangoConfig.username | quote }} }
             - name: ARANGO_PASSWORD
@@ -1307,7 +1307,7 @@ git commit -m "feat(charts): AI-tier dependency graph + audit rows + evaluator e
 **Files:**
 - Modify: `charts/README.md`
 - Modify: `charts/genieai-umbrella/README.md`
-- Modify: `docs/charts/plan-defects.md` (ANNOTATE, not close, the ArangoDB-URL row: chart-side name `arangodb-single.<ns>:8529` matches Plan 2's CR, but the kube-arangodb-created SERVICE name stays unverified until first live render — row stays open until then, M9)
+- Modify: `docs/charts/plan-defects.md` (ANNOTATE, not close, the ArangoDB-URL row: chart-side name `{{ include "genieai-umbrella.arangoHost" $ }}.<ns>:8529` matches Plan 2's CR, but the kube-arangodb-created SERVICE name stays unverified until first live render — row stays open until then, M9)
 
 **Interfaces:**
 - Consumes: every prior task.

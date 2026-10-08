@@ -600,7 +600,7 @@ kind: Namespace
 metadata:
   name: {{ $ns }}
   annotations:
-    # Wave-8 F2: the Namespace MUST be a pre-install hook. Regular resources
+    # the Namespace MUST be a pre-install hook. Regular resources
     # apply only AFTER all pre-install hooks — a regular Namespace means the
     # hook RBAC (-30) / ConfigMap (-20) / Jobs (-10/-5) target a namespace
     # that does not exist yet on a fresh cluster ("namespaces \"genie\" not

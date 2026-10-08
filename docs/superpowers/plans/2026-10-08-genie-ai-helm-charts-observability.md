@@ -371,7 +371,23 @@ cp configs/otel/otel-collector-config.yaml \
 
 1. **Remove** the `fluent_forward` receiver block and its entry from the logs pipeline `receivers:` list — containerd/K8s has no fluentd logging driver; logs arrive via the Task 4b agent over OTLP.
 2. **Keep verbatim** — `pii_redact` OTTL statements (do NOT touch the double-escaped regexes: YAML single-quote + OTTL unescape makes `\\s`/`\\.` load-bearing; single-escaping kills the pipeline with an OTTL parse error at collector boot), `stamp_log_metadata_from_msg`, `memory_limiter`, `batch`, healthcheck.
-3. **Retarget exporters** to K8s DNS — replace hard-coded hosts with the chart's service names: `vtraces.{{ "{{ .Values.namespace }}" }}.svc.cluster.local:10428`, `vmetrics...:8428`, `vlogs...:9428` (Helm templating is NOT evaluated in `.Files.Get` content by default — either keep plain DNS `vtraces.genieai.svc.cluster.local` fixed to the default namespace, or render through a ConfigMap and set endpoints via collector `env` substitution. For Plan 4 the plain fixed names are acceptable; per-env overrides land in Plan 6.)
+3. **Retarget exporters to K8s DNS** using the collector's `env` substitution
+   (NOT Helm templating — `.Files.Get` is not evaluated by Helm). The
+   plan ships the file with the hostnames pointing at the
+   **default** namespace `genieai` (plain DNS, no template syntax
+   embedded), e.g.:
+   - `vtraces.genieai.svc.cluster.local:10428`
+   - `vmetrics.genieai.svc.cluster.local:8428`  (8429 is the CLUSTER
+     vmselect port — single mode uses 8428)
+   - `vlogs.genieai.svc.cluster.local:9428`
+   For per-namespace installs, the executor must either (a) install with
+   namespace=`genieai`, or (b) extend the template at implementation
+   time by inlining the ported config into the chart template
+   (`.Files.Get` → `tpl` render with namespace — required for el-salvador
+   which uses `genieai-el-salvador`). The literal text
+   `{{ "{{ .Values.namespace }}" }}` is **not** a valid OTLP endpoint
+   and must NEVER land in the YAML; the per-namespace path is a
+   follow-up templating change, not a copy-paste of this note.
 
 - [ ] **Step 3: Write `charts/genieai-umbrella/templates/observability/otel-collector.yaml`**
 
@@ -390,8 +406,12 @@ spec:
   mode: deployment
   image: ghcr.io/open-telemetry/opentelemetry-collector-contrib:0.152.0   # matches the running Swarm stack (0.111.0 is 20+ versions stale)
   # The gateway's OTLP receiver port is exposed as a Service named
-  # `genieai-collector-collector` by the operator — the Task 4b agent and
-  # app SDKs (OTEL_EXPORTER_OTLP_ENDPOINT) target that name.
+  # after the CR (NOT `<cr>-collector`) by the opentelemetry-operator.
+  # The CR below is named `genieai-collector` -> the Service is also
+  # `genieai-collector` on port 4318. The Task 4b agent and every app
+  # SDK's OTEL_EXPORTER_OTLP_ENDPOINT target this name. (Earlier drafts
+  # cited `genieai-collector-collector` which is wrong against the
+  # operator's actual Service-naming convention.)
   config:
 {{ .Files.Get "configs/otel-collector-config.yaml" | indent 4 }}
   env:
@@ -445,7 +465,7 @@ git commit -m "feat(charts): gateway OpenTelemetryCollector with verbatim-ported
 - Create: `charts/genieai-umbrella/templates/rbac/otel-agent-role.yaml`
 
 **Interfaces:**
-- Consumes: `observability.otel.enabled`; the gateway CR from Task 4 (operator-exposed Service `genieai-collector-collector`).
+- Consumes: `observability.otel.enabled`; the gateway CR from Task 4 (operator-exposed Service `genieai-collector` — Service name matches the CR name per opentelemetry-operator).
 - Produces: 1 `OpenTelemetryCollector` (mode: daemonset) + ServiceAccount/Role for `k8sattributes`.
 
 **Why (Review Focus #6 / `docs/charts/otel-migration.md` §3 item 1):** the Swarm pipeline shipped container logs via the Docker fluentd driver → `fluent_forward`. On containerd/K8s that driver does not exist; without a node-level filelog agent, **no container logs reach VictoriaLogs** and the admin logs UI returns empty. The agent is a dumb shipper — all transforms stay in the gateway (single PII/stamping point).
@@ -462,6 +482,16 @@ Expected: prints `0`.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  # pre-delete hook fires on `helm uninstall`; the Job deletes the SA +
+  # the Role + RoleBinding BEFORE Helm tries to garbage-collect them.
+  # Without this, uninstall leaves the SA stranded and a re-install with
+  # a renamed SA keeps the old one — the agent DaemonSet then either
+  # schedules against the wrong identity or fails to schedule at all
+  # (the otel-collector operator looks the SA up by name on each reconcile).
+  annotations:
+    "helm.sh/hook": pre-delete
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
   name: genieai-agent
   namespace: {{ .Values.namespace }}
   labels:
@@ -566,9 +596,11 @@ spec:
       batch: {}
     exporters:
       # Ship to the gateway — single transform point (pii_redact + stamp
-      # live there, NOT here). OTLP/HTTP to the operator-created Service.
+      # live there, NOT here). OTLP/HTTP to the operator-created Service
+      # (name = CR name; for `genieai-collector` the Service is also
+      # `genieai-collector`).
       otlp/gateway:
-        endpoint: http://genieai-collector-collector.{{ .Values.namespace }}.svc.cluster.local:4318
+        endpoint: http://genieai-collector.{{ .Values.namespace }}.svc.cluster.local:4318
         tls:
           insecure: true
     service:
@@ -972,8 +1004,8 @@ spec:
           check http://vmetrics.${ns}.svc.cluster.local:8428/healthz   # single-node port; 8429 is cluster vmselect
           check http://vlogs.${ns}.svc.cluster.local:9428/healthz
           check http://vtraces.${ns}.svc.cluster.local:10428/healthz
-          # operator-exposed Service for the genieai-collector CR
-          check http://genieai-collector-collector.${ns}.svc.cluster.local:4318/v1/traces
+          # operator-exposed Service (name = CR name)
+          check http://genieai-collector.${ns}.svc.cluster.local:4318/v1/traces
           if [ "$failures" -gt 0 ]; then
             echo "FAIL: $failures service(s) unreachable"
             exit 1

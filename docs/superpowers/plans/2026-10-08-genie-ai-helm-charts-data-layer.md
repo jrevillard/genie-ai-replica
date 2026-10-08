@@ -914,7 +914,12 @@ spec:
   # References the Keycloak CR above; import runs once the instance is Ready.
   keycloakCRName: keycloak
   realm:
-    realm: genieai
+    # realm name MUST match the in-cluster consumers (compose ground
+    # truth: docker-compose.yaml KEYCLOAK_REALM=genie; Plan 5 sets
+    # KC_REALM=genie in chatqna + dataprep env). Earlier drafts named
+    # the realm `genieai` which silently broke every OIDC token call
+    # (404 on /realms/genieai/...).
+    realm: genie
     enabled: true
     registrationAllowed: false
     loginWithEmailAllowed: true
@@ -1263,7 +1268,7 @@ spec:
     # kubeseal before helm install.
     username: UExBQ0VIT0xERVIr
     password: UExBQ0VIT0xERVIr
-    {- else }
+    {{- else }}
     password: UExBQ0VIT0xERVIr
     {{- end }}
 {{- end -}}

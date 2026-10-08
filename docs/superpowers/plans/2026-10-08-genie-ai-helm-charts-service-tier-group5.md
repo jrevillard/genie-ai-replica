@@ -246,7 +246,7 @@ Usage:
 ```
 
 - [ ] **Step 2: Inject URLs into each per-service template** (Task 3 file edits):
-- `services/backend.yaml`: `KEYCLOAK_URL=http://keycloak.<ns>:8080/auth`, `ARANGO_URL=http://arangodb-single.<ns>:8529`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector-collector.<ns>:4318`.
+- `services/backend.yaml`: `KEYCLOAK_URL=http://keycloak.<ns>:8080/auth`, `ARANGO_URL=http://arangodb-single.<ns>:8529`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector.<ns>:4318` (the OTel operator names the gateway Service after the CR, not `<cr>-collector`).
 - `services/documentRepository.yaml`: `BACKEND_URL=http://backend.<ns>:80`, `CLAMAV_HOST=clamav`, `CLAMAV_PORT=3310`, OTEL endpoint.
 - `services/frontend.yaml`: `VUE_APP_API_URL`, OTEL endpoint.
 
@@ -352,22 +352,27 @@ Usage:
 {{- end -}}
 {{- end -}}
 {{- end -}}
+{{- $component := $ctx.component | default $svcName -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "genieai-common.fullname" $ctx }}-{{ $svcName }}
   namespace: {{ $ctx.Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" (deepCopy $ctx.Values | merge (dict "component" $svcName))) | nindent 4 }}
+    {{- /* Plan 5 Task 2 step 1 introduced $component = $ctx.component |
+           default $svcName so AI tier (component=ai-vllm) renders
+           distinct from Group-5 (component==name). All three label/selector
+           merges below use $component, NOT $svcName. */ -}}
+    {{- include "genieai-common.labels" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" (deepCopy $ctx.Values | merge (dict "component" $component))) | nindent 4 }}
 spec:
   replicas: {{ $replicas }}
   selector:
     matchLabels:
-      {{- include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" (deepCopy $ctx.Values | merge (dict "component" $svcName))) | nindent 6 }}
+      {{- include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" (deepCopy $ctx.Values | merge (dict "component" $component))) | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" (deepCopy $ctx.Values | merge (dict "component" $svcName))) | nindent 8 }}
+        {{- include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" (deepCopy $ctx.Values | merge (dict "component" $component))) | nindent 8 }}
     spec:
       securityContext:
         runAsNonRoot: true

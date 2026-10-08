@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the observability tier of the GENIE.AI Helm chart: vmoperator (VictoriaMetrics / VictoriaLogs / VictoriaTraces official operator) + opentelemetry-operator (gateway + DaemonSet agent) + grafana-operator (instance, datasources, 9 dashboards as CRs — K8s-native per `docs/charts/k8s-native-audit.md`) + per-service ServiceMonitors + PII redaction (config ported verbatim). Profile-gated (`dev=off`, `staging/prod/sovereign=on` per spec §5.2). **No tempo-proxy** — VictoriaTraces implements the Tempo HTTP API natively; Grafana queries VT directly.
+**Goal:** Ship the observability tier of the GENIE.AI Helm chart: vmoperator (VictoriaMetrics / VictoriaLogs / VictoriaTraces official operator) + opentelemetry-operator (gateway + DaemonSet agent) + grafana-operator (instance, datasources, 9 dashboards as CRs — K8s-native per `docs/charts/k8s-native-audit.md`) + per-service VMServiceScrapes + PII redaction (config ported verbatim). Enablement is **explicit per-env** (`observability.enabled` + per-component flags in `values-override.yaml`): values.yaml is static — Helm does not template it — and the ClusterProfile hook can only emit an Event (§5.2), so profile-driven defaults cannot drive operator installs. Per-env overlays flip observability on. **No tempo-proxy** — VictoriaTraces implements the Tempo HTTP API natively; Grafana queries VT directly.
 
-**Architecture:** Four independent operators, each managing their own custom resources: vmoperator manages `VMSingle`/`VMCluster`/`VLSingle`/`VLCluster`/`VTSingle`/`VTCluster`/`VMAgent`/`VMRule`/`VMAlertmanager`, opentelemetry-operator manages `OpenTelemetryCollector` (gateway + agent), grafana-operator manages `Grafana`/`GrafanaDatasource`/`GrafanaDashboard`. No traces proxy — VictoriaTraces implements the Tempo HTTP API natively (verified 2026-10-08), Grafana's Jaeger datasource queries VT directly. ServiceMonitors, for Prometheus-style scrape, get generated per Group 5 service conditionally. PII redaction and log-metadata stamping port **verbatim** from the existing `configs/otel/otel-collector-config.yaml` (OTTL `pii_redact` + `stamp_log_metadata_from_msg`) — the chart ports, never rewrites. Collector topology: **gateway** (Deployment, OTLP traces/metrics) + **agent** (DaemonSet, filelog container logs → gateway), replacing the Swarm fluentd-driver → `fluent_forward` pipeline which does not exist on containerd/K8s. See `docs/charts/otel-migration.md`.
+**Architecture:** Three operators: the **single `victoria-metrics-operator` chart** — there are NO separate victoria-logs-operator / victoria-traces-operator charts in the VM helm repo (verified against the repo index 2026-10-08; earlier drafts listed charts that do not exist) — provides ALL the VM/VL/VT CRDs (`VMSingle`/`VMCluster`, `VLSingle`, `VTSingle`, `VMAgent`, `VMServiceScrape`, `VMRule`, …). opentelemetry-operator manages `OpenTelemetryCollector` (gateway + agent), grafana-operator manages `Grafana`/`GrafanaDatasource`/`GrafanaDashboard`. No traces proxy — VictoriaTraces implements the Tempo HTTP API natively (verified 2026-10-08), Grafana's Jaeger datasource queries VT directly. VMServiceScrapes (vmoperator-native — no Prometheus operator is installed) get generated per Group 5 service conditionally. PII redaction and log-metadata stamping port **verbatim** from the existing `configs/otel/otel-collector-config.yaml` (OTTL `pii_redact` + `stamp_log_metadata_from_msg`) — the chart ports, never rewrites. Collector topology: **gateway** (Deployment, OTLP traces/metrics) + **agent** (DaemonSet, filelog container logs → gateway), replacing the Swarm fluentd-driver → `fluent_forward` pipeline which does not exist on containerd/K8s. See `docs/charts/otel-migration.md`.
 
 **Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), kind 1.33, vmoperator chart `~> 0.45.0`, opentelemetry-operator chart `~> 0.50.0`, grafana-operator chart `~> 5.22.0` (official `grafana/grafana-operator`).
 
@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Helm chart API version: `v2`. Helm 4.x.
-- Profile-gated: `observability.enabled` default derived from `clusterProfile` per spec §5.2 (dev=off, staging/prod/sovereign=on). Operators can override explicitly in `values-override.yaml`.
+- Explicit enablement: `observability.enabled: false` + per-component `enabled: false` ship as static values defaults; environments that want observability set them to `true` in `deploy/environments/<env>/values-override.yaml`. Profile-driven auto-enablement was DROPPED (values.yaml is not templated; the profile hook cannot mutate values — spec §5.2).
 - All observability CRDs (VM*, OpenTelemetryCollector, Grafana datasource Secret) namespaced to the release namespace.
 - PII redaction rules ship as the ported `configs/otel-collector-config.yaml` inside the chart (verbatim from the repo's Swarm config); operator edits + CI lint via conftest (Plan 7).
 - All English documentation and comments per project CLAUDE.md.
@@ -25,10 +25,10 @@
 Five input-class concerns the spec implies but no Plan 4 task tests explicitly.
 
 1. **vmoperator CRD version compatibility with K8s 1.33** — `~> 0.45.0` and `~> 0.50.0` pins may not align with K8s 1.33 admission. **Pinned in Task 1 Step 3** — `helm dep list` post-update confirms both operator versions; `helm install --dry-run` validates CRD shape.
-2. **ServiceMonitor-conditional emission** — services get `serviceMonitor: true` only when `observability.enabled: true`. If a service emits monitor fields unconditionally, scrape targets reference non-existent endpoints on dev. **Pinned in Task 7 Step 4** — render asserts no ServiceMonitor resources emitted when observability off.
+2. **VMServiceScrape-conditional emission** — services get `serviceMonitor: true` only when `observability.metrics.enabled: true`. If a service emits monitor fields unconditionally, scrape targets reference non-existent endpoints on dev. **Pinned in Task 7 Step 3** — render asserts no VMServiceScrape resources emitted when observability off.
 3. **Traces query path must be VT-direct** — Grafana's Jaeger datasource must point at `vtraces` (Tempo HTTP API implemented natively by VictoriaTraces, verified 2026-10-08), NOT at a proxy. A stale proxy reference or wrong port makes the "Trace explorer" dashboard silently fail. **Pinned in Task 5 Step 4** — render asserts the jaeger datasource URL contains `vtraces.` and that `tempo-proxy` appears nowhere in the rendered output.
 4. **PII redaction YAML schema** — OpenTelemetry Collector `transform` processor schema is versioned (v0.111+ uses `error_mode: ignore`). Older syntax accepted silently. **Pinned in Task 9 Step 4** — render asserts `error_mode: ignore` + each transform context statements name parsed by `otelcol validate`.
-5. **ClusterProfile auto-derivation race** — Plan 4 implements `observability.enabled: {{ .Values.clusterProfile | default "dev" | eq "prod" | or (.Values.clusterProfile | eq "staging") | or ... }}`. Multiple boolean conditions can drift. **Pinned in Task 11 Step 4** — values.yaml tests render with `clusterProfile: dev` (observability off) and `clusterProfile: prod` (on); assert only.
+5. **Values.yaml templating trap** — earlier drafts wrote `{{ include ... }}` into values.yaml; Helm NEVER templates values files (the strings would ship as literal text and break YAML parse or, worse, parse as a string boolean). All defaults are plain static booleans; every profile-dependent decision lives in TEMPLATE conditionals (`eq .Values.clusterProfile "prod"`), not values. **Pinned in Task 2 Steps 3-4** — render with dev default (off) and explicit `--set observability.enabled=true` (on).
 6. **Log ingestion without the fluentd driver** — containerd/K8s has no Docker fluentd logging driver, so the Swarm log pipeline (stdout → `fluent_forward` :24224 → VL) dies on arrival. Without a node-level agent, **zero container logs reach VictoriaLogs** and the admin logs UI returns empty. **Pinned in Task 4b Step 5** — render asserts BOTH collector CRs (gateway Deployment + agent DaemonSet); the agent's filelog receiver + hostPath mount are the structural fix.
 
 ---
@@ -40,7 +40,7 @@ Five input-class concerns the spec implies but no Plan 4 task tests explicitly.
 
 **Interfaces:**
 - Consumes: Plan 2 dep block.
-- Produces: vmoperator (×3 charts) + opentelemetry-operator + grafana-operator added. No tempo-proxy (native-audit decision 1).
+- Produces: victoria-metrics-operator (×1 chart, ALL VM/VL/VT CRDs) + opentelemetry-operator + grafana-operator added. No tempo-proxy (native-audit decision 1).
 
 - [ ] **Step 1: Run red-gate — no observability deps yet**
 
@@ -50,19 +50,18 @@ Expected: `OK: no observability deps`.
 - [ ] **Step 2: Append to `dependencies:` block in `charts/genieai-umbrella/Chart.yaml`**
 
 ```yaml
-  # Plan 4 — observability operators + subcharts
+  # Plan 4 — observability operators
+  # ONE VM operator chart: victoria-metrics-operator is the ONLY chart in
+  # the VM helm repo, and it ships ALL VM+VL+VT CRDs (VMSingle/VMCluster,
+  # VLSingle, VTSingle, VMAgent, VMServiceScrape, VMRule, …). Separate
+  # victoria-logs-operator / victoria-traces-operator charts DO NOT EXIST
+  # (verified against the repo index 2026-10-08 — `helm dep update` on the
+  # earlier 3-chart list fails). Condition = the master observability flag;
+  # per-component CRs are gated at template level.
   - name: victoria-metrics-operator
     version: "~> 0.45.0"
     repository: "https://victoriametrics.github.io/helm-charts"
-    condition: observability.metrics.enabled
-  - name: victoria-logs-operator
-    version: "~> 0.10.0"
-    repository: "https://victoriametrics.github.io/helm-charts"
-    condition: observability.logs.enabled
-  - name: victoria-traces-operator
-    version: "~> 0.5.0"
-    repository: "https://victoriametrics.github.io/helm-charts"
-    condition: observability.traces.enabled
+    condition: observability.enabled
   - name: opentelemetry-operator
     version: "~> 0.50.0"
     repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
@@ -75,17 +74,15 @@ Expected: `OK: no observability deps`.
     condition: observability.grafana.enabled
 ```
 
-(Note: each operator is a SEPARATE helm dep with `condition:` per spec §4. Single combined `vmoperator` umbrella dep would be simpler but the spec chose per-storage separation.)
-
 - [ ] **Step 3: Run `helm dependency update`**
 
 Run: `helm dependency update charts/genieai-umbrella`
-Expected: 6 new tarballs land in `charts/genieai-umbrella/charts/`. Chart.lock regenerates.
+Expected: 3 new tarballs land in `charts/genieai-umbrella/charts/`. Chart.lock regenerates.
 
 - [ ] **Step 4: Verify dep list (Review Focus #1)**
 
 Run: `helm dep list charts/genieai-umbrella | grep -E "victoria|opentelemetry|grafana|tempo"`
-Expected: 6 lines, each with a pinned version. If any version has `~> 0.X.0` resolving to `0.X.<y>` for `y` with breaking CRD changes, this step surfaces that before the next plan.
+Expected: 3 lines, each with a pinned version. If any version has `~> 0.X.0` resolving to `0.X.<y>` for `y` with breaking CRD changes, this step surfaces that before the next plan.
 
 - [ ] **Step 5: `helm lint --strict`**
 
@@ -120,31 +117,33 @@ Expected: prints `0`.
 ```yaml
 # Plan 4 — observability
 
-# Profile-driven default for observability per spec §5.2:
-#   dev=off, staging/prod/sovereign=on. Operators override via
-#   --set observability.enabled=... in install.
-# Default via Helm template — helper `genieai-umbrella.profileProduction`
-# in templates/_lib/_clusterprofile-defaults.tpl resolves this.
+# STATIC plain booleans. values.yaml is NEVER templated by Helm — an
+# `{{ include ... }}` here ships as literal text (round-6 review catch).
+# Defaults are OFF; environments that want observability set these true in
+# deploy/environments/<env>/values-override.yaml (dev=off is the intended
+# default; prod overlays flip master + components on). Profile-driven
+# auto-enablement is impossible from values (§5.2: the profile hook can
+# only emit an Event).
 observability:
-  enabled: {{ include "genieai-umbrella.observabilityDefault" . }}
+  enabled: false
   metrics:
-    enabled: {{ include "genieai-umbrella.observabilityDefault" . }}    # mirror top-level
+    enabled: false
     retention: "30d"
     storageSize: 10Gi
   logs:
-    enabled: {{ include "genieai-umbrella.observabilityDefault" . }}    # mirror top-level
+    enabled: false
     retention: "30d"
     storageSize: 20Gi
   traces:
-    enabled: {{ include "genieai-umbrella.observabilityDefault" . }}    # mirror top-level
+    enabled: false
     retention: "30d"
     storageSize: 5Gi
   otel:
-    enabled: {{ include "genieai-umbrella.observabilityDefault" . }}    # mirror top-level
+    enabled: false
   grafana:
-    enabled: {{ include "genieai-umbrella.observabilityDefault" . }}    # mirror top-level
+    enabled: false
     adminUser: admin
-    adminPasswordRef: grafanaAdminPassword    # SealedSecret name (Plan 4 ship)
+    adminPasswordRef: grafana-admin-password    # SealedSecret name (Task 10)
   # PII redaction rules (port from Swarm fluentd config). Operators edit
   # per deployment; conftest (Plan 7) lint ensures no rule is empty.
   piiRedaction:
@@ -159,17 +158,15 @@ observability:
         replace: '[UUID REDACTED]'
 ```
 
-- [ ] **Step 3: Render with default `clusterProfile: dev` — observability off**
+- [ ] **Step 3: Render with defaults — observability off (Review Focus #5)**
 
-Run: `helm template test charts/genieai-umbrella -n genieai -f charts/genieai-umbrella/values.yaml | grep -c "OpenTelemetryCollector"`
-Expected: prints `0`.
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "OpenTelemetryCollector"`
+Expected: prints `0`. Also assert `grep -c "{{" charts/genieai-umbrella/values.yaml` prints `0` — no template syntax may live in values.
 
-- [ ] **Step 4: Render with `clusterProfile: prod` — observability on (Review Focus #5)**
+- [ ] **Step 4: Render with explicit enablement — observability on (Review Focus #5)**
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep -c "OpenTelemetryCollector"`
-Expected: prints `>= 1` (the OTel Collector CR appears).
-
-If `0`: profile default expression in `observability.enabled` is buggy. Fix and re-test.
+Run: `helm template test charts/genieai-umbrella -n genieai --set observability.enabled=true --set observability.otel.enabled=true | grep -c "OpenTelemetryCollector"`
+Expected: prints `>= 1` (the OTel Collector CR appears). Enablement is explicit — no profile expression exists to be buggy.
 
 - [ ] **Step 5: `helm lint --strict`**
 
@@ -180,7 +177,7 @@ Expected: 0 errors.
 
 ```bash
 git add charts/genieai-umbrella/values.yaml
-git commit -m "feat(charts): observability block in values with clusterProfile-driven default"
+git commit -m "feat(charts): observability block in values (static explicit toggles)"
 ```
 
 ---
@@ -221,7 +218,9 @@ spec:
   storage:
     volumeClaimTemplate:
       spec:
-        storageClassName: {{ .Values.pluggable.storageClassName | default "" }}
+        {{- with .Values.pluggable.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
         resources:
           requests:
             storage: {{ .Values.observability.metrics.storageSize }}
@@ -238,7 +237,9 @@ spec:
   storage:
     volumeClaimTemplate:
       spec:
-        storageClassName: {{ .Values.pluggable.storageClassName | default "" }}
+        {{- with .Values.pluggable.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
         resources:
           requests:
             storage: {{ .Values.observability.metrics.storageSize }}
@@ -262,7 +263,9 @@ spec:
   storage:
     volumeClaimTemplate:
       spec:
-        storageClassName: {{ .Values.pluggable.storageClassName | default "" }}
+        {{- with .Values.pluggable.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
         resources:
           requests:
             storage: {{ .Values.observability.logs.storageSize }}
@@ -285,7 +288,9 @@ spec:
   storage:
     volumeClaimTemplate:
       spec:
-        storageClassName: {{ .Values.pluggable.storageClassName | default "" }}
+        {{- with .Values.pluggable.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
         resources:
           requests:
             storage: {{ .Values.observability.traces.storageSize }}
@@ -307,10 +312,12 @@ spec:
   serviceScrapeSelector:
     matchLabels:
       release: {{ .Release.Name }}-observability
-  # Remote write to VMSingle (or VMCluster). serviceScrape config selects
-  # ServiceMonitors emitted by Task 7.
+  # Remote write to VMSingle (or VMCluster). serviceScrapeSelector selects
+  # the VMServiceScrapes emitted by Task 7.
   remoteWrite:
-    - url: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8429/api/v1/write
+    # VMSingle serves 8428 (8429 is the CLUSTER vmselect port — single
+    # mode remote-write hits 8428).
+    - url: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428/api/v1/write
 {{- end -}}
 ```
 
@@ -356,7 +363,7 @@ cp configs/otel/otel-collector-config.yaml \
 
 1. **Remove** the `fluent_forward` receiver block and its entry from the logs pipeline `receivers:` list — containerd/K8s has no fluentd logging driver; logs arrive via the Task 4b agent over OTLP.
 2. **Keep verbatim** — `pii_redact` OTTL statements (do NOT touch the double-escaped regexes: YAML single-quote + OTTL unescape makes `\\s`/`\\.` load-bearing; single-escaping kills the pipeline with an OTTL parse error at collector boot), `stamp_log_metadata_from_msg`, `memory_limiter`, `batch`, healthcheck.
-3. **Retarget exporters** to K8s DNS — replace hard-coded hosts with the chart's service names: `vtraces.{{ "{{ .Values.namespace }}" }}.svc.cluster.local:10428`, `vmetrics...:8429`, `vlogs...:9428` (Helm templating is NOT evaluated in `.Files.Get` content by default — either keep plain DNS `vtraces.genieai.svc.cluster.local` fixed to the default namespace, or render through a ConfigMap and set endpoints via collector `env` substitution. For Plan 4 the plain fixed names are acceptable; per-env overrides land in Plan 6.)
+3. **Retarget exporters** to K8s DNS — replace hard-coded hosts with the chart's service names: `vtraces.{{ "{{ .Values.namespace }}" }}.svc.cluster.local:10428`, `vmetrics...:8428`, `vlogs...:9428` (Helm templating is NOT evaluated in `.Files.Get` content by default — either keep plain DNS `vtraces.genieai.svc.cluster.local` fixed to the default namespace, or render through a ConfigMap and set endpoints via collector `env` substitution. For Plan 4 the plain fixed names are acceptable; per-env overrides land in Plan 6.)
 
 - [ ] **Step 3: Write `charts/genieai-umbrella/templates/_observability/otel-collector.yaml`**
 
@@ -373,7 +380,7 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-collector"))) | nindent 4 }}
 spec:
   mode: deployment
-  image: ghcr.io/open-telemetry/opentelemetry-collector-contrib:0.111.0
+  image: ghcr.io/open-telemetry/opentelemetry-collector-contrib:0.152.0   # matches the running Swarm stack (0.111.0 is 20+ versions stale)
   # The gateway's OTLP receiver port is exposed as a Service named
   # `genieai-collector-collector` by the operator — the Task 4b agent and
   # app SDKs (OTEL_EXPORTER_OTLP_ENDPOINT) target that name.
@@ -497,7 +504,7 @@ metadata:
 spec:
   mode: daemonset
   serviceAccount: genieai-agent
-  image: ghcr.io/open-telemetry/opentelemetry-collector-contrib:0.111.0
+  image: ghcr.io/open-telemetry/opentelemetry-collector-contrib:0.152.0   # matches the running Swarm stack (0.111.0 is 20+ versions stale)
   volumes:
     - name: varlogpods
       hostPath:
@@ -641,7 +648,7 @@ spec:
   deployment:
     envFrom:
       - secretRef:
-          name: grafanaAdminPassword
+          name: grafana-admin-password   # lowercase (K8s names must be DNS-1123; camelCase is rejected)
   resources:
     requests: { cpu: 50m, memory: 128Mi }
     limits:   { cpu: 500m, memory: 512Mi }
@@ -661,7 +668,7 @@ spec:
   datasource:
     name: VictoriaMetrics
     type: prometheus
-    url: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8429
+    url: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428
     access: proxy
     isDefault: true
 ---
@@ -773,28 +780,29 @@ Consequences:
 - Grafana traces datasource points at `http://vtraces.<ns>.svc.cluster.local:10428` (Task 5).
 - Service inventory: 29 (was 30); Group 1 = 5.
 
-## Task 7: ServiceMonitor emission per Group 5 service (conditional)
+## Task 7: VMServiceScrape emission per Group 5 service (conditional)
 
 **Files:**
-- Modify: `charts/genieai-umbrella/templates/_lib/_service-factory.tpl` (Plan 3) — append ServiceMonitor block
+- Modify: `charts/genieai-umbrella/templates/_lib/_service-factory.tpl` (Plan 3) — append VMServiceScrape block
 
 **Interfaces:**
 - Consumes: each service's `serviceMonitor: true|false` toggle.
-- Produces: per-service PrometheusServiceMonitor CR, only when `observability.metrics.enabled: true`.
+- Produces: per-service `VMServiceScrape` CR (vmoperator CRD — there is NO Prometheus operator in this stack; `monitoring.coreos.com/v1 ServiceMonitor` CRs would have no controller watching them), only when `observability.metrics.enabled: true`.
 
 - [ ] **Step 1: Append to the service factory helper** in `charts/genieai-umbrella/templates/_lib/_service-factory.tpl`
 
-After the existing `--- end -}}` closing the Deployment block, add:
+After the existing `{{- end -}}` closing the Deployment block, add:
 
 ```gotemplate
 {{- /*
-ServiceMonitor emission. Review Focus #2 — only when observability.metrics
-is enabled AND the per-service toggle is true.
+VMServiceScrape emission. Review Focus #2 — only when observability.metrics
+is enabled AND the per-service toggle is true. The `release:` label must
+match the VMAgent's serviceScrapeSelector (Task 3 Step 5).
 */ -}}
 {{- if and $ctx.Values.observability.metrics.enabled $svc.serviceMonitor -}}
 ---
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
 metadata:
   name: {{ include "genieai-common.fullname" $ctx }}-{{ $svcName }}
   namespace: {{ $ctx.Values.namespace }}
@@ -812,17 +820,15 @@ spec:
 {{- end -}}
 ```
 
-- [ ] **Step 2: Render with `observability.metrics.enabled: true` and a service having `serviceMonitor: true`**
+- [ ] **Step 2: Render with metrics + a service having `serviceMonitor: true`**
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set observability.metrics.enabled=true --set 'clusterProfileReplicas.prod.backend=2' | grep -c "^kind: ServiceMonitor$" || echo "0"`
-Expected: prints ≥1.
+Run: `helm template test charts/genieai-umbrella -n genieai --set observability.metrics.enabled=true --set services.backend.serviceMonitor=true | grep -c "^kind: VMServiceScrape$"`
+Expected: prints `1` (backend).
 
-(Note: with default `serviceMonitor: false` on every service, the count is 0 even with observability on. To validate, set `serviceMonitor: true` on a service via `--set services.backend.serviceMonitor=true`.)
+- [ ] **Step 3: Render with observability off — no VMServiceScrape (Review Focus #2)**
 
-- [ ] **Step 3: Render with `observability.metrics.enabled: false` — no ServiceMonitor (Review Focus #2)**
-
-Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: ServiceMonitor$" || echo "0"`
-Expected: prints `0`.
+Run: `helm template test charts/genieai-umbrella -n genieai --set services.backend.serviceMonitor=true | grep -c "^kind: VMServiceScrape$" || echo "0"`
+Expected: prints `0` — the per-service toggle alone must NOT emit a scrape target when the metrics tier is disabled.
 
 - [ ] **Step 4: `helm lint --strict`**
 
@@ -833,26 +839,28 @@ Expected: 0 errors.
 
 ```bash
 git add charts/genieai-umbrella/templates/_lib/_service-factory.tpl
-git commit -m "feat(charts): ServiceMonitor emission in service factory (conditional)"
+git commit -m "feat(charts): VMServiceScrape emission in service factory (conditional)"
 ```
 
 ---
 
-## Task 8: ClusterProfile-driven observability toggle (default-on for staging/prod/sovereign)
+## Task 8: Profile helpers (template-side only)
 
 **Files:**
-- Modify: `charts/genieai-umbrella/templates/_lib/_clusterprofile-defaults.tpl` (NEW file)
+- Create: `charts/genieai-umbrella/templates/_lib/_clusterprofile-defaults.tpl`
 
 **Interfaces:**
 - Consumes: `clusterProfile` value.
-- Produces: a template helper that emits per-component enabled booleans driven by profile.
+- Produces: `genieai-umbrella.profileProduction` / `genieai-umbrella.profileDev` — used ONLY inside template conditionals (e.g. Task 3's VMCluster-vs-VMSingle switch). **No `observabilityDefault` helper**: values.yaml is static (Task 2) and observability enablement is explicit per env, so a values-level default resolver would be dead code (round-6 review: delete, do not defer).
 
 - [ ] **Step 1: Write `charts/genieai-umbrella/templates/_lib/_clusterprofile-defaults.tpl`**
 
 ```gotemplate
 {{/*
-Profile-driven boolean defaults. Used by templates that need to consult the
-profile for fine-grained toggles beyond the per-component values keys.
+Profile classification helpers — TEMPLATE-SIDE only. Values.yaml is never
+templated by Helm, so profile-driven decisions live in `{{- if include
+"genieai-umbrella.profileProduction" . }}` template conditionals, never in
+values files.
 */}}
 {{- define "genieai-umbrella.profileProduction" -}}
 {{- or (eq .Values.clusterProfile "prod") (eq .Values.clusterProfile "staging") (eq .Values.clusterProfile "sovereign") -}}
@@ -861,36 +869,22 @@ profile for fine-grained toggles beyond the per-component values keys.
 {{- define "genieai-umbrella.profileDev" -}}
 {{- or (eq .Values.clusterProfile "dev") (eq .Values.clusterProfile "") -}}
 {{- end -}}
-
-{{- /*
-Observability default. Per spec §5.2: dev=off, staging/prod/sovereign=on.
-This helper is invoked by the umbrellas's `_observability/**.yaml` files
-to derive the per-component `enabled` flag.
-*/}}
-{{- define "genieai-umbrella.observabilityDefault" -}}
-{{- if hasKey .Values.observability "explicitEnabled" -}}
-{{- .Values.observability.explicitEnabled -}}
-{{- else -}}
-{{- not (include "genieai-umbrella.profileDev" .) -}}
-{{- end -}}
-{{- end -}}
 ```
 
-- [ ] **Step 2: Update `values.yaml`** so `observability.enabled` uses the helper at template-time
+- [ ] **Step 2: Verify the helpers parse and the dev default stays off**
 
-Replace the static `enabled: false` with `enabled: {{ include "genieai-umbrella.observabilityDefault" . | eq true }}` at the top level (and the per-component mirrors). This requires the helper to be called from `values.yaml` — Helm templates ARE evaluated there.
+Run: `helm template test charts/genieai-umbrella -n genieai | grep -cE "^kind: (VMSingle|VMCluster|VLSingle|VTSingle|VMAgent|OpenTelemetryCollector)" || echo "0"`
+Expected: prints `0` (static defaults off; no nil/error from the new helper file).
 
-Actually `values.yaml` is not templated; it's static. The default belongs in the **templates**, not in values.yaml. Skip this step. The helper is invoked at template-render time in each observability template. Verify in Task 2 Step 4.
+- [ ] **Step 3: Render with explicit observability on**
 
-- [ ] **Step 3: Render with `clusterProfile: prod` — at least 1 observability resource**
+Run: `helm template test charts/genieai-umbrella -n genieai --set observability.enabled=true --set observability.metrics.enabled=true --set observability.logs.enabled=true --set observability.traces.enabled=true --set observability.otel.enabled=true | grep "^kind: " | sort | uniq -c | sort -rn | head`
+Expected: shows `VMSingle × 1` (dev profile → single), `VLSingle × 1`, `VTSingle × 1`, `VMAgent × 1`, `OpenTelemetryCollector × 1`.
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep "^kind: " | sort | uniq -c | sort -rn | head`
-Expected: shows ≥1 of `VMCluster`/`VMSingle`, `VLSingle`, `VTSingle`, `VMAgent`, `OpenTelemetryCollector` (with `clusterProfile=prod` toggling the profile default ON).
+- [ ] **Step 4: prod profile flips VMSingle → VMCluster**
 
-- [ ] **Step 4: Render with `clusterProfile: dev` — observability off**
-
-Run: `helm template test charts/genieai-umbrella -n genieai | grep -E "^kind: (VMSingle|VMCluster|VLSingle|VTSingle|VMAgent|OpenTelemetryCollector)" | wc -l`
-Expected: prints `0`.
+Run: `helm template test charts/genieai-umbrella -n genieai --set observability.enabled=true --set observability.metrics.enabled=true --set clusterProfile=prod | grep -c "^kind: VMCluster$"`
+Expected: prints `1` (and `VMSingle` count `0`).
 
 - [ ] **Step 5: `helm lint --strict`**
 
@@ -901,7 +895,7 @@ Expected: 0 errors.
 
 ```bash
 git add charts/genieai-umbrella/templates/_lib/_clusterprofile-defaults.tpl
-git commit -m "feat(charts): ClusterProfile-driven observability defaults"
+git commit -m "feat(charts): profile classification helpers (template-side)"
 ```
 
 ---
@@ -967,10 +961,11 @@ spec:
               failures=$((failures+1))
             fi
           }
-          check http://vmetrics.${ns}.svc.cluster.local:8429/healthz
+          check http://vmetrics.${ns}.svc.cluster.local:8428/healthz   # single-node port; 8429 is cluster vmselect
           check http://vlogs.${ns}.svc.cluster.local:9428/healthz
           check http://vtraces.${ns}.svc.cluster.local:10428/healthz
-          check http://otel-collector.${ns}.svc.cluster.local:4318/v1/traces
+          # operator-exposed Service for the genieai-collector CR
+          check http://genieai-collector-collector.${ns}.svc.cluster.local:4318/v1/traces
           if [ "$failures" -gt 0 ]; then
             echo "FAIL: $failures service(s) unreachable"
             exit 1
@@ -1010,11 +1005,15 @@ git commit -m "test(charts): helm test for observability stack reachability"
 
 ```yaml
 {{- if .Values.secrets.sealedSecrets.enabled -}}
-{{- /* Per spec §8 F14 mapping:
-       grafanaAdminPassword     → grafanaAdminPassword (rendered for Grafana)
-       kcGrafanaClientSecret   → kc-grafana-client-secret
+{{- /* Per spec §8 mapping (names DNS-1123 lowercase; encryptedData keys =
+       ENV VAR NAMES — Grafana CR consumes the secret whole via envFrom):
+       grafanaAdminPassword   → grafana-admin-password     (key GF_SECURITY_ADMIN_PASSWORD)
+       kcGrafanaClientSecret  → kc-grafana-client-secret   (key KC_GRAFANA_CLIENT_SECRET)
 */ -}}
-{{- range $secretName := list "grafanaAdminPassword" "kc-grafana-client-secret" -}}
+{{- $obs := dict
+      "grafana-admin-password" "GF_SECURITY_ADMIN_PASSWORD"
+      "kc-grafana-client-secret" "KC_GRAFANA_CLIENT_SECRET" -}}
+{{- range $secretName, $envKey := $obs -}}
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
 metadata:
@@ -1025,7 +1024,7 @@ metadata:
     app.kubernetes.io/component: observability-secrets
 spec:
   encryptedData:
-    password: PLACEHOLDER_{{ $secretName }}_SEALED_KID
+    {{ $envKey }}: PLACEHOLDER_{{ $envKey }}_SEALED_KID
 {{- end -}}
 {{- end -}}
 ```
@@ -1044,7 +1043,7 @@ Expected: 0 errors.
 
 ```bash
 git add charts/genieai-umbrella/templates/_secrets/observability-secrets.yaml
-git commit -m "feat(charts): Observability SealedSecrets (grafanaAdminPassword, kc-grafana-client-secret)"
+git commit -m "feat(charts): observability SealedSecrets (grafana-admin-password, kc-grafana-client-secret)"
 ```
 
 ---
@@ -1112,7 +1111,7 @@ Plan 4 shipped:
 | Grafana | grafana-operator CRs (Grafana + GrafanaDatasource + 9 GrafanaDashboard) | optional |
 | Traces query | Grafana Jaeger datasource -> VictoriaTraces direct (native Tempo HTTP API) | bundled when traces enabled |
 
-Per-service `serviceMonitor: true` triggers a Prometheus ServiceMonitor emission only when `observability.metrics.enabled: true`. PII redaction transform processor is part of the OTel Collector's gateway pipeline (regex rules ported from the current Swarm fluentd config).
+Per-service `serviceMonitor: true` triggers a `VMServiceScrape` emission (vmoperator CRD — no Prometheus operator in this stack) only when `observability.metrics.enabled: true`. Enablement is explicit per env (`values-override.yaml`), not profile-derived. PII redaction transform processor is part of the OTel Collector's gateway pipeline (regex rules ported from the current Swarm fluentd config).
 
 PII redaction rules: shipped inside the ported `configs/otel-collector-config.yaml` (verbatim from the Swarm config — the canonical source). Operators override per-env by forking the file in `deploy/environments/<env>/`; Plan 7 conftest lints that no rule is dropped.
 EOF
@@ -1124,7 +1123,7 @@ git commit -m "docs(charts): genieai-umbrella README with observability layer st
 - [ ] **Step 3: Final render summary**
 
 Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep "^kind:" | sort | uniq -c | sort -rn | head -10`
-Expected: comprehensive overview showing Services, Deployments, NetworkPolicies, SealedSecrets, VM*, V*, OTelCollector, ConfigMap, ServiceMonitor, etc.
+Expected: comprehensive overview showing Services, Deployments, NetworkPolicies, SealedSecrets, VM*, V*, OTelCollector, ConfigMap, VMServiceScrape, etc.
 
 - [ ] **Step 4: Final lint + ct lint**
 
@@ -1145,13 +1144,13 @@ After writing all 11 tasks, run this checklist against the spec.
 
 | Spec section | Task |
 |---|---|
-| §10 observability stack default (profile-gated) | Tasks 2, 8 |
+| §10 observability stack (explicit per-env toggles; profile helpers template-side) | Tasks 2, 8 |
 | §10 vmoperator (VM/VL/VT) | Task 3 |
 | §10 opentelemetry-operator | Task 4 |
 | §10 grafana-operator (instance/datasources/dashboards CRs) | Task 5 |
 | §10 PII redaction transform | Task 4 |
 | §10 log ingestion (agent DaemonSet replacing the fluentd-driver pipeline) | Task 4b |
-| §7 ServiceMonitors conditional | Task 7 |
+| §7 VMServiceScrapes conditional (vmoperator-native) | Task 7 |
 | §10 traces query via VT-native Tempo HTTP API (tempo-proxy REMOVED) | Task 5 Step 4 + Task 6 note |
 | §8 observability SealedSecrets (grafanaAdminPassword, kcGrafanaClientSecret per §8 F14) | Task 10 |
 | §17 observability entries in v1.0 manifest | Tasks 1-10 |
@@ -1168,10 +1167,10 @@ Sections deferred:
 **4. Review Focus coverage**: 5 input-class concerns pinned:
 
 1. vmoperator CRD version compat (K8s 1.33) → Task 1 Step 4 (`helm dep list` parses pinned versions).
-2. ServiceMonitor only when observability + per-service toggle → Task 7 Step 3 (render asserts 0 ServiceMonitors when observability off).
+2. VMServiceScrape only when observability + per-service toggle → Task 7 Step 3 (render asserts 0 VMServiceScrapes when observability off).
 3. Traces query VT-direct (no proxy) → Task 5 Step 4 (asserts jaeger datasource URL contains vtraces + zero tempo-proxy in render).
 4. PII redaction yaml schema (error_mode: ignore) → Task 4 Step 5 (assertions on ported config + otelcol validate when available).
-5. ClusterProfile-driven toggles → Task 8 Step 3-4 (render with prod AND dev; assert observable count).
+5. values.yaml templating trap → Task 2 Steps 3-4 (static booleans verified; no `{{` in values; explicit-enablement render).
 6. Log ingestion without the fluentd driver → Task 4b Step 5 (render asserts gateway `deployment` + agent `daemonset` CRs, filelog receiver, `/var/log/pods` hostPath).
 
 All six covered.
@@ -1191,6 +1190,6 @@ All six covered.
 ## What's next after Plan 4
 
 - Plan 5: AI/ML (vLLM + TEI + OPEA microservices + GPU operator + 14 Group-6 services including the restored tei_reranker)
-- Plan 6: per-env Kustomize overlays + GitOps sync + ingress (Envoy Gateway + cert-manager + nginx volumeMount wiring — picks up Plan 3 Task 5 step 4 follow-up)
+- Plan 6: per-env Kustomize overlays + GitOps sync + ingress (Envoy Gateway + cert-manager; picks up the deferred NetworkPolicy label-verification pass)
 - Plan 7: CI integration + image signing + Renovate + uninstall safety + secret-leak lint + chart-schema-drift alert
 - Plan 8: documentation (site content + docs/charts/*)

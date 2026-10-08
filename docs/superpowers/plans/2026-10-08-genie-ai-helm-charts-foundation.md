@@ -63,7 +63,7 @@ for the first batch of work.
 | Chart | Status | Purpose |
 |---|---|---|
 | `genieai-common` | foundation | Library chart (templates + helpers) reused by `genieai-umbrella` |
-| `genieai-umbrella` | foundation | Single-install chart — 26 services, depends on `genieai-common` + operators |
+| `genieai-umbrella` | foundation | Single-install chart — 28 services, depends on `genieai-common` + operators |
 
 ## Other directories
 
@@ -445,7 +445,7 @@ git commit -m "chore(charts): empty values.yaml + .helmignore for library"
 apiVersion: v2
 name: genieai-umbrella
 description: |
-  Single-install umbrella chart for GENIE.AI. Renders the entire 26-service
+  Single-install umbrella chart for GENIE.AI. Renders the entire 28-service
   stack with one `helm install` — typically consumed via per-env Kustomize
   overlays at `deploy/environments/<env>/`.
 type: application
@@ -723,7 +723,7 @@ kind load docker-image alpine:3.20 --name genieai-test
 kind create cluster --name genieai-test --image kindest/node:v1.33.0
 
 # Install chart
-helm install test charts/genieai-umbrella -n genieai --create-namespace
+helm install test charts/genieai-umbrella -n genieai   # the chart renders its own Namespace — do NOT pass --create-namespace (it pre-creates an unowned namespace the chart object then collides with)
 
 # Run test
 helm test test -n genieai
@@ -765,28 +765,20 @@ git commit -m "test(charts): helm test for Namespace + cluster-profile label"
 - [ ] **Step 1: Write `charts/ci/ct.yaml`**
 
 ```yaml
+# chart-testing REAL config schema (verified against upstream config.go):
+# FLAT kebab-case keys. `charts` is a []string; there is NO `kubeVersion`
+# config key — the K8s version is pinned via the kind node image and the
+# `ct install --kube-version 1.33.0` CLI flag in CI (Plan 7).
 remote: origin
-# target-branch: omitted intentionally. ct defaults the comparison branch to
-# the MR's target (e.g. main, release/el-salvador) when running in CI. Hard-coding
-# `target-branch: feat/k8s-migration` blocks MRs from any other branch (Review
-# Focus F11).
-# chart-repos intentionally empty in foundation plan — the only dependency
-# is the local file:// library chart in Task 6. Operator repos (CloudNativePG,
-# kube-arangodb, Keycloak, etc.) are added in Plan 2. Review Focus B5.
-charts:
-  - chart-dirs:
-      - charts
-    chart-repos: []
-    release-label: ct-foundation
-    debug: true
-    namespace: genieai-ct
-    check-resource-keywords: true
-    # Review Focus #3: pin a k8s version so ct runs against a known K8s.
-    # The kind cluster created in CI uses matching image.
-    kubeVersion: 1.33.0
-    skip-helm-dependencies: false
-    helm-extra-args: --timeout 300s
-    validate-changes: false
+# target-branch: omitted — ct derives the MR target branch in CI.
+# Hard-coding one branch would block MRs from any other branch.
+chart-dirs:
+  - charts
+chart-repos: []          # foundation: only the file:// library dep;
+                         # operator repos are added in Plan 2+
+excluded-charts: []
+helm-extra-args: --timeout 300s
+debug: true
 ```
 
 - [ ] **Step 2: Write `charts/ci/README.md`**
@@ -802,22 +794,17 @@ Plan 7). Locally:
 make test
 \`\`\`
 
-Pinned K8s version: **1.33.0** for chart-testing's `ct install --kube-version` flag.
-Matching kind node image: `kindest/node:v1.33.0`. Update both in lockstep.
+Pinned K8s version: **1.33.0** — the kind node image AND the `ct install --kube-version 1.33.0` CLI flag (there is no config-file key for it). Update both in lockstep.
 ```
 
 - [ ] **Step 3: Write `charts/genieai-umbrella/.helmignore`**
 
 ```
 # Helm packaging ignores for the umbrella chart.
-# Keeps `charts/` (vendored dep tarballs) and `Chart.lock` (regenerated on
-# every `helm dep update`) out of the chart's published tarball.
-# NOTE: `.helmignore` only affects `helm package` output, NOT `git add`.
-# Use the repo-root `.gitignore` (Task 10.5 below) to keep these out of
-# Git history.
-charts/
-*.tgz
-*.lock
+# NOTE: vendored deps (charts/*.tgz) + Chart.lock MUST SHIP in the packaged
+# tarball — an OCI-installed umbrella without its dependencies is
+# uninstallable. Keeping them out of GIT diffs is charts/.gitignore's job
+# (they still enter the package from disk).
 .DS_Store
 ```
 
@@ -908,7 +895,7 @@ metadata:
 spec:
   project: genieai
   source:
-    repoURL: ssh://git@opensource.unicc.org:un/itu/genie-ai.git
+    repoURL: git@opensource.unicc.org:un/itu/genie-ai.git   # scp-like form; ssh:// form needs an explicit numeric port (ssh://git@host:22/un/...) — the :un in the naive URL parses as a port and breaks
     targetRevision: main    # use release/el-salvador for the el-salvador env
     path: deploy/environments/dev
   destination:
@@ -1043,7 +1030,7 @@ Foundation plan complete. Next: Plans 2–8 for data layer, service tier, observ
 | Chart | Status | Purpose |
 |---|---|---|
 | `genieai-common` | foundation | Library chart (templates + helpers) reused by `genieai-umbrella` |
-| `genieai-umbrella` | foundation | Single-install chart — 26 services, depends on `genieai-common` + operators |
+| `genieai-umbrella` | foundation | Single-install chart — 28 services, depends on `genieai-common` + operators |
 
 ## Other directories
 

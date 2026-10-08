@@ -398,11 +398,14 @@ git commit -m "feat(charts): render CNPG Postgres Cluster for keycloak-db (HA vi
 
 **Files:**
 - Create: `charts/genieai-umbrella/templates/_rbac/dep-check-serviceaccount.yaml`
+- Create: `charts/genieai-umbrella/templates/_rbac/dep-check-clusterrole.yaml` (custom ClusterRole with CRD access — Review Focus F7)
 - Create: `charts/genieai-umbrella/templates/_rbac/dep-check-clusterrolebinding.yaml`
 
 **Interfaces:**
 - Consumes: nothing new.
-- Produces: a ServiceAccount + ClusterRoleBinding so the three pre-install hook Jobs (dep-check, clusterprofile-detect, sealed-secret-validate) can call kubectl against the cluster. **Review Focus F3**.
+- Produces: a ServiceAccount + ClusterRoleBinding granting list/watch access to (a) namespaces + configmaps + secrets (for dep-check + clusterprofile-detect) AND (b) all CRDs the chart depends on (SealedSecret, KeycloakRealm, ArangoDeployment, CNPG Cluster) so the drift validation hook can read `sealedsecrets.bitnami.com/invalid` annotations.
+
+**Review Focus F7 fix**: stock `view` ClusterRole has NO access to custom resources. Using it returns 403 on `kubectl get sealedsecrets.bitnami.com/sealedsecrets` and equivalent CRDs. Drift detection is silent. **Custom ClusterRole required.**
 
 - [ ] **Step 1: Run red-gate — confirm SA is missing**
 
@@ -421,7 +424,40 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "rbac"))) | nindent 4 }}
 ```
 
-- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_rbac/dep-check-clusterrolebinding.yaml`**
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_rbac/dep-check-clusterrole.yaml`** (custom ClusterRole)
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-dep-check
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "rbac"))) | nindent 4 }}
+rules:
+  # Read-only access to core resources the dep-check Job needs
+  - apiGroups: [""]
+    resources: ["namespaces", "configmaps", "secrets", "events"]
+    verbs: ["get", "list", "watch"]
+  # Read-only access to all chart-managed CRDs (Plan 1-3 dependencies)
+  - apiGroups: ["bitnami.com"]
+    resources: ["sealedsecrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["k8s.keycloak.org"]
+    resources: ["keycloakrealms", "keycloakclients"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["arango.kube.arangodb.com"]
+    resources: ["arangodeployments", "arangomembers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: ["clusters", "poolers"]
+    verbs: ["get", "list", "watch"]
+  # ClusterEvents for the clusterprofile-detect hook's Event write
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+```
+
+- [ ] **Step 4: Write `charts/genieai-umbrella/templates/_rbac/dep-check-clusterrolebinding.yaml`**
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -433,31 +469,28 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  # Read-only access to namespaces, ConfigMaps, and Secrets — sufficient
-  # for dep-check (which reads dependency-graph.json) and clusterprofile-
-  # detect (which reads the namespace label). No write access.
-  name: view
+  name: {{ include "genieai-common.fullname" . }}-dep-check
 subjects:
   - kind: ServiceAccount
     name: {{ include "genieai-common.fullname" . }}-dep-check
     namespace: {{ .Values.namespace }}
 ```
 
-- [ ] **Step 4: Verify render**
+- [ ] **Step 5: Verify render**
 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep "^kind: " | sort | uniq -c`
-Expected: shows `ServiceAccount` and `ClusterRoleBinding` lines.
+Expected: shows `ServiceAccount`, `ClusterRole`, `ClusterRoleBinding` lines.
 
-- [ ] **Step 5: `helm lint --strict`**
+- [ ] **Step 6: `helm lint --strict`**
 
 Run: `helm lint charts/genieai-umbrella --strict`
 Expected: 0 errors.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/_rbac/dep-check-serviceaccount.yaml charts/genieai-umbrella/templates/_rbac/dep-check-clusterrolebinding.yaml
-git commit -m "feat(charts): ServiceAccount + ClusterRoleBinding for pre-install hook Jobs"
+git add charts/genieai-umbrella/templates/_rbac/
+git commit -m "feat(charts): ServiceAccount + custom ClusterRole (CRD access) + RoleBinding for pre-install hook Jobs"
 ```
 
 ---
@@ -466,6 +499,7 @@ git commit -m "feat(charts): ServiceAccount + ClusterRoleBinding for pre-install
 
 **Files:**
 - Create: `charts/genieai-umbrella/templates/hooks/pre-install-dependency-check.yaml`
+- Create: `charts/genieai-umbrella/tests/test-dependency-graph.yaml`
 - Create: `charts/genieai-umbrella/tests/test-dependency-graph.yaml`
 
 **Interfaces:**
@@ -829,10 +863,22 @@ spec:
     - username: genie-admin
       firstName: GENIE
       lastName: Admin
+      # Review Focus F15 fix — Keycloak user profile requires `email` for
+      # verified users (otherwise login fails with 'Account is not fully
+      # set up'). Operators override this in deploy/environments/<env>/
+      # values-override.yaml under `data.keycloak.adminEmail`.
+      email: {{ .Values.data.keycloak.adminEmail | default "genie-admin@genieai.local" | quote }}
       emailVerified: true
       credentials:
+        # Review Focus F3 fix — operator-side credential POST via
+        # keycloak-admin-cli (out of band) is the only way to set the
+        # admin password. Setting `value: ""` here creates a user with
+        # empty password (un-fixable after the fact because the operator
+        # cannot mutate KeycloakRealm CR's user-list subresource).
+        # Credentials are set during install via a one-shot Job (Task 8a).
+        # For local dev, set via `kubectl exec keycloak -- /opt/keycloak/bin/kcadm.sh`.
         - type: password
-          value: ""                # populated by SealedSecret in Task 11
+          value: ""
           temporary: false
   clients:
     - clientId: genie-app
@@ -896,7 +942,11 @@ Expected: prints `0`.
 apiVersion: arango.kube.arangodb.com/v1
 kind: ArangoDeployment
 metadata:
-  name: arango-single
+  {{- /* Review Focus F2 fix: metadata.name MUST match the DNS name used by
+         the chart + Swarm migration paths. Swarm service is arango-vector-db;
+         we render as arangodb-single to match the chart's existing service
+         consumer namespace, which is downstream-of-here stable. */ -}}
+  name: arangodb-single
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "data-arangodb"))) | nindent 4 }}
@@ -909,7 +959,7 @@ spec:
   single:
     args:
       - --server.authentication-system-only=true
-      - --server.endpoint=arangodb://{{ .Values.namespace }}.svc.cluster.local:8529
+      - --server.endpoint=arangodb://arangodb-single.{{ .Values.namespace }}.svc.cluster.local:8529
     storage:
       engine: RocksDB
       volumeClaimTemplate:
@@ -928,7 +978,7 @@ spec:
 apiVersion: arango.kube.arangodb.com/v1
 kind: ArangoDeployment
 metadata:
-  name: arango-cluster
+  name: arangodb-cluster
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "data-arangodb"))) | nindent 4 }}
@@ -1211,8 +1261,17 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" (deepCopy $.Values | merge (dict "component" "sealed-secret"))) | nindent 4 }}
     app.kubernetes.io/component: arangodb
 spec:
+  {{- /* Review Focus F10 fix — kube-arangodb's `jwtSecretName` requires the
+         key `jwt`, not `password`. The `rootPasswordSecretName` requires
+         the key `password`. Each SealedSecret's encryptedData carries the
+         key the operator's `kube-arangodb` expects. */ -}}
+  {{- if eq $secretName "arango-root-secret" }}
   encryptedData:
-    password: PLACEHOLDER_{{ $secretName }}_SEALED_KID
+    password: PLACEHOLDER_arango-root-password_SEALED_KID
+  {{- else if eq $secretName "arango-jwt-secret" }}
+  encryptedData:
+    jwt: PLACEHOLDER_arango-jwt-key_SEALED_KID
+  {{- end }}
 {{- end -}}
 {{- end -}}
 ```
@@ -1253,8 +1312,12 @@ metadata:
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "sealed-secret-validate"))) | nindent 4 }}
   annotations:
-    "helm.sh/hook": pre-install,pre-upgrade
-    "helm.sh/hook-weight": "0"             # after dep-check + clusterprofile-detect
+    # Review Focus F6 fix — pre-install would fire BEFORE Helm renders the
+    # SealedSecret resources (which are regular templates, not hooks).
+    # On a fresh cluster the Job finds zero SealedSecrets and exits 0
+    # regardless of cluster key state (false PASS). Pre-upgrade only.
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   backoffLimit: 1
@@ -1300,18 +1363,28 @@ spec:
               set -eu
               ns="{{ .Values.namespace }}"
               invalid=0
-              for name in arango-root-secret arango-jwt-secret keycloak-db-credentials genie-admin-credentials; do
+              total=0
+              # Review Focus F13 fix — list ALL SealedSecret resources committed
+              # via the chart, including the 3 added by Plan 3 (email-password,
+              # keycloak-client-secret, huggingface-hub-token). Earlier version
+              # hardcoded the 4 Plan-2 secrets, missing Group-5 drift.
+              for name in $(kubectl get sealedsecret -n "$ns" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+                total=$((total+1))
                 if kubectl get sealedsecret "$name" -n "$ns" -o jsonpath='{.metadata.annotations.sealedsecrets\.bitnami\.com/invalid}' 2>/dev/null | grep -q '^true$'; then
                   echo "DRIFT: $name marked invalid (cluster key rotated; re-encrypt with current public key)"
                   invalid=$((invalid+1))
                 fi
               done
               if [ "$invalid" -gt 0 ]; then
-                echo "FAIL: $invalid SealedSecret resources drifted"
-                echo "FAIL: kubeseal --fetch-cert + re-encrypt + commit + push + re-install required"
+                echo "FAIL: $invalid SealedSecret resources drifted (of $total total)"
+                echo "FAIL: kubeseal --fetch-cert + re-encrypt + commit + push + re-upgrade required"
                 exit 1
               fi
-              echo "PASS: no drift detected (post sealed-secrets v0.40.0 30-day rotation)"
+              if [ "$total" -eq 0 ]; then
+                echo "INFO: no SealedSecret resources in namespace yet (first install?)"
+                exit 0
+              fi
+              echo "PASS: no drift detected across $total SealedSecret resources"
 {{- end -}}
 ```
 

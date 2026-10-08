@@ -58,8 +58,13 @@ ai:
   enabled: true
 
   models:
-    # IDs from `env` Section "Deployment-Specific" + compose defaults
-    llmId: meta-llama/Meta-Llama-3.1-8B-Instruct       # VLLM_LLM_MODEL_ID
+    # IDs from `env` Section "Deployment-Specific" + compose defaults.
+    # NOTE: docker-compose.gpu.yaml (the NEWER GPU reference) defaults to
+    # ibm-granite/granite-3.3-2b-instruct while main docker-compose.yaml
+    # still carries meta-llama — per-env values-override picks the model;
+    # the chart default follows the GPU compose (granite, validated for
+    # guided JSON per CLAUDE.md VLLM_LLM_MODEL_ID note).
+    llmId: ibm-granite/granite-3.3-2b-instruct          # VLLM_LLM_MODEL_ID
     translationId: google/gemma-3-4b-it                  # VLLM_TRANSLATION_MODEL_ID
     embeddingId: BAAI/bge-large-en-v1.5                  # EMBEDDING_MODEL_ID
     rerankerId: BAAI/bge-reranker-v2-m3                  # RERANKER_MODEL_ID
@@ -112,24 +117,42 @@ ai:
     accessModes: ["ReadWriteMany"]
 
   remoteGpu:
-    # Swarm GPU_NODE_HOST equivalent: model servers run OUTSIDE the cluster.
-    # When true: the 4 GPU Deployments are not rendered and wrapper env
-    # endpoints point at these URLs (bearer auth via VLLM_API_KEY).
+    # Swarm GPU_NODE_HOST equivalent: model servers run OUTSIDE the cluster
+    # (docker-compose.gpu.yaml node: nginx-gpu TLS + api_keys.map bearer,
+    # path-prefixed routing). When true: the 4 GPU Deployments + the HF
+    # cache PVC are not rendered and wrapper env endpoints point at these
+    # URLs — which MUST carry the nginx-gpu PATH PREFIXES, exactly like the
+    # Swarm env §14 derivation:
+    #   GPU_NODE_HOST=gpu.example.org ->
+    #     vllmUrl:            https://gpu.example.org/llm
+    #     vllmTranslationUrl: https://gpu.example.org/translation
+    #     teiEmbeddingUrl:    https://gpu.example.org/embed
+    #     teiRerankingUrl:    https://gpu.example.org/rerank
+    #     doclingUrl:         https://gpu.example.org/docling
+    # Auth: VLLM_API_KEY bearer (Authorization header) — same contract the
+    # GPU node's nginx validates via api_keys.map.
     enabled: false
-    vllmUrl: ""                      # e.g. https://gpu.example.org/vllm
+    vllmUrl: ""
     vllmTranslationUrl: ""
     teiEmbeddingUrl: ""
     teiRerankingUrl: ""
+    # docling-serve exists ONLY on the GPU node (no main-compose service).
+    # Empty = dataprep runs docling IN-PROCESS (Swarm default when unset).
+    # Set = dataprep ships extraction to the remote docling-serve.
+    doclingUrl: ""
+    doclingTimeout: "120"            # DOCLING_ENDPOINT_TIMEOUT
 
   services:
     # ---- GPU model servers (upstream images) ----
     vllm:
       enabled: true
-      image: { repository: vllm/vllm-openai, tag: "0.10.0" }
+      # v0.29.0 per docker-compose.gpu.yaml (newer than main compose's
+      # 0.10.0 — the GPU-node reference wins)
+      image: { repository: vllm/vllm-openai, tag: "0.29.0" }
       port: 8000                     # container port; Service exposes 80
     vllmTranslation:
       enabled: true
-      image: { repository: vllm/vllm-openai, tag: "0.10.0" }
+      image: { repository: vllm/vllm-openai, tag: "0.29.0" }
       port: 9031
     tei:
       enabled: true
@@ -156,6 +179,13 @@ ai:
       enabled: true
       image: { repository: registry.example.org/genie-ai-dataprep-arango, tag: "1.0.0" }
       port: 5000
+      # Swarm runs dataprep WITH GPU access (NVIDIA_VISIBLE_DEVICES=all,
+      # DOCLING_DEVICE=cuda — in-process docling is GPU-fed). K8s default:
+      # CPU-only pod + in-process docling on CPU (slower ingestion, zero
+      # GPU coupling). Set true per-env to schedule it on GPU nodes
+      # (nodeSelector + tolerations + nvidia.com/gpu: 1 are injected by
+      # the template when onGpu is set).
+      onGpu: false
     chatqna:
       enabled: true
       image: { repository: registry.example.org/genie-ai-chatqna-server, tag: "1.0.0" }
@@ -535,7 +565,7 @@ The remaining six carry (compose-verified env, Service port 80, targetPort = con
 | `embedding.yaml` | 6000 | `TEI_EMBEDDING_ENDPOINT=http://tei.{{ns}}:80`, `EMBEDDING_MODEL_ID=<ai.models.embeddingId>`; envFrom `vllm-api-key` |
 | `reranker.yaml` | 8000 | `TEI_RERANKING_ENDPOINT=http://tei-reranker.{{ns}}:80`, `RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING`; envFrom `vllm-api-key` |
 | `retriever.yaml` | 7000 | `VLLM_ENDPOINT=http://vllm.{{ns}}:80`, `TEI_EMBEDDING_ENDPOINT=http://tei.{{ns}}:80`, `ARANGO_URL=http://arangodb-single.{{ns}}:8529` (+ `RETRIEVER_ARANGO_*` same defaults as chatqna); envFrom `vllm-api-key` |
-| `dataprep.yaml` | 5000 | `VLLM_MODEL_ID=<llmId>`, `VLLM_ENDPOINT=http://vllm.{{ns}}:80`, `TEI_EMBEDDING_ENDPOINT=http://tei.{{ns}}:80`, `ARANGO_URL=http://arangodb-single.{{ns}}:8529`, `CONTEXTUAL_RETRIEVAL_ENABLED=true`; envFrom `vllm-api-key` + `kc-dataprep-client-secret` |
+| `dataprep.yaml` | 5000 | `VLLM_MODEL_ID=<llmId>`, `VLLM_ENDPOINT=…`, `TEI_EMBEDDING_ENDPOINT=…`, `ARANGO_URL=http://arangodb-single.{{ns}}:8529`, `CONTEXTUAL_RETRIEVAL_ENABLED=true`, `DOCUMENT_REPOSITORY_URL=http://document-repository.{{ns}}:80`, `BACKEND_SERVICE_URL=http://backend.{{ns}}:80`, `KC_DATAPREP_CLIENT_ID=dataprep-service-client` (secret via envFrom), `CONTENT_EXTRACTION_METHOD=docling`, `DOCLING_ENDPOINT` (Task 8 ternary), `DOCLING_DEVICE=cuda|cpu` (from `onGpu`); envFrom `vllm-api-key` + `kc-dataprep-client-secret` |
 | `textgen.yaml` | 9000 | `LLM_ENDPOINT=http://vllm.{{ns}}:80`, `LLM_MODEL_ID=<llmId>` |
 | `translation.yaml` | 8888 | `LLM_ENDPOINT=http://vllm-translation.{{ns}}:80`, `LLM_MODEL_ID=<translationId>` |
 
@@ -611,14 +641,14 @@ git commit -m "feat(charts): guardrail + chatqna ui/nginx templates (off by defa
 
 **Interfaces:**
 - Consumes: spec §8 rows: `VLLM_API_KEY` (Plan 5), `keycloakProxyClientSecret` (Plan 5), `kcDataprepClientSecret` (Plan 5).
-- Produces: 3 SealedSecret CRs. `vllm-api-key` carries BOTH `VLLM_API_KEY` and `HF_TOKEN` keys (same underlying value, two env names — compose feeds both from `VLLM_API_KEY`). `keycloak-proxy-client-secret` (key `KEYCLOAK_PROXY_CLIENT_SECRET`) is consumed by the BACKEND (keycloak-proxy-service.js) — values update only here; its envFrom already works via Plan 3's backend secrets list. `kc-dataprep-client-secret` (key `KC_DATAPREP_CLIENT_SECRET`) feeds dataprep's client-credentials grant.
+- Produces: 3 SealedSecret CRs. `vllm-api-key` carries FOUR keys (`VLLM_API_KEY`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `HUGGINGFACEHUB_API_TOKEN`) — one value under every env name the stack reads (wrappers, vllm pulls, dataprep). `keycloak-proxy-client-secret` (key `KEYCLOAK_PROXY_CLIENT_SECRET`) is consumed by the BACKEND (keycloak-proxy-service.js) — values update only here; its envFrom already works via Plan 3's backend secrets list. `kc-dataprep-client-secret` (key `KC_DATAPREP_CLIENT_SECRET`) feeds dataprep's client-credentials grant.
 
 - [ ] **Step 1: Write `charts/genieai-umbrella/templates/_secrets/ai-secrets.yaml`**
 
 ```yaml
 {{- if and .Values.secrets.sealedSecrets.enabled .Values.ai.enabled -}}
 {{- /* Spec §8 mapping (names DNS-1123; encryptedData keys = ENV VAR NAMES):
-       VLLM_API_KEY             → vllm-api-key                (keys VLLM_API_KEY + HF_TOKEN — same value, two env names)
+       VLLM_API_KEY             → vllm-api-key                (keys VLLM_API_KEY + HF_TOKEN + HUGGING_FACE_HUB_TOKEN + HUGGINGFACEHUB_API_TOKEN — SAME value under FOUR env names: wrappers read HF_TOKEN/VLLM_API_KEY, vllm model-pulls read HUGGING_FACE_HUB_TOKEN, dataprep reads HUGGINGFACEHUB_API_TOKEN)
        keycloakProxyClientSecret→ keycloak-proxy-client-secret (key KEYCLOAK_PROXY_CLIENT_SECRET — backend consumer)
        kcDataprepClientSecret   → kc-dataprep-client-secret    (key KC_DATAPREP_CLIENT_SECRET — dataprep consumer)
 */ -}}
@@ -633,7 +663,9 @@ metadata:
 spec:
   encryptedData:
     VLLM_API_KEY: PLACEHOLDER_VLLM_API_KEY_SEALED_KID
-    HF_TOKEN: PLACEHOLDER_VLLM_API_KEY_SEALED_KID   # same value, re-sealed
+    HF_TOKEN: PLACEHOLDER_VLLM_API_KEY_SEALED_KID
+    HUGGING_FACE_HUB_TOKEN: PLACEHOLDER_VLLM_API_KEY_SEALED_KID
+    HUGGINGFACEHUB_API_TOKEN: PLACEHOLDER_VLLM_API_KEY_SEALED_KID   # all four = same value, re-sealed
 ---
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
@@ -682,7 +714,7 @@ helm template test charts/genieai-umbrella -n genieai | \
   python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
   ss = next(d for d in docs if d and d.get('kind')=='SealedSecret' and d['metadata']['name']=='vllm-api-key'); \
   keys = set(ss['spec']['encryptedData'].keys()); \
-  assert keys == {'VLLM_API_KEY','HF_TOKEN'}, keys; print('PASS')"
+  assert keys == {'VLLM_API_KEY','HF_TOKEN','HUGGING_FACE_HUB_TOKEN','HUGGINGFACEHUB_API_TOKEN'}, keys; print('PASS')"
 ```
 
 Expected: prints `PASS`.
@@ -801,7 +833,7 @@ git commit -m "feat(charts): AI-tier NetworkPolicies (default-deny + edge matrix
               {{- end }}
 ```
 
-Mapping: `VLLM_ENDPOINT`→`vllmUrl`, `TEI_EMBEDDING_ENDPOINT`→`teiEmbeddingUrl`, `TEI_RERANKING_ENDPOINT`→`teiRerankingUrl`, translation `LLM_ENDPOINT`→`vllmTranslationUrl`, textgen `LLM_ENDPOINT`→`vllmUrl`.
+Mapping: `VLLM_ENDPOINT`→`vllmUrl`, `TEI_EMBEDDING_ENDPOINT`→`teiEmbeddingUrl`, `TEI_RERANKING_ENDPOINT`→`teiRerankingUrl`, translation `LLM_ENDPOINT`→`vllmTranslationUrl`, textgen `LLM_ENDPOINT`→`vllmUrl`, **chatqna** `VLLM_TRANSLATION_ENDPOINT`→`vllmTranslationUrl` (compose-verified: chatqna dials the translation model directly), **dataprep** `DOCLING_ENDPOINT`→`doclingUrl` (only when non-empty — empty keeps in-process docling, matching the Swarm `DOCLING_ENDPOINT=` semantics). All URLs carry the GPU node's nginx path prefixes (see values comment).
 
 - [ ] **Step 2: Fail-fast on empty remote URLs**
 
@@ -810,7 +842,7 @@ Add to `templates/_ai/*` wrappers' top:
 ```gotemplate
 {{- if and .Values.ai.enabled .Values.ai.remoteGpu.enabled -}}
 {{- if or (not .Values.ai.remoteGpu.vllmUrl) (not .Values.ai.remoteGpu.teiEmbeddingUrl) -}}
-{{- fail "ai.remoteGpu.enabled=true requires vllmUrl + teiEmbeddingUrl (and teiRerankingUrl/vllmTranslationUrl for their consumers)" -}}
+{{- fail "ai.remoteGpu.enabled=true requires vllmUrl + teiEmbeddingUrl (+ teiRerankingUrl / vllmTranslationUrl for their consumers); doclingUrl is optional (empty = in-process docling)" -}}
 {{- end -}}
 {{- end -}}
 ```

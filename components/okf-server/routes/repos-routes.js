@@ -59,6 +59,22 @@ router.post('/:repo_id/ingest', requireRepoScope('repo_id', 'admin'), ctrl.retir
 router.post('/:repo_id/head/rebuild', requireRepoScope('repo_id', 'admin'), ctrl.rebuildRepoHead);
 router.post('/:repo_id/routing-test', requireRepoScope('repo_id', 'admin'), ctrl.routingTest);
 
+// Story 1-8 MR-B (2026-10-08) — test suites + run analytics. The
+// generator is ONE guided-JSON vLLM call (admin — LLM-burning, 5-15s);
+// a run executes every suite query (one TEI embed each) and persists
+// pass rates / margins / steals to okf_head_test_runs. Curator
+// free-text queries join a suite via POST .../:suite_key/queries. The
+// runs listing is read-scope (analytics history across tag cycles) and
+// MUST stay above any /:suite_key route so 'runs' is never parsed as a key.
+router.get('/:repo_id/routing-testsuite/runs', requireRepoScope('repo_id', 'read'), ctrl.listTestSuiteRuns);
+router.post('/:repo_id/routing-testsuite', requireRepoScope('repo_id', 'admin'), ctrl.generateTestSuite);
+router.post('/:repo_id/routing-testsuite/:suite_key/run', requireRepoScope('repo_id', 'admin'), ctrl.runTestSuite);
+router.post(
+  '/:repo_id/routing-testsuite/:suite_key/queries',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.addTestSuiteQueries
+);
+
 // Version mint + manifests (Story 2.9.7 — ADR-031): mint is an admin mutation
 // (publish/crawl/manual trigger); listing/reading versions is read-scope
 // (backs 4.5's diff/list UI and version-pinned citation).

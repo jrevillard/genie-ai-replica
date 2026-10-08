@@ -53,6 +53,18 @@ function createMockDb() {
         s[k] = { ...s[k], ...patch };
         return { ...s[k] };
       }),
+      replace: jest.fn(async (k, doc) => {
+        const s = stores[name];
+        if (!s || !s[k]) {
+          const e = new Error('not found');
+          e.code = 404;
+          e.errorNum = 1204;
+          throw e;
+        }
+        s[k] = { ...doc, _key: k, _id: `${name}/${k}`, _rev: '2' };
+        return { ...s[k] };
+      }),
+      indexes: jest.fn(async () => []),
       rename: jest.fn(async (newName) => {
         const exists = (n) => !!(stores[n] && Object.keys(stores[n]).length > 0);
         if (!exists(name)) {
@@ -125,6 +137,11 @@ function createMockDb() {
     route,
     query: jest.fn(defaultQuery),
     exists: jest.fn(async () => true),
+    /** Collection inventory + creation (frontmatter/head-suite ensure paths). */
+    listCollections: jest.fn(async () => Object.keys(stores).map((n) => ({ name: n }))),
+    createCollection: jest.fn(async (n) => {
+      stores[n] = stores[n] || {};
+    }),
     /** Named-graph handles: existence derived from member collections. */
     graph: jest.fn((n) => ({
       exists: jest.fn(async () => {

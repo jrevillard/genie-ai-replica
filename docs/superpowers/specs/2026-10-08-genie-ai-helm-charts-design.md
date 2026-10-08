@@ -92,7 +92,7 @@ genie-ai/
 | `sealed-secrets` | `https://bitnami.github.io/sealed-secrets` (NOT the deprecated `charts.bitnami.com/bitnami/sealed-secrets`) | `~> 2.20.0` (corresponds to controller v0.40.0+) | `secrets.sealedSecrets.enabled` | always (default backend) |
 | `victoria-metrics-operator` | `https://victoriametrics.github.io/helm-charts` | `~> 0.45.0` | `observability.enabled` | single chart provides ALL CRDs: VMSingle/VMCluster, VLSingle, VTSingle, VMAgent, VMServiceScrape, VMRule… (verified against the repo index — no separate VL/VT operator charts exist) |
 | `opentelemetry-operator` | `https://open-telemetry.github.io/opentelemetry-helm-charts` | `~> 0.50.0` | `observability.otel.enabled` | profile-gated |
-| `gpu-operator` | `https://nvidia.github.io/gpu-operator` | `~> v25.x` | `gpu.enabled` | GPU clusters only |
+| _(gpu-operator — see note)_ | **cluster bootstrap prerequisite** (OLM / NVIDIA static YAML per nvidia docs) | v25.x | — | NOT a chart dep (audit decision 8, 2026-10-08 — keycloak-operator precedent); the chart only schedules onto GPU nodes (`ai.gpu.*`) |
 | `cert-manager` | `https://charts.jetstack.io` | `~> 1.21.0` | `certManager.enabled` | if `ingress.tls.issuer: cert-manager` |
 | `envoy-gateway` | `https://gateway.envoyproxy.io/charts` (or local OCI) | `~> 1.9.0` | `ingress.className: envoy` | if Envoy Gateway chosen |
 
@@ -428,7 +428,7 @@ PII redaction, currently in the Swarm `fluentd` driver config, becomes an OpenTe
 
 ## 11. GPU / AI workloads
 
-`gpu.enabled: true` triggers `nvidia/gpu-operator` install. Per-service toggles for vllm, tei, tei-reranker, etc. hold `nodeSelector: { nvidia.com/gpu: present }` and `tolerations: [{ key: nvidia.com/gpu, operator: Exists }]`.
+The GPU operator / device plugin is a **cluster bootstrap prerequisite** (audit decision 8) — NOT installed by the chart. Per-service scheduling lives under `ai.gpu.*`: `nodeSelector: { genieai.io/gpu: "true" }` + toleration of the optional `genieai.io/gpu=true:NoSchedule` taint + `nvidia.com/gpu` resource limits (Plan 5). Remote-GPU deployments (`ai.remoteGpu.enabled=true`) skip GPU scheduling entirely.
 
 vLLM/TEI resources remain governed by `services.*.resources`; `gpu.limitsPerService` is a v2+ knob (24GB cards + MIG vs time-slicing).
 

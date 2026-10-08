@@ -2679,7 +2679,8 @@ export default {
           repo: 'Repository',
           state: 'State',
           headScore: 'Head score',
-          rank: 'Rank'
+          rank: 'Rank',
+          claimed: 'Claims query'
         },
         provenance: 'Routing provenance',
         empty:
@@ -2687,7 +2688,12 @@ export default {
         pass: 'PASS — this repository wins the head routing.',
         fail: 'FAIL — {repo} wins the head routing for this query.',
         passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
-        failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).'
+        failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
+        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        notSelectedSuppressed:
+          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        claimed: 'claims',
+        suppressed: 'suppressed'
       },
       suites: {
         generate: 'Generate test suite',

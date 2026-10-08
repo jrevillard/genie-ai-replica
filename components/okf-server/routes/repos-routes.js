@@ -51,6 +51,14 @@ router.post('/:repo_id/import', requireRepoScope('repo_id', 'admin'), ctrl.impor
 // POST /:repo_id/lifecycle {"action":"ingest"}. 410 with the pointers.
 router.post('/:repo_id/ingest', requireRepoScope('repo_id', 'admin'), ctrl.retiredIngestRoute);
 
+// Story 1-8 (2026-10-08) — Head Tester / Routing Lab. rebuild fixes a
+// missing/stale okf_repositories.head (publish is warn-only on a TEI
+// outage); routing-test is the two-leg simulation (head signalling
+// works PRE-INGEST; chunk-probe replay for graph-bearing repos). Both
+// admin-scoped — the test burns a TEI embed per query.
+router.post('/:repo_id/head/rebuild', requireRepoScope('repo_id', 'admin'), ctrl.rebuildRepoHead);
+router.post('/:repo_id/routing-test', requireRepoScope('repo_id', 'admin'), ctrl.routingTest);
+
 // Version mint + manifests (Story 2.9.7 — ADR-031): mint is an admin mutation
 // (publish/crawl/manual trigger); listing/reading versions is read-scope
 // (backs 4.5's diff/list UI and version-pinned citation).

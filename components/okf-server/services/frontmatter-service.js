@@ -28,13 +28,10 @@
 // never reads at query time.
 
 const axios = require('axios');
-const nodeCrypto = require('crypto');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
-const auditService = require('./audit-service');
 const { isArangoNotFound } = require('./arango-errors');
-const { workingGraphName } = require('./graph-lifecycle-service');
 
 // ---------- Config (env-driven; env vars match the docker-compose template) ----------
 //
@@ -289,8 +286,7 @@ async function teiEmbed(inputs) {
   const headers = { 'Content-Type': 'application/json' };
   const hfKey = process.env.HF_TOKEN || process.env.HUGGINGFACEHUB_API_TOKEN || VLLM_LLM_API_KEY;
   if (hfKey) headers.Authorization = 'Bearer ' + hfKey;
-  const fn = () =>
-    axios.post(`${TEI_EMBED_HOST}/embed`, body, { headers, timeout: 30000 });
+  const fn = () => axios.post(`${TEI_EMBED_HOST}/embed`, body, { headers, timeout: 30000 });
   const resp = await withTeiRetry(fn, { endpoint: '/embed', batch_size: Array.isArray(inputs) ? inputs.length : 1 });
   // TEI returns either {data: [[...], ...]} (batched) or [...] depending on shape
   const out = resp.data && (resp.data.data || resp.data.embeddings || resp.data);
@@ -310,37 +306,6 @@ function normalizeTag(s) {
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9-]/g, '')
     .slice(0, 64);
-}
-
-function validateFrontmatterShape(fm) {
-  if (!fm || typeof fm !== 'object') throw new FrontmatterError('EMPTY', 'frontmatter is empty', 400);
-  const errors = [];
-  for (const field of VALID_FIELDS) {
-    const range = FIELD_RANGES[field];
-    const values = Array.isArray(fm[field])
-      ? fm[field]
-      : field === 'summary' || field === 'scope'
-        ? [fm[field]].filter(Boolean)
-        : [];
-    if (values.length < range.min || values.length > range.max) {
-      errors.push(`${field}: must have ${range.min}-${range.max} values (got ${values.length})`);
-    }
-  }
-  // forbidden must be non-empty if the corpus is NOT marked comprehensive
-  if (!fm.comprehensive && (!Array.isArray(fm.forbidden) || fm.forbidden.length < 2)) {
-    errors.push(
-      'forbidden: must list 2-6 things users might expect but are NOT in this corpus (or set comprehensive=true)'
-    );
-  }
-  // forbidden values must NOT collide with topic values
-  const topicSet = new Set((fm.topic || []).map(normalizeTag).filter(Boolean));
-  const forbCollision = (fm.forbidden || [])
-    .map(normalizeTag)
-    .filter(Boolean)
-    .filter((v) => topicSet.has(v));
-  if (forbCollision.length) errors.push(`forbidden collides with topic: ${forbCollision.join(', ')}`);
-  if (errors.length) throw new FrontmatterError('VALIDATION', errors.join('; '), 400);
-  return true;
 }
 
 // ---------- DB helpers ----------
@@ -446,11 +411,7 @@ async function suggestTags(repoId, opts = {}) {
       // 400 with a clear directive: per-repo tags require at least one
       // concept (curator's authoring). Chunks are NOT a fallback — the
       // spec (2026-10-08) is explicit that tags originate from concept-meta.
-      throw new FrontmatterError(
-        'NO_CONCEPTS',
-        'Add at least one concept before requesting tag suggestions.',
-        400
-      );
+      throw new FrontmatterError('NO_CONCEPTS', 'Add at least one concept before requesting tag suggestions.', 400);
     }
     span.setAttribute('okf.sample_size', concepts.length);
     const conceptsText = formatConceptsForPrompt(concepts).slice(0, 6000);
@@ -478,11 +439,7 @@ async function suggestTags(repoId, opts = {}) {
       content_preview: (content || '').slice(0, 600),
       content_length: (content || '').length,
       finish_reason:
-        (resp.data &&
-          resp.data.choices &&
-          resp.data.choices[0] &&
-          resp.data.choices[0].finish_reason) ||
-        null,
+        (resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].finish_reason) || null,
       usage: (resp.data && resp.data.usage) || null
     });
     const parsed = extractJson(content);
@@ -508,27 +465,17 @@ async function suggestTags(repoId, opts = {}) {
       return [];
     };
     const out = {
-      topic: arr('topic', 'topics', 'repo_level_topics', 'topic_set', 'subjects')
-        .map(normalizeTag)
-        .filter(Boolean),
-      entity: arr('entity', 'entities', 'named_entities', 'people_products_places')
-        .map(normalizeTag)
-        .filter(Boolean),
-      scope: normalizeTag(
-        parsed.scope || parsed.scope_label || parsed.scope_word || parsed.scope_kind
-      ),
-      forbidden: arr('forbidden', 'forbidden_topics', 'exclusions', 'not_about')
-        .map(normalizeTag)
-        .filter(Boolean),
+      topic: arr('topic', 'topics', 'repo_level_topics', 'topic_set', 'subjects').map(normalizeTag).filter(Boolean),
+      entity: arr('entity', 'entities', 'named_entities', 'people_products_places').map(normalizeTag).filter(Boolean),
+      scope: normalizeTag(parsed.scope || parsed.scope_label || parsed.scope_word || parsed.scope_kind),
+      forbidden: arr('forbidden', 'forbidden_topics', 'exclusions', 'not_about').map(normalizeTag).filter(Boolean),
       summary:
         typeof parsed.summary === 'string'
           ? parsed.summary.slice(0, 512)
           : typeof parsed.description === 'string'
             ? parsed.description.slice(0, 512)
             : null,
-      keyword: arr('keyword', 'keywords', 'specific_terms', 'low_coverage_terms')
-        .map(normalizeTag)
-        .filter(Boolean)
+      keyword: arr('keyword', 'keywords', 'specific_terms', 'low_coverage_terms').map(normalizeTag).filter(Boolean)
     };
     span.setAttribute('okf.suggested.topic_count', out.topic.length);
     span.setAttribute('okf.suggested.forbidden_count', out.forbidden.length);
@@ -544,8 +491,6 @@ async function suggestTags(repoId, opts = {}) {
 
 async function validateFrontmatter(repoId, frontmatter, _opts = {}) {
   return withSpan('okf.frontmatter.validate', async (span) => {
-    span.setAttribute('okf.repo_id', repoId);
-    const db = await dbService.getConnection();
     // TODO (post-Story 1.6): switch the consistency-check source to
     // concept-meta too, for symmetry with suggestTags. Today this still
     // samples chunks from the working graph — at publish time those may be
@@ -650,124 +595,6 @@ function averageVectors(vectors, weight) {
   return acc;
 }
 
-async function publishFrontmatter(repoId, frontmatter, opts = {}) {
-  return withSpan('okf.frontmatter.publish', async (span) => {
-    span.setAttribute('okf.repo_id', repoId);
-    const db = await dbService.getConnection();
-    await ensureCollections(db);
-    // 1. shape validate
-    validateFrontmatterShape(frontmatter);
-    const approvedBy = opts.actor && opts.actor.user_id ? opts.actor.user_id : 'auto-publish';
-    const now = new Date().toISOString();
-    const version = parseInt(opts.version || Date.now(), 10);
-    // 2. embed all tags (TEI)
-    const valuesByField = await embedAllTags(frontmatter);
-    // 3. compute combination vectors per the spec §1a
-    const summary = {
-      _key: repoId,
-      topic_combined_vector: averageVectors(valuesByField.topic, FIELD_RANGES.topic.default_weight),
-      entity_combined_vector: averageVectors(valuesByField.entity, FIELD_RANGES.entity.default_weight),
-      keyword_combined_vector: averageVectors(valuesByField.keyword, FIELD_RANGES.keyword.default_weight),
-      summary_vector: averageVectors(valuesByField.summary, FIELD_RANGES.summary.default_weight),
-      scope_vector: averageVectors(valuesByField.scope, FIELD_RANGES.scope.default_weight),
-      forbidden_combined_vector: averageVectors(valuesByField.forbidden, 1.0),
-      topic_count: valuesByField.topic.length,
-      entity_count: valuesByField.entity.length,
-      keyword_count: valuesByField.keyword.length,
-      forbidden_count: valuesByField.forbidden.length,
-      updated_at: now,
-      version
-    };
-    if (!summary.topic_combined_vector)
-      throw new FrontmatterError('VALIDATION', 'topic_combined_vector is empty after embedding', 400);
-    if (!summary.forbidden_combined_vector)
-      throw new FrontmatterError('VALIDATION', 'forbidden_combined_vector is empty after embedding', 400);
-    // 4. atomic write (single transaction)
-    const txn = await db.beginTransaction({ write: [FRONTMATTER_COLLECTION, FRONTMATTER_SUMMARY_COLLECTION] });
-    try {
-      // Clear existing rows for this repo (republish replaces; we don't merge)
-      await txn.step(() =>
-        db.query(`FOR d IN ${FRONTMATTER_COLLECTION} FILTER d.repo_id == @rid REMOVE d IN ${FRONTMATTER_COLLECTION}`, {
-          rid: repoId
-        })
-      );
-      // Insert per-tag rows
-      const rows = [];
-      for (const field of VALID_FIELDS) {
-        const weight = FIELD_RANGES[field].default_weight;
-        for (const { value, vector } of valuesByField[field]) {
-          rows.push({
-            _key: `${repoId}:${field}:${nodeCrypto.createHash('sha1').update(value).digest('hex').slice(0, 12)}`,
-            repo_id: repoId,
-            field,
-            value,
-            weight,
-            vector,
-            generated_at: now,
-            generated_by: `llm:${VLLM_LLM_MODEL_ID}`,
-            approved_at: now,
-            approved_by: approvedBy,
-            version
-          });
-        }
-      }
-      if (rows.length) {
-        await txn.step(() => db.collection(FRONTMATTER_COLLECTION).import(rows));
-      }
-      await txn.step(() => db.collection(FRONTMATTER_SUMMARY_COLLECTION).save(summary, { overwrite: true }));
-      await txn.commit();
-    } catch (err) {
-      try {
-        await txn.abort();
-      } catch {
-        /* ignore */
-      }
-      throw err;
-    }
-    // 5. invalidate BFF cache (the retriever-config cache will refresh on TTL)
-    try {
-      const { _resetFrontmatterSummaryCache } = require('./retrieval-config-service');
-      if (typeof _resetFrontmatterSummaryCache === 'function') {
-        _resetFrontmatterSummaryCache(repoId);
-      }
-    } catch {
-      /* retrieval-config-service may not export the helper; TTL fallback (60s) */
-    }
-    span.setAttribute(
-      'okf.published_tags',
-      valuesByField.topic.length +
-        valuesByField.entity.length +
-        valuesByField.keyword.length +
-        valuesByField.forbidden.length
-    );
-    logger.info('frontmatter.publish.done', {
-      repo_id: repoId,
-      topics: valuesByField.topic.length,
-      entities: valuesByField.entity.length,
-      keywords: valuesByField.keyword.length,
-      forbidden: valuesByField.forbidden.length
-    });
-    // 6. audit (per the convention used elsewhere in this repo)
-    try {
-      await auditService.append({
-        repo_id: repoId,
-        actor: opts.actor || { user_id: 'auto-publish' },
-        event: 'frontmatter.publish',
-        details: {
-          topic_count: valuesByField.topic.length,
-          entity_count: valuesByField.entity.length,
-          keyword_count: valuesByField.keyword.length,
-          forbidden_count: valuesByField.forbidden.length,
-          version
-        }
-      });
-    } catch (e) {
-      logger.warn('frontmatter.publish.audit_failed', { repo_id: repoId, err: e.message });
-    }
-    return summary;
-  });
-}
-
 // ---------- Story 1.7 — frontmatter on the repo doc ----------
 
 // Write the per-repo frontmatter to `okf_repositories.frontmatter`
@@ -853,9 +680,15 @@ async function buildVectorizedHead(repoId, frontmatter, opts = {}) {
       keyword: averageVectors(valuesByField.keyword, FIELD_RANGES.keyword.default_weight),
       summary: averageVectors(valuesByField.summary, FIELD_RANGES.summary.default_weight),
       scope: averageVectors(valuesByField.scope, FIELD_RANGES.scope.default_weight),
-      // forbidden is NOT included — it's a penalty for routing, not
-      // a positive signal of what the repo is about.
-      forbidden: averageVectors(valuesByField.forbidden, 0.0)
+      // forbidden is NOT averaged into the head — it's a penalty for
+      // routing, not a positive signal of what the repo is about.
+      // Story 1-8 (2026-10-08): the centroid IS persisted now (weight
+      // 1.0 for the average itself) — the previous weight-0 call made
+      // averageVectors return null (totalW === 0), so per_field.forbidden
+      // was ALWAYS null and the head-tester's misroute/penalty scoring
+      // had no forbidden vector to work with. Still excluded from the
+      // head average below (the `present` list).
+      forbidden: averageVectors(valuesByField.forbidden, 1.0)
     };
     // 3. single head vector: average the non-null per-field vectors
     //    with each field's weight. Empty result → no head (the
@@ -949,10 +782,7 @@ function frontmatterToHeadText(fm) {
 async function readFrontmatterFromRepoDoc(repoId) {
   const db = await dbService.getConnection();
   const rows = (
-    await db.query(
-      'FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter',
-      { rid: repoId }
-    )
+    await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter', { rid: repoId })
   ).all();
   return (rows && rows[0]) || null;
 }
@@ -976,10 +806,7 @@ async function getFrontmatter(repoId) {
   // is unreachable.
   if (IS_FRONTMATTER_COLLECTION_RETIRED) {
     await ensureCollections(db);
-    const q = await db.query(
-      `FOR d IN ${FRONTMATTER_COLLECTION} FILTER d.repo_id == @rid RETURN d`,
-      { rid: repoId }
-    );
+    const q = await db.query(`FOR d IN ${FRONTMATTER_COLLECTION} FILTER d.repo_id == @rid RETURN d`, { rid: repoId });
     const rows = await q.all();
     if (rows.length) {
       logger.warn('frontmatter.read.legacy_collection', {

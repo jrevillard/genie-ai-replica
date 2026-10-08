@@ -140,8 +140,10 @@ export async function patchFrontmatter(repoId, frontmatter) {
 
 /**
  * Frontmatter gate check (used by Publish.vue's gate). Returns true when the
- * repo has at least 3 topic tags AND at least 1 forbidden tag AND all rows are
- * approved (approved_at set). Used to enable/disable the Publish button.
+ * repo has at least 3 topic tags AND at least 1 forbidden tag. The per-row
+ * approval stamp is gone (Story 1.7 simplified 2026-10-08: every value in
+ * the frontmatter counts — the curator can edit either via the chip UI or
+ * the index.md YAML center pane).
  *
  * Computed locally from the frontmatter rows (cheap, no extra endpoint).
  */
@@ -150,7 +152,6 @@ export function isFrontmatterPublishReady(frontmatterRows = []) {
   let topicCount = 0;
   let forbiddenCount = 0;
   for (const row of frontmatterRows) {
-    if (!row.approved_at) return false; // an unapproved row blocks publish
     if (row.field === 'topic') topicCount += 1;
     else if (row.field === 'forbidden') forbiddenCount += 1;
   }

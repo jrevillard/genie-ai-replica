@@ -608,11 +608,6 @@ export default {
     // window. Non-blocking: the strip animates and the elapsed counter ticks
     // while the panes stay interactive.
     beginLongAction(label) {
-    // ── LONG-ACTION STRIP (David, 2026-09-12) ─────────────────────────────
-    // Wrap any editor action that can outlive a browser/gateway response
-    // window. Non-blocking: the strip animates and the elapsed counter ticks
-    // while the panes stay interactive.
-    beginLongAction(label) {
       this.endLongAction();
       this.longAction = { label, startedAt: Date.now() };
       this.longElapsed = '0s';

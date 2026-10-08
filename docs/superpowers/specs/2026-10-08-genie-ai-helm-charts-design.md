@@ -44,7 +44,7 @@ genie-ai/
 │   │   │   └── _helpers.tpl          # name/fullname/labels/selectors/annotations
 │   │   ├── values.schema.json        # JSON schema for values validation
 │   │   └── README.md
-│   └── genieai-umbrella/             # Umbrella chart (single install, 30 services)
+│   └── genieai-umbrella/             # Umbrella chart (single install, 29 services)
 │       ├── Chart.yaml                # depends on genieai-common + operators-as-deps
 │       ├── values.yaml               # DEFAULTS only (chart is generic + org-shareable)
 │       ├── templates/
@@ -306,7 +306,7 @@ Switching `pluggable.secretsBackend` between installs (`externalSecrets` → `se
 
 Per YAGNI discipline (Code Review pass, Y2): the chart ships only `externalSecrets` rendered. Templates for `sealedSecrets` and `secretProviderClass` are **not yet authored**; the plug-point design is documented in `docs/charts/pluggable-backends.md` so a later MR can add them. This avoids premature template triplication while preserving the pluggability surface area.
 
-## 7. Component surface (app tier, 30 services)
+## 7. Component surface (app tier, 29 services)
 
 Service inventory from the existing Swarm `docker-compose.yaml` (surveyed 2026-10-08). Each service in the chart gets:
 - a `services.<name>` toggle block in values
@@ -319,17 +319,15 @@ Service inventory from the existing Swarm `docker-compose.yaml` (surveyed 2026-1
 
 **Group 2 (cache, ephemeral state)**: redis.
 
-**Group 1 (observability)**: victoria-{metrics,logs,traces}, opentelemetry-collector, grafana (optional).
+**Group 1 (observability)**: victoria-{metrics,logs,traces}, opentelemetry-collector (gateway + agent), grafana (via grafana-operator). **No tempo-proxy**: VictoriaTraces implements the Tempo HTTP API natively (verified 2026-10-08, `docs.victoriametrics.com/victoriatraces/querying/grafana/`), so Grafana's Jaeger datasource queries VT directly — the Swarm `tempo-proxy` service is a vestige and is NOT ported.
 
 **Group 4 (identity)**: keycloak, postgres cluster (CloudNativePG) — **mirror before cutover**.
 
 **Group 6 (AI/ML)**: vllm, vllm-translation-guardrail, tei, **tei-reranker / reranker** (Swarm service `tei_reranker` per `docker-compose.yaml`; env var `TEI_RERANKING_ENDPOINT=http://tei_reranker:80`), chatqna-xeon-{backend,ui,nginx}, embedding, reranker, textgen, translation, guardrail, dataprep-arango-service, retriever-arango-service.
 
-**Group 1 (observability)**: victoria-{metrics,logs,traces}, opentelemetry-collector, grafana, **tempo-proxy** (Swarm `tempo-proxy` service; Jaeger query proxy for VictoriaTraces — Grafana "Trace explorer" dashboard depends on it).
-
 **Group 3 (vector DB, last)**: arangodb.
 
-**Count**: 30 services total (Group 5=6 + Group 2=1 + Group 1=6 + Group 4=2 + Group 6=14 + Group 3=1). `redis` lives in Group 2 (cache role); it is **not** duplicated into Group 5. `tei_reranker` is rendered as a single service in Group 6 (Swarm calls it `tei_reranker`; chart uses kebab-case `tei-reranker` with the Swarm service name preserved via Helm template variables). `tempo-proxy` is rendered as a sidecar/proxy to victoria-traces. Services like `translation-cache` and `httpService` do not appear in current Swarm and are scoped to a later epic if reintroduced.
+**Count**: 29 services total (Group 5=6 + Group 2=1 + Group 1=5 + Group 4=2 + Group 6=14 + Group 3=1). `redis` lives in Group 2 (cache role); it is **not** duplicated into Group 5. `tei_reranker` is rendered as a single service in Group 6 (Swarm calls it `tei_reranker`; chart uses kebab-case `tei-reranker` with the Swarm service name preserved via Helm template variables). Services like `translation-cache` and `httpService` do not appear in current Swarm and are scoped to a later epic if reintroduced.
 
 Each group's chart enabling is independent. Day 0 install: `data.postgres.enabled=false data.arangodb.enabled=false services.*.enabled=true` for a partial install pattern during phased migration.
 
@@ -417,11 +415,14 @@ Profile-gated. **Default depends on clusterProfile** (§5.2): dev=off, staging=o
 
 When on:
 - `vmoperator` deploys `VMSingle`/`VMCluster`, `VLSingle`, `VTSingle` (all single-node for dev; cluster for staging+).
-- `opentelemetry-operator` deploys `OpenTelemetryCollector` per node + central gateway.
-- All services get `serviceMonitor` annotations conditionally.
-- `grafana` subchart (lightweight, no operator) for dashboarding.
+- `opentelemetry-operator` deploys the collector topology: **gateway** (Deployment, OTLP traces/metrics, all transforms) + **agent** (DaemonSet, filelog container logs → gateway). Replaces the Swarm fluentd-driver pipeline, which does not exist on containerd.
+- All services get `serviceMonitor` emissions conditionally.
+- **`grafana-operator`** (official `grafana/grafana-operator`, v5) manages Grafana via CRs: `Grafana` (instance), `GrafanaDatasource` (VM/VL/Jaeger→VT), `GrafanaDashboard` (the 9 existing dashboards ported as CRs). K8s-native per the audit principle — replaces the earlier "grafana subchart + ConfigMap sidecar" posture.
+- **No tempo-proxy**: VictoriaTraces implements the Tempo HTTP API natively; Grafana's Jaeger datasource queries `vtraces` directly (verified 2026-10-08).
+- **Alerting**: Grafana-provisioned alert rules migrate to `VMRule` (+ `VMAlertmanager`) CRs under vmoperator — operator-native alerting instead of Grafana-internal rules.
+- **Instrumentation stays manual (deliberate)**: the OTel Operator's auto-instrumentation (`Instrumentation` CR + annotation injection) is the native mechanism, but it cannot reproduce the app-level span taxonomy (`dataprep.llm.label_batch`, `with_span`, …) the dashboards depend on. Manual SDK init (`tracing.js` / `tracing.py`) is retained and documented as a conscious deviation from the native-first principle. See `docs/charts/k8s-native-audit.md`.
 
-PII redaction, currently in the Swarm `fluentd` driver config, becomes an OpenTelemetry Collector `transform` processor (same regex rules, ported once).
+PII redaction, currently in the Swarm `fluentd` driver config, becomes an OpenTelemetry Collector `transform` processor (same regex rules, ported once — see `docs/charts/otel-migration.md`).
 
 ## 11. GPU / AI workloads
 
@@ -714,7 +715,7 @@ These are deliberate unknowns NOT blocking v1, but documented for follow-up:
 5. **Sticky dev workflow**: out-of-tree dev loop (helm-up + exec into container) is not specified. Solve during Day-1 onboarding.
 6. **Vault audit logging** (V4 from review): if externalSecrets is the default backend, Vault's audit device must be enabled for compliance; cross-reference in `docs/charts/secrets-audit-compliance.md`. P2.
 7. **Library-chart vs `_helpers.tpl` naming** (Y1 from review): `genieai-common` IS conceptually the umbrella's `_helpers.tpl` plus standalone templates. Clarify in chart README: "library chart contains templates and exports them via `import-values:`, helpers.tpl contains labels/selectors/name conventions." P2 doc clarification.
-8. **Service template generator** (Y3 from review): 30 services × 4 templates = ~120 files. v1 ships them hand-authored for transparency; **v1.1 introduces `make render-services` from a single service-list YAML**. P2 deferred.
+8. **Service template generator** (Y3 from review): 29 services × 4 templates = ~116 files. v1 ships them hand-authored for transparency; **v1.1 introduces `make render-services` from a single service-list YAML**. P2 deferred.
 
 ## 17. What lands in v1.0 (this epic)
 

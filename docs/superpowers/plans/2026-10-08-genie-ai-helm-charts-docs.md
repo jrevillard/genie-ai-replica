@@ -56,10 +56,18 @@ Expected output of `ls`: `_index.md a40-install.md docker-compose-setup.md docke
 ```markdown
 ---
 title: "Deploying GENIE.AI on Kubernetes with Helm"
-linkTitle: "Kubernetes (Helm)"
 weight: 80
 description: "Single-install Helm chart for GENIE.AI on any conformant K8s cluster (minikube, k3s, on-prem K8s, EKS, GKE)."
+aliases:
+  - /docs/deployment/kubernetes-helm/
+section: "deploy"
+mode: how-to
+persona: deployer
+owner: "docs-stewards"
+last_reviewed: 2026-10-08
 ---
+
+(Note: `linkTitle` is NOT used — zero occurrences in the existing site. F8 fix: only the 8 fields above; the front-matter matches `site/content/en/docs/deploy/topologies.md` exactly. Internal links use `{{< relref "..." >}}` per the project convention — F3/F4/F5 fix; `{{< ref >}}` is being deprecated in Hugo's roadmap.)
 
 GENIE.AI ships as a single Helm umbrella chart, `genieai-umbrella`, that renders the entire 28-service stack with one install. This page covers the day-0 flow: bootstrap a cluster, install the chart, smoke-test.
 
@@ -158,9 +166,9 @@ The chart's `pre-delete` hook blocks `helm uninstall` unless the namespace carri
 
 ## Next steps
 
-- [Per-env branches and overlays]({{< ref "per-env-branches.md" >}}) — the `release/<env>` branch workflow
+- [Per-env branches and overlays]({{< relref "per-env-branches.md" >}}) — the `release/<env>` branch workflow
 - The migration playbook (dev-internal, lives at `docs/charts/migration-playbook.md` in the repo) — key rotation, backup/restore, remote-GPU mode, sovereign cluster migration
-- [Architecture overview]({{< ref "/docs/architecture/architecture.md" >}}) — the 28-service topology this chart renders
+- [Architecture overview]({{< relref "architecture.md" >}}) — the 28-service topology this chart renders
 ```
 
 - [ ] **Step 3: Write `site/content/en/docs/deploy/per-env-branches.md`**
@@ -168,9 +176,15 @@ The chart's `pre-delete` hook blocks `helm uninstall` unless the namespace carri
 ```markdown
 ---
 title: "Per-environment branches and overlays"
-linkTitle: "Per-env branches"
 weight: 81
 description: "How GENIE.AI K8s deployments carry per-env customizations (release/<env> branches, deploy/environments/<env>/ overlays, GitOps sync)."
+aliases:
+  - /docs/deployment/per-env-branches/
+section: "deploy"
+mode: how-to
+persona: deployer
+owner: "docs-stewards"
+last_reviewed: 2026-10-08
 ---
 
 GENIE.AI today uses Ansible with `release/<env>` branches carrying per-env customizations (the el-salvador cluster on `release/el-salvador` is the canonical example). The K8s port preserves this discipline 1:1.
@@ -214,16 +228,16 @@ deploy/
    - Set `ingress.host` to the env's public domain.
    - Set `ingress.tls.issuerName` to a `ClusterIssuer` name the cluster admin has created.
    - If GPU is remote, set `ai.remoteGpu.enabled=true` + the 5 URL fields.
-3. Re-seal every SealedSecret under `deploy/environments/<env>/secrets/` with the env's cluster public key (`kubeseal --fetch-cert` per [migration playbook]({{< ref "/docs/charts/migration-playbook.md" >}})).
+3. Re-seal every SealedSecret under `deploy/environments/<env>/secrets/` with the env's cluster public key (`kubeseal --fetch-cert` per the migration playbook — dev-internal, lives at `docs/charts/migration-playbook.md` in the repo).
 4. Pick ONE of the GitOps paths (ArgoCD or Flux), apply the manifests under `deploy/gitops/`.
-5. Verify the install landed: see [Deploying on K8s]({{< ref "kubernetes-helm.md" >}}) §"Verify the install".
+5. Verify the install landed: see [Deploying on K8s]({{< relref "kubernetes-helm.md" >}}) §"Verify the install".
 
 ## GitOps: pick one
 
 The chart is GitOps-agnostic. Pick the path your team already operates:
 
-- **ArgoCD** (recommended for GitLab Ultimate users): `kubectl apply -f deploy/gitops/argocd/`. The `AppProject` defines the cluster resource allowlist; the per-env `Application` resources follow the standard ArgoCD pattern.
-- **Flux**: `flux create source git genieai ...` then `kubectl apply -f deploy/gitops/flux/`. Uses `Kustomization` with `force: false` (refuses on manifest conflict — surfaces to GitLab CI, MR must rebase).
+- **ArgoCD** (team preference for this deployment): `kubectl apply -f deploy/gitops/argocd/`. The `AppProject` defines the cluster resource allowlist; the per-env `Application` resources follow the standard ArgoCD pattern. (Spec §19.3.1 lists KAS+Flux as the spec-recommended path for GitLab-Ultimate deployments; this team uses ArgoCD by preference and accepts the divergence from the spec's recommendation.)
+- **Flux** (spec §19.3.1 default for non-GitLab-Ultimate and as the recommended path for our own Ultimate instance): `flux create source git genieai ...` then `kubectl apply -f deploy/gitops/flux/`. Uses `Kustomization` with `force: false` (refuses on manifest conflict — surfaces to GitLab CI, MR must rebase).
 
 Both paths read the same per-env overlay.
 
@@ -290,7 +304,7 @@ This playbook covers the day-2 reality of running the chart on a real cluster: k
 
 ## Day-0 — first install
 
-See [Deploying on K8s]({{< ref "/docs/architecture/architecture.md" >}}) and the [Deploying GENIE.AI on Kubernetes with Helm]({{< ref "/docs/deploy/kubernetes-helm.md" >}}) user-facing page for the install flow. The local `dev/values-override.yaml` ships the chart's defaults; prod is a fork of the prod template.
+See the deploying guide (live at `site/content/en/docs/deploy/kubernetes-helm.md` in the repo) and the [Deploying GENIE.AI on Kubernetes with Helm]({{< ref "/docs/deploy/kubernetes-helm.md" >}}) user-facing page for the install flow. The local `dev/values-override.yaml` ships the chart's defaults; prod is a fork of the prod template.
 
 ## Key rotation
 
@@ -334,7 +348,7 @@ The chart's pre-install hook is a `velero backup create` Job — but Velero is a
 
 1. Install Velero in the cluster (per the Velero operator pattern; cluster admin's concern).
 2. Annotate the release namespace: `kubectl annotate ns genieai genieai.io/run-backup-on-upgrade=true --overwrite`.
-3. On every `helm upgrade`, the pre-install hook creates a Velero backup of the data-tier PVCs BEFORE any new resources are applied.
+3. On every `helm upgrade`, the `pre-upgrade` hook (NOT `pre-install` — fresh installs have no data to back up, per spec §13.1) creates a Velero backup of the data-tier PVCs BEFORE any new resources are applied.
 
 To restore from a backup:
 

@@ -140,6 +140,23 @@
         @saved="onFrontmatterPanelSaved"
         @flush-before-save="flushConceptEditorSave"
       />
+      <!-- Story 1-8 (2026-10-08): compact head status under the tag panel —
+           the vectorized head is what the tags become at publish; the CTA
+           opens the Routing Lab to test it against competing repositories. -->
+      <div v-if="repoId" class="okf-re__head-badge">
+        <button type="button" class="okf-re__head-badge-btn" @click="headTestOpen = true">
+          <span :class="['okf-re__head-dot', 'okf-re__head-dot--' + headStatus]" />
+          {{ headBadgeText }}
+          <span class="okf-re__head-cta">{{ translate('okf.headTest.cta', 'Routing Lab') }} →</span>
+        </button>
+      </div>
+      <OkfHeadTestDialog
+        :visible="headTestOpen"
+        :repo="headTestRepo"
+        :initial-tab="'test'"
+        @close="headTestOpen = false"
+        @changed="onHeadTestChanged"
+      />
       <template v-if="selectedRow">
         <h4 class="okf-re__meta-title">{{ translate('okf.editor.meta.label', 'Concept metadata') }}</h4>
 
@@ -351,6 +368,7 @@ import FrontmatterPanel from '../FrontmatterPanel.vue';
 import DsDialog from '../../ds/Dialog.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
 import OkfAutocorrectPanel from './AutocorrectPanel.vue';
+import OkfHeadTestDialog from './HeadTestDialog.vue';
 
 const TYPE_OPTIONS = ['topic', 'entity', 'process', 'event', 'source'].map((t) => ({ value: t, label: t }));
 
@@ -371,7 +389,8 @@ export default {
     OkfSourceDialog,
     OkfRepoGraphView,
     FrontmatterPanel,
-    OkfAutocorrectPanel
+    OkfAutocorrectPanel,
+    OkfHeadTestDialog
   },
   mixins: [translateMixin],
   props: {
@@ -395,6 +414,8 @@ export default {
       // 3.10 T-editor (D6): add-sources picker + post-conversion note
       sourceOpen: false,
       sourceNote: '',
+      // Story 1-8: the right-rail head badge opens the Routing Lab here.
+      headTestOpen: false,
       typeOptions: TYPE_OPTIONS,
       labelOptions: [],
       // False when the repo's Subject Area has no KH match — the picker then
@@ -466,6 +487,22 @@ export default {
     },
     repo() {
       return this.repoById(this.repoId) || {};
+    },
+    /** Story 1-8: the rail badge state — present / stale / missing. */
+    headStatus() {
+      if (!this.repo.head || !this.repo.head.vector) return 'missing';
+      const fm = this.repo.frontmatter;
+      if (fm && fm.updated_at && this.repo.head.computed_at && fm.updated_at > this.repo.head.computed_at)
+        return 'stale';
+      return 'present';
+    },
+    headBadgeText() {
+      if (this.headStatus === 'present') return this.translate('okf.headTest.badge.present', 'head ready');
+      if (this.headStatus === 'stale') return this.translate('okf.headTest.badge.stale', 'head stale');
+      return this.translate('okf.headTest.badge.missing', 'no head');
+    },
+    headTestRepo() {
+      return this.repo && this.repo.repo_id ? this.repo : null;
     },
     hasIndex() {
       return this.concepts.some((c) => c.is_index);
@@ -597,6 +634,11 @@ export default {
     // step in the wizard) re-evaluates on the next render.
     onFrontmatterPanelSaved() {
       this.$store.dispatch('okf/fetchConcepts', this.repoId);
+    },
+    // Story 1-8: a head rebuild inside the Routing Lab rewrites the repo
+    // doc — refresh the cached repo so the badge + gates re-evaluate.
+    onHeadTestChanged() {
+      this.$store.dispatch('okf/fetchRepos');
     },
     // Public entry point for the wizard's Curate step. The wizard
     // embeds the editor inside its step; the chip panel on the
@@ -1088,6 +1130,47 @@ export default {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
+}
+/* Story 1-8: compact head status badge under the tag panel. */
+.okf-re__head-badge {
+  margin-bottom: var(--space-sm);
+}
+.okf-re__head-badge-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  cursor: pointer;
+}
+.okf-re__head-badge-btn:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+.okf-re__head-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.okf-re__head-dot--present {
+  background: var(--success);
+}
+.okf-re__head-dot--stale {
+  background: var(--warn);
+}
+.okf-re__head-dot--missing {
+  background: var(--danger);
+}
+.okf-re__head-cta {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 600;
 }
 .okf-re__meta-facts {
   display: grid;

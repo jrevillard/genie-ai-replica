@@ -86,6 +86,12 @@
         <DsButton variant="secondary" small :disabled="actionBusy" @click="versionsOpen = true">
           {{ translate('okf.shell.versions', 'Versions') }}
         </DsButton>
+        <!-- Story 1-8 (2026-10-08): the Head Tester / Routing Lab — test the
+             vectorized head before/after ingest (publish/approve state or a
+             head already present; serving repos test read-only). -->
+        <DsButton v-if="showHeadTest" variant="secondary" small :disabled="actionBusy" @click="headTestOpen = true">
+          {{ translate('okf.shell.headTest', 'Routing Lab') }}
+        </DsButton>
         <DsButton variant="secondary" small :disabled="logsBusy" @click="logsOpen = true">
           {{ translate('okf.shell.logs', 'Logs') }}
         </DsButton>
@@ -159,6 +165,14 @@
     />
 
     <OkfLogsDialog :visible="logsOpen" :repo="repo && repo.repo_id ? repo : null" @close="logsOpen = false" />
+
+    <!-- Story 1-8 (2026-10-08): the Head Tester / Routing Lab. -->
+    <OkfHeadTestDialog
+      :visible="headTestOpen"
+      :repo="repo && repo.repo_id ? repo : null"
+      @close="headTestOpen = false"
+      @changed="onChanged"
+    />
 
     <DsDialog
       :visible="publishOpen"
@@ -235,6 +249,7 @@ import DsTabs from '../../ds/Tabs.vue';
 import OkfStudioWizard from '../StudioWizard.vue';
 import OkfRepoEditor from './RepoEditor.vue';
 import OkfVersionsDialog from './VersionsDialog.vue';
+import OkfHeadTestDialog from './HeadTestDialog.vue';
 import OkfLogsDialog from './LogsDialog.vue';
 import BuildProgressCard from './BuildProgressCard.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
@@ -268,6 +283,7 @@ export default {
     OkfStudioWizard,
     OkfRepoEditor,
     OkfVersionsDialog,
+    OkfHeadTestDialog,
     OkfLogsDialog,
     BuildProgressCard
   },
@@ -281,6 +297,7 @@ export default {
   data() {
     return {
       versionsOpen: false,
+      headTestOpen: false,
       logsOpen: false,
       logsBusy: false,
       publishOpen: false,
@@ -313,6 +330,13 @@ export default {
     },
     serving() {
       return !!(this.repo.lifecycle_state === 'publish' && this.repo.ingested_at);
+    },
+    /** Story 1-8: the Routing Lab opens on publish/approve repos or any
+     * repo with a stored head (serving repos test read-only — legitimate
+     * post-ingest verification). */
+    showHeadTest() {
+      if (!this.repo) return false;
+      return ['publish', 'approve'].includes(this.repo.lifecycle_state) || !!this.repo.head;
     },
     readOnly() {
       return this.serving;

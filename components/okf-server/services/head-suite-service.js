@@ -446,15 +446,21 @@ async function listRuns(repoId, payload = {}) {
   const kind = ['run', 'suite', 'all'].includes(payload.kind) ? payload.kind : 'run';
   const db = await dbService.getConnection();
   await ensureCollection(db);
+  // Bind @kind ONLY when the filter clause is present — Arango rejects
+  // unused bind parameters (caught live by the MR-B smoke: kind=all 500'd
+  // with "bind parameter 'kind' was not declared in the query").
+  const kindFilter = kind === 'all' ? '' : 'FILTER d.kind == @kind ';
+  const bindVars = { rid: repoId, lim: limit };
+  if (kind !== 'all') bindVars.kind = kind;
   const cursor = await db.query(
     `FOR d IN ${HEAD_TEST_RUNS_COLLECTION} FILTER d.repo_id == @rid ` +
-      (kind === 'all' ? '' : 'FILTER d.kind == @kind ') +
+      kindFilter +
       'SORT d.created_at DESC LIMIT @lim RETURN MERGE(KEEP(d, ["_key", "repo_id", "kind", "suite_key", ' +
       '"repo_version", "head_version", "created_at", "created_by"]), ' +
       '{ summary: HAS(d.payload, "summary") ? d.payload.summary : null, ' +
       'positives: HAS(d.payload, "positive") ? LENGTH(d.payload.positive) : null, ' +
       'negatives: HAS(d.payload, "negative") ? LENGTH(d.payload.negative) : null })',
-    { rid: repoId, kind, lim: limit }
+    bindVars
   );
   return cursor.all();
 }

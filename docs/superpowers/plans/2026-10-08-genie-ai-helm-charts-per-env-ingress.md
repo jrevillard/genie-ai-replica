@@ -134,7 +134,7 @@ services:
   - `ingress.enabled: true` (operators MUST set `ingress.host` and `ingress.tls.issuerName` per their cluster)
   - `services.clamav: {enabled: true}` (default; disable in CI/smoke)
   - `migrate.enabled: true` (pre-install Job for backend db-migrations — required in prod)
-  - `uninstallPolicy.enabled: true` (the gate requires the namespace annotation to uninstall — a safety net for prod)
+  - (NO `uninstallPolicy.enabled` here — the per-env uninstall gate is the **release namespace annotation** `genieai.io/allow-destructive-uninstall=true` that the chart's pre-delete hook Job reads, NOT a values key. F9 fix: the previously-documented `uninstallPolicy.enabled: true|false` values key was dead config that misled operators into believing they had disabled the gate. The hook fires unconditionally; the only switch is the namespace annotation. Operators wishing to opt out of the gate use `helm uninstall --no-hooks` (the documented break-glass path, spec §13.1).)
   - `secrets.sealedSecrets.enabled: true` (always)
   - Every operator-specific value (cluster IPs, GPU URLs, Issuer name, Ingress host, real SealedSecret values) is INTENTIONALLY left for operators to fill in. The chart defaults + the per-env overlay = the contract; the operator's per-cluster fork = the reality.
 
@@ -395,6 +395,19 @@ spec:
     # cert-manager `http01` solver needs an HTTP listener; HTTP→HTTPS
     # redirect is the operator's choice via the HTTPRoute's
     # requestRedirect filter).
+    # The `https` listener is rendered ONLY when `ingress.tls.enabled`
+    # is true. The Gateway API rejects `tls: { mode: Terminate }`
+    # without a `certificateRefs` entry — so we either render the
+    # listener fully (mode + certRef) or skip it entirely. A separate
+    # `http` listener stays for the cert-manager bootstrap path (the
+    # cert-manager `http01` solver needs an HTTP listener; HTTP→HTTPS
+    # redirect is the operator's choice via the HTTPRoute's
+    # requestRedirect filter).
+    #
+    # allowedRoutes.namespaces.from: Same sits INSIDE each listener
+    # block (one per listener); an orphan `from: Same` outside the
+    # blocks would create a duplicate mapping key and fail the chart
+    # at install. (C1 fix.)
     {{- if .Values.ingress.tls.enabled }}
     - name: https
       protocol: HTTPS
@@ -408,7 +421,6 @@ spec:
         namespaces:
           from: Same
     {{- end }}
-          from: Same
 {{- end -}}
 ```
 
@@ -799,9 +811,16 @@ spec:
             capabilities:
               drop: ["ALL"]
           env:
-            # Inherit every env the backend needs (KEYCLOAK_URL, ARANGO_URL, etc.)
-            # via the cross-service-URLs helper. The migrations need Postgres
-            # write access (CNPG initdb + the per-app migrations).
+            # F10 fix (per round-8 review): the inline `value:` lines below
+            # are the ACTUAL env the Job uses; the `cross-service-URLs`
+            # helper exists (Plan 3 Task 1b) but is NOT invoked here
+            # (the migrations Job pre-dates the helper and is hand-written
+            # because it needs the additional KC_DATAPREP_CLIENT_ID +
+            # DATABASE_URL fields that the helper doesn't know about).
+            # When the helper is extended to cover all of them, switch
+            # to `include "genieai-umbrella.crossServiceURLs"`. The
+            # migrations need Postgres write access (CNPG initdb + the
+            # per-app migrations).
             - name: KEYCLOAK_URL
               value: "http://keycloak.{{ .Values.namespace }}.svc.cluster.local:8080/auth"
             - name: ARANGO_URL

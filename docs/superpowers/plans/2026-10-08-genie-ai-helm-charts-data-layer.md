@@ -525,7 +525,6 @@ git commit -m "feat(charts): ServiceAccount + custom ClusterRole (CRD access) + 
 **Files:**
 - Create: `charts/genieai-umbrella/templates/hooks/pre-install-dependency-check.yaml`
 - Create: `charts/genieai-umbrella/tests/test-dependency-graph.yaml`
-- Create: `charts/genieai-umbrella/tests/test-dependency-graph.yaml`
 
 **Interfaces:**
 - Consumes: `genieai-umbrella.dependencyGraph.json` helper (Task 3), `helm.sh/hook: pre-install` annotation pattern, hook-owned ServiceAccount from Task 4a (weight -30) and the hook-owned ConfigMap below (weight -20) — Helm creates lower-weight hooks first, so both exist when the Job (-5) runs.

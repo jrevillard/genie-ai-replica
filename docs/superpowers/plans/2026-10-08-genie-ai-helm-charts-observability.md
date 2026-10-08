@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the observability tier of the GENIE.AI Helm chart: vmoperator (VictoriaMetrics / VictoriaLogs / VictoriaTraces official operator) + opentelemetry-operator + Grafana subchart + tempo-proxy (Swarm Jaeger-query proxy for VictoriaTraces) + per-service ServiceMonitors + PII redaction transform processor. Profile-gated (`dev=off`, `staging/prod/sovereign=on` per spec §5.2).
+**Goal:** Ship the observability tier of the GENIE.AI Helm chart: vmoperator (VictoriaMetrics / VictoriaLogs / VictoriaTraces official operator) + opentelemetry-operator (gateway + DaemonSet agent) + grafana-operator (instance, datasources, 9 dashboards as CRs — K8s-native per `docs/charts/k8s-native-audit.md`) + per-service ServiceMonitors + PII redaction (config ported verbatim). Profile-gated (`dev=off`, `staging/prod/sovereign=on` per spec §5.2). **No tempo-proxy** — VictoriaTraces implements the Tempo HTTP API natively; Grafana queries VT directly.
 
-**Architecture:** Three independent operators, each managing their own custom resources: vmoperator manages `VMSingle`/`VMCluster`/`VLSingle`/`VLCluster`/`VTSingle`/`VTCluster`/`VMAgent`/`VMRule`, opentelemetry-operator manages `OpenTelemetryCollector`, Grafana is a lightweight subchart with sidecar datasources. Tempo-proxy is a community-maintained chart that mirrors the Swarm `tempo-proxy` service (Jaeger query API in front of VictoriaTraces). ServiceMonitors, for Prometheus-style scrape, get generated per Group 5 service conditionally. PII redaction and log-metadata stamping port **verbatim** from the existing `configs/otel/otel-collector-config.yaml` (OTTL `pii_redact` + `stamp_log_metadata_from_msg`) — the chart ports, never rewrites. Collector topology: **gateway** (Deployment, OTLP traces/metrics) + **agent** (DaemonSet, filelog container logs → gateway), replacing the Swarm fluentd-driver → `fluent_forward` pipeline which does not exist on containerd/K8s. See `docs/charts/otel-migration.md`.
+**Architecture:** Four independent operators, each managing their own custom resources: vmoperator manages `VMSingle`/`VMCluster`/`VLSingle`/`VLCluster`/`VTSingle`/`VTCluster`/`VMAgent`/`VMRule`/`VMAlertmanager`, opentelemetry-operator manages `OpenTelemetryCollector` (gateway + agent), grafana-operator manages `Grafana`/`GrafanaDatasource`/`GrafanaDashboard`. No traces proxy — VictoriaTraces implements the Tempo HTTP API natively (verified 2026-10-08), Grafana's Jaeger datasource queries VT directly. ServiceMonitors, for Prometheus-style scrape, get generated per Group 5 service conditionally. PII redaction and log-metadata stamping port **verbatim** from the existing `configs/otel/otel-collector-config.yaml` (OTTL `pii_redact` + `stamp_log_metadata_from_msg`) — the chart ports, never rewrites. Collector topology: **gateway** (Deployment, OTLP traces/metrics) + **agent** (DaemonSet, filelog container logs → gateway), replacing the Swarm fluentd-driver → `fluent_forward` pipeline which does not exist on containerd/K8s. See `docs/charts/otel-migration.md`.
 
-**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), kind 1.32, vmoperator chart `~> 0.45.0`, opentelemetry-operator chart `~> 0.50.0`, Grafana helm chart `~> 8.x`, tempo-proxy custom chart (community-maintained, ex `grokify/jaeger-query-proxy`).
+**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), kind 1.32, vmoperator chart `~> 0.45.0`, opentelemetry-operator chart `~> 0.50.0`, grafana-operator chart `~> 5.22.0` (official `grafana/grafana-operator`).
 
 **Spec:** `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` — this plan implements §10 (observability stack default + vmoperator + OTel Operator + Grafana + PII redaction), §6 pluggability (ClusterProfile-driven observability default), §11 v1.0 manifest observability entries.
 
@@ -15,7 +15,7 @@
 - Helm chart API version: `v2`. Helm 4.x.
 - Profile-gated: `observability.enabled` default derived from `clusterProfile` per spec §5.2 (dev=off, staging/prod/sovereign=on). Operators can override explicitly in `values-override.yaml`.
 - All observability CRDs (VM*, OpenTelemetryCollector, Grafana datasource Secret) namespaced to the release namespace.
-- PII redaction rules are an opaque blob in the chart (`configs/otel-pii-redaction.yaml`); operator edits + CI lint via conftest (Plan 7).
+- PII redaction rules ship as the ported `configs/otel-collector-config.yaml` inside the chart (verbatim from the repo's Swarm config); operator edits + CI lint via conftest (Plan 7).
 - All English documentation and comments per project CLAUDE.md.
 - Commits in English using Conventional Commits.
 - Worktree path: `/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/k8s-migration/`. Branch: `feat/k8s-migration`.
@@ -26,7 +26,7 @@ Five input-class concerns the spec implies but no Plan 4 task tests explicitly.
 
 1. **vmoperator CRD version compatibility with K8s 1.32** — `~> 0.45.0` and `~> 0.50.0` pins may not align with K8s 1.32 admission. **Pinned in Task 1 Step 3** — `helm dep list` post-update confirms both operator versions; `helm install --dry-run` validates CRD shape.
 2. **ServiceMonitor-conditional emission** — services get `serviceMonitor: true` only when `observability.enabled: true`. If a service emits monitor fields unconditionally, scrape targets reference non-existent endpoints on dev. **Pinned in Task 7 Step 4** — render asserts no ServiceMonitor resources emitted when observability off.
-3. **tempo-proxy Jaeger query API parity with VictoriaTraces** — VictoriaTraces exposes OTLP storage but not the Jaeger query API. tempo-proxy is the bridge. Misconfigured endpoint or wrong query prefix → "Trace explorer" dashboard silently fails. **Pinned in Task 6 Step 5** — render asserts the tempo-proxy Service exposes port 16686 + Jaeger query URL path.
+3. **Traces query path must be VT-direct** — Grafana's Jaeger datasource must point at `vtraces` (Tempo HTTP API implemented natively by VictoriaTraces, verified 2026-10-08), NOT at a proxy. A stale proxy reference or wrong port makes the "Trace explorer" dashboard silently fail. **Pinned in Task 5 Step 4** — render asserts the jaeger datasource URL contains `vtraces.` and that `tempo-proxy` appears nowhere in the rendered output.
 4. **PII redaction YAML schema** — OpenTelemetry Collector `transform` processor schema is versioned (v0.111+ uses `error_mode: ignore`). Older syntax accepted silently. **Pinned in Task 9 Step 4** — render asserts `error_mode: ignore` + each transform context statements name parsed by `otelcol validate`.
 5. **ClusterProfile auto-derivation race** — Plan 4 implements `observability.enabled: {{ .Values.clusterProfile | default "dev" | eq "prod" | or (.Values.clusterProfile | eq "staging") | or ... }}`. Multiple boolean conditions can drift. **Pinned in Task 11 Step 4** — values.yaml tests render with `clusterProfile: dev` (observability off) and `clusterProfile: prod` (on); assert only.
 6. **Log ingestion without the fluentd driver** — containerd/K8s has no Docker fluentd logging driver, so the Swarm log pipeline (stdout → `fluent_forward` :24224 → VL) dies on arrival. Without a node-level agent, **zero container logs reach VictoriaLogs** and the admin logs UI returns empty. **Pinned in Task 4b Step 5** — render asserts BOTH collector CRs (gateway Deployment + agent DaemonSet); the agent's filelog receiver + hostPath mount are the structural fix.
@@ -40,7 +40,7 @@ Five input-class concerns the spec implies but no Plan 4 task tests explicitly.
 
 **Interfaces:**
 - Consumes: Plan 2 dep block.
-- Produces: vmoperator + opentelemetry-operator + Grafana subchart + tempo-proxy added.
+- Produces: vmoperator (×3 charts) + opentelemetry-operator + grafana-operator added. No tempo-proxy (native-audit decision 1).
 
 - [ ] **Step 1: Run red-gate — no observability deps yet**
 
@@ -67,16 +67,12 @@ Expected: `OK: no observability deps`.
     version: "~> 0.50.0"
     repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
     condition: observability.otel.enabled
-  - name: grafana
-    version: "~> 8.5.0"
+  # grafana-operator — official Grafana org operator (K8s-native audit
+  # decision 2). Manages Grafana instance + datasources + dashboards as CRs.
+  - name: grafana-operator
+    version: "~> 5.22.0"
     repository: "https://grafana.github.io/helm-charts"
     condition: observability.grafana.enabled
-  # tempo-proxy: community-maintained chart for Jaeger-query shim in front
-  # of VictoriaTraces. ex `grokify/jaeger-query-proxy`. Upstream index URL.
-  - name: tempo-proxy
-    version: "~> 0.3.0"
-    repository: "https://grokify.github.io/tempo-proxy"
-    condition: observability.traces.enabled
 ```
 
 (Note: each operator is a SEPARATE helm dep with `condition:` per spec §4. Single combined `vmoperator` umbrella dep would be simpler but the spec chose per-storage separation.)
@@ -100,7 +96,7 @@ Expected: 0 errors.
 
 ```bash
 git add charts/genieai-umbrella/Chart.yaml charts/genieai-umbrella/Chart.lock charts/genieai-umbrella/charts/
-git commit -m "feat(charts): add observability operator deps (vmoperator, OTel operator, grafana, tempo-proxy)"
+git commit -m "feat(charts): add observability operator deps (vmoperator, OTel operator, grafana-operator)"
 ```
 
 ---
@@ -601,182 +597,156 @@ git commit -m "feat(charts): DaemonSet log-ingestion agent (filelog -> gateway -
 
 ---
 
-## Task 5: Grafana deployment + datasources
+## Task 5: Grafana via grafana-operator (instance + datasources + dashboards)
 
 **Files:**
-- Create: `charts/genieai-umbrella/templates/_observability/grafana-datasources.yaml`
+- Create: `charts/genieai-umbrella/templates/_observability/grafana-cr.yaml` (Grafana instance + 3 `GrafanaDatasource` CRs)
+- Create: `charts/genieai-umbrella/templates/_observability/grafana-dashboards.yaml` (9 `GrafanaDashboard` CRs from the existing dashboard JSONs)
+- Create: `charts/genieai-umbrella/configs/grafana-dashboards/.gitkeep` (the 9 ported JSONs land here — copied from `configs/grafana/provisioning/dashboards/`)
 
 **Interfaces:**
-- Consumes: `observability.grafana.enabled` + VM/VL/VT endpoints.
-- Produces: 1 ConfigMap with Grafana datasources pointing at VictoriaMetrics, VictoriaLogs, and tempo-proxy (for VictoriaTraces).
+- Consumes: `observability.grafana.enabled`; VM/VL/VT service DNS names; the 9 existing dashboard JSON files.
+- Produces: 1 `Grafana` CR + 3 `GrafanaDatasource` CRs + 9 `GrafanaDashboard` CRs — all operator-managed (K8s-native per `docs/charts/k8s-native-audit.md` decision 2).
 
-- [ ] **Step 1: Run red-gate — no Grafana datasources yet**
+**Native-audit note:** replaced the earlier grafana-subchart + ConfigMap-sidecar posture. grafana-operator (official `grafana/grafana-operator`, v5, chart `grafana/grafana-operator` 5.22.x) manages the instance and resources as CRs; dashboards stop being provisioning-file sidecars and become API objects.
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep -c "datasources.yaml" || echo "0"`
-Expected: prints `0`.
+- [ ] **Step 1: Copy the 9 dashboard JSONs into the chart**
 
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_observability/grafana-datasources.yaml`**
+```bash
+mkdir -p charts/genieai-umbrella/configs/grafana-dashboards
+cp configs/grafana/provisioning/dashboards/**/*.json \
+   charts/genieai-umbrella/configs/grafana-dashboards/ 2>/dev/null || \
+   find configs/grafana/provisioning/dashboards -name '*.json' \
+        -exec cp {} charts/genieai-umbrella/configs/grafana-dashboards/ \;
+ls charts/genieai-umbrella/configs/grafana-dashboards/ | wc -l   # expect 9
+```
 
-The Grafana subchart's datasource provisioning is shipped via the umbrella; standard annotation on the Grafana deployment loads it.
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_observability/grafana-cr.yaml`**
 
 ```yaml
 {{- if .Values.observability.grafana.enabled -}}
-apiVersion: v1
-kind: ConfigMap
+apiVersion: grafana.integreatly.org/v1beta1
+kind: Grafana
 metadata:
-  name: {{ include "genieai-common.fullname" . }}-grafana-datasources
+  name: genieai
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "grafana"))) | nindent 4 }}
-    grafana.io/provisioned-datasource: "true"
-data:
-  datasources.yaml: |
-    apiVersion: 1
-    datasources:
-      - name: VictoriaMetrics
-        type: prometheus
-        url: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8429
-        access: proxy
-      - name: VictoriaLogs
-        type: victorialogs
-        url: http://vlogs.{{ .Values.namespace }}.svc.cluster.local:9428
-        access: proxy
-      # tempo-proxy exposes Jaeger query API; Grafana connects to it for the
-      # "Trace explorer" dashboard. VictoriaTraces is the storage backend;
-      # tempo-proxy is the Jaeger-compatible query surface.
-      - name: Jaeger
-        type: jaeger
-        url: http://tempo-proxy.{{ .Values.namespace }}.svc.cluster.local:16686
-        access: proxy
-        isDefault: false
-{{- end -}}
-```
-
-- [ ] **Step 3: Render and verify**
-
-Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep -A 2 "name: Jaeger" | head -5`
-Expected: shows the Jaeger datasource pointing at tempo-proxy.
-
-- [ ] **Step 4: `helm lint --strict`**
-
-Run: `helm lint charts/genieai-umbrella --strict`
-Expected: 0 errors.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add charts/genieai-umbrella/templates/_observability/grafana-datasources.yaml
-git commit -m "feat(charts): Grafana datasources (VictoriaMetrics, VictoriaLogs, Jaeger via tempo-proxy)"
-```
-
+spec:
+  config:
+    security:
+      admin_user: {{ .Values.observability.grafana.adminUser | default "admin" }}
+    # adminPassword injected from the grafanaAdminPassword Secret via
+    # spec.deployment.envFrom (Plan 2/4 SealedSecret) — never inline.
+  deployment:
+    envFrom:
+      - secretRef:
+          name: grafanaAdminPassword
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
 ---
-
-## Task 6: tempo-proxy deployment (Swarm tempo-proxy component)
-
-**Files:**
-- Modify: `charts/genieai-umbrella/values.yaml` (add `tempo-proxy` config)
-- Create: `charts/genieai-umbrella/templates/_observability/tempo-proxy.yaml`
-
-**Interfaces:**
-- Consumes: `observability.traces.enabled`.
-- Produces: 1 Deployment + 1 Service mimicking Swarm `tempo-proxy` (Jaeger query API in front of VictoriaTraces).
-
-- [ ] **Step 1: Add `tempo-proxy` config to `values.yaml`** (Block 4 from Task 2)
-
-```yaml
-  tempo-proxy:
-    image:
-      repository: ghcr.io/grokify/jaeger-query-proxy
-      tag: "0.3.0"
-    replicas: 1
-    port: 16686
-    # Back-end: VictoriaTraces OTLP. tempo-proxy translates Jaeger query
-    # → OTLP query against VictoriaTraces.
-    backend:
-      url: http://vtraces.{{ .Values.namespace }}.svc.cluster.local:10428
-```
-
-- [ ] **Step 2: Write `charts/genieai-umbrella/templates/_observability/tempo-proxy.yaml`**
-
-```yaml
-{{- if .Values.observability.traces.enabled -}}
-apiVersion: apps/v1
-kind: Deployment
+# Datasource: VictoriaMetrics (Prometheus-compatible)
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
 metadata:
-  name: {{ include "genieai-common.fullname" . }}-tempo-proxy
+  name: vmetrics
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "tempo-proxy"))) | nindent 4 }}
-    app.kubernetes.io/component: tempo-proxy
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "grafana"))) | nindent 4 }}
 spec:
-  replicas: {{ .Values.observability.tempo-proxy.replicas | default 1 }}
-  selector:
+  instanceSelector:
     matchLabels:
-      genieai.io/component: tempo-proxy
-  template:
-    metadata:
-      labels:
-        genieai.io/component: tempo-proxy
-    spec:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 65534
-        seccompProfile:
-          type: RuntimeDefault
-      containers:
-        - name: tempo-proxy
-          image: "{{ .Values.observability.tempo-proxy.image.repository }}:{{ .Values.observability.tempo-proxy.image.tag }}"
-          imagePullPolicy: IfNotPresent
-          args:
-            - --backend.url={{ .Values.observability.tempo-proxy.backend.url }}
-            - --backend.type=otlp
-            - --query.port={{ .Values.observability.tempo-proxy.port | default 16686 }}
-          ports:
-            - name: jaeger-query
-              containerPort: {{ .Values.observability.tempo-proxy.port | default 16686 }}
-          readinessProbe:
-            httpGet:
-              path: /
-              port: {{ .Values.observability.tempo-proxy.port | default 16686 }}
-          resources:
-            requests: { cpu: 50m, memory: 64Mi }
-            limits:   { cpu: 250m, memory: 128Mi }
+      genieai.io/component: grafana
+  datasource:
+    name: VictoriaMetrics
+    type: prometheus
+    url: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8429
+    access: proxy
+    isDefault: true
 ---
-apiVersion: v1
-kind: Service
+# Datasource: VictoriaLogs
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
 metadata:
-  name: tempo-proxy
+  name: vlogs
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "tempo-proxy"))) | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "grafana"))) | nindent 4 }}
 spec:
-  ports:
-    - name: jaeger-query
-      port: 16686
-      targetPort: 16686
-  selector:
-    genieai.io/component: tempo-proxy
+  instanceSelector:
+    matchLabels:
+      genieai.io/component: grafana
+  datasource:
+    name: VictoriaLogs
+    type: victorialogs
+    url: http://vlogs.{{ .Values.namespace }}.svc.cluster.local:9428
+    access: proxy
+---
+# Datasource: traces — Grafana's Jaeger datasource queries VictoriaTraces
+# DIRECTLY (VT implements the Tempo HTTP API natively — verified
+# 2026-10-08, docs.victoriametrics.com/victoriatraces/querying/grafana/).
+# No tempo-proxy: the Swarm proxy component is a vestige, not ported
+# (k8s-native-audit decision 1).
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: vtraces-jaeger
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "grafana"))) | nindent 4 }}
+spec:
+  instanceSelector:
+    matchLabels:
+      genieai.io/component: grafana
+  datasource:
+    name: Jaeger
+    type: jaeger
+    url: http://vtraces.{{ .Values.namespace }}.svc.cluster.local:10428
+    access: proxy
 {{- end -}}
 ```
 
-- [ ] **Step 3: Render with `clusterProfile: prod` (Review Focus #3)**
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/_observability/grafana-dashboards.yaml`** (one CR per ported JSON)
 
-Run: `helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | grep -A 2 "name: jaeger-query" | head -5`
-Expected: shows port 16686 exposed by the Service.
+```yaml
+{{- if .Values.observability.grafana.enabled -}}
+{{- range $path, $_ := .Files.Glob "configs/grafana-dashboards/*.json" -}}
+{{- $name := base $path | trimSuffix ".json" -}}
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" (deepCopy $.Values | merge (dict "component" "grafana"))) | nindent 4 }}
+spec:
+  instanceSelector:
+    matchLabels:
+      genieai.io/component: grafana
+  json: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end -}}
+{{- end -}}
+```
 
-- [ ] **Step 4: Verify the Jaeger query URL prefix**
+- [ ] **Step 4: Render and verify (Review Focus #3 — VT direct, no proxy)**
 
 Run:
 
 ```bash
 helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod | \
   python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
-  svc = next(d for d in docs if d and d.get('kind')=='Service' and d.get('metadata',{}).get('name')=='tempo-proxy'); \
-  assert any(p.get('port')==16686 for p in svc['spec']['ports']), svc; \
-  print('PASS')"
+  ds = [d for d in docs if d and d.get('kind') == 'GrafanaDatasource']; \
+  jaeger = next(d for d in ds if d['spec']['datasource']['type'] == 'jaeger'); \
+  assert 'vtraces.' in jaeger['spec']['datasource']['url'], jaeger['spec']['datasource']['url']; \
+  assert 'tempo-proxy' not in str(docs), 'tempo-proxy must not render'; \
+  n = len([d for d in docs if d and d.get('kind') == 'GrafanaDashboard']); \
+  print(f'PASS: jaeger->vtraces direct, {n} dashboards')"
 ```
 
-Expected: prints `PASS`.
+Expected: prints `PASS: jaeger->vtraces direct, 9 dashboards`.
 
 - [ ] **Step 5: `helm lint --strict`**
 
@@ -786,11 +756,20 @@ Expected: 0 errors.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add charts/genieai-umbrella/values.yaml charts/genieai-umbrella/templates/_observability/tempo-proxy.yaml
-git commit -m "feat(charts): tempo-proxy Deployment + Service for VictoriaTraces Jaeger-query API"
+git add charts/genieai-umbrella/configs/grafana-dashboards/ charts/genieai-umbrella/templates/_observability/grafana-cr.yaml charts/genieai-umbrella/templates/_observability/grafana-dashboards.yaml
+git commit -m "feat(charts): grafana-operator CRs — instance, datasources (VM/VL/Jaeger->VT direct), 9 dashboards"
 ```
 
----
+## Task 6: REMOVED — tempo-proxy (native replacement)
+
+**No files. No steps.**
+
+The Swarm `tempo-proxy` service (Jaeger query proxy in front of VictoriaTraces) is **not ported**. Verified 2026-10-08 against the official docs (`docs.victoriametrics.com/victoriatraces/querying/grafana/`): VictoriaTraces implements the **Tempo HTTP API natively**, and Grafana's Jaeger datasource queries VT directly. The proxy was compensating plumbing from the Swarm era — exactly the kind of bespoke component the K8s-native audit (`docs/charts/k8s-native-audit.md`, decision 1) removes.
+
+Consequences:
+- No `tempo-proxy` helm dependency, no Deployment/Service template.
+- Grafana traces datasource points at `http://vtraces.<ns>.svc.cluster.local:10428` (Task 5).
+- Service inventory: 29 (was 30); Group 1 = 5.
 
 ## Task 7: ServiceMonitor emission per Group 5 service (conditional)
 
@@ -1128,12 +1107,12 @@ Plan 4 shipped:
 | VictoriaLogs | VLSingle | on for staging/prod/sovereign |
 | VictoriaTraces | VTSingle | on for staging/prod/sovereign |
 | OpenTelemetry Collector | OpenTelemetryCollector (gateway mode) | on for staging/prod/sovereign |
-| Grafana | subchart | optional |
-| tempo-proxy | Deployment + Service (Jaeger query API) | bundled when traces enabled |
+| Grafana | grafana-operator CRs (Grafana + GrafanaDatasource + 9 GrafanaDashboard) | optional |
+| Traces query | Grafana Jaeger datasource -> VictoriaTraces direct (native Tempo HTTP API) | bundled when traces enabled |
 
 Per-service `serviceMonitor: true` triggers a Prometheus ServiceMonitor emission only when `observability.metrics.enabled: true`. PII redaction transform processor is part of the OTel Collector's gateway pipeline (regex rules ported from the current Swarm fluentd config).
 
-PII redaction rules: shipped in `configs/otel-pii-redaction.yaml`. Operators override per-env via `observability.piiRedaction.rules` in `values-override.yaml`.
+PII redaction rules: shipped inside the ported `configs/otel-collector-config.yaml` (verbatim from the Swarm config — the canonical source). Operators override per-env by forking the file in `deploy/environments/<env>/`; Plan 7 conftest lints that no rule is dropped.
 EOF
 
 git add charts/genieai-umbrella/README.md
@@ -1167,11 +1146,11 @@ After writing all 11 tasks, run this checklist against the spec.
 | §10 observability stack default (profile-gated) | Tasks 2, 8 |
 | §10 vmoperator (VM/VL/VT) | Task 3 |
 | §10 opentelemetry-operator | Task 4 |
-| §10 Grafana subchart | Task 5 |
+| §10 grafana-operator (instance/datasources/dashboards CRs) | Task 5 |
 | §10 PII redaction transform | Task 4 |
 | §10 log ingestion (agent DaemonSet replacing the fluentd-driver pipeline) | Task 4b |
 | §7 ServiceMonitors conditional | Task 7 |
-| §10 tempo-proxy (Swarm tempo-proxy equivalence, Jaeger query API) | Task 6 |
+| §10 traces query via VT-native Tempo HTTP API (tempo-proxy REMOVED) | Task 5 Step 4 + Task 6 note |
 | §8 observability SealedSecrets (grafanaAdminPassword, kcGrafanaClientSecret per §8 F14) | Task 10 |
 | §17 observability entries in v1.0 manifest | Tasks 1-10 |
 
@@ -1188,7 +1167,7 @@ Sections deferred:
 
 1. vmoperator CRD version compat (K8s 1.32) → Task 1 Step 4 (`helm dep list` parses pinned versions).
 2. ServiceMonitor only when observability + per-service toggle → Task 7 Step 3 (render asserts 0 ServiceMonitors when observability off).
-3. tempo-proxy Jaeger port + URL prefix → Task 6 Step 4 (Python parse of Service spec).
+3. Traces query VT-direct (no proxy) → Task 5 Step 4 (asserts jaeger datasource URL contains vtraces + zero tempo-proxy in render).
 4. PII redaction yaml schema (error_mode: ignore) → Task 4 Step 5 (assertions on ported config + otelcol validate when available).
 5. ClusterProfile-driven toggles → Task 8 Step 3-4 (render with prod AND dev; assert observable count).
 6. Log ingestion without the fluentd driver → Task 4b Step 5 (render asserts gateway `deployment` + agent `daemonset` CRs, filelog receiver, `/var/log/pods` hostPath).
@@ -1202,14 +1181,14 @@ All six covered.
 ## Plan Stats
 
 - **Tasks:** 12
-- **Files created:** 10 (4 CRD templates + 1 ported collector config + 1 gateway OTel template + 1 agent OTel template + 1 agent RBAC + 1 Grafana datasources + 1 tempo-proxy + SealedSecrets + helper + factory edit) + values.yaml diff
+- **Files created:** 11 (4 vm CRD templates + 1 ported collector config + 1 gateway OTel template + 1 agent OTel template + 1 agent RBAC + 2 grafana-operator templates + 9 dashboard JSONs + SealedSecrets + helper + factory edit) + values.yaml diff
 - **Files modified:** 2 (Chart.yaml + values.yaml)
 - **Commits planned:** 12
 - **Estimated review surface:** ~1000 lines added (heavy CRD templates)
 
 ## What's next after Plan 4
 
-- Plan 5: AI/ML (vLLM + TEI + OPEA microservices + GPU operator + 14 Group-6 services including the restored tei_reranker + tempo-proxy)
+- Plan 5: AI/ML (vLLM + TEI + OPEA microservices + GPU operator + 14 Group-6 services including the restored tei_reranker)
 - Plan 6: per-env Kustomize overlays + GitOps sync + ingress (Envoy Gateway + cert-manager + nginx volumeMount wiring — picks up Plan 3 Task 5 step 4 follow-up)
 - Plan 7: CI integration + image signing + Renovate + uninstall safety + secret-leak lint + chart-schema-drift alert
 - Plan 8: documentation (site content + docs/charts/*)

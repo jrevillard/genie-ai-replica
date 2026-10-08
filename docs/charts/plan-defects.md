@@ -37,6 +37,20 @@ umbrella `.helmignore` no longer strips vendored deps/lock (OCI installability),
 ArgoCD scp-like repoURL syntax, service counts unified 28, §13.3 drift script
 rebased to newly-introduced-keys semantics.
 
+## Wave 7 — Plan 5 first review (fixed in 90fdf4b55)
+
+5 Critical + 12 Important + 11 Minor on the new AI/ML plan, all applied:
+factory component-derivation + probe guards (C1/C2), ARANGO creds +
+secretKeyRef (C3), chatqna LLM/translation env completed (C4),
+keycloak-proxy secret decoupled from ai.enabled (C5), NP matrix + remote-443
+egress (I1), TEI non-root port + /data cache mount + fsGroup (I2), backend
+AI wiring (I3), bearer-vs-HF-token split (I4), evaluator svc_enabled rewire
+(I5), env tables transcribed compose-verbatim with re-point/values-exposed
+markers (I6-I8), ui/nginx images + ports (I9), vLLM args + GPU-compose knob
+precedence (I10), GPU-operator spec reconciliation + audit decision 8 (I11),
+consumer-gated remote fail-fast (I12). Verdict was "No"; post-fix the plan's
+render-blocking and functional-dead paths are closed.
+
 ## OPEN — assigned to future plans
 
 | Item | Owner | Note |
@@ -49,4 +63,4 @@ rebased to newly-introduced-keys semantics.
 | PII smoke test K8s port (`tests/otel-collector/run-pii-smoke.sh` assumes docker) | Plan 7 | kind-based equivalent |
 | `genieai-common.fullname` collision check (release named `genieai` ⇒ `genieai-genieai-*`?) | Plan 1 execution | First `helm template` run must eyeball rendered names |
 | CNPG chart line verification (`~> 0.30.0` tracks operator 1.30) | Plan 2 execution | `helm search repo cloudnative-pg` at execution time; pin rationale: no assumption that chart minor == operator minor |
-| ArangoDB `arangodb-single` service consumer URLs vs operator-created Service naming | Plan 5/6 | Verify the kube-arangodb-created Service name matches `arangodb-single.<ns>:8529` used in backend env |
+| ArangoDB `arangodb-single` service consumer URLs vs operator-created Service naming | Plan 5/6 execution | Chart-side name matches the Plan 2 CR (annotated in Plan 5 Task 11), but the kube-arangodb-created SERVICE name stays unverified until first live render |

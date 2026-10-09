@@ -95,8 +95,8 @@ describe('generateSuite', () => {
       expect(suite.payload.positive).toHaveLength(1); // empty query dropped
       expect(suite.payload.positive[0]).toMatchObject({ kind: 'positive', source: 'llm' });
       const neg = suite.payload.negative;
-      // 1 confusable + 3 forbidden + 4 off-domain + 3 meta fallback
-      expect(neg).toHaveLength(11);
+      // 1 confusable + 3 forbidden + 4 near-miss + 4 off-domain + 3 meta fallback
+      expect(neg).toHaveLength(15);
       expect(neg.filter((q) => q.cls === 'confusable')).toHaveLength(1);
       const forbidden = neg.filter((q) => q.cls === 'forbidden');
       expect(forbidden).toHaveLength(3);

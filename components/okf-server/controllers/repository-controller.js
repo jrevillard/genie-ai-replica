@@ -1386,6 +1386,25 @@ async function routingTest(req, res, next) {
 }
 
 /**
+ * Story 1-8c — POST /api/okf/repos/:repo_id/routing-explain.
+ * Explains one query's gate outcome; when it (wrongly) CLAIMS, proposes
+ * forbidden tags that would exclude it. Admin-scoped — may burn one LLM
+ * call for the suggestion.
+ */
+async function routingExplain(req, res, next) {
+  try {
+    const headTestService = require('../services/head-test-service');
+    const result = await headTestService.explainRouting(req.params.repo_id, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Story 1-8 MR-B (2026-10-08) — POST /api/okf/repos/:repo_id/routing-testsuite.
  * Generates a test suite: ONE guided-JSON vLLM call (positives +
  * confusable-sibling negatives + keywords) plus deterministic
@@ -1443,6 +1462,24 @@ async function runTestSuite(req, res, next) {
 }
 
 /**
+ * Story 1-8c — POST /api/okf/repos/:repo_id/routing-testsuite/:suite_key/explain.
+ * BATCH advice for the latest run of the suite: every failing negative in
+ * one pass, ONE LLM call, consolidated suggested forbidden tags. Admin-scoped.
+ */
+async function explainTestSuiteFailures(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const result = await headSuiteService.explainSuiteFailures(req.params.repo_id, req.params.suite_key, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Story 1-8 MR-B — GET /repos/:repo_id/routing-testsuite/runs?limit&kind.
  * Analytics history: runs (default) or suites or both — newest first,
  * summary metrics only (the full per-query payload stays in the docs).
@@ -1469,9 +1506,10 @@ module.exports = {
   deleteRepo,
   rebuildRepoHead,
   routingTest,
+  routingExplain,
   generateTestSuite,
-  addTestSuiteQueries,
-  runTestSuite,
+  addTestSuiteQueries,  runTestSuite,
+  explainTestSuiteFailures,
   listTestSuiteRuns,
   piiScan,
   importRepoConcepts,

@@ -160,13 +160,14 @@ async function loadSiblingContext(db, underTestId) {
   return cursor.all();
 }
 
-function suitePrompt(repo, fm, siblings, nPositive, nNegative, topics) {
+function suitePrompt(repo, fm, siblings, nPositive, nNegative, topics, nNearMiss) {
   const siblingText = siblings.length
     ? siblings.map((s) => `- "${s.name}"\n  ${String(s.text || '').slice(0, 400)}`).join('\n')
     : '(no other repository currently has a vectorized head)';
   // Confusable negatives need competitors to be confusable WITH — a solo
   // universe yields none (the class exists only when siblings exist).
   const nConfusable = siblings.length ? nNegative : 0;
+  const forbiddenText = (fm.forbidden || []).join(', ') || '(none declared)';
   return `You are building a ROUTING TEST SUITE for one repository in a
 multi-repository retrieval system. Each query will be embedded and the
 system routes it to the repository whose "head" vector scores highest.
@@ -177,7 +178,7 @@ Its head text (what the router sees):
 Topics: ${(fm.topic || []).join(', ')}
 Entities: ${(fm.entity || []).join(', ')}
 Scope: ${fm.scope || ''}
-Explicitly NOT about: ${(fm.forbidden || []).join(', ')}
+Explicitly NOT about: ${forbiddenText}
 Summary: ${fm.summary || ''}
 
 COMPETING REPOSITORIES (queries similar to their content but not to the
@@ -194,6 +195,13 @@ Generate:
   (empty string if there are no competitors). 5-15 words each.${
     nConfusable ? '' : '\n  There are NO competing repositories — return an empty "negative" array.'
   }
+- ${nNearMiss} NEAR-MISS queries (the hardest negatives): use THIS
+  repository's own vocabulary and adjacent topics, but ask for something
+  it does NOT cover — a different intent (treatment, medications,
+  providers, insurance, costs when the repo covers guidelines and
+  prevention), an adjacent condition NOT in the entity list, or the
+  wrong population. Example pattern: if the repo covers cancer
+  SCREENING, a near miss is "best hospitals for cancer surgery".
 - EXACTLY ONE query for EACH topic in this list. Every topic is a
   domain completely UNRELATED to this repository — a user asking about
   it must NEVER be routed here:
@@ -207,6 +215,7 @@ Generate:
 OUTPUT FORMAT (CRITICAL — the parser is strict, no synonyms):
   { "positive": [ {"query": "...", "reason": "<one sentence>"} ],
     "negative": [ {"query": "...", "expected_repo": "...", "reason": "<one sentence>"} ],
+    "near_miss": [ {"query": "...", "reason": "<one sentence>"} ],
     "off_domain": [ {"topic": "<one topic from the list above>", "query": "...", "reason": "<one sentence>"} ],
     "meta": [ {"query": "...", "reason": "<one sentence>"} ],
     "keywords": ["...", "..."] }
@@ -312,6 +321,51 @@ function metaQueries(llmMeta) {
   }));
 }
 
+/**
+ * Near-miss rows (cls 'near-miss', Story 1-8c): queries using the repo's
+ * OWN vocabulary for something it does NOT cover — wrong intent, adjacent
+ * condition, wrong population. The hardest negative class. LLM-authored
+ * when provided; deterministic fallback templated from the repo's ENTITIES
+ * with wrong-intent frames so the class is never empty.
+ */
+const NEAR_MISS_TEMPLATES = [
+  'Best hospitals for {entity} surgery',
+  'Medication costs for {entity} treatment',
+  'Insurance coverage for {entity} care',
+  'Support groups for {entity} patients and families',
+  'Clinical trials recruiting {entity} patients'
+];
+
+function nearMissQueries(llmNearMiss, fm, n) {
+  const rows = (Array.isArray(llmNearMiss) ? llmNearMiss : [])
+    .filter((m) => m && typeof m.query === 'string' && m.query.trim())
+    .slice(0, n)
+    .map((m) => ({
+      query: m.query.trim(),
+      kind: 'negative',
+      cls: 'near-miss',
+      source: 'llm',
+      expected_repo: null,
+      reason: m.reason || 'near-miss: repo vocabulary, out-of-scope intent — the head must not win it'
+    }));
+  if (rows.length >= n) return rows;
+  const entities = (Array.isArray(fm.entity) ? fm.entity : []).filter((e) => typeof e === 'string' && e.trim());
+  for (let i = 0; rows.length < n && entities.length; i += 1) {
+    const entity = entities[i % entities.length];
+    const query = NEAR_MISS_TEMPLATES[(i + entities.length) % NEAR_MISS_TEMPLATES.length].replace('{entity}', entity);
+    if (rows.some((r) => r.query.toLowerCase() === query.toLowerCase())) continue;
+    rows.push({
+      query,
+      kind: 'negative',
+      cls: 'near-miss',
+      source: 'fallback',
+      expected_repo: null,
+      reason: `near-miss: ${entity} vocabulary, out-of-scope intent (deterministic fallback)`
+    });
+  }
+  return rows;
+}
+
 function clampCount(value, fallback, max) {
   const n = parseInt(value, 10);
   if (!Number.isFinite(n) || n <= 0) return fallback;
@@ -351,14 +405,18 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     // random off-domain pool is sized separately by n_negative_random.
     const nNegative = clampCount(payload.n_negative, 6, 15);
     const nRandom = clampCount(payload.n_negative_random, 4, 12);
+    // Story 1-8c — user-controlled class sizes (David: "give the lab user
+    // the ability to control the number of test queries").
+    const nMeta = clampCount(payload.n_meta, 3, 8);
+    const nNearMiss = clampCount(payload.n_near_miss, 4, 10);
     const randomTopics = sampleTopics(nRandom);
 
     const db = await dbService.getConnection();
     await ensureCollection(db);
     const siblings = await loadSiblingContext(db, repoId);
 
-    const prompt = suitePrompt(repo, fm, siblings, nPositive, nNegative, randomTopics);
-    let llm = { positive: [], negative: [], off_domain: [], meta: [], keywords: [] };
+    const prompt = suitePrompt(repo, fm, siblings, nPositive, nNegative, randomTopics, nNearMiss);
+    let llm = { positive: [], negative: [], off_domain: [], meta: [], near_miss: [], keywords: [] };
     try {
       // temperature 0.7 (not the extraction default 0.0) — adversarial
       // negatives must VARY generation to generation; 2200 max tokens —
@@ -375,6 +433,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
           negative: Array.isArray(parsed.negative) ? parsed.negative : [],
           off_domain: Array.isArray(parsed.off_domain) ? parsed.off_domain : [],
           meta: Array.isArray(parsed.meta) ? parsed.meta : [],
+          near_miss: Array.isArray(parsed.near_miss) ? parsed.near_miss : [],
           keywords: Array.isArray(parsed.keywords) ? parsed.keywords : []
         };
       }
@@ -407,7 +466,8 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
           }))
       : [];
     const offDomain = offDomainQueries(llm.off_domain, randomTopics);
-    const meta = metaQueries(llm.meta);
+    const meta = metaQueries(llm.meta).slice(0, nMeta);
+    const nearMiss = nearMissQueries(llm.near_miss, fm, nNearMiss);
 
     const suiteKey = `s${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
     const now = new Date().toISOString();
@@ -425,7 +485,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         sibling_names: siblings.map((s) => s.name),
         off_domain_topics: randomTopics,
         positive,
-        negative: [...llmNegatives, ...forbiddenDerivedQueries(fm), ...offDomain, ...meta],
+        negative: [...llmNegatives, ...forbiddenDerivedQueries(fm), ...nearMiss, ...offDomain, ...meta],
         keywords: llm.keywords.filter((k) => typeof k === 'string'),
         notes: []
       }
@@ -440,6 +500,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     span.setAttribute('okf.headsuite.negatives', suiteDoc.payload.negative.length);
     span.setAttribute('okf.headsuite.offdomain', byClass['off-domain'] || 0);
     span.setAttribute('okf.headsuite.meta', byClass.meta || 0);
+    span.setAttribute('okf.headsuite.nearmiss', byClass['near-miss'] || 0);
     logger.info('head-suite.generated', {
       repo_id: repoId,
       suite_key: suiteKey,
@@ -684,11 +745,104 @@ async function listRuns(repoId, payload = {}) {
   return cursor.all();
 }
 
+/**
+ * Story 1-8c — BATCH advice for a suite run's failures (David: gating
+ * must never become a per-query full-time job). Loads the LATEST run of
+ * the suite, collects every negative-classified query that CLAIMED, and
+ * makes ONE LLM call proposing a consolidated set of new forbidden tags
+ * covering all failing subjects. Per-query notes explain each failure.
+ */
+async function explainSuiteFailures(repoId, suiteKey, _opts = {}) {
+  return withSpan('okf.headsuite.explain_failures', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
+    const db = await dbService.getConnection();
+    await ensureCollection(db);
+    const runs = await (
+      await db.query(
+        'FOR r IN okf_head_test_runs FILTER r.repo_id == @k && r.suite_key == @s && r.kind == "run" ' +
+          'SORT r.created_at DESC LIMIT 1 RETURN r',
+        { k: repoId, s: suiteKey }
+      )
+    ).all();
+    const run = runs[0];
+    if (!run) {
+      const err = new Error(`no run found for suite ${suiteKey} — run the suite first`);
+      err.code = 'RUN_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+    const failing = (run.payload.results || []).filter(
+      (q) => q && q.kind && q.kind !== 'positive' && q.head_claimed
+    );
+    const fm = await frontmatterService.readFrontmatterFromRepoDoc(repoId);
+    const out = {
+      suite_key: suiteKey,
+      run_key: run._key || run.suite_key,
+      run_created_at: run.created_at,
+      failing_count: failing.length,
+      failing_queries: failing.map((q) => ({ query: q.query, cls: q.cls || null, head_claim: q.head_claim || null })),
+      suggested_tags: [],
+      source: 'none',
+      note: ''
+    };
+    if (!failing.length) {
+      out.note = 'no failing negatives in the latest run — nothing to explain';
+      return out;
+    }
+    let suggestionTags = [];
+    try {
+      const prompt = `A retrieval repository's routing test suite has failing NEGATIVE queries:
+each one is WRONGLY routed to this repository and must be excluded.
+
+REPOSITORY scope — topics: ${(fm.topic || []).join(', ')}; entities: ${(fm.entity || []).join(', ')};
+already forbidden: ${(fm.forbidden || []).join(', ') || '(none)'}; summary: ${fm.summary || ''}
+
+FAILING QUERIES:
+${failing.map((q, i) => `${i + 1}. ${q.query}`).join('\n')}
+
+Propose UP TO 5 NEW forbidden tags (lowercase kebab-case, 1-3 words each)
+that together cover EVERY failing query's subject, that the repository's
+scope genuinely EXCLUDES, that do not overlap the already-forbidden list,
+and that do not exclude the repository's own topics/entities. Prefer broad
+subject tags over query-specific ones. Respond with ONLY a JSON object:
+{"tags": ["...", "..."], "notes": "<one sentence covering rationale>"}`;
+      const resp = await frontmatterService.vllmChatCompletions([{ role: 'user', content: prompt }], {
+        maxTokens: 300,
+        temperature: 0.2
+      });
+      const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
+      const parsed = parseJsonObject(content && content.content);
+      suggestionTags = ((parsed && parsed.tags) || [])
+        .filter((t) => typeof t === 'string' && t.trim())
+        .map((t) => t.trim().toLowerCase().replace(/\s+/g, '-'))
+        .filter((t) => !(fm.forbidden || []).includes(t))
+        .slice(0, 5);
+      if (parsed && typeof parsed.notes === 'string') out.note = parsed.notes;
+      out.source = suggestionTags.length ? 'llm' : 'none';
+    } catch (e) {
+      logger.warn('head-suite.explain.llm_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message });
+      out.source = 'none';
+      out.note = 'the suggestion model is unreachable — review the failing queries against the declared scope manually';
+    }
+    out.suggested_tags = suggestionTags;
+    span.setAttribute('okf.headsuite.failing', failing.length);
+    span.setAttribute('okf.headsuite.suggested', suggestionTags.length);
+    logger.info('head-suite.explain_failures.done', {
+      repo_id: repoId,
+      suite_key: suiteKey,
+      failing: failing.length,
+      suggested: suggestionTags.length
+    });
+    return out;
+  });
+}
+
 module.exports = {
   generateSuite,
   addQueries,
   runSuite,
   listRuns,
+  explainSuiteFailures,
   // test surface
   _internals: {
     suitePrompt,
@@ -697,6 +851,7 @@ module.exports = {
     forbiddenDerivedQueries,
     offDomainQueries,
     metaQueries,
+    nearMissQueries,
     sampleTopics,
     OFF_DOMAIN_TOPICS,
     OFF_DOMAIN_TEMPLATES,

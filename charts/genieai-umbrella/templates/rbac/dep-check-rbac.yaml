@@ -36,7 +36,13 @@ metadata:
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-30"
-    "helm.sh/hook-delete-policy": before-hook-creation
+    # hook-succeeded (unlike the namespaced Role above): Helm never runs
+    # delete hooks on uninstall, so a cluster-scoped resource with only
+    # before-hook-creation survives forever — namespace deletion does not
+    # reap it. Removed on success, recreated before each hook phase; a
+    # failed attempt keeps it around for debugging until the next try's
+    # before-hook-creation replaces it.
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 rules:
   # Cluster-scoped lookups only — NO Secrets, NO ConfigMaps here.
   # The clusterprofile-detect hook reads the namespace label (get);

@@ -1,0 +1,90 @@
+{{- if .Values.data.arangodb.enabled -}}
+{{- $mode := .Values.data.arangodb.mode | default "single" -}}
+{{- if and (eq $mode "single") (or (eq .Values.clusterProfile "prod") (eq .Values.clusterProfile "staging")) -}}
+{{- $mode = "cluster" -}}
+{{- end -}}
+{{- if eq $mode "single" -}}
+apiVersion: arango.kube.arangodb.com/v1
+kind: ArangoDeployment
+metadata:
+  # metadata.name MUST match the DNS name used by the chart + Swarm migration
+  # paths. Swarm service is arango-vector-db; we render as arangodb-single to
+  # match the chart's existing service consumer namespace, which is
+  # downstream-of-here stable.
+  name: arangodb-single
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "data-arangodb"))) | nindent 4 }}
+    genieai.io/data-tier: arangodb
+spec:
+  mode: Single
+  image: arangodb/arangodb:3.12
+  externalAccess:
+    type: None
+  single:
+    args:
+      - --server.authentication-system-only=true
+      # NO --server.endpoint: `arangodb://` is not a valid endpoint scheme
+      # (arangod accepts tcp:// / ssl://). The operator sets endpoint+advertising
+      # itself from the CR; hand-rolling it here breaks pod startup.
+    storage:
+      engine: RocksDB
+      volumeClaimTemplate:
+        spec:
+          # Render storageClass ONLY when set: empty-string pins
+          # storageClassName: "" = "no default SC" and strands the PVC
+          # (same trap the CNPG template guards against).
+          {{- with .Values.pluggable.storageClassName }}
+          storageClassName: {{ . }}
+          {{- end }}
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: {{ .Values.data.arangodb.storageSize | default "50Gi" }}
+  authentication:
+    enabled: true
+    jwtSecretName: arango-jwt-secret
+    rootPasswordSecretName: arango-root-secret
+{{- else if eq $mode "cluster" -}}
+apiVersion: arango.kube.arangodb.com/v1
+kind: ArangoDeployment
+metadata:
+  name: arangodb-cluster
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "data-arangodb"))) | nindent 4 }}
+    genieai.io/data-tier: arangodb
+spec:
+  mode: Cluster
+  image: arangodb/arangodb:3.12
+  externalAccess:
+    type: None
+  agents:
+    count: 3
+    args:
+      - --server.authentication-system-only=true
+  dbservers:
+    count: 3
+    args:
+      - --server.authentication-system-only=true
+    storage:
+      engine: RocksDB
+      volumeClaimTemplate:
+        spec:
+          {{- with .Values.pluggable.storageClassName }}
+          storageClassName: {{ . }}
+          {{- end }}
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: {{ .Values.data.arangodb.storageSize | default "50Gi" }}
+  coordinators:
+    count: 2
+  authentication:
+    enabled: true
+    jwtSecretName: arango-jwt-secret
+    rootPasswordSecretName: arango-root-secret
+{{- end -}}
+{{- end -}}

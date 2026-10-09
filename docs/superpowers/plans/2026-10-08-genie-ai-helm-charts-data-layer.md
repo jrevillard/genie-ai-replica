@@ -56,12 +56,13 @@ Append to the `dependencies:` block (just below the existing `genieai-common` en
 ```yaml
 dependencies:
   # Local library chart — re-rendered on every umbrella install.
+  # NO import-values (Plan 1 execution deviation, ledger Wave 8 #1): Helm 4
+  # injects the reserved `global` key into every subchart's coalesced values,
+  # which the library schema's additionalProperties:false rejects. Template
+  # definitions are callable via {{ include "genieai-common.*" . }} without it.
   - name: genieai-common
     version: "0.1.0"
     repository: "file://../genieai-common"
-    import-values:
-      - child: "."
-        parent: "common"
 
   # Plan 2 — data layer operators
   - name: cloudnative-pg
@@ -738,12 +739,29 @@ git commit -m "feat(charts): pre-install dependency-check Job with real Python e
 
 ## Task 7: ClusterProfile auto-detect hook
 
+> **AMENDED at Plan-1 execution (ledger Wave 8 #2 + review round 2):** the
+> Namespace carrying `genieai.io/cluster-profile` is now a REGULAR resource
+> (Helm 4 implicit before-hook-creation deletes hook-identity Namespaces).
+> Regular resources apply AFTER all pre-install hooks — so on every FRESH
+> install the label is NEVER present while this hook runs, the 30s poll below
+> always exhausts, and the WARN path fires unconditionally. Implement the
+> redesign instead of the Step-2 body verbatim:
+>
+> - Annotate the hook `helm.sh/hook: pre-upgrade` ONLY (label exists by then,
+>   applied by the previous revision's regular-resource Namespace).
+> - On pre-upgrade, poll at most 3 × 2s; if the label is present and DIFFERS
+>   from `{{ .Values.clusterProfile }}` (render into the Job as a literal in
+>   the command), emit the `ClusterProfileDetected` Event with a mismatch
+>   message; if absent or equal, exit 0 silently.
+> - Drop the pre-install variant entirely — there is nothing to detect on a
+>   fresh install (the operator's `--set clusterProfile` IS the source).
+
 **Files:**
-- Create: `charts/genieai-umbrella/templates/hooks/pre-install-clusterprofile-detect.yaml`
+- Create: `charts/genieai-umbrella/templates/hooks/pre-upgrade-clusterprofile-detect.yaml`
 
 **Interfaces:**
-- Consumes: namespace label `genieai.io/cluster-profile`, `helm.sh/hook: pre-install`, `helm.sh/hook-weight: "-10"` (runs BEFORE the dependency check).
-- Produces: a Job that reads the namespace label, **emits a Kubernetes Event** recording the detected profile, and exits 0. **Does NOT mutate Helm-rendered values** (Helm does not re-render mid-install; Review Focus F10).
+- Consumes: namespace label `genieai.io/cluster-profile`, `helm.sh/hook: pre-upgrade`, `helm.sh/hook-weight: "-10"`.
+- Produces: a Job that reads the namespace label, **emits a Kubernetes Event** recording a mismatch, and exits 0. **Does NOT mutate Helm-rendered values** (Helm does not re-render mid-install; Review Focus F10).
 
 - [ ] **Step 1: Run red-gate — Job absent**
 

@@ -10,6 +10,7 @@
 //   POST /api/okf/repos/:id/routing-testsuite      (+ forbidden_snapshot)
 //   POST /api/okf/repos/:id/routing-testsuite/:k/run
 //   POST /api/okf/repos/:id/routing-testsuite/:k/explain (+positive_failures)
+//   POST /api/okf/repos/:id/routing-advisor           (comprehensive advisor)
 // Same auth spine as smoke-1-8c.js: throwaway Keycloak user + tools-admin
 // role + temporary ROPC (reverted immediately + on exit). COMPENSATING
 // WRITES ONLY: the one throwaway forbidden tag the history/revert check
@@ -450,6 +451,33 @@ async function cleanup() {
     'advice: removal_suggestions array (possibly empty)',
     Array.isArray(batch2.removal_suggestions) && batch2.removal_suggestions.every((r) => r && typeof r.tag === 'string' && typeof r.killed === 'number'),
     `removals=[${(batch2.removal_suggestions || []).map((r) => r.tag + 'x' + r.killed).join(', ')}] note=${(batch2.note || '').slice(0, 60)}`
+  );
+
+  // ---- 13. COMPREHENSIVE ADVISOR (aggregates runs → simulates the gate) ----
+  // Structural: the scorecards must be well-formed and CONSISTENT (the
+  // totals describe the same deduped query set), and the zero-positive-harm
+  // constraint must hold on the recommendation itself — the predicted
+  // positive_claimed may never sit below the current one.
+  console.log('[13] advisor');
+  const adv = j(await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-advisor`, { token: USER_TOKEN, json: {} }));
+  const cur = adv.current_scorecard;
+  const rec = adv.recommended_scorecard;
+  const scOk = (s) =>
+    !!s && typeof s.positive_claimed === 'number' && typeof s.positive_total === 'number' && typeof s.negative_suppressed === 'number' && typeof s.negative_total === 'number';
+  check(
+    'advisor: 200 + scorecard/changes shape',
+    scOk(cur) && scOk(rec) && !!adv.changes && Array.isArray(adv.changes.add) && Array.isArray(adv.changes.remove) && Array.isArray(adv.add_eval) && Array.isArray(adv.remove_eval),
+    `add=[${(adv.changes && adv.changes.add || []).join(', ')}] remove=[${(adv.changes && adv.changes.remove || []).map((r) => (typeof r === 'string' ? r : r && r.tag)).join(', ')}] queries=${adv.queries_considered} runs=${adv.runs_considered}`
+  );
+  check(
+    'advisor: scorecard totals agree between current and recommended',
+    !!cur && !!rec && cur.positive_total === rec.positive_total && cur.negative_total === rec.negative_total && cur.positive_total > 0 && cur.negative_total > 0,
+    `positives ${cur && cur.positive_total}/${rec && rec.positive_total} negatives ${cur && cur.negative_total}/${rec && rec.negative_total}`
+  );
+  check(
+    'advisor: zero-positive-harm holds on the recommendation',
+    !!cur && !!rec && rec.positive_claimed >= cur.positive_claimed,
+    `claimed ${cur && cur.positive_claimed} -> ${rec && rec.positive_claimed} (suppressed ${cur && cur.negative_suppressed} -> ${rec && rec.negative_suppressed})`
   );
 
   const failed = results.filter((r) => !r.ok);

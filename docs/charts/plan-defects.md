@@ -383,3 +383,38 @@ render-blocking and functional-dead paths are closed.
 ## Execution Wave E4 — /code-review pass 4 (fixes in flight)
 
 14 findings. Fixed (6): failOnPlaceholderSecrets default inverted to true (prod-safety foot-gun); tautological test replaced with PSA-label presence check; Chart.yaml duplicate dependencies block removed; drift hook shell loop hardened to while-read (future-fragile word-splitting); namespace.yaml warning comment guarding against helm.sh/hook annotation creep; values.yaml comment documenting clusterProfile staging IGNORES data.arangodb.mode. Deferred/ridden: dep-check services skip (services tier lands Plan 3), PSA restricted vs operator pods (live-validation), Arango storageClass existence (live-validation), componentContext double deepCopy (cosmetic), genie-admin no creds (kcadm out-of-band documented), namespace values vs .Release.Namespace inconsistency (already fail-gated), namespace template hook annotation hazard (comment now in place), duplicate Chart.yaml deps (fixed).
+
+## Execution Wave E13 — label divergence root cause (CRITICAL shipped bug)
+
+The label divergence wave 12 was trying to fix was real but the swap of
+`$values` → `$ctx` was a no-op: both arguments remained in the same order,
+so the same precedence semantics applied. The helper's call to
+`merge (deepCopy .Values) (dict "component" (.component | default "umbrella"))`
+always lost because sprig `merge` gives precedence to the FIRST argument
+— `deepCopy .Values` won, so any `--set component=...` propagated to
+every resource's `genieai.io/component` label while `app.kubernetes.io/component`
+read the per-call dict and stayed correct.
+
+Verified live: with `--set component=custom` every Namespace/ClusterRole/CRB/
+ArangoDeployment/Cluster/Keycloak/KeycloakRealmImport/SealedSecret/ConfigMap
+showed `app.kubernetes.io/component: "<per-call>"` alongside
+`genieai.io/component: "custom"`. Two follow-up fix attempts (reversing
+the merge order; if/else over the dict key) also produced divergent
+output because the merge order vs precedence is not the only source of
+ambiguity — once you reach for `merge` here, both args can contribute
+and a future caller setting `.Values.component` will leak again.
+
+The clean fix: delete the `genieai-common.componentContext` define
+(only caller was `genieai-common.labels` itself, plus a stale README
+mention) and inline both label emissions from a single `.component`
+lookup in the labels helper. The divergence is now impossible by
+construction — there is only one value to read. README updated to
+match (no more `componentContext`; `component` is a values key but
+only as a default for ad-hoc callers, never set via `--set`).
+
+Plus: the previous debugging round of "add a PERCALL- prefix to the
+template" produced an apparently-impossible divergence report that
+was actually the VENDORED `genieai-common-0.1.0.tgz` lagging behind
+the edited source — `helm dependency update` rebakes the tgz and the
+prefix showed up correctly. Documented for the next person who sees
+this.

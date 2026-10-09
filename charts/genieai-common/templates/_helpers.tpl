@@ -32,23 +32,18 @@ Chart name and version label.
 {{- end -}}
 
 {{/*
-Component context — the merged component view every labels call in the chart
-uses. Keeps the deepCopy (prevents component leaking into the shared values
-tree) in one place instead of every call site. include can only return text,
-so this renders the resolved genie-ai component label line; call sites pass
-the plain dict (dict "Chart" .Chart "Release" .Release "Values" .Values
-"component" <name>) to genieai-common.labels, which composes it below.
-*/}}
-{{- define "genieai-common.componentContext" -}}
-{{- $ctx := merge (deepCopy .Values) (dict "component" (.component | default "umbrella")) -}}
-genieai.io/component: {{ $ctx.component | quote }}
-{{- end -}}
-
-{{/*
 Common labels — applied to all umbrella resources.
 Includes helm.sh/chart, app.kubernetes.io/name, app.kubernetes.io/instance,
 app.kubernetes.io/version, app.kubernetes.io/managed-by, plus genie-ai-specific
 labels for Prometheus / OpenTelemetry service discovery.
+
+Call sites pass the per-template component name in the context dict
+(`(dict "Chart" .Chart "Release" .Release "Values" .Values
+"component" <name>)`); the helper emits both component labels from that
+single value. The component is read directly — never merged with
+.Values — because sprig `merge` gives precedence to the FIRST argument,
+so a merge that intended the per-call value to win would still fall
+back to any top-level `.Values.component` set via `--set`.
 */}}
 {{- define "genieai-common.labels" -}}
 helm.sh/chart: {{ include "genieai-common.chart" . }}
@@ -58,7 +53,7 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/component: {{ .component | default "umbrella" | quote }}
-{{ include "genieai-common.componentContext" . }}
+genieai.io/component: {{ .component | default "umbrella" | quote }}
 genieai.io/managed-by: helm
 {{- end -}}
 

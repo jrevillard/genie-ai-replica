@@ -441,6 +441,10 @@ async function routingTest(repoId, payload = {}, opts = {}) {
       const tags = Array.isArray(r.tag_cosines) ? r.tag_cosines : [];
       const worst = tags.reduce((a, t) => (!a || t.cosine > a.cosine ? t : a), null);
       r.max_tag_cosine = worst ? worst.cosine : null;
+      // Story 1-8d — the nearest forbidden tag is named ALWAYS (not only on
+      // veto) so margin-killed positives carry their attribution into run
+      // rows and the improvement advice.
+      r.max_tag = worst ? worst.tag : null;
       r.tag_veto = worst && worst.cosine >= ROUTE_FORBIDDEN_TAG_MAX ? worst.tag : null;
       r.floor_pass = r.score >= ROUTE_HEAD_FLOOR;
       const marginPass = r.forbidden_cosine === null || r.head_margin > ROUTE_HEAD_MARGIN;
@@ -704,9 +708,14 @@ const GUARD_SELF_SUBJECT = parseFloat(process.env.OKF_GUARD_SELF_SUBJECT || '0.5
 const GUARD_DUPLICATE_FORBIDDEN = parseFloat(process.env.OKF_GUARD_DUPLICATE_FORBIDDEN || '0.9');
 
 /**
- * Screen candidate forbidden tags against the repo's own head vectors.
- * Returns {accepted: [tag], rejected: [{tag, reason}]} — accepted entries
- * are still suggestions; the curator confirms via the chip flow.
+ * Screen candidate forbidden tags against the repo's own head vectors AND,
+ * when positive test queries are supplied, against the vetoes they would
+ * cause. The impact simulation is the decisive guard: a candidate that
+ * would suppress even ONE gold positive test is rejected regardless of how
+ * sensible its embedding looks ("cardiovascular-pharmacology" vetoes half
+ * a clinical corpus at the 0.55 bar). Returns
+ * {accepted: [tag], rejected: [{tag, reason}]} — accepted entries are
+ * still suggestions; the curator confirms via the chip flow.
  */
 async function guardSuggestions(repoId, candidates, opts = {}) {
   const list = (Array.isArray(candidates) ? candidates : []).filter((t) => typeof t === 'string' && t.trim());
@@ -722,6 +731,8 @@ async function guardSuggestions(repoId, candidates, opts = {}) {
   }
   const existingForbidden =
     head && head.per_field && Array.isArray(head.per_field.forbidden_vectors) ? head.per_field.forbidden_vectors : [];
+  const positiveQueries = Array.isArray(opts.positiveQueries) ? opts.positiveQueries.filter(Boolean) : [];
+  const positiveVectors = positiveQueries.length ? await frontmatterService.teiEmbed(positiveQueries.map((q) => q.query || q)) : [];
   const vecs = await frontmatterService.teiEmbed(list);
   const accepted = [];
   const rejected = [];
@@ -742,6 +753,21 @@ async function guardSuggestions(repoId, candidates, opts = {}) {
         reason: `too close to the repository's own subject (similarity ${worst.cosine.toFixed(2)} >= ${GUARD_SELF_SUBJECT})`
       });
       return;
+    }
+    // Veto-impact simulation — the 2026-10-09 poisoning guard.
+    if (positiveVectors.length) {
+      const killed = [];
+      positiveVectors.forEach((qv, qi) => {
+        const c = cosine(v, qv);
+        if (c !== null && c >= ROUTE_FORBIDDEN_TAG_MAX) killed.push(positiveQueries[qi].query || positiveQueries[qi]);
+      });
+      if (killed.length) {
+        rejected.push({
+          tag,
+          reason: `would suppress ${killed.length} positive test${killed.length > 1 ? 's' : ''} (e.g. "${String(killed[0]).slice(0, 60)}")`
+        });
+        return;
+      }
     }
     let dup = null;
     for (const fv of existingForbidden) {

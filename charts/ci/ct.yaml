@@ -1,6 +1,8 @@
 # chart-testing config — FLAT kebab-case keys only (upstream config schema).
-# There is NO `kubeVersion` config key: the K8s version is pinned via the kind
-# node image and the `ct install --kube-version 1.33.0` CLI flag in CI.
+# There is NO `kubeVersion` config key and NO --kube-version CLI flag
+# (verified against chart-testing v3.15.0 source): the K8s version is pinned
+# solely by the kind node image (kindest/node:v1.33.0) the ct cluster is
+# created from.
 remote: origin
 # Maintainer validation queries the git hosting service over HTTPS to verify
 # accounts; our self-hosted GitLab serves a cert the runner does not trust,

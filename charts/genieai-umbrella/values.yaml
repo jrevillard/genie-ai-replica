@@ -5,6 +5,9 @@
 # storageClassName / containerRuntime) are added together with the templates
 # that consume them — keys no template reads are not declared here.
 
+# Target namespace for tier templates that spell one out. MUST equal the
+# release namespace (-n) — the chart fails the render otherwise (the
+# Namespace resource and test pod follow .Release.Namespace).
 namespace: genieai
 
 global:

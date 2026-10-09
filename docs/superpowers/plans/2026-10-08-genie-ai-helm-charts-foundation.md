@@ -45,7 +45,7 @@ These five failure modes the spec implies but no plan-1 task tests explicitly. E
 
 1. **Library chart `import-values:` collision** — if two templates in `genieai-common/templates/_lib/` declare the same exported key, umbrella chart's values merge breaks. **Pinned in Task 4 step 3** (render test that fails on duplicate keys).
 2. **Helm test Pod missing `securityContext`** — the test Pod runs with default K8s `restricted` PSA; if `restricted` is enforced, the test Pod fails to schedule. **Pinned in Task 9 step 3** (test uses explicit `securityContext.runAsNonRoot: true`).
-3. **chart-testing `ct install` against kind without `--kube-version` flag** — kind defaults to an older k8s; the chart's recommended 1.30+ assumption breaks. **Pinned in Task 10 step 2** (CT config pins `kubeVersion: 1.33.0`).
+3. **chart-testing cluster version pin** — kind defaults to a moving node image; the chart's 1.33 assumption needs a pin. **Pinned in Task 10** (the ct cluster is created from kindest/node:v1.33.0; ct has no config key and no CLI flag for the version — both were fabrications, corrected in execution).
 4. **Chart.yaml `appVersion: latest` vs OCI tag immutable** — OCI registries reject `latest` for promotion; the chart must use explicit tags. **Pinned in Task 6 step 4** (chart-test verifies `appVersion` is not `latest`).
 5. **ArgoCD Application namespace conflict** — the Application manifest in `examples/` references `argocd` as install namespace; if applied by Helm before ArgoCD exists, install fails. **Pinned in Task 11 step 5** (helm template dry-run validates against `argocd` namespace only, not auto-applies).
 
@@ -90,7 +90,7 @@ for the first batch of work.
 
 - Helm API v2. Helm 4.x.
 - No secrets in `values-override.yaml`. Use External Secrets Operator.
-- Tests live in each chart's `tests/` directory; `ct install` for integration, `helm test` for smoke.
+- Tests live in each chart's `templates/tests/` directory; `ct install` for integration, `helm test` for smoke.
 ```
 
 - [ ] **Step 2: Create `charts/Makefile`**
@@ -798,7 +798,8 @@ git commit -m "test(charts): helm test for Namespace + cluster-profile label"
 # chart-testing REAL config schema (verified against upstream config.go):
 # FLAT kebab-case keys. `charts` is a []string; there is NO `kubeVersion`
 # config key — the K8s version is pinned via the kind node image and the
-# `ct install --kube-version 1.33.0` CLI flag in CI (Plan 7).
+# kind node image the ct cluster is created from (kindest/node:v1.33.0); ct
+# has NO CLI flag and NO config key for it (verified v3.15.0 source).
 remote: origin
 # target-branch: omitted — ct derives the MR target branch in CI.
 # Hard-coding one branch would block MRs from any other branch.
@@ -824,7 +825,7 @@ Plan 7). Locally:
 make test
 \`\`\`
 
-Pinned K8s version: **1.33.0** — the kind node image AND the `ct install --kube-version 1.33.0` CLI flag (there is no config-file key for it). Update both in lockstep.
+Pinned K8s version: **1.33.0** — solely via the kind node image (kindest/node:v1.33.0); ct has no config key and no CLI flag for it.
 ```
 
 - [ ] **Step 3: Write `charts/genieai-umbrella/.helmignore`**
@@ -1070,7 +1071,7 @@ Foundation plan complete. Next: Plans 2–8 for data layer, service tier, observ
 
 - Helm API v2. Helm 4.x.
 - No secrets in `values-override.yaml`. Use External Secrets Operator (Plan 2 + Plan 6).
-- Tests live in each chart's `tests/` directory; `ct install` for integration, `helm test` for smoke.
+- Tests live in each chart's `templates/tests/` directory; `ct install` for integration, `helm test` for smoke.
 EOF
 
 git add charts/README.md
@@ -1169,7 +1170,7 @@ Sections NOT covered by this plan, on purpose (move to Plans 2–8):
 
 1. Library `import-values:` collision → TDD red-steps in **Task 4 + Task 5** (chart fails lint without `values.yaml`; passes with it). `helm lint --strict` validates templates render without overlap but **does NOT detect duplicate `{{ define }}` keys** — explicit duplicate-define lint added in Plan 7.
 2. Helm test Pod missing securityContext → Task 9 Step 2 (test pod carries full `securityContext`) + Task 12 Step 4 (verifies post-install).
-3. chart-testing `ct install` without kube-version → Task 10 Step 1 (`ct.yaml` pins the version via the kind node image + `--kube-version` CLI flag in the Makefile/CI — there is NO `kubeVersion` config key; execution correction, ledger Wave 8 #3).
+3. chart-testing version pin → Task 10 (ct cluster created from kindest/node:v1.33.0; neither the `kubeVersion` config key nor a `--kube-version` CLI flag exists — both were fabrications, see ledger Waves 8-15).
 4. `appVersion: latest` rejected in OCI → Task 6 Step 4 (`if grep ... ; then exit 1 ; else echo OK ; fi`, regex covers `"latest"`, `'latest'`, and `latest`).
 5. ArgoCD Application auto-render → Task 11 Step 3 (`grep "kind: Application$"` confirms not in rendered output).
 6. Tarball + Chart.lock committed in source → Task 5 Step 4 (`.helmignore` in library); umbrella `.helmignore` intentionally keeps only `.DS_Store` — vendored deps MUST ship in the packaged tarball; keeping them out of git diffs is `charts/.gitignore`'s job (execution: tarball+lock are untracked, regenerated via `make deps`).

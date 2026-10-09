@@ -1,0 +1,21 @@
+apiVersion: v2
+name: genieai-common
+description: |
+  Library chart providing reusable templates and helpers for the GENIE.AI Helm
+  charts. NOT a deployable chart — used via `dependencies:` in consuming charts
+  with `import-values:` to expose helpers.
+type: library
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - genie-ai
+  - library
+  - templates
+home: https://opensource.unicc.org/un/itu/genie-ai
+sources:
+  - https://opensource.unicc.org/un/itu/genie-ai.git
+maintainers:
+  - name: GENIE.AI
+    email: maintainers@example.invalid
+annotations:
+  category: Library

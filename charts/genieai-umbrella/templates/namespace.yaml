@@ -12,9 +12,12 @@
 {{- $ns := .Release.Namespace -}}
 {{- /* Fail fast when the legacy values key diverges from the release
        namespace: later-tier templates still read .Values.namespace, and a
-       divergence silently splits the install across two namespaces. */ -}}
-{{- if ne (.Values.namespace | default "") .Release.Namespace -}}
-{{- fail (printf "values 'namespace' (%s) must equal the release namespace (%s) — pass -n %s or set the value accordingly" (.Values.namespace | default "") .Release.Namespace .Release.Namespace) -}}
+       divergence silently splits the install across two namespaces.
+       this guard fires only when the values key is explicitly set AND
+       mismatched — values.yaml ships a default so default installs never
+       trip it. */ -}}
+{{- if and .Values.namespace (ne .Values.namespace .Release.Namespace) -}}
+{{- fail (printf "values 'namespace' (%s) must equal the release namespace (%s) — pass -n %s or set the value accordingly" .Values.namespace .Release.Namespace .Release.Namespace) -}}
 {{- end -}}
 {{- /* Fail fast when a data tier is enabled without the sealed-secrets
        backend: the rendered CRs reference Secrets that nothing

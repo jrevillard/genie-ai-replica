@@ -38,7 +38,7 @@ data:
     enabled: true
     # CNPG Cluster resources for the keycloak-db (the only Postgres; the edge
     # tier is Envoy Gateway, not Kong).
-    instances: 1                       # 3 for prod/staging via clusterProfile
+    instances: 1                       # 3 on prod via clusterProfile (staging keeps 1; the Arango tier promotes to cluster on both prod and staging — Postgres HA is prod-only)
     storageSize: 10Gi
   arangodb:
     enabled: true
@@ -48,6 +48,7 @@ data:
     # Gates the Keycloak + KeycloakRealmImport CRs. The operator
     # itself is a cluster bootstrap prerequisite — NOT a chart dependency.
     enabled: true
+    instances: 1                      # 2 on prod via clusterProfile
     realmImport: true
     adminEmail: genie-admin@genieai.local
     # Gates the new-user email-verification flow; requires smtp to be set
@@ -60,12 +61,12 @@ data:
     supportedLocales: []
     # Access-token TTL in seconds (compose parity).
     accessTokenLifespan: 300
-    # Confidential-client secrets rendered into the realm import. The
-    # KeycloakRealmImport CR cannot read Kubernetes Secrets — operators
-    # supply the real values at install time (values override, never
-    # committed) and they MUST equal the corresponding SealedSecret
-    # values the consumers read (keycloak-proxy-client-secret,
-    # kc-dataprep-client-secret, grafana client secret).
+    # Confidential-client secrets rendered into the realm import — these
+    # values feed the KeycloakRealmImport CR directly (it cannot read
+    # Kubernetes Secrets; operators supply the real values at install time
+    # via values override, never committed). The SealedSecrets carrying
+    # the same values for the backend/dataprep/grafana consumers arrive
+    # with their service tiers.
     clientSecrets:
       proxyClient: change-me-proxy-client
       dataprep: change-me-dataprep-client

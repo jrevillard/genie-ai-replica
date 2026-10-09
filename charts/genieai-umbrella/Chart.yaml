@@ -32,7 +32,24 @@ dependencies:
     version: "0.1.0"
     repository: "file://../genieai-common"
 
-# Operator dependencies land here as their tiers are added:
+  # data layer operators
+  - name: cloudnative-pg
+    version: "~> 0.29.0"   # unified with spec §4 + Global Constraints
+    repository: "https://cloudnative-pg.github.io/charts"
+    condition: data.postgres.enabled
+  - name: kube-arangodb
+    version: "~> 1.4.5"
+    repository: "https://arangodb.github.io/kube-arangodb"
+    condition: data.arangodb.enabled
+  # keycloak-operator is deliberately NOT a Helm dependency: its advertised
+  # chart repo (https://keycloak.github.io/keycloak-operator-helm) serves no
+  # index (301 -> 404; verified 2026-10-08). It is a cluster bootstrap
+  # prerequisite installed via OLM or the static YAML from keycloak.org.
+  # The chart renders only the CRs it manages.
+  - name: sealed-secrets
+    version: "~> 2.20.0"
+    repository: "https://bitnami.github.io/sealed-secrets"
+    condition: secrets.sealedSecrets.enabled
 # cloudnative-pg, kube-arangodb, keycloak-operator, external-secrets-operator,
 # victoria-metrics-operator, opentelemetry-operator, gpu-operator,
 # cert-manager, envoy-gateway.

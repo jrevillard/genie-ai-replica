@@ -11,7 +11,7 @@
     "nameOverride": {
       "type": "string",
       "description": "Override the chart name segment in resource names. Empty = use chart default.",
-      "maxLength": 50
+      "maxLength": 63
     },
     "fullnameOverride": {
       "type": "string",

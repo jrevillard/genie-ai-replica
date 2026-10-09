@@ -1973,9 +1973,13 @@ export default {
     async pollForSuite(suiteKey) {
       const attempts = 96; // 96 × 2.5s ≈ 4 min
       for (let i = 0; i < attempts; i += 1) {
-        // GET first, sleep after — a fast generation lands on attempt 0
+        // GET first, sleep after — a fast generation lands on attempt 0.
+        // The server answers 200 {suite_key, status:'generating'} while the
+        // async worker runs (never a 404) — keep waiting on that envelope;
+        // only a real suite doc (no status) is adopted.
         const res = await this.$store.dispatch('okf/headSuiteGet', { repoId: this.repo.repo_id, suiteKey });
-        if (res && res.ok && res.result && res.result.suite_key) return res.result;
+        const suite = res && res.ok ? res.result : null;
+        if (suite && suite.suite_key && suite.status !== 'generating') return suite;
         await new Promise((resolve) => setTimeout(resolve, 2500));
       }
       return null;

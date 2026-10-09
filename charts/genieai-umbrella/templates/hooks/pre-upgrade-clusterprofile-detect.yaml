@@ -119,9 +119,7 @@ spec:
                   "  name: $ns" \
                   "reason: ClusterProfileDetected" \
                   "type: Warning" \
-                  "  message: $DRIFT_MSG" \
-                  "    detected: $detected" \
-                  "    rendered: $rendered" \
+                  "message: $DRIFT_MSG" \
                   | kubectl create -f - >/dev/null 2>&1 || echo "WARN: event create failed" >&2
               fi
               # Drift detection is advisory: a mismatch (or an unreadable

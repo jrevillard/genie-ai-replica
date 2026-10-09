@@ -74,7 +74,7 @@ genie-ai/
 └── (rest of the repo unchanged)
 ```
 
-`genieai-common` is a library chart (`type: library` in Chart.yaml). It provides templating primitives consumed by `genieai-umbrella` via `dependencies:` with `import-values:`. Subordinate umbrellas (e.g. `genieai-edge` for sovereign deployments) can also consume `genieai-common` later without duplicating template files.
+`genieai-common` is a library chart (`type: library` in Chart.yaml). It provides templating primitives consumed by `genieai-umbrella` via `dependencies:`. **AMENDED 2026-10-09 (execution finding, see `docs/charts/plan-defects.md` Wave 8):** no `import-values` — Helm 4 injects the reserved `global` key into every subchart's coalesced values, which the library schema's `additionalProperties: false` rejects; template definitions are callable from the consuming chart without it. Subordinate umbrellas (e.g. `genieai-edge` for sovereign deployments) can also consume `genieai-common` later without duplicating template files.
 
 **Per-env config lives OUTSIDE the chart** in `deploy/environments/<env>/`. Rationale: the chart stays generic + org-shareable; env config is project-specific and has its own evolution cadence (el-salvador gets 10× more changes than `prod`). Mirrors the Ansible convention of `group_vars/<env>/` for env config sitting beside deployment code.
 

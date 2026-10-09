@@ -1,0 +1,53 @@
+{{- if .Values.data.postgres.enabled -}}
+{{- $instances := .Values.data.postgres.instances | default 1 -}}
+{{- if eq .Values.clusterProfile "prod" -}}
+{{- $instances = 3 -}}
+{{- end -}}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: keycloak-db
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "data-postgres"))) | nindent 4 }}
+    genieai.io/data-tier: postgresql
+    genieai.io/serves: keycloak
+spec:
+  instances: {{ $instances }}
+  # Switchover (default) for HA primary rolling updates with zero downtime.
+  # Override via `data.postgres.primaryUpdateStrategy: Unmanaged` only when
+  # ops explicitly wants manual failover.
+  primaryUpdateStrategy: {{ .Values.data.postgres.primaryUpdateStrategy | default "Switchover" }}
+  imageName: "ghcr.io/cloudnative-pg/postgresql:16"
+  imagePullPolicy: IfNotPresent
+  storage:
+    size: {{ .Values.data.postgres.storageSize | default "10Gi" }}
+    # Render storageClass ONLY when set: an empty-string value would pin
+    # storageClassName: "" which means "NO default storage class" and
+    # strands the PVC on most clusters.
+    {{- with .Values.pluggable.storageClassName }}
+    storageClass: {{ . }}
+    {{- end }}
+    accessModes:
+      - ReadWriteOnce
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "256MB"
+  bootstrap:
+    initdb:
+      database: keycloak
+      owner: keycloak
+      # CNPG expects this Secret to carry BOTH `username` and `password`
+      # keys (username-only fails validation). The SealedSecret in the task
+      # emits both.
+      secret:
+        name: keycloak-db-credentials
+  serviceAccountTemplate:
+    metadata:
+      labels:
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "data-postgres"))) | nindent 8 }}
+  # NOTE: no `monitoring.enablePodMonitor` — that emits a Prometheus-operator
+  # ServiceMonitor and no Prometheus operator is installed in this stack.
+  # Metrics are scraped via VMServiceScrape.
+{{- end -}}

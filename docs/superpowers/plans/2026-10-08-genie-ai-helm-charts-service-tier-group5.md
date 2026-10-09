@@ -164,7 +164,15 @@ services:
     replicas: 1
     image: { repository: clamav/clamav, tag: "1.3" }
     port: 3310
-    securityContext: { runAsNonRoot: true, runAsUser: 100 }
+    # FULL override, not partial: the factory's container securityContext
+    # is replaced wholesale by a per-service value, so every PSA-restricted
+    # field must be restated here (only runAsUser differs from the factory
+    # default — the upstream image's `clamav` account is uid 100).
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 100
+      allowPrivilegeEscalation: false
+      capabilities: { drop: ["ALL"] }
     resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { cpu: 1, memory: 1Gi } }
     env: []
     secrets: []
@@ -272,7 +280,7 @@ arangodb-single
 ```
 
 - [ ] **Step 2: Inject URLs into each per-service template** (Task 3 file edits):
-- `services/backend.yaml`: `KEYCLOAK_URL=http://keycloak-service.<ns>:8080/auth`, `ARANGO_URL=http://{{ include "genieai-umbrella.arangoHost" $ }}.<ns>:8529`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector-collector.<ns>:4318` (the OTel operator names the gateway Service `<cr>-collector`).
+- `services/backend.yaml`: `KEYCLOAK_URL=http://keycloak-service.<ns>:8080/auth`, `ARANGO_URL=http://{{ include "genieai-umbrella.arangoHost" $ }}.<ns>:8529`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector-collector.<ns>:4318` (the OTel operator names the gateway Service `<cr>-collector`), plus the translation-cache block from compose (docker-compose.yaml:552-555): `TRANSLATION_CACHE=on`, `TRANSLATION_CACHE_HOST=redis-cache`, `TRANSLATION_CACHE_PORT=6379`. `TRANSLATION_CACHE_PASSWORD` arrives via the `translation-cache-password` envFrom secret (Task 7).
 - `services/documentRepository.yaml`: `BACKEND_URL=http://backend.<ns>:80`, `CLAMAV_HOST=clamav`, `CLAMAV_PORT=3310`, OTEL endpoint.
 - `services/frontend.yaml`: `VUE_APP_API_URL`, OTEL endpoint.
 
@@ -760,6 +768,15 @@ spec:
       ports:
         - protocol: TCP
           port: 3000
+    # OTLP exporter — Task 1b injects OTEL_EXPORTER_OTLP_ENDPOINT here too;
+    # without this port the frontend's telemetry silently drops under
+    # default-deny egress.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4318
 {{- end -}}
 ```
 
@@ -834,6 +851,15 @@ spec:
       ports:
         - protocol: TCP
           port: 3310
+    # OTLP exporter — Task 1b injects OTEL_EXPORTER_OTLP_ENDPOINT here too;
+    # without this port documentRepository's telemetry silently drops under
+    # default-deny egress.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4318
 {{- end -}}
 ```
 
@@ -997,6 +1023,110 @@ git commit -m "feat(charts): Group 5 stateless app tier (frontend, documentRepo,
 
 ---
 
+## Task 4c: redis-cache (Group 2 — translation cache)
+
+**Files:**
+- Modify: `charts/genieai-umbrella/values.yaml` (add `services.redisCache` entry)
+- Create: `charts/genieai-umbrella/templates/services/redis-cache.yaml`
+
+**Interfaces:**
+- Consumes: factory helper (Task 2); the `translation-cache-password` Secret (Task 7) for `--requirepass`.
+- Produces: 1 Deployment + 1 Service + 1 NetworkPolicy. The backend's translation-cache env block (Task 1b Step 2) and the 6379 egress port (already in backend's NetworkPolicy) target this Service.
+
+Swarm ground truth: compose service `redis-cache` (docker-compose.yaml:422-442) — `redis:7-alpine`, appendonly yes, noeviction, password-protected, internal-only. It is the Group 2 cache of the spec's service inventory; the env prefix `TRANSLATION_CACHE_*` on the backend is its only consumer.
+
+- [ ] **Step 1: Append the values entry**
+
+```yaml
+  redisCache:
+    enabled: true
+    replicas: 1
+    image: { repository: redis, tag: "7-alpine" }
+    port: 6379
+    resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 250m, memory: 512Mi } }
+    env: []
+    secrets: ["translation-cache-password"]   # REDISCLI_AUTH via envFrom
+    pvc:
+      enabled: true                          # appendonly persistence
+      storageSize: 5Gi
+    probes:
+      readiness: { exec: { command: ["sh", "-c", "redis-cli ping"] }, initialDelaySeconds: 5, periodSeconds: 10 }
+      liveness:  { exec: { command: ["sh", "-c", "redis-cli ping"] }, initialDelaySeconds: 30, periodSeconds: 30 }
+    podDisruptionBudget: null
+    serviceMonitor: false
+```
+
+- [ ] **Step 2: Write `charts/genieai-umbrella/templates/services/redis-cache.yaml`**
+
+```yaml
+{{- if .Values.services.redisCache.enabled -}}
+{{- $ctx := dict "name" "redisCache" "component" "redis-cache" "Values" .Values "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "redis-cache"))) | nindent 4 }}
+spec:
+  ports:
+    - name: redis
+      port: 6379
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "redis-cache"))) | nindent 4 }}
+---
+# Ingress from backend ONLY (the sole consumer); egress DNS only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "redis-cache"))) | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: redis-cache
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 6379
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+{{- end -}}
+```
+
+The container args mirror compose: `--appendonly yes --maxmemory-policy noeviction` plus
+`--requirepass $(TRANSLATION_CACHE_PASSWORD)` (env var arrives via envFrom).
+
+- [ ] **Step 3: Render + lint + commit**
+
+```bash
+helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: Deployment$"   # expect 6 now
+helm lint charts/genieai-umbrella --strict
+git add charts/genieai-umbrella/values.yaml charts/genieai-umbrella/templates/services/redis-cache.yaml
+git commit -m "feat(charts): redis-cache translation cache (Group 2)"
+```
+
+Also add the dependency edge `redisCache` to `dependencyGraph.services.backend` in values.yaml — the dep-check hook must fail installs that enable backend without the cache.
+
+---
+
 ## Task 5: nginx — project image + Kong-leak override ConfigMap
 
 **Files:**
@@ -1065,6 +1195,7 @@ Expected: prints `arango-jwt-secret`, `arango-root-secret`, `genie-admin-credent
     emailPassword        → email-password            (key EMAIL_PASSWORD)
     keycloakClientSecret → keycloak-client-secret    (key KEYCLOAK_CLIENT_SECRET)
     huggingFaceHubToken  → huggingface-hub-token     (key HUGGING_FACE_HUB_TOKEN)
+    translationCachePassword → translation-cache-password (key TRANSLATION_CACHE_PASSWORD)
   The factory consumes each Secret whole via envFrom: every
   encryptedData key becomes an env var verbatim — keys must BE the env
   var names, not "password"/"token".
@@ -1072,7 +1203,8 @@ Expected: prints `arango-jwt-secret`, `arango-root-secret`, `genie-admin-credent
 {{- $g5 := dict
       "email-password" "EMAIL_PASSWORD"
       "keycloak-client-secret" "KEYCLOAK_CLIENT_SECRET"
-      "huggingface-hub-token" "HUGGING_FACE_HUB_TOKEN" -}}
+      "huggingface-hub-token" "HUGGING_FACE_HUB_TOKEN"
+      "translation-cache-password" "TRANSLATION_CACHE_PASSWORD" -}}
 {{- range $secretName, $envKey := $g5 }}
 ---
 apiVersion: bitnami.com/v1alpha1
@@ -1093,7 +1225,7 @@ spec:
 - [ ] **Step 3: Render and verify count**
 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: SealedSecret$"`
-Expected: prints `7` (4 from Plan 2 + 3 from Plan 3).
+Expected: prints `8` (4 from Plan 2 + 4 from Plan 3).
 
 - [ ] **Step 4: `helm lint --strict`**
 
@@ -1419,7 +1551,7 @@ Expected: confirms 7 Deployments (5 Group-5 + Plan-2 pre-Install Jobs are not De
 
 ```bash
 helm lint charts/genieai-umbrella --strict
-ct lint --config charts/ci/ct.yaml --charts charts/genieai-umbrella
+ct lint --config charts/ci/ct.yaml --chart-yaml-schema charts/ci/chart_schema.yaml --lint-conf charts/ci/lintconf.yaml --charts charts/genieai-umbrella
 ```
 
 Expected: 0 errors from both.

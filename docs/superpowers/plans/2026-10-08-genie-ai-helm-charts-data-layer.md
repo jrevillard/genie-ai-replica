@@ -159,6 +159,22 @@ data:
     # itself is a cluster bootstrap prerequisite — NOT a chart dependency.
     enabled: true
     realmImport: true
+    adminEmail: genie-admin@genieai.local
+    # Confidential-client secrets rendered into the realm import. The
+    # KeycloakRealmImport CR cannot read Kubernetes Secrets — operators
+    # supply the real values at install time (values override, never
+    # committed) and they MUST equal the corresponding SealedSecret
+    # values the consumers read (keycloak-proxy-client-secret,
+    # kc-dataprep-client-secret, grafana client secret).
+    clientSecrets:
+      proxyClient: change-me-proxy-client
+      dataprep: change-me-dataprep-client
+      grafana: change-me-grafana-client
+    # SMTP for email verification — leave null to disable (no smtpServer
+    # block renders); set all fields in the environment override when used.
+    smtp: null
+    mobileClientId: genie-mobile          # Flutter OIDC client (public, PKCE)
+    mobileRedirectScheme: genieai         # <scheme>://callback redirect
 
 secrets:
   sealedSecrets:
@@ -1016,6 +1032,10 @@ spec:
     # (404 on /realms/genieai/...).
     realm: genie
     enabled: true
+    # TLS terminates at the edge (Envoy Gateway); the Keycloak pod serves
+    # plain HTTP inside the cluster. `external` (the Keycloak default)
+    # would reject every internal http:// redirect URI.
+    sslRequired: none
     registrationAllowed: false
     loginWithEmailAllowed: true
     duplicateEmailsAllowed: false
@@ -1034,6 +1054,38 @@ spec:
       - en
       - fr
     defaultLocale: en
+    {{- /* SMTP (email verification) is deployment-specific: rendered only
+           when the operator sets data.keycloak.smtp in their values
+           override. Fields mirror the Swarm realm export
+           (configs/keycloak/genie-realm.yaml). */ -}}
+    {{- with .Values.data.keycloak.smtp }}
+    smtpServer:
+      from: {{ .from | quote }}
+      host: {{ .host | quote }}
+      port: {{ .port | quote }}
+      ssl: {{ .ssl | quote }}
+      starttls: {{ .starttls | quote }}
+      auth: {{ .auth | quote }}
+      user: {{ .user | quote }}
+      password: {{ .password | quote }}
+    {{- end }}
+    # Realm roles — MUST match the Swarm realm export: `admin` is a
+    # composite over realm-management so the backend's user-management
+    # proxy works, `dataprep-service` authorizes the dataprep service
+    # account against document-repository.
+    roles:
+      realm:
+        - name: admin
+          description: Administrator role with full access
+          composite: true
+          composites:
+            client:
+              realm-management:
+                - manage-users
+                - query-users
+                - view-identity-providers
+        - name: dataprep-service
+          description: Service account role for Dataprep ingestion pipeline
     users:
       - username: genie-admin
         firstName: GENIE
@@ -1044,25 +1096,55 @@ spec:
         # under `data.keycloak.adminEmail`.
         email: {{ .Values.data.keycloak.adminEmail | default "genie-admin@genieai.local" | quote }}
         emailVerified: true
+        realmRoles:
+          - admin
         credentials:
           # Empty value on purpose: the operator cannot PATCH user passwords
           # through the CR after import (user subresource is operator-owned).
-          # Real password is set out-of-band post-install. NOTE: the realm
-          # name MUST match the KeycloakRealmImport's `realm:` field above
-          # (`genie` — see on the realm name) — `-r genieai` was
-          # the wrong value the operator flow used to ship.
+          # Real password is set out-of-band post-install:
           #   kubectl exec deploy/keycloak -n genieai -- \
           #     /opt/keycloak/bin/kcadm.sh set-password -r genie \
           #     --username genie-admin -p '<password>'
           - type: password
             value: ""
             temporary: false
+      # Service-account user entries link the confidential clients below to
+      # their roles (the KeycloakRealmImport equivalent of the Swarm export's
+      # serviceAccountClientId entries).
+      - username: service-account-genie-proxy-client
+        enabled: true
+        serviceAccountClientId: genie-proxy-client
+        clientRoles:
+          realm-management:
+            - query-users
+            - view-users
+            - manage-users
+            - view-realm
+      - username: service-account-dataprep-service-client
+        enabled: true
+        serviceAccountClientId: dataprep-service-client
+        realmRoles:
+          - dataprep-service
     clients:
+      # Keycloak built-in account console (needs webOrigins for iframe auth)
+      - clientId: account
+        enabled: true
+        webOrigins:
+          - https://{{ .Values.ingress.host | default "genieai.local" }}
+      - clientId: account-console
+        enabled: true
+        webOrigins:
+          - https://{{ .Values.ingress.host | default "genieai.local" }}
+      # Web SPA — PUBLIC client with PKCE (browser apps cannot hold client
+      # secrets; the Swarm realm ships publicClient: true — rendering it
+      # confidential breaks authorization_code login with invalid_client).
       - clientId: genie-app
         enabled: true
-        publicClient: false
+        publicClient: true
         directAccessGrantsEnabled: false
         standardFlowEnabled: true
+        implicitFlowEnabled: false
+        serviceAccountsEnabled: false
         rootUrl: https://{{ .Values.ingress.host | default "genieai.local" }}
         redirectUris:
           - https://{{ .Values.ingress.host | default "genieai.local" }}/*
@@ -1074,6 +1156,72 @@ spec:
           - https://{{ .Values.ingress.host | default "genieai.local" }}
         attributes:
           pkce.code.challenge.method: S256
+          oauth2.device.authorization.grant.enabled: false
+          client.credentials.use.refresh.token: false
+          require.pushed.authorization.requests: false
+      # Service account for the backend's Keycloak Admin API proxy
+      # (user/role CRUD on behalf of admin operations; permissions
+      # restricted via the realm-management client roles above).
+      - clientId: genie-proxy-client
+        enabled: true
+        publicClient: false
+        standardFlowEnabled: false
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: true
+        # KeycloakRealmImport cannot read Kubernetes Secrets — the secret
+        # is supplied at install time via the operator's values override
+        # (`data.keycloak.clientSecrets.proxyClient`) and MUST equal the
+        # value sealed in the `keycloak-proxy-client-secret` SealedSecret
+        # the backend consumes.
+        secret: {{ .Values.data.keycloak.clientSecrets.proxyClient | default "change-me-proxy-client" | quote }}
+      # Service account for the Dataprep ingestion pipeline (client_credentials
+      # grant for service-to-service calls into document-repository).
+      - clientId: dataprep-service-client
+        enabled: true
+        publicClient: false
+        standardFlowEnabled: false
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: true
+        # Same rule as proxyClient: must equal the `kc-dataprep-client-secret`
+        # SealedSecret value (`data.keycloak.clientSecrets.dataprep`).
+        secret: {{ .Values.data.keycloak.clientSecrets.dataprep | default "change-me-dataprep-client" | quote }}
+      # Mobile OIDC client (Flutter app) — public client with PKCE per
+      # RFC 8252; mobile apps cannot hold secrets. Refresh-token rotation
+      # on. Redirect scheme is deployment-specific (default mirrors the
+      # repo env template).
+      - clientId: {{ .Values.data.keycloak.mobileClientId | default "genie-mobile" | quote }}
+        enabled: true
+        publicClient: true
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: false
+        attributes:
+          pkce.code.challenge.method: S256
+          client.credentials.use.refresh.token: true
+          oauth2.device.authorization.grant.enabled: false
+          require.pushed.authorization.requests: false
+        redirectUris:
+          - {{ .Values.data.keycloak.mobileRedirectScheme | default "genieai" }}://callback
+        webOrigins:
+          - "+"
+      # Grafana OIDC SSO client — confidential, standard flow, redirect
+      # under the /grafana/ Kong-route equivalent.
+      - clientId: grafana
+        enabled: true
+        publicClient: false
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: false
+        secret: {{ .Values.data.keycloak.clientSecrets.grafana | default "change-me-grafana-client" | quote }}
+        attributes:
+          pkce.code.challenge.method: S256
+          oauth2.device.authorization.grant.enabled: false
+          client.credentials.use.refresh.token: false
+          require.pushed.authorization.requests: false
+        redirectUris:
+          - https://{{ .Values.ingress.host | default "genieai.local" }}/grafana/*
+        webOrigins:
+          - https://{{ .Values.ingress.host | default "genieai.local" }}
 {{- end -}}
 ```
 
@@ -1081,6 +1229,28 @@ spec:
 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep "^kind: Keycloak\|^kind: KeycloakRealmImport$" | sort | uniq -c`
 Expected: one `kind: Keycloak` + one `kind: KeycloakRealmImport`.
+
+Additionally assert the realm payload mirrors the Swarm export (public
+web client, both service-account clients, both service-account users,
+admin composite role):
+
+```bash
+helm template test charts/genieai-umbrella -n genieai | \
+  python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
+  ri = next(d for d in docs if d and d.get('kind') == 'KeycloakRealmImport'); \
+  r = ri['spec']['realm']; \
+  cs = {c['clientId']: c for c in r['clients']}; \
+  assert {'account','account-console','genie-app','genie-proxy-client','dataprep-service-client'} <= set(cs), set(cs); \
+  assert cs['genie-app']['publicClient'] is True, 'web client must be public+PKCE'; \
+  assert cs['genie-proxy-client']['serviceAccountsEnabled'] is True; \
+  us = {u['username'] for u in r['users']}; \
+  assert {'service-account-genie-proxy-client','service-account-dataprep-service-client'} <= us, us; \
+  roles = {x['name'] for x in r['roles']['realm']}; \
+  assert {'admin','dataprep-service'} <= roles, roles; \
+  print('PASS: realm import mirrors Swarm export')"
+```
+
+Expected: prints `PASS: realm import mirrors Swarm export`.
 
 - [ ] **Step 5: Verify the instance points at the CNPG rw Service**
 

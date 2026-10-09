@@ -272,7 +272,7 @@ arangodb-single
 ```
 
 - [ ] **Step 2: Inject URLs into each per-service template** (Task 3 file edits):
-- `services/backend.yaml`: `KEYCLOAK_URL=http://keycloak.<ns>:8080/auth`, `ARANGO_URL=http://{{ include "genieai-umbrella.arangoHost" $ }}.<ns>:8529`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector-collector.<ns>:4318` (the OTel operator names the gateway Service `<cr>-collector`).
+- `services/backend.yaml`: `KEYCLOAK_URL=http://keycloak-service.<ns>:8080/auth`, `ARANGO_URL=http://{{ include "genieai-umbrella.arangoHost" $ }}.<ns>:8529`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector-collector.<ns>:4318` (the OTel operator names the gateway Service `<cr>-collector`).
 - `services/documentRepository.yaml`: `BACKEND_URL=http://backend.<ns>:80`, `CLAMAV_HOST=clamav`, `CLAMAV_PORT=3310`, OTEL endpoint.
 - `services/frontend.yaml`: `VUE_APP_API_URL`, OTEL endpoint.
 
@@ -303,7 +303,14 @@ spec:
 ```
 + factory passthrough for `volumeMounts: [{name: uploads, mountPath: /app/uploads}]` and `volumes: [{name: uploads, persistentVolumeClaim: {claimName: document-repository-uploads}}]`.
 
-- [ ] **Step 5: nginx ConfigMap override**
+- [ ] **Step 5: nginx ConfigMap override (replaces default.conf, not additive)**
+
+The genie-ai-nginx entrypoint envsubst-renders a baked default.conf that
+binds :80/:443, self-signs certs, and proxies to the REMOVED Kong upstreams.
+An ADDITIONAL conf.d file leaves all of that live, and the baked listeners
+cannot start under the non-root restricted pod. The override must REPLACE
+default.conf via a subPath mount at its exact path, listen on 8080 only,
+and the Deployment must run the image's unprivileged user:
 
 ```yaml
 {{- if .Values.services.nginx.enabled -}}
@@ -314,7 +321,12 @@ metadata:
   name: nginx-override
   namespace: {{ .Values.namespace }}
 data:
-  override.conf: |
+  # mounted OVER /etc/nginx/conf.d/default.conf (subPath) — the baked
+  # server blocks never load; verify against
+  # api-gateway-solution/nginx/entrypoint.sh at execution (if the
+  # entrypoint re-renders the file at startup, mount over the TEMPLATE
+  # it renders from instead).
+  default.conf: |
     upstream genieai_frontend { server frontend:80; }
     upstream genieai_backend  { server backend:80; }
     upstream genieai_docrepo  { server document-repository:80; }
@@ -327,7 +339,7 @@ data:
     }
 {{- end -}}
 ```
-+ factory passthrough mounts it at `/etc/nginx/conf.d/override.conf` (subPath).
++ factory passthrough mounts it OVER `/etc/nginx/conf.d/default.conf` (subPath — replacement, not addition; see Step 5).
 
 - [ ] **Step 6: `helm lint --strict` + commit**
 
@@ -432,7 +444,8 @@ spec:
               clamav:1.3         UID  100
               curlimages         UID  1000
             Per-service `securityContext` override at the values level; the
-            factory default is `runAsNonRoot: true` + `runAsUser: 65534` only
+            factory default is the full PSA-restricted set (runAsNonRoot,
+            runAsUser 65534, allowPrivilegeEscalation false, drop ALL)
             when `services.<name>.securityContext` is unset in values.
 
             Operators that ship custom UIDs set:
@@ -444,7 +457,12 @@ spec:
                   drop: ["ALL"]
           */ -}}
           securityContext:
-            {{- $scc := $svc.securityContext | default (dict "runAsNonRoot" true "runAsUser" 65534) -}}
+            {{- /* PSA-restricted complete default: runAsNonRoot/runAsUser alone
+                   are REJECTED by enforce=restricted — allowPrivilegeEscalation
+                   false and capabilities drop ALL are mandatory too. A values
+                   override replaces the whole block, so custom UIDs must
+                   re-include all four fields. */ -}}
+            {{- $scc := $svc.securityContext | default (dict "runAsNonRoot" true "runAsUser" 65534 "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "ALL"))) -}}
             {{- toYaml $scc | nindent 12 }}
           {{- with $svc.probes.readiness }}
           readinessProbe:
@@ -987,7 +1005,7 @@ git commit -m "feat(charts): Group 5 stateless app tier (frontend, documentRepo,
 - Consumes: `services.nginx` values (Task 1); the `nginx-override` ConfigMap from Task 1b Step 5.
 - Produces: verification that both halves of the nginx decision shipped.
 
-**Decision**: the Swarm stack never ran stock nginx — it runs the CI-built `genie-ai-nginx` project image (Task 1 points `services.nginx.image` at `registry.example.org/genie-ai-nginx:1.0.0`). BUT the image's baked upstream routes `/api` to Kong, which this migration REMOVES (wave-6 finding #3; code-review Wave 10 #15): the per-instance `nginx-override` ConfigMap from Task 1b Step 5 (mounted at `/etc/nginx/conf.d/override.conf`) is therefore REQUIRED, not duplication — it re-points `/api`, `/api-docs`, `/uploads`, `/` at the in-cluster Services. Any host/path customization beyond that lands in Plan 6 (edge config), not in additional in-chart ConfigMaps.
+**Decision**: the Swarm stack never ran stock nginx — it runs the CI-built `genie-ai-nginx` project image (Task 1 points `services.nginx.image` at `registry.example.org/genie-ai-nginx:1.0.0`). BUT the image's baked upstream routes `/api` to Kong, which this migration REMOVES (wave-6 finding #3; code-review Wave 10 #15): the per-instance `nginx-override` ConfigMap from Task 1b Step 5 (mounted over `/etc/nginx/conf.d/default.conf`) is therefore REQUIRED, not duplication — it re-points `/api`, `/api-docs`, `/uploads`, `/` at the in-cluster Services. Any host/path customization beyond that lands in Plan 6 (edge config), not in additional in-chart ConfigMaps.
 
 - [ ] **Step 1: Confirm the override ConfigMap template exists (Task 1b Step 5)**
 
@@ -1348,7 +1366,9 @@ Foundation + Plan 2 (data layer) + Plan 3 (service tier Group 5 — stateless ap
 
 - Helm API v2. Helm 4.x.
 - No secrets in `values-override.yaml`. Use SealedSecret resources (Plan 2 default backend).
-- Tests live in each chart's `tests/` directory; `ct install` for integration, `helm test` for smoke.
+- Tests live in each chart's `templates/tests/` directory (Helm convention)
+- Install requires `-n <ns> --create-namespace` (the Namespace is a regular resource; the release Secret and hooks need it first)
+- Vendored dep tarballs + Chart.lock are generated, not tracked — run `make deps` (from `charts/`) after cloning or dep changes; `ct install` for integration, `helm test` for smoke.
 - Pre-install hooks in `templates/hooks/*.yaml` carry `helm.sh/hook: pre-install` annotations (Helm 3 scans recursively).
 - NetworkPolicy: every service gets default-deny + explicit allowlist.
 - PDB: only emitted when `replicas >= 2` (avoids drain block on singletons).

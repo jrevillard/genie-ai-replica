@@ -145,6 +145,7 @@ charts:integration:
         --set services.documentRepository.enabled=false
         --set services.nginx.enabled=false
         --set services.clamav.enabled=false
+        --set migrate.enabled=false
         --wait --timeout 25m
     # Run helm test.
     - helm test test --namespace genieai --timeout 20m

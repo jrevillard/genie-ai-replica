@@ -19,7 +19,7 @@
 |---|---|---|---|---|
 | Data | PostgreSQL (keycloak-db) | CloudNativePG operator (`Cluster` CR) | operator-native | — |
 | Data | ArangoDB | kube-arangodb operator (`ArangoDeployment` CR) | operator-native | single-node default; cluster via clusterProfile |
-| Data | Keycloak | official keycloak-operator (`KeycloakRealm` CR) | operator-native | — |
+| Data | Keycloak | official keycloak-operator (`Keycloak` + `KeycloakRealmImport` CRs — no KeycloakRealm CRD exists) | operator-native | — |
 | Data | Redis (Group 2 — **pending plan**) | TBD | — | decide at plan time: plain chart-tier StatefulSet acceptable for ephemeral cache; official Redis operator only if HA/persistence required |
 | Secrets | sealed-secrets controller | Bitnami chart (deploys controller) + `SealedSecret` CRs | operator-native | controller = operator pattern; CRs consumed natively |
 | Obs | VM/VL/VT | vmoperator (`VMSingle`/`VMCluster`, `VLSingle`, `VTSingle`, `VMAgent`, `VMRule`, `VMAlertmanager` CRs) | operator-native | alerting migrates Grafana-rules → `VMRule` CRs |

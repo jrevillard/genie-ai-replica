@@ -46,16 +46,22 @@ spec:
     # plain HTTP inside the cluster. `external` (the Keycloak default)
     # would reject every internal http:// redirect URI.
     sslRequired: none
-    registrationAllowed: false
+    # Boolean fields below are coerced via `eq (val | toString) "true"`
+    # so `--set-string key=true` and `--set key=true` both render a YAML
+    # `true` boolean (without the cast, a string value from --set-string
+    # would render as the literal string and Keycloak would reject it).
+    # `default <literal>` preserves the realm's built-in default when the
+    # operator leaves the key unset.
+    registrationAllowed: {{ eq ((.Values.data.keycloak.registrationAllowed | default false) | toString) "true" }}
     # Drives the new-user email-verification flow — only meaningful when
     # the operator sets data.keycloak.smtp; defaults false (Keycloak's
     # own default) so dev installs without SMTP stay login-able.
-    verifyEmail: {{ .Values.data.keycloak.verifyEmail | default false }}
-    loginWithEmailAllowed: true
-    duplicateEmailsAllowed: false
-    resetPasswordAllowed: false
-    editUsernameAllowed: false
-    bruteForceProtected: true
+    verifyEmail: {{ eq ((.Values.data.keycloak.verifyEmail | default false) | toString) "true" }}
+    loginWithEmailAllowed: {{ eq ((.Values.data.keycloak.loginWithEmailAllowed | default true) | toString) "true" }}
+    duplicateEmailsAllowed: {{ eq ((.Values.data.keycloak.duplicateEmailsAllowed | default false) | toString) "true" }}
+    resetPasswordAllowed: {{ eq ((.Values.data.keycloak.resetPasswordAllowed | default false) | toString) "true" }}
+    editUsernameAllowed: {{ eq ((.Values.data.keycloak.editUsernameAllowed | default false) | toString) "true" }}
+    bruteForceProtected: {{ eq ((.Values.data.keycloak.bruteForceProtected | default true) | toString) "true" }}
     permanentLockout: false
     maxFailureWaitSeconds: 900
     minimumQuickLoginWaitSeconds: 60
@@ -64,7 +70,7 @@ spec:
     accessTokenLifespan: {{ .Values.data.keycloak.accessTokenLifespan | default 300 }}
     ssoSessionIdleTimeout: 1800
     ssoSessionMaxLifespan: 36000
-    internationalizationEnabled: true
+    internationalizationEnabled: {{ eq ((.Values.data.keycloak.internationalizationEnabled | default true) | toString) "true" }}
     supportedLocales:
 {{ toYaml (.Values.data.keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans")) | indent 6 }}
     defaultLocale: en
@@ -144,23 +150,12 @@ spec:
         #   kubectl exec deploy/keycloak -- /opt/keycloak/bin/kcadm.sh \
         #     set-password -r genie --username genie-admin \
         #     --new-password '<password>'
-      # Service-account user entries link the confidential clients below to
-      # their roles (the KeycloakRealmImport equivalent of the Swarm export's
-      # serviceAccountClientId entries).
-      - username: service-account-genie-proxy-client
-        enabled: true
-        serviceAccountClientId: genie-proxy-client
-        clientRoles:
-          realm-management:
-            - query-users
-            - view-users
-            - manage-users
-            - view-realm
-      - username: service-account-dataprep-service-client
-        enabled: true
-        serviceAccountClientId: dataprep-service-client
-        realmRoles:
-          - dataprep-service
+      # No explicit service-account user entries: Keycloak 26+ auto-creates
+      # the `service-account-<clientId>` user on first client-credentials
+      # grant, and the client-level realm-management / dataprep-service role
+      # grants on the `clients:` block below propagate to that auto-created
+      # user at grant time. Explicit entries used to duplicate that user and
+      # collided with the auto-create.
     clients:
       # Keycloak built-in account console (needs webOrigins for iframe auth)
       - clientId: account
@@ -221,6 +216,15 @@ spec:
         # value sealed in the `keycloak-proxy-client-secret` SealedSecret
         # the backend consumes.
         secret: {{ .Values.data.keycloak.clientSecrets.proxyClient | quote }}
+        # Client-level realm-management scopes — propagate to the
+        # auto-created service-account-<clientId> user at first grant
+        # (Keycloak 26+ no longer needs the explicit user entry).
+        clientRoles:
+          realm-management:
+            - query-users
+            - view-users
+            - manage-users
+            - view-realm
       # Service account for the Dataprep ingestion pipeline (client_credentials
       # grant for service-to-service calls into document-repository).
       - clientId: dataprep-service-client
@@ -232,6 +236,10 @@ spec:
         # Same rule as proxyClient: must equal the `kc-dataprep-client-secret`
         # SealedSecret value (`data.keycloak.clientSecrets.dataprep`).
         secret: {{ .Values.data.keycloak.clientSecrets.dataprep | quote }}
+        # Client-level realm role — propagates to the auto-created
+        # service-account-<clientId> user at first grant.
+        realmRoles:
+          - dataprep-service
       # Mobile OIDC client (Flutter app) — public client with PKCE per
       # RFC 8252; mobile apps cannot hold secrets. Refresh-token rotation
       # on. The chart defaults (client genie-mobile, scheme genieai) are

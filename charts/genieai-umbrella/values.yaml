@@ -46,12 +46,11 @@ data:
     storageSize: 10Gi
   arangodb:
     enabled: true
-    # Arango deployment mode. `clusterProfile` in {prod,staging} IGNORES
-    # this value and promotes to cluster — the promotion template runs
-    # unconditionally for those profiles. To pin single mode on a
-    # staging-like cluster, set data.arangodb.mode=cluster then override
-    # the per-group counts out-of-band (not yet exposed) or set
-    # clusterProfile=dev.
+    # Arango deployment mode. THIS VALUE IS THE ONLY SOURCE OF TRUTH for
+    # the rendered ArangoDeployment mode — the chart does NOT auto-promote
+    # on clusterProfile changes (kube-arangodb requires fresh uninstall+install
+    # for mode switches; see docs/charts/arangodb-mode-migration.md). Operators
+    # switch by editing this value, then running helm uninstall + helm install.
     mode: single
     storageSize: 50Gi
     agentsStorageSize: 2Gi             # cluster-mode Agency volume — config state (MBs), not document data

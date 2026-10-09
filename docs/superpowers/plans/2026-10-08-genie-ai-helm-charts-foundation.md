@@ -865,7 +865,7 @@ Apply this ignore file at the **charts/ directory root** (NOT a per-chart ignore
 
 - [ ] **Step 4.5: Verify `ct lint` baseline passes**
 
-Run: `ct lint --config charts/ci/ct.yaml --charts charts/genieai-umbrella`
+Run: `ct lint --config charts/ci/ct.yaml --chart-yaml-schema charts/ci/chart_schema.yaml --lint-conf charts/ci/lintconf.yaml --charts charts/genieai-umbrella`
 Expected: no errors. Warnings about missing test coverage OK at this stage.
 
 If `ct` is not installed: `brew install chart-testing` or download from `https://github.com/helm/chart-testing/releases`.

@@ -324,7 +324,7 @@ Service inventory from the existing Swarm `docker-compose.yaml` (surveyed 2026-1
 
 **Group 3 (vector DB, last)**: arangodb.
 
-**Count**: 28 services total (Group 5=5 + Group 2=1 + Group 1=5 + Group 4=2 + Group 6=14 + Group 3=1). `redis` lives in Group 2 (cache role); it is **not** duplicated into Group 5. `tei_reranker` is rendered as a single service in Group 6 (Swarm calls it `tei_reranker`; chart uses kebab-case `tei-reranker` with the Swarm service name preserved via Helm template variables). Services like `translation-cache` and `httpService` do not appear in current Swarm and are scoped to a later epic if reintroduced.
+**Count**: 28 services total (Group 5=5 + Group 2=1 + Group 1=5 + Group 4=2 + Group 6=14 + Group 3=1). `redis` lives in Group 2 (cache role; the Swarm service is `redis-cache`, consumed by the backend via the `TRANSLATION_CACHE_*` env prefix); it is **not** duplicated into Group 5, but its chart templates, values entry (`services.redisCache`) and `TRANSLATION_CACHE_PASSWORD` secret are authored by the service-tier plan alongside the backend (its sole consumer). `tei_reranker` is rendered as a single service in Group 6 (Swarm calls it `tei_reranker`; chart uses kebab-case `tei-reranker` with the Swarm service name preserved via Helm template variables). Services like `httpService` do not appear in current Swarm and are scoped to a later epic if reintroduced.
 
 Each group's chart enabling is independent. Day 0 install: `data.postgres.enabled=false data.arangodb.enabled=false services.*.enabled=true` for a partial install pattern during phased migration.
 
@@ -394,7 +394,7 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
 | `kcGrafanaClientSecret` | _(TBD)_ | Plan 4 | Grafana OIDC client secret for SSO |
 | `huggingFaceHubToken` | `huggingface-hub-token` (key `HUGGING_FACE_HUB_TOKEN`) | Plan 3 | Model pulls (vLLM/TEI) |
 | `VLLM_API_KEY` | `vllm-api-key` (key `VLLM_API_KEY`) | Plan 5 | GPU-node bearer auth — consumed by backend, tei, reranker, retriever, chatqna |
-| `TRANSLATION_CACHE_PASSWORD` | `translation-cache-password` (key `TRANSLATION_CACHE_PASSWORD`) | Plan 6 | Redis translation-cache auth |
+| `TRANSLATION_CACHE_PASSWORD` | `translation-cache-password` (key `TRANSLATION_CACHE_PASSWORD`) | Plan 3 | Redis translation-cache auth (consumed by backend + redis-cache) |
 
 The mapping is **deliberately bijective**: each K8s `Secret` resource name maps back to exactly one `.env`-style key name (or none if K8s-only). Operators can grep the chart tree for any `Secret` name and trace back to its origin via this table. Spec §8 lists the .env-side keys; this table is the canonical K8s reference.
 

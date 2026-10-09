@@ -18,7 +18,7 @@ lint-umbrella: lint-common deps
 template: template-umbrella
 
 template-umbrella: deps
-	helm template test genieai-umbrella -n genieai > /tmp/genieai-rendered.yaml
+	helm template test genieai-umbrella -n genieai --set data.keycloak.failOnPlaceholderSecrets=false > /tmp/genieai-rendered.yaml
 
 test: test-umbrella
 
@@ -27,7 +27,7 @@ test-umbrella: deps
 	# created by CI or by hand BEFORE this target runs. ct has NO
 	# --kube-version flag and NO kubeVersion config key (verified against
 	# chart-testing v3.15.0 source — both were fabrications).
-	ct install $(CT_FLAGS) --charts genieai-umbrella
+	ct install $(CT_FLAGS) --charts genieai-umbrella --set data.keycloak.failOnPlaceholderSecrets=false
 
 # Advisory only: the chart READMEs are hand-written (curated usage docs,
 # not helm-docs output). Running plain `helm-docs` would OVERWRITE them

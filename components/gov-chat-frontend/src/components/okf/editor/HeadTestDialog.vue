@@ -324,7 +324,7 @@
                     {{ translate('okf.headTest.teach.rebuildRerun', 'Rebuild head & re-run') }}
                   </DsButton>
                   <DsSpinner
-                    v-if="busy === 'save-tag' || busy === 'rebuild-rerun'"
+                    v-if="busy === 'save-tag' || busy === 'rebuild-rerun' || busy === 'advisor-apply'"
                     size="sm"
                     class="okf-headtest__busy"
                   >
@@ -684,7 +684,11 @@
                 >
                   {{ translate('okf.headTest.suites.rebuildRerun', 'Rebuild head & re-run suite') }}
                 </DsButton>
-                <DsSpinner v-if="busy === 'save-tag' || busy === 'rebuild-rerun'" size="sm" class="okf-headtest__busy">
+                <DsSpinner
+                  v-if="busy === 'save-tag' || busy === 'rebuild-rerun' || busy === 'advisor-apply'"
+                  size="sm"
+                  class="okf-headtest__busy"
+                >
                   {{ teachBusyLabel }}
                 </DsSpinner>
               </div>
@@ -844,6 +848,7 @@
               <th>{{ translate('okf.headTest.suites.col.when', 'When') }}</th>
               <th>{{ translate('okf.headTest.suites.col.passRate', 'Pass rate') }}</th>
               <th>{{ translate('okf.headTest.suites.col.headVersion', 'Head') }}</th>
+              <th>{{ translate('okf.headTest.suites.col.tags', 'Tags') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -854,6 +859,22 @@
               <td>{{ shortDate(r.created_at) }}</td>
               <td>{{ pct(r.summary ? r.summary.pass_rate : null) }}</td>
               <td>{{ r.head_version || '—' }}</td>
+              <!-- 1-8e: the tuning identity — same-tags reruns are
+                   bit-stable, so a pass-rate difference across runs means
+                   THIS set changed. The hash identifies the configuration;
+                   the tooltip lists the actual tags. -->
+              <td>
+                <code
+                  v-if="r.tagset && r.tagset.hash"
+                  :title="
+                    translate('okf.headTest.suites.tagsetTip', 'Forbidden tags for this run') +
+                    ': ' +
+                    (r.tagset.forbidden || []).join(', ')
+                  "
+                  >{{ r.tagset.hash }}</code
+                >
+                <span v-else>—</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -1349,6 +1370,12 @@ export default {
       if (this.busy === 'rebuild-rerun') {
         return this.translate('okf.headTest.teach.rebuildBusy', 'Rebuilding the head and re-running…');
       }
+      if (this.busy === 'advisor-apply') {
+        return this.translate(
+          'okf.headTest.advisor.applying',
+          'Applying: saving tags, rebuilding the head, re-running the suite…'
+        );
+      }
       return '';
     },
     dialogActions() {
@@ -1670,14 +1697,20 @@ export default {
       const addTags = this.advisorAddTags;
       const removeTags = this.advisorRemoveTags.map((r) => r.tag);
       if ((!addTags.length && !removeTags.length) || this.busy !== null) return;
-      this.busy = 'save-tag';
+      // 1-8e race fix: ONE busy token owns the whole leg (save → rebuild →
+      // re-run). The previous version handed off through
+      // onRebuildSuiteRerun/onRunSuite, whose guard clauses return SILENTLY
+      // when a precondition flickers — the curator saw the flow just stop
+      // after Apply (2026-10-09 live incident). Every failure now surfaces
+      // in the error strip; the re-run runs inline, not via guard chains.
+      this.busy = 'advisor-apply';
       this.error = '';
       const save = await this.$store.dispatch('okf/saveFrontmatter', {
         repoId: this.repo.repo_id,
         shape: this.buildFrontmatterShape(addTags, removeTags)
       });
-      this.busy = null;
       if (!save || !save.ok) {
+        this.busy = null;
         this.error =
           (save && save.message) || this.translate('okf.headTest.error.saveTag', 'Could not save the forbidden tags');
         return;
@@ -1686,7 +1719,57 @@ export default {
       for (const t of removeTags) if (!this.removedTags.includes(t)) this.removedTags.push(t);
       this.advisor = null; // the recommendation is spent — the re-run shows the effect
       this.$emit('changed', { frontmatter: true });
-      await this.onRebuildSuiteRerun();
+      const reb = await this.$store.dispatch('okf/headRebuild', { repoId: this.repo.repo_id });
+      if (!reb || !reb.ok) {
+        this.busy = null;
+        this.error =
+          (reb && reb.message) ||
+          this.translate(
+            'okf.headTest.error.rebuild',
+            'Head rebuild failed — the tags are saved; rebuild from the Head tab.'
+          );
+        return;
+      }
+      this.$emit('changed', { head: reb.result });
+      if (!this.suite) {
+        this.busy = null;
+        this.error = this.translate(
+          'okf.headTest.error.applyNoSuite',
+          'Tags saved and the head rebuilt — generate a suite, then Run all to see the effect.'
+        );
+        return;
+      }
+      const res = await this.$store.dispatch('okf/headSuiteRun', {
+        repoId: this.repo.repo_id,
+        suiteKey: this.suite.suite_key
+      });
+      this.busy = null;
+      if (!res || !res.ok) {
+        this.error =
+          (res && res.message) ||
+          this.translate(
+            'okf.headTest.error.run',
+            'Suite run failed — the tags are saved; re-run from the Suites tab.'
+          );
+        return;
+      }
+      // Same post-run bookkeeping as onRunSuite (tripwire baseline is null —
+      // the tag set changed, so cross-tag-set comparison would be noise).
+      this.lastRunSummary = res.result.payload.summary;
+      this.lastRunSuiteKey = this.suite.suite_key;
+      const results = (res.result.payload && res.result.payload.results) || [];
+      this.lastRunSummaryRows = results.map((r, i) => ({
+        key: r.query + ':' + i,
+        query: r.query,
+        kind: r.kind,
+        cls: r.cls || null,
+        source: r.source,
+        error: r.error || null,
+        pass: this.outcomeOf(r),
+        failLabel: this.failLabelOf(r)
+      }));
+      this.batchAdvice = null;
+      this.refreshRuns();
     },
     /** 1-8c: the fix loop's last leg — rebuild the head from the just-
      * saved tags, then re-run the SAME query through routing-test so the
@@ -1799,7 +1882,11 @@ export default {
     /** 1-8c: batch fix loop — rebuild the head from the just-saved tags,
      * then re-run the SAME suite against the fresh head. */
     async onRebuildSuiteRerun() {
-      if (this.busy !== null || !this.suite) return;
+      if (this.busy !== null) return;
+      if (!this.suite) {
+        this.error = this.translate('okf.headTest.error.noSuite', 'Generate a suite first, then rebuild + re-run.');
+        return;
+      }
       this.busy = 'rebuild-rerun';
       this.error = '';
       const reb = await this.$store.dispatch('okf/headRebuild', { repoId: this.repo.repo_id });

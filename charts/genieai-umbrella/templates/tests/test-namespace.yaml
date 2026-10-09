@@ -40,10 +40,10 @@ spec:
           [ "$ns" = "{{ .Release.Namespace }}" ] \
             || { echo "FAIL: namespace mismatch, expected {{ .Release.Namespace }}"; exit 1; }
           echo "PASS"
-{{- /* Gated: the test hard-asserts the data-tier Secrets exist — without
-       the gate, CI's stripped-down install (data + secrets disabled) would
-       fail helm test on a healthy release. */ -}}
-{{- if and .Values.data.arangodb.enabled .Values.secrets.sealedSecrets.enabled }}
+{{- /* Gated on SealedSecrets AND at least one data tier rendering them —
+       the test asserts the tier-specific Secrets exist, so a release with
+       secrets (or all data tiers) disabled has nothing to check. */ -}}
+{{- if and .Values.secrets.sealedSecrets.enabled (or .Values.data.arangodb.enabled .Values.data.keycloak.enabled) }}
 ---
 apiVersion: v1
 kind: Pod
@@ -59,6 +59,10 @@ metadata:
 spec:
   restartPolicy: Never
   serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
+  {{- with .Values.global.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   securityContext:
     runAsNonRoot: true
     runAsUser: 65534
@@ -68,7 +72,7 @@ spec:
     - name: t
       # bitnami/kubectl: kubectl is NOT in alpine base. SA = the hook-owned
       # dep-check SA (persists between hook fires via before-hook-creation).
-      image: bitnami/kubectl:1.33
+      image: "{{ .Values.global.imageRegistry | default "docker.io" }}/bitnami/kubectl:1.33"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false
@@ -83,17 +87,37 @@ spec:
         - -c
         - |
           set -eu
+          ns="{{ .Values.namespace }}"
           echo "test Pod checking SealedSecret materialization"
-          missing=""
-          for secret in arango-jwt-secret arango-root-secret; do
-            if ! kubectl get secret "$secret" -n {{ .Values.namespace }} >/dev/null 2>&1; then
-              echo "missing K8s Secret: $secret"
-              missing="$missing $secret"
-            fi
-          done
-          if [ -n "$missing" ]; then
-            echo "FAIL: SealedSecret resources not yet materialised:"
-            echo "$missing"
+          # SealedSecret → Secret is eventually consistent: the controller
+          # unseals asynchronously after the SealedSecret is applied. A
+          # still-encrypted sentinel NEVER materializes (controller marks
+          # the SealedSecret Synced=False, reason ErrorDecrypt) and runs out
+          # of retries below. Poll each expected Secret up to 30 × 2s.
+          check_secret() {
+            name="$1"
+            i=0
+            while [ "$i" -lt 30 ]; do
+              if kubectl get secret "$name" -n "$ns" >/dev/null 2>&1; then
+                echo "OK: K8s Secret materialized: $name"
+                return 0
+              fi
+              i=$((i+1))
+              sleep 2
+            done
+            echo "FAIL: K8s Secret never materialized: $name (SealedSecret sentinel not re-sealed, or controller down)"
+            return 1
+          }
+          failed=0
+          {{- if .Values.data.arangodb.enabled }}
+          check_secret arango-jwt-secret || failed=1
+          check_secret arango-root-secret || failed=1
+          {{- end }}
+          {{- if .Values.data.keycloak.enabled }}
+          check_secret keycloak-db-credentials || failed=1
+          {{- end }}
+          if [ "$failed" -ne 0 ]; then
+            echo "FAIL: expected K8s Secrets did not materialize in 60s"
             exit 1
           fi
           echo "PASS"

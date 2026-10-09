@@ -11,7 +11,7 @@ metadata:
   name: genieai-realm
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "identity"))) | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 4 }}
     genieai.io/data-tier: identity
 spec:
   # References the Keycloak CR above; import runs once the instance is Ready.
@@ -21,15 +21,15 @@ spec:
     # KEYCLOAK_REALM value (genie).
     realm: genie
     enabled: true
-    {{- /* Single derivation of the public origin — every client's
-           rootUrl/redirectUris/webOrigins below uses $origin. A second
-           derivation site drifts and breaks that client's login with
-           invalid_redirect_uri while render gates stay green.
-           KeycloakRealmImport is import-once: the operator ignores later
-           spec.realm changes, so redirect URIs do NOT follow a
-           post-install ingress.host change (re-import or manual client
-           edit required). */ -}}
-    {{- $origin := printf "https://%s" (.Values.ingress.host | default "genieai.local") -}}
+    # Single derivation of the public origin — every client's
+    # rootUrl/redirectUris/webOrigins below uses $origin. A second
+    # derivation site drifts and breaks that client's login with
+    # invalid_redirect_uri while render gates stay green.
+    # KeycloakRealmImport is import-once: the operator ignores later
+    # spec.realm changes, so redirect URIs do NOT follow a
+    # post-install ingress.host change (re-import or manual client
+    # edit required).
+    {{- $origin := printf "https://%s" (.Values.ingress.host | default "genieai.local") }}
     # TLS terminates at the edge (Envoy Gateway); the Keycloak pod serves
     # plain HTTP inside the cluster. `external` (the Keycloak default)
     # would reject every internal http:// redirect URI.
@@ -56,10 +56,10 @@ spec:
     supportedLocales:
 {{ toYaml (.Values.data.keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans")) | indent 6 }}
     defaultLocale: en
-    {{- /* SMTP (email verification) is deployment-specific: rendered only
-           when the operator sets data.keycloak.smtp in their values
-           override. Fields mirror the Swarm realm export
-           (configs/keycloak/genie-realm.yaml). */ -}}
+    # SMTP (email verification) is deployment-specific: rendered only
+    # when the operator sets data.keycloak.smtp in their values
+    # override. Fields mirror the Swarm realm export
+    # (configs/keycloak/genie-realm.yaml).
     {{- with .Values.data.keycloak.smtp }}
     smtpServer:
       from: {{ .from | quote }}
@@ -183,6 +183,12 @@ spec:
           {{- end }}
         webOrigins:
           - {{ $origin }}
+          # Dev convenience, same gate as redirectUris above: without the
+          # browser origin whitelisted here, the token endpoint rejects
+          # the CORS preflight and local login dies.
+          {{- if eq .Values.clusterProfile "dev" }}
+          - http://localhost
+          {{- end }}
         attributes:
           pkce.code.challenge.method: S256
           oauth2.device.authorization.grant.enabled: false

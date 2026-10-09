@@ -1,5 +1,5 @@
-{{- /* Per-template Values view overriding `.component`, same pattern as templates/namespace.yaml. */ -}}
-{{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "test")) -}}
+{{- /* Component label context, same pattern as templates/namespace.yaml. */ -}}
+{{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test" -}}
 apiVersion: v1
 kind: Pod
 metadata:
@@ -55,7 +55,7 @@ metadata:
   name: {{ include "genieai-common.fullname" . }}-test-data-deps
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "test"))) | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test") | nindent 4 }}
     app.kubernetes.io/component: test
   annotations:
     "helm.sh/hook": test

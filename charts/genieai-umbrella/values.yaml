@@ -48,6 +48,7 @@ data:
     enabled: true
     mode: single                       # cluster for prod/staging via clusterProfile
     storageSize: 50Gi
+    agentsStorageSize: 2Gi             # cluster-mode Agency volume — config state (MBs), not document data
   keycloak:
     # Gates the Keycloak + KeycloakRealmImport CRs. The operator
     # itself is a cluster bootstrap prerequisite — NOT a chart dependency.
@@ -114,13 +115,6 @@ dependencyGraph:
 secrets:
   sealedSecrets:
     enabled: true                      # default; alternative secrets backends plug in here (ESO / SecretProviderClass)
-    # Public-key fingerprint for the cluster that sealed the committed
-    # encrypted blobs in deploy/environments/<env>/secrets/*.yaml. Fetched
-    # via `kubeseal --fetch-cert`. Serves as a manual cross-check aid: the
-    # operator-side record of which cluster key produced the committed seals.
-    # No runtime enforcement lives here. The pre-upgrade drift hook instead
-    # fails any upgrade where a chart-owned SealedSecret reports Synced=False.
-    publicKeyFingerprint: ""
   eso:
     enabled: false                     # plug-point; ESO controller installs separately
   secretProviderClass:

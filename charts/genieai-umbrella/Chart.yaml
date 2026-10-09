@@ -27,12 +27,17 @@ maintainers:
     email: maintainers@example.invalid
 dependencies:
   # Local library chart — re-rendered on every umbrella install.
+  # `import-values` of empty library would inject `global` (Helm 4 reserved key)
+  # into `.Values.common` and clash with the library schema's
+  # additionalProperties: false. The plan's `child: . parent: common` shorthand
+  # works on Helm 3 with an empty library values; for Helm 4 we keep the schema
+  # strict and omit import-values entirely. Library templates remain callable
+  # via `{{ include "genieai-common.foo" . }}` — `import-values` only exports
+  # values, not template definitions. Library values are consumed by umbrella
+  # via the umbrella's own `values.yaml` defaults (see below).
   - name: genieai-common
     version: "0.1.0"
     repository: "file://../genieai-common"
-    import-values:
-      - child: "."
-        parent: "common"
 
 # Operator dependencies (added in subsequent plans):
 # - cloudnative-pg (Plan 2)

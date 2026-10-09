@@ -4,8 +4,6 @@ Library chart for the GENIE.AI Helm umbrella. Provides:
 
 - Naming helpers (`genieai-common.name`, `genieai-common.fullname`)
 - Label selectors (`genieai-common.labels`, `genieai-common.selectorLabels`)
-- Component label resolution (`genieai-common.componentContext` — single
-  deepCopy site for the merged component view; composed by `labels`)
 - Chart/version label (`genieai-common.chart`)
 
 ## Usage
@@ -35,10 +33,14 @@ metadata:
 `nameOverride` and `fullnameOverride` are read from the **consuming chart's
 root values** (helpers render with the parent's context). Setting them under
 a `genieai-common:` subtree in values.yaml is silently ignored — always place
-them at the root. `component` is NOT a values key: call sites pass it in the
-context dict — `(dict "Chart" .Chart "Release" .Release "Values" .Values
-"component" <name>)` — and `genieai-common.componentContext` merges it for
-label rendering.
+them at the root. `component` is a values key (defaulted to `"umbrella"` in
+the schema) but is **only** a fallback for ad-hoc callers: call sites pass
+the per-template component name in the context dict — `(dict "Chart" .Chart
+"Release" .Release "Values" .Values "component" <name>)` — and the helper
+emits both `app.kubernetes.io/component` and `genieai.io/component` from
+that single value. Do not pass the component via `--set`: the per-call
+dict value takes precedence, and a top-level `--set component=...`
+would never reach resource labels.
 
 ## Why `type: library`?
 

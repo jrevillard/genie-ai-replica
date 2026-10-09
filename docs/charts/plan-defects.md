@@ -55,6 +55,38 @@ release named `genieai` renders `genieai-genieai-umbrella-*` — valid (39 chars
 < 50 truncation), ugly; charts/README.md advises avoiding `genieai*` release
 names. No code change.
 
+## Wave 10 — `/code-review` xhigh pass (post-Plan-1, plans 2-8 + spec)
+
+Chart code itself verified clean (make deps/lint/template + ct lint from both
+CWDs, helm v4.3.0). All 15 findings live in the planning docs future PRs
+execute verbatim; two verified against primary sources. All applied:
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| 1 | Every OTLP endpoint in Plans 3/4/5/6/7 targets `genieai-collector.<ns>:4318`; the opentelemetry-operator actually names the Service `<cr>-collector` (verified: internal/naming/main.go) → all endpoints would NXDOMAIN silently | Fixed across observability/per-env/ai-ml/ci/group5 plans → `genieai-collector-collector` (matches shipped docs/charts/otel-migration.md, which had it right all along); plan comment that "corrected" the doubled form as wrong was itself backwards |
+| 2 | Spec §14.1 + Plan 7 claim Kyverno uses `keys.keyData` and that `publicKeys` "is not in the schema" — inverted: CRD has 12× `publicKeys`, 0× `keyData` (verified); silent field pruning would kill verifyImages while appearing Enforced | Spec §14.1 + Plan 7 Task 3 reverted to `publicKeys:` with correction notes |
+| 3 | Plan 3 `_cross-service-urls.tpl` arangoHost define closes 4× `{{- end -}}` for 2 opened blocks — unparsable | Fixed (2 ends) |
+| 4 | Plan 2 sealed-drift hook greps nonexistent `sealedsecrets.bitnami.com/invalid` annotation AND its pre-install leg runs before regular-resource SealedSecrets exist (always vacuous on fresh installs) | Hook → pre-upgrade only; body reads `status.conditions[type=SealedSecretHasntDecrypted].status`; fresh-install sentinel detection moved to the Task 12 helm test |
+| 5 | Plan 4 otel-agent ServiceAccount carries `helm.sh/hook: pre-delete` → SA never exists at runtime → DaemonSet pods fail admission, admin logs UI empty | SA de-hooked (regular resource; Helm GC handles uninstall) |
+| 6 | Plan 3 Task 9 reachability test: unclosed nginx `{{- if }}`, clamav check nested inside nginx gate, `bash -c` TCP probe on curlimages/curl (no bash) | Template balanced + de-nested; clamav probe → curl telnet:// with exit-code semantics (6/7=fail, 28/0=open) |
+| 7 | Plan 7 PII smoke script: `$PII_IP/$PII_HEX/$PII_UUID` unbound under `set -u`; JWT/APIKEY/LONGHEX/BEARER asserted but never injected (4/5 vacuous passes — same trap as the original docker-era test); marker-length-dependent hex/bearer padding | All five covered patterns injected + asserted; lengths padded to fixed sizes; IP/UUID dropped (not in rules) |
+| 8 | Plans 3/4 still ship `PLACEHOLDER_<KEY>_SEALED_KID` (invalid base64; Wave 6 #12 purged only Plans 2/5); Plan 7 conftest can't catch that form | All → `UExBQ0VIT0xERVIr` (PLACEHOLDER+) incl. prose/self-review mentions |
+| 9 | Plans 6/7/8 + foundation plan narrative still describe the ns-as--40-hook + `--create-namespace=false` (Wave 8 #2 regression in plan text) | Fixed in ci.md job (flag now `--create-namespace` + rationale), per-env ArgoCD `CreateNamespace=true`, docs.md install sequence, namespace-per-env item 3, foundation banner |
+| 10 | Plan 7 Task 1 Step 2 would REPLACE the shipped Makefile (repo-root paths, nonexistent `lint-strict`, helm-docs as helm plugin) — reintroducing Wave 9 #1 | Step 2 → EXTEND with chart-relative additions; charts:lint job installs standalone helm-docs binary, runs `deps` first |
+| 11 | Foundation plan body still mandates superseded patterns with no in-plan markers (agentic re-execution risk) | STATUS banner at plan top: task-by-task table of verbatim-vs-shipped deltas pointing at Waves 8-10 |
+| 12 | Plan 6 contradictions: header scopes dev+prod but Task 1/4/Stats create staging/sovereign; Task 6 re-adds the dead `uninstallPolicy` values key the plan's own F9 fix killed | Scope banner + Task 1 files list pruned to dev/prod; Task 6 rewritten (annotation-only gate, dev=prod=1 render, doc-comment contract) |
+| 13 | Plan 7 cosign signs `${REGISTRY}/genieai/umbrella:${CI_COMMIT_TAG}` but helm push publishes `.../genieai/genieai-umbrella:<chart-version>` | CHART_REF/CHART_VERSION derived from Chart.yaml at runtime; sign+verify target the real push ref |
+| 14 | Plan 2 dep-check ClusterRole grants cluster-wide Secret read to an SA also mounted by helm-test pods → borrowed pod = full-cluster secret disclosure | Split: namespaced Role (secrets/configmaps/sealedsecrets/events) + minimal ClusterRole (namespaces + CRDs, no Secrets) + RoleBinding + ClusterRoleBinding |
+| 15 | Plan 3 nginx config: Task 1b Step 5 renders `nginx-override` ConfigMap (wave-6 #3 Kong-leak fix) while Task 5 asserts NO ConfigMap exists — opposite instructions | Task 5 rewritten: override REQUIRED (baked upstream → removed Kong), Step 1 asserts ConfigMap presence via helm template |
+
+Sub-cap items also fixed: dangling `<<<` heredoc in Plan 3 Task 1 Step 3;
+Plan 6 `printf "%s-tls" host | default` guard that could never fire (→
+secretName-first ternary); AppProject `clusterResourceWhitelist` entries
+missing `kinds`; otel-migration.md rows 4-5 still described the superseded
+ConfigMap-sidecar Grafana posture (→ grafana-operator CRs, Plan 4 owners).
+Shipped-code nit fixed: test pod now renders `genieai.io/component: test`
+(dict-override pattern, matching namespace.yaml).
+
 # Plan Defect Ledger — Helm Migration Docs
 
 Tracks every finding from the adversarial review rounds against the spec +

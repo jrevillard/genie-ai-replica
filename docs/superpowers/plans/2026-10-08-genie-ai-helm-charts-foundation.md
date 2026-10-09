@@ -2,6 +2,23 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> ⚠️ **STATUS: EXECUTED + SUPERSEDED (2026-10-09).** This plan was implemented
+> on `feat/k8s-migration` (commits c857319a4..f398009f9) and is COMPLETE.
+> Several task bodies below were amended DURING execution — the shipped code
+> in `charts/` is authoritative where it differs from the verbatim text here.
+> Do NOT re-execute unchecked boxes against the superseded patterns:
+>
+> | Task | Verbatim text says | Shipped reality (why) |
+> |---|---|---|
+> | Task 6 | `import-values: {child: ., parent: common}` | Dropped — Helm 4 injects reserved `global` into subchart values; schema rejects it (ledger Wave 8 #1) |
+> | Task 8 | Namespace = pre-install hook, weight -40, survives uninstall | REGULAR resource + `--create-namespace` required — Helm 4 implicit before-hook-creation deletes hook-identity Namespaces incl. the release Secret (Wave 8 #2, reproduced 3×) |
+> | Task 9/12 | install without `--create-namespace` | `--create-namespace` REQUIRED (see above) |
+> | Task 10 | `.gitignore` charts/… patterns | Patterns are relative to charts/: `*/Chart.lock`, `*/charts/`; tarball+lock are UNTRACKED, `make deps` regenerates (Wave 9 #1/#4) |
+> | Task 4 | nameOverride maxLength 50 | 63 (aligned with helper truncation, review round 1) |
+> | Task 10 | ct implicit schema defaults | ct v3.15 needs explicit `--chart-yaml-schema`/`--lint-conf` (Wave 8 #3) |
+>
+> Full detail: `docs/charts/plan-defects.md` Waves 8-10.
+
 **Goal:** Ship the foundation for the GENIE.AI Helm chart migration: `genieai-common` library chart, `genieai-umbrella` skeleton (Chart.yaml + values.yaml + namespace + ArgoCD Application example), chart-testing CI integration, and a passing `helm test` against a kind cluster. Establishes the patterns every later epic builds on.
 
 **Architecture:** Library chart (`type: library`) provides reusable templates via `_helpers.tpl` + standalone templates, exported via `import-values:`. Umbrella chart consumes the library as a local file dependency, plus all stateful-service operators as Helm `dependencies` with `condition:` toggles. Single `helm install` deploys the whole umbrella into one namespace. ArgoCD ApplicationSet renders per-env Kustomize overlays pointing at `deploy/environments/<env>/`.

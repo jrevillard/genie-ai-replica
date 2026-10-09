@@ -20,6 +20,22 @@
 | 14 | Group-5 reachability test uses `/` for document-repository (returns 404) and HTTP against the binary clamd port (hangs); can never pass | Plan 3 Task 9: document-repository check uses `/health`; clamav check uses `bash -c "echo > /dev/tcp/clamav/3310"` (TCP probe) |
 | 15 | `email-password` SealedSecret is rendered but no service's envFrom ever references it — EMAIL_PASSWORD never reaches the backend | Plan 3 Task 1b Step 3: add `email-password` to backend's `secrets:` list |
 
+## Wave 8 — Plan 1 execution findings (Helm 4.3.0, fixed in this branch)
+
+Found while executing the Foundation plan against helm v4.3.0 on kind 1.33.0.
+All three stem from plan text authored against Helm 3 semantics:
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| 1 | Helm 4 injects the reserved `global` key into every subchart's coalesced values; the library schema's `additionalProperties: false` rejected it (`at '': additional properties 'global' not allowed`) — every `helm lint`/`template` of the umbrella failed even with an empty library values.yaml | Library schema declares a tolerant `global: {type: object}` property; `import-values: {child: ., parent: common}` dropped from umbrella Chart.yaml (import-values exports values only — templates stay callable via `{{ include }}`) |
+| 2 | Namespace-as-pre-install-hook (wave-6 fix #2/#8) self-destructs on Helm 4: implicit `before-hook-creation` semantics delete the pre-existing namespace before applying the hook — including the one `--create-namespace` just made. Install reports `deployed`, then the release Secret dies with the namespace (`helm list -A` empty). Reproduced 3× live | `templates/namespace.yaml` is a regular resource; `--create-namespace` is required at install (flag re-undropped, documented in charts/README.md). Later plan hooks (RBAC -30, dep-graph -20) run after the flag provisions the ns. Validated: install + `helm test` Succeeded, PSA labels present, test pod PASS under `enforce=restricted` |
+| 3 | ct v3.15 requires explicit `--chart-yaml-schema`/`--lint-conf` (no implicit defaults), yamale 6 syntax (`str()` validators, required-by-default), yamllint 1.38 dropped `min-spaces-after`/`key-order` options, and maintainer validation does live HTTPS to the git forge (fails x509 on self-hosted GitLab) | `charts/ci/chart_schema.yaml` + `charts/ci/lintconf.yaml` shipped; `validate-maintainers: false` in ct.yaml |
+
+OPEN item from wave-6 ("genieai-common.fullname collision check") resolved:
+release named `genieai` renders `genieai-genieai-umbrella-*` — valid (39 chars
+< 50 truncation), ugly; charts/README.md advises avoiding `genieai*` release
+names. No code change.
+
 # Plan Defect Ledger — Helm Migration Docs
 
 Tracks every finding from the adversarial review rounds against the spec +

@@ -41,7 +41,7 @@ spec:
       # curlimages/curl: sh + curl in one tiny image, no apk layer.
       # Pulls the upstream kubectl release binary and makes it executable
       # in /tools/bin for the main container.
-      image: docker.io/curlimages/curl:8.10.1
+      image: "{{ .Values.global.imageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false
@@ -161,7 +161,7 @@ spec:
       # curlimages/curl: sh + curl in one tiny image, no apk layer.
       # Pulls the upstream kubectl release binary and makes it executable
       # in /tools/bin for the main container.
-      image: docker.io/curlimages/curl:8.10.1
+      image: "{{ .Values.global.imageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false

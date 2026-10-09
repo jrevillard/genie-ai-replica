@@ -67,6 +67,16 @@ preinstalled (the `registry.k8s.io/kubectl` image is distroless and the
 container that downloads the static binaries into a shared `tools` emptyDir
 and the main container (alpine) picks them up via the PATH env.
 
+### Air-gapped deployments
+
+The init containers download `kubectl` and `jq` from public release URLs by
+default. For air-gapped / sovereign clusters, set
+`global.kubeletToolsMirror` to an internal mirror URL (no scheme required);
+the init containers then prepend that mirror URL to the well-known release
+paths (`/release/v1.33.0/...` and `/jq/releases/download/jq-1.7.1/...`).
+The mirror must serve both paths from its base URL — the chart does not
+fall back to upstream when the mirror is unreachable.
+
 ## Secrets backend
 
 Default secrets backend `sealedSecrets` (controller = cluster bootstrap

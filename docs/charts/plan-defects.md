@@ -349,3 +349,15 @@ render-blocking and functional-dead paths are closed.
 | `genieai-common.fullname` collision check (release named `genieai` ⇒ `genieai-genieai-*`?) | Plan 1 execution | First `helm template` run must eyeball rendered names |
 | RESOLVED (Wave 16): live index shows 0.30.x does not exist — pin corrected to `~> 0.29.0`; re-verify at Plan 2 execution (`helm search repo cloudnative-pg`) |
 | ArangoDB `arangodb-single` service consumer URLs vs operator-created Service naming | Plan 5/6 execution | Chart-side name matches the Plan 2 CR (annotated in Plan 5 Task 11), but the kube-arangodb-created SERVICE name stays unverified until first live render |
+
+## Execution Wave E1 — /code-review pass 1 on shipped data layer (fixes in flight)
+
+15 findings on the executed Plan 2 chart code. Key rulings:
+- Vector-index flag MISSING (compose passes --experimental-vector-index=true) — RAG-dead without it; flag + image pin 3.12.4.
+- ct install random namespace vs render guard — fixed via ct.yaml namespace key, gate untouched.
+- Operator controllers (CNPG/kube-arangodb/sealed-secrets) converted from Helm deps to cluster bootstrap prerequisites (keycloak-operator precedent): cluster-scoped controllers × per-env releases = competing controllers; spec §4 amended at execution.
+- --server.authentication-system-only dropped (not in Swarm reference, semantics unverified — parity wins).
+- Chart.lock now committed (reproducible deps; tarballs stay ignored).
+- http://localhost redirect gated on clusterProfile=dev (OAuth surface widening).
+- values.schema.json added: clusterProfile + arangodb.mode enums only (typo = silent dev topology).
+- RIDDEN: PSA-restricted vs operator-generated pods unverified (live-validation item); agents VCT fixed proactively.

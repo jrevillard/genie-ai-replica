@@ -1,4 +1,10 @@
 {{- if and .Values.data.keycloak.enabled .Values.data.keycloak.realmImport -}}
+{{- if and .Values.data.keycloak.verifyEmail (not .Values.data.keycloak.smtp) }}{{ fail "data.keycloak.verifyEmail=true requires data.keycloak.smtp to be set (no SMTP server configured)" }}{{- end }}
+{{- if .Values.data.keycloak.failOnPlaceholderSecrets }}
+{{- range $k, $v := .Values.data.keycloak.clientSecrets }}
+{{- if hasPrefix "change-me" $v }}{{ fail (printf "data.keycloak.clientSecrets.%s still a placeholder (change-me-*) — set real values in the environment override" $k) }}{{- end }}
+{{- end }}
+{{- end }}
 apiVersion: k8s.keycloak.org/v2alpha1
 kind: KeycloakRealmImport
 metadata:
@@ -11,17 +17,18 @@ spec:
   # References the Keycloak CR above; import runs once the instance is Ready.
   keycloakCRName: keycloak
   realm:
-    # realm name MUST match the in-cluster consumers (compose ground
-    # truth: docker-compose.yaml KEYCLOAK_REALM=genie; the AI tier sets
-    # KC_REALM=genie in chatqna + dataprep env). Earlier drafts named
-    # the realm `genieai` which silently broke every OIDC token call
-    # (404 on /realms/genieai/...).
+    # realm name MUST match the in-cluster consumers' KC_REALM /
+    # KEYCLOAK_REALM value (genie).
     realm: genie
     enabled: true
     {{- /* Single derivation of the public origin — every client's
            rootUrl/redirectUris/webOrigins below uses $origin. A second
            derivation site drifts and breaks that client's login with
-           invalid_redirect_uri while render gates stay green. */ -}}
+           invalid_redirect_uri while render gates stay green.
+           KeycloakRealmImport is import-once: the operator ignores later
+           spec.realm changes, so redirect URIs do NOT follow a
+           post-install ingress.host change (re-import or manual client
+           edit required). */ -}}
     {{- $origin := printf "https://%s" (.Values.ingress.host | default "genieai.local") -}}
     # TLS terminates at the edge (Envoy Gateway); the Keycloak pod serves
     # plain HTTP inside the cluster. `external` (the Keycloak default)
@@ -41,13 +48,13 @@ spec:
     maxFailureWaitSeconds: 900
     minimumQuickLoginWaitSeconds: 60
     failureFactor: 30
-    accessTokenLifespan: 1800
+    passwordPolicy: {{ .Values.data.keycloak.passwordPolicy | default "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)" | quote }}
+    accessTokenLifespan: {{ .Values.data.keycloak.accessTokenLifespan | default 300 }}
     ssoSessionIdleTimeout: 1800
     ssoSessionMaxLifespan: 36000
     internationalizationEnabled: true
     supportedLocales:
-      - en
-      - fr
+{{ toYaml (.Values.data.keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans")) | indent 6 }}
     defaultLocale: en
     {{- /* SMTP (email verification) is deployment-specific: rendered only
            when the operator sets data.keycloak.smtp in their values
@@ -83,8 +90,9 @@ spec:
           description: Service account role for Dataprep ingestion pipeline
     users:
       - username: genie-admin
-        firstName: GENIE
-        lastName: Admin
+        enabled: true
+        firstName: Admin
+        lastName: GENIE
         # Keycloak user profile requires `email` + `emailVerified: true` for
         # login to succeed (SERVER-TESTING.md: "Account is not fully set up").
         # Operators override via deploy/environments/<env>/values-override.yaml
@@ -117,16 +125,13 @@ spec:
             - manage-identity-providers
             - view-authorization
             - manage-authorization
-        credentials:
-          # Empty value on purpose: the operator cannot PATCH user passwords
-          # through the CR after import (user subresource is operator-owned).
-          # Real password is set out-of-band post-install:
-          #   kubectl exec deploy/keycloak -n genieai -- \
-          #     /opt/keycloak/bin/kcadm.sh set-password -r genie \
-          #     --username genie-admin -p '<password>'
-          - type: password
-            value: ""
-            temporary: false
+        # The user imports without credentials — an empty-string password
+        # value would materialize a malformed null-hash credential, so no
+        # credentials block is rendered at all. genie-admin cannot
+        # authenticate until a password is set out-of-band:
+        #   kubectl exec deploy/keycloak -- /opt/keycloak/bin/kcadm.sh \
+        #     set-password -r genie --username genie-admin \
+        #     --new-password '<password>'
       # Service-account user entries link the confidential clients below to
       # their roles (the KeycloakRealmImport equivalent of the Swarm export's
       # serviceAccountClientId entries).
@@ -206,8 +211,8 @@ spec:
         secret: {{ .Values.data.keycloak.clientSecrets.dataprep | default "change-me-dataprep-client" | quote }}
       # Mobile OIDC client (Flutter app) — public client with PKCE per
       # RFC 8252; mobile apps cannot hold secrets. Refresh-token rotation
-      # on. Redirect scheme is deployment-specific (default mirrors the
-      # repo env template).
+      # on. The chart defaults (client genie-mobile, scheme genieai) are
+      # deploy-time placeholders operators override per institution.
       - clientId: {{ .Values.data.keycloak.mobileClientId | default "genie-mobile" | quote }}
         enabled: true
         publicClient: true

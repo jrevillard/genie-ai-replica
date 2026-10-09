@@ -199,6 +199,25 @@ Plan 8 playbook Hugo shortcode in non-Hugo file + stale "build stage" line.
 | 14 | envoy-gateway research doc re-taught the fabricated ct.yaml `kubeVersion` key | kind image + `--kube-version` CLI flag |
 | 15 | Dev overlay `ai.nodeSelector`/`ai.tolerations` read by no template (contract is `ai.gpu.*`) | Keys moved under `ai.gpu` |
 
+## Wave 15 — `/code-review` xhigh round 6 (2 shipped-code + 12 plan/spec/doc)
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| 1 | SHIPPED: Makefile + 7 docs taught `ct install --kube-version 1.33.0` — the flag does not exist either (verified against chart-testing v3.15.0 source, zero matches). Both the config key (Wave 8 #3) and the CLI flag (Wave 14 #14) were fabrications; the ONLY pin is the kind node image | Makefile target rewritten + comment; ct.yaml/ci-README/foundation/envoy-doc all corrected to kind-image-only |
+| 2 | SHIPPED: namespace divergence mandated by comment but unenforced; values key dead in shipped templates | Render-time `fail` guard (values namespace ≠ release namespace → hard error); values.yaml key re-documented. Verified: diverging render fails, matching render passes |
+| 3 | Wave-14 #3 fix incomplete: SA still rendered in the main namespace while DaemonSet + bindings reference <ns>-agent | SA moved to the agent namespace (admission was still broken) |
+| 4 | Redundant namespaced Role+RoleBinding duplicating the ClusterRole's grants | Dropped — one ClusterRole/Binding (pods get/list/watch) covers k8sattributes |
+| 5 | Cluster-scoped fixed name `genieai-agent` collides across multi-namespace installs of the same chart | ClusterRole/Binding renamed `{{ fullname }}-agent` |
+| 6 | Mangled comment fragment in the SA block (broken edit debris) | Rewritten |
+| 7 | nginx subPath mount over default.conf would EROFS at the entrypoint's envsubst (entrypoint.sh renders it at startup from the baked template) | Mount target = default.conf.template (envsubst-safe content renders verbatim); all mount-path references updated |
+| 8 | Keycloak CR lacked httpRelativePath while every consumer URL targets /auth (Keycloak 26 serves at / by default) | `httpRelativePath: /auth` pinned on the CR with rationale |
+| 9 | crossServiceURLs docstring still taught `host "keycloak"` (only invocation example in the plan) | → keycloak-service |
+| 10 | charts:integration smoke curls svc/backend while the same install disables the backend | Conditional smoke (SKIP when backend absent) |
+| 11 | Integration job created kind without --image — runner default node < 1.33 rejects the PSS enforce-version label | `--image kindest/node:v1.33.0` pinned |
+| 12 | SecurityPolicy hard-coded allowMethods/allowHeaders while values declared them tunable (dead keys + silent narrowing: PATCH, X-Requested-With dropped) | Templated from values with the promised defaults |
+| 13 | HTTPRouteFilter purge incomplete: grep/commit/summary/counters still referenced the removed kind | All → SecurityPolicy; expected-kinds check now asserts what actually renders |
+| 14 | Foundation plan still carried `tests/` convention (2 spots) — the plan the ledger marked fully dispositioned | → templates/tests/ |
+
 # Plan Defect Ledger — Helm Migration Docs
 
 Tracks every finding from the adversarial review rounds against the spec +

@@ -2761,7 +2761,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: 'Tags'
+          tags: 'Tags',
+          actions: 'Modifier'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2804,7 +2805,11 @@ export default {
         revertEmpty: 'Aucun enregistrement de frontmatter pour le moment.',
         revertDone: 'Frontmatter restauré — reconstruisez la tête et relancez pour l’appliquer.',
         removeTag: 'Retirer des tags interdits',
-        tagsetTip: 'Tags interdits pour cette exécution'
+        tagsetTip: 'Tags interdits pour cette exécution',
+        savedTitle: 'Suites enregistrées',
+        load: 'Charger',
+        flipTip: 'Basculer doit-sélectionner / ne-doit-pas-sélectionner',
+        deleteTip: 'Retirer cette ligne de la suite'
       },
       error: {
         explain: "Échec de l'explication",
@@ -2818,7 +2823,9 @@ export default {
         revert: 'Impossible de revenir sur le frontmatter',
         advisor: 'Échec du conseiller',
         noSuite: "Générez d'abord une suite, puis reconstruisez et relancez.",
-        applyNoSuite: 'Tags enregistrés et tête reconstruite — générez une suite, puis lancez tout pour voir l’effet.'
+        applyNoSuite: 'Tags enregistrés et tête reconstruite — générez une suite, puis lancez tout pour voir l’effet.',
+        suiteLoad: 'Impossible de charger la suite',
+        suiteUpdate: 'Impossible de mettre à jour la suite'
       },
       footer: {
         unpublish: 'Unpublish to review'

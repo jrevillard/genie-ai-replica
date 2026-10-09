@@ -1,0 +1,46 @@
+apiVersion: v2
+name: genieai-umbrella
+description: |
+  Single-install umbrella chart for GENIE.AI. Renders the entire 28-service
+  stack with one `helm install` — typically consumed via per-env Kustomize
+  overlays at `deploy/environments/<env>/`.
+type: application
+version: 0.1.0
+# Per spec §4: "umbrella's `appVersion` = chart version, **not** GENIE.AI app
+# version (semver divide between chart layout and product release)". The chart
+# version IS 0.1.0; `appVersion` mirrors it. Product versions move on a
+# separate axis from chart-layout versions.
+#
+# Never "latest" — see Review Focus #4. Pin to a chart version; image versions
+# are governed by the upstream component image tags.
+appVersion: "0.1.0"
+keywords:
+  - genie-ai
+  - umbrella
+  - sovereign
+  - rag
+home: https://opensource.unicc.org/un/itu/genie-ai
+sources:
+  - https://opensource.unicc.org/un/itu/genie-ai.git
+maintainers:
+  - name: GENIE.AI
+    email: maintainers@example.invalid
+dependencies:
+  # Local library chart — re-rendered on every umbrella install.
+  - name: genieai-common
+    version: "0.1.0"
+    repository: "file://../genieai-common"
+    import-values:
+      - child: "."
+        parent: "common"
+
+# Operator dependencies (added in subsequent plans):
+# - cloudnative-pg (Plan 2)
+# - kube-arangodb (Plan 2)
+# - keycloak-operator (Plan 2)
+# - external-secrets-operator (Plan 2)
+# - victoriametrics-operator + vl + vt (Plan 4)
+# - opentelemetry-operator (Plan 4)
+# - gpu-operator (Plan 5)
+# - cert-manager (umbrella-level dependency, Plan 6)
+# - envoy-gateway (Plan 6)

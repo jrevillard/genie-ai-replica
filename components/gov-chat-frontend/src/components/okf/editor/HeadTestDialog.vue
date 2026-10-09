@@ -1925,6 +1925,9 @@ export default {
       this.error = '';
       // 1-8c: per-class counts ride along; undefined lets the server
       // apply its own defaults/clamps. 1-8f: the optional suite name.
+      // 1-8f2: generation is ASYNC (202 + poll) — a large ask batches
+      // across minutes of LLM calls and the synchronous request died at
+      // the gateway before the suite landed (live 2026-10-09).
       const res = await this.$store.dispatch('okf/headSuiteGenerate', {
         repoId: this.repo.repo_id,
         nPositive: this.intOf(this.counts.n_positive),
@@ -1935,12 +1938,27 @@ export default {
         name: (this.suiteName || '').trim() || undefined
       });
       this.suiteName = '';
-      this.busy = null;
       if (!res.ok) {
+        this.busy = null;
         this.error = res.message || this.translate('okf.headTest.error.generate', 'Suite generation failed');
         return;
       }
-      this.suite = res.result;
+      let suite = null;
+      if (res.result && res.result.status === 'generating' && res.result.suite_key) {
+        suite = await this.pollForSuite(res.result.suite_key);
+      } else if (res.result && res.result.suite_key) {
+        suite = res.result; // legacy synchronous response
+      }
+      this.busy = null;
+      if (!suite) {
+        this.error = this.translate(
+          'okf.headTest.error.generateTimeout',
+          'The suite is taking unusually long — it may still land in Saved suites; check there in a minute.'
+        );
+        this.refreshRuns();
+        return;
+      }
+      this.suite = suite;
       this.lastRunSummary = null;
       this.lastRunSummaryRows = [];
       this.batchAdvice = null;
@@ -1949,6 +1967,18 @@ export default {
       this.tripwire = null;
       this.lastRunSuiteKey = this.suite ? this.suite.suite_key : null;
       this.refreshRuns();
+    },
+    /** 1-8f2: poll GET /:suite_key until the async generation lands the
+     * doc (2.5s interval, ~4min budget), or give up with null. */
+    async pollForSuite(suiteKey) {
+      const attempts = 96; // 96 × 2.5s ≈ 4 min
+      for (let i = 0; i < attempts; i += 1) {
+        // GET first, sleep after — a fast generation lands on attempt 0
+        const res = await this.$store.dispatch('okf/headSuiteGet', { repoId: this.repo.repo_id, suiteKey });
+        if (res && res.ok && res.result && res.result.suite_key) return res.result;
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
+      return null;
     },
     async onRunSuite() {
       if (!this.suite) return;

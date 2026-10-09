@@ -1543,8 +1543,8 @@ export default {
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+          'The LLM writes the queries in batches of 30 per class — a large ask (100+) takes a few minutes. The suite lands here and in Saved suites when done.',
+        generating: 'Generating in batches — large asks take a few minutes…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -1621,7 +1621,9 @@ export default {
         applyNoSuite: 'Tags saved and the head rebuilt — generate a suite, then Run all to see the effect.',
         suiteLoad: 'Could not load the suite',
         suiteUpdate: 'Could not update the suite',
-        suiteRename: 'Could not rename the suite'
+        suiteRename: 'Could not rename the suite',
+        generateTimeout:
+          'The suite is taking unusually long — it may still land in Saved suites; check there in a minute.'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -1659,7 +1661,7 @@ export default {
       none: 'No versions minted yet — publishing creates v1.',
       notServing: 'Not serving',
       publish: 'Create new version',
-      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
+      published: 'Version v{v} published — bundle {f} stored in the document repository.',
       serving: 'Ingested (serving)',
       title: 'Versions'
     },
@@ -1679,7 +1681,7 @@ export default {
         note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        body: 'Publishing mints v{n} and stores bundle "{file}" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.',
         confirm: 'Publish',
         inProgress: 'Publishing — exporting and transferring the bundle…',
         title: 'Publish'
@@ -1693,22 +1695,22 @@ export default {
         editor: 'Editor',
         wizard: 'Wizard'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{n}',
       versions: 'Versions',
       headTest: 'Routing Lab',
       deleteLabel: 'Delete'
     },
     logs: {
-      labeled: "labeled: {'{'}n{'}'}",
-      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
-      concepts: "concepts: {'{'}n{'}'}",
+      labeled: 'labeled: {n}',
+      fallbacks: 'LLM fallbacks: {n}',
+      concepts: 'concepts: {n}',
       col: {
         action: 'Action',
         description: 'Description',
         user: 'User',
         when: 'Date & time'
       },
-      count: "{'{'}n{'}'} entries",
+      count: '{n} entries',
       loadFailed: 'Failed to load the activity log.',
       none: 'No activity recorded yet — repository actions appear here as they happen.',
       title: 'Activity log'
@@ -1717,11 +1719,11 @@ export default {
       aria: 'Concept graph',
       building: 'Preparing graph…',
       card: {
-        chunks: "{'{'}n{'}'} chunks",
+        chunks: '{n} chunks',
         failed: 'indexing failed',
         flagged: 'flagged entities',
         hub: 'Index hub',
-        links: "{'{'}n{'}'} links",
+        links: '{n} links',
         pending: 'not indexed yet'
       },
       concepts: 'concepts',
@@ -1760,7 +1762,7 @@ export default {
     },
     pii: {
       panel: 'Flagged entities',
-      nFlagged: "{'{'}n{'}'} found",
+      nFlagged: '{n} found',
       rescan: 'Re-scan',
       scanning: 'Scanning…',
       clean: 'No flagged entities — this concept is clear.',
@@ -1874,8 +1876,8 @@ export default {
           problem: 'The problem',
           noError: 'Marked failed without a recorded reason.',
           fixLabel: 'How to fix',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               'The ingest worker gave up waiting within its grace window (the drain was saturated) — the content is intact. Fix: edit this file slightly and save to re-queue it, or retract and re-ingest the whole repo.',
@@ -1930,9 +1932,9 @@ export default {
       pickConcept: 'Select a concept from the list to start editing.',
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: 'Redact all flagged content',
           remove: 'Remove all flagged content',
@@ -1944,7 +1946,7 @@ export default {
           accept:
             'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
         },
-        scope: "Concepts affected: {'{'}n{'}'}.",
+        scope: 'Concepts affected: {n}.',
         confirm: 'Apply',
         failed: 'The bulk PII action failed — try again.'
       },
@@ -1976,11 +1978,11 @@ export default {
       bulk: {
         body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
         pending: 'Confirm to publish the selected repositories.',
-        publishConfirm: "Publish {'{'}n{'}'}",
+        publishConfirm: 'Publish {n}',
         title: 'Publish selected repositories'
       },
       card: {
-        actions: "Actions for {'{'}name{'}'}",
+        actions: 'Actions for {name}',
         building: 'Building…',
         buildingAria: 'Building — the source file is still being processed',
         delete: 'Delete',
@@ -2006,29 +2008,29 @@ export default {
         note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        body: 'Publishing mints v{n} and stores bundle "{file}" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.',
         confirm: 'Publish',
         title: 'Publish'
       },
       search: 'Search...',
-      select: "Select {'{'}name{'}'} for bulk publish",
+      select: 'Select {name} for bulk publish',
       stage: {
         drainFailed: 'Ingest failed',
-        queueBehind: "{'{'}n{'}'} queued · {'{'}m{'}'} repo(s) ingesting",
+        queueBehind: '{n} queued · {m} repo(s) ingesting',
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',
         inReview: 'In review',
-        ingested: "Ingested v{'{'}n{'}'}",
-        published: "Published v{'{'}n{'}'}",
+        ingested: 'Ingested v{n}',
+        published: 'Published v{n}',
         retracted: 'Retracted',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: 'Repositories',
       topics: 'topics',
       unpublish: {
         title: 'Unpublish',
-        body: "This stops serving {'{'}name{'}'} to RAG agents immediately. The published bundle zip and version history are kept; the repository returns to In Review so you can correct it. Publish again and Ingest to serve it once more.",
+        body: 'This stops serving {name} to RAG agents immediately. The published bundle zip and version history are kept; the repository returns to In Review so you can correct it. Publish again and Ingest to serve it once more.',
         confirm: 'Unpublish'
       },
       lane: {
@@ -2048,7 +2050,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} more",
+        more: '+ {n} more',
         fixPath: 'Re-ingest to retry: retract → create version → ingest.'
       },
       curation: {
@@ -2062,9 +2064,9 @@ export default {
       bytes: 'Source read',
       conceptsIndexed: 'concepts indexed',
       elapsed: {
-        hr: "Started {'{'}n{'}'} h ago",
+        hr: 'Started {n} h ago',
         lt1: 'Started less than a minute ago',
-        min: "Started {'{'}n{'}'} min ago"
+        min: 'Started {n} min ago'
       },
       pages: 'Pages processed',
       serving: {
@@ -2107,7 +2109,7 @@ export default {
     },
     create: {
       zipOnly: 'Pick a .zip bundle file.',
-      stagedFile: "Staged: {'{'}name{'}'}",
+      stagedFile: 'Staged: {name}',
       staged: 'Bundle staged — click Create Repository to start the import.',
       openExisting: 'Open existing repository',
       name: 'Repository name',
@@ -2325,7 +2327,7 @@ export default {
       },
       stage: {
         inReview: 'In review',
-        stepOf: "Step {'{'}n{'}'} of 10",
+        stepOf: 'Step {n} of 10',
         draft: 'Draft'
       },
       dashboard: {
@@ -2338,7 +2340,7 @@ export default {
         stale: 'stale',
         stage: {
           inReview: 'In review',
-          stepOf: "Step {'{'}n{'}'} of 10",
+          stepOf: 'Step {n} of 10',
           draft: 'Draft'
         },
         bulk: {
@@ -2449,11 +2451,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2674,15 +2676,15 @@ export default {
       saveBlocked: 'Save blocked: fix conformance issues first.'
     },
     validation: {
-      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
+      frozen: 'Content frozen at {v} — read-only preview. Retract the serving version to make changes.',
       none: 'None',
       expertHint: 'Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.',
       headline: {
-        blockers: "{'{'}n{'}'} blocking issue(s) — fix before you hand the repository off",
-        warnings: "{'{'}n{'}'} thing(s) need your review",
+        blockers: '{n} blocking issue(s) — fix before you hand the repository off',
+        warnings: '{n} thing(s) need your review',
         ok: 'Looks good. Nothing to fix.'
       },
-      summary: "{'{'}clean{'}'} clean · {'{'}warnings{'}'} needs review · {'{'}blockers{'}'} blocking",
+      summary: '{clean} clean · {warnings} needs review · {blockers} blocking',
       formatter: {
         notReady: 'Formatter lands in Story 4.2b.'
       },
@@ -2716,8 +2718,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2731,12 +2733,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2772,12 +2774,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       servingBadge: 'serving free-form RAG',
       alreadyBadge: 'already in an OKF repo',
@@ -2792,7 +2794,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)"
+      total: '{n} document(s)'
     },
     frontmatter: {
       title: 'Frontmatter tags — what this repo is about',

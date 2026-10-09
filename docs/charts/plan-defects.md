@@ -179,6 +179,26 @@ pre-install/pre-upgrade; spec §13.3 drift script check=True crash on
 git show; Plan 4 VMServiceScrape snippet placement outside define scope;
 Plan 8 playbook Hugo shortcode in non-Hugo file + stale "build stage" line.
 
+## Wave 14 — `/code-review` xhigh round 5 (1 shipped-code + 14 plan/spec/doc)
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| 1 | SHIPPED: chart pins resources to `.Values.namespace` while Helm installs into `.Release.Namespace` — divergence labels the wrong namespace, strands the release Secret, fails the built-in test | namespace.yaml + test pod now use `.Release.Namespace` (values key kept for templates that spell out a target; must equal the release ns). Verified live on kind: install into genieai-staging → ns labeled enforce=restricted → helm test Succeeded. OPEN: Plans 2-6 metadata.namespace still reads `.Values.namespace` — standardize on `.Release.Namespace` during Plan 2 execution |
+| 2 | Group-5 factory container securityContext lacked allowPrivilegeEscalation:false + drop ALL → every Deployment rejected under enforce=restricted | Full PSA-restricted default (Wave 11 #5 fix had reached only the AI factory) |
+| 3 | Wave-13 regression: agent SA/Role in main ns while DaemonSet moved to <ns>-agent → SA not found, pods never admitted | SA+Role+RoleBinding moved to the agent namespace + minimal ClusterRole (pods get/list/watch) for k8sattributes cross-ns enrichment |
+| 4 | `keycloak.<ns>` Service DNS — keycloak-operator names it `<cr>-service` (verified upstream docs; same class as the collector `-collector` fix) | `keycloak-service.<ns>` across backend/chatqna/dataprep/migrate refs |
+| 5 | CORS resource fabricated: HTTPRouteFilter has no `cors` field in EG v1.9; allowOrigins is a plain string list | Rewritten as SecurityPolicy.spec.cors targeting the HTTPRoute |
+| 6 | migrate pre-install hook (default on, registry.example.org image, envFrom secrets) blocks charts:integration + fresh data-off installs | `--set migrate.enabled=false` added to the integration job |
+| 7 | nginx override mounted as an ADDITIONAL conf.d file — baked default.conf (Kong upstreams, :80/:443, cert self-signing) still loads and cannot run non-root | Override replaces default.conf via subPath + execution-time entrypoint verification note |
+| 8 | otel-migration.md metrics exporter still pointed at 8429 (cluster vmselect) instead of 8428 (VMSingle) | Fixed (Wave 6 #13 escapee) |
+| 9 | Incomplete purge of the nonexistent invalid annotation (Files list, Task 13 README, self-review) + one inverted Synced=True comment | All corrected to conditions[type=Synced].status=False |
+| 10 | Task-13-style README overwrites regressed the shipped conventions (tests/ dir, no make-deps/--create-namespace notes) | All three blocks carry templates/tests/ + both conventions |
+| 11 | `KeycloakRealm` CR still cited in audit doc, spec §5/§8, plan architecture line (CRD does not exist) | All → Keycloak + KeycloakRealmImport |
+| 12 | Spec §8 envFrom snippet used fullname-prefixed secret names contradicting the plain-name pattern everywhere else | Plain `.service.secretName` + rationale |
+| 13 | Spec §12 Pattern C `--set x=a,b` — helm splits on the comma | Brace-wrapped list form |
+| 14 | envoy-gateway research doc re-taught the fabricated ct.yaml `kubeVersion` key | kind image + `--kube-version` CLI flag |
+| 15 | Dev overlay `ai.nodeSelector`/`ai.tolerations` read by no template (contract is `ai.gpu.*`) | Keys moved under `ai.gpu` |
+
 # Plan Defect Ledger — Helm Migration Docs
 
 Tracks every finding from the adversarial review rounds against the spec +

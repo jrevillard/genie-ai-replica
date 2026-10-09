@@ -83,7 +83,7 @@ containerd stdout ──► agent collector (DaemonSet, filelog receiver)
 2. **Remove:** the `fluent_forward` receiver block and its entry in the logs pipeline `receivers:` list (replaced by agent → OTLP).
 3. **Keep verbatim:** `pii_redact` OTTL statements, `stamp_log_metadata_from_msg`, healthcheck, memory_limiter, batch.
 4. **Mind the double-unescape trap:** the regexes are double-escaped (`\\s`, `\\.`) because YAML single-quoted scalars are literal AND OTTL string literals unescape once more. Single-escaping "looks correct" and kills the whole log pipeline (collector exits 1 on OTTL parse error). The port must not touch these strings.
-5. **Retarget exporters:** OTLP/HTTP endpoints to `vtraces.genieai.svc.cluster.local:10428`, `vmetrics...:8429`, `vlogs...:9428` (rendered via Helm values, not hard-coded).
+5. **Retarget exporters:** OTLP/HTTP endpoints to `vtraces.genieai.svc.cluster.local:10428`, `vmetrics...:8428`, `vlogs...:9428` (rendered via Helm values, not hard-coded).
 6. **OTel version floor:** collector contrib `0.111+` (transform `error_mode` stable).
 
 ## 6. Kong → Envoy Gateway tracing

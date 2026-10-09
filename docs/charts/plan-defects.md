@@ -87,6 +87,37 @@ ConfigMap-sidecar Grafana posture (→ grafana-operator CRs, Plan 4 owners).
 Shipped-code nit fixed: test pod now renders `genieai.io/component: test`
 (dict-override pattern, matching namespace.yaml).
 
+## Wave 11 — `/code-review` xhigh round 2 (plans 2-8 + spec)
+
+Chart code again verified clean. 14 findings, all in not-yet-executed plan
+docs; one external fact verified against upstream cosign CLI docs. All applied:
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| 1 | SealedSecret `range` loops emit multiple docs with no `---` separator — iteration 2's apiVersion concatenates onto iteration 1's trailing comment; unparsable (Plan 2 Task 11 ×2, Plan 3 Task 7, Plan 4 Task 10) | `---` separator after each range opener (4 loops) |
+| 2 | Plans 2-5 dereference `.Values.pluggable.storageClassName` + `.Values.ingress.host` before the values blocks exist (Plan 6) → nil-pointer on every lint/render from Plan 2 Task 5 on | Values keys declared in Plan 2 Task 2 (with rationale); Plan 6 merges instead of re-declaring |
+| 3 | NP egress rules key on Service port 80; enforcement is post-DNAT → every Service-routed connection blocked under default-deny (group5 frontend/docrepo/nginx + Plan 5 model-server matrix) | All egress ports → pod ports (backend 3000, frontend 8090, docrepo 3001, vllm 8000, tei 8080) |
+| 4 | Plan 5 Task 8 Step 2 fail-fast block: 4 ifs, 5 ends — unparsable when pasted into all 7 wrappers | Balanced |
+| 5 | Plan 5 Task 2 Step 1b claims a genieai-common helper sets podSecurityContext — no such helper; Group-5 pods would fail PSA-restricted admission | `with`/`else` fallback emitting `seccompProfile: RuntimeDefault` at pod level |
+| 6 | `arangoHost` keys on `data.arangodb.mode` only; the ArangoDeployment template auto-promotes single→cluster under prod/staging → consumer URLs NXDOMAIN in exactly the prod profiles | Helper mirrors the CR's promotion logic verbatim |
+| 7 | Plan 7 Task 6 Step 1 rewrote `stages:` inserting a `charts` stage and omitting `charts-integration` → GitLab rejects the whole pipeline config | Step 6 now verifies Task 1's layout; no new stage |
+| 8 | charts:lint ran conftest on fixtures designed to FAIL + helm-docs --check on hand-written READMEs → MR-blocking job permanently red | Gate tests real inputs only; fixture suite runs as an assert-expected-failure self-test; docs-check advisory |
+| 9 | charts:integration installs the dev overlay with GPU services + registry.example.org refs → pods Pending forever, --wait 25m timeout, job never green | Job pins ai.enabled=false + remote-GPU mock URLs + data/secrets off until the overlay carries them |
+| 10 | cosign key ref `env:COSIGN_KEY=$COSIGN_KEY` fabricated (shell-expands to `env:COSIGN_KEY=<entire PEM>` — invalid scheme AND key material in argv); documented form is `--key env://COSIGN_KEY` (verified upstream) | Spec §14.1 + Plan 7 (job, Review Focus, summary) all corrected |
+| 11 | PII smoke: no positive control (empty VL response = vacuous pass), wrong wait label (`app.kubernetes.io/component` — chart uses `genieai.io/component`), install without `--set namespace=$NS` while exporters template it | Marker-present assertion gates the redaction checks; wait on `deployment/genieai-collector-collector` Available; namespace pinned |
+| 12 | Rego rules vacuous: bare `input.data[k]` only true for literal `true` (never fires on strings); `$CI_` rule reads Pod-only `spec.containers` while chart emits Deployments | `!= ""` deref-and-assert; both container paths evaluated |
+| 13 | group5 NP egress omitted OTLP 4318 + backend→docrepo despite injected OTEL endpoints → OTel pipeline silently dead at source | Ports added (4318 any-dest scoped, docrepo 3001 podSelector) |
+| 14 | Plan 6 Task 6 told the executor to READ a pre-delete gate file no plan ever authors → spec §13.1 P0 protection never ships | Gate Job authored in Plan 6 Task 6 Step 1 (annotation-only switch) |
+| 15 | Edge HTTPRoute split /api+/uploads→backend and /→frontend, contradicting spec §9 (`/*`→nginx) and bypassing the nginx tier incl. its override ConfigMap; /uploads pointed at a backend that doesn't serve it | Single `/`→nginx rule; nginx owns the path matrix |
+
+Also this round: process rule enforced repo-wide after repeated violations —
+NO wave/plan/task/review-focus references inside fenced code blocks of the
+plan docs (they ship verbatim into charts/, CI files, and scripts). All
+shipping blocks verified zero-ref; the foundation plan's historical blocks
+are exempted by its SUPERSEDED banner. Sub-cap fixes: dangling `<<<` heredoc,
+never-firing `printf|default` TLS-name guard, AppProject whitelist missing
+`kinds`, otel-migration Grafana posture rows, PII lengths.
+
 # Plan Defect Ledger — Helm Migration Docs
 
 Tracks every finding from the adversarial review rounds against the spec +

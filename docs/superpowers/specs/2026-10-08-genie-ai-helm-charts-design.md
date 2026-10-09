@@ -666,14 +666,15 @@ publish:charts:
   stage: charts:publish
   script:
     - helm package charts/genieai-umbrella -d .publish/
-    # cosign 2.x URI schemes: the env-var resolver is the SINGLE-COLON
-    # form `env:COSIGN_KEY=<value>` (the value is the raw PEM; not
-    # base64-encoded, not the legacy `env://` form which is NOT
-    # recognized). The earlier draft `env://COSIGN_KEY` (F4 fix)
-    # was wrong; cosign errors with "no recognized key URI scheme".
-    - cosign sign --key env:COSIGN_KEY=$COSIGN_KEY ${CI_REGISTRY_IMAGE}/genieai/umbrella:${CI_COMMIT_TAG}
-    - cosign attest --predicate release-audit.json --type slsaprovenance ${CI_REGISTRY_IMAGE}/genieai/umbrella:${CI_COMMIT_TAG}
-    - helm push .publish/genieai-umbrella-${CI_COMMIT_TAG}.tgz oci://${CI_REGISTRY_IMAGE}/genieai
+    # CORRECTED (Wave 11): the documented env-var key reference is
+    # `--key env://COSIGN_KEY` (upstream cosign sign CLI docs) — cosign
+    # reads the PEM from the masked CI variable. The earlier
+    # `env:COSIGN_KEY=$COSIGN_KEY` form was fabricated: shell-expanded it
+    # is `env:COSIGN_KEY=<entire PEM>` — no recognized scheme, and it
+    # leaks the private key into the process list.
+    - cosign sign --key env://COSIGN_KEY ${CI_REGISTRY_IMAGE}/genieai/genieai-umbrella:${CHART_VERSION}
+    - cosign attest --predicate release-audit.json --type slsaprovenance ${CI_REGISTRY_IMAGE}/genieai/genieai-umbrella:${CHART_VERSION}
+    - helm push .publish/genieai-umbrella-${CHART_VERSION}.tgz oci://${CI_REGISTRY_IMAGE}/genieai
 ```
 
 Cluster-side enforcement via **Kyverno** policy (chart installs as part of bootstrap). **CORRECTED (code-review Wave 10):** the earlier "F3 fix" above inverted the truth — verified against the Kyverno CRD (`config/crds/kyverno/kyverno.io_policies.yaml`): the real field is `publicKeys` (12 occurrences, described as accepting directly-specified X.509 keys); `keyData` appears nowhere in the schema and would be silently pruned by structural-schema validation, killing verifyImages while appearing Enforced. We use `publicKeys:` with inline PEM:

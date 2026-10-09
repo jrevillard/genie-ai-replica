@@ -49,7 +49,7 @@ Expected: prints `0` (no ai values → templates in later tasks don't exist; thi
 - [ ] **Step 2: Append to `charts/genieai-umbrella/values.yaml`**
 
 ```yaml
-# Plan 5 — AI/ML tier (spec §7 Group 6; 14 services)
+# AI/ML tier
 #
 # Master switch: whole tier off for partial installs (Day-0 pattern: core
 # only). Per-service toggles mirror Swarm defaults (guardrail + OPEA
@@ -129,7 +129,7 @@ ai:
     chunkSizeMd: "500"
     chunkOverlap: "50"
 
-  # RAG tuning knobs consumed by the chatqna wrapper env (Task 4) —
+  # RAG tuning knobs consumed by the chatqna wrapper env —
   # defaults mirror `env` + compose (RERANKING_STRATEGY, RERANKER_TOP_N, ...)
   chatqnaConfig:
     rerankingStrategy: slice
@@ -322,17 +322,22 @@ In the `spec.template.spec` block (after `securityContext:`), add:
       {{- end }}
       {{- /* podSecurityContext (fsGroup 1000/100 for the RWX HF-cache PVC
              to be group-writable on first model download). Render ONLY
-             when present — Plan 3's hardcoded `securityContext:` block
+             when present — the factory's earlier hardcoded `securityContext:` block
              at the same spec level was REPLACED by this `with` guard to
              avoid the duplicate-key error the K8s API server raises
              when two `securityContext:` keys land at the same level.
-             Plan 3 callers that previously relied on the hardcoded
-             default must now set `podSecurityContext:` on the per-service
-             values entry (the genieai-common helper sets it when the
-             values block omits it). */ -}}
+             PSA-restricted fallback: when a service's values entry omits
+             `podSecurityContext`, emit the namespace-compliant default
+             below instead of omitting the key entirely (the namespace
+             enforces pod-security.kubernetes.io/enforce: restricted —
+             a pod without seccompProfile at either level is rejected). */ -}}
       {{- with $svc.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
+      {{- else }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       {{- end }}
 ```
 
@@ -423,7 +428,7 @@ spec:
 {{- if and .Values.ai.enabled .Values.ai.services.vllm.enabled (not .Values.ai.remoteGpu.enabled) -}}
 {{- /* The factory reads .Values.services.<name>; model servers live under
        ai.services — pass the per-service values MERGED with the GPU/scheduling
-       extras through the `aiService` context key (factory support: Task 2
+       extras through the `aiService` context key (factory support: the task
        note) so the factory renders it unchanged.
        vLLM pods also need pod-level fsGroup: 1000 — the PVC root is
        root-owned and runAsUser 1000 cannot write the first model download
@@ -604,7 +609,7 @@ spec:
             - { name: RERANK_SERVER_HOST_IP, value: reranker }
             - { name: RERANK_SERVER_PORT, value: "80" }
             # --- LLM generation (compose LLM_SERVER_HOST_IP/PORT +
-            #     VLLM_LLM_ENDPOINT; re-pointed + Task 8 ternary) ---
+            #     VLLM_LLM_ENDPOINT; re-pointed + the task ternary) ---
             - name: LLM_SERVER_HOST_IP
               {{- if .Values.ai.remoteGpu.enabled }}
               value: ""                       # remote: VLLM_LLM_ENDPOINT drives
@@ -840,7 +845,7 @@ git commit -m "feat(charts): guardrail + chatqna ui/nginx templates (off by defa
            HUGGINGFACEHUB_API_TOKEN + OPENAI_API_KEY — the GPU-node bearer
            value under every env name the WRAPPERS + chatqna AsyncOpenAI
            client read; the real HF pull token is a SEPARATE value in
-           Plan 3's huggingface-hub-token secret (HUGGING_FACE_HUB_TOKEN)
+           the service tier's huggingface-hub-token secret (HUGGING_FACE_HUB_TOKEN)
            — model servers envFrom BOTH.)
          keycloakProxyClientSecret → keycloak-proxy-client-secret
            (key KEYCLOAK_PROXY_CLIENT_SECRET — backend consumer)
@@ -858,7 +863,7 @@ metadata:
     app.kubernetes.io/component: vllm-api-key
 spec:
   encryptedData:
-    VLLM_API_KEY: UExBQ0VIT0xERVIr     # PLACEHOLDER+ — RE-SEAL before helm install (F12)
+    VLLM_API_KEY: UExBQ0VIT0xERVIr     # PLACEHOLDER+ — RE-SEAL before helm install
     HF_TOKEN: UExBQ0VIT0xERVIr          # ditto
     HUGGINGFACEHUB_API_TOKEN: UExBQ0VIT0xERVIr    # ditto
     OPENAI_API_KEY: UExBQ0VIT0xERVIr     # ditto   # all four = same bearer value, re-sealed
@@ -873,7 +878,7 @@ metadata:
     app.kubernetes.io/component: kc-dataprep-client-secret
 spec:
   encryptedData:
-    KC_DATAPREP_CLIENT_SECRET: UExBQ0VIT0xERVIr     # PLACEHOLDER+ — RE-SEAL (F12)
+    KC_DATAPREP_CLIENT_SECRET: UExBQ0VIT0xERVIr     # PLACEHOLDER+ — RE-SEAL
 ---
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
@@ -885,7 +890,7 @@ metadata:
     app.kubernetes.io/component: keycloak-proxy-client-secret
 spec:
   encryptedData:
-    KEYCLOAK_PROXY_CLIENT_SECRET: UExBQ0VIT0xERVIr     # PLACEHOLDER+ — RE-SEAL (F12)
+    KEYCLOAK_PROXY_CLIENT_SECRET: UExBQ0VIT0xERVIr     # PLACEHOLDER+ — RE-SEAL
 {{- end -}}
 ```
 
@@ -898,15 +903,15 @@ spec:
       # below are static strings; any value that needs a per-install
       # substitution (URLs, model IDs, ternary on ai.remoteGpu) lives
       # in the per-service Deployment template
-      # (templates/services/backend.yaml — Task 1b/Plan 5 Task 8). The
+      # (templates/services/backend.yaml — the task/the corresponding task). The
       # template-side block is the ONLY place `{{ .Values... }}` /
       # `{{ if ... }}` appears for these envs.
       env: []      # per-service URLs are injected by the Deployment template
       secrets:
         - name: keycloak-client-secret
         - name: huggingface-hub-token
-        - name: keycloak-proxy-client-secret   # Plan 5: keycloak-proxy-service
-        - name: vllm-api-key                    # Plan 5: remote-GPU bearer (VLLM_API_KEY)
+        - name: keycloak-proxy-client-secret   # keycloak-proxy service-account
+        - name: vllm-api-key                    # remote-GPU bearer (VLLM_API_KEY)
 ```
 
 NOTE: values.yaml is STATIC — the template-level remote ternary for `VLLM_TRANSLATION_ENDPOINT` is added to `templates/services/backend.yaml` (Plan 3 file) in Task 8 Step 1, exactly like the `_ai/*` wrappers. The `{{ .Values... }}` line above shows the DEFAULT baked into the backend template, not values.yaml content.
@@ -950,7 +955,7 @@ git commit -m "feat(charts): AI-tier SealedSecrets (vllm-api-key dual-key, keycl
 
 **Interfaces:**
 - Consumes: Plan 3 NP conventions (default-deny + explicit allow; `kubernetes.io/metadata.name` for DNS; port-scoped `ipBlock` where operator labels are unverified).
-- Produces: one NetworkPolicy per enabled AI service. Wrappers egress to: arango 8529 (retriever, dataprep, chatqna), model-server Services 80 (per consumer), DNS. Model servers ingress: from wrapper peers; egress: DNS + 443 (HF model pulls) only.
+- Produces: one NetworkPolicy per enabled AI service. Wrappers egress to: arango 8529 (retriever, dataprep, chatqna), model-server POD ports — vllm 8000, tei/tei-reranker 8080 (NetworkPolicy is enforced post-DNAT; the Service port 80 never reaches the policy engine), DNS. Model servers ingress: from wrapper peers; egress: DNS + 443 (HF model pulls) only.
 
 - [ ] **Step 1: Write `charts/genieai-umbrella/templates/ai/networkpolicies.yaml`**
 
@@ -984,11 +989,15 @@ spec:
               kubernetes.io/metadata.name: kube-system
       ports:
         - { protocol: UDP, port: 53 }
-    # Model servers + arango (port-scoped any-dest until Plan 6 label pass)
+    # Model servers + arango (port-scoped any-dest until the verified-peer label pass)
     - to:
         - ipBlock: { cidr: 0.0.0.0/0 }
       ports:
-        - { protocol: TCP, port: 80 }     # in-cluster model Services
+        # Model-server POD ports (NetworkPolicy applies post-DNAT —
+        # the Service port 80 never reaches the policy engine): vllm 8000,
+        # tei + tei-reranker 8080.
+        - { protocol: TCP, port: 8000 }    # vllm (pod port)
+        - { protocol: TCP, port: 8080 }    # tei / tei-reranker (pod ports)
         - { protocol: TCP, port: 8529 }   # arangodb
         - { protocol: TCP, port: 8080 }   # keycloak
         - { protocol: TCP, port: 4318 }   # otel collector
@@ -1077,7 +1086,6 @@ Add to `templates/ai/*` wrappers' top:
 {{- end -}}
 {{- if or (not .Values.ai.remoteGpu.vllmUrl) (not .Values.ai.remoteGpu.teiEmbeddingUrl) -}}
 {{- fail "ai.remoteGpu.enabled=true requires vllmUrl + teiEmbeddingUrl; doclingUrl is optional (empty = in-process docling)" -}}
-{{- end -}}
 {{- end -}}
 {{- end -}}
 ```
@@ -1214,9 +1222,9 @@ dependencyGraph:
     documentRepository:
       - backend
     clamav: []
-    # Plan 5 — AI tier (service→service edges; evaluator resolves the
+    # AI tier (service→service edges; evaluator resolves the
     # namespace from the graph itself). Leaf model servers listed as KEYS
-    # with empty deps (spec §5.1 shape) so dep resolution never falls
+    # with empty deps so dep resolution never falls
     # through to the data namespace for them.
     chatqna: [embedding, retriever, reranker, vllm, keycloak]
     embedding: [tei]

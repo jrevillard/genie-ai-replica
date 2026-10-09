@@ -67,7 +67,7 @@ owner: "docs-stewards"
 last_reviewed: 2026-10-08
 ---
 
-(Note: `linkTitle` is NOT used — zero occurrences in the existing site. F8 fix: only the 8 fields above; the front-matter matches `site/content/en/docs/deploy/topologies.md` exactly. Internal links use `{{< relref "..." >}}` per the project convention — F3/F4/F5 fix; `{{< ref >}}` is being deprecated in Hugo's roadmap.)
+(Note: `linkTitle` is NOT used — zero occurrences in the existing site. only the 8 fields above; the front-matter matches `site/content/en/docs/deploy/topologies.md` exactly. Internal links use `{{< relref "..." >}}` per the project convention — F3/F4/; `{{< ref >}}` is being deprecated in Hugo's roadmap.)
 
 GENIE.AI ships as a single Helm umbrella chart, `genieai-umbrella`, that renders the entire 28-service stack with one install. This page covers the day-0 flow: bootstrap a cluster, install the chart, smoke-test.
 
@@ -281,7 +281,7 @@ Expected: `BUILD OK`. If the build fails (e.g., Docsy PostCSS error on a differe
 
 ```bash
 git add site/content/en/docs/deploy/
-git commit -m "docs(site): add kubernetes-helm + per-env-branches user-facing pages (Plan 8 Task 1)"
+git commit -m "docs(site): add kubernetes-helm + per-env-branches user-facing pages"
 ```
 
 ---
@@ -411,7 +411,7 @@ The cluster inventory for el-salvador (for the future plan's reference):
 
 ```bash
 git add docs/charts/migration-playbook.md
-git commit -m "docs(charts): migration playbook - key rotation, backup/restore, remote-GPU, uninstall (Plan 8 Task 2)"
+git commit -m "docs(charts): migration playbook - key rotation, backup/restore, remote-GPU, uninstall"
 ```
 
 ---
@@ -468,7 +468,7 @@ grep -E '(WARN|ERROR).*ref=' /tmp/hugo.log && exit 1
 echo "FINAL BUILD OK"
 cd ..
 git add docs/charts/plan-defects.md charts/README.md site/content/en/docs/_index.md 2>/dev/null
-git commit -m "docs(charts): Plan 8 status - documentation complete (Hugo user-facing + dev-internal playbook)"
+git commit -m "docs(charts): documentation complete (Hugo user-facing + dev-internal playbook)"
 ```
 
 ---

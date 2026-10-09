@@ -52,7 +52,7 @@ const frontmatterSchema = Joi.object({
   topic: Joi.array().items(Joi.string().min(1).max(64)).min(0).max(8),
   entity: Joi.array().items(Joi.string().min(1).max(64)).max(20),
   scope: Joi.string().allow('').max(64),
-  forbidden: Joi.array().items(Joi.string().min(1).max(64)).min(0).max(6),
+  forbidden: Joi.array().items(Joi.string().min(1).max(64)).min(0).max(24),
   summary: Joi.string().allow('').max(1024),
   keyword: Joi.array().items(Joi.string().min(1).max(64)).max(20),
   // Per-row approved_at (Story 1.6 carry-over, Story 1.7 keeps it for

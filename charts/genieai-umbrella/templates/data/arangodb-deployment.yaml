@@ -1,8 +1,11 @@
 {{- if .Values.data.arangodb.enabled -}}
+{{- /* Honor .Values.data.arangodb.mode ONLY — no auto-promotion.
+       Switching mode requires a fresh uninstall+install (kube-arangodb
+       cannot mutate an ArangoDeployment's spec.mode in place; the prior
+       ArangoDeployment becomes orphaned on a Helm upgrade because Helm
+       only manages resources in the current render). See
+       docs/charts/arangodb-mode-migration.md. */ -}}
 {{- $mode := .Values.data.arangodb.mode | default "single" -}}
-{{- if and (eq $mode "single") (or (eq .Values.clusterProfile "prod") (eq .Values.clusterProfile "staging")) -}}
-{{- $mode = "cluster" -}}
-{{- end -}}
 {{- if eq $mode "single" -}}
 apiVersion: database.arangodb.com/v1
 kind: ArangoDeployment
@@ -54,6 +57,7 @@ spec:
   bootstrap:
     passwordSecretNames:
       root: arango-root-secret
+  imagePullPolicy: IfNotPresent
 {{- else if eq $mode "cluster" -}}
 apiVersion: database.arangodb.com/v1
 kind: ArangoDeployment
@@ -117,5 +121,6 @@ spec:
   bootstrap:
     passwordSecretNames:
       root: arango-root-secret
+  imagePullPolicy: IfNotPresent
 {{- end -}}
 {{- end -}}

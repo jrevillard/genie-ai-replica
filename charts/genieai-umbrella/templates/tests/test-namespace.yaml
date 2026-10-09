@@ -4,6 +4,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: {{ include "genieai-common.fullname" . }}-test-namespace
+  namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" $componentValues | nindent 4 }}
     app.kubernetes.io/component: test

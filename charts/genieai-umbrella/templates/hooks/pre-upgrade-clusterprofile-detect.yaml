@@ -46,6 +46,17 @@ spec:
           env:
             - name: RENDERED_PROFILE
               value: {{ .Values.clusterProfile | default "dev" | quote }}
+            - name: TARGET_NAMESPACE
+              value: {{ .Values.namespace | quote }}
+            - name: DRIFT_MSG
+              # Operator-facing drift text. The detected namespace label
+              # value lands in the printed output via a $detected shell
+              # substitution at runtime, not via render-time interpolation
+              # — rendering $detected here would require double-escaping
+              # every shell metacharacter in the field, and a hostile
+              # label value (backtick, $, ", newline) would otherwise
+              # break the printf-built manifest below. Static text only.
+              value: "cluster-profile drift: namespace label does not match the profile this release renders. If unintentional, set clusterProfile to the detected value on the next upgrade; if this upgrade intentionally changes the profile, ignore — the label updates when this upgrade applies."
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -59,7 +70,7 @@ spec:
             - -c
             - |
               set -eu
-              ns="{{ .Values.namespace }}"
+              ns="$TARGET_NAMESPACE"
               # The profile this release actually deploys, baked in at render
               # time: a running Job has no access to Helm values, and Helm
               # never re-renders templates mid-install/upgrade — so the only
@@ -84,24 +95,33 @@ spec:
                 echo "WARN: namespace label read failed; skipping drift check" >&2
               fi
               if [ -n "$detected" ] && [ "$detected" != "$rendered" ]; then
-                msg="cluster-profile: namespace label '${detected}' != rendered '${rendered}'. If unintentional, pass --set clusterProfile=${detected}; if this upgrade intentionally changes the profile, ignore - the label updates when this upgrade applies."
-                echo "$msg"
+                # Echo a one-line summary that includes the detected value
+                # (echo is shell-quoted, so metacharacters in $detected
+                # render as literal text, not as shell control).
+                echo "DRIFT: cluster-profile namespace label '${detected}' != rendered '${rendered}'"
                 # The Event is the visibility channel (kubectl describe ns).
-                # Created via `kubectl create -f -` from a printf'd manifest —
-                # no heredoc inside the block scalar.
+                # Built from static printf lines so no operator-controlled
+                # value (namespace, drift text) is expanded at render
+                # time — every dynamic value lands as a shell variable
+                # inside the printf body. $DRIFT_MSG is the operator-facing
+                # drift text (static, set as a container env); the
+                # namespace and detected label flow through $ns and
+                # $detected without touching printf's format string.
                 printf '%s\n' \
                   "apiVersion: v1" \
                   "kind: Event" \
                   "metadata:" \
                   "  name: genieai-profile-drift-$(date +%s)" \
-                  "  namespace: ${ns}" \
+                  "  namespace: $ns" \
                   "involvedObject:" \
                   "  apiVersion: v1" \
                   "  kind: Namespace" \
-                  "  name: ${ns}" \
+                  "  name: $ns" \
                   "reason: ClusterProfileDetected" \
                   "type: Warning" \
-                  "message: \"${msg}\"" \
+                  "  message: $DRIFT_MSG" \
+                  "    detected: $detected" \
+                  "    rendered: $rendered" \
                   | kubectl create -f - >/dev/null 2>&1 || echo "WARN: event create failed" >&2
               fi
               # Drift detection is advisory: a mismatch (or an unreadable

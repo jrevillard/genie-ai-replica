@@ -1,0 +1,32 @@
+{{- if .Values.data.keycloak.enabled -}}
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "identity"))) | nindent 4 }}
+    genieai.io/data-tier: identity
+spec:
+  instances: {{ .Values.data.keycloak.instances | default 1 }}
+  db:
+    # CNPG primary Service is <cluster>-rw (keycloak-db-rw), port 5432
+    vendor: postgres
+    host: keycloak-db-rw
+    database: keycloak
+    usernameSecret:
+      name: keycloak-db-credentials
+      key: username
+    passwordSecret:
+      name: keycloak-db-credentials
+      key: password
+  # The operator starts Keycloak without a reverse proxy; hostname + TLS are
+  # bound at the edge (Envoy Gateway) via `hostname` v2 fields once
+  # the ingress host is known. Dev default keeps localhost URLs working.
+  http:
+    httpEnabled: true
+    # Consumers (backend, chatqna, dataprep, the migrate Job) all target
+    # http://keycloak-service.<ns>:8080/auth — Keycloak 26.x serves at /
+    # by default, so the relative path MUST be pinned to /auth to match.
+    httpRelativePath: /auth
+{{- end -}}

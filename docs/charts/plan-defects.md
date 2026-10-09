@@ -240,6 +240,29 @@ Three dependency pins verified against LIVE chart indexes:
 | 14 | Spec §16.7 still taught the dropped `import-values:` pattern (Wave 8 #1) | Corrected to include-only + pointer to the §3 amendment |
 | 15 | Job-count expectation 3 → actually 4 (clusterprofile-detect hook also renders) | Expectation 4 |
 
+## Wave 17 — `/code-review` xhigh round 8 (plans + spec; chart code clean)
+
+All 15 findings in unexecuted plan/spec docs; shipped chart code verified
+clean (helm 4.3.0 + yamale + ct empirical checks by the reviewer).
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| 1 | KeycloakRealmImport diverged fatally from `configs/keycloak/genie-realm.yaml`: genie-app rendered confidential (real realm = public PKCE), realm roles, realm-management composites, genie-proxy-client / dataprep-service-client / mobile / grafana / account clients, service-account users, smtpServer, sslRequired all missing | Plan 2 realm import rewritten to mirror the Swarm export; values gain `clientSecrets`/`smtp`/`mobileClientId`/`mobileRedirectScheme` keys; render gate asserts clients/roles/users |
+| 2 | GrafanaDatasource CRs used type `victorialogs` (plugin registers `victoriametrics-logs-datasource`), dropped pinned UIDs and jsonData (VL derivedFields, VM timeInterval/httpMethod) | Types/UIDs/jsonData mirrored from `configs/grafana/provisioning/datasources/vm-datasource.yml`; Step 4 gate asserts UIDs + derivedFields |
+| 3 | Gateway collector CR set only MY_POD_IP — `${GENIEAI_NAMESPACE}` exporters undefined; Step 2 also taught literal genieai hostnames AND placeholders | Step 2 unified on placeholders-only; CR injects `GENIEAI_NAMESPACE: {{ .Values.namespace }}`; Step 5 asserts placeholder + env presence |
+| 4 | PII smoke asserted email/long-hex BODY redaction — real config covers those shapes only at attribute level; body rules are key-based/bearer/sk-/JWT; smoke permanently red | Injection rewritten: email as JSON-quoted pair in body, long-hex as `value` attribute; marker forced lowercase (sk- rule is lowercase-only) |
+| 5 | PII smoke installed dev overlay (GPU nodeSelector) + migrate Job on GPU-less kind under --wait → 20m timeout before any assertion | Overlay dropped; all non-obs tiers + migrate force-disabled (same pattern as charts:integration) |
+| 6 | Prod VM datasource `url:` had comment lines between key and value → rendered url null / parse error | Comment moved above `url:` with if/else blocks |
+| 7 | clamav values shipped a PARTIAL container securityContext — factory `\| default` REPLACES, dropping allowPrivilegeEscalation + capabilities (PSA-restricted rejection) | Full PSA-restricted set restated in the override |
+| 8 | frontend/documentRepository NetworkPolicies lacked the 4318 OTLP egress their injected OTEL_EXPORTER_OTLP_ENDPOINT requires | Port-scoped 4318 egress added to both NPs |
+| 9 | AI-tier helm test pod had no component label; Task 7 NPs allow only specific peers → 6-8 of 9 checks policy-dropped | Test pod labeled `genieai.io/component: test`; edge matrix + example NP whitelist the test peer |
+| 10 | Kyverno ClusterPolicy dereferences `.Values.cosign.enabled` but no task declares the `cosign:` values block → every default lint nil-pointers | Plan 7 Task 3 Step 1b appends the block (disabled by default) + render check + commit updated |
+| 11 | charts:scan render lacked `-n genieai` → shipped namespace guard fails the job before Trivy | `-n genieai` + sentinel-secret disable added (matches charts:lint) |
+| 12 | AI-tier env-port sweep flagged CLAMAV_PORT=3310 and OTEL endpoints :4318 — gate unpassable on a correct render; executor would "fix" correct env | Allowlists: ports {80,9090,3310}, endpoint suffixes {:80,:8529,:8080,:4318} |
+| 13 | ct lint invocations in Plans 3/4/5/6 (and foundation) omitted `--chart-yaml-schema`/`--lint-conf` — ct errors before linting | Flags added to all 5 invocations (verified failure mode by the reviewer) |
+| 14 | redis-cache (Group 2, translation cache) + TRANSLATION_CACHE_PASSWORD secret owned by NO plan; backend env block dropped; spec §7 wrongly claimed the service absent from Swarm | Plan 3 Task 4c authors Deployment/Service/NP/values/dep-edge; SealedSecret added (count 7→8); backend env block restored; spec §7 sentence + §8 owner corrected |
+| 15 | TLS secretName wiring desync: Gateway honored `ingress.tls.secretName`, Certificate CR always minted `<host>-tls` (printf\|default dead) | Shared `genieai-umbrella.tlsSecretName` helper used by both; Certificate suppressed entirely when secretName set; pre-baked-path render gate added |
+
 # Plan Defect Ledger — Helm Migration Docs
 
 Tracks every finding from the adversarial review rounds against the spec +

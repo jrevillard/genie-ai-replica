@@ -754,19 +754,21 @@ helm template test charts/genieai-umbrella -n genieai |   python3 -c "
 import sys, yaml
 docs = list(yaml.safe_load_all(sys.stdin))
 bad = []
+ALLOWED_PORTS = {'80', '9090', '3310'}          # 9090 GUARDRAIL; 3310 CLAMAV_PORT (doc-repo)
+ALLOWED_EPILOGUES = (':80', ':8529', ':8080', ':4318')  # svc :80; arango; keycloak; OTLP collector
 for d in docs:
     if not d or d.get('kind') != 'Deployment': continue
     for c in d['spec']['template']['spec']['containers']:
         for e in c.get('env', []):
             n, v = e.get('name',''), str(e.get('value',''))
-            if n.endswith('_PORT') and v not in ('80', '9090'): bad.append((d['metadata']['name'], n, v))
-            if n.endswith('_ENDPOINT') and v.startswith('http://') and not v.endswith(':80') and ':8529' not in v and ':8080' not in v:
+            if n.endswith('_PORT') and v not in ALLOWED_PORTS: bad.append((d['metadata']['name'], n, v))
+            if n.endswith('_ENDPOINT') and v.startswith('http://') and not v.endswith(ALLOWED_EPILOGUES):
                 bad.append((d['metadata']['name'], n, v))
 assert not bad, bad
 print('PASS')"
 ```
 
-Expected: prints `PASS` — every `*_PORT` is 80 (GUARDRAIL 9090 excepted), every http endpoint is Service-DNS :80 (arango 8529 / keycloak 8080 excepted).
+Expected: prints `PASS` — every `*_PORT` is 80 (GUARDRAIL 9090 and CLAMAV_PORT 3310 excepted), every http endpoint ends in a sanctioned Service-DNS port (`:80` wrappers, `:8529` arango, `:8080` keycloak, `:4318` OTLP collector).
 
 - [ ] **Step 7: ARANGO_PASSWORD secretKeyRef present on retriever + dataprep (C3 gate)**
 
@@ -988,6 +990,12 @@ spec:
         - podSelector:
             matchLabels:
               genieai.io/component: ai-chatqna
+        # helm test pod (Task 9) — labeled genieai.io/component: test.
+        # Without this peer the reachability test gets policy-dropped
+        # (HTTP 000) on every restricted-ingress service.
+        - podSelector:
+            matchLabels:
+              genieai.io/component: test
       ports:
         - { protocol: TCP, port: 7000 }
   egress:
@@ -1024,7 +1032,10 @@ spec:
 
 Full edge matrix (replicate the shape above per service). ALL ports are
 POD ports — NetworkPolicy evaluates post-DNAT, so the Service port 80 never
-appears here:
+appears here. EVERY service additionally allows ingress from the
+`genieai.io/component: test` pod (the Task 9 helm test pod) on its ingress
+port — restricted ingress without that peer policy-drops the reachability
+check (HTTP 000):
 
 | Service | ingress from | egress to (pod ports) |
 |---|---|---|
@@ -1138,6 +1149,10 @@ kind: Pod
 metadata:
   name: {{ include "genieai-common.fullname" . }}-test-ai-reach
   namespace: {{ .Values.namespace }}
+  labels:
+    # The AI-tier NetworkPolicies whitelist this component for ingress —
+    # without the label the reachability checks are policy-dropped (HTTP 000).
+    genieai.io/component: test
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation
@@ -1388,7 +1403,7 @@ Expected: prints `12` (16 − 4 GPU).
 
 ```bash
 helm lint charts/genieai-umbrella --strict
-ct lint --config charts/ci/ct.yaml --charts charts/genieai-umbrella
+ct lint --config charts/ci/ct.yaml --chart-yaml-schema charts/ci/chart_schema.yaml --lint-conf charts/ci/lintconf.yaml --charts charts/genieai-umbrella
 git add charts/README.md charts/genieai-umbrella/README.md docs/charts/plan-defects.md
 git commit -m "docs(charts): mark Plans 2-5 complete; AI-tier README"
 ```

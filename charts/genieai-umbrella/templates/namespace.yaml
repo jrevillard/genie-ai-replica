@@ -12,6 +12,15 @@
 {{- if and .Values.namespace (ne .Values.namespace .Release.Namespace) -}}
 {{- fail (printf "values 'namespace' (%s) must equal the release namespace (%s) — pass -n %s or set the value accordingly" .Values.namespace .Release.Namespace .Release.Namespace) -}}
 {{- end -}}
+{{- /* Fail fast when a data tier is enabled without the sealed-secrets
+       backend: the rendered CRs reference Secrets that nothing
+       materializes (SealedSecret unsealing is the only implemented
+       backend), so the install would stall Day 0 with pods `Waiting for
+       secret`. Lives here because this template always renders — one
+       gate covers every tier that gains secret references. */ -}}
+{{- if and (or .Values.data.postgres.enabled (or .Values.data.arangodb.enabled .Values.data.keycloak.enabled)) (not .Values.secrets.sealedSecrets.enabled) -}}
+{{- fail "data tiers require the sealed-secrets backend (secrets.sealedSecrets.enabled=false leaves their secret references unmaterialized; alternative backends are not implemented yet)" -}}
+{{- end -}}
 apiVersion: v1
 kind: Namespace
 metadata:

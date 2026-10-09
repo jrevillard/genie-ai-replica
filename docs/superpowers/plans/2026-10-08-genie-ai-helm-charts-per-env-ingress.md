@@ -531,21 +531,23 @@ spec:
       {{- range .Values.ingress.cors.allowOrigins }}
       - {{ . | quote }}
       {{- end }}
+    # Operator-tunable via values — a hard-coded list here would silently
+    # ignore values overrides (dead-keys class) and drop methods/headers
+    # the defaults promised.
     allowMethods:
-      - GET
-      - POST
-      - PUT
-      - DELETE
-      - OPTIONS
+      {{- range (.Values.ingress.cors.allowMethods | default (list "GET" "POST" "PUT" "PATCH" "DELETE" "OPTIONS")) }}
+      - {{ . | quote }}
+      {{- end }}
     allowHeaders:
-      - Authorization
-      - Content-Type
+      {{- range (.Values.ingress.cors.allowHeaders | default (list "Authorization" "Content-Type" "X-Requested-With")) }}
+      - {{ . | quote }}
+      {{- end }}
 {{- end -}}
 ```
 
 - [ ] **Step 4: Render with `prod` overlay**
 
-Run: `helm template test charts/genieai-umbrella -n genieai -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=true --set ingress.cors.allowOrigins={https://genieai.example.org} | grep -E "^kind: (Gateway|HTTPRoute|HTTPRouteFilter)$"`
+Run: `helm template test charts/genieai-umbrella -n genieai -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=true --set ingress.cors.allowOrigins={https://genieai.example.org} | grep -E "^kind: (Gateway|HTTPRoute|SecurityPolicy)$"`
 Expected: prints 3 kinds (one of each).
 
 - [ ] **Step 5: Render with `dev` overlay** (ingress disabled)
@@ -558,7 +560,7 @@ Expected: prints `0` (dev override has `ingress.enabled: false`).
 ```bash
 helm lint charts/genieai-umbrella --strict -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=true
 git add charts/genieai-umbrella/templates/gateway/
-git commit -m "feat(charts): Envoy Gateway Gateway + HTTPRoute + optional CORS HTTPRouteFilter"
+git commit -m "feat(charts): Envoy Gateway Gateway + HTTPRoute + optional CORS SecurityPolicy"
 ```
 
 ---
@@ -1085,7 +1087,7 @@ git commit -m "docs(charts): document namespace-annotation uninstall gate in per
 ## Plan 6 — per-env + ingress
 
 Tasks 1-7 shipped: per-env overlays (dev/staging/prod/sovereign), Envoy
-Gateway Gateway + HTTPRoute (CORS via HTTPRouteFilter), cert-manager
+Gateway Gateway + HTTPRoute (CORS via SecurityPolicy), cert-manager
 Certificate (issuer-agnostic, conftest-blocked chart-side Issuers),
 ArgoCD + Flux sync examples (pick one), verified-peer NetworkPolicy
 values, db-migrations pre-upgrade Job, document-repository PVC
@@ -1098,7 +1100,7 @@ documented as supported but not validated.
 
 ```bash
 helm template test charts/genieai-umbrella -n genieai -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=true --set ingress.cors.allowOrigins={https://genieai.example.org} | grep "^kind:" | sort | uniq -c | sort -rn | head -12
-# Expected: Gateway, HTTPRoute, Certificate, HTTPRouteFilter, plus
+# Expected: Gateway, HTTPRoute, Certificate, SecurityPolicy, plus
 # the Plans 1-5 inventory.
 helm lint charts/genieai-umbrella --strict -f deploy/environments/dev/values-override.yaml
 helm lint charts/genieai-umbrella --strict -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=true
@@ -1139,7 +1141,7 @@ Sections deferred: KAS module / Flux source-write side (GitLab CI renders the ch
 ## Plan Stats
 
 - **Tasks:** 7
-- **New templates:** 6 (Gateway, HTTPRoute, HTTPRouteFilter, Certificate, db-migrations Job, verified-peer NetworkPolicies) + 1 modified (documentRepository.yaml)
+- **New templates:** 6 (Gateway, HTTPRoute, SecurityPolicy, Certificate, db-migrations Job, verified-peer NetworkPolicies) + 1 modified (documentRepository.yaml)
 - **New overlays:** 4 (dev/staging/prod/sovereign)
 - **GitOps examples:** 8 (1 AppProject + 3 ArgoCD Application + 1 GitRepository + 3 Kustomization + 1 README)
 - **Commits planned:** 7

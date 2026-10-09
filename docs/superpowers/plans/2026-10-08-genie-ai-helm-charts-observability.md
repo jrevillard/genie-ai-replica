@@ -370,25 +370,20 @@ cp configs/otel/otel-collector-config.yaml \
 2. **Keep verbatim** — `pii_redact` OTTL statements (do NOT touch the double-escaped regexes: YAML single-quote + OTTL unescape makes `\\s`/`\\.` load-bearing; single-escaping kills the pipeline with an OTTL parse error at collector boot), `stamp_log_metadata_from_msg`, `memory_limiter`, `batch`, healthcheck.
 3. **Retarget exporters to K8s DNS** using the collector's `env` substitution
    (NOT Helm templating — `.Files.Get` is not evaluated by Helm). The
-   plan ships the file with the hostnames pointing at the
-   **default** namespace `genieai` (plain DNS, no template syntax
-   embedded), e.g.:
-   - `vtraces.genieai.svc.cluster.local:10428`
-   - `vmetrics.genieai.svc.cluster.local:8428`  (8429 is the CLUSTER
-     vmselect port — single mode uses 8428)
-   - `vlogs.genieai.svc.cluster.local:9428`
-   Per-namespace correctness is NOT optional — the PII smoke runner and
-   the per-env model both install into non-`genieai` namespaces, where
-   literal `genieai` endpoints NXDOMAIN. Use the collector's own env
-   substitution consistently: the file ships with OTLP exporter endpoints
-   like `vlogs.${GENIEAI_NAMESPACE}.svc.cluster.local:9428`, and the CR
-   (Step 3) sets the env var from the chart's values —
-   `GENIEAI_NAMESPACE: {{ .Values.namespace }}` under `spec.config`'s
-   service.extensions or the CR's `spec.env` (collector env expansion
-   applies to endpoint fields). Helm never evaluates the file
-   (`.Files.Get`), so no template syntax may land in it; the namespace
-   arrives via the CR environment, and every install (dev, PII-test,
-   el-salvador) resolves correctly.
+   file ships with EVERY exporter hostname written as an env placeholder
+   (no literal `genieai` anywhere — the PII smoke runner and the per-env
+   model install into non-`genieai` namespaces, where literal endpoints
+   NXDOMAIN):
+   - `vtraces.${GENIEAI_NAMESPACE}.svc.cluster.local:10428`
+   - `vmetrics.${GENIEAI_NAMESPACE}.svc.cluster.local:8428`  (8429 is the
+     CLUSTER vmselect port — single mode uses 8428)
+   - `vlogs.${GENIEAI_NAMESPACE}.svc.cluster.local:9428`
+   The CR (Step 3) injects the value — `GENIEAI_NAMESPACE` set under
+   `spec.env` from the chart's values (`{{ .Values.namespace }}`); the
+   collector expands `${GENIEAI_NAMESPACE}` in endpoint fields at boot.
+   Helm never evaluates the file (`.Files.Get`), so no template syntax
+   may land in it; the namespace arrives via the CR environment, and
+   every install (dev, PII-test, el-salvador) resolves correctly.
 
 - [ ] **Step 3: Write `charts/genieai-umbrella/templates/observability/otel-collector.yaml`**
 
@@ -422,6 +417,12 @@ spec:
       valueFrom:
         fieldRef:
           fieldPath: status.podIP
+    # The ported config's exporter endpoints are written as
+    # `${GENIEAI_NAMESPACE}` placeholders (Step 2) — without this env var
+    # the substitution yields an empty hostname and every exporter
+    # NXDOMAINs on any install.
+    - name: GENIEAI_NAMESPACE
+      value: {{ .Values.namespace | quote }}
 {{- end -}}
 ```
 
@@ -442,6 +443,9 @@ helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod 
   assert 'pii_redact' in str(cfg), 'pii_redact missing'; \
   assert 'stamp_log_metadata_from_msg' in str(cfg), 'metadata stamp missing'; \
   assert 'fluent_forward' not in str(cfg), 'fluent_forward must be removed on K8s'; \
+  assert '${GENIEAI_NAMESPACE}' in str(cfg), 'exporters must use the env placeholder, not literal hostnames'; \
+  envs = {e['name'] for e in cr['spec']['env']}; \
+  assert 'GENIEAI_NAMESPACE' in envs, 'CR must inject GENIEAI_NAMESPACE'; \
   import json; print(json.dumps(cfg['service']['pipelines']['logs'], indent=2))"
 ```
 
@@ -733,13 +737,26 @@ spec:
   datasource:
     name: VictoriaMetrics
     type: prometheus
-    url: {{ if eq .Values.clusterProfile "prod" }}# vmselect serves the Prometheus API under the tenant path
+    {{- if eq .Values.clusterProfile "prod" }}
+    # vmselect serves the Prometheus API under the tenant path
     # /select/<account>/prometheus — without it every dashboard query 404s.
-    http://vmetrics-vmselect.{{ .Values.namespace }}.svc.cluster.local:8481/select/0/prometheus{{ else }}http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428{{ end }}
+    url: http://vmetrics-vmselect.{{ .Values.namespace }}.svc.cluster.local:8481/select/0/prometheus
+    {{- else }}
+    url: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428
+    {{- end }}
     access: proxy
     isDefault: true
+    uid: victoriametrics
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST
 ---
-# Datasource: VictoriaLogs
+# Datasource: VictoriaLogs — the plugin registers under the type
+# `victoriametrics-logs-datasource` (NOT `victorialogs`: an unknown type
+# makes the operator reject/skip the datasource and the service-logs
+# dashboard dies). The pinned uid + derivedFields mirror the Swarm
+# provisioning (configs/grafana/provisioning/datasources/vm-datasource.yml):
+# the log→trace link fields depend on both.
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
 metadata:
@@ -753,9 +770,21 @@ spec:
       genieai.io/component: grafana
   datasource:
     name: VictoriaLogs
-    type: victorialogs
+    type: victoriametrics-logs-datasource
     url: http://vlogs.{{ .Values.namespace }}.svc.cluster.local:9428
     access: proxy
+    uid: victoriametrics-logs
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - name: TraceID
+          matcherRegex: trace_id=\"([^\"]+)\"
+          datasourceUid: victoriatraces
+          url: $${__value.raw}
+        - name: SpanID
+          matcherRegex: span_id=\"([^\"]+)\"
+          datasourceUid: victoriatraces
+          url: $${__value.raw}
 ---
 # Datasource: traces — Grafana's Jaeger datasource queries VictoriaTraces
 # DIRECTLY, with the /select/jaeger URL prefix (official VT Grafana guide,
@@ -764,6 +793,8 @@ spec:
 # VT >= 0.9.4 additionally offers the Tempo datasource + TraceQL at
 # /select/tempo — future option, not v1. Multi-service aggregation behavior
 # (the proxy's second job) is re-verified in the migration checklist.
+# The pinned uid `victoriatraces` is what the VictoriaLogs derivedFields
+# link against — dashboards and the VL datasource both break without it.
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
 metadata:
@@ -780,6 +811,7 @@ spec:
     type: jaeger
     url: http://vtraces.{{ .Values.namespace }}.svc.cluster.local:10428/select/jaeger
     access: proxy
+    uid: victoriatraces
 {{- end -}}
 ```
 
@@ -817,6 +849,11 @@ helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod 
   ds = [d for d in docs if d and d.get('kind') == 'GrafanaDatasource']; \
   jaeger = next(d for d in ds if d['spec']['datasource']['type'] == 'jaeger'); \
   assert jaeger['spec']['datasource']['url'].endswith('/select/jaeger'), jaeger['spec']['datasource']['url']; \
+  vl = next(d for d in ds if d['spec']['datasource']['type'] == 'victoriametrics-logs-datasource'); \
+  assert vl['spec']['datasource']['uid'] == 'victoriametrics-logs'; \
+  assert vl['spec']['datasource']['jsonData']['derivedFields'], 'VL derivedFields missing'; \
+  uids = {d['spec']['datasource']['uid'] for d in ds}; \
+  assert {'victoriametrics','victoriametrics-logs','victoriatraces'} <= uids, uids; \
   assert 'tempo-proxy' not in str(docs), 'tempo-proxy must not render'; \
   n = len([d for d in docs if d and d.get('kind') == 'GrafanaDashboard']); \
   print(f'PASS: jaeger->vtraces direct, {n} dashboards')"
@@ -1200,7 +1237,7 @@ Expected: comprehensive overview showing Services, Deployments, NetworkPolicies,
 Run:
 ```bash
 helm lint charts/genieai-umbrella --strict
-ct lint --config charts/ci/ct.yaml --charts charts/genieai-umbrella
+ct lint --config charts/ci/ct.yaml --chart-yaml-schema charts/ci/chart_schema.yaml --lint-conf charts/ci/lintconf.yaml --charts charts/genieai-umbrella
 ```
 Expected: 0 errors from both.
 

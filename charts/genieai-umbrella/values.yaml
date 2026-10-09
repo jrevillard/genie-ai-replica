@@ -18,3 +18,66 @@ global:
 # Drives chart-derived defaults (replica counts, data-tier topology,
 # observability). dev | staging | prod | sovereign.
 clusterProfile: dev
+
+# data layer values
+
+# Declared here because this plan's templates already dereference them:
+# the data-tier PVCs read `pluggable.storageClassName`, the realm-import
+# redirect URLs read `ingress.host`. Helm nil-pointer-evaluates
+# a missing parent map even under `with`/`default` guards — the keys must
+# exist in values.yaml before any template reads them.
+# The per-env plan elaborates both blocks; do not duplicate there.
+pluggable:
+  storageClassName: ""                # "" = cluster default storage class
+
+ingress:
+  host: genieai.local                 # public hostname for redirect URLs
+
+data:
+  postgres:
+    enabled: true
+    # CNPG Cluster resources for the keycloak-db; kong is REMOVED (decision 7).
+    instances: 1                       # 3 for prod/staging via clusterProfile
+    storageSize: 10Gi
+  arangodb:
+    enabled: true
+    mode: single                       # cluster for prod/staging via clusterProfile
+    storageSize: 50Gi
+  keycloak:
+    # Gates the Keycloak + KeycloakRealmImport CRs. The operator
+    # itself is a cluster bootstrap prerequisite — NOT a chart dependency.
+    enabled: true
+    realmImport: true
+    adminEmail: genie-admin@genieai.local
+    # Gates the new-user email-verification flow; requires smtp to be set
+    # when true (Keycloak rejects verification emails without a server).
+    verifyEmail: false
+    # Confidential-client secrets rendered into the realm import. The
+    # KeycloakRealmImport CR cannot read Kubernetes Secrets — operators
+    # supply the real values at install time (values override, never
+    # committed) and they MUST equal the corresponding SealedSecret
+    # values the consumers read (keycloak-proxy-client-secret,
+    # kc-dataprep-client-secret, grafana client secret).
+    clientSecrets:
+      proxyClient: change-me-proxy-client
+      dataprep: change-me-dataprep-client
+      grafana: change-me-grafana-client
+    # SMTP for email verification — leave null to disable (no smtpServer
+    # block renders); set all fields in the environment override when used.
+    smtp: null
+    mobileClientId: genie-mobile          # Flutter OIDC client (public, PKCE)
+    mobileRedirectScheme: genieai         # <scheme>://callback redirect
+
+secrets:
+  sealedSecrets:
+    enabled: true                      # default; see plug-point design §6.2
+    # Public-key fingerprint for the cluster producing the SealedSecret
+    # encrypted blobs in deploy/environments/<env>/secrets/*.yaml. The cluster
+    # public key is fetched via `kubeseal --fetch-cert`. If the fingerprint
+    # on file does not match what the in-cluster controller serves, the
+    # pre-upgrade hook fails the install.
+    publicKeyFingerprint: ""
+  eso:
+    enabled: false                     # plug-point only, per §6.2
+  secretProviderClass:
+    enabled: false                     # plug-point only, per §6.2

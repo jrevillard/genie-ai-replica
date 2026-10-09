@@ -8,7 +8,7 @@ subdirectory holds:
 - `values-override.yaml` — env-specific Helm values overrides.
 
 `main` branch tracks the chart + plain envs (dev, staging, prod). High-customization
-envs track `release/<env>` branches (e.g. `release/el-salvador`). See
-`docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` §19.
+envs track `release/<env>` branches (e.g. `release/el-salvador`).
 
-This directory is empty during the Foundation plan. Subsequent plans populate per-env.
+Per-env subdirectories are added as environments onboard to the Helm deployment;
+the umbrella chart itself stays identical across all of them.

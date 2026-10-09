@@ -1,7 +1,6 @@
-# chart-testing REAL config schema (verified against upstream config.go):
-# FLAT kebab-case keys. `charts` is a []string; there is NO `kubeVersion`
-# config key — the K8s version is pinned via the kind node image and the
-# `ct install --kube-version 1.33.0` CLI flag in CI (Plan 7).
+# chart-testing config — FLAT kebab-case keys only (upstream config schema).
+# There is NO `kubeVersion` config key: the K8s version is pinned via the kind
+# node image and the `ct install --kube-version 1.33.0` CLI flag in CI.
 remote: origin
 # Maintainer validation queries the git hosting service over HTTPS to verify
 # accounts; our self-hosted GitLab serves a cert the runner does not trust,
@@ -12,8 +11,8 @@ validate-maintainers: false
 # Hard-coding one branch would block MRs from any other branch.
 chart-dirs:
   - charts
-chart-repos: []          # foundation: only the file:// library dep;
-                         # operator repos are added in Plan 2+
+chart-repos: []          # only the file:// library dep today;
+                         # operator repos are added as their tiers land
 excluded-charts: []
 helm-extra-args: --timeout 300s
 debug: true

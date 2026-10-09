@@ -218,6 +218,28 @@ Plan 8 playbook Hugo shortcode in non-Hugo file + stale "build stage" line.
 | 13 | HTTPRouteFilter purge incomplete: grep/commit/summary/counters still referenced the removed kind | All → SecurityPolicy; expected-kinds check now asserts what actually renders |
 | 14 | Foundation plan still carried `tests/` convention (2 spots) — the plan the ledger marked fully dispositioned | → templates/tests/ |
 
+## Wave 16 — `/code-review` xhigh round 7 (plans + spec; chart code clean)
+
+Three dependency pins verified against LIVE chart indexes:
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| 1 | CNPG pin `~> 0.30.0` targets a chart version that does not exist (live index latest line = 0.29.x) — Plan 2 fails at `helm dependency update` | Pin → `~> 0.29.0` (plans + spec §4); ledger OPEN item closed |
+| 2 | victoria-metrics-operator pin `~> 0.45.0` ships operator v0.56.0 — predates the VTSingle CRD (added operator v0.63.0) → traces tier dead under the pin | Pin → `~> 0.68.0` (operator ≥ 0.63 for VTSingle) |
+| 3 | opentelemetry-operator pin `~> 0.50.0` = chart 0.50.0 from 2024-03 — 2.5-year-old operator vs collector 0.152.0; `~>` + Renovate locks it forever | Pin → `~> 0.124.0` (current line) |
+| 4 | db-migrations Job was a PRE-install hook — the CNPG/Arango CRs it connects to are regular resources applied AFTER hooks; every default install aborts | Hook → post-install,post-upgrade (backoff absorbs operator reconciliation) |
+| 5 | charts:lint gate permanently red: render without -n trips the shipped namespace guard; rendered sentinel SealedSecrets denied by the placeholder policy | -n genieai + secrets disabled on the gate render; Step 6 claim corrected |
+| 6 | Task 12 data-deps test pod ungated — hard-asserts Secrets that CI's stripped install disables → helm test red in exactly the CI config | Pod gated on data.arangodb + secrets.sealedSecrets |
+| 7 | Collector exporter endpoints hardcoded to the literal `genieai` namespace — NXDOMAIN for PII-test, per-env, el-salvador installs | Env-substitution pattern: file ships `${GENIEAI_NAMESPACE}` endpoints; CR injects the env from values |
+| 8 | Task 5 Decision text still said mount over default.conf (EROFS at envsubst) — contradicted Task 1b's template mount | Text aligned to default.conf.template |
+| 9 | Prod Grafana vmselect URL lacked the mandatory `/select/0/prometheus` tenant path — dashboards 404 in prod | Path added |
+| 10 | `redirectUris: http://localhost:*` — Keycloak rejects wildcards in the port; realm import fails | Bare `http://localhost` (port-agnostic special case) |
+| 11 | Spec §19.2 kustomize example omitted the namespace values key → trips the shipped render guard | Example + note corrected (values namespace MUST match) |
+| 12 | Plans 2/4 instructed `git add` on gitignored Chart.lock/tarballs — the add fails; -f would reintroduce Wave 9 #4 churn | Steps rewritten: manifest only, disk-vendored via make deps |
+| 13 | Velero pre-upgrade backup hook documented in playbook + spec §13.1(a) but authored by NO plan — documented data protection did not exist | Job authored in Plan 6 Task 6 Step 2b (annotation fires; backup.enabled values key gates existence) |
+| 14 | Spec §16.7 still taught the dropped `import-values:` pattern (Wave 8 #1) | Corrected to include-only + pointer to the §3 amendment |
+| 15 | Job-count expectation 3 → actually 4 (clusterprofile-detect hook also renders) | Expectation 4 |
+
 # Plan Defect Ledger — Helm Migration Docs
 
 Tracks every finding from the adversarial review rounds against the spec +
@@ -282,5 +304,5 @@ render-blocking and functional-dead paths are closed.
 | conftest placeholder sweep + PII rule lint | Plan 7 | Fails release branches carrying `PLACEHOLDER_*_SEALED_KID` |
 | PII smoke test K8s port (`tests/otel-collector/run-pii-smoke.sh` assumes docker) | Plan 7 | kind-based equivalent |
 | `genieai-common.fullname` collision check (release named `genieai` ⇒ `genieai-genieai-*`?) | Plan 1 execution | First `helm template` run must eyeball rendered names |
-| CNPG chart line verification (`~> 0.30.0` tracks operator 1.30) | Plan 2 execution | `helm search repo cloudnative-pg` at execution time; pin rationale: no assumption that chart minor == operator minor |
+| RESOLVED (Wave 16): live index shows 0.30.x does not exist — pin corrected to `~> 0.29.0`; re-verify at Plan 2 execution (`helm search repo cloudnative-pg`) |
 | ArangoDB `arangodb-single` service consumer URLs vs operator-created Service naming | Plan 5/6 execution | Chart-side name matches the Plan 2 CR (annotated in Plan 5 Task 11), but the kube-arangodb-created SERVICE name stays unverified until first live render |

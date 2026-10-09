@@ -85,13 +85,13 @@ genie-ai/
 | Helm dep | Repo | Version constraint | Default `condition:` | Pulled iff |
 |---|---|---|---|---|
 | `genieai-common` | local file:// | `~> 0.1.0` | unconditional | always |
-| `cloudnative-pg` (CNPG chart) | `https://cloudnative-pg.github.io/charts` | `~> 0.30.0` (exact chart line verified at adoption; the "chart minor == operator minor" assumption is FALSE) | `data.postgres.enabled` | keycloak-db |
+| `cloudnative-pg` (CNPG chart) | `https://cloudnative-pg.github.io/charts` | `~> 0.29.0` (exact chart line verified at adoption; the "chart minor == operator minor" assumption is FALSE) | `data.postgres.enabled` | keycloak-db |
 | `kube-arangodb` | `https://arangodb.github.io/kube-arangodb` | `~> 1.4.5` | `data.arangodb.enabled` | always |
 | _(keycloak-operator — see note)_ | **cluster bootstrap prerequisite** (OLM / static YAML per keycloak.org) | operator 26.x | — | NOT a chart dep |
 | `external-secrets-operator` (ESO) | `https://charts.external-secrets.io` | `~> 0.10.0` | `secrets.eso.enabled` | when `pluggable.secretsBackend: externalSecrets` |
 | `sealed-secrets` | `https://bitnami.github.io/sealed-secrets` (NOT the deprecated `charts.bitnami.com/bitnami/sealed-secrets`) | `~> 2.20.0` (corresponds to controller v0.40.0+) | `secrets.sealedSecrets.enabled` | always (default backend) |
-| `victoria-metrics-operator` | `https://victoriametrics.github.io/helm-charts` | `~> 0.45.0` | `observability.enabled` | single chart provides ALL CRDs: VMSingle/VMCluster, VLSingle, VTSingle, VMAgent, VMServiceScrape, VMRule… (verified against the repo index — no separate VL/VT operator charts exist) |
-| `opentelemetry-operator` | `https://open-telemetry.github.io/opentelemetry-helm-charts` | `~> 0.50.0` | `observability.otel.enabled` | profile-gated |
+| `victoria-metrics-operator` | `https://victoriametrics.github.io/helm-charts` | `~> 0.68.0` | `observability.enabled` | single chart provides ALL CRDs: VMSingle/VMCluster, VLSingle, VTSingle, VMAgent, VMServiceScrape, VMRule… (verified against the repo index — no separate VL/VT operator charts exist) |
+| `opentelemetry-operator` | `https://open-telemetry.github.io/opentelemetry-helm-charts` | `~> 0.124.0` | `observability.otel.enabled` | profile-gated |
 | _(gpu-operator — see note)_ | **cluster bootstrap prerequisite** (OLM / NVIDIA static YAML per nvidia docs) | v25.x | — | NOT a chart dep (audit decision 8, 2026-10-08 — keycloak-operator precedent); the chart only schedules onto GPU nodes (`ai.gpu.*`) |
 | `cert-manager` | `https://charts.jetstack.io` | `~> 1.21.0` | `certManager.enabled` | if `ingress.tls.issuer: cert-manager` |
 | `envoy-gateway` | `https://gateway.envoyproxy.io/charts` (or local OCI) | `~> 1.9.0` | `ingress.className: envoy` | if Envoy Gateway chosen |
@@ -744,7 +744,7 @@ These are deliberate unknowns NOT blocking v1, but documented for follow-up:
 4. **Connection pooling (PgBouncer)**: CloudNativePG has native support; whether `services.backend` connects via pooler or direct is a v1.1 decision.
 5. **Sticky dev workflow**: out-of-tree dev loop (helm-up + exec into container) is not specified. Solve during Day-1 onboarding.
 6. **Vault audit logging** (V4 from review): if externalSecrets is the default backend, Vault's audit device must be enabled for compliance; cross-reference in `docs/charts/secrets-audit-compliance.md`. P2.
-7. **Library-chart vs `_helpers.tpl` naming** (Y1 from review): `genieai-common` IS conceptually the umbrella's `_helpers.tpl` plus standalone templates. Clarify in chart README: "library chart contains templates and exports them via `import-values:`, helpers.tpl contains labels/selectors/name conventions." P2 doc clarification.
+7. **Library-chart vs `_helpers.tpl` naming** (Y1 from review): `genieai-common` IS conceptually the umbrella's `_helpers.tpl` plus standalone templates. Clarify in chart README: "library chart contains template definitions; consuming charts call them via `{{ include }}` — NO `import-values:` (dropped: Helm 4 injects the reserved `global` key into subchart values, which the library schema rejects; see §3 amendment), and helpers.tpl contains labels/selectors/name conventions." P2 doc clarification.
 8. **Service template generator** (Y3 from review): 28 services × 4 templates = ~112 files. v1 ships them hand-authored for transparency; **v1.1 introduces `make render-services` from a single service-list YAML**. P2 deferred.
 
 ## 17. What lands in v1.0 (this epic)
@@ -813,9 +813,15 @@ helmCharts:
 namespace: genieai-dev
 ```
 
+The matching `values-override.yaml` MUST set `namespace: genieai-dev` —
+the chart fails the render when the values namespace diverges from the
+release namespace (guard shipped with the foundation).
+
 ```yaml
 # deploy/environments/dev/values-override.yaml
 # Overrides only — inherits all defaults from charts/genieai-umbrella/values.yaml
+# namespace MUST match the kustomization's release namespace (render guard).
+namespace: genieai-dev
 replicas:
   backend: 1
 ingress:
@@ -877,6 +883,10 @@ spec:
       name: genieai-dev-backend
       namespace: genieai-dev
 ```
+
+The matching `values-override.yaml` MUST set `namespace: genieai-dev` —
+the chart fails the render when the values namespace diverges from the
+release namespace (guard shipped with the foundation).
 
 **The chart does NOT install Flux** (sovereign deploys that cannot tolerate an additional in-cluster controller can use KAS alone with GitLab CI pushes). Flux is a cluster-bootstrap concern; the chart ships the `Kustomization` CR manifests as **documentation only**. Operators install Flux once per cluster, separately.
 

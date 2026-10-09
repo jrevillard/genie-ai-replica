@@ -500,3 +500,128 @@ curation-time suggestions only ever propose what inheritance does not
 already cover. Needs its own story: KH taxonomy schema for boundary
 statements + inheritance at head build + migration note for existing
 heads. DECISION REQUESTED alongside the wave-3 ship.
+
+## 15. SHIPPED-IN-WIP (2026-10-09 — 1-8d teaching-loop guardrails)
+
+Status: backend COMMITTED on `fix/story-1-8b-routing-gate-v2` —
+130a99e (guardrail + positive-side advice + frontmatter history/revert
++ suite staleness snapshot) and 2f1cbd763 (veto-impact simulation in the
+guardrail + always-on max_tag attribution). Frontend loop remaining
+(§15.6). This section is the post-mortem and design record for David's
+three requirements: (1) every cycle improves, (2) unlimited cycles,
+(3) revert in the Lab.
+
+### 15.1 The poisoning post-mortem (2026-10-09)
+
+Three teaching-loop cycles applied LLM suggestions that included
+**'lung-cancer' — the repo's OWN entity tag** — as a FORBIDDEN tag. The
+prompt-only constraint ("do not propose the repo's own topics/entities")
+failed the way prompt-only constraints fail: the model still proposed the
+subject, and the add-all applied it. The self-forbidding tag turned the
+0.55 veto bar against the repo's own corpus:
+
+- positives collapsed **7/8 → 2/8** across the three cycles;
+- negatives hit **20/20** — not because routing improved but by
+  OVER-SUPPRESSION (a head that vetoes its own subject suppresses
+  everything);
+- the Explain button — gated on NEGATIVE failures only — disappeared
+  exactly when the loop was most needed: the moment negatives looked
+  "perfect", the advisory loop went dark.
+
+David's three properties are the direct counter-design. (3) was proven by
+hand first: the manual frontmatter restore that fixed the poisoning did
+exactly what the Revert button now does — and surfaced the `_approved`
+legacy-stamp 400 plus a stale-`updated_at` cosmetic, both fixed on the
+way. The forbidden-tag ceiling was also raised 6 → 24 (47171229) — the
+teaching loop's add-all on a repo that already held 5 tags was a
+guaranteed 400.
+
+### 15.2 The mechanical suggestion guardrail
+
+`guardSuggestions(repoId, candidates, opts)`
+(head-test-service.js) — every suggested forbidden tag is embedded
+(`frontmatterService.teiEmbed`) and screened BEFORE it can reach the UI
+chips. A screened-out proposal NEVER becomes a chip:
+
+| Check | Bar (env knob) | Rejection reason |
+|---|---|---|
+| Self-subject | cosine vs ANY topic/entity/keyword head vector ≥ `OKF_GUARD_SELF_SUBJECT` (0.55) | "too close to the repository's own subject (similarity X >= 0.55)" |
+| Veto-impact simulation (2f1cbd763) | cosine vs any of the run's own POSITIVE query vectors ≥ `ROUTE_FORBIDDEN_TAG_MAX` (0.55) | "would suppress N positives (e.g. \"...\")" — the kill list |
+| Near-duplicate | cosine vs an existing forbidden vector ≥ `OKF_GUARD_DUPLICATE_FORBIDDEN` (0.9) | "already covered by an existing forbidden tag" |
+
+Embedding failure rejects fail-closed ("embedding failed — cannot verify
+against the repository scope"). Rejections are REPORTED, not swallowed:
+`explainRouting` returns `suggestion.{tags, rejected, source:
+'llm'|'guardrail'|'none', reason}` and `explainSuiteFailures` carries
+`rejected: [...]` beside `suggested_tags`, with `source: 'guardrail'`
+when everything was screened out. "Forbid your own subject" is now
+structurally impossible — a property of the pipeline, not a request to
+the model.
+
+New env plumbing (defaults live in the service; env template §15 block,
+compose pipes, ansible env.j2 parity, and config-validator pins all
+wired): `OKF_GUARD_SELF_SUBJECT` (0.55), `OKF_GUARD_DUPLICATE_FORBIDDEN`
+(0.9). The veto-impact bar deliberately REUSES the existing
+`ROUTE_FORBIDDEN_TAG_MAX` — the same bar the live gate vetoes at, so the
+simulation answers "what would the gate actually do".
+
+### 15.3 Advice for BOTH failure kinds (unlimited cycles)
+
+`explainSuiteFailures` response v2 — the loop now sees and names both
+directions of failure:
+
+- `removal_suggestions: [{tag, killed}]` — aggregated from the killed
+  positives' `tag_veto` attribution, worst first: "positives vetoed by
+  `cardiovascular-pharmacology` ×4, `clinical-protocols` ×3 → remove
+  these?" — the inverse of add, feeding one-click remove chips.
+- `positive_failures: {count, veto_counts, margin_killed}` — the
+  over-suppression signature as data.
+- `improvements` — explicit positive-improvement advice (David: "the
+  feedback needs to make recommendations to improve the pass level on
+  positives"): remove/narrow the vetoing tags; on margin kills, review
+  the forbidden tags nearest to the killed positives (their centroid
+  contribution suppresses in-scope queries).
+- `under_test.max_tag` now names the nearest forbidden tag on EVERY query
+  (not only vetoes) — margin-killed positives have attribution too.
+- the no-failure note says **failures-are-suppressed-positives** when
+  only positives failed ("no wrongly-claimed negatives — the failures
+  are suppressed positives (see removal_suggestions)") — the §15.1
+  Explain blind spot is closed at the API level.
+- every explain run is PERSISTED as a `kind: 'explain'` doc in
+  `okf_head_test_runs` (actor + timestamp + full payload) — cycles are
+  auditable after the fact.
+
+### 15.4 frontmatter_history + revert in the Lab
+
+`repository-service.update()` snapshots EVERY frontmatter save into the
+bounded `doc.frontmatter_history` (last 10, `{saved_at, actor, shape}`);
+`frontmatterHistory(repo_id)` reads it; `revertFrontmatter(repo_id,
+saved_at, actor)` restores a prior shape and RE-ENTERS `update()`, so
+reverts are themselves snapshotted (revert-of-revert works, the history
+never lies). Routes: `GET
+/api/okf/repos/:repo_id/frontmatter/history` (read scope) and `POST
+/api/okf/repos/:repo_id/frontmatter/revert {saved_at}` (admin scope).
+The Lab's Revert-tags panel lists the saves; one click restores + offers
+a head rebuild (a stale head would keep vetoing until rebuilt).
+
+### 15.5 forbidden_snapshot (cycle staleness)
+
+`generateSuite` stores `forbidden_snapshot` — the forbidden list at
+generation time — on the suite payload, so a suite re-run against a
+CHANGED forbidden list is detectably stale (the forbidden-derived rows
+describe a head that no longer exists). The UI staleness flag and the
+positive-regression tripwire (re-run vs previous run, red flag with
+per-tag attribution + revert prompt) are the remaining frontend half —
+the data they need is now in the payload.
+
+### 15.6 Remaining (frontend) for 1-8d
+
+- Guardrail reporting in HeadTestDialog: render `rejected` reasons,
+  `source: 'guardrail'` states, remove chips from
+  `removal_suggestions`.
+- Revert-tags panel from `frontmatter_history` + rebuild offer.
+- Positive-regression tripwire UI + suite-staleness flag from
+  `forbidden_snapshot`.
+- Cycle discipline: re-run-same-suite as the primary action;
+  regeneration = explicit new benchmark identity; consolidation guidance
+  when the 24-tag ceiling is hit.

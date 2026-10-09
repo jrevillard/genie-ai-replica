@@ -5,7 +5,10 @@
 > gate v2 live on the local build after the 2026-10-09 validation
 > cycle (§8). David: "testing is much better." Remaining gap =
 > claim-side teaching + near-miss negatives → spun into 1-8c (backend
-> committed c87b5e2dc).** Spec: §13-14 of
+> committed c87b5e2dc). The first LIVE teaching-loop cycles then
+> poisoned a repo through the new advice flow (self-forbidding tag;
+> §9) — remediated by 1-8d teaching-loop guardrails (backend committed
+> 130a99e + 2f1cbd763, spec §15).** Spec: §13-15 of
 > `spec-1-8-head-tester.md`. Predecessor: 1-8a (merged 2e9be556d,
 > squash a1046629c). MR → feat/okf-server pending (orchestrator).
 
@@ -186,3 +189,54 @@ teach panels cover veto + floor only; nothing renders for
 run), the near-miss negative class, and per-class count controls —
 backend committed c87b5e2dc; the in-Lab tag-edit → rebuild → re-run
 loop is the remaining frontend work. Spec §14.
+
+## 9. First live teaching-loop cycles — the poisoning, and the 1-8d remediation (2026-10-09)
+
+The gate itself held (§8), but the TEACHING LOOP built on it (1-8c)
+failed in live use within its first three cycles — the failure mode is
+recorded here because it bounds this story's claim: the three-condition
+gate answers correctly at every instant; it cannot stop a curator from
+redefining the repo's scope through the advice flow.
+
+**Cycle outcome:** the explain LLM proposed 'lung-cancer' — the repo's
+OWN entity tag — as a forbidden tag, three add-all cycles applied it,
+and the 0.55 veto bar turned against the repo's own corpus: positives
+collapsed **7/8 → 2/8** while negatives "improved" to **20/20** by
+over-suppression (a head that vetoes its own subject suppresses
+everything). The Explain button — gated on negative failures only —
+disappeared exactly when the loop was most needed: the moment negatives
+looked "perfect", the advisory loop went dark. Recovery was a MANUAL
+frontmatter restore (which is what 1-8d's Revert button now does).
+
+**Remediation — 1-8d teaching-loop guardrails** (backend committed
+130a99e + 2f1cbd763 on this branch; spec §15):
+
+1. **Mechanical suggestion guardrail** — `guardSuggestions` embeds every
+   proposed forbidden tag and rejects it when cosine vs ANY
+   topic/entity/keyword head vector ≥ `OKF_GUARD_SELF_SUBJECT` (0.55) or
+   vs an existing forbidden vector ≥ `OKF_GUARD_DUPLICATE_FORBIDDEN`
+   (0.9); 2f1cbd763 adds veto-impact simulation against the run's own
+   positive queries (a candidate that would suppress even one gold
+   positive is rejected with the kill list). Rejections are reported
+   with reasons; a screened-out proposal never reaches the UI chips.
+   Self-forbidding suggestions are structurally impossible, not a
+   prompt request.
+2. **Advice for BOTH failure kinds** — `explainSuiteFailures` v2:
+   `removal_suggestions` [{tag, killed}] from the killed positives'
+   `tag_veto` attribution (remove-side advice), `positive_failures`
+   {count, veto_counts, margin_killed}, explicit `improvements` advice,
+   and a failures-are-suppressed-positives note when only positives
+   failed — the Explain blind spot is closed. Every explain run is
+   persisted (`kind: 'explain'`) so cycles are auditable.
+3. **Revert in the Lab** — every frontmatter save snapshots into bounded
+   `frontmatter_history` (10) on the repo doc; `GET .../frontmatter/history`
+   + `POST .../frontmatter/revert` (re-enters update(), so
+   revert-of-revert works). Plus `forbidden_snapshot` on every suite
+   (cycle-staleness detection) and the forbidden-tag ceiling raised
+   6 → 24 (47171229 — add-all on a 5-tag repo was a guaranteed 400).
+
+Requirement status vs David's three properties: (1) every cycle
+improves — enforced by the guardrail + tripwire data now in the
+payload; (2) unlimited cycles — both failure kinds now advise, failures
+cannot hide; (3) revert in the Lab — history/revert shipped backend,
+panel UI remaining. 1-8d frontend loop remaining (spec §15.6).

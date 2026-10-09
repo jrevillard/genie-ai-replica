@@ -28,12 +28,44 @@ spec:
     runAsUser: 65534
     seccompProfile:
       type: RuntimeDefault
+  # `registry.k8s.io/kubectl` is distroless (no /bin/sh), so this Pod
+  # ships kubectl via an init container that downloads the static binary
+  # into the shared `tools` emptyDir. The main container is alpine
+  # (sh is built in); kubectl is picked up via the PATH env, which
+  # prepends /tools/bin.
+  volumes:
+    - name: tools
+      emptyDir: {}
+  initContainers:
+    - name: tools
+      # curlimages/curl: sh + curl in one tiny image, no apk layer.
+      # Pulls the upstream kubectl release binary and makes it executable
+      # in /tools/bin for the main container.
+      image: docker.io/curlimages/curl:8.10.1
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+        capabilities:
+          drop:
+            - ALL
+      volumeMounts:
+        - name: tools
+          mountPath: /tools
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          mkdir -p /tools/bin
+          curl -fsSL https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl -o /tools/bin/kubectl
+          chmod +x /tools/bin/kubectl
   containers:
     - name: test
-      # registry.k8s.io/kubectl: kubectl is NOT in alpine base (the
-      # bitnami/kubectl version tags were purged from Docker Hub). SA =
-      # the hook-owned dep-check SA (read-only ClusterRole on namespaces).
-      image: "{{ .Values.global.imageRegistry | default "registry.k8s.io" }}/kubectl:v1.33.0"
+      # SA = the hook-owned dep-check SA (read-only ClusterRole on namespaces).
+      image: "{{ .Values.global.imageRegistry | default "docker.io" }}/library/alpine:3.20"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false
@@ -44,8 +76,15 @@ spec:
           drop:
             - ALL
       env:
+        - name: PATH
+          # Prepend /tools/bin so kubectl (downloaded by the `tools` init
+          # container) is discoverable by the script.
+          value: /tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         - name: EXPECTED_PROFILE
           value: {{ .Values.clusterProfile | default "dev" | quote }}
+      volumeMounts:
+        - name: tools
+          mountPath: /tools
       command:
         - /bin/sh
         - -c
@@ -104,13 +143,20 @@ spec:
     runAsUser: 65534
     seccompProfile:
       type: RuntimeDefault
-  containers:
-    - name: t
-      # registry.k8s.io/kubectl: kubectl is NOT in alpine base (the
-      # bitnami/kubectl version tags were purged from Docker Hub). SA = the
-      # hook-owned dep-check SA (persists between hook fires via
-      # before-hook-creation).
-      image: "{{ .Values.global.imageRegistry | default "registry.k8s.io" }}/kubectl:v1.33.0"
+  # `registry.k8s.io/kubectl` is distroless (no /bin/sh), so this Pod
+  # ships kubectl via an init container that downloads the static binary
+  # into the shared `tools` emptyDir. The main container is alpine
+  # (sh is built in); kubectl is picked up via the PATH env, which
+  # prepends /tools/bin.
+  volumes:
+    - name: tools
+      emptyDir: {}
+  initContainers:
+    - name: tools
+      # curlimages/curl: sh + curl in one tiny image, no apk layer.
+      # Pulls the upstream kubectl release binary and makes it executable
+      # in /tools/bin for the main container.
+      image: docker.io/curlimages/curl:8.10.1
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false
@@ -120,6 +166,39 @@ spec:
         capabilities:
           drop:
             - ALL
+      volumeMounts:
+        - name: tools
+          mountPath: /tools
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          mkdir -p /tools/bin
+          curl -fsSL https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl -o /tools/bin/kubectl
+          chmod +x /tools/bin/kubectl
+  containers:
+    - name: t
+      # SA = the hook-owned dep-check SA (persists between hook fires via
+      # before-hook-creation).
+      image: "{{ .Values.global.imageRegistry | default "docker.io" }}/library/alpine:3.20"
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+        capabilities:
+          drop:
+            - ALL
+      env:
+        - name: PATH
+          # Prepend /tools/bin so kubectl (downloaded by the `tools` init
+          # container) is discoverable by the script.
+          value: /tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      volumeMounts:
+        - name: tools
+          mountPath: /tools
       command:
         - /bin/sh
         - -c

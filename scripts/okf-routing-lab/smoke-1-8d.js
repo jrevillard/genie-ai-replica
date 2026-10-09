@@ -124,6 +124,22 @@ async function cleanup() {
   if (errs.length) console.error('[cleanup] FAILURES:', errs.join('; '));
 }
 
+// Story 1-8f2: generation is now 202 + poll — POST returns
+// {suite_key, status:'generating'} and the doc lands later.
+async function generateSuite(body) {
+  const start = j(await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite`, { token: USER_TOKEN, json: body }));
+  const key = start.suite_key;
+  if (!key || start.status !== 'generating') return start;
+  for (let i = 0; i < 60; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((r) => setTimeout(r, 2500));
+    // eslint-disable-next-line no-await-in-loop
+    const got = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`, { token: USER_TOKEN }));
+    if (got.suite_key) return got;
+  }
+  return { suite_key: key, status: 'timeout' };
+}
+
 (async () => {
   console.log('== Story 1-8d live smoke against ' + API_BASE + ' ==');
   // 1. master admin token
@@ -218,13 +234,8 @@ async function cleanup() {
     `tags=[${(ex.suggestion && ex.suggestion.tags || []).join(', ')}] source=${ex.suggestion && ex.suggestion.source}`
   );
 
-  // 5. suite generation with count controls + near-miss class
-  const gen = j(
-    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite`, {
-      token: USER_TOKEN,
-      json: { n_positive: 3, n_negative: 2, n_negative_random: 2, n_meta: 2, n_near_miss: 3 }
-    })
-  );
+  // 5. suite generation with count controls + near-miss class (1-8f2: async)
+  const gen = await generateSuite({ n_positive: 3, n_negative: 2, n_negative_random: 2, n_meta: 2, n_near_miss: 3 });
   SUITE_KEY = gen.suite_key;
   const negs = (gen.payload && gen.payload.negative) || [];
   const byCls = negs.reduce((m, q) => ((m[q.cls] = (m[q.cls] || 0) + 1), m), {});
@@ -413,12 +424,7 @@ async function cleanup() {
   console.log('[11] staleness snapshot');
   const repoNow = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}`, { token: USER_TOKEN }));
   const forbiddenNow = (repoNow.frontmatter && repoNow.frontmatter.forbidden) || [];
-  const gen2 = j(
-    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite`, {
-      token: USER_TOKEN,
-      json: { n_positive: 2, n_negative: 2, n_negative_random: 2, n_meta: 2, n_near_miss: 2 }
-    })
-  );
+  const gen2 = await generateSuite({ n_positive: 2, n_negative: 2, n_negative_random: 2, n_meta: 2, n_near_miss: 2 });
   SUITE_KEY = gen2.suite_key || SUITE_KEY;
   check(
     'staleness: payload.forbidden_snapshot equals current forbidden',

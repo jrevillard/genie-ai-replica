@@ -1474,7 +1474,7 @@ export default {
       none: 'Nenhuma versão criada ainda — a publicação cria a v1.',
       notServing: 'Não servindo',
       publish: 'Criar nova versão',
-      published: "Versão v{'{'}v{'}'} publicada — pacote {'{'}f{'}'} armazenado no repositório de documentos.",
+      published: 'Versão v{v} publicada — pacote {f} armazenado no repositório de documentos.',
       serving: 'Ingerido (servindo)',
       title: 'Versões'
     },
@@ -1494,7 +1494,7 @@ export default {
         note: 'As entidades sinalizadas fazem parte do conteúdo publicado. Se você já as revisou (por exemplo, detalhes de contato oficiais), reconheça e continue.'
       },
       publish: {
-        body: "Ao executar publish, cria-se a v{'{'}n{'}'} e armazena-se o pacote \"{'{'}file{'}'}\" no repositório de documentos, substituindo qualquer zip anterior. A nova versão não estará em serving até que você execute Ingest.",
+        body: 'Ao executar publish, cria-se a v{n} e armazena-se o pacote "{file}" no repositório de documentos, substituindo qualquer zip anterior. A nova versão não estará em serving até que você execute Ingest.',
         confirm: 'Publicar',
         inProgress: 'Publicando — exportando e transferindo o pacote…',
         title: 'Publicar'
@@ -1508,22 +1508,22 @@ export default {
         editor: 'Editor',
         wizard: 'Assistente'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{n}',
       versions: 'Versões',
       deleteLabel: 'Excluir',
       headTest: 'Routing Lab'
     },
     logs: {
-      labeled: "rotulados: {'{'}n{'}'}",
-      fallbacks: "fallbacks de LLM: {'{'}n{'}'}",
-      concepts: "conceitos: {'{'}n{'}'}",
+      labeled: 'rotulados: {n}',
+      fallbacks: 'fallbacks de LLM: {n}',
+      concepts: 'conceitos: {n}',
       col: {
         action: 'Ação',
         description: 'Descrição',
         user: 'Usuário',
         when: 'Data e hora'
       },
-      count: "{'{'}n{'}'} entradas",
+      count: '{n} entradas',
       loadFailed: 'Falha ao carregar o log de atividades.',
       none: 'Nenhuma atividade registrada ainda — as ações do repositório aparecem aqui conforme acontecem.',
       title: 'Registro de atividade'
@@ -1541,8 +1541,8 @@ export default {
       zoomIn: 'Aumentar zoom',
       zoomOut: 'Diminuir zoom',
       card: {
-        links: "{'{'}n{'}'} links",
-        chunks: "{'{'}n{'}'} blocos",
+        links: '{n} links',
+        chunks: '{n} blocos',
         failed: 'indexação falhou',
         flagged: 'entidades sinalizadas',
         hub: 'Núcleo do índice',
@@ -1614,8 +1614,8 @@ export default {
           problem: 'O problema',
           noError: 'Marcado como falho sem motivo registrado.',
           fixLabel: 'Como corrigir',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               'O worker de ingest parou de esperar dentro da sua janela de carência (a drenagem estava saturada) — o conteúdo está intacto. Correção: edite levemente este arquivo e salve para reenfileirá-lo, ou faça retract e re-ingest do repositório inteiro.',
@@ -1697,9 +1697,9 @@ export default {
       saveFailed: 'Falha ao salvar — tente novamente',
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: 'Ocultar todo o conteúdo sinalizado',
           remove: 'Remover todo o conteúdo sinalizado',
@@ -1712,7 +1712,7 @@ export default {
           accept:
             'Todas as entidades sinalizadas são marcadas como revisadas e mantidas — elas não serão sinalizadas novamente, a menos que você refaça a verificação.'
         },
-        scope: "Conceitos afetados: {'{'}n{'}'}.",
+        scope: 'Conceitos afetados: {n}.',
         confirm: 'Aplicar',
         failed: 'A ação de PII em massa falhou — tente novamente.'
       },
@@ -1731,11 +1731,11 @@ export default {
       bulk: {
         body: 'Cada repositório passa pela verificação completa de controle (revisão de PII, indexação, conformidade) ao ser publicado. Resultados por repositório:',
         pending: 'Confirme para executar publish nos repositórios selecionados.',
-        publishConfirm: "Publicar {'{'}n{'}'}",
+        publishConfirm: 'Publicar {n}',
         title: 'Publicar repositórios selecionados'
       },
       card: {
-        actions: "Ações para {'{'}name{'}'}",
+        actions: 'Ações para {name}',
         building: 'Construindo…',
         buildingAria: 'Em construção — o arquivo de origem ainda está sendo processado',
         delete: 'Excluir',
@@ -1761,23 +1761,23 @@ export default {
         note: 'As entidades sinalizadas fazem parte do conteúdo publicado. Se você já as revisou (por exemplo, detalhes de contato oficiais), reconheça e continue.'
       },
       publish: {
-        body: "Ao executar publish, cria-se a v{'{'}n{'}'} e armazena-se o pacote \"{'{'}file{'}'}\" no repositório de documentos, substituindo o zip anterior. A nova versão não estará em serving até que você execute Ingest.",
+        body: 'Ao executar publish, cria-se a v{n} e armazena-se o pacote "{file}" no repositório de documentos, substituindo o zip anterior. A nova versão não estará em serving até que você execute Ingest.',
         confirm: 'Publicar',
         title: 'Publicar'
       },
       search: 'Buscar...',
-      select: "Selecionar {'{'}name{'}'} para publicação em lote",
+      select: 'Selecionar {name} para publicação em lote',
       stage: {
         drainFailed: 'Falha em ingest',
-        queueBehind: "{'{'}n{'}'} na fila · ingest em {'{'}m{'}'} repo(s)",
+        queueBehind: '{n} na fila · ingest em {m} repo(s)',
         redraining: 'Re-drenando…',
         building: 'Construindo…',
         draft: 'Rascunho',
         inReview: 'Em revisão',
-        ingested: "Ingest concluído na v{'{'}n{'}'}",
-        published: "Publicada v{'{'}n{'}'}",
+        ingested: 'Ingest concluído na v{n}',
+        published: 'Publicada v{n}',
         retracted: 'Retraído',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: 'Repositórios',
       topics: 'tópicos',
@@ -1803,7 +1803,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} adicionais",
+        more: '+ {n} adicionais',
         fixPath: 'Execute ingest novamente para tentar de novo: retract → criar versão → ingest.'
       },
       curation: {
@@ -1817,9 +1817,9 @@ export default {
       bytes: 'Fonte lida',
       conceptsIndexed: 'conceitos indexados',
       elapsed: {
-        hr: "Iniciado há {'{'}n{'}'} h",
+        hr: 'Iniciado há {n} h',
         lt1: 'Iniciado há menos de um minuto',
-        min: "Iniciado há {'{'}n{'}'} min"
+        min: 'Iniciado há {n} min'
       },
       hint: {
         import: 'O repositório permanece em Import até que a conversão do arquivo seja concluída.',
@@ -1862,7 +1862,7 @@ export default {
     },
     create: {
       zipOnly: 'Escolha um arquivo de pacote .zip.',
-      stagedFile: "Preparado: {'{'}name{'}'}",
+      stagedFile: 'Preparado: {name}',
       staged: 'Pacote preparado — clique em Criar Repositório para iniciar a importação.',
       openExisting: 'Abrir repositório existente',
       name: 'Nome do repositório',
@@ -2083,7 +2083,7 @@ export default {
       },
       stage: {
         inReview: 'Em review',
-        stepOf: "Etapa {'{'}n{'}'} de 10",
+        stepOf: 'Etapa {n} de 10',
         draft: 'Rascunho'
       },
       dashboard: {
@@ -2096,7 +2096,7 @@ export default {
         stale: 'desatualizado',
         stage: {
           inReview: 'Em review',
-          stepOf: "Etapa {'{'}n{'}'} de 10",
+          stepOf: 'Etapa {n} de 10',
           draft: 'Rascunho'
         },
         bulk: {
@@ -2207,11 +2207,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2435,16 +2435,16 @@ export default {
     },
     validation: {
       frozen:
-        "Conteúdo congelado em {'{'}v{'}'} — visualização somente leitura. Execute retract na versão em serving para fazer alterações.",
+        'Conteúdo congelado em {v} — visualização somente leitura. Execute retract na versão em serving para fazer alterações.',
       none: 'Nenhum',
       expertHint:
         'Mude para o modo Especialista para ver o JSON de validação bruto, filtrar por gravidade e substituir verificações.',
       headline: {
-        blockers: "{'{'}n{'}'} problema(s) bloqueante(s) — corrija antes de entregar o repositório",
-        warnings: "{'{'}n{'}'} item(ns) precisam da sua revisão",
+        blockers: '{n} problema(s) bloqueante(s) — corrija antes de entregar o repositório',
+        warnings: '{n} item(ns) precisam da sua revisão',
         ok: 'Tudo certo. Nada a corrigir.'
       },
-      summary: "{'{'}clean{'}'} limpo(s) · {'{'}warnings{'}'} precisa(m) de revisão · {'{'}blockers{'}'} impeditivo(s)",
+      summary: '{clean} limpo(s) · {warnings} precisa(m) de revisão · {blockers} impeditivo(s)',
       formatter: {
         notReady: 'O formatador virá na História 4.2b.'
       },
@@ -2478,8 +2478,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2493,12 +2493,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2515,7 +2515,7 @@ export default {
     },
     pii: {
       panel: 'Entidades sinalizadas',
-      nFlagged: "{'{'}n{'}'} encontrada(s)",
+      nFlagged: '{n} encontrada(s)',
       rescan: 'Examinar novamente',
       scanning: 'A examinar…',
       clean: 'Nenhuma entidade sinalizada — este concept está limpo.',
@@ -2595,7 +2595,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)",
+      total: '{n} document(s)',
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2604,12 +2604,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
@@ -2742,8 +2742,8 @@ export default {
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+          'O LLM escreve as consultas em lotes de 30 por classe — um pedido grande (100+) leva alguns minutos. A suíte aparece aqui e em suítes salvas ao terminar.',
+        generating: 'Gerando em lotes — pedidos grandes levam alguns minutos…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -2822,7 +2822,8 @@ export default {
         applyNoSuite: 'Tags salvas e head reconstruído — gere uma suíte e execute tudo para ver o efeito.',
         suiteLoad: 'Não foi possível carregar a suíte',
         suiteUpdate: 'Não foi possível atualizar a suíte',
-        suiteRename: 'Não foi possível renomear a suíte'
+        suiteRename: 'Não foi possível renomear a suíte',
+        generateTimeout: 'A suíte está demorando muito — pode aparecer em suítes salvas; verifique em um minuto.'
       },
       footer: {
         unpublish: 'Unpublish to review'

@@ -1468,7 +1468,7 @@ export default {
       none: 'Версии пока не созданы — публикация создаст v1.',
       notServing: 'Не обслуживается',
       publish: 'Создать новую версию',
-      published: "Версия v{'{'}v{'}'} опубликована — пакет {'{'}f{'}'} сохранен в репозитории документов.",
+      published: 'Версия v{v} опубликована — пакет {f} сохранен в репозитории документов.',
       serving: 'Поглощено (обслуживается)',
       title: 'Версии'
     },
@@ -1488,7 +1488,7 @@ export default {
         note: 'Отмеченные сущности входят в состав публикуемого контента. Если вы проверили их (например, официальные контакты), подтвердите и продолжайте.'
       },
       publish: {
-        body: "При выполнении publish создается версия v{'{'}n{'}'}, а пакет \"{'{'}file{'}'}\" сохраняется в репозитории документов, заменяя любой предыдущий zip. Новая версия не перейдет в serving, пока вы не выполните Ingest.",
+        body: 'При выполнении publish создается версия v{n}, а пакет "{file}" сохраняется в репозитории документов, заменяя любой предыдущий zip. Новая версия не перейдет в serving, пока вы не выполните Ingest.',
         confirm: 'Опубликовать',
         inProgress: 'Публикация — экспорт и передача пакета…',
         title: 'Опубликовать'
@@ -1502,22 +1502,22 @@ export default {
         editor: 'Редактор',
         wizard: 'Мастер'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{n}',
       versions: 'Версии',
       deleteLabel: 'Удалить',
       headTest: 'Routing Lab'
     },
     logs: {
-      labeled: "с метками: {'{'}n{'}'}",
-      fallbacks: "резервных вызовов LLM: {'{'}n{'}'}",
-      concepts: "концептов: {'{'}n{'}'}",
+      labeled: 'с метками: {n}',
+      fallbacks: 'резервных вызовов LLM: {n}',
+      concepts: 'концептов: {n}',
       col: {
         action: 'Действие',
         description: 'Описание',
         user: 'Пользователь',
         when: 'Дата и время'
       },
-      count: "{'{'}n{'}'} записей",
+      count: '{n} записей',
       loadFailed: 'Не удалось загрузить журнал активности.',
       none: 'Активность пока не зафиксирована — действия с репозиторием появятся здесь по мере их выполнения.',
       title: 'Журнал активности'
@@ -1535,8 +1535,8 @@ export default {
       zoomIn: 'Увеличить',
       zoomOut: 'Уменьшить',
       card: {
-        links: "{'{'}n{'}'} связей",
-        chunks: "{'{'}n{'}'} фрагм.",
+        links: '{n} связей',
+        chunks: '{n} фрагм.',
         failed: 'ошибка индексации',
         flagged: 'отмеченные сущности',
         hub: 'Индексный узел',
@@ -1608,8 +1608,8 @@ export default {
           problem: 'Проблема',
           noError: 'Помечен как ошибочный без указания причины.',
           fixLabel: 'Как исправить',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               'Рабочий процесс загрузки прекратил ожидание в пределах льготного окна (слив был перегружен) — содержимое не повреждено. Исправление: внесите небольшое изменение в файл и сохраните — он встанет в очередь заново; либо отзовите и заново загрузите весь репозиторий.',
@@ -1691,9 +1691,9 @@ export default {
       saveFailed: 'Ошибка сохранения — повторите попытку',
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: 'Скрыть весь отмеченный контент',
           remove: 'Удалить весь отмеченный контент',
@@ -1706,7 +1706,7 @@ export default {
           accept:
             'Все отмеченные сущности помечены как проверенные и сохраненные — они не будут отмечены снова до повторного сканирования.'
         },
-        scope: "Затронуто концептов: {'{'}n{'}'}.",
+        scope: 'Затронуто концептов: {n}.',
         confirm: 'Применить',
         failed: 'Массовое действие над PII завершилось ошибкой — повторите попытку.'
       },
@@ -1725,11 +1725,11 @@ export default {
       bulk: {
         body: 'Каждый репозиторий проходит полную входную проверку (проверка PII, индексация, соответствие) при публикации. Результаты по репозиториям:',
         pending: 'Подтвердите, чтобы выполнить publish для выбранных репозиториев.',
-        publishConfirm: "Опубликовать {'{'}n{'}'}",
+        publishConfirm: 'Опубликовать {n}',
         title: 'Опубликовать выбранные репозитории'
       },
       card: {
-        actions: "Действия для {'{'}name{'}'}",
+        actions: 'Действия для {name}',
         building: 'Сборка…',
         buildingAria: 'Сборка — исходный файл все еще обрабатывается',
         delete: 'Удалить',
@@ -1755,23 +1755,23 @@ export default {
         note: 'Отмеченные сущности являются частью публикуемого контента. Если вы проверили их (например, официальные контактные данные), подтвердите и продолжайте.'
       },
       publish: {
-        body: "При выполнении publish создается версия v{'{'}n{'}'}, а пакет \"{'{'}file{'}'}\" сохраняется в репозитории документов, заменяя предыдущий zip. Новая версия не перейдет в serving, пока вы не выполните Ingest.",
+        body: 'При выполнении publish создается версия v{n}, а пакет "{file}" сохраняется в репозитории документов, заменяя предыдущий zip. Новая версия не перейдет в serving, пока вы не выполните Ingest.',
         confirm: 'Опубликовать',
         title: 'Опубликовать'
       },
       search: 'Поиск...',
-      select: "Выбрать {'{'}name{'}'} для массовой публикации",
+      select: 'Выбрать {name} для массовой публикации',
       stage: {
         drainFailed: 'Ошибка ingest',
-        queueBehind: "{'{'}n{'}'} в очереди · ingest в {'{'}m{'}'} репо(зиториях)",
+        queueBehind: '{n} в очереди · ingest в {m} репо(зиториях)',
         redraining: 'Повторная очистка…',
         building: 'Сборка…',
         draft: 'Черновик',
         inReview: 'На проверке',
-        ingested: "Выполнен ingest для v{'{'}n{'}'}",
-        published: "Опубликована v{'{'}n{'}'}",
+        ingested: 'Выполнен ingest для v{n}',
+        published: 'Опубликована v{n}',
         retracted: 'Отозвано',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: 'Репозитории',
       topics: 'темы',
@@ -1797,7 +1797,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ еще {'{'}n{'}'}",
+        more: '+ еще {n}',
         fixPath: 'Повторите ingest для новой попытки: retract → создать версию → ingest.'
       },
       curation: {
@@ -1811,9 +1811,9 @@ export default {
       bytes: 'Прочитано из источника',
       conceptsIndexed: 'концептов проиндексировано',
       elapsed: {
-        hr: "Запущено {'{'}n{'}'} ч назад",
+        hr: 'Запущено {n} ч назад',
         lt1: 'Запущено меньше минуты назад',
-        min: "Запущено {'{'}n{'}'} мин назад"
+        min: 'Запущено {n} мин назад'
       },
       hint: {
         import: 'Репозиторий остается в статусе Import до завершения конвертации файла.',
@@ -1856,7 +1856,7 @@ export default {
     },
     create: {
       zipOnly: 'Выберите файл пакета .zip.',
-      stagedFile: "Подготовлено: {'{'}name{'}'}",
+      stagedFile: 'Подготовлено: {name}',
       staged: 'Пакет подготовлен — нажмите «Создать репозиторий» для начала импорта.',
       openExisting: 'Открыть существующий репозиторий',
       name: 'Имя репозитория',
@@ -2078,7 +2078,7 @@ export default {
       },
       stage: {
         inReview: 'В процессе review',
-        stepOf: "Шаг {'{'}n{'}'} из 10",
+        stepOf: 'Шаг {n} из 10',
         draft: 'Черновик'
       },
       dashboard: {
@@ -2091,7 +2091,7 @@ export default {
         stale: 'устарело',
         stage: {
           inReview: 'В процессе review',
-          stepOf: "Шаг {'{'}n{'}'} из 10",
+          stepOf: 'Шаг {n} из 10',
           draft: 'Черновик'
         },
         bulk: {
@@ -2202,11 +2202,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2430,16 +2430,16 @@ export default {
     },
     validation: {
       frozen:
-        "Контент зафиксирован на версии {'{'}v{'}'} — режим только для чтения. Выполните retract для рабочей версии, чтобы внести изменения.",
+        'Контент зафиксирован на версии {v} — режим только для чтения. Выполните retract для рабочей версии, чтобы внести изменения.',
       none: 'Нет',
       expertHint:
         'Переключитесь в режим эксперта, чтобы просмотреть исходный JSON проверки, отфильтровать по серьезности и переопределить результаты.',
       headline: {
-        blockers: "{'{'}n{'}'} блокирующая(ие) проблема(ы) — устраните до передачи репозитория",
-        warnings: "Пунктов, требующих вашего внимания: {'{'}n{'}'}",
+        blockers: '{n} блокирующая(ие) проблема(ы) — устраните до передачи репозитория',
+        warnings: 'Пунктов, требующих вашего внимания: {n}',
         ok: 'Все в порядке. Замечаний нет.'
       },
-      summary: "{'{'}clean{'}'} без замечаний · {'{'}warnings{'}'} требуют проверки · {'{'}blockers{'}'} блокирующих",
+      summary: '{clean} без замечаний · {warnings} требуют проверки · {blockers} блокирующих',
       formatter: {
         notReady: 'Модуль форматирования появится в истории 4.2b.'
       },
@@ -2473,8 +2473,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2488,12 +2488,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2510,7 +2510,7 @@ export default {
     },
     pii: {
       panel: 'Отмеченные сущности',
-      nFlagged: "Найдено {'{'}n{'}'}",
+      nFlagged: 'Найдено {n}',
       rescan: 'Пересканировать',
       scanning: 'Сканирование…',
       clean: 'Отмеченных объектов нет — этот concept чист.',
@@ -2592,7 +2592,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)",
+      total: '{n} document(s)',
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2601,12 +2601,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
@@ -2738,8 +2738,8 @@ export default {
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+          'LLM пишет запросы пакетами по 30 на класс — большой запрос (100+) занимает несколько минут. Набор появится здесь и в сохранённых наборах по завершении.',
+        generating: 'Генерация пакетами — большие запросы занимают несколько минут…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -2817,7 +2817,9 @@ export default {
         applyNoSuite: 'Теги сохранены, head пересобран — создайте набор тестов и запустите его, чтобы увидеть эффект.',
         suiteLoad: 'Не удалось загрузить набор',
         suiteUpdate: 'Не удалось обновить набор',
-        suiteRename: 'Не удалось переименовать набор'
+        suiteRename: 'Не удалось переименовать набор',
+        generateTimeout:
+          'Набор создаётся необычно долго — возможно, он появится в сохранённых наборах; проверьте через минуту.'
       },
       footer: {
         unpublish: 'Unpublish to review'

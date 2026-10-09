@@ -1464,7 +1464,7 @@ export default {
       none: 'Bado hakuna matoleo yaliyotolewa — kufanya publish kunaunda v1.',
       notServing: 'Haitoi huduma',
       publish: 'Unda toleo jipya',
-      published: "Toleo la v{'{'}v{'}'} limechapishwa — kifurushi {'{'}f{'}'} kimehifadhiwa katika ghala la nyaraka.",
+      published: 'Toleo la v{v} limechapishwa — kifurushi {f} kimehifadhiwa katika ghala la nyaraka.',
       serving: 'Imeingizwa kupitia ingest (serving)',
       title: 'Matoleo'
     },
@@ -1484,7 +1484,7 @@ export default {
         note: 'Vitambulisho vilivyowekewa alama ni sehemu ya maudhui yaliyochapishwa. Ikiwa umeyakagua (mf. mawasiliano rasmi), yakubali na uendelee.'
       },
       publish: {
-        body: "Kufanya publish kunatoa v{'{'}n{'}'} na kuhifadhi kifurushi cha \"{'{'}file{'}'}\" katika ghala la nyaraka, kikichukua nafasi ya zip yoyote ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.",
+        body: 'Kufanya publish kunatoa v{n} na kuhifadhi kifurushi cha "{file}" katika ghala la nyaraka, kikichukua nafasi ya zip yoyote ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.',
         confirm: 'Chapisha',
         inProgress: 'Inachapishwa — kunasafirisha na kuhamisha kifurushi…',
         title: 'Chapisha'
@@ -1498,22 +1498,22 @@ export default {
         editor: 'Mhariri',
         wizard: 'Mchawi'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{n}',
       versions: 'Matoleo',
       deleteLabel: 'Futa',
       headTest: 'Routing Lab'
     },
     logs: {
-      labeled: "zilizowekewa lebo: {'{'}n{'}'}",
-      fallbacks: "mikakati mbadala ya LLM: {'{'}n{'}'}",
-      concepts: "dhana: {'{'}n{'}'}",
+      labeled: 'zilizowekewa lebo: {n}',
+      fallbacks: 'mikakati mbadala ya LLM: {n}',
+      concepts: 'dhana: {n}',
       col: {
         action: 'Kitendo',
         description: 'Maelezo',
         user: 'Mtumiaji',
         when: 'Tarehe na saa'
       },
-      count: "maingizo {'{'}n{'}'}",
+      count: 'maingizo {n}',
       loadFailed: 'Imeshindwa kupakia kumbukumbu ya shughuli.',
       none: 'Bado hakuna shughuli iliyorekodiwa — vitendo vya ghala vitaonekana hapa vinapotokea.',
       title: 'Kumbukumbu ya shughuli'
@@ -1531,8 +1531,8 @@ export default {
       zoomIn: 'Kuza',
       zoomOut: 'Punguza',
       card: {
-        links: "viungo {'{'}n{'}'}",
-        chunks: "vipande {'{'}n{'}'}",
+        links: 'viungo {n}',
+        chunks: 'vipande {n}',
         failed: 'uorodheshaji umeshindwa',
         flagged: 'vitambulisho vilivyowekewa alama',
         hub: 'Kitovu cha ielezo',
@@ -1603,8 +1603,8 @@ export default {
           problem: 'Tatizo',
           noError: 'Imeashiriwa kushindwa bila sababu iliyorekodiwa.',
           fixLabel: 'Jinsi ya kurekebisha',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               'Mfanyakazi wa ingest aliacha kusubiri ndani ya dirisha la rehema (mfuo ulikuwa umejaa) — maudhui yako salama. Kurekebisha: hariri faili hii kidogo kisha hifadhi ili iingizwe tena kwenye safu, au futa na ingiza upya hazina yote.',
@@ -1686,9 +1686,9 @@ export default {
       saveFailed: 'Uhifadhi umeshindwa — jaribu tena',
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: 'Kinga maelezo yote yaliyowekewa alama',
           remove: 'Ondoa maudhui yote yaliyowekewa alama',
@@ -1701,7 +1701,7 @@ export default {
           accept:
             'Vitambulisho vyote vilivyowekewa alama vinatiwa alama ya kukaguliwa na kuhifadhiwa — havitawekewa alama tena isipokuwa ukichanganua upya.'
         },
-        scope: "Dhana zilizoathirika: {'{'}n{'}'}.",
+        scope: 'Dhana zilizoathirika: {n}.',
         confirm: 'Tumia',
         failed: 'Kitendo cha pamoja cha PII kimeshindwa — jaribu tena.'
       },
@@ -1720,11 +1720,11 @@ export default {
       bulk: {
         body: 'Kila ghala huchapishwa kupitia ukaguzi kamili wa geti (ukaguzi wa PII, uorodheshaji, ulinganifu). Matokeo kwa kila ghala:',
         pending: 'Thibitisha kufanya publish kwa maghala yaliyochaguliwa.',
-        publishConfirm: "Phatlalatsa {'{'}n{'}'}",
+        publishConfirm: 'Phatlalatsa {n}',
         title: 'Chapisha maghala yaliyochaguliwa'
       },
       card: {
-        actions: "Vitendo vya {'{'}name{'}'}",
+        actions: 'Vitendo vya {name}',
         building: 'Inajenga…',
         buildingAria: 'Inajengwa — faili chanzo bado inachakatwa',
         delete: 'Futa',
@@ -1750,23 +1750,23 @@ export default {
         note: 'Vitambulisho vilivyowekewa alama ni sehemu ya maudhui yaliyochapishwa. Ikiwa umeyakagua (mf. mawasiliano rasmi), yakubali na uendelee.'
       },
       publish: {
-        body: "Kufanya publish kunatoa v{'{'}n{'}'} na kuhifadhi kifurushi cha \"{'{'}file{'}'}\" katika ghala la nyaraka, kikichukua nafasi ya zip ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.",
+        body: 'Kufanya publish kunatoa v{n} na kuhifadhi kifurushi cha "{file}" katika ghala la nyaraka, kikichukua nafasi ya zip ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.',
         confirm: 'Chapisha',
         title: 'Chapisha'
       },
       search: 'Tafuta...',
-      select: "Chagua {'{'}name{'}'} kwa uchapishaji wa pamoja",
+      select: 'Chagua {name} kwa uchapishaji wa pamoja',
       stage: {
         drainFailed: 'Ingest imeshindwa',
-        queueBehind: "{'{'}n{'}'} kwenye foleni · ingest katika {'{'}m{'}'} repo(s)",
+        queueBehind: '{n} kwenye foleni · ingest katika {m} repo(s)',
         redraining: 'Inakamua tena…',
         building: 'Inajenga…',
         draft: 'Rasimu',
         inReview: 'Inakaguliwa',
-        ingested: "Imeingizwa kupitia ingest v{'{'}n{'}'}",
-        published: "Imechapishwa v{'{'}n{'}'}",
+        ingested: 'Imeingizwa kupitia ingest v{n}',
+        published: 'Imechapishwa v{n}',
         retracted: 'Imebatilishwa',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: 'Hazina',
       topics: 'mada',
@@ -1792,7 +1792,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} zaidi",
+        more: '+ {n} zaidi',
         fixPath: 'Fanya ingest tena ili kurudia: retract → unda toleo → ingest.'
       },
       curation: {
@@ -1806,9 +1806,9 @@ export default {
       bytes: 'Chanzo kimesomwa',
       conceptsIndexed: 'dhana zilizoorodheshwa',
       elapsed: {
-        hr: "Ilianza saa {'{'}n{'}'} zilizopita",
+        hr: 'Ilianza saa {n} zilizopita',
         lt1: 'Ilianza chini ya dakika moja iliyopita',
-        min: "Ilianza dakika {'{'}n{'}'} zilizopita"
+        min: 'Ilianza dakika {n} zilizopita'
       },
       hint: {
         import: 'Ghala linabaki katika hatua ya Import hadi ubadilishaji wa faili utakapokamilika.',
@@ -1851,7 +1851,7 @@ export default {
     },
     create: {
       zipOnly: 'Chagua faili ya kifurushi cha .zip.',
-      stagedFile: "Kimeandaliwa: {'{'}name{'}'}",
+      stagedFile: 'Kimeandaliwa: {name}',
       staged: 'Kifurushi kimeandaliwa — bofya Unda Ghala ili kuanza uingizaji.',
       openExisting: 'Fungua ghala lililopo',
       name: 'Jina la ghala',
@@ -2071,7 +2071,7 @@ export default {
       },
       stage: {
         inReview: 'Iko kwenye review',
-        stepOf: "Hatua ya {'{'}n{'}'} kati ya 10",
+        stepOf: 'Hatua ya {n} kati ya 10',
         draft: 'Rasimu'
       },
       dashboard: {
@@ -2084,7 +2084,7 @@ export default {
         stale: 'yamepitwa na wakati',
         stage: {
           inReview: 'Iko kwenye review',
-          stepOf: "Hatua ya {'{'}n{'}'} kati ya 10",
+          stepOf: 'Hatua ya {n} kati ya 10',
           draft: 'Rasimu'
         },
         bulk: {
@@ -2195,11 +2195,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2423,16 +2423,16 @@ export default {
     },
     validation: {
       frozen:
-        "Maudhui yamesitishwa kwenye toleo la {'{'}v{'}'} — hakikisho la kusoma tu. Lifanyie toleo la serving hatua ya retract ili kufanya mabadiliko.",
+        'Maudhui yamesitishwa kwenye toleo la {v} — hakikisho la kusoma tu. Lifanyie toleo la serving hatua ya retract ili kufanya mabadiliko.',
       none: 'Hakuna',
       expertHint:
         'Badilisha hadi hali ya Utaalamu ili kuona JSON ghafi ya uhalalishaji, kuchuja kulingana na uzito, na kubatilisha ukaguzi.',
       headline: {
-        blockers: "{'{'}n{'}'} matatizo yanayozuia — yarekebishe kabla ya kuhamisha hifadhi",
-        warnings: "Mambo {'{'}n{'}'} yanahitaji uhakiki wako",
+        blockers: '{n} matatizo yanayozuia — yarekebishe kabla ya kuhamisha hifadhi',
+        warnings: 'Mambo {n} yanahitaji uhakiki wako',
         ok: 'Inaonekana vizuri. Hakuna cha kurekebisha.'
       },
-      summary: "{'{'}clean{'}'} ziko safi · {'{'}warnings{'}'} zinahitaji ukaguzi · {'{'}blockers{'}'} zinazuia",
+      summary: '{clean} ziko safi · {warnings} zinahitaji ukaguzi · {blockers} zinazuia',
       formatter: {
         notReady: 'Kipangilio kitaletwa katika Kisa cha 4.2b.'
       },
@@ -2466,8 +2466,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2481,12 +2481,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2503,7 +2503,7 @@ export default {
     },
     pii: {
       panel: 'Vitambulisho vilivyowekewa alama',
-      nFlagged: "{'{'}n{'}'} zimepatikana",
+      nFlagged: '{n} zimepatikana',
       rescan: 'Changanua tena',
       scanning: 'Inachanganua…',
       clean: 'Hakuna vipengele vilivyotiwa alama — concept hii ni safi.',
@@ -2583,7 +2583,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)",
+      total: '{n} document(s)',
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2592,12 +2592,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
@@ -2728,8 +2728,8 @@ export default {
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+          'LLM huandika maswali kwa vipande vya 30 kwa kila aina — ombi kubwa (100+) huchukua dakika chache. Kipima hutokea hapa na kwenye vilivyohifadhiwa ikikamilika.',
+        generating: 'Inatengeneza kwa vipande — maombi makubwa huchukua dakika…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -2808,7 +2808,9 @@ export default {
           'Tag zimehifadhiwa na head imejengwa upya — tengeneza kipima kisha endesha zote ili kuona matokeo.',
         suiteLoad: 'Imeshindikana kupakia kipima',
         suiteUpdate: 'Imeshindikana kusasisha kipima',
-        suiteRename: 'Imeshindikana kubadilisha jina la kipima'
+        suiteRename: 'Imeshindikana kubadilisha jina la kipima',
+        generateTimeout:
+          'Kipima kimechukua muda mrefu zaidi ya kawaida — kinaweza kutokea kwenye vilivyohifadhiwa; angalia baada ya dakika moja.'
       },
       footer: {
         unpublish: 'Unpublish to review'

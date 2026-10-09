@@ -1470,11 +1470,16 @@ async function routingExplain(req, res, next) {
 async function generateTestSuite(req, res, next) {
   try {
     const headSuiteService = require('../services/head-suite-service');
-    const suite = await headSuiteService.generateSuite(req.params.repo_id, req.body || {}, {
+    // Story 1-8f2 — 202 + poll. Large asks batch across minutes of LLM
+    // calls; the synchronous request died at the gateway (the suite saved
+    // at minute 5 while the browser gave up at 60s). The key is minted
+    // up-front; the UI polls GET /routing-testsuite/:key until it lands.
+    const { suite_key, done } = headSuiteService.beginSuiteGeneration(req.params.repo_id, req.body || {}, {
       authz: authzForService(req),
       actor: actorFrom(req)
     });
-    res.status(201).json(suite);
+    done.catch(() => {}); // the service logs; the poll surfaces the timeout
+    res.status(202).json({ suite_key, status: 'generating' });
   } catch (err) {
     next(err);
   }

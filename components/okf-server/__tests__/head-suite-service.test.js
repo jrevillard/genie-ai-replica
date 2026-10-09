@@ -1115,3 +1115,30 @@ describe('generateSuite batching + names (1-8f2)', () => {
     expect(renamed.name).toBe('Regressão NCD');
   });
 });
+
+describe('beginSuiteGeneration (1-8f2 — async 202 + poll)', () => {
+  it('mints the key up-front, lands the doc under it, and refuses a concurrent generate', async () => {
+    let release;
+    const gate = new Promise((r) => {
+      release = r;
+    });
+    __mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
+    frontmatterService.vllmChatCompletions.mockImplementation(async () => {
+      await gate; // hold the first generation IN FLIGHT
+      return llmResponse({ positive: [], negative: [], near_miss: [], off_domain: [], meta: [] });
+    });
+    const started = svc.beginSuiteGeneration('me', { n_positive: 2 }, {});
+    expect(started.suite_key).toMatch(/^s\d+-[0-9a-f]{6}$/);
+    // sync contract: the in-flight check throws before any async work
+    expect(() => svc.beginSuiteGeneration('me', {})).toThrow(
+      expect.objectContaining({ code: 'GENERATION_IN_FLIGHT', status: 409 })
+    );
+    release();
+    const suite = await started.done;
+    expect(suite._key).toBe(started.suite_key);
+    // the in-flight slot cleared — a fresh generation is accepted
+    const again = svc.beginSuiteGeneration('me', {}, {});
+    const done2 = await again.done;
+    expect(done2._key).toBe(again.suite_key);
+  });
+});

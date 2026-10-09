@@ -255,7 +255,6 @@ clusterProfile: dev  # set by helm install --set, not auto-detected at runtime
 ```
 
 When `clusterProfile: prod`:
-- `observability.enabled: true` (overrides default)
 - `data.postgres.instances: 3`
 - `data.arangodb.mode: cluster`
 - `keycloak.replicas: 2`
@@ -415,7 +414,7 @@ The mapping is **deliberately bijective**: each K8s `Secret` resource name maps 
 
 ## 10. Observability stack
 
-Profile-gated. **Default depends on clusterProfile** (§5.2): dev=off, staging=on, prod=on, sovereign=on. Operators can override per env by setting `observability.enabled` directly in `values-override.yaml`.
+Explicit values only. **`observability.enabled` defaults to `false` for every profile** — profile-driven auto-enablement was dropped (deliberate, observability plan round-7): overlays for staging/prod/sovereign set `observability.enabled: true` in their `values-override.yaml`, keeping the knob visible in per-env config instead of hidden in template logic.
 
 When on:
 - `vmoperator` deploys `VMSingle`/`VMCluster`, `VLSingle`, `VTSingle` (all single-node for dev; cluster for staging+).
@@ -440,8 +439,10 @@ The chart supports three install patterns:
 
 ```bash
 # Pattern A — full install on a greenfield cluster
-helm install genieai-prd ./genieai-umbrella -n genieai \
-  -f ./charts/genieai-umbrella/values.yaml \
+# --create-namespace is REQUIRED: the Namespace is a regular chart
+# resource and the release Secret + pre-install hooks need it present
+# before any chart resource applies.
+helm install prd charts/genieai-umbrella -n genieai --create-namespace \
   -f ./deploy/environments/prod/values-override.yaml
 
 # Pattern B — partial install during phased migration
@@ -452,8 +453,7 @@ helm install genieai-prd ./genieai-umbrella -n genieai \
 # `--no-hooks` flag (or, equivalently, disable the dep-check
 # ServiceAccount in the per-env values). Plan 2 Task 6 ships the
 # dep check; this flag is the documented escape hatch.
-helm install genieai-prd ./genieai-umbrella -n genieai \
-  -f ./charts/genieai-umbrella/values.yaml \
+helm install prd charts/genieai-umbrella -n genieai --create-namespace \
   -f ./deploy/environments/migration-step1.yaml \
   --set data.postgres.enabled=true \
   --set data.arangodb.enabled=false \
@@ -464,8 +464,7 @@ helm install genieai-prd ./genieai-umbrella -n genieai \
                # overlays do NOT use --no-hooks)
 
 # Pattern C — Swarm bridge (legacy coexistence)
-helm install genieai-edge ./genieai-umbrella -n genieai-edge \
-  -f ./charts/genieai-umbrella/values.yaml \
+helm install edge charts/genieai-umbrella -n genieai-edge --create-namespace \
   -f ./deploy/environments/sovereign/values-override.yaml \
   --set migration.swarmFallback=true \
   --set migration.swarmEndpoint=http://10.0.0.102:443 \
@@ -666,15 +665,14 @@ publish:charts:
   stage: charts:publish
   script:
     - helm package charts/genieai-umbrella -d .publish/
-    # CORRECTED (Wave 11): the documented env-var key reference is
-    # `--key env://COSIGN_KEY` (upstream cosign sign CLI docs) — cosign
-    # reads the PEM from the masked CI variable. The earlier
-    # `env:COSIGN_KEY=$COSIGN_KEY` form was fabricated: shell-expanded it
-    # is `env:COSIGN_KEY=<entire PEM>` — no recognized scheme, and it
-    # leaks the private key into the process list.
+    # PUSH FIRST, SIGN AFTER: cosign resolves the tag's digest from the
+    # registry — signing before the artifact exists fails with
+    # manifest-unknown. The env-var key reference is `--key env://COSIGN_KEY`
+    # (upstream cosign CLI docs): cosign reads the PEM from the masked CI
+    # variable, keeping key material out of argv and logs.
+    - helm push .publish/genieai-umbrella-${CHART_VERSION}.tgz oci://${CI_REGISTRY_IMAGE}/genieai
     - cosign sign --key env://COSIGN_KEY ${CI_REGISTRY_IMAGE}/genieai/genieai-umbrella:${CHART_VERSION}
     - cosign attest --predicate release-audit.json --type slsaprovenance ${CI_REGISTRY_IMAGE}/genieai/genieai-umbrella:${CHART_VERSION}
-    - helm push .publish/genieai-umbrella-${CHART_VERSION}.tgz oci://${CI_REGISTRY_IMAGE}/genieai
 ```
 
 Cluster-side enforcement via **Kyverno** policy (chart installs as part of bootstrap). **CORRECTED (code-review Wave 10):** the earlier "F3 fix" above inverted the truth — verified against the Kyverno CRD (`config/crds/kyverno/kyverno.io_policies.yaml`): the real field is `publicKeys` (12 occurrences, described as accepting directly-specified X.509 keys); `keyData` appears nowhere in the schema and would be silently pruned by structural-schema validation, killing verifyImages while appearing Enforced. We use `publicKeys:` with inline PEM:

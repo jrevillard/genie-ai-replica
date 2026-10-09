@@ -754,10 +754,16 @@ helm template test charts/genieai-umbrella -n genieai |   python3 -c "
 import sys, yaml
 docs = list(yaml.safe_load_all(sys.stdin))
 bad = []
-ALLOWED_PORTS = {'80', '9090', '3310'}          # 9090 GUARDRAIL; 3310 CLAMAV_PORT (doc-repo)
-ALLOWED_EPILOGUES = (':80', ':8529', ':8080', ':4318')  # svc :80; arango; keycloak; OTLP collector
+# Scoped to AI-tier Deployments ONLY (component label starts with 'ai-'):
+# this gate asserts AI-tier URL/port discipline, and a full-chart scan
+# would trip over every legitimate non-AI env var (CLAMAV_PORT=3310,
+# TRANSLATION_CACHE_PORT=6379, ...) — the recurring broken-gate pattern.
+ALLOWED_PORTS = {'80', '9090'}                          # 9090 = GUARDRAIL
+ALLOWED_EPILOGUES = (':80', ':8529', ':8080', ':4318')  # wrappers; arango; keycloak; OTLP collector
 for d in docs:
     if not d or d.get('kind') != 'Deployment': continue
+    comp = str(d['spec']['template']['metadata']['labels'].get('genieai.io/component', ''))
+    if not comp.startswith('ai-'): continue
     for c in d['spec']['template']['spec']['containers']:
         for e in c.get('env', []):
             n, v = e.get('name',''), str(e.get('value',''))
@@ -768,7 +774,7 @@ assert not bad, bad
 print('PASS')"
 ```
 
-Expected: prints `PASS` — every `*_PORT` is 80 (GUARDRAIL 9090 and CLAMAV_PORT 3310 excepted), every http endpoint ends in a sanctioned Service-DNS port (`:80` wrappers, `:8529` arango, `:8080` keycloak, `:4318` OTLP collector).
+Expected: prints `PASS` — in the AI tier every `*_PORT` is 80 (GUARDRAIL 9090 excepted), every http endpoint ends in a sanctioned Service-DNS port (`:80` wrappers, `:8529` arango, `:8080` keycloak, `:4318` OTLP collector).
 
 - [ ] **Step 7: ARANGO_PASSWORD secretKeyRef present on retriever + dataprep (C3 gate)**
 

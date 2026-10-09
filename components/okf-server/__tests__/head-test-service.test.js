@@ -398,47 +398,128 @@ describe('explainRouting (Story 1-8c — advice for a wrongly-claiming head)', (
     });
   }
 
-  it('a CLAIMING query gets LLM-suggested forbidden tags — kebab-normalized, already-forbidden deduped', async () => {
-    claimingRepoSetup();
+  // ─── Story 1-8d — the suggestion shape carries the guardrail. A 6-dim
+  // synthetic space gives every check its own axis so cosines are exact by
+  // construction: axis 0 = the query + head vector + topic vector (the
+  // OWN-SUBJECT axis), 1 = entity, 2 = keyword, 3 = the existing
+  // 'mental-health' forbidden vector, 4 = clean proposals, 5 = a gold
+  // positive query (veto-impact simulation). ───
+  const GDIM = 6;
+  const EXPLAIN_QUERY = 'hiv prevalence surveillance data';
+  const QUERY_VEC_KEY = 'Represent this sentence for searching relevant passages: ' + EXPLAIN_QUERY;
+
+  function guardRepoSetup(candidateVectors) {
+    const head = makeHead({
+      vector: unit(GDIM, 0),
+      topic: unit(GDIM, 0),
+      forbidden: unit(GDIM, 3),
+      forbiddenVectors: [{ tag: 'mental-health', vector: unit(GDIM, 3) }]
+    });
+    head.dim = GDIM;
+    head.per_field.entity = unit(GDIM, 1);
+    head.per_field.keyword = unit(GDIM, 2);
+    // Same mock serves BOTH embed calls: the test query (embedQuery) and
+    // the guardrail's candidate batch (guardSuggestions), keyed by text.
+    frontmatterService.teiEmbed.mockImplementation(async (texts) => texts.map((t) => candidateVectors[t] || null));
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'NCD Information',
+      lifecycle_state: 'publish',
+      ingested_graph_name: null,
+      head,
+      frontmatter: { updated_at: '2026-10-07T00:00:00.000Z' }
+    });
+    __mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
+    frontmatterService.readFrontmatterFromRepoDoc.mockResolvedValue({
+      topic: ['noncommunicable-diseases'],
+      entity: ['breast-cancer'],
+      forbidden: ['mental-health'],
+      summary: 'NCD guidance.'
+    });
+  }
+
+  it('a CLAIMING query gets LLM-suggested forbidden tags — guardrail-screened (Story 1-8d)', async () => {
+    // The 2026-10-09 poisoning shape: the model proposes the repo's OWN
+    // subject ('lung-cancer' — an entity-level tag) alongside a usable
+    // tag. The guardrail must pass the clean one and reject the rest
+    // BEFORE anything reaches the UI chips.
+    guardRepoSetup({
+      [QUERY_VEC_KEY]: unit(GDIM, 0), // the test query embed (claims the head)
+      'lung-cancer': unit(GDIM, 0), // (a) == the topic vector → 1.0 >= 0.55
+      'vaccination-programs': unit(GDIM, 4), // (b) orthogonal to everything → clean
+      'hiv-aids': unit(GDIM, 3) // (c) == the 'mental-health' forbidden vector → 1.0 >= 0.9
+    });
     frontmatterService.vllmChatCompletions.mockResolvedValue({
       data: {
         choices: [
           {
             message: {
-              content: 'Here you go: {"tags": ["Communicable Disease", "Mental Health", "Vaccination Programs"]}'
+              content: 'Here you go: {"tags": ["Lung Cancer", "Mental Health", "Vaccination Programs", "HIV AIDS"]}'
             }
           }
         ]
       }
     });
-    const res = await svc.explainRouting('me', { query: 'hiv prevalence surveillance data' }, {});
+    const res = await svc.explainRouting('me', { query: EXPLAIN_QUERY }, {});
     expect(res.under_test.head_claimed).toBe(true);
-    // 'Communicable Disease' → kebab-case; 'Mental Health' normalizes to
-    // 'mental-health' which is already forbidden → dropped; the prose
-    // around the JSON object is stripped by the strict parser.
+    // 'Mental Health' normalizes to the already-forbidden 'mental-health'
+    // and is dropped BEFORE the guard; 'lung-cancer' (own subject) and
+    // 'hiv-aids' (duplicate forbidden) are screened out; only the clean
+    // proposal reaches the chips.
     expect(res.suggestion).toEqual({
-      tags: ['communicable-disease', 'vaccination-programs'],
+      tags: ['vaccination-programs'],
+      rejected: [
+        { tag: 'lung-cancer', reason: "too close to the repository's own subject (similarity 1.00 >= 0.55)" },
+        { tag: 'hiv-aids', reason: 'already covered by an existing forbidden tag' }
+      ],
       source: 'llm',
-      reason: "suggested forbidden tags for this query's subject"
+      reason: "suggested forbidden tags for this query's subject (guardrail-screened)"
     });
     // ONE batch call whose prompt carries the repo scope, the
     // already-forbidden list and the query itself.
     expect(frontmatterService.vllmChatCompletions).toHaveBeenCalledTimes(1);
     const prompt = frontmatterService.vllmChatCompletions.mock.calls[0][0][0].content;
-    expect(prompt).toContain('hiv prevalence surveillance data');
+    expect(prompt).toContain(EXPLAIN_QUERY);
     expect(prompt).toContain('mental-health');
     expect(prompt).toContain('breast-cancer');
     // The explain path is head-leg only — no chunk probes are fired.
     expect(__mockDb.query.mock.calls.every(([aql]) => !aql.includes('APPROX_NEAR_COSINE'))).toBe(true);
   });
 
-  it('caps the LLM suggestions at 3 tags', async () => {
-    claimingRepoSetup();
+  it('caps the LLM suggestions at 3 tags (clean proposals pass the guardrail)', async () => {
+    const clean = unit(GDIM, 4);
+    guardRepoSetup({
+      [QUERY_VEC_KEY]: unit(GDIM, 0),
+      'tag-one': clean,
+      'tag-two': clean,
+      'tag-three': clean,
+      'tag-four': clean
+    });
     frontmatterService.vllmChatCompletions.mockResolvedValue({
       data: { choices: [{ message: { content: '{"tags": ["tag-one", "tag-two", "tag-three", "tag-four"]}' } }] }
     });
-    const res = await svc.explainRouting('me', { query: 'still a claiming query' }, {});
+    const res = await svc.explainRouting('me', { query: EXPLAIN_QUERY }, {});
     expect(res.suggestion.tags).toEqual(['tag-one', 'tag-two', 'tag-three']);
+    expect(res.suggestion.rejected).toEqual([]);
+  });
+
+  it('EVERY proposal screened out → source guardrail with the honest dead-end reason', async () => {
+    // The 2026-10-09 dead-end: when the query's subject IS the repo's
+    // subject, the loop must say so instead of offering a poisoned chip.
+    guardRepoSetup({
+      [QUERY_VEC_KEY]: unit(GDIM, 0),
+      'lung-cancer': unit(GDIM, 0), // == topic
+      'breast-cancer': unit(GDIM, 1) // == entity
+    });
+    frontmatterService.vllmChatCompletions.mockResolvedValue({
+      data: { choices: [{ message: { content: '{"tags": ["Lung Cancer", "Breast Cancer"]}' } }] }
+    });
+    const res = await svc.explainRouting('me', { query: EXPLAIN_QUERY }, {});
+    expect(res.suggestion.tags).toEqual([]);
+    expect(res.suggestion.source).toBe('guardrail');
+    expect(res.suggestion.rejected).toHaveLength(2);
+    expect(res.suggestion.rejected.every((r) => /own subject/.test(r.reason))).toBe(true);
+    expect(res.suggestion.reason).toContain('screened out by the guardrail');
   });
 
   it('an LLM failure degrades honestly (source none, reason, no throw)', async () => {
@@ -490,6 +571,95 @@ describe('explainRouting (Story 1-8c — advice for a wrongly-claiming head)', (
     });
     await expect(svc.explainRouting('me', { query: '   ' }, {})).rejects.toMatchObject({ status: 400 });
     expect(repositoryService.getById).not.toHaveBeenCalled();
+  });
+});
+
+// ---------- Story 1-8d: the mechanical suggestion guardrail ----------
+
+describe('guardSuggestions (Story 1-8d — no self-forbidding suggestion survives)', () => {
+  // Same axis layout as the explainRouting suite above: 0 = topic/own
+  // subject, 1 = entity, 2 = keyword, 3 = existing forbidden
+  // 'mental-health', 4 = clean proposals, 5 = a gold positive query.
+  const GDIM = 6;
+
+  function guardSetup() {
+    const head = makeHead({
+      vector: unit(GDIM, 0),
+      topic: unit(GDIM, 0),
+      forbidden: unit(GDIM, 3),
+      forbiddenVectors: [{ tag: 'mental-health', vector: unit(GDIM, 3) }]
+    });
+    head.dim = GDIM;
+    head.per_field.entity = unit(GDIM, 1);
+    head.per_field.keyword = unit(GDIM, 2);
+    repositoryService.getById.mockResolvedValue({ _key: 'me', head });
+  }
+
+  function embedMap(map) {
+    frontmatterService.teiEmbed.mockImplementation(async (texts) => texts.map((t) => map[t] || null));
+  }
+
+  beforeEach(() => {
+    guardSetup();
+  });
+
+  it('rejects a proposal at/above 0.55 vs ANY own-subject vector with the reason; an orthogonal one passes', async () => {
+    embedMap({ 'lung-cancer': unit(GDIM, 0), 'vaccination-programs': unit(GDIM, 4) });
+    const out = await svc.guardSuggestions('me', ['lung-cancer', 'vaccination-programs'], {});
+    expect(out.accepted).toEqual(['vaccination-programs']);
+    expect(out.rejected).toEqual([
+      { tag: 'lung-cancer', reason: "too close to the repository's own subject (similarity 1.00 >= 0.55)" }
+    ]);
+  });
+
+  it('rejects a near-duplicate of an existing forbidden tag at/above 0.9; a 0.8 overlap passes (new information)', async () => {
+    // [0,0,0,0.8,0.6,0] is a unit vector 0.8 along the 'mental-health'
+    // axis — below the 0.9 duplicate bar, and 0 on every own-subject axis.
+    const near = [0, 0, 0, 0.8, 0.6, 0];
+    embedMap({ 'hiv-aids': unit(GDIM, 3), 'near-dup': near });
+    const out = await svc.guardSuggestions('me', ['hiv-aids', 'near-dup'], {});
+    expect(out.accepted).toEqual(['near-dup']);
+    expect(out.rejected).toEqual([{ tag: 'hiv-aids', reason: 'already covered by an existing forbidden tag' }]);
+  });
+
+  it('VETO-IMPACT: a proposal that would suppress a gold positive is rejected with attribution', async () => {
+    // The decisive 1-8d guard: embedding plausibility is not enough — a
+    // candidate at/above ROUTE_FORBIDDEN_TAG_MAX vs ANY positive test
+    // query dies even when its own-subject cosine is 0.
+    embedMap({
+      'breast cancer screening age': unit(GDIM, 5), // the gold positive embed
+      'cardiovascular-pharmacology': unit(GDIM, 5), // identical → would kill it
+      'clean-proposal': unit(GDIM, 4)
+    });
+    const out = await svc.guardSuggestions('me', ['cardiovascular-pharmacology', 'clean-proposal'], {
+      positiveQueries: [{ query: 'breast cancer screening age' }]
+    });
+    expect(out.accepted).toEqual(['clean-proposal']);
+    expect(out.rejected).toEqual([
+      {
+        tag: 'cardiovascular-pharmacology',
+        reason: 'would suppress 1 positive test (e.g. "breast cancer screening age")'
+      }
+    ]);
+    // the positives are embedded in their OWN batch, before the candidates
+    expect(frontmatterService.teiEmbed).toHaveBeenCalledTimes(2);
+    expect(frontmatterService.teiEmbed.mock.calls[0][0]).toEqual(['breast cancer screening age']);
+  });
+
+  it('a missing embedding is rejected honestly (never silently accepted)', async () => {
+    embedMap({}); // teiEmbed resolves null for every text
+    const out = await svc.guardSuggestions('me', ['mystery-tag'], {});
+    expect(out.accepted).toEqual([]);
+    expect(out.rejected).toEqual([
+      { tag: 'mystery-tag', reason: 'embedding failed — cannot verify against the repository scope' }
+    ]);
+  });
+
+  it('an empty candidate list short-circuits before any repo or TEI access', async () => {
+    const out = await svc.guardSuggestions('me', [], {});
+    expect(out).toEqual({ accepted: [], rejected: [] });
+    expect(repositoryService.getById).not.toHaveBeenCalled();
+    expect(frontmatterService.teiEmbed).not.toHaveBeenCalled();
   });
 });
 

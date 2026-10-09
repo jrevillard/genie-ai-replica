@@ -1386,6 +1386,26 @@ async function routingTest(req, res, next) {
 }
 
 /**
+ * Story 1-8d — POST /api/okf/repos/:repo_id/routing-advisor.
+ * The comprehensive advisor: aggregates the queries of the last N runs
+ * (all classes), simulates candidate tag-set configurations against the
+ * production gate, and recommends the globally-optimal add/remove set
+ * under a hard zero-positive-harm constraint. Admin-scoped (LLM call).
+ */
+async function recommendTagSet(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const result = await headSuiteService.recommendTagSet(req.params.repo_id, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Story 1-8d — GET /api/okf/repos/:repo_id/frontmatter/history.
  * Bounded save history for the Lab's Revert-tags panel (read scope).
  */
@@ -1545,6 +1565,7 @@ module.exports = {
   routingExplain,
   frontmatterHistory,
   revertFrontmatter,
+  recommendTagSet,
   generateTestSuite,
   addTestSuiteQueries,  runTestSuite,
   explainTestSuiteFailures,

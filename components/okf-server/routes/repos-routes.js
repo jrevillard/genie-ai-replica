@@ -80,6 +80,10 @@ router.post(
   requireRepoScope('repo_id', 'admin'),
   ctrl.explainTestSuiteFailures
 );
+// Story 1-8d — the COMPREHENSIVE advisor: aggregates recent runs (all
+// classes), simulates tag-set changes against the gate, recommends the
+// globally-optimal add/remove set under a zero-positive-harm constraint.
+router.post('/:repo_id/routing-advisor', requireRepoScope('repo_id', 'admin'), ctrl.recommendTagSet);
 router.post(
   '/:repo_id/routing-testsuite/:suite_key/queries',
   requireRepoScope('repo_id', 'admin'),

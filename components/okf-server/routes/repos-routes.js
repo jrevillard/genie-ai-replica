@@ -58,6 +58,8 @@ router.post('/:repo_id/ingest', requireRepoScope('repo_id', 'admin'), ctrl.retir
 // admin-scoped — the test burns a TEI embed per query.
 router.post('/:repo_id/head/rebuild', requireRepoScope('repo_id', 'admin'), ctrl.rebuildRepoHead);
 router.post('/:repo_id/routing-test', requireRepoScope('repo_id', 'admin'), ctrl.routingTest);
+// Story 1-8c — single-query gate explanation + forbidden-tag suggestion.
+router.post('/:repo_id/routing-explain', requireRepoScope('repo_id', 'admin'), ctrl.routingExplain);
 
 // Story 1-8 MR-B (2026-10-08) — test suites + run analytics. The
 // generator is ONE guided-JSON vLLM call (admin — LLM-burning, 5-15s);
@@ -69,6 +71,12 @@ router.post('/:repo_id/routing-test', requireRepoScope('repo_id', 'admin'), ctrl
 router.get('/:repo_id/routing-testsuite/runs', requireRepoScope('repo_id', 'read'), ctrl.listTestSuiteRuns);
 router.post('/:repo_id/routing-testsuite', requireRepoScope('repo_id', 'admin'), ctrl.generateTestSuite);
 router.post('/:repo_id/routing-testsuite/:suite_key/run', requireRepoScope('repo_id', 'admin'), ctrl.runTestSuite);
+// Story 1-8c — batch advice for a suite run's failing negatives.
+router.post(
+  '/:repo_id/routing-testsuite/:suite_key/explain',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.explainTestSuiteFailures
+);
 router.post(
   '/:repo_id/routing-testsuite/:suite_key/queries',
   requireRepoScope('repo_id', 'admin'),

@@ -40,8 +40,8 @@ the plain dict (dict "Chart" .Chart "Release" .Release "Values" .Values
 "component" <name>) to genieai-common.labels, which composes it below.
 */}}
 {{- define "genieai-common.componentContext" -}}
-{{- $values := deepCopy .Values | merge (dict "component" (.component | default "umbrella")) -}}
-genieai.io/component: {{ $values.component | quote }}
+{{- $ctx := merge (deepCopy .Values) (dict "component" (.component | default "umbrella")) -}}
+genieai.io/component: {{ $ctx.component | quote }}
 {{- end -}}
 
 {{/*

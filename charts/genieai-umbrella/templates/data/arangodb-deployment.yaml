@@ -18,7 +18,9 @@ metadata:
     genieai.io/data-tier: arangodb
 spec:
   mode: Single
-  image: arangodb/arangodb:3.12.4
+  # Conditional registry prefix: an air-gapped global.imageRegistry mirror
+  # must mirror the docker.io arangodb/arangodb path.
+  image: {{ if .Values.global.imageRegistry }}{{ .Values.global.imageRegistry }}/{{ end }}arangodb/arangodb:3.12.4
   externalAccess:
     type: None
   single:
@@ -63,7 +65,9 @@ metadata:
     genieai.io/data-tier: arangodb
 spec:
   mode: Cluster
-  image: arangodb/arangodb:3.12.4
+  # Conditional registry prefix: an air-gapped global.imageRegistry mirror
+  # must mirror the docker.io arangodb/arangodb path.
+  image: {{ if .Values.global.imageRegistry }}{{ .Values.global.imageRegistry }}/{{ end }}arangodb/arangodb:3.12.4
   externalAccess:
     type: None
   agents:

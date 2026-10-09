@@ -15,7 +15,8 @@ global:
   imagePullSecrets: []
 
 # Drives chart-derived defaults (replica counts, data-tier topology,
-# observability). dev | staging | prod | sovereign.
+# observability). dev | staging | prod (sovereign is reserved — its branches
+# land with the sovereign deployment tier; it is rejected until then).
 clusterProfile: dev
 
 # data layer values

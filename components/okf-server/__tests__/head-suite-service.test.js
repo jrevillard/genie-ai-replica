@@ -1142,3 +1142,36 @@ describe('beginSuiteGeneration (1-8f2 — async 202 + poll)', () => {
     expect(done2._key).toBe(again.suite_key);
   });
 });
+
+describe('getSuite vs an in-flight generation (1-8f2 — the honest envelope)', () => {
+  it('answers {suite_key, status:"generating"} for a minted in-flight key; 404 only for unknown keys', async () => {
+    let release;
+    const gate = new Promise((r) => {
+      release = r;
+    });
+    __mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
+    frontmatterService.vllmChatCompletions.mockImplementation(async () => {
+      await gate;
+      return llmResponse({ positive: [], negative: [], near_miss: [], off_domain: [], meta: [] });
+    });
+    const started = svc.beginSuiteGeneration('me', { n_positive: 2 }, {});
+    try {
+      // in-flight: the poll's keep-waiting envelope, NOT a 404
+      const env = await svc.getSuite('me', started.suite_key, {});
+      expect(env).toEqual({ suite_key: started.suite_key, status: 'generating' });
+      expect(svc.suiteGenerationInFlight('me', started.suite_key)).toBe(true);
+    } finally {
+      release();
+      await started.done;
+    }
+    // landed: the doc is returned, and the in-flight flag cleared
+    const suite = await svc.getSuite('me', started.suite_key, {});
+    expect(suite._key).toBe(started.suite_key);
+    expect(svc.suiteGenerationInFlight('me', started.suite_key)).toBe(false);
+    // a key that was never minted still 404s
+    await expect(svc.getSuite('me', 's9999999-dead00', {})).rejects.toMatchObject({
+      code: 'SUITE_NOT_FOUND',
+      status: 404
+    });
+  });
+});

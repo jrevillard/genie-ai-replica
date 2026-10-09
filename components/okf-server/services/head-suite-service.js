@@ -667,6 +667,17 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
 // per repo at a time (a second begin while one is in flight is a 409).
 const suiteGenInFlight = new Map(); // repo_id -> suite_key
 
+// 1-8f2: is this (repo, key) pair a LIVE async generation? getSuite consults
+// this before its 404 — a minted key that is still generating must answer
+// {suite_key, status:'generating'} (the poll's keep-waiting signal), not
+// SUITE_NOT_FOUND. Live 2026-10-09: every 2.5s poll of an in-flight key
+// logged error-level "Unhandled OKF error … suite not found" and painted
+// browser-console 404s for the whole ~107s a 100-positive ask took — an
+// alarming false failure signal for the normal path.
+function suiteGenerationInFlight(repoId, suiteKey) {
+  return suiteGenInFlight.get(repoId) === suiteKey;
+}
+
 function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
   const inflight = suiteGenInFlight.get(repoId);
   if (inflight) {
@@ -745,6 +756,11 @@ async function getSuite(repoId, suiteKey, opts = {}) {
     await repositoryService.getById(repoId, { authz: opts.authz });
     const db = await dbService.getConnection();
     await ensureCollection(db);
+    if (suiteGenerationInFlight(repoId, suiteKey)) {
+      // minted + worker running — the doc persists only when generation ends
+      span.setAttribute('okf.suite_status', 'generating');
+      return { suite_key: suiteKey, status: 'generating' };
+    }
     const suite = await loadSuiteDoc(db, repoId, suiteKey);
     if (suite.repo_id !== repoId) {
       const err = new Error(`suite ${suiteKey} not found for repo ${repoId}`);
@@ -1554,6 +1570,7 @@ Respond with ONLY: {"add": ["...", "..."]}`;
 module.exports = {
   generateSuite,
   beginSuiteGeneration,
+  suiteGenerationInFlight,
   addQueries,
   getSuite,
   updateSuiteRows,

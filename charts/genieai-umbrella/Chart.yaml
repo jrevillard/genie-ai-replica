@@ -6,13 +6,10 @@ description: |
   overlays at `deploy/environments/<env>/`.
 type: application
 version: 0.1.0
-# Per spec §4: "umbrella's `appVersion` = chart version, **not** GENIE.AI app
-# version (semver divide between chart layout and product release)". The chart
-# version IS 0.1.0; `appVersion` mirrors it. Product versions move on a
-# separate axis from chart-layout versions.
-#
-# Never "latest" — see Review Focus #4. Pin to a chart version; image versions
-# are governed by the upstream component image tags.
+# `appVersion` mirrors the chart version deliberately: it tracks the chart
+# layout, not the GENIE.AI product release (the two version on independent
+# axes; deployed image tags are governed by values, not by appVersion).
+# Never "latest" — OCI registries reject it for immutable promotion.
 appVersion: "0.1.0"
 keywords:
   - genie-ai
@@ -27,25 +24,15 @@ maintainers:
     email: maintainers@example.invalid
 dependencies:
   # Local library chart — re-rendered on every umbrella install.
-  # `import-values` of empty library would inject `global` (Helm 4 reserved key)
-  # into `.Values.common` and clash with the library schema's
-  # additionalProperties: false. The plan's `child: . parent: common` shorthand
-  # works on Helm 3 with an empty library values; for Helm 4 we keep the schema
-  # strict and omit import-values entirely. Library templates remain callable
-  # via `{{ include "genieai-common.foo" . }}` — `import-values` only exports
-  # values, not template definitions. Library values are consumed by umbrella
-  # via the umbrella's own `values.yaml` defaults (see below).
+  # No `import-values`: it exports values only (template definitions are
+  # always callable via {{ include "genieai-common.*" . }} without it), and
+  # importing the library's values tree would carry Helm's reserved `global`
+  # key into a schema-validated subtree the library rejects.
   - name: genieai-common
     version: "0.1.0"
     repository: "file://../genieai-common"
 
-# Operator dependencies (added in subsequent plans):
-# - cloudnative-pg (Plan 2)
-# - kube-arangodb (Plan 2)
-# - keycloak-operator (Plan 2)
-# - external-secrets-operator (Plan 2)
-# - victoriametrics-operator + vl + vt (Plan 4)
-# - opentelemetry-operator (Plan 4)
-# - gpu-operator (Plan 5)
-# - cert-manager (umbrella-level dependency, Plan 6)
-# - envoy-gateway (Plan 6)
+# Operator dependencies land here as their tiers are added:
+# cloudnative-pg, kube-arangodb, keycloak-operator, external-secrets-operator,
+# victoria-metrics-operator, opentelemetry-operator, gpu-operator,
+# cert-manager, envoy-gateway.

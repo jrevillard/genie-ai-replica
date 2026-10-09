@@ -2686,6 +2686,22 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Gerbang',
+        floor: 'Batas minimum',
+        veto: 'Tag terlarang',
+        margin: 'Margin',
+        claim: 'Klaim',
+        pass: 'lolos',
+        fail: 'gagal',
+        na: 'n/a'
+      },
+      teach: {
+        title: 'Apa artinya ini',
+        veto: "Kueri ini sangat cocok dengan tag terlarang “{'{'}tag{'}'}”. Jika seharusnya termasuk dalam repositori ini, hapus “{'{'}tag{'}'}” dari tag terlarang di Frontmatter, lalu terbitkan ulang untuk membangun ulang head.",
+        floor:
+          'Kueri ini tidak berhubungan dengan topik repositori ini (skor di bawah batas minimum domain) — perubahan tag tidak akan memperbaiki ini; ini adalah penekanan yang benar.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

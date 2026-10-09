@@ -1,9 +1,11 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 // Story 1-8 MR-B — head-suite-service unit tests: the LLM suite
-// generator (guided-JSON contract + forbidden-derived negatives), the
-// curator free-text additions, the run aggregation (pass rates with
-// honest-empty semantics for negatives, margins, steals), and the runs
+// generator (guided-JSON contract + the four negative classes of
+// Story 1-8b: forbidden / confusable / off-domain / meta, with the
+// deterministic random-pool fallback), the curator free-text additions,
+// the run aggregation (pass rates with honest-empty semantics for
+// negatives, suppression reasons, margins, steals), and the runs
 // listing. vLLM/TEI/Arango mocked.
 
 jest.mock('../shared-lib/logger', () => ({
@@ -60,54 +62,153 @@ beforeEach(() => {
 });
 
 describe('generateSuite', () => {
-  it('merges LLM positives/negatives with forbidden-derived negatives and persists a suite doc', async () => {
-    frontmatterService.vllmChatCompletions.mockResolvedValue(
-      llmResponse({
-        positive: [
-          { query: 'breast cancer screening age recommendations', reason: 'topic hit' },
-          { query: '', reason: 'dropped — empty' }
-        ],
-        negative: [{ query: 'hospital bed capacity statistics', expected_repo: 'Kenya Services', reason: 'sibling' }],
-        keywords: ['screening', 'hearts', 42]
-      })
-    );
-    // Sibling context query (repos with heads).
-    __mockDb.query.mockImplementation(async (aql) => {
-      if (aql.includes('r.head != null')) {
-        return { all: async () => [{ repo_id: 'sib1', name: 'Kenya Services', text: 'Kenya gov services' }] };
-      }
-      return { all: async () => [] };
-    });
+  it('merges all four negative classes, labels every row with cls, and persists a suite doc', async () => {
+    // Deterministic pool sampling: Math.random()=0 always pops pool[0]
+    // → topics [geography, sports, cooking, music] (default n=4).
+    const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      frontmatterService.vllmChatCompletions.mockResolvedValue(
+        llmResponse({
+          positive: [
+            { query: 'breast cancer screening age recommendations', reason: 'topic hit' },
+            { query: '', reason: 'dropped — empty' }
+          ],
+          negative: [{ query: 'hospital bed capacity statistics', expected_repo: 'Kenya Services', reason: 'sibling' }],
+          off_domain: [{ topic: 'cooking', query: 'How do I make sourdough bread at home?' }],
+          // meta OMITTED by the LLM → the class falls back, never empty
+          keywords: ['screening', 'hearts', 42]
+        })
+      );
+      // Sibling context query (repos with heads).
+      __mockDb.query.mockImplementation(async (aql) => {
+        if (aql.includes('r.head != null')) {
+          return { all: async () => [{ repo_id: 'sib1', name: 'Kenya Services', text: 'Kenya gov services' }] };
+        }
+        return { all: async () => [] };
+      });
 
-    const suite = await svc.generateSuite('me', { n_positive: 5, n_negative: 4 }, { actor: { user_id: 'u1' } });
-    expect(suite.kind).toBe('suite');
-    expect(suite.repo_id).toBe('me');
-    expect(suite.created_by).toBe('u1');
-    expect(suite.head_version).toBe(42);
-    expect(suite.payload.positive).toHaveLength(1); // empty query dropped
-    expect(suite.payload.positive[0]).toMatchObject({ kind: 'positive', source: 'llm' });
-    // 1 LLM negative + forbidden-derived (3 forbidden tags → 3 queries)
-    expect(suite.payload.negative).toHaveLength(4);
-    const forbidden = suite.payload.negative.filter((n) => n.source === 'forbidden');
-    expect(forbidden).toHaveLength(3);
-    expect(forbidden[0].query).toContain('mental-health');
-    // keywords: strings only
-    expect(suite.payload.keywords).toEqual(['screening', 'hearts']);
-    // the prompt carries the sibling context + strict format contract
-    const prompt = frontmatterService.vllmChatCompletions.mock.calls[0][0][0].content;
-    expect(prompt).toContain('NCD Information');
-    expect(prompt).toContain('Kenya Services');
-    expect(prompt).toContain('"positive"');
-    // persisted in the runs collection
-    expect(Object.keys(__mockDb._stores.okf_head_test_runs)).toHaveLength(1);
+      const suite = await svc.generateSuite('me', { n_positive: 5, n_negative: 4 }, { actor: { user_id: 'u1' } });
+      expect(suite.kind).toBe('suite');
+      expect(suite.repo_id).toBe('me');
+      expect(suite.created_by).toBe('u1');
+      expect(suite.head_version).toBe(42);
+      expect(suite.payload.positive).toHaveLength(1); // empty query dropped
+      expect(suite.payload.positive[0]).toMatchObject({ kind: 'positive', source: 'llm' });
+      const neg = suite.payload.negative;
+      // 1 confusable + 3 forbidden + 4 off-domain + 3 meta fallback
+      expect(neg).toHaveLength(11);
+      expect(neg.filter((q) => q.cls === 'confusable')).toHaveLength(1);
+      const forbidden = neg.filter((q) => q.cls === 'forbidden');
+      expect(forbidden).toHaveLength(3);
+      expect(forbidden[0].query).toContain('mental-health');
+      expect(forbidden[0].source).toBe('forbidden');
+      // off-domain: the LLM row for the covered topic, deterministic
+      // templates for the topics it skipped; every row keeps its topic
+      const off = neg.filter((q) => q.cls === 'off-domain');
+      expect(off).toHaveLength(4);
+      expect(suite.payload.off_domain_topics).toEqual(['geography', 'sports', 'cooking', 'music']);
+      expect(off.find((q) => q.topic === 'cooking')).toMatchObject({
+        query: 'How do I make sourdough bread at home?',
+        source: 'llm',
+        expected_repo: null
+      });
+      expect(off.find((q) => q.topic === 'geography').query).toBe('Give me a general overview of geography');
+      expect(off.find((q) => q.topic === 'sports').query).toBe('Latest news about sports');
+      expect(off.find((q) => q.topic === 'music').source).toBe('fallback');
+      // meta omitted by the LLM → 3 deterministic fallbacks
+      const meta = neg.filter((q) => q.cls === 'meta');
+      expect(meta).toHaveLength(3);
+      expect(meta.every((q) => q.source === 'fallback')).toBe(true);
+      expect(neg.every((q) => q.kind === 'negative')).toBe(true);
+      // keywords: strings only
+      expect(suite.payload.keywords).toEqual(['screening', 'hearts']);
+      // the prompt carries the sibling context + strict format contract
+      const prompt = frontmatterService.vllmChatCompletions.mock.calls[0][0][0].content;
+      expect(prompt).toContain('NCD Information');
+      expect(prompt).toContain('Kenya Services');
+      expect(prompt).toContain('"positive"');
+      expect(prompt).toContain('"off_domain"');
+      expect(prompt).toContain('geography, sports, cooking, music');
+      // persisted in the runs collection
+      expect(Object.keys(__mockDb._stores.okf_head_test_runs)).toHaveLength(1);
+    } finally {
+      randSpy.mockRestore();
+    }
   });
 
-  it('still builds a forbidden-only suite when the LLM call fails (honest degradation)', async () => {
+  it('still builds a full fallback suite when the LLM call fails (honest degradation, classes never empty)', async () => {
     frontmatterService.vllmChatCompletions.mockRejectedValue(new Error('vllm down'));
     __mockDb.query.mockResolvedValue({ all: async () => [] });
     const suite = await svc.generateSuite('me', {}, {});
     expect(suite.payload.positive).toHaveLength(0);
-    expect(suite.payload.negative).toHaveLength(3); // forbidden-derived only
+    const neg = suite.payload.negative;
+    // 3 forbidden + 4 off-domain templates + 3 meta templates
+    expect(neg.filter((q) => q.cls === 'forbidden')).toHaveLength(3);
+    expect(neg.filter((q) => q.cls === 'off-domain')).toHaveLength(4);
+    expect(neg.filter((q) => q.cls === 'meta')).toHaveLength(3);
+    expect(neg.filter((q) => q.cls === 'off-domain').every((q) => q.source === 'fallback')).toBe(true);
+    expect(neg.filter((q) => q.cls === 'meta').every((q) => q.source === 'fallback')).toBe(true);
+    // solo universe → the confusable class cannot exist
+    expect(neg.some((q) => q.cls === 'confusable')).toBe(false);
+  });
+
+  it('respects n_negative_random (default 4, capped at 12) and seeds the prompt with the sampled topics', async () => {
+    const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      __mockDb.query.mockResolvedValue({ all: async () => [] });
+      frontmatterService.vllmChatCompletions.mockResolvedValue(
+        llmResponse({ positive: [], negative: [], keywords: [] })
+      );
+
+      const s2 = await svc.generateSuite('me', { n_negative_random: 2 }, {});
+      const s12 = await svc.generateSuite('me', { n_negative_random: 99 }, {});
+      const sDefault = await svc.generateSuite('me', {}, {});
+      expect(s2.payload.negative.filter((q) => q.cls === 'off-domain')).toHaveLength(2);
+      expect(s12.payload.negative.filter((q) => q.cls === 'off-domain')).toHaveLength(12);
+      expect(sDefault.payload.negative.filter((q) => q.cls === 'off-domain')).toHaveLength(4); // default
+      // the prompt lists the sampled topics + asks for the adversarial
+      // off-domain class; the call passes adversarial temperature
+      const prompt = frontmatterService.vllmChatCompletions.mock.calls[2][0][0].content;
+      expect(prompt).toContain('geography, sports, cooking, music');
+      expect(prompt).toContain('completely UNRELATED');
+      expect(frontmatterService.vllmChatCompletions.mock.calls[2][1]).toMatchObject({ temperature: 0.7 });
+    } finally {
+      randSpy.mockRestore();
+    }
+  });
+
+  it('produces NO confusable rows without siblings (the class exists only when competitors exist)', async () => {
+    __mockDb.query.mockResolvedValue({ all: async () => [] }); // solo universe
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [],
+        negative: [{ query: 'orphan confusable query', expected_repo: '', reason: 'none' }],
+        keywords: []
+      })
+    );
+    const suite = await svc.generateSuite('me', {}, {});
+    expect(suite.payload.negative.some((q) => q.cls === 'confusable')).toBe(false);
+    const prompt = frontmatterService.vllmChatCompletions.mock.calls[0][0][0].content;
+    expect(prompt).toContain('NO competing repositories');
+  });
+
+  it('uses LLM-authored meta rows when provided (fallback only when the class is omitted)', async () => {
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [],
+        negative: [],
+        meta: [
+          { query: 'How does the routing lab work?', reason: 'system probe' },
+          { query: 'Who maintains the forbidden tags?', reason: 'system probe' }
+        ],
+        keywords: []
+      })
+    );
+    const suite = await svc.generateSuite('me', {}, {});
+    const meta = suite.payload.negative.filter((q) => q.cls === 'meta');
+    expect(meta).toHaveLength(2);
+    expect(meta.every((q) => q.source === 'llm')).toBe(true);
   });
 
   it('409s without stored frontmatter', async () => {
@@ -222,12 +323,94 @@ describe('runSuite + summarizeRun', () => {
     expect(s.negative_pass_rate).toBe(0);
   });
 
-  it('captures per-query errors without failing the whole run', async () => {
-    const suite = await seedSuite({ positive: 2, negativeForbidden: 0 });
+  // ─── Story 1-8b: the four negative classes in the run + suppression reasons ───
+  it('1-8b: new classes count as negatives; run rows carry cls/head_claim/tag_veto + suppress_reason', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1, negativeRandom: 2, negativeMeta: 1 });
+    // Rename the random rows so the mock can key on them (topics are random).
+    let i = 0;
+    suite.payload.negative.forEach((q) => {
+      if (q.cls === 'off-domain') q.query = `off probe ${i++}`;
+      if (q.cls === 'meta') q.query = 'meta probe';
+    });
+    __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
+
+    headTestService.routingTest.mockImplementation(async (repoId, body) => {
+      if (body.query === 'positive query 0') return fakeResult(true, 0.2, 1, 'claimed');
+      if (body.query === 'off probe 1') return fakeResult(false, -0.1, 0, 'suppressed', 'veto');
+      return fakeResult(false, -0.1, 0, 'suppressed', 'floor'); // forbidden + meta + off probe 0
+    });
+
+    const run = await svc.runSuite('me', suite._key, {});
+    const s = run.payload.summary;
+    expect(s.negative_total).toBe(4); // 1 forbidden + 2 off-domain + 1 meta
+    expect(s.negative_evaluatable).toBe(4);
+    expect(s.negative_passed).toBe(4); // every row suppressed
+    expect(s.pass_rate).toBe(1);
+
+    const rows = run.payload.results;
+    const off0 = rows.find((r) => r.query === 'off probe 0');
+    expect(off0).toMatchObject({
+      cls: 'off-domain',
+      head_claim: 'floor',
+      tag_veto: null,
+      head_claimed: false,
+      suppress_reason: 'off-domain'
+    });
+    const off1 = rows.find((r) => r.query === 'off probe 1');
+    expect(off1).toMatchObject({
+      cls: 'off-domain',
+      head_claim: 'veto',
+      tag_veto: 'genetics',
+      suppress_reason: 'forbidden:genetics'
+    });
+    const metaRow = rows.find((r) => r.cls === 'meta');
+    expect(metaRow.suppress_reason).toBe('off-domain'); // floor-suppressed
+    const pos = rows.find((r) => r.kind === 'positive');
+    expect(pos.suppress_reason).toBeNull(); // positives are never "suppressed"
+  });
+
+  it('1-8b: summarizeRun treats EVERY non-positive row as a negative across all classes', () => {
+    const s = svc._internals.summarizeRun([
+      { query: 'p-win', kind: 'positive', under_test_wins_head: true, sibling_count: 2, margin: 0.1 },
+      {
+        query: 'p-lose',
+        kind: 'positive',
+        under_test_wins_head: false,
+        sibling_count: 2,
+        margin: 0.1,
+        winner_name: 'Sib'
+      },
+      {
+        query: 'f',
+        kind: 'negative',
+        cls: 'forbidden',
+        head_claimed: false,
+        head_claim: 'veto',
+        tag_veto: 'genetics',
+        sibling_count: 0
+      },
+      { query: 'o', kind: 'negative', cls: 'off-domain', head_claimed: false, head_claim: 'floor', sibling_count: 0 },
+      { query: 'm', kind: 'negative', cls: 'meta', head_claimed: false, head_claim: 'floor', sibling_count: 0 },
+      { query: 'c', kind: 'negative', cls: 'confusable', head_claimed: true, head_claim: 'claim', sibling_count: 2 }
+    ]);
+    expect(s.n_queries).toBe(6);
+    expect(s.positive_total).toBe(2);
+    expect(s.negative_total).toBe(4);
+    expect(s.negative_evaluatable).toBe(4); // gate-era rows evaluate solo
+    expect(s.negative_passed).toBe(3); // only the CLAIMED confusable fails
+    expect(s.negative_pass_rate).toBeCloseTo(3 / 4, 5);
+    expect(s.pass_rate).toBeCloseTo(4 / 6, 5);
+    expect(s.steals).toEqual([{ by_repo: 'Sib', count: 1 }]);
+  });
+
+  it('captures per-query errors without failing the whole run (cls passthrough on error rows)', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
     headTestService.routingTest.mockRejectedValue(new Error('TEI 503'));
     const run = await svc.runSuite('me', suite._key, {});
     expect(run.payload.summary.n_errors).toBe(2);
     expect(run.payload.results.every((r) => r.error === 'TEI 503')).toBe(true);
+    expect(run.payload.results.find((r) => r.cls === 'forbidden')).toBeTruthy();
+    expect(run.payload.results.find((r) => r.kind === 'positive').cls).toBeNull();
   });
 
   it('404s for an unknown suite', async () => {
@@ -263,10 +446,12 @@ describe('listRuns', () => {
 
 // ---------- helpers ----------
 
-function fakeResult(underTestWins, margin, siblingCount, gate = null) {
+function fakeResult(underTestWins, margin, siblingCount, gate = null, headClaim = null) {
   const winner = underTestWins ? 'me' : 'sib1';
   // gate: null = legacy response (pre-1-8a); 'claimed' | 'suppressed' = gate era.
+  // headClaim: which condition suppressed ('floor' | 'veto' | 'margin'); 'floor' default.
   const claimed = gate === 'claimed' ? true : gate === 'suppressed' ? false : null;
+  const claim = gate === 'claimed' ? 'claim' : gate === 'suppressed' ? headClaim || 'floor' : null;
   return {
     query: '',
     embedded_with: 'test',
@@ -277,6 +462,10 @@ function fakeResult(underTestWins, margin, siblingCount, gate = null) {
       head_rank: underTestWins ? 1 : 2,
       forbidden_cosine: gate ? 0.45 : null,
       head_margin: gate ? (claimed ? 0.05 : -0.02) : null,
+      head_claim: claim,
+      tag_veto: claim === 'veto' ? 'genetics' : null,
+      max_tag_cosine: claim === 'veto' ? 0.62 : null,
+      floor_pass: claim ? claim !== 'floor' : false,
       head_claimed: claimed
     },
     siblings: Array.from({ length: siblingCount }, (_, i) => ({
@@ -289,12 +478,19 @@ function fakeResult(underTestWins, margin, siblingCount, gate = null) {
       under_test_wins_head: underTestWins && claimed !== false,
       head_suppressed: claimed === false,
       margin,
-      provenance: claimed === false ? 'head-suppressed (forbidden/noise)' : 'head-only (no graph under test)'
+      provenance:
+        claimed === false
+          ? claim === 'floor'
+            ? 'head-suppressed (off-domain)'
+            : claim === 'veto'
+              ? 'head-suppressed (forbidden: genetics)'
+              : 'head-suppressed (forbidden/noise)'
+          : 'head-only (no graph under test)'
     }
   };
 }
 
-async function seedSuite({ positive = 1, negativeForbidden = 1 } = {}) {
+async function seedSuite({ positive = 1, negativeForbidden = 1, negativeRandom = 0, negativeMeta = 0 } = {}) {
   frontmatterService.vllmChatCompletions.mockResolvedValue(
     llmResponse({
       positive: Array.from({ length: positive }, (_, i) => ({ query: `positive query ${i}`, reason: 'r' })),
@@ -304,8 +500,13 @@ async function seedSuite({ positive = 1, negativeForbidden = 1 } = {}) {
   );
   __mockDb.query.mockResolvedValue({ all: async () => [] });
   const suite = await svc.generateSuite('me', {}, {});
-  // Trim the forbidden-derived negatives to the requested count.
-  suite.payload.negative = suite.payload.negative.slice(0, negativeForbidden);
+  // Trim each negative class to the requested count.
+  const neg = suite.payload.negative;
+  suite.payload.negative = [
+    ...neg.filter((q) => q.cls === 'forbidden').slice(0, negativeForbidden),
+    ...neg.filter((q) => q.cls === 'off-domain').slice(0, negativeRandom),
+    ...neg.filter((q) => q.cls === 'meta').slice(0, negativeMeta)
+  ];
   __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
   return suite;
 }

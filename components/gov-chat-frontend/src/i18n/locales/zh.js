@@ -2641,6 +2641,21 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: '门控',
+        floor: '下限',
+        veto: '禁用标签',
+        margin: '余量',
+        claim: '认领',
+        pass: '通过',
+        fail: '未通过',
+        na: '不适用'
+      },
+      teach: {
+        title: '这意味着什么',
+        veto: "该查询与禁用标签“{'{'}tag{'}'}”高度匹配。如果它应当属于此仓库，请在 Frontmatter 的禁用标签中移除“{'{'}tag{'}'}”，然后重新发布以重建 head。",
+        floor: '该查询与此仓库的主题无关（分数低于领域下限）——更改标签无法解决此问题；这是正确的抑制。'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

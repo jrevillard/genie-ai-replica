@@ -1500,6 +1500,22 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Gate',
+        floor: 'Floor',
+        veto: 'Forbidden tags',
+        margin: 'Margin',
+        claim: 'Claim',
+        pass: 'pass',
+        fail: 'fail',
+        na: 'n/a'
+      },
+      teach: {
+        title: 'What this means',
+        veto: "This query strongly matches the forbidden tag \"{'{'}tag{'}'}\". If it SHOULD belong to this repository, remove \"{'{'}tag{'}'}\" from the forbidden tags in Frontmatter, then republish to rebuild the head.",
+        floor:
+          'The query is unrelated to the subject matter of this repository (score below the domain floor) — no tag change fixes this; it is correct suppression.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

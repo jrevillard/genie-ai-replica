@@ -2698,6 +2698,22 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Filtro',
+        floor: 'Piso mínimo',
+        veto: 'Etiquetas prohibidas',
+        margin: 'Margen',
+        claim: 'Reclama',
+        pass: 'pasa',
+        fail: 'falla',
+        na: 'n/a'
+      },
+      teach: {
+        title: 'Qué significa esto',
+        veto: "Esta consulta coincide fuertemente con la etiqueta prohibida «{'{'}tag{'}'}». Si DEBERÍA pertenecer a este repositorio, elimine «{'{'}tag{'}'}» de las etiquetas prohibidas en el Frontmatter y vuelva a publicar para reconstruir el head.",
+        floor:
+          'La consulta no guarda relación con la temática de este repositorio (puntuación por debajo del piso mínimo del dominio) — ningún cambio de etiquetas lo corrige; es un descarte correcto.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

@@ -7,7 +7,10 @@
  * (positive vs adversarial expectation), the wizard readOnly mode (no
  * rebuild button), and the suite-run outcome semantics (positive passes
  * on a head win; negative passes on a loss ONLY with competitors —
- * null otherwise, never a fake pass).
+ * null otherwise, never a fake pass). Story 1-8b adds the gate v2
+ * contract: the Floor / Forbidden tags / Margin breakdown strip, and the
+ * teaching panel (veto = remove the named tag + republish; floor =
+ * correct suppression; claim = no panel).
  */
 
 const dispatch = jest.fn();
@@ -264,4 +267,119 @@ it('1-8a: suite outcome — a negative in a one-repo universe PASSES when the he
   expect(
     w.vm.outcomeOf({ kind: 'negative', under_test_wins_head: true, head_claimed: null, sibling_count: 0 })
   ).toBeNull();
+});
+
+// ─── Story 1-8b: gate v2 telemetry (Floor / Forbidden tags / Margin) and
+//     the teaching panel (David: the Lab must TEACH — suppression → which
+//     condition + which tag + what to edit) ──────────────────────────────
+
+/** A v2 payload: under_test carries the full gate telemetry
+ * (tag_veto / max_tag_cosine / floor_pass / head_claim) + the fidelity
+ * knob block the dialog displays its thresholds from. */
+function routingResultV2({ claim, tag = null, maxTag = 0.52, score = 0.7, forb = 0.45, floorPass = true }) {
+  const claimed = claim === 'claim';
+  return {
+    ok: true,
+    result: {
+      query: 'q',
+      embedded_with: 'model + query-instruction',
+      under_test: {
+        repo_id: 'r-1',
+        name: 'NCD Information',
+        lifecycle_state: 'publish',
+        head_score: score,
+        head_rank: claimed ? 1 : 2,
+        forbidden_cosine: forb,
+        head_margin: score - forb,
+        tag_veto: tag,
+        max_tag_cosine: maxTag,
+        floor_pass: floorPass,
+        head_claim: claim,
+        head_claimed: claimed
+      },
+      siblings: [],
+      verdict: {
+        head_routing_winner: claimed ? 'r-1' : null,
+        under_test_wins_head: claimed,
+        head_suppressed: !claimed,
+        margin: 1,
+        provenance: !claimed
+          ? claim === 'floor'
+            ? 'head-suppressed (off-domain)'
+            : claim === 'veto'
+              ? `head-suppressed (forbidden: ${tag})`
+              : 'head-suppressed (forbidden/noise)'
+          : 'head-only (no graph under test)'
+      },
+      fidelity: {
+        algorithm: 'story-1.3-replay+v2',
+        knobs: { ROUTE_HEAD_MARGIN: 0.01, ROUTE_HEAD_FLOOR: 0.55, ROUTE_FORBIDDEN_TAG_MAX: 0.55 }
+      }
+    }
+  };
+}
+
+it('1-8b: a veto renders the gate breakdown and the fix-the-tag teaching panel', async () => {
+  const w = mountDialog({ initialTab: 'test' });
+  await w.vm.$nextTick();
+  w.vm.query = 'genetics of diabetes';
+  dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'veto', tag: 'genetics', maxTag: 0.638, score: 0.617 }));
+  await w.vm.onRunTest();
+  await w.vm.$nextTick();
+  // Gate strip: three checks; the forbidden-tag one FAILS and names the tag.
+  expect(w.vm.gateChecks.map((c) => c.key)).toEqual(['floor', 'veto', 'margin']);
+  expect(w.vm.gateChecks[0].state).toBe('pass');
+  expect(w.vm.gateChecks[1].state).toBe('fail');
+  expect(w.vm.gateChecks[1].tag).toBe('genetics');
+  const strip = w.find('.okf-headtest__gate');
+  expect(strip.exists()).toBe(true);
+  expect(strip.text()).toContain('genetics');
+  // Teaching panel: names the matched tag + the fix (remove it, republish).
+  const teach = w.find('.okf-headtest__teach--veto');
+  expect(teach.exists()).toBe(true);
+  expect(teach.text()).toContain('genetics');
+  expect(teach.text()).toContain('remove "genetics"');
+  expect(teach.text()).toContain('republish');
+});
+
+it('1-8b: a floor suppression teaches that it is correct — no tag fix proposed', async () => {
+  const w = mountDialog({ initialTab: 'test' });
+  await w.vm.$nextTick();
+  w.vm.query = 'weather today';
+  dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'floor', score: 0.484, maxTag: 0.31, floorPass: false }));
+  await w.vm.onRunTest();
+  await w.vm.$nextTick();
+  expect(w.vm.gateChecks[0]).toMatchObject({ key: 'floor', state: 'fail' });
+  const teach = w.find('.okf-headtest__teach--floor');
+  expect(teach.exists()).toBe(true);
+  expect(teach.text()).toContain('correct suppression');
+  expect(teach.text()).not.toContain('remove');
+  expect(w.find('.okf-headtest__teach--veto').exists()).toBe(false);
+});
+
+it('1-8b: a plain claim renders no teaching panel and three passing checks', async () => {
+  const w = mountDialog({ initialTab: 'test' });
+  await w.vm.$nextTick();
+  w.vm.query = 'cancer screening';
+  dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'claim' }));
+  await w.vm.onRunTest();
+  await w.vm.$nextTick();
+  expect(w.vm.teachNote).toBeNull();
+  expect(w.find('.okf-headtest__teach').exists()).toBe(false);
+  expect(w.vm.gateChecks).toHaveLength(3);
+  expect(w.vm.gateChecks.every((c) => c.state === 'pass')).toBe(true);
+  expect(w.vm.verdictText).toContain('wins the head routing');
+});
+
+it('1-8b: a legacy (pre-v2) result renders no gate strip and keeps the old banner detail', async () => {
+  const w = mountDialog({ initialTab: 'test' });
+  await w.vm.$nextTick();
+  w.vm.query = 'genetic risk factors for cancer';
+  dispatch.mockResolvedValueOnce(routingResult(true, 0, 'claimed'));
+  await w.vm.onRunTest();
+  await w.vm.$nextTick();
+  expect(w.vm.gateChecks).toEqual([]);
+  expect(w.find('.okf-headtest__gate').exists()).toBe(false);
+  expect(w.find('.okf-headtest__teach').exists()).toBe(false);
+  expect(w.vm.verdictText).toContain('score 0.700 − forbidden 0.450 = 0.050');
 });

@@ -405,15 +405,30 @@ class TestRouteGraphs:
 
     # ─── Story 1-8 MR-D: vectorized-head affinity in the global pool ────────
 
-    def _head_rows(self, g="OKF_ncd_v1", dim=8, model="BAAI/bge-large-en-v1.5", vector=None):
-        return [{"g": g, "v": vector or [0.5] * dim, "dim": dim, "model": model}]
+    def _head_rows(self, g="OKF_ncd_v1", dim=8, model="BAAI/bge-large-en-v1.5", vector=None, fv=None, fvs=None):
+        # Story 1-8b: the head-fetch AQL always returns the gate inputs —
+        # ``fv`` the averaged forbidden centroid (null when the head has
+        # none) and ``fvs`` the per-tag forbidden_vectors ([] when absent).
+        # The defaults mirror that shape: no centroid, no per-tag vectors.
+        return [{"g": g, "v": vector or [0.5] * dim, "fv": fv, "fvs": fvs or [], "dim": dim, "model": model}]
 
-    async def _route(self, stub, graphs):
+    async def _route(self, stub, graphs, emb=None):
+        routed, degraded, _route_span = await self._route_with_span(stub, graphs, emb)
+        return routed, degraded
+
+    async def _route_with_span(self, stub, graphs, emb=None):
+        """Route and also return the mock route span, for set_attribute pins."""
         from retriever.genieai_retriever_arangodb import _route_graphs
 
         with patch("tracing.get_tracer") as mock_tracer:
             mock_tracer.return_value.start_span.return_value = MagicMock()
-            return await _route_graphs(stub, graphs, [0.1] * 8)
+            routed, degraded = await _route_graphs(stub, graphs, emb or [0.1] * 8)
+        return routed, degraded, mock_tracer.return_value.start_span.return_value
+
+    @staticmethod
+    def _span_attrs(route_span):
+        """Flatten the mock span's set_attribute calls into a dict."""
+        return {call.args[0]: call.args[1] for call in route_span.set_attribute.call_args_list}
 
     async def test_head_pseudo_row_lights_up_its_graph(self):
         # ncd has only 2 chunks (< ROUTE_MIN_CHUNKS) but a strong head
@@ -476,6 +491,268 @@ class TestRouteGraphs:
         )
         assert degraded is False
         assert routed == ["GRAPH", "OKF_alphabet_v1"]
+
+    # ─── Story 1-8b: the forbidden/noise gate (FLOOR + per-tag VETO) ────────
+    # David, 2026-10-09: "forbidden is forbidden — a hard contract, it should
+    # immediately score zero." A head CLAIMS the query only when ALL of:
+    #   FLOOR  — cosine(q, head) >= ROUTE_HEAD_FLOOR (unrelated queries score
+    #            0.32-0.48 on ANY head; margin-only let "capital of France"
+    #            claim NCD at +0.012),
+    #   VETO   — no single per-tag vector in head.per_field.forbidden_vectors
+    #            matches the query at/above ROUTE_FORBIDDEN_TAG_MAX
+    #            (mixed-subject queries slip the averaged centroid but not
+    #            their dominant tag),
+    #   MARGIN — cosine(q, head) - cosine(q, forbidden centroid) >
+    #            ROUTE_HEAD_MARGIN (the 1-8a rule, now the third leg).
+    # Degradation: heads without per-tag vectors skip the veto; heads without
+    # a forbidden centroid skip the margin. All gate knobs are patched
+    # explicitly (the module reads its config imports at call time — same
+    # mechanism as test_head_weight_zero_disables_the_signal), and the vectors
+    # are built on the basis query _E0 so every cosine is hand-checkable:
+    # cos(_E0, w) = w[0] / |w|.
+
+    # Basis query embedding — every gate cosine below reads off w[0] / |w|.
+    _E0 = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    async def test_head_below_floor_is_floored(self):
+        # cos(_E0, [0.5]*8) = 1/√8 ≈ 0.354 < 0.55 → the head scores ZERO
+        # (heads_floored) — the "capital of France" class that margin-only
+        # let through at +0.012. ncd stays at 2 chunks → dropped; alphabet's
+        # 3 chunks still qualify.
+        import retriever.genieai_retriever_arangodb as rmod
+
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        with (
+            patch.object(rmod, "ROUTE_HEAD_FLOOR", 0.55),
+            patch.object(rmod, "ROUTE_FORBIDDEN_TAG_MAX", 0.55),
+            patch.object(rmod, "ROUTE_HEAD_MARGIN", 0.01),
+        ):
+            routed, degraded, span = await self._route_with_span(
+                _routing_stub(results, heads=self._head_rows(vector=[0.5] * 8)),
+                ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"],
+                emb=self._E0,
+            )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1"]
+        attrs = self._span_attrs(span)
+        assert attrs["rag.route.heads_floored"] == 1
+        assert attrs["rag.route.head_rows"] == 0
+        assert attrs["rag.route.heads_vetoed"] == 0
+
+    async def test_head_vetoed_by_dominant_forbidden_tag(self):
+        # Floor passes (cos 1.0), margin skipped (no centroid), but ONE
+        # per-tag vector — "genetics" at cos 0.6 — reaches the veto ceiling:
+        # the head scores ZERO (heads_vetoed) and ncd (2 chunks, no vote)
+        # stays dropped. This is the mixed-subject class ("genetics + cancer")
+        # that slips the averaged centroid but not its dominant tag.
+        import retriever.genieai_retriever_arangodb as rmod
+
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        heads = self._head_rows(
+            vector=list(self._E0),
+            fvs=[{"tag": "genetics", "vector": [0.6, 0.8, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}],
+        )
+        with (
+            patch.object(rmod, "ROUTE_HEAD_FLOOR", 0.55),
+            patch.object(rmod, "ROUTE_FORBIDDEN_TAG_MAX", 0.55),
+            patch.object(rmod, "ROUTE_HEAD_MARGIN", 0.01),
+        ):
+            routed, degraded, span = await self._route_with_span(
+                _routing_stub(results, heads=heads),
+                ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"],
+                emb=self._E0,
+            )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1"]
+        attrs = self._span_attrs(span)
+        assert attrs["rag.route.heads_vetoed"] == 1
+        assert attrs["rag.route.heads_floored"] == 0
+        assert attrs["rag.route.head_rows"] == 0
+
+    async def test_veto_ignores_tags_below_the_ceiling(self):
+        # Same head shape, but the only tag vector scores 1/√8 ≈ 0.354 —
+        # below the ceiling → no veto. The per-tag list EXISTING at all must
+        # not suppress a legitimate claim: ncd gets the pseudo-row → 3
+        # chunks → qualifies.
+        import retriever.genieai_retriever_arangodb as rmod
+
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        heads = self._head_rows(vector=list(self._E0), fvs=[{"tag": "genetics", "vector": [0.5] * 8}])
+        with (
+            patch.object(rmod, "ROUTE_HEAD_FLOOR", 0.55),
+            patch.object(rmod, "ROUTE_FORBIDDEN_TAG_MAX", 0.55),
+            patch.object(rmod, "ROUTE_HEAD_MARGIN", 0.01),
+        ):
+            routed, degraded, span = await self._route_with_span(
+                _routing_stub(results, heads=heads),
+                ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"],
+                emb=self._E0,
+            )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"]
+        attrs = self._span_attrs(span)
+        assert attrs["rag.route.heads_vetoed"] == 0
+        assert attrs["rag.route.head_rows"] == 1
+
+    async def test_all_gates_pass_head_row_injected(self):
+        # The affirmative claim, all three legs: FLOOR 1.0 >= 0.55, VETO tag
+        # at 0.354 < 0.55, MARGIN 1.0 - 0.354 = 0.646 > 0.01 over the averaged
+        # centroid → pseudo-row injected → ncd qualifies.
+        import retriever.genieai_retriever_arangodb as rmod
+
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        heads = self._head_rows(
+            vector=list(self._E0),
+            fv=[0.5] * 8,
+            fvs=[{"tag": "genetics", "vector": [0.5] * 8}],
+        )
+        with (
+            patch.object(rmod, "ROUTE_HEAD_FLOOR", 0.55),
+            patch.object(rmod, "ROUTE_FORBIDDEN_TAG_MAX", 0.55),
+            patch.object(rmod, "ROUTE_HEAD_MARGIN", 0.01),
+        ):
+            routed, degraded, span = await self._route_with_span(
+                _routing_stub(results, heads=heads),
+                ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"],
+                emb=self._E0,
+            )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"]
+        attrs = self._span_attrs(span)
+        assert attrs["rag.route.head_rows"] == 1
+        assert attrs["rag.route.heads_gated"] == 0
+        assert attrs["rag.route.heads_floored"] == 0
+        assert attrs["rag.route.heads_vetoed"] == 0
+
+    async def test_margin_over_centroid_gates_head_1_8a(self):
+        # The 1-8a margin leg pinned (previously untested): the head claims at
+        # cos 1.0 and floor passes, but the averaged forbidden centroid sits
+        # at cos ≈ 0.995 — 1.0 - 0.995 = 0.005 <= 0.01 → heads_gated, no
+        # vote, ncd stays dropped.
+        import retriever.genieai_retriever_arangodb as rmod
+
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        heads = self._head_rows(vector=list(self._E0), fv=[1.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        with (
+            patch.object(rmod, "ROUTE_HEAD_FLOOR", 0.55),
+            patch.object(rmod, "ROUTE_FORBIDDEN_TAG_MAX", 0.55),
+            patch.object(rmod, "ROUTE_HEAD_MARGIN", 0.01),
+        ):
+            routed, degraded, span = await self._route_with_span(
+                _routing_stub(results, heads=heads),
+                ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"],
+                emb=self._E0,
+            )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1"]
+        attrs = self._span_attrs(span)
+        assert attrs["rag.route.heads_gated"] == 1
+        assert attrs["rag.route.head_rows"] == 0
+        assert attrs["rag.route.heads_floored"] == 0
+        assert attrs["rag.route.heads_vetoed"] == 0
+
+    async def test_degradation_no_forbidden_vectors_skips_veto(self):
+        # Pre-1-8b head — per_field.forbidden_vectors absent, so the fetch
+        # AQL's `|| []` yields an EMPTY list: the veto leg is skipped
+        # entirely. The identical head that
+        # test_head_vetoed_by_dominant_forbidden_tag suppresses now claims.
+        import retriever.genieai_retriever_arangodb as rmod
+
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        heads = self._head_rows(vector=list(self._E0), fvs=[])
+        with (
+            patch.object(rmod, "ROUTE_HEAD_FLOOR", 0.55),
+            patch.object(rmod, "ROUTE_FORBIDDEN_TAG_MAX", 0.55),
+            patch.object(rmod, "ROUTE_HEAD_MARGIN", 0.01),
+        ):
+            routed, degraded, span = await self._route_with_span(
+                _routing_stub(results, heads=heads),
+                ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"],
+                emb=self._E0,
+            )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"]
+        attrs = self._span_attrs(span)
+        assert attrs["rag.route.heads_vetoed"] == 0
+        assert attrs["rag.route.head_rows"] == 1
+
+    async def test_degradation_no_centroid_skips_margin(self):
+        # Head without a forbidden centroid (fv null): the margin leg is
+        # skipped (the 1-8a "gate degrades open" semantics). The identical
+        # head+centroid pair that test_margin_over_centroid_gates_head_1_8a
+        # suppresses now claims — margin needs a centroid to compare against.
+        import retriever.genieai_retriever_arangodb as rmod
+
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        heads = self._head_rows(vector=list(self._E0), fv=None, fvs=[])
+        with (
+            patch.object(rmod, "ROUTE_HEAD_FLOOR", 0.55),
+            patch.object(rmod, "ROUTE_FORBIDDEN_TAG_MAX", 0.55),
+            patch.object(rmod, "ROUTE_HEAD_MARGIN", 0.01),
+        ):
+            routed, degraded, span = await self._route_with_span(
+                _routing_stub(results, heads=heads),
+                ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"],
+                emb=self._E0,
+            )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"]
+        attrs = self._span_attrs(span)
+        assert attrs["rag.route.heads_gated"] == 0
+        assert attrs["rag.route.head_rows"] == 1
+
+    async def test_gate_boundaries_floor_inclusive_veto_inclusive(self):
+        # Boundary semantics: the floor is INCLUSIVE (a head scoring EXACTLY
+        # the floor is not floored — the drop is strictly-less) and the veto
+        # ceiling is INCLUSIVE (a tag at EXACTLY the ceiling vetoes — the
+        # code vetoes on >=). Both knobs pinned at 0.6 and [0.6, 0.8, 0…] is
+        # a unit vector, so head and tag both score EXACTLY 0.6: the head
+        # passes the floor, the tag vetoes it.
+        import retriever.genieai_retriever_arangodb as rmod
+
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        unit06 = [0.6, 0.8, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        heads = self._head_rows(vector=unit06, fvs=[{"tag": "genetics", "vector": list(unit06)}])
+        with (
+            patch.object(rmod, "ROUTE_HEAD_FLOOR", 0.6),
+            patch.object(rmod, "ROUTE_FORBIDDEN_TAG_MAX", 0.6),
+            patch.object(rmod, "ROUTE_HEAD_MARGIN", 0.01),
+        ):
+            routed, degraded, span = await self._route_with_span(
+                _routing_stub(results, heads=heads),
+                ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"],
+                emb=self._E0,
+            )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_alphabet_v1"]
+        attrs = self._span_attrs(span)
+        assert attrs["rag.route.heads_floored"] == 0  # 0.6 == floor → passed the floor
+        assert attrs["rag.route.heads_vetoed"] == 1  # 0.6 == ceiling → vetoed
+        assert attrs["rag.route.head_rows"] == 0
 
 
 class TestFanoutRoutingHook:

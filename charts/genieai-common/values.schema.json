@@ -4,6 +4,10 @@
   "description": "Schema for values imported via import-values: into consuming charts. Most fields default and require no setting.",
   "type": "object",
   "properties": {
+    "global": {
+      "type": "object",
+      "description": "Helm-injected subtree every chart receives from the root release values. Defined here only so additionalProperties:false tolerates the key Helm always injects; the library itself reads nothing from it."
+    },
     "nameOverride": {
       "type": "string",
       "description": "Override the chart name segment in resource names. Empty = use chart default.",

@@ -22,6 +22,17 @@
               loop: after a run with failing negatives, one "Explain
               failures" call (ONE LLM call) returns add-all forbidden
               tags + a rebuild/re-run-suite offer — the anti-treadmill.
+              Story 1-8d makes the loop GUARDED and reversible after the
+              2026-10-09 poisoning (3 cycles applied 'lung-cancer' — the
+              repo's OWN entity tag — and positives collapsed while
+              negatives went 20/20): the guardrail's rejected proposals
+              render as muted chips with their reason, removal_suggestions
+              render as one-click danger chips (the inverse affordance),
+              positive failures gate the Explain button alongside
+              negatives, a same-suite positive-pass-rate drop raises a
+              red tripwire strip pointing at the Revert panel, the suite's
+              forbidden_snapshot staleness is flagged, and every
+              frontmatter save is revertible in place.
   Entry points: StudioDashboard card actions (published + ingested), the
   editor shell actions row, the editor right-rail badge, the wizard
   Publish step (readOnly — view + test only; every write path here is
@@ -265,7 +276,7 @@
                   {{ isTaught(t) ? '✓' : '+' }} {{ t }}
                 </DsTag>
               </div>
-              <p v-else class="okf-headtest__teach-text okf-headtest__empty">
+              <p v-else-if="!suggestedRejected.length" class="okf-headtest__teach-text okf-headtest__empty">
                 {{
                   translate(
                     'okf.headTest.teach.suggestNone',
@@ -273,6 +284,31 @@
                   )
                 }}
               </p>
+              <!-- 1-8d: the guardrail's screened-out proposals — the curator
+                   SEES what was rejected and why (trust through
+                   transparency; the 2026-10-09 poisoning happened in the
+                   dark). Muted chips, reason as tooltip. -->
+              <div v-if="suggestedRejected.length" class="okf-headtest__rejected">
+                <p class="okf-headtest__teach-text okf-headtest__empty">
+                  {{
+                    translate(
+                      'okf.headTest.teach.rejected',
+                      'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
+                    )
+                  }}
+                </p>
+                <div class="okf-headtest__chips">
+                  <DsTag
+                    v-for="r in suggestedRejected"
+                    :key="'rej-' + r.tag"
+                    variant="neutral"
+                    class="okf-headtest__rejected-chip"
+                    :title="r.reason"
+                  >
+                    ✕ {{ r.tag }}
+                  </DsTag>
+                </div>
+              </div>
               <p class="okf-headtest__teach-text okf-headtest__empty">{{ explanation.suggestion.reason }}</p>
               <template v-if="taughtTags.length">
                 <p class="okf-headtest__teach-text">
@@ -312,6 +348,61 @@
           }}
         </p>
         <p v-if="error" class="okf-headtest__error">{{ error }}</p>
+        <!-- 1-8d: the cycle's undo — every frontmatter save is snapshotted
+             server-side; one click restores + offers rebuild & re-run.
+             Editor only (wizard writes nothing). -->
+        <div
+          v-if="!readOnly"
+          class="okf-headtest__revert"
+          :class="{ 'okf-headtest__revert--highlight': revertHighlight }"
+        >
+          <span class="okf-headtest__teach-title">
+            {{ translate('okf.headTest.suites.revertTitle', 'Revert tags') }}
+          </span>
+          <DsSpinner v-if="busy === 'history'" size="sm" class="okf-headtest__busy">
+            {{ translate('okf.headTest.suites.revertBusy', 'Loading save history…') }}
+          </DsSpinner>
+          <template v-else>
+            <ul v-if="revertEntries.length" class="okf-headtest__revert-list">
+              <li v-for="e in revertEntries" :key="e.saved_at">
+                <span>{{ shortDate(e.saved_at) }}</span>
+                <span class="okf-headtest__revert-actor">{{ e.actor }}</span>
+                <span v-if="e.forbidden_count !== null" class="okf-headtest__revert-actor">
+                  {{
+                    translate('okf.headTest.suites.revertForbiddenCount', '{n} forbidden tags').replace(
+                      '{n}',
+                      String(e.forbidden_count)
+                    )
+                  }}
+                </span>
+                <DsButton variant="secondary" small :disabled="busy !== null" @click="onRevertTo(e)">
+                  {{ translate('okf.headTest.suites.revertAction', 'Revert') }}
+                </DsButton>
+              </li>
+            </ul>
+            <p v-else class="okf-headtest__teach-text okf-headtest__empty">
+              {{ translate('okf.headTest.suites.revertEmpty', 'No frontmatter saves recorded yet.') }}
+            </p>
+          </template>
+          <DsSpinner v-if="busy === 'revert'" size="sm" class="okf-headtest__busy">
+            {{ translate('okf.headTest.suites.revertSaving', 'Restoring the frontmatter…') }}
+          </DsSpinner>
+          <template v-if="reverted && query.trim()">
+            <p class="okf-headtest__teach-text">
+              {{
+                translate(
+                  'okf.headTest.suites.revertDone',
+                  'Frontmatter restored — rebuild the head and re-run to apply it.'
+                )
+              }}
+            </p>
+            <div class="okf-headtest__pane-actions">
+              <DsButton variant="primary" small :disabled="busy !== null" @click="onRebuildRerun">
+                {{ translate('okf.headTest.teach.rebuildRerun', 'Rebuild head & re-run') }}
+              </DsButton>
+            </div>
+          </template>
+        </div>
       </div>
 
       <!-- ─────────────────────── TAB 3: SUITES ─────────────────────── -->
@@ -370,6 +461,17 @@
             <DsButton variant="secondary" small :disabled="busy !== null" @click="onRunSuite">
               {{ translate('okf.headTest.suites.run', 'Run all queries') }}
             </DsButton>
+            <!-- 1-8d: the suite's forbidden rows were derived from the
+                 forbidden list AT GENERATION TIME — after any tag change
+                 they no longer match the repo (say it, don't hide it). -->
+            <span v-if="suiteForbiddenStale" class="okf-headtest__stale-suite">
+              {{
+                translate(
+                  'okf.headTest.suites.staleSnapshot',
+                  'Tags changed since this suite was generated — regenerate for fresh forbidden rows.'
+                )
+              }}
+            </span>
           </div>
           <table class="okf-headtest__scores">
             <thead>
@@ -433,11 +535,25 @@
               }}
             </span>
           </div>
+          <!-- 1-8d: the positive-regression tripwire — re-running the SAME
+               suite after a tag cycle must never silently drop positives
+               (the 2026-10-09 collapse was 7/8 -> 2/8 while negatives went
+               20/20). Same-suite comparison only; a drop opens the door to
+               the Revert panel. -->
+          <div v-if="tripwire" class="okf-headtest__tripwire">
+            <span>{{ tripwireText }}</span>
+            <DsButton variant="secondary" small :disabled="busy !== null" @click="showRevertPanel">
+              {{ translate('okf.headTest.suites.tripwireRevert', 'View revert options') }}
+            </DsButton>
+          </div>
           <!-- 1-8c: BATCH advice — the anti-treadmill (David: this must
                never become a per-query full-time job). One review per run:
-               every failing negative, ONE LLM call, add-all chips. Hidden
-               in the wizard (readOnly — the fix writes tags). -->
-          <div v-if="!readOnly && hasNegativeFailures" class="okf-headtest__pane-actions">
+               every failing negative, ONE LLM call, add-all chips. 1-8d
+               extends the gate to POSITIVE failures (over-suppression —
+               the Explain button must not vanish exactly when the added
+               tags suppress the repo's own subject). Hidden in the wizard
+               (readOnly — the fix writes tags). -->
+          <div v-if="!readOnly && hasExplainableFailures" class="okf-headtest__pane-actions">
             <DsButton variant="secondary" small :disabled="busy !== null" @click="onExplainFailures">
               {{ translate('okf.headTest.suites.explainFailures', 'Explain failures') }}
             </DsButton>
@@ -450,11 +566,91 @@
               }}
             </DsSpinner>
           </div>
-          <div v-if="batchAdvice" class="okf-headtest__suggestion">
+          <!-- 1-8d: the COMPREHENSIVE advisor — every query class across
+               recent runs, simulated against the gate before anything is
+               recommended. Independent of the per-run batch advice. -->
+          <div v-if="!readOnly" class="okf-headtest__pane-actions">
+            <DsButton variant="secondary" small :disabled="busy !== null" @click="onRecommend">
+              {{ translate('okf.headTest.advisor.run', 'Advisor: recommend tag changes') }}
+            </DsButton>
+            <DsSpinner v-if="busy === 'advisor'" size="sm" class="okf-headtest__busy">
+              {{ translate('okf.headTest.advisor.busy', 'Simulating tag changes across recent runs…') }}
+            </DsSpinner>
+          </div>
+          <div v-if="advisor" class="okf-headtest__suggestion">
             <span class="okf-headtest__teach-title">{{
-              translate('okf.headTest.suites.batchTitle', 'Why the failing negatives routed here')
+              translate('okf.headTest.advisor.title', 'Tag-set recommendation (simulated across recent runs)')
             }}</span>
+            <p class="okf-headtest__teach-text">{{ advisorScoreText }}</p>
+            <p v-if="advisor.note" class="okf-headtest__teach-text okf-headtest__empty">{{ advisor.note }}</p>
+            <div v-if="advisorAddTags.length" class="okf-headtest__chips">
+              <DsTag
+                v-for="t in advisorAddTags"
+                :key="'adv-a-' + t"
+                variant="accent"
+                class="okf-headtest__add-chip"
+                role="button"
+                :title="translate('okf.headTest.teach.addTag', 'Add to forbidden tags')"
+                @click="onTeachTag(t)"
+              >
+                {{ isTaught(t) ? '✓' : '+' }} {{ t }}
+              </DsTag>
+            </div>
+            <div v-if="advisorRemoveTags.length" class="okf-headtest__chips">
+              <DsTag
+                v-for="r in advisorRemoveTags"
+                :key="'adv-r-' + r.tag"
+                variant="danger"
+                class="okf-headtest__remove-chip"
+                role="button"
+                :title="translate('okf.headTest.suites.removeTag', 'Remove from forbidden tags')"
+                @click="onRemoveTag(r.tag)"
+              >
+                − {{ r.tag }}
+              </DsTag>
+            </div>
+            <ul v-if="advisorVerdicts.length" class="okf-headtest__failing">
+              <li v-for="v in advisorVerdicts" :key="v.tag + (v.rejected || '')">
+                <span>{{ v.rejected ? '✗' : '✓' }} {{ v.tag }}{{ v.rejected ? ' — ' + v.rejected : '' }}</span>
+              </li>
+            </ul>
+            <div class="okf-headtest__pane-actions">
+              <DsButton
+                v-if="advisorAddTags.length || advisorRemoveTags.length"
+                variant="primary"
+                small
+                :disabled="busy !== null"
+                @click="onAdvisorApply"
+              >
+                {{ translate('okf.headTest.advisor.apply', 'Apply changes & rebuild & re-run suite') }}
+              </DsButton>
+            </div>
+          </div>
+          <div v-if="batchAdvice" class="okf-headtest__suggestion">
+            <span class="okf-headtest__teach-title">{{ batchTitleText }}</span>
             <p v-if="batchAdvice.note" class="okf-headtest__teach-text">{{ batchAdvice.note }}</p>
+            <!-- 1-8d: positive failures are visible on their own terms —
+                 the count + the veto attribution (which added tag killed
+                 how many positives), not folded into the negative list. -->
+            <div v-if="positiveFailures && positiveFailures.count > 0" class="okf-headtest__positive-fail">
+              <p class="okf-headtest__teach-text">
+                {{
+                  translate(
+                    'okf.headTest.suites.positiveFailures',
+                    '{n} positive test(s) were suppressed this run — the forbidden tags over-match the repository scope.'
+                  ).replace('{n}', String(positiveFailures.count))
+                }}
+              </p>
+              <p v-if="vetoCountsText" class="okf-headtest__teach-text okf-headtest__empty">{{ vetoCountsText }}</p>
+              <p v-if="positiveFailures.margin_killed > 0" class="okf-headtest__teach-text okf-headtest__empty">
+                {{
+                  translate(
+                    'okf.headTest.suites.marginKilled',
+                    '{n} positive test(s) lost on margin (no single veto tag).'
+                  ).replace('{n}', String(positiveFailures.margin_killed))
+                }}
+              </p>
+            </div>
             <ul v-if="batchAdvice.failing_queries && batchAdvice.failing_queries.length" class="okf-headtest__failing">
               <li v-for="f in batchAdvice.failing_queries" :key="f.query">
                 <span>{{ f.query }}</span>
@@ -480,7 +676,7 @@
                   {{ translate('okf.headTest.suites.addAll', 'Add all') }}
                 </DsButton>
                 <DsButton
-                  v-if="taughtTags.length"
+                  v-if="taughtTags.length || removedTags.length"
                   variant="primary"
                   small
                   :disabled="busy !== null"
@@ -493,7 +689,66 @@
                 </DsSpinner>
               </div>
             </template>
-            <p v-else class="okf-headtest__teach-text okf-headtest__empty">
+            <!-- 1-8d: the guardrail's screened-out proposals — same
+                 transparency as the Test tab, and INDEPENDENT of the
+                 accepted chips (a fully-screened batch has no add chips
+                 but must still show what was refused and why). -->
+            <div v-if="batchRejected.length" class="okf-headtest__rejected">
+              <p class="okf-headtest__teach-text okf-headtest__empty">
+                {{
+                  translate(
+                    'okf.headTest.teach.rejected',
+                    'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
+                  )
+                }}
+              </p>
+              <div class="okf-headtest__chips">
+                <DsTag
+                  v-for="r in batchRejected"
+                  :key="'rej-' + r.tag"
+                  variant="neutral"
+                  class="okf-headtest__rejected-chip"
+                  :title="r.reason"
+                >
+                  ✕ {{ r.tag }}
+                </DsTag>
+              </div>
+            </div>
+            <!-- 1-8d: the INVERSE affordance — killed positives carry the
+                 tag_veto attribution; one click removes the offending tag
+                 (the exact inverse of the add chips above). -->
+            <div v-if="removalSuggestions.length" class="okf-headtest__removals">
+              <p class="okf-headtest__teach-text okf-headtest__empty">
+                {{
+                  translate(
+                    'okf.headTest.suites.removals',
+                    'Tags to remove (they veto this repository’s own positives)'
+                  )
+                }}
+              </p>
+              <div class="okf-headtest__chips">
+                <DsTag
+                  v-for="rm in removalSuggestions"
+                  :key="'rm-' + rm.tag"
+                  :variant="isRemoved(rm.tag) ? 'neutral' : 'danger'"
+                  class="okf-headtest__remove-chip"
+                  role="button"
+                  :title="removalTip(rm)"
+                  @click="onRemoveTag(rm.tag)"
+                >
+                  {{ isRemoved(rm.tag) ? '✓' : '−' }} {{ rm.tag }}
+                </DsTag>
+              </div>
+              <div v-if="removedTags.length && !batchTags.length" class="okf-headtest__pane-actions">
+                <DsButton variant="primary" small :disabled="busy !== null" @click="onRebuildSuiteRerun">
+                  {{ translate('okf.headTest.suites.rebuildRerun', 'Rebuild head & re-run suite') }}
+                </DsButton>
+              </div>
+            </div>
+            <p
+              v-if="!batchTags.length && !removalSuggestions.length && !batchRejected.length"
+              class="okf-headtest__teach-text okf-headtest__empty"
+            >
               {{
                 translate(
                   'okf.headTest.suites.batchNone',
@@ -520,6 +775,63 @@
           >
             {{ translate('okf.headTest.suites.add', 'Add to suite') }}
           </DsButton>
+        </div>
+
+        <!-- 1-8d: Revert tags — the cycle's undo, requirement (3). Every
+             frontmatter save is snapshotted (bounded, newest first); one
+             click restores and offers the rebuild + re-run. Editor only
+             (the wizard writes nothing). -->
+        <div
+          v-if="!readOnly"
+          class="okf-headtest__revert"
+          :class="{ 'okf-headtest__revert--highlight': revertHighlight }"
+        >
+          <span class="okf-headtest__teach-title">
+            {{ translate('okf.headTest.suites.revertTitle', 'Revert tags') }}
+          </span>
+          <DsSpinner v-if="busy === 'history'" size="sm" class="okf-headtest__busy">
+            {{ translate('okf.headTest.suites.revertBusy', 'Loading save history…') }}
+          </DsSpinner>
+          <template v-else>
+            <ul v-if="revertEntries.length" class="okf-headtest__revert-list">
+              <li v-for="e in revertEntries" :key="e.saved_at">
+                <span>{{ shortDate(e.saved_at) }}</span>
+                <span class="okf-headtest__revert-actor">{{ e.actor }}</span>
+                <span v-if="e.forbidden_count !== null" class="okf-headtest__revert-actor">
+                  {{
+                    translate('okf.headTest.suites.revertForbiddenCount', '{n} forbidden tags').replace(
+                      '{n}',
+                      String(e.forbidden_count)
+                    )
+                  }}
+                </span>
+                <DsButton variant="secondary" small :disabled="busy !== null" @click="onRevertTo(e)">
+                  {{ translate('okf.headTest.suites.revertAction', 'Revert') }}
+                </DsButton>
+              </li>
+            </ul>
+            <p v-else class="okf-headtest__teach-text okf-headtest__empty">
+              {{ translate('okf.headTest.suites.revertEmpty', 'No frontmatter saves recorded yet.') }}
+            </p>
+          </template>
+          <DsSpinner v-if="busy === 'revert'" size="sm" class="okf-headtest__busy">
+            {{ translate('okf.headTest.suites.revertSaving', 'Restoring the frontmatter…') }}
+          </DsSpinner>
+          <template v-if="reverted && suite">
+            <p class="okf-headtest__teach-text">
+              {{
+                translate(
+                  'okf.headTest.suites.revertDone',
+                  'Frontmatter restored — rebuild the head and re-run to apply it.'
+                )
+              }}
+            </p>
+            <div class="okf-headtest__pane-actions">
+              <DsButton variant="primary" small :disabled="busy !== null" @click="onRebuildSuiteRerun">
+                {{ translate('okf.headTest.suites.rebuildRerun', 'Rebuild head & re-run suite') }}
+              </DsButton>
+            </div>
+          </template>
         </div>
 
         <h4 class="okf-headtest__suite-title">
@@ -613,7 +925,21 @@ export default {
       // the forbidden tags taught (added) from either panel this session.
       explanation: null,
       batchAdvice: null,
-      taughtTags: []
+      // 1-8d: the comprehensive advisor's latest result (scorecards +
+      // simulated add/remove changes across recent runs).
+      advisor: null,
+      taughtTags: [],
+      // 1-8d: the guarded cycle — removedTags mirrors taughtTags for the
+      // removal chips; tripwire holds a positive-regression detection for
+      // the last same-suite re-run (dropped count); the Revert panel's
+      // save history + highlight state. lastRunSuiteKey keeps the
+      // comparison same-suite only (never across suites).
+      removedTags: [],
+      tripwire: null,
+      lastRunSuiteKey: null,
+      fmHistory: [],
+      revertHighlight: false,
+      reverted: false
     };
   },
   computed: {
@@ -880,6 +1206,140 @@ export default {
       if (!s || typeof s.negative_passed !== 'number' || typeof s.negative_total !== 'number') return false;
       return s.negative_passed < s.negative_total;
     },
+    /** 1-8d: positive failures count as explainable too — over-suppression
+     * is the poisoning signature, and the Explain button must not vanish
+     * exactly when the added tags suppress the repo's own subject. */
+    hasPositiveFailures() {
+      const s = this.lastRunSummary;
+      if (!s || typeof s.positive_passed !== 'number' || typeof s.positive_total !== 'number') return false;
+      return s.positive_passed < s.positive_total;
+    },
+    /** 1-8d: the Explain gate — either failure kind. Legacy run summaries
+     * carrying neither counter keep the button hidden (nothing to explain
+     * from). */
+    hasExplainableFailures() {
+      return this.hasNegativeFailures || this.hasPositiveFailures;
+    },
+    /** 1-8d: guardrail-screened proposals from the claim-side explain —
+     * [{tag, reason}] rendered as muted chips with the reason as tooltip. */
+    suggestedRejected() {
+      const r = this.explanation && this.explanation.suggestion;
+      return r && Array.isArray(r.rejected) ? r.rejected : [];
+    },
+    /** 1-8d: the batch explain's screened-out proposals. */
+    batchRejected() {
+      return this.batchAdvice && Array.isArray(this.batchAdvice.rejected) ? this.batchAdvice.rejected : [];
+    },
+    /** 1-8d: the batch explain's removal advice — [{tag, killed}] from the
+     * killed positives' tag_veto attribution. Legacy responses carry no
+     * field → empty (never a crash). */
+    removalSuggestions() {
+      return (
+        (this.batchAdvice &&
+          Array.isArray(this.batchAdvice.removal_suggestions) &&
+          this.batchAdvice.removal_suggestions) ||
+        []
+      );
+    },
+    /** 1-8d: the batch explain's positive-failure block — {count,
+     * veto_counts, margin_killed}; absent on legacy responses. */
+    positiveFailures() {
+      return this.batchAdvice && this.batchAdvice.positive_failures ? this.batchAdvice.positive_failures : null;
+    },
+    /** 1-8d: the veto attribution as one line ("Vetoed by: lung-cancer ×2,
+     * non-smoking ×1") — the exact tags that over-suppressed. */
+    vetoCountsText() {
+      const pf = this.positiveFailures;
+      if (!pf || !pf.veto_counts || typeof pf.veto_counts !== 'object') return '';
+      const parts = Object.entries(pf.veto_counts).map(([tag, n]) => `${tag} ×${n}`);
+      if (!parts.length) return '';
+      return this.translate('okf.headTest.suites.vetoedBy', 'Vetoed by') + ': ' + parts.join(', ');
+    },
+    /** 1-8d: batch panel title — negatives failing get the 1-8c title; a
+     * positive-only collapse gets its own (the "why the failing negatives
+     * routed here" heading reads absurd with an empty negative list). */
+    batchTitleText() {
+      if (this.batchAdvice && this.batchAdvice.failing_count > 0) {
+        return this.translate('okf.headTest.suites.batchTitle', 'Why the failing negatives routed here');
+      }
+      return this.translate('okf.headTest.suites.positiveFailuresTitle', 'Why positives stopped passing');
+    },
+    /** 1-8d: the advisor's recommended additions (not yet applied). */
+    advisorAddTags() {
+      const add =
+        this.advisor && this.advisor.changes && Array.isArray(this.advisor.changes.add) ? this.advisor.changes.add : [];
+      return add.filter((t) => !this.isTaught(t));
+    },
+    /** 1-8d: the advisor's recommended removals still present in the
+     * repo's forbidden list — [{tag, killed}]. */
+    advisorRemoveTags() {
+      const remove =
+        this.advisor && this.advisor.changes && Array.isArray(this.advisor.changes.remove)
+          ? this.advisor.changes.remove
+          : [];
+      const fm = (this.repo && this.repo.frontmatter) || {};
+      const current = Array.isArray(fm.forbidden) ? fm.forbidden.map((x) => String(x).toLowerCase()) : [];
+      return remove
+        .map((t) => (typeof t === 'string' ? { tag: t } : t))
+        .filter((r) => current.includes(String(r.tag).toLowerCase()));
+    },
+    /** 1-8d: candidate evaluation verdicts (accepted + rejected) for the
+     * advisor transparency list. */
+    advisorVerdicts() {
+      const addEval = (this.advisor && Array.isArray(this.advisor.add_eval) ? this.advisor.add_eval : []).slice(0, 12);
+      const removeEval = (
+        this.advisor && Array.isArray(this.advisor.remove_eval) ? this.advisor.remove_eval : []
+      ).slice(0, 8);
+      return addEval.concat(removeEval);
+    },
+    /** 1-8d: the before/after scorecard line for the advisor panel. */
+    advisorScoreText() {
+      const a = this.advisor;
+      if (!a || !a.current_scorecard || !a.recommended_scorecard) return '';
+      const cur = a.current_scorecard;
+      const rec = a.recommended_scorecard;
+      const fmt = (s) =>
+        this.translate('okf.headTest.advisor.scorecard', 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed')
+          .replace('{p}', String(s.positive_claimed))
+          .replace('{pt}', String(s.positive_total))
+          .replace('{n}', String(s.negative_suppressed))
+          .replace('{nt}', String(s.negative_total));
+      return (
+        `${this.translate('okf.headTest.advisor.now', 'Now')}: ${fmt(cur)} → ${this.translate(
+          'okf.headTest.advisor.predicted',
+          'predicted'
+        )}: ${fmt(rec)}` +
+        this.translate('okf.headTest.advisor.scope', ' (across {q} queries from the last {r} runs)')
+          .replace('{q}', String(a.queries_considered))
+          .replace('{r}', String(a.runs_considered))
+      );
+    },
+    /** 1-8d: the suite's forbidden-derived rows were derived from the
+     * forbidden list AT GENERATION TIME (payload.forbidden_snapshot) —
+     * flag when the stored list has since drifted (set compare,
+     * case-insensitive). */
+    suiteForbiddenStale() {
+      const snap = this.suite && this.suite.payload && this.suite.payload.forbidden_snapshot;
+      if (!Array.isArray(snap)) return false;
+      const fm = (this.repo && this.repo.frontmatter && this.repo.frontmatter.forbidden) || [];
+      const norm = (a) => [...new Set(a.map((x) => String(x).toLowerCase()))].sort();
+      const a = norm(snap);
+      const b = norm(fm);
+      return a.length !== b.length || a.some((x, i) => x !== b[i]);
+    },
+    /** 1-8d: the Revert panel's entries, display-capped at 10 (the server
+     * already bounds its history at 10 — the slice is belt and braces). */
+    revertEntries() {
+      return (Array.isArray(this.fmHistory) ? this.fmHistory : []).slice(0, 10);
+    },
+    /** 1-8d: the tripwire strip's text — N positives broke this cycle. */
+    tripwireText() {
+      const n = this.tripwire ? this.tripwire.dropped : 0;
+      return this.translate(
+        'okf.headTest.suites.tripwire',
+        'This cycle broke {n} positive tests — the added tags over-suppress. Revert?'
+      ).replace('{n}', String(n));
+    },
     /** 1-8c: label for the teach-flow long actions (tag save / rebuild +
      * re-run) — the same busy-strip pattern as the tabs' own spinners. */
     teachBusyLabel() {
@@ -917,7 +1377,15 @@ export default {
           this.taughtTags = [];
           this.explanation = null;
           this.batchAdvice = null;
+          // 1-8d: cycle state is per-open too (the tripwire describes the
+          // session's last same-suite comparison; history is cheap).
+          this.removedTags = [];
+          this.tripwire = null;
+          this.revertHighlight = false;
+          this.reverted = false;
+          this.fmHistory = [];
           this.refreshRuns();
+          if (!this.readOnly) this.loadFrontmatterHistory();
         }
       }
     }
@@ -1003,15 +1471,21 @@ export default {
     },
     /** 1-8c: the frontmatter shape the Lab's tag writes go through — the
      * doc-field shape (same as FrontmatterPanel), with extraForbidden
-     * merged into the stored forbidden list (case-insensitive dedupe).
-     * The WRITE itself reuses the okf/saveFrontmatter two-write action —
+     * merged into the stored forbidden list (case-insensitive dedupe) and
+     * removeForbidden (1-8d, the removal chips) filtered out of it. The
+     * WRITE itself reuses the okf/saveFrontmatter two-write action —
      * no new endpoint. */
-    buildFrontmatterShape(extraForbidden = []) {
+    buildFrontmatterShape(extraForbidden = [], removeForbidden = []) {
       const fm = (this.repo && this.repo.frontmatter) || {};
       const arr = (v) => (Array.isArray(v) ? v.slice() : []);
-      const forbidden = arr(fm.forbidden);
+      let forbidden = arr(fm.forbidden);
       for (const t of extraForbidden) {
         if (!forbidden.some((x) => String(x).toLowerCase() === String(t).toLowerCase())) forbidden.push(t);
+      }
+      if (removeForbidden.length) {
+        forbidden = forbidden.filter(
+          (x) => !removeForbidden.some((t) => String(x).toLowerCase() === String(t).toLowerCase())
+        );
       }
       return {
         topic: arr(fm.topic),
@@ -1031,6 +1505,106 @@ export default {
       return (
         Array.isArray(fm.forbidden) && fm.forbidden.some((x) => String(x).toLowerCase() === String(t).toLowerCase())
       );
+    },
+    /** 1-8d: a removal chip counts as done when clicked this session OR
+     * already absent from the stored forbidden list (mirrors isTaught). */
+    isRemoved(t) {
+      if (this.removedTags.includes(t)) return true;
+      const fm = (this.repo && this.repo.frontmatter) || {};
+      return (
+        !Array.isArray(fm.forbidden) || !fm.forbidden.some((x) => String(x).toLowerCase() === String(t).toLowerCase())
+      );
+    },
+    /** 1-8d: the removal chip's tooltip — the attribution ("- tag (killed
+     * N positives)"), so the curator sees WHY before clicking. */
+    removalTip(rm) {
+      return this.translate('okf.headTest.suites.removeTip', 'Remove "{tag}" — it vetoed {n} positive test(s)')
+        .replace('{tag}', rm.tag)
+        .replace('{n}', String(rm.killed));
+    },
+    /** 1-8d: REMOVE one vetoed tag from the repo's forbidden tags — the
+     * inverse of onTeachTag. Same shared two-write save, shape built with
+     * the tag excluded. Afterwards the rebuild + re-run offer appears. */
+    async onRemoveTag(tag) {
+      if (!tag || this.busy !== null) return;
+      this.busy = 'save-tag';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/saveFrontmatter', {
+        repoId: this.repo.repo_id,
+        shape: this.buildFrontmatterShape([], [tag])
+      });
+      this.busy = null;
+      if (!res || !res.ok) {
+        this.error =
+          (res && res.message) || this.translate('okf.headTest.error.saveTag', 'Could not save the forbidden tag');
+        return;
+      }
+      if (!this.removedTags.includes(tag)) this.removedTags.push(tag);
+      this.taughtTags = this.taughtTags.filter((t) => t !== tag);
+      this.$emit('changed', { frontmatter: true });
+    },
+    /** 1-8d: the positive-regression tripwire — same-suite comparison
+     * ONLY. Given the previous run's positive counts (null when there is
+     * no comparable run) and the fresh summary, flags a pass-rate drop
+     * with a best-effort broken-positive count. */
+    checkTripwire(prev, next) {
+      this.tripwire = null;
+      if (!prev || !next || !prev.total || !next.positive_total) return;
+      const prevRate = prev.passed / prev.total;
+      const nextRate = next.positive_passed / next.positive_total;
+      if (nextRate >= prevRate) return;
+      const dropped =
+        prev.total === next.positive_total
+          ? Math.max(0, prev.passed - next.positive_passed)
+          : Math.max(1, Math.round((prevRate - nextRate) * prev.total));
+      this.tripwire = { dropped };
+    },
+    /** 1-8d: load the bounded frontmatter save history for the Revert
+     * panel (cheap read; editor sessions only — the panel is hidden in
+     * the wizard). */
+    async loadFrontmatterHistory() {
+      if (this.busy !== null) return;
+      this.busy = 'history';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/frontmatterHistory', { repoId: this.repo.repo_id });
+      this.busy = null;
+      if (!res.ok) {
+        this.error = res.message || this.translate('okf.headTest.error.history', 'Could not load the save history');
+        return;
+      }
+      this.fmHistory = res.entries || [];
+    },
+    /** 1-8d: the tripwire's "Revert?" affordance — jump to the Revert
+     * panel (Suites tab), highlight it, and make sure its data is in. */
+    async showRevertPanel() {
+      if (this.readOnly) return;
+      if (this.tab !== 'suites') this.tab = 'suites';
+      this.revertHighlight = true;
+      if (!this.fmHistory.length) await this.loadFrontmatterHistory();
+    },
+    /** 1-8d: restore the frontmatter snapshotted at the entry's saved_at.
+     * The server re-enters update(), so the revert itself is snapshotted
+     * (revert-of-revert works). Emits changed so the shell refetches the
+     * repo, then offers the rebuild + re-run. */
+    async onRevertTo(entry) {
+      if (!entry || !entry.saved_at || this.busy !== null) return;
+      this.busy = 'revert';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/frontmatterRevert', {
+        repoId: this.repo.repo_id,
+        savedAt: entry.saved_at
+      });
+      this.busy = null;
+      if (!res.ok) {
+        this.error = res.message || this.translate('okf.headTest.error.revert', 'Could not revert the frontmatter');
+        return;
+      }
+      this.reverted = true;
+      this.revertHighlight = false;
+      this.taughtTags = [];
+      this.removedTags = [];
+      this.$emit('changed', { frontmatter: true });
+      await this.loadFrontmatterHistory();
     },
     /** 1-8c: add ONE suggested tag to the repo's forbidden tags (the
      * shared two-write save), then offer the rebuild + re-run. */
@@ -1069,6 +1643,50 @@ export default {
       }
       for (const t of pending) if (!this.taughtTags.includes(t)) this.taughtTags.push(t);
       this.$emit('changed', { frontmatter: true });
+    },
+    /** 1-8d: the COMPREHENSIVE advisor — one call aggregates every query
+     * class across the last N runs, simulates tag-set configurations
+     * against the gate, and returns the globally-optimal add/remove set
+     * under the zero-positive-harm constraint. Pure advice — nothing is
+     * written until the curator clicks a chip or Apply. */
+    async onRecommend() {
+      if (this.busy !== null) return;
+      this.busy = 'advisor';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headRecommend', { repoId: this.repo.repo_id });
+      this.busy = null;
+      if (!res.ok) {
+        this.error = res.message || this.translate('okf.headTest.error.advisor', 'Advisor failed');
+        return;
+      }
+      this.advisor = res.result;
+    },
+    /** 1-8d: apply the advisor's recommendation in ONE frontmatter save
+     * (adds and removes together — never two half-states), then hand off
+     * to the standard rebuild + re-run-suite leg so the scorecard
+     * refreshes against real runs (the tripwire guards this like any
+     * other cycle). */
+    async onAdvisorApply() {
+      const addTags = this.advisorAddTags;
+      const removeTags = this.advisorRemoveTags.map((r) => r.tag);
+      if ((!addTags.length && !removeTags.length) || this.busy !== null) return;
+      this.busy = 'save-tag';
+      this.error = '';
+      const save = await this.$store.dispatch('okf/saveFrontmatter', {
+        repoId: this.repo.repo_id,
+        shape: this.buildFrontmatterShape(addTags, removeTags)
+      });
+      this.busy = null;
+      if (!save || !save.ok) {
+        this.error =
+          (save && save.message) || this.translate('okf.headTest.error.saveTag', 'Could not save the forbidden tags');
+        return;
+      }
+      for (const t of addTags) if (!this.taughtTags.includes(t)) this.taughtTags.push(t);
+      for (const t of removeTags) if (!this.removedTags.includes(t)) this.removedTags.push(t);
+      this.advisor = null; // the recommendation is spent — the re-run shows the effect
+      this.$emit('changed', { frontmatter: true });
+      await this.onRebuildSuiteRerun();
     },
     /** 1-8c: the fix loop's last leg — rebuild the head from the just-
      * saved tags, then re-run the SAME query through routing-test so the
@@ -1118,12 +1736,22 @@ export default {
       this.lastRunSummary = null;
       this.lastRunSummaryRows = [];
       this.batchAdvice = null;
+      // 1-8d: regeneration creates a NEW benchmark identity — no tripwire
+      // carry-over, and the baseline key follows the new suite.
+      this.tripwire = null;
+      this.lastRunSuiteKey = this.suite ? this.suite.suite_key : null;
       this.refreshRuns();
     },
     async onRunSuite() {
       if (!this.suite) return;
       this.busy = 'run';
       this.error = '';
+      // 1-8d: tripwire baseline — the run being REPLACED, only when it
+      // belongs to the SAME suite (never compare across suites).
+      const baseline =
+        this.lastRunSummary && this.lastRunSuiteKey === this.suite.suite_key
+          ? { passed: this.lastRunSummary.positive_passed, total: this.lastRunSummary.positive_total }
+          : null;
       const res = await this.$store.dispatch('okf/headSuiteRun', {
         repoId: this.repo.repo_id,
         suiteKey: this.suite.suite_key
@@ -1134,6 +1762,7 @@ export default {
         return;
       }
       this.lastRunSummary = res.result.payload.summary;
+      this.lastRunSuiteKey = this.suite.suite_key;
       // Map the summary onto the suite's queries for the outcome column.
       const results = (res.result.payload && res.result.payload.results) || [];
       this.lastRunSummaryRows = results.map((r, i) => ({
@@ -1147,6 +1776,7 @@ export default {
         failLabel: this.failLabelOf(r)
       }));
       this.batchAdvice = null; // a fresh run makes the previous advice stale
+      this.checkTripwire(baseline, this.lastRunSummary);
       this.refreshRuns();
     },
     /** 1-8c: batch advice for the latest run of the current suite — every
@@ -1498,6 +2128,81 @@ export default {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
+}
+/* 1-8d: the guardrail's rejected proposals — muted, non-interactive
+   chips; the reason rides on the title attribute. */
+.okf-headtest__rejected {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.okf-headtest__rejected-chip {
+  opacity: 0.55;
+  cursor: default;
+}
+/* 1-8d: the removal chips — the inverse affordance (danger variant,
+   clickable like the add chips). */
+.okf-headtest__removals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.okf-headtest__remove-chip {
+  cursor: pointer;
+}
+.okf-headtest__positive-fail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+/* 1-8d: the positive-regression tripwire — red tint, one clear exit
+   (the Revert panel). */
+.okf-headtest__tripwire {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  background: color-mix(in oklab, var(--danger) 14%, transparent);
+  color: var(--danger);
+}
+.okf-headtest__stale-suite {
+  font-size: var(--text-xs);
+  color: var(--warning);
+}
+/* 1-8d: the Revert-tags panel — same neutral surface as the advice
+   panels; the highlight ring marks the tripwire's jump target. */
+.okf-headtest__revert {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.okf-headtest__revert--highlight {
+  outline: 2px solid var(--accent);
+}
+.okf-headtest__revert-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.okf-headtest__revert-list li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.okf-headtest__revert-actor {
+  color: var(--muted);
 }
 .okf-headtest__add-query {
   display: flex;

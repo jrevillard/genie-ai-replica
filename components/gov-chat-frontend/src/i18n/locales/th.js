@@ -2710,7 +2710,8 @@ export default {
         title: 'สิ่งนี้หมายความว่าอย่างไร',
         veto: "คำค้นนี้ตรงกับแท็กต้องห้าม “{'{'}tag{'}'}” อย่างมาก หากควรเป็นของคลังข้อมูลนี้ ให้ลบ “{'{'}tag{'}'}” ออกจากแท็กต้องห้ามใน Frontmatter แล้วเผยแพร่ใหม่เพื่อสร้าง head ใหม่",
         floor:
-          'คำค้นนี้ไม่เกี่ยวข้องกับหัวข้อของคลังข้อมูลนี้ (คะแนนต่ำกว่าคะแนนขั้นต่ำของโดเมน) — การเปลี่ยนแท็กจะไม่ช่วยแก้ไข นี่คือการกดที่ถูกต้อง'
+          'คำค้นนี้ไม่เกี่ยวข้องกับหัวข้อของคลังข้อมูลนี้ (คะแนนต่ำกว่าคะแนนขั้นต่ำของโดเมน) — การเปลี่ยนแท็กจะไม่ช่วยแก้ไข นี่คือการกดที่ถูกต้อง',
+        rejected: 'ถูกปฏิเสธโดยระบบป้องกัน — แท็กต้องห้ามต้องไม่ตรงกับหัวข้อของคลังข้อมูลนี้เอง'
       },
       suites: {
         generate: 'Generate test suite',
@@ -2749,7 +2750,24 @@ export default {
         batchTitle: 'ทำไมข้อลบที่ล้มเหลวจึงถูกกำหนดเส้นทางมาที่นี่',
         batchNone: 'ไม่มีการแนะนำวิธีแก้ — โปรดตรวจสอบคำค้นที่ล้มเหลวเทียบกับขอบเขตที่ประกาศด้วยตนเอง',
         addAll: 'เพิ่มทั้งหมด',
-        rebuildRerun: 'สร้างหัวใหม่และรันชุดทดสอบซ้ำ'
+        rebuildRerun: 'สร้างหัวใหม่และรันชุดทดสอบซ้ำ',
+        positiveFailuresTitle: 'ทำไมกรณีบวกจึงผ่านไม่ได้อีกต่อไป',
+        positiveFailures: 'ในรอบนี้มีการทดสอบบวกถูกกด {n} รายการ — แท็กต้องห้ามครอบคลุมขอบเขตของคลังข้อมูลมากเกินไป',
+        vetoedBy: 'ถูกยับยั้งโดย',
+        marginKilled: 'การทดสอบบวก {n} รายการแพ้ด้วยระยะ margin (ไม่มีแท็กยับยั้งเดี่ยว)',
+        removals: 'แท็กที่ควรลบ (แท็กเหล่านี้ยับยั้งกรณีบวกของคลังข้อมูลนี้เอง)',
+        removeTip: 'ลบ "{tag}" — ยับยั้งการทดสอบบวก {n} รายการ',
+        tripwire: 'รอบนี้ทำให้การทดสอบบวกล้มเหลว {n} รายการ — แท็กที่เพิ่มกดมากเกินไป ต้องการย้อนกลับหรือไม่?',
+        tripwireRevert: 'ดูตัวเลือกการย้อนกลับ',
+        staleSnapshot: 'แท็กเปลี่ยนแปลงหลังจากสร้างชุดทดสอบนี้ — สร้างใหม่เพื่อให้แถวต้องห้ามเป็นปัจจุบัน',
+        revertTitle: 'ย้อนกลับแท็ก',
+        revertForbiddenCount: '{n} แท็กต้องห้าม',
+        revertAction: 'ย้อนกลับ',
+        revertBusy: 'กำลังโหลดประวัติการบันทึก…',
+        revertSaving: 'กำลังกู้คืน frontmatter…',
+        revertEmpty: 'ยังไม่มีประวัติการบันทึก frontmatter',
+        revertDone: 'กู้คืน frontmatter แล้ว — สร้างหัวใหม่และรันซ้ำเพื่อใช้งาน',
+        removeTag: 'นำออกจากแท็กต้องห้าม'
       },
       error: {
         explain: 'การอธิบายล้มเหลว',
@@ -2758,7 +2776,10 @@ export default {
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'โหลดประวัติการบันทึกไม่สำเร็จ',
+        revert: 'ย้อนกลับ frontmatter ไม่สำเร็จ',
+        advisor: 'ที่ปรึกษาล้มเหลว'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2768,6 +2789,16 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'ที่ปรึกษา: แนะนำการปรับแท็ก',
+        busy: 'กำลังจำลองการปรับแท็กจากการรันล่าสุด…',
+        title: 'คำแนะนำชุดแท็ก (จำลองจากการรันล่าสุด)',
+        apply: 'ใช้การเปลี่ยนแปลง สร้าง head ใหม่ และรันชุดทดสอบซ้ำ',
+        scorecard: 'บวก {p}/{pt} ผ่าน · ลบ {n}/{nt} ถูกปิดกั้น',
+        now: 'ปัจจุบัน',
+        predicted: 'คาดการณ์',
+        scope: ' (จาก {q} คำถามในการรันล่าสุด {r} ครั้ง)'
       }
     }
   },

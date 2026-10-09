@@ -2735,7 +2735,8 @@ export default {
         title: 'Seo sena se bolelang',
         veto: "Potso ena e lumellana haholo le tag e thibetsitseng “{'{'}tag{'}'}”. Haeba e lokela ho ba la polokelo ena, tlosa “{'{'}tag{'}'}” ho matag a thibetsoeng a Frontmatter, ebe u phatlalatsa hape ho aha hlopo bocha.",
         floor:
-          'Potso ena ha e amane le taba ea polokelo ena (score e tlaase ho moeli oa domain) — ho fetola matag ha ho lokise sena; ke thibelo e nepahetseng.'
+          'Potso ena ha e amane le taba ea polokelo ena (score e tlaase ho moeli oa domain) — ho fetola matag ha ho lokise sena; ke thibelo e nepahetseng.',
+        rejected: 'E lokotsoe ke guardrail — tag e thibetsitseng ha eao lumana le taba ea polokelo ena ka boeona.'
       },
       suites: {
         generate: 'Generate test suite',
@@ -2775,7 +2776,26 @@ export default {
         batchNone:
           'Ha ho tokiso e fanoeng — hlahloba dipotso tse fosahetseng ka letsoho khahlano le moeli o boletsoeng.',
         addAll: 'Eketsa tsohle',
-        rebuildRerun: 'Haha hlooho hape & phethahatsa suite hape'
+        rebuildRerun: 'Haha hlooho hape & phethahatsa suite hape',
+        positiveFailuresTitle: 'Hobaneng tse mabapi li sitoa ho feta',
+        positiveFailures:
+          '{n} teko(tse) tse mabapi li thibetswe pang ena — matag a thibetsitseng a lumana haholo le sepheo sa polokelo.',
+        vetoedBy: 'E thibetsoe ke',
+        marginKilled: '{n} teko(tse) tse mabapi li lahlehile ka margin (ha ho tag e le nngoe ea veto).',
+        removals: 'Matag a tlosoang (a beha veto holim’a tse mabapi tsa polokelo ena)',
+        removeTip: 'Tlosa "{tag}" — e behile veto holim’a {n} teko(tse) tse mabapi',
+        tripwire: 'Potong ena e robile {n} teko tse mabapi — matag a kentsoeng a thibela haholo. Khutlisa?',
+        tripwireRevert: 'Likhetho tsa ho khutlisa',
+        staleSnapshot:
+          'Matag a fetoloe ho tloha ha suite ena e entsoe — hlahisa hape bakeng sa mela e macha ea thibelo.',
+        revertTitle: 'Khutlisa matag',
+        revertForbiddenCount: '{n} matag a thibetsitseng',
+        revertAction: 'Khutlisa',
+        revertBusy: 'E kenya histori ea polokelo…',
+        revertSaving: 'E busetsa frontmatter…',
+        revertEmpty: 'Ha hona polokelo ea frontmatter e ngolisitsoeng hajoale.',
+        revertDone: 'Frontmatter e khutlisitsoe — haha hlooho hape & phethahatsa hape ho e sebelisa.',
+        removeTag: 'Tlosa ho litag tse thibetsoeng'
       },
       error: {
         explain: 'Tlhaloso e hlolehile',
@@ -2784,7 +2804,10 @@ export default {
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Ha e khone ho kenya histori ea polokelo',
+        revert: 'Ha e khone ho khutlisa frontmatter',
+        advisor: 'Moeletsi o hlolehile'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2794,6 +2817,16 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Moeletsi: kgothaletsa diphetoho tsa litag',
+        busy: 'E papalesa diphetoho tsa litag ho tsamaello tsa kajeno…',
+        title: 'Khothaletso ea sete ea litag (e papalelitsoe ho tsamaello tsa kajeno)',
+        apply: 'Kenya liphetoho tšebetsong, haha hlooho hape & phethahatsa hape',
+        scorecard: 'tse nepahetseng {p}/{pt} tse amohetsoeng · tse fosahetseng {n}/{nt} tse thibilitseng',
+        now: 'Hona joale',
+        predicted: 'e boleloa pele',
+        scope: ' (lipotso {q} ho tswa ho tsamaello {r} tsa kajeno)'
       }
     }
   },

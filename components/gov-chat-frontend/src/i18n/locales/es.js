@@ -2739,7 +2739,9 @@ export default {
         title: 'Qué significa esto',
         veto: "Esta consulta coincide fuertemente con la etiqueta prohibida «{'{'}tag{'}'}». Si DEBERÍA pertenecer a este repositorio, elimine «{'{'}tag{'}'}» de las etiquetas prohibidas en el Frontmatter y vuelva a publicar para reconstruir el head.",
         floor:
-          'La consulta no guarda relación con la temática de este repositorio (puntuación por debajo del piso mínimo del dominio) — ningún cambio de etiquetas lo corrige; es un descarte correcto.'
+          'La consulta no guarda relación con la temática de este repositorio (puntuación por debajo del piso mínimo del dominio) — ningún cambio de etiquetas lo corrige; es un descarte correcto.',
+        rejected:
+          'Descartado por el guardián — una etiqueta prohibida no debe coincidir con el propio tema de este repositorio.'
       },
       suites: {
         generate: 'Generate test suite',
@@ -2779,7 +2781,26 @@ export default {
         batchNone:
           'No se sugirió ninguna corrección — revise las consultas fallidas frente al alcance declarado manualmente.',
         addAll: 'Añadir todas',
-        rebuildRerun: 'Reconstruir cabecera y repetir la suite'
+        rebuildRerun: 'Reconstruir cabecera y repetir la suite',
+        positiveFailuresTitle: 'Por qué los positivos dejaron de pasar',
+        positiveFailures:
+          '{n} prueba(s) positiva(s) fueron suprimidas en esta ejecución — las etiquetas prohibidas sobre-coinciden con el alcance del repositorio.',
+        vetoedBy: 'Vetado por',
+        marginKilled: '{n} prueba(s) positiva(s) perdieron por margen (sin etiqueta de veto única).',
+        removals: 'Etiquetas a eliminar (vetan los positivos propios de este repositorio)',
+        removeTip: 'Eliminar "{tag}" — vetó {n} prueba(s) positiva(s)',
+        tripwire: 'Este ciclo rompió {n} pruebas positivas — las etiquetas añadidas sobre-suprimen. ¿Revertir?',
+        tripwireRevert: 'Ver opciones de reversión',
+        staleSnapshot:
+          'Las etiquetas cambiaron desde que se generó esta suite — regenere para obtener filas prohibidas actualizadas.',
+        revertTitle: 'Revertir etiquetas',
+        revertForbiddenCount: '{n} etiquetas prohibidas',
+        revertAction: 'Revertir',
+        revertBusy: 'Cargando el historial de guardado…',
+        revertSaving: 'Restaurando el frontmatter…',
+        revertEmpty: 'Aún no hay guardados de frontmatter registrados.',
+        revertDone: 'Frontmatter restaurado — reconstruya la cabecera y vuelva a ejecutar para aplicarlo.',
+        removeTag: 'Quitar de las etiquetas prohibidas'
       },
       error: {
         explain: 'La explicación falló',
@@ -2788,7 +2809,10 @@ export default {
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'No se pudo cargar el historial de guardado',
+        revert: 'No se pudo revertir el frontmatter',
+        advisor: 'Fallo del asesor'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2798,6 +2822,16 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Asesor: recomendar cambios de etiquetas',
+        busy: 'Simulando cambios de etiquetas en las ejecuciones recientes…',
+        title: 'Recomendación de etiquetas (simulada en las ejecuciones recientes)',
+        apply: 'Aplicar cambios, reconstruir y relanzar la suite',
+        scorecard: 'positivos {p}/{pt} aceptados · negativos {n}/{nt} suprimidos',
+        now: 'Ahora',
+        predicted: 'previsto',
+        scope: ' (sobre {q} consultas de las últimas {r} ejecuciones)'
       }
     }
   },

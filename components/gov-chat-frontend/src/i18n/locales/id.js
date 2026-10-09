@@ -2727,7 +2727,8 @@ export default {
         title: 'Apa artinya ini',
         veto: "Kueri ini sangat cocok dengan tag terlarang “{'{'}tag{'}'}”. Jika seharusnya termasuk dalam repositori ini, hapus “{'{'}tag{'}'}” dari tag terlarang di Frontmatter, lalu terbitkan ulang untuk membangun ulang head.",
         floor:
-          'Kueri ini tidak berhubungan dengan topik repositori ini (skor di bawah batas minimum domain) — perubahan tag tidak akan memperbaiki ini; ini adalah penekanan yang benar.'
+          'Kueri ini tidak berhubungan dengan topik repositori ini (skor di bawah batas minimum domain) — perubahan tag tidak akan memperbaiki ini; ini adalah penekanan yang benar.',
+        rejected: 'Ditolak oleh pagar pengaman — tag terlarang tidak boleh cocok dengan topik repositori ini sendiri.'
       },
       suites: {
         generate: 'Generate test suite',
@@ -2767,7 +2768,25 @@ export default {
         batchNone:
           'Tidak ada perbaikan yang disarankan — tinjau kueri yang gagal terhadap cakupan yang dinyatakan secara manual.',
         addAll: 'Tambahkan semua',
-        rebuildRerun: 'Bangun ulang head & jalankan ulang suite'
+        rebuildRerun: 'Bangun ulang head & jalankan ulang suite',
+        positiveFailuresTitle: 'Mengapa positif berhenti lolos',
+        positiveFailures:
+          '{n} tes positif ditekan pada run ini — tag terlarang mencakup cakupan repositori terlalu luas.',
+        vetoedBy: 'Diveto oleh',
+        marginKilled: '{n} tes positif kalah pada margin (tanpa tag veto tunggal).',
+        removals: 'Tag untuk dihapus (tag ini memveto positif milik repositori ini sendiri)',
+        removeTip: 'Hapus "{tag}" — tag ini memveto {n} tes positif',
+        tripwire: 'Siklus ini merusak {n} tes positif — tag yang ditambahkan terlalu menekan. Kembalikan?',
+        tripwireRevert: 'Lihat opsi pengembalian',
+        staleSnapshot: 'Tag berubah sejak suite ini dibuat — buat ulang untuk baris terlarang yang terbaru.',
+        revertTitle: 'Kembalikan tag',
+        revertForbiddenCount: '{n} tag terlarang',
+        revertAction: 'Kembalikan',
+        revertBusy: 'Memuat riwayat penyimpanan…',
+        revertSaving: 'Memulihkan frontmatter…',
+        revertEmpty: 'Belum ada penyimpanan frontmatter yang tercatat.',
+        revertDone: 'Frontmatter dipulihkan — bangun ulang head dan jalankan ulang untuk menerapkannya.',
+        removeTag: 'Hapus dari tag terlarang'
       },
       error: {
         explain: 'Penjelasan gagal',
@@ -2776,7 +2795,10 @@ export default {
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Tidak dapat memuat riwayat penyimpanan',
+        revert: 'Tidak dapat mengembalikan frontmatter',
+        advisor: 'Penasihat gagal'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2786,6 +2808,16 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Penasihat: rekomendasikan perubahan tag',
+        busy: 'Menyimulasikan perubahan tag pada eksekusi terbaru…',
+        title: 'Rekomendasi set tag (disimulasikan pada eksekusi terbaru)',
+        apply: 'Terapkan perubahan, bangun ulang head & jalankan ulang suite',
+        scorecard: 'positif {p}/{pt} diterima · negatif {n}/{nt} ditekan',
+        now: 'Saat ini',
+        predicted: 'perkiraan',
+        scope: ' (atas {q} kueri dari {r} eksekusi terakhir)'
       }
     }
   },

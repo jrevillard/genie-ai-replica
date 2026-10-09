@@ -10,6 +10,8 @@
  *   POST /okf/repos/:id/routing-testsuite/:key/run     — run-all + summary
  *   POST /okf/repos/:id/routing-testsuite/:key/explain — 1-8c batch advice
  *   GET  /okf/repos/:id/routing-testsuite/runs         — analytics history
+ *   GET  /okf/repos/:id/frontmatter/history            — 1-8d save history
+ *   POST /okf/repos/:id/frontmatter/revert             — 1-8d revert (admin)
  *
  * Error surface: httpService rejections carry the server envelope in
  * err.data ({error, message}) — callers map to {ok, code, message}.
@@ -93,6 +95,35 @@ const headTestService = {
     const res = await httpService.get(`/okf/repos/${rid(repoId)}/routing-testsuite/runs${qs ? '?' + qs : ''}`);
     const body = res && res.data;
     return body && Array.isArray(body.runs) ? body.runs : [];
+  },
+
+  /** Story 1-8d — the bounded frontmatter save history (newest first;
+   * server caps at 10). Each entry: {saved_at, actor, forbidden_count,
+   * shape}. Backs the Lab's Revert-tags panel. */
+  async frontmatterHistory(repoId) {
+    const res = await httpService.get(`/okf/repos/${rid(repoId)}/frontmatter/history`);
+    const body = res && res.data;
+    return body && Array.isArray(body.entries) ? body.entries : [];
+  },
+
+  /** Story 1-8d — restore the frontmatter snapshotted at saved_at (the
+   * server re-enters its own update(), so the revert is itself
+   * snapshotted — revert-of-revert works). Admin action. Returns
+   * {repo_id, reverted_to, frontmatter}. */
+  async revertFrontmatter(repoId, savedAt) {
+    const res = await httpService.post(`/okf/repos/${rid(repoId)}/frontmatter/revert`, { saved_at: savedAt });
+    return res && res.data ? res.data : null;
+  },
+
+  /** Story 1-8d — the COMPREHENSIVE advisor: aggregates the queries of the
+   * last N runs (all classes), simulates tag-set configurations against the
+   * gate, recommends the globally-optimal add/remove set under a
+   * zero-positive-harm constraint. Admin action (one LLM call). Returns
+   * {current_scorecard, recommended_scorecard, changes:{add,remove},
+   * add_eval, remove_eval, note, ...}. */
+  async recommendTags(repoId, payload = {}) {
+    const res = await httpService.post(`/okf/repos/${rid(repoId)}/routing-advisor`, payload);
+    return res && res.data ? res.data : null;
   }
 };
 

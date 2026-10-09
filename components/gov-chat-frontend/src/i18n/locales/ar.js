@@ -2706,7 +2706,8 @@ export default {
         title: 'ماذا يعني هذا',
         veto: "هذا الاستعلام يطابق الوسم المحظور «{'{'}tag{'}'}» بقوة. إذا كان ينبغي أن ينتمي إلى هذا المستودع، فاحذف «{'{'}tag{'}'}» من الوسوم المحظورة في Frontmatter، ثم أعد النشر لإعادة بناء الرأس.",
         floor:
-          'الاستعلام لا علاقة له بموضوع هذا المستودع (النتيجة أقل من الحد الأدنى للمجال) — لا يعالج تغيير الوسوم هذه المشكلة؛ هذا استبعاد صحيح.'
+          'الاستعلام لا علاقة له بموضوع هذا المستودع (النتيجة أقل من الحد الأدنى للمجال) — لا يعالج تغيير الوسوم هذه المشكلة؛ هذا استبعاد صحيح.',
+        rejected: 'تم رفضه بواسطة الحاجز الآلي — يجب ألا يطابق الوسم المحظور موضوع هذا المستودع نفسه.'
       },
       suites: {
         generate: 'Generate test suite',
@@ -2745,7 +2746,25 @@ export default {
         batchTitle: 'لماذا تم توجيه السالبة الفاشلة إلى هنا',
         batchNone: 'لم يُقترح أي إصلاح — راجع الاستعلامات الفاشلة مقابل النطاق المعلن يدويًا.',
         addAll: 'أضف الكل',
-        rebuildRerun: 'أعد بناء الرأس وأعد تشغيل المجموعة'
+        rebuildRerun: 'أعد بناء الرأس وأعد تشغيل المجموعة',
+        positiveFailuresTitle: 'لماذا توقف نجاح الإيجابيات',
+        positiveFailures:
+          'تم كبح {n} من اختبارات الإيجابية في هذه الجولة — وسوم المنع تطابق نطاق المستودع أكثر من اللازم.',
+        vetoedBy: 'استُبعد بواسطة',
+        marginKilled: 'خسر {n} من اختبارات الإيجابية بسبب الهامش (دون فيتو من وسم واحد).',
+        removals: 'وسوم لإزالتها (تمارس الفيتو ضد إيجابيات هذا المستودع نفسه)',
+        removeTip: 'أزِل "{tag}" — أنهى الفيتو {n} من الاختبارات الإيجابية',
+        tripwire: 'كسرت هذه الدورة {n} من الاختبارات الإيجابية — الوسوم المضافة تبالغ في الكبح. هل تريد التراجع؟',
+        tripwireRevert: 'خيارات التراجع',
+        staleSnapshot: 'تغيّرت الوسوم منذ توليد هذه المجموعة — أعد التوليد للحصول على صفوف منع حديثة.',
+        revertTitle: 'التراجع عن الوسوم',
+        revertForbiddenCount: '{n} وسم محظور',
+        revertAction: 'تراجع',
+        revertBusy: 'جارٍ تحميل سجل الحفظ…',
+        revertSaving: 'جارٍ استعادة الـ frontmatter…',
+        revertEmpty: 'لا توجد عمليات حفظ مسجلة بعد.',
+        revertDone: 'تمت الاستعادة — أعد بناء الرأس وأعد التشغيل لتطبيقها.',
+        removeTag: 'إزالة من الوسوم المحظورة'
       },
       error: {
         explain: 'فشل الشرح',
@@ -2754,7 +2773,10 @@ export default {
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'تعذر تحميل سجل الحفظ',
+        revert: 'تعذر التراجع عن الوسوم',
+        advisor: 'فشل المستشار'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2764,6 +2786,16 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'المستشار: اقتراح تغييرات على الوسوم',
+        busy: 'محاكاة تغييرات الوسوم عبر التشغيلات الأخيرة…',
+        title: 'توصية مجموعة الوسوم (محاكاة عبر التشغيلات الأخيرة)',
+        apply: 'تطبيق التغييرات وإعادة بناء head وإعادة تشغيل المجموعة',
+        scorecard: 'الموجبات {p}/{pt} مقبولة · السالبات {n}/{nt} محظورة',
+        now: 'الآن',
+        predicted: 'المتوقع',
+        scope: ' (عبر {q} استعلامات من آخر {r} تشغيلات)'
       }
     }
   },

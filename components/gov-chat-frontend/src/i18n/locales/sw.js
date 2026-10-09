@@ -2722,7 +2722,8 @@ export default {
         title: 'Maana yake ni nini',
         veto: "Hoja hii inalingana sana na lebo iliyozuiwa “{'{'}tag{'}'}”. Ikipaswa kuwa ya repository hii, ondoa “{'{'}tag{'}'}” kwenye lebo zilizozuiwa katika Frontmatter, kisha chapisha tena ili kujenga upya head.",
         floor:
-          'Hoja hii haihusiani na mada ya repository hii (alama iko chini ya kiwango cha chini cha domain) — kubadilisha lebo hakurekebishi hili; hii ni uzuiaji sahihi.'
+          'Hoja hii haihusiani na mada ya repository hii (alama iko chini ya kiwango cha chini cha domain) — kubadilisha lebo hakurekebishi hili; hii ni uzuiaji sahihi.',
+        rejected: 'Imezuiwa na ulinzi — lebo iliyozuiwa haipaswi kulingana na mada ya hifadhi hii yenyewe.'
       },
       suites: {
         generate: 'Generate test suite',
@@ -2762,7 +2763,25 @@ export default {
         batchNone:
           'Hakuna marekebisho yaliyopendekezwa — kagua hoja zilizoshindikana dhidi ya wanzo uliotangaza kwa mkono.',
         addAll: 'Ongeza zote',
-        rebuildRerun: 'Jenga upya kichwa & endesha tena mtihani'
+        rebuildRerun: 'Jenga upya kichwa & endesha tena mtihani',
+        positiveFailuresTitle: 'Kwa nini chanya zimeacha kupita',
+        positiveFailures:
+          '{n} jaribio chanya vimezuiwa katika uendeshaji huu — lebo zilizozuiwa zinalingana zaidi na wigo wa hifadhi.',
+        vetoedBy: 'Imezuiwa na',
+        marginKilled: '{n} jaribio chanya vimepoteza kwa ukingo (hakuna lebo moja ya zuio).',
+        removals: 'Lebo za kuondoa (zinazuia chanya za hifadhi hii yenyewe)',
+        removeTip: 'Ondoa "{tag}" — imevetoa jaribio(zo) {n} chanya',
+        tripwire: 'Mzunguko huu umevunja majaribio {n} chanya — lebo zilizoongezwa zinazuia kupita kiasi. Rejesha?',
+        tripwireRevert: 'Chaguo za kurejesha',
+        staleSnapshot: 'Lebo zimebadilika tangu suite hii itengenezwe — tengeneza upya kwa safu mpya za zuio.',
+        revertTitle: 'Rejesha lebo',
+        revertForbiddenCount: 'lebo zilizozuiwa: {n}',
+        revertAction: 'Rejesha',
+        revertBusy: 'Inapakia historia ya kuhifadhi…',
+        revertSaving: 'Inarejesha frontmatter…',
+        revertEmpty: 'Hakuna kuhifadhi kwa frontmatter kilichorekwa bado.',
+        revertDone: 'Frontmatter imerejeshwa — jenga upya kichwa & endesha tena ili itumike.',
+        removeTag: 'Ondoa kwenye tag zilizozuiwa'
       },
       error: {
         explain: 'Uelelezo umeshindikana',
@@ -2771,7 +2790,10 @@ export default {
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Imeshindwa kupakia historia ya kuhifadhi',
+        revert: 'Imeshindwa kurejesha frontmatter',
+        advisor: 'Mshauri umeshindikana'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2781,6 +2803,16 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Mshauri: pendekeza mabadiliko ya tag',
+        busy: 'Inaigiza mabadiliko ya tag kwenye ukimbiaji wa hivi karibuni…',
+        title: 'Pendekezo la seti ya tag (limeigizwa kwenye ukimbiaji wa hivi karibuni)',
+        apply: 'Tekeleza mabadiliko, jenga upya head na endesha upya kipima',
+        scorecard: 'chanya {p}/{pt} zimepitishwa · hasi {n}/{nt} zimezuiwa',
+        now: 'Sasa',
+        predicted: 'makadirio',
+        scope: ' (maswali {q} kutoka ukimbiaji {r} wa hivi karibuni)'
       }
     }
   },

@@ -13,7 +13,6 @@ namespace: genieai
 global:
   imageRegistry: ""
   imagePullSecrets: []
-  imagePullPolicy: IfNotPresent
 
 # Drives chart-derived defaults (replica counts, data-tier topology,
 # observability). dev | staging | prod | sovereign.
@@ -34,6 +33,10 @@ ingress:
   host: genieai.local                 # public hostname for redirect URLs
 
 data:
+  # The `enabled` toggles gate the custom resources only; the operator
+  # controllers that reconcile them (CNPG, kube-arangodb, keycloak-operator)
+  # are cluster bootstrap prerequisites — see the README's Cluster
+  # prerequisites section.
   postgres:
     enabled: true
     # CNPG Cluster resources for the keycloak-db (the only Postgres; the edge

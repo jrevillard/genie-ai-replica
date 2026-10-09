@@ -172,10 +172,15 @@ spec:
         rootUrl: {{ $origin }}
         redirectUris:
           - {{ $origin }}/*
-          # Keycloak allows NO wildcard in the port — `http://localhost:*`
-          # is rejected at realm import. The bare host is Keycloak's
-          # port-agnostic localhost special case.
+          # Dev convenience only: local `npm run dev` servers on arbitrary
+          # ports. Widens the OAuth redirect surface otherwise — prod/staging
+          # restrict logins to the configured origin. Keycloak allows NO
+          # wildcard in the port (`http://localhost:*` is rejected at realm
+          # import); the bare host is Keycloak's port-agnostic localhost
+          # special case.
+          {{- if eq .Values.clusterProfile "dev" }}
           - http://localhost
+          {{- end }}
         webOrigins:
           - {{ $origin }}
         attributes:

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$comment": "The schema pins ONLY the enum-valued keys a typo would silently mis-render: a wrong clusterProfile renders the dev topology and the drift hook cannot catch it. Everything else stays permissive (no additionalProperties:false anywhere) — Helm injects `global`, and future tiers add keys.",
+  "type": "object",
+  "properties": {
+    "clusterProfile": {
+      "type": "string",
+      "enum": ["dev", "staging", "prod", "sovereign"]
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "arangodb": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["single", "cluster"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

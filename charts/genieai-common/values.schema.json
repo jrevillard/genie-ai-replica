@@ -20,7 +20,7 @@
     },
     "component": {
       "type": "string",
-      "description": "Free-form string identifying the component of a resource; consumed by genieai-common.labels to emit genieai.io/component: <component>. No enum — callers pick the value. NOTE: top-level additionalProperties is false, but `component` is in the known property set (no error at render time).",
+      "description": "Free-form string identifying the component of a resource. genieai-common.labels emits BOTH genieai.io/component: <component> and app.kubernetes.io/component: <component> from this value. All call sites pass the per-template component name as a dict key when invoking the labels helper (e.g. include 'genieai-common.labels' (dict 'Chart' .Chart ... 'component' 'data-arangodb')); the top-level `component` value is a default fallback for ad-hoc callers and should not be set by the consuming chart.",
       "default": "umbrella",
       "maxLength": 63
     }

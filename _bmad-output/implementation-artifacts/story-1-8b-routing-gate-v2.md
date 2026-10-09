@@ -240,3 +240,68 @@ improves — enforced by the guardrail + tripwire data now in the
 payload; (2) unlimited cycles — both failure kinds now advise, failures
 cannot hide; (3) revert in the Lab — history/revert shipped backend,
 panel UI remaining. 1-8d frontend loop remaining (spec §15.6).
+
+## 10. 1-8e — the advisor cycles live: findings, hardening, and the tuning identity (2026-10-09)
+
+Live NCD cycling with the 1-8d advisor surfaced four defects and one
+design insight; all four are fixed on this branch (commits dd41684,
+f642e65 + the advisor UI wiring 6b1dbab/e2c7e87/364916a/57dcf69/ff85ba2).
+
+**Defects found and fixed:**
+
+1. **TEI batch cap (57dcf69)** — the advisor aggregates every deduped
+   query of the last N runs and embedded them in ONE `/embed` call; the
+   remote TEI rejects batches above its client cap with 422 (observed:
+   32 OK, 48 → 422). `teiEmbed` now chunks at 32 — every caller bounded,
+   no per-caller workaround.
+2. **Duplicate tag propagation (dd41684)** — granite emitted
+   `"mental-health"` 5× inside ONE forbidden array (raw model output in
+   `frontmatter.suggest.llm_response`); suggestTags had no dedup and the
+   duplicates reached the stored frontmatter AND the head's per-tag veto
+   vectors. Fixed at both origin points: suggestTags dedups every tag
+   array, and `repository-service.update()` dedups topic/entity/keyword/
+   forbidden at the WRITE BOUNDARY — no path can persist duplicates.
+   RepoEditor also remounts the concept pane after a chip-panel save
+   (the stale-YAML display bug).
+3. **The pass-rate "bounce"** — run-record forensics (diffing same-head
+   run pairs): same tags + same suite = **0 flipped rows** — evaluation
+   is bit-stable. Every score swing traced to a tag-set change (advisor
+   applies + hand edits) compared as if it were the same experiment.
+   Compounding: the margin gate uses the forbidden CENTROID, so adding
+   any tag shifts the margin verdict of every query — the 82↔87 oscillation.
+4. **The Apply race (f642e65)** — the advisor-apply leg (save → rebuild →
+   re-run) chained through guard clauses that return SILENTLY; when a
+   precondition flickered the flow just stopped ("why did everything
+   stop"). Apply now owns ONE busy token across the whole leg and every
+   failure path writes the error strip; jest pins the dispatch order and
+   both failure paths.
+
+**Design insight — the tuning identity:** pass rates are only comparable
+within a tag-set configuration. Runs now stamp `tagset {forbidden, hash}`
+(f642e65); the history table shows the hash so like compares with like.
+The advisor's aggregate is already configuration-safe (it re-PREDICTS
+every query via `predict()`, never trusts stored outcomes).
+
+**Anti-treadmill damping (f642e65):** the live cycle added one admin tag
+per advisor round for +1 suppressed negative each — the treadmill David
+banned ("must not become a long term full time job"). `recommendTagSet`
+now rejects a negatives-only add that suppresses < 2
+(`OKF_ADVISOR_MIN_NEGATIVE_GAIN`) and caps adds at 3 per run
+(`OKF_ADVISOR_MAX_ADDS`); only "no predicted improvement" rejections are
+retried on the interaction pass (damping/cap verdicts are final — the
+unit test pins this after the retry pass double-counted damped adds).
+
+**Live cycle evidence (suite s1791548461754, 45 rows):** failing 7 → 6 →
+5 across three advisor cycles, positive kills constant at 1 (the
+mislabelled HIV query — vetoed by `communicable-diseases` at 0.562, the
+exact routing the gate was built for; the "fail" is the manual label).
+The advisor converged (add=[] remove=[], score 58→58) after 4 rounds —
+the cycle TERMINATES, it does not treadmill. ~6 of the remaining fails
+are suite-label errors (5 in-scope near-misses + HIV), not gate errors.
+
+**Open decisions:** (a) B — margin on worst-tag instead of centroid
+(compositional tuning; gate-semantics change, lab + retriever parity,
+David's call, deferred); (b) honest-label benchmark regeneration
+(HIV as negative, the 5 in-scope near-misses as positives) — the
+prerequisite for 100%-meaningful numbers at scale; (c) branch push → CI →
+MR to feat/okf-server once David validates NCD as done.

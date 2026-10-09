@@ -1,0 +1,39 @@
+# IMPORTANT: do NOT render — apply manually.
+# This file is a literal ArgoCD Application manifest, NOT a Helm template.
+# Apply with:
+#   kubectl apply -f argocd-application.yaml -n argocd
+# Pre-condition: ArgoCD installed in the `argocd` namespace; the target cluster
+# is the current kubectl context.
+#
+# For el-salvador (or other high-customization envs), change:
+#   * targetRevision: main  ->  release/<env>
+#   * path: deploy/environments/dev/  ->  deploy/environments/<env>/
+#   * namespace: genieai  ->  genieai-<env>
+#
+# Per-env overlays (path: deploy/environments/<env>/) are populated by Plan 6.
+---
+# - path: deploy/environments/dev (NOT charts/genieai-umbrella) so per-env
+#   Kustomize overlay composes the chart with values-override.yaml
+#   (per spec §19.2).
+# - repoURL uses SSH form since GitLab requires auth; cluster ArgoCD has
+#   SSH key registered via GitLab Agent.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: genieai-dev
+  namespace: argocd
+spec:
+  project: genieai
+  source:
+    repoURL: git@opensource.unicc.org:un/itu/genie-ai.git   # scp-like form; ssh:// form needs an explicit numeric port (ssh://git@host:22/un/...) — the :un in the naive URL parses as a port and breaks
+    targetRevision: main    # use release/el-salvador for the el-salvador env
+    path: deploy/environments/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: genieai
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

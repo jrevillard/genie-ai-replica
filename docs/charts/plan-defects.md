@@ -20,6 +20,25 @@
 | 14 | Group-5 reachability test uses `/` for document-repository (returns 404) and HTTP against the binary clamd port (hangs); can never pass | Plan 3 Task 9: document-repository check uses `/health`; clamav check uses `bash -c "echo > /dev/tcp/clamav/3310"` (TCP probe) |
 | 15 | `email-password` SealedSecret is rendered but no service's envFrom ever references it — EMAIL_PASSWORD never reaches the backend | Plan 3 Task 1b Step 3: add `email-password` to backend's `secrets:` list |
 
+## Wave 9 — Plan 1 review rounds 1-2 (fixed on this branch)
+
+Two independent reviewer passes over b1c9dde99..b4b202ba8. Verdicts "With
+fixes"; all findings applied or dispositioned:
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| 1 | `charts/Makefile` doubly broken: `lint: $(addprefix lint-,$(CHARTS))` expands to `lint-genieai-common` but rules are `lint-common` (no rule to make target), and recipes use repo-root-relative paths while the Makefile lives in `charts/` — `make lint`/`make test` never worked | Rewritten: short CHARTS list, chart-relative paths, `--strict` on lints, ct schema/lintconf flags + `--kube-version 1.33.0` in `test-umbrella`, new `deps` target; verified `make lint` + `make template` green from `charts/` |
+| 2 | Plan 2 Task 1 Step 2 re-added `import-values: {child: ., parent: common}` — would reintroduce the Wave-8 #1 clash | Plan 2 amended (dep block mirrors shipped Chart.yaml, ledger pointer) |
+| 3 | Plan 2 clusterprofile-detect hook (-10, pre-install) polls the ns label — never present on fresh installs (Namespace is a regular resource, applies AFTER hooks); 30s burn + WARN every time | Plan 2 Task 7 amended: pre-upgrade only, 3×2s poll, mismatch-only Event, `--set` documented as the fresh-install source of truth |
+| 4 | `charts/.gitignore` rules inert — tarball + Chart.lock tracked | `git rm --cached` both; `make deps` regenerates; charts/README documents the flow |
+| 5 | ArgoCD example: prune deletes ns+PVCs with the future pre-delete helm gate never firing (GitOps applies manifests, no helm lifecycle); `project: genieai` needs a pre-existing AppProject not listed | Example header: LIMITATION block (ArgoCD-native protection needed for GitOps mode) + AppProject precondition |
+| 6 | library README Usage taught the dropped import-values pattern; schema description stale; nameOverride maxLength 50 vs helper trunc 63 | Round-1 fixes: README rewritten, description rewritten, maxLength 63 |
+| 7 | Spec §3/§743 prose still mandates import-values | Spec §3 amended with decision + ledger pointer (round 1) |
+| 8 | Test pod asserts only SA namespace, not the ns labels (plan interface claimed label assertion) | ACCEPTED as-is: alpine pod has no kubectl; label rendering is asserted by `helm template` inspection + the namespace itself is the object under test. Plan 1 interface text is aspirational |
+| 9 | No umbrella values.schema.json (`namespace`/`clusterProfile` unvalidated) | DEFERRED to the tier that consumes more values (a one-key schema now buys nothing; `clusterProfile` enum lands with the Plan 2 profile hook) |
+| 10 | charts/README said tests live in `tests/` | Fixed: `templates/tests/` |
+| 11 | Plan 1 Self-Review stale: kubeVersion config key claim + .helmignore exclusion claim | Both corrected in the plan doc |
+
 ## Wave 8 — Plan 1 execution findings (Helm 4.3.0, fixed in this branch)
 
 Found while executing the Foundation plan against helm v4.3.0 on kind 1.33.0.

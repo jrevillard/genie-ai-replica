@@ -1152,10 +1152,10 @@ Sections NOT covered by this plan, on purpose (move to Plans 2–8):
 
 1. Library `import-values:` collision → TDD red-steps in **Task 4 + Task 5** (chart fails lint without `values.yaml`; passes with it). `helm lint --strict` validates templates render without overlap but **does NOT detect duplicate `{{ define }}` keys** — explicit duplicate-define lint added in Plan 7.
 2. Helm test Pod missing securityContext → Task 9 Step 2 (test pod carries full `securityContext`) + Task 12 Step 4 (verifies post-install).
-3. chart-testing `ct install` without kube-version → Task 10 Step 1 (`ct.yaml` pins `kubeVersion: 1.33.0`).
+3. chart-testing `ct install` without kube-version → Task 10 Step 1 (`ct.yaml` pins the version via the kind node image + `--kube-version` CLI flag in the Makefile/CI — there is NO `kubeVersion` config key; execution correction, ledger Wave 8 #3).
 4. `appVersion: latest` rejected in OCI → Task 6 Step 4 (`if grep ... ; then exit 1 ; else echo OK ; fi`, regex covers `"latest"`, `'latest'`, and `latest`).
 5. ArgoCD Application auto-render → Task 11 Step 3 (`grep "kind: Application$"` confirms not in rendered output).
-6. Tarball + Chart.lock committed in source → Task 5 Step 4 (`.helmignore` in library); Task 10 Step 3 (umbrella `.helmignore` excludes `charts/`, `*.tgz`, `*.lock`).
+6. Tarball + Chart.lock committed in source → Task 5 Step 4 (`.helmignore` in library); umbrella `.helmignore` intentionally keeps only `.DS_Store` — vendored deps MUST ship in the packaged tarball; keeping them out of git diffs is `charts/.gitignore`'s job (execution: tarball+lock are untracked, regenerated via `make deps`).
 7. PSA namespace labeling → Task 8 Step 1 (explicit `pod-security.kubernetes.io/enforce: restricted` + versioned `v1.33` not `latest`).
 8. Pluggable surface declared but unused → Task 7 Step 1–2 (values trimmed to foundation).
 9. test-utils image reference dangling → Task 9 Step 2 (`image: alpine:3.20` only).

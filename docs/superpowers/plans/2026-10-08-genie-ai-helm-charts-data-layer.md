@@ -29,7 +29,7 @@ Five input-class concerns the spec implies but no Plan 2 task tests explicitly. 
 2. **ClusterProfile auto-detection race** — namespace label write may not propagate to the Pod quickly; the Job checks label at runtime, decides profile, mutates Helm release. Race condition if release upgrade starts before label syncs. **Pinned in Task 7 Step 4** — Job has a 30s `for` loop polling the label; aborts cleanly if missing.
 3. **`ArangoDeployment` mode switch mid-life (single → cluster)** — kube-arangodb requires PVC re-allocation + new cluster initialization when transitioning from single-node to cluster mode. **Pinned in Task 9 Step 5** — task explicitly notes "single → cluster requires fresh `helm uninstall` + `helm install`; do not in-place upgrade" + cluster-mode test skipped in foundation CI (uses single mode default).
 4. ~~Kong DB-less misconfig~~ — moot: Kong REMOVED (decision 7). Edge routing/JWT/CORS/rate-limit are Envoy Gateway concerns (Plan 6).
-5. **SealedSecrets become undecryptable after cluster-key rotation** — rotation is OPERATOR-INITIATED (`kubeseal --rotate`; there is NO 30-day auto-rotation — that earlier claim was wrong). After a rotation, committed SealedSecrets silently fail to decrypt and the controller marks them via the `sealedsecrets.bitnami.com/invalid` annotation. **Pinned in Task 11 Step 4** — a pre-upgrade hook Job lists SealedSecrets and FAILS the upgrade when any carries the `invalid` annotation (no kubeseal needed inside the Job).
+5. **SealedSecrets become undecryptable after cluster-key rotation** — rotation is OPERATOR-INITIATED (`kubeseal --rotate`; there is NO 30-day auto-rotation — that earlier claim was wrong). After a rotation, committed SealedSecrets silently fail to decrypt; the controller signals this via `status.conditions[type=SealedSecretHasntDecrypted].status=True` (there is no `invalid` annotation upstream). **Pinned in Task 11 Step 4** — a pre-upgrade hook Job lists SealedSecrets and FAILS the upgrade when any carries that condition (no kubeseal needed inside the Job).
 
 ---
 
@@ -428,7 +428,7 @@ git commit -m "feat(charts): render CNPG Postgres Cluster for keycloak-db (HA vi
 
 **Interfaces:**
 - Consumes: nothing new.
-- Produces: a ServiceAccount + ClusterRoleBinding granting list/watch access to (a) namespaces + configmaps + secrets (for dep-check + clusterprofile-detect) AND (b) all CRDs the chart depends on (SealedSecret, Keycloak, KeycloakRealmImport, ArangoDeployment, CNPG Cluster) so the drift validation hook can read `sealedsecrets.bitnami.com/invalid` annotations.
+- Produces: a ServiceAccount + Role/ClusterRoleBinding pair granting list/watch access to (a) the release namespace's configmaps + secrets + sealedsecrets (for dep-check + drift validation) AND (b) cluster-scoped namespaces + the CRDs the chart depends on (Keycloak, KeycloakRealmImport, ArangoDeployment, CNPG Cluster) so the drift validation hook can read each SealedSecret's `status.conditions`.
 - **Hook-ordering note (critical)**: these RBAC objects carry `helm.sh/hook: pre-install,pre-upgrade` + `helm.sh/hook-weight: "-30"` themselves. Regular (non-hook) resources are installed AFTER all pre-install hooks — a regular SA would not exist when the hook Jobs run, deadlocking every first install. Making the RBAC the lowest-weight hook resolves the chicken-and-egg: Helm creates hook resources in ascending weight order and waits for each batch (weight -30 RBAC -> -20 dep-graph ConfigMap -> -10 clusterprofile -> -5 dep-check). `before-hook-creation` delete-policy keeps them across installs (recreated only when the hook fires again).
 
 **Review Focus F7 fix**: stock `view` ClusterRole has NO access to custom resources. Using it returns 403 on `kubectl get sealedsecrets.bitnami.com/sealedsecrets` and equivalent CRDs. Drift detection is silent. **Custom ClusterRole required.**
@@ -731,14 +731,20 @@ data:
            `| default true` would flip an explicitly disabled component back
            on, and a bare .Values.services.backend.enabled would nil-pointer
            at render time because values.yaml carries NO services block at this
-           point. `dig` walks the path safely. */ -}}
-    {{- $flat := dict -}}
-    {{- range $name := list "backend" "frontend" "documentRepository" "clamav" -}}
-    {{- $_ := set $flat (printf "services.%s.enabled" $name) (dig "services" $name "enabled" false $) -}}
-    {{- end -}}
-    {{- range $name := list "postgres" "arangodb" "keycloak" -}}
-    {{- $_ := set $flat (printf "data.%s.enabled" $name) (dig "data" $name "enabled" false $) -}}
-    {{- end -}}
+           point. Two subtleties: (1) sprig `dig` REFUSES Helm's typed Values
+           (`interface conversion: ... is common.Values`) — round-trip through
+           toRawJson|fromJson to get a plain map first; (2) inside a literal
+           block scalar, a trailing `{{- ... -}}` dash trims the newline the
+           `|` pipe needs — use plain `}}` closers on every line of the block
+           (verified by rendering). */ -}}
+    {{- $vals := $.Values | toRawJson | fromJson }}
+    {{- $flat := dict }}
+    {{- range $name := list "backend" "frontend" "documentRepository" "clamav" }}
+    {{- $_ := set $flat (printf "services.%s.enabled" $name) (dig "services" $name "enabled" false $vals) }}
+    {{- end }}
+    {{- range $name := list "postgres" "arangodb" "keycloak" }}
+    {{- $_ := set $flat (printf "data.%s.enabled" $name) (dig "data" $name "enabled" false $vals) }}
+    {{- end }}
     {{ $flat | toJson }}
 ```
 
@@ -770,7 +776,10 @@ Expected: prints `PASS`.
 helm template test charts/genieai-umbrella -n genieai | \
   python3 -c "import sys, yaml; docs = list(yaml.safe_load_all(sys.stdin)); \
   job = next(d for d in docs if d and d.get('kind')=='Job' and 'dep-check' in (d.get('metadata',{}).get('name',''))); \
-  assert job['metadata']['annotations'].get('helm.sh/hook') == 'pre-install'; \
+  # The annotation renders as the comma-joined list of BOTH hook phases —
+# assert membership, not exact equality ('== pre-install' can never pass
+# against 'pre-install,pre-upgrade').
+assert 'pre-install' in job['metadata']['annotations'].get('helm.sh/hook', ''); \
   print('PASS')"
 ```
 

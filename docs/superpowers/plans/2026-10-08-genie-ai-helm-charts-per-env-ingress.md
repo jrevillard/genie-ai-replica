@@ -11,7 +11,7 @@
 > — no `uninstallPolicy` values key exists; Task 6 below is corrected
 > accordingly.
 
-**Goal:** Ship the per-environment configuration layer (`values-override.yaml` per env) for `dev` (the only real env today — local minikube/k3s) and `prod` (a generic, empty-of-real-cluster-details overlay that operators can fork when a real prod cluster lands). Plus: GitOps sync examples (ArgoCD + Flux), Envoy Gateway ingress, db-migrations Job, document-repository PVC, verified-peer NetworkPolicy pass, per-env uninstallPolicy opt-in.
+**Goal:** Ship the per-environment configuration layer (`values-override.yaml` per env) for `dev` (the only real env today — local minikube/k3s) and `prod` (a generic, empty-of-real-cluster-details overlay that operators can fork when a real prod cluster lands). Plus: GitOps sync examples (ArgoCD + Flux), Envoy Gateway ingress, db-migrations Job, document-repository PVC, verified-peer NetworkPolicy pass, annotation-based uninstall gate documentation.
 
 **Removed from scope (rolled back from an earlier draft)**:
 - `staging/`: no separate tier in our model.
@@ -145,6 +145,31 @@ services:
   - `secrets.sealedSecrets.enabled: true` (always)
   - Every operator-specific value (cluster IPs, GPU URLs, Issuer name, Ingress host, real SealedSecret values) is INTENTIONALLY left for operators to fill in. The chart defaults + the per-env overlay = the contract; the operator's per-cluster fork = the reality.
 
+- [ ] **Step 2b: Author the per-env `kustomization.yaml` (both envs — nothing renders without it)**
+
+The ArgoCD Applications point at `deploy/environments/<env>`; a directory
+holding only `values-override.yaml` has no renderable manifests. Create
+`deploy/environments/dev/kustomization.yaml` (and the prod twin with
+`releaseName: genieai-prod`):
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+helmCharts:
+  - name: genieai-umbrella
+    releaseName: genieai-dev
+    namespace: genieai
+    version: 0.1.0
+    # Path form requires the vendored file:// dependency tarball, which is
+    # gitignored — any consumer (kustomize build, ArgoCD, CI) MUST run
+    # `make -C charts deps` on checkout first. Clusters that cannot run
+    # helm (air-gapped ArgoCD) should switch `chart:` to the published OCI
+    # ref instead once publish:charts ships it.
+    chart: ../../charts/genieai-umbrella
+    valuesFile: values-override.yaml
+```
+
 - [ ] **Step 3: Create `deploy/environments/README.md`**
 
 ```markdown
@@ -215,8 +240,11 @@ to K8s. The template's defaults are:
 - `ingress.enabled: true` — operators MUST set `ingress.host` and
   `ingress.tls.issuerName` per their cluster's cert-manager Issuer
 - `migrate.enabled: true` — pre-install Job runs backend db-migrations
-- `uninstallPolicy.enabled: true` — the gate requires the namespace
-  annotation before `helm uninstall` (safety net for prod)
+- Uninstall gate: NOT a values key (the chart reads none) — the gate
+  fires on every `helm uninstall` until the operator annotates the
+  namespace with
+  `genieai.io/allow-destructive-uninstall=true` (safety net for prod;
+  break-glass = `helm uninstall --no-hooks`)
 
 The template does NOT contain: cluster IPs, GPU URLs, Issuer names,
 real SealedSecret values. Every operator-specific value is left for

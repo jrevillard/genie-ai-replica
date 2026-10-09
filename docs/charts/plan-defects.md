@@ -118,6 +118,28 @@ are exempted by its SUPERSEDED banner. Sub-cap fixes: dangling `<<<` heredoc,
 never-firing `printf|default` TLS-name guard, AppProject whitelist missing
 `kinds`, otel-migration Grafana posture rows, PII lengths.
 
+## Wave 12 — `/code-review` xhigh round 3 (2 shipped-code + 13 plan/spec)
+
+Two findings in SHIPPED artifacts this round (both fixed + re-validated):
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| 1 | SHIPPED `make docs` overwrites hand-written chart READMEs with generated stubs (verified empirically: +14/−26 on the library README, plus creating an umbrella README the repo deliberately lacks) | Destructive target removed; `docs-check` prints `helm-docs --dry-run` only, never writes |
+| 2 | SHIPPED library schema documented nameOverride/fullnameOverride/component as dependency-subtree keys — provably ignored there (helpers read the parent's ROOT values; verified with --set probes); root values remain unvalidated | Schema description + library README rewritten: keys apply at the consuming chart's root, subtree placement silently no-ops |
+| 3 | sprig `dig ... $` hard-fails on Helm's typed Values (`interface conversion: ... common.Values` — reproduced) in the dep-check enabled.json + 3 AI-tier spots → Plans 2/5 render-dead | `toRawJson \| fromJson` plain-map round-trip + no-trailing-dash block-scalar rule (both verified by rendering) |
+| 4 | charts:lint extends `.lint_template` (doesn't exist) + image has no helm/conftest | Self-contained image + binary checks in before_script |
+| 5 | `helm template \| conftest test` missing the trailing `-` (conftest exits 1 without reading stdin) — gate never evaluated a rule | `-` added (job + local gate) |
+| 6 | publish:charts `needs:` later-stage jobs → GitLab rejects pipeline creation | Moved to own `charts:publish` stage after scan; stages lists updated |
+| 7 | GitOps path unbuildable: per-env kustomization.yaml never authored + gitignored file:// dep breaks kustomize/ArgoCD on fresh checkout | Plan 6 Task 1 Step 2b authors both kustomizations with the `make deps` prerequisite + OCI-source alternative documented |
+| 8 | PII smoke curled `*.svc.cluster.local` from the host — unresolvable outside kind; script dead on arrival | Inject via `kubectl run` in-cluster pod (stdin payload); VL query via `port-forward svc/vlogs` + trap cleanup |
+| 9 | Kyverno example imagePattern named gitlab.com + wrong ref path → matches zero images, dead Enforced policy | Pattern → self-hosted registry + the exact ref publish:charts signs |
+| 10 | Spec §14.1 signed/attested BEFORE helm push (cosign needs the digest in the registry) | Order corrected: package → push → sign → attest |
+| 11 | Spec §12 install patterns: wrong chart path (`./genieai-umbrella`) + missing required `--create-namespace` | All three patterns corrected; also dropped release names starting with `genieai` (fullname collision) |
+| 12 | Plan 2 Task 6 Step 5 assert `== 'pre-install'` vs template's `pre-install,pre-upgrade` — unpassable, executor would "fix" the chart wrongly | Membership assertion |
+| 13 | Plan 6 environments README still documented the dead `uninstallPolicy.enabled` key; Plan 2 constraint + Task 4 interfaces still cited the nonexistent invalid annotation | Both rewritten (annotation-gate contract; status.conditions signal) |
+| 14 | Spec §5.2/§10 promised profile-driven observability auto-enable while Plan 4 ships static-false → prod installs blind per spec's promise | Spec aligned to Plan 4: explicit per-env values, no hidden template auto-enable |
+| 15 | Renovate: `helm-requirements` manager (Helm 2 — matches nothing) + `allowedVersions: "/^~/"` matching no release version → dependency MRs never open | `helmv3` manager + plain-semver release regex matching the `~>` pin semantics |
+
 # Plan Defect Ledger — Helm Migration Docs
 
 Tracks every finding from the adversarial review rounds against the spec +

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "genieai-common library chart values",
-  "description": "Schema for values imported via import-values: into consuming charts. Most fields default and require no setting.",
+  "description": "Schema for the library chart's values. Consuming charts inherit these keys via the dependency's values coalescing; most fields default and require no setting.",
   "type": "object",
   "properties": {
     "global": {

@@ -34,3 +34,4 @@ controllers. See `genieai-umbrella/README.md` for install hints.
 - Install requires `-n <ns> --create-namespace` (the Namespace is a regular resource; the release Secret and hooks need it first)
 - Vendored dep tarballs are generated, not tracked — run `make deps` (from `charts/`) after cloning or dep changes. `Chart.lock` IS tracked (pins dep versions for reproducible builds). `ct install` for integration, `helm test` for smoke.
 - Hook Jobs live in `templates/hooks/*.yaml` with explicit `helm.sh/hook` annotations (phase + weight). Helm scans `templates/` recursively — the subdirectory is organizational only.
+- Hook + test-pod init containers download `kubectl` and `jq` from public release URLs by default. Set `global.kubeletToolsMirror` in `values.yaml` to route them through an internal mirror for air-gapped / sovereign clusters.

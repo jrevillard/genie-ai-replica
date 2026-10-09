@@ -5,7 +5,6 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "pre-install") | nindent 4 }}
-    app.kubernetes.io/component: pre-install
   annotations:
     # Helm 3 scans templates/ recursively for hook annotations. Subdirectory
     # name `hooks/` is irrelevant to Helm; the annotations below are what

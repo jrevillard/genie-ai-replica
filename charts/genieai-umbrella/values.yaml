@@ -13,6 +13,13 @@ namespace: genieai
 global:
   imageRegistry: ""
   imagePullSecrets: []
+  # Hook + test-pod init containers curl-download kubectl + jq from the
+  # public releases. In air-gapped environments set this to an
+  # internal mirror URL (no scheme) so the init container hits a
+  # local proxy; the paths /release/v1.33.0/bin/linux/amd64/kubectl
+  # and /jq/releases/download/jq-1.7.1/jq-linux-amd64 are appended
+  # automatically. Default = empty (use the public URLs).
+  kubeletToolsMirror: ""
 
 # Drives chart-derived defaults (replica counts, data-tier topology,
 # observability). dev | staging | prod (sovereign is reserved — its branches
@@ -38,6 +45,11 @@ data:
   # controllers that reconcile them (CNPG, kube-arangodb, keycloak-operator)
   # are cluster bootstrap prerequisites — see the README's Cluster
   # prerequisites section.
+  # The services tier's enabled toggles are added with the service-tier plan
+  # (Plan 3); until then the dep-check validates only the data tier
+  # (default). The dep-check loop iterates both `services` and `data`
+  # tiers but reads `false` for every services.* key until those toggles
+  # land — the service→data validation half is therefore decorative today.
   postgres:
     enabled: true
     # CNPG Cluster resources for the keycloak-db (the only Postgres; the edge

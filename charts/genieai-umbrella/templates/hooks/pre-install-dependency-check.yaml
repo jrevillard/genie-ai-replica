@@ -22,6 +22,13 @@ spec:
     spec:
       restartPolicy: Never
       serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
+      # The evaluator reads only the two mounted JSON files; it makes no
+      # Kubernetes API calls, so it never needs a service account token.
+      automountServiceAccountToken: false
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534
@@ -29,12 +36,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: dep-check
-          # python:3.12-alpine ships python + pyyaml-stripped; we read YAML
-          # without pyyaml by parsing only the JSON graph mount. The image
-          # is the minimal alpine + python that fits the dependency-check
-          # logic, without falling back to a no-op
-          # grep.
-          image: python:3.12-alpine
+          # Minimal alpine + python base; the evaluator parses only the two
+          # JSON mounts and needs no YAML library.
+          image: "{{ .Values.global.imageRegistry | default "docker.io" }}/python:3.12-alpine"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -54,23 +58,19 @@ spec:
                   print(f"FAIL: {graph_path} missing"); sys.exit(1)
               with open(graph_path) as f:
                   graph = json.load(f)
-              # Read which services are ENABLED via the chart's env. The
-              # values.yaml defines a `services.<X>.enabled` boolean. The
-              # graph only includes declared deps; the evaluator reads
-              # current values from the helm chart via `kubectl get
-              # ConfigMap`. We use a generated ConfigMap with the
-              # `data.enabled` keys flattened to avoid parsing values.yaml
-              # at runtime.
+              # Enabled toggles come from the enabled.json mount — the
+              # chart flattens every `services.<X>.enabled` /
+              # `data.<X>.enabled` boolean to JSON at render time. The
+              # graph lists only declared deps; enabled.json is the sole
+              # source for whether each component is on.
               enabled_json = "/var/run/genieai/enabled.json"
               if not os.path.exists(enabled_json):
                   print(f"FAIL: {enabled_json} missing"); sys.exit(1)
               with open(enabled_json) as f:
                   enabled = json.load(f)
-              # Resolve a dependency name to its namespace in the graph:
-              # deps may be services (frontend -> backend) OR data tiers
-              # (backend -> arangodb). Earlier version assumed every dep was
-              # a data.* key — a service dep like "backend" resolved to
-              # data.backend.enabled=False and failed every default install.
+              # Dependency names resolve against the graph's own
+              # namespaces: a name present under services.* is a service
+              # dep, anything else a data dep.
               def dep_enabled(dep):
                   if dep in graph.get("services", {}):
                       return enabled.get(f"services.{dep}.enabled", False)
@@ -116,35 +116,31 @@ metadata:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-20"
     "helm.sh/hook-delete-policy": before-hook-creation
+  {{- /*
+    enabled.json flattens the component enabled toggles as JSON so the
+    dependency-check Pod reads them without parsing values.yaml. Absent
+    keys read FALSE — an unexported toggle disables, never enables, a
+    component's edge checks.
+  */}}
 data:
   dependency-graph.json: |
     {{- include "genieai-umbrella.dependencyGraph.json" . | nindent 4 }}
-  {{ "" }}
-  {{- /*
-    Renders the current `services.X.enabled` and `data.X.enabled` boolean
-    values as JSON so the dependency-check Pod reads them without parsing
-    the raw values.yaml (which uses Helm templating the Pod can't run). If
-    a new `services.<X>.enabled` is added to values.yaml but not exported
-    here, the Pod falls back to False (failing safe — service appears
-    "off"). The op-level "missing dependency" failure then surfaces in CI.
-  */ -}}
   enabled.json: |
-    {{- /* FAIL-SAFE flat map: every toggle defaults to FALSE when absent.
-           `| default true` would flip an explicitly disabled component back
-           on, and a bare .Values.services.backend.enabled would nil-pointer
-           at render time because values.yaml carries NO services block at this
-           point. Two subtleties: (1) sprig `dig` REFUSES Helm's typed Values
-           (`interface conversion: ... is common.Values`) — round-trip through
-           toRawJson|fromJson to get a plain map first; (2) inside a literal
-           block scalar, a trailing `{{- ... -}}` dash trims the newline the
-           `|` pipe needs — use plain `}}` closers on every line of the block
-           (verified by rendering). */ -}}
+    {{- /* FAIL-SAFE flat map: every toggle defaults to FALSE when absent —
+           a missing export disables a component's checks, never enables
+           them. Exported keys derive from the graph itself (the ranges
+           below iterate dependencyGraph keys), so a new graph node exports
+           its toggle automatically. sprig `dig` refuses Helm's typed
+           Values — round-trip through toRawJson|fromJson for a plain map;
+           inside a literal block scalar, dash-closers would trim the
+           newline the `|` pipe needs, so every line uses plain `}}`
+           closers. */ -}}
     {{- $vals := $.Values | toRawJson | fromJson }}
     {{- $flat := dict }}
-    {{- range $name := list "backend" "frontend" "documentRepository" "clamav" }}
+    {{- range $name, $deps := dig "dependencyGraph" "services" dict $vals }}
     {{- $_ := set $flat (printf "services.%s.enabled" $name) (dig "services" $name "enabled" false $vals) }}
     {{- end }}
-    {{- range $name := list "postgres" "arangodb" "keycloak" }}
+    {{- range $name, $deps := dig "dependencyGraph" "data" dict $vals }}
     {{- $_ := set $flat (printf "data.%s.enabled" $name) (dig "data" $name "enabled" false $vals) }}
     {{- end }}
     {{ $flat | toJson }}

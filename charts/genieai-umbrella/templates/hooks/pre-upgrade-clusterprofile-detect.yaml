@@ -26,6 +26,10 @@ spec:
     spec:
       restartPolicy: Never
       serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534
@@ -35,8 +39,11 @@ spec:
         - name: detect
           # bitnami/kubectl ships kubectl on a minimal base; alpine has no
           # kubectl binary at all.
-          image: bitnami/kubectl:1.33
+          image: "{{ .Values.global.imageRegistry | default "docker.io" }}/bitnami/kubectl:1.33"
           imagePullPolicy: IfNotPresent
+          env:
+            - name: RENDERED_PROFILE
+              value: {{ .Values.clusterProfile | default "dev" | quote }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -55,32 +62,45 @@ spec:
               # time: a running Job has no access to Helm values, and Helm
               # never re-renders templates mid-install/upgrade — so the only
               # faithful comparison target is the literal rendered value.
-              rendered="{{ .Values.clusterProfile }}"
+              rendered="$RENDERED_PROFILE"
               # The label is applied by a regular Namespace resource, which
               # can lag hook start; poll a bounded 3 attempts, 2s apart.
               detected=""
+              read_failed=0
               for attempt in 1 2 3; do
-                profile=$(kubectl get ns "$ns" -o jsonpath='{.metadata.labels.genieai\.io/cluster-profile}' 2>/dev/null || true)
-                if [ -n "$profile" ]; then
-                  detected="$profile"
-                  break
+                if profile=$(kubectl get ns "$ns" -o jsonpath='{.metadata.labels.genieai\.io/cluster-profile}' 2>/dev/null); then
+                  if [ -n "$profile" ]; then
+                    detected="$profile"
+                    break
+                  fi
+                else
+                  read_failed=1
                 fi
                 [ "$attempt" -lt 3 ] && sleep 2
               done
+              if [ -z "$detected" ] && [ "$read_failed" -eq 1 ]; then
+                echo "WARN: namespace label read failed; skipping drift check" >&2
+              fi
               if [ -n "$detected" ] && [ "$detected" != "$rendered" ]; then
-                echo "cluster-profile mismatch: namespace $ns carries '$detected' but this release renders '$rendered'"
-                # The Job cannot mutate Helm-rendered values; the Event is
-                # the visibility channel (kubectl describe ns) prompting the
-                # operator to pass --set clusterProfile=$detected on the next
-                # install/upgrade. `kubectl create event` one-liner:
-                # `apply` rejects generateName manifests and an indented
-                # heredoc would break YAML parsing inside the block scalar.
-                kubectl create event "genieai-profile-drift-$(date +%s)" \
-                  --type=Warning \
-                  --reason=ClusterProfileDetected \
-                  --message="cluster-profile mismatch: namespace label '$detected' != rendered clusterProfile '$rendered' — pass --set clusterProfile=$detected at the next install/upgrade to align" \
-                  --for=namespace/"$ns" \
-                  -n "$ns" >/dev/null 2>&1 || true
+                msg="cluster-profile: namespace label '${detected}' != rendered '${rendered}'. If unintentional, pass --set clusterProfile=${detected}; if this upgrade intentionally changes the profile, ignore - the label updates when this upgrade applies."
+                echo "$msg"
+                # The Event is the visibility channel (kubectl describe ns).
+                # Created via `kubectl create -f -` from a printf'd manifest —
+                # no heredoc inside the block scalar.
+                printf '%s\n' \
+                  "apiVersion: v1" \
+                  "kind: Event" \
+                  "metadata:" \
+                  "  name: genieai-profile-drift-$(date +%s)" \
+                  "  namespace: ${ns}" \
+                  "involvedObject:" \
+                  "  apiVersion: v1" \
+                  "  kind: Namespace" \
+                  "  name: ${ns}" \
+                  "reason: ClusterProfileDetected" \
+                  "type: Warning" \
+                  "message: \"${msg}\"" \
+                  | kubectl create -f - >/dev/null 2>&1 || echo "WARN: event create failed" >&2
               fi
               # Drift detection is advisory: a mismatch (or an unreadable
               # label) must never block the upgrade itself.

@@ -432,9 +432,11 @@ class TestRouteGraphs:
 
     async def test_head_pseudo_row_lights_up_its_graph(self):
         # ncd has only 2 chunks (< ROUTE_MIN_CHUNKS) but a strong head
-        # (cosine 1.0 × weight 1.0 → the top row of the pool): the pseudo-row
-        # adds +1 to ncd's count → 3 → QUALIFIES. kenya (2 chunks, no head)
-        # stays dropped. This is David's "the head is the signal" case.
+        # (cosine 1.0 passes all three gate legs — no centroid/tags → veto
+        # and margin degrade open): the claim is DECISIVE under heads-
+        # supersede (1-8f3) — ncd routes, and alphabet's 5 chunks do NOT
+        # keep it in (a claiming head silences the chunk competition).
+        # This is David's "CLEARLY IT SHOULD HAVE HIT NCD (only)" ruling.
         results = {
             "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93, 0.92, 0.91],
             "OKF_kenya_v1_SOURCE": [0.85, 0.84],
@@ -444,6 +446,41 @@ class TestRouteGraphs:
             _routing_stub(results, heads=self._head_rows()),
             ["GRAPH", "OKF_alphabet_v1", "OKF_kenya_v1", "OKF_ncd_v1"],
         )
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_ncd_v1"]
+
+    async def test_supersede_skips_the_chunk_probe(self):
+        # 1-8f3 latency contract: under an active claim the per-graph probe
+        # NEVER runs — the db sees ONLY the okf_repositories head fetch (the
+        # live probe across ~100k-chunk graphs cost 78s of a 122s answer).
+
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93, 0.92, 0.91],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        stub = _routing_stub(results, heads=self._head_rows())
+        routed, degraded = await self._route(stub, ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"])
+        assert degraded is False
+        assert routed == ["GRAPH", "OKF_ncd_v1"]
+        assert stub.db.calls and all("okf_repositories" in str(call) or call is None for call in stub.db.calls), (
+            f"probe ran under an active claim: {stub.db.calls}"
+        )
+
+    async def test_supersede_off_restores_pool_semantics(self):
+        # RETRIEVER_ROUTE_HEADS_SUPERSEDE=false → the 1-8 MR-D pool: the
+        # claiming head is one pseudo-row (+1 chunk-count) among chunks —
+        # alphabet's 5 chunks keep it in alongside ncd.
+        import retriever.genieai_retriever_arangodb as rmod
+
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93, 0.92, 0.91],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        with patch.object(rmod, "ROUTE_HEADS_SUPERSEDE", False):
+            routed, degraded = await self._route(
+                _routing_stub(results, heads=self._head_rows()),
+                ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"],
+            )
         assert degraded is False
         assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"]
 
@@ -598,7 +635,7 @@ class TestRouteGraphs:
                 emb=self._E0,
             )
         assert degraded is False
-        assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"]
+        assert routed == ["GRAPH", "OKF_ncd_v1"]
         attrs = self._span_attrs(span)
         assert attrs["rag.route.heads_vetoed"] == 0
         assert attrs["rag.route.head_rows"] == 1
@@ -629,8 +666,9 @@ class TestRouteGraphs:
                 emb=self._E0,
             )
         assert degraded is False
-        assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"]
+        assert routed == ["GRAPH", "OKF_ncd_v1"]
         attrs = self._span_attrs(span)
+        assert attrs["rag.route.mode"] == "heads-supersede"
         assert attrs["rag.route.head_rows"] == 1
         assert attrs["rag.route.heads_gated"] == 0
         assert attrs["rag.route.heads_floored"] == 0
@@ -689,7 +727,7 @@ class TestRouteGraphs:
                 emb=self._E0,
             )
         assert degraded is False
-        assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"]
+        assert routed == ["GRAPH", "OKF_ncd_v1"]
         attrs = self._span_attrs(span)
         assert attrs["rag.route.heads_vetoed"] == 0
         assert attrs["rag.route.head_rows"] == 1
@@ -717,7 +755,7 @@ class TestRouteGraphs:
                 emb=self._E0,
             )
         assert degraded is False
-        assert routed == ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"]
+        assert routed == ["GRAPH", "OKF_ncd_v1"]
         attrs = self._span_attrs(span)
         assert attrs["rag.route.heads_gated"] == 0
         assert attrs["rag.route.head_rows"] == 1

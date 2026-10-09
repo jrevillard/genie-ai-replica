@@ -299,6 +299,16 @@ ROUTE_HEAD_MARGIN = float(os.getenv("RETRIEVER_ROUTE_HEAD_MARGIN", "0.01"))
 # veto; heads without a forbidden centroid skip margin (1-8a semantics).
 ROUTE_HEAD_FLOOR = float(os.getenv("RETRIEVER_ROUTE_HEAD_FLOOR", "0.55"))
 ROUTE_FORBIDDEN_TAG_MAX = float(os.getenv("RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX", "0.55"))
+# Story 1-8f3 (David 2026-10-10: "CLEARLY IT SHOULD HAVE HIT THE NCD
+# Information graph (only)") — heads SUPERSEDE chunk competition. When ≥1
+# gate-passing head claims the query, ONLY claimed graphs route and the
+# chunk-level probe is SKIPPED entirely: headless corpora (bulk-ingested,
+# untagged, no head to gate) must not pollute the pool, and probing them
+# was the latency (live: a 4-graph probe across ~100k-chunk graphs cost
+# 78s of a 122s answer). With NO claims the legacy chunk competition runs
+# unchanged (un-headed deployments keep Story 1.3 behavior). false restores
+# the 1-8 MR-D pool semantics (head rows as one vote among chunks).
+ROUTE_HEADS_SUPERSEDE = os.getenv("RETRIEVER_ROUTE_HEADS_SUPERSEDE", "true").lower() == "true"
 
 # Summarizer Configuration
 SUMMARIZER_ENABLED = os.getenv("RETRIEVER_SUMMARIZER_ENABLED", "false").lower() == "true"

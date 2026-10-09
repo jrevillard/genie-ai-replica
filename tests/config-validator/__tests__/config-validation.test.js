@@ -452,7 +452,8 @@ describe('Configuration Validation Suite', () => {
       RETRIEVER_ROUTE_HEAD_WEIGHT: '1.0',
       RETRIEVER_ROUTE_HEAD_MARGIN: '0.01',
       RETRIEVER_ROUTE_HEAD_FLOOR: '0.55',
-      RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX: '0.55'
+      RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX: '0.55',
+      RETRIEVER_ROUTE_HEADS_SUPERSEDE: 'true'
     };
 
     test('every routing-head knob is piped in compose with the code default', () => {

@@ -217,6 +217,7 @@ HUGGING_FACE_HUB_TOKEN=
 # RETRIEVER_ROUTE_HEAD_MARGIN=0.01         # min head-over-forbidden margin for a claim (heads without a forbidden centroid skip it)
 # RETRIEVER_ROUTE_HEAD_FLOOR=0.55          # off-domain noise bar for the routing head claim
 # RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX=0.55   # hard forbidden-tag veto bar
+# RETRIEVER_ROUTE_HEADS_SUPERSEDE=true     # a gate-passing head claim routes EXCLUSIVELY (probe skipped, headless graphs out); false = 1-8 pool semantics
 # GPU service endpoints for the okf-server publish pipeline (Story 1.6):
 #   VLLM_LLM_HOST  — OpenAI-compatible /v1/chat/completions for tag suggest + validate (AsyncOpenAI-equivalent)
 #   TEI_EMBED_HOST — /embed for tag vectorization (1024-dim, shared embedding space with chunks)

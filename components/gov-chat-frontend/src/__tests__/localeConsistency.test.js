@@ -108,59 +108,83 @@ describe('Locale consistency', () => {
     expect(dupMap).toEqual({});
   });
 
-  // PLACEHOLDER-ESCAPING GUARD (David, 2026-09-30, "Step of 10"): these keys
-  // are consumed via translate(key, fb).replace('{x}', ...) — translate()
-  // passes NO interpolation params, so vue-i18n swallows a raw {x} (renders
-  // it as empty) before the component's .replace() ever runs. Consumed keys
-  // must carry the literal-escape form {'{'}x{'}'} (the pattern already used
-  // by okf.dashboard.stage.ingested / published).
-  test('replace()-consumed keys carry escaped placeholders in every locale', () => {
+  // PLACEHOLDER GUARD (David, 2026-09-30, "Step of 10"; re-inked 2026-10-09).
+  // translateMixin now does RAW message lookup (no vue-i18n compilation), so
+  // a replace()-consumed okf.* key must carry the PLAIN {x} form — the
+  // caller's .replace('{x}', …) needs to find it. The old {'{'}x{'}'} escape
+  // renders literally under raw lookup (live: the dashboard Ingested card
+  // showed "Ingested v{'{'}n{'}'}"), so every okf.* escape was un-escaped in
+  // the same change. admin.documents.* keys are the exception: their consumer
+  // is AdminDashboard.translate, which still routes through vue-i18n's
+  // compiler — there the escape form is load-bearing and a plain {x} would
+  // be swallowed as an empty named slot.
+  const RAW = /\{[a-zA-Z][a-zA-Z0-9_]*\}/;
+  const replaceConsumedPlain = [
+    'okf.dashboard.stage.stepOf',
+    'okf.studio.stage.stepOf',
+    'okf.studio.dashboard.stage.stepOf',
+    'okf.dashboard.stage.queueBehind',
+    'okf.pii.nFlagged',
+    'okf.src.total',
+    'okf.src.count',
+    'okf.src.confirm',
+    'okf.src.uploaded',
+    'okf.steps.input.benchCount',
+    'okf.steps.input.moreN',
+    // #1039 batch (2026-10-03): Step-7 keys consumed via .replace()
+    'okf.validation.headline.blockers',
+    'okf.validation.headline.warnings',
+    'okf.validation.summary',
+    'okf.validation.mergedPages',
+    'okf.validation.preview.truncated',
+    'okf.validation.action.wireCreate',
+    'okf.validation.action.wireExisting',
+    'okf.validation.wireDone',
+    'okf.validation.wireCreated',
+    // #1040 follow-up: the workbench bulk-PII success lines (consumed via
+    // translate().replace('{n}') — the done_accept multiline wrap slipped a
+    // raw {n} past a scripted escape once; the guard now pins all three).
+    'okf.editor.piiBulk.done_accept',
+    'okf.editor.piiBulk.done_redact',
+    'okf.editor.piiBulk.done_remove'
+  ];
+  // #1042 batch delete: consumed via AdminDashboard.translate (compiled $t).
+  const replaceConsumedEscaped = [
+    'admin.documents.confirmDeleteSelected',
+    'admin.documents.deleteQueuedSuccess',
+    'admin.documents.deletePartialFailure',
+    'admin.documents.deleteAllFailed',
+    'admin.documents.deleteRefuseReason'
+  ];
+
+  test('replace()-consumed okf.* keys carry PLAIN placeholders in every locale (mixin raw lookup)', () => {
     const get = (o, d) => d.split('.').reduce((a, k) => (a && a[k] != null ? a[k] : undefined), o);
-    const RAW = /\{[a-zA-Z][a-zA-Z0-9_]*\}/;
-    const replaceConsumed = [
-      'okf.dashboard.stage.stepOf',
-      'okf.studio.stage.stepOf',
-      'okf.studio.dashboard.stage.stepOf',
-      'okf.dashboard.stage.queueBehind',
-      'okf.pii.nFlagged',
-      'okf.src.total',
-      'okf.src.count',
-      'okf.src.confirm',
-      'okf.src.uploaded',
-      'okf.steps.input.benchCount',
-      'okf.steps.input.moreN',
-      // #1039 batch (2026-10-03): Step-7 keys consumed via .replace()
-      'okf.validation.headline.blockers',
-      'okf.validation.headline.warnings',
-      'okf.validation.summary',
-      'okf.validation.mergedPages',
-      'okf.validation.preview.truncated',
-      'okf.validation.action.wireCreate',
-      'okf.validation.action.wireExisting',
-      'okf.validation.wireDone',
-      'okf.validation.wireCreated',
-      // #1040 follow-up: the workbench bulk-PII success lines (consumed via
-      // translate().replace('{n}') — the done_accept multiline wrap slipped a
-      // raw {n} past a scripted escape once; the guard now pins all three).
-      'okf.editor.piiBulk.done_accept',
-      'okf.editor.piiBulk.done_redact',
-      'okf.editor.piiBulk.done_remove',
-      // #1042 batch delete: confirm/result toasts all carry replace() params.
-      'admin.documents.confirmDeleteSelected',
-      'admin.documents.deleteQueuedSuccess',
-      'admin.documents.deletePartialFailure',
-      'admin.documents.deleteAllFailed',
-      'admin.documents.deleteRefuseReason'
-    ];
     const offenders = [];
     for (const locale of localeFiles) {
       const data = getLocaleData(locale);
-      for (const key of replaceConsumed) {
+      for (const key of replaceConsumedPlain) {
+        const v = get(data, key);
+        if (typeof v !== 'string') {
+          offenders.push(`${locale}:${key} missing`);
+        } else if (!RAW.test(v)) {
+          offenders.push(`${locale}:${key} no plain placeholder: ${v}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('admin.documents replace()-consumed keys keep the escaped form (AdminDashboard compiled path)', () => {
+    const get = (o, d) => d.split('.').reduce((a, k) => (a && a[k] != null ? a[k] : undefined), o);
+    const offenders = [];
+    for (const locale of localeFiles) {
+      const data = getLocaleData(locale);
+      for (const key of replaceConsumedEscaped) {
         const v = get(data, key);
         if (typeof v !== 'string') {
           offenders.push(`${locale}:${key} missing`);
         } else if (RAW.test(v)) {
-          offenders.push(`${locale}:${key} raw placeholder: ${v}`);
+          offenders.push(`${locale}:${key} raw placeholder (must stay escaped): ${v}`);
         }
       }
     }

@@ -1011,3 +1011,50 @@ it('1-8f: a failed row edit surfaces the error instead of losing the local suite
   expect(w.vm.error).toContain('duplicate query text');
   expect(w.vm.suite).toStrictEqual(suiteFixture); // untouched on failure (deep: vm wraps it in a reactive proxy)
 });
+
+it('1-8f2: rename inline in the Saved-suites table dispatches and adopts the new name', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.savedSuites = [{ _key: 's-old', created_at: 'x', positives: 1, negatives: 1, name: '' }];
+  await w.vm.$nextTick();
+  dispatch.mockResolvedValueOnce({ ok: true, result: { _key: 's-old', name: 'NCD regression set' } });
+  await w.vm.onRenameSuite(w.vm.savedSuites[0], '  NCD regression set  ');
+  expect(dispatch).toHaveBeenCalledWith('okf/headSuiteRename', {
+    repoId: 'r-1',
+    suiteKey: 's-old',
+    name: 'NCD regression set'
+  });
+  expect(w.vm.savedSuites[0].name).toBe('NCD regression set');
+});
+
+it('1-8f2: count controls allow any number (max 1000 positives — the clamp regression)', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  const pos = w.vm.countControls.find((c) => c.key === 'n_positive');
+  expect(pos.max).toBe(1000);
+  // 0 is a request (positives-only suite), not a fallback trigger.
+  expect(w.vm.intOf('0')).toBe(0);
+  expect(w.vm.intOf('')).toBeUndefined();
+});
+
+it('1-8f2: generation is 202+poll — the UI polls and adopts the suite when it lands', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  const landed = { suite_key: 's-new', payload: { positive: [], negative: [] } };
+  dispatch.mockImplementation((action, payload) => {
+    if (action === 'okf/headSuiteGenerate') {
+      return Promise.resolve({ ok: true, result: { suite_key: 's-new', status: 'generating' } });
+    }
+    if (action === 'okf/headSuiteGet' && payload && payload.suiteKey === 's-new') {
+      return Promise.resolve({ ok: true, result: landed });
+    }
+    if (action === 'okf/headSuiteListRuns') return Promise.resolve({ ok: true, runs: [] });
+    return Promise.resolve({ ok: true });
+  });
+  w.vm.pollForSuite = jest.fn().mockResolvedValue(landed);
+  await w.vm.onGenerateSuite();
+  expect(w.vm.pollForSuite).toHaveBeenCalledWith('s-new');
+  expect(w.vm.suite.suite_key).toBe('s-new');
+  expect(w.vm.busy).toBeNull();
+  expect(w.vm.error).toBe('');
+});

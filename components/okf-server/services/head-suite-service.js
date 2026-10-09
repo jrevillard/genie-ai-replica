@@ -603,7 +603,9 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     const meta = metaQueries(llm.meta, nMeta);
     const nearMiss = nearMissQueries(llm.near_miss, fm, nNearMiss);
 
-    const suiteKey = `s${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
+    // 1-8f2: the key can be PRE-MINTED (async generation — the HTTP
+    // request returns 202 immediately and the UI polls for this key).
+    const suiteKey = opts.suiteKey || `s${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
     const now = new Date().toISOString();
     const suiteDoc = {
       _key: suiteKey,
@@ -655,6 +657,38 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
 }
 
 // ---------- public: curator free-text additions ----------
+
+// Story 1-8f2 — ASYNC generation. A large ask (100 positives) batches
+// across several LLM calls and takes MINUTES; the synchronous request dies
+// at the gateway long before (live 2026-10-09: the suite saved at minute 5
+// while the browser had given up at 60s). beginSuiteGeneration pre-mints
+// the key, kicks the worker DETACHED, and returns immediately; the UI
+// polls GET /routing-testsuite/:key until the doc lands. One generation
+// per repo at a time (a second begin while one is in flight is a 409).
+const suiteGenInFlight = new Map(); // repo_id -> suite_key
+
+function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
+  const inflight = suiteGenInFlight.get(repoId);
+  if (inflight) {
+    const err = new Error('a suite generation is already running for this repository');
+    err.code = 'GENERATION_IN_FLIGHT';
+    err.status = 409;
+    err.suite_key = inflight;
+    throw err;
+  }
+  const suiteKey = `s${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
+  suiteGenInFlight.set(repoId, suiteKey);
+  const done = generateSuite(repoId, payload, { ...opts, suiteKey })
+    .then((suite) => suite)
+    .finally(() => suiteGenInFlight.delete(repoId));
+  // The controller responds 202 without awaiting `done`; a hard failure
+  // (DB down) means no doc ever lands — the UI's poll times out with an
+  // honest message. Log it here so the failure is visible.
+  done.catch((e) =>
+    logger.error('head-suite.generate.async_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message })
+  );
+  return { suite_key: suiteKey, done };
+}
 
 async function addQueries(repoId, suiteKey, payload = {}, opts = {}) {
   return withSpan('okf.headsuite.add_queries', async (span) => {
@@ -1519,6 +1553,7 @@ Respond with ONLY: {"add": ["...", "..."]}`;
 
 module.exports = {
   generateSuite,
+  beginSuiteGeneration,
   addQueries,
   getSuite,
   updateSuiteRows,

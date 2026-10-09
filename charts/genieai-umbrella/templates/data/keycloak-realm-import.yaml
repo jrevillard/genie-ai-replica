@@ -1,5 +1,7 @@
 {{- if and .Values.data.keycloak.enabled .Values.data.keycloak.realmImport -}}
-{{- if and .Values.data.keycloak.verifyEmail (not .Values.data.keycloak.smtp) }}{{ fail "data.keycloak.verifyEmail=true requires data.keycloak.smtp to be set (no SMTP server configured)" }}{{- end }}
+{{- if and .Values.data.keycloak.verifyEmail (or (not (hasKey .Values.data.keycloak "smtp")) (not (hasKey .Values.data.keycloak.smtp "host"))) -}}
+{{- fail "data.keycloak.verifyEmail=true requires data.keycloak.smtp.host to be set (smtp may be null OR an object that includes a 'host' key)" -}}
+{{- end -}}
 {{- /* failOnPlaceholderSecrets defaults to TRUE in values.yaml; a default
        install with `change-me-*` client secrets fails this render before
        the realm CR is built. The single loop covers all three failure
@@ -66,7 +68,9 @@ spec:
     maxFailureWaitSeconds: 900
     minimumQuickLoginWaitSeconds: 60
     failureFactor: 30
-    passwordPolicy: {{ .Values.data.keycloak.passwordPolicy | default "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)" | quote }}
+    {{- with .Values.data.keycloak.passwordPolicy }}
+    passwordPolicy: {{ . | quote }}
+    {{- end }}
     accessTokenLifespan: {{ .Values.data.keycloak.accessTokenLifespan | default 300 }}
     ssoSessionIdleTimeout: 1800
     ssoSessionMaxLifespan: 36000

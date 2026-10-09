@@ -6,7 +6,7 @@
 
 **Architecture:** Three operators: the **single `victoria-metrics-operator` chart** — there are NO separate victoria-logs-operator / victoria-traces-operator charts in the VM helm repo (verified against the repo index 2026-10-08; earlier drafts listed charts that do not exist) — provides ALL the VM/VL/VT CRDs (`VMSingle`/`VMCluster`, `VLSingle`, `VTSingle`, `VMAgent`, `VMServiceScrape`, `VMRule`, …). opentelemetry-operator manages `OpenTelemetryCollector` (gateway + agent), grafana-operator manages `Grafana`/`GrafanaDatasource`/`GrafanaDashboard`. No traces proxy — VictoriaTraces implements the Tempo HTTP API natively (verified 2026-10-08), Grafana's Jaeger datasource queries VT directly. VMServiceScrapes (vmoperator-native — no Prometheus operator is installed) get generated per Group 5 service conditionally. PII redaction and log-metadata stamping port **verbatim** from the existing `configs/otel/otel-collector-config.yaml` (OTTL `pii_redact` + `stamp_log_metadata_from_msg`) — the chart ports, never rewrites. Collector topology: **gateway** (Deployment, OTLP traces/metrics) + **agent** (DaemonSet, filelog container logs → gateway), replacing the Swarm fluentd-driver → `fluent_forward` pipeline which does not exist on containerd/K8s. See `docs/charts/otel-migration.md`.
 
-**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), kind 1.33, vmoperator chart `~> 0.45.0`, opentelemetry-operator chart `~> 0.50.0`, grafana-operator chart `~> 5.22.0` (official `grafana/grafana-operator`).
+**Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), kind 1.33, vmoperator chart `~> 0.68.0`, opentelemetry-operator chart `~> 0.124.0`, grafana-operator chart `~> 5.22.0` (official `grafana/grafana-operator`).
 
 **Spec:** `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` — this plan implements §10 (observability stack default + vmoperator + OTel Operator + Grafana + PII redaction), §6 pluggability (ClusterProfile-driven observability default), §11 v1.0 manifest observability entries.
 
@@ -24,7 +24,7 @@
 
 Five input-class concerns the spec implies but no Plan 4 task tests explicitly.
 
-1. **vmoperator CRD version compatibility with K8s 1.33** — `~> 0.45.0` and `~> 0.50.0` pins may not align with K8s 1.33 admission. **Pinned in Task 1 Step 3** — `helm dep list` post-update confirms both operator versions; `helm install --dry-run` validates CRD shape.
+1. **vmoperator CRD version compatibility with K8s 1.33** — `~> 0.68.0` and `~> 0.124.0` pins may not align with K8s 1.33 admission. **Pinned in Task 1 Step 3** — `helm dep list` post-update confirms both operator versions; `helm install --dry-run` validates CRD shape.
 2. **VMServiceScrape-conditional emission** — services get `serviceMonitor: true` only when `observability.metrics.enabled: true`. If a service emits monitor fields unconditionally, scrape targets reference non-existent endpoints on dev. **Pinned in Task 7 Step 3** — render asserts no VMServiceScrape resources emitted when observability off.
 3. **Traces query path must be VT-direct** — Grafana's Jaeger datasource must point at `vtraces` (Tempo HTTP API implemented natively by VictoriaTraces, verified 2026-10-08), NOT at a proxy. A stale proxy reference or wrong port makes the "Trace explorer" dashboard silently fail. **Pinned in Task 5 Step 4** — render asserts the jaeger datasource URL contains `vtraces.` and that `tempo-proxy` appears nowhere in the rendered output.
 4. **PII redaction YAML schema** — OpenTelemetry Collector `transform` processor schema is versioned (v0.111+ uses `error_mode: ignore`). Older syntax accepted silently. **Pinned in Task 9 Step 4** — render asserts `error_mode: ignore` + each transform context statements name parsed by `otelcol validate`.
@@ -59,11 +59,11 @@ Expected: `OK: no observability deps`.
   # earlier 3-chart list fails). Condition = the master observability flag;
   # per-component CRs are gated at template level.
   - name: victoria-metrics-operator
-    version: "~> 0.45.0"
+    version: "~> 0.68.0"
     repository: "https://victoriametrics.github.io/helm-charts"
     condition: observability.enabled
   - name: opentelemetry-operator
-    version: "~> 0.50.0"
+    version: "~> 0.124.0"
     repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
     condition: observability.otel.enabled
   # grafana-operator — official Grafana org operator (K8s-native audit
@@ -77,7 +77,7 @@ Expected: `OK: no observability deps`.
 - [ ] **Step 3: Run `helm dependency update`**
 
 Run: `helm dependency update charts/genieai-umbrella`
-Expected: 3 new tarballs land in `charts/genieai-umbrella/charts/`. Chart.lock regenerates.
+Expected: 3 new tarballs land on disk in `charts/genieai-umbrella/charts/` (gitignored); Chart.lock regenerates (gitignored).
 
 - [ ] **Step 4: Verify dep list (Review Focus #1)**
 
@@ -92,7 +92,9 @@ Expected: 0 errors.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add charts/genieai-umbrella/Chart.yaml charts/genieai-umbrella/Chart.lock charts/genieai-umbrella/charts/
+# Chart.lock + charts/*.tgz are gitignored (charts/.gitignore) — git add
+# on them fails; they live on disk for packaging only (regenerate via make deps).
+git add charts/genieai-umbrella/Chart.yaml
 git commit -m "feat(charts): add observability operator deps (vmoperator, OTel operator, grafana-operator)"
 ```
 
@@ -375,14 +377,18 @@ cp configs/otel/otel-collector-config.yaml \
    - `vmetrics.genieai.svc.cluster.local:8428`  (8429 is the CLUSTER
      vmselect port — single mode uses 8428)
    - `vlogs.genieai.svc.cluster.local:9428`
-   For per-namespace installs, the executor must either (a) install with
-   namespace=`genieai`, or (b) extend the template at implementation
-   time by inlining the ported config into the chart template
-   (`.Files.Get` → `tpl` render with namespace — required for el-salvador
-   which uses `genieai-el-salvador`). The literal text
-   `{{ "{{ .Values.namespace }}" }}` is **not** a valid OTLP endpoint
-   and must NEVER land in the YAML; the per-namespace path is a
-   follow-up templating change, not a copy-paste of this note.
+   Per-namespace correctness is NOT optional — the PII smoke runner and
+   the per-env model both install into non-`genieai` namespaces, where
+   literal `genieai` endpoints NXDOMAIN. Use the collector's own env
+   substitution consistently: the file ships with OTLP exporter endpoints
+   like `vlogs.${GENIEAI_NAMESPACE}.svc.cluster.local:9428`, and the CR
+   (Step 3) sets the env var from the chart's values —
+   `GENIEAI_NAMESPACE: {{ .Values.namespace }}` under `spec.config`'s
+   service.extensions or the CR's `spec.env` (collector env expansion
+   applies to endpoint fields). Helm never evaluates the file
+   (`.Files.Get`), so no template syntax may land in it; the namespace
+   arrives via the CR environment, and every install (dev, PII-test,
+   el-salvador) resolves correctly.
 
 - [ ] **Step 3: Write `charts/genieai-umbrella/templates/observability/otel-collector.yaml`**
 
@@ -727,7 +733,9 @@ spec:
   datasource:
     name: VictoriaMetrics
     type: prometheus
-    url: {{ if eq .Values.clusterProfile "prod" }}http://vmetrics-vmselect.{{ .Values.namespace }}.svc.cluster.local:8481{{ else }}http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428{{ end }}
+    url: {{ if eq .Values.clusterProfile "prod" }}# vmselect serves the Prometheus API under the tenant path
+    # /select/<account>/prometheus — without it every dashboard query 404s.
+    http://vmetrics-vmselect.{{ .Values.namespace }}.svc.cluster.local:8481/select/0/prometheus{{ else }}http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428{{ end }}
     access: proxy
     isDefault: true
 ---

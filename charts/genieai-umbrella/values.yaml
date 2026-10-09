@@ -21,12 +21,12 @@ clusterProfile: dev
 
 # data layer values
 
-# Declared here because this plan's templates already dereference them:
+# Declared alongside the templates that dereference them:
 # the data-tier PVCs read `pluggable.storageClassName`, the realm-import
 # redirect URLs read `ingress.host`. Helm nil-pointer-evaluates
 # a missing parent map even under `with`/`default` guards — the keys must
 # exist in values.yaml before any template reads them.
-# The per-env plan elaborates both blocks; do not duplicate there.
+# Per-environment overrides elaborate both blocks; do not duplicate them here.
 pluggable:
   storageClassName: ""                # "" = cluster default storage class
 
@@ -36,7 +36,8 @@ ingress:
 data:
   postgres:
     enabled: true
-    # CNPG Cluster resources for the keycloak-db; kong is REMOVED (decision 7).
+    # CNPG Cluster resources for the keycloak-db (the only Postgres; the edge
+    # tier is Envoy Gateway, not Kong).
     instances: 1                       # 3 for prod/staging via clusterProfile
     storageSize: 10Gi
   arangodb:
@@ -95,7 +96,7 @@ dependencyGraph:
 
 secrets:
   sealedSecrets:
-    enabled: true                      # default; see plug-point design §6.2
+    enabled: true                      # default; alternative secrets backends plug in here (ESO / SecretProviderClass)
     # Public-key fingerprint for the cluster producing the SealedSecret
     # encrypted blobs in deploy/environments/<env>/secrets/*.yaml. The cluster
     # public key is fetched via `kubeseal --fetch-cert`. If the fingerprint
@@ -103,6 +104,6 @@ secrets:
     # pre-upgrade hook fails the install.
     publicKeyFingerprint: ""
   eso:
-    enabled: false                     # plug-point only, per §6.2
+    enabled: false                     # plug-point; ESO controller installs separately
   secretProviderClass:
-    enabled: false                     # plug-point only, per §6.2
+    enabled: false                     # plug-point; SecretProviderClass resources managed externally

@@ -1559,8 +1559,12 @@ spec:
 ```yaml
 {{- if and .Values.secrets.sealedSecrets.enabled .Values.data.keycloak.enabled -}}
 {{- /* Keycloak-bootstrap secrets needed by CNPG Cluster (keycloak-db-
-       credentials) and KeycloakRealmImport (genie-admin credentials). Remaining
-       Keycloak-connected secrets ship in Plans 3+ (keycloakClientSecret,
+       credentials) and KeycloakRealmImport (genie-admin credentials).
+       NOTE: inside `range`, use `$` (not `.`) for root context — dot is the
+       loop string; plain .Values.namespace reads a field off the STRING and
+       errors at render. Keep comments OUT of the spec: body: a trim marker
+       between `spec:` and `encryptedData:` merges the two keys at render.
+       Remaining Keycloak-connected secrets ship with their consumers (keycloakClientSecret,
        keycloakProxyClientSecret, kcDataprepClientSecret, kcGrafanaClientSecret). */ -}}
 {{- range $secretName := list "keycloak-db-credentials" "genie-admin-credentials" }}
 ---
@@ -1573,8 +1577,6 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" (deepCopy $.Values | merge (dict "component" "sealed-secret"))) | nindent 4 }}
     app.kubernetes.io/component: keycloak
 spec:
-  {{- /* `$` (not `.`): inside `range`, dot is the loop string — plain
-         .Values.namespace reads a field off the STRING and errors at render. */ -}}
   encryptedData:
     {{- if eq $secretName "keycloak-db-credentials" }}
     # CNPG initdb.secret requires BOTH keys. # PLACEHOLDER+ sentinels (valid base64 of "PLACEHOLDER+"); conftest

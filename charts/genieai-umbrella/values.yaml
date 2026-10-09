@@ -109,11 +109,12 @@ dependencyGraph:
 secrets:
   sealedSecrets:
     enabled: true                      # default; alternative secrets backends plug in here (ESO / SecretProviderClass)
-    # Public-key fingerprint for the cluster producing the SealedSecret
-    # encrypted blobs in deploy/environments/<env>/secrets/*.yaml. The cluster
-    # public key is fetched via `kubeseal --fetch-cert`. If the fingerprint
-    # on file does not match what the in-cluster controller serves, the
-    # pre-upgrade hook fails the install.
+    # Public-key fingerprint for the cluster that sealed the committed
+    # encrypted blobs in deploy/environments/<env>/secrets/*.yaml. Fetched
+    # via `kubeseal --fetch-cert`. Serves as a manual cross-check aid: the
+    # operator-side record of which cluster key produced the committed seals.
+    # No runtime enforcement lives here. The pre-upgrade drift hook instead
+    # fails any upgrade where a chart-owned SealedSecret reports Synced=False.
     publicKeyFingerprint: ""
   eso:
     enabled: false                     # plug-point; ESO controller installs separately

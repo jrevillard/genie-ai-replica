@@ -50,6 +50,7 @@ dependencies:
     version: "~> 2.20.0"
     repository: "https://bitnami.github.io/sealed-secrets"
     condition: secrets.sealedSecrets.enabled
-# cloudnative-pg, kube-arangodb, keycloak-operator, external-secrets-operator,
-# victoria-metrics-operator, opentelemetry-operator, gpu-operator, cert-manager,
-# envoy-gateway. cloudnative-pg and kube-arangodb are already declared above.
+# Operator chart dependencies for later tiers (victoria-metrics,
+# opentelemetry, gpu, cert-manager, envoy-gateway) are added here as
+# their tiers land. keycloak-operator is never a chart dependency; see
+# its note above.

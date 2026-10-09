@@ -53,6 +53,8 @@ const IMMUTABLE_FIELDS = ['graph_name', 'repo_id', 'domain'];
 // here so a direct PATCH /api/okf/repos/:id with a `frontmatter` key
 // is also accepted (back-stop for the operator migration script).
 const UPDATABLE_FIELDS = ['name', 'source', 'acl', 'retention', 'studio_step', 'frontmatter'];
+// Story 1-8d — frontmatter_history bound (revert support for the Lab).
+const FRONTMATTER_HISTORY_LIMIT = 10;
 
 // ArangoDB error codes used for control flow.
 const ARANGO_NOT_FOUND = (err) => err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404);
@@ -622,6 +624,18 @@ async function update(repo_id, patch, actor) {
     for (const f of UPDATABLE_FIELDS) {
       if (Object.prototype.hasOwnProperty.call(patch, f)) setFields[f] = patch[f];
     }
+    // Story 1-8d — bounded frontmatter save history (the Lab's Revert-tags
+    // panel). Every save that CHANGES frontmatter snapshots the shape; the
+    // teaching loop's cycle (add tags -> rebuild -> test) is then reversible
+    // in one click (David 2026-10-09: "we can revert the changes if
+    // necessary in the lab"). Capped at 10 entries.
+    if (Object.prototype.hasOwnProperty.call(setFields, 'frontmatter')) {
+      const prev = Array.isArray(existing.frontmatter_history) ? existing.frontmatter_history : [];
+      setFields.frontmatter_history = [
+        { saved_at: nowIso(), actor: (actor && (actor.sub || actor.user_id || actor.name)) || 'system', shape: setFields.frontmatter },
+        ...prev
+      ].slice(0, FRONTMATTER_HISTORY_LIMIT);
+    }
     const nameChanged = Object.prototype.hasOwnProperty.call(setFields, 'name') && setFields.name !== existing.name;
     const oldName = existing.name;
     setFields.updated_at = nowIso();
@@ -775,6 +789,63 @@ async function remove(repo_id, actor) {
   });
 }
 
+/**
+ * Story 1-8d — read the bounded frontmatter save history (the Lab's
+ * Revert-tags panel). Entries are newest-first; each carries the FULL
+ * frontmatter shape so a revert is an exact restore.
+ */
+async function frontmatterHistory(repo_id, opts = {}) {
+  return withSpan('okf.repo.frontmatter_history', async (span) => {
+    span.setAttribute('okf.repo_id', repo_id);
+    const db = await getDb();
+    let existing;
+    try {
+      existing = await db.collection(COLLECTION).document(repo_id);
+    } catch (err) {
+      if (ARANGO_NOT_FOUND(err)) throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+      throw err;
+    }
+    const entries = Array.isArray(existing.frontmatter_history) ? existing.frontmatter_history : [];
+    return {
+      repo_id,
+      entries: entries.map((e) => ({
+        saved_at: e.saved_at,
+        actor: e.actor || 'system',
+        forbidden_count: Array.isArray(e.shape && e.shape.forbidden) ? e.shape.forbidden.length : null,
+        shape: e.shape || null
+      }))
+    };
+  });
+}
+
+/**
+ * Story 1-8d — revert frontmatter to a history entry. Goes back through
+ * update(), so the revert itself is snapshotted (revert-of-revert works)
+ * and every writer shares one code path.
+ */
+async function revertFrontmatter(repo_id, saved_at, actor) {
+  return withSpan('okf.repo.frontmatter_revert', async (span) => {
+    span.setAttribute('okf.repo_id', repo_id);
+    span.setAttribute('okf.revert_to', String(saved_at));
+    const db = await getDb();
+    let existing;
+    try {
+      existing = await db.collection(COLLECTION).document(repo_id);
+    } catch (err) {
+      if (ARANGO_NOT_FOUND(err)) throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+      throw err;
+    }
+    const entries = Array.isArray(existing.frontmatter_history) ? existing.frontmatter_history : [];
+    const entry = entries.find((e) => e.saved_at === saved_at);
+    if (!entry || !entry.shape) {
+      throw new RepoError('HISTORY_ENTRY_NOT_FOUND', `no frontmatter history entry at ${saved_at}`, 404);
+    }
+    await update(repo_id, { frontmatter: entry.shape }, actor);
+    logger.info('OKF frontmatter reverted', { repo_id, to: saved_at, actor: (actor && actor.sub) || null });
+    return { repo_id, reverted_to: saved_at, frontmatter: entry.shape };
+  });
+}
+
 module.exports = {
   create,
   cloneRepository,
@@ -782,6 +853,8 @@ module.exports = {
   getById,
   update,
   remove,
+  frontmatterHistory,
+  revertFrontmatter,
   RepoError,
   LIFECYCLE_STATES
 };

@@ -60,6 +60,9 @@ router.post('/:repo_id/head/rebuild', requireRepoScope('repo_id', 'admin'), ctrl
 router.post('/:repo_id/routing-test', requireRepoScope('repo_id', 'admin'), ctrl.routingTest);
 // Story 1-8c — single-query gate explanation + forbidden-tag suggestion.
 router.post('/:repo_id/routing-explain', requireRepoScope('repo_id', 'admin'), ctrl.routingExplain);
+// Story 1-8d — frontmatter save history + revert (the Lab's undo).
+router.get('/:repo_id/frontmatter/history', requireRepoScope('repo_id', 'read'), ctrl.frontmatterHistory);
+router.post('/:repo_id/frontmatter/revert', requireRepoScope('repo_id', 'admin'), ctrl.revertFrontmatter);
 
 // Story 1-8 MR-B (2026-10-08) — test suites + run analytics. The
 // generator is ONE guided-JSON vLLM call (admin — LLM-burning, 5-15s);

@@ -484,6 +484,10 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         generator: `llm:${process.env.VLLM_LLM_MODEL_ID || 'vllm'}`,
         sibling_names: siblings.map((s) => s.name),
         off_domain_topics: randomTopics,
+        // Story 1-8d — the forbidden list this suite was generated against.
+        // The UI flags "tags changed since generation" when it drifts (the
+        // forbidden-derived rows go stale on any tag change).
+        forbidden_snapshot: [...(fm.forbidden || [])],
         positive,
         negative: [...llmNegatives, ...forbiddenDerivedQueries(fm), ...nearMiss, ...offDomain, ...meta],
         keywords: llm.keywords.filter((k) => typeof k === 'string'),
@@ -774,6 +778,21 @@ async function explainSuiteFailures(repoId, suiteKey, _opts = {}) {
     const failing = (run.payload.results || []).filter(
       (q) => q && q.kind && q.kind !== 'positive' && q.head_claimed
     );
+    // Story 1-8d — the loop must see BOTH failure kinds. Killed positives
+    // are the over-suppression signature: aggregate their veto attribution
+    // so the advice is tag REMOVAL (one-click in the Lab), not addition.
+    const positiveKills = (run.payload.results || []).filter(
+      (q) => q && q.kind === 'positive' && q.head_claimed === false
+    );
+    const vetoCounts = {};
+    const marginKilled = [];
+    for (const q of positiveKills) {
+      if (q.tag_veto) vetoCounts[q.tag_veto] = (vetoCounts[q.tag_veto] || 0) + 1;
+      else marginKilled.push(q.query);
+    }
+    const removalSuggestions = Object.entries(vetoCounts)
+      .map(([tag, killed]) => ({ tag, killed }))
+      .sort((a, b) => b.killed - a.killed);
     const fm = await frontmatterService.readFrontmatterFromRepoDoc(repoId);
     const out = {
       suite_key: suiteKey,
@@ -782,16 +801,24 @@ async function explainSuiteFailures(repoId, suiteKey, _opts = {}) {
       failing_count: failing.length,
       failing_queries: failing.map((q) => ({ query: q.query, cls: q.cls || null, head_claim: q.head_claim || null })),
       suggested_tags: [],
+      rejected: [],
+      removal_suggestions: removalSuggestions,
+      positive_failures: {
+        count: positiveKills.length,
+        veto_counts: vetoCounts,
+        margin_killed: marginKilled.length
+      },
       source: 'none',
       note: ''
     };
-    if (!failing.length) {
-      out.note = 'no failing negatives in the latest run — nothing to explain';
+    if (!failing.length && !positiveKills.length) {
+      out.note = 'no failures in the latest run — nothing to explain';
       return out;
     }
     let suggestionTags = [];
-    try {
-      const prompt = `A retrieval repository's routing test suite has failing NEGATIVE queries:
+    if (failing.length) {
+      try {
+        const prompt = `A retrieval repository's routing test suite has failing NEGATIVE queries:
 each one is WRONGLY routed to this repository and must be excluded.
 
 REPOSITORY scope — topics: ${(fm.topic || []).join(', ')}; entities: ${(fm.entity || []).join(', ')};
@@ -806,32 +833,61 @@ scope genuinely EXCLUDES, that do not overlap the already-forbidden list,
 and that do not exclude the repository's own topics/entities. Prefer broad
 subject tags over query-specific ones. Respond with ONLY a JSON object:
 {"tags": ["...", "..."], "notes": "<one sentence covering rationale>"}`;
-      const resp = await frontmatterService.vllmChatCompletions([{ role: 'user', content: prompt }], {
-        maxTokens: 300,
-        temperature: 0.2
-      });
-      const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
-      const parsed = parseJsonObject(content && content.content);
-      suggestionTags = ((parsed && parsed.tags) || [])
-        .filter((t) => typeof t === 'string' && t.trim())
-        .map((t) => t.trim().toLowerCase().replace(/\s+/g, '-'))
-        .filter((t) => !(fm.forbidden || []).includes(t))
-        .slice(0, 5);
-      if (parsed && typeof parsed.notes === 'string') out.note = parsed.notes;
-      out.source = suggestionTags.length ? 'llm' : 'none';
-    } catch (e) {
-      logger.warn('head-suite.explain.llm_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message });
-      out.source = 'none';
-      out.note = 'the suggestion model is unreachable — review the failing queries against the declared scope manually';
+        const resp = await frontmatterService.vllmChatCompletions([{ role: 'user', content: prompt }], {
+          maxTokens: 300,
+          temperature: 0.2
+        });
+        const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
+        const parsed = parseJsonObject(content && content.content);
+        suggestionTags = ((parsed && parsed.tags) || [])
+          .filter((t) => typeof t === 'string' && t.trim())
+          .map((t) => t.trim().toLowerCase().replace(/\s+/g, '-'))
+          .filter((t) => !(fm.forbidden || []).includes(t))
+          .slice(0, 5);
+        if (parsed && typeof parsed.notes === 'string') out.note = parsed.notes;
+      } catch (e) {
+        logger.warn('head-suite.explain.llm_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message });
+        out.note = 'the suggestion model is unreachable — review the failing queries against the declared scope manually';
+      }
+      // Story 1-8d — the mechanical guardrail (self-subject + duplicate
+      // screening). Prompt constraints alone failed in the 2026-10-09
+      // poisoning; a screened-out proposal NEVER reaches the UI chips.
+      if (suggestionTags.length) {
+        const headTestService = require('./head-test-service');
+        const guard = await headTestService.guardSuggestions(repoId, suggestionTags, opts);
+        out.suggested_tags = guard.accepted;
+        out.rejected = guard.rejected;
+        out.source = guard.accepted.length ? 'llm' : 'guardrail';
+      }
+    } else {
+      out.note = 'no wrongly-claimed negatives — the failures are suppressed positives (see removal_suggestions)';
     }
-    out.suggested_tags = suggestionTags;
+    // Story 1-8d — persist the advice so cycles are auditable.
+    try {
+      await db.collection(HEAD_TEST_RUNS_COLLECTION).save({
+        _key: `x${Date.now()}-${crypto.randomUUID().slice(0, 6)}`,
+        repo_id: repoId,
+        kind: 'explain',
+        suite_key: suiteKey,
+        run_key: out.run_key,
+        created_at: new Date().toISOString(),
+        created_by: (opts.actor && opts.actor.user_id) || 'system',
+        payload: out
+      });
+    } catch (e) {
+      logger.warn('head-suite.explain.persist_failed', { repo_id: repoId, error: e.message });
+    }
     span.setAttribute('okf.headsuite.failing', failing.length);
-    span.setAttribute('okf.headsuite.suggested', suggestionTags.length);
+    span.setAttribute('okf.headsuite.positive_kills', positiveKills.length);
+    span.setAttribute('okf.headsuite.suggested', out.suggested_tags.length);
+    span.setAttribute('okf.headsuite.removals', removalSuggestions.length);
     logger.info('head-suite.explain_failures.done', {
       repo_id: repoId,
       suite_key: suiteKey,
       failing: failing.length,
-      suggested: suggestionTags.length
+      positive_kills: positiveKills.length,
+      suggested: out.suggested_tags.length,
+      removals: removalSuggestions.length
     });
     return out;
   });

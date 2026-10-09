@@ -1,0 +1,6 @@
+# Helm packaging ignores for genieai-common (library chart).
+# We never package this chart for OCI distribution, so generated tarballs
+# should never be committed under any condition.
+charts/
+*.tgz
+.DS_Store

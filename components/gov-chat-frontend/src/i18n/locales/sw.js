@@ -2741,7 +2741,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: 'Tag'
+          tags: 'Tag',
+          actions: 'Hariri'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2783,7 +2784,11 @@ export default {
         revertEmpty: 'Hakuna kuhifadhi kwa frontmatter kilichorekwa bado.',
         revertDone: 'Frontmatter imerejeshwa — jenga upya kichwa & endesha tena ili itumike.',
         removeTag: 'Ondoa kwenye tag zilizozuiwa',
-        tagsetTip: 'Tag zilizozuiwa za ukimbiaji huu'
+        tagsetTip: 'Tag zilizozuiwa za ukimbiaji huu',
+        savedTitle: 'Vipima vilivyohifadhiwa',
+        load: 'Pakia',
+        flipTip: 'Badilisha iwe-chaguliwe / isiwe-chaguliwe',
+        deleteTip: 'Ondoa mstari huu kwenye kipima'
       },
       error: {
         explain: 'Uelelezo umeshindikana',
@@ -2798,7 +2803,9 @@ export default {
         advisor: 'Mshauri umeshindikana',
         noSuite: 'Tengeneza kipima kwanza, kisha jenga upya na endesha upya.',
         applyNoSuite:
-          'Tag zimehifadhiwa na head imejengwa upya — tengeneza kipima kisha endesha zote ili kuona matokeo.'
+          'Tag zimehifadhiwa na head imejengwa upya — tengeneza kipima kisha endesha zote ili kuona matokeo.',
+        suiteLoad: 'Imeshindikana kupakia kipima',
+        suiteUpdate: 'Imeshindikana kusasisha kipima'
       },
       footer: {
         unpublish: 'Unpublish to review'

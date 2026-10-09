@@ -2723,7 +2723,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: 'Tags'
+          tags: 'Tags',
+          actions: 'Edit'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2764,7 +2765,11 @@ export default {
         revertEmpty: 'No frontmatter saves recorded yet.',
         revertDone: 'Frontmatter restored — rebuild the head and re-run to apply it.',
         removeTag: 'Remove from forbidden tags',
-        tagsetTip: 'Forbidden tags for this run'
+        tagsetTip: 'Forbidden tags for this run',
+        savedTitle: 'Saved suites',
+        load: 'Load',
+        flipTip: 'Flip should-select / should-NOT-select',
+        deleteTip: 'Remove this row from the suite'
       },
       error: {
         explain: 'Explain failed',
@@ -2778,7 +2783,9 @@ export default {
         revert: 'Could not revert the frontmatter',
         advisor: 'Advisor failed',
         noSuite: 'Generate a suite first, then rebuild + re-run.',
-        applyNoSuite: 'Tags saved and the head rebuilt — generate a suite, then Run all to see the effect.'
+        applyNoSuite: 'Tags saved and the head rebuilt — generate a suite, then Run all to see the effect.',
+        suiteLoad: 'Could not load the suite',
+        suiteUpdate: 'Could not update the suite'
       },
       footer: {
         unpublish: 'Unpublish to review'

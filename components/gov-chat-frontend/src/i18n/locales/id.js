@@ -2746,7 +2746,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: 'Tag'
+          tags: 'Tag',
+          actions: 'Edit'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2788,7 +2789,11 @@ export default {
         revertEmpty: 'Belum ada penyimpanan frontmatter yang tercatat.',
         revertDone: 'Frontmatter dipulihkan — bangun ulang head dan jalankan ulang untuk menerapkannya.',
         removeTag: 'Hapus dari tag terlarang',
-        tagsetTip: 'Tag terlarang untuk eksekusi ini'
+        tagsetTip: 'Tag terlarang untuk eksekusi ini',
+        savedTitle: 'Suite tersimpan',
+        load: 'Muat',
+        flipTip: 'Balikkan harus-dipilih / tidak-harus-dipilih',
+        deleteTip: 'Hapus baris ini dari suite'
       },
       error: {
         explain: 'Penjelasan gagal',
@@ -2802,7 +2807,9 @@ export default {
         revert: 'Tidak dapat mengembalikan frontmatter',
         advisor: 'Penasihat gagal',
         noSuite: 'Buat suite terlebih dahulu, lalu bangun ulang dan jalankan ulang.',
-        applyNoSuite: 'Tag tersimpan dan head dibangun ulang — buat suite lalu jalankan semua untuk melihat efeknya.'
+        applyNoSuite: 'Tag tersimpan dan head dibangun ulang — buat suite lalu jalankan semua untuk melihat efeknya.',
+        suiteLoad: 'Gagal memuat suite',
+        suiteUpdate: 'Gagal memperbarui suite'
       },
       footer: {
         unpublish: 'Unpublish to review'

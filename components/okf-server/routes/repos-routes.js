@@ -72,8 +72,18 @@ router.post('/:repo_id/frontmatter/revert', requireRepoScope('repo_id', 'admin')
 // runs listing is read-scope (analytics history across tag cycles) and
 // MUST stay above any /:suite_key route so 'runs' is never parsed as a key.
 router.get('/:repo_id/routing-testsuite/runs', requireRepoScope('repo_id', 'read'), ctrl.listTestSuiteRuns);
+// Story 1-8f — load ONE saved suite (full rows) back into the Lab; edit
+// its rows in place (kind flips + removes). GET is read-scope (same as
+// the runs listing); the rows PATCH is an admin mutation like /queries.
+// 'runs' above must stay first so it is never parsed as a suite key.
+router.get('/:repo_id/routing-testsuite/:suite_key', requireRepoScope('repo_id', 'read'), ctrl.getTestSuite);
 router.post('/:repo_id/routing-testsuite', requireRepoScope('repo_id', 'admin'), ctrl.generateTestSuite);
 router.post('/:repo_id/routing-testsuite/:suite_key/run', requireRepoScope('repo_id', 'admin'), ctrl.runTestSuite);
+router.post(
+  '/:repo_id/routing-testsuite/:suite_key/rows',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.updateTestSuiteRows
+);
 // Story 1-8c — batch advice for a suite run's failing negatives.
 router.post(
   '/:repo_id/routing-testsuite/:suite_key/explain',

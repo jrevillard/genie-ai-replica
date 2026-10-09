@@ -2740,7 +2740,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: 'ট্যাগ'
+          tags: 'ট্যাগ',
+          actions: 'সম্পাদনা'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2782,7 +2783,11 @@ export default {
         revertEmpty: 'এখনো কোনো ফ্রন্টম্যাটার সেভ রেকর্ড করা হয়নি।',
         revertDone: 'ফ্রন্টম্যাটার পুনরুদ্ধার হয়েছে — প্রয়োগ করতে head পুনর্নির্মাণ ও পুনরায় চালান।',
         removeTag: 'নিষিদ্ধ ট্যাগ থেকে সরান',
-        tagsetTip: 'এই রানের নিষিদ্ধ ট্যাগ'
+        tagsetTip: 'এই রানের নিষিদ্ধ ট্যাগ',
+        savedTitle: 'সংরক্ষিত suite',
+        load: 'লোড করুন',
+        flipTip: 'নির্বাচন-করবে / নির্বাচন-করবে-না উল্টে দিন',
+        deleteTip: 'suite থেকে এই সারিটি সরান'
       },
       error: {
         explain: 'ব্যাখ্যা ব্যর্থ হয়েছে',
@@ -2796,7 +2801,9 @@ export default {
         revert: 'ফ্রন্টম্যাটার ফিরিয়ে আনা যায়নি',
         advisor: 'উপদেষ্টা ব্যর্থ হয়েছে',
         noSuite: 'প্রথমে একটি suite তৈরি করুন, তারপর পুনর্নির্মাণ ও পুনরায় চালান।',
-        applyNoSuite: 'ট্যাগ সংরক্ষিত ও head পুনর্নির্মিত — প্রভাব দেখতে একটি suite তৈরি করে সব চালান।'
+        applyNoSuite: 'ট্যাগ সংরক্ষিত ও head পুনর্নির্মিত — প্রভাব দেখতে একটি suite তৈরি করে সব চালান।',
+        suiteLoad: 'suite লোড করা যায়নি',
+        suiteUpdate: 'suite আপডেট করা যায়নি'
       },
       footer: {
         unpublish: 'Unpublish to review'

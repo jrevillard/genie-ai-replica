@@ -58,6 +58,23 @@ const headTestService = {
     return res && res.data ? res.data : null;
   },
 
+  /** Story 1-8f — load ONE saved suite (full rows) back into the Lab. */
+  async getSuite(repoId, suiteKey) {
+    const res = await httpService.get(`/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}`);
+    return res && res.data ? res.data : null;
+  },
+
+  /** Story 1-8f — edit a suite's rows in place: kind flips (the mislabel
+   * fix — the row is searched in BOTH arrays) and removes. Returns the
+   * updated suite doc. */
+  async updateSuiteRows(repoId, suiteKey, payload) {
+    const res = await httpService.post(
+      `/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}/rows`,
+      payload
+    );
+    return res && res.data ? res.data : null;
+  },
+
   /** Execute every suite query, aggregate pass rates / margins / steals. */
   async runSuite(repoId, suiteKey) {
     const res = await httpService.post(

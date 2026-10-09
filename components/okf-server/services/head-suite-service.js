@@ -590,6 +590,145 @@ async function addQueries(repoId, suiteKey, payload = {}, opts = {}) {
   });
 }
 
+// ---------- public: load + edit rows (Story 1-8f — David: "the test suites
+// need to be able to be saved, modified and rerun (of course)") ----------
+// Suites already persist (kind:'suite' docs) and rerun by key; what was
+// missing is LOADING one back into the Lab and EDITING its rows — until now
+// a row could only be ADDED, so a mislabeled row (the HIV positive) was
+// permanent noise and had to be duplicated with the other kind.
+
+const SUITE_ROW_CAPS = { positive: 60, negative: 150 };
+
+async function getSuite(repoId, suiteKey, opts = {}) {
+  return withSpan('okf.headsuite.get', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
+    await repositoryService.getById(repoId, { authz: opts.authz });
+    const db = await dbService.getConnection();
+    await ensureCollection(db);
+    const suite = await loadSuiteDoc(db, repoId, suiteKey);
+    if (suite.repo_id !== repoId) {
+      const err = new Error(`suite ${suiteKey} not found for repo ${repoId}`);
+      err.code = 'SUITE_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+    return suite;
+  });
+}
+
+async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
+  return withSpan('okf.headsuite.update_rows', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
+    await repositoryService.getById(repoId, { authz: opts.authz });
+    const updates = Array.isArray(payload.updates) ? payload.updates : [];
+    const removes = Array.isArray(payload.removes) ? payload.removes : [];
+    const validRow = (q) =>
+      q && typeof q.query === 'string' && q.query.trim() && (q.kind === 'positive' || q.kind === 'negative');
+    const validUpdate = (u) =>
+      u && validRow(u.match) && u.set && (u.set.kind === 'positive' || u.set.kind === 'negative');
+    if (!updates.filter(validUpdate).length && !removes.filter(validRow).length) {
+      const err = new Error('updates[] ({match:{query,kind}, set:{kind}}) and/or removes[] ({query, kind}) required');
+      err.code = 'VALIDATION_ERROR';
+      err.status = 400;
+      throw err;
+    }
+    const db = await dbService.getConnection();
+    await ensureCollection(db);
+    const suite = await loadSuiteDoc(db, repoId, suiteKey);
+    if (suite.repo_id !== repoId) {
+      const err = new Error(`suite ${suiteKey} not found for repo ${repoId}`);
+      err.code = 'SUITE_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+    const pos = suite.payload.positive || [];
+    const neg = suite.payload.negative || [];
+    let removed = 0;
+    let relabeled = 0;
+
+    // 1. Removes — every exact {query, kind} match goes.
+    for (const r of removes.filter(validRow)) {
+      const target = r.kind === 'positive' ? pos : neg;
+      const idx = target.findIndex((row) => row.query === r.query.trim() && row.kind === r.kind);
+      if (idx >= 0) {
+        target.splice(idx, 1);
+        removed += 1;
+      }
+    }
+
+    // 2. Updates — kind flips only (v1). The row MOVES to the array matching
+    //    the TARGET kind — searched in BOTH arrays, because the mislabeled
+    //    row (the whole reason this endpoint exists) sits in the WRONG array
+    //    (a row with kind:'positive' inside payload.negative). cls is
+    //    cleared (the class is the GENERATOR's assessment — a manually
+    //    relabeled row has none). Flipping all exact duplicates is consistent.
+    for (const u of updates.filter(validUpdate)) {
+      const from = u.match.kind;
+      const to = u.set.kind;
+      if (from === to) continue;
+      const dst = to === 'positive' ? pos : neg;
+      const idxIn = (arr) => arr.findIndex((row) => row.query === u.match.query.trim() && row.kind === from);
+      let idx = idxIn(pos);
+      let srcArr = pos;
+      if (idx < 0) {
+        idx = idxIn(neg);
+        srcArr = neg;
+      }
+      if (idx < 0) continue;
+      const [row] = srcArr.splice(idx, 1);
+      dst.push({ ...row, kind: to, cls: null });
+      relabeled += 1;
+    }
+
+    // 3. Invariants — no contradiction (same text in BOTH arrays makes every
+    //    run self-refuting) and no text duplicated within an array (the run
+    //    would count it twice); caps as a sanity backstop.
+    const norm = (s) =>
+      String(s || '')
+        .trim()
+        .toLowerCase();
+    const contradiction = pos.find((r) => neg.some((n) => norm(n.query) === norm(r.query)));
+    if (contradiction) {
+      const err = new Error(`query is both positive and negative: "${contradiction.query.slice(0, 80)}"`);
+      err.code = 'SUITE_CONTRADICTION';
+      err.status = 409;
+      throw err;
+    }
+    const dupIn = (arr) => arr.some((r, i) => arr.findIndex((x) => norm(x.query) === norm(r.query)) !== i);
+    if (dupIn(pos) || dupIn(neg)) {
+      const err = new Error('duplicate query text within one kind after the update');
+      err.code = 'SUITE_DUPLICATE';
+      err.status = 409;
+      throw err;
+    }
+    if (pos.length > SUITE_ROW_CAPS.positive || neg.length > SUITE_ROW_CAPS.negative) {
+      const err = new Error(
+        `suite row cap exceeded (positive ≤ ${SUITE_ROW_CAPS.positive}, negative ≤ ${SUITE_ROW_CAPS.negative})`
+      );
+      err.code = 'SUITE_CAP';
+      err.status = 409;
+      throw err;
+    }
+
+    suite.payload.positive = pos;
+    suite.payload.negative = neg;
+    suite.updated_at = new Date().toISOString();
+    suite.updated_by = (opts.actor && opts.actor.user_id) || 'system';
+    await db.collection(HEAD_TEST_RUNS_COLLECTION).replace(suite._key, suite);
+    span.setAttribute('okf.headsuite.relabeled', relabeled);
+    span.setAttribute('okf.headsuite.removed', removed);
+    logger.info('head-suite.rows_updated', {
+      repo_id: repoId,
+      suite_key: suiteKey,
+      relabeled,
+      removed,
+      positives: pos.length,
+      negatives: neg.length
+    });
+    return suite;
+  });
+}
+
 // ---------- public: run ----------
 
 async function runSuite(repoId, suiteKey, opts = {}) {
@@ -1244,6 +1383,8 @@ Respond with ONLY: {"add": ["...", "..."]}`;
 module.exports = {
   generateSuite,
   addQueries,
+  getSuite,
+  updateSuiteRows,
   runSuite,
   listRuns,
   explainSuiteFailures,

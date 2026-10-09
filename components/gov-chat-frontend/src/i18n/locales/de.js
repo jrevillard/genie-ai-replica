@@ -2761,7 +2761,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: 'Tags'
+          tags: 'Tags',
+          actions: 'Bearbeiten'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2805,7 +2806,11 @@ export default {
         revertEmpty: 'Noch keine Frontmatter-Speicherungen aufgezeichnet.',
         revertDone: 'Frontmatter wiederhergestellt — Head neu bauen und erneut ausführen, um es anzuwenden.',
         removeTag: 'Aus den Sperr-Tags entfernen',
-        tagsetTip: 'Sperr-Tags dieses Laufs'
+        tagsetTip: 'Sperr-Tags dieses Laufs',
+        savedTitle: 'Gespeicherte Suiten',
+        load: 'Laden',
+        flipTip: 'Wechseln zwischen soll-selektieren / nicht-selektieren',
+        deleteTip: 'Diese Zeile aus der Suite entfernen'
       },
       error: {
         explain: 'Erklärung fehlgeschlagen',
@@ -2820,7 +2825,9 @@ export default {
         advisor: 'Berater fehlgeschlagen',
         noSuite: 'Erstellen Sie zuerst eine Suite, dann Head neu bauen & neu ausführen.',
         applyNoSuite:
-          'Tags gespeichert und Head neu gebaut — erstellen Sie eine Suite und führen Sie alles aus, um den Effekt zu sehen.'
+          'Tags gespeichert und Head neu gebaut — erstellen Sie eine Suite und führen Sie alles aus, um den Effekt zu sehen.',
+        suiteLoad: 'Suite konnte nicht geladen werden',
+        suiteUpdate: 'Suite konnte nicht aktualisiert werden'
       },
       footer: {
         unpublish: 'Unpublish to review'

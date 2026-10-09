@@ -917,3 +917,97 @@ it('1-8d: staleness — forbidden_snapshot drift against the stored tags is flag
   w.vm.suite = { suite_key: 's1', payload: {} };
   expect(w.vm.suiteForbiddenStale).toBe(false);
 });
+
+// ─── Story 1-8f: suites are savable, modifiable and rerunnable ─────────────
+
+it('1-8f: Saved suites list renders and Load pulls the full rows as the editable current suite', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.savedSuites = [{ _key: 's-old', created_at: '2026-10-09T10:00:00.000Z', positives: 2, negatives: 2 }];
+  await w.vm.$nextTick();
+  const loadBtn = w.findAll('button').find((b) => b.text() === 'Load');
+  expect(loadBtn).toBeTruthy();
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: {
+      suite_key: 's-old',
+      payload: {
+        positive: [{ query: 'q1', kind: 'positive', cls: null, source: 'llm' }],
+        negative: [{ query: 'q2', kind: 'negative', cls: 'near-miss', source: 'llm' }]
+      }
+    }
+  });
+  await w.vm.onLoadSuite('s-old');
+  expect(dispatch).toHaveBeenCalledWith('okf/headSuiteGet', { repoId: 'r-1', suiteKey: 's-old' });
+  expect(w.vm.suite.suite_key).toBe('s-old');
+  // Rows are visible BEFORE any run — the old view only rendered post-run.
+  expect(w.vm.suiteEditableRows).toHaveLength(2);
+  expect(w.vm.suiteEditableRows.every((r) => r.pass === null)).toBe(true);
+});
+
+it('1-8f: flip a row kind — dispatches the row update and adopts the returned suite', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = {
+    suite_key: 's1',
+    payload: {
+      positive: [{ query: 'HIV causes', kind: 'positive', cls: null, source: 'manual' }],
+      negative: [{ query: 'q2', kind: 'negative', cls: 'near-miss', source: 'llm' }]
+    }
+  };
+  const updated = {
+    suite_key: 's1',
+    payload: {
+      positive: [],
+      negative: [
+        { query: 'q2', kind: 'negative', cls: 'near-miss', source: 'llm' },
+        { query: 'HIV causes', kind: 'negative', cls: null, source: 'manual' }
+      ]
+    }
+  };
+  dispatch.mockResolvedValueOnce({ ok: true, result: updated });
+  await w.vm.onFlipRow({ query: 'HIV causes', kind: 'positive' });
+  expect(dispatch).toHaveBeenCalledWith('okf/headSuiteUpdateRows', {
+    repoId: 'r-1',
+    suiteKey: 's1',
+    payload: { updates: [{ match: { query: 'HIV causes', kind: 'positive' }, set: { kind: 'negative' } }] }
+  });
+  expect(w.vm.suite).toEqual(updated);
+  expect(w.vm.busy).toBeNull();
+});
+
+it('1-8f: delete a row — dispatches removes and adopts the returned suite', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = {
+    suite_key: 's1',
+    payload: {
+      positive: [],
+      negative: [{ query: 'q2', kind: 'negative', cls: 'near-miss', source: 'llm' }]
+    }
+  };
+  const updated = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  dispatch.mockResolvedValueOnce({ ok: true, result: updated });
+  await w.vm.onDeleteRow({ query: 'q2', kind: 'negative' });
+  expect(dispatch).toHaveBeenCalledWith('okf/headSuiteUpdateRows', {
+    repoId: 'r-1',
+    suiteKey: 's1',
+    payload: { removes: [{ query: 'q2', kind: 'negative' }] }
+  });
+  expect(w.vm.suite).toEqual(updated);
+});
+
+it('1-8f: a failed row edit surfaces the error instead of losing the local suite', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  const suiteFixture = {
+    suite_key: 's1',
+    payload: { positive: [], negative: [{ query: 'q2', kind: 'negative', cls: null, source: 'llm' }] }
+  };
+  w.vm.suite = suiteFixture;
+  dispatch.mockResolvedValueOnce({ ok: false, message: 'duplicate query text' });
+  await w.vm.onFlipRow({ query: 'q2', kind: 'negative' });
+  expect(w.vm.busy).toBeNull();
+  expect(w.vm.error).toContain('duplicate query text');
+  expect(w.vm.suite).toStrictEqual(suiteFixture); // untouched on failure (deep: vm wraps it in a reactive proxy)
+});

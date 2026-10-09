@@ -2699,7 +2699,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: '标签'
+          tags: '标签',
+          actions: '编辑'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2739,7 +2740,11 @@ export default {
         revertEmpty: '尚无 frontmatter 保存记录。',
         revertDone: 'Frontmatter 已恢复——请重建 head 并重跑以使其生效。',
         removeTag: '从禁止标签中移除',
-        tagsetTip: '本次运行的禁止标签'
+        tagsetTip: '本次运行的禁止标签',
+        savedTitle: '已保存的测试集',
+        load: '加载',
+        flipTip: '切换 应选择 / 不应选择',
+        deleteTip: '从测试集中移除此行'
       },
       error: {
         explain: '解释失败',
@@ -2753,7 +2758,9 @@ export default {
         revert: '回滚 frontmatter 失败',
         advisor: '顾问失败',
         noSuite: '请先生成测试集，然后重建并重新运行。',
-        applyNoSuite: '标签已保存、head 已重建——请生成测试集并运行全部以查看效果。'
+        applyNoSuite: '标签已保存、head 已重建——请生成测试集并运行全部以查看效果。',
+        suiteLoad: '无法加载测试集',
+        suiteUpdate: '无法更新测试集'
       },
       footer: {
         unpublish: 'Unpublish to review'

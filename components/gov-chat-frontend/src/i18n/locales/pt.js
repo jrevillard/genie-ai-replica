@@ -2755,7 +2755,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: 'Tags'
+          tags: 'Tags',
+          actions: 'Editar'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2798,7 +2799,11 @@ export default {
         revertEmpty: 'Ainda não há gravações de frontmatter registadas.',
         revertDone: 'Frontmatter restaurado — reconstrua a cabeça e reexecute para aplicar.',
         removeTag: 'Remover das tags proibidas',
-        tagsetTip: 'Tags proibidas desta execução'
+        tagsetTip: 'Tags proibidas desta execução',
+        savedTitle: 'Suítes salvas',
+        load: 'Carregar',
+        flipTip: 'Alternar deve-selecionar / não-deve-selecionar',
+        deleteTip: 'Remover esta linha da suíte'
       },
       error: {
         explain: 'A explicação falhou',
@@ -2812,7 +2817,9 @@ export default {
         revert: 'Não foi possível reverter o frontmatter',
         advisor: 'Falha do consultor',
         noSuite: 'Gere primeiro uma suíte e depois reconstrua e execute novamente.',
-        applyNoSuite: 'Tags salvas e head reconstruído — gere uma suíte e execute tudo para ver o efeito.'
+        applyNoSuite: 'Tags salvas e head reconstruído — gere uma suíte e execute tudo para ver o efeito.',
+        suiteLoad: 'Não foi possível carregar a suíte',
+        suiteUpdate: 'Não foi possível atualizar a suíte'
       },
       footer: {
         unpublish: 'Unpublish to review'

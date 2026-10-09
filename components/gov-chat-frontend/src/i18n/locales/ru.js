@@ -2751,7 +2751,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: 'Теги'
+          tags: 'Теги',
+          actions: 'Правка'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2793,7 +2794,11 @@ export default {
         revertEmpty: 'Сохранения frontmatter пока не записывались.',
         revertDone: 'Frontmatter восстановлен — перестройте голову и повторите запуск, чтобы применить.',
         removeTag: 'Убрать из запрещённых тегов',
-        tagsetTip: 'Запрещённые теги этого запуска'
+        tagsetTip: 'Запрещённые теги этого запуска',
+        savedTitle: 'Сохранённые наборы',
+        load: 'Загрузить',
+        flipTip: 'Переключить должна-выбираться / не-должна-выбираться',
+        deleteTip: 'Убрать эту строку из набора'
       },
       error: {
         explain: 'Не удалось объяснить',
@@ -2807,7 +2812,9 @@ export default {
         revert: 'Не удалось откатить frontmatter',
         advisor: 'Ошибка советника',
         noSuite: 'Сначала создайте набор тестов, затем пересоберите и перезапустите.',
-        applyNoSuite: 'Теги сохранены, head пересобран — создайте набор тестов и запустите его, чтобы увидеть эффект.'
+        applyNoSuite: 'Теги сохранены, head пересобран — создайте набор тестов и запустите его, чтобы увидеть эффект.',
+        suiteLoad: 'Не удалось загрузить набор',
+        suiteUpdate: 'Не удалось обновить набор'
       },
       footer: {
         unpublish: 'Unpublish to review'

@@ -2754,7 +2754,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: 'Matag'
+          tags: 'Matag',
+          actions: 'Lokisa'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2797,7 +2798,11 @@ export default {
         revertEmpty: 'Ha hona polokelo ea frontmatter e ngolisitsoeng hajoale.',
         revertDone: 'Frontmatter e khutlisitsoe — haha hlooho hape & phethahatsa hape ho e sebelisa.',
         removeTag: 'Tlosa ho litag tse thibetsoeng',
-        tagsetTip: 'Litag tse thibetsoeng tsa tsamaello ena'
+        tagsetTip: 'Litag tse thibetsoeng tsa tsamaello ena',
+        savedTitle: 'Liteko tse bolokiloeng',
+        load: 'Jarisa',
+        flipTip: 'Fetola lokisa ho khetha / se khethe',
+        deleteTip: 'Tlosa mola ona seteng'
       },
       error: {
         explain: 'Tlhaloso e hlolehile',
@@ -2812,7 +2817,9 @@ export default {
         advisor: 'Moeletsi o hlolehile',
         noSuite: 'Qala ka ho etsa sete ea liteko, ebe haha hlooho hape u phethahatse hape.',
         applyNoSuite:
-          'Matag a bolokiloe mme hlooho e ahiloe hape — etsa sete ea liteko ebe phethahatsa tsohle ho bona sehlaho.'
+          'Matag a bolokiloe mme hlooho e ahiloe hape — etsa sete ea liteko ebe phethahatsa tsohle ho bona sehlaho.',
+        suiteLoad: 'Ho hlolehile ho jarisa sete',
+        suiteUpdate: 'Ho hlolehile ho ntlafatsa sete'
       },
       footer: {
         unpublish: 'Unpublish to review'

@@ -2759,7 +2759,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: 'Etiquetas'
+          tags: 'Etiquetas',
+          actions: 'Editar'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2802,7 +2803,11 @@ export default {
         revertEmpty: 'Aún no hay guardados de frontmatter registrados.',
         revertDone: 'Frontmatter restaurado — reconstruya la cabecera y vuelva a ejecutar para aplicarlo.',
         removeTag: 'Quitar de las etiquetas prohibidas',
-        tagsetTip: 'Etiquetas prohibidas de esta ejecución'
+        tagsetTip: 'Etiquetas prohibidas de esta ejecución',
+        savedTitle: 'Suites guardadas',
+        load: 'Cargar',
+        flipTip: 'Cambiar debe-seleccionar / no-debe-seleccionar',
+        deleteTip: 'Quitar esta fila de la suite'
       },
       error: {
         explain: 'La explicación falló',
@@ -2816,7 +2821,9 @@ export default {
         revert: 'No se pudo revertir el frontmatter',
         advisor: 'Fallo del asesor',
         noSuite: 'Genera primero una suite y luego reconstruye y relanza.',
-        applyNoSuite: 'Etiquetas guardadas y head reconstruido: genera una suite y ejecuta todo para ver el efecto.'
+        applyNoSuite: 'Etiquetas guardadas y head reconstruido: genera una suite y ejecuta todo para ver el efecto.',
+        suiteLoad: 'No se pudo cargar la suite',
+        suiteUpdate: 'No se pudo actualizar la suite'
       },
       footer: {
         unpublish: 'Unpublish to review'

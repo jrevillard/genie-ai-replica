@@ -442,9 +442,41 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation
 ```
 
-- [ ] **Step 3: Write `charts/genieai-umbrella/templates/rbac/dep-check-clusterrole.yaml`** (custom ClusterRole)
+- [ ] **Step 3: Write `charts/genieai-umbrella/templates/rbac/dep-check-rbac.yaml`**
+
+Split scope per least privilege (code-review Wave 10 #14): namespaced Role
+for Secrets/ConfigMaps/events (every consumer — dep-check, drift-validate,
+helm-test pods — operates in the release namespace ONLY; a cluster-wide
+Secret read turns any borrowed pod into a full-cluster secret disclosure),
+plus a minimal ClusterRole for cluster-scoped lookups (namespaces) and
+chart-managed CRDs.
 
 ```yaml
+{{- $ns := .Values.namespace -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-dep-check
+  namespace: {{ $ns }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "rbac"))) | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-30"
+    "helm.sh/hook-delete-policy": before-hook-creation
+rules:
+  # Namespaced reads the Jobs need — Secrets stay namespace-scoped.
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["bitnami.com"]
+    resources: ["sealedsecrets"]
+    verbs: ["get", "list", "watch"]
+  # Events for the clusterprofile-detect hook's Event write + Job status
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -456,14 +488,12 @@ metadata:
     "helm.sh/hook-weight": "-30"
     "helm.sh/hook-delete-policy": before-hook-creation
 rules:
-  # Read-only access to core resources the dep-check Job needs
+  # Cluster-scoped lookups only — NO Secrets, NO ConfigMaps here.
   - apiGroups: [""]
-    resources: ["namespaces", "configmaps", "secrets", "events"]
+    resources: ["namespaces"]
     verbs: ["get", "list", "watch"]
-  # Read-only access to all chart-managed CRDs (Plan 1-3 dependencies)
-  - apiGroups: ["bitnami.com"]
-    resources: ["sealedsecrets"]
-    verbs: ["get", "list", "watch"]
+  # Read-only access to chart-managed CRDs (cross-namespace visibility is
+  # inherent to ClusterRole but exposes no secret material).
   - apiGroups: ["k8s.keycloak.org"]
     resources: ["keycloaks", "keycloakrealmimports", "keycloakbackups"]
     verbs: ["get", "list", "watch"]
@@ -473,15 +503,31 @@ rules:
   - apiGroups: ["postgresql.cnpg.io"]
     resources: ["clusters", "poolers"]
     verbs: ["get", "list", "watch"]
-  # ClusterEvents for the clusterprofile-detect hook's Event write
-  - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["create", "patch"]
 ```
 
-- [ ] **Step 4: Write `charts/genieai-umbrella/templates/rbac/dep-check-clusterrolebinding.yaml`**
+- [ ] **Step 4: Write `charts/genieai-umbrella/templates/rbac/dep-check-bindings.yaml`** — BOTH bindings (namespaced Role + cluster ClusterRole, matching Step 3's split)
 
 ```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-dep-check
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "rbac"))) | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-30"
+    "helm.sh/hook-delete-policy": before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "genieai-common.fullname" . }}-dep-check
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "genieai-common.fullname" . }}-dep-check
+    namespace: {{ .Values.namespace }}
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -505,7 +551,7 @@ subjects:
 - [ ] **Step 5: Verify render**
 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep "^kind: " | sort | uniq -c`
-Expected: shows `ServiceAccount`, `ClusterRole`, `ClusterRoleBinding` lines.
+Expected: shows `ServiceAccount`, `Role`, `RoleBinding`, `ClusterRole`, `ClusterRoleBinding` lines.
 
 - [ ] **Step 6: `helm lint --strict`**
 
@@ -1211,7 +1257,7 @@ Expected: prints `0`.
 {{- if .Values.secrets.sealedSecrets.enabled -}}
 {{- /*
   SealedSecret CR template. The encryptedData here is a PLACEHOLDER
-  (`PLACEHOLDER_*_SEALED_KID`) — actual encryption happens via:
+  (the valid-base64 `PLACEHOLDER+` sentinel `UExBQ0VIT0xERVIr`) — actual encryption happens via:
       kubeseal --fetch-cert --context=cluster --kubeconfig=kubeconfig \
         | kubeseal --cert pub-cert.pem --scope cluster-wide \
           --secret-name <name> --name <kss-name>
@@ -1308,17 +1354,17 @@ metadata:
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "sealed-secret-validate"))) | nindent 4 }}
   annotations:
-    # Pre-upgrade AND pre-install. The pre-install run is the safety
-    # net that catches freshly-shipped SealedSecrets that are
-    # PLACEHOLDER sentinels (the controller marks them
-    # `status.conditions[SealedSecretHasntDecrypted]=True` at the
-    # first sync attempt). Without pre-install, a fresh install with
-    # PLACEHOLDER+ blobs leaves CNPG/ArangoDeployment pods in
-    # `Waiting for secret` forever.
-    # (Earlier drafts were pre-upgrade-only — that was wrong; the hook
-    # must run on BOTH paths. The pre-install + pre-upgrade annotation
-    # here makes the same Job handle both. Review Focus F4.)
-    "helm.sh/hook": pre-install,pre-upgrade
+    # Pre-upgrade ONLY. A pre-install leg would be vacuous: SealedSecrets
+    # are REGULAR resources, applied AFTER every hook — `kubectl get
+    # sealedsecret` during pre-install returns an empty list, the loop
+    # totals zero, and the hook exits 0 having checked nothing (code-review
+    # Wave 10 #4). Fresh-install sentinel detection therefore lives in the
+    # Task 12 helm test, which runs post-install and waits for the K8s
+    # Secrets to materialize (PLACEHOLDER+ blobs never do — the controller
+    # marks the SealedSecret `status.conditions[type=SealedSecretHasntDecrypted]
+    # .status=True` and CNPG/ArangoDeployment pods hang in
+    # `Waiting for secret`; the test's materialization timeout catches it).
+    "helm.sh/hook": pre-upgrade
     "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
@@ -1369,14 +1415,17 @@ spec:
               ns="{{ .Values.namespace }}"
               invalid=0
               total=0
-              # Review Focus F13 fix — list ALL SealedSecret resources committed
-              # via the chart, including the 3 added by Plan 3 (email-password,
-              # keycloak-client-secret, huggingface-hub-token). Earlier version
-              # hardcoded the 4 Plan-2 secrets, missing Group-5 drift.
+              # The controller signals an undecryptable SealedSecret via
+              # status.conditions[type=SealedSecretHasntDecrypted].status=True
+              # — the `sealedsecrets.bitnami.com/invalid` annotation does NOT
+              # exist upstream and grepping it always matches nothing
+              # (code-review Wave 10 #4).
               for name in $(kubectl get sealedsecret -n "$ns" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
                 total=$((total+1))
-                if kubectl get sealedsecret "$name" -n "$ns" -o jsonpath='{.metadata.annotations.sealedsecrets\.bitnami\.com/invalid}' 2>/dev/null | grep -q '^true$'; then
-                  echo "DRIFT: $name marked invalid (cluster key rotated; re-encrypt with current public key)"
+                cond=$(kubectl get sealedsecret "$name" -n "$ns" \
+                  -o jsonpath='{range .status.conditions[?(@.type=="SealedSecretHasntDecrypted")]}{.status}{end}' 2>/dev/null || true)
+                if [ "$cond" = "True" ]; then
+                  echo "DRIFT: $name undecryptable (cluster key rotated or sentinel blob; re-encrypt with current public key)"
                   invalid=$((invalid+1))
                 fi
               done
@@ -1384,10 +1433,6 @@ spec:
                 echo "FAIL: $invalid SealedSecret resources drifted (of $total total)"
                 echo "FAIL: kubeseal --fetch-cert + re-encrypt + commit + push + re-upgrade required"
                 exit 1
-              fi
-              if [ "$total" -eq 0 ]; then
-                echo "INFO: no SealedSecret resources in namespace yet (first install?)"
-                exit 0
               fi
               echo "PASS: no drift detected across $total SealedSecret resources"
 {{- end -}}

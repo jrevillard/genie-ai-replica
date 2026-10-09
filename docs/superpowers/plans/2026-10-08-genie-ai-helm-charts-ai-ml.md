@@ -661,7 +661,7 @@ spec:
             - { name: BACKEND_SERVICE_URL, value: "http://backend.{{ .Values.namespace }}.svc.cluster.local:80" }
             # --- Observability (SDK no-op when 0) ---
             - { name: ENABLE_OBSERVABILITY, value: {{ ternary "1" "0" .Values.observability.enabled | quote }} }
-            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://genieai-collector.{{ .Values.namespace }}.svc.cluster.local:4318" }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://genieai-collector-collector.{{ .Values.namespace }}.svc.cluster.local:4318" }
           # OPENAI_API_KEY (+ VLLM_API_KEY) arrive via envFrom below — the
           # AsyncOpenAI client needs it for remote-GPU bearer auth.
           envFrom:
@@ -1392,7 +1392,7 @@ git commit -m "docs(charts): mark Plans 2-5 complete; AI-tier README"
 
 Sections deferred: RAG eval harness wiring (tests/rag-benchmarks) — outside chart scope; OPEA `DEPLOY_OPEA` profile gate — `ai.enabled` master switch replaces it (values-level, no compose profiles in Helm).
 
-**2. Placeholder scan**: only intentional `PLACEHOLDER_*_SEALED_KID` markers. No TBD/TODO.
+**2. Placeholder scan**: only intentional `PLACEHOLDER+` (UExBQ0VIT0xERVIr) sentinels. No TBD/TODO.
 
 **3. Type consistency**: factory consumes `aiService` merged dict (Task 2 one-line extension, backward compatible); SealedSecret keys = env var names (`VLLM_API_KEY`, `HF_TOKEN`, `KEYCLOAK_PROXY_CLIENT_SECRET`, `KC_DATAPREP_CLIENT_SECRET`); Service port 80 contract holds for all 11 rendered AI Services.
 

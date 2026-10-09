@@ -130,12 +130,12 @@ sudo kubectl port-forward -n genieai svc/backend 3000:80 --address 0.0.0.0
 
 ## What the install does
 
-A single `helm install` triggers, in order:
+A single `helm install -n genieai --create-namespace` triggers, in order:
 
-1. **Pre-install hook** (weight -40): creates the namespace.
+1. `--create-namespace` provisions the bare namespace (the chart's Namespace resource is a regular manifest that server-side-applies its labels afterwards — Helm 4 deletes hook-identity Namespaces, so a -40 hook is not an option).
 2. **Pre-install hook** (weight -30): ServiceAccount + ClusterRole + ClusterRoleBinding (the dep-check Job's identity).
 3. **Pre-install hook** (weight -20): ConfigMap holding the dep-graph + enabled-flags snapshot.
-4. **Pre-install hook** (weight -10): cluster-profile auto-detect (reads the namespace label `genieai.io/cluster-profile`; emits a Kubernetes Event).
+4. **Pre-upgrade hook** (weight -10): cluster-profile mismatch detect (reads the namespace label `genieai.io/cluster-profile` left by the previous revision; emits a Kubernetes Event on mismatch).
 5. **Pre-install hook** (weight -5): dep-check Job (Python; reads the ConfigMap; fails the install if a service's declared data dep is not enabled).
 6. **Pre-install hook** (weight 0): backend db-migrations Job (`migrate.enabled=true`).
 7. **Regular manifests**: Namespace + SealedSecrets + Deployments + Services + NetworkPolicies + ConfigMaps + (optional) Gateway + HTTPRoute + Certificate + db-migrations PVC + Helm test Pods.

@@ -53,11 +53,14 @@ charts:lint:
     HELM_DOCS_VERSION: v1.14.2
   before_script:
     - helm version --short
-    - helm plugin install https://github.com/kudulab/helm-docs --version ${HELM_DOCS_VERSION} || true
-    - helm plugin ls | grep docs
+    # helm-docs is a STANDALONE binary (github.com/norwoodj/helm-docs), not
+    # a helm plugin — the earlier `helm plugin install kudulab/helm-docs`
+    # line always failed and was masked by `|| true`.
+    - curl -sSL https://github.com/norwoodj/helm-docs/releases/download/${HELM_DOCS_VERSION}/helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz | tar xz -C /usr/local/bin helm-docs
   script:
-    - make -C charts lint              # helm lint + helm-docs check
-    - make -C charts lint-strict       # helm lint --strict
+    - make -C charts deps              # vendor the file:// library dependency
+    - make -C charts lint              # helm lint --strict (both charts)
+    - make -C charts docs-check        # helm-docs --check
     - conftest test --policy policies/ policies/fixtures/test-data.yaml --output stdout
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -92,10 +95,13 @@ charts:integration:
   script:
     # Install the chart with the dev overlay (single-node, no GPU,
     # observability off — keeps the kind cluster under the 60-min CI
-    # budget). The chart's pre-install hooks (-40 ns, -30 rbac, -20
-    # cm, -10 profile, -5 dep-check) all run during this install.
+    # budget). --create-namespace is REQUIRED: the Namespace is a
+    # regular resource (code-review Wave 10 #9 — Helm 4 deletes
+    # hook-identity Namespaces, see plan-defects.md Wave 8 #2), so
+    # the flag provisions it before the release Secret and the
+    # pre-install hooks (-30 rbac, -20 cm, -5 dep-check) run.
     - helm install test charts/genieai-umbrella
-        --namespace genieai --create-namespace=false
+        --namespace genieai --create-namespace
         --values ${HELM_VALUES}
         --set observability.enabled=false
         --wait --timeout 25m
@@ -161,12 +167,16 @@ The cosign sign step belongs in a `publish:charts` job, NOT in `charts:integrati
 publish:charts:
   stage: build
   image: registry.example.org/dev-tools/helm-cosign:1.33
-  variables:
-    CHART_REF: ${CI_REGISTRY_IMAGE}/genieai/umbrella
   before_script:
     - helm version --short
     - cosign version
     - make -C charts deps
+    # helm push uploads the tgz as <registry-path>/<chart-name>:<chart-version>
+    # — helm appends the chart name and tags with the Chart.yaml `version`.
+    # Signing must target exactly that ref (code-review Wave 10 #13):
+    #   oci push: ${CI_REGISTRY_IMAGE}/genieai/genieai-umbrella:<version>
+    - CHART_VERSION=$(grep '^version:' charts/genieai-umbrella/Chart.yaml | awk '{print $2}')
+    - CHART_REF="${CI_REGISTRY_IMAGE}/genieai/genieai-umbrella"
   script:
     # Package the chart (no signing yet — sign AFTER push)
     - helm package charts/genieai-umbrella -d /tmp/chart
@@ -174,9 +184,9 @@ publish:charts:
     # Sign with cosign. The env var carries the RAW PEM (NOT base64-encoded;
     # the suffix `BASE64` was wrong — cosign 2.x parses `env:VAR` as either
     # a path OR the raw PEM content, never base64).
-    - cosign sign --key env:COSIGN_KEY=${COSIGN_KEY} ${CHART_REF}:${CI_COMMIT_TAG}
+    - cosign sign --key env:COSIGN_KEY=${COSIGN_KEY} ${CHART_REF}:${CHART_VERSION}
     # Verify — fail the job on a real signature mismatch (do NOT use `|| true`).
-    - cosign verify --key env:COSIGN_KEY=${COSIGN_KEY} ${CHART_REF}:${CI_COMMIT_TAG}
+    - cosign verify --key env:COSIGN_KEY=${COSIGN_KEY} ${CHART_REF}:${CHART_VERSION}
   rules:
     - if: $CI_COMMIT_TAG
       when: on_success
@@ -189,40 +199,33 @@ publish:charts:
       optional: true
 ```
 
-- [ ] **Step 2: Add the `make lint` + `make lint-strict` + `make deps` targets** to `charts/Makefile` (create the Makefile if it doesn't exist)
+- [ ] **Step 2: EXTEND the existing `charts/Makefile`** (shipped by the foundation plan — do NOT replace it: a wholesale rewrite reintroduces the doubly-broken-Makefile defect from plan-defects.md Wave 9 #1). Add the targets below, keeping the existing `lint`/`lint-common`/`lint-umbrella`/`template`/`test`/`docs`/`deps` set. All paths are CHART-RELATIVE (the Makefile lives in `charts/`; `make -C charts` must work).
 
 ```makefile
-# GENIE.AI Helm chart CI helpers
+# Additions to charts/Makefile (existing targets unchanged above)
 
-CHART_DIR := charts/genieai-umbrella
-OVERLAY_DEV := deploy/environments/dev/values-override.yaml
+OVERLAY_DEV := ../deploy/environments/dev/values-override.yaml
 
-.PHONY: lint
-lint:
-	helm lint $(CHART_DIR)
-	helm-docs --chart-search-root=$(CHART_DIR) --check
-
-.PHONY: lint-strict
-lint-strict:
-	helm lint $(CHART_DIR) --strict
-	helm-docs --chart-search-root=$(CHART_DIR) --check
-
-.PHONY: deps
-deps:
-	helm dep update $(CHART_DIR)
+.PHONY: docs-check
+docs-check:
+	helm-docs --chart-search-root=. --check
 
 .PHONY: render
 render:
-	helm template test $(CHART_DIR) --values $(OVERLAY_DEV) --include-crds
+	helm template test genieai-umbrella --values $(OVERLAY_DEV) --include-crds > /tmp/genieai-rendered.yaml
 
 .PHONY: install-dev
 install-dev:
-	helm install test $(CHART_DIR) --values $(OVERLAY_DEV) --create-namespace --namespace genieai
+	helm install test genieai-umbrella --values $(OVERLAY_DEV) --create-namespace --namespace genieai
 
-.PHONY: test
-test:
+# Existing `test` target already runs `ct install` — keep it; the plain
+# `helm test` invocation below complements it for an installed release.
+.PHONY: helm-test
+helm-test:
 	helm test test --namespace genieai
 ```
+
+Note: the earlier draft of this step created a `lint-strict` target and installed helm-docs as a helm plugin — both wrong (lint already runs `--strict`; helm-docs is a standalone binary, installed per the foundation plan).
 
 - [ ] **Step 3: Verify the `charts:lint` job in a local dry-run** (skip the cluster install, just lint)
 
@@ -541,14 +544,16 @@ spec:
           attestors:
             - entries:
                 - keys:
-                    # F3 fix: `keyData:` is the real Kyverno v1.13+ schema
-                    # field for inline PEM (the older `publicKeys:` is
-                    # NOT in the schema; the spec used it incorrectly for
-                    # three rounds). `keyData:` accepts an inline PEM
-                    # string only — no Secret/ConfigMap references.
+                    # Verified against the Kyverno CRD: the real schema
+                    # field for inline PEM is `publicKeys` (accepts
+                    # directly-specified X.509 keys; no Secret/ConfigMap
+                    # references). An earlier draft used `keyData`, which
+                    # does not exist in the schema and would be silently
+                    # pruned — verifyImages would then match and verify
+                    # nothing while appearing Enforced.
                     # The `{{- ... | nindent 22 }}` indents the
                     # multi-line PEM block inside the YAML scalar.
-                    keyData: |-
+                    publicKeys: |-
                       {{- .Values.cosign.publicKey | nindent 22 }}
 {{- end -}}
 ```
@@ -770,14 +775,21 @@ kubectl wait --namespace $NS --for=condition=Ready pods \
 #    The PII smoke test asserts only the covered patterns; adding
 #    IP / UUID coverage is Plan 4 work (extend the redaction rules
 #    in the ported OTel collector config). C7 fix.
-OTLP_URL="http://genieai-collector.$NS.svc.cluster.local:4318/v1/logs"
+OTLP_URL="http://genieai-collector-collector.$NS.svc.cluster.local:4318/v1/logs"
+# Every value below MUST appear in the injected log body AND be checked in
+# step 6 — an assertion over a value never injected passes vacuously (the
+# failure mode of the first docker-based PII smoke test; code-review
+# Wave 10 #7). Lengths are padded to fixed sizes so the {40,} / bearer
+# patterns match regardless of marker length.
 PII_EMAIL="leak-$MARKER@example.com"
 PII_JWT="eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJsZWFrIn0.fakefakefake"
 PII_APIKEY="sk-$MARKER-1234567890abcdef1234"
-PII_LONGHEX="$(printf '%s' "$MARKER" | head -c 48)abcdef"   # 48 chars, matches {40,}
-PII_BEARER="Bearer $(printf '%s' "$MARKER" | head -c 40)abc"
+PII_LONGHEX="${MARKER}abcdef0123456789abcdef0123456789abcdef0123456789abcdef"   # >= 48 chars, matches {40,}
+PII_BEARER="Bearer ${MARKER}abcdefghijklmnopqrstuvwxyz0123456789abc"            # >= 40 chars after "Bearer "
 
-# Build a minimal OTLP log request (one resource + one log record)
+# Build a minimal OTLP log request (one resource + one log record).
+# NOTE: only the patterns the redaction rules cover are injected — no
+# bare IP / UUID (not in the rules; would muddy the assertions).
 PAYLOAD=$(cat <<EOF
 {
   "resourceLogs": [{
@@ -793,7 +805,7 @@ PAYLOAD=$(cat <<EOF
         "timeUnixNano": "$(date +%s)000000000",
         "severityNumber": 9,
         "severityText": "INFO",
-        "body": { "stringValue": "marker=$MARKER email=$PII_EMAIL ip=$PII_IP hex=$PII_HEX uuid=$PII_UUID" }
+        "body": { "stringValue": "marker=$MARKER email=$PII_EMAIL jwt=$PII_JWT apikey=$PII_APIKEY hex=$PII_LONGHEX auth=$PII_BEARER" }
       }]
     }]
   }]

@@ -592,6 +592,11 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           head_margin: r.under_test.head_margin !== undefined ? r.under_test.head_margin : null,
           head_claim: r.under_test.head_claim || null,
           tag_veto: r.under_test.tag_veto || null,
+          max_tag: r.under_test.max_tag || null,
+          max_tag_cosine:
+            r.under_test.max_tag_cosine !== undefined && r.under_test.max_tag_cosine !== null
+              ? r.under_test.max_tag_cosine
+              : null,
           head_claimed:
             r.under_test.head_claimed === undefined || r.under_test.head_claimed === null
               ? null
@@ -849,18 +854,36 @@ subject tags over query-specific ones. Respond with ONLY a JSON object:
         logger.warn('head-suite.explain.llm_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message });
         out.note = 'the suggestion model is unreachable — review the failing queries against the declared scope manually';
       }
-      // Story 1-8d — the mechanical guardrail (self-subject + duplicate
-      // screening). Prompt constraints alone failed in the 2026-10-09
-      // poisoning; a screened-out proposal NEVER reaches the UI chips.
+      // Story 1-8d — the mechanical guardrail (self-subject + duplicate +
+      // VETO-IMPACT simulation against this run's own positive queries).
+      // A screened-out proposal NEVER reaches the UI chips.
       if (suggestionTags.length) {
         const headTestService = require('./head-test-service');
-        const guard = await headTestService.guardSuggestions(repoId, suggestionTags, opts);
+        const positiveQueries = (run.payload.results || [])
+          .filter((q) => q && q.kind === 'positive')
+          .map((q) => q.query)
+          .filter(Boolean);
+        const guard = await headTestService.guardSuggestions(repoId, suggestionTags, {
+          ...opts,
+          positiveQueries
+        });
         out.suggested_tags = guard.accepted;
         out.rejected = guard.rejected;
         out.source = guard.accepted.length ? 'llm' : 'guardrail';
       }
     } else {
       out.note = 'no wrongly-claimed negatives — the failures are suppressed positives (see removal_suggestions)';
+    }
+    // Story 1-8d — explicit positive-improvement advice (David: "the
+    // feedback needs to make recommendations to improve the pass level on
+    // positives"). Veto kills name the tag to remove/narrow; margin kills
+    // name the nearest forbidden tag.
+    if (positiveKills.length) {
+      const removalTags = removalSuggestions.map((r) => r.tag);
+      out.improvements =
+        marginKilled.length > 0
+          ? `To improve the positive pass rate: remove or narrow ${removalTags.join(', ') || 'the nearest forbidden tags'} (vetoing positives), and review the forbidden tags nearest to the ${marginKilled.length} margin-killed positive${marginKilled.length > 1 ? 's' : ''} — their centroid contribution is suppressing in-scope queries.`
+          : `To improve the positive pass rate: remove or narrow ${removalTags.join(', ') || 'the vetoing forbidden tags'} — they suppress in-scope queries.`;
     }
     // Story 1-8d — persist the advice so cycles are auditable.
     try {

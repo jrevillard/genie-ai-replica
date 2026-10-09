@@ -93,6 +93,18 @@ spec:
               done
               if [ -z "$detected" ] && [ "$read_failed" -eq 1 ]; then
                 echo "WARN: namespace label read failed; skipping drift check" >&2
+              elif [ -z "$detected" ] && [ "$read_failed" -eq 0 ]; then
+                # Label absent (read succeeded, value empty) is a separate
+                # case from a read error. The pre-upgrade drift check is
+                # only meaningful when the cluster is already labelled;
+                # a fresh namespace with no label falls into the advisory
+                # bucket and prints a WARN to stderr so the operator sees
+                # the missing config without the upgrade being blocked.
+                # Exit stays 0 (advisory only) — matching the read-error
+                # branch's semantics. The label-absent branch used to
+                # fall through silently: operators had no signal that
+                # genieai.io/cluster-profile was unset.
+                echo "WARN: namespace $ns lacks genieai.io/cluster-profile label (set it to dev|staging|prod|sovereign or accept defaults via clusterProfile)" >&2
               fi
               if [ -n "$detected" ] && [ "$detected" != "$rendered" ]; then
                 # Echo a one-line summary that includes the detected value

@@ -232,7 +232,7 @@ values.yaml is never templated, so cross-service URLs MUST
 be rendered here.
 Usage:
   {{- include "genieai-umbrella.crossServiceURLs" (list $ctx (list
-    (dict "name" "KEYCLOAK_URL" "host" "keycloak" "port" 8080 "path" "/auth")
+    (dict "name" "KEYCLOAK_URL" "host" "keycloak-service" "port" 8080 "path" "/auth")
     (dict "name" "ARANGO_URL"    "host" (include "genieai-umbrella.arangoHost" .) "port" 8529)
     ...)) | nindent 12 }}
 */}}
@@ -321,12 +321,13 @@ metadata:
   name: nginx-override
   namespace: {{ .Values.namespace }}
 data:
-  # mounted OVER /etc/nginx/conf.d/default.conf (subPath) — the baked
-  # server blocks never load; verify against
-  # api-gateway-solution/nginx/entrypoint.sh at execution (if the
-  # entrypoint re-renders the file at startup, mount over the TEMPLATE
-  # it renders from instead).
-  default.conf: |
+  # The entrypoint envsubst-renders /etc/nginx/conf.d/default.conf FROM
+  # its baked template AT STARTUP (api-gateway-solution/nginx/entrypoint.sh
+  # lines 78-80) — a read-only subPath mount OVER the OUTPUT file makes
+  # that redirect fail with EROFS and the container exits. Mount over the
+  # TEMPLATE instead: our rendered config is envsubst-safe (no ${...}
+  # placeholders), so the entrypoint writes our content verbatim.
+  default.conf.template: |
     upstream genieai_frontend { server frontend:80; }
     upstream genieai_backend  { server backend:80; }
     upstream genieai_docrepo  { server document-repository:80; }
@@ -339,7 +340,7 @@ data:
     }
 {{- end -}}
 ```
-+ factory passthrough mounts it OVER `/etc/nginx/conf.d/default.conf` (subPath — replacement, not addition; see Step 5).
++ factory passthrough mounts it OVER `/etc/nginx/conf.d/default.conf.template` (subPath — the entrypoint envsubst-renders the template to default.conf at startup, so the baked Kong config never survives).
 
 - [ ] **Step 6: `helm lint --strict` + commit**
 

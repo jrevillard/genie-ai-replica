@@ -23,7 +23,11 @@ template-umbrella:
 test: test-umbrella
 
 test-umbrella:
-	ct install $(CT_FLAGS) --charts genieai-umbrella --kube-version 1.33.0
+	# The K8s version pin is the kind NODE IMAGE (kindest/node:v1.33.0),
+	# created by CI or by hand BEFORE this target runs. ct has NO
+	# --kube-version flag and NO kubeVersion config key (verified against
+	# chart-testing v3.15.0 source — both were fabrications).
+	ct install $(CT_FLAGS) --charts genieai-umbrella
 
 # Advisory only: the chart READMEs are hand-written (curated usage docs,
 # not helm-docs output). Running plain `helm-docs` would OVERWRITE them

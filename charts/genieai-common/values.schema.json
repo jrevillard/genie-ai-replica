@@ -16,11 +16,11 @@
     "fullnameOverride": {
       "type": "string",
       "description": "Override the entire resource name prefix. Empty = use <release>-<chart>.",
-      "maxLength": 50
+      "maxLength": 40
     },
     "component": {
       "type": "string",
-      "description": "Top-level GENIE.AI component this label marks. Used by Prometheus service discovery, NetworkPolicy selectors, and Grafana dashboards. Open enum (additionalProperties tolerated); concrete values include: umbrella, namespace, data, data-postgres, data-arangodb, identity, pre-install, sealed-secret, sealed-secret-validate, rbac, test, ... (per-template).",
+      "description": "Free-form string identifying the component of a resource; consumed by genieai-common.labels to emit genieai.io/component: <component>. No enum — callers pick the value. NOTE: top-level additionalProperties is false, but `component` is in the known property set (no error at render time).",
       "default": "umbrella",
       "maxLength": 63
     }

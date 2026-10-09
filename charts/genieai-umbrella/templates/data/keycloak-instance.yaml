@@ -1,4 +1,8 @@
 {{- if .Values.data.keycloak.enabled -}}
+{{- $instances := .Values.data.keycloak.instances | default 1 -}}
+{{- if eq .Values.clusterProfile "prod" -}}
+{{- $instances = 2 -}}
+{{- end -}}
 apiVersion: k8s.keycloak.org/v2alpha1
 kind: Keycloak
 metadata:
@@ -8,7 +12,7 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "identity"))) | nindent 4 }}
     genieai.io/data-tier: identity
 spec:
-  instances: {{ .Values.data.keycloak.instances | default 1 }}
+  instances: {{ $instances }}
   db:
     # CNPG primary Service is <cluster>-rw (keycloak-db-rw), port 5432
     vendor: postgres

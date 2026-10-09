@@ -146,7 +146,7 @@ data:
     mode: cluster                   # single | cluster
   keycloak:
     enabled: true
-    realmImport: true               # apply KeycloakRealm CRs
+    realmImport: true               # apply KeycloakRealmImport CRs
 
 observability:
   enabled: false                    # profile-gated default off
@@ -342,7 +342,10 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
   ```yaml
   envFrom:
     - secretRef:
-        name: {{ include "genieai-common.fullname" . }}-{{ .service.name }}
+        # PLAIN secret names — the chart renders SealedSecrets with these
+        # exact names (keycloak-client-secret, arango-root-secret, ...);
+        # fullname-prefixing the ref would match no rendered Secret.
+        name: {{ .service.secretName }}
   ```
 
 **Rotation story (HONEST — replacing earlier fabricated claims)**:
@@ -381,7 +384,7 @@ Each group's chart enabling is independent. Day 0 install: `data.postgres.enable
 | `postgresPassword` | _(unused after `data.postgres.enabled=false`)_ | — | Dropped with Kong removal |
 | `kongDbPassword` | _(unused)_ | — | Kong removed (decision 7) |
 | `keycloakDbPassword` | `keycloak-db-credentials` (key `password`) | Plan 2 | keycloak user's role password on CNPG `keycloak-db` cluster |
-| `keycloakAdminPassword` | `genie-admin-credentials` (key `password`) | Plan 2 | KeycloakRealm `genie-admin` user |
+| `keycloakAdminPassword` | `genie-admin-credentials` (key `password`) | Plan 2 | KeycloakRealmImport `genie-admin` user |
 | `keycloakClientSecret` | _(TBD)_ | Plan 3 (frontend SPA client secret) | Rendered under `keycloak` component |
 | `keycloakProxyClientSecret` | _(TBD)_ | Plan 5 (AI/ML OPEA microservices) | `proxy` client for service-account auth |
 | `kcDataprepClientSecret` | _(TBD)_ | Plan 5 | dataprep client's secret |
@@ -468,7 +471,9 @@ helm install edge charts/genieai-umbrella -n genieai-edge --create-namespace \
   -f ./deploy/environments/sovereign/values-override.yaml \
   --set migration.swarmFallback=true \
   --set migration.swarmEndpoint=http://10.0.0.102:443 \
-  --set migration.swarmAllowedCIDRs=10.0.0.0/16,192.168.0.0/16   # Review Focus F12
+  # Brace-wrap comma lists: bare --set splits on commas and the second
+  # CIDR would be parsed as a separate (invalid) expression.
+  --set 'migration.swarmAllowedCIDRs={10.0.0.0/16,192.168.0.0/16}'
 ```
 
 Each pattern produces a working install. Pattern A is the v1 target. B and C exist to keep options open during phased migration.

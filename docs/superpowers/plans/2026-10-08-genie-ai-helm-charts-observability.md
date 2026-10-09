@@ -495,7 +495,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: genieai-agent
-  namespace: {{ .Values.namespace }}
+  namespace: {{ printf "%s-agent" .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
 rules:
@@ -507,13 +507,46 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
+  # SAME namespace as the DaemonSet (the agent namespace): a ServiceAccount
+  # is namespaced — binding it in the main namespace while the pods run in
+  # <ns>-agent leaves the SA unresolvable and every pod fails admission.
   name: genieai-agent
-  namespace: {{ .Values.namespace }}
+  namespace: {{ printf "%s-agent" .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
+  name: genieai-agent
+subjects:
+  - kind: ServiceAccount
+    name: genieai-agent
+    namespace: {{ printf "%s-agent" .Values.namespace }}
+---
+# k8sattributes enrichment resolves pod IPs to pod metadata ACROSS
+# namespaces (workload pods live in the main namespace) — a Role in the
+# agent namespace can never see them. Minimal cluster-wide read of pods
+# only; no secrets, no writes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: genieai-agent
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: genieai-agent
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
   name: genieai-agent
 subjects:
   - kind: ServiceAccount
@@ -1141,7 +1174,9 @@ Foundation + Plans 2-4 complete (data layer, service tier Group 5, observability
 
 - Helm API v2. Helm 4.x.
 - No secrets in `values-override.yaml`. Use SealedSecret resources (Plan 2 default backend).
-- Tests live in each chart's `tests/` directory; `ct install` for integration, `helm test` for smoke.
+- Tests live in each chart's `templates/tests/` directory (Helm convention)
+- Install requires `-n <ns> --create-namespace` (the Namespace is a regular resource; the release Secret and hooks need it first)
+- Vendored dep tarballs + Chart.lock are generated, not tracked — run `make deps` (from `charts/`) after cloning or dep changes; `ct install` for integration, `helm test` for smoke.
 - NetworkPolicy: every service gets default-deny + explicit allowlist.
 - PDB: only emitted when `replicas >= 2`.
 - Observability: explicit values only — `false` by default for EVERY profile; staging/prod/sovereign overlays set `observability.enabled: true` in their values-override.yaml.

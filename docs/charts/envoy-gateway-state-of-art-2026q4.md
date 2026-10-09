@@ -108,7 +108,7 @@
 
 ## Spec changes required
 
-1. **§9 Ingress + TLS**: bump K8s target from 1.32 to **1.33+** (minimum for EG v1.9). Update `kubeVersion` in `charts/ci/ct.yaml` to match.
+1. **§9 Ingress + TLS**: bump K8s target from 1.32 to **1.33+** (minimum for EG v1.9). Pin via the kind node image + the `ct install --kube-version 1.33.0` CLI flag (`charts/ci/ct.yaml` has no kubeVersion config key).
 2. **§5.2 ClusterProfile + dep table**: drop `kong` entirely (user-confirmed removal). Add Envoy Gateway helm dep at `~> 1.9.0` (already in spec, just need version pin).
 3. **§8 secrets / §6 pluggability**: Kong removed entirely (decision 7).
 4. **§13 uninstall hook**: no changes.
@@ -120,7 +120,7 @@
 - `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` (§9 K8s target, Kong references)
 - `docs/superpowers/plans/2026-10-08-genie-ai-helm-charts-data-layer.md` (Plan 2 Task 10 — Kong opt-in)
 - `docs/superpowers/plans/2026-10-08-genie-ai-helm-charts-service-tier-group5.md` (Plan 3 Task 5 step 2 — nginx upstream swap)
-- `charts/ci/ct.yaml` (`kubeVersion: 1.33.0`)
+- `charts/ci/ct.yaml` (`ct install --kube-version 1.33.0`)
 
 ## Status
 

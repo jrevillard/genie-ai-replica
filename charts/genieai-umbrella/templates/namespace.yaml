@@ -1,6 +1,11 @@
 {{- /* Build a per-template Values view so we can override `.component` for label rendering. */ -}}
 {{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "namespace")) -}}
-{{- $ns := .Values.namespace -}}
+{{- /* The release namespace is authoritative: resources install where the
+       release lives, and a values-side namespace that diverges from it
+       would label the wrong namespace and strand the release Secret.
+       `namespace` in values exists for templates that must SPELL OUT a
+       target namespace; it must equal the release namespace. */ -}}
+{{- $ns := .Release.Namespace -}}
 apiVersion: v1
 kind: Namespace
 metadata:

@@ -1,0 +1,150 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-dep-check
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "pre-install"))) | nindent 4 }}
+    app.kubernetes.io/component: pre-install
+  annotations:
+    # Helm 3 scans templates/ recursively for hook annotations. Subdirectory
+    # name `hooks/` is irrelevant to Helm; the annotations below are what
+    # matter.
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"          # run after clusterprofile-detect (-10)
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "pre-install"))) | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dep-check
+          # python:3.12-alpine ships python + pyyaml-stripped; we read YAML
+          # without pyyaml by parsing only the JSON graph mount. The image
+          # is the minimal alpine + python that fits the dependency-check
+          # logic, without falling back to a no-op
+          # grep.
+          image: python:3.12-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - python3
+            - -c
+            - |
+              import json, os, sys
+              graph_path = "/var/run/genieai/dependency-graph.json"
+              if not os.path.exists(graph_path):
+                  print(f"FAIL: {graph_path} missing"); sys.exit(1)
+              with open(graph_path) as f:
+                  graph = json.load(f)
+              # Read which services are ENABLED via the chart's env. The
+              # values.yaml defines a `services.<X>.enabled` boolean. The
+              # graph only includes declared deps; the evaluator reads
+              # current values from the helm chart via `kubectl get
+              # ConfigMap`. We use a generated ConfigMap with the
+              # `data.enabled` keys flattened to avoid parsing values.yaml
+              # at runtime.
+              enabled_json = "/var/run/genieai/enabled.json"
+              if not os.path.exists(enabled_json):
+                  print(f"FAIL: {enabled_json} missing"); sys.exit(1)
+              with open(enabled_json) as f:
+                  enabled = json.load(f)
+              # Resolve a dependency name to its namespace in the graph:
+              # deps may be services (frontend -> backend) OR data tiers
+              # (backend -> arangodb). Earlier version assumed every dep was
+              # a data.* key — a service dep like "backend" resolved to
+              # data.backend.enabled=False and failed every default install.
+              def dep_enabled(dep):
+                  if dep in graph.get("services", {}):
+                      return enabled.get(f"services.{dep}.enabled", False)
+                  return enabled.get(f"data.{dep}.enabled", False)
+              def dep_kind(dep):
+                  return "service" if dep in graph.get("services", {}) else "data"
+              failures = []
+              for tier in ("services", "data"):
+                  for svc, deps in graph.get(tier, {}).items():
+                      if not enabled.get(f"{tier}.{svc}.enabled", False):
+                          continue
+                      for dep in deps.get("deps", []):
+                          if dep == "":
+                              continue
+                          if not dep_enabled(dep):
+                              failures.append(f"{tier}.{svc} requires {dep_kind(dep)}.{dep}")
+              if failures:
+                  print("FAIL: unmet dependencies")
+                  for f in failures:
+                      print(f"  - {f}")
+                  sys.exit(1)
+              print("PASS: dependency graph satisfied")
+          volumeMounts:
+            - name: dependency-graph
+              mountPath: /var/run/genieai
+              readOnly: true
+      volumes:
+        - name: dependency-graph
+          configMap:
+            name: {{ include "genieai-common.fullname" . }}-dep-graph
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-dep-graph
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "pre-install"))) | nindent 4 }}
+  annotations:
+    # Hook with weight -20: created after the RBAC (-30) and BEFORE the
+    # dep-check Job (-5) mounts it. A regular ConfigMap would not exist on
+    # first install (regular resources land after all pre-install hooks).
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-20"
+    "helm.sh/hook-delete-policy": before-hook-creation
+data:
+  dependency-graph.json: |
+    {{- include "genieai-umbrella.dependencyGraph.json" . | nindent 4 }}
+  {{ "" }}
+  {{- /*
+    Renders the current `services.X.enabled` and `data.X.enabled` boolean
+    values as JSON so the dependency-check Pod reads them without parsing
+    the raw values.yaml (which uses Helm templating the Pod can't run). If
+    a new `services.<X>.enabled` is added to values.yaml but not exported
+    here, the Pod falls back to False (failing safe — service appears
+    "off"). The op-level "missing dependency" failure then surfaces in CI.
+  */ -}}
+  enabled.json: |
+    {{- /* FAIL-SAFE flat map: every toggle defaults to FALSE when absent.
+           `| default true` would flip an explicitly disabled component back
+           on, and a bare .Values.services.backend.enabled would nil-pointer
+           at render time because values.yaml carries NO services block at this
+           point. Two subtleties: (1) sprig `dig` REFUSES Helm's typed Values
+           (`interface conversion: ... is common.Values`) — round-trip through
+           toRawJson|fromJson to get a plain map first; (2) inside a literal
+           block scalar, a trailing `{{- ... -}}` dash trims the newline the
+           `|` pipe needs — use plain `}}` closers on every line of the block
+           (verified by rendering). */ -}}
+    {{- $vals := $.Values | toRawJson | fromJson }}
+    {{- $flat := dict }}
+    {{- range $name := list "backend" "frontend" "documentRepository" "clamav" }}
+    {{- $_ := set $flat (printf "services.%s.enabled" $name) (dig "services" $name "enabled" false $vals) }}
+    {{- end }}
+    {{- range $name := list "postgres" "arangodb" "keycloak" }}
+    {{- $_ := set $flat (printf "data.%s.enabled" $name) (dig "data" $name "enabled" false $vals) }}
+    {{- end }}
+    {{ $flat | toJson }}

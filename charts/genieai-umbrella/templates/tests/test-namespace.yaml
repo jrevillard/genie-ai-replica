@@ -40,3 +40,61 @@ spec:
           [ "$ns" = "{{ .Release.Namespace }}" ] \
             || { echo "FAIL: namespace mismatch, expected {{ .Release.Namespace }}"; exit 1; }
           echo "PASS"
+{{- /* Gated: the test hard-asserts the data-tier Secrets exist — without
+       the gate, CI's stripped-down install (data + secrets disabled) would
+       fail helm test on a healthy release. */ -}}
+{{- if and .Values.data.arangodb.enabled .Values.secrets.sealedSecrets.enabled }}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-test-data-deps
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "test"))) | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  restartPolicy: Never
+  serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: t
+      # bitnami/kubectl: kubectl is NOT in alpine base. SA = the hook-owned
+      # dep-check SA (persists between hook fires via before-hook-creation).
+      image: bitnami/kubectl:1.33
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+        capabilities:
+          drop:
+            - ALL
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          echo "test Pod checking SealedSecret materialization"
+          missing=""
+          for secret in arango-jwt-secret arango-root-secret; do
+            if ! kubectl get secret "$secret" -n {{ .Values.namespace }} >/dev/null 2>&1; then
+              echo "missing K8s Secret: $secret"
+              missing="$missing $secret"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "FAIL: SealedSecret resources not yet materialised:"
+            echo "$missing"
+            exit 1
+          fi
+          echo "PASS"
+{{- end }}

@@ -8,6 +8,13 @@
 #     `kubectl apply -f` an AppProject manifest granting the repo + destinations
 #   - the target cluster is the current kubectl context
 #
+# LIMITATION (Helm hooks under ArgoCD): ArgoCD maps the chart's
+# pre-install/post-install hooks onto its own PreSync/PostSync phases, but
+# pre-upgrade hooks are NOT executed by ArgoCD. The chart's two pre-upgrade
+# drift hooks (SealedSecret validation and cluster-profile detection) do
+# not run under ArgoCD — that validation must happen in CI or manually
+# before each GitOps sync.
+#
 # LIMITATION (destructive prune): ArgoCD applies rendered manifests directly
 # and never executes Helm lifecycle hooks — including any pre-delete
 # confirmation gate the chart may define. An ArgoCD prune deletes the

@@ -13,9 +13,14 @@ validate-maintainers: false
 # Hard-coding one branch would block MRs from any other branch.
 chart-dirs:
   - charts
-chart-repos: []          # only the file:// library dep today;
-                         # operator repos are added as their tiers land
+chart-repos: []          # only the file:// library dep; operator
+                         # controllers are bootstrap prerequisites,
+                         # never chart dependencies
 excluded-charts: []
+# Fixed install namespace: the chart's render guard fails when
+# .Values.namespace != the release namespace, so ct must install into
+# genieai (the values default) rather than a generated one.
+namespace: genieai
 helm-extra-args: --timeout 300s
 # Data-tier operators (kube-arangodb, CNPG, keycloak) are cluster bootstrap
 # prerequisites absent on ephemeral kind clusters, and the sentinel

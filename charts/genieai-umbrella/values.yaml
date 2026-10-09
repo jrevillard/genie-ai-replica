@@ -68,6 +68,31 @@ data:
     mobileClientId: genie-mobile          # Flutter OIDC client (public, PKCE)
     mobileRedirectScheme: genieai         # <scheme>://callback redirect
 
+# service ↔ data dependency graph (used by pre-install hook).
+# Read by the dependency-check hook Job; values are intentionally declarative
+# to keep the static analysis simple (no chart-template evaluation at
+# Job runtime).
+#
+# Edge format: [from, to, required]. The Job fails the install if a service
+# is enabled but any of its `to` targets in `required: true` is not.
+dependencyGraph:
+  services:
+    backend:
+      - keycloak
+      - arangodb
+    frontend:
+      - backend
+    documentRepository:
+      - backend
+    clamav: []
+  data:
+    postgres:
+      - ""                                # no deps; lowest tier
+    arangodb:
+      - ""
+    keycloak:
+      - postgres
+
 secrets:
   sealedSecrets:
     enabled: true                      # default; see plug-point design §6.2

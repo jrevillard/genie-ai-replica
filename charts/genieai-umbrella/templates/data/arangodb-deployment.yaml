@@ -4,7 +4,7 @@
 {{- $mode = "cluster" -}}
 {{- end -}}
 {{- if eq $mode "single" -}}
-apiVersion: arango.kube.arangodb.com/v1
+apiVersion: database.arangodb.com/v1
 kind: ArangoDeployment
 metadata:
   # metadata.name MUST match the DNS name used by the chart + Swarm migration
@@ -27,27 +27,30 @@ spec:
       # NO --server.endpoint: `arangodb://` is not a valid endpoint scheme
       # (arangod accepts tcp:// / ssl://). The operator sets endpoint+advertising
       # itself from the CR; hand-rolling it here breaks pod startup.
-    storage:
-      engine: RocksDB
-      volumeClaimTemplate:
-        spec:
-          # Render storageClass ONLY when set: empty-string pins
-          # storageClassName: "" = "no default SC" and strands the PVC
-          # (same trap the CNPG template guards against).
-          {{- with .Values.pluggable.storageClassName }}
-          storageClassName: {{ . }}
-          {{- end }}
-          accessModes:
-            - ReadWriteOnce
-          resources:
-            requests:
-              storage: {{ .Values.data.arangodb.storageSize | default "50Gi" }}
-  authentication:
-    enabled: true
+    volumeClaimTemplate:
+      spec:
+        # Render storageClass ONLY when set: empty-string pins
+        # storageClassName: "" = "no default SC" and strands the PVC
+        # (same trap the CNPG template guards against).
+        {{- with .Values.pluggable.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.data.arangodb.storageSize | default "50Gi" }}
+  auth:
     jwtSecretName: arango-jwt-secret
-    rootPasswordSecretName: arango-root-secret
+  # Root password bootstrap: passwordSecretNames is a map of username to
+  # Secret name (kube-arangodb 1.4.5 BootstrapSpec). The referenced Secret
+  # must carry basic-auth keys (`username`, `password`); without this wiring
+  # the operator leaves the root password EMPTY (default `None`).
+  bootstrap:
+    passwordSecretNames:
+      root: arango-root-secret
 {{- else if eq $mode "cluster" -}}
-apiVersion: arango.kube.arangodb.com/v1
+apiVersion: database.arangodb.com/v1
 kind: ArangoDeployment
 metadata:
   name: arangodb-cluster
@@ -68,23 +71,22 @@ spec:
     count: 3
     args:
       - --server.authentication-system-only=true
-    storage:
-      engine: RocksDB
-      volumeClaimTemplate:
-        spec:
-          {{- with .Values.pluggable.storageClassName }}
-          storageClassName: {{ . }}
-          {{- end }}
-          accessModes:
-            - ReadWriteOnce
-          resources:
-            requests:
-              storage: {{ .Values.data.arangodb.storageSize | default "50Gi" }}
+    volumeClaimTemplate:
+      spec:
+        {{- with .Values.pluggable.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.data.arangodb.storageSize | default "50Gi" }}
   coordinators:
     count: 2
-  authentication:
-    enabled: true
+  auth:
     jwtSecretName: arango-jwt-secret
-    rootPasswordSecretName: arango-root-secret
+  bootstrap:
+    passwordSecretNames:
+      root: arango-root-secret
 {{- end -}}
 {{- end -}}

@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-test-namespace
+  labels:
+    {{- include "genieai-common.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    "helm.sh/hook": test
+    # Single valid value — Helm 3 accepts comma-separated but listing the same
+    # value twice is a copy-paste bug caught by stricter validators. Service
+    # tier plans replicate this pattern.
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  restartPolicy: Never
+  # Required by PSA restricted.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: test
+      image: alpine:3.20
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+        capabilities:
+          drop:
+            - ALL
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          ns="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+          echo "test Pod running in namespace: $ns"
+          [ "$ns" = "{{ .Values.namespace }}" ] \
+            || { echo "FAIL: namespace mismatch, expected {{ .Values.namespace }}"; exit 1; }
+          echo "PASS"

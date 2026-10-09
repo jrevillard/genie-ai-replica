@@ -52,8 +52,8 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector-collector.genieai.svc.clust
 | 1 | **Log ingestion** | fluentd logging driver does not exist on containerd/K8s. Need node-level filelog collection. | **M** | Plan 4 Task 4b (agent DaemonSet) |
 | 2 | **Collector config** | Port `configs/otel/otel-collector-config.yaml` verbatim (never rewrite); drop `fluent_forward` receiver, keep `pii_redact` + `stamp_log_metadata_from_msg`; retarget exporters to K8s DNS. | **S** | Plan 4 Task 4 |
 | 3 | **Gateway request tracing** | Kong OTel plugin disappears (Kong REMOVED — decision 7). Envoy Gateway tracing via policy (Envoy-native OTel exporter) + `traceparent` propagation. | **S** | Plan 6 |
-| 4 | **Grafana dashboards** | 9 dashboards from `configs/grafana/provisioning/` → ConfigMaps + sidecar provisioning; datasource names unchanged so queries work. | **S** | Plan 6 |
-| 5 | **Alert rules** | Grafana-provisioned rules → `VMRule` CRs (vmoperator). | **S** | Plan 6 |
+| 4 | **Grafana dashboards** | 9 dashboards from `configs/grafana/provisioning/` → `GrafanaDashboard` CRs via grafana-operator (v5) — NOT the ConfigMap+sidecar pattern; datasource names unchanged so queries work. | **S** | Plan 4 |
+| 5 | **Alert rules** | Grafana-provisioned rules → `VMRule` CRs (+ `VMAlertmanager`) via vmoperator. | **S** | Plan 4 |
 | 6 | **PII smoke test** | `run-pii-smoke.sh` targets docker compose → helm test / kind CI equivalent. Same assertions (marker-based row read-back). | **S** | Plan 7 |
 | 7 | **k8s enrichment** (bonus) | `k8sattributes` processor adds pod/namespace to spans/logs — free with the operator. | XS | Plan 4 Task 4b |
 

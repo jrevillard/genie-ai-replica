@@ -16,7 +16,7 @@
 - Per-service entries under `values.services.<name>` must match spec §5 schema: `enabled`, `replicas`, `image.{repository,tag}`, `port`, `resources.{requests,limits}`, `env`, `secrets`, `pvc`, `probes.{readiness,liveness,startup}`, `podDisruptionBudget.{minAvailable}`, `serviceMonitor`.
 - Each service gets its own `templates/services/<name>/` directory with `<name>.yaml` template that renders all six (Deployment, Service, NetworkPolicy, ServiceMonitor?, HPA?, PDB?). All files in one YAML multi-document template.
 - NetworkPolicies default-deny + explicit allowlists; per-tier clauses documented in spec §7 (Group 5 gets the strictest defaults).
-- SealedSecret entries use placeholder format per Plan 2 Task 2 convention: `PLACEHOLDER_<name>_SEALED_KID`.
+- SealedSecret entries use the valid-base64 `PLACEHOLDER+` sentinel (`UExBQ0VIT0xERVIr`, Plan 2 Task 2 convention) — underscore-bearing forms are outside the base64 alphabet and never decrypt.
 - All English documentation and comments per project CLAUDE.md.
 - Commits in English using Conventional Commits.
 - No secrets in any committed file — only encrypted SealedSecret resources ship in Git.
@@ -192,7 +192,7 @@ clusterProfileReplicas:
 
 - [ ] **Step 3: Render and confirm templates parse**
 
-Run: `helm template test charts/genieai-umbrella -n genieai -f /dev/stdin <<<`
+Run: `helm template test charts/genieai-umbrella -n genieai`
 Expected: clean render (no errors); existing Plan 1 + Plan 2 resources still emitted + zero `kind: Deployment` from these entries yet.
 
 (Note: the `--set services.<name>.replicas` formula reads `.Values.services.<name>.replicas` and is applied at template render time. The `clusterProfileReplicas` block above is consumed by the helper in Task 2 — those entries don't render Deployments themselves.)
@@ -259,12 +259,10 @@ arangodb-cluster
 arangodb-single
 {{- end -}}
 {{- end -}}
-{{- end -}}
-{{- end -}}
 ```
 
 - [ ] **Step 2: Inject URLs into each per-service template** (Task 3 file edits):
-- `services/backend.yaml`: `KEYCLOAK_URL=http://keycloak.<ns>:8080/auth`, `ARANGO_URL=http://{{ include "genieai-umbrella.arangoHost" $ }}.<ns>:8529`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector.<ns>:4318` (the OTel operator names the gateway Service after the CR, not `<cr>-collector`).
+- `services/backend.yaml`: `KEYCLOAK_URL=http://keycloak.<ns>:8080/auth`, `ARANGO_URL=http://{{ include "genieai-umbrella.arangoHost" $ }}.<ns>:8529`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://genieai-collector-collector.<ns>:4318` (the OTel operator names the gateway Service `<cr>-collector`).
 - `services/documentRepository.yaml`: `BACKEND_URL=http://backend.<ns>:80`, `CLAMAV_HOST=clamav`, `CLAMAV_PORT=3310`, OTEL endpoint.
 - `services/frontend.yaml`: `VUE_APP_API_URL`, OTEL endpoint.
 
@@ -954,21 +952,21 @@ git commit -m "feat(charts): Group 5 stateless app tier (frontend, documentRepo,
 
 ---
 
-## Task 5: nginx — project image (no stock nginx, no ConfigMap)
+## Task 5: nginx — project image + Kong-leak override ConfigMap
 
 **Files:**
 - Modify: `charts/genieai-umbrella/values.yaml` (nginx image block — already updated in Task 1)
 
 **Interfaces:**
-- Consumes: `services.nginx` values (Task 1).
-- Produces: nothing new — this task DOCUMENTS the decision and removes the old ConfigMap step.
+- Consumes: `services.nginx` values (Task 1); the `nginx-override` ConfigMap from Task 1b Step 5.
+- Produces: verification that both halves of the nginx decision shipped.
 
-**Decision**: the Swarm stack never ran stock nginx — it runs the CI-built `genie-ai-nginx` image whose Dockerfile bakes the full routing config (frontend SPA, `/api/*` → backend, document-repository, Keycloak front/back channels). Rendering a hand-rolled `nginx.conf` ConfigMap would (a) duplicate that config, (b) drift from it, and (c) require volumeMount wiring the factory does not do. Task 1 already points `services.nginx.image` at `registry.example.org/genie-ai-nginx:1.0.0`. Any host/path customization that the image cannot absorb via env lands in Plan 6 (edge config), not in an in-chart ConfigMap.
+**Decision**: the Swarm stack never ran stock nginx — it runs the CI-built `genie-ai-nginx` project image (Task 1 points `services.nginx.image` at `registry.example.org/genie-ai-nginx:1.0.0`). BUT the image's baked upstream routes `/api` to Kong, which this migration REMOVES (wave-6 finding #3; code-review Wave 10 #15): the per-instance `nginx-override` ConfigMap from Task 1b Step 5 (mounted at `/etc/nginx/conf.d/override.conf`) is therefore REQUIRED, not duplication — it re-points `/api`, `/api-docs`, `/uploads`, `/` at the in-cluster Services. Any host/path customization beyond that lands in Plan 6 (edge config), not in additional in-chart ConfigMaps.
 
-- [ ] **Step 1: Confirm no nginx ConfigMap template is created**
+- [ ] **Step 1: Confirm the override ConfigMap template exists (Task 1b Step 5)**
 
-Run: `ls charts/genieai-umbrella/templates/services/`
-Expected: `backend.yaml frontend.yaml documentRepository.yaml nginx.yaml clamav.yaml pdb-bundler.yaml` — NO `nginx-config.yaml`.
+Run: `helm template test charts/genieai-umbrella -n genieai --set services.nginx.enabled=true | grep -c "kind: ConfigMap"`
+Expected: `1` (the `nginx-override` ConfigMap; `0` with `services.nginx.enabled=false`).
 
 - [ ] **Step 2: Confirm values carry the project image**
 
@@ -984,7 +982,7 @@ Expected: 0 errors.
 
 ```bash
 git add charts/genieai-umbrella/values.yaml
-git commit -m "feat(charts): nginx uses genie-ai-nginx project image (baked routing, no ConfigMap)"
+git commit -m "feat(charts): nginx uses genie-ai-nginx project image + Kong-leak override ConfigMap"
 ```
 
 ---
@@ -1041,7 +1039,7 @@ metadata:
     app.kubernetes.io/component: {{ $secretName }}
 spec:
   encryptedData:
-    {{ $envKey }}: PLACEHOLDER_{{ $envKey }}_SEALED_KID
+    {{ $envKey }}: UExBQ0VIT0xERVIr     # PLACEHOLDER+ — RE-SEAL before helm install
 {{- end -}}
 {{- end -}}
 ```
@@ -1241,11 +1239,23 @@ spec:
           {{- end }}
           {{- if .Values.services.nginx.enabled }}
           check nginx 80 /healthz 200
+          {{- end }}
           {{- if .Values.services.clamav.enabled }}
-          # clamd is a binary protocol, not HTTP — TCP probe only
-          timeout 3 bash -c "echo > /dev/tcp/clamav/3310" 2>/dev/null && \
-            echo "PASS: clamav:3310 tcp open" || \
-            { echo "FAIL: clamav:3310 tcp closed"; failures=$((failures+1)); }
+          # clamd is a binary protocol, not HTTP — TCP-open probe only.
+          # The test image (curlimages/curl) ships no bash, so /dev/tcp is
+          # unavailable; probe with curl's telnet:// scheme instead:
+          # connection refused exits 7, DNS failure exits 6; a timeout
+          # (exit 28) or clean close means the TCP port answered.
+          curl_code=$(curl -s -o /dev/null --max-time 3 telnet://clamav:3310 </dev/null; echo $?)
+          case "$curl_code" in
+            6|7)
+              echo "FAIL: clamav:3310 tcp closed (curl exit $curl_code)"
+              failures=$((failures+1))
+              ;;
+            *)
+              echo "PASS: clamav:3310 tcp open (curl exit $curl_code)"
+              ;;
+          esac
           {{- end }}
           if [ "$failures" -gt 0 ]; then
             echo "FAIL: $failures service(s) unreachable"
@@ -1393,7 +1403,7 @@ Sections NOT covered by this plan (deferred):
 - §9 Ingress + Envoy Gateway / cert-manager — Plan 6
 - §14 CI integration + secret-leak lint — Plan 7
 
-**2. Placeholder scan**: only intentional `PLACEHOLDER_<name>_SEALED_KID` markers in sealed-secrets.yaml (one per secret, gated by Plan 7 conftest). No "TBD", "TODO", "implement later".
+**2. Placeholder scan**: only intentional `PLACEHOLDER+` (UExBQ0VIT0xERVIr) sentinels in sealed-secrets.yaml (one per secret, gated by Plan 7 conftest). No "TBD", "TODO", "implement later".
 
 **3. Type consistency**: `genieai-common.labels`, `genieai-common.fullname`, `genieai-common.serviceSelector` invoked consistently across Tasks 3, 4, 5, 7, 8. The `dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "<name>"))` pattern is uniform — same shape as Plans 1, 2.
 

@@ -43,7 +43,7 @@ rules:
   - apiGroups: ["k8s.keycloak.org"]
     resources: ["keycloaks", "keycloakrealmimports", "keycloakbackups"]
     verbs: ["get", "list", "watch"]
-  - apiGroups: ["arango.kube.arangodb.com"]
+  - apiGroups: ["database.arangodb.com"]
     resources: ["arangodeployments", "arangomembers"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["postgresql.cnpg.io"]

@@ -76,8 +76,11 @@ data:
     # Gates the new-user email-verification flow; requires smtp to be set
     # when true (Keycloak rejects verification emails without a server).
     verifyEmail: false
-    # Realm password policy; empty = built-in default rendered in the
-    # realm-import template.
+    # Realm password policy; empty = no `passwordPolicy` field rendered;
+    # Keycloak's built-in default applies (no length/charcase/digit/special
+    # requirements). For a strong policy set the same value as the Swarm
+    # export: `length(12) and upperCase(1) and lowerCase(1) and digits(1)
+    # and specialChars(1)`.
     passwordPolicy: ""
     # Login-page locales; empty = default 9-locale list.
     supportedLocales: []

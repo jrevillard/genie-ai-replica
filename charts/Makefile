@@ -1,4 +1,4 @@
-.PHONY: lint lint-common lint-umbrella template template-umbrella deps test test-umbrella docs
+.PHONY: lint lint-common lint-umbrella template template-umbrella deps test test-umbrella docs-check
 
 # Short chart names — target suffixes must match the rules below.
 CHARTS = common umbrella
@@ -25,5 +25,9 @@ test: test-umbrella
 test-umbrella:
 	ct install $(CT_FLAGS) --charts genieai-umbrella --kube-version 1.33.0
 
-docs:
-	helm-docs --chart-search-root=.
+# Advisory only: the chart READMEs are hand-written (curated usage docs,
+# not helm-docs output). Running plain `helm-docs` would OVERWRITE them
+# with generated stubs — this target only prints what regeneration WOULD
+# change and never writes to the working tree.
+docs-check:
+	helm-docs --chart-search-root=. --dry-run

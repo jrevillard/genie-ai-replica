@@ -1170,8 +1170,9 @@ spec:
           {{- if and (not .Values.ai.remoteGpu.enabled) .Values.ai.services.tei.enabled }}
           check http://tei.${ns}.svc.cluster.local:80/health reachable
           {{- end }}
+          {{- $vals := $.Values | toRawJson | fromJson }}
           {{- range $name := list "chatqna" "retriever" "dataprep" "embedding" "reranker" "translation" "textgen" }}
-          {{- if and $.Values.ai.enabled (dig "ai" "services" $name "enabled" false $) }}
+          {{- if and $.Values.ai.enabled (dig "ai" "services" $name "enabled" false $vals) }}
           check http://{{ $name }}.{{ $.Values.namespace }}.svc.cluster.local:80/health reachable
           {{- end }}
           {{- end }}
@@ -1248,12 +1249,12 @@ dependencyGraph:
     keycloak: [postgres]
 ```
 
-- [ ] **Step 2: Extend the `enabled.json` ConfigMap** (Plan 2 Task 6) with the AI keys — same `dig` pattern:
+- [ ] **Step 2: Extend the `enabled.json` ConfigMap** (Plan 2 Task 6) with the AI keys — same `dig` pattern (including the plain-map `$vals` from `toRawJson|fromJson` and the no-trailing-dash block-scalar rule established there):
 
 ```yaml
-    {{- range $name := list "chatqna" "embedding" "reranker" "retriever" "dataprep" "textgen" "translation" "vllm" "vllmTranslation" "tei" "teiReranker" -}}
-    {{- $_ := set $flat (printf "ai.services.%s.enabled" $name) (dig "ai" "services" $name "enabled" false $) -}}
-    {{- end -}}
+    {{- range $name := list "chatqna" "embedding" "reranker" "retriever" "dataprep" "textgen" "translation" "vllm" "vllmTranslation" "tei" "teiReranker" }}
+    {{- $_ := set $flat (printf "ai.services.%s.enabled" $name) (dig "ai" "services" $name "enabled" false $vals) }}
+    {{- end }}
 ```
 
 AND **rewire the evaluator loop**` directly; with AI nodes under `ai.services.*`, every AI service reads disabled and its edges are never checked — the negative test would silently pass-green). Three changes in the Job's Python:
@@ -1298,10 +1299,10 @@ for tier in ("services", "data"):
 AND render **effective** AI enablement in enabled.json (the per-service dig alone ignores the master switch):
 
 ```yaml
-    {{- range $name := list "chatqna" "embedding" "reranker" "retriever" "dataprep" "textgen" "translation" "vllm" "vllmTranslation" "tei" "teiReranker" -}}
-    {{- $eff := and $.Values.ai.enabled (dig "ai" "services" $name "enabled" false $) -}}
-    {{- $_ := set $flat (printf "ai.services.%s.enabled" $name) $eff -}}
-    {{- end -}}
+    {{- range $name := list "chatqna" "embedding" "reranker" "retriever" "dataprep" "textgen" "translation" "vllm" "vllmTranslation" "tei" "teiReranker" }}
+    {{- $eff := and $.Values.ai.enabled (dig "ai" "services" $name "enabled" false $vals) }}
+    {{- $_ := set $flat (printf "ai.services.%s.enabled" $name) $eff }}
+    {{- end }}
 ```
 
 - [ ] **Step 3: Amend `docs/charts/k8s-native-audit.md`** — add rows:

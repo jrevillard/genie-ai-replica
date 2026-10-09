@@ -715,6 +715,13 @@ services:
       # the head-test query embeds (production chatqna parity). Unset =
       # no prefix, honestly reported by the lab as "unknown (no prefix)".
       - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID:-}
+      # Story 1-8d teaching-loop guardrail — mechanical rejection of suggested
+      # forbidden tags that are self-forbidding (cosine vs the repo's OWN
+      # topic/entity/keyword vectors >= threshold; the 2026-10-09 poisoning
+      # forbade 'lung-cancer', the repo's own entity tag) or near-duplicates
+      # of already-forbidden tags. Defaults live in the service (0.55 / 0.9).
+      - OKF_GUARD_SELF_SUBJECT=${OKF_GUARD_SELF_SUBJECT:-}
+      - OKF_GUARD_DUPLICATE_FORBIDDEN=${OKF_GUARD_DUPLICATE_FORBIDDEN:-}
       - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
       - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
       # Stuck-parsed reaper signals (claim-stamp semantics): a claimed row with

@@ -1386,6 +1386,42 @@ async function routingTest(req, res, next) {
 }
 
 /**
+ * Story 1-8d — GET /api/okf/repos/:repo_id/frontmatter/history.
+ * Bounded save history for the Lab's Revert-tags panel (read scope).
+ */
+async function frontmatterHistory(req, res, next) {
+  try {
+    const repoService = require('../services/repository-service');
+    const result = await repoService.frontmatterHistory(req.params.repo_id, { authz: authzForService(req) });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 1-8d — POST /api/okf/repos/:repo_id/frontmatter/revert  {saved_at}.
+ * Restores the frontmatter shape snapshotted at saved_at. Goes back
+ * through update(), so the revert itself is snapshotted. Admin-scoped.
+ */
+async function revertFrontmatter(req, res, next) {
+  try {
+    const repoService = require('../services/repository-service');
+    const savedAt = req.body && typeof req.body.saved_at === 'string' ? req.body.saved_at : '';
+    if (!savedAt) {
+      const err = new Error('saved_at is required');
+      err.code = 'VALIDATION_ERROR';
+      err.status = 400;
+      throw err;
+    }
+    const result = await repoService.revertFrontmatter(req.params.repo_id, savedAt, actorFrom(req));
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Story 1-8c — POST /api/okf/repos/:repo_id/routing-explain.
  * Explains one query's gate outcome; when it (wrongly) CLAIMS, proposes
  * forbidden tags that would exclude it. Admin-scoped — may burn one LLM
@@ -1507,6 +1543,8 @@ module.exports = {
   rebuildRepoHead,
   routingTest,
   routingExplain,
+  frontmatterHistory,
+  revertFrontmatter,
   generateTestSuite,
   addTestSuiteQueries,  runTestSuite,
   explainTestSuiteFailures,

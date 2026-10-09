@@ -667,13 +667,23 @@ object: {"tags": ["...", "..."]}`;
           .map((t) => t.trim().toLowerCase().replace(/\s+/g, '-'))
           .filter((t) => !(fm.forbidden || []).includes(t))
           .slice(0, 3);
-        suggestion = tags.length
-          ? { tags, source: 'llm', reason: 'suggested forbidden tags for this query\'s subject' }
-          : { tags: [], source: 'none', reason: 'the model proposed no non-overlapping tags — review the query against the declared scope manually' };
+        // Story 1-8d — mechanical guardrail before anything reaches the UI.
+        const guard = await guardSuggestions(repoId, tags, opts);
+        suggestion = guard.accepted.length
+          ? { tags: guard.accepted, rejected: guard.rejected, source: 'llm', reason: 'suggested forbidden tags for this query\'s subject (guardrail-screened)' }
+          : {
+              tags: [],
+              rejected: guard.rejected,
+              source: guard.rejected.length ? 'guardrail' : 'none',
+              reason: guard.rejected.length
+                ? 'every proposal was screened out by the guardrail — the query matches the declared scope'
+                : 'the model proposed no non-overlapping tags — review the query against the declared scope manually'
+            };
       } catch (e) {
         logger.warn('head-test.explain.llm_failed', { repo_id: repoId, error: e.message });
         suggestion = {
           tags: [],
+          rejected: [],
           source: 'none',
           reason: 'the suggestion model is unreachable — no forbidden tag matches this query; consider adding one for its subject'
         };
@@ -683,10 +693,75 @@ object: {"tags": ["...", "..."]}`;
   return { ...result, suggestion };
 }
 
+// Story 1-8d — the MECHANICAL suggestion guardrail. A proposed forbidden
+// tag must not match the repository's own subject: cosine vs ANY topic/
+// entity/keyword vector at/above GUARD_SELF_SUBJECT rejects it. This exists
+// because prompt-only constraints failed in production: the 3-cycle
+// poisoning (2026-10-09) applied 'lung-cancer' — the repo's OWN entity tag
+// — and positives collapsed 7/8 -> 2/8. Near-duplicates of already-forbidden
+// tags are rejected too (nothing new to learn).
+const GUARD_SELF_SUBJECT = parseFloat(process.env.OKF_GUARD_SELF_SUBJECT || '0.55');
+const GUARD_DUPLICATE_FORBIDDEN = parseFloat(process.env.OKF_GUARD_DUPLICATE_FORBIDDEN || '0.9');
+
+/**
+ * Screen candidate forbidden tags against the repo's own head vectors.
+ * Returns {accepted: [tag], rejected: [{tag, reason}]} — accepted entries
+ * are still suggestions; the curator confirms via the chip flow.
+ */
+async function guardSuggestions(repoId, candidates, opts = {}) {
+  const list = (Array.isArray(candidates) ? candidates : []).filter((t) => typeof t === 'string' && t.trim());
+  if (!list.length) return { accepted: [], rejected: [] };
+  const repositoryService = require('./repository-service');
+  const repo = await repositoryService.getById(repoId, { authz: opts.authz });
+  const head = repo && repo.head;
+  const ownVectors = [];
+  if (head && head.per_field) {
+    for (const f of POSITIVE_FIELDS) {
+      if (Array.isArray(head.per_field[f])) ownVectors.push(head.per_field[f]);
+    }
+  }
+  const existingForbidden =
+    head && head.per_field && Array.isArray(head.per_field.forbidden_vectors) ? head.per_field.forbidden_vectors : [];
+  const vecs = await frontmatterService.teiEmbed(list);
+  const accepted = [];
+  const rejected = [];
+  list.forEach((tag, i) => {
+    const v = vecs && vecs[i];
+    if (!Array.isArray(v)) {
+      rejected.push({ tag, reason: 'embedding failed — cannot verify against the repository scope' });
+      return;
+    }
+    let worst = null;
+    for (const ov of ownVectors) {
+      const c = cosine(v, ov);
+      if (c !== null && (!worst || c > worst.cosine)) worst = { cosine: c };
+    }
+    if (worst && worst.cosine >= GUARD_SELF_SUBJECT) {
+      rejected.push({
+        tag,
+        reason: `too close to the repository's own subject (similarity ${worst.cosine.toFixed(2)} >= ${GUARD_SELF_SUBJECT})`
+      });
+      return;
+    }
+    let dup = null;
+    for (const fv of existingForbidden) {
+      const c = fv && Array.isArray(fv.vector) ? cosine(v, fv.vector) : null;
+      if (c !== null && (dup === null || c > dup)) dup = c;
+    }
+    if (dup !== null && dup >= GUARD_DUPLICATE_FORBIDDEN) {
+      rejected.push({ tag, reason: 'already covered by an existing forbidden tag' });
+      return;
+    }
+    accepted.push(tag);
+  });
+  return { accepted, rejected };
+}
+
 module.exports = {
   rebuildHead,
   routingTest,
   explainRouting,
+  guardSuggestions,
   // test surface
   _internals: {
     cosine,
@@ -695,6 +770,8 @@ module.exports = {
     queryInstructionFor,
     normalizeFormula,
     POSITIVE_FIELDS,
-    DEFAULT_WEIGHTS
+    DEFAULT_WEIGHTS,
+    GUARD_SELF_SUBJECT,
+    GUARD_DUPLICATE_FORBIDDEN
   }
 };

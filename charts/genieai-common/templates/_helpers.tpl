@@ -57,6 +57,7 @@ helm.sh/chart: {{ include "genieai-common.chart" . }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/component: {{ .Values.component | default "umbrella" | quote }}
 {{ include "genieai-common.componentContext" . }}
 genieai.io/managed-by: helm
 {{- end -}}

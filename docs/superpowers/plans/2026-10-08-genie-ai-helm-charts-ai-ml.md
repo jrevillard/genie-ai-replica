@@ -645,7 +645,7 @@ spec:
             - { name: RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED, value: "5" }
             - { name: RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD, value: "0.7" }
             # --- Auth + identity ---
-            - { name: KEYCLOAK_URL, value: "http://keycloak.{{ .Values.namespace }}.svc.cluster.local:8080/auth" }
+            - { name: KEYCLOAK_URL, value: "http://keycloak-service.{{ .Values.namespace }}.svc.cluster.local:8080/auth" }
             - { name: KC_REALM, value: genie }
             - { name: KC_CLIENT_ID, value: genie-app }
             - { name: OPEA_SSL_SKIP_VERIFY, value: "0" }
@@ -729,7 +729,7 @@ spec:
 envFrom `vllm-api-key`.
 
 **`dataprep.yaml`** (targetPort 5000; compose 1175-1215):
-`DATAPREP_COMPONENT_NAME=GENIE_DATAPREP_ARANGODB`, `VLLM_MODEL_ID=<llmId>`, `VLLM_ENDPOINT`/`TEI_EMBEDDING_ENDPOINT` (re-pointed + ternary), `GUARDRAIL_URL=http://guardrail.<ns>:80/v1/guardrails` (re-pointed), arango block as retriever (URL/DB/GRAPH + secretKeyRef password), `DOCUMENT_REPOSITORY_URL`/`BACKEND_SERVICE_URL` (re-pointed :80), `KEYCLOAK_URL=http://keycloak.<ns>:8080/auth`, `KC_REALM=genie`, `KC_DATAPREP_CLIENT_ID=dataprep-service-client`, `LABELING_STRATEGY=llm`, `EMBEDDING_LABEL_THRESHOLD=0.75`, `BM25_LABEL_THRESHOLD=2.00`, `CONTENT_EXTRACTION_METHOD=docling`, `DOCLING_DEVICE=cuda|cpu` (from `onGpu`), `DOCLING_ENDPOINT` (Task 8 ternary; empty = in-process), `DOCLING_ENDPOINT_TIMEOUT=<ai.remoteGpu.doclingTimeout>` (M4 fix — wire it), `DATAPREP_MAX_CONCURRENT_BATCHES=20`, `DATAPREP_LLM_LABEL_BATCH_SIZE=4`, chunk sizes (values-exposed `ai.dataprepConfig.chunkSize*`: PDF 500 / DOCX 1000 / XLSX 1500 / PPTX 500 / HTML 500 / TXT 500 / MD 500), `DATAPREP_CHUNK_OVERLAP=50`, `LABEL_SELECTOR_SYSTEM_PROMPT=""` (two-tier prompt contract), `CONTEXTUAL_RETRIEVAL_ENABLED=true`, `DATAPREP_CONTEXTUAL_MODEL=""`, `DATAPREP_CONTEXTUAL_DOC_BUDGET=6000` (+ `DATAPREP_CONTEXTUAL_MAX_TOKENS=512` — the MR !218 fix); envFrom `vllm-api-key` + `kc-dataprep-client-secret`; emptyDir `/tmp` scratch.
+`DATAPREP_COMPONENT_NAME=GENIE_DATAPREP_ARANGODB`, `VLLM_MODEL_ID=<llmId>`, `VLLM_ENDPOINT`/`TEI_EMBEDDING_ENDPOINT` (re-pointed + ternary), `GUARDRAIL_URL=http://guardrail.<ns>:80/v1/guardrails` (re-pointed), arango block as retriever (URL/DB/GRAPH + secretKeyRef password), `DOCUMENT_REPOSITORY_URL`/`BACKEND_SERVICE_URL` (re-pointed :80), `KEYCLOAK_URL=http://keycloak-service.<ns>:8080/auth`, `KC_REALM=genie`, `KC_DATAPREP_CLIENT_ID=dataprep-service-client`, `LABELING_STRATEGY=llm`, `EMBEDDING_LABEL_THRESHOLD=0.75`, `BM25_LABEL_THRESHOLD=2.00`, `CONTENT_EXTRACTION_METHOD=docling`, `DOCLING_DEVICE=cuda|cpu` (from `onGpu`), `DOCLING_ENDPOINT` (Task 8 ternary; empty = in-process), `DOCLING_ENDPOINT_TIMEOUT=<ai.remoteGpu.doclingTimeout>` (M4 fix — wire it), `DATAPREP_MAX_CONCURRENT_BATCHES=20`, `DATAPREP_LLM_LABEL_BATCH_SIZE=4`, chunk sizes (values-exposed `ai.dataprepConfig.chunkSize*`: PDF 500 / DOCX 1000 / XLSX 1500 / PPTX 500 / HTML 500 / TXT 500 / MD 500), `DATAPREP_CHUNK_OVERLAP=50`, `LABEL_SELECTOR_SYSTEM_PROMPT=""` (two-tier prompt contract), `CONTEXTUAL_RETRIEVAL_ENABLED=true`, `DATAPREP_CONTEXTUAL_MODEL=""`, `DATAPREP_CONTEXTUAL_DOC_BUDGET=6000` (+ `DATAPREP_CONTEXTUAL_MAX_TOKENS=512` — the MR !218 fix); envFrom `vllm-api-key` + `kc-dataprep-client-secret`; emptyDir `/tmp` scratch.
 
 **`textgen.yaml`** (targetPort 9000; compose 868-885):
 `LLM_ENDPOINT=http://vllm.<ns>:80` (+ternary), `LLM_MODEL_ID=<llmId>`; envFrom `vllm-api-key`.

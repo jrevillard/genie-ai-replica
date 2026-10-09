@@ -18,10 +18,10 @@ rules:
   - apiGroups: ["bitnami.com"]
     resources: ["sealedsecrets"]
     verbs: ["get", "list", "watch"]
-  # Events for the clusterprofile-detect hook's Event write + Job status
+  # Events for the clusterprofile-detect hook's Event create
   - apiGroups: [""]
     resources: ["events"]
-    verbs: ["create", "patch"]
+    verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

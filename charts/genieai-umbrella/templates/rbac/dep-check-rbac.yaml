@@ -11,13 +11,17 @@ metadata:
     "helm.sh/hook-weight": "-30"
     "helm.sh/hook-delete-policy": before-hook-creation
 rules:
-  # Namespaced reads the Jobs need — Secrets stay namespace-scoped.
+  # Exactly what the hook Jobs + test pods consume — re-add verbs/resources
+  # together with the consumer that needs them, never speculatively.
+  # Secrets: the test-data-deps pod's materialization check (get only).
   - apiGroups: [""]
-    resources: ["configmaps", "secrets"]
-    verbs: ["get", "list", "watch"]
+    resources: ["secrets"]
+    verbs: ["get"]
+  # SealedSecrets: the pre-upgrade drift hook lists the release's
+  # SealedSecrets, then gets each one's Synced condition.
   - apiGroups: ["bitnami.com"]
     resources: ["sealedsecrets"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list"]
   # Events for the clusterprofile-detect hook's Event create
   - apiGroups: [""]
     resources: ["events"]
@@ -35,17 +39,8 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation
 rules:
   # Cluster-scoped lookups only — NO Secrets, NO ConfigMaps here.
+  # The clusterprofile-detect hook reads the namespace label (get);
+  # no hook queries CRDs today.
   - apiGroups: [""]
     resources: ["namespaces"]
-    verbs: ["get", "list", "watch"]
-  # Read-only access to chart-managed CRDs (cross-namespace visibility is
-  # inherent to ClusterRole but exposes no secret material).
-  - apiGroups: ["k8s.keycloak.org"]
-    resources: ["keycloaks", "keycloakrealmimports", "keycloakbackups"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["database.arangodb.com"]
-    resources: ["arangodeployments", "arangomembers"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["postgresql.cnpg.io"]
-    resources: ["clusters", "poolers"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get"]

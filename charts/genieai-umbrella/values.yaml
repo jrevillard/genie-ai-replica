@@ -53,6 +53,13 @@ data:
     # Gates the new-user email-verification flow; requires smtp to be set
     # when true (Keycloak rejects verification emails without a server).
     verifyEmail: false
+    # Realm password policy; empty = built-in default rendered in the
+    # realm-import template.
+    passwordPolicy: ""
+    # Login-page locales; empty = default 9-locale list.
+    supportedLocales: []
+    # Access-token TTL in seconds (compose parity).
+    accessTokenLifespan: 300
     # Confidential-client secrets rendered into the realm import. The
     # KeycloakRealmImport CR cannot read Kubernetes Secrets — operators
     # supply the real values at install time (values override, never
@@ -63,6 +70,10 @@ data:
       proxyClient: change-me-proxy-client
       dataprep: change-me-dataprep-client
       grafana: change-me-grafana-client
+    # Fail the render when any clientSecrets value is still a change-me
+    # placeholder; enable in prod overrides (default keeps dev/kind
+    # renders working).
+    failOnPlaceholderSecrets: false
     # SMTP for email verification — leave null to disable (no smtpServer
     # block renders); set all fields in the environment override when used.
     smtp: null

@@ -379,3 +379,7 @@ render-blocking and functional-dead paths are closed.
 ## Execution Wave E3 — /code-review pass 3 (fixes in flight)
 
 11 findings. Notable: realm.enabled string-corruption (3rd occurrence of the dash-trim comment class — systemic; wave 3 converts all remaining block comments in that file), uninstall blast radius (release-owned Namespace cascades ALL PVCs — runbook rewritten honestly), ArgoCD example can never sync from repo path (documented as target-state illustration), fullname 63-char budget (50→40), agents 2Gi, publicKeyFingerprint deleted (dead key), componentContext helper dedup (12+ sites).
+
+## Execution Wave E4 — /code-review pass 4 (fixes in flight)
+
+14 findings. Fixed (6): failOnPlaceholderSecrets default inverted to true (prod-safety foot-gun); tautological test replaced with PSA-label presence check; Chart.yaml duplicate dependencies block removed; drift hook shell loop hardened to while-read (future-fragile word-splitting); namespace.yaml warning comment guarding against helm.sh/hook annotation creep; values.yaml comment documenting clusterProfile staging IGNORES data.arangodb.mode. Deferred/ridden: dep-check services skip (services tier lands Plan 3), PSA restricted vs operator pods (live-validation), Arango storageClass existence (live-validation), componentContext double deepCopy (cosmetic), genie-admin no creds (kcadm out-of-band documented), namespace values vs .Release.Namespace inconsistency (already fail-gated), namespace template hook annotation hazard (comment now in place), duplicate Chart.yaml deps (fixed).

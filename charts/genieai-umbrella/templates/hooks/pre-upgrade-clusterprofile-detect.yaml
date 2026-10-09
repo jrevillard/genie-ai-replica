@@ -5,7 +5,6 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clusterprofile-detect") | nindent 4 }}
-    app.kubernetes.io/component: clusterprofile-detect
   annotations:
     # pre-upgrade ONLY: the Namespace carrying genieai.io/cluster-profile is
     # a regular resource, and regular resources apply after every pre-install
@@ -67,9 +66,17 @@ spec:
             - |
               set -eu
               mkdir -p /tools/bin
-              curl -fsSL https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl -o /tools/bin/kubectl
+              # `kubeletToolsMirror` lets air-gapped installs route the
+              # kubectl/jq release downloads through an internal mirror.
+              # Empty (default) keeps the original upstream URLs;
+              # operators set `global.kubeletToolsMirror` to a single
+              # internal URL that serves both `/release/...` and
+              # `/jq/releases/...` (mirror path convention).
+              BASE="{{ .Values.global.kubeletToolsMirror | default "https://dl.k8s.io" }}"
+              BASE_JQ="{{ .Values.global.kubeletToolsMirror | default "https://github.com/jqlang" }}"
+              curl -fsSL "$BASE/release/v1.33.0/bin/linux/amd64/kubectl" -o /tools/bin/kubectl
               chmod +x /tools/bin/kubectl
-              curl -fsSL https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64 -o /tools/bin/jq
+              curl -fsSL "$BASE_JQ/jq/releases/download/jq-1.7.1/jq-linux-amd64" -o /tools/bin/jq
               chmod +x /tools/bin/jq
       containers:
         - name: detect
@@ -117,10 +124,18 @@ spec:
               rendered="$RENDERED_PROFILE"
               # The label is applied by a regular Namespace resource, which
               # can lag hook start; poll a bounded 3 attempts, 2s apart.
+              # `read_failed` tracks only the current iteration's success:
+              # a successful-but-empty kubectl get clears the flag, so a
+              # later attempt's transient error is not muddled with an
+              # earlier one's. The final-branch decides between
+              # "read failed" and "label absent" based on the post-loop
+              # values, which lets a noisy cluster's stuck attempt be
+              # distinguished from a fresh namespace without the label.
               detected=""
               read_failed=0
               for attempt in 1 2 3; do
                 if profile=$(kubectl get ns "$ns" -o jsonpath='{.metadata.labels.genieai\.io/cluster-profile}' 2>/dev/null); then
+                  read_failed=0
                   if [ -n "$profile" ]; then
                     detected="$profile"
                     break

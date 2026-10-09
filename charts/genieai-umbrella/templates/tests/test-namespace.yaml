@@ -7,7 +7,6 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" $componentValues | nindent 4 }}
-    app.kubernetes.io/component: test
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation
@@ -61,7 +60,13 @@ spec:
         - |
           set -eu
           mkdir -p /tools/bin
-          curl -fsSL https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl -o /tools/bin/kubectl
+          # `kubeletToolsMirror` lets air-gapped installs route the
+          # kubectl release download through an internal mirror.
+          # Empty (default) keeps the original upstream URL;
+          # operators set `global.kubeletToolsMirror` to a single
+          # internal URL that serves `/release/...`.
+          BASE="{{ .Values.global.kubeletToolsMirror | default "https://dl.k8s.io" }}"
+          curl -fsSL "$BASE/release/v1.33.0/bin/linux/amd64/kubectl" -o /tools/bin/kubectl
           chmod +x /tools/bin/kubectl
   containers:
     - name: test
@@ -128,7 +133,6 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test") | nindent 4 }}
-    app.kubernetes.io/component: test
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation
@@ -176,7 +180,13 @@ spec:
         - |
           set -eu
           mkdir -p /tools/bin
-          curl -fsSL https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl -o /tools/bin/kubectl
+          # `kubeletToolsMirror` lets air-gapped installs route the
+          # kubectl release download through an internal mirror.
+          # Empty (default) keeps the original upstream URL;
+          # operators set `global.kubeletToolsMirror` to a single
+          # internal URL that serves `/release/...`.
+          BASE="{{ .Values.global.kubeletToolsMirror | default "https://dl.k8s.io" }}"
+          curl -fsSL "$BASE/release/v1.33.0/bin/linux/amd64/kubectl" -o /tools/bin/kubectl
           chmod +x /tools/bin/kubectl
   containers:
     - name: t

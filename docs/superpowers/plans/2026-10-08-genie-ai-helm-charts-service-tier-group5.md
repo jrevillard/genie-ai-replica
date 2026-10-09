@@ -98,6 +98,7 @@ services:
       - name: keycloak-client-secret
       - name: huggingface-hub-token
       - name: email-password          # EMAIL_PASSWORD via envFrom (SMTP)
+      - name: translation-cache-password   # TRANSLATION_CACHE_PASSWORD (redis AUTH)
     pvc: null
     probes:
       readiness: { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 10, periodSeconds: 10 }
@@ -1044,24 +1045,121 @@ Swarm ground truth: compose service `redis-cache` (docker-compose.yaml:422-442) 
     image: { repository: redis, tag: "7-alpine" }
     port: 6379
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 250m, memory: 512Mi } }
-    env: []
-    secrets: ["translation-cache-password"]   # REDISCLI_AUTH via envFrom
     pvc:
       enabled: true                          # appendonly persistence
       storageSize: 5Gi
-    probes:
-      readiness: { exec: { command: ["sh", "-c", "redis-cli ping"] }, initialDelaySeconds: 5, periodSeconds: 10 }
-      liveness:  { exec: { command: ["sh", "-c", "redis-cli ping"] }, initialDelaySeconds: 30, periodSeconds: 30 }
     podDisruptionBudget: null
     serviceMonitor: false
 ```
 
 - [ ] **Step 2: Write `charts/genieai-umbrella/templates/services/redis-cache.yaml`**
 
+The Deployment is hand-written, NOT factory-emitted: the factory has no
+`args`/volume support, and this service needs all three (redis-server
+flags, the AOF data mount) — a factory call would silently drop them and
+boot a default, unauthenticated redis.
+
 ```yaml
 {{- if .Values.services.redisCache.enabled -}}
-{{- $ctx := dict "name" "redisCache" "component" "redis-cache" "Values" .Values "Chart" .Chart "Release" .Release -}}
-{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+{{- $svc := .Values.services.redisCache -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "redis-cache"))) | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicas }}
+  selector:
+    matchLabels:
+      genieai.io/component: redis-cache
+  template:
+    metadata:
+      labels:
+        genieai.io/component: redis-cache
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999                     # redis:7-alpine `redis` account
+        runAsGroup: 999
+        fsGroup: 999                       # /data writable for AOF
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis-cache
+          image: "{{ $svc.image.repository }}:{{ $svc.image.tag }}"
+          # Compose parity (docker-compose.yaml:441): appendonly +
+          # noeviction + requirepass. $(VAR) in args expands against the
+          # container env below (K8s native expansion).
+          args:
+            - redis-server
+            - --appendonly
+            - "yes"
+            - --maxmemory-policy
+            - noeviction
+            - --requirepass
+            - $(TRANSLATION_CACHE_PASSWORD)
+          env:
+            # redis-cli (health probes below) reads REDISCLI_AUTH
+            # automatically — same mechanism compose uses.
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: translation-cache-password
+                  key: TRANSLATION_CACHE_PASSWORD
+            - name: TRANSLATION_CACHE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: translation-cache-password
+                  key: TRANSLATION_CACHE_PASSWORD
+          ports:
+            - name: redis
+              containerPort: {{ $svc.port }}
+          readinessProbe:
+            exec: { command: ["sh", "-c", "redis-cli ping"] }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec: { command: ["sh", "-c", "redis-cli ping"] }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: { drop: ["ALL"] }}
+      volumes:
+        - name: data
+        {{- if $svc.pvc.enabled }}
+          persistentVolumeClaim:
+            claimName: redis-cache-data
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+{{- if $svc.pvc.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-cache-data
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "redis-cache"))) | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ $svc.pvc.storageSize }}
+  {{- with .Values.pluggable.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -1075,7 +1173,7 @@ spec:
     - name: redis
       port: 6379
   selector:
-    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "redis-cache"))) | nindent 4 }}
+    genieai.io/component: redis-cache
 ---
 # Ingress from backend ONLY (the sole consumer); egress DNS only.
 apiVersion: networking.k8s.io/v1
@@ -1110,9 +1208,6 @@ spec:
           port: 53
 {{- end -}}
 ```
-
-The container args mirror compose: `--appendonly yes --maxmemory-policy noeviction` plus
-`--requirepass $(TRANSLATION_CACHE_PASSWORD)` (env var arrives via envFrom).
 
 - [ ] **Step 3: Render + lint + commit**
 

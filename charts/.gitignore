@@ -2,13 +2,11 @@
 # file's directory).
 #
 # Each chart carries a `charts/*.tgz` subdir (vendored dep tarballs generated
-# by `helm dependency update`, run via `make deps`) and a `Chart.lock`
-# (generated lockfile of dep versions). Both regenerate on every dep change
-# and bloat PR diffs without adding value to the chart's source.
+# by `helm dependency update`, run via `make deps`). Tarballs regenerate on
+# every dep change and bloat PR diffs. Chart.lock, by contrast, IS tracked:
+# it pins the dependency versions for reproducible builds (the lock tracks
+# whatever dependencies exist in Chart.yaml).
 
 # Vendored dep tarballs (per chart)
 */charts/
 */*.tgz
-
-# Generated dep lockfiles
-*/Chart.lock

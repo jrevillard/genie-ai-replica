@@ -43,11 +43,13 @@ The chart's pre-install/pre-upgrade hooks run in ascending `helm.sh/hook-weight`
 order (RBAC first — regular resources land only AFTER all hooks, so everything a
 hook needs must itself be a lower-weight hook):
 
-1. `-30` — ServiceAccount + Role + RoleBinding (namespaced) + ClusterRole + ClusterRoleBinding (cluster-scoped) — all hook-owned
-2. `-20` — dep-graph ConfigMap (dependency-graph.json + enabled.json)
-3. `-10` — cluster-profile drift detection (pre-upgrade only; emits a Warning Event on namespace-label/render mismatch)
-4. `-5`  — dependency graph validation (services/data require their deps)
-5. `0` on pre-upgrade only — SealedSecret drift validation (status.conditions[type=Synced].status=False sweep)
+1. `-30` — ServiceAccount (hook-owned, before-hook-creation,hook-succeeded)
+2. `-30` — Role + RoleBinding (namespaced, hook-owned, before-hook-creation,hook-succeeded)
+3. REGULAR (after all hooks) — ClusterRole + ClusterRoleBinding (cluster-scoped, regular resource; the helm-test pod's `kubectl get ns` call relies on these — they must exist AFTER install/upgrade; the dep-check Job runs BEFORE they appear but the Job only needs the namespaced Role)
+4. `-20` — dep-graph ConfigMap (dependency-graph.json + enabled.json)
+5. `-10` — cluster-profile drift detection (pre-upgrade only; emits a Warning Event on namespace-label/render mismatch)
+6. `-5`  — dependency graph validation (services/data require their deps)
+7. `0` on pre-upgrade only — SealedSecret drift validation (status.conditions[type=Synced].status=False sweep)
 
 ## Tests
 

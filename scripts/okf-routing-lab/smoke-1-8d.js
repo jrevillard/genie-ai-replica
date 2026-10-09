@@ -130,12 +130,18 @@ async function generateSuite(body) {
   const start = j(await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite`, { token: USER_TOKEN, json: body }));
   const key = start.suite_key;
   if (!key || start.status !== 'generating') return start;
+  // 1-8f2 contract: an in-flight key answers 200 {suite_key, status:'generating'}
+  // (never a 404 — the minted-key envelope is the poll's keep-waiting signal).
+  const first = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`, { token: USER_TOKEN }));
+  if (!(first && first.suite_key === key && first.status === 'generating')) {
+    console.log(`  [WARN] generating-key GET did not return the generating envelope: ${JSON.stringify(first).slice(0, 120)}`);
+  }
   for (let i = 0; i < 60; i++) {
     // eslint-disable-next-line no-await-in-loop
     await new Promise((r) => setTimeout(r, 2500));
     // eslint-disable-next-line no-await-in-loop
     const got = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`, { token: USER_TOKEN }));
-    if (got.suite_key) return got;
+    if (got.suite_key && got.status !== 'generating') return got;
   }
   return { suite_key: key, status: 'timeout' };
 }

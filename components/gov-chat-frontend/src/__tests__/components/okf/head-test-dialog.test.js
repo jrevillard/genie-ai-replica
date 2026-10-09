@@ -1058,3 +1058,19 @@ it('1-8f2: generation is 202+poll — the UI polls and adopts the suite when it 
   expect(w.vm.busy).toBeNull();
   expect(w.vm.error).toBe('');
 });
+
+it('1-8f2: pollForSuite keeps waiting on the {status:"generating"} envelope and adopts the real suite', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  const landed = { suite_key: 's-x', payload: { positive: [], negative: [] } };
+  const results = [
+    { ok: true, result: { suite_key: 's-x', status: 'generating' } }, // poll 1: keep waiting
+    { ok: true, result: landed } // poll 2: adopt
+  ];
+  dispatch.mockImplementation((action) => {
+    if (action === 'okf/headSuiteGet') return Promise.resolve(results.shift() || { ok: true, result: landed });
+    return Promise.resolve({ ok: true });
+  });
+  const suite = await w.vm.pollForSuite('s-x');
+  expect(suite).toBe(landed); // NOT the generating envelope
+});

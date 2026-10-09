@@ -54,23 +54,3 @@ Note: must NOT include version (selector is immutable).
 app.kubernetes.io/name: {{ include "genieai-common.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
-
-{{/*
-Component label — emits a `genieai.io/component: <name>` label for any resource.
-The receiving component name comes from `.Values.component` (overridden per
-template).
-*/}}
-{{- define "genieai-common.componentLabel" -}}
-genieai.io/component: {{ .Values.component | default "umbrella" | quote }}
-{{- end -}}
-
-{{/*
-Service selector — emits the right selector labels for service discovery.
-Differs from `selectorLabels` by including the component-only label so that
-network policies can target one app.
-*/}}
-{{- define "genieai-common.serviceSelector" -}}
-app.kubernetes.io/name: {{ include "genieai-common.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
-genieai.io/component: {{ .Values.component | default "umbrella" | quote }}
-{{- end -}}

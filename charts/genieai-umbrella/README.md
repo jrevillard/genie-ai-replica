@@ -58,6 +58,15 @@ make test         # ct install + helm test against kind
 helm test <release> -n genieai
 ```
 
+The two helm-test pods (`<release>-genieai-umbrella-test-namespace`,
+`<release>-genieai-umbrella-test-data-deps`) and the clusterprofile-detect /
+sealed-secret-validate hook Jobs all need `kubectl` (and the drift validator
+also needs `jq`). The chart no longer pins an image that ships those binaries
+preinstalled (the `registry.k8s.io/kubectl` image is distroless and the
+`bitnami/kubectl` version tags were purged); instead each Pod runs an init
+container that downloads the static binaries into a shared `tools` emptyDir
+and the main container (alpine) picks them up via the PATH env.
+
 ## Secrets backend
 
 Default secrets backend `sealedSecrets` (controller = cluster bootstrap

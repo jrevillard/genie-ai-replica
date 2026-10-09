@@ -23,13 +23,15 @@
 # (finalizers, preSync hooks, or disabling automated prune on this
 # Application); the Helm-hook gate only protects plain `helm uninstall`.
 #
-# For el-salvador (or other high-customization envs), change:
-#   * targetRevision: main  ->  release/<env>
-#   * path: deploy/environments/dev/  ->  deploy/environments/<env>/
-#   * namespace: genieai  ->  genieai-<env>
-#
-# The per-env path (deploy/environments/<env>/) hosts the Kustomize overlay
-# that composes the umbrella chart with that env's values-override.yaml.
+# Per-env overlays under deploy/environments/<env>/ land with the
+# environment-tier work — until then this example installs the umbrella
+# chart DIRECTLY from its repo path (ArgoCD auto-detects the Helm chart via
+# the Chart.yaml in the path; no valueFiles are set, so chart defaults
+# apply). When the overlays exist, point path at
+# deploy/environments/<env>/ (the Kustomize overlay composing the chart
+# with that env's values), and for el-salvador-style envs also change
+# targetRevision: HEAD -> release/<env> and namespace: genieai ->
+# genieai-<env>.
 ---
 # - repoURL uses the scp-like SSH form since GitLab requires auth; the ssh://
 #   form needs an explicit numeric port (ssh://git@host:22/un/...) — the
@@ -43,8 +45,9 @@ spec:
   project: genieai
   source:
     repoURL: git@opensource.unicc.org:un/itu/genie-ai.git
-    targetRevision: main    # use release/el-salvador for the el-salvador env
-    path: deploy/environments/dev
+    targetRevision: HEAD
+    # The chart itself, not a per-env overlay — see the comment block above.
+    path: charts/genieai-umbrella
   destination:
     server: https://kubernetes.default.svc
     namespace: genieai

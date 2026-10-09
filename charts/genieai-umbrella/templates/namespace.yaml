@@ -1,8 +1,10 @@
 {{- /* REGULAR resource — do NOT add any helm.sh/hook:* annotation; a future
        Hook annotation would implicitly enable before-hook-creation and delete
        this Namespace before every reinstall (Helm 4). */ -}}
-{{- /* Component label context — genieai-common.labels resolves `.component`
-       in the helper (single deepCopy site, see genieai-common _helpers.tpl). */ -}}
+{{- /* Component label context — pass the per-template component name
+       ("namespace" here) into the labels helper so both
+       app.kubernetes.io/component and genieai.io/component pick it up
+       from a single .component lookup. */ -}}
 {{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" .Values "component" "namespace" -}}
 {{- /* The release namespace is authoritative: resources install where the
        release lives, and a values-side namespace that diverges from it

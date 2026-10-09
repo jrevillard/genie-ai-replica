@@ -9,7 +9,7 @@ metadata:
   name: keycloak-db
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "data-postgres"))) | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "data-postgres") | nindent 4 }}
     genieai.io/data-tier: postgresql
     genieai.io/serves: keycloak
 spec:
@@ -49,7 +49,7 @@ spec:
   serviceAccountTemplate:
     metadata:
       labels:
-        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "data-postgres"))) | nindent 8 }}
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "data-postgres") | nindent 8 }}
   # NOTE: no `monitoring.enablePodMonitor` — that emits a Prometheus-operator
   # ServiceMonitor and no Prometheus operator is installed in this stack.
   # Metrics are scraped via VMServiceScrape.

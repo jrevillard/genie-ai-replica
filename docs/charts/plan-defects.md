@@ -263,6 +263,26 @@ clean (helm 4.3.0 + yamale + ct empirical checks by the reviewer).
 | 14 | redis-cache (Group 2, translation cache) + TRANSLATION_CACHE_PASSWORD secret owned by NO plan; backend env block dropped; spec §7 wrongly claimed the service absent from Swarm | Plan 3 Task 4c authors Deployment/Service/NP/values/dep-edge; SealedSecret added (count 7→8); backend env block restored; spec §7 sentence + §8 owner corrected |
 | 15 | TLS secretName wiring desync: Gateway honored `ingress.tls.secretName`, Certificate CR always minted `<host>-tls` (printf\|default dead) | Shared `genieai-umbrella.tlsSecretName` helper used by both; Certificate suppressed entirely when secretName set; pre-baked-path render gate added |
 
+## Wave 18 — `/code-review` xhigh round 9 (final gate; loop closed)
+
+10 findings — 5 introduced by Wave 17 itself (redis-cache Task 4c), 5
+residuals. Loop closed per convergence decision: shipped chart code clean
+for 5 consecutive rounds; remaining review value is below execution-time
+discovery.
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| 1 | redis-cache values `secrets:` used string list; factory derefs `.name` per entry → render error | Moot after #4 (factory no longer used); values entry slimmed accordingly |
+| 2 | PII smoke + charts:integration installs omitted `services.redisCache.enabled=false` → CreateContainerConfigError under --wait | Flag added to both installs |
+| 3 | env-port sweep allowlist re-broken by TRANSLATION_CACHE_PORT=6379 (recurrence of W17#12) | Root fix: sweep scoped to `ai-*` component Deployments (the gate's stated purpose); allowlists back to {80,9090} |
+| 4 | redis-cache runtime config (requirepass/appendonly/noeviction, REDISCLI_AUTH, AOF PVC) existed only in prose — factory has no args/volumes; booted default unauthenticated redis | Task 4c Deployment hand-written: args with `$(TRANSLATION_CACHE_PASSWORD)` expansion, secretKeyRef envs, exec probes (REDISCLI_AUTH), PVC/emptyDir, PSA-restricted contexts |
+| 5 | Backend never wired to translation-cache-password envFrom (env block referenced it) | `- name: translation-cache-password` added to services.backend.secrets |
+| 6 | Collector placeholders written bare `${VAR}` — deprecated; source config uses `${env:VAR}` scheme | `${env:GENIEAI_NAMESPACE}` everywhere + Step 5 gate updated |
+| 7 | genie-admin lost the 18 realm-management clientRoles (composite `admin` covers 3) → admin-console 403s | Full block restored verbatim from export; gate asserts count == 18 |
+| 8 | `verifyEmail` omitted while smtpServer was wired — verification flow never fires | Realm key + `data.keycloak.verifyEmail` values key (default false); gate asserts presence |
+| 9 | PII marker fallback `$(... \|\| echo)` dead (pipeline exit = tr's 0) → deterministic marker → false green on stale rows | Real `command -v uuidgen` branch with /dev/urandom fallback |
+| 10 | Public-origin derivation repeated 12+× across realm clients | Single `$origin` variable at realm top; all clients reference it |
+
 # Plan Defect Ledger — Helm Migration Docs
 
 Tracks every finding from the adversarial review rounds against the spec +

@@ -2,6 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> ⚠️ **SCOPE AMENDMENT (code-review Wave 10 #12):** the header below is
+> authoritative — **`dev` + `prod` overlays ONLY**. Any task body, file list,
+> GitOps example, commit-message text, or Plan Stats line still mentioning
+> `staging` or `sovereign` overlays is stale; do not create those directories.
+> The uninstall gate's ONLY switch is the release-namespace annotation
+> `genieai.io/allow-destructive-uninstall` (see the F9 note in Task 1 Step 2)
+> — no `uninstallPolicy` values key exists; Task 6 below is corrected
+> accordingly.
+
 **Goal:** Ship the per-environment configuration layer (`values-override.yaml` per env) for `dev` (the only real env today — local minikube/k3s) and `prod` (a generic, empty-of-real-cluster-details overlay that operators can fork when a real prod cluster lands). Plus: GitOps sync examples (ArgoCD + Flux), Envoy Gateway ingress, db-migrations Job, document-repository PVC, verified-peer NetworkPolicy pass, per-env uninstallPolicy opt-in.
 
 **Removed from scope (rolled back from an earlier draft)**:
@@ -45,9 +54,7 @@ Five input-class concerns the spec implies but no Plan 6 task tests explicitly. 
 
 **Files:**
 - Create: `deploy/environments/dev/values-override.yaml`
-- Create: `deploy/environments/staging/values-override.yaml`
 - Create: `deploy/environments/prod/values-override.yaml`
-- Create: `deploy/environments/sovereign/values-override.yaml`
 - Create: `deploy/environments/README.md`
 - Create: `docs/charts/namespace-per-env.md`
 - Modify: `charts/genieai-umbrella/values.yaml` (add `pluggable.networkPolicy.peers` block + `ingress.tls.*` + `migrate.*` blocks)
@@ -257,14 +264,17 @@ following chart-side hooks DO NOT support per-namespace installs as
 shipped:
 
 1. The pre-install `dep-check` Job reads `.Values.namespace` correctly;
-   the pre-install `clusterprofile-detect` Job reads the namespace
-   label which the operator must set on the per-env namespace object.
+   the `clusterprofile-detect` Job is pre-upgrade-only and reads the
+   namespace label, which the previous revision's regular-resource
+   Namespace applied (nothing to detect on fresh installs — the
+   operator's `--set clusterProfile` is the source of truth there).
 2. The SealedSecret drift hook (Plan 2 Task 11) and the pre-upgrade
    drift hook (Plan 2 Task 11 Step 4) read the namespace correctly.
-3. The `Namespace` resource (Plan 1 Task 8) is a pre-install hook with
-   weight -40 — it creates the per-env namespace object on first
-   install; re-runs on `helm upgrade` re-create it (idempotent — same
-   spec, before-hook-creation keeps it).
+3. The `Namespace` resource (Plan 1 Task 8) is a REGULAR resource — the
+   install command must carry `--create-namespace` (or ArgoCD
+   `CreateNamespace=true`) to provision the per-env namespace before the
+   chart's resources apply; the chart's manifest then server-side-applies
+   its labels onto it.
 4. The dep-graph ConfigMap (Plan 2 Task 6) reads `.Values.namespace` —
    correctly per-env.
 
@@ -272,7 +282,7 @@ What requires a values-side override on a per-namespace install:
 - `ingress.host` (every HTTPRoute uses it)
 - `KEYCLOAK_URL` (set by `cross-service-urls` template; uses
   `.Values.namespace`)
-- The OTel collector Service name (`genieai-collector.<ns>.svc...`) —
+- The OTel collector Service name (`genieai-collector-collector.<ns>.svc...`) —
   per-namespace, fine.
 
 Recommended approach: per-namespace installs are SUPPORTED but the
@@ -415,8 +425,11 @@ spec:
       tls:
         mode: Terminate
         certificateRefs:
+          # ingress.tls.secretName when set; otherwise derive from the host.
+          # (A bare `| default` after printf can never fire — printf output
+          # is always non-empty, so an unset host rendered "-tls".)
           - kind: Secret
-            name: {{ printf "%s-tls" .Values.ingress.host | default "genieai-tls" }}
+            name: {{ .Values.ingress.tls.secretName | default (printf "%s-tls" .Values.ingress.host) }}
       allowedRoutes:
         namespaces:
           from: Same
@@ -604,8 +617,16 @@ spec:
     - namespace: '*'
       server: '*'
   clusterResourceWhitelist:
-    - group: ''     # core (Namespace, ConfigMap)
+    # Each entry REQUIRES a `kinds` list (ArgoCD AppProject schema rejects
+    # kind-less entries).
+    - group: ''
+      kinds:
+        - Namespace
+        - ConfigMap
     - group: rbac.authorization.k8s.io
+      kinds:
+        - ClusterRole
+        - ClusterRoleBinding
 ```
 
 - [ ] **Step 2: Write `deploy/gitops/argocd/genieai-dev.yaml`**
@@ -633,7 +654,11 @@ spec:
       selfHeal: true
       allowEmpty: false
     syncOptions:
-      - CreateNamespace=false              # the chart's hook (Plan 1 Task 8) creates the namespace
+      # The Namespace is a regular resource (Wave 8 #2 / Wave 10 #9), so
+      # something must create it before the chart's resources apply —
+      # ArgoCD's CreateNamespace=true does exactly that (equivalent of
+      # helm's --create-namespace).
+      - CreateNamespace=true
     retry:
       limit: 5
       backoff:
@@ -910,38 +935,38 @@ git commit -m "feat(charts): db-migrations pre-upgrade Job + doc-repo PVC + veri
 - Modify: `charts/genieai-umbrella/templates/hooks/pre-delete-uninstall-gate.yaml` (Plan 2 deferred; read what Plan 2 wrote first)
 
 **Interfaces:**
-- Consumes: `release.<env>.uninstallPolicy` values key (per-env).
-- Produces: 1 pre-delete `Job` that fails `helm uninstall` UNLESS the chart's namespace carries `genieai.io/allow-destructive-uninstall=true` (Plan 2 spec — the spec's pattern is operator-applied per env via the values override; the chart renders the gate, operators set the annotation per env via `kubectl annotate ns ... --overwrite`).
+- Consumes: the release-namespace annotation `genieai.io/allow-destructive-uninstall` (the ONLY switch — no values key; see the F9 note in Task 1 Step 2).
+- Produces: 1 pre-delete `Job` that fails `helm uninstall` UNLESS the chart's namespace carries `genieai.io/allow-destructive-uninstall=true` (operators set it per env via `kubectl annotate ns ... --overwrite`; break-glass = `helm uninstall --no-hooks`).
 
 - [ ] **Step 1: Locate Plan 2's pre-delete hook job and re-confirm its annotation carrier**
 
 Read `charts/genieai-umbrella/templates/hooks/pre-delete-uninstall-gate.yaml`. Plan 2 ships a pre-delete Job; the gate reads the `genieai.io/allow-destructive-uninstall` annotation on the namespace. If the annotation is set, the gate exits 0; otherwise it exits 1 with a clear message.
 
-- [ ] **Step 2: Per-env `uninstallPolicy` in values-override**
+- [ ] **Step 2: Document the annotation in both overlays (NOT a values key)**
 
-In `deploy/environments/prod/values-override.yaml` (the sole real env), add:
+The gate is not configurable from values — adding an `uninstallPolicy` key would be dead config (F9). Instead, record the operational contract as comments:
+
+In `deploy/environments/prod/values-override.yaml`, append:
 ```yaml
-uninstallPolicy:
-  # `enabled: true` = gate renders (the operator MUST set the annotation
-  # before `helm uninstall`). `enabled: false` = gate is a no-op
-  # (uninstall proceeds; spec §13.1 says this is the default for dev
-  # only — prod should keep it `true`).
-  enabled: true
+# Uninstall gate (no values key — by design):
+#   helm uninstall fails until the operator annotates the namespace:
+#     kubectl annotate ns genieai genieai.io/allow-destructive-uninstall=true --overwrite
+#   Break-glass: helm uninstall --no-hooks  (see spec §13.1)
 ```
 
-Set `enabled: false` in `dev/values-override.yaml`; `true` for `prod/values-override.yaml`.
+Mirror the same comment block in `dev/values-override.yaml`.
 
 - [ ] **Step 3: `helm template` with each overlay**
 
 Run: `for env in dev prod; do echo "=== $env"; helm template test charts/genieai-umbrella -n genieai -f deploy/environments/$env/values-override.yaml | grep -c "pre-delete"; done`
-Expected: dev=0; prod=1 (the Job renders when `uninstallPolicy.enabled: true`).
+Expected: dev=1; prod=1 (the gate Job renders unconditionally — the annotation is the only switch).
 
 - [ ] **Step 4: `helm lint --strict` + commit**
 
 ```bash
 helm lint charts/genieai-umbrella --strict -f deploy/environments/prod/values-override.yaml
-git add deploy/environments/ charts/genieai-umbrella/values.yaml
-git commit -m "feat(charts): per-env uninstallPolicy opt-in (dev skips the gate; staging/prod/sovereign require the annotation)"
+git add deploy/environments/
+git commit -m "docs(charts): document namespace-annotation uninstall gate in per-env overlays"
 ```
 
 ---

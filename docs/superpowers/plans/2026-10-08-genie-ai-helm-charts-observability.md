@@ -405,13 +405,15 @@ metadata:
 spec:
   mode: deployment
   image: ghcr.io/open-telemetry/opentelemetry-collector-contrib:0.152.0   # matches the running Swarm stack (0.111.0 is 20+ versions stale)
-  # The gateway's OTLP receiver port is exposed as a Service named
-  # after the CR (NOT `<cr>-collector`) by the opentelemetry-operator.
-  # The CR below is named `genieai-collector` -> the Service is also
-  # `genieai-collector` on port 4318. The Task 4b agent and every app
-  # SDK's OTEL_EXPORTER_OTLP_ENDPOINT target this name. (Earlier drafts
-  # cited `genieai-collector-collector` which is wrong against the
-  # operator's actual Service-naming convention.)
+  # The opentelemetry-operator exposes the OTLP receiver as a Service
+  # named `<cr-name>-collector` (internal/naming/main.go: Service(otelcol)
+  # = "%s-collector" — verified against operator source). The CR below is
+  # `genieai-collector` -> the Service is `genieai-collector-collector`
+  # on port 4318. The Task 4b agent and every app SDK's
+  # OTEL_EXPORTER_OTLP_ENDPOINT target this name. (An earlier plan draft
+  # asserted the Service matched the CR name verbatim and "corrected"
+  # the doubled form — that was backwards; docs/charts/otel-migration.md
+  # has carried the correct name all along.)
   config:
 {{ .Files.Get "configs/otel-collector-config.yaml" | indent 4 }}
   env:
@@ -465,7 +467,7 @@ git commit -m "feat(charts): gateway OpenTelemetryCollector with verbatim-ported
 - Create: `charts/genieai-umbrella/templates/rbac/otel-agent-role.yaml`
 
 **Interfaces:**
-- Consumes: `observability.otel.enabled`; the gateway CR from Task 4 (operator-exposed Service `genieai-collector` — Service name matches the CR name per opentelemetry-operator).
+- Consumes: `observability.otel.enabled`; the gateway CR from Task 4 (operator-exposed Service `genieai-collector-collector` — the operator names the Service `<cr>-collector`).
 - Produces: 1 `OpenTelemetryCollector` (mode: daemonset) + ServiceAccount/Role for `k8sattributes`.
 
 **Why (Review Focus #6 / `docs/charts/otel-migration.md` §3 item 1):** the Swarm pipeline shipped container logs via the Docker fluentd driver → `fluent_forward`. On containerd/K8s that driver does not exist; without a node-level filelog agent, **no container logs reach VictoriaLogs** and the admin logs UI returns empty. The agent is a dumb shipper — all transforms stay in the gateway (single PII/stamping point).
@@ -482,16 +484,12 @@ Expected: prints `0`.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  # pre-delete hook fires on `helm uninstall`; the Job deletes the SA +
-  # the Role + RoleBinding BEFORE Helm tries to garbage-collect them.
-  # Without this, uninstall leaves the SA stranded and a re-install with
-  # a renamed SA keeps the old one — the agent DaemonSet then either
-  # schedules against the wrong identity or fails to schedule at all
-  # (the otel-collector operator looks the SA up by name on each reconcile).
-  annotations:
-    "helm.sh/hook": pre-delete
-    "helm.sh/hook-weight": "-5"
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  # A REGULAR resource — NO helm.sh/hook annotation. An earlier draft
+  # hooked the SA with `pre-delete`, which meant Helm only ever applied
+  # it during uninstall: the DaemonSet's pods then failed admission with
+  # `serviceaccounts "genieai-agent" not found` on every install
+  # (code-review Wave 10 #5). Release-owned resources are garbage-
+  # collected by Helm on uninstall; nothing extra is needed.
   name: genieai-agent
   namespace: {{ .Values.namespace }}
   labels:
@@ -597,10 +595,10 @@ spec:
     exporters:
       # Ship to the gateway — single transform point (pii_redact + stamp
       # live there, NOT here). OTLP/HTTP to the operator-created Service
-      # (name = CR name; for `genieai-collector` the Service is also
-      # `genieai-collector`).
+      # (operator names it `<cr>-collector`; for CR `genieai-collector`
+      # the Service is `genieai-collector-collector`).
       otlp/gateway:
-        endpoint: http://genieai-collector.{{ .Values.namespace }}.svc.cluster.local:4318
+        endpoint: http://genieai-collector-collector.{{ .Values.namespace }}.svc.cluster.local:4318
         tls:
           insecure: true
     service:
@@ -1005,7 +1003,7 @@ spec:
           check http://vlogs.${ns}.svc.cluster.local:9428/healthz
           check http://vtraces.${ns}.svc.cluster.local:10428/healthz
           # operator-exposed Service (name = CR name)
-          check http://genieai-collector.${ns}.svc.cluster.local:4318/v1/traces
+          check http://genieai-collector-collector.${ns}.svc.cluster.local:4318/v1/traces
           if [ "$failures" -gt 0 ]; then
             echo "FAIL: $failures service(s) unreachable"
             exit 1
@@ -1064,7 +1062,7 @@ metadata:
     app.kubernetes.io/component: observability-secrets
 spec:
   encryptedData:
-    {{ $envKey }}: PLACEHOLDER_{{ $envKey }}_SEALED_KID
+    {{ $envKey }}: UExBQ0VIT0xERVIr     # PLACEHOLDER+ — RE-SEAL before helm install
 {{- end -}}
 {{- end -}}
 ```
@@ -1200,7 +1198,7 @@ Sections deferred:
 - §14 OTLP/auth service-account tokens for cross-component auth — Plan 7
 - §10 dashboards pre-configured via Grafana provisioning sidecar — Plan 6
 
-**2. Placeholder scan**: only intentional `PLACEHOLDER_*_SEALED_KID` markers in sealed-secrets. No "TBD" or "TODO".
+**2. Placeholder scan**: only intentional `PLACEHOLDER+` (UExBQ0VIT0xERVIr) sentinels in sealed-secrets. No "TBD" or "TODO".
 
 **3. Type consistency**: `genieai-common.labels`, `genieai-common.serviceSelector`, `genieai-common.fullname` invoked uniformly across Tasks 3-10. CRDs namespace-scoped (release namespace).
 

@@ -1,0 +1,244 @@
+{{- if and .Values.data.keycloak.enabled .Values.data.keycloak.realmImport -}}
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: KeycloakRealmImport
+metadata:
+  name: genieai-realm
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "identity"))) | nindent 4 }}
+    genieai.io/data-tier: identity
+spec:
+  # References the Keycloak CR above; import runs once the instance is Ready.
+  keycloakCRName: keycloak
+  realm:
+    # realm name MUST match the in-cluster consumers (compose ground
+    # truth: docker-compose.yaml KEYCLOAK_REALM=genie; the AI tier sets
+    # KC_REALM=genie in chatqna + dataprep env). Earlier drafts named
+    # the realm `genieai` which silently broke every OIDC token call
+    # (404 on /realms/genieai/...).
+    realm: genie
+    enabled: true
+    {{- /* Single derivation of the public origin — every client's
+           rootUrl/redirectUris/webOrigins below uses $origin. A second
+           derivation site drifts and breaks that client's login with
+           invalid_redirect_uri while render gates stay green. */ -}}
+    {{- $origin := printf "https://%s" (.Values.ingress.host | default "genieai.local") -}}
+    # TLS terminates at the edge (Envoy Gateway); the Keycloak pod serves
+    # plain HTTP inside the cluster. `external` (the Keycloak default)
+    # would reject every internal http:// redirect URI.
+    sslRequired: none
+    registrationAllowed: false
+    # Drives the new-user email-verification flow — only meaningful when
+    # the operator sets data.keycloak.smtp; defaults false (Keycloak's
+    # own default) so dev installs without SMTP stay login-able.
+    verifyEmail: {{ .Values.data.keycloak.verifyEmail | default false }}
+    loginWithEmailAllowed: true
+    duplicateEmailsAllowed: false
+    resetPasswordAllowed: false
+    editUsernameAllowed: false
+    bruteForceProtected: true
+    permanentLockout: false
+    maxFailureWaitSeconds: 900
+    minimumQuickLoginWaitSeconds: 60
+    failureFactor: 30
+    accessTokenLifespan: 1800
+    ssoSessionIdleTimeout: 1800
+    ssoSessionMaxLifespan: 36000
+    internationalizationEnabled: true
+    supportedLocales:
+      - en
+      - fr
+    defaultLocale: en
+    {{- /* SMTP (email verification) is deployment-specific: rendered only
+           when the operator sets data.keycloak.smtp in their values
+           override. Fields mirror the Swarm realm export
+           (configs/keycloak/genie-realm.yaml). */ -}}
+    {{- with .Values.data.keycloak.smtp }}
+    smtpServer:
+      from: {{ .from | quote }}
+      host: {{ .host | quote }}
+      port: {{ .port | quote }}
+      ssl: {{ .ssl | quote }}
+      starttls: {{ .starttls | quote }}
+      auth: {{ .auth | quote }}
+      user: {{ .user | quote }}
+      password: {{ .password | quote }}
+    {{- end }}
+    # Realm roles — MUST match the Swarm realm export: `admin` is a
+    # composite over realm-management so the backend's user-management
+    # proxy works, `dataprep-service` authorizes the dataprep service
+    # account against document-repository.
+    roles:
+      realm:
+        - name: admin
+          description: Administrator role with full access
+          composite: true
+          composites:
+            client:
+              realm-management:
+                - manage-users
+                - query-users
+                - view-identity-providers
+        - name: dataprep-service
+          description: Service account role for Dataprep ingestion pipeline
+    users:
+      - username: genie-admin
+        firstName: GENIE
+        lastName: Admin
+        # Keycloak user profile requires `email` + `emailVerified: true` for
+        # login to succeed (SERVER-TESTING.md: "Account is not fully set up").
+        # Operators override via deploy/environments/<env>/values-override.yaml
+        # under `data.keycloak.adminEmail`.
+        email: {{ .Values.data.keycloak.adminEmail | default "genie-admin@genieai.local" | quote }}
+        emailVerified: true
+        realmRoles:
+          - admin
+        # Full realm-management grant, verbatim from the Swarm export —
+        # the composite `admin` role only covers 3 of these; dropping the
+        # rest silently 403s admin-console operations (client inspection,
+        # realm settings, events, impersonation).
+        clientRoles:
+          realm-management:
+            - view-realm
+            - manage-realm
+            - query-realms
+            - view-users
+            - manage-users
+            - query-users
+            - impersonation
+            - query-groups
+            - view-clients
+            - manage-clients
+            - query-clients
+            - create-client
+            - view-events
+            - manage-events
+            - view-identity-providers
+            - manage-identity-providers
+            - view-authorization
+            - manage-authorization
+        credentials:
+          # Empty value on purpose: the operator cannot PATCH user passwords
+          # through the CR after import (user subresource is operator-owned).
+          # Real password is set out-of-band post-install:
+          #   kubectl exec deploy/keycloak -n genieai -- \
+          #     /opt/keycloak/bin/kcadm.sh set-password -r genie \
+          #     --username genie-admin -p '<password>'
+          - type: password
+            value: ""
+            temporary: false
+      # Service-account user entries link the confidential clients below to
+      # their roles (the KeycloakRealmImport equivalent of the Swarm export's
+      # serviceAccountClientId entries).
+      - username: service-account-genie-proxy-client
+        enabled: true
+        serviceAccountClientId: genie-proxy-client
+        clientRoles:
+          realm-management:
+            - query-users
+            - view-users
+            - manage-users
+            - view-realm
+      - username: service-account-dataprep-service-client
+        enabled: true
+        serviceAccountClientId: dataprep-service-client
+        realmRoles:
+          - dataprep-service
+    clients:
+      # Keycloak built-in account console (needs webOrigins for iframe auth)
+      - clientId: account
+        enabled: true
+        webOrigins:
+          - {{ $origin }}
+      - clientId: account-console
+        enabled: true
+        webOrigins:
+          - {{ $origin }}
+      # Web SPA — PUBLIC client with PKCE (browser apps cannot hold client
+      # secrets; the Swarm realm ships publicClient: true — rendering it
+      # confidential breaks authorization_code login with invalid_client).
+      - clientId: genie-app
+        enabled: true
+        publicClient: true
+        directAccessGrantsEnabled: false
+        standardFlowEnabled: true
+        implicitFlowEnabled: false
+        serviceAccountsEnabled: false
+        rootUrl: {{ $origin }}
+        redirectUris:
+          - {{ $origin }}/*
+          # Keycloak allows NO wildcard in the port — `http://localhost:*`
+          # is rejected at realm import. The bare host is Keycloak's
+          # port-agnostic localhost special case.
+          - http://localhost
+        webOrigins:
+          - {{ $origin }}
+        attributes:
+          pkce.code.challenge.method: S256
+          oauth2.device.authorization.grant.enabled: false
+          client.credentials.use.refresh.token: false
+          require.pushed.authorization.requests: false
+      # Service account for the backend's Keycloak Admin API proxy
+      # (user/role CRUD on behalf of admin operations; permissions
+      # restricted via the realm-management client roles above).
+      - clientId: genie-proxy-client
+        enabled: true
+        publicClient: false
+        standardFlowEnabled: false
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: true
+        # KeycloakRealmImport cannot read Kubernetes Secrets — the secret
+        # is supplied at install time via the operator's values override
+        # (`data.keycloak.clientSecrets.proxyClient`) and MUST equal the
+        # value sealed in the `keycloak-proxy-client-secret` SealedSecret
+        # the backend consumes.
+        secret: {{ .Values.data.keycloak.clientSecrets.proxyClient | default "change-me-proxy-client" | quote }}
+      # Service account for the Dataprep ingestion pipeline (client_credentials
+      # grant for service-to-service calls into document-repository).
+      - clientId: dataprep-service-client
+        enabled: true
+        publicClient: false
+        standardFlowEnabled: false
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: true
+        # Same rule as proxyClient: must equal the `kc-dataprep-client-secret`
+        # SealedSecret value (`data.keycloak.clientSecrets.dataprep`).
+        secret: {{ .Values.data.keycloak.clientSecrets.dataprep | default "change-me-dataprep-client" | quote }}
+      # Mobile OIDC client (Flutter app) — public client with PKCE per
+      # RFC 8252; mobile apps cannot hold secrets. Refresh-token rotation
+      # on. Redirect scheme is deployment-specific (default mirrors the
+      # repo env template).
+      - clientId: {{ .Values.data.keycloak.mobileClientId | default "genie-mobile" | quote }}
+        enabled: true
+        publicClient: true
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: false
+        attributes:
+          pkce.code.challenge.method: S256
+          client.credentials.use.refresh.token: true
+          oauth2.device.authorization.grant.enabled: false
+          require.pushed.authorization.requests: false
+        redirectUris:
+          - {{ .Values.data.keycloak.mobileRedirectScheme | default "genieai" }}://callback
+        webOrigins:
+          - "+"
+      # Grafana OIDC SSO client — confidential, standard flow, redirect
+      # under the /grafana/ Kong-route equivalent.
+      - clientId: grafana
+        enabled: true
+        publicClient: false
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        serviceAccountsEnabled: false
+        secret: {{ .Values.data.keycloak.clientSecrets.grafana | default "change-me-grafana-client" | quote }}
+        attributes:
+          pkce.code.challenge.method: S256
+          oauth2.device.authorization.grant.enabled: false
+          client.credentials.use.refresh.token: false
+          require.pushed.authorization.requests: false
+        redirectUris:
+          - {{ $origin }}/grafana/*
+        webOrigins:
+          - {{ $origin }}
+{{- end -}}

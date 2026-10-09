@@ -4,7 +4,7 @@ metadata:
   name: {{ include "genieai-common.fullname" . }}-clusterprofile-detect
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "clusterprofile-detect"))) | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clusterprofile-detect") | nindent 4 }}
     app.kubernetes.io/component: clusterprofile-detect
   annotations:
     # pre-upgrade ONLY: the Namespace carrying genieai.io/cluster-profile is
@@ -22,7 +22,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "clusterprofile-detect"))) | nindent 8 }}
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clusterprofile-detect") | nindent 8 }}
     spec:
       restartPolicy: Never
       serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check

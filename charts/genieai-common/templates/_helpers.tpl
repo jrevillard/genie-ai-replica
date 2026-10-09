@@ -7,17 +7,19 @@ Expand the name of the chart.
 
 {{/*
 Create a default fully qualified app name.
-We truncate at 50 chars because some K8s name fields are limited to this (RFC 1123).
+Truncate at 40 chars: the name budget must reserve the longest hook suffix
+("-sealed-secret-validate", 23 chars) within the 63-char K8s object-name
+limit — fullname + "-sealed-secret-validate" tops out exactly at 63.
 */}}
 {{- define "genieai-common.fullname" -}}
 {{- if .Values.fullnameOverride -}}
-{{- .Values.fullnameOverride | trunc 50 | trimSuffix "-" -}}
+{{- .Values.fullnameOverride | trunc 40 | trimSuffix "-" -}}
 {{- else -}}
 {{- $name := default .Chart.Name .Values.nameOverride -}}
 {{- if contains $name .Release.Name -}}
-{{- .Release.Name | trunc 50 | trimSuffix "-" -}}
+{{- .Release.Name | trunc 40 | trimSuffix "-" -}}
 {{- else -}}
-{{- printf "%s-%s" .Release.Name $name | trunc 50 | trimSuffix "-" -}}
+{{- printf "%s-%s" .Release.Name $name | trunc 40 | trimSuffix "-" -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -27,6 +29,19 @@ Chart name and version label.
 */}}
 {{- define "genieai-common.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Component context — the merged component view every labels call in the chart
+uses. Keeps the deepCopy (prevents component leaking into the shared values
+tree) in one place instead of every call site. include can only return text,
+so this renders the resolved genie-ai component label line; call sites pass
+the plain dict (dict "Chart" .Chart "Release" .Release "Values" .Values
+"component" <name>) to genieai-common.labels, which composes it below.
+*/}}
+{{- define "genieai-common.componentContext" -}}
+{{- $values := deepCopy .Values | merge (dict "component" (.component | default "umbrella")) -}}
+genieai.io/component: {{ $values.component | quote }}
 {{- end -}}
 
 {{/*
@@ -42,7 +57,7 @@ helm.sh/chart: {{ include "genieai-common.chart" . }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
-genieai.io/component: {{ .Values.component | default "umbrella" | quote }}
+{{ include "genieai-common.componentContext" . }}
 genieai.io/managed-by: helm
 {{- end -}}
 

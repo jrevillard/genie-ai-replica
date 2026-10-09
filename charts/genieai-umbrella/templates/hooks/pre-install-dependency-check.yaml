@@ -4,7 +4,7 @@ metadata:
   name: {{ include "genieai-common.fullname" . }}-dep-check
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "pre-install"))) | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "pre-install") | nindent 4 }}
     app.kubernetes.io/component: pre-install
   annotations:
     # Helm 3 scans templates/ recursively for hook annotations. Subdirectory
@@ -18,7 +18,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "pre-install"))) | nindent 8 }}
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "pre-install") | nindent 8 }}
     spec:
       restartPolicy: Never
       serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
@@ -108,7 +108,7 @@ metadata:
   name: {{ include "genieai-common.fullname" . }}-dep-graph
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "pre-install"))) | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "pre-install") | nindent 4 }}
   annotations:
     # Hook with weight -20: created after the RBAC (-30) and BEFORE the
     # dep-check Job (-5) mounts it. A regular ConfigMap would not exist on

@@ -1,0 +1,34 @@
+# genieai-common
+
+Library chart for the GENIE.AI Helm umbrella. Provides:
+
+- Naming helpers (`genieai-common.name`, `genieai-common.fullname`)
+- Label selectors (`genieai-common.labels`, `genieai-common.selectorLabels`)
+- Chart/version label (`genieai-common.chart`)
+
+## Usage
+
+Consume from an umbrella chart's `Chart.yaml`:
+
+```yaml
+dependencies:
+  - name: genieai-common
+    version: "0.1.0"
+    repository: "file://../genieai-common"
+    import-values:
+      - child: "."
+        parent: "common"
+```
+
+Then in templates:
+
+```gotemplate
+metadata:
+  labels:
+    {{- include "genieai-common.labels" . | nindent 4 }}
+```
+
+## Why `type: library`?
+
+Library charts do not render Pods/Services themselves — they export helpers and
+values consumed by umbrella templates. The umbrella chart is what users install.

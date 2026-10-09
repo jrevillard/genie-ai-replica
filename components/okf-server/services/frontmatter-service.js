@@ -490,18 +490,31 @@ async function suggestTags(repoId, opts = {}) {
       }
       return [];
     };
+    // LLMs repeat values (observed 2026-10-09: granite emitted
+    // "mental-health" 5x inside ONE forbidden array; the duplicates rode
+    // straight through to the stored frontmatter). normalizeTag has already
+    // lowercased everything, so first-occurrence Set dedup is exact.
+    const uniqTags = (list) => [...new Set(list)];
     const out = {
-      topic: arr('topic', 'topics', 'repo_level_topics', 'topic_set', 'subjects').map(normalizeTag).filter(Boolean),
-      entity: arr('entity', 'entities', 'named_entities', 'people_products_places').map(normalizeTag).filter(Boolean),
+      topic: uniqTags(
+        arr('topic', 'topics', 'repo_level_topics', 'topic_set', 'subjects').map(normalizeTag).filter(Boolean)
+      ),
+      entity: uniqTags(
+        arr('entity', 'entities', 'named_entities', 'people_products_places').map(normalizeTag).filter(Boolean)
+      ),
       scope: normalizeTag(parsed.scope || parsed.scope_label || parsed.scope_word || parsed.scope_kind),
-      forbidden: arr('forbidden', 'forbidden_topics', 'exclusions', 'not_about').map(normalizeTag).filter(Boolean),
+      forbidden: uniqTags(
+        arr('forbidden', 'forbidden_topics', 'exclusions', 'not_about').map(normalizeTag).filter(Boolean)
+      ),
       summary:
         typeof parsed.summary === 'string'
           ? parsed.summary.slice(0, 512)
           : typeof parsed.description === 'string'
             ? parsed.description.slice(0, 512)
             : null,
-      keyword: arr('keyword', 'keywords', 'specific_terms', 'low_coverage_terms').map(normalizeTag).filter(Boolean)
+      keyword: uniqTags(
+        arr('keyword', 'keywords', 'specific_terms', 'low_coverage_terms').map(normalizeTag).filter(Boolean)
+      )
     };
     // Routing-gate contract (2026-10-09): the proposed forbidden set is
     // ALSO returned flagged as suggestions — [{value, suggested: true}] —

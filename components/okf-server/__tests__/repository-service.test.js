@@ -103,6 +103,27 @@ describe('repository-service', () => {
       expect(updated.updated_at).toEqual(expect.any(String));
     });
 
+    test('dedups frontmatter tag arrays at the write boundary (2026-10-09 dup incident)', async () => {
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      const fm = {
+        topic: ['cancer-screening', 'cancer-screening'],
+        entity: ['asthma'],
+        scope: 'healthcare',
+        // Verbatim duplicate shape the suggester once emitted and the UI saved.
+        forbidden: ['mental-health', 'communicable-diseases', 'mental-health', 'mental-health'],
+        summary: '',
+        keyword: ['who', 'WHO']
+      };
+      const updated = await repoService.update(created.repo_id, { frontmatter: fm }, ACTOR);
+      expect(updated.frontmatter.forbidden).toEqual(['mental-health', 'communicable-diseases']);
+      expect(updated.frontmatter.topic).toEqual(['cancer-screening']);
+      // Case-insensitive: the second 'WHO' (different case) is still a dup.
+      expect(updated.frontmatter.keyword).toEqual(['who']);
+      // The history snapshot stores the CLEANED shape, not the dup payload.
+      const stored = db._stores.okf_repositories[created.repo_id];
+      expect(stored.frontmatter_history[0].shape.forbidden).toEqual(['mental-health', 'communicable-diseases']);
+    });
+
     test('409 when attempting to change graph_name (immutable)', async () => {
       const created = await repoService.create(validCreateInput(), ACTOR);
       await expect(repoService.update(created.repo_id, { graph_name: 'OKF_other' }, ACTOR)).rejects.toMatchObject({

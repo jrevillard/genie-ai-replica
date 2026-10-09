@@ -153,4 +153,38 @@ describe('frontmatterService.suggestTags — forbidden suggestion contract', () 
     axios.post.mockResolvedValue(vllmResponse('not json at all'));
     await expect(svc.suggestTags(REPO_ID)).rejects.toMatchObject({ code: 'LLM_PARSE', status: 502 });
   });
+
+  test('dedups repeated LLM values (the 2026-10-09 mental-health x5 incident)', async () => {
+    seedDb();
+    // Verbatim shape of the granite response that poisoned the live NCD
+    // frontmatter: the model repeated "mental-health" inside ONE array.
+    axios.post.mockResolvedValue(
+      vllmResponse(
+        JSON.stringify({
+          topic: ['cancer-screening', 'cardiovascular-disease', 'chronic-respiratory', 'risk-assessment'],
+          entity: ['breast-cancer', 'asthma', 'asthma'],
+          scope: 'healthcare',
+          forbidden: [
+            'mental-health',
+            'communicable-diseases',
+            'mental-health',
+            'mental-health',
+            'mental-health',
+            'mental-health'
+          ],
+          summary: 'NCD corpus.',
+          keyword: ['who', 'who']
+        })
+      )
+    );
+    const out = await svc.suggestTags(REPO_ID);
+    // First occurrence wins, order preserved, per-array only.
+    expect(out.forbidden).toEqual(['mental-health', 'communicable-diseases']);
+    expect(out.entity).toEqual(['breast-cancer', 'asthma']);
+    expect(out.keyword).toEqual(['who']);
+    expect(out.forbidden_suggestions).toEqual([
+      { value: 'mental-health', suggested: true },
+      { value: 'communicable-diseases', suggested: true }
+    ]);
+  });
 });

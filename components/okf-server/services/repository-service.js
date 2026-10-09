@@ -624,6 +624,26 @@ async function update(repo_id, patch, actor) {
     for (const f of UPDATABLE_FIELDS) {
       if (Object.prototype.hasOwnProperty.call(patch, f)) setFields[f] = patch[f];
     }
+    // Tag-array dedup at the WRITE BOUNDARY (2026-10-09): the LLM suggester
+    // once emitted "mental-health" 5x inside one forbidden array and it rode
+    // through client + validator into the stored doc. No write path — manual
+    // chips, advisor apply, teach loop, revert of a legacy dup payload — may
+    // persist duplicate tags again. Case-insensitive, first occurrence wins,
+    // order preserved.
+    if (setFields.frontmatter && typeof setFields.frontmatter === 'object') {
+      for (const field of ['topic', 'entity', 'keyword', 'forbidden']) {
+        const list = setFields.frontmatter[field];
+        if (Array.isArray(list)) {
+          const seen = new Set();
+          setFields.frontmatter[field] = list.filter((v) => {
+            const k = String(v).toLowerCase();
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+          });
+        }
+      }
+    }
     // Story 1-8d — bounded frontmatter save history (the Lab's Revert-tags
     // panel). Every save that CHANGES frontmatter snapshots the shape; the
     // teaching loop's cycle (add tags -> rebuild -> test) is then reversible
@@ -632,7 +652,11 @@ async function update(repo_id, patch, actor) {
     if (Object.prototype.hasOwnProperty.call(setFields, 'frontmatter')) {
       const prev = Array.isArray(existing.frontmatter_history) ? existing.frontmatter_history : [];
       setFields.frontmatter_history = [
-        { saved_at: nowIso(), actor: (actor && (actor.sub || actor.user_id || actor.name)) || 'system', shape: setFields.frontmatter },
+        {
+          saved_at: nowIso(),
+          actor: (actor && (actor.sub || actor.user_id || actor.name)) || 'system',
+          shape: setFields.frontmatter
+        },
         ...prev
       ].slice(0, FRONTMATTER_HISTORY_LIMIT);
     }
@@ -794,7 +818,7 @@ async function remove(repo_id, actor) {
  * Revert-tags panel). Entries are newest-first; each carries the FULL
  * frontmatter shape so a revert is an exact restore.
  */
-async function frontmatterHistory(repo_id, opts = {}) {
+async function frontmatterHistory(repo_id) {
   return withSpan('okf.repo.frontmatter_history', async (span) => {
     span.setAttribute('okf.repo_id', repo_id);
     const db = await getDb();

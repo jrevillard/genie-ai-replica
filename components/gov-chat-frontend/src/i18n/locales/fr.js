@@ -2742,7 +2742,8 @@ export default {
         title: 'Ce que cela signifie',
         veto: "Cette requête correspond fortement au tag interdit « {'{'}tag{'}'} ». Si elle DOIT appartenir à ce dépôt, retirez « {'{'}tag{'}'} » des tags interdits dans le Frontmatter, puis republiez pour reconstruire le head.",
         floor:
-          'La requête est sans rapport avec le sujet de ce dépôt (score en dessous du seuil minimum du domaine) — aucun changement de tag ne corrige cela ; le filtrage est correct.'
+          'La requête est sans rapport avec le sujet de ce dépôt (score en dessous du seuil minimum du domaine) — aucun changement de tag ne corrige cela ; le filtrage est correct.',
+        rejected: 'Écarté par le garde-fou — un tag interdit ne doit pas correspondre au propre sujet de ce dépôt.'
       },
       suites: {
         generate: 'Generate test suite',
@@ -2782,7 +2783,26 @@ export default {
         batchNone:
           "Aucune correction n'a été suggérée — vérifiez manuellement les requêtes en échec par rapport au périmètre déclaré.",
         addAll: 'Tout ajouter',
-        rebuildRerun: 'Reconstruire la tête et relancer la suite'
+        rebuildRerun: 'Reconstruire la tête et relancer la suite',
+        positiveFailuresTitle: 'Pourquoi les positifs ne passent plus',
+        positiveFailures:
+          '{n} test(s) positif(s) ont été supprimés lors de cette exécution — les tags interdits englobent trop largement le périmètre du dépôt.',
+        vetoedBy: 'Veto de',
+        marginKilled: '{n} test(s) positif(s) perdus sur la marge (aucun tag de veto unique).',
+        removals: 'Tags à retirer (ils posent un veto sur les positifs propres à ce dépôt)',
+        removeTip: 'Retirer « {tag} » — il a mis un veto sur {n} test(s) positif(s)',
+        tripwire: 'Ce cycle a cassé {n} tests positifs — les tags ajoutés sur-suppriment. Revenir en arrière ?',
+        tripwireRevert: 'Options de retour arrière',
+        staleSnapshot:
+          'Les tags ont changé depuis la génération de cette suite — régénérez pour des lignes interdites à jour.',
+        revertTitle: 'Revenir sur les tags',
+        revertForbiddenCount: '{n} tags interdits',
+        revertAction: 'Revenir',
+        revertBusy: 'Chargement de l’historique des enregistrements…',
+        revertSaving: 'Restauration du frontmatter…',
+        revertEmpty: 'Aucun enregistrement de frontmatter pour le moment.',
+        revertDone: 'Frontmatter restauré — reconstruisez la tête et relancez pour l’appliquer.',
+        removeTag: 'Retirer des tags interdits'
       },
       error: {
         explain: "Échec de l'explication",
@@ -2791,7 +2811,10 @@ export default {
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Impossible de charger l’historique des enregistrements',
+        revert: 'Impossible de revenir sur le frontmatter',
+        advisor: 'Échec du conseiller'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2801,6 +2824,16 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Conseiller : recommander des changements de tags',
+        busy: 'Simulation des changements de tags sur les exécutions récentes…',
+        title: 'Recommandation de jeu de tags (simulée sur les exécutions récentes)',
+        apply: 'Appliquer les changements, reconstruire et relancer la suite',
+        scorecard: 'positifs {p}/{pt} acceptés · négatifs {n}/{nt} supprimés',
+        now: 'Actuellement',
+        predicted: 'prédit',
+        scope: ' (sur {q} requêtes des {r} dernières exécutions)'
       }
     }
   },

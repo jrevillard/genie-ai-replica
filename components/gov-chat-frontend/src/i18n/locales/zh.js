@@ -2680,7 +2680,8 @@ export default {
         rebuildBusy: '正在重建 head 并重跑…',
         title: '这意味着什么',
         veto: "该查询与禁用标签“{'{'}tag{'}'}”高度匹配。如果它应当属于此仓库，请在 Frontmatter 的禁用标签中移除“{'{'}tag{'}'}”，然后重新发布以重建 head。",
-        floor: '该查询与此仓库的主题无关（分数低于领域下限）——更改标签无法解决此问题；这是正确的抑制。'
+        floor: '该查询与此仓库的主题无关（分数低于领域下限）——更改标签无法解决此问题；这是正确的抑制。',
+        rejected: '已被护栏过滤——禁用标签不得与该仓库自身的主题匹配。'
       },
       suites: {
         generate: 'Generate test suite',
@@ -2719,7 +2720,24 @@ export default {
         batchTitle: '失败的负向查询为何路由到这里',
         batchNone: '没有建议任何修复——请人工将失败的查询与声明的范围进行比对。',
         addAll: '全部添加',
-        rebuildRerun: '重建 head 并重跑测试集'
+        rebuildRerun: '重建 head 并重跑测试集',
+        positiveFailuresTitle: '为什么正例不再通过',
+        positiveFailures: '本轮有 {n} 个正例测试被抑制——禁用标签过度匹配仓库范围。',
+        vetoedBy: '否决来源',
+        marginKilled: '{n} 个正例测试因 margin 落败（无单一否决标签）。',
+        removals: '建议移除的标签（它们否决了该仓库自身的正例）',
+        removeTip: '移除“{tag}”——它否决了 {n} 个正例测试',
+        tripwire: '本轮周期破坏了 {n} 个正例测试——新增标签过度抑制。是否回滚？',
+        tripwireRevert: '查看回滚选项',
+        staleSnapshot: '自该测试套件生成以来标签已变更——请重新生成以获得最新的禁用行。',
+        revertTitle: '回滚标签',
+        revertForbiddenCount: '{n} 个禁用标签',
+        revertAction: '回滚',
+        revertBusy: '正在加载保存历史…',
+        revertSaving: '正在恢复 frontmatter…',
+        revertEmpty: '尚无 frontmatter 保存记录。',
+        revertDone: 'Frontmatter 已恢复——请重建 head 并重跑以使其生效。',
+        removeTag: '从禁止标签中移除'
       },
       error: {
         explain: '解释失败',
@@ -2728,7 +2746,10 @@ export default {
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: '加载保存历史失败',
+        revert: '回滚 frontmatter 失败',
+        advisor: '顾问失败'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2738,6 +2759,16 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: '顾问：推荐标签调整',
+        busy: '正在根据近期运行模拟标签调整…',
+        title: '标签集建议（基于近期运行模拟）',
+        apply: '应用更改、重建 head 并重新运行测试集',
+        scorecard: '正例 {p}/{pt} 通过 · 负例 {n}/{nt} 拦截',
+        now: '当前',
+        predicted: '预测',
+        scope: '（最近 {r} 次运行共 {q} 条查询）'
       }
     }
   },

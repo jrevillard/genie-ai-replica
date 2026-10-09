@@ -1,4 +1,3 @@
-// i18n English source of truth (newest keys safe-added by add-amendmenta-keys.cjs)
 export default {
   countries: {
     AF: 'Afghanistan',
@@ -1448,7 +1447,6 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
-    // Story 1-8 (2026-10-08): the Head Tester / Routing Lab.
     headTest: {
       title: 'Routing Lab — head test',
       cta: 'Routing Lab',
@@ -1539,7 +1537,8 @@ export default {
         title: 'What this means',
         veto: "This query strongly matches the forbidden tag \"{'{'}tag{'}'}\". If it SHOULD belong to this repository, remove \"{'{'}tag{'}'}\" from the forbidden tags in Frontmatter, then republish to rebuild the head.",
         floor:
-          'The query is unrelated to the subject matter of this repository (score below the domain floor) — no tag change fixes this; it is correct suppression.'
+          'The query is unrelated to the subject matter of this repository (score below the domain floor) — no tag change fixes this; it is correct suppression.',
+        rejected: 'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
       },
       suites: {
         generate: 'Generate test suite',
@@ -1578,7 +1577,25 @@ export default {
         batchTitle: 'Why the failing negatives routed here',
         batchNone: 'No fix was suggested — review the failing queries against the declared scope manually.',
         addAll: 'Add all',
-        rebuildRerun: 'Rebuild head & re-run suite'
+        rebuildRerun: 'Rebuild head & re-run suite',
+        positiveFailuresTitle: 'Why positives stopped passing',
+        positiveFailures:
+          '{n} positive test(s) were suppressed this run — the forbidden tags over-match the repository scope.',
+        vetoedBy: 'Vetoed by',
+        marginKilled: '{n} positive test(s) lost on margin (no single veto tag).',
+        removals: 'Tags to remove (they veto this repository’s own positives)',
+        removeTip: 'Remove "{tag}" — it vetoed {n} positive test(s)',
+        tripwire: 'This cycle broke {n} positive tests — the added tags over-suppress. Revert?',
+        tripwireRevert: 'View revert options',
+        staleSnapshot: 'Tags changed since this suite was generated — regenerate for fresh forbidden rows.',
+        revertTitle: 'Revert tags',
+        revertForbiddenCount: '{n} forbidden tags',
+        revertAction: 'Revert',
+        revertBusy: 'Loading save history…',
+        revertSaving: 'Restoring the frontmatter…',
+        revertEmpty: 'No frontmatter saves recorded yet.',
+        revertDone: 'Frontmatter restored — rebuild the head and re-run to apply it.',
+        removeTag: 'Remove from forbidden tags'
       },
       error: {
         explain: 'Explain failed',
@@ -1587,7 +1604,10 @@ export default {
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Could not load the save history',
+        revert: 'Could not revert the frontmatter',
+        advisor: 'Advisor failed'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -1597,6 +1617,16 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Advisor: recommend tag changes',
+        busy: 'Simulating tag changes across recent runs…',
+        title: 'Tag-set recommendation (simulated across recent runs)',
+        apply: 'Apply changes & rebuild & re-run suite',
+        scorecard: 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed',
+        now: 'Now',
+        predicted: 'predicted',
+        scope: ' (across {q} queries from the last {r} runs)'
       }
     },
     versions: {
@@ -2116,10 +2146,6 @@ export default {
       descriptionLabel: 'Description',
       save: 'Save frontmatter',
       saveFailed: 'Frontmatter save failed',
-      // Story 1.7 (2026-10-08): per-repo frontmatter rendered as a
-      // dedicated section in the dialog (topic/entity/scope/forbidden/
-      // summary/keyword). Same data as the chip panel; both editors
-      // write through to the repo doc field.
       perRepoTitle: 'Routing tags — what this repo is about',
       perRepoHint:
         'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
@@ -2131,9 +2157,6 @@ export default {
         summary: 'Summary',
         keyword: 'Keyword'
       },
-      // Per-field placeholder + hint for the textarea control (array
-      // fields only — scalar fields reuse the field name as the
-      // placeholder).
       perRepoPh: {
         topic: 'One topic per line',
         entity: 'One entity per line',
@@ -2616,10 +2639,6 @@ export default {
         empty: 'No labels yet.',
         notReady: 'Labels saved locally — server sync coming soon.'
       },
-      // Story 1.6→1.7 dialog fields + the per-repo-only InfoTip key
-      // (merged 2026-10-08: two `frontmatter:` literals in one object
-      // is a no-dupe-keys lint error and the second silently shadowed
-      // the first at runtime).
       frontmatter: {
         label: 'Frontmatter',
         edit: 'Edit frontmatter',
@@ -2760,14 +2779,6 @@ export default {
       crawlTip: 'Crawled from: {url}',
       total: "{'{'}n{'}'} document(s)"
     },
-    // Story 1.7 (2026-10-08, simplified 2026-10-08): the per-repo
-    // frontmatter chip UI (Refresh / Save tags) used in BOTH the
-    // wizard's Curate step and the OKF Studio editor's right rail.
-    // Per David: the tags ARE the frontmatter — no approve state.
-    // The curator can edit the chips here OR the YAML in the center
-    // pane. The values match the translateMixin default strings in
-    // components/okf/FrontmatterPanel.vue so the locale tree is the
-    // source of truth and the inline fallbacks are the safety net.
     frontmatter: {
       title: 'Frontmatter tags — what this repo is about',
       help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',

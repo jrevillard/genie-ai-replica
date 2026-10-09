@@ -2735,7 +2735,9 @@ export default {
         title: 'O que isto significa',
         veto: "Esta consulta corresponde fortemente à tag proibida “{'{'}tag{'}'}”. Se DEVERIA pertencer a este repositório, remova “{'{'}tag{'}'}” das tags proibidas no Frontmatter e publique novamente para reconstruir o head.",
         floor:
-          'A consulta não tem relação com o tema deste repositório (pontuação abaixo do piso mínimo do domínio) — nenhuma alteração de tags corrige isto; é uma supressão correta.'
+          'A consulta não tem relação com o tema deste repositório (pontuação abaixo do piso mínimo do domínio) — nenhuma alteração de tags corrige isto; é uma supressão correta.',
+        rejected:
+          'Rejeitado pelo guarda-corpo — uma tag proibida não deve corresponder ao próprio assunto deste repositório.'
       },
       suites: {
         generate: 'Generate test suite',
@@ -2775,7 +2777,26 @@ export default {
         batchNone:
           'Nenhuma correção foi sugerida — revise as consultas que falharam em relação ao escopo declarado manualmente.',
         addAll: 'Adicionar todas',
-        rebuildRerun: 'Reconstruir cabeça e reexecutar a suíte'
+        rebuildRerun: 'Reconstruir cabeça e reexecutar a suíte',
+        positiveFailuresTitle: 'Por que os positivos deixaram de passar',
+        positiveFailures:
+          '{n} teste(s) positivo(s) foram suprimidos nesta execução — as tags proibidas excedem o escopo do repositório.',
+        vetoedBy: 'Vetado por',
+        marginKilled: '{n} teste(s) positivo(s) perderam por margem (sem tag de veto única).',
+        removals: 'Tags a remover (vetam os positivos do próprio repositório)',
+        removeTip: 'Remover "{tag}" — vetou {n} teste(s) positivo(s)',
+        tripwire: 'Este ciclo quebrou {n} testes positivos — as tags adicionadas suprimem demais. Reverter?',
+        tripwireRevert: 'Ver opções de reversão',
+        staleSnapshot:
+          'As tags mudaram desde que esta suíte foi gerada — gere novamente para obter linhas proibidas atualizadas.',
+        revertTitle: 'Reverter tags',
+        revertForbiddenCount: '{n} tags proibidas',
+        revertAction: 'Reverter',
+        revertBusy: 'Carregando o histórico de gravações…',
+        revertSaving: 'Restaurando o frontmatter…',
+        revertEmpty: 'Ainda não há gravações de frontmatter registadas.',
+        revertDone: 'Frontmatter restaurado — reconstrua a cabeça e reexecute para aplicar.',
+        removeTag: 'Remover das tags proibidas'
       },
       error: {
         explain: 'A explicação falhou',
@@ -2784,7 +2805,10 @@ export default {
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Não foi possível carregar o histórico de gravações',
+        revert: 'Não foi possível reverter o frontmatter',
+        advisor: 'Falha do consultor'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2794,6 +2818,16 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Consultor: recomendar alterações de tags',
+        busy: 'Simulando alterações de tags nas execuções recentes…',
+        title: 'Recomendação de conjunto de tags (simulada nas execuções recentes)',
+        apply: 'Aplicar alterações, reconstruir e executar novamente a suíte',
+        scorecard: 'positivos {p}/{pt} aceitos · negativos {n}/{nt} suprimidos',
+        now: 'Agora',
+        predicted: 'previsto',
+        scope: ' (em {q} consultas das últimas {r} execuções)'
       }
     }
   },

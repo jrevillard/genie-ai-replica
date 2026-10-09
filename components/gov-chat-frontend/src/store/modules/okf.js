@@ -1017,6 +1017,55 @@ const actions = {
     }
   },
 
+  /** Story 1-8d — the bounded frontmatter save history (the Lab's
+   * Revert-tags panel). Returns {ok, entries: [{saved_at, actor,
+   * forbidden_count, shape}]}. */
+  async frontmatterHistory(_ctx, { repoId } = {}) {
+    try {
+      const entries = await headTestService.frontmatterHistory(repoId);
+      return { ok: true, entries };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'HISTORY_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8d — restore the frontmatter snapshotted at saved_at. The
+   * server re-enters update(), so the revert itself is snapshotted.
+   * Returns {ok, result: {repo_id, reverted_to, frontmatter}}. */
+  async frontmatterRevert(_ctx, { repoId, savedAt } = {}) {
+    try {
+      const result = await headTestService.revertFrontmatter(repoId, savedAt);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'REVERT_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8d — the comprehensive advisor: aggregates recent runs (all
+   * classes), simulates tag-set configurations against the gate, recommends
+   * the globally-optimal add/remove set. Returns
+   * {ok, result: {current_scorecard, recommended_scorecard, changes, ...}}. */
+  async headRecommend(_ctx, { repoId, runLimit } = {}) {
+    try {
+      const result = await headTestService.recommendTags(repoId, runLimit ? { run_limit: runLimit } : {});
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'ADVISE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
   setEditorSubTab({ commit }, subTab) {
     commit('setEditorSubTab', subTab === 'wizard' ? 'wizard' : 'editor');
   }

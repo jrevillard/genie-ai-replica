@@ -2742,7 +2742,8 @@ export default {
         title: 'Was das bedeutet',
         veto: "Diese Abfrage stimmt stark mit dem verbotenen Tag „{'{'}tag{'}'}“ überein. Sollte sie zu diesem Repository gehören, entfernen Sie „{'{'}tag{'}'}“ aus den verbotenen Tags im Frontmatter und veröffentlichen Sie erneut, um den Head neu zu bauen.",
         floor:
-          'Die Abfrage hat keinen Bezug zum Thema dieses Repositorys (Wert unter der Domain-Untergrenze) — keine Tag-Änderung behebt das; die Unterdrückung ist korrekt.'
+          'Die Abfrage hat keinen Bezug zum Thema dieses Repositorys (Wert unter der Domain-Untergrenze) — keine Tag-Änderung behebt das; die Unterdrückung ist korrekt.',
+        rejected: 'Vom Guardrail abgelehnt — ein verbotenes Tag darf nicht zum eigenen Thema des Repositorys passen.'
       },
       suites: {
         generate: 'Generate test suite',
@@ -2782,7 +2783,27 @@ export default {
         batchNone:
           'Es wurde keine Korrektur vorgeschlagen — prüfen Sie die fehlgeschlagenen Abfragen manuell gegen den deklarierten Umfang.',
         addAll: 'Alle hinzufügen',
-        rebuildRerun: 'Head neu bauen & Suite erneut ausführen'
+        rebuildRerun: 'Head neu bauen & Suite erneut ausführen',
+        positiveFailuresTitle: 'Warum die Positivfälle nicht mehr bestehen',
+        positiveFailures:
+          'In diesem Durchlauf wurde(n) {n} Positiv-Test(s) unterdrückt — die verbotenen Tags treffen über das Repository-Scope hinaus zu.',
+        vetoedBy: 'Veto durch',
+        marginKilled: '{n} Positiv-Test(s) am Margin gescheitert (kein einzelnes Veto-Tag).',
+        removals: 'Zu entfernende Tags (sie legen Veto gegen die eigenen Positivfälle dieses Repositorys ein)',
+        removeTip: '"{tag}" entfernen — es hat {n} Positiv-Test(s) mit Veto blockiert',
+        tripwire:
+          'Dieser Zyklus hat {n} Positiv-Tests gebrochen — die hinzugefügten Tags unterdrücken zu viel. Zurücksetzen?',
+        tripwireRevert: 'Wiederherstellungsoptionen ansehen',
+        staleSnapshot:
+          'Tags wurden seit der Erzeugung dieser Suite geändert — für aktuelle verbotene Zeilen neu erzeugen.',
+        revertTitle: 'Tags zurücksetzen',
+        revertForbiddenCount: '{n} verbotene Tags',
+        revertAction: 'Zurücksetzen',
+        revertBusy: 'Speicherhistorie wird geladen…',
+        revertSaving: 'Frontmatter wird wiederhergestellt…',
+        revertEmpty: 'Noch keine Frontmatter-Speicherungen aufgezeichnet.',
+        revertDone: 'Frontmatter wiederhergestellt — Head neu bauen und erneut ausführen, um es anzuwenden.',
+        removeTag: 'Aus den Sperr-Tags entfernen'
       },
       error: {
         explain: 'Erklärung fehlgeschlagen',
@@ -2791,7 +2812,10 @@ export default {
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Speicherhistorie konnte nicht geladen werden',
+        revert: 'Frontmatter konnte nicht zurückgesetzt werden',
+        advisor: 'Berater fehlgeschlagen'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2801,6 +2825,16 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Berater: Tag-Änderungen empfehlen',
+        busy: 'Tag-Änderungen über die letzten Läufe simulieren…',
+        title: 'Tag-Set-Empfehlung (simuliert über die letzten Läufe)',
+        apply: 'Änderungen anwenden, Head neu bauen & Suite neu ausführen',
+        scorecard: 'Positive {p}/{pt} akzeptiert · Negative {n}/{nt} unterdrückt',
+        now: 'Jetzt',
+        predicted: 'prognostiziert',
+        scope: ' (über {q} Abfragen aus den letzten {r} Läufen)'
       }
     }
   },

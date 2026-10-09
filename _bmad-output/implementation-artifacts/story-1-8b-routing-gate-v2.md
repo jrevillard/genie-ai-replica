@@ -305,3 +305,42 @@ David's call, deferred); (b) honest-label benchmark regeneration
 (HIV as negative, the 5 in-scope near-misses as positives) — the
 prerequisite for 100%-meaningful numbers at scale; (c) branch push → CI →
 MR to feat/okf-server once David validates NCD as done.
+
+## 11. 1-8f — suites are savable, modifiable and rerunnable (2026-10-09)
+
+David: "the test suites need to be able to be saved, modified and rerun
+(of course)". Suites already persisted (kind:'suite' docs in
+okf_head_test_runs) and reran by key; the gaps were LOADING one back into
+the Lab and EDITING its rows — a row could only be ADDED, so a mislabeled
+row (the HIV positive) was permanent noise: it could not be relabeled or
+removed, only duplicated with the other kind (which the advisor then
+reads as two contradictory rows).
+
+**Backend (cf9fe2c):** GET /okf/repos/:id/routing-testsuite/:suite_key
+returns the full saved suite (read scope; 'runs' stays registered first
+so the key is never parsed as a suite id). POST .../:suite_key/rows
+{updates, removes} (admin): kind flips search BOTH payload arrays — the
+mislabeled row sits in the WRONG array (kind:'positive' inside
+payload.negative), which the first implementation missed and the unit
+test now pins; cls is cleared on flip (the class is the GENERATOR's
+assessment — a relabeled row has none); 409 on a resulting
+cross-array contradiction (same text both kinds) or in-kind duplicate;
+run doc untouched (runs are immutable history — edit the SUITE, rerun).
+
+**Frontend:** Saved-suites table in the Suites tab (key / when /
+positives / negatives + Load); suite rows visible and editable BEFORE
+any run (the old view only rendered post-run — suiteResultRows gated on
+lastRunSummary); per-row ⇄ (flip) and × (remove) buttons adopt the
+server-returned suite on every edit; DS tokens only (--danger etc.).
+
+**Also in this cycle:** translateMixin switched to RAW message lookup
+(4ba28e5) — vue-i18n's compiler was rendering every {placeholder} EMPTY
+in the browser (the advisor scorecard showed "positives / claimed ·
+negatives / suppressed") while jest stayed green; the {'{'}-escape
+workaround string (teach.veto ×14) reverted to plain {tag}.
+
+**Validation:** okf-server 843 (one pre-existing flake:
+import-links-integration timeout under full-suite load, green in
+isolation at 1.4s), frontend 1664, live smoke 32/32 (section 14 = suite
+load + flip + flip-back roundtrip + 401), verify-local-build 46/46.
+Commits: 4ba28e5 (translate), cf9fe2c (1-8f), ce7d7a7 (smoke §14).

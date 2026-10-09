@@ -4,6 +4,8 @@ Library chart for the GENIE.AI Helm umbrella. Provides:
 
 - Naming helpers (`genieai-common.name`, `genieai-common.fullname`)
 - Label selectors (`genieai-common.labels`, `genieai-common.selectorLabels`)
+- Component label resolution (`genieai-common.componentContext` — single
+  deepCopy site for the merged component view; composed by `labels`)
 - Chart/version label (`genieai-common.chart`)
 
 ## Usage
@@ -30,10 +32,13 @@ metadata:
 
 ### Values scope
 
-`nameOverride`, `fullnameOverride` and `component` are read from the
-**consuming chart's root values** (helpers render with the parent's
-context). Setting them under a `genieai-common:` subtree in values.yaml is
-silently ignored — always place them at the root.
+`nameOverride` and `fullnameOverride` are read from the **consuming chart's
+root values** (helpers render with the parent's context). Setting them under
+a `genieai-common:` subtree in values.yaml is silently ignored — always place
+them at the root. `component` is NOT a values key: call sites pass it in the
+context dict — `(dict "Chart" .Chart "Release" .Release "Values" .Values
+"component" <name>)` — and `genieai-common.componentContext` merges it for
+label rendering.
 
 ## Why `type: library`?
 

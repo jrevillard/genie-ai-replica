@@ -1,3 +1,11 @@
+# TARGET-STATE EXAMPLE — as written, this Application CANNOT sync from a
+# plain repo clone: ArgoCD does not run `helm dependency build`, and the
+# vendored genieai-common tarball (charts/genieai-umbrella/charts/*.tgz)
+# is deliberately gitignored (regenerated via `make deps` in charts/).
+# The manifest illustrates the target state once the chart publishes to a
+# registry (OCI artifact or a Helm repo) — sync from a repo `path:` only
+# works after the dependency tarball exists in the cloned tree.
+#
 # IMPORTANT: do NOT render — apply manually.
 # This file is a literal ArgoCD Application manifest, NOT a Helm template.
 # Apply with:

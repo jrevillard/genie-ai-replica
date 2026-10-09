@@ -58,6 +58,13 @@ const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
 
 const HEAD_TEST_RUNS_COLLECTION = 'okf_head_test_runs';
+// Story 1-8d — the advisor predicts the production gate LOCALLY (embed +
+// cosine), so it can simulate tag-set changes before recommending them.
+// These mirror retriever config.py / head-test-service.js (same env names,
+// same defaults) — keep the three definitions in sync.
+const GATE_MARGIN = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_MARGIN || '0.01');
+const GATE_FLOOR = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_FLOOR || '0.55');
+const GATE_TAG_MAX = parseFloat(process.env.RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX || '0.55');
 // Sibling context for the LLM prompt (matches the lab's sibling bound).
 const SIBLING_CONTEXT_LIMIT = 20;
 // Deterministic forbidden-negative templates: {tag} is substituted.
@@ -761,7 +768,7 @@ async function listRuns(repoId, payload = {}) {
  * makes ONE LLM call proposing a consolidated set of new forbidden tags
  * covering all failing subjects. Per-query notes explain each failure.
  */
-async function explainSuiteFailures(repoId, suiteKey, _opts = {}) {
+async function explainSuiteFailures(repoId, suiteKey, opts = {}) {
   return withSpan('okf.headsuite.explain_failures', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
     const db = await dbService.getConnection();
@@ -916,12 +923,262 @@ subject tags over query-specific ones. Respond with ONLY a JSON object:
   });
 }
 
+/**
+ * Story 1-8d — the COMPREHENSIVE advisor (David: "the advisor output must
+ * be comprehensive and consider all types of queries based on the query set
+ * in the test suite... across multiple suites and cycles of tests").
+ *
+ * Unlike the per-run explain, this aggregates the queries of the last N
+ * runs (every class), embeds them ONCE, and SIMULATES candidate tag-set
+ * configurations against the production gate rules (floor + per-tag veto +
+ * centroid margin) before recommending anything:
+ *   - additions come from ONE LLM call over the failing queries of every
+ *     class, then survive the veto-impact simulation (kill 0 positives);
+ *   - removal candidates come ONLY from the loop's own recent writes
+ *     (frontmatter_history) — curator-declared originals are never
+ *     proposed for removal;
+ *   - greedy acceptance with a hard constraint: a configuration that loses
+ *     a single previously-passing positive is rejected.
+ * Output: current vs predicted scorecard per class, the exact tag changes,
+ * per-query effects, and the persisted advice doc (kind:'advisor').
+ */
+async function recommendTagSet(repoId, payload = {}, opts = {}) {
+  return withSpan('okf.headsuite.recommend', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
+    const runLimit = Math.max(1, Math.min(parseInt(payload.run_limit, 10) || 5, 20));
+    const db = await dbService.getConnection();
+    await ensureCollection(db);
+    const repo = await repositoryService.getById(repoId, { authz: opts.authz });
+    const fm = await frontmatterService.readFrontmatterFromRepoDoc(repoId);
+    const head = repo.head;
+    if (!head || !Array.isArray(head.vector)) {
+      const err = new Error('repo has no vectorized head — rebuild it before asking for advice');
+      err.code = 'NO_HEAD';
+      err.status = 409;
+      throw err;
+    }
+
+    // 1. Queries of the last N runs, deduped by text, labeled by class.
+    const runs = await (
+      await db.query(
+        'FOR r IN okf_head_test_runs FILTER r.repo_id == @k && r.kind == "run" SORT r.created_at DESC LIMIT @n RETURN r',
+        { k: repoId, n: runLimit }
+      )
+    ).all();
+    const byText = new Map();
+    for (const r of runs) {
+      for (const q of r.payload.results || []) {
+        if (!q || !q.query || !q.kind) continue;
+        const key = q.query.trim().toLowerCase();
+        if (!byText.has(key)) byText.set(key, { query: q.query, kind: q.kind, cls: q.cls || null, claimed: !!q.head_claimed });
+      }
+    }
+    const queries = [...byText.values()];
+    if (!queries.length) {
+      const err = new Error('no runs found — run a suite first');
+      err.code = 'RUN_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+
+    // 2. Embed everything once. Tag vectors: reuse the head's stored
+    //    per-tag forbidden vectors where present (exact); embed fresh
+    //    otherwise (same TEI path the head build uses).
+    const qvecs = await frontmatterService.teiEmbed(queries.map((q) => q.query));
+    const headTagVectors = new Map();
+    for (const fv of (head.per_field && head.per_field.forbidden_vectors) || []) {
+      if (fv && typeof fv.tag === 'string' && Array.isArray(fv.vector)) headTagVectors.set(fv.tag, fv.vector);
+    }
+    const ownVectors = [];
+    for (const f of ['topic', 'entity', 'keyword', 'summary', 'scope']) {
+      if (Array.isArray(head.per_field && head.per_field[f])) ownVectors.push(head.per_field[f]);
+    }
+    const cos = (a, b) => {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return null;
+      let d = 0, na = 0, nb = 0;
+      for (let i = 0; i < a.length; i += 1) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+      return na && nb ? d / (Math.sqrt(na) * Math.sqrt(nb)) : null;
+    };
+    const centroid = (vectors) => {
+      const dim = vectors[0].length;
+      const acc = new Array(dim).fill(0);
+      for (const v of vectors) for (let i = 0; i < dim; i += 1) acc[i] += v[i];
+      return acc.map((x) => x / vectors.length);
+    };
+    const predict = (qv, tags, tagVecMap) => {
+      const score = cos(qv, head.vector);
+      if (score === null || score < GATE_FLOOR) return { claimed: false, why: 'floor' };
+      const vecs = tags.map((t) => tagVecMap.get(t)).filter(Array.isArray);
+      if (vecs.length) {
+        for (const tv of vecs) {
+          const c = cos(qv, tv);
+          if (c !== null && c >= GATE_TAG_MAX) return { claimed: false, why: 'veto' };
+        }
+        const c = cos(qv, centroid(vecs));
+        if (c !== null && score - c <= GATE_MARGIN) return { claimed: false, why: 'margin' };
+      }
+      return { claimed: true, why: null, score };
+    };
+
+    const evalConfig = async (tags) => {
+      const newTags = tags.filter((t) => !headTagVectors.has(t));
+      if (newTags.length) {
+        const vecs = await frontmatterService.teiEmbed(newTags);
+        newTags.forEach((t, i) => headTagVectors.set(t, vecs[i]));
+      }
+      const tagVecMap = new Map();
+      for (const t of tags) if (headTagVectors.has(t)) tagVecMap.set(t, headTagVectors.get(t));
+      const per = queries.map((q, i) => ({ ...q, ...predict(qvecs[i], tags, tagVecMap) }));
+      const sc = { positive_claimed: 0, positive_total: 0, negative_suppressed: 0, negative_total: 0, by_cls: {} };
+      for (const p of per) {
+        if (p.kind === 'positive') {
+          sc.positive_total += 1;
+          if (p.claimed) sc.positive_claimed += 1;
+        } else {
+          sc.negative_total += 1;
+          if (!p.claimed) sc.negative_suppressed += 1;
+          const k = p.cls || 'confusable';
+          sc.by_cls[k] = sc.by_cls[k] || { suppressed: 0, total: 0 };
+          sc.by_cls[k].total += 1;
+          if (!p.claimed) sc.by_cls[k].suppressed += 1;
+        }
+      }
+      sc.score = sc.negative_suppressed + sc.positive_claimed * 2; // positives weigh double
+      return { scorecard: sc, per };
+    };
+
+    const current = [...(fm.forbidden || [])];
+    const before = await evalConfig(current);
+    const goldPositives = before.per.filter((p) => p.kind === 'positive' && p.claimed);
+
+    // 3. LLM proposals — additions for EVERY failing class, removals are
+    //    only sourced from the loop's own recent writes.
+    const failing = before.per.filter((p) => (p.kind === 'positive' ? !p.claimed : p.claimed));
+    let llmAdds = [];
+    try {
+      const prompt = `A retrieval repository's routing test suite fails some queries across classes.
+
+REPOSITORY scope — topics: ${(fm.topic || []).join(', ')}; entities: ${(fm.entity || []).join(', ')};
+already forbidden: ${current.join(', ') || '(none)'}; summary: ${fm.summary || ''}
+
+FAILING QUERIES (label — what went wrong):
+${failing.map((q) => `- [${q.kind}${q.cls ? '/' + q.cls : ''}] ${q.query}`).join('\n')}
+
+For the NEGATIVE queries that were wrongly claimed: propose UP TO 6 NEW
+forbidden tags (lowercase kebab-case, 1-3 words) that exclude their
+subjects. They must be NARROW domain tags (a broad clinical compound vetoes
+half a corpus), must not overlap the already-forbidden list, and must not
+exclude the repository's own topics/entities. Do NOT propose anything for
+positive queries — those are fixed by REMOVING over-broad tags, not adding.
+Respond with ONLY: {"add": ["...", "..."]}`;
+      const resp = await frontmatterService.vllmChatCompletions([{ role: 'user', content: prompt }], {
+        maxTokens: 300,
+        temperature: 0.2
+      });
+      const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
+      const parsed = parseJsonObject(content && content.content);
+      llmAdds = ((parsed && parsed.add) || [])
+        .filter((t) => typeof t === 'string' && t.trim())
+        .map((t) => t.trim().toLowerCase().replace(/\s+/g, '-'))
+        .filter((t) => !current.includes(t))
+        .slice(0, 6);
+    } catch (e) {
+      logger.warn('head-suite.recommend.llm_failed', { repo_id: repoId, error: e.message });
+    }
+
+    // 4. Removal candidates: the loop's own recent writes only (frontmatter
+    //    history shapes minus the FIRST entry = the baseline lineage).
+    const history = Array.isArray(repo.frontmatter_history) ? repo.frontmatter_history : [];
+    const loopWritten = new Set();
+    for (const h of history.slice(0, 5)) {
+      for (const t of (h.shape && h.shape.forbidden) || []) loopWritten.add(String(t).toLowerCase());
+    }
+    const baseline = (history[history.length - 1] && history[history.length - 1].shape && history[history.length - 1].shape.forbidden) || [];
+    const removalCandidates = current.filter((t) => loopWritten.has(String(t).toLowerCase()) && !baseline.includes(t));
+
+    // 5. Greedy search with the hard positive constraint.
+    const working = [...current];
+    const applied = { add: [], remove: [] };
+    let best = before;
+    const considerAdd = async (tag) => {
+      if (working.includes(tag)) return null;
+      const trial = await evalConfig([...working, tag]);
+      const gainsPositives = trial.scorecard.positive_claimed > best.scorecard.positive_claimed;
+      const losesPositive = trial.scorecard.positive_claimed < best.scorecard.positive_claimed;
+      const gainsNegatives = trial.scorecard.negative_suppressed > best.scorecard.negative_suppressed;
+      if (losesPositive) return { tag, rejected: 'would suppress positive tests' };
+      if (!gainsNegatives && !gainsPositives) return { tag, rejected: 'no predicted improvement' };
+      working.push(tag);
+      applied.add.push(tag);
+      best = trial;
+      return { tag, accepted: true, by_cls: trial.scorecard.by_cls };
+    };
+    const considerRemove = async (tag) => {
+      const trial = await evalConfig(working.filter((t) => t !== tag));
+      const gainsPositives = trial.scorecard.positive_claimed > best.scorecard.positive_claimed;
+      const losesNegatives = trial.scorecard.negative_suppressed < best.scorecard.negative_suppressed;
+      if (!gainsPositives || losesNegatives) return { tag, rejected: gainsPositives ? 'un-suppresses other negatives' : 'no positive gain' };
+      const idx = working.indexOf(tag);
+      if (idx >= 0) working.splice(idx, 1);
+      applied.remove.push(tag);
+      best = trial;
+      return { tag, accepted: true };
+    };
+    const addResults = [];
+    for (const tag of llmAdds) addResults.push(await considerAdd(tag));
+    const removeResults = [];
+    for (const tag of removalCandidates) removeResults.push(await considerRemove(tag));
+    // second pass — interactions between accepted changes
+    for (const tag of llmAdds.filter((t) => !working.includes(t))) addResults.push(await considerAdd(tag));
+
+    const out = {
+      repo_id: repoId,
+      runs_considered: runs.length,
+      queries_considered: queries.length,
+      current_scorecard: before.scorecard,
+      recommended_scorecard: best.scorecard,
+      changes: { add: applied.add, remove: applied.remove },
+      add_eval: addResults,
+      remove_eval: removeResults,
+      gold_positives: goldPositives.length,
+      note:
+        applied.add.length || applied.remove.length
+          ? 'apply the changes, rebuild the head, re-run the suite — predicted scorecard above'
+          : 'no tag-set change predicts an improvement — the remaining fails are curator tradeoffs or need head-topic growth'
+    };
+    try {
+      await db.collection(HEAD_TEST_RUNS_COLLECTION).save({
+        _key: `a${Date.now()}-${crypto.randomUUID().slice(0, 6)}`,
+        repo_id: repoId,
+        kind: 'advisor',
+        created_at: new Date().toISOString(),
+        created_by: (opts.actor && opts.actor.user_id) || 'system',
+        payload: out
+      });
+    } catch (e) {
+      logger.warn('head-suite.recommend.persist_failed', { repo_id: repoId, error: e.message });
+    }
+    span.setAttribute('okf.headsuite.queries', queries.length);
+    span.setAttribute('okf.headsuite.add', applied.add.length);
+    span.setAttribute('okf.headsuite.remove', applied.remove.length);
+    logger.info('head-suite.recommend.done', {
+      repo_id: repoId,
+      queries: queries.length,
+      add: applied.add,
+      remove: applied.remove,
+      score: `${before.scorecard.score} -> ${best.scorecard.score}`
+    });
+    return out;
+  });
+}
+
 module.exports = {
   generateSuite,
   addQueries,
   runSuite,
   listRuns,
   explainSuiteFailures,
+  recommendTagSet,
   // test surface
   _internals: {
     suitePrompt,

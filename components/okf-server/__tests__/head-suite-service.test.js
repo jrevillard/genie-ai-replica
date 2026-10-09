@@ -27,7 +27,8 @@ jest.mock('../services/repository-service', () => ({
   getById: jest.fn()
 }));
 jest.mock('../services/head-test-service', () => ({
-  routingTest: jest.fn()
+  routingTest: jest.fn(),
+  guardSuggestions: jest.fn()
 }));
 
 const svc = require('../services/head-suite-service');
@@ -555,7 +556,7 @@ describe('explainSuiteFailures (Story 1-8c — batch advice for the latest run)'
     };
   }
 
-  it('ONE vllm call advises on ALL failing negatives: failing_queries carry cls+head_claim, tags normalized/deduped/capped at 5', async () => {
+  it('ONE vllm call advises on ALL failing negatives: failing_queries carry cls+head_claim, tags normalized/deduped/capped at 5, guardrail-screened (Story 1-8d)', async () => {
     mockRunLookup(
       seedRun([
         {
@@ -589,6 +590,13 @@ describe('explainSuiteFailures (Story 1-8c — batch advice for the latest run)'
         notes: 'covers the failing subjects'
       })
     );
+    const GUARD = {
+      accepted: ['communicable-disease', 'hiv-aids', 'physical-fitness', 'hospital-beds'],
+      rejected: [
+        { tag: 'nutrition-science', reason: "too close to the repository's own subject (similarity 0.61 >= 0.55)" }
+      ]
+    };
+    headTestService.guardSuggestions.mockResolvedValue(GUARD);
     const out = await svc.explainSuiteFailures('me', 's1', {});
     expect(out.suite_key).toBe('s1');
     expect(out.run_key).toBe('r1');
@@ -599,16 +607,25 @@ describe('explainSuiteFailures (Story 1-8c — batch advice for the latest run)'
       { query: 'exercise guidelines for seniors', cls: 'forbidden', head_claim: 'claim' }
     ]);
     // 'Mental Health' normalizes to 'mental-health' — already forbidden →
-    // dropped; the remaining six clean tags are capped at 5.
-    expect(out.suggested_tags).toEqual([
+    // dropped; the remaining six clean tags are capped at 5 BEFORE the
+    // guardrail, whose verdict splits the survivors into chips + rejected.
+    expect(out.suggested_tags).toEqual(GUARD.accepted);
+    expect(out.rejected).toEqual(GUARD.rejected);
+    expect(out.source).toBe('llm');
+    expect(out.note).toBe('covers the failing subjects');
+    // the guardrail sees the FULL normalized proposal set AND this run's
+    // positive queries (the veto-impact simulation input)
+    expect(headTestService.guardSuggestions).toHaveBeenCalledTimes(1);
+    expect(headTestService.guardSuggestions).toHaveBeenCalledWith('me', expect.any(Array), {
+      positiveQueries: ['breast cancer screening age']
+    });
+    expect(headTestService.guardSuggestions.mock.calls[0][1]).toEqual([
       'communicable-disease',
       'hiv-aids',
       'physical-fitness',
       'nutrition-science',
       'hospital-beds'
     ]);
-    expect(out.source).toBe('llm');
-    expect(out.note).toBe('covers the failing subjects');
     // ONE call for the WHOLE batch; the prompt carries only the failing
     // queries — passing negatives and (claimed) positives stay out.
     expect(frontmatterService.vllmChatCompletions).toHaveBeenCalledTimes(1);
@@ -619,6 +636,80 @@ describe('explainSuiteFailures (Story 1-8c — batch advice for the latest run)'
     expect(messages[0].content).not.toContain('breast cancer screening age');
     expect(messages[0].content).toContain('mental-health');
     expect(opts).toMatchObject({ maxTokens: 300, temperature: 0.2 });
+    // Story 1-8d — the advice is persisted as an auditable explain doc.
+    const explain = Object.values(__mockDb._stores.okf_head_test_runs).find((d) => d.kind === 'explain');
+    expect(explain).toMatchObject({ repo_id: 'me', suite_key: 's1', run_key: 'r1' });
+    expect(explain.payload.suggested_tags).toEqual(GUARD.accepted);
+    expect(explain.payload.rejected).toEqual(GUARD.rejected);
+  });
+
+  it('a fully screened-out proposal set lands as source guardrail — a poisoned chip never forms', async () => {
+    // The 2026-10-09 regression shape at the suite level: every LLM
+    // proposal dies in the guardrail, so suggested_tags stays empty and
+    // the rejections are carried + persisted for the audit trail.
+    mockRunLookup(
+      seedRun([
+        {
+          query: 'lung cancer staging details',
+          kind: 'negative',
+          cls: 'near-miss',
+          head_claimed: true,
+          head_claim: 'claim'
+        }
+      ])
+    );
+    frontmatterService.vllmChatCompletions.mockResolvedValue(llmResponse({ tags: ['Lung Cancer'], notes: '' }));
+    headTestService.guardSuggestions.mockResolvedValue({
+      accepted: [],
+      rejected: [{ tag: 'lung-cancer', reason: "too close to the repository's own subject (similarity 1.00 >= 0.55)" }]
+    });
+    const out = await svc.explainSuiteFailures('me', 's1', {});
+    expect(out.suggested_tags).toEqual([]);
+    expect(out.rejected).toEqual([
+      { tag: 'lung-cancer', reason: "too close to the repository's own subject (similarity 1.00 >= 0.55)" }
+    ]);
+    expect(out.source).toBe('guardrail');
+    const explain = Object.values(__mockDb._stores.okf_head_test_runs).find((d) => d.kind === 'explain');
+    expect(explain.payload.rejected).toHaveLength(1);
+  });
+
+  it('positives-only failure: removal_suggestions aggregate tag_veto attribution — no LLM, no additions', async () => {
+    // The over-suppression signature: negatives look perfect, positives
+    // die. The advice flips to tag REMOVAL, sorted by kill count, and no
+    // suggestion model is involved.
+    mockRunLookup(
+      seedRun([
+        { query: 'p1', kind: 'positive', head_claimed: false, tag_veto: 'lung-cancer' },
+        { query: 'p2', kind: 'positive', head_claimed: false, tag_veto: 'lung-cancer' },
+        { query: 'p3', kind: 'positive', head_claimed: false, tag_veto: 'non-smoking' },
+        { query: 'p4', kind: 'positive', head_claimed: false, tag_veto: null }, // margin-killed
+        { query: 'p5', kind: 'positive', head_claimed: true } // passing positive — not a kill
+      ])
+    );
+    const out = await svc.explainSuiteFailures('me', 's1', {});
+    expect(out.failing_count).toBe(0);
+    expect(out.removal_suggestions).toEqual([
+      { tag: 'lung-cancer', killed: 2 },
+      { tag: 'non-smoking', killed: 1 }
+    ]);
+    expect(out.positive_failures).toEqual({
+      count: 4,
+      veto_counts: { 'lung-cancer': 2, 'non-smoking': 1 },
+      margin_killed: 1
+    });
+    expect(out.note).toBe(
+      'no wrongly-claimed negatives — the failures are suppressed positives (see removal_suggestions)'
+    );
+    expect(out.suggested_tags).toEqual([]);
+    expect(out.source).toBe('none');
+    // the positive-improvement advice names the vetoing tags
+    expect(out.improvements).toContain('remove or narrow lung-cancer, non-smoking');
+    expect(frontmatterService.vllmChatCompletions).not.toHaveBeenCalled();
+    expect(headTestService.guardSuggestions).not.toHaveBeenCalled();
+    // still persisted — the cycle stays auditable in every direction
+    const explain = Object.values(__mockDb._stores.okf_head_test_runs).find((d) => d.kind === 'explain');
+    expect(explain.payload.removal_suggestions).toHaveLength(2);
+    expect(explain.payload.positive_failures.count).toBe(4);
   });
 
   it('404s RUN_NOT_FOUND when the suite has never been run', async () => {
@@ -629,7 +720,7 @@ describe('explainSuiteFailures (Story 1-8c — batch advice for the latest run)'
     });
   });
 
-  it('zero failures → an honest note and NO LLM call', async () => {
+  it('zero failures → an honest note, NO LLM call, and nothing persisted', async () => {
     mockRunLookup(
       seedRun([
         { query: 'capital of France', kind: 'negative', cls: 'off-domain', head_claimed: false, head_claim: 'floor' },
@@ -640,11 +731,14 @@ describe('explainSuiteFailures (Story 1-8c — batch advice for the latest run)'
     expect(out.failing_count).toBe(0);
     expect(out.suggested_tags).toEqual([]);
     expect(out.source).toBe('none');
-    expect(out.note).toBe('no failing negatives in the latest run — nothing to explain');
+    expect(out.note).toBe('no failures in the latest run — nothing to explain');
     expect(frontmatterService.vllmChatCompletions).not.toHaveBeenCalled();
+    expect(headTestService.guardSuggestions).not.toHaveBeenCalled();
+    // the early return skips the explain-doc persistence — nothing to audit
+    expect(Object.values(__mockDb._stores.okf_head_test_runs || {})).toHaveLength(0);
   });
 
-  it('an LLM failure degrades honestly (source none, note, no throw)', async () => {
+  it('an LLM failure degrades honestly (source none, note, no throw) and still persists the advice', async () => {
     mockRunLookup(
       seedRun([
         { query: 'exercise guidelines', kind: 'negative', cls: 'forbidden', head_claimed: true, head_claim: 'claim' }
@@ -655,6 +749,11 @@ describe('explainSuiteFailures (Story 1-8c — batch advice for the latest run)'
     expect(out.suggested_tags).toEqual([]);
     expect(out.source).toBe('none');
     expect(out.note).toContain('unreachable');
+    // regression guard: the persist block reads the actor from the (fixed)
+    // opts param — an explain doc must land even when the model is down
+    const explain = Object.values(__mockDb._stores.okf_head_test_runs).find((d) => d.kind === 'explain');
+    expect(explain).toMatchObject({ repo_id: 'me', suite_key: 's1', run_key: 'r1' });
+    expect(explain.payload.note).toContain('unreachable');
   });
 
   it('unparseable LLM output → source none with empty tags', async () => {

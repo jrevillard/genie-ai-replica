@@ -374,13 +374,17 @@ cp configs/otel/otel-collector-config.yaml \
    (no literal `genieai` anywhere — the PII smoke runner and the per-env
    model install into non-`genieai` namespaces, where literal endpoints
    NXDOMAIN):
-   - `vtraces.${GENIEAI_NAMESPACE}.svc.cluster.local:10428`
-   - `vmetrics.${GENIEAI_NAMESPACE}.svc.cluster.local:8428`  (8429 is the
-     CLUSTER vmselect port — single mode uses 8428)
-   - `vlogs.${GENIEAI_NAMESPACE}.svc.cluster.local:9428`
+   - `vtraces.${env:GENIEAI_NAMESPACE}.svc.cluster.local:10428`
+   - `vmetrics.${env:GENIEAI_NAMESPACE}.svc.cluster.local:8428`  (8429 is
+     the CLUSTER vmselect port — single mode uses 8428)
+   - `vlogs.${env:GENIEAI_NAMESPACE}.svc.cluster.local:9428`
+   Use the `${env:VAR}` form — the scheme the source config itself uses
+   (its own env-dependent fields are written `${env:...}`). The legacy
+   bare `${VAR}` expansion is deprecated and newer collector builds
+   reject it; `${env:...}` works on both old and new.
    The CR (Step 3) injects the value — `GENIEAI_NAMESPACE` set under
    `spec.env` from the chart's values (`{{ .Values.namespace }}`); the
-   collector expands `${GENIEAI_NAMESPACE}` in endpoint fields at boot.
+   collector expands the placeholders in endpoint fields at boot.
    Helm never evaluates the file (`.Files.Get`), so no template syntax
    may land in it; the namespace arrives via the CR environment, and
    every install (dev, PII-test, el-salvador) resolves correctly.
@@ -418,8 +422,8 @@ spec:
         fieldRef:
           fieldPath: status.podIP
     # The ported config's exporter endpoints are written as
-    # `${GENIEAI_NAMESPACE}` placeholders (Step 2) — without this env var
-    # the substitution yields an empty hostname and every exporter
+    # `${env:GENIEAI_NAMESPACE}` placeholders (Step 2) — without this env
+    # var the substitution yields an empty hostname and every exporter
     # NXDOMAINs on any install.
     - name: GENIEAI_NAMESPACE
       value: {{ .Values.namespace | quote }}
@@ -443,7 +447,7 @@ helm template test charts/genieai-umbrella -n genieai --set clusterProfile=prod 
   assert 'pii_redact' in str(cfg), 'pii_redact missing'; \
   assert 'stamp_log_metadata_from_msg' in str(cfg), 'metadata stamp missing'; \
   assert 'fluent_forward' not in str(cfg), 'fluent_forward must be removed on K8s'; \
-  assert '${GENIEAI_NAMESPACE}' in str(cfg), 'exporters must use the env placeholder, not literal hostnames'; \
+  assert '${env:GENIEAI_NAMESPACE}' in str(cfg), 'exporters must use the ${env:...} placeholder, not literal hostnames'; \
   envs = {e['name'] for e in cr['spec']['env']}; \
   assert 'GENIEAI_NAMESPACE' in envs, 'CR must inject GENIEAI_NAMESPACE'; \
   import json; print(json.dumps(cfg['service']['pipelines']['logs'], indent=2))"

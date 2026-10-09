@@ -155,6 +155,7 @@ charts:integration:
         --set services.documentRepository.enabled=false
         --set services.nginx.enabled=false
         --set services.clamav.enabled=false
+        --set services.redisCache.enabled=false
         --set migrate.enabled=false
         --wait --timeout 25m
     # Run helm test.
@@ -838,8 +839,16 @@ RELEASE=${RELEASE:-pii-test}
 # No hyphens, lowercase only: the sk- apikey body rule is a lowercase
 # class ([a-z0-9]{20,}) and a hyphenated or uppercase marker breaks the
 # regexes, the value is never redacted, and the raw-value assertion fails
-# on every run. uuidgen emits uppercase hex — fold to lowercase.
-MARKER="piimarker$(uuidgen 2>/dev/null | tr -d '-' | tr '[:upper:]' '[:lower:]' || echo $RANDOM$RANDOM)"
+# on every run. uuidgen emits uppercase hex — fold to lowercase. The
+# fallback is a real branch: `uuidgen ... || echo` would never fire (the
+# pipeline's exit status is tr's, always 0) and a deterministic marker
+# can satisfy the positive control from a stale row of a previous run.
+if command -v uuidgen >/dev/null 2>&1; then
+  RAND=$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')
+else
+  RAND=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
+fi
+MARKER="piimarker${RAND}"
 
 echo "=== PII smoke test (K8s) ==="
 echo "Namespace: $NS"
@@ -871,6 +880,7 @@ helm install $RELEASE charts/genieai-umbrella \
   --set services.documentRepository.enabled=false \
   --set services.nginx.enabled=false \
   --set services.clamav.enabled=false \
+  --set services.redisCache.enabled=false \
   --set migrate.enabled=false \
   --set observability.enabled=true \
   --set observability.otel.enabled=true \

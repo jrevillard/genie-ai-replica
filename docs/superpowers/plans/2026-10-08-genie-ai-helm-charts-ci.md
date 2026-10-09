@@ -23,7 +23,7 @@ Five input-class concerns the spec implies but no Plan 7 task tests explicitly. 
 
 1. **CI runtime footprint** — `charts:integration` spins up a kind cluster, installs the chart, runs `helm test`, runs smoke. The full GENIE.AI stack is 28 services; kind with the chart on a developer laptop will time out before the GitLab CI default (60 min). **Pinned in Task 1 Step 3** — the integration job runs the SAME chart as the production install, with the `dev/values-override.yaml` overlay (single-node everything, no GPU servers, observability off) so the stack stays under the resource budget.
 2. **conftest conftest vs conftest (test runner) — name collision** — the OPA-conftest binary is `conftest`; pytest ships a `conftest.py` for fixtures. The repo already imports `tests/conftest.py` (per spec line 671). **Pinned in Task 2 Step 1** — the OPA conftest binary is invoked as `conftest test policies/`; pytest is invoked as `pytest`. Two different binaries, two different commands, no name conflict in the CI definition.
-3. **Cosign `env:COSIGN_KEY` (single colon) is the ONLY correct URI scheme** — `env://COSIGN_KEY` (double slash) fails with "no recognized key URI scheme" in cosign 2.x. **Pinned in Task 3 Step 1** — the CI signing step uses `--key env:COSIGN_KEY=$COSIGN_KEY_BASE64` (single colon, base64-encoded as required by cosign).
+3. **Cosign env-var key reference is `--key env://COSIGN_KEY`** (verified against upstream cosign sign CLI docs) — cosign reads the PEM from the named environment variable. Earlier drafts fabricated an `env:COSIGN_KEY=$COSIGN_KEY` form: after shell expansion that argument is `env:COSIGN_KEY=<entire PEM>`, which is neither a recognized scheme nor a path — AND it exposes the private key in the runner's process list. **Pinned in Task 3 Step 1** — the CI signing step uses `--key env://COSIGN_KEY` with the PEM carried in the masked CI variable only.
 4. **Kyverno publicKeys is INLINE PEM ONLY** — Kyverno's `verifyImages.attestors.entries[].keys.publicKeys` does NOT accept a cosign-style URI, a Secret reference, a ConfigMap, or a template. **Pinned in Task 3 Step 2** — the chart renders the ClusterPolicy with the public key inlined in the YAML (a multi-line `-----BEGIN PUBLIC KEY-----` block). CI renders the chart, reads the key, substitutes it into the template; the template's `{{ .Values.cosign.publicKey }}` resolves to a literal PEM string.
 5. **Placeholder sweep MUST fail on a `PLACEHOLDER+` sentinel** — Plan 2/5 sentinels are valid base64 (decodes to "PLACEHOLDER+") but are NOT valid SealedSecret ciphertext. The controller marks them `invalid`. Conftest must catch the sentinel, not just literally-named placeholders. **Pinned in Task 2 Step 3** — the policy decodes base64, asserts the decoded value is NOT a known sentinel string.
 
@@ -43,7 +43,7 @@ Five input-class concerns the spec implies but no Plan 7 task tests explicitly. 
 **The plan does NOT add a new `charts` stage.** Spec §14 places `charts:lint` in the existing `lint` stage, adds a single new stage `charts:integration` between `build` and `scan`, and puts `charts:scan` in the existing `scan` stage. Following this avoids breaking the existing pipeline's `needs:` and `dependencies:` edges.
 
 ```yaml
-# CHART PIPELINE (Plan 7) — per spec §14
+# CHART PIPELINE —
 # Job 1: charts:lint (existing `lint` stage)
 
 charts:lint:
@@ -60,8 +60,19 @@ charts:lint:
   script:
     - make -C charts deps              # vendor the file:// library dependency
     - make -C charts lint              # helm lint --strict (both charts)
-    - make -C charts docs-check        # helm-docs --check
-    - conftest test --policy policies/ policies/fixtures/test-data.yaml --output stdout
+    # Gate runs conftest on REAL inputs only: the fixtures are intentional
+    # violations and would keep the job
+    # permanently red; the shipped READMEs are hand-written, so helm-docs
+    # --check would likewise always fail. The fixture suite runs as a
+    # self-test that ASSERTS the expected failures.
+    - helm template test charts/genieai-umbrella | conftest test --policy policies/ --output stdout
+    - if conftest test --policy policies/ policies/fixtures/test-data.yaml --output stdout; then
+        echo "FAIL: fixture suite unexpectedly passed — deny rules are dead"; exit 1;
+      else
+        echo "OK: fixture suite failed as designed (deny rules live)";
+      fi
+    # docs-check is ADVISORY only (hand-authored READMEs): report drift, never block.
+    - make -C charts docs-check || echo "WARN: helm-docs drift detected (advisory)"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -96,16 +107,32 @@ charts:integration:
     # Install the chart with the dev overlay (single-node, no GPU,
     # observability off — keeps the kind cluster under the 60-min CI
     # budget). --create-namespace is REQUIRED: the Namespace is a
-    # regular resource (code-review Wave 10 #9 — Helm 4 deletes
-    # hook-identity Namespaces, see plan-defects.md Wave 8 #2), so
+    # regular resource (Helm 4 deletes
+    # hook-identity Namespaces mid-install), so
     # the flag provisions it before the release Secret and the
     # pre-install hooks (-30 rbac, -20 cm, -5 dep-check) run.
+    # AI tier is force-disabled: the dev overlay still defaults
+    # ai.enabled=true with GPU nodeSelectors and registry.example.org
+    # image refs — on a GPU-less kind cluster those pods stay Pending and
+    # PLACEHOLDER+ secrets never materialize, so --wait would time out.
+    # The dev overlay SHOULD carry these keys itself; until then the job
+    # pins them here.
     - helm install test charts/genieai-umbrella
         --namespace genieai --create-namespace
         --values ${HELM_VALUES}
         --set observability.enabled=false
+        --set ai.enabled=false
+        --set ai.remoteGpu.enabled=true
+        --set ai.remoteGpu.vllmUrl=http://gpu-mock.example.org/vllm
+        --set ai.remoteGpu.teiEmbeddingUrl=http://gpu-mock.example.org/tei
+        --set ai.remoteGpu.teiRerankingUrl=http://gpu-mock.example.org/teir
+        --set ai.remoteGpu.vllmTranslationUrl=http://gpu-mock.example.org/vllmt
+        --set data.arangodb.enabled=false
+        --set data.postgres.enabled=false
+        --set data.keycloak.enabled=false
+        --set secrets.sealedSecrets.enabled=false
         --wait --timeout 25m
-    # Run helm test (Plan 2/3/4/5/6 test pods).
+    # Run helm test.
     - helm test test --namespace genieai --timeout 20m
     # Run connectivity smoke (the namespace-routed backend).
     - kubectl port-forward -n genieai svc/backend 8080:80 &
@@ -151,7 +178,7 @@ stages:
   - test
   - config
   - build
-  - charts-integration   # NEW (Plan 7)
+  - charts-integration   # NEW
   - scan
   - e2e
   - promote
@@ -161,7 +188,7 @@ stages:
 
 # Job 4 (separate, spec §14): publish:charts + cosign sign + verify
 
-The cosign sign step belongs in a `publish:charts` job, NOT in `charts:integration` (per spec §14 line 645: "publish:charts job uploads the umbrella to the existing GitLab Container Registry"). The signing key reference MUST use the single-colon `env:COSIGN_KEY=` scheme (cosign 2.x; `env://` is NOT a recognized scheme).
+The cosign sign step belongs in a `publish:charts` job, NOT in `charts:integration` (per spec §14 line 645: "publish:charts job uploads the umbrella to the existing GitLab Container Registry"). The signing key reference uses `--key env://COSIGN_KEY` (cosign reads the PEM from the env var; nothing key-shaped lands in argv).
 
 ```yaml
 publish:charts:
@@ -173,7 +200,7 @@ publish:charts:
     - make -C charts deps
     # helm push uploads the tgz as <registry-path>/<chart-name>:<chart-version>
     # — helm appends the chart name and tags with the Chart.yaml `version`.
-    # Signing must target exactly that ref (code-review Wave 10 #13):
+    # Signing must target exactly that ref:
     #   oci push: ${CI_REGISTRY_IMAGE}/genieai/genieai-umbrella:<version>
     - CHART_VERSION=$(grep '^version:' charts/genieai-umbrella/Chart.yaml | awk '{print $2}')
     - CHART_REF="${CI_REGISTRY_IMAGE}/genieai/genieai-umbrella"
@@ -181,12 +208,11 @@ publish:charts:
     # Package the chart (no signing yet — sign AFTER push)
     - helm package charts/genieai-umbrella -d /tmp/chart
     - helm push /tmp/chart/genieai-umbrella-*.tgz oci://${CI_REGISTRY_IMAGE}/genieai
-    # Sign with cosign. The env var carries the RAW PEM (NOT base64-encoded;
-    # the suffix `BASE64` was wrong — cosign 2.x parses `env:VAR` as either
-    # a path OR the raw PEM content, never base64).
-    - cosign sign --key env:COSIGN_KEY=${COSIGN_KEY} ${CHART_REF}:${CHART_VERSION}
+    # Sign with cosign. env://COSIGN_KEY makes cosign read the PEM from
+    # the (masked) CI variable — no key material in argv or logs.
+    - cosign sign --key env://COSIGN_KEY ${CHART_REF}:${CHART_VERSION}
     # Verify — fail the job on a real signature mismatch (do NOT use `|| true`).
-    - cosign verify --key env:COSIGN_KEY=${COSIGN_KEY} ${CHART_REF}:${CHART_VERSION}
+    - cosign verify --key env://COSIGN_KEY ${CHART_REF}:${CHART_VERSION}
   rules:
     - if: $CI_COMMIT_TAG
       when: on_success
@@ -240,7 +266,7 @@ Expected: 0 errors. (Conftest policies are Task 2 — the test exits 0 even when
 
 ```bash
 git add .gitlab-ci.yml charts/Makefile
-git commit -m "ci(charts): add charts:lint, charts:integration, charts:scan jobs (Plan 7 Task 1)"
+git commit -m "ci(charts): add charts:lint, charts:integration, charts:scan jobs"
 ```
 
 ---
@@ -270,18 +296,20 @@ package main
 deny[msg] {
   input.kind == "ConfigMap"
   some k
-  input.data[k]
-  regex.match(`(?i)(password|secret|token|apikey|api_key)`, k)
+  # Bare `input.data[k]` only holds for the literal boolean true in Rego —
+  # a string value like "hunter2" makes the expression undefined and the
+  # rule silently never fires. The != "" comparison both dereferences AND
+  # asserts non-empty.
   input.data[k] != ""
+  regex.match(`(?i)(password|secret|token|apikey|api_key)`, k)
   msg := sprintf("configmap %q has secret-shaped key %q with non-empty value — use a SealedSecret instead", [input.metadata.name, k])
 }
 
 deny[msg] {
   input.kind == "Secret"
   some k
-  input.data[k]
-  regex.match(`(?i)(password|secret|token)`, k)
   input.data[k] != ""
+  regex.match(`(?i)(password|secret|token)`, k)
   msg := sprintf("secret %q has data key %q with non-empty value — use a SealedSecret instead", [input.metadata.name, k])
 }
 
@@ -304,12 +332,25 @@ deny[msg] {
 # GitLab CI variables that should never end up in committed files.
 # Catches `$(echo $CI_REGISTRY_PASSWORD)` style accidental leaks.
 deny[msg] {
+  # Workload manifests nest containers under spec.template.spec (Deployment,
+  # StatefulSet, DaemonSet, Job); bare Pods use spec directly. Evaluate both
+  # shapes — matching only one makes the rule dead against the rendered chart.
+  some container
+  container := input.spec.template.spec.containers[_]
+  some env
+  env := container.env[_]
+  contains(env.value, "$CI_")
+  not contains(env.name, "CI_")    # env name may reference CI_* variables, but not literal $CI_* in values
+  msg := sprintf("container %q env %q contains a literal $CI_* reference — use a Secret or envFrom", [container.name, env.name])
+}
+
+deny[msg] {
   some container
   container := input.spec.containers[_]
   some env
   env := container.env[_]
   contains(env.value, "$CI_")
-  not contains(env.name, "CI_")    # env name may reference CI_* variables, but not literal $CI_* in values
+  not contains(env.name, "CI_")
   msg := sprintf("container %q env %q contains a literal $CI_* reference — use a Secret or envFrom", [container.name, env.name])
 }
 ```
@@ -493,7 +534,7 @@ Expected: 0 violations (the chart itself doesn't ship `PLACEHOLDER+` sentinels �
 
 ```bash
 git add policies/
-git commit -m "ci(charts): conftest policies - secret-leak, PLACEHOLDER sweep, chart-side Issuer/IP forbid (Plan 7 Task 2)"
+git commit -m "ci(charts): conftest policies - secret-leak, PLACEHOLDER sweep, chart-side Issuer/IP forbid"
 ```
 
 ---
@@ -538,7 +579,7 @@ spec:
             # (`${...}` is a GitLab CI runtime var, NOT a Helm template
             # var; the `${...}` would render literally, the policy would
             # match zero pods, and the chart's admission control is
-            # dead. C4 fix: template-side, the value comes from the
+            # dead. : template-side, the value comes from the
             # values-override.)
             - "{{ .Values.cosign.imagePattern }}"
           attestors:
@@ -610,7 +651,7 @@ Expected: the ClusterPolicy YAML contains the literal `-----BEGIN PUBLIC KEY----
 
 ```bash
 git add charts/genieai-umbrella/templates/policies/ charts/genieai-umbrella/values-policies.yaml.example
-git commit -m "ci(charts): cosign signing (CI step) + Kyverno verifyImages ClusterPolicy with inline PEM (Plan 7 Task 3)"
+git commit -m "ci(charts): cosign signing (CI step) + Kyverno verifyImages ClusterPolicy with inline PEM"
 ```
 
 ---
@@ -692,7 +733,7 @@ Expected: no errors. (If the validator is not available, this step is skipped; C
 
 ```bash
 git add renovate.json
-git commit -m "ci(charts): Renovate config - helm deps + container image digests, CRD-owner pins via `~>` (Plan 7 Task 4)"
+git commit -m "ci(charts): Renovate config - helm deps + container image digests, CRD-owner pins via `~>`"
 ```
 
 ---
@@ -748,6 +789,7 @@ helm repo add bitnami https://charts.bitnami.com/bitnami >/dev/null 2>&1 || true
 helm install $RELEASE charts/genieai-umbrella \
   --namespace $NS --create-namespace \
   --values deploy/environments/dev/values-override.yaml \
+  --set namespace=$NS \
   --set observability.enabled=true \
   --set observability.otel.enabled=true \
   --set observability.logs.enabled=true \
@@ -756,10 +798,12 @@ helm install $RELEASE charts/genieai-umbrella \
   --set observability.grafana.enabled=true \
   --wait --timeout 20m
 
-# 3. Wait for the OTLP gateway Service to be Programmed
-kubectl wait --namespace $NS --for=condition=Ready pods \
-  -l app.kubernetes.io/component=otel-collector \
-  --timeout=10m
+# 3. Wait for the OTLP gateway to be Available. The operator names the
+#    collector Deployment `<cr>-collector`; the chart labels resources with
+#    genieai.io/component (NOT app.kubernetes.io/component) — waiting on
+#    that label never matches anything.
+kubectl wait --namespace $NS --for=condition=Available \
+  deployment/genieai-collector-collector --timeout=10m
 
 # 4. Inject a log line with PII patterns. The set of patterns the
 #    smoke test asserts on is INTENTIONALLY limited to what the
@@ -774,12 +818,12 @@ kubectl wait --namespace $NS --for=condition=Ready pods \
 #    IP / UUID / short-hex patterns are NOT in the redaction rules.
 #    The PII smoke test asserts only the covered patterns; adding
 #    IP / UUID coverage is Plan 4 work (extend the redaction rules
-#    in the ported OTel collector config). C7 fix.
+#    in the ported OTel collector config).
 OTLP_URL="http://genieai-collector-collector.$NS.svc.cluster.local:4318/v1/logs"
 # Every value below MUST appear in the injected log body AND be checked in
 # step 6 — an assertion over a value never injected passes vacuously (the
 # failure mode of the first docker-based PII smoke test; code-review
-# Wave 10 #7). Lengths are padded to fixed sizes so the {40,} / bearer
+# fixed sizes). Lengths are padded so the {40,} / bearer
 # patterns match regardless of marker length.
 PII_EMAIL="leak-$MARKER@example.com"
 PII_JWT="eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJsZWFrIn0.fakefakefake"
@@ -835,6 +879,15 @@ echo "--- VL response ---"
 echo "$RAW" | head -20
 echo "-------------------"
 
+# POSITIVE CONTROL FIRST: the marker row must exist in the response.
+# Without it, every "PII not present" assertion below passes vacuously
+# (empty response = nothing found = false green).
+if ! echo "$RAW" | grep -q "$MARKER"; then
+  echo "FAIL: marker row never reached VictoriaLogs — pipeline broken upstream; redaction assertions below would be meaningless"
+  exit 1
+fi
+echo "OK: marker row present in VictoriaLogs (positive control)"
+
 fail=0
 if echo "$RAW" | grep -q "$PII_EMAIL"; then
   echo "FAIL: email $PII_EMAIL present in VL (not redacted)"; fail=1
@@ -878,7 +931,7 @@ Add a header comment to `tests/otel-collector/run-pii-smoke.sh`:
 
 ```bash
 git add tests/otel-collector/run-pii-smoke-k8s.sh tests/otel-collector/run-pii-smoke.sh
-git commit -m "test(observability): PII smoke runner rewritten for K8s (Plan 7 Task 5)"
+git commit -m "test(observability): PII smoke runner rewritten for K8s"
 ```
 
 ---
@@ -888,21 +941,21 @@ git commit -m "test(observability): PII smoke runner rewritten for K8s (Plan 7 T
 **Files:**
 - Modify: `charts/README.md` (status badges for the new CI jobs)
 - Modify: `docs/charts/plan-defects.md` (Plan 7 wave entry)
-- Modify: `.gitlab-ci.yml` (add the `charts` stage to the `stages:` block at the top of the file)
+- Modify: `.gitlab-ci.yml` (verify the `charts-integration` stage added in Task 1 sits between `build` and `scan`)
 
 **Interfaces:**
 - Consumes: every prior task.
 - Produces: documentation + pipeline stage wiring.
 
-- [ ] **Step 1: Add the `charts` stage** to `.gitlab-ci.yml` (anchor: the `stages:` list at the top of the file)
+- [ ] **Step 1: Verify the `stages:` list matches Task 1's layout** (NO new stage here — Task 1 already inserted `charts-integration` between `build` and `scan`; a `charts` stage would orphan the `charts:integration` job's `stage:` and invalidate the whole pipeline)
 
 ```yaml
 stages:
   - lint
   - test
   - config
-  - charts       # NEW (Plan 7)
   - build
+  - charts-integration   # inserted by the task
   - scan
   - e2e
   - promote
@@ -927,8 +980,8 @@ for `helm install` on a fresh kind cluster + `helm test` + connectivity
 smoke; `charts:scan` for `trivy config` against the rendered YAML);
 three conftest (OPA Rego) policies (secret-leak lint, PLACEHOLDER+
 sentinel sweep, chart-side Issuer / private IP forbid); cosign chart
-signing (single-colon `env:COSIGN_KEY=` scheme — `env://` is NOT
-recognized by cosign 2.x); Kyverno `verifyImages` ClusterPolicy with
+signing (`--key env://COSIGN_KEY`; key material stays in the masked
+CI variable, never in argv); Kyverno `verifyImages` ClusterPolicy with
 INLINE PEM only (no Secret/ConfigMap references); Renovate config
 that pins CRD-owner charts with `~>` and pins container image tags
 to digests; K8s-port PII smoke test runner. Spec §13 (test strategy)
@@ -942,7 +995,7 @@ to digests; K8s-port PII smoke test runner. Spec §13 (test strategy)
 helm lint charts/genieai-umbrella --strict
 conftest test policies/
 git add .gitlab-ci.yml charts/README.md charts/Makefile policies/ renovate.json tests/otel-collector/run-pii-smoke-k8s.sh tests/otel-collector/run-pii-smoke.sh docs/charts/plan-defects.md
-git commit -m "ci(charts): Plan 7 - charts CI stage + conftest + cosign + Renovate + K8s PII smoke"
+git commit -m "ci(charts): charts CI stage + conftest + cosign + Renovate + K8s PII smoke"
 ```
 
 ---

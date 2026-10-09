@@ -110,17 +110,17 @@ const VALID_FIELDS = ['topic', 'entity', 'scope', 'forbidden', 'summary', 'keywo
 // forbidden >= 2 (misroute prevention). entity, keyword, scope, and
 // summary are zero-or-more — an empty scope is a routing warning, not a
 // patch rejection. The cap on the upper end is the LLM prompt target
-// (3-8 topic, 3-6 forbidden — the 2026-10-09 routing-gate contract
-// widened the forbidden derivation from near-topics to whole adjacent
-// domains) plus a generous hard ceiling (20) so a verbose LLM call
-// doesn't get clipped.
+// (3-8 topic, 3-6 forbidden-proposals — the 2026-10-09 routing-gate
+// contract widened the forbidden derivation from near-topics to whole
+// adjacent domains; the 1-8c teaching loop ADDS tags on top of that, so
+// the soft guidance is 2-12 while the hard validator ceiling is 24).
 const FIELD_RANGES = {
   topic: { min: 3, max: 8, default_weight: 1.0 },
   entity: { min: 0, max: 20, default_weight: 0.7 },
   keyword: { min: 0, max: 20, default_weight: 0.5 },
   summary: { min: 0, max: 1, default_weight: 0.5 },
   scope: { min: 0, max: 1, default_weight: 0.3 },
-  forbidden: { min: 2, max: 6, default_weight: 0.0 } // penalty; weight unused
+  forbidden: { min: 2, max: 12, default_weight: 0.0 } // penalty; weight unused
 };
 
 // ---------- Errors ----------

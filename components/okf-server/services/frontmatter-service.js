@@ -276,8 +276,16 @@ function extractJson(content) {
 
 // ---------- TEI embed call ----------
 
+// The remote TEI rejects batches above its --max-client-batch-size with 422
+// (observed 2026-10-09: 32 OK, 48 -> 422 on ai.assembly.govstack.global).
+// teiEmbed chunks client-side so EVERY caller is bounded — the routing
+// advisor aggregates every deduped query of the last N runs in one call and
+// blew straight past the cap.
+const TEI_EMBED_CHUNK = 32;
+
 async function teiEmbed(inputs) {
-  const body = { inputs, truncate: true };
+  const list = Array.isArray(inputs) ? inputs : [inputs];
+  if (!list.length) return [];
   // David 2026-10-08: the remote TEI is HF-gated (same 401 path the
   // OPEA TEI wrapper services have always used). Send Authorization
   // Bearer with the same VLLM_API_KEY the local build propagates as
@@ -290,14 +298,28 @@ async function teiEmbed(inputs) {
   const headers = { 'Content-Type': 'application/json' };
   const hfKey = process.env.HF_TOKEN || process.env.HUGGINGFACEHUB_API_TOKEN || VLLM_LLM_API_KEY;
   if (hfKey) headers.Authorization = 'Bearer ' + hfKey;
-  const fn = () => axios.post(`${TEI_EMBED_HOST}/embed`, body, { headers, timeout: 30000 });
-  const resp = await withTeiRetry(fn, { endpoint: '/embed', batch_size: Array.isArray(inputs) ? inputs.length : 1 });
-  // TEI returns either {data: [[...], ...]} (batched) or [...] depending on shape
-  const out = resp.data && (resp.data.data || resp.data.embeddings || resp.data);
-  if (Array.isArray(out) && Array.isArray(out[0])) return out;
-  if (Array.isArray(out) && out.length && Array.isArray(out[0])) return out;
-  if (Array.isArray(out) && out.length && typeof out[0] === 'number') return [out];
-  throw new FrontmatterError('EMBED_BAD_SHAPE', 'TEI embed returned an unexpected shape', 502);
+  const decode = (resp) => {
+    // TEI returns either {data: [[...], ...]} (batched) or [...] depending on shape
+    const out = resp.data && (resp.data.data || resp.data.embeddings || resp.data);
+    if (Array.isArray(out) && Array.isArray(out[0])) return out;
+    if (Array.isArray(out) && out.length && Array.isArray(out[0])) return out;
+    if (Array.isArray(out) && out.length && typeof out[0] === 'number') return [out];
+    throw new FrontmatterError('EMBED_BAD_SHAPE', 'TEI embed returned an unexpected shape', 502);
+  };
+  const vectors = [];
+  for (let i = 0; i < list.length; i += TEI_EMBED_CHUNK) {
+    const chunk = list.slice(i, i + TEI_EMBED_CHUNK);
+    const body = { inputs: chunk, truncate: true };
+    const fn = () => axios.post(`${TEI_EMBED_HOST}/embed`, body, { headers, timeout: 30000 });
+    const resp = await withTeiRetry(fn, {
+      endpoint: '/embed',
+      batch_size: list.length,
+      chunk_size: chunk.length,
+      chunk_index: i / TEI_EMBED_CHUNK
+    });
+    vectors.push(...decode(resp));
+  }
+  return vectors;
 }
 
 // ---------- Validation ----------

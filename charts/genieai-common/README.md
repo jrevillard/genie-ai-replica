@@ -28,6 +28,13 @@ metadata:
     {{- include "genieai-common.labels" . | nindent 4 }}
 ```
 
+### Values scope
+
+`nameOverride`, `fullnameOverride` and `component` are read from the
+**consuming chart's root values** (helpers render with the parent's
+context). Setting them under a `genieai-common:` subtree in values.yaml is
+silently ignored — always place them at the root.
+
 ## Why `type: library`?
 
 Library charts do not render Pods/Services themselves — they export helpers and

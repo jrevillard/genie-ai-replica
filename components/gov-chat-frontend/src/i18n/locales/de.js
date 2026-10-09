@@ -2632,6 +2632,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2711,7 +2712,33 @@ export default {
         fail: 'nicht bestanden',
         na: 'n/a'
       },
+      counts: {
+        positive: 'Positive Abfragen',
+        negative: 'Verwechselbare',
+        negativeRandom: 'Außerhalb des Fachgebiets',
+        meta: 'Meta',
+        nearMiss: 'Beinahe-Treffer',
+        hint: 'Die aus verbotenen Tags abgeleiteten Zeilen richten sich nach der Anzahl der verbotenen Tags des Repositorys — sie lassen sich hier nicht einstellen.'
+      },
+      cls: {
+        nearMiss: 'Beinahe-Treffer',
+        confusable: 'Verwechselbar',
+        forbidden: 'Verboten',
+        offDomain: 'Außerhalb des Fachgebiets',
+        meta: 'Meta'
+      },
       teach: {
+        claim:
+          'Der Head BEANSPRUCHT diese Abfrage — sie hat alle drei Schranken passiert. Soll sie NICHT hierher routen, lassen Sie verbotene Tags vorschlagen, die ihr Thema ausschließen, fügen Sie sie hinzu und bauen Sie den Head neu.',
+        explain: 'Erklären & vorschlagen',
+        explainBusy: 'Erklärung läuft — das Modell schlägt verbotene Tags vor…',
+        addTag: 'Zu verbotenen Tags hinzufügen',
+        suggestNone:
+          'Es wurde kein verbotener Tag vorgeschlagen — prüfen Sie die Abfrage manuell gegen den deklarierten Umfang.',
+        added: 'Zu den verbotenen Tags hinzugefügt — bauen Sie den Head neu, um sie anzuwenden.',
+        rebuildRerun: 'Head neu bauen & erneut testen',
+        savingTag: 'Verbotener Tag wird gespeichert…',
+        rebuildBusy: 'Head wird neu gebaut und erneut ausgeführt…',
         title: 'Was das bedeutet',
         veto: "Diese Abfrage stimmt stark mit dem verbotenen Tag „{'{'}tag{'}'}“ überein. Sollte sie zu diesem Repository gehören, entfernen Sie „{'{'}tag{'}'}“ aus den verbotenen Tags im Frontmatter und veröffentlichen Sie erneut, um den Head neu zu bauen.",
         floor:
@@ -2748,9 +2775,18 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Fehler erklären',
+        explainBusy: 'Fehler werden erklärt — ein Modellaufruf für jede fehlgeschlagene Negativ-Abfrage…',
+        batchTitle: 'Warum die fehlgeschlagenen Negativ-Abfragen hierher geroutet wurden',
+        batchNone:
+          'Es wurde keine Korrektur vorgeschlagen — prüfen Sie die fehlgeschlagenen Abfragen manuell gegen den deklarierten Umfang.',
+        addAll: 'Alle hinzufügen',
+        rebuildRerun: 'Head neu bauen & Suite erneut ausführen'
       },
       error: {
+        explain: 'Erklärung fehlgeschlagen',
+        saveTag: 'Verbotener Tag konnte nicht gespeichert werden',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',

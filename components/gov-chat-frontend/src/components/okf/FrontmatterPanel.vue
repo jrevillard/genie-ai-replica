@@ -71,7 +71,17 @@
           <span class="okf-fmp__field-count">({{ fieldValues(field).length }})</span>
         </div>
         <div class="okf-fmp__values">
-          <span v-for="(value, idx) in fieldValues(field)" :key="`${field}:${value}`" class="okf-fmp__tag">
+          <span
+            v-for="(value, idx) in fieldValues(field)"
+            :key="`${field}:${value}`"
+            class="okf-fmp__tag"
+            :class="{ 'okf-fmp__tag--suggested': field === 'forbidden' && isSuggestedForbidden(value) }"
+            :title="
+              field === 'forbidden' && isSuggestedForbidden(value)
+                ? translate('okf.frontmatter.suggestedTag', 'LLM suggestion — remove to dismiss')
+                : null
+            "
+          >
             <button
               v-if="!readOnly"
               class="okf-fmp__tag-remove"
@@ -166,6 +176,11 @@ export default {
       addDrafts: { topic: '', entity: '', scope: '', forbidden: '', summary: '', keyword: '' },
       suggesting: false,
       suggestionError: null,
+      // Forbidden values the LLM proposed (Routing-gate contract,
+      // 2026-10-09). A forbidden chip whose value is listed here renders
+      // with the suggestion style: accept = leave it and Save, dismiss =
+      // click ×. Cleared on load (persisted values are curator-owned).
+      suggestedForbidden: [],
       saving: false,
       error: null,
       savedAt: null
@@ -206,6 +221,9 @@ export default {
       }
       return Array.isArray(this.shape[field]) ? this.shape[field] : [];
     },
+    isSuggestedForbidden(value) {
+      return this.suggestedForbidden.indexOf(value) !== -1;
+    },
     async loadFrontmatter() {
       this.error = null;
       try {
@@ -224,6 +242,9 @@ export default {
           }
         }
         this.shape = next;
+        // Persisted values are curator-owned — nothing is a pending
+        // suggestion after a load.
+        this.suggestedForbidden = [];
         this.savedAt = null;
       } catch (e) {
         this.shape = emptyShape();
@@ -247,7 +268,14 @@ export default {
       if (field === 'scope' || field === 'summary') {
         this.shape[field] = '';
       } else {
+        const removed = this.shape[field][idx];
         this.shape[field] = this.shape[field].filter((_, i) => i !== idx);
+        // Dismissing a suggested forbidden chip clears its suggestion
+        // state — re-adding the same value by hand renders it as a
+        // curator-owned chip, not an LLM proposal.
+        if (field === 'forbidden' && removed) {
+          this.suggestedForbidden = this.suggestedForbidden.filter((v) => v !== removed);
+        }
       }
       this.savedAt = null;
     },
@@ -274,6 +302,19 @@ export default {
           summary: typeof suggested.summary === 'string' ? suggested.summary : '',
           keyword: Array.isArray(suggested.keyword) ? suggested.keyword.slice() : []
         };
+        // Routing-gate contract (2026-10-09): the suggested forbidden set
+        // arrives flagged ({value, suggested: true}) — track which chips
+        // are LLM proposals so they render as accept (keep + Save) /
+        // dismiss (×) suggestions. Older servers return only the plain
+        // array, in which case every value it carries IS a suggestion.
+        const flagged = Array.isArray(suggested.forbidden_suggestions)
+          ? suggested.forbidden_suggestions.map((s) => (s && s.value) || null).filter(Boolean)
+          : [];
+        this.suggestedForbidden = flagged.length
+          ? flagged
+          : Array.isArray(suggested.forbidden)
+            ? suggested.forbidden.slice()
+            : [];
         this.savedAt = null;
       } catch (e) {
         this.suggestionError =
@@ -390,6 +431,14 @@ export default {
 }
 .okf-fmp__tag-value {
   color: var(--color-text);
+}
+/* LLM-proposed forbidden chip (accept/dismiss suggestion): dashed accent
+   border + muted accent fill — DS tokens only, distinct from the solid
+   curator-owned chip. Accept = leave it and Save; dismiss = click ×. */
+.okf-fmp__tag--suggested {
+  border-style: dashed;
+  border-color: var(--accent, var(--color-border));
+  background: var(--accent-muted, var(--color-surface-base));
 }
 .okf-fmp__tag-remove {
   appearance: none;

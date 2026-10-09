@@ -1510,7 +1510,32 @@ export default {
         fail: 'fail',
         na: 'n/a'
       },
+      counts: {
+        positive: 'Positives',
+        negative: 'Confusable',
+        negativeRandom: 'Off-domain',
+        meta: 'Meta',
+        nearMiss: 'Near miss',
+        hint: "Forbidden-derived rows scale with the repository's forbidden tag count — they cannot be set here."
+      },
+      cls: {
+        nearMiss: 'Near miss',
+        confusable: 'Confusable',
+        forbidden: 'Forbidden',
+        offDomain: 'Off-domain',
+        meta: 'Meta'
+      },
       teach: {
+        claim:
+          'The head CLAIMS this query — it passed all three gates. If it should NOT route here, ask for forbidden tags that exclude its subject, add them, then rebuild the head.',
+        explain: 'Explain & suggest',
+        explainBusy: 'Explaining — the model is proposing forbidden tags…',
+        addTag: 'Add to forbidden tags',
+        suggestNone: 'No forbidden tag was suggested — review the query against the declared scope manually.',
+        added: 'Added to the forbidden tags — rebuild the head to apply them.',
+        rebuildRerun: 'Rebuild head & re-run',
+        savingTag: 'Saving the forbidden tag…',
+        rebuildBusy: 'Rebuilding the head and re-running…',
         title: 'What this means',
         veto: "This query strongly matches the forbidden tag \"{'{'}tag{'}'}\". If it SHOULD belong to this repository, remove \"{'{'}tag{'}'}\" from the forbidden tags in Frontmatter, then republish to rebuild the head.",
         floor:
@@ -1547,9 +1572,17 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Explain failures',
+        explainBusy: 'Explaining the failures — one model call for every failing negative…',
+        batchTitle: 'Why the failing negatives routed here',
+        batchNone: 'No fix was suggested — review the failing queries against the declared scope manually.',
+        addAll: 'Add all',
+        rebuildRerun: 'Rebuild head & re-run suite'
       },
       error: {
+        explain: 'Explain failed',
+        saveTag: 'Could not save the forbidden tag',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',
@@ -2742,6 +2775,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',

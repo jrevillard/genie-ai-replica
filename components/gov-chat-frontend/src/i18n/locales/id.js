@@ -2617,6 +2617,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2696,7 +2697,33 @@ export default {
         fail: 'gagal',
         na: 'n/a'
       },
+      counts: {
+        positive: 'Positif',
+        negative: 'Membingungkan',
+        negativeRandom: 'Luar domain',
+        meta: 'Meta',
+        nearMiss: 'Hampir tepat',
+        hint: 'Baris turunan tag terlarang mengikuti jumlah tag terlarang repositori — tidak dapat diatur di sini.'
+      },
+      cls: {
+        nearMiss: 'Hampir tepat',
+        confusable: 'Membingungkan',
+        forbidden: 'Terlarang',
+        offDomain: 'Luar domain',
+        meta: 'Meta'
+      },
       teach: {
+        claim:
+          'Head MENGAKUI kueri ini — ia melewati ketiga gerbang. Jika seharusnya TIDAK merute ke sini, minta tag terlarang yang menyingkirkan subjeknya, tambahkan, lalu bangun ulang head.',
+        explain: 'Jelaskan & sarankan',
+        explainBusy: 'Menjelaskan — model mengusulkan tag terlarang…',
+        addTag: 'Tambahkan ke tag terlarang',
+        suggestNone:
+          'Tidak ada tag terlarang yang disarankan — tinjau kueri terhadap cakupan yang dinyatakan secara manual.',
+        added: 'Ditambahkan ke tag terlarang — bangun ulang head untuk menerapkannya.',
+        rebuildRerun: 'Bangun ulang head & jalankan ulang',
+        savingTag: 'Menyimpan tag terlarang…',
+        rebuildBusy: 'Membangun ulang head dan menjalankan ulang…',
         title: 'Apa artinya ini',
         veto: "Kueri ini sangat cocok dengan tag terlarang “{'{'}tag{'}'}”. Jika seharusnya termasuk dalam repositori ini, hapus “{'{'}tag{'}'}” dari tag terlarang di Frontmatter, lalu terbitkan ulang untuk membangun ulang head.",
         floor:
@@ -2733,9 +2760,18 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Jelaskan kegagalan',
+        explainBusy: 'Menjelaskan kegagalan — satu panggilan model untuk setiap negatif yang gagal…',
+        batchTitle: 'Mengapa negatif yang gagal dirute ke sini',
+        batchNone:
+          'Tidak ada perbaikan yang disarankan — tinjau kueri yang gagal terhadap cakupan yang dinyatakan secara manual.',
+        addAll: 'Tambahkan semua',
+        rebuildRerun: 'Bangun ulang head & jalankan ulang suite'
       },
       error: {
+        explain: 'Penjelasan gagal',
+        saveTag: 'Tidak dapat menyimpan tag terlarang',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',

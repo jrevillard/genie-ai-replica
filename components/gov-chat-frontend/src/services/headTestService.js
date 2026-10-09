@@ -4,9 +4,11 @@
  *
  *   POST /okf/repos/:id/head/rebuild            — re-run the vectorized head
  *   POST /okf/repos/:id/routing-test            — two-leg single-query test
+ *   POST /okf/repos/:id/routing-explain         — 1-8c claim-side explain
  *   POST /okf/repos/:id/routing-testsuite       — LLM suite generation
  *   POST /okf/repos/:id/routing-testsuite/:key/queries — curator additions
  *   POST /okf/repos/:id/routing-testsuite/:key/run     — run-all + summary
+ *   POST /okf/repos/:id/routing-testsuite/:key/explain — 1-8c batch advice
  *   GET  /okf/repos/:id/routing-testsuite/runs         — analytics history
  *
  * Error surface: httpService rejections carry the server envelope in
@@ -58,6 +60,26 @@ const headTestService = {
   async runSuite(repoId, suiteKey) {
     const res = await httpService.post(
       `/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}/run`
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  /** Story 1-8c — explain ONE query's gate outcome; when the head claims
+   * it, carries suggestion {tags[], source: 'llm'|'none', reason} with
+   * proposed forbidden tags. The full routing-test contract rides along
+   * (under_test / siblings / verdict / fidelity). */
+  async explainRouting(repoId, query) {
+    const res = await httpService.post(`/okf/repos/${rid(repoId)}/routing-explain`, { query });
+    return res && res.data ? res.data : null;
+  },
+
+  /** Story 1-8c — BATCH advice for the latest run of a suite: every
+   * failing negative in one pass, ONE LLM call. Returns {suite_key,
+   * run_key, failing_count, failing_queries[], suggested_tags[], source,
+   * note}. */
+  async explainSuiteFailures(repoId, suiteKey) {
+    const res = await httpService.post(
+      `/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}/explain`
     );
     return res && res.data ? res.data : null;
   },

@@ -10,14 +10,23 @@
               gate breakdown (Floor / Forbidden tags / Margin — 1-8b)
               with its teaching note (veto = fix the tags + republish;
               floor = correct suppression), adversarial expectation
-              (expect NOT selected).
+              (expect NOT selected). Story 1-8c closes the teaching gap
+              on the claim side: when the head CLAIMS a query it should
+              suppress, "Explain & suggest" proposes forbidden tags, the
+              curator adds them (shared two-write frontmatter save), and
+              one click rebuilds the head and re-runs the same query.
     Suites  — LLM-generated suites (+ forbidden-derived negatives +
               curator free-text), run-all, pass-rate/margin history,
-              steal pairs ("kenya stole 3 of 8").
+              steal pairs ("kenya stole 3 of 8"). Story 1-8c adds
+              user-controlled per-class counts and the BATCH advice
+              loop: after a run with failing negatives, one "Explain
+              failures" call (ONE LLM call) returns add-all forbidden
+              tags + a rebuild/re-run-suite offer — the anti-treadmill.
   Entry points: StudioDashboard card actions (published + ingested), the
   editor shell actions row, the editor right-rail badge, the wizard
-  Publish step (readOnly — view + test only). Lifecycle cycle affordances
-  (Unpublish / re-publish note) live in the footer, editor context only.
+  Publish step (readOnly — view + test only; every write path here is
+  hidden). Lifecycle cycle affordances (Unpublish / re-publish note)
+  live in the footer, editor context only.
 -->
 <template>
   <DsDialog
@@ -216,6 +225,79 @@
             }}</span>
             <p class="okf-headtest__teach-text">{{ teachNote.text }}</p>
           </div>
+          <!-- 1-8c: claim-side teaching — the gap the veto/floor panels
+               don't cover: the head CLAIMS a query it should suppress (all
+               three gates passed, no forbidden tag covers the subject).
+               The fix loop INSIDE the Lab: explain → suggested forbidden
+               tags → add → rebuild → re-run. Hidden in the wizard
+               (readOnly — no repo mutations from the wizard, D4). -->
+          <div v-if="claimTeachable" class="okf-headtest__suggestion">
+            <span class="okf-headtest__teach-title">{{
+              translate('okf.headTest.teach.title', 'What this means')
+            }}</span>
+            <p class="okf-headtest__teach-text">
+              {{
+                translate(
+                  'okf.headTest.teach.claim',
+                  'The head CLAIMS this query — it passed all three gates. If it should NOT route here, ask for forbidden tags that exclude its subject, add them, then rebuild the head.'
+                )
+              }}
+            </p>
+            <div class="okf-headtest__pane-actions">
+              <DsButton variant="secondary" small :disabled="busy !== null" @click="onExplainClaim">
+                {{ translate('okf.headTest.teach.explain', 'Explain & suggest') }}
+              </DsButton>
+              <DsSpinner v-if="busy === 'explain'" size="sm" class="okf-headtest__busy">
+                {{ translate('okf.headTest.teach.explainBusy', 'Explaining — the model is proposing forbidden tags…') }}
+              </DsSpinner>
+            </div>
+            <template v-if="explanation && explanation.suggestion">
+              <div v-if="suggestedTags.length" class="okf-headtest__chips">
+                <DsTag
+                  v-for="t in suggestedTags"
+                  :key="t"
+                  :variant="isTaught(t) ? 'success' : 'accent'"
+                  class="okf-headtest__add-chip"
+                  role="button"
+                  :title="translate('okf.headTest.teach.addTag', 'Add to forbidden tags')"
+                  @click="onTeachTag(t)"
+                >
+                  {{ isTaught(t) ? '✓' : '+' }} {{ t }}
+                </DsTag>
+              </div>
+              <p v-else class="okf-headtest__teach-text okf-headtest__empty">
+                {{
+                  translate(
+                    'okf.headTest.teach.suggestNone',
+                    'No forbidden tag was suggested — review the query against the declared scope manually.'
+                  )
+                }}
+              </p>
+              <p class="okf-headtest__teach-text okf-headtest__empty">{{ explanation.suggestion.reason }}</p>
+              <template v-if="taughtTags.length">
+                <p class="okf-headtest__teach-text">
+                  {{
+                    translate(
+                      'okf.headTest.teach.added',
+                      'Added to the forbidden tags — rebuild the head to apply them.'
+                    )
+                  }}
+                </p>
+                <div class="okf-headtest__pane-actions">
+                  <DsButton variant="primary" small :disabled="busy !== null" @click="onRebuildRerun">
+                    {{ translate('okf.headTest.teach.rebuildRerun', 'Rebuild head & re-run') }}
+                  </DsButton>
+                  <DsSpinner
+                    v-if="busy === 'save-tag' || busy === 'rebuild-rerun'"
+                    size="sm"
+                    class="okf-headtest__busy"
+                  >
+                    {{ teachBusyLabel }}
+                  </DsSpinner>
+                </div>
+              </template>
+            </template>
+          </div>
           <p v-if="lastResult.verdict && lastResult.verdict.provenance" class="okf-headtest__provenance">
             {{ translate('okf.headTest.test.provenance', 'Routing provenance') }}:
             <code>{{ lastResult.verdict.provenance }}</code>
@@ -247,6 +329,31 @@
             "
           />
         </div>
+        <!-- 1-8c: user-controlled query counts per class (David: "give the
+             lab user the ability to control the number of test queries").
+             The forbidden-derived class is deliberately absent — it scales
+             with the repo's forbidden tag count, not a user knob. -->
+        <div class="okf-headtest__counts">
+          <label v-for="c in countControls" :key="c.key" class="okf-headtest__count">
+            <span class="okf-headtest__count-label">{{ c.label }}</span>
+            <DsInput
+              v-model="counts[c.key]"
+              type="number"
+              size="sm"
+              :min="c.min"
+              :max="c.max"
+              class="okf-headtest__count-input"
+            />
+          </label>
+        </div>
+        <p class="okf-headtest__counts-hint">
+          {{
+            translate(
+              'okf.headTest.counts.hint',
+              'Forbidden-derived rows scale with the repository’s forbidden tag count — they cannot be set here.'
+            )
+          }}
+        </p>
         <DsSpinner v-if="busy === 'generate'" size="sm" class="okf-headtest__busy">
           {{ translate('okf.headTest.suites.generating', 'Generating — the LLM is writing the queries…') }}
         </DsSpinner>
@@ -276,8 +383,14 @@
               <tr v-for="row in suiteResultRows" :key="row.key">
                 <td>{{ row.query }}</td>
                 <td>
-                  <DsPill :variant="row.kind === 'positive' ? 'info' : 'warn'">
+                  <DsPill v-if="row.kind === 'positive'" variant="info">
                     {{ row.kind }}{{ row.source ? ' · ' + row.source : '' }}
+                  </DsPill>
+                  <!-- 1-8c: negatives render their CLASS (near-miss /
+                       confusable / forbidden / off-domain / meta) — the
+                       near-miss chip is the new repo-vocabulary class. -->
+                  <DsPill v-else :variant="classVariant(row.cls)">
+                    {{ row.cls ? classLabel(row.cls) : row.kind }}{{ row.source ? ' · ' + row.source : '' }}
                   </DsPill>
                 </td>
                 <td>
@@ -319,6 +432,75 @@
                   .replace('{n}', String(steal.count))
               }}
             </span>
+          </div>
+          <!-- 1-8c: BATCH advice — the anti-treadmill (David: this must
+               never become a per-query full-time job). One review per run:
+               every failing negative, ONE LLM call, add-all chips. Hidden
+               in the wizard (readOnly — the fix writes tags). -->
+          <div v-if="!readOnly && hasNegativeFailures" class="okf-headtest__pane-actions">
+            <DsButton variant="secondary" small :disabled="busy !== null" @click="onExplainFailures">
+              {{ translate('okf.headTest.suites.explainFailures', 'Explain failures') }}
+            </DsButton>
+            <DsSpinner v-if="busy === 'explain-failures'" size="sm" class="okf-headtest__busy">
+              {{
+                translate(
+                  'okf.headTest.suites.explainBusy',
+                  'Explaining the failures — one model call for every failing negative…'
+                )
+              }}
+            </DsSpinner>
+          </div>
+          <div v-if="batchAdvice" class="okf-headtest__suggestion">
+            <span class="okf-headtest__teach-title">{{
+              translate('okf.headTest.suites.batchTitle', 'Why the failing negatives routed here')
+            }}</span>
+            <p v-if="batchAdvice.note" class="okf-headtest__teach-text">{{ batchAdvice.note }}</p>
+            <ul v-if="batchAdvice.failing_queries && batchAdvice.failing_queries.length" class="okf-headtest__failing">
+              <li v-for="f in batchAdvice.failing_queries" :key="f.query">
+                <span>{{ f.query }}</span>
+                <DsPill v-if="f.cls" :variant="classVariant(f.cls)">{{ classLabel(f.cls) }}</DsPill>
+              </li>
+            </ul>
+            <template v-if="batchTags.length">
+              <div class="okf-headtest__chips">
+                <DsTag
+                  v-for="t in batchTags"
+                  :key="t"
+                  :variant="isTaught(t) ? 'success' : 'accent'"
+                  class="okf-headtest__add-chip"
+                  role="button"
+                  :title="translate('okf.headTest.teach.addTag', 'Add to forbidden tags')"
+                  @click="onTeachTag(t)"
+                >
+                  {{ isTaught(t) ? '✓' : '+' }} {{ t }}
+                </DsTag>
+              </div>
+              <div class="okf-headtest__pane-actions">
+                <DsButton variant="secondary" small :disabled="busy !== null" @click="onTeachAllTags">
+                  {{ translate('okf.headTest.suites.addAll', 'Add all') }}
+                </DsButton>
+                <DsButton
+                  v-if="taughtTags.length"
+                  variant="primary"
+                  small
+                  :disabled="busy !== null"
+                  @click="onRebuildSuiteRerun"
+                >
+                  {{ translate('okf.headTest.suites.rebuildRerun', 'Rebuild head & re-run suite') }}
+                </DsButton>
+                <DsSpinner v-if="busy === 'save-tag' || busy === 'rebuild-rerun'" size="sm" class="okf-headtest__busy">
+                  {{ teachBusyLabel }}
+                </DsSpinner>
+              </div>
+            </template>
+            <p v-else class="okf-headtest__teach-text okf-headtest__empty">
+              {{
+                translate(
+                  'okf.headTest.suites.batchNone',
+                  'No fix was suggested — review the failing queries against the declared scope manually.'
+                )
+              }}
+            </p>
           </div>
         </div>
 
@@ -419,9 +601,19 @@ export default {
       lastResult: null,
       suite: null,
       lastRunSummary: null,
+      // 1-8c: per-class row list of the LAST run (kind + cls + outcome).
+      lastRunSummaryRows: [],
       manualQuery: '',
       manualKind: 'positive',
-      runs: []
+      runs: [],
+      // 1-8c: user-controlled per-class query counts (server clamps).
+      counts: { n_positive: 8, n_negative: 6, n_negative_random: 4, n_meta: 3, n_near_miss: 4 },
+      // 1-8c: claim-side teaching state — the routing-explain result for
+      // the current query, the batch advice for the last suite run, and
+      // the forbidden tags taught (added) from either panel this session.
+      explanation: null,
+      batchAdvice: null,
+      taughtTags: []
     };
   },
   computed: {
@@ -648,6 +840,57 @@ export default {
         { value: 'negative', label: this.translate('okf.headTest.suites.kindNegative', 'should NOT select') }
       ];
     },
+    /** 1-8c: the five class-count controls (defaults mirror the server's
+     * clampCount fallbacks; mins/maxes mirror its documented ranges). */
+    countControls() {
+      return [
+        { key: 'n_positive', min: 8, max: 20, label: this.translate('okf.headTest.counts.positive', 'Positives') },
+        { key: 'n_negative', min: 6, max: 15, label: this.translate('okf.headTest.counts.negative', 'Confusable') },
+        {
+          key: 'n_negative_random',
+          min: 4,
+          max: 12,
+          label: this.translate('okf.headTest.counts.negativeRandom', 'Off-domain')
+        },
+        { key: 'n_meta', min: 3, max: 8, label: this.translate('okf.headTest.counts.meta', 'Meta') },
+        { key: 'n_near_miss', min: 4, max: 10, label: this.translate('okf.headTest.counts.nearMiss', 'Near miss') }
+      ];
+    },
+    /** 1-8c: the claim-side teach block shows when the under-test head
+     * CLAIMS the query — the one gate outcome the 1-8b panels don't cover.
+     * Hidden in the wizard (readOnly — the fix writes forbidden tags). */
+    claimTeachable() {
+      if (this.readOnly) return false;
+      const ut = this.lastResult && this.lastResult.under_test;
+      return !!(ut && ut.head_claimed === true);
+    },
+    /** 1-8c: forbidden tags the explain call proposed for this query. */
+    suggestedTags() {
+      const s = this.explanation && this.explanation.suggestion;
+      return s && Array.isArray(s.tags) ? s.tags : [];
+    },
+    /** 1-8c: the consolidated forbidden tags the batch explain proposed. */
+    batchTags() {
+      return this.batchAdvice && Array.isArray(this.batchAdvice.suggested_tags) ? this.batchAdvice.suggested_tags : [];
+    },
+    /** 1-8c: show the batch 'Explain failures' affordance when the last
+     * run left failing negatives (summary-level, per the run contract). */
+    hasNegativeFailures() {
+      const s = this.lastRunSummary;
+      if (!s || typeof s.negative_passed !== 'number' || typeof s.negative_total !== 'number') return false;
+      return s.negative_passed < s.negative_total;
+    },
+    /** 1-8c: label for the teach-flow long actions (tag save / rebuild +
+     * re-run) — the same busy-strip pattern as the tabs' own spinners. */
+    teachBusyLabel() {
+      if (this.busy === 'save-tag') {
+        return this.translate('okf.headTest.teach.savingTag', 'Saving the forbidden tag…');
+      }
+      if (this.busy === 'rebuild-rerun') {
+        return this.translate('okf.headTest.teach.rebuildBusy', 'Rebuilding the head and re-running…');
+      }
+      return '';
+    },
     dialogActions() {
       const actions = [];
       if (!this.readOnly && this.repo && this.repo.lifecycle_state === 'publish' && !this.serving) {
@@ -669,6 +912,11 @@ export default {
         if (open && this.repo) {
           this.tab = this.initialTab;
           this.error = '';
+          // 1-8c: teach state is per-open — isTaught still cross-checks the
+          // stored frontmatter, so edits made outside the Lab stay honest.
+          this.taughtTags = [];
+          this.explanation = null;
+          this.batchAdvice = null;
           this.refreshRuns();
         }
       }
@@ -724,6 +972,7 @@ export default {
       this.busy = 'test';
       this.error = '';
       this.lastResult = null;
+      this.explanation = null; // 1-8c: advice belongs to the previous result
       const res = await this.$store.dispatch('okf/headRoutingTest', {
         repoId: this.repo.repo_id,
         query: this.query.trim()
@@ -735,10 +984,131 @@ export default {
       }
       this.lastResult = res.result;
     },
+    /** 1-8c: claim-side advice (Story 1-8c routing-explain) — when the
+     * head claims a query it should suppress, propose forbidden tags. */
+    async onExplainClaim() {
+      if (!this.query.trim() || this.busy !== null) return;
+      this.busy = 'explain';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headRoutingExplain', {
+        repoId: this.repo.repo_id,
+        query: this.query.trim()
+      });
+      this.busy = null;
+      if (!res.ok) {
+        this.error = res.message || this.translate('okf.headTest.error.explain', 'Explain failed');
+        return;
+      }
+      this.explanation = res.result;
+    },
+    /** 1-8c: the frontmatter shape the Lab's tag writes go through — the
+     * doc-field shape (same as FrontmatterPanel), with extraForbidden
+     * merged into the stored forbidden list (case-insensitive dedupe).
+     * The WRITE itself reuses the okf/saveFrontmatter two-write action —
+     * no new endpoint. */
+    buildFrontmatterShape(extraForbidden = []) {
+      const fm = (this.repo && this.repo.frontmatter) || {};
+      const arr = (v) => (Array.isArray(v) ? v.slice() : []);
+      const forbidden = arr(fm.forbidden);
+      for (const t of extraForbidden) {
+        if (!forbidden.some((x) => String(x).toLowerCase() === String(t).toLowerCase())) forbidden.push(t);
+      }
+      return {
+        topic: arr(fm.topic),
+        entity: arr(fm.entity),
+        scope: typeof fm.scope === 'string' ? fm.scope : '',
+        forbidden,
+        summary: typeof fm.summary === 'string' ? fm.summary : '',
+        keyword: arr(fm.keyword)
+      };
+    },
+    /** 1-8c: a suggested tag counts as taught when added this session OR
+     * already present in the stored frontmatter (the repo prop refreshes
+     * asynchronously after a save — taughtTags bridges the gap). */
+    isTaught(t) {
+      if (this.taughtTags.includes(t)) return true;
+      const fm = (this.repo && this.repo.frontmatter) || {};
+      return (
+        Array.isArray(fm.forbidden) && fm.forbidden.some((x) => String(x).toLowerCase() === String(t).toLowerCase())
+      );
+    },
+    /** 1-8c: add ONE suggested tag to the repo's forbidden tags (the
+     * shared two-write save), then offer the rebuild + re-run. */
+    async onTeachTag(tag) {
+      if (!tag || this.isTaught(tag) || this.busy !== null) return;
+      this.busy = 'save-tag';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/saveFrontmatter', {
+        repoId: this.repo.repo_id,
+        shape: this.buildFrontmatterShape([tag])
+      });
+      this.busy = null;
+      if (!res || !res.ok) {
+        this.error =
+          (res && res.message) || this.translate('okf.headTest.error.saveTag', 'Could not save the forbidden tag');
+        return;
+      }
+      if (!this.taughtTags.includes(tag)) this.taughtTags.push(tag);
+      this.$emit('changed', { frontmatter: true });
+    },
+    /** 1-8c: add every remaining batch tag in ONE save. */
+    async onTeachAllTags() {
+      const pending = this.batchTags.filter((t) => !this.isTaught(t));
+      if (!pending.length || this.busy !== null) return;
+      this.busy = 'save-tag';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/saveFrontmatter', {
+        repoId: this.repo.repo_id,
+        shape: this.buildFrontmatterShape(pending)
+      });
+      this.busy = null;
+      if (!res || !res.ok) {
+        this.error =
+          (res && res.message) || this.translate('okf.headTest.error.saveTag', 'Could not save the forbidden tag');
+        return;
+      }
+      for (const t of pending) if (!this.taughtTags.includes(t)) this.taughtTags.push(t);
+      this.$emit('changed', { frontmatter: true });
+    },
+    /** 1-8c: the fix loop's last leg — rebuild the head from the just-
+     * saved tags, then re-run the SAME query through routing-test so the
+     * gate breakdown + verdict refresh in place. */
+    async onRebuildRerun() {
+      if (this.busy !== null || !this.query.trim()) return;
+      this.busy = 'rebuild-rerun';
+      this.error = '';
+      const reb = await this.$store.dispatch('okf/headRebuild', { repoId: this.repo.repo_id });
+      if (!reb.ok) {
+        this.busy = null;
+        this.error = reb.message || this.translate('okf.headTest.error.rebuild', 'Head rebuild failed');
+        return;
+      }
+      this.$emit('changed', { head: reb.result });
+      const res = await this.$store.dispatch('okf/headRoutingTest', {
+        repoId: this.repo.repo_id,
+        query: this.query.trim()
+      });
+      this.busy = null;
+      if (!res.ok) {
+        this.error = res.message || this.translate('okf.headTest.error.test', 'Routing test failed');
+        return;
+      }
+      this.lastResult = res.result;
+      this.explanation = null; // the old advice is spent — re-explain if it still claims
+    },
     async onGenerateSuite() {
       this.busy = 'generate';
       this.error = '';
-      const res = await this.$store.dispatch('okf/headSuiteGenerate', { repoId: this.repo.repo_id });
+      // 1-8c: per-class counts ride along; undefined lets the server
+      // apply its own defaults/clamps.
+      const res = await this.$store.dispatch('okf/headSuiteGenerate', {
+        repoId: this.repo.repo_id,
+        nPositive: this.intOf(this.counts.n_positive),
+        nNegative: this.intOf(this.counts.n_negative),
+        nNegativeRandom: this.intOf(this.counts.n_negative_random),
+        nMeta: this.intOf(this.counts.n_meta),
+        nNearMiss: this.intOf(this.counts.n_near_miss)
+      });
       this.busy = null;
       if (!res.ok) {
         this.error = res.message || this.translate('okf.headTest.error.generate', 'Suite generation failed');
@@ -746,6 +1116,8 @@ export default {
       }
       this.suite = res.result;
       this.lastRunSummary = null;
+      this.lastRunSummaryRows = [];
+      this.batchAdvice = null;
       this.refreshRuns();
     },
     async onRunSuite() {
@@ -768,12 +1140,78 @@ export default {
         key: r.query + ':' + i,
         query: r.query,
         kind: r.kind,
+        cls: r.cls || null, // 1-8c: negative class (near-miss/confusable/…)
         source: r.source,
         error: r.error || null,
         pass: this.outcomeOf(r),
         failLabel: this.failLabelOf(r)
       }));
+      this.batchAdvice = null; // a fresh run makes the previous advice stale
       this.refreshRuns();
+    },
+    /** 1-8c: batch advice for the latest run of the current suite — every
+     * failing negative, ONE LLM call (the anti-treadmill affordance). */
+    async onExplainFailures() {
+      if (!this.suite || this.busy !== null) return;
+      this.busy = 'explain-failures';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headSuiteExplainFailures', {
+        repoId: this.repo.repo_id,
+        suiteKey: this.suite.suite_key
+      });
+      this.busy = null;
+      if (!res.ok) {
+        this.error = res.message || this.translate('okf.headTest.error.explain', 'Explain failed');
+        return;
+      }
+      this.batchAdvice = res.result;
+    },
+    /** 1-8c: batch fix loop — rebuild the head from the just-saved tags,
+     * then re-run the SAME suite against the fresh head. */
+    async onRebuildSuiteRerun() {
+      if (this.busy !== null || !this.suite) return;
+      this.busy = 'rebuild-rerun';
+      this.error = '';
+      const reb = await this.$store.dispatch('okf/headRebuild', { repoId: this.repo.repo_id });
+      this.busy = null;
+      if (!reb.ok) {
+        this.error = reb.message || this.translate('okf.headTest.error.rebuild', 'Head rebuild failed');
+        return;
+      }
+      this.$emit('changed', { head: reb.result });
+      await this.onRunSuite();
+    },
+    /** 1-8c: counts inputs hold strings (DsInput emits target.value) —
+     * coerce to int; undefined lets the server apply its own default. */
+    intOf(v) {
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) && n > 0 ? n : undefined;
+    },
+    /** 1-8c: translated label for a negative class token (near-miss |
+     * confusable | forbidden | off-domain | meta). */
+    classLabel(cls) {
+      const keys = {
+        'near-miss': ['okf.headTest.cls.nearMiss', 'Near miss'],
+        confusable: ['okf.headTest.cls.confusable', 'Confusable'],
+        forbidden: ['okf.headTest.cls.forbidden', 'Forbidden'],
+        'off-domain': ['okf.headTest.cls.offDomain', 'Off-domain'],
+        meta: ['okf.headTest.cls.meta', 'Meta']
+      };
+      const hit = keys[cls];
+      return hit ? this.translate(hit[0], hit[1]) : cls;
+    },
+    /** 1-8c: pill variant per class — near-miss stands apart (accent) so
+     * the new repo-vocabulary class is distinguishable at a glance. */
+    classVariant(cls) {
+      return (
+        {
+          'near-miss': 'accent',
+          confusable: 'warning',
+          forbidden: 'warning',
+          'off-domain': 'neutral',
+          meta: 'info'
+        }[cls] || 'warning'
+      );
     },
     /** Pass semantics (server-identical): positive passes when the repo
      * wins the head leg; negative passes when it does NOT — but only if
@@ -1011,6 +1449,55 @@ export default {
 }
 .okf-headtest__steal {
   color: var(--danger);
+}
+.okf-headtest__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: flex-end;
+}
+.okf-headtest__count {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.okf-headtest__count-label {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.okf-headtest__count-input {
+  width: 76px;
+}
+.okf-headtest__counts-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+/* 1-8c: the claim-side teach panel + the suites batch-advice panel —
+   neutral surface so the verdict banner keeps the pass/fail color. */
+.okf-headtest__suggestion {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.okf-headtest__add-chip {
+  cursor: pointer;
+}
+.okf-headtest__failing {
+  margin: 0;
+  padding-left: var(--space-md);
+  font-size: var(--text-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.okf-headtest__failing li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
 }
 .okf-headtest__add-query {
   display: flex;

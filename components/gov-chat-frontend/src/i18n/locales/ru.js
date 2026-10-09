@@ -2622,6 +2622,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2701,7 +2702,32 @@ export default {
         fail: 'не пройдено',
         na: 'н/д'
       },
+      counts: {
+        positive: 'Позитивные',
+        negative: 'Сбивающие с толку',
+        negativeRandom: 'Вне домена',
+        meta: 'Мета',
+        nearMiss: 'Почти попадание',
+        hint: 'Количество строк из запрещённых тегов зависит от числа запрещённых тегов репозитория — здесь оно не задаётся.'
+      },
+      cls: {
+        nearMiss: 'Почти попадание',
+        confusable: 'Сбивающий с толку',
+        forbidden: 'Запрещённый',
+        offDomain: 'Вне домена',
+        meta: 'Мета'
+      },
       teach: {
+        claim:
+          'Голова ПРИСВАИВАЕТ этот запрос — он прошёл все три порога. Если он НЕ должен маршрутизироваться сюда, запросите запрещённые теги, исключающие его тему, добавьте их и перестройте голову.',
+        explain: 'Объяснить и предложить',
+        explainBusy: 'Объяснение — модель предлагает запрещённые теги…',
+        addTag: 'Добавить в запрещённые теги',
+        suggestNone: 'Запрещённый тег не предложен — сверьте запрос с заявленной областью вручную.',
+        added: 'Добавлено в запрещённые теги — перестройте голову, чтобы применить.',
+        rebuildRerun: 'Перестроить голову и повторить',
+        savingTag: 'Сохранение запрещённого тега…',
+        rebuildBusy: 'Перестройка головы и повторный запуск…',
         title: 'Что это означает',
         veto: "Этот запрос сильно совпадает с запрещённым тегом «{'{'}tag{'}'}». Если он ДОЛЖЕН относиться к этому репозиторию, удалите «{'{'}tag{'}'}» из запрещённых тегов в Frontmatter, затем опубликуйте заново, чтобы перестроить head.",
         floor:
@@ -2738,9 +2764,17 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Объяснить сбои',
+        explainBusy: 'Объяснение сбоев — один вызов модели на каждый провалившийся негативный запрос…',
+        batchTitle: 'Почему провалившиеся негативные запросы маршрутизировались сюда',
+        batchNone: 'Исправление не предложено — сверьте провалившиеся запросы с заявленной областью вручную.',
+        addAll: 'Добавить все',
+        rebuildRerun: 'Перестроить голову и повторить набор'
       },
       error: {
+        explain: 'Не удалось объяснить',
+        saveTag: 'Не удалось сохранить запрещённый тег',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',

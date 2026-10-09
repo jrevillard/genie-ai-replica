@@ -2629,6 +2629,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2708,7 +2709,33 @@ export default {
         fail: 'falla',
         na: 'n/a'
       },
+      counts: {
+        positive: 'Positivas',
+        negative: 'Confundibles',
+        negativeRandom: 'Fuera de dominio',
+        meta: 'Meta',
+        nearMiss: 'Casi acierto',
+        hint: 'Las filas derivadas de etiquetas prohibidas escalan con la cantidad de etiquetas prohibidas del repositorio; no se pueden fijar aquí.'
+      },
+      cls: {
+        nearMiss: 'Casi acierto',
+        confusable: 'Confundible',
+        forbidden: 'Prohibida',
+        offDomain: 'Fuera de dominio',
+        meta: 'Meta'
+      },
       teach: {
+        claim:
+          'La cabecera RECLAMA esta consulta — pasó las tres compuertas. Si NO debería enrutar aquí, pida etiquetas prohibidas que excluyan su tema, añádalas y reconstruya la cabecera.',
+        explain: 'Explicar y sugerir',
+        explainBusy: 'Explicando — el modelo propone etiquetas prohibidas…',
+        addTag: 'Añadir a etiquetas prohibidas',
+        suggestNone:
+          'No se sugirió ninguna etiqueta prohibida — revise la consulta frente al alcance declarado manualmente.',
+        added: 'Añadidas a las etiquetas prohibidas — reconstruya la cabecera para aplicarlas.',
+        rebuildRerun: 'Reconstruir cabecera y repetir',
+        savingTag: 'Guardando la etiqueta prohibida…',
+        rebuildBusy: 'Reconstruyendo la cabecera y repitiendo…',
         title: 'Qué significa esto',
         veto: "Esta consulta coincide fuertemente con la etiqueta prohibida «{'{'}tag{'}'}». Si DEBERÍA pertenecer a este repositorio, elimine «{'{'}tag{'}'}» de las etiquetas prohibidas en el Frontmatter y vuelva a publicar para reconstruir el head.",
         floor:
@@ -2745,9 +2772,18 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Explicar fallos',
+        explainBusy: 'Explicando los fallos — una llamada al modelo para cada negativo fallido…',
+        batchTitle: 'Por qué los negativos fallidos enrutaron aquí',
+        batchNone:
+          'No se sugirió ninguna corrección — revise las consultas fallidas frente al alcance declarado manualmente.',
+        addAll: 'Añadir todas',
+        rebuildRerun: 'Reconstruir cabecera y repetir la suite'
       },
       error: {
+        explain: 'La explicación falló',
+        saveTag: 'No se pudo guardar la etiqueta prohibida',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',

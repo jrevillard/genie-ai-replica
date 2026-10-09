@@ -10,7 +10,12 @@
  * null otherwise, never a fake pass). Story 1-8b adds the gate v2
  * contract: the Floor / Forbidden tags / Margin breakdown strip, and the
  * teaching panel (veto = remove the named tag + republish; floor =
- * correct suppression; claim = no panel).
+ * correct suppression; claim = no panel). Story 1-8c adds the Lab's
+ * teaching loop: per-class count knobs on the generate call, the
+ * near-miss class chip, the claim-side "Explain & suggest" loop
+ * (routing-explain → suggested forbidden tags → shared two-write
+ * frontmatter save → rebuild + re-run), and the batch "Explain failures"
+ * advice for a suite run (add-all chips).
  */
 
 const dispatch = jest.fn();
@@ -382,4 +387,256 @@ it('1-8b: a legacy (pre-v2) result renders no gate strip and keeps the old banne
   expect(w.find('.okf-headtest__gate').exists()).toBe(false);
   expect(w.find('.okf-headtest__teach').exists()).toBe(false);
   expect(w.vm.verdictText).toContain('score 0.700 − forbidden 0.450 = 0.050');
+});
+
+// ─── Story 1-8c: the Lab teaching loop — count knobs, near-miss chip,
+//     claim-side explain→add→rebuild, batch explain failures ───────────────
+
+it('1-8c: count controls pass per-class params to the generate call', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  // DsInput emits strings — the dialog coerces before dispatching.
+  w.vm.counts = { n_positive: '12', n_negative: '9', n_negative_random: '6', n_meta: '5', n_near_miss: '6' };
+  dispatch.mockResolvedValueOnce({ ok: true, result: { suite_key: 's9' } });
+  dispatch.mockResolvedValueOnce({ ok: true, runs: [] }); // refreshRuns
+  await w.vm.onGenerateSuite();
+  expect(dispatch).toHaveBeenCalledWith('okf/headSuiteGenerate', {
+    repoId: 'r-1',
+    nPositive: 12,
+    nNegative: 9,
+    nNegativeRandom: 6,
+    nMeta: 5,
+    nNearMiss: 6
+  });
+
+  // Non-numeric input → undefined → the server applies its own default.
+  w.vm.counts = { n_positive: '8', n_negative: 'abc', n_negative_random: '', n_meta: '3', n_near_miss: 'x' };
+  dispatch.mockClear();
+  dispatch.mockResolvedValueOnce({ ok: true, result: { suite_key: 's10' } });
+  dispatch.mockResolvedValueOnce({ ok: true, runs: [] });
+  await w.vm.onGenerateSuite();
+  expect(dispatch).toHaveBeenCalledWith('okf/headSuiteGenerate', {
+    repoId: 'r-1',
+    nPositive: 8,
+    nNegative: undefined,
+    nNegativeRandom: undefined,
+    nMeta: 3,
+    nNearMiss: undefined
+  });
+});
+
+it('1-8c: near-miss rows render a distinct class chip', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: {
+      payload: {
+        summary: {
+          pass_rate: 1,
+          positive_passed: 1,
+          positive_total: 1,
+          negative_passed: 1,
+          negative_total: 1,
+          negative_evaluatable: 1,
+          avg_margin: null,
+          steals: []
+        },
+        results: [
+          { query: 'p1', kind: 'positive', source: 'llm', under_test_wins_head: true, sibling_count: 2 },
+          {
+            query: 'Best hospitals for cancer surgery',
+            kind: 'negative',
+            cls: 'near-miss',
+            source: 'llm',
+            head_claimed: false,
+            sibling_count: 0
+          }
+        ]
+      }
+    }
+  });
+  dispatch.mockResolvedValueOnce({ ok: true, runs: [] });
+  await w.vm.onRunSuite();
+  await w.vm.$nextTick();
+  expect(w.vm.lastRunSummaryRows[1].cls).toBe('near-miss');
+  expect(w.vm.classLabel('near-miss')).toBe('Near miss');
+  expect(w.vm.classVariant('near-miss')).toBe('accent');
+  expect(w.element.textContent).toContain('Near miss');
+});
+
+it('1-8c: explain flow renders suggestion chips, saves via the shared two-write save, then rebuilds and re-runs', async () => {
+  const w = mountDialog({ initialTab: 'test' });
+  await w.vm.$nextTick();
+  w.vm.query = 'hiv and communicable disease prevention';
+  // 1. the query (wrongly) CLAIMS
+  dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'claim', score: 0.594, maxTag: 0.518 }));
+  await w.vm.onRunTest();
+  await w.vm.$nextTick();
+  expect(w.vm.claimTeachable).toBe(true);
+  // 2. Explain & suggest → routing-explain proposes a forbidden tag
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: {
+      suggestion: { tags: ['communicable-disease'], source: 'llm', reason: 'suggested forbidden tags for this subject' }
+    }
+  });
+  await w.vm.onExplainClaim();
+  await w.vm.$nextTick();
+  expect(dispatch).toHaveBeenCalledWith('okf/headRoutingExplain', {
+    repoId: 'r-1',
+    query: 'hiv and communicable disease prevention'
+  });
+  const chip = w.find('.okf-headtest__add-chip');
+  expect(chip.exists()).toBe(true);
+  expect(chip.text()).toContain('communicable-disease');
+  // 3. click the chip → the tag lands in the shared saveFrontmatter shape
+  dispatch.mockResolvedValueOnce({ ok: true, step: 'done' });
+  await chip.trigger('click');
+  await w.vm.$nextTick();
+  expect(dispatch).toHaveBeenCalledWith('okf/saveFrontmatter', {
+    repoId: 'r-1',
+    shape: expect.objectContaining({ forbidden: ['mental-health', 'communicable-disease'] })
+  });
+  expect(w.vm.taughtTags).toEqual(['communicable-disease']);
+  // 4. Rebuild head & re-run → headRebuild + routing-test for the SAME query
+  const rebuildBtn = w.findAll('button').find((b) => b.text().includes('Rebuild head & re-run'));
+  expect(rebuildBtn).toBeTruthy();
+  dispatch.mockResolvedValueOnce({ ok: true, result: { dim: 1024 } }); // headRebuild
+  dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'floor', score: 0.41 })); // re-run
+  await rebuildBtn.trigger('click');
+  await w.vm.$nextTick();
+  expect(dispatch).toHaveBeenCalledWith('okf/headRebuild', { repoId: 'r-1' });
+  expect(dispatch).toHaveBeenCalledWith('okf/headRoutingTest', {
+    repoId: 'r-1',
+    query: 'hiv and communicable disease prevention'
+  });
+  expect(w.vm.lastResult.under_test.head_claim).toBe('floor');
+  expect(w.vm.explanation).toBeNull(); // spent advice
+});
+
+it('1-8c: a tag already in the stored frontmatter renders as added', async () => {
+  const w = mountDialog({ initialTab: 'test' });
+  await w.vm.$nextTick();
+  w.vm.query = 'q';
+  dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'claim' }));
+  await w.vm.onRunTest();
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: { suggestion: { tags: ['mental-health', 'genetics'], source: 'llm', reason: 'r' } }
+  });
+  await w.vm.onExplainClaim();
+  await w.vm.$nextTick();
+  expect(w.vm.isTaught('mental-health')).toBe(true); // in REPO.frontmatter
+  expect(w.vm.isTaught('genetics')).toBe(false);
+  const chips = w.findAll('.okf-headtest__add-chip');
+  expect(chips).toHaveLength(2);
+  expect(chips.at(0).text()).toContain('✓');
+  expect(chips.at(1).text()).toContain('+');
+});
+
+it('1-8c: batch advice — Explain failures renders add-all chips and saves them in one write', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: {
+      payload: {
+        summary: {
+          pass_rate: 0.75,
+          positive_passed: 3,
+          positive_total: 3,
+          negative_passed: 1,
+          negative_total: 2,
+          negative_evaluatable: 2,
+          avg_margin: null,
+          steals: []
+        },
+        results: [
+          { query: 'p1', kind: 'positive', source: 'llm', under_test_wins_head: true, sibling_count: 2 },
+          { query: 'n1 ok', kind: 'negative', cls: 'near-miss', source: 'llm', head_claimed: false, sibling_count: 0 },
+          {
+            query: 'hiv prevention guideline',
+            kind: 'negative',
+            cls: 'near-miss',
+            source: 'llm',
+            head_claimed: true,
+            sibling_count: 0
+          }
+        ]
+      }
+    }
+  });
+  dispatch.mockResolvedValueOnce({ ok: true, runs: [] });
+  await w.vm.onRunSuite();
+  expect(w.vm.hasNegativeFailures).toBe(true); // 1/2 negatives passed
+  // Explain failures → ONE batch call
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: {
+      suite_key: 's1',
+      run_key: 'r1',
+      failing_count: 1,
+      failing_queries: [{ query: 'hiv prevention guideline', cls: 'near-miss', head_claim: 'claim' }],
+      suggested_tags: ['communicable-disease', 'hiv'],
+      source: 'llm',
+      note: 'both failures share the communicable-disease subject'
+    }
+  });
+  await w.vm.onExplainFailures();
+  await w.vm.$nextTick();
+  expect(dispatch).toHaveBeenCalledWith('okf/headSuiteExplainFailures', { repoId: 'r-1', suiteKey: 's1' });
+  expect(w.vm.batchTags).toEqual(['communicable-disease', 'hiv']);
+  expect(w.element.textContent).toContain('both failures share the communicable-disease subject');
+  expect(w.element.textContent).toContain('hiv prevention guideline');
+  // Add all → ONE saveFrontmatter with every pending tag
+  const addAll = w.findAll('button').find((b) => b.text().includes('Add all'));
+  expect(addAll).toBeTruthy();
+  dispatch.mockResolvedValueOnce({ ok: true, step: 'done' });
+  await addAll.trigger('click');
+  await w.vm.$nextTick();
+  expect(dispatch).toHaveBeenCalledWith('okf/saveFrontmatter', {
+    repoId: 'r-1',
+    shape: expect.objectContaining({ forbidden: ['mental-health', 'communicable-disease', 'hiv'] })
+  });
+  // Rebuild head & re-run suite is now offered
+  const rerun = w.findAll('button').find((b) => b.text().includes('Rebuild head & re-run suite'));
+  expect(rerun).toBeTruthy();
+  dispatch.mockResolvedValueOnce({ ok: true, result: { dim: 1024 } }); // headRebuild
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: {
+      payload: {
+        summary: {
+          pass_rate: 1,
+          positive_passed: 1,
+          positive_total: 1,
+          negative_passed: 1,
+          negative_total: 1,
+          negative_evaluatable: 1,
+          avg_margin: null,
+          steals: []
+        },
+        results: [{ query: 'n1', kind: 'negative', cls: 'near-miss', head_claimed: false, sibling_count: 0 }]
+      }
+    }
+  });
+  dispatch.mockResolvedValueOnce({ ok: true, runs: [] });
+  await rerun.trigger('click');
+  await w.vm.$nextTick();
+  expect(dispatch).toHaveBeenCalledWith('okf/headRebuild', { repoId: 'r-1' });
+  expect(dispatch).toHaveBeenCalledWith('okf/headSuiteRun', { repoId: 'r-1', suiteKey: 's1' });
+});
+
+it('1-8c: the claim-side teach loop is hidden in readOnly (wizard writes nothing)', async () => {
+  const w = mountDialog({ initialTab: 'test', readOnly: true });
+  await w.vm.$nextTick();
+  w.vm.query = 'q';
+  dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'claim' }));
+  await w.vm.onRunTest();
+  await w.vm.$nextTick();
+  expect(w.vm.claimTeachable).toBe(false);
+  expect(w.find('.okf-headtest__add-chip').exists()).toBe(false);
 });

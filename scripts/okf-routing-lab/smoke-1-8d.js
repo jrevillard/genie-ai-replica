@@ -99,6 +99,13 @@ function check(name, ok, detail) {
   results.push({ name, ok, detail });
   console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${name}${detail ? ' — ' + detail : ''}`);
 }
+// A skipped check is neither pass nor fail (counted out of the totals) —
+// used when the live repo's state makes a section inapplicable (e.g. the
+// serving/ingested repo is READ ONLY: frontmatter writes 409 by design).
+function skip(name, detail) {
+  results.push({ name, ok: true, skipped: true });
+  console.log(`  [SKIP] ${name}${detail ? ' — ' + detail : ''}`);
+}
 
 async function cleanup() {
   const errs = [];
@@ -329,6 +336,12 @@ async function generateSuite(body) {
   // the new endpoint (restores exactly that snapshot — and removes the
   // throwaway through the revert path, not a second PATCH).
   console.log('[10] history + revert');
+  // A SERVING repo is READ ONLY (409 REPO_READ_ONLY on every frontmatter
+  // write, by design — live 2026-10-09: David ingested NCD before this run).
+  // Skip the whole section rather than fail against correct behavior.
+  const fresh0 = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}`, { token: USER_TOKEN }));
+  const readOnly = fresh0.lifecycle_state === 'publish' && !!fresh0.ingested_at;
+  if (!readOnly) {
   const F0 = Array.isArray(repoDoc.frontmatter && repoDoc.frontmatter.forbidden)
     ? repoDoc.frontmatter.forbidden
     : [];
@@ -425,6 +438,9 @@ async function generateSuite(body) {
     Array.isArray(fmNow) && !fmNow.includes(THROWAWAY_TAG) && eqTags(fmNow, F0),
     `via=${via} forbidden=[${(fmNow || []).join(', ')}]`
   );
+  } else {
+    skip('history + revert (whole section)', 'repo is serving (ingested) and READ ONLY — retract to mutate; run this smoke before ingesting');
+  }
 
   // ---- 11. STALENESS: forbidden_snapshot on generation ----
   console.log('[11] staleness snapshot');
@@ -540,7 +556,12 @@ async function generateSuite(body) {
   check('suite edit: unauthenticated rejected', noauthEdit.status === 401 || noauthEdit.status === 403, `status=${noauthEdit.status}`);
 
   const failed = results.filter((r) => !r.ok);
-  console.log(`\n== SMOKE ${failed.length ? 'FAILED' : 'PASSED'}: ${results.length - failed.length}/${results.length} checks ==`);
+  const skipped = results.filter((r) => r.skipped).length;
+  const active = results.length - skipped;
+  console.log(
+    `\n== SMOKE ${failed.length ? 'FAILED' : 'PASSED'}: ${active - failed.length}/${active} checks` +
+      (skipped ? ` (${skipped} skipped)` : '') + ' =='
+  );
   process.exitCode = failed.length ? 1 : 0;
 })()
   .catch((e) => {

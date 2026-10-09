@@ -41,7 +41,7 @@ export default {
     CG: 'Congo',
     CD: 'Congo, Democratic Republic of the',
     CR: 'Costa Rica',
-    CI: "Côte d'Ivoire",
+    CI: 'Côte d\'Ivoire',
     HR: 'Croatia',
     CU: 'Cuba',
     CY: 'Cyprus',
@@ -411,14 +411,11 @@ export default {
       gitRepoAccess: 'Git Repository Access Attempts',
       gitRepoAccessDesc: 'attempts to access Git repository files detected',
       recommendedAction: 'Recommended Action',
-      rateLimitRecommendation:
-        'Consider implementing rate limiting, IP blocking for persistent offenders, and ensure proper server hardening is in place.',
-      envFileRecommendation:
-        'Ensure environment files are not accessible from web directories and server configurations properly block access to sensitive files.',
+      rateLimitRecommendation: 'Consider implementing rate limiting, IP blocking for persistent offenders, and ensure proper server hardening is in place.',
+      envFileRecommendation: 'Ensure environment files are not accessible from web directories and server configurations properly block access to sensitive files.',
       gitRepoRecommendation: 'Make sure .git directories are properly secured and not accessible from the web.',
       logPatternMatches: 'Log Pattern Matches',
-      patternMatchNote:
-        'Terms found in log text. The scan reports the substring, not a verified attack — read the line.',
+      patternMatchNote: 'Terms found in log text. The scan reports the substring, not a verified attack — read the line.',
       patternMatchSummaryNote: '(substring found in log text, not a verified attack)',
       noVulnerabilitiesFound: 'No Vulnerabilities Found',
       systemSecure: 'Your system appears to be secure. Continue monitoring regularly.',
@@ -513,13 +510,12 @@ export default {
       retractPartialFailure: '{successCount} of {count} retracted. Failed: {detail}',
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
-      confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
+      confirmDeleteSelected: 'Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.',
+      deleteQueuedSuccess: '{\'{\'}count{\'}\'} file(s) deleted.',
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
-      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
-      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
+      deletePartialFailure: '{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}',
+      deleteAllFailed: 'All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}',
+      deleteRefuseReason: '{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.',
       retractAllFailed: 'All {count} file(s) failed: {detail}',
       uploadSuccessMultiple: '{count} file(s) uploaded successfully.',
       linkSubmitSuccess: 'Successfully crawled and saved "{fileName}".',
@@ -739,7 +735,7 @@ export default {
     chatTitle: 'Chat Title',
     chatTitlePlaceholder: 'Enter a title for this chat',
     deleteFolder: 'Delete Folder',
-    deleteFolderConfirm: "Are you sure you want to delete '{name}' folder?",
+    deleteFolderConfirm: 'Are you sure you want to delete \'{name}\' folder?',
     chatsMoveWarning: 'All chats in this folder will be moved to the default folder.',
     weatherTitle: 'Weather Forecast',
     collapse: 'Collapse sidebar',
@@ -829,18 +825,15 @@ export default {
     },
     cat2: {
       name: '2. Healthcare & Social Services',
-      children:
-        'Public healthcare access,Vaccination programs,Health insurance,Disability benefits,Welfare and food assistance'
+      children: 'Public healthcare access,Vaccination programs,Health insurance,Disability benefits,Welfare and food assistance'
     },
     cat3: {
       name: '3. Education & Learning',
-      children:
-        'Public schools and universities,Scholarships and student loans,Adult education programs,Online learning resources'
+      children: 'Public schools and universities,Scholarships and student loans,Adult education programs,Online learning resources'
     },
     cat4: {
       name: '4. Employment & Labor Services',
-      children:
-        'Job search and unemployment benefits,Worker protections and labor rights,Workplace safety regulations,Skills training and apprenticeships'
+      children: 'Job search and unemployment benefits,Worker protections and labor rights,Workplace safety regulations,Skills training and apprenticeships'
     },
     cat5: {
       name: '5. Taxes & Revenue',
@@ -852,23 +845,19 @@ export default {
     },
     cat7: {
       name: '7. Transportation & Mobility',
-      children:
-        "Driver's licenses and vehicle registration,Public transit and infrastructure,Traffic violations and fines,Road safety programs"
+      children: 'Driver\'s licenses and vehicle registration,Public transit and infrastructure,Traffic violations and fines,Road safety programs'
     },
     cat8: {
       name: '8. Housing & Urban Development',
-      children:
-        'Public housing assistance,Property registration and land records,Housing loans and subsidies,Zoning and building permits'
+      children: 'Public housing assistance,Property registration and land records,Housing loans and subsidies,Zoning and building permits'
     },
     cat9: {
       name: '9. Utilities & Environment',
-      children:
-        'Water and electricity services,Waste management and recycling,Environmental regulations,Renewable energy initiatives'
+      children: 'Water and electricity services,Waste management and recycling,Environmental regulations,Renewable energy initiatives'
     },
     cat10: {
       name: '10. Business & Trade',
-      children:
-        'Business registration and licensing,Trade regulations and permits,Small business grants and incentives,E-commerce and digital business support'
+      children: 'Business registration and licensing,Trade regulations and permits,Small business grants and incentives,E-commerce and digital business support'
     },
     cat11: {
       name: '11. Social Security & Pensions',
@@ -876,8 +865,7 @@ export default {
     },
     cat12: {
       name: '12. Community & Civic Engagement',
-      children:
-        'Voting and elections,Public feedback and citizen complaints,Volunteering and community programs,Local government participation'
+      children: 'Voting and elections,Public feedback and citizen complaints,Volunteering and community programs,Local government participation'
     }
   },
   settings: {
@@ -937,22 +925,19 @@ export default {
     user: 'User',
     loadingUserInfo: 'Loading user information...',
     resetUserDataTitle: 'Reset User Data',
-    confirmResetUserData:
-      'Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.',
+    confirmResetUserData: 'Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.',
     reset: 'Reset',
     deleteAccount: 'Delete my account',
     deleteAccountDesc: 'Permanently delete your account and all data. This cannot be undone.',
     deleteAccountTitle: 'Delete Account',
-    confirmDeleteAccount:
-      'Are you sure you want to delete your account? This action is permanent and cannot be undone. All your data will be erased.',
+    confirmDeleteAccount: 'Are you sure you want to delete your account? This action is permanent and cannot be undone. All your data will be erased.',
     delete: 'Delete',
     accountDeleted: 'Your account has been deleted.',
     failedToDeleteAccount: 'Failed to delete your account. Please try again later.'
   },
   userProfile: {
     title: 'User Profile',
-    privacyInfo:
-      "By providing more information, you'll get more accurate and meaningful responses from the chatbot. Please review our",
+    privacyInfo: 'By providing more information, you\'ll get more accurate and meaningful responses from the chatbot. Please review our',
     privacyPolicyLink: 'Privacy Policy',
     tabComingSoon: 'This tab is under development and will be available soon.',
     saveSuccess: 'Profile saved successfully',
@@ -1023,7 +1008,7 @@ export default {
       landRecords: 'Land and property ownership records',
       idCard: 'National ID card number',
       passport: 'Passport details',
-      driversLicense: "Driver's license",
+      driversLicense: 'Driver\'s license',
       voterId: 'Voter ID',
       ssn: 'Social Security / National Insurance Number',
       militaryRecords: 'Military service records',
@@ -1169,8 +1154,8 @@ export default {
       highSchool: 'High School',
       vocational: 'Vocational Training',
       associate: 'Associate Degree',
-      bachelor: "Bachelor's Degree",
-      master: "Master's Degree",
+      bachelor: 'Bachelor\'s Degree',
+      master: 'Master\'s Degree',
       doctoral: 'Doctoral Degree',
       professional: 'Professional Degree',
       other: 'Other'
@@ -1217,10 +1202,8 @@ export default {
     noMatchingCountries: 'No matching countries found',
     noMatchingDisciplines: 'No matching disciplines found',
     noMatchingDegrees: 'No matching degrees found',
-    educationOptions:
-      'Accounting,Aerospace Engineering,Agricultural Science,Anthropology,Architecture,Art History,Artificial Intelligence,Astronomy,Astrophysics,Biochemistry,Biomedical Engineering,Biotechnology,Business Administration,Chemical Engineering,Chemistry,Civil Engineering,Communications,Computer Engineering,Computer Science,Construction Management,Criminal Justice,Cybersecurity,Data Science,Dentistry,Economics,Education,Electrical Engineering,Elementary Education,English Literature,Environmental Engineering,Environmental Science,Fashion Design,Film Studies,Finance,Fine Arts,Food Science,Forensic Science,Game Design,Geography,Geology,Graphic Design,Health Administration,History,Hospitality Management,Human Resources,Industrial Design,Industrial Engineering,Information Systems,Information Technology,Interior Design,International Business,International Relations,Journalism,Law,Library Science,Linguistics,Management,Marketing,Materials Science,Mathematics,Mechanical Engineering,Media Studies,Medicine,Meteorology,Microbiology,Music,Nanotechnology,Nursing,Nutrition,Occupational Therapy,Oceanography,Petroleum Engineering,Pharmacy,Philosophy,Photography,Physical Education,Physical Therapy,Physics,Political Science,Psychology,Public Administration,Public Health,Public Relations,Robotics,Secondary Education,Social Work,Sociology,Software Engineering,Special Education,Sports Management,Statistics,Systems Engineering,Theatre Arts,Tourism,Urban Planning,Veterinary Medicine,Web Development,Wildlife Biology,Zoology',
-    degreeOptions:
-      'Associate Degree,Bachelor of Arts (BA),Bachelor of Science (BS),Bachelor of Engineering (BEng),Bachelor of Business Administration (BBA),Bachelor of Fine Arts (BFA),Bachelor of Education (BEd),Bachelor of Medicine (MBBS),Bachelor of Laws (LLB),Master of Arts (MA),Master of Science (MS),Master of Business Administration (MBA),Master of Engineering (MEng),Master of Fine Arts (MFA),Master of Education (MEd),Master of Laws (LLM),Master of Public Health (MPH),Doctor of Philosophy (PhD),Doctor of Medicine (MD),Doctor of Education (EdD),Doctor of Business Administration (DBA),Doctor of Jurisprudence (JD),Professional Diploma,Technical Diploma,Vocational Certificate,Graduate Certificate,Post-Graduate Diploma,Post-Doctoral',
+    educationOptions: 'Accounting,Aerospace Engineering,Agricultural Science,Anthropology,Architecture,Art History,Artificial Intelligence,Astronomy,Astrophysics,Biochemistry,Biomedical Engineering,Biotechnology,Business Administration,Chemical Engineering,Chemistry,Civil Engineering,Communications,Computer Engineering,Computer Science,Construction Management,Criminal Justice,Cybersecurity,Data Science,Dentistry,Economics,Education,Electrical Engineering,Elementary Education,English Literature,Environmental Engineering,Environmental Science,Fashion Design,Film Studies,Finance,Fine Arts,Food Science,Forensic Science,Game Design,Geography,Geology,Graphic Design,Health Administration,History,Hospitality Management,Human Resources,Industrial Design,Industrial Engineering,Information Systems,Information Technology,Interior Design,International Business,International Relations,Journalism,Law,Library Science,Linguistics,Management,Marketing,Materials Science,Mathematics,Mechanical Engineering,Media Studies,Medicine,Meteorology,Microbiology,Music,Nanotechnology,Nursing,Nutrition,Occupational Therapy,Oceanography,Petroleum Engineering,Pharmacy,Philosophy,Photography,Physical Education,Physical Therapy,Physics,Political Science,Psychology,Public Administration,Public Health,Public Relations,Robotics,Secondary Education,Social Work,Sociology,Software Engineering,Special Education,Sports Management,Statistics,Systems Engineering,Theatre Arts,Tourism,Urban Planning,Veterinary Medicine,Web Development,Wildlife Biology,Zoology',
+    degreeOptions: 'Associate Degree,Bachelor of Arts (BA),Bachelor of Science (BS),Bachelor of Engineering (BEng),Bachelor of Business Administration (BBA),Bachelor of Fine Arts (BFA),Bachelor of Education (BEd),Bachelor of Medicine (MBBS),Bachelor of Laws (LLB),Master of Arts (MA),Master of Science (MS),Master of Business Administration (MBA),Master of Engineering (MEng),Master of Fine Arts (MFA),Master of Education (MEd),Master of Laws (LLM),Master of Public Health (MPH),Doctor of Philosophy (PhD),Doctor of Medicine (MD),Doctor of Education (EdD),Doctor of Business Administration (DBA),Doctor of Jurisprudence (JD),Professional Diploma,Technical Diploma,Vocational Certificate,Graduate Certificate,Post-Graduate Diploma,Post-Doctoral',
     aria: {
       tabList: 'Profile form sections',
       nextButton: 'Go to next section',
@@ -1234,8 +1217,7 @@ export default {
   chatbot: {
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
-    configMismatchWarning:
-      'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
+    configMismatchWarning: 'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
     categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',
     serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
     noFilterWarning: 'No context filter active — query will be unfiltered.',
@@ -1267,8 +1249,7 @@ export default {
     saveConfirmTitle: 'Save Existing Conversation',
     saveConfirmMessage: 'Save existing conversation?',
     loadConfirmTitle: 'Load Existing Conversation',
-    loadConfirmMessage:
-      'You have unsaved changes. Do you want to discard them and load the selected conversation, or save the current conversation first?',
+    loadConfirmMessage: 'You have unsaved changes. Do you want to discard them and load the selected conversation, or save the current conversation first?',
     loadAndDiscard: 'Load and Discard',
     saveAndLoad: 'Save and Load',
     saveAndStartNew: 'Save and Start New',
@@ -1284,24 +1265,15 @@ export default {
     removeItem: 'Remove item'
   },
   quickhelp: {
-    applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
-    payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-    startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-    findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-    educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
-    transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-    housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-    findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
-    justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+    applyForIDPrompt: 'Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents\' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as \'Genie AI\'.',
+    payTaxesPrompt: 'Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as \'Genie AI\'.',
+    startBusinessPrompt: 'Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as \'Genie AI\'.',
+    findHealthcarePrompt: 'Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as \'Genie AI\'.',
+    educationServicesPrompt: 'Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as \'Genie AI\'.',
+    transportLicensesPrompt: 'Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as \'Genie AI\'.',
+    housingProgramsPrompt: 'Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as \'Genie AI\'.',
+    findJobsPrompt: 'Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as \'Genie AI\'.',
+    justChatPrompt: 'Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as \'Genie AI\'.'
   },
   common: {
     cancel: 'Cancel',
@@ -1368,14 +1340,10 @@ export default {
     tabs: {
       details: 'Details',
       ingestionLog: 'Ingestion Log',
-      detailsHint:
-        'Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.',
-      dashboardHint:
-        "Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.",
-      crawlLogHint:
-        'Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.',
-      ingestionLogHint:
-        'Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.'
+      detailsHint: 'Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.',
+      dashboardHint: 'Live view of this file\'s website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.',
+      crawlLogHint: 'Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.',
+      ingestionLogHint: 'Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.'
     },
     log: {
       killActions: 'Kill Actions:',
@@ -1421,11 +1389,9 @@ export default {
       retractTitle: 'Confirm Retraction',
       deleteTitle: 'Confirm Deletion',
       killDocTitle: 'Kill Document Ingestion',
-      killDoc:
-        'Are you sure you want to kill the ingestion task for THIS document? The process will attempt a graceful rollback.',
+      killDoc: 'Are you sure you want to kill the ingestion task for THIS document? The process will attempt a graceful rollback.',
       killProcTitle: 'Kill ENTIRE Ingestion Process',
-      killProc:
-        'WARNING: This will kill the entire backend ingestion service, affecting ALL files currently processing. Are you absolutely sure?'
+      killProc: 'WARNING: This will kill the entire backend ingestion service, affecting ALL files currently processing. Are you absolutely sure?'
     }
   },
   uploadDialog: {
@@ -1443,8 +1409,7 @@ export default {
       uploadSuccess: 'Successfully uploaded {fileName}',
       uploadFailed: 'Failed to upload {fileName}.'
     },
-    ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+    ragTip: 'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
     headTest: {
@@ -1466,8 +1431,7 @@ export default {
         version: 'Head version',
         computedAt: 'Computed',
         staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
-        missingNote:
-          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+        missingNote: 'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
         rebuild: 'Rebuild head',
         rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
         rebuildBusy: 'Rebuilding — embedding the tag fields…'
@@ -1486,14 +1450,12 @@ export default {
           claimed: 'Claims query'
         },
         provenance: 'Routing provenance',
-        empty:
-          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
+        empty: 'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
         pass: 'PASS — this repository wins the head routing.',
         fail: 'FAIL — {repo} wins the head routing for this query.',
         passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
         passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
-        notSelectedSuppressed:
-          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        notSelectedSuppressed: 'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
         failAdversarial: 'FAIL — this query routed HERE but it should not: the head claimed it',
         claimed: 'claims',
         suppressed: 'suppressed'
@@ -1514,7 +1476,7 @@ export default {
         negativeRandom: 'Off-domain',
         meta: 'Meta',
         nearMiss: 'Near miss',
-        hint: "Forbidden-derived rows scale with the repository's forbidden tag count — they cannot be set here."
+        hint: 'Forbidden-derived rows scale with the repository\'s forbidden tag count — they cannot be set here.'
       },
       cls: {
         nearMiss: 'Near miss',
@@ -1524,8 +1486,7 @@ export default {
         meta: 'Meta'
       },
       teach: {
-        claim:
-          'The head CLAIMS this query — it passed all three gates. If it should NOT route here, ask for forbidden tags that exclude its subject, add them, then rebuild the head.',
+        claim: 'The head CLAIMS this query — it passed all three gates. If it should NOT route here, ask for forbidden tags that exclude its subject, add them, then rebuild the head.',
         explain: 'Explain & suggest',
         explainBusy: 'Explaining — the model is proposing forbidden tags…',
         addTag: 'Add to forbidden tags',
@@ -1535,15 +1496,13 @@ export default {
         savingTag: 'Saving the forbidden tag…',
         rebuildBusy: 'Rebuilding the head and re-running…',
         title: 'What this means',
-        veto: "This query strongly matches the forbidden tag \"{'{'}tag{'}'}\". If it SHOULD belong to this repository, remove \"{'{'}tag{'}'}\" from the forbidden tags in Frontmatter, then republish to rebuild the head.",
-        floor:
-          'The query is unrelated to the subject matter of this repository (score below the domain floor) — no tag change fixes this; it is correct suppression.',
+        veto: 'This query strongly matches the forbidden tag "{\'{\'}tag{\'}\'}". If it SHOULD belong to this repository, remove "{\'{\'}tag{\'}\'}" from the forbidden tags in Frontmatter, then republish to rebuild the head.',
+        floor: 'The query is unrelated to the subject matter of this repository (score below the domain floor) — no tag change fixes this; it is correct suppression.',
         rejected: 'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
       },
       suites: {
         generate: 'Generate test suite',
-        generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
+        generateTip: 'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
         generating: 'Generating — the LLM is writing the queries…',
         run: 'Run all queries',
         running: 'Running every suite query…',
@@ -1555,7 +1514,8 @@ export default {
           run: 'Run',
           when: 'When',
           passRate: 'Pass rate',
-          headVersion: 'Head'
+          headVersion: 'Head',
+          tags: 'Tags'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -1579,8 +1539,7 @@ export default {
         addAll: 'Add all',
         rebuildRerun: 'Rebuild head & re-run suite',
         positiveFailuresTitle: 'Why positives stopped passing',
-        positiveFailures:
-          '{n} positive test(s) were suppressed this run — the forbidden tags over-match the repository scope.',
+        positiveFailures: '{n} positive test(s) were suppressed this run — the forbidden tags over-match the repository scope.',
         vetoedBy: 'Vetoed by',
         marginKilled: '{n} positive test(s) lost on margin (no single veto tag).',
         removals: 'Tags to remove (they veto this repository’s own positives)',
@@ -1595,7 +1554,8 @@ export default {
         revertSaving: 'Restoring the frontmatter…',
         revertEmpty: 'No frontmatter saves recorded yet.',
         revertDone: 'Frontmatter restored — rebuild the head and re-run to apply it.',
-        removeTag: 'Remove from forbidden tags'
+        removeTag: 'Remove from forbidden tags',
+        tagsetTip: 'Forbidden tags for this run'
       },
       error: {
         explain: 'Explain failed',
@@ -1607,14 +1567,15 @@ export default {
         add: 'Could not add the query',
         history: 'Could not load the save history',
         revert: 'Could not revert the frontmatter',
-        advisor: 'Advisor failed'
+        advisor: 'Advisor failed',
+        noSuite: 'Generate a suite first, then rebuild + re-run.',
+        applyNoSuite: 'Tags saved and the head rebuilt — generate a suite, then Run all to see the effect.'
       },
       footer: {
         unpublish: 'Unpublish to review'
       },
       publishCard: {
-        present:
-          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
+        present: 'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
       },
@@ -1626,7 +1587,8 @@ export default {
         scorecard: 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed',
         now: 'Now',
         predicted: 'predicted',
-        scope: ' (across {q} queries from the last {r} runs)'
+        scope: ' (across {q} queries from the last {r} runs)',
+        applying: 'Applying: saving tags, rebuilding the head, re-running the suite…'
       }
     },
     versions: {
@@ -1644,7 +1606,7 @@ export default {
       none: 'No versions minted yet — publishing creates v1.',
       notServing: 'Not serving',
       publish: 'Create new version',
-      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
+      published: 'Version v{\'{\'}v{\'}\'} published — bundle {\'{\'}f{\'}\'} stored in the document repository.',
       serving: 'Ingested (serving)',
       title: 'Versions'
     },
@@ -1664,7 +1626,7 @@ export default {
         note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        body: 'Publishing mints v{\'{\'}n{\'}\'} and stores bundle "{\'{\'}file{\'}\'}" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.',
         confirm: 'Publish',
         inProgress: 'Publishing — exporting and transferring the bundle…',
         title: 'Publish'
@@ -1678,22 +1640,22 @@ export default {
         editor: 'Editor',
         wizard: 'Wizard'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{\'{\'}n{\'}\'}',
       versions: 'Versions',
       headTest: 'Routing Lab',
       deleteLabel: 'Delete'
     },
     logs: {
-      labeled: "labeled: {'{'}n{'}'}",
-      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
-      concepts: "concepts: {'{'}n{'}'}",
+      labeled: 'labeled: {\'{\'}n{\'}\'}',
+      fallbacks: 'LLM fallbacks: {\'{\'}n{\'}\'}',
+      concepts: 'concepts: {\'{\'}n{\'}\'}',
       col: {
         action: 'Action',
         description: 'Description',
         user: 'User',
         when: 'Date & time'
       },
-      count: "{'{'}n{'}'} entries",
+      count: '{\'{\'}n{\'}\'} entries',
       loadFailed: 'Failed to load the activity log.',
       none: 'No activity recorded yet — repository actions appear here as they happen.',
       title: 'Activity log'
@@ -1702,11 +1664,11 @@ export default {
       aria: 'Concept graph',
       building: 'Preparing graph…',
       card: {
-        chunks: "{'{'}n{'}'} chunks",
+        chunks: '{\'{\'}n{\'}\'} chunks',
         failed: 'indexing failed',
         flagged: 'flagged entities',
         hub: 'Index hub',
-        links: "{'{'}n{'}'} links",
+        links: '{\'{\'}n{\'}\'} links',
         pending: 'not indexed yet'
       },
       concepts: 'concepts',
@@ -1732,11 +1694,9 @@ export default {
       files: 'Selected documents',
       servingBadge: 'serving free-form RAG',
       alreadyBadge: 'already in an OKF repo',
-      servingTip:
-        'This document currently serves the free-form RAG corpus — the new repository cannot be ingested until it is retracted.',
+      servingTip: 'This document currently serves the free-form RAG corpus — the new repository cannot be ingested until it is retracted.',
       alreadyTip: 'This document is already the source of another OKF repository.',
-      servingWarn:
-        '{n} document(s) still serve the free-form corpus. The import succeeds, but this repository cannot be ingested until they are retracted.',
+      servingWarn: '{n} document(s) still serve the free-form corpus. The import succeeds, but this repository cannot be ingested until they are retracted.',
       cancel: 'Cancel',
       importing: 'Importing…',
       go: 'Import',
@@ -1745,7 +1705,7 @@ export default {
     },
     pii: {
       panel: 'Flagged entities',
-      nFlagged: "{'{'}n{'}'} found",
+      nFlagged: '{\'{\'}n{\'}\'} found',
       rescan: 'Re-scan',
       scanning: 'Scanning…',
       clean: 'No flagged entities — this concept is clear.',
@@ -1852,22 +1812,18 @@ export default {
         empty: 'No files yet - add a concept or re-split from source.',
         filter: 'Filter files',
         flagged: 'flagged',
-        flaggedTip:
-          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+        flaggedTip: 'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
         failedCard: {
           title: 'Failed to ingest',
           problem: 'The problem',
           noError: 'Marked failed without a recorded reason.',
           fixLabel: 'How to fix',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {\'{\'}n{\'}\'}',
+          when: 'Last attempt {\'{\'}when{\'}\'}',
           fix: {
-            reaper:
-              'The ingest worker gave up waiting within its grace window (the drain was saturated) — the content is intact. Fix: edit this file slightly and save to re-queue it, or retract and re-ingest the whole repo.',
-            dataprep:
-              'The content-preparation service failed this ingest. Fix: edit and save to re-queue it; if it repeats, check the dataprep service health.',
-            generic:
-              'Indexing failed. Fix: edit the content and save to re-queue it, or retract and re-ingest the whole repo.'
+            reaper: 'The ingest worker gave up waiting within its grace window (the drain was saturated) — the content is intact. Fix: edit this file slightly and save to re-queue it, or retract and re-ingest the whole repo.',
+            dataprep: 'The content-preparation service failed this ingest. Fix: edit and save to re-queue it; if it repeats, check the dataprep service health.',
+            generic: 'Indexing failed. Fix: edit the content and save to re-queue it, or retract and re-ingest the whole repo.'
           }
         },
         indexBadge: 'index',
@@ -1914,10 +1870,9 @@ export default {
       },
       pickConcept: 'Select a concept from the list to start editing.',
       piiBulk: {
-        done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+        done_accept: 'Done — every flagged entity is marked reviewed-and-kept on {\'{\'}n{\'}\'} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {\'{\'}n{\'}\'} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {\'{\'}n{\'}\'} concept(s) is removed.',
         title: {
           redact: 'Redact all flagged content',
           remove: 'Remove all flagged content',
@@ -1926,10 +1881,9 @@ export default {
         body: {
           redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
           remove: 'The body of every flagged concept is emptied. This cannot be undone.',
-          accept:
-            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+          accept: 'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
         },
-        scope: "Concepts affected: {'{'}n{'}'}.",
+        scope: 'Concepts affected: {\'{\'}n{\'}\'}.',
         confirm: 'Apply',
         failed: 'The bulk PII action failed — try again.'
       },
@@ -1961,11 +1915,11 @@ export default {
       bulk: {
         body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
         pending: 'Confirm to publish the selected repositories.',
-        publishConfirm: "Publish {'{'}n{'}'}",
+        publishConfirm: 'Publish {\'{\'}n{\'}\'}',
         title: 'Publish selected repositories'
       },
       card: {
-        actions: "Actions for {'{'}name{'}'}",
+        actions: 'Actions for {\'{\'}name{\'}\'}',
         building: 'Building…',
         buildingAria: 'Building — the source file is still being processed',
         delete: 'Delete',
@@ -1991,29 +1945,29 @@ export default {
         note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        body: 'Publishing mints v{\'{\'}n{\'}\'} and stores bundle "{\'{\'}file{\'}\'}" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.',
         confirm: 'Publish',
         title: 'Publish'
       },
       search: 'Search...',
-      select: "Select {'{'}name{'}'} for bulk publish",
+      select: 'Select {\'{\'}name{\'}\'} for bulk publish',
       stage: {
         drainFailed: 'Ingest failed',
-        queueBehind: "{'{'}n{'}'} queued · {'{'}m{'}'} repo(s) ingesting",
+        queueBehind: '{\'{\'}n{\'}\'} queued · {\'{\'}m{\'}\'} repo(s) ingesting',
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',
         inReview: 'In review',
-        ingested: "Ingested v{'{'}n{'}'}",
-        published: "Published v{'{'}n{'}'}",
+        ingested: 'Ingested v{\'{\'}n{\'}\'}',
+        published: 'Published v{\'{\'}n{\'}\'}',
         retracted: 'Retracted',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {\'{\'}n{\'}\'} of 10'
       },
       title: 'Repositories',
       topics: 'topics',
       unpublish: {
         title: 'Unpublish',
-        body: "This stops serving {'{'}name{'}'} to RAG agents immediately. The published bundle zip and version history are kept; the repository returns to In Review so you can correct it. Publish again and Ingest to serve it once more.",
+        body: 'This stops serving {\'{\'}name{\'}\'} to RAG agents immediately. The published bundle zip and version history are kept; the repository returns to In Review so you can correct it. Publish again and Ingest to serve it once more.',
         confirm: 'Unpublish'
       },
       lane: {
@@ -2033,7 +1987,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} more",
+        more: '+ {\'{\'}n{\'}\'} more',
         fixPath: 'Re-ingest to retry: retract → create version → ingest.'
       },
       curation: {
@@ -2047,9 +2001,9 @@ export default {
       bytes: 'Source read',
       conceptsIndexed: 'concepts indexed',
       elapsed: {
-        hr: "Started {'{'}n{'}'} h ago",
+        hr: 'Started {\'{\'}n{\'}\'} h ago',
         lt1: 'Started less than a minute ago',
-        min: "Started {'{'}n{'}'} min ago"
+        min: 'Started {\'{\'}n{\'}\'} min ago'
       },
       pages: 'Pages processed',
       serving: {
@@ -2092,7 +2046,7 @@ export default {
     },
     create: {
       zipOnly: 'Pick a .zip bundle file.',
-      stagedFile: "Staged: {'{'}name{'}'}",
+      stagedFile: 'Staged: {\'{\'}name{\'}\'}',
       staged: 'Bundle staged — click Create Repository to start the import.',
       openExisting: 'Open existing repository',
       name: 'Repository name',
@@ -2147,8 +2101,7 @@ export default {
       save: 'Save frontmatter',
       saveFailed: 'Frontmatter save failed',
       perRepoTitle: 'Routing tags — what this repo is about',
-      perRepoHint:
-        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoHint: 'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2172,63 +2125,39 @@ export default {
       perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
     },
     glossary: {
-      pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
-      classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      pickSource: 'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy: 'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
       clsHeur: 'Heuristics (fast, no LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
-      fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
-      autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
-      handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
-      addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      fsPick: 'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect: 'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff: 'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      addConcept: 'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
       type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
-      title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
-      indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
-      trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
-      concept:
-        'One entry in your repository — usually a single page or topic. Each concept has structured frontmatter the assistant reads, plus the markdown text it answers from.',
-      repository:
-        'A collection of curated concepts around one Subject Area. It becomes an OKF bundle you publish, version and make available to the assistant.',
-      subjectArea:
-        'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.',
+      title: 'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus: 'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier: 'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept: 'One entry in your repository — usually a single page or topic. Each concept has structured frontmatter the assistant reads, plus the markdown text it answers from.',
+      repository: 'A collection of curated concepts around one Subject Area. It becomes an OKF bundle you publish, version and make available to the assistant.',
+      subjectArea: 'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.',
       selectSubjectArea: 'Select a subject area…',
-      subjectAreaMissing:
-        'The Subject Area of this repository is not in the Knowledge Hierarchy — showing every label.',
-      label:
-        'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.',
-      bundle:
-        'The zip export of a repository — its concepts, structure and metadata in one file. Bundles are how repositories move between systems.',
-      version:
-        'A frozen snapshot of a repository at publish time. Editing continues on the next version — published versions never change.',
+      subjectAreaMissing: 'The Subject Area of this repository is not in the Knowledge Hierarchy — showing every label.',
+      label: 'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.',
+      bundle: 'The zip export of a repository — its concepts, structure and metadata in one file. Bundles are how repositories move between systems.',
+      version: 'A frozen snapshot of a repository at publish time. Editing continues on the next version — published versions never change.',
       serving: 'This version is live: the assistant reads its content when answering. Retract it to make changes.',
-      ingestion:
-        'The step where a published version is prepared for answering — text is split, embedded and linked. Nothing reaches the assistant before this.',
-      classification:
-        'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.',
-      resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      ingestion: 'The step where a published version is prepared for answering — text is split, embedded and linked. Nothing reaches the assistant before this.',
+      classification: 'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.',
+      resplit: 'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'Save failed',
       importFailedTitle: 'The import failed — the source file could not be converted.',
       importFailedHint: 'Delete this repository and import the source file again.',
-      frontmatter:
-        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.',
-      lifecycle:
-        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
-      labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
-      reviewHandoff:
-        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
-      piiReview:
-        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+      frontmatter: 'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.',
+      lifecycle: 'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto: 'Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.',
+      reviewHandoff: 'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview: 'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
     },
     md: {
       toolbar: 'Formatting',
@@ -2246,33 +2175,20 @@ export default {
       rendering: 'Rendering…'
     },
     narrative: {
-      intro:
-        'An OKF repository is a structured, versioned collection of topics your chat answers can cite. Think of it as a lightweight ontological layer for your domain — labels define the categories, topics define the entities, sources define the provenance.',
-      step0:
-        'An OKF repository is a curated, versioned collection of topics. Think of it as a lightweight ontological layer for your domain — labels define categories, topics define entities, sources define provenance. Once published, downstream chat answers cite these topics by id.',
-      step1:
-        'Three ways to seed an OKF repository: pull topics from a website crawl, lift them from documents you have already uploaded, or start from a blank canvas. Cloning an existing repo copies its topics and lets you fork the work.',
-      step2:
-        'Each document becomes a source of topics. The producer reads them, extracts candidate topics, and proposes a hierarchy. You will review every topic on the next step — nothing is committed until you sign off.',
-      step3:
-        'We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.',
-      step4:
-        'Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.',
-      step5:
-        'This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.',
-      step6:
-        'We run conformance checks: does every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before you hand the repository off; warnings can be acknowledged.',
-      step7:
-        'Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.',
-      step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
-      step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
-      docMgmtEntry:
-        'Create a new OKF repository from the selected documents. Documents will become sources; you will review and name the topics they produce before anything is published.',
+      intro: 'An OKF repository is a structured, versioned collection of topics your chat answers can cite. Think of it as a lightweight ontological layer for your domain — labels define the categories, topics define the entities, sources define the provenance.',
+      step0: 'An OKF repository is a curated, versioned collection of topics. Think of it as a lightweight ontological layer for your domain — labels define categories, topics define entities, sources define provenance. Once published, downstream chat answers cite these topics by id.',
+      step1: 'Three ways to seed an OKF repository: pull topics from a website crawl, lift them from documents you have already uploaded, or start from a blank canvas. Cloning an existing repo copies its topics and lets you fork the work.',
+      step2: 'Each document becomes a source of topics. The producer reads them, extracts candidate topics, and proposes a hierarchy. You will review every topic on the next step — nothing is committed until you sign off.',
+      step3: 'We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.',
+      step4: 'Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.',
+      step5: 'This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.',
+      step6: 'We run conformance checks: does every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before you hand the repository off; warnings can be acknowledged.',
+      step7: 'Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.',
+      step8: 'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9: 'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry: 'Create a new OKF repository from the selected documents. Documents will become sources; you will review and name the topics they produce before anything is published.',
       crawlSegment: 'An OKF repository is a structured, versioned collection of topics your chat answers can cite.',
-      emptyDashboard:
-        'You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.',
+      emptyDashboard: 'You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.',
       labels: 'Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".',
       hide: 'Hide',
       whatIsThis: 'What is this?'
@@ -2288,8 +2204,7 @@ export default {
       title: 'OKF Studio',
       help: 'Help',
       helpTitle: 'About OKF Studio',
-      helpBody:
-        'OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.',
+      helpBody: 'OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.',
       view: {
         dashboard: 'Dashboard',
         wizard: 'Wizard'
@@ -2310,7 +2225,7 @@ export default {
       },
       stage: {
         inReview: 'In review',
-        stepOf: "Step {'{'}n{'}'} of 10",
+        stepOf: 'Step {\'{\'}n{\'}\'} of 10',
         draft: 'Draft'
       },
       dashboard: {
@@ -2323,7 +2238,7 @@ export default {
         stale: 'stale',
         stage: {
           inReview: 'In review',
-          stepOf: "Step {'{'}n{'}'} of 10",
+          stepOf: 'Step {\'{\'}n{\'}\'} of 10',
           draft: 'Draft'
         },
         bulk: {
@@ -2434,11 +2349,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{\'{\'}n{\'}\'} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{\'{\'}n{\'}\'}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2464,8 +2379,7 @@ export default {
         neverStarted: 'The conversion did not start — retry.',
         manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
         labelDone: 'Conversion complete',
-        dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        dupContent: 'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
@@ -2484,12 +2398,11 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        adjust: 'Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.',
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {
-        embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        embedHint: 'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
         noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'Review the topics',
         hint: 'Each topic is a small, citable unit of knowledge. Edit the title and description.',
@@ -2516,11 +2429,9 @@ export default {
         sources: 'Sources',
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
-        browserHint:
-          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
+        browserHint: 'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
         noRepo: 'No repository yet — the file review appears here once a repository exists.',
-        ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        ritualOutside: 'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2537,8 +2448,7 @@ export default {
         topicsServing: 'Topics serving',
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
-        ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        ritual: 'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2563,8 +2473,7 @@ export default {
         emptySelection: 'Select at least one document',
         alreadyInOkf: 'Remove documents already in an OKF repository',
         alreadyIngested: 'Remove documents already ingested',
-        servingWarn:
-          '{n} selected document(s) still serve the free-form corpus — the new repository cannot be ingested until they are retracted.'
+        servingWarn: '{n} selected document(s) still serve the free-form corpus — the new repository cannot be ingested until they are retracted.'
       },
       produce: {
         notReady: 'Producer wires in a later story.'
@@ -2577,11 +2486,9 @@ export default {
       classHeuristics: 'Heuristics (default)',
       classHeuristicsHint: 'Fast rule-based classification — no LLM cost, good for well-structured crawls.',
       classLlm: 'LLM-assisted',
-      classLlmHint:
-        'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.',
+      classLlmHint: 'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.',
       classHybrid: 'Hybrid',
-      classHybridHint:
-        'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.',
+      classHybridHint: 'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.',
       targetLabel: 'Where should this go?',
       target: {
         freeform: 'Crawl to free-form corpus',
@@ -2599,7 +2506,7 @@ export default {
       progressDownload: 'Downloading crawled content...',
       progressSplit: 'Splitting into concepts...',
       progressIngest: 'Adding concepts (batch [i] of [n])...',
-      postCrawlHint: "After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.",
+      postCrawlHint: 'After the crawl finishes, you can turn it into an OKF repository from the file\'s Dashboard tab.',
       creating: 'Creating OKF repository...',
       createOk: 'OKF repository created. Opening the Studio to curate.',
       createOkRenamed: 'OKF repository created as "[name]". Opening the Studio to curate.',
@@ -2659,15 +2566,15 @@ export default {
       saveBlocked: 'Save blocked: fix conformance issues first.'
     },
     validation: {
-      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
+      frozen: 'Content frozen at {\'{\'}v{\'}\'} — read-only preview. Retract the serving version to make changes.',
       none: 'None',
       expertHint: 'Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.',
       headline: {
-        blockers: "{'{'}n{'}'} blocking issue(s) — fix before you hand the repository off",
-        warnings: "{'{'}n{'}'} thing(s) need your review",
+        blockers: '{\'{\'}n{\'}\'} blocking issue(s) — fix before you hand the repository off',
+        warnings: '{\'{\'}n{\'}\'} thing(s) need your review',
         ok: 'Looks good. Nothing to fix.'
       },
-      summary: "{'{'}clean{'}'} clean · {'{'}warnings{'}'} needs review · {'{'}blockers{'}'} blocking",
+      summary: '{\'{\'}clean{\'}\'} clean · {\'{\'}warnings{\'}\'} needs review · {\'{\'}blockers{\'}\'} blocking',
       formatter: {
         notReady: 'Formatter lands in Story 4.2b.'
       },
@@ -2681,8 +2588,7 @@ export default {
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
       indexFailed: 'Re-index failed — edit or re-split the page.',
-      indexFailedRemedy:
-        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      indexFailedRemedy: 'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2701,8 +2607,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {\'{\'}n{\'}\'} page(s)',
+        wireExisting: 'Link {\'{\'}n{\'}\'} page(s) to "{\'{\'}hub{\'}\'}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2716,24 +2622,19 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {\'{\'}n{\'}\'} page(s) to "{\'{\'}hub{\'}\'}".',
+      wireCreated: 'Created the Sources page and linked {\'{\'}n{\'}\'} page(s).',
+      mergedPages: '{\'{\'}n{\'}\'} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {\'{\'}n{\'}\'} characters — open the editor for the full page.'
       },
       tip: {
-        conformance:
-          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
-        orphan:
-          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
-        near_duplicate:
-          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
-        citation:
-          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
-        index_failed:
-          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+        conformance: 'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan: 'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate: 'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation: 'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed: 'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
       }
     },
     lifecycle: {
@@ -2757,17 +2658,16 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{\'{\'}n{\'}\'} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {\'{\'}n{\'}\'}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {\'{\'}n{\'}\'} source(s)',
       cancel: 'Cancel',
       servingBadge: 'serving free-form RAG',
       alreadyBadge: 'already in an OKF repo',
-      servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      servingTip: 'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.',
       searchPh: 'Search by name or site…',
       chipsLabel: 'Filter by origin',
@@ -2777,7 +2677,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)"
+      total: '{\'{\'}n{\'}\'} document(s)'
     },
     frontmatter: {
       title: 'Frontmatter tags — what this repo is about',
@@ -2807,7 +2707,6 @@ export default {
     }
   },
   link: {
-    ragTip:
-      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
+    ragTip: 'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

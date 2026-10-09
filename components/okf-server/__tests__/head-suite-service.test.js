@@ -835,3 +835,132 @@ async function seedSuite({ positive = 1, negativeForbidden = 1, negativeRandom =
   __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
   return suite;
 }
+
+// ─── Story 1-8e: the tuning identity + the anti-treadmill damping ──────────
+
+describe('runSuite tagset stamp (1-8e)', () => {
+  it('records the forbidden tag set + hash on every run doc (the tuning identity)', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.7, 0, 'claimed'));
+    // The run reads the repo doc — give it a frontmatter to stamp from.
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'NCD Information',
+      version: 3,
+      head: { version: 42 },
+      frontmatter: FM
+    });
+    const run = await svc.runSuite('me', suite._key, {});
+    expect(run.tagset).toBeTruthy();
+    expect(run.tagset.forbidden).toEqual(FM.forbidden);
+    expect(run.tagset.hash).toMatch(/^[0-9a-f]{8}$/);
+  });
+
+  it('stamps hash "empty" when the repo has no forbidden tags', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.7, 0, 'claimed'));
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      version: 3,
+      head: { version: 42 },
+      frontmatter: { ...FM, forbidden: [] }
+    });
+    const run = await svc.runSuite('me', suite._key, {});
+    expect(run.tagset.forbidden).toEqual([]);
+    expect(run.tagset.hash).toBe('empty');
+  });
+});
+
+describe('recommendTagSet damping (1-8e — the anti-treadmill guard)', () => {
+  // Orthogonal 7-dim universe: head vector = e1; negatives sit at
+  // normalize(e1 + e_i) (cos 0.707 — above the floor, so they CLAIM in the
+  // baseline); tag k = e_{k+2} vetoes exactly the negatives aligned with it
+  // (cos 0.707 >= 0.55). Nine negatives total: tag-one..tag-three each
+  // suppress two, tag-five suppresses two, tag-low suppresses ONE.
+  const DIM = 7;
+  const unit = (v) => {
+    const n = Math.sqrt(v.reduce((a, x) => a + x * x, 0));
+    return v.map((x) => x / n);
+  };
+  const basis = (i) => unit(Array.from({ length: DIM }, (_, k) => (k === i ? 1 : 0)));
+  const HEAD_VEC = basis(0);
+  const NEG_DIRS = [1, 1, 2, 2, 3, 3, 4, 4, 5].map((i) =>
+    unit([1, ...Array.from({ length: DIM - 1 }, (_, k) => (k === i - 1 ? 1 : 0))])
+  ); // cos(head)=0.707 -> claims; cos(tag)=0.707 -> veto
+  const TAG_VECS = {
+    'tag-one': basis(1),
+    'tag-two': basis(2),
+    'tag-three': basis(3),
+    'tag-five': basis(4),
+    'tag-low': basis(5)
+  };
+  const QUERIES = [
+    { query: 'pos one', kind: 'positive', cls: null },
+    { query: 'pos two', kind: 'positive', cls: null },
+    ...NEG_DIRS.map((_, i) => ({ query: `neg ${i + 1}`, kind: 'negative', cls: 'near-miss' }))
+  ];
+
+  function seedAdvisor({ history = [] } = {}) {
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('r.kind == "run"')) {
+        return {
+          all: async () => [
+            {
+              _key: 'r1',
+              repo_id: 'me',
+              kind: 'run',
+              created_at: new Date().toISOString(),
+              payload: { results: QUERIES.map((q) => ({ ...q, head_claimed: q.kind === 'positive' })) }
+            }
+          ]
+        };
+      }
+      return { all: async () => [] };
+    });
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      version: 1,
+      frontmatter_history: history,
+      head: { version: 9, vector: HEAD_VEC, per_field: { topic: [HEAD_VEC], forbidden_vectors: [] } }
+    });
+    frontmatterService.teiEmbed.mockImplementation(async (texts) =>
+      texts.map((t) => {
+        if (TAG_VECS[t]) return TAG_VECS[t];
+        if (t.startsWith('neg ')) return NEG_DIRS[Number(t.slice(4)) - 1];
+        if (t.startsWith('pos ')) return HEAD_VEC;
+        return basis(6); // current tags: orthogonal junk — no gate effect
+      })
+    );
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({ add: ['tag-low', 'tag-one', 'tag-two', 'tag-three', 'tag-five'] })
+    );
+  }
+
+  it('damps a one-negative gain, caps adds per run, and reports both in the payload', async () => {
+    seedAdvisor();
+    const out = await svc.recommendTagSet('me', {});
+    // tag-low: suppresses ONE negative → below the 2-gain noise-fit guard.
+    const lowEval = out.add_eval.find((e) => e.tag === 'tag-low');
+    expect(lowEval.rejected).toMatch(/below the 2-gain noise-fit guard/);
+    expect(out.damped_adds).toBe(1);
+    // tag-one..three each suppress two → accepted up to the cap of 3.
+    expect(out.changes.add).toEqual(['tag-one', 'tag-two', 'tag-three']);
+    // tag-five would also suppress two — but the per-run add cap hit first.
+    const capEval = out.add_eval.find((e) => e.tag === 'tag-five');
+    expect(capEval.rejected).toMatch(/add cap reached/);
+    expect(out.damping).toEqual({ min_negative_gain: 2, max_adds: 3 });
+    // Predicted scorecard: 6 of 9 negatives suppressed, both positives kept.
+    expect(out.recommended_scorecard.negative_suppressed).toBe(6);
+    expect(out.recommended_scorecard.positive_claimed).toBe(2);
+    expect(out.current_scorecard.negative_suppressed).toBe(0);
+  });
+
+  it('baseline: with no LLM candidates nothing is added and the scorecards agree', async () => {
+    seedAdvisor();
+    frontmatterService.vllmChatCompletions.mockResolvedValue(llmResponse({ add: [] }));
+    const out = await svc.recommendTagSet('me', {});
+    expect(out.changes.add).toEqual([]);
+    expect(out.changes.remove).toEqual([]);
+    expect(out.current_scorecard.negative_suppressed).toBe(out.recommended_scorecard.negative_suppressed);
+  });
+});

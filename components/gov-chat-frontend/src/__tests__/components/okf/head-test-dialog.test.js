@@ -808,6 +808,67 @@ it('1-8d: tripwire — a same-suite positive-pass-rate drop raises the strip and
   expect(w.vm.tripwire).toBeNull();
 });
 
+it('1-8e: Apply owns ONE busy token across save → rebuild → re-run and never stops silently', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  w.vm.advisor = { changes: { add: ['new-tag'], remove: [] }, add_eval: [], remove_eval: [] };
+  // Dispatch order: saveFrontmatter → headRebuild → headSuiteRun → listRuns.
+  dispatch.mockResolvedValueOnce({ ok: true });
+  dispatch.mockResolvedValueOnce({ ok: true, result: { dim: 1024 } });
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: {
+      payload: {
+        summary: {
+          pass_rate: 1,
+          positive_passed: 2,
+          positive_total: 2,
+          negative_passed: 1,
+          negative_total: 1,
+          negative_evaluatable: 1
+        },
+        results: []
+      }
+    }
+  });
+  dispatch.mockResolvedValueOnce({ ok: true, runs: [] });
+  await w.vm.onAdvisorApply();
+  const calls = dispatch.mock.calls.map((c) => c[0]);
+  expect(calls).toEqual(expect.arrayContaining(['okf/saveFrontmatter', 'okf/headRebuild', 'okf/headSuiteRun']));
+  // The whole leg completed: busy released, no error, summary refreshed.
+  expect(w.vm.busy).toBeNull();
+  expect(w.vm.error).toBe('');
+  expect(w.vm.lastRunSummary.pass_rate).toBe(1);
+});
+
+it('1-8e: a failed rebuild during Apply surfaces the error instead of stopping silently', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  w.vm.advisor = { changes: { add: ['new-tag'], remove: [] }, add_eval: [], remove_eval: [] };
+  dispatch.mockResolvedValueOnce({ ok: true }); // saveFrontmatter
+  dispatch.mockResolvedValueOnce({ ok: false, message: 'TEI unreachable' }); // headRebuild
+  await w.vm.onAdvisorApply();
+  expect(w.vm.busy).toBeNull();
+  expect(w.vm.error).toContain('TEI unreachable');
+  // The leg stopped where it failed — no phantom re-run on a stale head.
+  expect(dispatch.mock.calls.map((c) => c[0])).not.toContain('okf/headSuiteRun');
+});
+
+it('1-8e: Apply without a suite still saves + rebuilds, then reports instead of stopping', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = null;
+  w.vm.advisor = { changes: { add: ['new-tag'], remove: [] }, add_eval: [], remove_eval: [] };
+  dispatch.mockResolvedValueOnce({ ok: true }); // saveFrontmatter
+  dispatch.mockResolvedValueOnce({ ok: true, result: { dim: 1024 } }); // headRebuild
+  await w.vm.onAdvisorApply();
+  expect(w.vm.busy).toBeNull();
+  expect(w.vm.error).toContain('generate a suite');
+  expect(dispatch.mock.calls.map((c) => c[0])).not.toContain('okf/headSuiteRun');
+});
+
 it('1-8d: revert panel — lists the save history and a click calls the store revert action', async () => {
   const w = mountDialog({ initialTab: 'suites' });
   await w.vm.$nextTick();

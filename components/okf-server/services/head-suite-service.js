@@ -51,6 +51,7 @@
 
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
+const { createHash } = require('node:crypto');
 const dbService = require('../shared-lib/db-connection-service');
 
 const frontmatterService = require('./frontmatter-service');
@@ -65,6 +66,15 @@ const HEAD_TEST_RUNS_COLLECTION = 'okf_head_test_runs';
 const GATE_MARGIN = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_MARGIN || '0.01');
 const GATE_FLOOR = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_FLOOR || '0.55');
 const GATE_TAG_MAX = parseFloat(process.env.RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX || '0.55');
+// Story 1-8e — ANTI-TREADMILL DAMPING (David 2026-10-09: the live cycle
+// added one admin tag per advisor round for +1 suppressed negative each —
+// "this type of gating must not become a long term full time job"). A tag
+// that buys positives back is exempt (recovery, not noise-fitting); a tag
+// that only suppresses negatives must clear a real margin, and one advisor
+// run may add at most ADVISOR_MAX_ADDS tags so the curator re-evaluates
+// between steps.
+const ADVISOR_MIN_NEGATIVE_GAIN = Math.max(1, parseInt(process.env.OKF_ADVISOR_MIN_NEGATIVE_GAIN || '2', 10));
+const ADVISOR_MAX_ADDS = Math.max(1, parseInt(process.env.OKF_ADVISOR_MAX_ADDS || '3', 10));
 // Sibling context for the LLM prompt (matches the lab's sibling bound).
 const SIBLING_CONTEXT_LIMIT = 20;
 // Deterministic forbidden-negative templates: {tag} is substituted.
@@ -379,6 +389,20 @@ function clampCount(value, fallback, max) {
   return Math.min(n, max);
 }
 
+// 1-8e — the tuning identity of a run: which forbidden tag set produced
+// this score. Stored on every run doc so the Lab's history can group runs
+// by configuration; the hash (8 hex chars) is the display identity.
+function tagsetOf(repo) {
+  const forbidden = Array.isArray(repo.frontmatter && repo.frontmatter.forbidden)
+    ? repo.frontmatter.forbidden.map(String)
+    : [];
+  const norm = forbidden.map((t) => t.toLowerCase()).sort();
+  return {
+    forbidden,
+    hash: norm.length ? createHash('sha1').update(norm.join('|')).digest('hex').slice(0, 8) : 'empty'
+  };
+}
+
 function loadSuiteDoc(db, repoId, suiteKey) {
   return db
     .collection(HEAD_TEST_RUNS_COLLECTION)
@@ -641,6 +665,13 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       suite_key: suiteKey,
       repo_version: repo.version || null,
       head_version: repo.head ? repo.head.version || null : null,
+      // 1-8e — the forbidden tag set this run evaluated against (the TUNING
+      // IDENTITY). Same-tags reruns are bit-stable (verified 2026-10-09: 0
+      // flipped rows across same-head runs), so a pass_rate change between
+      // runs means the TAG SET changed — the history renders this so the
+      // curator compares like with like instead of seeing phantom
+      // regressions while tuning.
+      tagset: tagsetOf(repo),
       created_at: new Date().toISOString(),
       created_by: (opts.actor && opts.actor.user_id) || 'system',
       payload: {
@@ -752,7 +783,7 @@ async function listRuns(repoId, payload = {}) {
     `FOR d IN ${HEAD_TEST_RUNS_COLLECTION} FILTER d.repo_id == @rid ` +
       kindFilter +
       'SORT d.created_at DESC LIMIT @lim RETURN MERGE(KEEP(d, ["_key", "repo_id", "kind", "suite_key", ' +
-      '"repo_version", "head_version", "created_at", "created_by"]), ' +
+      '"repo_version", "head_version", "tagset", "created_at", "created_by"]), ' +
       '{ summary: HAS(d.payload, "summary") ? d.payload.summary : null, ' +
       'positives: HAS(d.payload, "positive") ? LENGTH(d.payload.positive) : null, ' +
       'negatives: HAS(d.payload, "negative") ? LENGTH(d.payload.negative) : null })',
@@ -787,9 +818,7 @@ async function explainSuiteFailures(repoId, suiteKey, opts = {}) {
       err.status = 404;
       throw err;
     }
-    const failing = (run.payload.results || []).filter(
-      (q) => q && q.kind && q.kind !== 'positive' && q.head_claimed
-    );
+    const failing = (run.payload.results || []).filter((q) => q && q.kind && q.kind !== 'positive' && q.head_claimed);
     // Story 1-8d — the loop must see BOTH failure kinds. Killed positives
     // are the over-suppression signature: aggregate their veto attribution
     // so the advice is tag REMOVAL (one-click in the Lab), not addition.
@@ -859,7 +888,8 @@ subject tags over query-specific ones. Respond with ONLY a JSON object:
         if (parsed && typeof parsed.notes === 'string') out.note = parsed.notes;
       } catch (e) {
         logger.warn('head-suite.explain.llm_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message });
-        out.note = 'the suggestion model is unreachable — review the failing queries against the declared scope manually';
+        out.note =
+          'the suggestion model is unreachable — review the failing queries against the declared scope manually';
       }
       // Story 1-8d — the mechanical guardrail (self-subject + duplicate +
       // VETO-IMPACT simulation against this run's own positive queries).
@@ -970,7 +1000,8 @@ async function recommendTagSet(repoId, payload = {}, opts = {}) {
       for (const q of r.payload.results || []) {
         if (!q || !q.query || !q.kind) continue;
         const key = q.query.trim().toLowerCase();
-        if (!byText.has(key)) byText.set(key, { query: q.query, kind: q.kind, cls: q.cls || null, claimed: !!q.head_claimed });
+        if (!byText.has(key))
+          byText.set(key, { query: q.query, kind: q.kind, cls: q.cls || null, claimed: !!q.head_claimed });
       }
     }
     const queries = [...byText.values()];
@@ -995,8 +1026,14 @@ async function recommendTagSet(repoId, payload = {}, opts = {}) {
     }
     const cos = (a, b) => {
       if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return null;
-      let d = 0, na = 0, nb = 0;
-      for (let i = 0; i < a.length; i += 1) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+      let d = 0,
+        na = 0,
+        nb = 0;
+      for (let i = 0; i < a.length; i += 1) {
+        d += a[i] * b[i];
+        na += a[i] * a[i];
+        nb += b[i] * b[i];
+      }
       return na && nb ? d / (Math.sqrt(na) * Math.sqrt(nb)) : null;
     };
     const centroid = (vectors) => {
@@ -1093,23 +1130,45 @@ Respond with ONLY: {"add": ["...", "..."]}`;
     for (const h of history.slice(0, 5)) {
       for (const t of (h.shape && h.shape.forbidden) || []) loopWritten.add(String(t).toLowerCase());
     }
-    const baseline = (history[history.length - 1] && history[history.length - 1].shape && history[history.length - 1].shape.forbidden) || [];
+    const baseline =
+      (history[history.length - 1] &&
+        history[history.length - 1].shape &&
+        history[history.length - 1].shape.forbidden) ||
+      [];
     const removalCandidates = current.filter((t) => loopWritten.has(String(t).toLowerCase()) && !baseline.includes(t));
 
     // 5. Greedy search with the hard positive constraint.
     const working = [...current];
     const applied = { add: [], remove: [] };
+    let dampedAdds = 0; // 1-8e: candidates skipped by the noise-fit guard
+    const firstRejection = new Map(); // tag -> reason class (drives the retry pass)
     let best = before;
     const considerAdd = async (tag) => {
       if (working.includes(tag)) return null;
+      const reject = (reason) => {
+        if (!firstRejection.has(tag)) firstRejection.set(tag, reason);
+        return { tag, rejected: reason };
+      };
+      if (applied.add.length >= ADVISOR_MAX_ADDS)
+        return reject(`add cap reached (${ADVISOR_MAX_ADDS} per advisor run)`);
       const trial = await evalConfig([...working, tag]);
       const gainsPositives = trial.scorecard.positive_claimed > best.scorecard.positive_claimed;
       const losesPositive = trial.scorecard.positive_claimed < best.scorecard.positive_claimed;
-      const gainsNegatives = trial.scorecard.negative_suppressed > best.scorecard.negative_suppressed;
-      if (losesPositive) return { tag, rejected: 'would suppress positive tests' };
-      if (!gainsNegatives && !gainsPositives) return { tag, rejected: 'no predicted improvement' };
+      const negativeGain = trial.scorecard.negative_suppressed - best.scorecard.negative_suppressed;
+      if (losesPositive) return reject('would suppress positive tests');
+      if (negativeGain <= 0 && !gainsPositives) return reject('no predicted improvement');
+      // 1-8e damping: a negatives-only gain must clear ADVISOR_MIN_NEGATIVE_GAIN —
+      // a tag that buys exactly one suppressed negative on the current corpus is
+      // noise-fitting (it will under-perform on queries the suite has not seen).
+      if (!gainsPositives && negativeGain < ADVISOR_MIN_NEGATIVE_GAIN) {
+        dampedAdds += 1;
+        return reject(
+          `suppresses only ${negativeGain} negative(s) — below the ${ADVISOR_MIN_NEGATIVE_GAIN}-gain noise-fit guard`
+        );
+      }
       working.push(tag);
       applied.add.push(tag);
+      firstRejection.delete(tag);
       best = trial;
       return { tag, accepted: true, by_cls: trial.scorecard.by_cls };
     };
@@ -1117,7 +1176,8 @@ Respond with ONLY: {"add": ["...", "..."]}`;
       const trial = await evalConfig(working.filter((t) => t !== tag));
       const gainsPositives = trial.scorecard.positive_claimed > best.scorecard.positive_claimed;
       const losesNegatives = trial.scorecard.negative_suppressed < best.scorecard.negative_suppressed;
-      if (!gainsPositives || losesNegatives) return { tag, rejected: gainsPositives ? 'un-suppresses other negatives' : 'no positive gain' };
+      if (!gainsPositives || losesNegatives)
+        return { tag, rejected: gainsPositives ? 'un-suppresses other negatives' : 'no positive gain' };
       const idx = working.indexOf(tag);
       if (idx >= 0) working.splice(idx, 1);
       applied.remove.push(tag);
@@ -1128,8 +1188,15 @@ Respond with ONLY: {"add": ["...", "..."]}`;
     for (const tag of llmAdds) addResults.push(await considerAdd(tag));
     const removeResults = [];
     for (const tag of removalCandidates) removeResults.push(await considerRemove(tag));
-    // second pass — interactions between accepted changes
-    for (const tag of llmAdds.filter((t) => !working.includes(t))) addResults.push(await considerAdd(tag));
+    // second pass — interactions between accepted changes. Only 'no predicted
+    // improvement' rejections are order-dependent (a later acceptance can
+    // unlock a gain); damping and cap verdicts are final — retrying them
+    // would double-count damped_adds and burn embeds re-deriving the same
+    // rejection (caught by the 1-8e unit test).
+    for (const tag of llmAdds.filter(
+      (t) => !working.includes(t) && firstRejection.get(t) === 'no predicted improvement'
+    ))
+      addResults.push(await considerAdd(tag));
 
     const out = {
       repo_id: repoId,
@@ -1144,7 +1211,9 @@ Respond with ONLY: {"add": ["...", "..."]}`;
       note:
         applied.add.length || applied.remove.length
           ? 'apply the changes, rebuild the head, re-run the suite — predicted scorecard above'
-          : 'no tag-set change predicts an improvement — the remaining fails are curator tradeoffs or need head-topic growth'
+          : 'no tag-set change predicts an improvement — the remaining fails are curator tradeoffs or need head-topic growth',
+      damped_adds: dampedAdds,
+      damping: { min_negative_gain: ADVISOR_MIN_NEGATIVE_GAIN, max_adds: ADVISOR_MAX_ADDS }
     };
     try {
       await db.collection(HEAD_TEST_RUNS_COLLECTION).save({

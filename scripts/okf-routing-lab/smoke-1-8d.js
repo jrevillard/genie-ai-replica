@@ -480,6 +480,53 @@ async function cleanup() {
     `claimed ${cur && cur.positive_claimed} -> ${rec && rec.positive_claimed} (suppressed ${cur && cur.negative_suppressed} -> ${rec && rec.negative_suppressed})`
   );
 
+  // ---- 14. SUITE LOAD + ROW EDIT roundtrip (1-8f) ----
+  // GET the latest saved suite (full rows), flip its first negative row to
+  // positive, verify the server moved it, flip it back. Compensating
+  // roundtrip: query + kind are identical at exit; the row's generator cls
+  // is cleared by a flip (documented behavior — a relabeled row has no
+  // generator class), which is the one content delta the roundtrip leaves.
+  console.log('[14] suite load + row edit');
+  const suitesList = j(
+    await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/runs?kind=suite&limit=1`, { token: USER_TOKEN })
+  );
+  const latestSuite = suitesList.runs && suitesList.runs[0];
+  check('suites: saved-suites listing returns suite docs', !!latestSuite && !!latestSuite._key, `key=${latestSuite && latestSuite._key}`);
+  const loaded = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite && latestSuite._key}`, { token: USER_TOKEN }));
+  const firstNeg = (loaded.payload && loaded.payload.negative || [])[0];
+  check(
+    'suite load: full rows returned',
+    !!loaded.suite_key && Array.isArray(loaded.payload && loaded.payload.negative) && !!firstNeg,
+    `negatives=${(loaded.payload && loaded.payload.negative || []).length} positives=${(loaded.payload && loaded.payload.positive || []).length}`
+  );
+  const flipBody = {
+    updates: [{ match: { query: firstNeg.query, kind: firstNeg.kind || 'negative' }, set: { kind: 'positive' } }]
+  };
+  const flipped = j(
+    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/rows`, { token: USER_TOKEN, json: flipBody })
+  );
+  const negAfter = (flipped.payload && flipped.payload.negative) || [];
+  check(
+    'suite edit: row flipped out of negatives',
+    Array.isArray(flipped.payload && flipped.payload.negative) &&
+      !negAfter.some((r) => r.query === firstNeg.query && (r.kind || 'negative') === 'negative'),
+    `negatives now=${negAfter.length}`
+  );
+  const flipBack = j(
+    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/rows`, {
+      token: USER_TOKEN,
+      json: { updates: [{ match: { query: firstNeg.query, kind: 'positive' }, set: { kind: firstNeg.kind || 'negative' } }] }
+    })
+  );
+  const negBack = (flipBack.payload && flipBack.payload.negative) || [];
+  check(
+    'suite edit: flip-back restores the row (compensating roundtrip)',
+    negBack.some((r) => r.query === firstNeg.query && r.kind === (firstNeg.kind || 'negative')),
+    `negatives=${negBack.length} (cls cleared by the flip — documented)`
+  );
+  const noauthEdit = await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/rows`, { json: flipBody });
+  check('suite edit: unauthenticated rejected', noauthEdit.status === 401 || noauthEdit.status === 403, `status=${noauthEdit.status}`);
+
   const failed = results.filter((r) => !r.ok);
   console.log(`\n== SMOKE ${failed.length ? 'FAILED' : 'PASSED'}: ${results.length - failed.length}/${results.length} checks ==`);
   process.exitCode = failed.length ? 1 : 0;

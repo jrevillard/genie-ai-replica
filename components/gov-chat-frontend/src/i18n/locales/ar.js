@@ -412,11 +412,14 @@ export default {
       gitRepoAccess: 'محاولات الوصول إلى مستودع Git',
       gitRepoAccessDesc: 'تم اكتشاف محاولات الوصول إلى ملفات مستودع Git',
       recommendedAction: 'الإجراء الموصى به',
-      rateLimitRecommendation: 'فكر في تطبيق حدود السرعة، وحظر عناوين IP للمخالفين المستمرين، وتأكد من وجود تصلب مناسب للخادم.',
-      envFileRecommendation: 'تأكد من أن ملفات البيئة غير متاحة من دلائل الويب وأن تكوينات الخادم تمنع الوصول إلى الملفات الحساسة بشكل صحيح.',
+      rateLimitRecommendation:
+        'فكر في تطبيق حدود السرعة، وحظر عناوين IP للمخالفين المستمرين، وتأكد من وجود تصلب مناسب للخادم.',
+      envFileRecommendation:
+        'تأكد من أن ملفات البيئة غير متاحة من دلائل الويب وأن تكوينات الخادم تمنع الوصول إلى الملفات الحساسة بشكل صحيح.',
       gitRepoRecommendation: 'تأكد من أن أدلة .git مؤمنة بشكل صحيح وغير متاحة من الويب.',
       logPatternMatches: 'أنماط السجلات المكتشفة',
-      patternMatchNote: 'مصطلحات عُثر عليها في نص السجل. يفحص التقرير عن السلسلة الفرعية، لا عن هجوم مؤكد — اقرأ السطر.',
+      patternMatchNote:
+        'مصطلحات عُثر عليها في نص السجل. يفحص التقرير عن السلسلة الفرعية، لا عن هجوم مؤكد — اقرأ السطر.',
       patternMatchSummaryNote: '(سلسلة فرعية عُثر عليها في نص السجل، ليست هجومًا مؤكدًا)',
       noVulnerabilitiesFound: 'لم يتم العثور على ثغرات أمنية',
       systemSecure: 'يبدو نظامك آمنًا. واصل المراقبة بانتظام.',
@@ -512,12 +515,13 @@ export default {
       retractPartialFailure: 'تم سحب {successCount} من {count} ملفات. فشل: {detail}',
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
-      confirmDeleteSelected: 'Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.',
-      deleteQueuedSuccess: '{\'{\'}count{\'}\'} file(s) deleted.',
+      confirmDeleteSelected:
+        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: '{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}',
-      deleteAllFailed: 'All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}',
-      deleteRefuseReason: '{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.',
+      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
+      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
+      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
       retractAllFailed: 'فشل جميع الملفات {count}: {detail}',
       uploadSuccessMultiple: 'تم تحميل {count} ملف(ات) بنجاح.',
       linkSubmitSuccess: 'تم الزحف وحفظ "{fileName}" بنجاح.',
@@ -737,7 +741,7 @@ export default {
     chatTitle: 'عنوان المحادثة',
     chatTitlePlaceholder: 'أدخل عنوانًا لهذه المحادثة',
     deleteFolder: 'حذف المجلد',
-    deleteFolderConfirm: 'هل أنت متأكد من أنك تريد حذف المجلد \'{name}\'؟',
+    deleteFolderConfirm: "هل أنت متأكد من أنك تريد حذف المجلد '{name}'؟",
     chatsMoveWarning: 'سيتم نقل جميع المحادثات في هذا المجلد إلى المجلد الافتراضي.',
     weatherTitle: 'توقعات الطقس',
     weatherLoading: 'جاري تحميل بيانات الطقس...',
@@ -827,7 +831,8 @@ export default {
     },
     cat2: {
       name: '2. الرعاية الصحية والخدمات الاجتماعية',
-      children: 'الوصول إلى الرعاية الصحية العامة,برامج التطعيم,التأمين الصحي,إعانات الإعاقة,الرعاية الاجتماعية والمساعدات الغذائية'
+      children:
+        'الوصول إلى الرعاية الصحية العامة,برامج التطعيم,التأمين الصحي,إعانات الإعاقة,الرعاية الاجتماعية والمساعدات الغذائية'
     },
     cat3: {
       name: '3. التعليم والتعلم',
@@ -835,11 +840,13 @@ export default {
     },
     cat4: {
       name: '4. التوظيف والخدمات العمالية',
-      children: 'البحث عن عمل وإعانات البطالة,حماية العمال وحقوق العمل,لوائح سلامة مكان العمل,التدريب على المهارات والتدريب المهني'
+      children:
+        'البحث عن عمل وإعانات البطالة,حماية العمال وحقوق العمل,لوائح سلامة مكان العمل,التدريب على المهارات والتدريب المهني'
     },
     cat5: {
       name: '5. الضرائب والإيرادات',
-      children: 'تقديم الضرائب على الدخل والاستردادات,مدفوعات ضريبة الأملاك,الامتثال لضريبة الأعمال,الجمارك وواجبات الاستيراد'
+      children:
+        'تقديم الضرائب على الدخل والاستردادات,مدفوعات ضريبة الأملاك,الامتثال لضريبة الأعمال,الجمارك وواجبات الاستيراد'
     },
     cat6: {
       name: '6. السلامة العامة والعدالة',
@@ -851,7 +858,8 @@ export default {
     },
     cat8: {
       name: '8. الإسكان والتنمية الحضرية',
-      children: 'المساعدة في الإسكان العام,تسجيل العقارات وسجلات الأراضي,قروض وإعانات الإسكان,التقسيم والتصاريح البنائية'
+      children:
+        'المساعدة في الإسكان العام,تسجيل العقارات وسجلات الأراضي,قروض وإعانات الإسكان,التقسيم والتصاريح البنائية'
     },
     cat9: {
       name: '9. المرافق والبيئة',
@@ -859,7 +867,8 @@ export default {
     },
     cat10: {
       name: '10. الأعمال والتجارة',
-      children: 'تسجيل الأعمال وترخيصها,لوائح التجارة والتصاريح,منح وحوافز الأعمال الصغيرة,دعم التجارة الإلكترونية والأعمال الرقمية'
+      children:
+        'تسجيل الأعمال وترخيصها,لوائح التجارة والتصاريح,منح وحوافز الأعمال الصغيرة,دعم التجارة الإلكترونية والأعمال الرقمية'
     },
     cat11: {
       name: '11. الضمان الاجتماعي والمعاشات',
@@ -867,7 +876,8 @@ export default {
     },
     cat12: {
       name: '12. المجتمع والمشاركة المدنية',
-      children: 'التصويت والانتخابات,ردود الفعل العامة وشكاوى المواطنين,التطوع وبرامج المجتمع,المشاركة في الحكومة المحلية'
+      children:
+        'التصويت والانتخابات,ردود الفعل العامة وشكاوى المواطنين,التطوع وبرامج المجتمع,المشاركة في الحكومة المحلية'
     }
   },
   settings: {
@@ -930,7 +940,8 @@ export default {
     user: 'المستخدم',
     loadingUserInfo: 'جاري تحميل معلومات المستخدم...',
     resetUserDataTitle: 'إعادة تعيين بيانات المستخدم',
-    confirmResetUserData: 'هل أنت متأكد من أنك تريد إعادة تعيين جميع بيانات ملفك الشخصي؟ سيؤدي هذا إلى مسح جميع معلومات ملفك الشخصي وسجل المحادثات، ولكن سيحتفظ ببيانات اعتماد حسابك.',
+    confirmResetUserData:
+      'هل أنت متأكد من أنك تريد إعادة تعيين جميع بيانات ملفك الشخصي؟ سيؤدي هذا إلى مسح جميع معلومات ملفك الشخصي وسجل المحادثات، ولكن سيحتفظ ببيانات اعتماد حسابك.',
     reset: 'إعادة التعيين',
     deleteAccountTitle: 'حذف الحساب',
     delete: 'حذف',
@@ -1204,8 +1215,10 @@ export default {
     noMatchingCountries: 'لم يتم العثور على بلدان مطابقة',
     noMatchingDisciplines: 'لم يتم العثور على تخصصات مطابقة',
     noMatchingDegrees: 'لم يتم العثور على درجات مطابقة',
-    educationOptions: 'المحاسبة,هندسة الفضاء,علوم الزراعة,الأنثروبولوجيا,العمارة,تاريخ الفن,الذكاء الاصطناعي,الفلك,فيزياء الفلك,الكيمياء الحيوية,هندسة الطب الحيوي,التكنولوجيا الحيوية,إدارة الأعمال,هندسة الكيمياء,الكيمياء,هندسة المدني,التواصل,هندسة الحاسوب,علوم الحاسوب,إدارة الإنشاءات,العدالة الجنائية,الأمن السيبراني,علوم البيانات,طب الأسنان,الاقتصاد,التعليم,هندسة الكهرباء,التعليم الابتدائي,الأدب الإنجليزي,هندسة البيئة,علوم البيئة,تصميم الأزياء,دراسات السينما,المالية,الفنون الجميلة,علوم الغذاء,العلوم الجنائية,تصميم الألعاب,الجغرافيا,الجيولوجيا,تصميم الجرافيك,إدارة الصحة,التاريخ,إدارة الفنادق,الموارد البشرية,التصميم الصناعي,الهندسة الصناعية,نظم المعلومات,تكنولوجيا المعلومات,تصميم الداخلي,الأعمال الدولية,العلاقات الدولية,الصحافة,القانون,علوم المكتبات,اللغويات,الإدارة,التسويق,علوم المواد,الرياضيات,الهندسة الميكانيكية,دراسات الإعلام,الطب,الأرصاد الجوية,علم الأحياء الدقيقة,الموسيقى,تكنولوجيا النانو,التمريض,التغذية,العلاج المهني,علوم المحيطات,هندسة البترول,الصيدلة,الفلسفة,التصوير الفوتوغرافي,التربية البدنية,العلاج الطبيعي,الفيزياء,العلوم السياسية,علم النفس,الإدارة العامة,الصحة العامة,العلاقات العامة,الروبوتات,التعليم الثانوي,العمل الاجتماعي,علم الاجتماع,هندسة البرمجيات,التعليم الخاص,إدارة الرياضة,الإحصاء,هندسة النظم,فنون المسرح,السياحة,التخطيط الحضري,الطب البيطري,تطوير الويب,بيولوجيا الحياة البرية,علم الحيوان',
-    degreeOptions: 'درجة مشارك,بكالوريوس في الآداب (BA),بكالوريوس في العلوم (BS),بكالوريوس في الهندسة (BEng),بكالوريوس في إدارة الأعمال (BBA),بكالوريوس في الفنون الجميلة (BFA),بكالوريوس في التربية (BEd),بكالوريوس في الطب (MBBS),بكالوريوس في القانون (LLB),ماجستير في الآداب (MA),ماجستير في العلوم (MS),ماجستير في إدارة الأعمال (MBA),ماجستير في الهندسة (MEng),ماجستير في الفنون الجميلة (MFA),ماجستير في التربية (MEd),ماجستير في القانون (LLM),ماجستير في الصحة العامة (MPH),دكتوراه في الفلسفة (PhD),دكتوراه في الطب (MD),دكتوراه في التربية (EdD),دكتوراه في إدارة الأعمال (DBA),دكتوراه في القانون (JD),دبلوم مهني,دبلوم تقني,شهادة مهنية,شهادة خريج,دبلوم خريج,ما بعد الدكتوراه',
+    educationOptions:
+      'المحاسبة,هندسة الفضاء,علوم الزراعة,الأنثروبولوجيا,العمارة,تاريخ الفن,الذكاء الاصطناعي,الفلك,فيزياء الفلك,الكيمياء الحيوية,هندسة الطب الحيوي,التكنولوجيا الحيوية,إدارة الأعمال,هندسة الكيمياء,الكيمياء,هندسة المدني,التواصل,هندسة الحاسوب,علوم الحاسوب,إدارة الإنشاءات,العدالة الجنائية,الأمن السيبراني,علوم البيانات,طب الأسنان,الاقتصاد,التعليم,هندسة الكهرباء,التعليم الابتدائي,الأدب الإنجليزي,هندسة البيئة,علوم البيئة,تصميم الأزياء,دراسات السينما,المالية,الفنون الجميلة,علوم الغذاء,العلوم الجنائية,تصميم الألعاب,الجغرافيا,الجيولوجيا,تصميم الجرافيك,إدارة الصحة,التاريخ,إدارة الفنادق,الموارد البشرية,التصميم الصناعي,الهندسة الصناعية,نظم المعلومات,تكنولوجيا المعلومات,تصميم الداخلي,الأعمال الدولية,العلاقات الدولية,الصحافة,القانون,علوم المكتبات,اللغويات,الإدارة,التسويق,علوم المواد,الرياضيات,الهندسة الميكانيكية,دراسات الإعلام,الطب,الأرصاد الجوية,علم الأحياء الدقيقة,الموسيقى,تكنولوجيا النانو,التمريض,التغذية,العلاج المهني,علوم المحيطات,هندسة البترول,الصيدلة,الفلسفة,التصوير الفوتوغرافي,التربية البدنية,العلاج الطبيعي,الفيزياء,العلوم السياسية,علم النفس,الإدارة العامة,الصحة العامة,العلاقات العامة,الروبوتات,التعليم الثانوي,العمل الاجتماعي,علم الاجتماع,هندسة البرمجيات,التعليم الخاص,إدارة الرياضة,الإحصاء,هندسة النظم,فنون المسرح,السياحة,التخطيط الحضري,الطب البيطري,تطوير الويب,بيولوجيا الحياة البرية,علم الحيوان',
+    degreeOptions:
+      'درجة مشارك,بكالوريوس في الآداب (BA),بكالوريوس في العلوم (BS),بكالوريوس في الهندسة (BEng),بكالوريوس في إدارة الأعمال (BBA),بكالوريوس في الفنون الجميلة (BFA),بكالوريوس في التربية (BEd),بكالوريوس في الطب (MBBS),بكالوريوس في القانون (LLB),ماجستير في الآداب (MA),ماجستير في العلوم (MS),ماجستير في إدارة الأعمال (MBA),ماجستير في الهندسة (MEng),ماجستير في الفنون الجميلة (MFA),ماجستير في التربية (MEd),ماجستير في القانون (LLM),ماجستير في الصحة العامة (MPH),دكتوراه في الفلسفة (PhD),دكتوراه في الطب (MD),دكتوراه في التربية (EdD),دكتوراه في إدارة الأعمال (DBA),دكتوراه في القانون (JD),دبلوم مهني,دبلوم تقني,شهادة مهنية,شهادة خريج,دبلوم خريج,ما بعد الدكتوراه',
     aria: {
       tabList: 'أقسام نموذج الملف الشخصي',
       nextButton: 'الذهاب إلى القسم التالي',
@@ -1220,7 +1233,8 @@ export default {
     streamingError: 'تمت مقاطعة الاستجابة. يرجى المحاولة مرة أخرى.',
     aiGeneratedNoDocs: 'مُنشأ بواسطة الذكاء الاصطناعي — غير مستند إلى وثائق المكتبة',
     welcomeMessage: 'مرحبًا بك! كيف يمكنني مساعدتك اليوم؟',
-    configMismatchWarning: 'عدم تطابق في التكوين: {warnings}. يُرجى التحقق من المساعدة السريعة وتكوين التسلسل الهرمي للمعرفة.',
+    configMismatchWarning:
+      'عدم تطابق في التكوين: {warnings}. يُرجى التحقق من المساعدة السريعة وتكوين التسلسل الهرمي للمعرفة.',
     categoryNotFound: 'الفئة "{label}" غير موجودة في التسلسل الهرمي للمعرفة',
     serviceLabelMismatch: 'تستخدم الخدمة "{label}" تسمية واجهة مستخدم قد لا تتطابق مع التسلسل الهرمي للمعرفة',
     noFilterWarning: 'لا يوجد عامل تصفية نشط للسياق — سيكون الاستعلام غير مصفى.',
@@ -1252,7 +1266,8 @@ export default {
     saveConfirmTitle: 'حفظ المحادثة الحالية',
     saveConfirmMessage: 'حفظ المحادثة الحالية؟',
     loadConfirmTitle: 'تحميل المحادثة الحالية',
-    loadConfirmMessage: 'لديك تغييرات غير محفوظة. هل تريد التخلص منها وتحميل المحادثة المحددة، أو حفظ المحادثة الحالية أولاً؟',
+    loadConfirmMessage:
+      'لديك تغييرات غير محفوظة. هل تريد التخلص منها وتحميل المحادثة المحددة، أو حفظ المحادثة الحالية أولاً؟',
     loadAndDiscard: 'تحميل والتخلص',
     saveAndLoad: 'حفظ وتحميل',
     saveAndStartNew: 'حفظ وبدء جديد',
@@ -1267,15 +1282,24 @@ export default {
     removeItem: 'إزالة العنصر'
   },
   quickhelp: {
-    applyForIDPrompt: 'تصرف كخبير تسجيل مدني كيني متعاون. اشرح خطوات الحصول على بطاقة الهوية الوطنية (Maisha Namba) أو استبدال بطاقة مفقودة. هام: قدم قائمة واضحة بالوثائق المطلوبة (مثل شهادة الميلاد، نسخ من بطاقات هوية الوالدين) وانصح المستخدم بزيارة أقرب مركز Huduma أو مكتب السجل المدني. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.',
-    payTaxesPrompt: 'تصرف كمرشد لهيئة الإيرادات الكينية (KRA). اشرح عملية تقديم الإقرارات الضريبية، أو التقدم للحصول على KRA PIN، أو إعادة تعيين كلمة المرور على بوابة iTax. هام: ذكّر المستخدم بالموعد النهائي للإقرارات السنوية في 30 يونيو ووجهه حول كيفية تقديم إقرارات صفرية إذا لم يكن لديه دخل. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.',
-    startBusinessPrompt: 'تصرف كمستشار أعمال لخدمات eCitizen. وجه المستخدم خلال حجز اسم تجاري وتسجيل شركة في كينيا. هام: اشرح التكاليف الحالية للبحث عن الاسم والتسجيل، ووجّه المستخدم إلى بوابة eCitizen الرسمية لإكمال الطلب. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.',
-    findHealthcarePrompt: 'تصرف كمرشد للخدمات الصحية. قدم معلومات حول الانتقال من NHIF إلى SHIF (صندوق التأمين الصحي الاجتماعي) وكيفية التسجيل. هام: شارك رموز USSD الرسمية (مثل *263#) أو روابط مواقع الويب للتسجيل واشرح مزايا التغطية الصحية العامة. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.',
-    educationServicesPrompt: 'تصرف كمستشار تعليمي. ناقش منهج CBC، أو التسجيل في NEMIS، أو تنسيق القبول الجامعي عبر KUCCPS. هام: اشرح كيف يمكن لأولياء الأمور التحقق من نتائج الامتحانات الوطنية عبر الرسائل القصيرة (SMS) أو بوابة KNEC عند صدورها. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.',
-    transportLicensesPrompt: 'تصرف كمرشد لخدمات NTSA. اشرح إجراءات تجديد رخصة القيادة، أو فحص المركبات، أو إدارة حساب TIMS. هام: وجه المستخدم حول كيفية تسجيل الدخول إلى بوابة eCitizen NTSA للتقدم بطلب للحصول على رخصة القيادة الذكية (Smart DL) أو حجز موعد لفحص المركبة. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.',
-    housingProgramsPrompt: 'تصرف كمستشار لبرامج الإسكان. اشرح برنامج الإسكان ميسور التكلفة (Boma Yangu) وعملية التسجيل والمساهمة الطوعية. هام: وجه المستخدم إلى بوابة Boma Yangu لعرض المشاريع واشرح معايير الأهلية للتخصيص. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.',
-    findJobsPrompt: 'تصرف كمدرب مهني للخدمة العامة. وجه المستخدم حول إنشاء ملف تعريفي والتقدم للوظائف الشاغرة عبر بوابة لجنة الخدمة العامة (PSC). هام: انصح المستخدم بإبقاء شهاداته الأكاديمية جاهزة ومراجعة موقع PSC بانتظام أو الصحف اليومية المحلية لإعلانات MyGov. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.',
-    justChatPrompt: 'تصرف كرفيق محلي ودود. كن مهذبًا، ومفيدًا، ومطلعًا على الثقافة الكينية والحياة اليومية. هام: ذكّر المستخدم أنه بينما يمكنك الدردشة حول أي شيء، فإن نقطة قوتك الرئيسية هي مساعدتهم في تصفح خدمات الحكومة الكينية مثل **الهويات** و**الضرائب** و**تسجيل الشركات**. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.'
+    applyForIDPrompt:
+      "تصرف كخبير تسجيل مدني كيني متعاون. اشرح خطوات الحصول على بطاقة الهوية الوطنية (Maisha Namba) أو استبدال بطاقة مفقودة. هام: قدم قائمة واضحة بالوثائق المطلوبة (مثل شهادة الميلاد، نسخ من بطاقات هوية الوالدين) وانصح المستخدم بزيارة أقرب مركز Huduma أو مكتب السجل المدني. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+    payTaxesPrompt:
+      "تصرف كمرشد لهيئة الإيرادات الكينية (KRA). اشرح عملية تقديم الإقرارات الضريبية، أو التقدم للحصول على KRA PIN، أو إعادة تعيين كلمة المرور على بوابة iTax. هام: ذكّر المستخدم بالموعد النهائي للإقرارات السنوية في 30 يونيو ووجهه حول كيفية تقديم إقرارات صفرية إذا لم يكن لديه دخل. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+    startBusinessPrompt:
+      "تصرف كمستشار أعمال لخدمات eCitizen. وجه المستخدم خلال حجز اسم تجاري وتسجيل شركة في كينيا. هام: اشرح التكاليف الحالية للبحث عن الاسم والتسجيل، ووجّه المستخدم إلى بوابة eCitizen الرسمية لإكمال الطلب. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+    findHealthcarePrompt:
+      "تصرف كمرشد للخدمات الصحية. قدم معلومات حول الانتقال من NHIF إلى SHIF (صندوق التأمين الصحي الاجتماعي) وكيفية التسجيل. هام: شارك رموز USSD الرسمية (مثل *263#) أو روابط مواقع الويب للتسجيل واشرح مزايا التغطية الصحية العامة. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+    educationServicesPrompt:
+      "تصرف كمستشار تعليمي. ناقش منهج CBC، أو التسجيل في NEMIS، أو تنسيق القبول الجامعي عبر KUCCPS. هام: اشرح كيف يمكن لأولياء الأمور التحقق من نتائج الامتحانات الوطنية عبر الرسائل القصيرة (SMS) أو بوابة KNEC عند صدورها. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+    transportLicensesPrompt:
+      "تصرف كمرشد لخدمات NTSA. اشرح إجراءات تجديد رخصة القيادة، أو فحص المركبات، أو إدارة حساب TIMS. هام: وجه المستخدم حول كيفية تسجيل الدخول إلى بوابة eCitizen NTSA للتقدم بطلب للحصول على رخصة القيادة الذكية (Smart DL) أو حجز موعد لفحص المركبة. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+    housingProgramsPrompt:
+      "تصرف كمستشار لبرامج الإسكان. اشرح برنامج الإسكان ميسور التكلفة (Boma Yangu) وعملية التسجيل والمساهمة الطوعية. هام: وجه المستخدم إلى بوابة Boma Yangu لعرض المشاريع واشرح معايير الأهلية للتخصيص. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+    findJobsPrompt:
+      "تصرف كمدرب مهني للخدمة العامة. وجه المستخدم حول إنشاء ملف تعريفي والتقدم للوظائف الشاغرة عبر بوابة لجنة الخدمة العامة (PSC). هام: انصح المستخدم بإبقاء شهاداته الأكاديمية جاهزة ومراجعة موقع PSC بانتظام أو الصحف اليومية المحلية لإعلانات MyGov. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+    justChatPrompt:
+      "تصرف كرفيق محلي ودود. كن مهذبًا، ومفيدًا، ومطلعًا على الثقافة الكينية والحياة اليومية. هام: ذكّر المستخدم أنه بينما يمكنك الدردشة حول أي شيء، فإن نقطة قوتك الرئيسية هي مساعدتهم في تصفح خدمات الحكومة الكينية مثل **الهويات** و**الضرائب** و**تسجيل الشركات**. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'."
   },
   common: {
     cancel: 'إلغاء',
@@ -1342,10 +1366,14 @@ export default {
     tabs: {
       details: 'التفاصيل',
       ingestionLog: 'سجل الاستيعاب',
-      detailsHint: 'بيانات وصفية لهذا الملف: الاسم، المؤلف وتسميات التسلسل الهرمي للمعرفة التي يستخدمها الذكاء الاصطناعي لتوجيه الأسئلة. يتطلب إجراء ingest تسمية واحدة على الأقل.',
-      dashboardHint: 'عرض مباشر لزحف الموقع لهذا الملف: المعدل، قائمة الانتظار، الأخطاء والتقدم. عند نجاح الزحف، يُحوّله التذييل أدناه إلى مستودع OKF.',
-      crawlLogHint: 'سجل لكل صفحة لعملية الزحف على الموقع: عناوين URL التي تم جلبها أو إعادة توجيهها أو التي فشلت. يُكتب أثناء تشغيل الزحف.',
-      ingestionLogHint: 'التقدم مرحلة بمرحلة لإعداد هذا الملف لإجابات الذكاء الاصطناعي: التقسيم، التصنيف، التضمين والفهرسة. تُظهر الأخطاء هنا بالضبط أين توقفت عملية ingest.'
+      detailsHint:
+        'بيانات وصفية لهذا الملف: الاسم، المؤلف وتسميات التسلسل الهرمي للمعرفة التي يستخدمها الذكاء الاصطناعي لتوجيه الأسئلة. يتطلب إجراء ingest تسمية واحدة على الأقل.',
+      dashboardHint:
+        'عرض مباشر لزحف الموقع لهذا الملف: المعدل، قائمة الانتظار، الأخطاء والتقدم. عند نجاح الزحف، يُحوّله التذييل أدناه إلى مستودع OKF.',
+      crawlLogHint:
+        'سجل لكل صفحة لعملية الزحف على الموقع: عناوين URL التي تم جلبها أو إعادة توجيهها أو التي فشلت. يُكتب أثناء تشغيل الزحف.',
+      ingestionLogHint:
+        'التقدم مرحلة بمرحلة لإعداد هذا الملف لإجابات الذكاء الاصطناعي: التقسيم، التصنيف، التضمين والفهرسة. تُظهر الأخطاء هنا بالضبط أين توقفت عملية ingest.'
     },
     log: {
       killActions: 'إجراءات الإنهاء:',
@@ -1393,7 +1421,8 @@ export default {
       killDocTitle: 'إنهاء استيعاب المستند',
       killDoc: 'هل أنت متأكد من أنك تريد إنهاء مهمة الاستيعاب لهذا المستند؟ ستحاول العملية التراجع بأمان.',
       killProcTitle: 'إنهاء عملية الاستيعاب بأكملها',
-      killProc: 'تحذير: سيؤدي هذا إلى إنهاء خدمة الاستيعاب الخلفية بأكملها، مما يؤثر على جميع الملفات قيد المعالجة حاليًا. هل أنت متأكد تمامًا؟'
+      killProc:
+        'تحذير: سيؤدي هذا إلى إنهاء خدمة الاستيعاب الخلفية بأكملها، مما يؤثر على جميع الملفات قيد المعالجة حاليًا. هل أنت متأكد تمامًا؟'
     }
   },
   uploadDialog: {
@@ -1411,7 +1440,8 @@ export default {
       uploadSuccess: 'تم تحميل {fileName} بنجاح',
       uploadFailed: 'فشل تحميل {fileName}.'
     },
-    ragTip: 'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
     versions: {
@@ -1429,7 +1459,7 @@ export default {
       none: 'لم يتم إصدار أي إصدارات حتى الآن — النشر ينشئ الإصدار v1.',
       notServing: 'لا يخدم',
       publish: 'إنشاء إصدار جديد',
-      published: 'تم نشر الإصدار v{\'{\'}v{\'}\'} — تم تخزين الحزمة {\'{\'}f{\'}\'} في مستودع المستندات.',
+      published: "تم نشر الإصدار v{'{'}v{'}'} — تم تخزين الحزمة {'{'}f{'}'} في مستودع المستندات.",
       serving: 'مستوعب (قيد الخدمة)',
       title: 'الإصدارات'
     },
@@ -1449,7 +1479,7 @@ export default {
         note: 'الكيانات المميزة بنجمة هي جزء من المحتوى المنشور. إذا قمت بمراجعتها (مثل تفاصيل الاتصال الرسمية)، فأقر وتابع.'
       },
       publish: {
-        body: 'يؤدي النشر إلى إنشاء الإصدار v{\'{\'}n{\'}\'} وتخزين الحزمة "{\'{\'}file{\'}\'}" في مستودع المستندات، ليحل محل أي ملف zip سابق. الإصدار الجديد لن يكون متاحًا للخدمة حتى تستوعبه.',
+        body: "يؤدي النشر إلى إنشاء الإصدار v{'{'}n{'}'} وتخزين الحزمة \"{'{'}file{'}'}\" في مستودع المستندات، ليحل محل أي ملف zip سابق. الإصدار الجديد لن يكون متاحًا للخدمة حتى تستوعبه.",
         confirm: 'نشر',
         inProgress: 'جارٍ النشر — تصدير الحزمة ونقلها…',
         title: 'نشر'
@@ -1463,22 +1493,22 @@ export default {
         editor: 'المحرر',
         wizard: 'المعالج'
       },
-      version: 'الإصدار {\'{\'}n{\'}\'}',
+      version: "الإصدار {'{'}n{'}'}",
       versions: 'الإصدارات',
       deleteLabel: 'حذف',
       headTest: 'Routing Lab'
     },
     logs: {
-      labeled: 'تمت تسميتها: {\'{\'}n{\'}\'}',
-      fallbacks: 'بدائل LLM الاحتياطية: {\'{\'}n{\'}\'}',
-      concepts: 'المفاهيم: {\'{\'}n{\'}\'}',
+      labeled: "تمت تسميتها: {'{'}n{'}'}",
+      fallbacks: "بدائل LLM الاحتياطية: {'{'}n{'}'}",
+      concepts: "المفاهيم: {'{'}n{'}'}",
       col: {
         action: 'الإجراء',
         description: 'الوصف',
         user: 'المستخدم',
         when: 'التاريخ والوقت'
       },
-      count: '{\'{\'}n{\'}\'} مدخلات',
+      count: "{'{'}n{'}'} مدخلات",
       loadFailed: 'فشل تحميل سجل النشاط.',
       none: 'لم يتم تسجيل أي نشاط حتى الآن — تظهر إجراءات المستودع هنا فور حدوثها.',
       title: 'سجل النشاط'
@@ -1496,8 +1526,8 @@ export default {
       zoomIn: 'تكبير',
       zoomOut: 'تصغير',
       card: {
-        links: '{\'{\'}n{\'}\'} روابط',
-        chunks: '{\'{\'}n{\'}\'} أجزاء',
+        links: "{'{'}n{'}'} روابط",
+        chunks: "{'{'}n{'}'} أجزاء",
         failed: 'فشلت الفهرسة',
         flagged: 'كيانات مميزة بنجمة',
         hub: 'مركز الفهرس',
@@ -1519,7 +1549,8 @@ export default {
       alreadyBadge: 'في مستودع OKF بالفعل',
       servingTip: 'هذا المستند يخدم النص الحر حاليًا — لا يمكن استيعاب المستودع الجديد حتى يتم سحبه.',
       alreadyTip: 'هذا المستند هو مصدر مستودع OKF آخر بالفعل.',
-      servingWarn: '{n} من المستندات لا تزال تخدم النص الحر. الاستيراد ينجح، لكن لا يمكن استيعاب هذا المستودع حتى يتم سحبها.',
+      servingWarn:
+        '{n} من المستندات لا تزال تخدم النص الحر. الاستيراد ينجح، لكن لا يمكن استيعاب هذا المستودع حتى يتم سحبها.',
       cancel: 'إلغاء',
       importing: 'جارٍ الاستيراد…',
       go: 'استيراد',
@@ -1567,12 +1598,15 @@ export default {
           problem: 'المشكلة',
           noError: 'وُسم فاشلًا دون سبب مسجَّل.',
           fixLabel: 'كيفية الإصلاح',
-          attempts: 'Attempts: {\'{\'}n{\'}\'}',
-          when: 'Last attempt {\'{\'}when{\'}\'}',
+          attempts: "Attempts: {'{'}n{'}'}",
+          when: "Last attempt {'{'}when{'}'}",
           fix: {
-            reaper: 'توقف عامل الاستيعاب عن الانتظار خلال نافذة السماح لأن التصريف كان مشبعًا — المحتوى سليم. للإصلاح: عدِّل هذا الملف تعديلًا بسيطًا واحفظ لإعادة إدراجه في الطابور، أو اسحب المستودع وأعد الاستيعاب بالكامل.',
-            dataprep: 'أخفقت خدمة إعداد المحتوى في هذا الاستيعاب. للإصلاح: عدِّل واحفظ لإعادة الإدراج؛ وإن تكرر الفشل فتحقق من صحة الخدمة.',
-            generic: 'فشلت الفهرسة. للإصلاح: عدِّل المحتوى واحفظ لإعادة الإدراج، أو اسحب المستودع وأعد الاستيعاب بالكامل.'
+            reaper:
+              'توقف عامل الاستيعاب عن الانتظار خلال نافذة السماح لأن التصريف كان مشبعًا — المحتوى سليم. للإصلاح: عدِّل هذا الملف تعديلًا بسيطًا واحفظ لإعادة إدراجه في الطابور، أو اسحب المستودع وأعد الاستيعاب بالكامل.',
+            dataprep:
+              'أخفقت خدمة إعداد المحتوى في هذا الاستيعاب. للإصلاح: عدِّل واحفظ لإعادة الإدراج؛ وإن تكرر الفشل فتحقق من صحة الخدمة.',
+            generic:
+              'فشلت الفهرسة. للإصلاح: عدِّل المحتوى واحفظ لإعادة الإدراج، أو اسحب المستودع وأعد الاستيعاب بالكامل.'
           }
         },
         indexBadge: 'فهرس',
@@ -1580,7 +1614,8 @@ export default {
         loading: 'يُحمل…',
         resplit: 'إعادة تقسيم',
         flagged: 'مميز',
-        flaggedTip: 'مفاهيم تحتوي على كيانات مميزة — افتح كل منها، أو أزل الكيان أو عدّله، ثم احفظ (يُعاد الفحص تلقائيًا)؛ أو أقر بها عند publish.',
+        flaggedTip:
+          'مفاهيم تحتوي على كيانات مميزة — افتح كل منها، أو أزل الكيان أو عدّله، ثم احفظ (يُعاد الفحص تلقائيًا)؛ أو أقر بها عند publish.',
         piiBadge: 'PII',
         piiTip: 'الكيانات المميزة: {k}. افتحها أو أزلها أو عدّلها ثم احفظ — يُعاد الفحص تلقائيًا.',
         piiTipBare: 'كيانات مميزة — افتحها، راجعها، ثم احفظ لإعادة الفحص.',
@@ -1644,9 +1679,10 @@ export default {
       paneLabel: 'جزء العرض',
       saveFailed: 'فشل الحفظ — أعد المحاولة',
       piiBulk: {
-        done_accept: 'Done — every flagged entity is marked reviewed-and-kept on {\'{\'}n{\'}\'} concept(s). The PII flags are cleared.',
-        done_redact: 'Done — the flagged content on {\'{\'}n{\'}\'} concept(s) is replaced with the redaction notice.',
-        done_remove: 'Done — the flagged content on {\'{\'}n{\'}\'} concept(s) is removed.',
+        done_accept:
+          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
+        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
+        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
         title: {
           redact: 'حجب جميع المحتويات المميزة',
           remove: 'إزالة جميع المحتويات المميزة',
@@ -1655,9 +1691,10 @@ export default {
         body: {
           redact: 'يتم استبدال متن كل مفهوم مميز بإشعار الحجب. لا يمكن التراجع عن هذا الإجراء.',
           remove: 'يتم تفريغ متن كل مفهوم مميز. لا يمكن التراجع عن هذا الإجراء.',
-          accept: 'تم وضع علامة تمت المراجعة والاحتفاظ على جميع الكيانات المميزة — لن يتم وضع علامة عليها مرة أخرى إلا إذا أعدت الفحص.'
+          accept:
+            'تم وضع علامة تمت المراجعة والاحتفاظ على جميع الكيانات المميزة — لن يتم وضع علامة عليها مرة أخرى إلا إذا أعدت الفحص.'
         },
-        scope: 'المفاهيم المتأثرة: {\'{\'}n{\'}\'}.',
+        scope: "المفاهيم المتأثرة: {'{'}n{'}'}.",
         confirm: 'تطبيق',
         failed: 'فشل إجراء PII المجمع — حاول مرة أخرى.'
       },
@@ -1676,11 +1713,11 @@ export default {
       bulk: {
         body: 'يتم نشر كل مستودع مع الفحص الكامل للبوابة (مراجعة PII، الفهرسة، المطابقة). النتائج لكل مستودع:',
         pending: 'تأكيد publish للمستودعات المحددة.',
-        publishConfirm: 'نشر {\'{\'}n{\'}\'}',
+        publishConfirm: "نشر {'{'}n{'}'}",
         title: 'نشر المستودعات المحددة'
       },
       card: {
-        actions: 'إجراءات {\'{\'}name{\'}\'}',
+        actions: "إجراءات {'{'}name{'}'}",
         building: 'يبني…',
         buildingAria: 'قيد الإنشاء — لا يزال الملف المصدر قيد المعالجة',
         delete: 'حذف',
@@ -1706,23 +1743,23 @@ export default {
         note: 'الكيانات المميزة بنجمة هي جزء من المحتوى المنشور. إذا قمت بمراجعتها (مثل تفاصيل الاتصال الرسمية)، فأقر وتابع.'
       },
       publish: {
-        body: 'يُنشئ إجراء publish الإصدار v{\'{\'}n{\'}\'} ويخزن الحزمة "{\'{\'}file{\'}\'}" في مستودع المستندات، ليحل محل ملف zip السابق. الإصدار الجديد لن يكون في حالة serving حتى تقوم بإجراء Ingest له.',
+        body: "يُنشئ إجراء publish الإصدار v{'{'}n{'}'} ويخزن الحزمة \"{'{'}file{'}'}\" في مستودع المستندات، ليحل محل ملف zip السابق. الإصدار الجديد لن يكون في حالة serving حتى تقوم بإجراء Ingest له.",
         confirm: 'نشر',
         title: 'نشر'
       },
       search: 'بحث...',
-      select: 'تحديد {\'{\'}name{\'}\'} للنشر المجمع',
+      select: "تحديد {'{'}name{'}'} للنشر المجمع",
       stage: {
         drainFailed: 'فشلت عملية ingest',
-        queueBehind: '{\'{\'}n{\'}\'} في قائمة الانتظار · يجري الاستيعاب من {\'{\'}m{\'}\'} مستودع/مستودعات',
+        queueBehind: "{'{'}n{'}'} في قائمة الانتظار · يجري الاستيعاب من {'{'}m{'}'} مستودع/مستودعات",
         redraining: 'إعادة استنزاف…',
         building: 'يبني…',
         draft: 'مسودة',
         inReview: 'قيد المراجعة',
-        ingested: 'تمت عملية ingest لـ v{\'{\'}n{\'}\'}',
-        published: 'تم publish لـ v{\'{\'}n{\'}\'}',
+        ingested: "تمت عملية ingest لـ v{'{'}n{'}'}",
+        published: "تم publish لـ v{'{'}n{'}'}",
         retracted: 'مسحوب',
-        stepOf: 'Step {\'{\'}n{\'}\'} of 10'
+        stepOf: "Step {'{'}n{'}'} of 10"
       },
       title: 'المستودعات',
       topics: 'المواضيع',
@@ -1748,7 +1785,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: '+ {\'{\'}n{\'}\'} المزيد',
+        more: "+ {'{'}n{'}'} المزيد",
         fixPath: 'أعد إجراء ingest للمحاولة مرة أخرى: retract → إنشاء إصدار → ingest.'
       },
       curation: {
@@ -1762,9 +1799,9 @@ export default {
       bytes: 'قراءة المصدر',
       conceptsIndexed: 'المفاهيم المفهرسة',
       elapsed: {
-        hr: 'بدأ منذ {\'{\'}n{\'}\'} ساعة',
+        hr: "بدأ منذ {'{'}n{'}'} ساعة",
         lt1: 'بدأ منذ أقل من دقيقة',
-        min: 'بدأ منذ {\'{\'}n{\'}\'} دقيقة'
+        min: "بدأ منذ {'{'}n{'}'} دقيقة"
       },
       hint: {
         import: 'يبقى المستودع في حالة استيراد حتى يكتمل تحويل الملف.',
@@ -1807,7 +1844,7 @@ export default {
     },
     create: {
       zipOnly: 'اختر ملف حزمة .zip.',
-      stagedFile: 'المجهز: {\'{\'}name{\'}\'}',
+      stagedFile: "المجهز: {'{'}name{'}'}",
       staged: 'تم تجهيز الحزمة — انقر على إنشاء مستودع لبدء الاستيراد.',
       openExisting: 'فتح مستودع موجود',
       name: 'اسم المستودع',
@@ -1862,7 +1899,8 @@ export default {
       save: 'حفظ frontmatter',
       saveFailed: 'فشل حفظ frontmatter',
       perRepoTitle: 'Routing tags — what this repo is about',
-      perRepoHint: 'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoHint:
+        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -1886,39 +1924,61 @@ export default {
       perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
     },
     glossary: {
-      addConcept: 'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
       type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
-      title: 'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
-      indexStatus: 'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
-      trustTier: 'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
-      concept: 'مدخل واحد في المستودع الخاص بك — عادةً صفحة واحدة أو موضوع واحد. يحتوي كل مفهوم على frontmatter مهيكل يقرأه المساعد، بالإضافة إلى نص markdown الذي يجيب منه.',
-      repository: 'مجموعة من المفاهيم المنظمة حول مجال موضوع واحد. تصبح حزمة OKF تقوم بنشرها وتحديد إصدارها وإتاحتها للمساعد.',
-      subjectArea: 'إلى أين تنتمي هذه المعرفة؟ يجمع مجال الموضوع مستودعك ويحدد التسميات التي يمكنك اختيارها. لا يمكن تغييره بعد الإنشاء.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept:
+        'مدخل واحد في المستودع الخاص بك — عادةً صفحة واحدة أو موضوع واحد. يحتوي كل مفهوم على frontmatter مهيكل يقرأه المساعد، بالإضافة إلى نص markdown الذي يجيب منه.',
+      repository:
+        'مجموعة من المفاهيم المنظمة حول مجال موضوع واحد. تصبح حزمة OKF تقوم بنشرها وتحديد إصدارها وإتاحتها للمساعد.',
+      subjectArea:
+        'إلى أين تنتمي هذه المعرفة؟ يجمع مجال الموضوع مستودعك ويحدد التسميات التي يمكنك اختيارها. لا يمكن تغييره بعد الإنشاء.',
       selectSubjectArea: 'حدد مجال الموضوع…',
       subjectAreaMissing: 'مجال الموضوع لهذا المستودع غير موجود في التسلسل الهرمي للمعرفة — يتم عرض جميع التسميات.',
-      label: 'فئة من التسلسل الهرمي للمعرفة تخبر المساعد بنوع هذا المفهوم. التسميات هي الطريقة التي تعثر بها الإجابات على المحتوى المناسب.',
-      bundle: 'تصدير zip لمستودع ما — مفاهيمه وبنيته وبياناته الوصفية في ملف واحد. الحزم هي طريقة نقل المستودعات بين الأنظمة.',
+      label:
+        'فئة من التسلسل الهرمي للمعرفة تخبر المساعد بنوع هذا المفهوم. التسميات هي الطريقة التي تعثر بها الإجابات على المحتوى المناسب.',
+      bundle:
+        'تصدير zip لمستودع ما — مفاهيمه وبنيته وبياناته الوصفية في ملف واحد. الحزم هي طريقة نقل المستودعات بين الأنظمة.',
       version: 'لقطة مجمدة لمستودع في وقت النشر. يستمر التحرير في الإصدار التالي — لا تتغير الإصدارات المنشورة أبدًا.',
       serving: 'هذا الإصدار مباشر: يقرأ المساعد محتواه عند الإجابة. اسحبه لإجراء تغييرات.',
-      ingestion: 'الخطوة التي يتم فيها تجهيز إصدار منشور للإجابة — يتم تقسيم النص وتضمينه وربطه. لا يصل أي شيء إلى المساعد قبل ذلك.',
-      classification: 'كيف نحدد ماهية كل مفهوم (موضوع، كيان، عملية…). يقرأ الاستدلال الصفحة تلقائيًا؛ بينما خيار LLM أبطأ ولكنه يتعامل مع الصفحات المعقدة.',
-      resplit: 'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      ingestion:
+        'الخطوة التي يتم فيها تجهيز إصدار منشور للإجابة — يتم تقسيم النص وتضمينه وربطه. لا يصل أي شيء إلى المساعد قبل ذلك.',
+      classification:
+        'كيف نحدد ماهية كل مفهوم (موضوع، كيان، عملية…). يقرأ الاستدلال الصفحة تلقائيًا؛ بينما خيار LLM أبطأ ولكنه يتعامل مع الصفحات المعقدة.',
+      resplit:
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'فشل الحفظ',
       importFailedTitle: 'فشل الاستيراد — تعذر تحويل الملف المصدر.',
       importFailedHint: 'احذف هذا المستودع واستورد الملف المصدر مرة أخرى.',
-      frontmatter: 'المعلومات المنظمة في الجزء العلوي من كل ملف — النوع، العنوان، التسميات. يستخدمها المساعد لمعرفة موضوع كل مفهوم.',
-      pickSource: 'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
-      classificationStrategy: 'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      frontmatter:
+        'المعلومات المنظمة في الجزء العلوي من كل ملف — النوع، العنوان، التسميات. يستخدمها المساعد لمعرفة موضوع كل مفهوم.',
+      pickSource:
+        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy:
+        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
       clsHeur: 'Heuristics (fast, no LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
-      fsPick: 'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
-      autocorrect: 'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
-      handoff: 'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
-      lifecycle: 'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
-      labelsAuto: 'Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.',
-      reviewHandoff: 'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
-      piiReview: 'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+      fsPick:
+        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect:
+        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff:
+        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      lifecycle:
+        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto:
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+      reviewHandoff:
+        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview:
+        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
     },
     md: {
       toolbar: 'تنسيق',
@@ -1936,20 +1996,33 @@ export default {
       rendering: 'جارٍ العرض…'
     },
     narrative: {
-      intro: 'مستودع OKF هو مجموعة مهيكلة ذات إصدارات من الموضوعات التي يمكن لإجابات الدردشة الاستشهاد بها. فكر فيه كطبقة أنطولوجية خفيفة لمجالك — تحدد التسميات الفئات، وتحدد الموضوعات الكيانات، وتحدد المصادر الأصل والنسب.',
-      step0: 'مستودع OKF هو مجموعة منسقة وذات إصدارات من الموضوعات. فكر فيه كطبقة أنطولوجية خفيفة لمجالك — تحدد التسميات الفئات، وتحدد الموضوعات الكيانات، وتحدد المصادر الأصل. بمجرد النشر، تستشهد إجابات الدردشة اللاحقة بهذه الموضوعات عبر المعرّف الخاص بها.',
-      step1: 'ثلاث طرق لبدء مستودع OKF: سحب الموضوعات من زحف موقع ويب، أو استخراجها من المستندات التي قمت بتحميلها بالفعل، أو البدء من لوحة فارغة. نسخ مستودع موجود ينسخ موضوعاته ويتيح لك تفريع العمل.',
-      step2: 'يصبح كل مستند مصدرًا للموضوعات. يقرأ المنشئ هذه المستندات، ويستخرج الموضوعات المرشحة، ويقترح تسلسلاً هرميًا. ستراجع كل موضوع في الخطوة التالية — لا يتم اعتماد أي شيء حتى توافق عليه.',
-      step3: 'نحن نقرأ مصادرك ونقترح الموضوعات. تتجمع الموضوعات تحت تسميات الفئات التي تختارها. المنشئ متحفظ — يفضل اقتراح موضوعات أقل وأكثر دقة بدلاً من العديد من الموضوعات المشوشة.',
-      step4: 'التسميات هي المحاور الفئوية للأنطولوجيا الخاصة بك — ما نوع هذا الموضوع؟ اختر من 3 إلى 7 تسميات تلتقط المحاور الرئيسية؛ يستخدمها المنشئ كهياكل داعمة للتسلسل الهرمي للموضوعات.',
-      step5: 'هذا هو جوهر العمل. كل موضوع هو وحدة معرفية صغيرة وقابلة للاستشهاد. تحصل الموضوعات على عنوان ووصف وترث التسميات التي اخترتها. مهمتك هي جعلها دقيقة وموثوقة: أعد تسمية العناوين الغامضة، وادمج العناصر شبه المتطابقة، واستبعد ما لا يمكنك دعمه بمصدر.',
-      step6: 'نجري فحوصات المطابقة: هل لكل موضوع عنوان؟ هل التسميات صالحة؟ هل نسب المصادر سليمة؟ يجب إصلاح المشكلات المعيقة قبل تسليم المستودع؛ ويمكن الإقرار بالتحذيرات.',
-      step7: 'يمكن إصلاح بعض التحذيرات تلقائيًا: يمكن ضبط قيم الحالة إلى تعدادات صالحة، ويمكن ملء الحقول المفقودة بقيم افتراضية معقولة. طبق الإصلاحات التي توافق عليها، ثم عد إلى المسؤول للمراجعة.',
-      step8: 'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
-      step9: 'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
-      docMgmtEntry: 'إنشاء مستودع OKF جديد من المستندات المحددة. ستصبح المستندات مصادر؛ وستراجع وتسمي الموضوعات التي تنتجها قبل نشر أي شيء.',
+      intro:
+        'مستودع OKF هو مجموعة مهيكلة ذات إصدارات من الموضوعات التي يمكن لإجابات الدردشة الاستشهاد بها. فكر فيه كطبقة أنطولوجية خفيفة لمجالك — تحدد التسميات الفئات، وتحدد الموضوعات الكيانات، وتحدد المصادر الأصل والنسب.',
+      step0:
+        'مستودع OKF هو مجموعة منسقة وذات إصدارات من الموضوعات. فكر فيه كطبقة أنطولوجية خفيفة لمجالك — تحدد التسميات الفئات، وتحدد الموضوعات الكيانات، وتحدد المصادر الأصل. بمجرد النشر، تستشهد إجابات الدردشة اللاحقة بهذه الموضوعات عبر المعرّف الخاص بها.',
+      step1:
+        'ثلاث طرق لبدء مستودع OKF: سحب الموضوعات من زحف موقع ويب، أو استخراجها من المستندات التي قمت بتحميلها بالفعل، أو البدء من لوحة فارغة. نسخ مستودع موجود ينسخ موضوعاته ويتيح لك تفريع العمل.',
+      step2:
+        'يصبح كل مستند مصدرًا للموضوعات. يقرأ المنشئ هذه المستندات، ويستخرج الموضوعات المرشحة، ويقترح تسلسلاً هرميًا. ستراجع كل موضوع في الخطوة التالية — لا يتم اعتماد أي شيء حتى توافق عليه.',
+      step3:
+        'نحن نقرأ مصادرك ونقترح الموضوعات. تتجمع الموضوعات تحت تسميات الفئات التي تختارها. المنشئ متحفظ — يفضل اقتراح موضوعات أقل وأكثر دقة بدلاً من العديد من الموضوعات المشوشة.',
+      step4:
+        'التسميات هي المحاور الفئوية للأنطولوجيا الخاصة بك — ما نوع هذا الموضوع؟ اختر من 3 إلى 7 تسميات تلتقط المحاور الرئيسية؛ يستخدمها المنشئ كهياكل داعمة للتسلسل الهرمي للموضوعات.',
+      step5:
+        'هذا هو جوهر العمل. كل موضوع هو وحدة معرفية صغيرة وقابلة للاستشهاد. تحصل الموضوعات على عنوان ووصف وترث التسميات التي اخترتها. مهمتك هي جعلها دقيقة وموثوقة: أعد تسمية العناوين الغامضة، وادمج العناصر شبه المتطابقة، واستبعد ما لا يمكنك دعمه بمصدر.',
+      step6:
+        'نجري فحوصات المطابقة: هل لكل موضوع عنوان؟ هل التسميات صالحة؟ هل نسب المصادر سليمة؟ يجب إصلاح المشكلات المعيقة قبل تسليم المستودع؛ ويمكن الإقرار بالتحذيرات.',
+      step7:
+        'يمكن إصلاح بعض التحذيرات تلقائيًا: يمكن ضبط قيم الحالة إلى تعدادات صالحة، ويمكن ملء الحقول المفقودة بقيم افتراضية معقولة. طبق الإصلاحات التي توافق عليها، ثم عد إلى المسؤول للمراجعة.',
+      step8:
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9:
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry:
+        'إنشاء مستودع OKF جديد من المستندات المحددة. ستصبح المستندات مصادر؛ وستراجع وتسمي الموضوعات التي تنتجها قبل نشر أي شيء.',
       crawlSegment: 'مستودع OKF هو مجموعة منظمة ذات إصدارات من الموضوعات التي يمكن لإجابات الدردشة الاستشهاد بها.',
-      emptyDashboard: 'لم تقم بإنشاء أي مستودعات OKF حتى الآن. مستودع OKF هو مجموعة منظمة وقابلة للاستشهاد من الموضوعات التي يمكن لإجابات الدردشة الاستفادة منها.',
+      emptyDashboard:
+        'لم تقم بإنشاء أي مستودعات OKF حتى الآن. مستودع OKF هو مجموعة منظمة وقابلة للاستشهاد من الموضوعات التي يمكن لإجابات الدردشة الاستفادة منها.',
       labels: 'التسميات هي المحاور الفئوية للأنطولوجيا الخاصة بك — فهي تجيب على "ما نوع هذا الموضوع؟".',
       hide: 'إخفاء',
       whatIsThis: 'ما هذا؟'
@@ -1965,7 +2038,8 @@ export default {
       title: 'OKF Studio',
       help: 'مساعدة',
       helpTitle: 'حول OKF Studio',
-      helpBody: 'مستودعات OKF هي طبقة أنطولوجية خفيفة الوزن — تحدد التسميات الفئات، وتحدد الموضوعات الكيانات، وتحدد المصادر الأصل. بمجرد النشر، تستشهد إجابات الدردشة بالموضوعات حسب المعرف وتظهر أصلها ومصدرها.',
+      helpBody:
+        'مستودعات OKF هي طبقة أنطولوجية خفيفة الوزن — تحدد التسميات الفئات، وتحدد الموضوعات الكيانات، وتحدد المصادر الأصل. بمجرد النشر، تستشهد إجابات الدردشة بالموضوعات حسب المعرف وتظهر أصلها ومصدرها.',
       view: {
         dashboard: 'لوحة التحكم',
         wizard: 'المعالج'
@@ -1986,7 +2060,7 @@ export default {
       },
       stage: {
         inReview: 'قيد المراجعة',
-        stepOf: 'الخطوة {\'{\'}n{\'}\'} من 10',
+        stepOf: "الخطوة {'{'}n{'}'} من 10",
         draft: 'مسودة'
       },
       dashboard: {
@@ -1999,7 +2073,7 @@ export default {
         stale: 'قديم',
         stage: {
           inReview: 'قيد المراجعة',
-          stepOf: 'الخطوة {\'{\'}n{\'}\'} من 10',
+          stepOf: "الخطوة {'{'}n{'}'} من 10",
           draft: 'مسودة'
         },
         bulk: {
@@ -2110,11 +2184,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: ' +{\'{\'}n{\'}\'} more',
+        moreN: " +{'{'}n{'}'} more",
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: '{\'{\'}n{\'}\'}',
+        benchCount: "{'{'}n{'}'}",
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2140,7 +2214,8 @@ export default {
         neverStarted: 'The conversion did not start — retry.',
         manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
         labelDone: 'Conversion complete',
-        dupContent: 'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        dupContent:
+          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
@@ -2159,11 +2234,12 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: 'Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {
-        embedHint: 'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
         noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'مراجعة الموضوعات',
         hint: 'كل موضوع هو وحدة معرفية صغيرة وقابلة للاستشهاد. قم بتحرير العنوان والوصف.',
@@ -2190,9 +2266,11 @@ export default {
         sources: 'المصادر',
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
-        browserHint: 'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
+        browserHint:
+          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
         noRepo: 'No repository yet — the file review appears here once a repository exists.',
-        ritualOutside: 'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        ritualOutside:
+          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2209,7 +2287,8 @@ export default {
         topicsServing: 'Topics serving',
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
-        ritual: 'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        ritual:
+          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2247,7 +2326,8 @@ export default {
       classHeuristics: 'الاستدلال (افتراضي)',
       classHeuristicsHint: 'تصنيف سريع قائم على القواعد — لا توجد تكلفة LLM، مناسب لعمليات الزحف جيدة التنظيم.',
       classLlm: 'بمساعدة LLM',
-      classLlmHint: 'ينسق LLM كل مفهوم — النوع، تسمية التسلسل الهرمي للمعرفة والوصف. أكثر دقة واكتمالاً بكثير من الاستدلال؛ توقع وقتًا إضافيًا لكل مفهوم.',
+      classLlmHint:
+        'ينسق LLM كل مفهوم — النوع، تسمية التسلسل الهرمي للمعرفة والوصف. أكثر دقة واكتمالاً بكثير من الاستدلال؛ توقع وقتًا إضافيًا لكل مفهوم.',
       classHybrid: 'هجين',
       classHybridHint: 'الاستدلال أولاً؛ يراجع LLM الحالات غير المؤكدة ويسد الفجوات. متوازن بين الوقت والاكتمال.',
       targetLabel: 'أين يجب أن يذهب هذا؟',
@@ -2327,15 +2407,15 @@ export default {
       saveBlocked: 'تم حظر الحفظ: أصلح مشكلات المطابقة أولاً.'
     },
     validation: {
-      frozen: 'المحتوى مجمد عند {\'{\'}v{\'}\'} — معاينة للقراءة فقط. اسحب الإصدار المتاح للخدمة لإجراء تغييرات.',
+      frozen: "المحتوى مجمد عند {'{'}v{'}'} — معاينة للقراءة فقط. اسحب الإصدار المتاح للخدمة لإجراء تغييرات.",
       none: 'لا يوجد',
       expertHint: 'قم بالتبديل إلى وضع الخبير لرؤية كائن JSON الأولي للتحقق، والتصفية حسب الأهمية، وتجاوز الفحوصات.',
       headline: {
-        blockers: '{\'{\'}n{\'}\'} مشكلة(مشكلات) معيقة — أصلحها قبل تسليم المستودع',
-        warnings: '{\'{\'}n{\'}\'} عنصر (عناصر) تحتاج إلى مراجعتك',
+        blockers: "{'{'}n{'}'} مشكلة(مشكلات) معيقة — أصلحها قبل تسليم المستودع",
+        warnings: "{'{'}n{'}'} عنصر (عناصر) تحتاج إلى مراجعتك",
         ok: 'يبدو جيدًا. لا يوجد شيء للإصلاح.'
       },
-      summary: '{\'{\'}clean{\'}\'} سليم · {\'{\'}warnings{\'}\'} يحتاج إلى مراجعة · {\'{\'}blockers{\'}\'} معرقل',
+      summary: "{'{'}clean{'}'} سليم · {'{'}warnings{'}'} يحتاج إلى مراجعة · {'{'}blockers{'}'} معرقل",
       formatter: {
         notReady: 'ستتوفر أداة التنسيق في المهمة 4.2b.'
       },
@@ -2349,7 +2429,8 @@ export default {
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
       indexFailed: 'Re-index failed — edit or re-split the page.',
-      indexFailedRemedy: 'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      indexFailedRemedy:
+        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2368,8 +2449,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: 'Create the Sources page and link {\'{\'}n{\'}\'} page(s)',
-        wireExisting: 'Link {\'{\'}n{\'}\'} page(s) to "{\'{\'}hub{\'}\'}"',
+        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
+        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2383,29 +2464,35 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: 'Linked {\'{\'}n{\'}\'} page(s) to "{\'{\'}hub{\'}\'}".',
-      wireCreated: 'Created the Sources page and linked {\'{\'}n{\'}\'} page(s).',
-      mergedPages: '{\'{\'}n{\'}\'} pages',
+      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
+      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
+      mergedPages: "{'{'}n{'}'} pages",
       preview: {
         loading: 'Loading page contents…',
-        truncated: 'First {\'{\'}n{\'}\'} characters — open the editor for the full page.'
+        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
       },
       tip: {
-        conformance: 'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
-        orphan: 'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
-        near_duplicate: 'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
-        citation: 'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
-        index_failed: 'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+        conformance:
+          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan:
+          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate:
+          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation:
+          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed:
+          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
       }
     },
     pii: {
       panel: 'الكيانات المميزة بنجمة',
-      nFlagged: 'تم العثور على {\'{\'}n{\'}\'}',
+      nFlagged: "تم العثور على {'{'}n{'}'}",
       rescan: 'إعادة المسح',
       scanning: 'جارٍ المسح…',
       clean: 'لا توجد كيانات مميزة — هذا الـ concept سليم.',
       how: 'الإصلاح: قم بإزالته أو إعادة صياغته (مثلًا للإشارة إلى الدور بدلًا من الاسم)، ثم احفظ — إعادة المسح تحدّث هذه القائمة.',
-      descFallback: 'تم اكتشاف بيانات شخصية هنا (اللائحة العامة لحماية البيانات المادة 4(1) — تتعلق بشخص يمكن التعرف عليه).',
+      descFallback:
+        'تم اكتشاف بيانات شخصية هنا (اللائحة العامة لحماية البيانات المادة 4(1) — تتعلق بشخص يمكن التعرف عليه).',
       scanError: 'الفحص غير متاح',
       type: {
         PERSON: 'اسم الشخص',
@@ -2480,7 +2567,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: '{\'{\'}n{\'}\'} document(s)',
+      total: "{'{'}n{'}'} document(s)",
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2489,16 +2576,17 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: '{\'{\'}n{\'}\'} file(s) uploaded.',
+      uploaded: "{'{'}n{'}'} file(s) uploaded.",
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: 'Selected: {\'{\'}n{\'}\'}',
+      count: "Selected: {'{'}n{'}'}",
       needOne: 'Select at least one source.',
-      confirm: 'Use {\'{\'}n{\'}\'} source(s)',
+      confirm: "Use {'{'}n{'}'} source(s)",
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
-      servingTip: 'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
       alreadyBadge: 'already in an OKF repo',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     },
@@ -2547,7 +2635,8 @@ export default {
         version: 'Head version',
         computedAt: 'Computed',
         staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
-        missingNote: 'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+        missingNote:
+          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
         rebuild: 'Rebuild head',
         rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
         rebuildBusy: 'Rebuilding — embedding the tag fields…'
@@ -2566,13 +2655,15 @@ export default {
           claimed: 'Claims query'
         },
         provenance: 'Routing provenance',
-        empty: 'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
+        empty:
+          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
         pass: 'PASS — this repository wins the head routing.',
         fail: 'FAIL — {repo} wins the head routing for this query.',
         passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
         passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
-        notSelectedSuppressed: 'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        notSelectedSuppressed:
+          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -2602,7 +2693,8 @@ export default {
         meta: 'ميتا'
       },
       teach: {
-        claim: 'الرأس يطالب بهذا الاستعلام — لقد اجتاز البوابات الثلاثة. إذا كان لا ينبغي توجيهه إلى هنا، فاطلب وسومًا محظورة تستبعد موضوعه، وأضفها، ثم أعد بناء الرأس.',
+        claim:
+          'الرأس يطالب بهذا الاستعلام — لقد اجتاز البوابات الثلاثة. إذا كان لا ينبغي توجيهه إلى هنا، فاطلب وسومًا محظورة تستبعد موضوعه، وأضفها، ثم أعد بناء الرأس.',
         explain: 'اشرح واقترح',
         explainBusy: 'جارٍ الشرح — النموذج يقترح وسومًا محظورة…',
         addTag: 'أضف إلى الوسوم المحظورة',
@@ -2612,13 +2704,15 @@ export default {
         savingTag: 'جارٍ حفظ الوسم المحظور…',
         rebuildBusy: 'جارٍ إعادة بناء الرأس وإعادة التشغيل…',
         title: 'ماذا يعني هذا',
-        veto: 'هذا الاستعلام يطابق الوسم المحظور «{\'{\'}tag{\'}\'}» بقوة. إذا كان ينبغي أن ينتمي إلى هذا المستودع، فاحذف «{\'{\'}tag{\'}\'}» من الوسوم المحظورة في Frontmatter، ثم أعد النشر لإعادة بناء الرأس.',
-        floor: 'الاستعلام لا علاقة له بموضوع هذا المستودع (النتيجة أقل من الحد الأدنى للمجال) — لا يعالج تغيير الوسوم هذه المشكلة؛ هذا استبعاد صحيح.',
+        veto: 'هذا الاستعلام يطابق الوسم المحظور «{tag}» بقوة. إذا كان ينبغي أن ينتمي إلى هذا المستودع، فاحذف «{tag}» من الوسوم المحظورة في Frontmatter، ثم أعد النشر لإعادة بناء الرأس.',
+        floor:
+          'الاستعلام لا علاقة له بموضوع هذا المستودع (النتيجة أقل من الحد الأدنى للمجال) — لا يعالج تغيير الوسوم هذه المشكلة؛ هذا استبعاد صحيح.',
         rejected: 'تم رفضه بواسطة الحاجز الآلي — يجب ألا يطابق الوسم المحظور موضوع هذا المستودع نفسه.'
       },
       suites: {
         generate: 'Generate test suite',
-        generateTip: 'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
+        generateTip:
+          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
         generating: 'Generating — the LLM is writing the queries…',
         run: 'Run all queries',
         running: 'Running every suite query…',
@@ -2655,7 +2749,8 @@ export default {
         addAll: 'أضف الكل',
         rebuildRerun: 'أعد بناء الرأس وأعد تشغيل المجموعة',
         positiveFailuresTitle: 'لماذا توقف نجاح الإيجابيات',
-        positiveFailures: 'تم كبح {n} من اختبارات الإيجابية في هذه الجولة — وسوم المنع تطابق نطاق المستودع أكثر من اللازم.',
+        positiveFailures:
+          'تم كبح {n} من اختبارات الإيجابية في هذه الجولة — وسوم المنع تطابق نطاق المستودع أكثر من اللازم.',
         vetoedBy: 'استُبعد بواسطة',
         marginKilled: 'خسر {n} من اختبارات الإيجابية بسبب الهامش (دون فيتو من وسم واحد).',
         removals: 'وسوم لإزالتها (تمارس الفيتو ضد إيجابيات هذا المستودع نفسه)',
@@ -2691,7 +2786,8 @@ export default {
         unpublish: 'Unpublish to review'
       },
       publishCard: {
-        present: 'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
+        present:
+          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
       },
@@ -2709,6 +2805,7 @@ export default {
     }
   },
   link: {
-    ragTip: 'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

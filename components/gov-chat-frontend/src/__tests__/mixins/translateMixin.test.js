@@ -1,17 +1,37 @@
 /**
  * Unit tests for the translateMixin. The mixin exposes `translate(key, fallback)`
  * to any Options API component that imports it; it must:
- *  - return the translation when $i18n resolves the key
- *  - return the fallback when the key is missing OR when $i18n is unavailable
- *  - never throw (even when $i18n.t itself throws)
+ *  - return the RAW locale string when the key resolves (interpolation
+ *    placeholders intact — callers .replace('{x}') themselves)
+ *  - fall back locale → 'en' → the fallback argument
+ *  - never throw
  *
- * The mixin was introduced because every OKF component referenced `translate`
- * in templates/methods but only `AdminDashboard.vue` defined the method —
- * Vue 3's child render scope resolves identifiers against the child's own
- * instance, so the parent's method was unreachable (TypeError: e.translate is
- * not a function). See `mixins/translateMixin.js`.
+ * RAW lookup contract (2026-10-09): translate used to delegate to
+ * $i18n.t(), whose message compiler renders {name} slots EMPTY when called
+ * without params — the advisor scorecard displayed "positives / claimed ·
+ * negatives / suppressed" live while jest (no $i18n → fallback verbatim)
+ * stayed green. The mixin now walks the raw message tree instead; the
+ * {'{'}-escape workaround in locale strings is no longer needed.
  */
 import translateMixin from '../../mixins/translateMixin';
+
+const TREE = {
+  en: {
+    okf: {
+      studio: { title: 'OKF Studio' },
+      headTest: {
+        advisor: { scorecard: 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed' },
+        suites: { tripwire: 'This cycle broke {n} positive tests' }
+      }
+    }
+  },
+  fr: {
+    okf: {
+      studio: { title: 'Studio OKF' }
+      // advisor.* deliberately missing in fr → en fallback path
+    }
+  }
+};
 
 function makeHarness(i18nMock) {
   // The mixin only needs `this.$i18n`. We stub the rest of the Vue instance.
@@ -22,30 +42,28 @@ function makeHarness(i18nMock) {
 }
 
 describe('translateMixin', () => {
-  it('returns the translated string when $i18n resolves the key', () => {
-    const harness = makeHarness({
-      locale: 'en',
-      t: jest.fn().mockReturnValue('OKF Studio')
-    });
-    expect(harness.translate('okf.studio.title', 'OKF Studio')).toBe('OKF Studio');
-    expect(harness.$i18n.t).toHaveBeenCalledWith('okf.studio.title', { locale: 'en' });
+  it('returns the RAW string from the active locale — placeholders intact (the scorecard regression)', () => {
+    const harness = makeHarness({ locale: 'en', messages: TREE });
+    expect(harness.translate('okf.headTest.advisor.scorecard', 'x')).toBe(
+      'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed'
+    );
   });
 
-  it('passes the active locale so reactive locale changes propagate', () => {
-    const harness = makeHarness({
-      locale: 'fr',
-      t: jest.fn().mockReturnValue('Studio OKF')
-    });
-    harness.translate('okf.studio.title', 'OKF Studio');
-    expect(harness.$i18n.t).toHaveBeenCalledWith('okf.studio.title', { locale: 'fr' });
+  it('resolves the active locale (fr) from the message tree', () => {
+    const harness = makeHarness({ locale: 'fr', messages: TREE });
+    expect(harness.translate('okf.studio.title', 'OKF Studio')).toBe('Studio OKF');
   });
 
-  it('returns the fallback when the key is missing (i18n echoes the key back)', () => {
-    const harness = makeHarness({
-      locale: 'en',
-      t: jest.fn().mockImplementation((key) => key)
-    });
-    expect(harness.translate('okf.studio.title', 'OKF Studio')).toBe('OKF Studio');
+  it('falls back to the en tree when the active locale lacks the key', () => {
+    const harness = makeHarness({ locale: 'fr', messages: TREE });
+    expect(harness.translate('okf.headTest.advisor.scorecard', 'x')).toBe(
+      'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed'
+    );
+  });
+
+  it('returns the fallback when the key is missing from every tree', () => {
+    const harness = makeHarness({ locale: 'en', messages: TREE });
+    expect(harness.translate('okf.studio.nope', 'OKF Studio')).toBe('OKF Studio');
   });
 
   it('returns the fallback when $i18n is missing (e.g. unit-test context)', () => {
@@ -58,24 +76,16 @@ describe('translateMixin', () => {
     expect(harness.translate('okf.studio.title')).toBe('okf.studio.title');
   });
 
-  it('never throws — catches and logs i18n errors then returns the fallback', () => {
+  it('never throws — catches and logs lookup errors then returns the fallback', () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const harness = makeHarness({
-      locale: 'en',
-      t: jest.fn().mockImplementation(() => {
+      get locale() {
         throw new Error('i18n blew up');
-      })
+      },
+      messages: TREE
     });
     expect(harness.translate('okf.studio.title', 'OKF Studio')).toBe('OKF Studio');
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
-  });
-
-  it('returns the key when the key is missing AND no fallback supplied', () => {
-    const harness = makeHarness({
-      locale: 'en',
-      t: jest.fn().mockImplementation((key) => key)
-    });
-    expect(harness.translate('okf.studio.title')).toBe('okf.studio.title');
   });
 });

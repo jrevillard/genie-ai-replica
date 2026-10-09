@@ -344,3 +344,40 @@ import-links-integration timeout under full-suite load, green in
 isolation at 1.4s), frontend 1664, live smoke 32/32 (section 14 = suite
 load + flip + flip-back roundtrip + 401), verify-local-build 46/46.
 Commits: 4ba28e5 (translate), cf9fe2c (1-8f), ce7d7a7 (smoke §14).
+
+## 12. 1-8f2 — async generation + the dashboard escape bug (2026-10-09, 036af473b)
+
+Two live findings from David's 100-positive generate + dashboard pass:
+
+**Async 202 + poll.** The synchronous POST /routing-testsuite/generate
+died at the gateway on large asks: the 100-positive suite SAVED at
+minute 5 while the browser gave up at 60s ("I just tried to generate and
+never got the suite after" — the suite was actually there:
+s1791559159861-e67759). Now: beginSuiteGeneration mints the suite key
+up-front, kicks generateSuite DETACHED (suiteGenInFlight Map, one per
+repo — a second begin 409s GENERATION_IN_FLIGHT, sync throw), the
+controller responds 202 {suite_key, status:'generating'} immediately,
+and the dialog polls GET /routing-testsuite/:key (96 × 2.5s ≈ 4 min,
+GET-first-then-sleep) adopting the suite when it lands, with an honest
+timeout message. i18n: suites.generateTip/.generating rewritten for the
+batched reality + error.generateTimeout ×14.
+
+**The {'{'}-escape convention is DEAD.** The raw-lookup mixin made every
+remaining escape render AS ITSELF: all dashboard cards showed "Ingested
+v{'{'}n{'}'}" — the caller's .replace('{n}') can never match the
+escaped form. All ~47 okf.* escaped strings un-escaped ×14
+(scripts/unescape-okf-braces-async-i18n.cjs). admin.documents.* KEEPS
+its escapes deliberately: its consumer is AdminDashboard.translate,
+which still routes through vue-i18n's compiled $t and would swallow a
+plain {x} as an empty named slot. The localeConsistency guard re-inked
+to pin the split invariant: plain {x} required for mixin-consumed okf.*
+keys, escaped form required for admin.documents.*. (Follow-up noted:
+aligning AdminDashboard.translate to raw lookup would let the escape
+die everywhere — legacy-file blast radius, not this story.)
+
+**Validation:** okf-server 845+42 (import-links flake green in
+isolation), frontend 1668, live smoke 32/32 with the poll-based
+generation, verify-local-build 46/46 (patched_files_expected 42). One
+commit: 036af473b. NOTE: first smoke run against the build tree failed
+24/32 — the build tree held a STALE pre-async smoke copy; always cp the
+fresh smoke before running.

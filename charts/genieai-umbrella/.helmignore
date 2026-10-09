@@ -1,0 +1,6 @@
+# Helm packaging ignores for the umbrella chart.
+# NOTE: vendored deps (charts/*.tgz) + Chart.lock MUST SHIP in the packaged
+# tarball — an OCI-installed umbrella without its dependencies is
+# uninstallable. Keeping them out of GIT diffs is charts/.gitignore's job
+# (they still enter the package from disk).
+.DS_Store

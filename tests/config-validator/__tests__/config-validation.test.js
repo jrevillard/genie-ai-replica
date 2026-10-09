@@ -482,4 +482,49 @@ describe('Configuration Validation Suite', () => {
     });
   });
 
+  // --- Story 1-8d: teaching-loop suggestion-guardrail knobs. The 2026-10-09
+  // poisoning (a suggested forbidden tag matching the repo's OWN subject —
+  // 'lung-cancer', its own entity tag — positives 7/8 -> 2/8) is exactly the
+  // failure these thresholds prevent, and their calibration is load-bearing:
+  // plumbing drift between the three surfaces would silently retune the
+  // guardrail. Defaults live in components/okf-server/services/
+  // head-test-service.js; the compose pipes are intentionally EMPTY (code
+  // default applies when unset), so these pins check the code default where
+  // each surface documents it: the env template comment and the env.j2
+  // emission.
+  describe('Story 1-8d: OKF suggestion-guardrail knob plumbing', () => {
+    const GUARD_KNOBS = {
+      OKF_GUARD_SELF_SUBJECT: '0.55',
+      OKF_GUARD_DUPLICATE_FORBIDDEN: '0.9'
+    };
+
+    test('both guard knobs are piped in the okf-server compose block with an empty default (code default applies)', () => {
+      const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = composeText.slice(composeText.indexOf('  okf-server:'), composeText.indexOf('  pii-service:'));
+      for (const name of Object.keys(GUARD_KNOBS)) {
+        expect(okfBlock).toMatch(new RegExp(`- ${name}=\\$\\{${name}:-\\}`));
+      }
+    });
+
+    test('both guard knobs are documented in the env template with the code default', () => {
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      for (const [name, def] of Object.entries(GUARD_KNOBS)) {
+        expect(envText).toMatch(new RegExp(`^#\\s*${name}=${def.replace(/\./g, '\\.')}\\s*(#.*)?$`, 'm'));
+      }
+    });
+
+    test('both guard knobs are emitted by ansible env.j2 with the code default', () => {
+      const guardVars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      for (const [name, def] of Object.entries(GUARD_KNOBS)) {
+        expect({ name, found: !!guardVars[name], default: guardVars[name] ? guardVars[name].default : null }).toEqual({
+          name,
+          found: true,
+          default: def
+        });
+      }
+    });
+  });
+
 });

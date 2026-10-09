@@ -1238,6 +1238,19 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # ROUTE_RETRY=1
 #   Default: 1 probe retry. Used by: okf-server. Compose: no.
 
+# --- okf-server: teaching-loop suggestion guardrail (Story 1-8d) ---
+# OKF_GUARD_SELF_SUBJECT=0.55
+#   Default: 0.55 (cosine vs ANY of the repo's own topic/entity/keyword head
+#   vectors at/above this rejects a suggested forbidden tag as self-forbidding
+#   — the mechanical backstop after the 2026-10-09 teaching-loop poisoning
+#   applied 'lung-cancer', the repo's OWN entity tag, and positives collapsed
+#   7/8 -> 2/8). Used by: okf-server head tests (guardSuggestions).
+#   Compose: yes. Ansible: yes.
+# OKF_GUARD_DUPLICATE_FORBIDDEN=0.9
+#   Default: 0.9 (cosine vs an existing forbidden vector at/above this rejects
+#   a suggested tag as a near-duplicate — nothing new to learn). Used by:
+#   okf-server head tests (guardSuggestions). Compose: yes. Ansible: yes.
+
 # --- okf-server: retrieval mode governance (Story 1.7, ADR-okf-039 D3) ---
 # OKF_RETRIEVAL_MODE=legacy
 #   Default: legacy (boot default; the okf_system_config doc overrides

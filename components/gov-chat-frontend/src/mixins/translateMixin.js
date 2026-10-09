@@ -43,13 +43,24 @@ export default {
         return fallback || key;
       }
       try {
-        // Force the current locale so reactive locale changes propagate
-        // even when the component caches its rendered output.
-        const translation = this.$i18n.t(key, { locale: this.$i18n.locale });
-        if (translation === key) {
-          return fallback || key;
-        }
-        return translation;
+        // RAW message lookup — deliberately NOT $t(). vue-i18n's message
+        // compiler treats {name} as a named-interpolation slot and renders
+        // it EMPTY when $t is called without params; every caller of this
+        // helper interpolates via .replace('{x}') afterwards, so compiled
+        // output silently dropped their placeholders (live 2026-10-09: the
+        // advisor scorecard rendered "positives / claimed · negatives /
+        // suppressed" with every slot gone, while jest — which has no $i18n
+        // and returns the fallback verbatim — stayed green). Walk the raw
+        // message tree instead: active locale first, then the 'en' tree.
+        const resolve = (msgs, path) =>
+          path.split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), msgs);
+        const messages = this.$i18n.messages;
+        const locale = this.$i18n.locale || 'en';
+        const hit = resolve(messages && messages[locale], key);
+        if (typeof hit === 'string') return hit;
+        const en = resolve(messages && messages.en, key);
+        if (typeof en === 'string') return en;
+        return fallback || key;
       } catch (e) {
         console.error(`[translateMixin] Translation error for key ${key}:`, e);
         return fallback || key;

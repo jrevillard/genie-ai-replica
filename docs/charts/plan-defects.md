@@ -140,6 +140,45 @@ Two findings in SHIPPED artifacts this round (both fixed + re-validated):
 | 14 | Spec §5.2/§10 promised profile-driven observability auto-enable while Plan 4 ships static-false → prod installs blind per spec's promise | Spec aligned to Plan 4: explicit per-env values, no hidden template auto-enable |
 | 15 | Renovate: `helm-requirements` manager (Helm 2 — matches nothing) + `allowedVersions: "/^~/"` matching no release version → dependency MRs never open | `helmv3` manager + plain-semver release regex matching the `~>` pin semantics |
 
+## Wave 13 — `/code-review` xhigh round 4 (plans + spec; chart code clean)
+
+15 findings + 5 sub-caps fixed; 8 sub-caps deferred (below).
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| 1 | otel-agent DaemonSet mounts hostPath /var/log/pods in a PSS-restricted namespace — pods never admitted, zero logs shipped | Agent (CR + SA) moved to dedicated `<ns>-agent` namespace carrying enforce=privileged (main namespace stays restricted) |
+| 2 | Plan 5 Task 7 edge-matrix prose used Service port 80 for wrapper→wrapper/model-server edges, contradicting the post-DNAT rule | Matrix rewritten with pod ports (6000/7000/8000/8888/9000/9031/8080/3000/3001) |
+| 3 | charts:integration unpassable: dep-check fails (backend deps disabled) + registry.example.org images → permanent red | Service tier also disabled in the job + rationale; tiers re-enable as images publish |
+| 4 | Drift hook keyed on condition type `SealedSecretHasntDecrypted` — does not exist upstream (verified: only `Synced`; undecryptable = Synced=False reason ErrorDecrypt) | Hook jsonpath + all prose (Plans 2/8, README) → conditions[type=Synced].status=False |
+| 5 | Spec §6.2 inverted — claimed externalSecrets shipped as the single backend, contradicting §6/§8/§16 | Corrected to sealedSecrets (v1's actual backend) |
+| 6 | Per-env kustomization `chart: ../../charts/...` resolves to deploy/charts (wrong depth); spec §19.2 same | `../../../charts/genieai-umbrella` both places |
+| 7 | Plan 2 Task 3 Step 4 verification used `--show-only` on a define-only underscore file — Helm errors (verified) | Verification via --execute include / consumer ConfigMap with explanation |
+| 8 | email-password absent from BOTH canonical backend-secrets blocks (Plan 3 Task 1, Plan 5 Task 6 rewrite) — SMTP silently broken (Wave-6 #15 reintroduced twice) | Added to both lists |
+| 9 | pre-delete gate Job had no securityContext → rejected under enforce=restricted, annotated path unusable | Full pod+container securityContext added |
+| 10 | Plan 5 Task 6 Step 3 expected 10 SealedSecrets with ai.enabled=false; gating is secrets-only → 12 — executor would "fix" the gates and reintroduce the Day-0 crashloop | Expectation corrected to 12 with explicit do-not-touch-gates note |
+| 11 | Plan 6 Task 5 Step 5 expected 1 Job; helm template renders 3 (dep-check + drift + migrate hooks) | Expected 3 with missing-hook warning |
+| 12 | observability.piiRedaction.rules dead values block (no template reads it) with a WRONG rule list (IP/UUID not in the real set) | Dropped; ported-config is the single source |
+| 13 | Plan 4 Task 11 README + Default column still claimed profile-gated observability (Wave 12 #14 regression) | Rewritten: explicit per-env values, false by default everywhere |
+| 14 | Plan 2 Task 13 umbrella README cited the nonexistent invalid annotation + fabricated `kubeseal --rotate` | Rotation story corrected (fresh controller key + re-seal; no in-Pod rotate command); Synced=False signal |
+| 15 | PII smoke marker contained hyphens (uuidgen) breaking the sk-[a-z0-9]{20,} rule → test permanently red | Marker `tr -d '-'` + rationale |
+
+Sub-caps fixed: renovate.json strict-JSON (# comments stripped); spec §13.1
+"annotation on the release" → namespace carrier (both gate + pvc-transient);
+Plan 6 TLS negative test kept tls.enabled=true and blanked issuerName (the
+old form skipped the required-guard entirely); Plan 7 Goal prose garbled
+cosign/Kyverno correction untangled; chart-defaults-leak.rego container path
+→ spec.template.spec (Deployment shape).
+
+DEFERRED sub-caps (accepted, none render-blocking): `global.imageRegistry`
+declared but unconsumed by service templates (sovereign mirroring needs it —
+revisit in Plans 3-6 execution); chatqna `GUARDRAIL_SERVICE_PORT: 9090` pod
+port vs Service 80; clamav probe treats curl exit 28 as PASS + test pod
+blocked by docrepo-only ingress; Plan 6 migrate Job missing
+DATABASE_URL/KC_DATAPREP_CLIENT_ID env; Plan 2 Task 7 file naming split
+pre-install/pre-upgrade; spec §13.3 drift script check=True crash on
+git show; Plan 4 VMServiceScrape snippet placement outside define scope;
+Plan 8 playbook Hugo shortcode in non-Hugo file + stale "build stage" line.
+
 # Plan Defect Ledger — Helm Migration Docs
 
 Tracks every finding from the adversarial review rounds against the spec +

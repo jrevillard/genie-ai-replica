@@ -14,7 +14,7 @@ metadata:
     "helm.sh/hook-weight": "-5"          # run after clusterprofile-detect (-10)
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
-  backoffLimit: 1
+  backoffLimit: 0
   template:
     metadata:
       labels:
@@ -136,11 +136,11 @@ data:
            a missing export disables a component's checks, never enables
            them. Exported keys derive from the graph itself (the ranges
            below iterate dependencyGraph keys), so a new graph node exports
-           its toggle automatically. sprig `dig` refuses Helm's typed
-           Values — round-trip through toRawJson|fromJson for a plain map;
-           inside a literal block scalar, dash-closers would trim the
-           newline the `|` pipe needs, so every line uses plain `}}`
-           closers. */ -}}
+           its toggle automatically. The round-trip via toRawJson|fromJson
+           makes the values tree a plain map[string]interface{} that Sprig's
+           `dig` navigates uniformly across Helm versions; inside a literal
+           block scalar, dash-closers would trim the newline the `|` pipe
+           needs, so every line uses plain `}}` closers. */ -}}
     {{- $vals := $.Values | toRawJson | fromJson }}
     {{- $flat := dict }}
     {{- range $name, $deps := dig "dependencyGraph" "services" dict $vals }}

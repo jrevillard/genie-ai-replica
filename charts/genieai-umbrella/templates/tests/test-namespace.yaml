@@ -43,6 +43,9 @@ spec:
         capabilities:
           drop:
             - ALL
+      env:
+        - name: EXPECTED_PROFILE
+          value: {{ .Values.clusterProfile | default "dev" | quote }}
       command:
         - /bin/sh
         - -c
@@ -52,18 +55,26 @@ spec:
           echo "test Pod running in namespace: $ns"
           # Read-only assertion via kubectl (read-only RBAC in
           # charts/genieai-umbrella/templates/rbac/): the release namespace
-          # must carry the chart's PSA labels and MUST NOT carry the
-          # genieai.io/cluster-profile label (the cluster-profile label
-          # lives on the host namespace, not on the release namespace).
+          # must carry the chart's PSA labels and the genieai.io/cluster-profile
+          # label (set by templates/namespace.yaml; read by the clusterprofile-detect hook).
           enforce=$(kubectl get ns "$ns" -o jsonpath='{.metadata.labels.pod-security\.kubernetes\.io/enforce}' 2>/dev/null || true)
           enforce_ver=$(kubectl get ns "$ns" -o jsonpath='{.metadata.labels.pod-security\.kubernetes\.io/enforce-version}' 2>/dev/null || true)
           cluster_profile=$(kubectl get ns "$ns" -o jsonpath='{.metadata.labels.genieai\.io/cluster-profile}' 2>/dev/null || true)
+          [ -n "$enforce" ] \
+            || { echo "FAIL: pod-security.kubernetes.io/enforce missing (got: '$enforce')"; exit 1; }
           [ "$enforce" = "restricted" ] \
-            || { echo "FAIL: pod-security.kubernetes.io/enforce missing or != restricted (got: '$enforce')"; exit 1; }
+            || { echo "FAIL: pod-security.kubernetes.io/enforce != restricted (got: '$enforce')"; exit 1; }
           [ -n "$enforce_ver" ] \
             || { echo "FAIL: pod-security.kubernetes.io/enforce-version missing (got: '$enforce_ver')"; exit 1; }
-          [ -z "$cluster_profile" ] \
-            || { echo "FAIL: genieai.io/cluster-profile label should live on the host namespace, not on the release namespace (got: '$cluster_profile')"; exit 1; }
+          # Fail if the label is absent, then compare its value to EXPECTED_PROFILE.
+          if [ -z "$cluster_profile" ]; then
+            echo "FAIL: genieai.io/cluster-profile label is absent (expected: '$EXPECTED_PROFILE')"
+            exit 1
+          fi
+          if [ "$cluster_profile" != "$EXPECTED_PROFILE" ]; then
+            echo "FAIL: genieai.io/cluster-profile mismatch — got '$cluster_profile', expected '$EXPECTED_PROFILE'"
+            exit 1
+          fi
           echo "PASS"
 {{- /* Gated on SealedSecrets AND at least one data tier rendering them —
        the test asserts the tier-specific Secrets exist, so a release with

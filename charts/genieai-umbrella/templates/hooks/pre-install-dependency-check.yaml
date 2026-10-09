@@ -56,8 +56,11 @@ spec:
               graph_path = "/var/run/genieai/dependency-graph.json"
               if not os.path.exists(graph_path):
                   print(f"FAIL: {graph_path} missing"); sys.exit(1)
-              with open(graph_path) as f:
-                  graph = json.load(f)
+              try:
+                  with open(graph_path) as f:
+                      graph = json.load(f)
+              except (FileNotFoundError, json.JSONDecodeError) as e:
+                  print(f"FAIL: dependency-graph.json is missing or corrupt: {e}"); sys.exit(1)
               # Enabled toggles come from the enabled.json mount — the
               # chart flattens every `services.<X>.enabled` /
               # `data.<X>.enabled` boolean to JSON at render time. The
@@ -66,8 +69,11 @@ spec:
               enabled_json = "/var/run/genieai/enabled.json"
               if not os.path.exists(enabled_json):
                   print(f"FAIL: {enabled_json} missing"); sys.exit(1)
-              with open(enabled_json) as f:
-                  enabled = json.load(f)
+              try:
+                  with open(enabled_json) as f:
+                      enabled = json.load(f)
+              except (FileNotFoundError, json.JSONDecodeError) as e:
+                  print(f"FAIL: enabled.json is missing or corrupt: {e}"); sys.exit(1)
               # Dependency names resolve against the graph's own
               # namespaces: a name present under services.* is a service
               # dep, anything else a data dep.
@@ -143,4 +149,4 @@ data:
     {{- range $name, $deps := dig "dependencyGraph" "data" dict $vals }}
     {{- $_ := set $flat (printf "data.%s.enabled" $name) (dig "data" $name "enabled" false $vals) }}
     {{- end }}
-    {{ $flat | toJson }}
+    {{ $flat | mustToJson }}

@@ -43,7 +43,7 @@ The chart's pre-install/pre-upgrade hooks run in ascending `helm.sh/hook-weight`
 order (RBAC first — regular resources land only AFTER all hooks, so everything a
 hook needs must itself be a lower-weight hook):
 
-1. `-30` — ServiceAccount + ClusterRole + ClusterRoleBinding (hook-owned)
+1. `-30` — ServiceAccount + Role + RoleBinding (namespaced) + ClusterRole + ClusterRoleBinding (cluster-scoped) — all hook-owned
 2. `-20` — dep-graph ConfigMap (dependency-graph.json + enabled.json)
 3. `-10` — cluster-profile drift detection (pre-upgrade only; emits a Warning Event on namespace-label/render mismatch)
 4. `-5`  — dependency graph validation (services/data require their deps)
@@ -63,3 +63,9 @@ prerequisite; see above). Key rotation is operator-initiated: restart the
 controller with a fresh key, re-fetch its public cert, re-encrypt every
 committed SealedSecret against it, then deploy — the pre-upgrade drift hook
 fails upgrades while any SealedSecret reports Synced=False (ErrorDecrypt).
+
+Operator convention (no chart value): record which cluster key sealed the
+committed blobs in `deploy/environments/<env>/secrets/*.yaml` next to those
+blobs — e.g. the certificate fingerprint from `kubeseal --fetch-cert` in a
+comment or the environment's README. The chart reads no fingerprint value;
+runtime enforcement is the drift hook above.

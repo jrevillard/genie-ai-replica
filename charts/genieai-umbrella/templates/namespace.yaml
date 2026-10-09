@@ -5,19 +5,15 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: {{ $ns }}
-  annotations:
-    # NOT a helm hook. The plan's original design (Namespace as pre-install
-    # hook, weight -40, no --create-namespace) relied on Helm 3 semantics;
-    # Helm 4 deletes pre-existing hook-identity resources before applying
-    # hooks (before-hook-creation became implicit), which deletes the very
-    # namespace the release Secret is stored in — install reports deployed,
-    # then the release vanishes with the namespace. Correct Helm 4 flow:
-    # `helm install -n genieai --create-namespace` creates the bare
-    # namespace BEFORE any hook or release record; later pre-install hooks
-    # (RBAC -30, dep-graph -20, ...) then find it; this regular resource
-    # server-side-applies the labels onto it. Uninstall removes it with the
-    # release — acceptable for the foundation tier; data-tier namespaces
-    # get the §13.1 pre-delete gate in Plan 7.
+  # A REGULAR resource, not a helm hook: Helm 4 applies implicit
+  # before-hook-creation semantics to hooks, deleting any pre-existing
+  # object with the hook identity before applying — including the
+  # namespace `--create-namespace` just provisioned and the release
+  # Secret stored inside it. As a regular resource this manifest
+  # server-side-applies onto the namespace `--create-namespace` creates,
+  # merging the labels below. Install therefore requires
+  # `helm install -n <ns> --create-namespace`; other pre-install hooks
+  # in the chart then find the namespace already present.
   labels:
     {{- include "genieai-common.labels" $componentValues | nindent 4 }}
     genieai.io/cluster-profile: {{ .Values.clusterProfile | default "dev" | quote }}

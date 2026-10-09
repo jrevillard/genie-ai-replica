@@ -1,0 +1,44 @@
+{{- /* Cluster-scoped RBAC for the dep-check SA. REGULAR resource — no
+       helm.sh/hook:* annotations.
+
+       Why not hook-owned with hook-succeeded: the chart's helm-test pod
+       (templates/tests/test-namespace.yaml) runs AFTER install completes
+       and reuses the same SA via `kubectl get ns`; a hook-succeeded policy
+       deletes the cluster-scoped grant at the end of install, and the test
+       pod's API call then 403s — the assertion fails on its own RBAC
+       rather than on the missing label it actually checks.
+
+       Uninstall-leak concern: on uninstall, helm deletes this file's
+       resources (they are not hook-owned, so the default teardown path
+       applies). The CRB references the hook-owned SA in dep-check-bindings
+       / dep-check-serviceaccount — when the namespace is deleted, the SA
+       and the regular CRB are both GC'd, so no orphan binding survives
+       pointing at a non-existent subject. */ -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-dep-check
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "rbac") | nindent 4 }}
+rules:
+  # Cluster-scoped lookups only — NO Secrets, NO ConfigMaps here.
+  # The clusterprofile-detect hook reads the namespace label (get);
+  # the helm-test pod reads the same label; both need this verb.
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-dep-check
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "rbac") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "genieai-common.fullname" . }}-dep-check
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "genieai-common.fullname" . }}-dep-check
+    namespace: {{ .Values.namespace }}

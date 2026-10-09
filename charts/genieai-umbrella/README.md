@@ -8,12 +8,29 @@ with one `helm install`.
 | Layer | Status |
 |---|---|
 | Foundation (namespace, ArgoCD example, chart-testing baseline) | ✅ Shipped |
-| Data layer (CNPG, kube-arangodb, sealed-secrets; keycloak-operator = bootstrap prerequisite) | ✅ Shipped |
+| Data layer (CNPG, kube-arangodb, sealed-secrets CRs; operators = bootstrap prerequisites) | ✅ Shipped |
 | Service tier (stateless app: backend + frontend + document-repository + nginx + clamav + gateway) | ⏳ Next |
 | Observability (vmoperator VMSingle/Cluster + OTel operator + serviceMonitors) | ⏳ Planned |
 | AI/ML (vLLM + TEI + OPEA microservices + GPU operator) | ⏳ Planned |
 | Per-env config + ingress (Envoy Gateway + cert-manager) | ⏳ Planned |
 | CI integration + image signing + Renovate | ⏳ Planned |
+
+## Cluster prerequisites
+
+The operator controllers the chart's custom resources depend on are **cluster
+bootstrap prerequisites** — installed once per cluster, before any GENIE.AI
+release. Per-release operator installs would create competing cluster-scoped
+controllers (sealed-secrets keypair fights, duplicate CNPG/kube-arangodb
+reconcilers). The chart renders only the custom resources they manage.
+
+| Operator | Version | Install (generic) |
+|---|---|---|
+| CloudNativePG | ≥1.30 | `helm install cnpg cloudnative-pg --repo https://cloudnative-pg.github.io/charts` |
+| kube-arangodb | 1.4.x | `helm install arango kube-arangodb --repo https://arangodb.github.io/kube-arangodb` |
+| sealed-secrets | ≥0.40 | `helm install sealed-secrets sealed-secrets --repo https://bitnami.github.io/sealed-secrets` |
+| keycloak-operator | 26.x | OLM subscription or the static YAML from keycloak.org (its advertised Helm repo serves no index) |
+
+Later tiers add: GPU operator, cert-manager, envoy-gateway — same model.
 
 ## Per-environment overlay
 
@@ -41,9 +58,8 @@ helm test <release> -n genieai
 
 ## Secrets backend
 
-Default secrets backend `sealedSecrets`. Helm dep pinned to `~> 2.20.0`
-(pin rationale in docs/charts/k8s-native-audit.md; the CVE IDs from early
-research are RETRACTED). Key rotation is operator-initiated: restart the
+Default secrets backend `sealedSecrets` (controller = cluster bootstrap
+prerequisite; see above). Key rotation is operator-initiated: restart the
 controller with a fresh key, re-fetch its public cert, re-encrypt every
 committed SealedSecret against it, then deploy — the pre-upgrade drift hook
 fails upgrades while any SealedSecret reports Synced=False (ErrorDecrypt).

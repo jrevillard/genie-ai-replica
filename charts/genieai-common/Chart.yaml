@@ -2,8 +2,10 @@ apiVersion: v2
 name: genieai-common
 description: |
   Library chart providing reusable templates and helpers for the GENIE.AI Helm
-  charts. NOT a deployable chart — used via `dependencies:` in consuming charts
-  with `import-values:` to expose helpers.
+  charts. NOT a deployable chart — consumed via `dependencies:` for template
+  sharing only, with helpers invoked through `include` at the call site; it
+  exports no `import-values` surface (importing its values tree would carry
+  Helm's reserved `global` key into a schema-validated subtree it rejects).
 type: library
 version: 0.1.0
 appVersion: "0.1.0"

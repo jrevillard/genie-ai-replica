@@ -329,7 +329,7 @@ The sealed-secrets controller's private key never leaves the controller pod. Rot
       5. Re-encrypt every committed SealedSecret (`kubeseal --cert pub-cert.pem --scope cluster-wide --name <name>` — **NOT `--scope namespace`**, that flag is not a valid scope; real values are `strict` | `namespace-wide` | `cluster-wide`).
       6. Commit and let the controller re-materialize the underlying K8s Secrets.
 
-3. Verify no drift: the chart's pre-upgrade hook Job (Plan 2 Task 11) lists every SealedSecret and asserts the controller's `status.conditions[SealedSecretHasntDecrypted]` is empty. A non-empty list means a SealedSecret wasn't re-sealed with the new key — find it, re-seal, commit.
+3. Verify no drift: the chart's pre-upgrade hook Job (Plan 2 Task 11) lists every SealedSecret and asserts every SealedSecret reports conditions[type=Synced].status=True. A non-empty list means a SealedSecret wasn't re-sealed with the new key — find it, re-seal, commit.
 
 ### Service-token secrets
 

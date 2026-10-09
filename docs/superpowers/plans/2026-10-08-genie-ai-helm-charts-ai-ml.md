@@ -910,6 +910,7 @@ spec:
       secrets:
         - name: keycloak-client-secret
         - name: huggingface-hub-token
+        - name: email-password                  # EMAIL_PASSWORD via envFrom (SMTP)
         - name: keycloak-proxy-client-secret   # keycloak-proxy service-account
         - name: vllm-api-key                    # remote-GPU bearer (VLLM_API_KEY)
 ```
@@ -919,7 +920,14 @@ NOTE: values.yaml is STATIC — the template-level remote ternary for `VLLM_TRAN
 - [ ] **Step 3: Render count**
 
 Run: `helm template test charts/genieai-umbrella -n genieai | grep -c "^kind: SealedSecret$"`
-Expected: prints `12` (4 Plan-2 + 3 Plan-3 + 2 Plan-4 + 3 Plan-5). And with `--set ai.enabled=false`: STILL `10` — `keycloak-proxy-client-secret` must survive the AI master switch (C5 gate).
+Expected: prints `12` (4 Plan-2 + 3 Plan-3 + 2 Plan-4 + 3 Plan-5). And with
+`--set ai.enabled=false`: STILL `12` — ALL three AI-tier SealedSecrets gate
+only on `secrets.sealedSecrets.enabled`, NEVER on `ai.enabled`: the backend
+and other non-AI consumers reference vllm-api-key / keycloak-proxy-client-secret
+via envFrom regardless of the AI master switch, so removing the secrets under
+ai.enabled=false crashloops those pods at Day 0 (the exact regression the
+gates comment in the template warns about). If the count drops, the gating
+was changed — fix the GATES, not the expectation.
 
 - [ ] **Step 4: Verify dual keys in vllm-api-key (Review Focus #5)**
 
@@ -1014,19 +1022,21 @@ spec:
 {{- end -}}
 ```
 
-Full edge matrix (replicate the shape above per service):
+Full edge matrix (replicate the shape above per service). ALL ports are
+POD ports — NetworkPolicy evaluates post-DNAT, so the Service port 80 never
+appears here:
 
-| Service | ingress from | egress to (ports) |
+| Service | ingress from | egress to (pod ports) |
 |---|---|---|
-| embedding | chatqna, dataprep, retriever (6000) | tei 80, DNS |
-| reranker | chatqna (8000) | tei-reranker 80, DNS |
-| retriever | chatqna (7000) | vllm 80, tei 80, arango 8529, DNS |
-| dataprep | backend (5000) | vllm 80, tei 80, arango 8529, document-repository 80 (file fetch), backend 80 (ingestion-log), keycloak 8080 (token), otel-collector 4318, DNS |
-| chatqna | backend (8888) | embedding 80, retriever 80, reranker 80, vllm 80, vllm-translation 80, keycloak 8080, document-repository 80, backend 80, otel-collector 4318, DNS |
-| textgen | same-ns any (9000; no verified backend consumer in compose) | vllm 80, DNS |
-| translation | same-ns any (8888; backend dials vllm-translation directly, not this wrapper) | vllm-translation 80, DNS |
+| embedding | chatqna, dataprep, retriever (6000) | tei 8080, DNS |
+| reranker | chatqna (8000) | tei-reranker 8080, DNS |
+| retriever | chatqna (7000) | vllm 8000, tei 8080, arango 8529, DNS |
+| dataprep | backend (5000) | vllm 8000, tei 8080, arango 8529, document-repository 3001 (file fetch), backend 3000 (ingestion-log), keycloak 8080 (token), otel collector 4318, DNS |
+| chatqna | backend (8888) | embedding 6000, retriever 7000, reranker 8000, vllm 8000, vllm-translation 9031, keycloak 8080, document-repository 3001, backend 3000, otel collector 4318, DNS |
+| textgen | same-ns any (9000; no verified backend consumer in compose) | vllm 8000, DNS |
+| translation | same-ns any (8888; backend dials vllm-translation directly, not this wrapper) | vllm-translation 9031, DNS |
 | vllm / vllm-translation | wrappers (8000 / 9031) | DNS + 443 (HF pulls) |
-| tei / tei-reranker | wrappers (80) | DNS + 443 (HF pulls, first boot) |
+| tei / tei-reranker | wrappers (8080) | DNS + 443 (HF pulls, first boot) |
 
 - [ ] **Step 2: Render + count**
 

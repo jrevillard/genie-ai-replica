@@ -301,7 +301,7 @@ Switching `pluggable.secretsBackend` between installs (`externalSecrets` → `se
 
 ### 6.2 Single-backend ships; document others as plug-points
 
-Per YAGNI discipline (Code Review pass, Y2): the chart ships only `externalSecrets` rendered. Templates for `sealedSecrets` and `secretProviderClass` are **not yet authored**; the plug-point design is documented in `docs/charts/pluggable-backends.md` so a later MR can add them. This avoids premature template triplication while preserving the pluggability surface area.
+Per YAGNI discipline (Code Review pass, Y2): the chart ships only **`sealedSecrets`** rendered (per §6 table and §8 — v1's default and only backend). Templates for `externalSecrets` (ESO) and `secretProviderClass` (Azure CSI) are **not yet authored**; the plug-point design is documented in `docs/charts/pluggable-backends.md` so a later MR can add them. This avoids premature template triplication while preserving the pluggability surface area. (An earlier draft of this paragraph named `externalSecrets` as the shipped backend — inverted; corrected.)
 
 ## 7. Component surface (app tier, 28 services)
 
@@ -511,7 +511,7 @@ helm upgrade genieai-prd charts/genieai-umbrella -n genieai
 
 If Velero is not installed and the annotation is set, the hook fails the upgrade with a clear error: `velero: command not found`. Operator must install Velero first. The hook does NOT block install (annotations default to false → no backup Job runs); upgrade operators explicitly opt in.
 
-**(b) Confirmation gate** — a `pre-delete` chart-hook **blocks** `helm uninstall` unless the operator confirms via release annotation `genieai.io/allow-destructive-uninstall: "true"`. The two gating mechanisms are **mutually exclusive**:
+**(b) Confirmation gate** — a `pre-delete` chart-hook **blocks** `helm uninstall` unless the operator confirms via the RELEASE NAMESPACE annotation `genieai.io/allow-destructive-uninstall: "true"` (plain Helm releases carry no annotatable object; the namespace is the stable carrier — see the code paths below). The two gating mechanisms are **mutually exclusive**:
 
 ```bash
 # Refused by hook (default state):
@@ -530,7 +530,7 @@ helm uninstall genieai-prd -n genieai --no-hooks   # (gate never fires)
 
 **Important**: `--no-hooks` is the **break-glass path** that bypasses the gate. Standard policy is path (1) — annotate-and-uninstall — to keep an auditable trail. `--no-hooks` is reserved for emergency operations where the gate itself is corrupted. **Both paths are supported; neither requires the other.**
 
-For non-stateful-only installs (e.g., dev cluster with all PVCs ephemeral), the hook shortcuts to "just uninstall" by checking `secrets.pvc.transient: true` annotation on the release; if set, gate immediately approves.
+For non-stateful-only installs (e.g., dev cluster with all PVCs ephemeral), the hook shortcuts to "just uninstall" by checking the `genieai.io/pvc-transient: "true"` annotation on the release NAMESPACE; if set, the gate immediately approves.
 
 ### 13.2 Secret-leak lint rule
 
@@ -800,7 +800,7 @@ kind: Kustomization
 helmCharts:
   - name: genieai
     releaseName: genieai-dev
-    chart: ../../charts/genieai-umbrella
+    chart: ../../../charts/genieai-umbrella
     version: 0.1.0
     includeCRDs: false
     valuesFile: values-override.yaml

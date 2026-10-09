@@ -361,3 +361,17 @@ render-blocking and functional-dead paths are closed.
 - http://localhost redirect gated on clusterProfile=dev (OAuth surface widening).
 - values.schema.json added: clusterProfile + arangodb.mode enums only (typo = silent dev topology).
 - RIDDEN: PSA-restricted vs operator-generated pods unverified (live-validation item); agents VCT fixed proactively.
+
+## Execution Wave E2 — /code-review pass 2 (fixes in flight)
+
+10 findings. Rulings:
+- bitnami/kubectl:1.33 tag DOES NOT EXIST (registry-verified; Bitnami purged version tags) — switch to registry.k8s.io/kubectl:v1.33.0 (fixer re-verifies availability).
+- /tmp stderr capture vs readOnlyRootFilesystem → emptyDir /tmp.
+- total==0 chicken-and-egg on tier-enabling upgrades → WARN not FAIL (nothing-to-validate ≠ drift).
+- ClusterRole/CRB uninstall leak → before-hook-creation,hook-succeeded.
+- Data images registry-prefixed (mirror-path convention documented).
+- Tier-on + secrets-off → render-time fail gate (in namespace.yaml).
+- sovereign dropped from enum until branches exist (typo-class silent dev render).
+- Dead helpers componentLabel/serviceSelector deleted (re-add with Plan 3 factory).
+- ArgoCD example → chart path until overlays exist.
+- PARKED: Keycloak spec.hostname deferred to ingress tier (KC26 hostname-strict + plain-HTTP backend interaction needs live verification with TLS at the edge).

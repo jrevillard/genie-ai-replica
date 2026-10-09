@@ -1,11 +1,13 @@
 # Story 1-8b — Routing Gate v2: the three-condition affirmative claim
 
-> **Status: IN-PROGRESS — core implemented (uncommitted on
-> `fix/story-1-8b-routing-gate-v2`, cut from feat/okf-server 2e9be556),
-> gated on local validation.** Spec: §13 of
+> **Status: VALIDATED — committed f8ead5de0 (31 files, +1972) on
+> `fix/story-1-8b-routing-gate-v2` (cut from feat/okf-server 2e9be556);
+> gate v2 live on the local build after the 2026-10-09 validation
+> cycle (§8). David: "testing is much better." Remaining gap =
+> claim-side teaching + near-miss negatives → spun into 1-8c (backend
+> committed c87b5e2dc).** Spec: §13-14 of
 > `spec-1-8-head-tester.md`. Predecessor: 1-8a (merged 2e9be556d,
-> squash a1046629c). Branch rules: do NOT commit/push until the
-> validation plan in §6 passes; nothing here has touched a remote.
+> squash a1046629c). MR → feat/okf-server pending (orchestrator).
 
 ## 1. Problem — the margin-only gate (1-8a) is not enough
 
@@ -136,6 +138,16 @@ epidemiology. Probe tool: `gate-probe-inner.js` (session-local, 2026-10-09).
 
 ## 7. Remaining work
 
+[RESOLVED 2026-10-09 — all three items below shipped in commit
+f8ead5de0: v2 unit tests authored (jest `head-test-service.test.js`
++176; pytest `test_fanout.py` +287 incl. gate parity); suite generator
+randomized (off-domain + meta negative classes with deterministic
+fallbacks); HeadTestDialog teach-the-user live (3-check Floor /
+Forbidden-tags / Margin breakdown with DsPill pass/fail/na from
+`fidelity.knobs` + veto/floor teach panels, i18n ×14). The validation
+cycle then exposed the ONE gap this story could not close — a
+CLAIM-side failure (§8) — spun into 1-8c.]
+
 - v2 unit tests (§6.5) — NOT yet authored; existing
   `head-test-service.test.js` is 18/18 green under v2 (margin fixtures
   score 1.0 clear the floor; heads without `forbidden_vectors` skip the
@@ -147,3 +159,30 @@ epidemiology. Probe tool: `gate-probe-inner.js` (session-local, 2026-10-09).
   `tag_veto`/`max_tag_cosine` + what-to-edit hint (frontmatter forbidden
   list). The response contract is already in place (§4).
 - The validation plan (§6).
+
+## 8. Validation results (2026-10-09 — the done gate, PASSED)
+
+Gate v2 is live on the local build after the NCD validation cycle. The
+head was rebuilt first (`per_field.forbidden_vectors` minted — the
+veto no longer degrades open), then:
+
+- **Suite 18/18 PASS** (08:08 cycle): positives CLAIMED, mixed-subject
+  negatives VETOED, off-domain FLOORED. (The §6 plan targeted 17/17;
+  the generated suite carried 18 queries — all passed.)
+- **TB query 0.509 < floor 0.55** → floor-suppressed, correctly.
+- **David: "testing is much better."**
+
+**Residual finding — the CLAIM-side gap (spun into 1-8c):** the HIV /
+communicable-disease query CLAIMS the NCD head — head 0.594 > floor
+0.55, max tag 0.518 < 0.55, margin +0.049 > 0.01: all three gate
+conditions PASS, so the gate affirms a claim on a query that must be
+excluded. Root cause: **communicable-disease is UNDECLARED** — no
+forbidden tag covers the subject. A curation gap, NOT a gate bug — but
+the Lab had no surface to teach the curator what to add (the 1-8b
+teach panels cover veto + floor only; nothing renders for
+`head_claim = claim`). 1-8c closes it: `POST /routing-explain`
+(claim-side forbidden-tag suggestions), `POST
+/routing-testsuite/:suite_key/explain` (batch advice, ONE LLM call per
+run), the near-miss negative class, and per-class count controls —
+backend committed c87b5e2dc; the in-Lab tag-edit → rebuild → re-run
+loop is the remaining frontend work. Spec §14.

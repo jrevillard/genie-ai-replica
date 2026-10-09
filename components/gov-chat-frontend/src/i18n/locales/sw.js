@@ -2613,6 +2613,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2692,7 +2693,32 @@ export default {
         fail: 'imeshindwa',
         na: 'haitumiki'
       },
+      counts: {
+        positive: 'Chanya',
+        negative: 'Zinazochanganya',
+        negativeRandom: 'Nje ya uwanja',
+        meta: 'Meta',
+        nearMiss: 'Karibu-kosa',
+        hint: 'Mistari inayotokana na lebo zilizozuiwa inalingana na idadi ya lebo zilizozuiwa za repository — haiwezi kuwekwa hapa.'
+      },
+      cls: {
+        nearMiss: 'Karibu-kosa',
+        confusable: 'Inachanganya',
+        forbidden: 'Imezuiwa',
+        offDomain: 'Nje ya uwanja',
+        meta: 'Meta'
+      },
       teach: {
+        claim:
+          'Kichwa KINADAI hoja hii — imepita milango yote mitatu. Ikiwa haipaswi kuelekeza hapa, omba lebo zilizozuiwa zinazoondoa mada yake, ziongeze, kisha jenga upya kichwa.',
+        explain: 'Eleza na pendekeza',
+        explainBusy: 'Inaeleza — model inapendekeza lebo zilizozuiwa…',
+        addTag: 'Ongeza kwenye lebo zilizozuiwa',
+        suggestNone: 'Hakuna lebo iliyozuiwa iliyopendekezwa — kagua hoja dhidi ya wanzo uliotangaza kwa mkono.',
+        added: 'Imeongezwa kwenye lebo zilizozuiwa — jenga upya kichwa ili kuzitumia.',
+        rebuildRerun: 'Jenga upya kichwa & endesha tena',
+        savingTag: 'Inahifadhi lebo iliyozuiwa…',
+        rebuildBusy: 'Inajenga upya kichwa na kuendesha tena…',
         title: 'Maana yake ni nini',
         veto: "Hoja hii inalingana sana na lebo iliyozuiwa “{'{'}tag{'}'}”. Ikipaswa kuwa ya repository hii, ondoa “{'{'}tag{'}'}” kwenye lebo zilizozuiwa katika Frontmatter, kisha chapisha tena ili kujenga upya head.",
         floor:
@@ -2729,9 +2755,18 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Eleza mashindikizo',
+        explainBusy: 'Inaeleza mashindikizo — wito mmoja wa model kwa kila hasi iliyoshindikana…',
+        batchTitle: 'Kwa nini hasi zilizoshindikana zilielekezwa hapa',
+        batchNone:
+          'Hakuna marekebisho yaliyopendekezwa — kagua hoja zilizoshindikana dhidi ya wanzo uliotangaza kwa mkono.',
+        addAll: 'Ongeza zote',
+        rebuildRerun: 'Jenga upya kichwa & endesha tena mtihani'
       },
       error: {
+        explain: 'Uelelezo umeshindikana',
+        saveTag: 'Imeshindikana kuhifadhi lebo iliyozuiwa',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',

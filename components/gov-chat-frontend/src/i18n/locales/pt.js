@@ -2625,6 +2625,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2704,7 +2705,33 @@ export default {
         fail: 'falha',
         na: 'n/a'
       },
+      counts: {
+        positive: 'Positivas',
+        negative: 'Confundíveis',
+        negativeRandom: 'Fora do domínio',
+        meta: 'Meta',
+        nearMiss: 'Quase certo',
+        hint: 'As linhas derivadas de tags proibidas escalam com a quantidade de tags proibidas do repositório — não podem ser definidas aqui.'
+      },
+      cls: {
+        nearMiss: 'Quase certo',
+        confusable: 'Confundível',
+        forbidden: 'Proibida',
+        offDomain: 'Fora do domínio',
+        meta: 'Meta'
+      },
       teach: {
+        claim:
+          'A cabeça RECLAMA esta consulta — passou nas três barreiras. Se NÃO deve rotear para cá, peça tags proibidas que excluam o assunto dela, adicione-as e reconstrua a cabeça.',
+        explain: 'Explicar e sugerir',
+        explainBusy: 'Explicando — o modelo está propondo tags proibidas…',
+        addTag: 'Adicionar às tags proibidas',
+        suggestNone:
+          'Nenhuma tag proibida foi sugerida — revise a consulta em relação ao escopo declarado manualmente.',
+        added: 'Adicionado às tags proibidas — reconstrua a cabeça para aplicá-las.',
+        rebuildRerun: 'Reconstruir cabeça e reexecutar',
+        savingTag: 'Guardando a tag proibida…',
+        rebuildBusy: 'Reconstruindo a cabeça e reexecutando…',
         title: 'O que isto significa',
         veto: "Esta consulta corresponde fortemente à tag proibida “{'{'}tag{'}'}”. Se DEVERIA pertencer a este repositório, remova “{'{'}tag{'}'}” das tags proibidas no Frontmatter e publique novamente para reconstruir o head.",
         floor:
@@ -2741,9 +2768,18 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Explicar falhas',
+        explainBusy: 'Explicando as falhas — uma chamada ao modelo para cada negativo que falhou…',
+        batchTitle: 'Por que os negativos que falharam rotearam para cá',
+        batchNone:
+          'Nenhuma correção foi sugerida — revise as consultas que falharam em relação ao escopo declarado manualmente.',
+        addAll: 'Adicionar todas',
+        rebuildRerun: 'Reconstruir cabeça e reexecutar a suíte'
       },
       error: {
+        explain: 'A explicação falhou',
+        saveTag: 'Não foi possível guardar a tag proibida',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',

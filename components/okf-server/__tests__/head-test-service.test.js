@@ -27,14 +27,16 @@ jest.mock('../shared-lib/db-connection-service', () => {
 });
 // The sibling primitives come from frontmatter-service; stub the ones
 // the lab calls (teiEmbed for the query embed, buildVectorizedHead +
-// readFrontmatterFromRepoDoc for rebuild).
+// readFrontmatterFromRepoDoc for rebuild, vllmChatCompletions for the
+// Story 1-8c explain suggestions).
 jest.mock('../services/frontmatter-service', () => {
   const actual = jest.requireActual('../services/frontmatter-service');
   return {
     ...actual,
     teiEmbed: jest.fn(),
     buildVectorizedHead: jest.fn(),
-    readFrontmatterFromRepoDoc: jest.fn()
+    readFrontmatterFromRepoDoc: jest.fn(),
+    vllmChatCompletions: jest.fn()
   };
 });
 jest.mock('../services/repository-service', () => ({
@@ -369,6 +371,125 @@ describe('routingTest', () => {
     await expect(svc.routingTest('me', { query: 'x', formula: 'bogus' }, {})).rejects.toMatchObject({
       status: 400
     });
+  });
+});
+
+// ---------- Story 1-8c: explainRouting (the teaching half of the loop) ----------
+
+describe('explainRouting (Story 1-8c — advice for a wrongly-claiming head)', () => {
+  // The 'genetics ruling' shape from the routingTest suite above: floor
+  // pass, orthogonal forbidden centroid, no per-tag vectors → CLAIM.
+  function claimingRepoSetup() {
+    frontmatterService.teiEmbed.mockResolvedValue([unit(DIM, 0)]);
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'NCD Information',
+      lifecycle_state: 'publish',
+      ingested_graph_name: null,
+      head: makeHead({ vector: unit(DIM, 0), forbidden: unit(DIM, 1) }),
+      frontmatter: { updated_at: '2026-10-07T00:00:00.000Z' }
+    });
+    __mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
+    frontmatterService.readFrontmatterFromRepoDoc.mockResolvedValue({
+      topic: ['noncommunicable-diseases'],
+      entity: ['breast-cancer'],
+      forbidden: ['mental-health'],
+      summary: 'NCD guidance.'
+    });
+  }
+
+  it('a CLAIMING query gets LLM-suggested forbidden tags — kebab-normalized, already-forbidden deduped', async () => {
+    claimingRepoSetup();
+    frontmatterService.vllmChatCompletions.mockResolvedValue({
+      data: {
+        choices: [
+          {
+            message: {
+              content: 'Here you go: {"tags": ["Communicable Disease", "Mental Health", "Vaccination Programs"]}'
+            }
+          }
+        ]
+      }
+    });
+    const res = await svc.explainRouting('me', { query: 'hiv prevalence surveillance data' }, {});
+    expect(res.under_test.head_claimed).toBe(true);
+    // 'Communicable Disease' → kebab-case; 'Mental Health' normalizes to
+    // 'mental-health' which is already forbidden → dropped; the prose
+    // around the JSON object is stripped by the strict parser.
+    expect(res.suggestion).toEqual({
+      tags: ['communicable-disease', 'vaccination-programs'],
+      source: 'llm',
+      reason: "suggested forbidden tags for this query's subject"
+    });
+    // ONE batch call whose prompt carries the repo scope, the
+    // already-forbidden list and the query itself.
+    expect(frontmatterService.vllmChatCompletions).toHaveBeenCalledTimes(1);
+    const prompt = frontmatterService.vllmChatCompletions.mock.calls[0][0][0].content;
+    expect(prompt).toContain('hiv prevalence surveillance data');
+    expect(prompt).toContain('mental-health');
+    expect(prompt).toContain('breast-cancer');
+    // The explain path is head-leg only — no chunk probes are fired.
+    expect(__mockDb.query.mock.calls.every(([aql]) => !aql.includes('APPROX_NEAR_COSINE'))).toBe(true);
+  });
+
+  it('caps the LLM suggestions at 3 tags', async () => {
+    claimingRepoSetup();
+    frontmatterService.vllmChatCompletions.mockResolvedValue({
+      data: { choices: [{ message: { content: '{"tags": ["tag-one", "tag-two", "tag-three", "tag-four"]}' } }] }
+    });
+    const res = await svc.explainRouting('me', { query: 'still a claiming query' }, {});
+    expect(res.suggestion.tags).toEqual(['tag-one', 'tag-two', 'tag-three']);
+  });
+
+  it('an LLM failure degrades honestly (source none, reason, no throw)', async () => {
+    claimingRepoSetup();
+    frontmatterService.vllmChatCompletions.mockRejectedValue(new Error('vllm down'));
+    const res = await svc.explainRouting('me', { query: 'hiv prevalence data' }, {});
+    expect(res.suggestion.tags).toEqual([]);
+    expect(res.suggestion.source).toBe('none');
+    expect(res.suggestion.reason).toContain('unreachable');
+  });
+
+  it('unparseable LLM output → source none with the manual-review reason', async () => {
+    claimingRepoSetup();
+    frontmatterService.vllmChatCompletions.mockResolvedValue({
+      data: { choices: [{ message: { content: 'no json object in here at all' } }] }
+    });
+    const res = await svc.explainRouting('me', { query: 'hiv prevalence data' }, {});
+    expect(res.suggestion.tags).toEqual([]);
+    expect(res.suggestion.source).toBe('none');
+    expect(res.suggestion.reason).toContain('manually');
+  });
+
+  it('a NON-claiming query explains the gate WITHOUT calling the LLM or re-reading frontmatter', async () => {
+    // Floor-suppressed shape (score 0.5 < ROUTE_HEAD_FLOOR 0.55): the
+    // verdict already teaches the fix (a floor failure is correct
+    // suppression), so the suggestion stays empty at zero LLM cost.
+    frontmatterService.teiEmbed.mockResolvedValue([unit(DIM, 0)]);
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'NCD Information',
+      lifecycle_state: 'publish',
+      ingested_graph_name: null,
+      head: makeHead({ vector: [0.5, 0.5, 0.5, 0.5], forbidden: unit(DIM, 2) }),
+      frontmatter: { updated_at: '2026-10-07T00:00:00.000Z' }
+    });
+    __mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
+    const res = await svc.explainRouting('me', { query: 'capital of France' }, {});
+    expect(res.under_test.head_claimed).toBe(false);
+    expect(res.under_test.head_claim).toBe('floor');
+    expect(res.suggestion).toEqual({ tags: [], source: 'none', reason: '' });
+    expect(frontmatterService.vllmChatCompletions).not.toHaveBeenCalled();
+    expect(frontmatterService.readFrontmatterFromRepoDoc).not.toHaveBeenCalled();
+  });
+
+  it('400s on an empty/whitespace query before touching the repo', async () => {
+    await expect(svc.explainRouting('me', {}, {})).rejects.toMatchObject({
+      status: 400,
+      code: 'VALIDATION_ERROR'
+    });
+    await expect(svc.explainRouting('me', { query: '   ' }, {})).rejects.toMatchObject({ status: 400 });
+    expect(repositoryService.getById).not.toHaveBeenCalled();
   });
 });
 

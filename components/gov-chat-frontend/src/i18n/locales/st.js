@@ -2626,6 +2626,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2705,7 +2706,32 @@ export default {
         fail: 'hlotile',
         na: 'n/a'
       },
+      counts: {
+        positive: 'Tse lokileng',
+        negative: 'Tse tshulaneng',
+        negativeRandom: 'Kantle ga domene',
+        meta: 'Meta',
+        nearMiss: 'Haufi-fosaho',
+        hint: 'Mela e tsoang matag a thibetsitseng e lekana le palo ya matag a thibetsitseng a polokelo — ha e khone ho behoa mona.'
+      },
+      cls: {
+        nearMiss: 'Haufi-fosaho',
+        confusable: 'E tshulanang',
+        forbidden: 'E thibetsitseng',
+        offDomain: 'Kantle ga domene',
+        meta: 'Meta'
+      },
       teach: {
+        claim:
+          'Hlooho e LEMELA potso ena — e fetile mekhoa e meraro. Ha e lokela ho ruta mona, kopa matag a thibetsitseng a susumantsang sehlooho sa eona, o e eketse, o ajo hlooho hape.',
+        explain: 'Hlalosa & khothaletsa',
+        explainBusy: 'E hlalosa — mohlala o fana ka matag a thibetsitseng…',
+        addTag: 'Eketsa ho matag a thibetsitseng',
+        suggestNone: 'Ha ho tag e thibetsitseng e fanoeng — hlahloba potso ka letsoho khahlano le moeli o boletsoeng.',
+        added: 'E kentswe ho matag a thibetsitseng — haha hlooho hape ho di sebelisa.',
+        rebuildRerun: 'Haha hlooho hape & phethahatsa hape',
+        savingTag: 'E boloka tag e thibetsitseng…',
+        rebuildBusy: 'E haha hlooho hape ebe e phethahatsa hape…',
         title: 'Seo sena se bolelang',
         veto: "Potso ena e lumellana haholo le tag e thibetsitseng “{'{'}tag{'}'}”. Haeba e lokela ho ba la polokelo ena, tlosa “{'{'}tag{'}'}” ho matag a thibetsoeng a Frontmatter, ebe u phatlalatsa hape ho aha hlopo bocha.",
         floor:
@@ -2742,9 +2768,18 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Hlalosa tse fosahetseng',
+        explainBusy: 'E hlalosa tse fosahetseng — mohlala o bitsuetsoa hang ho tse fosahetseng…',
+        batchTitle: 'Hobaneng tse fosahetseng li fihlile mona',
+        batchNone:
+          'Ha ho tokiso e fanoeng — hlahloba dipotso tse fosahetseng ka letsoho khahlano le moeli o boletsoeng.',
+        addAll: 'Eketsa tsohle',
+        rebuildRerun: 'Haha hlooho hape & phethahatsa suite hape'
       },
       error: {
+        explain: 'Tlhaloso e hlolehile',
+        saveTag: 'Ha e khone ho boloka tag e thibetsitseng',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',

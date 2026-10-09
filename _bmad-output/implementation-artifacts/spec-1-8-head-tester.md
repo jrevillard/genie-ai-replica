@@ -306,6 +306,14 @@ into feat/okf-server.]
 
 ## 13. SHIPPED-IN-WIP (2026-10-09 — gate v2, story 1-8b)
 
+[UPDATE 2026-10-09: COMMITTED as f8ead5de0 (31 files, +1972) on
+`fix/story-1-8b-routing-gate-v2` and VALIDATED live on the local build
+(§14.2). Everything §13.7 lists as not-yet-done shipped in that commit:
+the v2 unit tests (jest +176; pytest +287 gate parity in
+test_fanout.py), the randomized suite negative classes, and the
+HeadTestDialog 3-check gate breakdown + veto/floor teach panels
+(i18n ×14). Status chain continues in §14.]
+
 Status: the v2 core is IMPLEMENTED on `fix/story-1-8b-routing-gate-v2`
 (cut from feat/okf-server 2e9be556) as UNCOMMITTED working-tree changes
 to exactly 4 files; NOT yet validated (see the story file's validation
@@ -419,3 +427,76 @@ WEIGHT — not part of the OKF env-file externalization set):
 - v2-specific unit tests (floor/veto/claim per condition, first-failing
   priority, degradation paths; jest + retriever pytest parity) NOT yet
   authored — part of the story's remaining work.
+
+## 14. IN-WIP (2026-10-09 — 1-8c Lab teaching loop)
+
+Status: 1-8b gate v2 COMMITTED (f8ead5de0) and validated live on the
+local build (§14.2); 1-8c backend COMMITTED (c87b5e2dc, 5 files +291 —
+near-miss class, per-class count controls, routing-explain + batch
+suite-explain endpoints; jest updated for the 5-class negative merge,
+17/17). Remaining: the frontend half of the loop — claim-side teach
+panels, per-class count inputs in the suite dialog, and the in-Lab
+tag-edit → rebuild → re-run flow. The 1-8b teaching UI covers the
+suppression side only: the Test tab renders the 3-check gate breakdown
+(Floor / Forbidden tags / Margin, DsPill pass/fail/na, thresholds from
+`fidelity.knobs`) and teach panels for veto (which tag fired + what to
+adjust + republish) and floor (confirms correct suppression). NOTHING
+yet covers a CLAIM-side failure — a negative-classified query the head
+wrongly claims.
+
+### 14.1 David's requirements (2026-10-09)
+
+1. When tests FAIL, the Lab MUST advise how to adjust the head —
+   INCLUDING claim-side failures: suggest forbidden tags, let the user
+   add them, rebuild, retest — INSIDE the Lab.
+2. "Similar but wrong" negatives = the near-miss class.
+3. User-controlled query counts per class in the suite dialog.
+4. Tag editing + head regeneration from the Lab.
+5. Batching — this must never become a per-query full-time admin job.
+
+### 14.2 NCD validation evidence (2026-10-09) — and the gap it exposed
+
+Gate v2 validated on NCD Information (f043215b) after a head rebuild
+(mints `per_field.forbidden_vectors`): the **08:08 suite cycle ran
+18/18 PASS** — positives CLAIMED, mixed-subject negatives VETOED,
+off-domain FLOORED. David: **"testing is much better."**
+
+The manual probe in the same cycle exposed the residual failure mode —
+the one the gate cannot see BY DESIGN:
+
+| Probe | head | max tag | margin | verdict |
+|---|---|---|---|---|
+| HIV / communicable-disease query | 0.594 (> floor 0.55) | 0.518 (< 0.55) | +0.049 (> 0.01) | **CLAIMED** |
+| TB query | 0.509 (< floor 0.55) | — | — | floor-suppressed (correct) |
+
+The HIV query clears ALL THREE gate conditions and claims, because
+**communicable-disease is UNDECLARED** — no forbidden tag covers its
+subject. A CURATION gap, not a gate bug: the gate answered correctly;
+the Lab just had no surface to teach the curator what to add. That
+surface is 1-8c.
+
+### 14.3 The six wave-3 items
+
+| # | Item | State |
+|---|---|---|
+| 1 | **Claim-side teaching** — `POST /api/okf/repos/:repo_id/routing-explain {query}` → full routingTest verdict + `suggestion {tags: [kebab-case forbidden tags], source: 'llm'\|'none', reason}` — populated ONLY when the head CLAIMS (`explainRouting`, head-test-service.js). The LLM proposes 1-3 tags capturing the query's subject that the declared scope genuinely excludes; deterministic empty fallback keeps the UI teaching ("no forbidden tag covers this subject — consider adding one") when vLLM is down. | backend DONE (c87b5e2dc) |
+| 2 | **Batch advice — the anti-treadmill guarantee** — `POST /api/okf/repos/:repo_id/routing-testsuite/:suite_key/explain` → `{suite_key, run_key, failing_count, failing_queries: [{query, cls, head_claim}], suggested_tags (≤5), source, note}` — every failing negative of the LATEST run of the suite, ONE LLM call, consolidated tag suggestions (`explainSuiteFailures`, head-suite-service.js:755). Fails 404 RUN_NOT_FOUND when the suite has no run yet. | backend DONE (c87b5e2dc) |
+| 3 | **Near-miss negative class** — new negative cls `near-miss`: repo vocabulary, out-of-scope intent — the hardest negatives ("similar but wrong"). LLM `near_miss[]` rows + deterministic `NEAR_MISS_TEMPLATES` fallback templated from the repo's entities, so the class is NEVER empty. | backend DONE (c87b5e2dc) |
+| 4 | **Per-class count controls** — suite generator accepts `n_meta` (default 3, cap 8) and `n_near_miss` (default 4, cap 10) beside the existing `n_positive` (8..20) / `n_negative` (6..15) / `n_negative_random` (4..12); all clampCount-guarded. Suite dialog exposes per-class inputs. | backend DONE (c87b5e2dc); dialog UI remaining |
+| 5 | **In-Lab tag edit + rebuild + re-run loop** — from advice → edit the frontmatter forbidden list → `head/rebuild` → re-run the suite, without leaving the Lab. | remaining (frontend) |
+| 6 | **Initial-tag forbidden suggestions at curation time** — David: "look at the process of generating the initial tags too... if this can be improved without losing query fidelity on the target corpus then also fine." The curation-time tag proposal should surface candidate EXCLUSION tags alongside inclusions, so subjects like communicable-disease get declared BEFORE the first publish — closing the §14.2 gap at the source instead of after a failed suite run. Hard constraint from David: no loss of query fidelity on the target corpus. | follow-up (see §14.4) |
+
+### 14.4 STRATEGIC FOLLOW-UP recorded for David: Subject-Area-inherited exclusions
+
+The §14.2 HIV finding generalizes: most forbidden tags a repo needs are
+not repo-specific judgments — they are BOUNDARY statements of the
+subject area ("NCD repos do not cover communicable disease"). Proposal
+recorded for David's decision: move boundary statements into the KH
+taxonomy at Subject-Area level, with every repo INHERITING its area's
+exclusions automatically at head build. Under that model per-repo
+forbidden lists shrink to genuine repo-specific exceptions (the
+exception path, not the main mechanism), and wave-3 item 6's
+curation-time suggestions only ever propose what inheritance does not
+already cover. Needs its own story: KH taxonomy schema for boundary
+statements + inheritance at head build + migration note for existing
+heads. DECISION REQUESTED alongside the wave-3 ship.

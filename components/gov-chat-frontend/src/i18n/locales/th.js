@@ -2601,6 +2601,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2680,7 +2681,32 @@ export default {
         fail: 'ไม่ผ่าน',
         na: 'ไม่มีข้อมูล'
       },
+      counts: {
+        positive: 'เชิงบวก',
+        negative: 'ที่สับสนได้',
+        negativeRandom: 'นอกโดเมน',
+        meta: 'เมตา',
+        nearMiss: 'ใกล้เคียงแต่ผิด',
+        hint: 'แถวที่ได้จากแท็กต้องห้ามขึ้นกับจำนวนแท็กต้องห้ามของคลังข้อมูล — ตั้งค่าที่นี่ไม่ได้'
+      },
+      cls: {
+        nearMiss: 'ใกล้เคียงแต่ผิด',
+        confusable: 'สับสน',
+        forbidden: 'ต้องห้าม',
+        offDomain: 'นอกโดเมน',
+        meta: 'เมตา'
+      },
       teach: {
+        claim:
+          'หัว (head) อ้างสิทธิ์คำค้นนี้ — ผ่านประตูทั้งสามบาน หากไม่ควรถูกกำหนดเส้นทางมาที่นี่ ให้ขอแท็กต้องห้ามที่ตัดหัวข้อนี้ออก เพิ่ม แล้วสร้างหัวใหม่',
+        explain: 'อธิบายและเสนอ',
+        explainBusy: 'กำลังอธิบาย — โมเดลกำลังเสนอแท็กต้องห้าม…',
+        addTag: 'เพิ่มไปยังแท็กต้องห้าม',
+        suggestNone: 'ไม่มีแท็กต้องห้ามที่ถูกเสนอ — โปรดตรวจสอบคำค้นเทียบกับขอบเขตที่ประกาศด้วยตนเอง',
+        added: 'เพิ่มไปยังแท็กต้องห้ามแล้ว — สร้างหัวใหม่เพื่อใช้งาน',
+        rebuildRerun: 'สร้างหัวใหม่และรันซ้ำ',
+        savingTag: 'กำลังบันทึกแท็กต้องห้าม…',
+        rebuildBusy: 'กำลังสร้างหัวใหม่และรันซ้ำ…',
         title: 'สิ่งนี้หมายความว่าอย่างไร',
         veto: "คำค้นนี้ตรงกับแท็กต้องห้าม “{'{'}tag{'}'}” อย่างมาก หากควรเป็นของคลังข้อมูลนี้ ให้ลบ “{'{'}tag{'}'}” ออกจากแท็กต้องห้ามใน Frontmatter แล้วเผยแพร่ใหม่เพื่อสร้าง head ใหม่",
         floor:
@@ -2717,9 +2743,17 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'อธิบายความล้มเหลว',
+        explainBusy: 'กำลังอธิบายความล้มเหลว — เรียกโมเดลหนึ่งครั้งสำหรับข้อลบที่ล้มเหลวแต่ละรายการ…',
+        batchTitle: 'ทำไมข้อลบที่ล้มเหลวจึงถูกกำหนดเส้นทางมาที่นี่',
+        batchNone: 'ไม่มีการแนะนำวิธีแก้ — โปรดตรวจสอบคำค้นที่ล้มเหลวเทียบกับขอบเขตที่ประกาศด้วยตนเอง',
+        addAll: 'เพิ่มทั้งหมด',
+        rebuildRerun: 'สร้างหัวใหม่และรันชุดทดสอบซ้ำ'
       },
       error: {
+        explain: 'การอธิบายล้มเหลว',
+        saveTag: 'ไม่สามารถบันทึกแท็กต้องห้ามได้',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',

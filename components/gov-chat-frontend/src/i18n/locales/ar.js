@@ -2597,6 +2597,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2676,7 +2677,32 @@ export default {
         fail: 'راسب',
         na: 'لا ينطبق'
       },
+      counts: {
+        positive: 'إيجابية',
+        negative: 'مربكة',
+        negativeRandom: 'خارج النطاق',
+        meta: 'ميتا',
+        nearMiss: 'شبه مطابقة',
+        hint: 'تتدرج الصفوف المشتقة من الوسوم المحظورة مع عدد الوسوم المحظورة للمستودع — لا يمكن تعيينها هنا.'
+      },
+      cls: {
+        nearMiss: 'شبه مطابقة',
+        confusable: 'مربك',
+        forbidden: 'محظور',
+        offDomain: 'خارج النطاق',
+        meta: 'ميتا'
+      },
       teach: {
+        claim:
+          'الرأس يطالب بهذا الاستعلام — لقد اجتاز البوابات الثلاثة. إذا كان لا ينبغي توجيهه إلى هنا، فاطلب وسومًا محظورة تستبعد موضوعه، وأضفها، ثم أعد بناء الرأس.',
+        explain: 'اشرح واقترح',
+        explainBusy: 'جارٍ الشرح — النموذج يقترح وسومًا محظورة…',
+        addTag: 'أضف إلى الوسوم المحظورة',
+        suggestNone: 'لم يُقترح أي وسم محظور — راجع الاستعلام مقابل النطاق المعلن يدويًا.',
+        added: 'أُضيفت إلى الوسوم المحظورة — أعد بناء الرأس لتطبيقها.',
+        rebuildRerun: 'أعد بناء الرأس وأعد التشغيل',
+        savingTag: 'جارٍ حفظ الوسم المحظور…',
+        rebuildBusy: 'جارٍ إعادة بناء الرأس وإعادة التشغيل…',
         title: 'ماذا يعني هذا',
         veto: "هذا الاستعلام يطابق الوسم المحظور «{'{'}tag{'}'}» بقوة. إذا كان ينبغي أن ينتمي إلى هذا المستودع، فاحذف «{'{'}tag{'}'}» من الوسوم المحظورة في Frontmatter، ثم أعد النشر لإعادة بناء الرأس.",
         floor:
@@ -2713,9 +2739,17 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'اشرح الإخفاقات',
+        explainBusy: 'جارٍ شرح الإخفاقات — نداء واحد للنموذج لكل سالب فاشل…',
+        batchTitle: 'لماذا تم توجيه السالبة الفاشلة إلى هنا',
+        batchNone: 'لم يُقترح أي إصلاح — راجع الاستعلامات الفاشلة مقابل النطاق المعلن يدويًا.',
+        addAll: 'أضف الكل',
+        rebuildRerun: 'أعد بناء الرأس وأعد تشغيل المجموعة'
       },
       error: {
+        explain: 'فشل الشرح',
+        saveTag: 'تعذر حفظ الوسم المحظور',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',

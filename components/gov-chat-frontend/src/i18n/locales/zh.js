@@ -2572,6 +2572,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2651,7 +2652,32 @@ export default {
         fail: '未通过',
         na: '不适用'
       },
+      counts: {
+        positive: '正向',
+        negative: '易混淆',
+        negativeRandom: '跨域',
+        meta: '元查询',
+        nearMiss: '近似擦边',
+        hint: '禁用标签衍生的行数随仓库禁用标签的数量增减——无法在此设置。'
+      },
+      cls: {
+        nearMiss: '近似擦边',
+        confusable: '易混淆',
+        forbidden: '禁用',
+        offDomain: '跨域',
+        meta: '元查询'
+      },
       teach: {
+        claim:
+          'Head 认领了这条查询——它通过了全部三道闸。如果它不应路由到这里，请让系统建议能排除其主题的禁用标签，添加后重建 head。',
+        explain: '解释并建议',
+        explainBusy: '解释中——模型正在建议禁用标签…',
+        addTag: '添加到禁用标签',
+        suggestNone: '没有建议任何禁用标签——请人工将查询与声明的范围进行比对。',
+        added: '已添加到禁用标签——请重建 head 以使其生效。',
+        rebuildRerun: '重建 head 并重跑',
+        savingTag: '正在保存禁用标签…',
+        rebuildBusy: '正在重建 head 并重跑…',
         title: '这意味着什么',
         veto: "该查询与禁用标签“{'{'}tag{'}'}”高度匹配。如果它应当属于此仓库，请在 Frontmatter 的禁用标签中移除“{'{'}tag{'}'}”，然后重新发布以重建 head。",
         floor: '该查询与此仓库的主题无关（分数低于领域下限）——更改标签无法解决此问题；这是正确的抑制。'
@@ -2687,9 +2713,17 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: '解释失败项',
+        explainBusy: '正在解释失败项——对每个失败的负向查询一次模型调用…',
+        batchTitle: '失败的负向查询为何路由到这里',
+        batchNone: '没有建议任何修复——请人工将失败的查询与声明的范围进行比对。',
+        addAll: '全部添加',
+        rebuildRerun: '重建 head 并重跑测试集'
       },
       error: {
+        explain: '解释失败',
+        saveTag: '无法保存禁用标签',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',

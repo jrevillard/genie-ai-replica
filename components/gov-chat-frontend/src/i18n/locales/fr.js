@@ -2632,6 +2632,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2711,7 +2712,33 @@ export default {
         fail: 'échoué',
         na: 'n/a'
       },
+      counts: {
+        positive: 'Positives',
+        negative: 'Confusables',
+        negativeRandom: 'Hors domaine',
+        meta: 'Meta',
+        nearMiss: 'Presque pertinent',
+        hint: 'Les lignes dérivées des tags interdits suivent le nombre de tags interdits du dépôt — elles ne se règlent pas ici.'
+      },
+      cls: {
+        nearMiss: 'Presque pertinent',
+        confusable: 'Confusable',
+        forbidden: 'Interdit',
+        offDomain: 'Hors domaine',
+        meta: 'Meta'
+      },
       teach: {
+        claim:
+          'La tête RÉCLAME cette requête — elle a passé les trois barrières. Si elle ne doit PAS router ici, demandez des tags interdits excluant son sujet, ajoutez-les, puis reconstruisez la tête.',
+        explain: 'Expliquer et suggérer',
+        explainBusy: 'Explication en cours — le modèle propose des tags interdits…',
+        addTag: 'Ajouter aux tags interdits',
+        suggestNone:
+          "Aucun tag interdit n'a été suggéré — vérifiez manuellement la requête par rapport au périmètre déclaré.",
+        added: 'Ajouté aux tags interdits — reconstruisez la tête pour les appliquer.',
+        rebuildRerun: 'Reconstruire la tête et relancer',
+        savingTag: 'Enregistrement du tag interdit…',
+        rebuildBusy: 'Reconstruction de la tête et relance…',
         title: 'Ce que cela signifie',
         veto: "Cette requête correspond fortement au tag interdit « {'{'}tag{'}'} ». Si elle DOIT appartenir à ce dépôt, retirez « {'{'}tag{'}'} » des tags interdits dans le Frontmatter, puis republiez pour reconstruire le head.",
         floor:
@@ -2748,9 +2775,18 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Expliquer les échecs',
+        explainBusy: 'Explication des échecs — un appel au modèle pour chaque négatif en échec…',
+        batchTitle: 'Pourquoi les négatifs en échec ont routé ici',
+        batchNone:
+          "Aucune correction n'a été suggérée — vérifiez manuellement les requêtes en échec par rapport au périmètre déclaré.",
+        addAll: 'Tout ajouter',
+        rebuildRerun: 'Reconstruire la tête et relancer la suite'
       },
       error: {
+        explain: "Échec de l'explication",
+        saveTag: "Impossible d'enregistrer le tag interdit",
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',

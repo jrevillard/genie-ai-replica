@@ -921,10 +921,18 @@ const actions = {
     }
   },
 
-  /** Generate a test suite (LLM + forbidden-derived negatives). */
-  async headSuiteGenerate(_ctx, { repoId, nPositive, nNegative } = {}) {
+  /** Generate a test suite (LLM + forbidden-derived negatives). The
+   * 1-8c count knobs are optional — undefined lets the server apply its
+   * own per-class defaults/clamps. */
+  async headSuiteGenerate(_ctx, { repoId, nPositive, nNegative, nNegativeRandom, nMeta, nNearMiss } = {}) {
     try {
-      const result = await headTestService.generateSuite(repoId, { n_positive: nPositive, n_negative: nNegative });
+      const result = await headTestService.generateSuite(repoId, {
+        n_positive: nPositive,
+        n_negative: nNegative,
+        n_negative_random: nNegativeRandom,
+        n_meta: nMeta,
+        n_near_miss: nNearMiss
+      });
       return { ok: true, result };
     } catch (err) {
       return {
@@ -958,6 +966,38 @@ const actions = {
       return {
         ok: false,
         code: (err && (err.code || (err.data && err.data.error))) || 'RUN_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8c — explain ONE query's gate outcome; the result carries
+   * suggestion {tags, source, reason} when the head (wrongly) claims it.
+   * The teaching half of the Lab loop. */
+  async headRoutingExplain(_ctx, { repoId, query } = {}) {
+    try {
+      const result = await headTestService.explainRouting(repoId, query);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'EXPLAIN_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8c — BATCH advice for the latest run of a suite: every
+   * failing negative, ONE LLM call, consolidated suggested forbidden
+   * tags (the anti-treadmill: one review per run). */
+  async headSuiteExplainFailures(_ctx, { repoId, suiteKey } = {}) {
+    try {
+      const result = await headTestService.explainSuiteFailures(repoId, suiteKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'EXPLAIN_FAILED',
         message: err.message
       };
     }

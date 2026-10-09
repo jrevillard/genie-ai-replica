@@ -110,8 +110,10 @@ const VALID_FIELDS = ['topic', 'entity', 'scope', 'forbidden', 'summary', 'keywo
 // forbidden >= 2 (misroute prevention). entity, keyword, scope, and
 // summary are zero-or-more — an empty scope is a routing warning, not a
 // patch rejection. The cap on the upper end is the LLM prompt target
-// (3-8 topic, 2-6 forbidden) plus a generous hard ceiling (20) so a
-// verbose LLM call doesn't get clipped.
+// (3-8 topic, 3-6 forbidden — the 2026-10-09 routing-gate contract
+// widened the forbidden derivation from near-topics to whole adjacent
+// domains) plus a generous hard ceiling (20) so a verbose LLM call
+// doesn't get clipped.
 const FIELD_RANGES = {
   topic: { min: 3, max: 8, default_weight: 1.0 },
   entity: { min: 0, max: 20, default_weight: 0.7 },
@@ -206,12 +208,14 @@ what the repo is about by setting per-concept topics. You must:
   2. Identify the named entities across the concepts (people, products,
      places, organizations) — pull from the per-concept tags and labels.
   3. Infer the repo's scope from the concept types and topics.
-  4. The FORBIDDEN list is the ADJACENT topics a user might assume are
-     here but aren't — derive it from the per-concept topic surface by
-     asking "what's the closest neighbor topic the curator didn't
-     include?". A repo of bali-hindu-rituals probably should not be
-     asked about bali-beach-tourism or bali-history; both are adjacent
-     but excluded.
+  4. The FORBIDDEN list is the ADJACENT DOMAINS a user might assume are
+     here but aren't — 3-6 sibling domains of the same family that this
+     corpus does NOT cover. Think in whole domains, not just the nearest
+     topic: a non-communicable-disease (NCD) corpus should list
+     communicable-disease and mental-health; a repo of bali-hindu-rituals
+     should list bali-beach-tourism and bali-history. A query inside a
+     forbidden domain must NEVER route to this repo, so cover every
+     plausible confusable neighbor of the topic surface.
   5. Phrase a 1-2 sentence summary from the user's perspective.
 
 The tag strings must be SHORT (1-3 words), lowercase, hyphenated. Be
@@ -223,7 +227,7 @@ OUTPUT FORMAT (CRITICAL — the parser is strict, no synonyms):
   { "topic":     [...],   // REP-LEVEL topic set, 3-8 items
     "entity":    [...],   // named entities, 0-10 items
     "scope":     "<one-word scope>",   // single word from the list above
-    "forbidden": [...],   // adjacent-but-excluded topics, 2-6 items
+    "forbidden": [...],   // adjacent domains NOT covered, 3-6 items
     "summary":   "<1-2 sentences>",   // user-perspective summary
     "keyword":   [...]    // specific low-coverage terms, 0-10 items
   }
@@ -477,6 +481,18 @@ async function suggestTags(repoId, opts = {}) {
             : null,
       keyword: arr('keyword', 'keywords', 'specific_terms', 'low_coverage_terms').map(normalizeTag).filter(Boolean)
     };
+    // Routing-gate contract (2026-10-09): the proposed forbidden set is
+    // ALSO returned flagged as suggestions — [{value, suggested: true}] —
+    // so the curator UI renders accept/dismiss chips and the routing
+    // boundary is born declared (the 1-8b per-tag veto only has power
+    // over domains the curator actually declared). Additive + read-only:
+    // `forbidden` stays the plain string array every existing consumer
+    // reads (the publish-hook auto-apply loop and writeFrontmatterToRepoDoc
+    // both ignore unknown keys), and nothing here writes — the curator
+    // confirms via the existing chip flow. Fidelity is untouched: forbidden
+    // tags are excluded from the head vector average; they only power the
+    // gate.
+    out.forbidden_suggestions = out.forbidden.map((value) => ({ value, suggested: true }));
     span.setAttribute('okf.suggested.topic_count', out.topic.length);
     span.setAttribute('okf.suggested.forbidden_count', out.forbidden.length);
     logger.info('frontmatter.suggest.done', {

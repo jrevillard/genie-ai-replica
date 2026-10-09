@@ -50,12 +50,27 @@ variables:
     .claude/**,
     _bmad/**,
     update_quickhelp.js
+  # --- Android release (mobile:* jobs, polisense-mobile runner) ---
+  MOBILE_RELEASE_VERSION:
+    value: ""
+    description: "Set (e.g. 1.0.1) on a manual pipeline to build a signed Android APK and publish it as a GitLab Release"
 
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:
   rules:
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
       when: never
+    # mobile-v* tags are created by mobile:release; without this they would
+    # trigger the full image build + promote pipeline.
+    - if: $CI_COMMIT_TAG =~ /^mobile-v/
+      when: never
+    # Mobile release pipelines run only the mobile:* jobs. The Dependency
+    # Scanning template otherwise adds gemnasium-maven on any branch pipeline
+    # because the Android project contains build.gradle files.
+    - if: $CI_PIPELINE_SOURCE == "web" && $MOBILE_RELEASE_VERSION
+      variables:
+        DEPENDENCY_SCANNING_DISABLED: "true"
+        SAST_DISABLED: "true"
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -2282,6 +2297,64 @@ release:create:
     description: release-notes.md
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v/'
+
+# --- Android release (manual pipeline with MOBILE_RELEASE_VERSION set) ---
+# Runs only on the self-hosted `polisense-mobile` runner. Its config.toml
+# provides the local genie-android-builder image
+# (mobile/genie_ai_mobile/docker/android-builder.Dockerfile, pull_policy
+# if-not-present) and mounts the release keystore + key.properties read-only
+# at /signing — signing secrets never leave the runner host.
+.mobile_release_rules:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web" && $MOBILE_RELEASE_VERSION
+
+mobile:build-apk:
+  extends: .mobile_release_rules
+  stage: build
+  tags: [polisense-mobile]
+  image: genie-android-builder:3.41.7
+  variables:
+    FLAVOR: itu
+    BUILD_NAME: $MOBILE_RELEASE_VERSION
+    # Pipeline IID is project-wide and always increasing, so every release
+    # has a higher versionCode and installs over the previous one.
+    BUILD_NUMBER: $CI_PIPELINE_IID
+    OUTPUT_DIR: $CI_PROJECT_DIR/dist
+  script:
+    - cp /signing/key.properties mobile/genie_ai_mobile/android/key.properties
+    - cp /signing/*.jks mobile/genie_ai_mobile/android/app/
+    - ./mobile/genie_ai_mobile/scripts/build-android-release.sh
+    - APK="genie-ai-${FLAVOR}-${MOBILE_RELEASE_VERSION}.apk"
+    - >-
+      curl --fail-with-body --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
+      --upload-file "dist/${APK}"
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/genie-ai-mobile/${MOBILE_RELEASE_VERSION}/${APK}"
+  after_script:
+    - rm -f mobile/genie_ai_mobile/android/key.properties mobile/genie_ai_mobile/android/app/*.jks
+  artifacts:
+    paths: [dist/*.apk]
+    expire_in: 30 days
+
+mobile:release:
+  extends: .mobile_release_rules
+  stage: release
+  tags: [polisense-mobile]
+  image: registry.gitlab.com/gitlab-org/release-cli:v0.24.0
+  needs: [mobile:build-apk]
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - echo "Creating GitLab Release mobile-v${MOBILE_RELEASE_VERSION}"
+  release:
+    name: "Mobile ${MOBILE_RELEASE_VERSION}"
+    tag_name: mobile-v$MOBILE_RELEASE_VERSION
+    ref: $CI_COMMIT_SHA
+    description: "Android APK ${MOBILE_RELEASE_VERSION} (versionCode ${CI_PIPELINE_IID}, branch ${CI_COMMIT_REF_NAME})."
+    assets:
+      links:
+        - name: genie-ai-itu-$MOBILE_RELEASE_VERSION.apk
+          url: $CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/genie-ai-mobile/$MOBILE_RELEASE_VERSION/genie-ai-itu-$MOBILE_RELEASE_VERSION.apk
+          link_type: package
 
 # --- Lint jobs ---
 

@@ -47,12 +47,17 @@ Five input-class concerns the spec implies but no Plan 7 task tests explicitly. 
 # Job 1: charts:lint (existing `lint` stage)
 
 charts:lint:
-  extends: .lint_template          # the existing lint job template (docker image, cache, etc.)
+  # Self-contained image: this job needs helm + conftest + helm-docs, a
+  # combination none of the existing job templates provides (extending the
+  # node-based lint templates leaves the job without helm/conftest
+  # binaries — 'command not found' on the first script line).
+  image: registry.example.org/dev-tools/helm-ct:1.33
   stage: lint
   variables:
     HELM_DOCS_VERSION: v1.14.2
   before_script:
     - helm version --short
+    - conftest --version
     # helm-docs is a STANDALONE binary (github.com/norwoodj/helm-docs), not
     # a helm plugin — the earlier `helm plugin install kudulab/helm-docs`
     # line always failed and was masked by `|| true`.
@@ -65,7 +70,7 @@ charts:lint:
     # permanently red; the shipped READMEs are hand-written, so helm-docs
     # --check would likewise always fail. The fixture suite runs as a
     # self-test that ASSERTS the expected failures.
-    - helm template test charts/genieai-umbrella | conftest test --policy policies/ --output stdout
+    - helm template test charts/genieai-umbrella | conftest test --policy policies/ --output stdout -
     - if conftest test --policy policies/ policies/fixtures/test-data.yaml --output stdout; then
         echo "FAIL: fixture suite unexpectedly passed — deny rules are dead"; exit 1;
       else
@@ -192,7 +197,12 @@ The cosign sign step belongs in a `publish:charts` job, NOT in `charts:integrati
 
 ```yaml
 publish:charts:
-  stage: build
+  # Own stage AFTER scan: GitLab rejects a job whose `needs:` reference jobs
+  # in later stages — needs: [charts:integration (charts-integration),
+  # charts:scan (scan)] is invalid while this job sits in `build`.
+  # Add `charts:publish` to the stages list right after `scan` (and after
+  # `charts-integration`), then declare it here.
+  stage: charts:publish
   image: registry.example.org/dev-tools/helm-cosign:1.33
   before_script:
     - helm version --short
@@ -525,7 +535,7 @@ Expected: a mix of pass + fail. The 4 positive cases (cm-secret-leak, ss-placeho
 
 ```bash
 helm template test charts/genieai-umbrella --values deploy/environments/dev/values-override.yaml \
-  | conftest test --policy policies/ --output stdout
+  | conftest test --policy policies/ --output stdout -
 ```
 
 Expected: 0 violations (the chart itself doesn't ship `PLACEHOLDER+` sentinels — the sentinels only appear in the chart source, not in the rendered output; the secret-leak rule may flag a few `value: secret` patterns in legacy code, fix on sight).
@@ -615,10 +625,15 @@ The `{{- .Values.cosign.publicKey | nindent 22 }}` block renders the operator-co
 cosign:
   enabled: true
   # The image pattern Kyverno verifyImages matches. Operator-side:
-  # set to the actual GitLab Container Registry path. The chart
-  # template uses `{{ .Values.cosign.imagePattern }}` (NOT
-  # `${CI_REGISTRY_IMAGE}` — that's a CI runtime var, not Helm).
-  imagePattern: "registry.gitlab.com/un/itu/genie-ai/genieai/umbrella:*"
+  # set to the actual registry path your images publish to. It must match
+  # the refs the CI actually pushes — on this project's self-hosted GitLab
+  # that is <registry-host>/<project-path>/genieai/genieai-umbrella:* (the
+  # same ref publish:charts signs). A pattern naming the wrong host or
+  # path matches zero images and the policy enforces nothing while
+  # reporting Enforced. The chart template uses
+  # `{{ .Values.cosign.imagePattern }}` (NOT `${CI_REGISTRY_IMAGE}` —
+  # that's a CI runtime var, not Helm).
+  imagePattern: "registry.opensource.unicc.org/un/itu/genie-ai/genieai/genieai-umbrella:*"
   # The INLINE PEM of the public key cosign uses to sign the chart.
   # Multi-line, with the BEGIN/END markers. Kyverno does NOT accept
   # Secret/ConfigMap references here — inline only.
@@ -677,12 +692,13 @@ git commit -m "ci(charts): cosign signing (CI step) + Kyverno verifyImages Clust
     "group:allNonMajor"
   ],
   "enabledManagers": [
-    "helm-requirements",
+    "helmv3",
     "helm-values",
     "dockerfile",
     "github-actions"
   ],
-  "helm-requirements": {
+  # helmv3 = the manager for apiVersion v2 Chart.yaml dependencies (helm-requirements is Helm 2 only and matches nothing here).
+  "helmv3": {
     "fileMatch": ["(^|/)charts/genieai-umbrella/Chart\\.yaml$"]
   },
   "helm-values": {
@@ -690,8 +706,8 @@ git commit -m "ci(charts): cosign signing (CI step) + Kyverno verifyImages Clust
   },
   "packageRules": [
     {
-      "description": "Pin CRD-owner charts with `~>`; Renovate must preserve the prefix",
-      "matchManagers": ["helm-requirements"],
+      "description": "CRD-owner charts: plain-semver releases only, keeping updates inside the `~>` same-minor pins Chart.yaml declares (the old `/^~/` regex matched the constraint syntax, not release versions, and rejected every candidate)",
+      "matchManagers": ["helmv3"],
       "matchPackageNames": [
         "cloudnative-pg",
         "kube-arangodb",
@@ -700,11 +716,11 @@ git commit -m "ci(charts): cosign signing (CI step) + Kyverno verifyImages Clust
         "grafana-operator",
         "sealed-secrets"
       ],
-      "allowedVersions": "/^~/"
+      "allowedVersions": "/^\d+\.\d+\.\d+$/"
     },
     {
       "description": "GPU operator / cert-manager / envoy-gateway: version pins update freely but DO NOT cross major",
-      "matchManagers": ["helm-requirements"],
+      "matchManagers": ["helmv3"],
       "matchPackageNames": ["cert-manager", "envoy-gateway"],
       "major": { "enabled": false }
     },
@@ -857,10 +873,12 @@ PAYLOAD=$(cat <<EOF
 EOF
 )
 
-curl -fsS -X POST \
-  -H "Content-Type: application/json" \
-  -d "$PAYLOAD" \
-  $OTLP_URL >/dev/null
+# Inject FROM INSIDE the cluster: *.svc.cluster.local does not resolve on
+# the host running this script. Run curl in an in-cluster pod instead.
+printf '%s' "$PAYLOAD" > /tmp/pii-payload.json
+kubectl run pii-inject --rm -i --restart=Never --image=curlimages/curl:8.10.1 \
+  -n "$NS" --command -- sh -c "curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data-binary @/dev/stdin $OTLP_URL" < /tmp/pii-payload.json >/dev/null
 echo "Sent PII envelope (marker=$MARKER)"
 
 # 5. Wait for the log to reach VictoriaLogs (eventual consistency;
@@ -868,13 +886,16 @@ echo "Sent PII envelope (marker=$MARKER)"
 sleep 10
 
 # 6. Query VictoriaLogs for the marker; expect PII patterns to be
-#    REDACTED, not the raw values.
-VL_URL="http://vlogs.$NS.svc.cluster.local:9428/select/logsql/query"
+#    REDACTED, not the raw values. Port-forward to reach the in-cluster
+#    service from this host (svc DNS is unresolvable outside kind).
 QUERY="service.name:pii-smoke _msg:'$MARKER'"
-ENCODED=$(echo -n "$QUERY" | jq -sRr @uri)
+kubectl -n "$NS" port-forward svc/vlogs 9428:9428 >/dev/null 2>&1 &
+PF_PID=$!
+trap 'kill $PF_PID 2>/dev/null || true' EXIT
+sleep 3
 
 # Pull the log body. Assert the raw PII values are NOT present.
-RAW=$(curl -fsS --get --data-urlencode "query=$QUERY" "$VL_URL" || true)
+RAW=$(curl -fsS --get --data-urlencode "query=$QUERY" "http://127.0.0.1:9428/select/logsql/query" || true)
 echo "--- VL response ---"
 echo "$RAW" | head -20
 echo "-------------------"
@@ -955,8 +976,9 @@ stages:
   - test
   - config
   - build
-  - charts-integration   # inserted by the task
+  - charts-integration   # inserted earlier
   - scan
+  - charts:publish       # inserted with the publish job
   - e2e
   - promote
 ```

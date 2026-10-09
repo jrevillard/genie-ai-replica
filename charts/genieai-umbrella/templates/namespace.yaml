@@ -1,5 +1,6 @@
-{{- /* Build a per-template Values view so we can override `.component` for label rendering. */ -}}
-{{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "namespace")) -}}
+{{- /* Component label context — genieai-common.labels resolves `.component`
+       in the helper (single deepCopy site, see genieai-common _helpers.tpl). */ -}}
+{{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" .Values "component" "namespace" -}}
 {{- /* The release namespace is authoritative: resources install where the
        release lives, and a values-side namespace that diverges from it
        would label the wrong namespace and strand the release Secret.

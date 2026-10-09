@@ -14,7 +14,7 @@ metadata:
   name: arangodb-single
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "data-arangodb"))) | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "data-arangodb") | nindent 4 }}
     genieai.io/data-tier: arangodb
 spec:
   mode: Single
@@ -61,7 +61,7 @@ metadata:
   name: arangodb-cluster
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "data-arangodb"))) | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "data-arangodb") | nindent 4 }}
     genieai.io/data-tier: arangodb
 spec:
   mode: Cluster
@@ -87,7 +87,9 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
-            storage: {{ .Values.data.arangodb.storageSize | default "50Gi" }}
+            # Agency holds cluster-configuration state only (MBs), not
+            # document data — sized independently of the dbservers volume.
+            storage: {{ .Values.data.arangodb.agentsStorageSize | default "2Gi" }}
   dbservers:
     count: 3
     args:

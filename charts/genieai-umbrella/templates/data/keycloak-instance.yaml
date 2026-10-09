@@ -9,7 +9,7 @@ metadata:
   name: keycloak
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "identity"))) | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 4 }}
     genieai.io/data-tier: identity
 spec:
   instances: {{ $instances }}

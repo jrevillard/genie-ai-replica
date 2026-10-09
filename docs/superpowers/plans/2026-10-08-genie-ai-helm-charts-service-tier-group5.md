@@ -55,7 +55,7 @@ Add `email-password` to the `services.backend.secrets:` list (this plan's values
 - [ ] **Step 2: Append to `charts/genieai-umbrella/values.yaml`** (preserve YAML structure + add comments referencing spec §5)
 
 ```yaml
-# Plan 3 — service tier Group 5 (stateless app)
+# service tier Group 5 (stateless app)
 # Per spec §7: backend, frontend, documentRepository, nginx, clamav.
 # Kong is REMOVED (decision 7); Envoy Gateway is the edge.
 #
@@ -75,13 +75,13 @@ Add `email-password` to the `services.backend.secrets:` list (this plan's values
 services:
   # Per-service entry shape. NO Helm template syntax here —
   # values.yaml is never templated. Cross-service URLs are injected by
-  # the per-service Deployment template (Task 1b).
+  # the per-service Deployment template.
   #   enabled: true|false
   #   replicas: <int>
   #   image: { repository: <name>, tag: <tag> }
   #   port: <int>     # container port
   #   resources: { requests: {...}, limits: {...} }
-  #   env: []         # raw env list (TEMPLATE-side URLs added in Task 1b)
+  #   env: []         # raw env list (TEMPLATE-side URLs added in the task)
   #   secrets: []
   #   pvc: null
   #   probes: { readiness, liveness, startup }
@@ -129,7 +129,7 @@ services:
     env: []
     secrets: []
     pvc:
-      enabled: true                     # rendered as PVC by Task 1b (F4)
+      enabled: true                     # rendered as PVC by the task
       storageSize: 20Gi
     probes:
       readiness: { httpGet: { path: /health, port: 3001 }, initialDelaySeconds: 10, periodSeconds: 10 }
@@ -143,9 +143,9 @@ services:
     # the genie-ai-nginx image's baked-in upstream IS /api -> Kong
     # (api-gateway-solution/nginx/conf/default.conf.template) — Kong is removed
     # (decision 7), so we OVERRIDE the config with a host-mounted ConfigMap
-    # pointing /api at the backend Service AND the SPA at frontend. Plan 6
+    # pointing /api at the backend Service AND the SPA at frontend. The edge tier
     # wires the actual ConfigMap; this plan renders a per-instance override
-    # (Task 5b) so the stock image doesn't 502.
+    # so the stock image doesn't 502.
     image: { repository: registry.example.org/genie-ai-nginx, tag: "1.0.0" }
     port: 8080
     resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
@@ -246,14 +246,23 @@ Usage:
 
 {{/*
 ArangoDB service name — single mode renders `{{ include "genieai-umbrella.arangoHost" $ }}`, cluster
-mode renders `arangodb-cluster` (per Plan 2 Task 9 ArangoDeployment
+mode renders `arangodb-cluster` (per the corresponding task ArangoDeployment
 names). The kube-arangodb operator creates Services named after the
 ArangoDeployment, so callers MUST use the same suffix or DNS NXDOMAIN.
 Usage:
   {{- include "genieai-umbrella.arangoHost" . }}
 */}}
 {{- define "genieai-umbrella.arangoHost" -}}
-{{- if eq (default "single" .Values.data.arangodb.mode) "cluster" -}}
+{{- /* MUST mirror the ArangoDeployment template's name derivation exactly:
+       the CR auto-promotes single->cluster under clusterProfile prod/staging,
+       and the kube-arangodb operator creates Services named after the CR.
+       Keying on `mode` alone would emit arangodb-single while the cluster
+       actually runs arangodb-cluster (NXDOMAIN for every consumer). */ -}}
+{{- $mode := .Values.data.arangodb.mode | default "single" -}}
+{{- if and (eq $mode "single") (or (eq .Values.clusterProfile "prod") (eq .Values.clusterProfile "staging")) -}}
+{{- $mode = "cluster" -}}
+{{- end -}}
+{{- if eq $mode "cluster" -}}
 arangodb-cluster
 {{- else -}}
 arangodb-single
@@ -324,7 +333,7 @@ data:
 ```bash
 helm lint charts/genieai-umbrella --strict
 git add charts/genieai-umbrella/templates/_lib/_cross-service-urls.tpl charts/genieai-umbrella/templates/services/
-git commit -m "feat(charts): cross-service URL injection (F1) + doc-repo PVC (F4) + nginx Kong-leak override (F3) + email-password (F15)"
+git commit -m "feat(charts): cross-service URL injection + doc-repo PVC + nginx Kong-leak override + email-password"
 ```
 
 ---
@@ -375,7 +384,7 @@ metadata:
   name: {{ include "genieai-common.fullname" $ctx }}-{{ $svcName }}
   namespace: {{ $ctx.Values.namespace }}
   labels:
-    {{- /* Plan 5 Task 2 step 1 introduced $component = $ctx.component |
+    {{- /* $component = $ctx.component keeps labels per-service |
            default $svcName so AI tier (component=ai-vllm) renders
            distinct from Group-5 (component==name). All three label/selector
            merges below use $component, NOT $svcName. */ -}}
@@ -406,7 +415,7 @@ spec:
             {{- toYaml $svc.env | nindent 12 }}
           envFrom:
             {{- /* Plain Secret names — SealedSecrets in this chart are named
-                   WITHOUT a namespace prefix (Task 7 / Plan 2 Task 11);
+                   WITHOUT a namespace prefix;
                    envFrom consumes the whole Secret: its keys ARE the env
                    var names. */ -}}
             {{- range $svc.secrets }}
@@ -416,7 +425,7 @@ spec:
           resources:
             {{- toYaml $svc.resources | nindent 12 }}
           {{- /*
-            Review Focus F1 fix — upstream images ship with fixed UIDs and
+            upstream images ship with fixed UIDs and
             need writable scratch dirs:
               nginx-unprivileged  UID  101  /var/cache/nginx + /var/run
               clamav:1.3         UID  100
@@ -538,7 +547,7 @@ spec:
 ---
 # Default-deny + allowlist: ingress from the edge (Envoy Gateway pods,
 # component=ingress) + documentRepository; egress to arangodb +
-# keycloak-db CNPG + keycloak + DNS. Review Focus #2.
+# keycloak-db CNPG + keycloak + DNS.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -557,7 +566,7 @@ spec:
     # v1 simplification: same-namespace pods on the app port. The intended
     # `genieai.io/component: ingress` peer matched NOTHING (Envoy Gateway
     # data-plane pods live in the gateway's OWN namespace, not this one —
-    # cross-namespace peering is wired in Plan 6 with the gateway's real
+    # cross-namespace peering is wired with the gateway's real
     # labels). AuthN/AuthZ is enforced at the edge (Envoy) regardless.
     - from:
         - podSelector: {}
@@ -577,7 +586,7 @@ spec:
     # (8529 arango / 5432 CNPG / 8080 keycloak / 6379 redis). Pod-label
     # peering to operator-managed pods (CNPG, kube-arangodb, keycloak-
     # operator) requires each operator's REAL pod labels — guessed labels
-    # silently block all traffic. Plan 6 replaces these with verified
+    # silently block all traffic. The verified-peer pass replaces these with
     # namespaceSelector/podSelector peers after live label inspection.
     - to:
         - ipBlock:
@@ -591,6 +600,21 @@ spec:
           port: 8080
         - protocol: TCP
           port: 6379
+        # OTLP exporter (the task injects OTEL_EXPORTER_OTLP_ENDPOINT into
+        # backend/frontend/documentRepository — without this port the whole
+        # OTel pipeline silently drops at the source under default-deny;
+        # default-deny).
+        - protocol: TCP
+          port: 4318
+    # document-repository (file references) — POD port 3001 (post-DNAT;
+    # docrepo's own ingress rule already allows backend).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: 3001
 {{- end -}}
 ```
 
@@ -689,7 +713,7 @@ spec:
     - Egress
   ingress:
     # nginx routes to the SPA; same-namespace peers only (the ingress
-    # controller lives elsewhere — Plan 6).
+    # controller lives elsewhere).
     - from:
         - podSelector:
             matchLabels:
@@ -707,14 +731,15 @@ spec:
       ports:
         - protocol: UDP
           port: 53
-    # Backend BFF — Service port 80 (container 3000 is a targetPort detail)
+    # Backend BFF — NetworkPolicy is enforced POST-DNAT: allow the POD port
+    # (3000), not the Service port 80.
     - to:
         - podSelector:
             matchLabels:
               genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: 80
+          port: 3000
 {{- end -}}
 ```
 
@@ -773,14 +798,14 @@ spec:
       ports:
         - protocol: UDP
           port: 53
-    # Backend — Service port 80
+    # Backend — POD port 3000 (post-DNAT)
     - to:
         - podSelector:
             matchLabels:
               genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: 80
+          port: 3000
     # ClamAV (file scan calls)
     - to:
         - podSelector:
@@ -814,7 +839,7 @@ spec:
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "nginx"))) | nindent 4 }}
 ---
-# nginx.conf ConfigMap is rendered in Task 5.
+# nginx.conf ConfigMap is rendered in the task.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -830,7 +855,7 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Same-namespace any on 8080 for v1 (Envoy Gateway peering lands Plan 6
+    # Same-namespace any on 8080 for v1 (Envoy Gateway peering lands later
     # with the gateway namespace's real labels).
     - from:
         - podSelector: {}
@@ -846,22 +871,22 @@ spec:
       ports:
         - protocol: UDP
           port: 53
-    # Frontend SPA — Service port 80
+    # Frontend SPA — POD port 8090 (post-DNAT)
     - to:
         - podSelector:
             matchLabels:
               genieai.io/component: frontend
       ports:
         - protocol: TCP
-          port: 80
-    # Backend (nginx proxies /api/*) — Service port 80
+          port: 8090
+    # Backend (nginx proxies /api/*) — POD port 3000 (post-DNAT)
     - to:
         - podSelector:
             matchLabels:
               genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: 80
+          port: 3000
 {{- end -}}
 ```
 
@@ -886,7 +911,7 @@ spec:
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "clamav"))) | nindent 4 }}
 ---
-# Review Focus #4: ingress from documentRepository ONLY.
+# Ingress from documentRepository ONLY.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -1012,15 +1037,15 @@ Expected: prints `arango-jwt-secret`, `arango-root-secret`, `genie-admin-credent
 ```yaml
 {{- if .Values.secrets.sealedSecrets.enabled -}}
 {{- /*
-  Group 5 SealedSecrets per spec §8 F14 mapping table.
-  kcGrafanaClientSecret (Plan 4) and grafanaAdminPassword (Plan 4) are not
+  Group 5 SealedSecrets
+  kcGrafanaClientSecret and grafanaAdminPassword are not
   in this template; they ship with observability services.
 
   Service-to-K8s mapping (Secret name → encryptedData key = ENV VAR NAME):
     emailPassword        → email-password            (key EMAIL_PASSWORD)
     keycloakClientSecret → keycloak-client-secret    (key KEYCLOAK_CLIENT_SECRET)
     huggingFaceHubToken  → huggingface-hub-token     (key HUGGING_FACE_HUB_TOKEN)
-  The factory consumes each Secret whole via envFrom (Task 2): every
+  The factory consumes each Secret whole via envFrom: every
   encryptedData key becomes an env var verbatim — keys must BE the env
   var names, not "password"/"token".
 */ -}}
@@ -1028,7 +1053,8 @@ Expected: prints `arango-jwt-secret`, `arango-root-secret`, `genie-admin-credent
       "email-password" "EMAIL_PASSWORD"
       "keycloak-client-secret" "KEYCLOAK_CLIENT_SECRET"
       "huggingface-hub-token" "HUGGING_FACE_HUB_TOKEN" -}}
-{{- range $secretName, $envKey := $g5 -}}
+{{- range $secretName, $envKey := $g5 }}
+---
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
 metadata:
@@ -1328,7 +1354,7 @@ Foundation + Plan 2 (data layer) + Plan 3 (service tier Group 5 — stateless ap
 EOF
 
 git add charts/README.md
-git commit -m "docs(charts): mark Foundation + Plan 2 + Plan 3 complete in charts/README.md"
+git commit -m "docs(charts): mark foundation + data layer + service tier complete in charts/README.md"
 ```
 
 - [ ] **Step 2: Update `charts/genieai-umbrella/README.md` with Group 5 status**

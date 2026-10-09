@@ -50,7 +50,7 @@ Expected: `OK: no observability deps`.
 - [ ] **Step 2: Append to `dependencies:` block in `charts/genieai-umbrella/Chart.yaml`**
 
 ```yaml
-  # Plan 4 — observability operators
+  # observability operators
   # ONE VM operator chart: victoria-metrics-operator is the ONLY chart in
   # the VM helm repo, and it ships ALL VM+VL+VT CRDs (VMSingle/VMCluster,
   # VLSingle, VTSingle, VMAgent, VMServiceScrape, VMRule, …). Separate
@@ -115,7 +115,7 @@ Expected: prints `0`.
 - [ ] **Step 2: Append to `charts/genieai-umbrella/values.yaml`**
 
 ```yaml
-# Plan 4 — observability
+# observability
 
 # STATIC plain booleans. values.yaml is NEVER templated by Helm — an
 # `{{ include ... }}` here ships as literal text.
@@ -143,9 +143,9 @@ observability:
   grafana:
     enabled: false
     adminUser: admin
-    adminPasswordRef: grafana-admin-password    # SealedSecret name (Task 10)
+    adminPasswordRef: grafana-admin-password    # SealedSecret name
   # PII redaction rules (port from Swarm fluentd config). Operators edit
-  # per deployment; conftest (Plan 7) lint ensures no rule is empty.
+  # per deployment; conftest lint ensures no rule is empty.
   piiRedaction:
     rules:
       - pattern: '"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"'
@@ -313,7 +313,7 @@ spec:
     matchLabels:
       release: {{ .Release.Name }}-observability
   # Remote write to VMSingle (or VMCluster). serviceScrapeSelector selects
-  # the VMServiceScrapes emitted by Task 7.
+  # the VMServiceScrapes emitted by the task.
   remoteWrite:
     # VMSingle serves 8428 (8429 is the CLUSTER vmselect port — single
     # mode remote-write hits 8428).
@@ -409,7 +409,7 @@ spec:
   # named `<cr-name>-collector` (internal/naming/main.go: Service(otelcol)
   # = "%s-collector" — verified against operator source). The CR below is
   # `genieai-collector` -> the Service is `genieai-collector-collector`
-  # on port 4318. The Task 4b agent and every app SDK's
+  # on port 4318. The the task agent and every app SDK's
   # OTEL_EXPORTER_OTLP_ENDPOINT target this name. (An earlier plan draft
   # asserted the Service matched the CR name verbatim and "corrected"
   # the doubled form — that was backwards; docs/charts/otel-migration.md
@@ -488,7 +488,8 @@ metadata:
   # hooked the SA with `pre-delete`, which meant Helm only ever applied
   # it during uninstall: the DaemonSet's pods then failed admission with
   # `serviceaccounts "genieai-agent" not found` on every install
-  # (code-review Wave 10 #5). Release-owned resources are garbage-
+  # (hook-annotated resources skip install entirely).
+# Release-owned resources are garbage-
   # collected by Helm on uninstall; nothing extra is needed.
   name: genieai-agent
   namespace: {{ .Values.namespace }}
@@ -682,7 +683,7 @@ spec:
     security:
       admin_user: {{ .Values.observability.grafana.adminUser | default "admin" }}
     # adminPassword injected from the grafanaAdminPassword Secret via
-    # spec.deployment.envFrom (Plan 2/4 SealedSecret) — never inline.
+    # spec.deployment.envFrom — never inline.
   deployment:
     envFrom:
       - secretRef:
@@ -833,9 +834,9 @@ After the existing `{{- end -}}` closing the Deployment block, add:
 
 ```gotemplate
 {{- /*
-VMServiceScrape emission. Review Focus #2 — only when observability.metrics
+VMServiceScrape emission. only when observability.metrics
 is enabled AND the per-service toggle is true. The `release:` label must
-match the VMAgent's serviceScrapeSelector (Task 3 Step 5).
+match the VMAgent's serviceScrapeSelector.
 */ -}}
 {{- if and $ctx.Values.observability.metrics.enabled $svc.serviceMonitor -}}
 ---
@@ -1051,7 +1052,8 @@ git commit -m "test(charts): helm test for observability stack reachability"
 {{- $obs := dict
       "grafana-admin-password" "GF_SECURITY_ADMIN_PASSWORD"
       "kc-grafana-client-secret" "KC_GRAFANA_CLIENT_SECRET" -}}
-{{- range $secretName, $envKey := $obs -}}
+{{- range $secretName, $envKey := $obs }}
+---
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
 metadata:

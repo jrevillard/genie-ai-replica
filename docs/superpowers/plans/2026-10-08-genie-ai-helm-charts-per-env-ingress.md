@@ -268,14 +268,14 @@ shipped:
    namespace label, which the previous revision's regular-resource
    Namespace applied (nothing to detect on fresh installs — the
    operator's `--set clusterProfile` is the source of truth there).
-2. The SealedSecret drift hook (Plan 2 Task 11) and the pre-upgrade
-   drift hook (Plan 2 Task 11 Step 4) read the namespace correctly.
-3. The `Namespace` resource (Plan 1 Task 8) is a REGULAR resource — the
+2. The SealedSecret drift hook and the pre-upgrade
+   drift hook read the namespace correctly.
+3. The `Namespace` resource is a REGULAR resource — the
    install command must carry `--create-namespace` (or ArgoCD
    `CreateNamespace=true`) to provision the per-env namespace before the
    chart's resources apply; the chart's manifest then server-side-applies
    its labels onto it.
-4. The dep-graph ConfigMap (Plan 2 Task 6) reads `.Values.namespace` —
+4. The dep-graph ConfigMap reads `.Values.namespace` —
    correctly per-env.
 
 What requires a values-side override on a per-namespace install:
@@ -313,7 +313,7 @@ ingress:
 
 migrate:
   # Helm pre-install + pre-upgrade Job that runs the backend db-migrations
-  # before the backend Deployment becomes Ready (Plan 2 + Plan 3 deferred
+  # before the backend Deployment becomes Ready (data + service tiers deferred
   # item). The image + command match the genie-ai-db-migrations image
   # in the CI registry (see `deploy/ansible/tasks/deploy-shared-facts.yml`).
   enabled: true
@@ -329,13 +329,15 @@ migrate:
     requests: { cpu: 100m, memory: 256Mi }
     limits:   { cpu: 1, memory: 1Gi }
 
-# Verified-peer NetworkPolicy values — Task 5 reads these to replace
+# Verified-peer NetworkPolicy values — the task reads these to replace
 # the port-scoped ipBlock egress with real podSelector peers after the
 # operator runs `kubectl get pods --show-labels` against the
 # cluster's CNPG / kube-arangodb / keycloak-operator / Envoy Gateway
 # data plane.
 pluggable:
-  storageClassName: ""
+  # storageClassName + ingress.host were already declared by the corresponding task
+  #. Do NOT re-declare;
+  # merge `networkPolicy` into the existing block.
   networkPolicy:
     # Empty list = port-scoped ipBlock fallback (Plans 2-5 default).
     # Each entry is `{namespace: "<ns>", podSelector: {<labels>}}`.
@@ -417,7 +419,7 @@ spec:
     # allowedRoutes.namespaces.from: Same sits INSIDE each listener
     # block (one per listener); an orphan `from: Same` outside the
     # blocks would create a duplicate mapping key and fail the chart
-    # at install. (C1 fix.)
+    # at install.
     {{- if .Values.ingress.tls.enabled }}
     - name: https
       protocol: HTTPS
@@ -459,15 +461,17 @@ spec:
   hostnames:
     - {{ .Values.ingress.host | quote }}
   rules:
-    # /api/* and /uploads/* -> backend BFF (Plan 3 backend Service on port 80)
+    # Single edge rule: EVERYTHING routes to the nginx proxy tier, which
+    # owns the path matrix (/api + /api-docs -> backend, /uploads ->
+    # document-repository, / -> frontend SPA). Splitting the routes here
+    # would bypass nginx (leaving its override ConfigMap dead code) and
+    # point /uploads at a backend that does not serve it.
     - matches:
-        - path: { type: PathPrefix, value: /api/ }
-        - path: { type: PathPrefix, value: /api-docs/ }
-        - path: { type: PathPrefix, value: /uploads/ }
+        - path: { type: PathPrefix, value: / }
       backendRefs:
-        - name: backend
+        - name: nginx
           port: 80
-      {{- /* CORS via the HTTPRouteFilter rendered in Task 2 Step 3. The
+      {{- /* CORS via the HTTPRouteFilter rendered in the task. The
              filter is opt-in (only renders when ingress.cors.allowOrigins
              is non-empty). When the filter is absent this `filters:`
              block emits nothing. */ -}}
@@ -479,12 +483,6 @@ spec:
             kind: HTTPRouteFilter
             name: genieai-cors
       {{- end }}
-    # SPA -> frontend
-    - matches:
-        - path: { type: PathPrefix, value: / }
-      backendRefs:
-        - name: frontend
-          port: 80
 {{- end -}}
 ```
 
@@ -654,7 +652,7 @@ spec:
       selfHeal: true
       allowEmpty: false
     syncOptions:
-      # The Namespace is a regular resource (Wave 8 #2 / Wave 10 #9), so
+      # The Namespace is a regular resource (Helm 4 deletes hook-identity
       # something must create it before the chart's resources apply —
       # ArgoCD's CreateNamespace=true does exactly that (equivalent of
       # helm's --create-namespace).
@@ -723,7 +721,7 @@ spec:
 ```markdown
 # GitOps sync examples
 
-The chart is GitOps-agnostic (spec §19.3 — chart is GitOps-agnostic).
+The chart is GitOps-agnostic.
 Choose ONE of the two paths below and DELETE the other:
 
 ## Option A — ArgoCD (recommended)
@@ -836,9 +834,9 @@ spec:
             capabilities:
               drop: ["ALL"]
           env:
-            # F10 fix (per round-8 review): the inline `value:` lines below
+            # the inline `value:` lines below
             # are the ACTUAL env the Job uses; the `cross-service-URLs`
-            # helper exists (Plan 3 Task 1b) but is NOT invoked here
+            # helper exists but is NOT invoked here
             # (the migrations Job pre-dates the helper and is hand-written
             # because it needs the additional KC_DATAPREP_CLIENT_ID +
             # DATABASE_URL fields that the helper doesn't know about).
@@ -932,15 +930,51 @@ git commit -m "feat(charts): db-migrations pre-upgrade Job + doc-repo PVC + veri
 ### Task 6: Uninstall safety gate — per-env opt-in annotation (spec §13.1)
 
 **Files:**
-- Modify: `charts/genieai-umbrella/templates/hooks/pre-delete-uninstall-gate.yaml` (Plan 2 deferred; read what Plan 2 wrote first)
+- Create: `charts/genieai-umbrella/templates/hooks/pre-delete-uninstall-gate.yaml` (no earlier plan authors this Job — it is created HERE)
 
 **Interfaces:**
 - Consumes: the release-namespace annotation `genieai.io/allow-destructive-uninstall` (the ONLY switch — no values key; see the F9 note in Task 1 Step 2).
 - Produces: 1 pre-delete `Job` that fails `helm uninstall` UNLESS the chart's namespace carries `genieai.io/allow-destructive-uninstall=true` (operators set it per env via `kubectl annotate ns ... --overwrite`; break-glass = `helm uninstall --no-hooks`).
 
-- [ ] **Step 1: Locate Plan 2's pre-delete hook job and re-confirm its annotation carrier**
+- [ ] **Step 1: Write the pre-delete gate Job**
 
-Read `charts/genieai-umbrella/templates/hooks/pre-delete-uninstall-gate.yaml`. Plan 2 ships a pre-delete Job; the gate reads the `genieai.io/allow-destructive-uninstall` annotation on the namespace. If the annotation is set, the gate exits 0; otherwise it exits 1 with a clear message.
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-uninstall-gate
+  namespace: {{ .Values.namespace }}
+  annotations:
+    "helm.sh/hook": pre-delete
+    "helm.sh/hook-weight": "-5"
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
+      containers:
+        - name: gate
+          image: bitnami/kubectl:1.33
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              ns="{{ .Values.namespace }}"
+              gate=$(kubectl get ns "$ns" -o jsonpath='{.metadata.annotations.genieai\.io/allow-destructive-uninstall}' 2>/dev/null || true)
+              if [ "$gate" = "true" ]; then
+                echo "uninstall gate: annotation set — proceeding"
+                exit 0
+              fi
+              echo "BLOCKED: helm uninstall would delete the namespace and every PVC in it."
+              echo "To proceed, annotate the namespace and re-run uninstall:"
+              echo "  kubectl annotate ns $ns genieai.io/allow-destructive-uninstall=true --overwrite"
+              echo "Break-glass: helm uninstall --no-hooks"
+              exit 1
+```
+
+If the annotation is set, the gate exits 0; otherwise it exits 1 with the annotate-and-retry instructions above.
 
 - [ ] **Step 2: Document the annotation in both overlays (NOT a values key)**
 
@@ -1014,7 +1048,7 @@ helm lint charts/genieai-umbrella --strict -f deploy/environments/dev/values-ove
 helm lint charts/genieai-umbrella --strict -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=true
 ct lint --config charts/ci/ct.yaml --charts charts/genieai-umbrella
 git add charts/README.md charts/genieai-umbrella/README.md deploy/environments/README.md docs/charts/plan-defects.md
-git commit -m "docs(charts): Plan 6 status — per-env + ingress + GitOps + migrations"
+git commit -m "docs(charts): per-env + ingress + GitOps + migrations status"
 ```
 
 ---

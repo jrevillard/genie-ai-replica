@@ -25,8 +25,14 @@ Then in templates:
 ```gotemplate
 metadata:
   labels:
-    {{- include "genieai-common.labels" . | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "my-component") | nindent 4 }}
 ```
+
+(The shorthand `include "genieai-common.labels" .` is the ad-hoc fallback —
+it works because the helper reads `component` from `.Values` as a default,
+but every shipped call site in the umbrella chart uses the explicit
+dict form above so the per-template component lands in both component
+labels.)
 
 ### Values scope
 

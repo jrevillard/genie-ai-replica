@@ -2729,7 +2729,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: 'แท็ก'
+          tags: 'แท็ก',
+          actions: 'แก้ไข'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2769,7 +2770,11 @@ export default {
         revertEmpty: 'ยังไม่มีประวัติการบันทึก frontmatter',
         revertDone: 'กู้คืน frontmatter แล้ว — สร้างหัวใหม่และรันซ้ำเพื่อใช้งาน',
         removeTag: 'นำออกจากแท็กต้องห้าม',
-        tagsetTip: 'แท็กต้องห้ามของการรันนี้'
+        tagsetTip: 'แท็กต้องห้ามของการรันนี้',
+        savedTitle: 'ชุดทดสอบที่บันทึกไว้',
+        load: 'โหลด',
+        flipTip: 'สลับ ควรเลือก / ไม่ควรเลือก',
+        deleteTip: 'นำแถวนี้ออกจากชุดทดสอบ'
       },
       error: {
         explain: 'การอธิบายล้มเหลว',
@@ -2783,7 +2788,9 @@ export default {
         revert: 'ย้อนกลับ frontmatter ไม่สำเร็จ',
         advisor: 'ที่ปรึกษาล้มเหลว',
         noSuite: 'สร้างชุดทดสอบก่อน จากนั้นจึงสร้างใหม่และรันซ้ำ',
-        applyNoSuite: 'บันทึกแท็กและสร้าง head ใหม่แล้ว — สร้างชุดทดสอบแล้วรันทั้งหมดเพื่อดูผล'
+        applyNoSuite: 'บันทึกแท็กและสร้าง head ใหม่แล้ว — สร้างชุดทดสอบแล้วรันทั้งหมดเพื่อดูผล',
+        suiteLoad: 'โหลดชุดทดสอบไม่สำเร็จ',
+        suiteUpdate: 'อัปเดตชุดทดสอบไม่สำเร็จ'
       },
       footer: {
         unpublish: 'Unpublish to review'

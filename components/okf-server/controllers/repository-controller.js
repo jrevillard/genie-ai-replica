@@ -1498,6 +1498,35 @@ async function addTestSuiteQueries(req, res, next) {
   }
 }
 
+// Story 1-8f — load ONE saved suite (full rows) back into the Lab, and
+// edit its rows in place (kind flips + removes; adds stay on /queries).
+// Read scope for the load, admin for the edit — same split as the
+// runs listing vs the suite mutations.
+async function getTestSuite(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const suite = await headSuiteService.getSuite(req.params.repo_id, req.params.suite_key, {
+      authz: authzForService(req)
+    });
+    res.status(200).json(suite);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function updateTestSuiteRows(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const suite = await headSuiteService.updateSuiteRows(req.params.repo_id, req.params.suite_key, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(suite);
+  } catch (err) {
+    next(err);
+  }
+}
+
 /**
  * Story 1-8 MR-B — POST /repos/:repo_id/routing-testsuite/:suite_key/run.
  * Executes every suite query through the routing test, aggregates
@@ -1567,7 +1596,10 @@ module.exports = {
   revertFrontmatter,
   recommendTagSet,
   generateTestSuite,
-  addTestSuiteQueries,  runTestSuite,
+  addTestSuiteQueries,
+  getTestSuite,
+  updateTestSuiteRows,
+  runTestSuite,
   explainTestSuiteFailures,
   listTestSuiteRuns,
   piiScan,

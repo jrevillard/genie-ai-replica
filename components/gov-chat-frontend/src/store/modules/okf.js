@@ -957,6 +957,34 @@ const actions = {
     }
   },
 
+  /** Story 1-8f — load ONE saved suite (full rows) back into the Lab. */
+  async headSuiteGet(_ctx, { repoId, suiteKey } = {}) {
+    try {
+      const result = await headTestService.getSuite(repoId, suiteKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'SUITE_LOAD_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8f — edit a suite's rows in place (kind flips + removes). */
+  async headSuiteUpdateRows(_ctx, { repoId, suiteKey, payload } = {}) {
+    try {
+      const result = await headTestService.updateSuiteRows(repoId, suiteKey, payload);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'SUITE_UPDATE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
   /** Run every suite query + aggregate pass rates / margins / steals. */
   async headSuiteRun(_ctx, { repoId, suiteKey } = {}) {
     try {

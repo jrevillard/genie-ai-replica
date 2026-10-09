@@ -964,3 +964,85 @@ describe('recommendTagSet damping (1-8e — the anti-treadmill guard)', () => {
     expect(out.current_scorecard.negative_suppressed).toBe(out.recommended_scorecard.negative_suppressed);
   });
 });
+
+// ─── Story 1-8f: suites are savable, modifiable and rerunnable ─────────────
+
+describe('getSuite + updateSuiteRows (1-8f)', () => {
+  const ROWS = {
+    positive: [
+      { query: 'breast cancer screening guidance', kind: 'positive', cls: null, source: 'llm' },
+      { query: 'asthma management protocol', kind: 'positive', cls: null, source: 'llm' }
+    ],
+    negative: [
+      { query: 'insurance plans cover screening', kind: 'negative', cls: 'near-miss', source: 'llm' },
+      { query: 'HIV causes and symptoms', kind: 'positive', cls: null, source: 'manual' }
+    ]
+  };
+
+  async function seedRows() {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    suite.payload.positive = ROWS.positive.map((r) => ({ ...r }));
+    suite.payload.negative = ROWS.negative.map((r) => ({ ...r }));
+    __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
+    return suite;
+  }
+
+  it('getSuite returns the full saved suite (rows included)', async () => {
+    const suite = await seedRows();
+    const got = await svc.getSuite('me', suite._key, {});
+    expect(got._key).toBe(suite._key);
+    expect(got.payload.positive).toHaveLength(2);
+    expect(got.payload.negative).toHaveLength(2);
+  });
+
+  it('getSuite 404s an unknown key', async () => {
+    await expect(svc.getSuite('me', 'nope', {})).rejects.toMatchObject({ code: 'SUITE_NOT_FOUND', status: 404 });
+  });
+
+  it('updateSuiteRows flips a row kind (the mislabel fix) — moves arrays, clears cls', async () => {
+    const suite = await seedRows();
+    const out = await svc.updateSuiteRows(
+      'me',
+      suite._key,
+      { updates: [{ match: { query: 'HIV causes and symptoms', kind: 'positive' }, set: { kind: 'negative' } }] },
+      { actor: { user_id: 'u1' } }
+    );
+    // The mislabeled row lived in the NEGATIVE array with kind:'positive' —
+    // the flip searches BOTH arrays; the positive array never held it.
+    expect(out.payload.positive).toHaveLength(2);
+    expect(out.payload.negative).toHaveLength(2);
+    const flipped = out.payload.negative.find((r) => r.query === 'HIV causes and symptoms');
+    expect(flipped).toMatchObject({ kind: 'negative', cls: null, source: 'manual' });
+  });
+
+  it('updateSuiteRows removes rows and rejects a resulting contradiction (same text both kinds)', async () => {
+    const suite = await seedRows();
+    // Removing the insurance near-miss is fine.
+    const out = await svc.updateSuiteRows('me', suite._key, {
+      removes: [{ query: 'insurance plans cover screening', kind: 'negative' }]
+    });
+    expect(out.payload.negative).toHaveLength(1);
+    // A flip that would put the SAME text in both kinds is a contradiction:
+    // 'shared text' exists as a positive AND as a mislabeled positive in the
+    // negative array — flipping it lands the text in both arrays.
+    const s2 = await seedRows();
+    s2.payload.positive.push({ query: 'shared text', kind: 'positive', cls: null, source: 'llm' });
+    s2.payload.negative.push({ query: 'shared text', kind: 'positive', cls: null, source: 'llm' });
+    __mockDb.collection('okf_head_test_runs').replace(s2._key, s2);
+    await expect(
+      svc.updateSuiteRows('me', s2._key, {
+        updates: [{ match: { query: 'shared text', kind: 'positive' }, set: { kind: 'negative' } }]
+      })
+    // Either 409 guard is a correct refusal here (contradiction OR the
+    // text duplicating within one kind — the match is ambiguous input).
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('updateSuiteRows 400s an empty body', async () => {
+    const suite = await seedRows();
+    await expect(svc.updateSuiteRows('me', suite._key, {})).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
+  });
+});

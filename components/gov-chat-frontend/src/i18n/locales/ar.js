@@ -2725,7 +2725,8 @@ export default {
           when: 'When',
           passRate: 'Pass rate',
           headVersion: 'Head',
-          tags: 'الوسوم'
+          tags: 'الوسوم',
+          actions: 'تعديل'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2766,7 +2767,11 @@ export default {
         revertEmpty: 'لا توجد عمليات حفظ مسجلة بعد.',
         revertDone: 'تمت الاستعادة — أعد بناء الرأس وأعد التشغيل لتطبيقها.',
         removeTag: 'إزالة من الوسوم المحظورة',
-        tagsetTip: 'الوسوم المحظورة لهذا التشغيل'
+        tagsetTip: 'الوسوم المحظورة لهذا التشغيل',
+        savedTitle: 'المجموعات المحفوظة',
+        load: 'تحميل',
+        flipTip: 'التبديل بين يجب-اختياره / يجب-عدم-اختياره',
+        deleteTip: 'إزالة هذا الصف من المجموعة'
       },
       error: {
         explain: 'فشل الشرح',
@@ -2780,7 +2785,9 @@ export default {
         revert: 'تعذر التراجع عن الوسوم',
         advisor: 'فشل المستشار',
         noSuite: 'أنشئ مجموعة اختبارات أولاً، ثم أعد بناء head وأعد التشغيل.',
-        applyNoSuite: 'تم حفظ الوسوم وإعادة بناء head — أنشئ مجموعة اختبارات ثم شغّل الكل لرؤية التأثير.'
+        applyNoSuite: 'تم حفظ الوسوم وإعادة بناء head — أنشئ مجموعة اختبارات ثم شغّل الكل لرؤية التأثير.',
+        suiteLoad: 'تعذر تحميل المجموعة',
+        suiteUpdate: 'تعذر تحديث المجموعة'
       },
       footer: {
         unpublish: 'Unpublish to review'

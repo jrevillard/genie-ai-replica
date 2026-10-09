@@ -479,10 +479,15 @@
                 <th>{{ translate('okf.headTest.suites.col.query', 'Query') }}</th>
                 <th>{{ translate('okf.headTest.suites.col.kind', 'Kind') }}</th>
                 <th>{{ translate('okf.headTest.suites.col.outcome', 'Outcome') }}</th>
+                <th v-if="!readOnly">{{ translate('okf.headTest.suites.col.actions', 'Edit') }}</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in suiteResultRows" :key="row.key">
+              <!-- 1-8f: rows are visible + editable BEFORE any run (the old
+                   view only rendered post-run). Flip fixes a mislabel (the
+                   HIV row); × removes a row; both hit the server and the
+                   returned suite becomes the local copy. -->
+              <tr v-for="row in suiteEditableRows" :key="row.key">
                 <td>{{ row.query }}</td>
                 <td>
                   <DsPill v-if="row.kind === 'positive'" variant="info">
@@ -497,15 +502,36 @@
                 </td>
                 <td>
                   <DsPill v-if="row.error" variant="danger">{{ row.error }}</DsPill>
-                  <DsPill v-else-if="row.pass === null" variant="info">
-                    {{ translate('okf.headTest.suites.notEvaluatable', 'not evaluatable (no competitors)') }}
-                  </DsPill>
-                  <DsPill v-else-if="row.pass" variant="success">
+                  <DsPill v-else-if="row.pass === true" variant="success">
                     {{ translate('okf.headTest.suites.pass', 'pass') }}
                   </DsPill>
-                  <DsPill v-else variant="danger">
+                  <DsPill v-else-if="row.pass === false" variant="danger">
                     {{ row.failLabel }}
                   </DsPill>
+                  <DsPill v-else-if="lastRunSummary" variant="info">
+                    {{ translate('okf.headTest.suites.notEvaluatable', 'not evaluatable (no competitors)') }}
+                  </DsPill>
+                  <span v-else>—</span>
+                </td>
+                <td v-if="!readOnly" class="okf-headtest__row-actions">
+                  <button
+                    type="button"
+                    class="okf-headtest__row-btn"
+                    :disabled="busy !== null"
+                    :title="translate('okf.headTest.suites.flipTip', 'Flip should-select / should-NOT-select')"
+                    @click="onFlipRow(row)"
+                  >
+                    ⇄
+                  </button>
+                  <button
+                    type="button"
+                    class="okf-headtest__row-btn okf-headtest__row-btn--danger"
+                    :disabled="busy !== null"
+                    :title="translate('okf.headTest.suites.deleteTip', 'Remove this row from the suite')"
+                    @click="onDeleteRow(row)"
+                  >
+                    ×
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -881,6 +907,45 @@
         <p v-else class="okf-headtest__empty-pane">
           {{ translate('okf.headTest.suites.noRuns', 'No runs yet — generate a suite and run it.') }}
         </p>
+        <!-- 1-8f: SAVED SUITES — the load targets for "saved, modified and
+             rerun". Every generated suite persists; Load pulls its full
+             rows back as the editable current suite. -->
+        <div v-if="savedSuites.length" class="okf-headtest__saved-suites">
+          <h4 class="okf-headtest__pane-title">
+            {{ translate('okf.headTest.suites.savedTitle', 'Saved suites') }}
+          </h4>
+          <table class="okf-headtest__scores">
+            <thead>
+              <tr>
+                <th>{{ translate('okf.headTest.suites.col.run', 'Run') }}</th>
+                <th>{{ translate('okf.headTest.suites.col.when', 'When') }}</th>
+                <th>{{ translate('okf.headTest.suites.positives', 'Positives') }}</th>
+                <th>{{ translate('okf.headTest.suites.negatives', 'Negatives') }}</th>
+                <th v-if="!readOnly"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="s in savedSuites" :key="s._key">
+                <td>
+                  <code>{{ s._key }}</code>
+                </td>
+                <td>{{ shortDate(s.created_at) }}</td>
+                <td>{{ s.positives != null ? s.positives : '—' }}</td>
+                <td>{{ s.negatives != null ? s.negatives : '—' }}</td>
+                <td v-if="!readOnly">
+                  <DsButton
+                    variant="secondary"
+                    small
+                    :disabled="busy !== null || (suite && suite.suite_key === s._key)"
+                    @click="onLoadSuite(s._key)"
+                  >
+                    {{ translate('okf.headTest.suites.load', 'Load') }}
+                  </DsButton>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p v-if="error" class="okf-headtest__error">{{ error }}</p>
       </div>
     </DsTabs>
@@ -939,6 +1004,8 @@ export default {
       manualQuery: '',
       manualKind: 'positive',
       runs: [],
+      // 1-8f: persisted suites (kind 'suite') — the Load targets.
+      savedSuites: [],
       // 1-8c: user-controlled per-class query counts (server clamps).
       counts: { n_positive: 8, n_negative: 6, n_negative_random: 4, n_meta: 3, n_near_miss: 4 },
       // 1-8c: claim-side teaching state — the routing-explain result for
@@ -1169,9 +1236,33 @@ export default {
               winner
             );
     },
-    suiteResultRows() {
-      if (!this.lastRunSummary || !this.lastRunSummaryRows) return [];
-      return this.lastRunSummaryRows;
+    /** 1-8f: the suite's rows as an editable list — visible BEFORE any run
+     * (the old view only rendered after a run), merged with the last run's
+     * outcome when one exists. */
+    suiteEditableRows() {
+      const s = this.suite;
+      if (!s || !s.payload) return [];
+      const rows = [];
+      const push = (arr, kind) =>
+        (Array.isArray(arr) ? arr : []).forEach((r) =>
+          rows.push({ query: r.query, kind, cls: r.cls || null, source: r.source || null })
+        );
+      push(s.payload.positive, 'positive');
+      push(s.payload.negative, 'negative');
+      const outcomes = new Map((this.lastRunSummaryRows || []).map((r) => [r.query + '|' + r.kind, r]));
+      return rows.map((r, i) => {
+        const o = outcomes.get(r.query + '|' + r.kind) || null;
+        return {
+          key: r.query + '|' + r.kind + ':' + i,
+          query: r.query,
+          kind: r.kind,
+          cls: r.cls,
+          source: r.source,
+          pass: o ? o.pass : null,
+          failLabel: o ? o.failLabel : null,
+          error: o ? o.error : null
+        };
+      });
     },
     negLabel() {
       const s = this.lastRunSummary;
@@ -1967,6 +2058,76 @@ export default {
     async refreshRuns() {
       const res = await this.$store.dispatch('okf/headSuiteListRuns', { repoId: this.repo.repo_id, kind: 'run' });
       if (res.ok) this.runs = res.runs;
+      // 1-8f: the SAVED SUITES list (kind 'suite') — the load targets for
+      // "saved, modified and rerun". Cheap read; kept beside the runs
+      // refresh so both stay current after generate/run/edit.
+      const suites = await this.$store.dispatch('okf/headSuiteListRuns', { repoId: this.repo.repo_id, kind: 'suite' });
+      if (suites.ok) this.savedSuites = suites.runs;
+    },
+    /** 1-8f: load a saved suite back into the Lab — its rows become the
+     * editable current suite (flip kinds, remove rows, re-run). */
+    async onLoadSuite(suiteKey) {
+      if (this.busy !== null) return;
+      this.busy = 'suite-load';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headSuiteGet', { repoId: this.repo.repo_id, suiteKey });
+      this.busy = null;
+      if (!res || !res.ok || !res.result) {
+        this.error = (res && res.message) || this.translate('okf.headTest.error.suiteLoad', 'Could not load the suite');
+        return;
+      }
+      this.suite = res.result;
+      this.lastRunSummary = null;
+      this.lastRunSummaryRows = [];
+      this.batchAdvice = null;
+      this.tripwire = null;
+      this.advisor = null;
+      this.lastRunSuiteKey = this.suite ? this.suite.suite_key : null;
+    },
+    /** 1-8f: flip a row's kind (positive ↔ negative) — THE mislabel fix.
+     * The server searches both arrays (a mislabeled row sits in the wrong
+     * one) and returns the updated suite, which becomes the new local copy. */
+    async onFlipRow(row) {
+      if (this.busy !== null || !this.suite) return;
+      this.busy = 'suite-edit';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headSuiteUpdateRows', {
+        repoId: this.repo.repo_id,
+        suiteKey: this.suite.suite_key,
+        payload: {
+          updates: [
+            {
+              match: { query: row.query, kind: row.kind },
+              set: { kind: row.kind === 'positive' ? 'negative' : 'positive' }
+            }
+          ]
+        }
+      });
+      this.busy = null;
+      if (!res || !res.ok) {
+        this.error =
+          (res && res.message) || this.translate('okf.headTest.error.suiteUpdate', 'Could not update the suite');
+        return;
+      }
+      this.suite = res.result;
+    },
+    /** 1-8f: remove a row from the suite entirely. */
+    async onDeleteRow(row) {
+      if (this.busy !== null || !this.suite) return;
+      this.busy = 'suite-edit';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headSuiteUpdateRows', {
+        repoId: this.repo.repo_id,
+        suiteKey: this.suite.suite_key,
+        payload: { removes: [{ query: row.query, kind: row.kind }] }
+      });
+      this.busy = null;
+      if (!res || !res.ok) {
+        this.error =
+          (res && res.message) || this.translate('okf.headTest.error.suiteUpdate', 'Could not update the suite');
+        return;
+      }
+      this.suite = res.result;
     },
     onDialogAction(key) {
       if (key === 'close') this.$emit('close');
@@ -2076,6 +2237,34 @@ export default {
 }
 .okf-headtest__row-under-test {
   background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+/* 1-8f: per-row edit controls (flip kind / remove row). */
+.okf-headtest__row-actions {
+  white-space: nowrap;
+}
+.okf-headtest__row-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: var(--radius-sm, 4px);
+  min-width: var(--space-lg);
+  padding: 0 var(--space-xs);
+  margin-left: var(--space-2xs, 2px);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+.okf-headtest__row-btn:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--fg);
+}
+.okf-headtest__row-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.okf-headtest__row-btn--danger:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 .okf-headtest__under-mark {
   color: var(--accent);

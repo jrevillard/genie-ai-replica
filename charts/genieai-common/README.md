@@ -15,10 +15,10 @@ dependencies:
   - name: genieai-common
     version: "0.1.0"
     repository: "file://../genieai-common"
-    import-values:
-      - child: "."
-        parent: "common"
 ```
+
+No `import-values` is needed: template definitions defined by a library chart
+are directly callable from the consuming chart's templates.
 
 Then in templates:
 

@@ -153,7 +153,7 @@ describe('generateSuite', () => {
     expect(neg.some((q) => q.cls === 'confusable')).toBe(false);
   });
 
-  it('respects n_negative_random (default 4, capped at 12) and seeds the prompt with the sampled topics', async () => {
+  it('respects n_negative_random (default 4; 99 requested delivers 99 — the 1-8f uncapped pool)', async () => {
     const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
     try {
       __mockDb.query.mockResolvedValue({ all: async () => [] });
@@ -165,7 +165,8 @@ describe('generateSuite', () => {
       const s12 = await svc.generateSuite('me', { n_negative_random: 99 }, {});
       const sDefault = await svc.generateSuite('me', {}, {});
       expect(s2.payload.negative.filter((q) => q.cls === 'off-domain')).toHaveLength(2);
-      expect(s12.payload.negative.filter((q) => q.cls === 'off-domain')).toHaveLength(12);
+      // 1-8f: 99 requested delivers 99 — sampleTopics cycles the finite pool.
+      expect(s12.payload.negative.filter((q) => q.cls === 'off-domain')).toHaveLength(99);
       expect(sDefault.payload.negative.filter((q) => q.cls === 'off-domain')).toHaveLength(4); // default
       // the prompt lists the sampled topics + asks for the adversarial
       // off-domain class; the call passes adversarial temperature
@@ -193,7 +194,7 @@ describe('generateSuite', () => {
     expect(prompt).toContain('NO competing repositories');
   });
 
-  it('uses LLM-authored meta rows when provided (fallback only when the class is omitted)', async () => {
+  it('uses LLM-authored meta rows first, then fills to the requested count (1-8f)', async () => {
     __mockDb.query.mockResolvedValue({ all: async () => [] });
     frontmatterService.vllmChatCompletions.mockResolvedValue(
       llmResponse({
@@ -208,8 +209,11 @@ describe('generateSuite', () => {
     );
     const suite = await svc.generateSuite('me', {}, {});
     const meta = suite.payload.negative.filter((q) => q.cls === 'meta');
-    expect(meta).toHaveLength(2);
-    expect(meta.every((q) => q.source === 'llm')).toBe(true);
+    // 1-8f: meta fills to the requested count (default 3) — 2 LLM rows +
+    // 1 deterministic fallback; LLM rows always come first.
+    expect(meta).toHaveLength(3);
+    expect(meta.slice(0, 2).every((q) => q.source === 'llm')).toBe(true);
+    expect(meta[2].source).toBe('fallback');
   });
 
   it('409s without stored frontmatter', async () => {
@@ -1033,8 +1037,8 @@ describe('getSuite + updateSuiteRows (1-8f)', () => {
       svc.updateSuiteRows('me', s2._key, {
         updates: [{ match: { query: 'shared text', kind: 'positive' }, set: { kind: 'negative' } }]
       })
-    // Either 409 guard is a correct refusal here (contradiction OR the
-    // text duplicating within one kind — the match is ambiguous input).
+      // Either 409 guard is a correct refusal here (contradiction OR the
+      // text duplicating within one kind — the match is ambiguous input).
     ).rejects.toMatchObject({ status: 409 });
   });
 
@@ -1044,5 +1048,70 @@ describe('getSuite + updateSuiteRows (1-8f)', () => {
       code: 'VALIDATION_ERROR',
       status: 400
     });
+  });
+});
+
+// ─── Story 1-8f part 2: any number of tests + suite names ──────────────────
+
+describe('generateSuite batching + names (1-8f2)', () => {
+  it('batches a large ask across LLM calls, dedupes, and delivers the count', async () => {
+    const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      let call = 0;
+      frontmatterService.vllmChatCompletions.mockImplementation(async () => {
+        call += 1;
+        const base = (call - 1) * 30;
+        return llmResponse({
+          positive: Array.from({ length: 30 }, (_, i) => ({
+            query: `positive probe ${base + i + 1} for the repository`,
+            reason: 'batched'
+          })),
+          // one dup + one fresh negative per call
+          negative: [
+            { query: 'shared negative probe', expected_repo: 'Sibling Repo', reason: 'x' },
+            { query: `negative probe ${call}`, expected_repo: 'Sibling Repo', reason: 'x' }
+          ],
+          near_miss: [],
+          off_domain: [],
+          meta: [],
+          keywords: ['who']
+        });
+      });
+      __mockDb.query.mockImplementation(async (aql) => {
+        if (aql.includes('r.head != null')) {
+          return { all: async () => [{ repo_id: 'sib1', name: 'Sibling Repo', text: 'sibling text' }] };
+        }
+        return { all: async () => [] };
+      });
+      const suite = await svc.generateSuite('me', { n_positive: 60, n_negative: 6 }, {});
+      // 60 positives delivered across 2 batched calls (30 + 30).
+      expect(call).toBeGreaterThanOrEqual(2);
+      const texts = suite.payload.positive.map((r) => r.query);
+      expect(suite.payload.positive).toHaveLength(60);
+      expect(new Set(texts.map((t) => t.toLowerCase())).size).toBe(60);
+      // negatives deduped across calls: 1 shared + 1 unique per call —
+      // the shared dup is dropped, uniques kept (5 calls: 2 for positives,
+      // 3 topping up the negative backlog to the requested 6).
+      const neg = suite.payload.negative.filter((q) => q.cls === 'confusable');
+      expect(neg).toHaveLength(6);
+    } finally {
+      randSpy.mockRestore();
+    }
+  });
+
+  it('persists the suite name (trimmed) and 400s an empty rename', async () => {
+    __mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
+    frontmatterService.vllmChatCompletions.mockImplementation(async () => {
+      // no progress on the first call → immediate fallback suite
+      return llmResponse({ positive: [], negative: [], near_miss: [], off_domain: [], meta: [] });
+    });
+    const suite = await svc.generateSuite('me', { name: '  NCD regression set  ' }, {});
+    expect(suite.name).toBe('NCD regression set');
+    await expect(svc.renameSuite('me', suite._key, { name: '   ' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
+    const renamed = await svc.renameSuite('me', suite._key, { name: 'Regressão NCD' }, { actor: { user_id: 'u1' } });
+    expect(renamed.name).toBe('Regressão NCD');
   });
 });

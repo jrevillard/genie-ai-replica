@@ -59,6 +59,11 @@ const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
 
 const HEAD_TEST_RUNS_COLLECTION = 'okf_head_test_runs';
+// Story 1-8f — per-class generation ceilings ("any number of tests for any
+// type"). The LLM call is batched at GEN_BATCH rows per class per call, so
+// these bound the DOC, not the model output.
+const CLASS_MAX = { positive: 1000, negative: 500, random: 500, meta: 500, nearMiss: 500 };
+const GEN_BATCH = 30;
 // Story 1-8d — the advisor predicts the production gate LOCALLY (embed +
 // cosine), so it can simulate tag-set changes before recommending them.
 // These mirror retriever config.py / head-test-service.js (same env names,
@@ -177,7 +182,7 @@ async function loadSiblingContext(db, underTestId) {
   return cursor.all();
 }
 
-function suitePrompt(repo, fm, siblings, nPositive, nNegative, topics, nNearMiss) {
+function suitePrompt(repo, fm, siblings, nPositive, nNegative, topics, nNearMiss, nMeta = 3) {
   const siblingText = siblings.length
     ? siblings.map((s) => `- "${s.name}"\n  ${String(s.text || '').slice(0, 400)}`).join('\n')
     : '(no other repository currently has a vectorized head)';
@@ -223,7 +228,7 @@ Generate:
   domain completely UNRELATED to this repository — a user asking about
   it must NEVER be routed here:
   ${topics.join(', ')}
-- ${META_TEMPLATES.length} META/noise queries about the retrieval
+- ${nMeta} META/noise queries about the retrieval
   system itself (the routing lab, the head tester, the forbidden
   tags) — users probing the machinery rather than the content.
   Example: "${META_TEMPLATES[0]}"
@@ -263,10 +268,19 @@ function forbiddenDerivedQueries(fm) {
  * does not).
  */
 function sampleTopics(n) {
+  // Story 1-8f — the pool is finite (~dozens); "any number" of off-domain
+  // rows means topics CYCLE when n exceeds the pool (the LLM + templates
+  // vary the query per round). Shuffled draw for the first pass, then
+  // cyclic continuation.
   const pool = OFF_DOMAIN_TOPICS.slice();
   const picked = [];
   while (picked.length < n && pool.length) {
     picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  }
+  let cursor = 0;
+  while (picked.length < n && OFF_DOMAIN_TOPICS.length) {
+    picked.push(OFF_DOMAIN_TOPICS[cursor % OFF_DOMAIN_TOPICS.length]);
+    cursor += 1;
   }
   return picked;
 }
@@ -315,10 +329,9 @@ function offDomainQueries(llmOffDomain, topics) {
  * system itself. LLM-authored when provided, deterministic fallback
  * otherwise — the class is NEVER empty. Expected floor-suppressed.
  */
-function metaQueries(llmMeta) {
+function metaQueries(llmMeta, nMeta = META_QUERY_COUNT) {
   const rows = (Array.isArray(llmMeta) ? llmMeta : [])
     .filter((m) => m && typeof m.query === 'string' && m.query.trim())
-    .slice(0, META_QUERY_COUNT)
     .map((m) => ({
       query: m.query.trim(),
       kind: 'negative',
@@ -327,15 +340,29 @@ function metaQueries(llmMeta) {
       expected_repo: null,
       reason: 'noise/meta probe — the system itself, not repo content; must be floor-suppressed'
     }));
-  if (rows.length) return rows;
-  return META_TEMPLATES.map((query) => ({
-    query,
-    kind: 'negative',
-    cls: 'meta',
-    source: 'fallback',
-    expected_repo: null,
-    reason: 'noise/meta probe — deterministic fallback; must be floor-suppressed'
-  }));
+  // Story 1-8f — fill to the requested count (LLM rows first, then the
+  // deterministic templates cycling); "any number" applies to meta too.
+  const out = [];
+  let i = 0;
+  while (out.length < nMeta && i < rows.length) out.push(rows[i++]);
+  let t = 0;
+  while (out.length < nMeta && META_TEMPLATES.length) {
+    const query = META_TEMPLATES[t % META_TEMPLATES.length];
+    t += 1;
+    if (out.some((r) => r.query === query)) {
+      if (t > nMeta * 2) break; // all templates used; never fabricate dups
+      continue;
+    }
+    out.push({
+      query,
+      kind: 'negative',
+      cls: 'meta',
+      source: 'fallback',
+      expected_repo: null,
+      reason: 'noise/meta probe — deterministic fallback; must be floor-suppressed'
+    });
+  }
+  return out;
 }
 
 /**
@@ -431,42 +458,118 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       err.status = 409;
       throw err;
     }
-    const nPositive = clampCount(payload.n_positive, 8, 20);
+    // Story 1-8f — explicit 0 is a REQUEST (a positives-only suite), not a
+    // missing value: zeroable() distinguishes absent (fallback) from 0.
+    const zeroable = (v, fallback, max) => (v === 0 ? 0 : clampCount(v, fallback, max));
+    const nPositive = zeroable(payload.n_positive, 8, CLASS_MAX.positive);
     // n_negative budgets the CONFUSABLE + FORBIDDEN classes only — the
     // random off-domain pool is sized separately by n_negative_random.
-    const nNegative = clampCount(payload.n_negative, 6, 15);
-    const nRandom = clampCount(payload.n_negative_random, 4, 12);
-    // Story 1-8c — user-controlled class sizes (David: "give the lab user
-    // the ability to control the number of test queries").
-    const nMeta = clampCount(payload.n_meta, 3, 8);
-    const nNearMiss = clampCount(payload.n_near_miss, 4, 10);
+    // Story 1-8f (David: "we need to be able to generate any number of
+    // tests for any type") — the old caps (20/15/12/8/10) silently ate his
+    // n_positive=100. The caps now sit at a practical 1000-class ceiling;
+    // the LLM call is BATCHED (GEN_BATCH rows per class per call) so a
+    // large ask cannot blow the guided-JSON token budget.
+    const nNegative = zeroable(payload.n_negative, 6, CLASS_MAX.negative);
+    const nRandom = zeroable(payload.n_negative_random, 4, CLASS_MAX.random);
+    const nMeta = zeroable(payload.n_meta, 3, CLASS_MAX.meta);
+    const nNearMiss = zeroable(payload.n_near_miss, 4, CLASS_MAX.nearMiss);
+    const suiteName = typeof payload.name === 'string' ? payload.name.trim().slice(0, 80) : '';
     const randomTopics = sampleTopics(nRandom);
 
     const db = await dbService.getConnection();
     await ensureCollection(db);
     const siblings = await loadSiblingContext(db, repoId);
 
-    const prompt = suitePrompt(repo, fm, siblings, nPositive, nNegative, randomTopics, nNearMiss);
-    let llm = { positive: [], negative: [], off_domain: [], meta: [], near_miss: [], keywords: [] };
+    const llm = { positive: [], negative: [], off_domain: [], meta: [], near_miss: [], keywords: [] };
     try {
       // temperature 0.7 (not the extraction default 0.0) — adversarial
-      // negatives must VARY generation to generation; 2200 max tokens —
-      // four row classes per call now.
-      const resp = await frontmatterService.vllmChatCompletions([{ role: 'user', content: prompt }], {
-        maxTokens: 2200,
-        temperature: 0.7
-      });
-      const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
-      const parsed = parseJsonObject(content && content.content);
-      if (parsed) {
-        llm = {
-          positive: Array.isArray(parsed.positive) ? parsed.positive : [],
-          negative: Array.isArray(parsed.negative) ? parsed.negative : [],
-          off_domain: Array.isArray(parsed.off_domain) ? parsed.off_domain : [],
-          meta: Array.isArray(parsed.meta) ? parsed.meta : [],
-          near_miss: Array.isArray(parsed.near_miss) ? parsed.near_miss : [],
-          keywords: Array.isArray(parsed.keywords) ? parsed.keywords : []
-        };
+      // negatives must VARY generation to generation. Story 1-8f: the ask
+      // is BATCHED — GEN_BATCH rows per class per call, merging + deduping
+      // until every class is satisfied, no progress, or a hard call guard.
+      // One giant guided-JSON call truncates at the token budget (the
+      // reason the old 20-positive cap existed).
+      const norm = (s) =>
+        String(s || '')
+          .trim()
+          .toLowerCase();
+      const seen = {
+        positive: new Set(),
+        negative: new Set(),
+        off_domain: new Set(),
+        meta: new Set(),
+        near_miss: new Set()
+      };
+      const takeNew = (rows, klass) => {
+        const out = [];
+        for (const r of Array.isArray(rows) ? rows : []) {
+          const key = r && typeof r.query === 'string' ? norm(r.query) : '';
+          if (!key || seen[klass].has(key)) continue;
+          seen[klass].add(key);
+          out.push(r);
+        }
+        return out;
+      };
+      const topicSeen = new Set();
+      const takeTopics = (arr) => arr.filter((t) => !topicSeen.has(t) && topicSeen.add(t));
+      const keywordsAdd = (arr) => {
+        llm.keywords = [
+          ...llm.keywords,
+          ...(Array.isArray(arr) ? arr : []).filter((k) => typeof k === 'string' && k && !llm.keywords.includes(k))
+        ];
+      };
+      const MAX_CALLS = 60;
+      for (let call = 0; call < MAX_CALLS; call += 1) {
+        const needP = nPositive - llm.positive.length;
+        const needN = siblings.length ? nNegative - llm.negative.length : 0;
+        const needNm = nNearMiss - llm.near_miss.length;
+        const needM = nMeta - llm.meta.length;
+        const needR = nRandom - llm.off_domain.length;
+        if (needP <= 0 && needN <= 0 && needNm <= 0 && needM <= 0 && needR <= 0) break;
+        const cP = Math.max(0, Math.min(needP, GEN_BATCH));
+        const cN = Math.max(0, Math.min(needN, GEN_BATCH));
+        const cNm = Math.max(0, Math.min(needNm, GEN_BATCH));
+        const cM = Math.max(0, Math.min(needM, GEN_BATCH));
+        const callTopics = takeTopics(sampleTopics(Math.max(needR, 0)));
+        const rowsInCall = cP + cN + cNm + cM + callTopics.length;
+        if (!rowsInCall) break;
+        const callPrompt = suitePrompt(repo, fm, siblings, cP, cN, callTopics, cNm, cM);
+        const resp = await frontmatterService.vllmChatCompletions([{ role: 'user', content: callPrompt }], {
+          // ~34 tokens per row + JSON overhead, scaled to the chunk — a
+          // fixed budget truncated large asks mid-JSON.
+          maxTokens: Math.min(6000, 500 + 34 * rowsInCall),
+          temperature: 0.7
+        });
+        const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
+        const parsed = parseJsonObject(content && content.content);
+        const before =
+          llm.positive.length + llm.negative.length + llm.near_miss.length + llm.meta.length + llm.off_domain.length;
+        if (parsed) {
+          llm.positive.push(...takeNew(parsed.positive, 'positive'));
+          llm.negative.push(...takeNew(parsed.negative, 'negative'));
+          llm.near_miss.push(...takeNew(parsed.near_miss, 'near_miss'));
+          llm.meta.push(...takeNew(parsed.meta, 'meta'));
+          llm.off_domain.push(...takeNew(parsed.off_domain, 'off_domain'));
+          keywordsAdd(parsed.keywords);
+        }
+        const after =
+          llm.positive.length + llm.negative.length + llm.near_miss.length + llm.meta.length + llm.off_domain.length;
+        if (after === before) {
+          // No progress this call (LLM repeated/exhausted) — stop; the
+          // per-class deterministic fallbacks fill the remainder honestly.
+          logger.warn('head-suite.generate.no_progress', {
+            repo_id: repoId,
+            call,
+            have: {
+              p: llm.positive.length,
+              n: llm.negative.length,
+              nm: llm.near_miss.length,
+              m: llm.meta.length,
+              r: llm.off_domain.length
+            },
+            want: { p: nPositive, n: siblings.length ? nNegative : 0, nm: nNearMiss, m: nMeta, r: nRandom }
+          });
+          break;
+        }
       }
     } catch (e) {
       // The forbidden-derived + fallback negatives + curator additions
@@ -497,7 +600,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
           }))
       : [];
     const offDomain = offDomainQueries(llm.off_domain, randomTopics);
-    const meta = metaQueries(llm.meta).slice(0, nMeta);
+    const meta = metaQueries(llm.meta, nMeta);
     const nearMiss = nearMissQueries(llm.near_miss, fm, nNearMiss);
 
     const suiteKey = `s${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
@@ -507,6 +610,9 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       repo_id: repoId,
       kind: 'suite',
       suite_key: suiteKey,
+      // Story 1-8f — the curator's name for the suite (optional; the key
+      // remains the identity). Rendered in the Saved-suites table.
+      name: suiteName,
       repo_version: repo.version || null,
       head_version: repo.head ? repo.head.version || null : null,
       created_at: now,
@@ -729,6 +835,37 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
   });
 }
 
+// Story 1-8f — name a suite (optional at generation; renamable after).
+async function renameSuite(repoId, suiteKey, payload = {}, opts = {}) {
+  return withSpan('okf.headsuite.rename', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
+    await repositoryService.getById(repoId, { authz: opts.authz });
+    const name = typeof payload.name === 'string' ? payload.name.trim().slice(0, 80) : '';
+    if (!name) {
+      const err = new Error('name (1-80 chars) is required');
+      err.code = 'VALIDATION_ERROR';
+      err.status = 400;
+      throw err;
+    }
+    const db = await dbService.getConnection();
+    await ensureCollection(db);
+    const suite = await loadSuiteDoc(db, repoId, suiteKey);
+    if (suite.repo_id !== repoId) {
+      const err = new Error(`suite ${suiteKey} not found for repo ${repoId}`);
+      err.code = 'SUITE_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+    const was = suite.name || '';
+    suite.name = name;
+    suite.updated_at = new Date().toISOString();
+    suite.updated_by = (opts.actor && opts.actor.user_id) || 'system';
+    await db.collection(HEAD_TEST_RUNS_COLLECTION).replace(suite._key, suite);
+    logger.info('head-suite.renamed', { repo_id: repoId, suite_key: suiteKey, was, name });
+    return suite;
+  });
+}
+
 // ---------- public: run ----------
 
 async function runSuite(repoId, suiteKey, opts = {}) {
@@ -922,7 +1059,7 @@ async function listRuns(repoId, payload = {}) {
     `FOR d IN ${HEAD_TEST_RUNS_COLLECTION} FILTER d.repo_id == @rid ` +
       kindFilter +
       'SORT d.created_at DESC LIMIT @lim RETURN MERGE(KEEP(d, ["_key", "repo_id", "kind", "suite_key", ' +
-      '"repo_version", "head_version", "tagset", "created_at", "created_by"]), ' +
+      '"name", "repo_version", "head_version", "tagset", "created_at", "created_by"]), ' +
       '{ summary: HAS(d.payload, "summary") ? d.payload.summary : null, ' +
       'positives: HAS(d.payload, "positive") ? LENGTH(d.payload.positive) : null, ' +
       'negatives: HAS(d.payload, "negative") ? LENGTH(d.payload.negative) : null })',
@@ -1385,6 +1522,7 @@ module.exports = {
   addQueries,
   getSuite,
   updateSuiteRows,
+  renameSuite,
   runSuite,
   listRuns,
   explainSuiteFailures,

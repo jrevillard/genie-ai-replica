@@ -2742,7 +2742,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: 'Tag',
-          actions: 'Hariri'
+          actions: 'Hariri',
+          name: 'Jina'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2788,7 +2789,8 @@ export default {
         savedTitle: 'Vipima vilivyohifadhiwa',
         load: 'Pakia',
         flipTip: 'Badilisha iwe-chaguliwe / isiwe-chaguliwe',
-        deleteTip: 'Ondoa mstari huu kwenye kipima'
+        deleteTip: 'Ondoa mstari huu kwenye kipima',
+        namePlaceholder: 'Jina la kipima (si lazima) — mf. seti ya urejesho wa NCD'
       },
       error: {
         explain: 'Uelelezo umeshindikana',
@@ -2805,7 +2807,8 @@ export default {
         applyNoSuite:
           'Tag zimehifadhiwa na head imejengwa upya — tengeneza kipima kisha endesha zote ili kuona matokeo.',
         suiteLoad: 'Imeshindikana kupakia kipima',
-        suiteUpdate: 'Imeshindikana kusasisha kipima'
+        suiteUpdate: 'Imeshindikana kusasisha kipima',
+        suiteRename: 'Imeshindikana kubadilisha jina la kipima'
       },
       footer: {
         unpublish: 'Unpublish to review'

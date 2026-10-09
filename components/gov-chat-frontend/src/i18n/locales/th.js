@@ -2730,7 +2730,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: 'แท็ก',
-          actions: 'แก้ไข'
+          actions: 'แก้ไข',
+          name: 'ชื่อ'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2774,7 +2775,8 @@ export default {
         savedTitle: 'ชุดทดสอบที่บันทึกไว้',
         load: 'โหลด',
         flipTip: 'สลับ ควรเลือก / ไม่ควรเลือก',
-        deleteTip: 'นำแถวนี้ออกจากชุดทดสอบ'
+        deleteTip: 'นำแถวนี้ออกจากชุดทดสอบ',
+        namePlaceholder: 'ชื่อชุดทดสอบ (ไม่บังคับ) — เช่น ชุดทดสอบย้อนหลัง NCD'
       },
       error: {
         explain: 'การอธิบายล้มเหลว',
@@ -2790,7 +2792,8 @@ export default {
         noSuite: 'สร้างชุดทดสอบก่อน จากนั้นจึงสร้างใหม่และรันซ้ำ',
         applyNoSuite: 'บันทึกแท็กและสร้าง head ใหม่แล้ว — สร้างชุดทดสอบแล้วรันทั้งหมดเพื่อดูผล',
         suiteLoad: 'โหลดชุดทดสอบไม่สำเร็จ',
-        suiteUpdate: 'อัปเดตชุดทดสอบไม่สำเร็จ'
+        suiteUpdate: 'อัปเดตชุดทดสอบไม่สำเร็จ',
+        suiteRename: 'เปลี่ยนชื่อชุดทดสอบไม่สำเร็จ'
       },
       footer: {
         unpublish: 'Unpublish to review'

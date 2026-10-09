@@ -2747,7 +2747,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: 'Tag',
-          actions: 'Edit'
+          actions: 'Edit',
+          name: 'Nama'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2793,7 +2794,8 @@ export default {
         savedTitle: 'Suite tersimpan',
         load: 'Muat',
         flipTip: 'Balikkan harus-dipilih / tidak-harus-dipilih',
-        deleteTip: 'Hapus baris ini dari suite'
+        deleteTip: 'Hapus baris ini dari suite',
+        namePlaceholder: 'Nama suite (opsional) — mis. set regresi NCD'
       },
       error: {
         explain: 'Penjelasan gagal',
@@ -2809,7 +2811,8 @@ export default {
         noSuite: 'Buat suite terlebih dahulu, lalu bangun ulang dan jalankan ulang.',
         applyNoSuite: 'Tag tersimpan dan head dibangun ulang — buat suite lalu jalankan semua untuk melihat efeknya.',
         suiteLoad: 'Gagal memuat suite',
-        suiteUpdate: 'Gagal memperbarui suite'
+        suiteUpdate: 'Gagal memperbarui suite',
+        suiteRename: 'Gagal mengganti nama suite'
       },
       footer: {
         unpublish: 'Unpublish to review'

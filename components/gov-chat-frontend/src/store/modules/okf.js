@@ -924,14 +924,15 @@ const actions = {
   /** Generate a test suite (LLM + forbidden-derived negatives). The
    * 1-8c count knobs are optional — undefined lets the server apply its
    * own per-class defaults/clamps. */
-  async headSuiteGenerate(_ctx, { repoId, nPositive, nNegative, nNegativeRandom, nMeta, nNearMiss } = {}) {
+  async headSuiteGenerate(_ctx, { repoId, nPositive, nNegative, nNegativeRandom, nMeta, nNearMiss, name } = {}) {
     try {
       const result = await headTestService.generateSuite(repoId, {
         n_positive: nPositive,
         n_negative: nNegative,
         n_negative_random: nNegativeRandom,
         n_meta: nMeta,
-        n_near_miss: nNearMiss
+        n_near_miss: nNearMiss,
+        name
       });
       return { ok: true, result };
     } catch (err) {
@@ -980,6 +981,20 @@ const actions = {
       return {
         ok: false,
         code: (err && (err.code || (err.data && err.data.error))) || 'SUITE_UPDATE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8f — name/rename a suite. */
+  async headSuiteRename(_ctx, { repoId, suiteKey, name } = {}) {
+    try {
+      const result = await headTestService.renameSuite(repoId, suiteKey, name);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'SUITE_RENAME_FAILED',
         message: err.message
       };
     }

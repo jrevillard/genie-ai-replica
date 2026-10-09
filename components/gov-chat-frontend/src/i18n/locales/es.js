@@ -2760,7 +2760,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: 'Etiquetas',
-          actions: 'Editar'
+          actions: 'Editar',
+          name: 'Nombre'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2807,7 +2808,8 @@ export default {
         savedTitle: 'Suites guardadas',
         load: 'Cargar',
         flipTip: 'Cambiar debe-seleccionar / no-debe-seleccionar',
-        deleteTip: 'Quitar esta fila de la suite'
+        deleteTip: 'Quitar esta fila de la suite',
+        namePlaceholder: 'Nombre de la suite (opcional): p. ej. conjunto de regresión ECD'
       },
       error: {
         explain: 'La explicación falló',
@@ -2823,7 +2825,8 @@ export default {
         noSuite: 'Genera primero una suite y luego reconstruye y relanza.',
         applyNoSuite: 'Etiquetas guardadas y head reconstruido: genera una suite y ejecuta todo para ver el efecto.',
         suiteLoad: 'No se pudo cargar la suite',
-        suiteUpdate: 'No se pudo actualizar la suite'
+        suiteUpdate: 'No se pudo actualizar la suite',
+        suiteRename: 'No se pudo renombrar la suite'
       },
       footer: {
         unpublish: 'Unpublish to review'

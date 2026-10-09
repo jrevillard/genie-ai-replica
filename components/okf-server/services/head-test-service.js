@@ -176,7 +176,8 @@ function scoreHead(head, queryVec, formula) {
     acc += w * perFieldCos[f];
     totalW += w;
   }
-  if (totalW === 0) return { score: null, per_field: perFieldCos, tag_cosines: tagCosines, formula_used: String(formula) };
+  if (totalW === 0)
+    return { score: null, per_field: perFieldCos, tag_cosines: tagCosines, formula_used: String(formula) };
   let score = acc / totalW;
   const wf = typeof weights.forbidden === 'number' ? weights.forbidden : 0;
   if (wf > 0 && perFieldCos.forbidden !== null) {
@@ -449,13 +450,7 @@ async function routingTest(repoId, payload = {}, opts = {}) {
       r.floor_pass = r.score >= ROUTE_HEAD_FLOOR;
       const marginPass = r.forbidden_cosine === null || r.head_margin > ROUTE_HEAD_MARGIN;
       r.head_claimed = r.floor_pass && !r.tag_veto && marginPass;
-      r.head_claim = !r.floor_pass
-        ? 'floor'
-        : r.tag_veto
-          ? 'veto'
-          : !marginPass
-            ? 'margin'
-            : 'claim';
+      r.head_claim = !r.floor_pass ? 'floor' : r.tag_veto ? 'veto' : !marginPass ? 'margin' : 'claim';
     }
     const topRanked = ranked.length ? ranked[0] : null;
     const headWinner = topRanked && topRanked.head_claimed ? topRanked : null;
@@ -674,7 +669,12 @@ object: {"tags": ["...", "..."]}`;
         // Story 1-8d — mechanical guardrail before anything reaches the UI.
         const guard = await guardSuggestions(repoId, tags, opts);
         suggestion = guard.accepted.length
-          ? { tags: guard.accepted, rejected: guard.rejected, source: 'llm', reason: 'suggested forbidden tags for this query\'s subject (guardrail-screened)' }
+          ? {
+              tags: guard.accepted,
+              rejected: guard.rejected,
+              source: 'llm',
+              reason: "suggested forbidden tags for this query's subject (guardrail-screened)"
+            }
           : {
               tags: [],
               rejected: guard.rejected,
@@ -689,7 +689,8 @@ object: {"tags": ["...", "..."]}`;
           tags: [],
           rejected: [],
           source: 'none',
-          reason: 'the suggestion model is unreachable — no forbidden tag matches this query; consider adding one for its subject'
+          reason:
+            'the suggestion model is unreachable — no forbidden tag matches this query; consider adding one for its subject'
         };
       }
     }
@@ -732,8 +733,18 @@ async function guardSuggestions(repoId, candidates, opts = {}) {
   const existingForbidden =
     head && head.per_field && Array.isArray(head.per_field.forbidden_vectors) ? head.per_field.forbidden_vectors : [];
   const positiveQueries = Array.isArray(opts.positiveQueries) ? opts.positiveQueries.filter(Boolean) : [];
-  const positiveVectors = positiveQueries.length ? await frontmatterService.teiEmbed(positiveQueries.map((q) => q.query || q)) : [];
+  const positiveVectors = positiveQueries.length
+    ? await frontmatterService.teiEmbed(positiveQueries.map((q) => q.query || q))
+    : [];
   const vecs = await frontmatterService.teiEmbed(list);
+  // Per-tag naming data: the repo's own topic/entity/keyword VALUES (the
+  // head carries only their centroids — the naming pass needs the tags).
+  const ownTags = [];
+  const fm = repo.frontmatter || {};
+  for (const f of POSITIVE_FIELDS) {
+    for (const v of Array.isArray(fm[f]) ? fm[f] : []) ownTags.push({ field: f, value: String(v) });
+  }
+  const ownTagVecs = ownTags.length ? await frontmatterService.teiEmbed(ownTags.map((t) => t.value)) : [];
   const accepted = [];
   const rejected = [];
   list.forEach((tag, i) => {
@@ -748,9 +759,24 @@ async function guardSuggestions(repoId, candidates, opts = {}) {
       if (c !== null && (!worst || c > worst.cosine)) worst = { cosine: c };
     }
     if (worst && worst.cosine >= GUARD_SELF_SUBJECT) {
+      // Name the offending OWN TAG (2026-10-09: David read "must not match
+      // the repository's own subject" as being about the forbidden list —
+      // the guard actually fires against the repo's OWN topic/entity/
+      // keyword tags, e.g. 'lung-cancer-treatment' vs own entity
+      // 'lung-cancer'). The per_field vectors are centroids, so embed the
+      // repo's own tag values once and find the closest one.
+      let closest = null;
+      ownTags.forEach((t, ti) => {
+        const c = cosine(v, ownTagVecs[ti]);
+        if (c !== null && (!closest || c > closest.cosine)) closest = { ...t, cosine: c };
+      });
+      const detail =
+        closest && closest.cosine >= GUARD_SELF_SUBJECT
+          ? ` — closest own tag: ${closest.field} "${closest.value}" (${closest.cosine.toFixed(2)})`
+          : '';
       rejected.push({
         tag,
-        reason: `too close to the repository's own subject (similarity ${worst.cosine.toFixed(2)} >= ${GUARD_SELF_SUBJECT})`
+        reason: `too close to the repository's own subject (similarity ${worst.cosine.toFixed(2)} >= ${GUARD_SELF_SUBJECT})${detail}`
       });
       return;
     }

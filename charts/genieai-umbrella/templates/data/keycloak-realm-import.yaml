@@ -211,7 +211,7 @@ spec:
         # (`data.keycloak.clientSecrets.proxyClient`) and MUST equal the
         # value sealed in the `keycloak-proxy-client-secret` SealedSecret
         # the backend consumes.
-        secret: {{ .Values.data.keycloak.clientSecrets.proxyClient | default "change-me-proxy-client" | quote }}
+        secret: {{ .Values.data.keycloak.clientSecrets.proxyClient | quote }}
       # Service account for the Dataprep ingestion pipeline (client_credentials
       # grant for service-to-service calls into document-repository).
       - clientId: dataprep-service-client
@@ -222,7 +222,7 @@ spec:
         serviceAccountsEnabled: true
         # Same rule as proxyClient: must equal the `kc-dataprep-client-secret`
         # SealedSecret value (`data.keycloak.clientSecrets.dataprep`).
-        secret: {{ .Values.data.keycloak.clientSecrets.dataprep | default "change-me-dataprep-client" | quote }}
+        secret: {{ .Values.data.keycloak.clientSecrets.dataprep | quote }}
       # Mobile OIDC client (Flutter app) — public client with PKCE per
       # RFC 8252; mobile apps cannot hold secrets. Refresh-token rotation
       # on. The chart defaults (client genie-mobile, scheme genieai) are
@@ -250,7 +250,7 @@ spec:
         standardFlowEnabled: true
         directAccessGrantsEnabled: false
         serviceAccountsEnabled: false
-        secret: {{ .Values.data.keycloak.clientSecrets.grafana | default "change-me-grafana-client" | quote }}
+        secret: {{ .Values.data.keycloak.clientSecrets.grafana | quote }}
         attributes:
           pkce.code.challenge.method: S256
           oauth2.device.authorization.grant.enabled: false

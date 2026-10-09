@@ -70,7 +70,14 @@ charts:lint:
     # permanently red; the shipped READMEs are hand-written, so helm-docs
     # --check would likewise always fail. The fixture suite runs as a
     # self-test that ASSERTS the expected failures.
-    - helm template test charts/genieai-umbrella | conftest test --policy policies/ --output stdout -
+    # -n genieai: the shipped chart FAILS the render when the values
+    #   namespace diverges from the release namespace (default -n is
+    #   `default`).
+    # secrets off: with the default secrets.sealedSecrets.enabled=true the
+    #   render carries the 12 PLACEHOLDER+ sentinel SealedSecrets, which
+    #   the placeholder-sweep policy denies by design (they are chart
+    #   SOURCE sentinels meant for re-sealing, not release content).
+    - helm template test charts/genieai-umbrella -n genieai --set secrets.sealedSecrets.enabled=false | conftest test --policy policies/ --output stdout -
     - if conftest test --policy policies/ policies/fixtures/test-data.yaml --output stdout; then
         echo "FAIL: fixture suite unexpectedly passed — deny rules are dead"; exit 1;
       else
@@ -556,11 +563,11 @@ Expected: a mix of pass + fail. The 4 positive cases (cm-secret-leak, ss-placeho
 - [ ] **Step 6: Run `conftest test` against the rendered chart**
 
 ```bash
-helm template test charts/genieai-umbrella --values deploy/environments/dev/values-override.yaml \
+helm template test charts/genieai-umbrella -n genieai --set secrets.sealedSecrets.enabled=false --values deploy/environments/dev/values-override.yaml \
   | conftest test --policy policies/ --output stdout -
 ```
 
-Expected: 0 violations (the chart itself doesn't ship `PLACEHOLDER+` sentinels — the sentinels only appear in the chart source, not in the rendered output; the secret-leak rule may flag a few `value: secret` patterns in legacy code, fix on sight).
+Expected: 0 violations with secrets disabled on the render (defaults render the sentinel SealedSecrets, which the sweep policy denies BY DESIGN — sentinels are chart-source artifacts awaiting re-seal, not release content).
 
 - [ ] **Step 7: Commit**
 

@@ -23,7 +23,8 @@ per-environment overlays and CI integration are under active development.
 
 - Helm API v2. Helm 4.x.
 - No secrets in `values-override.yaml`. Secrets are delivered by a pluggable backend (Sealed Secrets by default; External Secrets Operator documented as an alternative).
-- Tests live in each chart's `tests/` directory; `ct install` for integration, `helm test` for smoke.
+- Tests live in each chart's `templates/tests/` directory (Helm convention); `ct install` for integration, `helm test` for smoke.
+- Vendored dependency tarballs (`charts/*/charts/*.tgz`) and `Chart.lock` are generated, not tracked — run `make deps` (from `charts/`) after cloning or dependency changes.
 
 ## Install (foundation tier)
 

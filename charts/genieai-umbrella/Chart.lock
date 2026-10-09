@@ -1,6 +1,0 @@
-dependencies:
-- name: genieai-common
-  repository: file://../genieai-common
-  version: 0.1.0
-digest: sha256:00943846b80988a883432da172f6f6aa43433311aa795974d171c5536c85de1a
-generated: "2026-10-09T12:36:05.765943961+02:00"

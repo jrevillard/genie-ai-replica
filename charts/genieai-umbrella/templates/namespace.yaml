@@ -6,6 +6,12 @@
        `namespace` in values exists for templates that must SPELL OUT a
        target namespace; it must equal the release namespace. */ -}}
 {{- $ns := .Release.Namespace -}}
+{{- /* Fail fast when the legacy values key diverges from the release
+       namespace: later-tier templates still read .Values.namespace, and a
+       divergence silently splits the install across two namespaces. */ -}}
+{{- if and .Values.namespace (ne .Values.namespace .Release.Namespace) -}}
+{{- fail (printf "values 'namespace' (%s) must equal the release namespace (%s) — pass -n %s or set the value accordingly" .Values.namespace .Release.Namespace .Release.Namespace) -}}
+{{- end -}}
 apiVersion: v1
 kind: Namespace
 metadata:

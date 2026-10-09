@@ -986,6 +986,10 @@ spec:
   # the ingress host is known. Dev default keeps localhost URLs working.
   http:
     httpEnabled: true
+    # Consumers (backend, chatqna, dataprep, the migrate Job) all target
+    # http://keycloak-service.<ns>:8080/auth — Keycloak 26.x serves at /
+    # by default, so the relative path MUST be pinned to /auth to match.
+    httpRelativePath: /auth
 {{- end -}}
 ```
 

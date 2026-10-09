@@ -18,4 +18,4 @@ ct lint --config charts/ci/ct.yaml \
   --charts charts/genieai-umbrella
 ```
 
-Pinned K8s version: **1.33.0** — the kind node image AND the `ct install --kube-version 1.33.0` CLI flag (there is no config-file key for it). Update both in lockstep.
+Pinned K8s version: **1.33.0** — solely via the kind node image (`kindest/node:v1.33.0`) the cluster is created from. There is no ct config key and no ct CLI flag for it (verified against chart-testing v3.15.0 source).

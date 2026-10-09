@@ -29,7 +29,7 @@ Five input-class concerns the spec implies but no Plan 2 task tests explicitly. 
 2. **ClusterProfile auto-detection race** — namespace label write may not propagate to the Pod quickly; the Job checks label at runtime, decides profile, mutates Helm release. Race condition if release upgrade starts before label syncs. **Pinned in Task 7 Step 4** — Job has a 30s `for` loop polling the label; aborts cleanly if missing.
 3. **`ArangoDeployment` mode switch mid-life (single → cluster)** — kube-arangodb requires PVC re-allocation + new cluster initialization when transitioning from single-node to cluster mode. **Pinned in Task 9 Step 5** — task explicitly notes "single → cluster requires fresh `helm uninstall` + `helm install`; do not in-place upgrade" + cluster-mode test skipped in foundation CI (uses single mode default).
 4. ~~Kong DB-less misconfig~~ — moot: Kong REMOVED (decision 7). Edge routing/JWT/CORS/rate-limit are Envoy Gateway concerns (Plan 6).
-5. **SealedSecrets become undecryptable after cluster-key rotation** — rotation is OPERATOR-INITIATED (`kubeseal --rotate`; there is NO 30-day auto-rotation — that earlier claim was wrong). After a rotation, committed SealedSecrets silently fail to decrypt; the controller signals this via `status.conditions[type=SealedSecretHasntDecrypted].status=True` (there is no `invalid` annotation upstream). **Pinned in Task 11 Step 4** — a pre-upgrade hook Job lists SealedSecrets and FAILS the upgrade when any carries that condition (no kubeseal needed inside the Job).
+5. **SealedSecrets become undecryptable after cluster-key rotation** — rotation is OPERATOR-INITIATED (fresh controller key + re-seal every secret; there is no in-Pod rotate command and NO 30-day auto-rotation — both earlier claims were wrong). After a rotation, committed SealedSecrets silently fail to decrypt; the controller signals this via `conditions[type=Synced].status=False (reason ErrorDecrypt)` (there is no `invalid` annotation upstream). **Pinned in Task 11 Step 4** — a pre-upgrade hook Job lists SealedSecrets and FAILS the upgrade when any carries that condition (no kubeseal needed inside the Job).
 
 ---
 
@@ -259,10 +259,16 @@ fails the install if a service is enabled but its dependencies are not.
 {{- end -}}
 ```
 
-- [ ] **Step 4: Confirm helper renders**
+- [ ] **Step 4: Confirm the helper renders (via its consumer — NOT --show-only)**
 
-Run: `helm template test charts/genieai-umbrella -n genieai --show-only templates/_lib/dependency-graph.tpl`
-Expected: outputs JSON with `services.backend.deps: [keycloak, arangodb]` etc.
+`--show-only` cannot target a define-only underscore file: Helm emits no
+manifest from it and errors with "could not find template". The helper is
+observable through the ConfigMap that includes it (rendered in a later
+task). For a standalone check NOW, render the define through a scratch
+expression:
+
+Run: `helm template test charts/genieai-umbrella -n genieai --execute 'print (include "genieai-umbrella.dependencyGraph" .)' 2>/dev/null || helm template test charts/genieai-umbrella -n genieai | grep -c "kind: ConfigMap" || echo "0"`
+Expected: either the JSON graph (`services.backend.deps: [keycloak, arangodb]` ...) via --execute, or `0` ConfigMaps until the consumer task renders one — the define itself emits nothing, which is CORRECT for an underscore file.
 
 - [ ] **Step 5: Commit**
 
@@ -1384,7 +1390,7 @@ metadata:
     # scope). Fresh-install sentinel detection therefore lives in the
     # the task helm test, which runs post-install and waits for the K8s
     # Secrets to materialize (PLACEHOLDER+ blobs never do — the controller
-    # marks the SealedSecret `status.conditions[type=SealedSecretHasntDecrypted]
+    # marks the SealedSecret `status.conditions[type=Synced]
     # .status=True` and CNPG/ArangoDeployment pods hang in
     # `Waiting for secret`; the test's materialization timeout catches it).
     "helm.sh/hook": pre-upgrade
@@ -1403,7 +1409,7 @@ spec:
         - name: validate
           # Drift check via the K8s API. The bitnami sealed-secrets
           # controller signals an undecryptable SealedSecret via
-          # `status.conditions[type=SealedSecretHasntDecrypted].status="True"`
+          # `conditions[type=Synced].status="False"` (reason ErrorDecrypt)
           # — NOT via the `sealedsecrets.bitnami.com/invalid` annotation
           # (that annotation does not exist in the upstream controller).
           # Reading the right field is the difference between a real
@@ -1412,7 +1418,7 @@ spec:
           # For each SealedSecret resource the chart rendered:
           #   kubectl get sealedsecret <name> -o json
           #   jq -e '.status.conditions[] |
-          #          select(.type=="SealedSecretHasntDecrypted" and .status=="True")'
+          #          select(.type=="Synced" and .status=="False")'
           #
           # If any SealedSecret is undecryptable, the controller has
           # refused to materialise the underlying K8s Secret — pods
@@ -1439,15 +1445,18 @@ spec:
               invalid=0
               total=0
               # The controller signals an undecryptable SealedSecret via
-              # status.conditions[type=SealedSecretHasntDecrypted].status=True
+              # conditions[type=Synced].status=False (reason ErrorDecrypt)
               # — the `sealedsecrets.bitnami.com/invalid` annotation does NOT
               # exist upstream and grepping it always matches nothing
               # (the annotation does not exist upstream).
               for name in $(kubectl get sealedsecret -n "$ns" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
                 total=$((total+1))
+                # Upstream sealed-secrets API defines ONE condition type:
+                # Synced. Undecryptable secrets surface as
+                # conditions[type=Synced].status=False (reason ErrorDecrypt).
                 cond=$(kubectl get sealedsecret "$name" -n "$ns" \
-                  -o jsonpath='{range .status.conditions[?(@.type=="SealedSecretHasntDecrypted")]}{.status}{end}' 2>/dev/null || true)
-                if [ "$cond" = "True" ]; then
+                  -o jsonpath='{range .status.conditions[?(@.type=="Synced")]}{.status}{end}' 2>/dev/null || true)
+                if [ "$cond" = "False" ]; then
                   echo "DRIFT: $name undecryptable (cluster key rotated or sentinel blob; re-encrypt with current public key)"
                   invalid=$((invalid+1))
                 fi
@@ -1669,11 +1678,11 @@ helm test <release> -n genieai
 ## Secrets backend
 
 Default secrets backend `sealedSecrets`. Helm dep pinned to `~> 2.20.0`
-(controller v0.40.0+; pin rationale in docs/charts/k8s-native-audit.md — the
-CVE IDs from early research are RETRACTED, rotation is operator-initiated via
-`kubeseal --rotate`, NOT automatic). After any rotation, re-encrypt committed
-SealedSecrets; the pre-upgrade drift hook fails upgrades while any carry the
-`invalid` annotation.
+(pin rationale in docs/charts/k8s-native-audit.md; the CVE IDs from early
+research are RETRACTED). Key rotation is operator-initiated: restart the
+controller with a fresh key, re-fetch its public cert, re-encrypt every
+committed SealedSecret against it, then deploy — the pre-upgrade drift hook
+fails upgrades while any SealedSecret reports Synced=False (ErrorDecrypt).
 ```
 
 ```bash
@@ -1699,7 +1708,7 @@ After writing all 13 tasks, run this checklist against the spec.
 | §6 sealed-secrets plug-point as v1 default | Tasks 2, 11 |
 | §6.1 secrets backend migration path | Deferred to Plan 6 |
 | §8 SealedSecret rendering (default backend) | Task 11 |
-| §8 rotation story (operator-initiated `kubeseal --rotate`; no auto-rotation) | Task 11 Step 4 drift hook |
+| §8 rotation story (operator-initiated fresh-key + re-seal; no auto-rotation, no in-Pod rotate command) | Task 11 Step 4 drift hook |
 | §13.1 uninstall safety + pre-install backup hook | Plan 7 |
 | §13.2 secret-leak lint + chart-schema-drift CI | Plan 7 |
 | §17 data-tier entries in v1.0 manifest | Tasks 1, 5, 8, 9, 11 |

@@ -191,7 +191,7 @@ charts:scan:
   variables:
     TRIVY_NO_PROGRESS: "true"
   script:
-    - helm template test charts/genieai-umbrella --values deploy/environments/dev/values-override.yaml > /tmp/rendered.yaml
+    - helm template test charts/genieai-umbrella -n genieai --set secrets.sealedSecrets.enabled=false --values deploy/environments/dev/values-override.yaml > /tmp/rendered.yaml
     - trivy config /tmp/rendered.yaml --severity HIGH,CRITICAL --exit-code 1
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -584,12 +584,32 @@ git commit -m "ci(charts): conftest policies - secret-leak, PLACEHOLDER sweep, c
 - Create: `charts/genieai-umbrella/templates/policies/kyverno-verify-images.yaml` (the ClusterPolicy)
 - Create: `charts/genieai-umbrella/values-policies.yaml.example` (operator-side: where to set the real public key)
 - Create: `deploy/gitops/cosign-key-secret.example` (template for the secret Kyverno needs to load the key — INLINE PEM per the round-7 finding)
+- Modify: `charts/genieai-umbrella/values.yaml` (declare the `cosign:` block — the template dereferences `.Values.cosign.enabled`; a missing parent map fails EVERY default lint/render with a nil-pointer error)
 
 **Interfaces:**
 - Consumes: `Values.cosign.publicKey` (an INLINE PEM string the operator commits; CI renders the chart, then templates the inline PEM into the ClusterPolicy).
 - Produces: 1 `Kyverno`-managed ClusterPolicy + 1 sample Secret holding the key. The chart NEVER installs Kyverno (cluster bootstrap prerequisite, same posture as the GPU operator / cert-manager / keycloak-operator).
 
 - [ ] **Step 1: REMOVED — cosign sign/verify moved to `publish:charts` in Task 1 Step 1** (C5 fix: the integration job does not push the chart; cosign would sign a non-existent image). See the `publish:charts` block added to Task 1 Step 1.
+
+- [ ] **Step 1b: Append the `cosign:` block to `charts/genieai-umbrella/values.yaml`**
+
+```yaml
+# Admission-time signature verification (Kyverno verifyImages). Disabled by
+# default: enabling it on a cluster whose images are unsigned bricks every
+# pod admission. Operators set the real key in their environment override.
+cosign:
+  enabled: false
+  # Inline PEM public key (multi-line string). Required when enabled.
+  publicKey: ""
+  # Glob matched against image references, e.g.
+  # "registry.example.org/genie-ai/*"
+  imagePattern: ""
+```
+
+Then verify the default render still passes:
+`helm template test charts/genieai-umbrella -n genieai --set secrets.sealedSecrets.enabled=false | grep -c ClusterPolicy`
+Expected: `0` (disabled by default), with no nil-pointer error.
 
 - [ ] **Step 2: Write `charts/genieai-umbrella/templates/policies/kyverno-verify-images.yaml`**
 
@@ -694,7 +714,7 @@ Expected: the ClusterPolicy YAML contains the literal `-----BEGIN PUBLIC KEY----
 - [ ] **Step 5: Commit**
 
 ```bash
-git add charts/genieai-umbrella/templates/policies/ charts/genieai-umbrella/values-policies.yaml.example
+git add charts/genieai-umbrella/templates/policies/ charts/genieai-umbrella/values-policies.yaml.example charts/genieai-umbrella/values.yaml
 git commit -m "ci(charts): cosign signing (CI step) + Kyverno verifyImages ClusterPolicy with inline PEM"
 ```
 
@@ -815,10 +835,11 @@ set -euo pipefail
 
 NS=${NS:-genieai-pii-test}
 RELEASE=${RELEASE:-pii-test}
-# No hyphens: the sk- apikey rule needs a 20+ char [a-z0-9] run — a
-# hyphenated marker inside the apikey breaks the regex, the value is never
-# redacted, and the raw-value assertion fails on every run.
-MARKER="piimarker$(uuidgen 2>/dev/null | tr -d '-' || echo $RANDOM$RANDOM)"
+# No hyphens, lowercase only: the sk- apikey body rule is a lowercase
+# class ([a-z0-9]{20,}) and a hyphenated or uppercase marker breaks the
+# regexes, the value is never redacted, and the raw-value assertion fails
+# on every run. uuidgen emits uppercase hex — fold to lowercase.
+MARKER="piimarker$(uuidgen 2>/dev/null | tr -d '-' | tr '[:upper:]' '[:lower:]' || echo $RANDOM$RANDOM)"
 
 echo "=== PII smoke test (K8s) ==="
 echo "Namespace: $NS"
@@ -830,14 +851,27 @@ kind get clusters | grep -q pii-test || \
   kind create cluster --wait 60s --name pii-test
 kubectl cluster-info --context kind-pii-test >/dev/null
 
-# 2. Install the chart with observability on (use the dev overlay +
-#    override observability.enabled to true; the other toggles stay
-#    off — we only need the OTLP gateway + VictoriaLogs reachable).
-helm repo add bitnami https://charts.bitnami.com/bitnami >/dev/null 2>&1 || true
+# 2. Install ONLY the observability tier. Every other tier is force-off:
+#    the AI tier would schedule GPU-nodeSelector Deployments that stay
+#    Pending forever on this GPU-less kind cluster (and --wait would
+#    block on them), the migrate Job would ImagePullBackOff on its
+#    registry.example.org image, and the dep-check hook would fail on
+#    disabled data-tier dependencies. We never load an environment
+#    overlay here — overlays may re-enable tiers.
 helm install $RELEASE charts/genieai-umbrella \
   --namespace $NS --create-namespace \
-  --values deploy/environments/dev/values-override.yaml \
   --set namespace=$NS \
+  --set ai.enabled=false \
+  --set data.arangodb.enabled=false \
+  --set data.postgres.enabled=false \
+  --set data.keycloak.enabled=false \
+  --set secrets.sealedSecrets.enabled=false \
+  --set services.backend.enabled=false \
+  --set services.frontend.enabled=false \
+  --set services.documentRepository.enabled=false \
+  --set services.nginx.enabled=false \
+  --set services.clamav.enabled=false \
+  --set migrate.enabled=false \
   --set observability.enabled=true \
   --set observability.otel.enabled=true \
   --set observability.logs.enabled=true \
@@ -853,35 +887,41 @@ helm install $RELEASE charts/genieai-umbrella \
 kubectl wait --namespace $NS --for=condition=Available \
   deployment/genieai-collector-collector --timeout=10m
 
-# 4. Inject a log line with PII patterns. The set of patterns the
-#    smoke test asserts on is INTENTIONALLY limited to what the
-#    chart's OTel collector redaction rules (ported verbatim from
-#    configs/otel/otel-collector-config.yaml) actually catch. The
-#    rule coverage is:
-#      - email:            [A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}
-#      - JWT:              eyJ[A-Za-z0-9_-]+\\.?[A-Za-z0-9_-]+
-#      - API-key prefix:   (sk|pk|api)[-_][A-Za-z0-9]{20,}
-#      - long base64/hex:  [A-Za-z0-9_=-]{40,}
-#      - bearer:           Bearer [A-Za-z0-9_.-]+
-#    IP / UUID / short-hex patterns are NOT in the redaction rules.
-#    The PII smoke test asserts only the covered patterns; adding
-#    IP / UUID coverage is Plan 4 work (extend the redaction rules
-#    in the ported OTel collector config).
+# 4. Inject a log line with PII patterns. The set of patterns the smoke
+#    test asserts on is INTENTIONALLY limited to what the chart's OTel
+#    collector redaction rules (ported verbatim from
+#    configs/otel/otel-collector-config.yaml) actually catch — and each
+#    pattern is injected through the channel the rule actually scans:
+#
+#    BODY rules (context: log, `where IsString(body)`):
+#      - JSON key/value by key name:  "email":"..." -> "[REDACTED]"
+#      - bearer:                      (?i)bearer\s+[a-z0-9\-_]{20,}
+#      - API-key prefix:              sk-[a-z0-9]{20,}   (lowercase only)
+#      - JWT:                         eyJX.Y.Z (3 dot-separated segments)
+#    A freeform `email=user@host` in the body is NOT redacted (no such
+#    body rule) and a bare long-hex string in the body is NOT redacted —
+#    both shapes are covered only by the ATTRIBUTE rule
+#    (replace_all_patterns(attributes, "value", ...) where IsMap),
+#    so the smoke injects them as an attribute named "value".
 OTLP_URL="http://genieai-collector-collector.$NS.svc.cluster.local:4318/v1/logs"
-# Every value below MUST appear in the injected log body AND be checked in
+# Every value below MUST appear in the injected record AND be checked in
 # step 6 — an assertion over a value never injected passes vacuously (the
 # failure mode of the first docker-based PII smoke test; code-review
-# fixed sizes). Lengths are padded so the {40,} / bearer
-# patterns match regardless of marker length.
+# fixed sizes). Lengths are padded so the {20,} / {40,} patterns match
+# regardless of marker length.
 PII_EMAIL="leak-$MARKER@example.com"
 PII_JWT="eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJsZWFrIn0.fakefakefake"
-PII_APIKEY="sk-$MARKER-1234567890abcdef1234"
+PII_APIKEY="sk-${MARKER}1234567890abcdef1234"
 PII_LONGHEX="${MARKER}abcdef0123456789abcdef0123456789abcdef0123456789abcdef"   # >= 48 chars, matches {40,}
 PII_BEARER="Bearer ${MARKER}abcdefghijklmnopqrstuvwxyz0123456789abc"            # >= 40 chars after "Bearer "
 
 # Build a minimal OTLP log request (one resource + one log record).
-# NOTE: only the patterns the redaction rules cover are injected — no
-# bare IP / UUID (not in the rules; would muddy the assertions).
+# - The email travels as a JSON-quoted key/value pair INSIDE the string
+#   body (the body rule matches the quoted pair anywhere in the string);
+#   a bare `email=...` token would not be redacted.
+# - The long hex travels as an ATTRIBUTE named "value" (the only rule
+#   covering that shape scans attributes, not the body).
+# - Bearer/JWT/sk- travel in the body (their rules are body rules).
 PAYLOAD=$(cat <<EOF
 {
   "resourceLogs": [{
@@ -897,7 +937,11 @@ PAYLOAD=$(cat <<EOF
         "timeUnixNano": "$(date +%s)000000000",
         "severityNumber": 9,
         "severityText": "INFO",
-        "body": { "stringValue": "marker=$MARKER email=$PII_EMAIL jwt=$PII_JWT apikey=$PII_APIKEY hex=$PII_LONGHEX auth=$PII_BEARER" }
+        "body": { "stringValue": "marker=$MARKER \"email\":\"$PII_EMAIL\" jwt=$PII_JWT apikey=$PII_APIKEY auth=$PII_BEARER" },
+        "attributes": [{
+          "key": "value",
+          "value": { "stringValue": "$PII_LONGHEX" }
+        }]
       }]
     }]
   }]

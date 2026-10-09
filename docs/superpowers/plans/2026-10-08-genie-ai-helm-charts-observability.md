@@ -144,18 +144,13 @@ observability:
     enabled: false
     adminUser: admin
     adminPasswordRef: grafana-admin-password    # SealedSecret name
-  # PII redaction rules (port from Swarm fluentd config). Operators edit
-  # per deployment; conftest lint ensures no rule is empty.
-  piiRedaction:
-    rules:
-      - pattern: '"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"'
-        replace: '[EMAIL REDACTED]'
-      - pattern: '"\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b"'
-        replace: '[IP REDACTED]'
-      - pattern: '"\\b[A-Fa-f0-9]{32,}\\b"'
-        replace: '[HEX REDACTED]'
-      - pattern: '"\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\b"'
-        replace: '[UUID REDACTED]'
+  # NO piiRedaction values block: the collector config (including the
+  # redaction transform) is ported VERBATIM from
+  # configs/otel/otel-collector-config.yaml via .Files.Get — a values-side
+  # copy would be dead config no template reads and would drift from the
+  # ported source (the actual rule set covers email, JWT, sk-/pk-/api-
+  # keys, 40+ char base64/hex runs, and Bearer tokens — NOT bare IP or
+  # UUID).
 ```
 
 - [ ] **Step 3: Render with defaults — observability off (Review Focus #5)**
@@ -523,7 +518,28 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: genieai-agent
-    namespace: {{ .Values.namespace }}
+    namespace: {{ printf "%s-agent" .Values.namespace }}
+{{- end -}}
+```
+
+The agent namespace (below) carries `pod-security.kubernetes.io/enforce:
+privileged` — the filelog receiver needs hostPath `/var/log/pods`, which the
+restricted PSS forbids; keeping the agent in the main namespace would make
+every DaemonSet pod fail admission.
+
+```yaml
+{{- if .Values.observability.otel.enabled -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ printf "%s-agent" .Values.namespace }}
+  labels:
+    genieai.io/cluster-profile: {{ .Values.clusterProfile | default "dev" | quote }}
+    app.kubernetes.io/part-of: genieai
+    # hostPath access is required by the node log reader — this dedicated
+    # namespace relaxes ONLY itself; the main namespace stays restricted.
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest
 {{- end -}}
 ```
 
@@ -535,7 +551,9 @@ apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
 metadata:
   name: genieai-agent
-  namespace: {{ .Values.namespace }}
+  # Dedicated privileged namespace — see the namespace template in Step 2
+  # (the main namespace enforces restricted PSS, which forbids hostPath).
+  namespace: {{ printf "%s-agent" .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
 spec:
@@ -1126,7 +1144,7 @@ Foundation + Plans 2-4 complete (data layer, service tier Group 5, observability
 - Tests live in each chart's `tests/` directory; `ct install` for integration, `helm test` for smoke.
 - NetworkPolicy: every service gets default-deny + explicit allowlist.
 - PDB: only emitted when `replicas >= 2`.
-- Observability: profile-gated; `dev=off`, `staging/prod/sovereign=on` by default.
+- Observability: explicit values only — `false` by default for EVERY profile; staging/prod/sovereign overlays set `observability.enabled: true` in their values-override.yaml.
 EOF
 
 git add charts/README.md
@@ -1144,10 +1162,10 @@ Plan 4 shipped:
 
 | Component | Resource type | Default |
 |---|---|---|
-| VictoriaMetrics | VMSingle (dev/sovereign) / VMCluster (prod) | on for staging/prod/sovereign |
-| VictoriaLogs | VLSingle | on for staging/prod/sovereign |
-| VictoriaTraces | VTSingle | on for staging/prod/sovereign |
-| OpenTelemetry Collector | OpenTelemetryCollector (gateway mode) | on for staging/prod/sovereign |
+| VictoriaMetrics | VMSingle (dev/sovereign) / VMCluster (prod) | enabled via each env's values-override.yaml |
+| VictoriaLogs | VLSingle | enabled via each env's values-override.yaml |
+| VictoriaTraces | VTSingle | enabled via each env's values-override.yaml |
+| OpenTelemetry Collector | OpenTelemetryCollector (gateway mode) | enabled via each env's values-override.yaml |
 | Grafana | grafana-operator CRs (Grafana + GrafanaDatasource + 9 GrafanaDashboard) | optional |
 | Traces query | Grafana Jaeger datasource -> VictoriaTraces direct (native Tempo HTTP API) | bundled when traces enabled |
 

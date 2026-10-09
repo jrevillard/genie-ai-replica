@@ -97,6 +97,7 @@ services:
     secrets:
       - name: keycloak-client-secret
       - name: huggingface-hub-token
+      - name: email-password          # EMAIL_PASSWORD via envFrom (SMTP)
     pvc: null
     probes:
       readiness: { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 10, periodSeconds: 10 }

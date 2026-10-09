@@ -1,27 +1,21 @@
 {{- if and .Values.data.keycloak.enabled .Values.data.keycloak.realmImport -}}
 {{- if and .Values.data.keycloak.verifyEmail (not .Values.data.keycloak.smtp) }}{{ fail "data.keycloak.verifyEmail=true requires data.keycloak.smtp to be set (no SMTP server configured)" }}{{- end }}
-{{- /* Two-layer guards on clientSecrets: a missing key fails render
-       unconditionally (--set data.keycloak.clientSecrets: {} would
-       otherwise render secret: "" and the realm import would reject);
-       the `change-me-*` sentinel is caught by failOnPlaceholderSecrets
-       below. Both gates are needed — fail() guards the key, the loop
-       guards the value. */ -}}
-{{- if not (hasKey .Values.data.keycloak.clientSecrets "proxyClient") -}}
-{{- fail "data.keycloak.clientSecrets.proxyClient is required (set it via values-override; do not commit real values)" -}}
-{{- end -}}
-{{- if not (hasKey .Values.data.keycloak.clientSecrets "dataprep") -}}
-{{- fail "data.keycloak.clientSecrets.dataprep is required (set it via values-override; do not commit real values)" -}}
-{{- end -}}
-{{- if not (hasKey .Values.data.keycloak.clientSecrets "grafana") -}}
-{{- fail "data.keycloak.clientSecrets.grafana is required (set it via values-override; do not commit real values)" -}}
-{{- end -}}
 {{- /* failOnPlaceholderSecrets defaults to TRUE in values.yaml; a default
        install with `change-me-*` client secrets fails this render before
-       the realm CR is built. The loop below scans every client secret. */ -}}
+       the realm CR is built. The single loop covers all three failure
+       modes (missing key / empty value / change-me prefix) for all
+       three secrets (proxyClient, dataprep, grafana). Per-key `hasKey`
+       fail() checks for the same three keys were previously rendered
+       above this block, but empty values used to slip past `change-me-*`
+       and a missing key rendered as `secret: ""` — both of which the
+       Keycloak operator rejects. */ -}}
 {{- if .Values.data.keycloak.failOnPlaceholderSecrets }}
-{{- range $k, $v := .Values.data.keycloak.clientSecrets }}
-{{- if hasPrefix "change-me" $v }}{{ fail (printf "data.keycloak.clientSecrets.%s still a placeholder (change-me-*) — set real values in the environment override" $k) }}{{- end }}
-{{- end }}
+{{- range $k := list "proxyClient" "dataprep" "grafana" }}
+{{- $v := (get $.Values.data.keycloak.clientSecrets $k) -}}
+{{- if or (not $v) (eq $v "") (hasPrefix "change-me" $v) -}}
+{{- fail (printf "data.keycloak.clientSecrets.%s is empty or a placeholder (change-me-*); set a real value in the values-override" $k) -}}
+{{- end -}}
+{{- end -}}
 {{- end }}
 apiVersion: k8s.keycloak.org/v2alpha1
 kind: KeycloakRealmImport

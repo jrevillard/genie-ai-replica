@@ -479,49 +479,15 @@ Expected: prints `0`.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  # A REGULAR resource — NO helm.sh/hook annotation. An earlier draft
-  # hooked the SA with `pre-delete`, which meant Helm only ever applied
-  # it during uninstall: the DaemonSet's pods then failed admission with
-  # `serviceaccounts "genieai-agent" not found` on every install
-  # (hook-annotated resources skip install entirely).
-# Release-owned resources are garbage-
-  # collected by Helm on uninstall; nothing extra is needed.
-  name: genieai-agent
-  namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
+  # A REGULAR resource — NO helm.sh/hook annotation (hook-annotated
+  # resources skip install entirely; an earlier pre-delete-hooked SA never
+  # existed at runtime). Same namespace as the DaemonSet: a ServiceAccount
+  # is namespaced, so an SA in the main namespace cannot serve pods in
+  # <ns>-agent. Helm garbage-collects release-owned resources on uninstall.
   name: genieai-agent
   namespace: {{ printf "%s-agent" .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
-rules:
-  # k8sattributes enrichment: resolve pod IP -> pod/namespace metadata
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  # SAME namespace as the DaemonSet (the agent namespace): a ServiceAccount
-  # is namespaced — binding it in the main namespace while the pods run in
-  # <ns>-agent leaves the SA unresolvable and every pod fails admission.
-  name: genieai-agent
-  namespace: {{ printf "%s-agent" .Values.namespace }}
-  labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: genieai-agent
-subjects:
-  - kind: ServiceAccount
-    name: genieai-agent
-    namespace: {{ printf "%s-agent" .Values.namespace }}
 ---
 # k8sattributes enrichment resolves pod IPs to pod metadata ACROSS
 # namespaces (workload pods live in the main namespace) — a Role in the
@@ -530,7 +496,10 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: genieai-agent
+  # Release-derived name: a fixed cluster-scoped name collides across
+  # multiple installs of this chart (ownership error on the second
+  # install, cross-delete on uninstall).
+  name: {{ include "genieai-common.fullname" . }}-agent
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
 rules:
@@ -541,13 +510,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: genieai-agent
+  name: {{ include "genieai-common.fullname" . }}-agent
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "otel-agent"))) | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: genieai-agent
+  name: {{ include "genieai-common.fullname" . }}-agent
 subjects:
   - kind: ServiceAccount
     name: genieai-agent

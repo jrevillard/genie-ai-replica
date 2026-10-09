@@ -12,6 +12,10 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   restartPolicy: Never
+  {{- with .Values.global.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   # Required by PSA restricted.
   securityContext:
     runAsNonRoot: true
@@ -20,7 +24,7 @@ spec:
       type: RuntimeDefault
   containers:
     - name: test
-      image: alpine:3.20
+      image: "{{ .Values.global.imageRegistry | default "docker.io" }}/alpine:3.20"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false
@@ -43,7 +47,7 @@ spec:
 {{- /* Gated on SealedSecrets AND at least one data tier rendering them —
        the test asserts the tier-specific Secrets exist, so a release with
        secrets (or all data tiers) disabled has nothing to check. */ -}}
-{{- if and .Values.secrets.sealedSecrets.enabled (or .Values.data.arangodb.enabled .Values.data.keycloak.enabled) }}
+{{- if and .Values.secrets.sealedSecrets.enabled (or .Values.data.arangodb.enabled (or .Values.data.keycloak.enabled .Values.data.postgres.enabled)) }}
 ---
 apiVersion: v1
 kind: Pod
@@ -113,7 +117,9 @@ spec:
           check_secret arango-jwt-secret || failed=1
           check_secret arango-root-secret || failed=1
           {{- end }}
-          {{- if .Values.data.keycloak.enabled }}
+          {{- if or .Values.data.keycloak.enabled .Values.data.postgres.enabled }}
+          # keycloak-db-credentials is rendered by the Postgres tier (the
+          # Keycloak CR consumes it); either tier enabled means it must exist.
           check_secret keycloak-db-credentials || failed=1
           {{- end }}
           if [ "$failed" -ne 0 ]; then

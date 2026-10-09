@@ -18,12 +18,15 @@ metadata:
     genieai.io/data-tier: arangodb
 spec:
   mode: Single
-  image: arangodb/arangodb:3.12
+  image: arangodb/arangodb:3.12.4
   externalAccess:
     type: None
   single:
     args:
-      - --server.authentication-system-only=true
+      # Vector indexes are required by the ingestion/retrieval pipeline
+      # (dataprep creates them; hybrid retrieval returns nothing without
+      # the flag). Flag name per ArangoDB 3.12.4.
+      - --experimental-vector-index=true
       # NO --server.endpoint: `arangodb://` is not a valid endpoint scheme
       # (arangod accepts tcp:// / ssl://). The operator sets endpoint+advertising
       # itself from the CR; hand-rolling it here breaks pod startup.
@@ -60,17 +63,33 @@ metadata:
     genieai.io/data-tier: arangodb
 spec:
   mode: Cluster
-  image: arangodb/arangodb:3.12
+  image: arangodb/arangodb:3.12.4
   externalAccess:
     type: None
   agents:
     count: 3
     args:
-      - --server.authentication-system-only=true
+      # Vector indexes are required by the ingestion/retrieval pipeline
+      # (flag name per ArangoDB 3.12.4; same flag as the single branch).
+      - --experimental-vector-index=true
+    # Agency state MUST persist across restarts — on emptyDir every pod
+    # reschedule loses the cluster configuration.
+    volumeClaimTemplate:
+      spec:
+        {{- with .Values.pluggable.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.data.arangodb.storageSize | default "50Gi" }}
   dbservers:
     count: 3
     args:
-      - --server.authentication-system-only=true
+      # Vector indexes are required by the ingestion/retrieval pipeline
+      # (flag name per ArangoDB 3.12.4; same flag as the single branch).
+      - --experimental-vector-index=true
     volumeClaimTemplate:
       spec:
         {{- with .Values.pluggable.storageClassName }}
@@ -83,6 +102,10 @@ spec:
             storage: {{ .Values.data.arangodb.storageSize | default "50Gi" }}
   coordinators:
     count: 2
+    args:
+      # Vector indexes are required by the ingestion/retrieval pipeline
+      # (flag name per ArangoDB 3.12.4; same flag as the single branch).
+      - --experimental-vector-index=true
   auth:
     jwtSecretName: arango-jwt-secret
   bootstrap:

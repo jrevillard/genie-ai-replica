@@ -166,7 +166,7 @@ helmCharts:
     # `make -C charts deps` on checkout first. Clusters that cannot run
     # helm (air-gapped ArgoCD) should switch `chart:` to the published OCI
     # ref instead once publish:charts ships it.
-    chart: ../../charts/genieai-umbrella
+    chart: ../../../charts/genieai-umbrella
     valuesFile: values-override.yaml
 ```
 
@@ -597,7 +597,10 @@ Expected: prints the Certificate with the prod Issuer name.
 
 - [ ] **Step 3: Negative test — missing issuerName fails**
 
-Run: `helm template test charts/genieai-umbrella -n genieai -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=false 2>&1 | grep "Error" | head -3`
+# TLS must stay ENABLED for the `required` guard to evaluate — disabling
+# it skips the whole block and renders cleanly (an unpassable assertion).
+# Instead, keep TLS on and blank the issuerName.
+Run: `helm template test charts/genieai-umbrella -n genieai -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=true --set ingress.tls.issuerName= 2>&1 | grep "Error" | head -3`
 Expected: a Helm template error (the `required` function in Task 3 Step 1).
 
 - [ ] **Step 4: `helm lint --strict` + commit**
@@ -946,7 +949,10 @@ In `docs/charts/plan-defects.md`, mark these rows as closed:
 ```bash
 helm lint charts/genieai-umbrella --strict -f deploy/environments/prod/values-override.yaml
 helm template test charts/genieai-umbrella -n genieai -f deploy/environments/prod/values-override.yaml | grep -c "^kind: Job$"
-# Expected: 1 (the migrate Job; hook Jobs are pre-install/pre-upgrade, the gate counts)
+# Expected: 3 — the migrate Job + the dep-check and sealed-secret-validate
+# hook Jobs (helm template renders hook resources too; they only RUN at
+# install/upgrade time). Fewer than 3 means a hook template stopped
+# rendering — investigate before touching anything else.
 helm template test charts/genieai-umbrella -n genieai -f deploy/environments/prod/values-override.yaml | grep -c "kind: PersistentVolumeClaim"
 # Expected: 2 (HF cache + document-repository)
 git add charts/genieai-umbrella/templates/migrate/ charts/genieai-umbrella/templates/networkpolicies-verified.yaml charts/genieai-umbrella/templates/services/documentRepository.yaml docs/charts/plan-defects.md
@@ -981,9 +987,24 @@ spec:
     spec:
       restartPolicy: Never
       serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
+      # PSA restricted applies to hook pods too — without this the gate
+      # itself is rejected at admission and every uninstall errors even on
+      # the annotated path.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: gate
           image: bitnami/kubectl:1.33
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop: ["ALL"]
           command:
             - /bin/sh
             - -c

@@ -381,3 +381,28 @@ generation, verify-local-build 46/46 (patched_files_expected 42). One
 commit: 036af473b. NOTE: first smoke run against the build tree failed
 24/32 — the build tree held a STALE pre-async smoke copy; always cp the
 fresh smoke before running.
+
+## 13. 1-8f2 — the generating envelope (2026-10-09, f8742689e + d80af5054)
+
+David's first async generate "404ed" — but the log told the opposite
+story: POST 16:25:11 → ~14 polls 404 → head-suite.generated at 16:26:58
+(positives=100, negatives=20; the doc verified in ArangoDB). The suite
+LANDED; the wait was the failure signal. Root flaw: a minted in-flight
+key hit getSuite's SUITE_NOT_FOUND path — the server logged error-level
+"Unhandled OKF error … suite not found" on EVERY 2.5s poll and the
+browser painted red 404s, for the normal path.
+
+Fix: getSuite consults suiteGenerationInFlight(repoId, key) before the
+404 — a minted, still-generating key answers 200
+{suite_key, status:'generating'}; only a never-minted key 404s.
+pollForSuite treats the envelope as keep-waiting (it carries suite_key —
+the old adoption check would have adopted it as a suite) and adopts only
+real docs. Same adoption bug fixed in the smoke generateSuite() helper,
+which now also PINS the envelope contract (first GET of a minted key
+must be the generating envelope). Smoke section 10 skips as one line
+when the live repo is serving — REPO_READ_ONLY 409s on frontmatter
+writes are correct behavior, not failures (NCD was ingested before the
+run; that also explains the earlier 6 "failures").
+
+Tests: okf-server 847, frontend 1669, live smoke 23/23 (1 skipped),
+verify-local-build 46/46.

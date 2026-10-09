@@ -1,0 +1,3 @@
+# genieai-common library chart — no chart-specific defaults.
+# Consuming charts define defaults in their own values.yaml; this file exists
+# only because Helm requires values.yaml on disk even for library charts.

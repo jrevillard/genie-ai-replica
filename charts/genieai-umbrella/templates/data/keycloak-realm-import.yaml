@@ -1,5 +1,8 @@
 {{- if and .Values.data.keycloak.enabled .Values.data.keycloak.realmImport -}}
 {{- if and .Values.data.keycloak.verifyEmail (not .Values.data.keycloak.smtp) }}{{ fail "data.keycloak.verifyEmail=true requires data.keycloak.smtp to be set (no SMTP server configured)" }}{{- end }}
+{{- /* failOnPlaceholderSecrets defaults to TRUE in values.yaml; a default
+       install with `change-me-*` client secrets fails this render before
+       the realm CR is built. The loop below scans every client secret. */ -}}
 {{- if .Values.data.keycloak.failOnPlaceholderSecrets }}
 {{- range $k, $v := .Values.data.keycloak.clientSecrets }}
 {{- if hasPrefix "change-me" $v }}{{ fail (printf "data.keycloak.clientSecrets.%s still a placeholder (change-me-*) — set real values in the environment override" $k) }}{{- end }}

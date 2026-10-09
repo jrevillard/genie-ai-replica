@@ -2,8 +2,19 @@
 # This file is a literal ArgoCD Application manifest, NOT a Helm template.
 # Apply with:
 #   kubectl apply -f argocd-application.yaml -n argocd
-# Pre-condition: ArgoCD installed in the `argocd` namespace; the target cluster
-# is the current kubectl context.
+# Pre-conditions:
+#   - ArgoCD installed in the `argocd` namespace
+#   - an AppProject named `genieai` exists (spec.project below), e.g.
+#     `kubectl apply -f` an AppProject manifest granting the repo + destinations
+#   - the target cluster is the current kubectl context
+#
+# LIMITATION (destructive prune): ArgoCD applies rendered manifests directly
+# and never executes Helm lifecycle hooks — including any pre-delete
+# confirmation gate the chart may define. An ArgoCD prune deletes the
+# Namespace and every PVC inside it with no gate. Destructive-sync protection
+# for GitOps-delivered instances must come from an ArgoCD-native mechanism
+# (finalizers, preSync hooks, or disabling automated prune on this
+# Application); the Helm-hook gate only protects plain `helm uninstall`.
 #
 # For el-salvador (or other high-customization envs), change:
 #   * targetRevision: main  ->  release/<env>

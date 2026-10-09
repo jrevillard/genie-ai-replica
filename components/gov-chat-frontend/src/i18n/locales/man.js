@@ -2704,7 +2704,8 @@ export default {
         title: 'Ta ṇe?',
         veto: "Kajjitōk in ej lukkun im forbidden tag “{'{'}tag{'}'}”. Elane e jikin ilo repo in, jol̦o̦k “{'{'}tag{'}'}” ilo forbidden tags ko ilo Frontmatter, im publish ak in rebuild head eo.",
         floor:
-          'Kajjitōk in ejab naan ko ilo repo in (score eo ej jab elōn floor eo) — tag ko enaj jab kōm̦m̦an melele; kōnka ej suppress eo em̦ōj.'
+          'Kajjitōk in ejab naan ko ilo repo in (score eo ej jab elōn floor eo) — tag ko enaj jab kōm̦m̦an melele; kōnka ej suppress eo em̦ōj.',
+        rejected: 'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
       },
       suites: {
         generate: 'Generate test suite',
@@ -2743,7 +2744,25 @@ export default {
         batchTitle: 'Why the failing negatives routed here',
         batchNone: 'No fix was suggested — review the failing queries against the declared scope manually.',
         addAll: 'Add all',
-        rebuildRerun: 'Rebuild head & re-run suite'
+        rebuildRerun: 'Rebuild head & re-run suite',
+        positiveFailuresTitle: 'Why positives stopped passing',
+        positiveFailures:
+          '{n} positive test(s) were suppressed this run — the forbidden tags over-match the repository scope.',
+        vetoedBy: 'Vetoed by',
+        marginKilled: '{n} positive test(s) lost on margin (no single veto tag).',
+        removals: 'Tags to remove (they veto this repository’s own positives)',
+        removeTip: 'Remove "{tag}" — it vetoed {n} positive test(s)',
+        tripwire: 'This cycle broke {n} positive tests — the added tags over-suppress. Revert?',
+        tripwireRevert: 'View revert options',
+        staleSnapshot: 'Tags changed since this suite was generated — regenerate for fresh forbidden rows.',
+        revertTitle: 'Revert tags',
+        revertForbiddenCount: '{n} forbidden tags',
+        revertAction: 'Revert',
+        revertBusy: 'Loading save history…',
+        revertSaving: 'Restoring the frontmatter…',
+        revertEmpty: 'No frontmatter saves recorded yet.',
+        revertDone: 'Frontmatter restored — rebuild the head and re-run to apply it.',
+        removeTag: 'Remove from forbidden tags'
       },
       error: {
         explain: 'Explain failed',
@@ -2752,7 +2771,10 @@ export default {
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Could not load the save history',
+        revert: 'Could not revert the frontmatter',
+        advisor: 'Advisor failed'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2762,6 +2784,16 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Advisor: recommend tag changes',
+        busy: 'Simulating tag changes across recent runs…',
+        title: 'Tag-set recommendation (simulated across recent runs)',
+        apply: 'Apply changes & rebuild & re-run suite',
+        scorecard: 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed',
+        now: 'Now',
+        predicted: 'predicted',
+        scope: ' (across {q} queries from the last {r} runs)'
       }
     }
   },

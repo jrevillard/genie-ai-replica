@@ -15,7 +15,15 @@
  * near-miss class chip, the claim-side "Explain & suggest" loop
  * (routing-explain → suggested forbidden tags → shared two-write
  * frontmatter save → rebuild + re-run), and the batch "Explain failures"
- * advice for a suite run (add-all chips).
+ * advice for a suite run (add-all chips). Story 1-8d makes the loop
+ * GUARDED and reversible (the 2026-10-09 poisoning: LLM suggestions
+ * forbade the repo's OWN subject and positives collapsed while negatives
+ * went 20/20): guardrail-rejected proposals render as muted chips with
+ * their reason, removal_suggestions render as one-click danger chips
+ * (shape built with the tag excluded), positive failures gate the
+ * Explain button alongside negatives, a same-suite positive-pass-rate
+ * drop raises the red tripwire strip pointing at the Revert panel, and
+ * the frontmatter save history is revertible in place.
  */
 
 const dispatch = jest.fn();
@@ -639,4 +647,212 @@ it('1-8c: the claim-side teach loop is hidden in readOnly (wizard writes nothing
   await w.vm.$nextTick();
   expect(w.vm.claimTeachable).toBe(false);
   expect(w.find('.okf-headtest__add-chip').exists()).toBe(false);
+});
+
+// ─── Story 1-8d: the GUARDED teaching loop — rejection chips, removal
+//     chips, positive-failure visibility, the tripwire, revert ──────────────
+
+it('1-8d: guardrail rejections render as muted chips with their reason (Test tab)', async () => {
+  const w = mountDialog({ initialTab: 'test' });
+  await w.vm.$nextTick();
+  w.vm.query = 'lung cancer staging';
+  dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'claim' }));
+  await w.vm.onRunTest();
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: {
+      suggestion: {
+        tags: [],
+        rejected: [{ tag: 'lung-cancer', reason: 'too close to the repository subject (similarity 0.81 >= 0.55)' }],
+        source: 'guardrail',
+        reason: 'every proposal was screened out by the guardrail'
+      }
+    }
+  });
+  await w.vm.onExplainClaim();
+  await w.vm.$nextTick();
+  const rej = w.findAll('.okf-headtest__rejected-chip');
+  expect(rej).toHaveLength(1);
+  expect(rej.at(0).text()).toContain('lung-cancer');
+  // The reason rides as the tooltip — trust through transparency.
+  expect(rej.at(0).attributes('title')).toContain('too close');
+  // Rejections are NOT "nothing suggested" — the 1-8c dead-end copy stays hidden.
+  expect(w.element.textContent).not.toContain('No forbidden tag was suggested');
+  expect(w.element.textContent).toContain('every proposal was screened out by the guardrail');
+});
+
+it('1-8d: Explain button gate — positive failures qualify, legacy summaries keep it hidden', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  // The explain affordance lives inside the current-suite block.
+  w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  // Negatives all pass, positives collapsed (the poisoning signature) → explainable.
+  w.vm.lastRunSummary = {
+    pass_rate: 0.5,
+    positive_passed: 2,
+    positive_total: 8,
+    negative_passed: 6,
+    negative_total: 6,
+    negative_evaluatable: 6
+  };
+  expect(w.vm.hasNegativeFailures).toBe(false);
+  expect(w.vm.hasPositiveFailures).toBe(true);
+  expect(w.vm.hasExplainableFailures).toBe(true);
+  await w.vm.$nextTick();
+  expect(w.findAll('button').find((b) => b.text().includes('Explain failures'))).toBeTruthy();
+  // Legacy summary without the counters → no button (nothing to explain from).
+  w.vm.lastRunSummary = { pass_rate: 1 };
+  expect(w.vm.hasExplainableFailures).toBe(false);
+});
+
+it('1-8d: removal chips — positive-failure attribution renders and a click filters the shape', async () => {
+  const w = mountDialog({
+    initialTab: 'suites',
+    repo: { ...REPO, frontmatter: { ...REPO.frontmatter, forbidden: ['mental-health', 'lung-cancer'] } }
+  });
+  await w.vm.$nextTick();
+  w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: {
+      suite_key: 's1',
+      run_key: 'r1',
+      failing_count: 0,
+      failing_queries: [],
+      suggested_tags: [],
+      rejected: [{ tag: 'genetics', reason: 'too close to the repository subject' }],
+      removal_suggestions: [
+        { tag: 'lung-cancer', killed: 2 },
+        { tag: 'non-smoking', killed: 1 }
+      ],
+      positive_failures: { count: 3, veto_counts: { 'lung-cancer': 2, 'non-smoking': 1 }, margin_killed: 0 },
+      source: 'none',
+      note: 'no wrongly-claimed negatives — the failures are suppressed positives (see removal_suggestions)'
+    }
+  });
+  await w.vm.onExplainFailures();
+  await w.vm.$nextTick();
+  // Positive failures are visible on their own terms + veto attribution.
+  expect(w.element.textContent).toContain('Why positives stopped passing');
+  expect(w.element.textContent).toContain('Vetoed by');
+  expect(w.element.textContent).toContain('lung-cancer ×2');
+  // The guardrail's rejected proposal renders in the batch panel too.
+  expect(w.findAll('.okf-headtest__rejected-chip').map((c) => c.text())).toHaveLength(1);
+  // Removal chip: danger variant, tooltip carries the attribution.
+  const chips = w.findAll('.okf-headtest__remove-chip');
+  expect(chips).toHaveLength(2);
+  expect(chips.at(0).attributes('title')).toContain('lung-cancer');
+  expect(chips.at(0).attributes('title')).toContain('2');
+  // Click → the shared save with the tag FILTERED OUT of forbidden.
+  dispatch.mockResolvedValueOnce({ ok: true, step: 'done' });
+  await chips.at(0).trigger('click');
+  await w.vm.$nextTick();
+  expect(dispatch).toHaveBeenCalledWith('okf/saveFrontmatter', {
+    repoId: 'r-1',
+    shape: expect.objectContaining({ forbidden: ['mental-health'] })
+  });
+  expect(w.vm.removedTags).toEqual(['lung-cancer']);
+  // After a removal the rebuild & re-run flow is offered.
+  expect(w.findAll('button').find((b) => b.text().includes('Rebuild head & re-run suite'))).toBeTruthy();
+});
+
+it('1-8d: tripwire — a same-suite positive-pass-rate drop raises the strip and points at Revert', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  const runWith = (passed) => ({
+    ok: true,
+    result: {
+      payload: {
+        summary: {
+          pass_rate: passed / 4,
+          positive_passed: passed,
+          positive_total: 4,
+          negative_passed: 2,
+          negative_total: 2,
+          negative_evaluatable: 2,
+          avg_margin: null,
+          steals: []
+        },
+        results: []
+      }
+    }
+  });
+  // Cycle 1: 4/4 positives.
+  dispatch.mockResolvedValueOnce(runWith(4));
+  dispatch.mockResolvedValueOnce({ ok: true, runs: [] });
+  await w.vm.onRunSuite();
+  expect(w.vm.tripwire).toBeNull();
+  // Cycle 2 (rebuild & re-run the SAME suite): positives collapse to 1/4.
+  dispatch.mockResolvedValueOnce({ ok: true, result: { dim: 1024 } }); // headRebuild
+  dispatch.mockResolvedValueOnce(runWith(1));
+  dispatch.mockResolvedValueOnce({ ok: true, runs: [] });
+  await w.vm.onRebuildSuiteRerun();
+  expect(w.vm.tripwire).toEqual({ dropped: 3 });
+  const strip = w.find('.okf-headtest__tripwire');
+  expect(strip.exists()).toBe(true);
+  expect(strip.text()).toContain('3');
+  // The strip's button jumps to the Revert panel and loads its history.
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    entries: [{ saved_at: '2026-10-09T10:00:00.000Z', actor: 'david.forden', forbidden_count: 3 }]
+  });
+  await w.vm.showRevertPanel();
+  expect(w.vm.revertHighlight).toBe(true);
+  expect(w.vm.revertEntries).toHaveLength(1);
+  expect(dispatch).toHaveBeenLastCalledWith('okf/frontmatterHistory', { repoId: 'r-1' });
+  // A different suite never compares across identities: regenerating clears it.
+  dispatch.mockResolvedValueOnce({ ok: true, result: { suite_key: 's2' } });
+  dispatch.mockResolvedValueOnce({ ok: true, runs: [] });
+  await w.vm.onGenerateSuite();
+  expect(w.vm.tripwire).toBeNull();
+});
+
+it('1-8d: revert panel — lists the save history and a click calls the store revert action', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  w.vm.fmHistory = [
+    { saved_at: '2026-10-09T12:00:00.000Z', actor: 'david.forden', forbidden_count: 3 },
+    { saved_at: '2026-10-09T10:00:00.000Z', actor: 'system', forbidden_count: 1 }
+  ];
+  await w.vm.$nextTick();
+  const panel = w.find('.okf-headtest__revert');
+  expect(panel.exists()).toBe(true);
+  expect(panel.text()).toContain('david.forden');
+  const buttons = w.findAll('button').filter((b) => b.text().trim() === 'Revert');
+  expect(buttons.length).toBeGreaterThanOrEqual(2); // one per pane (suites + test footer)
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: { repo_id: 'r-1', reverted_to: '2026-10-09T10:00:00.000Z', frontmatter: { forbidden: [] } }
+  });
+  dispatch.mockResolvedValueOnce({ ok: true, entries: [] }); // history refresh
+  await buttons.at(0).trigger('click');
+  await w.vm.$nextTick();
+  expect(dispatch).toHaveBeenCalledWith('okf/frontmatterRevert', {
+    repoId: 'r-1',
+    savedAt: '2026-10-09T12:00:00.000Z'
+  });
+  expect(w.emitted('changed')).toBeTruthy();
+  expect(w.vm.reverted).toBe(true);
+});
+
+it('1-8d: the Revert panel is hidden in readOnly (wizard writes nothing)', async () => {
+  const w = mountDialog({ initialTab: 'suites', readOnly: true });
+  await w.vm.$nextTick();
+  expect(w.findAll('.okf-headtest__revert')).toHaveLength(0);
+});
+
+it('1-8d: staleness — forbidden_snapshot drift against the stored tags is flagged', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  // REPO forbids [mental-health]; the suite snapshot adds genetics → drifted.
+  w.vm.suite = { suite_key: 's1', payload: { forbidden_snapshot: ['mental-health', 'genetics'] } };
+  expect(w.vm.suiteForbiddenStale).toBe(true);
+  // Same list (order-insensitive set compare) → fresh.
+  w.vm.suite = { suite_key: 's1', payload: { forbidden_snapshot: ['Mental-Health'] } };
+  expect(w.vm.suiteForbiddenStale).toBe(false);
+  // Legacy suite docs without a snapshot never flag.
+  w.vm.suite = { suite_key: 's1', payload: {} };
+  expect(w.vm.suiteForbiddenStale).toBe(false);
 });

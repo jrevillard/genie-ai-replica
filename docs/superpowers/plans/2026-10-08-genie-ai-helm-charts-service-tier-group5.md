@@ -1006,7 +1006,7 @@ git commit -m "feat(charts): Group 5 stateless app tier (frontend, documentRepo,
 - Consumes: `services.nginx` values (Task 1); the `nginx-override` ConfigMap from Task 1b Step 5.
 - Produces: verification that both halves of the nginx decision shipped.
 
-**Decision**: the Swarm stack never ran stock nginx — it runs the CI-built `genie-ai-nginx` project image (Task 1 points `services.nginx.image` at `registry.example.org/genie-ai-nginx:1.0.0`). BUT the image's baked upstream routes `/api` to Kong, which this migration REMOVES (wave-6 finding #3; code-review Wave 10 #15): the per-instance `nginx-override` ConfigMap from Task 1b Step 5 (mounted over `/etc/nginx/conf.d/default.conf`) is therefore REQUIRED, not duplication — it re-points `/api`, `/api-docs`, `/uploads`, `/` at the in-cluster Services. Any host/path customization beyond that lands in Plan 6 (edge config), not in additional in-chart ConfigMaps.
+**Decision**: the Swarm stack never ran stock nginx — it runs the CI-built `genie-ai-nginx` project image (Task 1 points `services.nginx.image` at `registry.example.org/genie-ai-nginx:1.0.0`). BUT the image's baked upstream routes `/api` to Kong, which this migration REMOVES (wave-6 finding #3; code-review Wave 10 #15): the per-instance `nginx-override` ConfigMap from Task 1b Step 5 (mounted over `/etc/nginx/conf.d/default.conf.template`) is therefore REQUIRED, not duplication — it re-points `/api`, `/api-docs`, `/uploads`, `/` at the in-cluster Services. Any host/path customization beyond that lands in Plan 6 (edge config), not in additional in-chart ConfigMaps.
 
 - [ ] **Step 1: Confirm the override ConfigMap template exists (Task 1b Step 5)**
 

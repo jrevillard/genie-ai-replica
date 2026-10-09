@@ -842,10 +842,13 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "migrate"))) | nindent 4 }}
   annotations:
     # pre-install + pre-upgrade: runs BEFORE the backend Deployment becomes
-    # Ready (the chart's hook ordering: -30 RBAC -> -20 cm -> -10 profile
-    # -> -5 dep-check -> 0 [migrate] -> 1 [regular Deployments]). The Job
-    # is a pre-install hook, not a regular resource.
-    "helm.sh/hook": pre-install,pre-upgrade
+    # POST-install: pre-install hooks run BEFORE regular resources — the
+    # CNPG/ArangoDeployment CRs the migrations connect to are regular
+    # resources, so a pre-install migrations Job can never resolve its
+    # database DNS on a fresh install and would abort every default
+    # install. Post-install runs after all resources apply; the Job's
+    # backoff absorbs the operators' reconciliation time.
+    "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
@@ -958,10 +961,10 @@ In `docs/charts/plan-defects.md`, mark these rows as closed:
 ```bash
 helm lint charts/genieai-umbrella --strict -f deploy/environments/prod/values-override.yaml
 helm template test charts/genieai-umbrella -n genieai -f deploy/environments/prod/values-override.yaml | grep -c "^kind: Job$"
-# Expected: 3 — the migrate Job + the dep-check and sealed-secret-validate
-# hook Jobs (helm template renders hook resources too; they only RUN at
-# install/upgrade time). Fewer than 3 means a hook template stopped
-# rendering — investigate before touching anything else.
+# Expected: 4 — the migrate Job + dep-check, sealed-secret-validate, and
+# clusterprofile-detect hook Jobs (helm template renders hook resources
+# too; they only RUN at install/upgrade time). Fewer than 4 means a hook
+# template stopped rendering — investigate before touching anything else.
 helm template test charts/genieai-umbrella -n genieai -f deploy/environments/prod/values-override.yaml | grep -c "kind: PersistentVolumeClaim"
 # Expected: 2 (HF cache + document-repository)
 git add charts/genieai-umbrella/templates/migrate/ charts/genieai-umbrella/templates/networkpolicies-verified.yaml charts/genieai-umbrella/templates/services/documentRepository.yaml docs/charts/plan-defects.md
@@ -1047,6 +1050,66 @@ In `deploy/environments/prod/values-override.yaml`, append:
 ```
 
 Mirror the same comment block in `dev/values-override.yaml`.
+
+- [ ] **Step 2b: Author the opt-in pre-upgrade backup hook** (documented in the migration playbook + spec §13.1(a) — no earlier plan writes it; it is created HERE)
+
+```yaml
+{{- /* OPT-IN: only renders content when the operator annotates the
+       namespace genieai.io/run-backup-on-upgrade=true — the annotation,
+       not a values key, is the switch (same carrier as the uninstall
+       gate). Velero is a cluster bootstrap prerequisite; if it is absent
+       the Job fails with a clear error instead of skipping silently. */ -}}
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-pre-upgrade-backup
+  namespace: {{ .Values.namespace }}
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-3"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: backup
+          image: velero/velero:v1.16.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              ns="{{ .Values.namespace }}"
+              want=$(kubectl get ns "$ns" -o jsonpath='{.metadata.annotations.genieai\.io/run-backup-on-upgrade}' 2>/dev/null || true)
+              if [ "$want" != "true" ]; then
+                echo "backup opt-out: annotation not set — no backup this upgrade"
+                exit 0
+              fi
+              if ! command -v velero >/dev/null 2>&1; then
+                echo "FAIL: genieai.io/run-backup-on-upgrade=true but velero CLI unavailable — install Velero first (cluster bootstrap prerequisite)"
+                exit 1
+              fi
+              velero backup create "genieai-pre-upgrade-$(date +%s)" --include-namespaces "$ns"
+{{- end }}
+```
+
+Declare the `backup.enabled` values key (default `false`) alongside the other overlay keys — the annotation controls FIRING, the values key controls EXISTENCE.
 
 - [ ] **Step 3: `helm template` with each overlay**
 

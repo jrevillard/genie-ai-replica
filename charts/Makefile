@@ -12,17 +12,17 @@ lint: $(addprefix lint-,$(CHARTS))
 lint-common:
 	helm lint genieai-common --strict
 
-lint-umbrella: lint-common
+lint-umbrella: lint-common deps
 	helm lint genieai-umbrella --strict
 
 template: template-umbrella
 
-template-umbrella:
+template-umbrella: deps
 	helm template test genieai-umbrella -n genieai > /tmp/genieai-rendered.yaml
 
 test: test-umbrella
 
-test-umbrella:
+test-umbrella: deps
 	# The K8s version pin is the kind NODE IMAGE (kindest/node:v1.33.0),
 	# created by CI or by hand BEFORE this target runs. ct has NO
 	# --kube-version flag and NO kubeVersion config key (verified against

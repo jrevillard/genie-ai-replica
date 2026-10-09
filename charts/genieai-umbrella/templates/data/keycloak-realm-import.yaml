@@ -1,6 +1,6 @@
 {{- if and .Values.data.keycloak.enabled .Values.data.keycloak.realmImport -}}
-{{- if and .Values.data.keycloak.verifyEmail (or (not (hasKey .Values.data.keycloak "smtp")) (not (hasKey .Values.data.keycloak.smtp "host"))) -}}
-{{- fail "data.keycloak.verifyEmail=true requires data.keycloak.smtp.host to be set (smtp may be null OR an object that includes a 'host' key)" -}}
+{{- if and .Values.data.keycloak.verifyEmail (or (not (hasKey .Values.data.keycloak "smtp")) (not (eq (kindOf .Values.data.keycloak.smtp) "map")) (not (hasKey .Values.data.keycloak.smtp "host"))) -}}
+{{- fail "data.keycloak.verifyEmail=true requires data.keycloak.smtp to be a map containing a 'host' key (smtp may be null OR a map missing 'host' OR a non-map value)" -}}
 {{- end -}}
 {{- /* failOnPlaceholderSecrets defaults to TRUE in values.yaml; a default
        install with `change-me-*` client secrets fails this render before
@@ -11,9 +11,10 @@
        above this block, but empty values used to slip past `change-me-*`
        and a missing key rendered as `secret: ""` — both of which the
        Keycloak operator rejects. */ -}}
+{{- $cs := .Values.data.keycloak.clientSecrets | default dict -}}
 {{- if .Values.data.keycloak.failOnPlaceholderSecrets }}
 {{- range $k := list "proxyClient" "dataprep" "grafana" }}
-{{- $v := (get $.Values.data.keycloak.clientSecrets $k) -}}
+{{- $v := dig $k "" $cs -}}
 {{- if or (not $v) (eq $v "") (hasPrefix "change-me" $v) -}}
 {{- fail (printf "data.keycloak.clientSecrets.%s is empty or a placeholder (change-me-*); set a real value in the values-override" $k) -}}
 {{- end -}}
@@ -222,7 +223,7 @@ spec:
         # (`data.keycloak.clientSecrets.proxyClient`) and MUST equal the
         # value sealed in the `keycloak-proxy-client-secret` SealedSecret
         # the backend consumes.
-        secret: {{ .Values.data.keycloak.clientSecrets.proxyClient | quote }}
+        secret: {{ dig "proxyClient" "" $cs | quote }}
         # Client-level realm-management scopes — propagate to the
         # auto-created service-account-<clientId> user at first grant
         # (Keycloak 26+ no longer needs the explicit user entry).
@@ -242,7 +243,7 @@ spec:
         serviceAccountsEnabled: true
         # Same rule as proxyClient: must equal the `kc-dataprep-client-secret`
         # SealedSecret value (`data.keycloak.clientSecrets.dataprep`).
-        secret: {{ .Values.data.keycloak.clientSecrets.dataprep | quote }}
+        secret: {{ dig "dataprep" "" $cs | quote }}
         # Client-level realm role — propagates to the auto-created
         # service-account-<clientId> user at first grant.
         realmRoles:
@@ -274,7 +275,7 @@ spec:
         standardFlowEnabled: true
         directAccessGrantsEnabled: false
         serviceAccountsEnabled: false
-        secret: {{ .Values.data.keycloak.clientSecrets.grafana | quote }}
+        secret: {{ dig "grafana" "" $cs | quote }}
         attributes:
           pkce.code.challenge.method: S256
           oauth2.device.authorization.grant.enabled: false

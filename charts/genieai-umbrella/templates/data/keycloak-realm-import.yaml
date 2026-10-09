@@ -12,6 +12,9 @@
        and a missing key rendered as `secret: ""` — both of which the
        Keycloak operator rejects. */ -}}
 {{- $cs := .Values.data.keycloak.clientSecrets | default dict -}}
+{{- if and (hasKey .Values.data.keycloak "clientSecrets") (not (eq (kindOf .Values.data.keycloak.clientSecrets) "map")) -}}
+{{- fail "data.keycloak.clientSecrets must be a map (set it to {proxyClient, dataprep, grafana} or omit the key entirely; null/missing is fine)" -}}
+{{- end -}}
 {{- if .Values.data.keycloak.failOnPlaceholderSecrets }}
 {{- range $k := list "proxyClient" "dataprep" "grafana" }}
 {{- $v := dig $k "" $cs -}}

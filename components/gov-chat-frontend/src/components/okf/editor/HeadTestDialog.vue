@@ -305,7 +305,7 @@
                     class="okf-headtest__rejected-chip"
                     :title="r.reason"
                   >
-                    ✕ {{ r.tag }}
+                    ✕ {{ r.tag }}<span v-if="r.reason" class="okf-headtest__rejected-reason"> — {{ r.reason }}</span>
                   </DsTag>
                 </div>
               </div>
@@ -407,6 +407,19 @@
 
       <!-- ─────────────────────── TAB 3: SUITES ─────────────────────── -->
       <div v-show="tab === 'suites'" class="okf-headtest__pane">
+        <!-- 1-8f: optional suite name — lands on the suite doc and renders
+             in the Saved-suites table (the key stays the identity). -->
+        <div class="okf-headtest__pane-actions">
+          <input
+            v-model="suiteName"
+            class="okf-headtest__name-input"
+            type="text"
+            :placeholder="
+              translate('okf.headTest.suites.namePlaceholder', 'Suite name (optional) — e.g. NCD regression set')
+            "
+            :maxlength="80"
+          />
+        </div>
         <div class="okf-headtest__pane-actions">
           <DsButton variant="primary" small :disabled="busy !== null" @click="onGenerateSuite">
             {{ translate('okf.headTest.suites.generate', 'Generate test suite') }}
@@ -740,7 +753,7 @@
                   class="okf-headtest__rejected-chip"
                   :title="r.reason"
                 >
-                  ✕ {{ r.tag }}
+                  ✕ {{ r.tag }}<span v-if="r.reason" class="okf-headtest__rejected-reason"> — {{ r.reason }}</span>
                 </DsTag>
               </div>
             </div>
@@ -917,6 +930,7 @@
           <table class="okf-headtest__scores">
             <thead>
               <tr>
+                <th>{{ translate('okf.headTest.suites.col.name', 'Name') }}</th>
                 <th>{{ translate('okf.headTest.suites.col.run', 'Run') }}</th>
                 <th>{{ translate('okf.headTest.suites.col.when', 'When') }}</th>
                 <th>{{ translate('okf.headTest.suites.positives', 'Positives') }}</th>
@@ -926,6 +940,18 @@
             </thead>
             <tbody>
               <tr v-for="s in savedSuites" :key="s._key">
+                <td>
+                  <!-- 1-8f: inline rename — commit on blur/Enter when changed. -->
+                  <input
+                    class="okf-headtest__name-input okf-headtest__name-input--compact"
+                    type="text"
+                    :value="s.name || ''"
+                    :placeholder="translate('okf.headTest.suites.namePlaceholder', 'Suite name (optional)')"
+                    :maxlength="80"
+                    :disabled="busy !== null"
+                    @change="onRenameSuite(s, $event.target.value)"
+                  />
+                </td>
                 <td>
                   <code>{{ s._key }}</code>
                 </td>
@@ -1006,6 +1032,8 @@ export default {
       runs: [],
       // 1-8f: persisted suites (kind 'suite') — the Load targets.
       savedSuites: [],
+      // 1-8f: optional name for the next generated suite.
+      suiteName: '',
       // 1-8c: user-controlled per-class query counts (server clamps).
       counts: { n_positive: 8, n_negative: 6, n_negative_random: 4, n_meta: 3, n_near_miss: 4 },
       // 1-8c: claim-side teaching state — the routing-explain result for
@@ -1281,17 +1309,21 @@ export default {
     /** 1-8c: the five class-count controls (defaults mirror the server's
      * clampCount fallbacks; mins/maxes mirror its documented ranges). */
     countControls() {
+      // Story 1-8f — "any number of tests for any type": the maxes mirror
+      // the server's CLASS_MAX ceilings (the old 20/15/12/8/10 caps
+      // silently ate David's n_positive=100). The LLM ask is batched
+      // server-side, so large numbers no longer truncate.
       return [
-        { key: 'n_positive', min: 8, max: 20, label: this.translate('okf.headTest.counts.positive', 'Positives') },
-        { key: 'n_negative', min: 6, max: 15, label: this.translate('okf.headTest.counts.negative', 'Confusable') },
+        { key: 'n_positive', min: 0, max: 1000, label: this.translate('okf.headTest.counts.positive', 'Positives') },
+        { key: 'n_negative', min: 0, max: 500, label: this.translate('okf.headTest.counts.negative', 'Confusable') },
         {
           key: 'n_negative_random',
-          min: 4,
-          max: 12,
+          min: 0,
+          max: 500,
           label: this.translate('okf.headTest.counts.negativeRandom', 'Off-domain')
         },
-        { key: 'n_meta', min: 3, max: 8, label: this.translate('okf.headTest.counts.meta', 'Meta') },
-        { key: 'n_near_miss', min: 4, max: 10, label: this.translate('okf.headTest.counts.nearMiss', 'Near miss') }
+        { key: 'n_meta', min: 0, max: 500, label: this.translate('okf.headTest.counts.meta', 'Meta') },
+        { key: 'n_near_miss', min: 0, max: 500, label: this.translate('okf.headTest.counts.nearMiss', 'Near miss') }
       ];
     },
     /** 1-8c: the claim-side teach block shows when the under-test head
@@ -1892,15 +1924,17 @@ export default {
       this.busy = 'generate';
       this.error = '';
       // 1-8c: per-class counts ride along; undefined lets the server
-      // apply its own defaults/clamps.
+      // apply its own defaults/clamps. 1-8f: the optional suite name.
       const res = await this.$store.dispatch('okf/headSuiteGenerate', {
         repoId: this.repo.repo_id,
         nPositive: this.intOf(this.counts.n_positive),
         nNegative: this.intOf(this.counts.n_negative),
         nNegativeRandom: this.intOf(this.counts.n_negative_random),
         nMeta: this.intOf(this.counts.n_meta),
-        nNearMiss: this.intOf(this.counts.n_near_miss)
+        nNearMiss: this.intOf(this.counts.n_near_miss),
+        name: (this.suiteName || '').trim() || undefined
       });
+      this.suiteName = '';
       this.busy = null;
       if (!res.ok) {
         this.error = res.message || this.translate('okf.headTest.error.generate', 'Suite generation failed');
@@ -1992,8 +2026,10 @@ export default {
     /** 1-8c: counts inputs hold strings (DsInput emits target.value) —
      * coerce to int; undefined lets the server apply its own default. */
     intOf(v) {
+      // 0 is a REQUEST (a positives-only suite) — only empty/garbage is
+      // undefined (which lets the server apply its fallback).
       const n = parseInt(v, 10);
-      return Number.isFinite(n) && n > 0 ? n : undefined;
+      return Number.isFinite(n) && n >= 0 ? n : undefined;
     },
     /** 1-8c: translated label for a negative class token (near-miss |
      * confusable | forbidden | off-domain | meta). */
@@ -2063,6 +2099,28 @@ export default {
       // refresh so both stay current after generate/run/edit.
       const suites = await this.$store.dispatch('okf/headSuiteListRuns', { repoId: this.repo.repo_id, kind: 'suite' });
       if (suites.ok) this.savedSuites = suites.runs;
+    },
+    /** 1-8f: rename a saved suite (inline in the Saved-suites table). */
+    async onRenameSuite(suite, value) {
+      const name = String(value || '').trim();
+      if (!name || name === (suite.name || '') || this.busy !== null) return;
+      this.busy = 'suite-edit';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headSuiteRename', {
+        repoId: this.repo.repo_id,
+        suiteKey: suite._key,
+        name
+      });
+      this.busy = null;
+      if (!res || !res.ok) {
+        this.error =
+          (res && res.message) || this.translate('okf.headTest.error.suiteRename', 'Could not rename the suite');
+        return;
+      }
+      // Adopt the returned doc and refresh the saved list (order can shift
+      // when the name changes — keep it simple and re-read).
+      const saved = this.savedSuites.find((s) => s._key === suite._key);
+      if (saved) saved.name = res.result.name;
     },
     /** 1-8f: load a saved suite back into the Lab — its rows become the
      * editable current suite (flip kinds, remove rows, re-run). */
@@ -2239,6 +2297,20 @@ export default {
   background: color-mix(in oklab, var(--accent) 8%, transparent);
 }
 /* 1-8f: per-row edit controls (flip kind / remove row). */
+.okf-headtest__name-input {
+  flex: 1 1 240px;
+  min-width: 200px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  border-radius: var(--radius-sm, 4px);
+  padding: var(--space-2xs, 2px) var(--space-xs);
+  font-size: var(--text-sm);
+}
+.okf-headtest__name-input--compact {
+  min-width: 140px;
+  width: 160px;
+}
 .okf-headtest__row-actions {
   white-space: nowrap;
 }
@@ -2415,6 +2487,13 @@ export default {
 .okf-headtest__rejected-chip {
   opacity: 0.55;
   cursor: default;
+}
+/* 1-8f: the rejection reason rides INLINE (naming the offending own tag)
+   — buried tooltips read as a wall of unexplained ✕ (David, 2026-10-09). */
+.okf-headtest__rejected-reason {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
 }
 /* 1-8d: the removal chips — the inverse affordance (danger variant,
    clickable like the add chips). */

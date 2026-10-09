@@ -2726,7 +2726,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: 'الوسوم',
-          actions: 'تعديل'
+          actions: 'تعديل',
+          name: 'الاسم'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2771,7 +2772,8 @@ export default {
         savedTitle: 'المجموعات المحفوظة',
         load: 'تحميل',
         flipTip: 'التبديل بين يجب-اختياره / يجب-عدم-اختياره',
-        deleteTip: 'إزالة هذا الصف من المجموعة'
+        deleteTip: 'إزالة هذا الصف من المجموعة',
+        namePlaceholder: 'اسم المجموعة (اختياري) — مثال: مجموعة انحدار الأمراض غير السارية'
       },
       error: {
         explain: 'فشل الشرح',
@@ -2787,7 +2789,8 @@ export default {
         noSuite: 'أنشئ مجموعة اختبارات أولاً، ثم أعد بناء head وأعد التشغيل.',
         applyNoSuite: 'تم حفظ الوسوم وإعادة بناء head — أنشئ مجموعة اختبارات ثم شغّل الكل لرؤية التأثير.',
         suiteLoad: 'تعذر تحميل المجموعة',
-        suiteUpdate: 'تعذر تحديث المجموعة'
+        suiteUpdate: 'تعذر تحديث المجموعة',
+        suiteRename: 'تعذر إعادة تسمية المجموعة'
       },
       footer: {
         unpublish: 'Unpublish to review'

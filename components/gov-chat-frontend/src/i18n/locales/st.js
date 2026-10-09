@@ -2755,7 +2755,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: 'Matag',
-          actions: 'Lokisa'
+          actions: 'Lokisa',
+          name: 'Lebitso'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2802,7 +2803,8 @@ export default {
         savedTitle: 'Liteko tse bolokiloeng',
         load: 'Jarisa',
         flipTip: 'Fetola lokisa ho khetha / se khethe',
-        deleteTip: 'Tlosa mola ona seteng'
+        deleteTip: 'Tlosa mola ona seteng',
+        namePlaceholder: 'Lebitso la sete (ha ho hlokahale) — mohl. sete ea NCD'
       },
       error: {
         explain: 'Tlhaloso e hlolehile',
@@ -2819,7 +2821,8 @@ export default {
         applyNoSuite:
           'Matag a bolokiloe mme hlooho e ahiloe hape — etsa sete ea liteko ebe phethahatsa tsohle ho bona sehlaho.',
         suiteLoad: 'Ho hlolehile ho jarisa sete',
-        suiteUpdate: 'Ho hlolehile ho ntlafatsa sete'
+        suiteUpdate: 'Ho hlolehile ho ntlafatsa sete',
+        suiteRename: 'Ho hlolehile ho reha sete ka lebitso le lecha'
       },
       footer: {
         unpublish: 'Unpublish to review'

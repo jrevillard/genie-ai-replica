@@ -2741,7 +2741,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: 'ট্যাগ',
-          actions: 'সম্পাদনা'
+          actions: 'সম্পাদনা',
+          name: 'নাম'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2787,7 +2788,8 @@ export default {
         savedTitle: 'সংরক্ষিত suite',
         load: 'লোড করুন',
         flipTip: 'নির্বাচন-করবে / নির্বাচন-করবে-না উল্টে দিন',
-        deleteTip: 'suite থেকে এই সারিটি সরান'
+        deleteTip: 'suite থেকে এই সারিটি সরান',
+        namePlaceholder: 'Suite-এর নাম (ঐচ্ছিক) — যেমন NCD রিগ্রেশন সেট'
       },
       error: {
         explain: 'ব্যাখ্যা ব্যর্থ হয়েছে',
@@ -2803,7 +2805,8 @@ export default {
         noSuite: 'প্রথমে একটি suite তৈরি করুন, তারপর পুনর্নির্মাণ ও পুনরায় চালান।',
         applyNoSuite: 'ট্যাগ সংরক্ষিত ও head পুনর্নির্মিত — প্রভাব দেখতে একটি suite তৈরি করে সব চালান।',
         suiteLoad: 'suite লোড করা যায়নি',
-        suiteUpdate: 'suite আপডেট করা যায়নি'
+        suiteUpdate: 'suite আপডেট করা যায়নি',
+        suiteRename: 'suite-এর নাম পরিবর্তন করা যায়নি'
       },
       footer: {
         unpublish: 'Unpublish to review'

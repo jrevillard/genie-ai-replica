@@ -440,4 +440,46 @@ describe('Configuration Validation Suite', () => {
     });
   });
 
+  // --- Story 1-8b: retriever routing-head knobs (graph affinity + the
+  // forbidden/noise gate). The routing decision must be an affirmative claim
+  // with positive evidence, and its thresholds are calibration-sensitive —
+  // plumbing drift between the three surfaces (compose pipe / env template
+  // doc / ansible env.j2) would silently retune production routing. Defaults
+  // live in genie-ai-overlay/retriever/config.py; these pins keep the
+  // plumbing honest (code default = compose default = template doc default).
+  describe('Story 1-8b: retriever routing-head knob plumbing', () => {
+    const ROUTE_HEAD_KNOBS = {
+      RETRIEVER_ROUTE_HEAD_WEIGHT: '1.0',
+      RETRIEVER_ROUTE_HEAD_MARGIN: '0.01',
+      RETRIEVER_ROUTE_HEAD_FLOOR: '0.55',
+      RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX: '0.55'
+    };
+
+    test('every routing-head knob is piped in compose with the code default', () => {
+      for (const [name, def] of Object.entries(ROUTE_HEAD_KNOBS)) {
+        const v = composeVars.find((x) => x.name === name);
+        expect({ name, found: !!v, default: v ? v.default : null }).toEqual({
+          name,
+          found: true,
+          default: def
+        });
+      }
+    });
+
+    test('every routing-head knob is documented in the env template with the same default', () => {
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      for (const [name, def] of Object.entries(ROUTE_HEAD_KNOBS)) {
+        expect(envText).toMatch(new RegExp(`^#\\s*${name}=${def.replace(/\./g, '\\.')}\\s*(#.*)?$`, 'm'));
+      }
+    });
+
+    test('every routing-head knob is emitted by ansible env.j2', () => {
+      const headVars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      const missing = Object.keys(ROUTE_HEAD_KNOBS).filter((v) => !headVars[v]);
+      expect(missing).toEqual([]);
+    });
+  });
+
 });

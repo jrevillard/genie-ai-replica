@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Story 1-8 — head-test-service unit tests. The service is the Routing
 // Lab backend: query embedding with production prefix fidelity, the
-// head leg (formula scoring incl. the forbidden penalty), the Story 1.3
-// chunk-probe replay (top-40 / >=3 chunks / floor / degraded), and
-// rebuildHead. TEI/vLLM/Arango are mocked; the math is asserted on
-// deterministic vectors.
+// head leg (formula scoring incl. the forbidden penalty + the 1-8b
+// per-tag veto), the Story 1.3 chunk-probe replay (top-40 / >=3 chunks
+// / floor / degraded), and rebuildHead. TEI/vLLM/Arango are mocked; the
+// math is asserted on deterministic vectors.
 
 // The service reads EMBEDDING_MODEL_ID at module load to pick the
 // query-instruction prefix — pin it to the production model so the
@@ -56,7 +56,7 @@ function unit(d, i) {
 }
 const DIM = 4;
 
-function makeHead({ vector, topic, forbidden } = {}) {
+function makeHead({ vector, topic, forbidden, forbiddenVectors } = {}) {
   return {
     vector: vector || unit(DIM, 0),
     per_field: {
@@ -65,7 +65,10 @@ function makeHead({ vector, topic, forbidden } = {}) {
       keyword: null,
       summary: null,
       scope: null,
-      forbidden: forbidden || null
+      forbidden: forbidden || null,
+      // Story 1-8b — per-tag embeddings for the hard veto ([{tag,
+      // vector}]); heads rebuilt before 1-8b omit the key.
+      forbidden_vectors: forbiddenVectors || null
     },
     dim: DIM,
     model: 'test-model',
@@ -118,6 +121,27 @@ describe('scoreHead formulas (Story 1-8 formula experimentation)', () => {
       forbidden: 0.5
     });
     expect(anti.score).toBeCloseTo(0 - 0.5 * 1, 5); // query hits forbidden axis
+  });
+
+  it('surfaces per-tag forbidden cosines (the 1-8b veto input)', () => {
+    const head = makeHead({ topic: unit(DIM, 0) });
+    head.per_field.forbidden_vectors = [
+      { tag: 'exercise', vector: unit(DIM, 0) }, // aligned with the query → 1.0
+      { tag: 'genetics', vector: unit(DIM, 1) }, // orthogonal → 0.0
+      { tag: 'broken', vector: 'not-a-vector' }, // malformed → skipped
+      null // malformed → skipped
+    ];
+    const r = svc._internals.scoreHead(head, unit(DIM, 0), 'default');
+    expect(r.tag_cosines).toEqual([
+      { tag: 'exercise', cosine: 1 },
+      { tag: 'genetics', cosine: 0 }
+    ]);
+  });
+
+  it('returns an empty tag list when the head predates per-tag vectors', () => {
+    const head = makeHead({ topic: unit(DIM, 0) }); // forbidden_vectors null
+    const r = svc._internals.scoreHead(head, unit(DIM, 0), 'default');
+    expect(r.tag_cosines).toEqual([]);
   });
 
   it('missing head → null score (never a crash)', () => {
@@ -213,6 +237,10 @@ describe('routingTest', () => {
     expect(res.verdict.current_routing_winner).toBe('no-graph-under-test');
     expect(res.verdict.provenance).toContain('head-only');
     expect(res.fidelity.knobs.ROUTE_MIN_CHUNKS).toBeGreaterThanOrEqual(1);
+    expect(res.fidelity.algorithm).toBe('story-1.3-replay+v2');
+    expect(res.fidelity.knobs.ROUTE_HEAD_MARGIN).toBeGreaterThan(0);
+    expect(res.fidelity.knobs.ROUTE_HEAD_FLOOR).toBeGreaterThan(0);
+    expect(res.fidelity.knobs.ROUTE_FORBIDDEN_TAG_MAX).toBeGreaterThan(0);
   });
 
   it('400s without a query', async () => {
@@ -222,8 +250,14 @@ describe('routingTest', () => {
     });
   });
 
-  // ─── Story 1-8a: the forbidden/noise GATE (David: "under no
-  // circumstances should 'fun in Indonesia' be routed to the NCD repo") ───
+  // ─── Story 1-8a/1-8b: the forbidden/noise GATE (David 1-8a: "under no
+  // circumstances should 'fun in Indonesia' be routed to the NCD repo";
+  // 1-8b: "forbidden is forbidden — a hard contract, it should
+  // immediately score zero"). A head CLAIMS a query only with ALL of:
+  // floor (score ≥ ROUTE_HEAD_FLOOR), no tag veto (no forbidden tag
+  // cosine ≥ ROUTE_FORBIDDEN_TAG_MAX), and margin (score clears the
+  // averaged forbidden centroid by > ROUTE_HEAD_MARGIN). head_claim
+  // names the deciding condition: floor | veto | margin | claim. ───
 
   function soloRepoSetup(head) {
     frontmatterService.teiEmbed.mockResolvedValue([unit(DIM, 0)]);
@@ -241,36 +275,93 @@ describe('routingTest', () => {
     });
   }
 
-  it('suppresses a forbidden-dominant top scorer even in a one-repo universe', async () => {
-    // Query aligns with BOTH the head (score 1.0) and the forbidden
-    // centroid (1.0): margin 0 ≤ ROUTE_HEAD_MARGIN → NOT claimed.
+  it('suppresses a query that never clears the claim FLOOR (off-domain)', async () => {
+    // score 0.5 clears the forbidden centroid by +0.5 (margin would
+    // pass) and matches no forbidden tag — but 0.5 < ROUTE_HEAD_FLOOR
+    // 0.55 suppresses: the calibration gap (unrelated queries score
+    // 0.32-0.48 on a real head; legit claims start at 0.614).
+    soloRepoSetup(makeHead({ vector: [0.5, 0.5, 0.5, 0.5], forbidden: unit(DIM, 2) }));
+    const res = await svc.routingTest('me', { query: 'capital of France' }, {});
+    expect(res.under_test.head_score).toBeCloseTo(0.5, 5);
+    expect(res.under_test.floor_pass).toBe(false);
+    expect(res.under_test.head_margin).toBeCloseTo(0.5, 5);
+    expect(res.under_test.tag_veto).toBeNull();
+    expect(res.under_test.head_claimed).toBe(false);
+    expect(res.under_test.head_claim).toBe('floor');
+    expect(res.verdict.head_routing_winner).toBeNull();
+    expect(res.verdict.head_suppressed).toBe(true);
+    expect(res.verdict.provenance).toBe('head-suppressed (off-domain)');
+  });
+
+  it('vetoes a mixed-subject query on a single forbidden tag even with floor+margin clear', async () => {
+    // score 0.9 (floor pass), forbidden centroid orthogonal (margin
+    // +0.9 > 0.01) — but the 'exercise' tag vector is aligned with the
+    // query (cosine 1.0 ≥ ROUTE_FORBIDDEN_TAG_MAX): the hard veto wins.
+    soloRepoSetup(
+      makeHead({
+        vector: [0.9, Math.sqrt(1 - 0.9 * 0.9), 0, 0], // unit; cos(q, head) = 0.9
+        forbidden: unit(DIM, 1),
+        forbiddenVectors: [{ tag: 'exercise', vector: unit(DIM, 0) }]
+      })
+    );
+    const res = await svc.routingTest('me', { query: 'exercise and asthma' }, {});
+    expect(res.under_test.floor_pass).toBe(true);
+    expect(res.under_test.head_margin).toBeCloseTo(0.9, 5);
+    expect(res.under_test.max_tag_cosine).toBeCloseTo(1, 5);
+    expect(res.under_test.tag_veto).toBe('exercise');
+    expect(res.under_test.head_claimed).toBe(false);
+    expect(res.under_test.head_claim).toBe('veto');
+    expect(res.verdict.head_routing_winner).toBeNull();
+    expect(res.verdict.head_suppressed).toBe(true);
+    expect(res.verdict.provenance).toBe('head-suppressed (forbidden: exercise)');
+  });
+
+  it('suppresses a forbidden-dominant top scorer on the MARGIN rule', async () => {
+    // score 1.0, forbidden 1.0 → margin 0 ≤ ROUTE_HEAD_MARGIN; floor
+    // passes and no per-tag vectors exist (veto skips) → margin decides.
     soloRepoSetup(makeHead({ vector: unit(DIM, 0), forbidden: unit(DIM, 0) }));
     const res = await svc.routingTest('me', { query: 'mental health guidance' }, {});
     expect(res.under_test.head_score).toBeCloseTo(1, 5);
     expect(res.under_test.forbidden_cosine).toBeCloseTo(1, 5);
     expect(res.under_test.head_margin).toBeCloseTo(0, 5);
+    expect(res.under_test.floor_pass).toBe(true);
+    expect(res.under_test.max_tag_cosine).toBeNull();
+    expect(res.under_test.tag_veto).toBeNull();
     expect(res.under_test.head_claimed).toBe(false);
+    expect(res.under_test.head_claim).toBe('margin');
     expect(res.verdict.head_routing_winner).toBeNull();
     expect(res.verdict.under_test_wins_head).toBe(false);
     expect(res.verdict.head_suppressed).toBe(true);
-    expect(res.verdict.provenance).toContain('head-suppressed');
+    expect(res.verdict.provenance).toBe('head-suppressed (forbidden/noise)');
   });
 
-  it('claims a borderline query whose positive margin clears the gate (the genetics ruling)', async () => {
-    // score 1.0, forbidden 0.5 → margin +0.5 > ROUTE_HEAD_MARGIN → claimed.
+  it('claims a query that clears floor, veto and margin (the genetics ruling)', async () => {
+    // score 1.0 (floor pass), forbidden centroid orthogonal (margin
+    // +1.0 > 0.01), no forbidden tags at all → affirmative claim.
     soloRepoSetup(makeHead({ vector: unit(DIM, 0), forbidden: unit(DIM, 1) }));
     const res = await svc.routingTest('me', { query: 'genetic risk factors for cancer' }, {});
+    expect(res.under_test.floor_pass).toBe(true);
+    expect(res.under_test.tag_veto).toBeNull();
     expect(res.under_test.head_claimed).toBe(true);
+    expect(res.under_test.head_claim).toBe('claim');
     expect(res.verdict.under_test_wins_head).toBe(true);
     expect(res.verdict.head_suppressed).toBe(false);
+    expect(res.verdict.provenance).toBe('head-only (no graph under test)');
   });
 
-  it('a head WITHOUT a forbidden centroid claims freely (gate degrades open)', async () => {
+  it('a head WITHOUT forbidden data degrades open: veto+margin skip, floor still applies', async () => {
+    // Pre-1-8b head: no forbidden centroid, no per-tag vectors. The gate
+    // never silently suppresses on missing data — score 1.0 passes the
+    // floor, the veto and the margin skip → claims.
     soloRepoSetup(makeHead({ vector: unit(DIM, 0), forbidden: null }));
     const res = await svc.routingTest('me', { query: 'anything at all' }, {});
     expect(res.under_test.forbidden_cosine).toBeNull();
     expect(res.under_test.head_margin).toBeNull();
+    expect(res.under_test.max_tag_cosine).toBeNull();
+    expect(res.under_test.tag_veto).toBeNull();
+    expect(res.under_test.floor_pass).toBe(true);
     expect(res.under_test.head_claimed).toBe(true);
+    expect(res.under_test.head_claim).toBe('claim');
     expect(res.verdict.under_test_wins_head).toBe(true);
   });
 
@@ -278,6 +369,76 @@ describe('routingTest', () => {
     await expect(svc.routingTest('me', { query: 'x', formula: 'bogus' }, {})).rejects.toMatchObject({
       status: 400
     });
+  });
+});
+
+// ---------- gate v2 knobs: env-tunable at module load ----------
+
+describe('gate v2 knobs are env-tunable', () => {
+  // ROUTE_HEAD_FLOOR / ROUTE_FORBIDDEN_TAG_MAX are parsed at module
+  // load (production tunes them via .env). A fresh require under
+  // overridden env proves the contract; the top-level `svc` keeps its
+  // original knobs, so these tests load their own instance.
+  function freshLoad(envOverrides) {
+    jest.resetModules();
+    for (const [k, v] of Object.entries(envOverrides)) process.env[k] = v;
+    const fm = require('../services/frontmatter-service');
+    const repository = require('../services/repository-service');
+    const db = require('../shared-lib/db-connection-service').__mockDb;
+    return { svc: require('../services/head-test-service'), fm, repository, db };
+  }
+
+  function soloFreshSetup(head, fm, repository, db) {
+    fm.teiEmbed.mockResolvedValue([unit(DIM, 0)]);
+    repository.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'Under Test',
+      lifecycle_state: 'publish',
+      ingested_graph_name: null,
+      head,
+      frontmatter: { updated_at: '2026-10-07T00:00:00.000Z' }
+    });
+    db.query.mockImplementation(async () => ({ all: async () => [] }));
+  }
+
+  afterEach(() => {
+    delete process.env.RETRIEVER_ROUTE_HEAD_FLOOR;
+    delete process.env.RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX;
+    jest.resetModules();
+  });
+
+  it('ROUTE_HEAD_FLOOR lowers the claim floor (a 0.5-scored head claims under floor=0.3)', async () => {
+    // The default 0.55 floor suppresses this head (see the floor test
+    // above); the deployer's lower bar must let it claim.
+    const { svc: fresh, fm, repository, db } = freshLoad({ RETRIEVER_ROUTE_HEAD_FLOOR: '0.3' });
+    soloFreshSetup(makeHead({ vector: [0.5, 0.5, 0.5, 0.5], forbidden: unit(DIM, 2) }), fm, repository, db);
+    const res = await fresh.routingTest('me', { query: 'half-related query' }, {});
+    expect(res.fidelity.knobs.ROUTE_HEAD_FLOOR).toBe(0.3);
+    expect(res.under_test.floor_pass).toBe(true);
+    expect(res.under_test.head_claimed).toBe(true);
+    expect(res.under_test.head_claim).toBe('claim');
+  });
+
+  it('ROUTE_FORBIDDEN_TAG_MAX relaxes the veto (a 0.6 tag cosine claims under max=0.9)', async () => {
+    // The default 0.55 veto threshold rejects a 0.6 tag cosine; the
+    // deployer's higher bar must not.
+    const { svc: fresh, fm, repository, db } = freshLoad({ RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX: '0.9' });
+    soloFreshSetup(
+      makeHead({
+        vector: unit(DIM, 0),
+        forbidden: unit(DIM, 1),
+        forbiddenVectors: [{ tag: 'exercise', vector: [0.6, 0.8, 0, 0] }] // unit; cos(q, tag) = 0.6
+      }),
+      fm,
+      repository,
+      db
+    );
+    const res = await fresh.routingTest('me', { query: 'on-topic query' }, {});
+    expect(res.fidelity.knobs.ROUTE_FORBIDDEN_TAG_MAX).toBe(0.9);
+    expect(res.under_test.max_tag_cosine).toBeCloseTo(0.6, 5);
+    expect(res.under_test.tag_veto).toBeNull();
+    expect(res.under_test.head_claimed).toBe(true);
+    expect(res.under_test.head_claim).toBe('claim');
   });
 });
 

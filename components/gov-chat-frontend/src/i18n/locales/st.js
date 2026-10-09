@@ -2695,6 +2695,22 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Lekhalate',
+        floor: 'Moeli o tlaase',
+        veto: 'Matag a thibetsoeng',
+        margin: 'Sekgala',
+        claim: 'E bolela',
+        pass: 'fetile',
+        fail: 'hlotile',
+        na: 'n/a'
+      },
+      teach: {
+        title: 'Seo sena se bolelang',
+        veto: "Potso ena e lumellana haholo le tag e thibetsitseng “{'{'}tag{'}'}”. Haeba e lokela ho ba la polokelo ena, tlosa “{'{'}tag{'}'}” ho matag a thibetsoeng a Frontmatter, ebe u phatlalatsa hape ho aha hlopo bocha.",
+        floor:
+          'Potso ena ha e amane le taba ea polokelo ena (score e tlaase ho moeli oa domain) — ho fetola matag ha ho lokise sena; ke thibelo e nepahetseng.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

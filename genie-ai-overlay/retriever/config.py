@@ -286,6 +286,19 @@ ROUTE_HEAD_WEIGHT = float(os.getenv("RETRIEVER_ROUTE_HEAD_WEIGHT", "1.0"))
 # ("genetic risk factors for cancer" — borderline IN, per David). Heads
 # without a forbidden centroid claim freely (gate degrades open).
 ROUTE_HEAD_MARGIN = float(os.getenv("RETRIEVER_ROUTE_HEAD_MARGIN", "0.01"))
+# Story 1-8b (David 2026-10-09: "forbidden is forbidden — a hard contract,
+# it should immediately score zero") — the head pseudo-row is emitted only
+# when ALL of: FLOOR (score ≥ this — unrelated queries score 0.32-0.48 on
+# any head and the margin rule is blind to them; "capital of France"
+# claimed at +0.012 under margin-only. Calibrated: unrelated ≤ 0.484,
+# legit claims ≥ 0.614 → 0.55 mid-gap), VETO (no single forbidden tag
+# matches the query at/above this — mixed-subject queries like
+# genetics+cancer slip the averaged centroid but not their dominant tag;
+# failing queries ≥ 0.567 vs their tag, legit claims ≤ 0.529), and the
+# 1-8a MARGIN. Heads without per-tag vectors (pre-1-8b rebuild) skip the
+# veto; heads without a forbidden centroid skip margin (1-8a semantics).
+ROUTE_HEAD_FLOOR = float(os.getenv("RETRIEVER_ROUTE_HEAD_FLOOR", "0.55"))
+ROUTE_FORBIDDEN_TAG_MAX = float(os.getenv("RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX", "0.55"))
 
 # Summarizer Configuration
 SUMMARIZER_ENABLED = os.getenv("RETRIEVER_SUMMARIZER_ENABLED", "false").lower() == "true"

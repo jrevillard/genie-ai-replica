@@ -2664,6 +2664,22 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Gate',
+        floor: 'Floor',
+        veto: 'Forbidden tags',
+        margin: 'Margin',
+        claim: 'Claim',
+        pass: 'pass',
+        fail: 'fail',
+        na: 'n/a'
+      },
+      teach: {
+        title: 'Ta ṇe?',
+        veto: "Kajjitōk in ej lukkun im forbidden tag “{'{'}tag{'}'}”. Elane e jikin ilo repo in, jol̦o̦k “{'{'}tag{'}'}” ilo forbidden tags ko ilo Frontmatter, im publish ak in rebuild head eo.",
+        floor:
+          'Kajjitōk in ejab naan ko ilo repo in (score eo ej jab elōn floor eo) — tag ko enaj jab kōm̦m̦an melele; kōnka ej suppress eo em̦ōj.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

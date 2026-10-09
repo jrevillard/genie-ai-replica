@@ -2701,6 +2701,22 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Filtre',
+        floor: 'Seuil minimum',
+        veto: 'Tags interdits',
+        margin: 'Marge',
+        claim: 'Revendique',
+        pass: 'réussi',
+        fail: 'échoué',
+        na: 'n/a'
+      },
+      teach: {
+        title: 'Ce que cela signifie',
+        veto: "Cette requête correspond fortement au tag interdit « {'{'}tag{'}'} ». Si elle DOIT appartenir à ce dépôt, retirez « {'{'}tag{'}'} » des tags interdits dans le Frontmatter, puis republiez pour reconstruire le head.",
+        floor:
+          'La requête est sans rapport avec le sujet de ce dépôt (score en dessous du seuil minimum du domaine) — aucun changement de tag ne corrige cela ; le filtrage est correct.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

@@ -2682,6 +2682,22 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Lango',
+        floor: 'Kiwango cha chini',
+        veto: 'Lebo zilizozuiwa',
+        margin: 'Pengo',
+        claim: 'Inadai',
+        pass: 'imefaulu',
+        fail: 'imeshindwa',
+        na: 'haitumiki'
+      },
+      teach: {
+        title: 'Maana yake ni nini',
+        veto: "Hoja hii inalingana sana na lebo iliyozuiwa “{'{'}tag{'}'}”. Ikipaswa kuwa ya repository hii, ondoa “{'{'}tag{'}'}” kwenye lebo zilizozuiwa katika Frontmatter, kisha chapisha tena ili kujenga upya head.",
+        floor:
+          'Hoja hii haihusiani na mada ya repository hii (alama iko chini ya kiwango cha chini cha domain) — kubadilisha lebo hakurekebishi hili; hii ni uzuiaji sahihi.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

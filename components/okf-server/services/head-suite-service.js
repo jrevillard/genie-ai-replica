@@ -5,13 +5,15 @@
 // run ANALYTICS for the OKF Head Tester / Routing Lab. Sits on top of
 // head-test-service.routingTest (the two-leg simulation) and adds:
 //
-//   generateSuite(repoId, {n_positive, n_negative})
+//   generateSuite(repoId, {n_positive, n_negative, n_negative_random})
 //     ONE guided-JSON vLLM call given this repo's frontmatter + head
-//     text + sibling head texts → positive queries (should route here)
-//     and confusable-sibling negatives (should route elsewhere), plus
-//     deterministic FORBIDDEN-derived negatives templated from the
-//     repo's own forbidden list (the third negative kind — no LLM).
-//     Persisted as a suite doc in okf_head_test_runs.
+//     text + sibling head texts → positive queries (should route here),
+//     confusable-sibling negatives (should route elsewhere), random
+//     OFF-DOMAIN negatives (one per sampled unrelated topic) and META
+//     noise queries about the system itself — plus deterministic
+//     FORBIDDEN-derived negatives templated from the repo's own
+//     forbidden list (no LLM). Persisted as a suite doc in
+//     okf_head_test_runs.
 //   addQueries(repoId, suiteKey, {queries})
 //     Curator free-text additions (kind positive|negative) — the
 //     operator's own probes join the suite and every future run.
@@ -22,10 +24,23 @@
 //   listRuns(repoId, {limit, kind})
 //     Analytics history across tag cycles (kind filter run|suite|all).
 //
-// Negative-kind taxonomy (David 2026-10-08, "absolutely - all three"):
-//   llm        — confusable-sibling queries from the generator
+// Origin channel (`source` — who authored the row; David 2026-10-08,
+// "absolutely - all three"):
+//   llm        — generator output (positives + confusable negatives)
 //   forbidden  — templated from frontmatter.forbidden (must NOT route)
 //   manual     — curator free-text
+//   fallback   — code-level synthesis when the LLM omits/fails a class
+// Evaluation class (`cls` — Story 1-8b, David 2026-10-09: "forbidden is
+// forbidden — a hard contract, it should immediately score zero" +
+// "the routing decision must be an affirmative claim"): every NEGATIVE
+// row carries exactly one —
+//   forbidden   — a frontmatter.forbidden query (veto gate)
+//   confusable  — a competing repo's domain (only when siblings exist)
+//   off-domain  — an unrelated domain from the random topic pool
+//   meta        — noise about the retrieval system itself
+// summarizeRun treats EVERY non-positive row as a negative; off-domain
+// and meta rows are expected SUPPRESSED by the floor condition
+// (ROUTE_HEAD_FLOOR) even in a one-repo universe.
 //
 // Honest-empty semantics: with no sibling heads in the universe a
 // negative cannot fail-select (the under-test repo wins a one-repo
@@ -52,6 +67,50 @@ const FORBIDDEN_TEMPLATES = [
   'Give me statistics and recent data about {tag}'
 ];
 const FORBIDDEN_DERIVED_MAX = 3;
+// Story 1-8b — the OFF-DOMAIN RANDOM POOL (David: "MORE RANDOM
+// adversarial negatives"). Deterministic list in code, far from any
+// health domain; every generation call samples a random subset
+// (n_negative_random) so no two suites probe the same noise.
+const OFF_DOMAIN_TOPICS = [
+  'geography',
+  'sports',
+  'cooking',
+  'music',
+  'astronomy',
+  'motoring',
+  'finance',
+  'weather',
+  'history',
+  'fashion',
+  'gaming',
+  'agriculture',
+  'maritime',
+  'aviation',
+  'literature',
+  'physics',
+  'pets',
+  'architecture',
+  'cinema',
+  'gardening',
+  'chess',
+  'volcanoes',
+  'sewing',
+  'football'
+];
+// Deterministic fallback when the LLM omits the off-domain class —
+// the class is NEVER empty (honest adversarial coverage without a model).
+const OFF_DOMAIN_TEMPLATES = [
+  'Give me a general overview of {topic}',
+  'Latest news about {topic}',
+  'What are the basic rules of {topic}?'
+];
+// Meta/noise fallbacks — queries about the retrieval system itself.
+const META_TEMPLATES = [
+  'What is the forbidden noise gate?',
+  'How does the routing lab work?',
+  'What does the head tester measure?'
+];
+const META_QUERY_COUNT = 3;
 
 let _runsCollectionEnsured = false;
 
@@ -101,10 +160,13 @@ async function loadSiblingContext(db, underTestId) {
   return cursor.all();
 }
 
-function suitePrompt(repo, fm, siblings, nPositive, nNegative) {
+function suitePrompt(repo, fm, siblings, nPositive, nNegative, topics) {
   const siblingText = siblings.length
     ? siblings.map((s) => `- "${s.name}"\n  ${String(s.text || '').slice(0, 400)}`).join('\n')
     : '(no other repository currently has a vectorized head)';
+  // Confusable negatives need competitors to be confusable WITH — a solo
+  // universe yields none (the class exists only when siblings exist).
+  const nConfusable = siblings.length ? nNegative : 0;
   return `You are building a ROUTING TEST SUITE for one repository in a
 multi-repository retrieval system. Each query will be embedded and the
 system routes it to the repository whose "head" vector scores highest.
@@ -126,15 +188,27 @@ Generate:
 - ${nPositive} POSITIVE queries a real user would type when they want
   THIS repository's content. Use its topic/entity vocabulary. Vary the
   phrasing (question, keyword list, sentence). 5-15 words each.
-- ${nNegative} NEGATIVE queries that a user might MISTAKE for this
+- ${nConfusable} NEGATIVE queries that a user might MISTAKE for this
   repository's domain but actually belong to a COMPETING repository
   above. Set "expected_repo" to the EXACT competing repository name
-  (empty string if there are no competitors). 5-15 words each.
+  (empty string if there are no competitors). 5-15 words each.${
+    nConfusable ? '' : '\n  There are NO competing repositories — return an empty "negative" array.'
+  }
+- EXACTLY ONE query for EACH topic in this list. Every topic is a
+  domain completely UNRELATED to this repository — a user asking about
+  it must NEVER be routed here:
+  ${topics.join(', ')}
+- ${META_TEMPLATES.length} META/noise queries about the retrieval
+  system itself (the routing lab, the head tester, the forbidden
+  tags) — users probing the machinery rather than the content.
+  Example: "${META_TEMPLATES[0]}"
 - 5-8 KEYWORDS: single-domain terms strongly identifying THIS repository.
 
 OUTPUT FORMAT (CRITICAL — the parser is strict, no synonyms):
   { "positive": [ {"query": "...", "reason": "<one sentence>"} ],
     "negative": [ {"query": "...", "expected_repo": "...", "reason": "<one sentence>"} ],
+    "off_domain": [ {"topic": "<one topic from the list above>", "query": "...", "reason": "<one sentence>"} ],
+    "meta": [ {"query": "...", "reason": "<one sentence>"} ],
     "keywords": ["...", "..."] }
 Use the EXACT field names shown. Output ONLY the JSON object, no prose,
 no markdown fences.`;
@@ -150,9 +224,91 @@ function forbiddenDerivedQueries(fm) {
   return tags.slice(0, FORBIDDEN_DERIVED_MAX).map((tag, i) => ({
     query: FORBIDDEN_TEMPLATES[i % FORBIDDEN_TEMPLATES.length].replace('{tag}', tag),
     kind: 'negative',
+    cls: 'forbidden',
     source: 'forbidden',
     expected_repo: null,
     reason: `derived from the repo's own forbidden tag "${tag}" — the head must not win it`
+  }));
+}
+
+/**
+ * RANDOM subset of the off-domain pool (fresh adversaries every
+ * generation — the pool stays deterministic in code, the selection
+ * does not).
+ */
+function sampleTopics(n) {
+  const pool = OFF_DOMAIN_TOPICS.slice();
+  const picked = [];
+  while (picked.length < n && pool.length) {
+    picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  }
+  return picked;
+}
+
+/**
+ * Off-domain rows (cls 'off-domain', Story 1-8b): one query per SAMPLED
+ * topic. LLM-authored where the model answered for the topic, code-level
+ * template synthesis for every topic it skipped/omitted — the class is
+ * NEVER empty. These rows are expected to be suppressed by the FLOOR
+ * condition (ROUTE_HEAD_FLOOR), not by the forbidden veto.
+ */
+function offDomainQueries(llmOffDomain, topics) {
+  const byTopic = new Map();
+  for (const r of Array.isArray(llmOffDomain) ? llmOffDomain : []) {
+    if (r && typeof r.query === 'string' && r.query.trim() && typeof r.topic === 'string' && r.topic.trim()) {
+      byTopic.set(r.topic.trim().toLowerCase(), r.query.trim());
+    }
+  }
+  return topics.map((topic, i) => {
+    const llmQuery = byTopic.get(topic.toLowerCase());
+    if (llmQuery) {
+      return {
+        query: llmQuery,
+        kind: 'negative',
+        cls: 'off-domain',
+        source: 'llm',
+        topic,
+        expected_repo: null,
+        reason: `unrelated domain (${topic}) — the floor gate must suppress it`
+      };
+    }
+    return {
+      query: OFF_DOMAIN_TEMPLATES[i % OFF_DOMAIN_TEMPLATES.length].replace('{topic}', topic),
+      kind: 'negative',
+      cls: 'off-domain',
+      source: 'fallback',
+      topic,
+      expected_repo: null,
+      reason: `unrelated domain (${topic}) — deterministic fallback; the floor gate must suppress it`
+    };
+  });
+}
+
+/**
+ * Meta/noise rows (cls 'meta', Story 1-8b): queries about the retrieval
+ * system itself. LLM-authored when provided, deterministic fallback
+ * otherwise — the class is NEVER empty. Expected floor-suppressed.
+ */
+function metaQueries(llmMeta) {
+  const rows = (Array.isArray(llmMeta) ? llmMeta : [])
+    .filter((m) => m && typeof m.query === 'string' && m.query.trim())
+    .slice(0, META_QUERY_COUNT)
+    .map((m) => ({
+      query: m.query.trim(),
+      kind: 'negative',
+      cls: 'meta',
+      source: 'llm',
+      expected_repo: null,
+      reason: 'noise/meta probe — the system itself, not repo content; must be floor-suppressed'
+    }));
+  if (rows.length) return rows;
+  return META_TEMPLATES.map((query) => ({
+    query,
+    kind: 'negative',
+    cls: 'meta',
+    source: 'fallback',
+    expected_repo: null,
+    reason: 'noise/meta probe — deterministic fallback; must be floor-suppressed'
   }));
 }
 
@@ -191,17 +347,25 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       throw err;
     }
     const nPositive = clampCount(payload.n_positive, 8, 20);
+    // n_negative budgets the CONFUSABLE + FORBIDDEN classes only — the
+    // random off-domain pool is sized separately by n_negative_random.
     const nNegative = clampCount(payload.n_negative, 6, 15);
+    const nRandom = clampCount(payload.n_negative_random, 4, 12);
+    const randomTopics = sampleTopics(nRandom);
 
     const db = await dbService.getConnection();
     await ensureCollection(db);
     const siblings = await loadSiblingContext(db, repoId);
 
-    const prompt = suitePrompt(repo, fm, siblings, nPositive, nNegative);
-    let llm = { positive: [], negative: [], keywords: [] };
+    const prompt = suitePrompt(repo, fm, siblings, nPositive, nNegative, randomTopics);
+    let llm = { positive: [], negative: [], off_domain: [], meta: [], keywords: [] };
     try {
+      // temperature 0.7 (not the extraction default 0.0) — adversarial
+      // negatives must VARY generation to generation; 2200 max tokens —
+      // four row classes per call now.
       const resp = await frontmatterService.vllmChatCompletions([{ role: 'user', content: prompt }], {
-        maxTokens: 1500
+        maxTokens: 2200,
+        temperature: 0.7
       });
       const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
       const parsed = parseJsonObject(content && content.content);
@@ -209,12 +373,14 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         llm = {
           positive: Array.isArray(parsed.positive) ? parsed.positive : [],
           negative: Array.isArray(parsed.negative) ? parsed.negative : [],
+          off_domain: Array.isArray(parsed.off_domain) ? parsed.off_domain : [],
+          meta: Array.isArray(parsed.meta) ? parsed.meta : [],
           keywords: Array.isArray(parsed.keywords) ? parsed.keywords : []
         };
       }
     } catch (e) {
-      // The forbidden-derived negatives + curator additions still make a
-      // usable suite; record the failure honestly.
+      // The forbidden-derived + fallback negatives + curator additions
+      // still make a usable suite; record the failure honestly.
       logger.warn('head-suite.generate.llm_failed', { repo_id: repoId, error: e.message });
     }
 
@@ -227,16 +393,21 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         source: 'llm',
         reason: p.reason || ''
       }));
-    const llmNegatives = llm.negative
-      .filter((p) => p && typeof p.query === 'string' && p.query.trim())
-      .slice(0, nNegative)
-      .map((p) => ({
-        query: p.query.trim(),
-        kind: 'negative',
-        source: 'llm',
-        expected_repo: typeof p.expected_repo === 'string' ? p.expected_repo.trim() : null,
-        reason: p.reason || ''
-      }));
+    const llmNegatives = siblings.length
+      ? llm.negative
+          .filter((p) => p && typeof p.query === 'string' && p.query.trim())
+          .slice(0, nNegative)
+          .map((p) => ({
+            query: p.query.trim(),
+            kind: 'negative',
+            cls: 'confusable',
+            source: 'llm',
+            expected_repo: typeof p.expected_repo === 'string' ? p.expected_repo.trim() : null,
+            reason: p.reason || ''
+          }))
+      : [];
+    const offDomain = offDomainQueries(llm.off_domain, randomTopics);
+    const meta = metaQueries(llm.meta);
 
     const suiteKey = `s${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
     const now = new Date().toISOString();
@@ -252,20 +423,30 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       payload: {
         generator: `llm:${process.env.VLLM_LLM_MODEL_ID || 'vllm'}`,
         sibling_names: siblings.map((s) => s.name),
+        off_domain_topics: randomTopics,
         positive,
-        negative: [...llmNegatives, ...forbiddenDerivedQueries(fm)],
+        negative: [...llmNegatives, ...forbiddenDerivedQueries(fm), ...offDomain, ...meta],
         keywords: llm.keywords.filter((k) => typeof k === 'string'),
         notes: []
       }
     };
     await db.collection(HEAD_TEST_RUNS_COLLECTION).save(suiteDoc);
+    const byClass = suiteDoc.payload.negative.reduce((m, q) => {
+      const k = q.cls || 'confusable';
+      m[k] = (m[k] || 0) + 1;
+      return m;
+    }, {});
     span.setAttribute('okf.headsuite.positives', positive.length);
     span.setAttribute('okf.headsuite.negatives', suiteDoc.payload.negative.length);
+    span.setAttribute('okf.headsuite.offdomain', byClass['off-domain'] || 0);
+    span.setAttribute('okf.headsuite.meta', byClass.meta || 0);
     logger.info('head-suite.generated', {
       repo_id: repoId,
       suite_key: suiteKey,
       positives: positive.length,
-      negatives: suiteDoc.payload.negative.length
+      negatives: suiteDoc.payload.negative.length,
+      by_class: byClass,
+      off_domain_topics: randomTopics
     });
     return suiteDoc;
   });
@@ -337,16 +518,20 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         results.push({
           query: q.query,
           kind: q.kind,
+          cls: q.cls || null,
           source: q.source || 'llm',
           expected_repo: q.expected_repo || null,
           head_score: r.under_test.head_score,
           head_rank: r.under_test.head_rank,
           forbidden_cosine: r.under_test.forbidden_cosine !== undefined ? r.under_test.forbidden_cosine : null,
           head_margin: r.under_test.head_margin !== undefined ? r.under_test.head_margin : null,
+          head_claim: r.under_test.head_claim || null,
+          tag_veto: r.under_test.tag_veto || null,
           head_claimed:
             r.under_test.head_claimed === undefined || r.under_test.head_claimed === null
               ? null
               : !!r.under_test.head_claimed,
+          suppress_reason: suppressReason(q, r.under_test),
           winner: r.verdict.head_routing_winner,
           winner_name:
             r.verdict.head_routing_winner === repoId
@@ -362,6 +547,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         results.push({
           query: q.query,
           kind: q.kind,
+          cls: q.cls || null,
           source: q.source || 'llm',
           expected_repo: q.expected_repo || null,
           error: e.message
@@ -401,6 +587,20 @@ async function runSuite(repoId, suiteKey, opts = {}) {
 }
 
 /**
+ * Story 1-8b — WHY a negative was suppressed, in the curator's terms
+ * (the Lab teaches which knob — and which tag — to adjust):
+ *   head_claim 'floor' → 'off-domain' (ROUTE_HEAD_FLOOR suppressed noise)
+ *   head_claim 'veto'  → 'forbidden:<tag>' (ROUTE_FORBIDDEN_TAG_MAX veto)
+ * Positive rows, non-suppressed rows and legacy rows (no gate data) → null.
+ */
+function suppressReason(q, ut) {
+  if (!q || !ut || q.kind === 'positive' || ut.head_claimed !== false) return null;
+  if (ut.head_claim === 'floor') return 'off-domain';
+  if (ut.head_claim === 'veto') return `forbidden:${ut.tag_veto}`;
+  return null;
+}
+
+/**
  * Pass criteria + honest-empty semantics:
  *   positive → under_test_wins_head === true
  *   negative → under_test_wins_head === false, but ONLY evaluatable when
@@ -411,6 +611,10 @@ async function runSuite(repoId, suiteKey, opts = {}) {
  *   universe — a negative passes when the head does not CLAIM the query
  *   (head_claimed === false), which works solo. Legacy results without
  *   head_claimed fall back to the sibling-gated rank semantics.
+ *   1-8b: EVERY non-positive row is a negative — cls ∈ forbidden |
+ *   confusable | off-domain | meta (manual rows carry no cls but keep
+ *   kind='negative'); off-domain and meta rows are expected suppressed
+ *   via the floor condition even in a one-repo universe.
  *   avg_margin over positives, null when no siblings (margin==1 is the
  *   solo-race artifact, not a quality signal).
  *   steals: positives lost, grouped by the winning sibling.
@@ -418,7 +622,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
 function summarizeRun(results) {
   const done = results.filter((r) => !r.error);
   const positives = done.filter((r) => r.kind === 'positive');
-  const negatives = done.filter((r) => r.kind === 'negative');
+  const negatives = done.filter((r) => r.kind !== 'positive');
   const siblingCount = done.length ? Math.max(...done.map((r) => r.sibling_count || 0)) : 0;
   const posPassed = positives.filter((r) => r.under_test_wins_head).length;
   // Gate-era negatives are evaluatable solo; legacy (head_claimed null)
@@ -489,7 +693,14 @@ module.exports = {
   _internals: {
     suitePrompt,
     summarizeRun,
+    suppressReason,
     forbiddenDerivedQueries,
+    offDomainQueries,
+    metaQueries,
+    sampleTopics,
+    OFF_DOMAIN_TOPICS,
+    OFF_DOMAIN_TEMPLATES,
+    META_TEMPLATES,
     parseJsonObject,
     clampCount,
     HEAD_TEST_RUNS_COLLECTION

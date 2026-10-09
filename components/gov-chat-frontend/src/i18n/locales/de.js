@@ -2701,6 +2701,22 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Gate',
+        floor: 'Untergrenze',
+        veto: 'Verbotene Tags',
+        margin: 'Abstand',
+        claim: 'Anspruch',
+        pass: 'bestanden',
+        fail: 'nicht bestanden',
+        na: 'n/a'
+      },
+      teach: {
+        title: 'Was das bedeutet',
+        veto: "Diese Abfrage stimmt stark mit dem verbotenen Tag „{'{'}tag{'}'}“ überein. Sollte sie zu diesem Repository gehören, entfernen Sie „{'{'}tag{'}'}“ aus den verbotenen Tags im Frontmatter und veröffentlichen Sie erneut, um den Head neu zu bauen.",
+        floor:
+          'Die Abfrage hat keinen Bezug zum Thema dieses Repositorys (Wert unter der Domain-Untergrenze) — keine Tag-Änderung behebt das; die Unterdrückung ist korrekt.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

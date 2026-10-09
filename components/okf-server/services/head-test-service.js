@@ -95,6 +95,20 @@ const ROUTE_RETRY = parseInt(process.env.RETRIEVER_ROUTE_RETRY || '1', 10);
 // factors for cancer" — David: "probably in, given the tags"; on-topic
 // positives +0.106..+0.122). Default 0.01 sits centered in the gap.
 const ROUTE_HEAD_MARGIN = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_MARGIN || '0.01');
+// Story 1-8b (David 2026-10-09: "forbidden is forbidden — that is a hard
+// contract, it should immediately score zero") — the gate hardens from one
+// margin rule to a three-condition claim. Calibrated on NCD 2026-10-09
+// (19-query probe, gate-probe-inner.js):
+//   FLOOR: unrelated queries score 0.32-0.48 on ANY head ("capital of
+//   France" 0.321, "forbidden noise gate" 0.407, "weather today" 0.484)
+//   and the margin rule cannot see them (France claimed at +0.012). Legit
+//   claims start at 0.614 → 0.55 sits mid-gap.
+const ROUTE_HEAD_FLOOR = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_FLOOR || '0.55');
+//   VETO: a mixed-subject query (genetics+cancer 0.617, epidemiology+lung
+//   0.619, exercise+asthma 0.638, incidence-trends 0.567) slips past the
+//   averaged forbidden centroid but not its single dominant forbidden tag.
+//   Legit claims never exceed 0.529 on any forbidden tag → 0.55 separates.
+const ROUTE_FORBIDDEN_TAG_MAX = parseFloat(process.env.RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX || '0.55');
 const SIBLING_LIMIT = parseInt(process.env.OKF_HEAD_TEST_SIBLING_LIMIT || '20', 10);
 
 // ---------- math helpers ----------
@@ -123,22 +137,35 @@ const DEFAULT_WEIGHTS = { topic: 1.0, entity: 0.7, keyword: 0.5, summary: 0.5, s
  * for a recompute formula).
  */
 function scoreHead(head, queryVec, formula) {
-  if (!head || !Array.isArray(head.vector)) return { score: null, per_field: null };
+  if (!head || !Array.isArray(head.vector)) return { score: null, per_field: null, tag_cosines: [] };
   const perFieldCos = {};
   for (const f of POSITIVE_FIELDS.concat(['forbidden'])) {
     const v = head.per_field && head.per_field[f];
     perFieldCos[f] = Array.isArray(v) ? cosine(queryVec, v) : null;
   }
+  // Story 1-8b — per-tag forbidden cosines for the hard veto gate. Each
+  // forbidden tag was embedded individually at head build time
+  // (per_field.forbidden_vectors = [{tag, vector}]).
+  const tagCosines = [];
+  const forbiddenVectors = (head.per_field && head.per_field.forbidden_vectors) || [];
+  if (Array.isArray(forbiddenVectors)) {
+    for (const fv of forbiddenVectors) {
+      if (!fv || typeof fv.tag !== 'string' || !Array.isArray(fv.vector)) continue;
+      const c = cosine(queryVec, fv.vector);
+      if (c !== null) tagCosines.push({ tag: fv.tag, cosine: c });
+    }
+  }
   if (formula === 'default' || formula === undefined || formula === null) {
     return {
       score: cosine(queryVec, head.vector),
       per_field: perFieldCos,
+      tag_cosines: tagCosines,
       formula_used: 'default(stored-vector)'
     };
   }
   // Recompute formulas need per_field vectors.
   const hasAny = POSITIVE_FIELDS.some((f) => perFieldCos[f] !== null);
-  if (!hasAny) return { score: null, per_field: perFieldCos, formula_used: String(formula) };
+  if (!hasAny) return { score: null, per_field: perFieldCos, tag_cosines: tagCosines, formula_used: String(formula) };
   const weights =
     formula === 'uniform' ? { topic: 1, entity: 1, keyword: 1, summary: 1, scope: 1, forbidden: 0 } : formula; // caller-validated object
   let acc = 0;
@@ -149,7 +176,7 @@ function scoreHead(head, queryVec, formula) {
     acc += w * perFieldCos[f];
     totalW += w;
   }
-  if (totalW === 0) return { score: null, per_field: perFieldCos, formula_used: String(formula) };
+  if (totalW === 0) return { score: null, per_field: perFieldCos, tag_cosines: tagCosines, formula_used: String(formula) };
   let score = acc / totalW;
   const wf = typeof weights.forbidden === 'number' ? weights.forbidden : 0;
   if (wf > 0 && perFieldCos.forbidden !== null) {
@@ -158,7 +185,7 @@ function scoreHead(head, queryVec, formula) {
     // never earns a bonus).
     score -= wf * Math.max(0, perFieldCos.forbidden);
   }
-  return { score, per_field: perFieldCos, formula_used: String(formula) };
+  return { score, per_field: perFieldCos, tag_cosines: tagCosines, formula_used: String(formula) };
 }
 
 // ---------- query embedding ----------
@@ -372,6 +399,7 @@ async function routingTest(repoId, payload = {}, opts = {}) {
         name: s.name,
         score: null,
         per_field: null,
+        tag_cosines: [],
         is_under_test: false
       });
     }
@@ -387,6 +415,7 @@ async function routingTest(repoId, payload = {}, opts = {}) {
         const sc = scoreHead(headsById[headRows[i].repo_id], emb.vector, formula);
         headRows[i].score = sc.score;
         headRows[i].per_field = sc.per_field;
+        headRows[i].tag_cosines = sc.tag_cosines || [];
       }
     }
     // Rank the head leg (nulls sink).
@@ -394,15 +423,35 @@ async function routingTest(repoId, payload = {}, opts = {}) {
     ranked.forEach((r, i) => {
       r.head_rank = i + 1;
     });
-    // Story 1-8a — the forbidden/noise gate. A repo CLAIMS the head leg only
-    // when its score clears its own forbidden centroid by ROUTE_HEAD_MARGIN.
-    // A head whose forbidden centroid is missing (pre-1.8a rebuild) claims
-    // freely — the gate degrades open, never silently suppresses.
+    // Story 1-8a/1-8b — the forbidden contract, three conditions. A repo
+    // CLAIMS the head leg only when ALL of:
+    //   floor  — score ≥ ROUTE_HEAD_FLOOR (off-domain noise can never win;
+    //            the margin rule alone is blind to fully-unrelated queries).
+    //   veto   — NO forbidden tag individually matches the query at/above
+    //            ROUTE_FORBIDDEN_TAG_MAX ("forbidden is forbidden — a hard
+    //            contract; it should immediately score zero").
+    //   margin — the score still clears the averaged forbidden centroid.
+    // Degradation: a head without forbidden data (pre-1-8b rebuild has no
+    // per-tag vectors) skips the veto but still applies floor+margin —
+    // the gate never silently suppresses on missing data.
     for (const r of ranked) {
       const forb = r.per_field ? r.per_field.forbidden : null;
       r.forbidden_cosine = typeof forb === 'number' ? forb : null;
       r.head_margin = r.forbidden_cosine !== null ? r.score - r.forbidden_cosine : null;
-      r.head_claimed = r.forbidden_cosine === null || r.head_margin > ROUTE_HEAD_MARGIN;
+      const tags = Array.isArray(r.tag_cosines) ? r.tag_cosines : [];
+      const worst = tags.reduce((a, t) => (!a || t.cosine > a.cosine ? t : a), null);
+      r.max_tag_cosine = worst ? worst.cosine : null;
+      r.tag_veto = worst && worst.cosine >= ROUTE_FORBIDDEN_TAG_MAX ? worst.tag : null;
+      r.floor_pass = r.score >= ROUTE_HEAD_FLOOR;
+      const marginPass = r.forbidden_cosine === null || r.head_margin > ROUTE_HEAD_MARGIN;
+      r.head_claimed = r.floor_pass && !r.tag_veto && marginPass;
+      r.head_claim = !r.floor_pass
+        ? 'floor'
+        : r.tag_veto
+          ? 'veto'
+          : !marginPass
+            ? 'margin'
+            : 'claim';
     }
     const topRanked = ranked.length ? ranked[0] : null;
     const headWinner = topRanked && topRanked.head_claimed ? topRanked : null;
@@ -496,10 +545,14 @@ async function routingTest(repoId, payload = {}, opts = {}) {
         head_score: utRow.score,
         head_rank: utRow.head_rank || null,
         per_field: utRow.per_field,
-        // Story 1-8a gate telemetry: does this head CLAIM the query, and by
-        // what margin over its own forbidden centroid.
+        // Story 1-8a/1-8b gate telemetry: does this head CLAIM the query,
+        // and which condition decided (floor | veto | margin | claim).
         forbidden_cosine: utRow.forbidden_cosine !== undefined ? utRow.forbidden_cosine : null,
         head_margin: utRow.head_margin !== undefined ? utRow.head_margin : null,
+        tag_veto: utRow.tag_veto || null,
+        max_tag_cosine: utRow.max_tag_cosine !== undefined ? utRow.max_tag_cosine : null,
+        floor_pass: !!utRow.floor_pass,
+        head_claim: utRow.head_claim || null,
         head_claimed: !!utRow.head_claimed,
         probe: probeOutcome ? probeOutcome.per_repo[repoId] || null : null
       },
@@ -520,12 +573,24 @@ async function routingTest(repoId, payload = {}, opts = {}) {
               ? 'floor'
               : 'qualified'
           : topRanked && !topRanked.head_claimed
-            ? 'head-suppressed (forbidden/noise)'
+            ? topRanked.head_claim === 'floor'
+              ? 'head-suppressed (off-domain)'
+              : topRanked.head_claim === 'veto'
+                ? `head-suppressed (forbidden: ${topRanked.tag_veto})`
+                : 'head-suppressed (forbidden/noise)'
             : 'head-only (no graph under test)'
       },
       fidelity: {
-        algorithm: 'story-1.3-replay+v1',
-        knobs: { ROUTE_TOP_K, ROUTE_MIN_CHUNKS, ROUTE_PROBE_TIMEOUT_MS, ROUTE_RETRY, ROUTE_HEAD_MARGIN }
+        algorithm: 'story-1.3-replay+v2',
+        knobs: {
+          ROUTE_TOP_K,
+          ROUTE_MIN_CHUNKS,
+          ROUTE_PROBE_TIMEOUT_MS,
+          ROUTE_RETRY,
+          ROUTE_HEAD_MARGIN,
+          ROUTE_HEAD_FLOOR,
+          ROUTE_FORBIDDEN_TAG_MAX
+        }
       }
     };
     span.setAttribute('okf.headtest.head_winner', result.verdict.head_routing_winner || '');

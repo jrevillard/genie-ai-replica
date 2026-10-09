@@ -1514,6 +1514,13 @@ services:
       # for the adaptive reranker (keep aligned with chatqna's RERANKING_STRATEGY).
       RERANKING_STRATEGY: ${RERANKING_STRATEGY:-slice}
       RETRIEVER_SUMMARIZER_ENABLED: ${RETRIEVER_SUMMARIZER_ENABLED:-false}
+      # Story 1-8 routing head — OKF graph affinity + the forbidden/noise gate
+      # (read only by the retriever's graph routing; knob semantics + calibration
+      # in genie-ai-overlay/retriever/config.py; rollback: WEIGHT=0.0).
+      RETRIEVER_ROUTE_HEAD_WEIGHT: ${RETRIEVER_ROUTE_HEAD_WEIGHT:-1.0}
+      RETRIEVER_ROUTE_HEAD_MARGIN: ${RETRIEVER_ROUTE_HEAD_MARGIN:-0.01}
+      RETRIEVER_ROUTE_HEAD_FLOOR: ${RETRIEVER_ROUTE_HEAD_FLOOR:-0.55}
+      RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX: ${RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX:-0.55}
       # Graph traversal
       RETRIEVER_ARANGO_TRAVERSAL_ENABLED: ${RETRIEVER_ARANGO_TRAVERSAL_ENABLED:-true}
       RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH:-2}

@@ -6,8 +6,11 @@
               dim/model/version/computed_at + staleness badge, Rebuild
               (admin; hidden in the wizard — no repo mutations there).
     Test    — one query against the two-leg simulation: head scores for
-              the repo under test + every sibling, verdict banner,
-              adversarial expectation (expect NOT selected).
+              the repo under test + every sibling, verdict banner, the
+              gate breakdown (Floor / Forbidden tags / Margin — 1-8b)
+              with its teaching note (veto = fix the tags + republish;
+              floor = correct suppression), adversarial expectation
+              (expect NOT selected).
     Suites  — LLM-generated suites (+ forbidden-derived negatives +
               curator free-text), run-all, pass-rate/margin history,
               steal pairs ("kenya stole 3 of 8").
@@ -34,7 +37,7 @@
         <DsPill v-if="headStatus === 'present'" variant="success">
           {{ translate('okf.headTest.badge.present', 'head ready') }}
         </DsPill>
-        <DsPill v-else-if="headStatus === 'stale'" variant="warn">
+        <DsPill v-else-if="headStatus === 'stale'" variant="warning">
           {{ translate('okf.headTest.badge.stale', 'head stale') }}
         </DsPill>
         <DsPill v-else variant="danger">
@@ -165,19 +168,54 @@
                 </td>
                 <td>{{ row.rank }}</td>
                 <td>
-                  <!-- 1-8a: the gate column — a head only CLAIMS a query
-                       when its score clears its own forbidden centroid. -->
+                  <!-- 1-8a/1-8b: the gate column — a head only CLAIMS a
+                       query when it clears floor + forbidden-veto + margin;
+                       when it is suppressed, name the condition that
+                       decided (under-test rows carry head_claim). -->
                   <DsPill v-if="row.claimed === true" variant="success">
                     {{ translate('okf.headTest.test.claimed', 'claims') }}
                   </DsPill>
-                  <DsPill v-else-if="row.claimed === false" variant="warn">
-                    {{ translate('okf.headTest.test.suppressed', 'suppressed') }}
-                  </DsPill>
+                  <template v-else-if="row.claimed === false">
+                    <DsPill variant="warning">
+                      {{ translate('okf.headTest.test.suppressed', 'suppressed') }}
+                    </DsPill>
+                    <span v-if="row.claim" class="okf-headtest__claim-why">{{ claimLabel(row.claim) }}</span>
+                  </template>
                   <span v-else class="okf-headtest__empty">—</span>
                 </td>
               </tr>
             </tbody>
           </table>
+          <!-- 1-8b: the three gate conditions behind head_claimed — Floor
+               (off-domain noise), Forbidden tags (the hard veto), Margin
+               (centroid clearance). Thresholds come from the response's
+               fidelity.knobs so the display never drifts from the config. -->
+          <div v-if="gateChecks.length" class="okf-headtest__gate">
+            <span class="okf-headtest__gate-title">{{ translate('okf.headTest.gate.title', 'Gate') }}</span>
+            <span v-for="check in gateChecks" :key="check.key" class="okf-headtest__gate-check">
+              <span class="okf-headtest__gate-name">{{ check.name }}</span>
+              <code v-if="check.value">{{ check.value }}</code>
+              <DsTag v-if="check.tag">{{ check.tag }}</DsTag>
+              <DsPill :variant="check.state === 'pass' ? 'success' : check.state === 'fail' ? 'danger' : 'neutral'">
+                {{
+                  check.state === 'pass'
+                    ? translate('okf.headTest.gate.pass', 'pass')
+                    : check.state === 'fail'
+                      ? translate('okf.headTest.gate.fail', 'fail')
+                      : translate('okf.headTest.gate.na', 'n/a')
+                }}
+              </DsPill>
+            </span>
+          </div>
+          <!-- 1-8b: the teaching panel — a veto is FIXABLE (remove the tag,
+               republish, rebuild the head); a floor suppression is correct
+               behavior, not a defect; a plain claim needs no guidance. -->
+          <div v-if="teachNote" class="okf-headtest__teach" :class="'okf-headtest__teach--' + teachNote.kind">
+            <span class="okf-headtest__teach-title">{{
+              translate('okf.headTest.teach.title', 'What this means')
+            }}</span>
+            <p class="okf-headtest__teach-text">{{ teachNote.text }}</p>
+          </div>
           <p v-if="lastResult.verdict && lastResult.verdict.provenance" class="okf-headtest__provenance">
             {{ translate('okf.headTest.test.provenance', 'Routing provenance') }}:
             <code>{{ lastResult.verdict.provenance }}</code>
@@ -425,6 +463,7 @@ export default {
           score: ut.head_score,
           rank: ut.head_rank,
           claimed: ut.head_claimed !== undefined ? ut.head_claimed : null,
+          claim: ut.head_claim || null,
           under_test: true
         }
       ];
@@ -436,6 +475,7 @@ export default {
           score: s.head_score,
           rank: s.head_rank,
           claimed: s.head_claimed !== undefined ? s.head_claimed : null,
+          claim: null, // 1-8b: the deciding condition is under-test telemetry only
           under_test: false
         });
       }
@@ -458,10 +498,105 @@ export default {
       if (!this.lastResult) return false;
       return !!this.lastResult.verdict.head_suppressed;
     },
+    /** 1-8b: the three knob values, read from the response's fidelity
+     * block so the displayed thresholds always match the server's real
+     * config (fallbacks mirror the server defaults). */
+    gateKnobs() {
+      const k = (this.lastResult && this.lastResult.fidelity && this.lastResult.fidelity.knobs) || {};
+      const num = (v, fb) => (typeof v === 'number' ? v : fb);
+      return {
+        floor: num(k.ROUTE_HEAD_FLOOR, 0.55),
+        tagMax: num(k.ROUTE_FORBIDDEN_TAG_MAX, 0.55),
+        margin: num(k.ROUTE_HEAD_MARGIN, 0.01)
+      };
+    },
+    /** 1-8b: the three checks of the gate — value string for the code
+     * chip, the vetoed tag when present, and pass/fail state ('na' when
+     * the head carries no data for that leg: pre-1-8b heads skip the
+     * veto, heads without forbidden tags skip the margin). Empty for
+     * pre-v2 (1-8a) payloads — they carry no head_claim. */
+    gateChecks() {
+      const ut = this.lastResult && this.lastResult.under_test;
+      if (!ut || !ut.head_claim) return [];
+      const has = (v) => v !== null && v !== undefined;
+      return [
+        {
+          key: 'floor',
+          name: this.claimLabel('floor'),
+          value: has(ut.head_score) ? `${ut.head_score.toFixed(3)} ≥ ${this.gateKnobs.floor.toFixed(2)}` : '',
+          tag: '',
+          state: has(ut.head_score) ? (ut.floor_pass ? 'pass' : 'fail') : 'na'
+        },
+        {
+          key: 'veto',
+          name: this.claimLabel('veto'),
+          value: has(ut.max_tag_cosine)
+            ? `max ${ut.max_tag_cosine.toFixed(3)} ${ut.tag_veto ? '≥' : '<'} ${this.gateKnobs.tagMax.toFixed(2)}`
+            : '',
+          tag: ut.tag_veto || '',
+          state: has(ut.max_tag_cosine) ? (ut.tag_veto ? 'fail' : 'pass') : 'na'
+        },
+        {
+          key: 'margin',
+          name: this.claimLabel('margin'),
+          value: has(ut.head_margin) ? `${ut.head_margin.toFixed(3)} > ${this.gateKnobs.margin.toFixed(2)}` : '',
+          tag: '',
+          state: has(ut.head_margin) ? (ut.head_margin > this.gateKnobs.margin ? 'pass' : 'fail') : 'na'
+        }
+      ];
+    },
+    /** 1-8b: the vetoed tag — from the structured field, else parsed out
+     * of the provenance string ("head-suppressed (forbidden: <tag>)"). */
+    vetoTag() {
+      const ut = this.lastResult && this.lastResult.under_test;
+      if (ut && ut.tag_veto) return ut.tag_veto;
+      const prov = this.lastResult && this.lastResult.verdict && this.lastResult.verdict.provenance;
+      const m = typeof prov === 'string' ? prov.match(/^head-suppressed \(forbidden: (.+)\)$/) : null;
+      return m ? m[1] : '';
+    },
+    /** 1-8b teaching note: a veto is actionable (remove the named tag +
+     * republish), a floor suppression is correct behavior (no fix), and
+     * a claim (or a margin loss, which the breakdown already shows)
+     * needs no panel. */
+    teachNote() {
+      const ut = this.lastResult && this.lastResult.under_test;
+      if (!ut) return null;
+      if (ut.head_claim === 'veto') {
+        return {
+          kind: 'veto',
+          text: this.translate(
+            'okf.headTest.teach.veto',
+            'This query strongly matches the forbidden tag "{tag}". If it SHOULD belong to this repository, remove "{tag}" from the forbidden tags in Frontmatter, then republish to rebuild the head.'
+          ).replace(/\{tag\}/g, this.vetoTag)
+        };
+      }
+      if (ut.head_claim === 'floor') {
+        return {
+          kind: 'floor',
+          text: this.translate(
+            'okf.headTest.teach.floor',
+            'The query is unrelated to the subject matter of this repository (score below the domain floor) — no tag change fixes this; it is correct suppression.'
+          )
+        };
+      }
+      return null;
+    },
+    /** 1-8a margin detail, extended by 1-8b with the deciding gate
+     * condition (e.g. "… = 0.094 · Forbidden tags: genetics"). */
     gateDetail() {
       const ut = this.lastResult && this.lastResult.under_test;
-      if (!ut || typeof ut.head_margin !== 'number') return '';
-      return ` (score ${ut.head_score.toFixed(3)} − forbidden ${ut.forbidden_cosine.toFixed(3)} = ${ut.head_margin.toFixed(3)})`;
+      if (!ut) return '';
+      const bits = [];
+      if (typeof ut.head_margin === 'number' && typeof ut.head_score === 'number') {
+        bits.push(
+          `score ${ut.head_score.toFixed(3)} − forbidden ${ut.forbidden_cosine.toFixed(3)} = ${ut.head_margin.toFixed(3)}`
+        );
+      }
+      if (ut.head_claim) {
+        const label = this.claimLabel(ut.head_claim);
+        bits.push(ut.head_claim === 'veto' && ut.tag_veto ? `${label}: ${ut.tag_veto}` : label);
+      }
+      return bits.length ? ` (${bits.join(' · ')})` : '';
     },
     verdictText() {
       if (!this.lastResult) return '';
@@ -540,6 +675,19 @@ export default {
     }
   },
   methods: {
+    /** 1-8b: translated label for a head_claim token (floor | veto |
+     * margin | claim) — used by the claims column, the banner suffix and
+     * the gate breakdown. */
+    claimLabel(claim) {
+      const keys = {
+        floor: ['okf.headTest.gate.floor', 'Floor'],
+        veto: ['okf.headTest.gate.veto', 'Forbidden tags'],
+        margin: ['okf.headTest.gate.margin', 'Margin'],
+        claim: ['okf.headTest.gate.claim', 'Claim']
+      };
+      const hit = keys[claim];
+      return hit ? this.translate(hit[0], hit[1]) : claim;
+    },
     winnerName(repoId) {
       if (!this.lastResult) return '';
       if (repoId === this.lastResult.under_test.repo_id) return this.lastResult.under_test.name;
@@ -720,7 +868,7 @@ export default {
 }
 .okf-headtest__stale-note {
   width: 100%;
-  color: var(--warn);
+  color: var(--warning);
 }
 .okf-headtest__pane-actions {
   display: flex;
@@ -798,6 +946,54 @@ export default {
   font-size: var(--text-sm);
   color: var(--muted);
   margin: 0;
+}
+.okf-headtest__claim-why {
+  margin-left: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.okf-headtest__gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-sm);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+.okf-headtest__gate-title {
+  font-weight: 600;
+  color: var(--muted);
+}
+.okf-headtest__gate-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.okf-headtest__gate-name {
+  color: var(--muted);
+}
+.okf-headtest__teach {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+.okf-headtest__teach-title {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--space-xs);
+}
+.okf-headtest__teach-text {
+  margin: 0;
+}
+.okf-headtest__teach--veto {
+  background: color-mix(in oklab, var(--warning) 14%, transparent);
+  color: var(--warning);
+}
+.okf-headtest__teach--floor {
+  background: color-mix(in oklab, var(--info) 14%, transparent);
+  color: var(--info);
 }
 .okf-headtest__suite-title {
   margin: var(--space-sm) 0 0;

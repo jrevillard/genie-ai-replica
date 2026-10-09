@@ -375,3 +375,7 @@ render-blocking and functional-dead paths are closed.
 - Dead helpers componentLabel/serviceSelector deleted (re-add with Plan 3 factory).
 - ArgoCD example → chart path until overlays exist.
 - PARKED: Keycloak spec.hostname deferred to ingress tier (KC26 hostname-strict + plain-HTTP backend interaction needs live verification with TLS at the edge).
+
+## Execution Wave E3 — /code-review pass 3 (fixes in flight)
+
+11 findings. Notable: realm.enabled string-corruption (3rd occurrence of the dash-trim comment class — systemic; wave 3 converts all remaining block comments in that file), uninstall blast radius (release-owned Namespace cascades ALL PVCs — runbook rewritten honestly), ArgoCD example can never sync from repo path (documented as target-state illustration), fullname 63-char budget (50→40), agents 2Gi, publicKeyFingerprint deleted (dead key), componentContext helper dedup (12+ sites).

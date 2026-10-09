@@ -118,15 +118,18 @@ ai:
       count: 1
     teiReranker:
       count: 1
-  # dev: GPU node is the kind cluster's GPU label (none on kind — schedule fails)
-  # CI may set nodeSelector: null to render anyway and accept Pending.
-  nodeSelector:
-    genieai.io/gpu: "true"
-  tolerations:
-    - key: genieai.io/gpu
-      operator: Equal
-      value: "true"
-      effect: NoSchedule
+    # These keys live under ai.gpu — the templates read
+    # ai.gpu.nodeSelector / ai.gpu.tolerations; a top-level ai.nodeSelector
+    # is read by nothing and silently no-ops.
+    # dev: no GPU-labeled nodes on kind — CI may null nodeSelector to
+    # render anyway and accept Pending.
+    nodeSelector:
+      genieai.io/gpu: "true"
+    tolerations:
+      - key: genieai.io/gpu
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
   # dev: keep HF cache small + a hostPath for kind
   hfCache:
     storageSize: 5Gi
@@ -499,42 +502,46 @@ spec:
       backendRefs:
         - name: nginx
           port: 80
-      {{- /* CORS via the HTTPRouteFilter rendered in the task. The
-             filter is opt-in (only renders when ingress.cors.allowOrigins
-             is non-empty). When the filter is absent this `filters:`
-             block emits nothing. */ -}}
-      {{- if .Values.ingress.cors.allowOrigins }}
-      filters:
-        - type: ExtensionRef
-          extensionRef:
-            group: gateway.envoyproxy.io
-            kind: HTTPRouteFilter
-            name: genieai-cors
-      {{- end }}
+      {{- /* CORS attaches via the SecurityPolicy in the next step
+             (targetRef to this HTTPRoute) — HTTPRouteFilter has NO cors
+             field in Envoy Gateway v1.9. */ -}}
 {{- end -}}
 ```
 
-- [ ] **Step 3: Optional CORS policy** (envoy gateway uses BackendTLSPolicy / HTTPRouteFilter for CORS; render only when `cors.allowOrigins` is non-empty)
+- [ ] **Step 3: Optional CORS policy** (render only when `cors.allowOrigins` is non-empty)
+
+CORS lives on **SecurityPolicy.spec.cors** (Envoy Gateway v1.9) — an
+HTTPRouteFilter carries no `cors` field, and `allowOrigins` is a PLAIN
+string list (not a list of objects):
 
 ```yaml
 {{- if and .Values.ingress.enabled .Values.ingress.cors.allowOrigins -}}
 apiVersion: gateway.envoyproxy.io/v1alpha1
-kind: HTTPRouteFilter
+kind: SecurityPolicy
 metadata:
   name: genieai-cors
   namespace: {{ .Values.namespace }}
 spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: genieai
   cors:
     allowOrigins:
       {{- range .Values.ingress.cors.allowOrigins }}
-      - name: {{ . | quote }}
+      - {{ . | quote }}
       {{- end }}
-    allowMethods: {{ .Values.ingress.cors.allowMethods | toJson }}
-    allowHeaders: {{ .Values.ingress.cors.allowHeaders | toJson }}
+    allowMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+    allowHeaders:
+      - Authorization
+      - Content-Type
 {{- end -}}
 ```
-
-(The HTTPRoute's `filters:` array references this HTTPRouteFilter by name; add to Task 2 Step 2.)
 
 - [ ] **Step 4: Render with `prod` overlay**
 
@@ -876,7 +883,7 @@ spec:
             # migrations need Postgres write access (CNPG initdb + the
             # per-app migrations).
             - name: KEYCLOAK_URL
-              value: "http://keycloak.{{ .Values.namespace }}.svc.cluster.local:8080/auth"
+              value: "http://keycloak-service.{{ .Values.namespace }}.svc.cluster.local:8080/auth"
             - name: ARANGO_URL
               value: "http://{{ include "genieai-umbrella.arangoHost" . }}.{{ .Values.namespace }}.svc.cluster.local:8529"
             - name: KEYCLOAK_REALM

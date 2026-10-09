@@ -413,6 +413,20 @@ git commit -m "feat(charts): per-env overlays (dev/staging/prod/sovereign) + ing
 - [ ] **Step 1: Write `charts/genieai-umbrella/templates/gateway/gateway.yaml`**
 
 ```yaml
+{{/*
+Canonical TLS Secret name. Precedence:
+  1. ingress.tls.secretName  — operator pre-baked certificate (sovereign
+     deployments that manage keys outside cert-manager). Setting it also
+     suppresses the chart's Certificate CR.
+  2. <host>-tls               — matches the cert-manager Certificate CR
+     this chart renders (its secretName uses this same helper).
+Both the Gateway listener's certificateRefs and the Certificate CR call
+this helper — a second derivation site would let the two drift and leave
+the https listener waiting on a Secret nobody writes.
+*/}}
+{{- define "genieai-umbrella.tlsSecretName" -}}
+{{- .Values.ingress.tls.secretName | default (printf "%s-tls" (.Values.ingress.host | default "genieai")) -}}
+{{- end -}}
 {{- if .Values.ingress.enabled -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
@@ -458,11 +472,13 @@ spec:
       tls:
         mode: Terminate
         certificateRefs:
-          # ingress.tls.secretName when set; otherwise derive from the host.
-          # (A bare `| default` after printf can never fire — printf output
-          # is always non-empty, so an unset host rendered "-tls".)
+          # Single source of truth for the TLS Secret name — the helper
+          # below. The Certificate CR (cert-manager task) renders the SAME
+          # name; setting ingress.tls.secretName (pre-baked sovereign
+          # certificate) skips the Certificate CR entirely, so the two can
+          # never drift apart.
           - kind: Secret
-            name: {{ .Values.ingress.tls.secretName | default (printf "%s-tls" .Values.ingress.host) }}
+            name: {{ include "genieai-umbrella.tlsSecretName" . }}
       allowedRoutes:
         namespaces:
           from: Same
@@ -577,7 +593,12 @@ git commit -m "feat(charts): Envoy Gateway Gateway + HTTPRoute + optional CORS S
 - [ ] **Step 1: Write `charts/genieai-umbrella/templates/gateway/certificate.yaml`**
 
 ```yaml
-{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled -}}
+{{- /* Skipped entirely when ingress.tls.secretName is set: a pre-baked
+       certificate means the operator owns the Secret — rendering a
+       Certificate CR would mint a SECOND, unused secret under the
+       derived name while the Gateway listener waits on the pre-baked
+       one. */ -}}
+{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled (not .Values.ingress.tls.secretName) -}}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -593,7 +614,10 @@ spec:
     name: {{ .Values.ingress.tls.issuerName | required "ingress.tls.issuerName is required when ingress.tls.enabled=true" }}
     kind: ClusterIssuer
     group: cert-manager.io
-  secretName: {{ printf "%s-tls" .Values.ingress.host | default "genieai-tls" }}
+  # MUST stay the same helper the Gateway listener's certificateRefs uses —
+  # a divergence leaves the https listener NotReady (ResolvedRefs=False)
+  # while cert-manager fills a Secret nobody references.
+  secretName: {{ include "genieai-umbrella.tlsSecretName" . }}
   dnsNames:
     - {{ .Values.ingress.host | quote }}
 {{- end -}}
@@ -603,6 +627,10 @@ spec:
 
 Run: `helm template test charts/genieai-umbrella -n genieai -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=true | grep -A 2 "kind: Certificate"`
 Expected: prints the Certificate with the prod Issuer name.
+
+Additionally verify the pre-baked-certificate path (sovereign deployments):
+`helm template test charts/genieai-umbrella -n genieai -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=true --set ingress.tls.secretName=my-cert | grep -c "kind: Certificate"`
+Expected: prints `0` (no Certificate CR), and the Gateway listener references `name: my-cert`.
 
 - [ ] **Step 3: Negative test — missing issuerName fails**
 
@@ -1167,7 +1195,7 @@ helm template test charts/genieai-umbrella -n genieai -f deploy/environments/pro
 # the Plans 1-5 inventory.
 helm lint charts/genieai-umbrella --strict -f deploy/environments/dev/values-override.yaml
 helm lint charts/genieai-umbrella --strict -f deploy/environments/prod/values-override.yaml --set ingress.tls.enabled=true
-ct lint --config charts/ci/ct.yaml --charts charts/genieai-umbrella
+ct lint --config charts/ci/ct.yaml --chart-yaml-schema charts/ci/chart_schema.yaml --lint-conf charts/ci/lintconf.yaml --charts charts/genieai-umbrella
 git add charts/README.md charts/genieai-umbrella/README.md deploy/environments/README.md docs/charts/plan-defects.md
 git commit -m "docs(charts): per-env + ingress + GitOps + migrations status"
 ```

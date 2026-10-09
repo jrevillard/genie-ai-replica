@@ -2611,6 +2611,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2690,7 +2691,33 @@ export default {
         fail: 'ব্যর্থ',
         na: 'প্রযোজ্য নয়'
       },
+      counts: {
+        positive: 'পজিটিভ',
+        negative: 'বিভ্রান্তিকর',
+        negativeRandom: 'ডোমেইনের বাইরে',
+        meta: 'মেটা',
+        nearMiss: 'কাছাকাছি ভুল',
+        hint: 'নিষিদ্ধ ট্যাগ থেকে আসা সারিগুলি রিপোজিটরির নিষিদ্ধ ট্যাগের সংখ্যার সাথে বাড়ে — এখানে সেট করা যায় না।'
+      },
+      cls: {
+        nearMiss: 'কাছাকাছি ভুল',
+        confusable: 'বিভ্রান্তিকর',
+        forbidden: 'নিষিদ্ধ',
+        offDomain: 'ডোমেইনের বাইরে',
+        meta: 'মেটা'
+      },
       teach: {
+        claim:
+          'হেড এই কোয়েরিটি দাবি করছে — এটি তিনটি গেটই পাস করেছে। যদি এটি এখানে রাউট না হওয়া উচিত হয়, তার বিষয় বাদ দেওয়ার নিষিদ্ধ ট্যাগ চান, সেগুলি যোগ করুন, তারপর হেড পুনর্নির্মাণ করুন।',
+        explain: 'ব্যাখ্যা ও পরামর্শ',
+        explainBusy: 'ব্যাখ্যা চলছে — মডেল নিষিদ্ধ ট্যাগের পরামর্শ দিচ্ছে…',
+        addTag: 'নিষিদ্ধ ট্যাগে যোগ করুন',
+        suggestNone:
+          'কোনো নিষিদ্ধ ট্যাগের পরামর্শ দেওয়া হয়নি — ঘোষিত সুযোগের সাথে কোয়েরিটি ম্যানুয়ালি পর্যালোচনা করুন।',
+        added: 'নিষিদ্ধ ট্যাগে যোগ করা হয়েছে — প্রয়োগ করতে হেড পুনর্নির্মাণ করুন।',
+        rebuildRerun: 'হেড পুনর্নির্মাণ ও পুনরায় চালান',
+        savingTag: 'নিষিদ্ধ ট্যাগ সংরক্ষণ করা হচ্ছে…',
+        rebuildBusy: 'হেড পুনর্নির্মাণ ও পুনরায় চালানো হচ্ছে…',
         title: 'এর অর্থ কী',
         veto: "এই কোয়েরিটি নিষিদ্ধ ট্যাগ “{'{'}tag{'}'}” এর সাথে দৃঢ়ভাবে মেলে। যদি এটি এই রিপোজিটরির অন্তর্ভুক্ত হওয়া উচিত হয়, তবে Frontmatter-এর নিষিদ্ধ ট্যাগ থেকে “{'{'}tag{'}'}” সরিয়ে ফেলুন, তারপর head পুনর্নির্মাণের জন্য পুনরায় প্রকাশ করুন।",
         floor:
@@ -2727,9 +2754,18 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'ব্যর্থতা ব্যাখ্যা করুন',
+        explainBusy: 'ব্যর্থতা ব্যাখ্যা করা হচ্ছে — প্রতিটি ব্যর্থ নেগেটিভের জন্য একটি মডেল কল…',
+        batchTitle: 'ব্যর্থ নেগেটিভগুলি কেন এখানে রাউট হয়েছে',
+        batchNone:
+          'কোনো সমাধানের পরামর্শ দেওয়া হয়নি — ব্যর্থ কোয়েরিগুলি ঘোষিত সুযোগের সাথে ম্যানুয়ালি পর্যালোচনা করুন।',
+        addAll: 'সব যোগ করুন',
+        rebuildRerun: 'হেড পুনর্নির্মাণ ও স্যুট পুনরায় চালান'
       },
       error: {
+        explain: 'ব্যাখ্যা ব্যর্থ হয়েছে',
+        saveTag: 'নিষিদ্ধ ট্যাগ সংরক্ষণ করা যায়নি',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',

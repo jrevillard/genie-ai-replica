@@ -217,6 +217,94 @@ describe('generateSuite', () => {
   });
 });
 
+// ---------- Story 1-8c: the near-miss class ("similar but wrong") ----------
+
+describe('near-miss negative class (Story 1-8c)', () => {
+  const TWO_ENTITY_FM = { entity: ['breast-cancer', 'diabetes'] };
+
+  it('nearMissQueries uses LLM rows first, then fills from entity-templated fallbacks', () => {
+    const rows = svc._internals.nearMissQueries(
+      [
+        { query: 'best hospitals for breast cancer surgery', reason: 'wrong intent: providers' },
+        { query: 'treatment costs for breast cancer', reason: 'wrong intent: costs' }
+      ],
+      { entity: ['breast-cancer'] },
+      4
+    );
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toMatchObject({
+      query: 'best hospitals for breast cancer surgery',
+      kind: 'negative',
+      cls: 'near-miss',
+      source: 'llm',
+      expected_repo: null,
+      reason: 'wrong intent: providers'
+    });
+    // The fallback fills the remainder from the repo's OWN vocabulary.
+    expect(rows.slice(2).map((q) => q.source)).toEqual(['fallback', 'fallback']);
+    expect(rows.slice(2).every((q) => q.query.includes('breast-cancer'))).toBe(true);
+    expect(new Set(rows.map((q) => q.query.toLowerCase())).size).toBe(4); // no duplicate queries
+  });
+
+  it('nearMissQueries falls back entirely to entity templates when the LLM omits the class', () => {
+    const rows = svc._internals.nearMissQueries([], TWO_ENTITY_FM, 4);
+    expect(rows).toHaveLength(4);
+    expect(rows.every((q) => q.cls === 'near-miss' && q.source === 'fallback')).toBe(true);
+    expect(rows.every((q) => q.kind === 'negative' && q.expected_repo === null)).toBe(true);
+    expect(rows.every((q) => /breast-cancer|diabetes/.test(q.query))).toBe(true);
+  });
+
+  it('nearMissQueries stays duplicate-free while capping at 10 rows', () => {
+    // 5 wrong-intent templates x 2 entities = 10 distinct rows — the cap
+    // is reachable without a collision.
+    const rows = svc._internals.nearMissQueries([], TWO_ENTITY_FM, 10);
+    expect(rows).toHaveLength(10);
+    expect(new Set(rows.map((q) => q.query.toLowerCase())).size).toBe(10);
+  });
+
+  it('n_near_miss defaults to 4 and caps at 10 (clampCount)', () => {
+    expect(svc._internals.clampCount(undefined, 4, 10)).toBe(4);
+    expect(svc._internals.clampCount(1, 4, 10)).toBe(1);
+    expect(svc._internals.clampCount(99, 4, 10)).toBe(10);
+    expect(svc._internals.clampCount('bad', 4, 10)).toBe(4);
+  });
+
+  it('generateSuite: LLM near_miss rows flow into the suite and the prompt asks for NEAR-MISS', async () => {
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [],
+        negative: [],
+        keywords: [],
+        near_miss: [{ query: 'clinical trials recruiting breast cancer patients', reason: 'wrong intent' }]
+      })
+    );
+    const suite = await svc.generateSuite('me', {}, {});
+    const nm = suite.payload.negative.filter((q) => q.cls === 'near-miss');
+    expect(nm).toHaveLength(4); // default n_near_miss; LLM row first, fallback fills
+    expect(nm[0]).toMatchObject({ query: 'clinical trials recruiting breast cancer patients', source: 'llm' });
+    const prompt = frontmatterService.vllmChatCompletions.mock.calls[0][0][0].content;
+    expect(prompt).toContain('NEAR-MISS');
+    expect(prompt).toContain('"near_miss"');
+  });
+
+  it('generateSuite: n_meta slices the meta class (n_meta=1 → one row; default 3)', async () => {
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [],
+        negative: [],
+        keywords: [],
+        meta: [{ query: 'meta one' }, { query: 'meta two' }, { query: 'meta three' }]
+      })
+    );
+    const one = await svc.generateSuite('me', { n_meta: 1 }, {});
+    expect(one.payload.negative.filter((q) => q.cls === 'meta')).toHaveLength(1);
+    const all = await svc.generateSuite('me', {}, {});
+    expect(all.payload.negative.filter((q) => q.cls === 'meta')).toHaveLength(3);
+  });
+});
+
 describe('addQueries (curator free-text)', () => {
   it('appends manual positives/negatives to the suite and rejects bad input', async () => {
     const suite = await seedSuite();
@@ -441,6 +529,144 @@ describe('listRuns', () => {
     const [aql, bindVars] = __mockDb.query.mock.calls[0];
     expect(aql).not.toContain('@kind');
     expect(bindVars).not.toHaveProperty('kind');
+  });
+});
+
+// ---------- Story 1-8c: explainSuiteFailures (batch advice, ONE LLM call) ----------
+
+describe('explainSuiteFailures (Story 1-8c — batch advice for the latest run)', () => {
+  // The run lookup is the only db.query the explainer makes; the suite
+  // itself never needs to exist for this path.
+  function mockRunLookup(runDoc) {
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('r.kind == "run"')) return { all: async () => (runDoc ? [runDoc] : []) };
+      return { all: async () => [] };
+    });
+  }
+
+  function seedRun(results, key = 'r1') {
+    return {
+      _key: key,
+      repo_id: 'me',
+      kind: 'run',
+      suite_key: 's1',
+      created_at: '2026-10-09T00:00:00.000Z',
+      payload: { results, summary: { pass_rate: 0.5 } }
+    };
+  }
+
+  it('ONE vllm call advises on ALL failing negatives: failing_queries carry cls+head_claim, tags normalized/deduped/capped at 5', async () => {
+    mockRunLookup(
+      seedRun([
+        {
+          query: 'hiv prevalence surveillance data',
+          kind: 'negative',
+          cls: 'near-miss',
+          head_claimed: true,
+          head_claim: 'claim'
+        },
+        {
+          query: 'exercise guidelines for seniors',
+          kind: 'negative',
+          cls: 'forbidden',
+          head_claimed: true,
+          head_claim: 'claim'
+        },
+        { query: 'capital of France', kind: 'negative', cls: 'off-domain', head_claimed: false, head_claim: 'floor' },
+        { query: 'breast cancer screening age', kind: 'positive', head_claimed: true, head_claim: 'claim' }
+      ])
+    );
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        tags: [
+          'Communicable Disease',
+          'Mental Health',
+          'HIV AIDS',
+          'Physical Fitness',
+          'Nutrition Science',
+          'Hospital Beds'
+        ],
+        notes: 'covers the failing subjects'
+      })
+    );
+    const out = await svc.explainSuiteFailures('me', 's1', {});
+    expect(out.suite_key).toBe('s1');
+    expect(out.run_key).toBe('r1');
+    expect(out.run_created_at).toBe('2026-10-09T00:00:00.000Z');
+    expect(out.failing_count).toBe(2);
+    expect(out.failing_queries).toEqual([
+      { query: 'hiv prevalence surveillance data', cls: 'near-miss', head_claim: 'claim' },
+      { query: 'exercise guidelines for seniors', cls: 'forbidden', head_claim: 'claim' }
+    ]);
+    // 'Mental Health' normalizes to 'mental-health' — already forbidden →
+    // dropped; the remaining six clean tags are capped at 5.
+    expect(out.suggested_tags).toEqual([
+      'communicable-disease',
+      'hiv-aids',
+      'physical-fitness',
+      'nutrition-science',
+      'hospital-beds'
+    ]);
+    expect(out.source).toBe('llm');
+    expect(out.note).toBe('covers the failing subjects');
+    // ONE call for the WHOLE batch; the prompt carries only the failing
+    // queries — passing negatives and (claimed) positives stay out.
+    expect(frontmatterService.vllmChatCompletions).toHaveBeenCalledTimes(1);
+    const [messages, opts] = frontmatterService.vllmChatCompletions.mock.calls[0];
+    expect(messages[0].content).toContain('hiv prevalence surveillance data');
+    expect(messages[0].content).toContain('exercise guidelines for seniors');
+    expect(messages[0].content).not.toContain('capital of France');
+    expect(messages[0].content).not.toContain('breast cancer screening age');
+    expect(messages[0].content).toContain('mental-health');
+    expect(opts).toMatchObject({ maxTokens: 300, temperature: 0.2 });
+  });
+
+  it('404s RUN_NOT_FOUND when the suite has never been run', async () => {
+    mockRunLookup(null);
+    await expect(svc.explainSuiteFailures('me', 's1', {})).rejects.toMatchObject({
+      status: 404,
+      code: 'RUN_NOT_FOUND'
+    });
+  });
+
+  it('zero failures → an honest note and NO LLM call', async () => {
+    mockRunLookup(
+      seedRun([
+        { query: 'capital of France', kind: 'negative', cls: 'off-domain', head_claimed: false, head_claim: 'floor' },
+        { query: 'breast cancer screening age', kind: 'positive', head_claimed: true }
+      ])
+    );
+    const out = await svc.explainSuiteFailures('me', 's1', {});
+    expect(out.failing_count).toBe(0);
+    expect(out.suggested_tags).toEqual([]);
+    expect(out.source).toBe('none');
+    expect(out.note).toBe('no failing negatives in the latest run — nothing to explain');
+    expect(frontmatterService.vllmChatCompletions).not.toHaveBeenCalled();
+  });
+
+  it('an LLM failure degrades honestly (source none, note, no throw)', async () => {
+    mockRunLookup(
+      seedRun([
+        { query: 'exercise guidelines', kind: 'negative', cls: 'forbidden', head_claimed: true, head_claim: 'claim' }
+      ])
+    );
+    frontmatterService.vllmChatCompletions.mockRejectedValue(new Error('vllm down'));
+    const out = await svc.explainSuiteFailures('me', 's1', {});
+    expect(out.suggested_tags).toEqual([]);
+    expect(out.source).toBe('none');
+    expect(out.note).toContain('unreachable');
+  });
+
+  it('unparseable LLM output → source none with empty tags', async () => {
+    mockRunLookup(
+      seedRun([
+        { query: 'exercise guidelines', kind: 'negative', cls: 'forbidden', head_claimed: true, head_claim: 'claim' }
+      ])
+    );
+    frontmatterService.vllmChatCompletions.mockResolvedValue(llmResponse({ no_tags_here: true }));
+    const out = await svc.explainSuiteFailures('me', 's1', {});
+    expect(out.suggested_tags).toEqual([]);
+    expect(out.source).toBe('none');
   });
 });
 

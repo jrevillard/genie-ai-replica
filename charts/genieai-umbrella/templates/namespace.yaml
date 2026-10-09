@@ -1,0 +1,35 @@
+{{- /* Build a per-template Values view so we can override `.component` for label rendering. */ -}}
+{{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "namespace")) -}}
+{{- $ns := .Values.namespace -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  annotations:
+    # the Namespace MUST be a pre-install hook. Regular resources
+    # apply only AFTER all pre-install hooks — a regular Namespace means the
+    # hook RBAC (-30) / ConfigMap (-20) / Jobs (-10/-5) target a namespace
+    # that does not exist yet on a fresh cluster ("namespaces \"genie\" not
+    # found") and every first install fails. Weight -40 puts it first in the
+    # hook chain (-40 ns -> -30 rbac -> -20 cm -> -10 profile -> -5 dep-check).
+    # before-hook-creation keeps it across installs; the namespace INTENTIONALLY
+    # survives helm uninstall — the data tier (PVCs, sealed-secrets keys)
+    # depends on the namespace existing.
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-40"
+    "helm.sh/hook-delete-policy": before-hook-creation
+  labels:
+    {{- include "genieai-common.labels" $componentValues | nindent 4 }}
+    genieai.io/cluster-profile: {{ .Values.clusterProfile | default "dev" | quote }}
+    app.kubernetes.io/part-of: genieai
+    # Advertise K8s Pod Security Standards at the namespace level so admission
+    # controllers refuse pods without required securityContext.
+    pod-security.kubernetes.io/enforce: restricted
+    # Pin to a specific version rather than `latest`. Across cluster upgrades
+    # `latest` silently changes the policy version and may start rejecting
+    # pods that previously scheduled without warning.
+    pod-security.kubernetes.io/enforce-version: v1.33
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.33
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.33

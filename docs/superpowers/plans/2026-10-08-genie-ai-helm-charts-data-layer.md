@@ -160,6 +160,9 @@ data:
     enabled: true
     realmImport: true
     adminEmail: genie-admin@genieai.local
+    # Gates the new-user email-verification flow; requires smtp to be set
+    # when true (Keycloak rejects verification emails without a server).
+    verifyEmail: false
     # Confidential-client secrets rendered into the realm import. The
     # KeycloakRealmImport CR cannot read Kubernetes Secrets — operators
     # supply the real values at install time (values override, never
@@ -1032,11 +1035,20 @@ spec:
     # (404 on /realms/genieai/...).
     realm: genie
     enabled: true
+    {{- /* Single derivation of the public origin — every client's
+           rootUrl/redirectUris/webOrigins below uses $origin. A second
+           derivation site drifts and breaks that client's login with
+           invalid_redirect_uri while render gates stay green. */ -}}
+    {{- $origin := printf "https://%s" (.Values.ingress.host | default "genieai.local") -}}
     # TLS terminates at the edge (Envoy Gateway); the Keycloak pod serves
     # plain HTTP inside the cluster. `external` (the Keycloak default)
     # would reject every internal http:// redirect URI.
     sslRequired: none
     registrationAllowed: false
+    # Drives the new-user email-verification flow — only meaningful when
+    # the operator sets data.keycloak.smtp; defaults false (Keycloak's
+    # own default) so dev installs without SMTP stay login-able.
+    verifyEmail: {{ .Values.data.keycloak.verifyEmail | default false }}
     loginWithEmailAllowed: true
     duplicateEmailsAllowed: false
     resetPasswordAllowed: false
@@ -1098,6 +1110,30 @@ spec:
         emailVerified: true
         realmRoles:
           - admin
+        # Full realm-management grant, verbatim from the Swarm export —
+        # the composite `admin` role only covers 3 of these; dropping the
+        # rest silently 403s admin-console operations (client inspection,
+        # realm settings, events, impersonation).
+        clientRoles:
+          realm-management:
+            - view-realm
+            - manage-realm
+            - query-realms
+            - view-users
+            - manage-users
+            - query-users
+            - impersonation
+            - query-groups
+            - view-clients
+            - manage-clients
+            - query-clients
+            - create-client
+            - view-events
+            - manage-events
+            - view-identity-providers
+            - manage-identity-providers
+            - view-authorization
+            - manage-authorization
         credentials:
           # Empty value on purpose: the operator cannot PATCH user passwords
           # through the CR after import (user subresource is operator-owned).
@@ -1130,11 +1166,11 @@ spec:
       - clientId: account
         enabled: true
         webOrigins:
-          - https://{{ .Values.ingress.host | default "genieai.local" }}
+          - {{ $origin }}
       - clientId: account-console
         enabled: true
         webOrigins:
-          - https://{{ .Values.ingress.host | default "genieai.local" }}
+          - {{ $origin }}
       # Web SPA — PUBLIC client with PKCE (browser apps cannot hold client
       # secrets; the Swarm realm ships publicClient: true — rendering it
       # confidential breaks authorization_code login with invalid_client).
@@ -1145,15 +1181,15 @@ spec:
         standardFlowEnabled: true
         implicitFlowEnabled: false
         serviceAccountsEnabled: false
-        rootUrl: https://{{ .Values.ingress.host | default "genieai.local" }}
+        rootUrl: {{ $origin }}
         redirectUris:
-          - https://{{ .Values.ingress.host | default "genieai.local" }}/*
+          - {{ $origin }}/*
           # Keycloak allows NO wildcard in the port — `http://localhost:*`
           # is rejected at realm import. The bare host is Keycloak's
           # port-agnostic localhost special case.
           - http://localhost
         webOrigins:
-          - https://{{ .Values.ingress.host | default "genieai.local" }}
+          - {{ $origin }}
         attributes:
           pkce.code.challenge.method: S256
           oauth2.device.authorization.grant.enabled: false
@@ -1219,9 +1255,9 @@ spec:
           client.credentials.use.refresh.token: false
           require.pushed.authorization.requests: false
         redirectUris:
-          - https://{{ .Values.ingress.host | default "genieai.local" }}/grafana/*
+          - {{ $origin }}/grafana/*
         webOrigins:
-          - https://{{ .Values.ingress.host | default "genieai.local" }}
+          - {{ $origin }}
 {{- end -}}
 ```
 
@@ -1245,6 +1281,10 @@ helm template test charts/genieai-umbrella -n genieai | \
   assert cs['genie-proxy-client']['serviceAccountsEnabled'] is True; \
   us = {u['username'] for u in r['users']}; \
   assert {'service-account-genie-proxy-client','service-account-dataprep-service-client'} <= us, us; \
+  admin = next(u for u in r['users'] if u['username'] == 'genie-admin'); \
+  assert 'realm-management' in admin.get('clientRoles', {}), 'admin realm-management roles missing'; \
+  assert len(admin['clientRoles']['realm-management']) == 18, 'admin realm-management role count drift'; \
+  assert 'verifyEmail' in r, 'verifyEmail key missing'; \
   roles = {x['name'] for x in r['roles']['realm']}; \
   assert {'admin','dataprep-service'} <= roles, roles; \
   print('PASS: realm import mirrors Swarm export')"

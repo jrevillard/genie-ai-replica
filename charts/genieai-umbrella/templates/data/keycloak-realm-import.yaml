@@ -82,10 +82,13 @@ spec:
     smtpServer:
       from: {{ .from | quote }}
       host: {{ .host | quote }}
-      port: {{ .port | quote }}
-      ssl: {{ .ssl | quote }}
-      starttls: {{ .starttls | quote }}
-      auth: {{ .auth | quote }}
+      # port: int (Keycloak CRD rejects a quoted string). The values file
+      # may ship a string (operators using --set-string), so the default +
+      # int cast defends against both shapes.
+      port: {{ .port | default 587 | int }}
+      ssl: {{ eq (.ssl | toString) "true" }}
+      starttls: {{ eq (.starttls | toString) "true" }}
+      auth: {{ eq (.auth | toString) "true" }}
       user: {{ .user | quote }}
       password: {{ .password | quote }}
     {{- end }}

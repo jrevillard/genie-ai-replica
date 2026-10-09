@@ -80,23 +80,29 @@ genie-ai/
 
 ## 4. Dependency model
 
-`genieai-umbrella/Chart.yaml` declares dependencies. Every operator/subchart has a `condition:` toggle in values so installing-without-data is supportable (bootstrapping pattern).
+**AMENDED at data-layer execution (2026-10-09):** ALL operator controllers with cluster-scoped CRDs are **cluster bootstrap prerequisites, NOT chart dependencies** — cloudnative-pg (CNPG), kube-arangodb, and sealed-secrets joined keycloak-operator and gpu-operator in that posture. Rationale: these controllers watch the whole cluster; the per-env model (§13.1: one namespace per environment, one cluster) would deploy N competing controllers per cluster — the sealed-secrets keypair fight (decrypt races, overwritten derived Secrets, cross-controller Synced=False) is the worst case but CNPG/kube-arangodb duplicate operators have the same shape. The chart renders ONLY the custom resources the operators manage; the `data.*.enabled` / `secrets.*.enabled` values keys remain as CR gates. Chart.yaml's only Helm dependency is the local `genieai-common` library; `Chart.lock` is committed (reproducible), vendored tarballs stay gitignored.
 
 | Helm dep | Repo | Version constraint | Default `condition:` | Pulled iff |
 |---|---|---|---|---|
 | `genieai-common` | local file:// | `~> 0.1.0` | unconditional | always |
-| `cloudnative-pg` (CNPG chart) | `https://cloudnative-pg.github.io/charts` | `~> 0.29.0` (exact chart line verified at adoption; the "chart minor == operator minor" assumption is FALSE) | `data.postgres.enabled` | keycloak-db |
-| `kube-arangodb` | `https://arangodb.github.io/kube-arangodb` | `~> 1.4.5` | `data.arangodb.enabled` | always |
-| _(keycloak-operator — see note)_ | **cluster bootstrap prerequisite** (OLM / static YAML per keycloak.org) | operator 26.x | — | NOT a chart dep |
-| `external-secrets-operator` (ESO) | `https://charts.external-secrets.io` | `~> 0.10.0` | `secrets.eso.enabled` | when `pluggable.secretsBackend: externalSecrets` |
-| `sealed-secrets` | `https://bitnami.github.io/sealed-secrets` (NOT the deprecated `charts.bitnami.com/bitnami/sealed-secrets`) | `~> 2.20.0` (corresponds to controller v0.40.0+) | `secrets.sealedSecrets.enabled` | always (default backend) |
-| `victoria-metrics-operator` | `https://victoriametrics.github.io/helm-charts` | `~> 0.68.0` | `observability.enabled` | single chart provides ALL CRDs: VMSingle/VMCluster, VLSingle, VTSingle, VMAgent, VMServiceScrape, VMRule… (verified against the repo index — no separate VL/VT operator charts exist) |
-| `opentelemetry-operator` | `https://open-telemetry.github.io/opentelemetry-helm-charts` | `~> 0.124.0` | `observability.otel.enabled` | profile-gated |
-| _(gpu-operator — see note)_ | **cluster bootstrap prerequisite** (OLM / NVIDIA static YAML per nvidia docs) | v25.x | — | NOT a chart dep (audit decision 8, 2026-10-08 — keycloak-operator precedent); the chart only schedules onto GPU nodes (`ai.gpu.*`) |
-| `cert-manager` | `https://charts.jetstack.io` | `~> 1.21.0` | `certManager.enabled` | if `ingress.tls.issuer: cert-manager` |
-| `envoy-gateway` | `https://gateway.envoyproxy.io/charts` (or local OCI) | `~> 1.9.0` | `ingress.className: envoy` | if Envoy Gateway chosen |
 
-**Cluster bootstrap prerequisites (NOT chart dependencies)** — installed once per cluster before `helm install`: keycloak-operator (OLM or static YAML from keycloak.org), Flux (optional GitOps), Velero (opt-in backups). The chart renders only the CRs those operators manage (Keycloak, KeycloakRealmImport, VMSingle, …).
+**Cluster bootstrap prerequisites (NOT chart dependencies)** — installed once per cluster before `helm install`:
+
+| Prerequisite | Install path | Version | Notes |
+|---|---|---|---|
+| keycloak-operator | OLM / static YAML per keycloak.org | operator 26.x | chart renders Keycloak + KeycloakRealmImport CRs |
+| cloudnative-pg (CNPG) | helm/OLM per cloudnative-pg docs | operator 1.30.x (chart line 0.29.x equivalent) | chart renders the Cluster CR |
+| kube-arangodb | helm/static manifests per arangodb docs | 1.4.x | chart renders the ArangoDeployment CR |
+| sealed-secrets | helm (bitnami repo) / static YAML | controller ≥ 0.40.0 (chart line 2.20.x equivalent) | cluster-wide keypair; ONE controller per cluster, always |
+| gpu-operator | OLM / NVIDIA static YAML | v25.x | chart only schedules onto GPU nodes (`ai.gpu.*`) |
+| external-secrets-operator (ESO) | `https://charts.external-secrets.io` | `~> 0.10.0` (CRD shape changed 0.9→0.10) | only when `pluggable.secretsBackend: externalSecrets` is exercised |
+| victoria-metrics-operator | `https://victoriametrics.github.io/helm-charts` | `~> 0.68.0` | single chart provides ALL CRDs: VMSingle/VMCluster, VLSingle, VTSingle, VMAgent, VMServiceScrape, VMRule… |
+| opentelemetry-operator | `https://open-telemetry.github.io/opentelemetry-helm-charts` | `~> 0.124.0` | profile-gated |
+| cert-manager | `https://charts.jetstack.io` | `~> 1.21.0` | if `ingress.tls.issuer: cert-manager` |
+| envoy-gateway | `https://gateway.envoyproxy.io/charts` (or local OCI) | `~> 1.9.0` | if Envoy Gateway chosen |
+| Flux (optional GitOps), Velero (opt-in backups) | per their docs | — | never chart deps |
+
+The chart's README documents this table as the operator-facing prerequisite checklist.
 
 **Version-pin discipline (`~>` for CRD owners)**: CRD schemas change between minor releases for `cloudnative-pg`, `kube-arangodb`, `keycloak-operator`, `external-secrets-operator`, and `vmoperator`. `>= X.Y.Z` allows silent breaking changes in CRD shape between patch bumps; `~> X.Y.Z` constrains to the same minor. `~>` is mandatory for these. **Off-CRD deps** (GPU operator, cert-manager, gateway) tolerate `~>` less strictly but use it for reproducibility.
 

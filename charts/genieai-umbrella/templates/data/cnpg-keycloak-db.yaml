@@ -19,7 +19,9 @@ spec:
   # Distinct from primaryUpdateStrategy (unsupervised | supervised), which
   # only gates whether the operator needs manual approval for the failover.
   primaryUpdateMethod: switchover
-  imageName: "ghcr.io/cloudnative-pg/postgresql:16"
+  # Conditional registry prefix — mirror path convention DROPS ghcr.io: an
+  # air-gapped global.imageRegistry mirror must mirror cloudnative-pg/postgresql.
+  imageName: "{{ if .Values.global.imageRegistry }}{{ .Values.global.imageRegistry }}/{{ end }}cloudnative-pg/postgresql:16"
   imagePullPolicy: IfNotPresent
   storage:
     size: {{ .Values.data.postgres.storageSize | default "10Gi" }}

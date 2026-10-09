@@ -5,7 +5,7 @@
   "properties": {
     "clusterProfile": {
       "type": "string",
-      "enum": ["dev", "staging", "prod", "sovereign"]
+      "enum": ["dev", "staging", "prod"]
     },
     "data": {
       "type": "object",

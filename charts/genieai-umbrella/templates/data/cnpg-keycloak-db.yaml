@@ -14,10 +14,11 @@ metadata:
     genieai.io/serves: keycloak
 spec:
   instances: {{ $instances }}
-  # Switchover (default) for HA primary rolling updates with zero downtime.
-  # Override via `data.postgres.primaryUpdateStrategy: Unmanaged` only when
-  # ops explicitly wants manual failover.
-  primaryUpdateStrategy: {{ .Values.data.postgres.primaryUpdateStrategy | default "Switchover" }}
+  # Zero-downtime primary rolling updates: fail over to a replica before
+  # updating the primary (enum: switchover | restart, the CNPG default).
+  # Distinct from primaryUpdateStrategy (unsupervised | supervised), which
+  # only gates whether the operator needs manual approval for the failover.
+  primaryUpdateMethod: switchover
   imageName: "ghcr.io/cloudnative-pg/postgresql:16"
   imagePullPolicy: IfNotPresent
   storage:

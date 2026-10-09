@@ -1,0 +1,32 @@
+# chart-testing Chart.yaml schema for Yamale (adapted to ct v3.15 / yamale 6.x).
+# Yamale syntax: validators are REQUIRED by default — optional fields must
+# carry required=False explicitly.
+name: str(required=True)
+home: str(required=False)
+version: regex('^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z\\-]+(\\.[0-9A-Za-z\\-]+)*)?(\\+[0-9A-Za-z\\-]+(\\.[0-9A-Za-z\\-]+)*)?$', required=True)
+description: str(required=True)
+apiVersion: regex('^v[1-9]\\d*$', required=True)
+icon: str(required=False)
+deprecated: bool(required=False)
+kubeVersion: str(required=False)
+keywords: list(str(), required=False)
+sources: list(str(), required=False)
+maintainers: list(include('maintainer'), required=False)
+dependencies: list(include('dependency'), required=False)
+annotations: map(str(), required=False)
+type: enum('application', 'library', required=False)
+appVersion: regex('^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z\\-]+(\\.[0-9A-Za-z\\-]+)*)?(\\+[0-9A-Za-z\\-]+(\\.[0-9A-Za-z\\-]+)*)?$', required=False)
+---
+maintainer:
+  name: str(required=True)
+  email: str(required=False)
+  url: str(required=False)
+---
+dependency:
+  name: str(required=True)
+  version: str(required=True)
+  repository: str(required=True)
+  condition: str(required=False)
+  tags: list(str(), required=False)
+  enabled: bool(required=False)
+  import-values: any(required=False)

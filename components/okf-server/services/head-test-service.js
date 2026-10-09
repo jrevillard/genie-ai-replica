@@ -604,9 +604,89 @@ async function routingTest(repoId, payload = {}, opts = {}) {
   });
 }
 
+/**
+ * Story 1-8c — explain ONE query's gate outcome and, when it wrongly
+ * CLAIMS, suggest forbidden tags that would exclude it. The teaching half
+ * of the Lab loop: fail -> advice -> edit tags -> rebuild -> retest.
+ * Reuses routingTest for the full verdict, then adds the suggestion.
+ */
+async function explainRouting(repoId, payload = {}, opts = {}) {
+  const query = typeof payload.query === 'string' ? payload.query.trim() : '';
+  if (!query) {
+    const err = new Error('query is required');
+    err.code = 'VALIDATION_ERROR';
+    err.status = 400;
+    throw err;
+  }
+  const result = await routingTest(repoId, { query, include_probes: false, formula: payload.formula }, opts);
+  const ut = result.under_test || {};
+  let suggestion = { tags: [], source: 'none', reason: '' };
+  if (ut.head_claimed) {
+    // It claims — the interesting case. LLM proposes 1-3 kebab-case
+    // forbidden tags excluding this query's subject WITHOUT excluding the
+    // declared scope. Deterministic empty fallback: the UI still teaches
+    // ("no forbidden tag covers this subject — consider adding one").
+    let fm = null;
+    try {
+      fm = await frontmatterService.readFrontmatterFromRepoDoc(repoId);
+    } catch (e) {
+      logger.warn('head-test.explain.fm_read_failed', { repo_id: repoId, error: e.message });
+    }
+    if (fm) {
+      try {
+        const prompt = `A retrieval repository must NOT route the query below, but its vectorized
+head currently claims it (score ${ut.head_score != null ? ut.head_score.toFixed(3) : 'n/a'},
+max forbidden-tag similarity ${ut.max_tag_cosine != null ? ut.max_tag_cosine.toFixed(3) : 'n/a'}).
+
+REPOSITORY scope — topics: ${(fm.topic || []).join(', ')}; entities: ${(fm.entity || []).join(', ')};
+already forbidden: ${(fm.forbidden || []).join(', ') || '(none)'}; summary: ${fm.summary || ''}
+
+QUERY: ${query}
+
+Propose 1-3 NEW forbidden tags (lowercase kebab-case, each 1-3 words) that
+capture what this query is about and that the repository's scope genuinely
+EXCLUDES. They must not overlap the already-forbidden list and must not
+exclude the repository's own topics/entities. Respond with ONLY a JSON
+object: {"tags": ["...", "..."]}`;
+        const resp = await frontmatterService.vllmChatCompletions([{ role: 'user', content: prompt }], {
+          maxTokens: 200,
+          temperature: 0.2
+        });
+        const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
+        const parsed = (() => {
+          const m = content && content.content && content.content.match(/\{[\s\S]*\}/);
+          if (!m) return null;
+          try {
+            return JSON.parse(m[0]);
+          } catch {
+            return null;
+          }
+        })();
+        const tags = (parsed && Array.isArray(parsed.tags) ? parsed.tags : [])
+          .filter((t) => typeof t === 'string' && t.trim())
+          .map((t) => t.trim().toLowerCase().replace(/\s+/g, '-'))
+          .filter((t) => !(fm.forbidden || []).includes(t))
+          .slice(0, 3);
+        suggestion = tags.length
+          ? { tags, source: 'llm', reason: 'suggested forbidden tags for this query\'s subject' }
+          : { tags: [], source: 'none', reason: 'the model proposed no non-overlapping tags — review the query against the declared scope manually' };
+      } catch (e) {
+        logger.warn('head-test.explain.llm_failed', { repo_id: repoId, error: e.message });
+        suggestion = {
+          tags: [],
+          source: 'none',
+          reason: 'the suggestion model is unreachable — no forbidden tag matches this query; consider adding one for its subject'
+        };
+      }
+    }
+  }
+  return { ...result, suggestion };
+}
+
 module.exports = {
   rebuildHead,
   routingTest,
+  explainRouting,
   // test surface
   _internals: {
     cosine,

@@ -676,10 +676,10 @@ publish:charts:
     - helm push .publish/genieai-umbrella-${CI_COMMIT_TAG}.tgz oci://${CI_REGISTRY_IMAGE}/genieai
 ```
 
-Cluster-side enforcement via **Kyverno** policy (chart installs as part of bootstrap). **F3 fix** (per-round-8 review): Kyverno v1.13+ accepts `keyData:` (inline PEM string) or `key:` (cosign URI). It does NOT accept `publicKeys:` — that field is not in the schema. Earlier drafts (including the line below + the chart template's `publicKeys:` block) used the wrong field name and would have failed schema validation on `kubectl apply`. We use `keyData:` with inline PEM:
+Cluster-side enforcement via **Kyverno** policy (chart installs as part of bootstrap). **CORRECTED (code-review Wave 10):** the earlier "F3 fix" above inverted the truth — verified against the Kyverno CRD (`config/crds/kyverno/kyverno.io_policies.yaml`): the real field is `publicKeys` (12 occurrences, described as accepting directly-specified X.509 keys); `keyData` appears nowhere in the schema and would be silently pruned by structural-schema validation, killing verifyImages while appearing Enforced. We use `publicKeys:` with inline PEM:
 
 ```yaml
-# ClusterPolicy — image signature verification (F3 fix: `keyData:`, not `publicKeys:`)
+# ClusterPolicy — image signature verification
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -702,7 +702,7 @@ spec:
                     # Secret/ConfigMap references here. The
                     # `{{- ... | nindent 22 }}` indents the multi-line
                     # PEM block inside the YAML scalar.
-                    keyData: |-
+                    publicKeys: |-
                       -----BEGIN PUBLIC KEY-----
                       ...
                       -----END PUBLIC KEY-----

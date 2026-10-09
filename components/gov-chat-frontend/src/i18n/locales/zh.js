@@ -2700,7 +2700,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: '标签',
-          actions: '编辑'
+          actions: '编辑',
+          name: '名称'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2744,7 +2745,8 @@ export default {
         savedTitle: '已保存的测试集',
         load: '加载',
         flipTip: '切换 应选择 / 不应选择',
-        deleteTip: '从测试集中移除此行'
+        deleteTip: '从测试集中移除此行',
+        namePlaceholder: '测试集名称（可选）— 例如：NCD 回归集'
       },
       error: {
         explain: '解释失败',
@@ -2760,7 +2762,8 @@ export default {
         noSuite: '请先生成测试集，然后重建并重新运行。',
         applyNoSuite: '标签已保存、head 已重建——请生成测试集并运行全部以查看效果。',
         suiteLoad: '无法加载测试集',
-        suiteUpdate: '无法更新测试集'
+        suiteUpdate: '无法更新测试集',
+        suiteRename: '无法重命名测试集'
       },
       footer: {
         unpublish: 'Unpublish to review'

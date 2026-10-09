@@ -64,6 +64,17 @@ const headTestService = {
     return res && res.data ? res.data : null;
   },
 
+  /** Story 1-8f — name/rename a saved suite. */
+  async renameSuite(repoId, suiteKey, name) {
+    const res = await httpService.post(
+      `/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}/rename`,
+      {
+        name
+      }
+    );
+    return res && res.data ? res.data : null;
+  },
+
   /** Story 1-8f — edit a suite's rows in place: kind flips (the mislabel
    * fix — the row is searched in BOTH arrays) and removes. Returns the
    * updated suite doc. */

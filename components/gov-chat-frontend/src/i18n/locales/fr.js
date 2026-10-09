@@ -2762,7 +2762,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: 'Tags',
-          actions: 'Modifier'
+          actions: 'Modifier',
+          name: 'Nom'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2809,7 +2810,8 @@ export default {
         savedTitle: 'Suites enregistrées',
         load: 'Charger',
         flipTip: 'Basculer doit-sélectionner / ne-doit-pas-sélectionner',
-        deleteTip: 'Retirer cette ligne de la suite'
+        deleteTip: 'Retirer cette ligne de la suite',
+        namePlaceholder: 'Nom de la suite (facultatif) — ex. ensemble de régression NCD'
       },
       error: {
         explain: "Échec de l'explication",
@@ -2825,7 +2827,8 @@ export default {
         noSuite: "Générez d'abord une suite, puis reconstruisez et relancez.",
         applyNoSuite: 'Tags enregistrés et tête reconstruite — générez une suite, puis lancez tout pour voir l’effet.',
         suiteLoad: 'Impossible de charger la suite',
-        suiteUpdate: 'Impossible de mettre à jour la suite'
+        suiteUpdate: 'Impossible de mettre à jour la suite',
+        suiteRename: 'Impossible de renommer la suite'
       },
       footer: {
         unpublish: 'Unpublish to review'

@@ -2752,7 +2752,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: 'Теги',
-          actions: 'Правка'
+          actions: 'Правка',
+          name: 'Имя'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2798,7 +2799,8 @@ export default {
         savedTitle: 'Сохранённые наборы',
         load: 'Загрузить',
         flipTip: 'Переключить должна-выбираться / не-должна-выбираться',
-        deleteTip: 'Убрать эту строку из набора'
+        deleteTip: 'Убрать эту строку из набора',
+        namePlaceholder: 'Имя набора (необязательно) — напр. регрессионный набор НИЗ'
       },
       error: {
         explain: 'Не удалось объяснить',
@@ -2814,7 +2816,8 @@ export default {
         noSuite: 'Сначала создайте набор тестов, затем пересоберите и перезапустите.',
         applyNoSuite: 'Теги сохранены, head пересобран — создайте набор тестов и запустите его, чтобы увидеть эффект.',
         suiteLoad: 'Не удалось загрузить набор',
-        suiteUpdate: 'Не удалось обновить набор'
+        suiteUpdate: 'Не удалось обновить набор',
+        suiteRename: 'Не удалось переименовать набор'
       },
       footer: {
         unpublish: 'Unpublish to review'

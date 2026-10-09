@@ -2756,7 +2756,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: 'Tags',
-          actions: 'Editar'
+          actions: 'Editar',
+          name: 'Nome'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2803,7 +2804,8 @@ export default {
         savedTitle: 'Suítes salvas',
         load: 'Carregar',
         flipTip: 'Alternar deve-selecionar / não-deve-selecionar',
-        deleteTip: 'Remover esta linha da suíte'
+        deleteTip: 'Remover esta linha da suíte',
+        namePlaceholder: 'Nome da suíte (opcional) — ex. conjunto de regressão DCNT'
       },
       error: {
         explain: 'A explicação falhou',
@@ -2819,7 +2821,8 @@ export default {
         noSuite: 'Gere primeiro uma suíte e depois reconstrua e execute novamente.',
         applyNoSuite: 'Tags salvas e head reconstruído — gere uma suíte e execute tudo para ver o efeito.',
         suiteLoad: 'Não foi possível carregar a suíte',
-        suiteUpdate: 'Não foi possível atualizar a suíte'
+        suiteUpdate: 'Não foi possível atualizar a suíte',
+        suiteRename: 'Não foi possível renomear a suíte'
       },
       footer: {
         unpublish: 'Unpublish to review'

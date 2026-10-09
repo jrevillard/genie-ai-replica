@@ -1557,7 +1557,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: 'Tags',
-          actions: 'Edit'
+          actions: 'Edit',
+          name: 'Name'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -1602,7 +1603,8 @@ export default {
         savedTitle: 'Saved suites',
         load: 'Load',
         flipTip: 'Flip should-select / should-NOT-select',
-        deleteTip: 'Remove this row from the suite'
+        deleteTip: 'Remove this row from the suite',
+        namePlaceholder: 'Suite name (optional) — e.g. NCD regression set'
       },
       error: {
         explain: 'Explain failed',
@@ -1618,7 +1620,8 @@ export default {
         noSuite: 'Generate a suite first, then rebuild + re-run.',
         applyNoSuite: 'Tags saved and the head rebuilt — generate a suite, then Run all to see the effect.',
         suiteLoad: 'Could not load the suite',
-        suiteUpdate: 'Could not update the suite'
+        suiteUpdate: 'Could not update the suite',
+        suiteRename: 'Could not rename the suite'
       },
       footer: {
         unpublish: 'Unpublish to review'

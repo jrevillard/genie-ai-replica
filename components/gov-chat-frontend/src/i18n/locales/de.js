@@ -2762,7 +2762,8 @@ export default {
           passRate: 'Pass rate',
           headVersion: 'Head',
           tags: 'Tags',
-          actions: 'Bearbeiten'
+          actions: 'Bearbeiten',
+          name: 'Name'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2810,7 +2811,8 @@ export default {
         savedTitle: 'Gespeicherte Suiten',
         load: 'Laden',
         flipTip: 'Wechseln zwischen soll-selektieren / nicht-selektieren',
-        deleteTip: 'Diese Zeile aus der Suite entfernen'
+        deleteTip: 'Diese Zeile aus der Suite entfernen',
+        namePlaceholder: 'Suiten-Name (optional) — z. B. NCD-Regressionssatz'
       },
       error: {
         explain: 'Erklärung fehlgeschlagen',
@@ -2827,7 +2829,8 @@ export default {
         applyNoSuite:
           'Tags gespeichert und Head neu gebaut — erstellen Sie eine Suite und führen Sie alles aus, um den Effekt zu sehen.',
         suiteLoad: 'Suite konnte nicht geladen werden',
-        suiteUpdate: 'Suite konnte nicht aktualisiert werden'
+        suiteUpdate: 'Suite konnte nicht aktualisiert werden',
+        suiteRename: 'Suite konnte nicht umbenannt werden'
       },
       footer: {
         unpublish: 'Unpublish to review'

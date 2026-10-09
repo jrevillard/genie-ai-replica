@@ -84,6 +84,12 @@ router.post(
   requireRepoScope('repo_id', 'admin'),
   ctrl.updateTestSuiteRows
 );
+// Story 1-8f — name/rename a suite (admin mutation).
+router.post(
+  '/:repo_id/routing-testsuite/:suite_key/rename',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.renameTestSuite
+);
 // Story 1-8c — batch advice for a suite run's failing negatives.
 router.post(
   '/:repo_id/routing-testsuite/:suite_key/explain',

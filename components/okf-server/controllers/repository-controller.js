@@ -1527,6 +1527,20 @@ async function updateTestSuiteRows(req, res, next) {
   }
 }
 
+// Story 1-8f — name/rename a suite (the Saved-suites table renders it).
+async function renameTestSuite(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const suite = await headSuiteService.renameSuite(req.params.repo_id, req.params.suite_key, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(suite);
+  } catch (err) {
+    next(err);
+  }
+}
+
 /**
  * Story 1-8 MR-B — POST /repos/:repo_id/routing-testsuite/:suite_key/run.
  * Executes every suite query through the routing test, aggregates
@@ -1599,6 +1613,7 @@ module.exports = {
   addTestSuiteQueries,
   getTestSuite,
   updateTestSuiteRows,
+  renameTestSuite,
   runTestSuite,
   explainTestSuiteFailures,
   listTestSuiteRuns,

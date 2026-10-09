@@ -1,0 +1,16 @@
+# GENIE.AI umbrella chart — foundation-only values.
+# Subsequent plans add: services.* (Plan 3+), observability.* (Plan 4),
+# gpu.* (Plan 5), data.* (Plan 2), ingress.* (Plan 6), migration.* (Plan 6).
+# Pluggability surface (secretsBackend / ingressClassName / storageClassName /
+# containerRuntime) lands in Plan 6 alongside the concrete backend code — do not
+# declare fields here that no template consumes.
+
+namespace: genieai
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  imagePullPolicy: IfNotPresent
+
+# ClusterProfile-based defaults (Plan 2+ adds the pre-install hook).
+clusterProfile: dev                # dev | staging | prod | sovereign

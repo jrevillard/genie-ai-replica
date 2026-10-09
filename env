@@ -211,6 +211,12 @@ HUGGING_FACE_HUB_TOKEN=
 # RETRIEVER_FRONTMATTER_FORBIDDEN_PENALTY=1.5
 # RETRIEVER_FRONTMATTER_MIN_SCORE=0.25
 # RETRIEVER_FRONTMATTER_TOP_K=5
+# Story 1-8 routing head — OKF graph affinity + the forbidden/noise gate
+# (read by the retriever's graph routing; rollback: ROUTE_HEAD_WEIGHT=0.0).
+# RETRIEVER_ROUTE_HEAD_WEIGHT=1.0          # head pseudo-row weight in the global top-K pool
+# RETRIEVER_ROUTE_HEAD_MARGIN=0.01         # min head-over-forbidden margin for a claim (heads without a forbidden centroid skip it)
+# RETRIEVER_ROUTE_HEAD_FLOOR=0.55          # off-domain noise bar for the routing head claim
+# RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX=0.55   # hard forbidden-tag veto bar
 # GPU service endpoints for the okf-server publish pipeline (Story 1.6):
 #   VLLM_LLM_HOST  — OpenAI-compatible /v1/chat/completions for tag suggest + validate (AsyncOpenAI-equivalent)
 #   TEI_EMBED_HOST — /embed for tag vectorization (1024-dim, shared embedding space with chunks)

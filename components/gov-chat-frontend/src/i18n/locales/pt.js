@@ -2694,6 +2694,22 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Filtro',
+        floor: 'Piso mínimo',
+        veto: 'Tags proibidas',
+        margin: 'Margem',
+        claim: 'Reivindica',
+        pass: 'passa',
+        fail: 'falha',
+        na: 'n/a'
+      },
+      teach: {
+        title: 'O que isto significa',
+        veto: "Esta consulta corresponde fortemente à tag proibida “{'{'}tag{'}'}”. Se DEVERIA pertencer a este repositório, remova “{'{'}tag{'}'}” das tags proibidas no Frontmatter e publique novamente para reconstruir o head.",
+        floor:
+          'A consulta não tem relação com o tema deste repositório (pontuação abaixo do piso mínimo do domínio) — nenhuma alteração de tags corrige isto; é uma supressão correta.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

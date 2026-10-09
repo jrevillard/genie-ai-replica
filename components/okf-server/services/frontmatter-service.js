@@ -733,7 +733,15 @@ async function buildVectorizedHead(repoId, frontmatter, opts = {}) {
         keyword: perField.keyword,
         summary: perField.summary,
         scope: perField.scope,
-        forbidden: perField.forbidden
+        forbidden: perField.forbidden,
+        // Story 1-8b — per-tag forbidden vectors for the hard veto gate
+        // ("forbidden is forbidden"). The averaged centroid stays for the
+        // margin rule; the per-tag vectors let the gate veto a query when
+        // ANY single forbidden tag matches it at/above the tag bar.
+        forbidden_vectors: (valuesByField.forbidden || []).map(({ value, vector }) => ({
+          tag: value,
+          vector
+        }))
       },
       dim,
       model: process.env.EMBEDDING_MODEL_ID || 'tei-embed',

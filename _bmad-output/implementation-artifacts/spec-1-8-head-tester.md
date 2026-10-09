@@ -301,3 +301,121 @@ genieai_retriever_arangodb.py}` (drop-in-the-pool filter); frontend
 rank-fail from gate-suppressed; adversarial text updated); i18n ×14
 (5 new keys). Tests: okf-server 777/777 (+3); frontend 1640/1640 (+3);
 retriever 8/8 (existing pool tests cover the change).
+[UPDATE 2026-10-09: 1-8a MERGED — squash commit a1046629c via merge 2e9be556d
+into feat/okf-server.]
+
+## 13. SHIPPED-IN-WIP (2026-10-09 — gate v2, story 1-8b)
+
+Status: the v2 core is IMPLEMENTED on `fix/story-1-8b-routing-gate-v2`
+(cut from feat/okf-server 2e9be556) as UNCOMMITTED working-tree changes
+to exactly 4 files; NOT yet validated (see the story file's validation
+plan) — hence SHIPPED-IN-WIP, not SHIPPED. Story file:
+`_bmad-output/implementation-artifacts/story-1-8b-routing-gate-v2.md`.
+
+### 13.1 Why v2 — the margin-only gate (1-8a) fails two ways
+
+19-query calibration probe on NCD Information (f043215b,
+`gate-probe-inner.js`, production TEI endpoint, 2026-10-09):
+
+1. **Off-domain claims.** Fully-unrelated queries score 0.32–0.484 on
+   ANY head ("capital of France" 0.321, "forbidden noise gate" 0.407,
+   "weather today" 0.484) — and unrelated text still sits slightly
+   ABOVE the averaged forbidden centroid, so the margin rule is blind
+   to it: France CLAIMED NCD at **+0.012** (> the 0.01 margin).
+2. **Mixed-subject negatives slip the averaged centroid.** A
+   two-subject query dilutes its forbidden half: the four failing
+   negatives score ≥ 0.567 against their single dominant forbidden
+   tag — genetics 0.617, epidemiology 0.619, exercise 0.638,
+   incidence-trends/epi 0.567 — yet pass the margin test because the
+   AVERAGED forbidden centroid absorbs the spike.
+
+### 13.2 David's rulings (2026-10-09)
+
+1. **"forbidden is forbidden — that is a hard contract, it should
+   immediately score zero."** → the per-tag VETO.
+2. **The routing decision must be an AFFIRMATIVE claim.** "We must
+   ascertain that there either IS or IS NOT a reason to include any
+   repo in the selected list for any given query… this is a key part
+   of both the RAG accuracy and efficiency goals." A repo is in the
+   selected list ONLY with positive evidence — suppression is a
+   no-claim, never a rank demotion.
+3. **The Lab must TEACH the user how to adjust tags** — a suppression
+   must resolve to which condition fired + which forbidden tag + what
+   to edit (the frontmatter forbidden list).
+4. **The suite generator must produce MORE RANDOM adversarial
+   negatives** (deterministic forbidden-derived negatives pattern-match
+   too easily) — remaining work, `head-suite-service.js` untouched so far.
+
+### 13.3 The three-condition claim contract
+
+A head CLAIMS a query only when ALL of (replaces the 1-8a margin-only
+rule; margin is kept as the third condition):
+
+| # | Condition | Env knob (default) | Fires when | Kills |
+|---|---|---|---|---|
+| 1 | **floor** | `RETRIEVER_ROUTE_HEAD_FLOOR` (0.55) | score < 0.55 | off-domain noise — the whole 0.32–0.484 unrelated band; 0.55 sits mid-gap (legit claims ≥ 0.614) |
+| 2 | **veto** | `RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX` (0.55) | ANY single forbidden tag cosine ≥ 0.55 | mixed-subject queries that slip the averaged centroid (failing ≥ 0.567 vs their tag; legit claims never exceed 0.529 on any tag) |
+| 3 | **margin** | `RETRIEVER_ROUTE_HEAD_MARGIN` (0.01, unchanged) | score − averaged-forbidden-centroid ≤ 0.01 | forbidden-dominant queries (the 1-8a rule) |
+
+`head_claimed = floor_pass && !tag_veto && marginPass`. The reported
+`head_claim` is the FIRST failing condition — `floor | veto | margin |
+claim` — which is the teach-the-user hook: it names the deciding
+condition, and `tag_veto` carries the offending tag's name.
+
+**Degradation (never silently suppress on missing data):** a head
+without per-tag vectors (pre-1-8b rebuild) skips the veto but still
+applies floor + margin; a head without a forbidden centroid skips the
+margin. No condition ever fails closed on absence of data.
+
+### 13.4 Lab contract changes (head-test-service.js)
+
+- `scoreHead` returns `tag_cosines: [{tag, cosine}]` — per-tag cosines
+  computed from the head's per-tag forbidden vectors.
+- Every ranked row gains: `floor_pass`, `tag_veto` (tag name | null),
+  `max_tag_cosine`, `head_margin`, `head_claimed`, and
+  `head_claim ∈ {floor, veto, margin, claim}`.
+- `verdict.head_suppressed` + new provenance strings:
+  `'head-suppressed (off-domain)'` (floor),
+  `'head-suppressed (forbidden: <tag>)'` (veto),
+  `'head-suppressed (forbidden/noise)'` (margin — the legacy 1-8a text).
+- `under_test` carries `tag_veto` / `max_tag_cosine` / `floor_pass` /
+  `head_claim` / `head_claimed`.
+- `fidelity.algorithm = 'story-1.3-replay+v2'`; `fidelity.knobs` now
+  carries all three gate knobs beside the replay knobs.
+
+### 13.5 Per-tag forbidden vectors at head build (frontmatter-service.js)
+
+`buildVectorizedHead` now stores
+`head.per_field.forbidden_vectors = [{tag, vector}]` — each forbidden
+tag embedded INDIVIDUALLY at publish/rebuild time. The averaged
+`per_field.forbidden` centroid is unchanged and remains the margin
+rule's input. Requires a head REBUILD on existing repos to appear
+(publish or `head/rebuild` — the validation plan's first step).
+
+### 13.6 Retriever parity (config.py, genieai_retriever_arangodb.py)
+
+`_route_graphs` applies the identical three conditions to each head
+pseudo-row (floor → per-tag veto → margin) before it may enter the
+global top-K pool. New observability:
+
+- Counters `heads_floored` / `heads_vetoed` beside the 1-8a
+  `heads_gated` (+ `head_rows` injected).
+- Span attributes `rag.route.heads_floored` / `rag.route.heads_vetoed`
+  (beside `rag.route.heads_gated`).
+- The `Graph routing` log line extended with both new counters.
+
+New env knobs (code-default, same family as ROUTE_TOP_K/MIN_CHUNKS/
+WEIGHT — not part of the OKF env-file externalization set):
+`RETRIEVER_ROUTE_HEAD_FLOOR=0.55`, `RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX=0.55`
+(beside the existing `RETRIEVER_ROUTE_HEAD_MARGIN=0.01` and
+`RETRIEVER_ROUTE_HEAD_WEIGHT`).
+
+### 13.7 Test status
+
+- Existing `head-test-service.test.js` suite 18/18 GREEN under v2
+  (the 1-8a margin fixtures score 1.0, clearing the 0.55 floor; their
+  heads carry no `forbidden_vectors`, so the veto degrades open) —
+  re-run 2026-10-09.
+- v2-specific unit tests (floor/veto/claim per condition, first-failing
+  priority, degradation paths; jest + retriever pytest parity) NOT yet
+  authored — part of the story's remaining work.

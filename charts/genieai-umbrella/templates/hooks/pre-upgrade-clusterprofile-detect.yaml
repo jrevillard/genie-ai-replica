@@ -43,41 +43,7 @@ spec:
         - name: tools
           emptyDir: {}
       initContainers:
-        - name: tools
-          # curlimages/curl: sh + curl in one tiny image, no apk layer.
-          # Pulls the upstream Kubernetes and jq release binaries and
-          # makes them executable in /tools/bin for the main container.
-          image: "{{ .Values.global.imageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 65534
-            capabilities:
-              drop:
-                - ALL
-          volumeMounts:
-            - name: tools
-              mountPath: /tools
-          command:
-            - /bin/sh
-            - -c
-            - |
-              set -eu
-              mkdir -p /tools/bin
-              # `kubeletToolsMirror` lets air-gapped installs route the
-              # kubectl/jq release downloads through an internal mirror.
-              # Empty (default) keeps the original upstream URLs;
-              # operators set `global.kubeletToolsMirror` to a single
-              # internal URL that serves both `/release/...` and
-              # `/jq/releases/...` (mirror path convention).
-              BASE="{{ .Values.global.kubeletToolsMirror | default "https://dl.k8s.io" }}"
-              BASE_JQ="{{ .Values.global.kubeletToolsMirror | default "https://github.com/jqlang" }}"
-              curl -fsSL "$BASE/release/v1.33.0/bin/linux/amd64/kubectl" -o /tools/bin/kubectl
-              chmod +x /tools/bin/kubectl
-              curl -fsSL "$BASE_JQ/jq/releases/download/jq-1.7.1/jq-linux-amd64" -o /tools/bin/jq
-              chmod +x /tools/bin/jq
+        {{- include "genieai-umbrella.toolsInitContainer" . | nindent 8 }}
       containers:
         - name: detect
           image: "{{ .Values.global.imageRegistry | default "docker.io" }}/library/alpine:3.20"

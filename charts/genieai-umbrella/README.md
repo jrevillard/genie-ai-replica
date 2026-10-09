@@ -37,6 +37,21 @@ Later tiers add: GPU operator, cert-manager, envoy-gateway — same model.
 Apply per-env config via `deploy/environments/<env>/values-override.yaml`. See
 that directory's `README.md`.
 
+## Values
+
+The umbrella's own `values.schema.json` is what validates operator overrides;
+the `genieai-common` library's `values.schema.json` is **NOT** applied here
+because the umbrella deliberately avoids `import-values` — Helm 4 injects
+the `global` subtree into every dependency, which would otherwise pull the
+library's schema down the same path and double-validate keys that the
+umbrella schema already accepts (top-level `component:`, `nameOverride:`,
+`fullnameOverride:`). The umbrella's own schema is the source of truth;
+top-level keys from the library schema description that the umbrella's
+schema does not explicitly declare (top-level `component:`, `nameOverride:`,
+`fullnameOverride:`) pass unchallenged. Per-call `component` (the dict key
+passed to `genieai-common.labels` from each template) is the only enforced
+component path.
+
 ## Pre-install hooks
 
 The chart's pre-install/pre-upgrade hooks run in ascending `helm.sh/hook-weight`

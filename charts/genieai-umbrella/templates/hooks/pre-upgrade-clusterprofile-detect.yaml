@@ -35,15 +35,51 @@ spec:
         runAsUser: 65534
         seccompProfile:
           type: RuntimeDefault
+      # `registry.k8s.io/kubectl` is distroless (no /bin/sh), so this Pod
+      # ships kubectl + jq via an init container that downloads the static
+      # binaries into the shared `tools` emptyDir. The main container is
+      # alpine (sh is built in); kubectl/jq are picked up via the PATH env,
+      # which prepends /tools/bin.
+      volumes:
+        - name: tools
+          emptyDir: {}
+      initContainers:
+        - name: tools
+          # curlimages/curl: sh + curl in one tiny image, no apk layer.
+          # Pulls the upstream Kubernetes and jq release binaries and
+          # makes them executable in /tools/bin for the main container.
+          image: docker.io/curlimages/curl:8.10.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tools
+              mountPath: /tools
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              mkdir -p /tools/bin
+              curl -fsSL https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl -o /tools/bin/kubectl
+              chmod +x /tools/bin/kubectl
+              curl -fsSL https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64 -o /tools/bin/jq
+              chmod +x /tools/bin/jq
       containers:
         - name: detect
-          # registry.k8s.io/kubectl is the upstream kubectl image; alpine
-          # has no kubectl binary at all. (The bitnami/kubectl version tags
-          # were purged from Docker Hub — only `latest` remains, which is
-          # not pinnable.)
-          image: "{{ .Values.global.imageRegistry | default "registry.k8s.io" }}/kubectl:v1.33.0"
+          image: "{{ .Values.global.imageRegistry | default "docker.io" }}/library/alpine:3.20"
           imagePullPolicy: IfNotPresent
           env:
+            - name: PATH
+              # Prepend /tools/bin so kubectl + jq (downloaded by the
+              # `tools` init container) are discoverable by the script.
+              value: /tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             - name: RENDERED_PROFILE
               value: {{ .Values.clusterProfile | default "dev" | quote }}
             - name: TARGET_NAMESPACE
@@ -65,6 +101,9 @@ spec:
             capabilities:
               drop:
                 - ALL
+          volumeMounts:
+            - name: tools
+              mountPath: /tools
           command:
             - /bin/sh
             - -c

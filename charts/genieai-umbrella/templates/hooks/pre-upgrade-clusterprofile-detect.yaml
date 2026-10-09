@@ -1,0 +1,87 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-clusterprofile-detect
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "clusterprofile-detect"))) | nindent 4 }}
+    app.kubernetes.io/component: clusterprofile-detect
+  annotations:
+    # pre-upgrade ONLY: the Namespace carrying genieai.io/cluster-profile is
+    # a regular resource, and regular resources apply after every pre-install
+    # hook — on a fresh install the label cannot exist while any hook runs.
+    # By the time an upgrade starts, the previous revision's Namespace
+    # already carries the label, so drift detection has something to read.
+    "helm.sh/hook": pre-upgrade
+    # Runs before the dependency check (-5) so operators checking upgrade
+    # progress see profile drift surfaced alongside dependency failures.
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" (deepCopy .Values | merge (dict "component" "clusterprofile-detect"))) | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: detect
+          # bitnami/kubectl ships kubectl on a minimal base; alpine has no
+          # kubectl binary at all.
+          image: bitnami/kubectl:1.33
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              ns="{{ .Values.namespace }}"
+              # The profile this release actually deploys, baked in at render
+              # time: a running Job has no access to Helm values, and Helm
+              # never re-renders templates mid-install/upgrade — so the only
+              # faithful comparison target is the literal rendered value.
+              rendered="{{ .Values.clusterProfile }}"
+              # The label is applied by a regular Namespace resource, which
+              # can lag hook start; poll a bounded 3 attempts, 2s apart.
+              detected=""
+              for attempt in 1 2 3; do
+                profile=$(kubectl get ns "$ns" -o jsonpath='{.metadata.labels.genieai\.io/cluster-profile}' 2>/dev/null || true)
+                if [ -n "$profile" ]; then
+                  detected="$profile"
+                  break
+                fi
+                [ "$attempt" -lt 3 ] && sleep 2
+              done
+              if [ -n "$detected" ] && [ "$detected" != "$rendered" ]; then
+                echo "cluster-profile mismatch: namespace $ns carries '$detected' but this release renders '$rendered'"
+                # The Job cannot mutate Helm-rendered values; the Event is
+                # the visibility channel (kubectl describe ns) prompting the
+                # operator to pass --set clusterProfile=$detected on the next
+                # install/upgrade. `kubectl create event` one-liner:
+                # `apply` rejects generateName manifests and an indented
+                # heredoc would break YAML parsing inside the block scalar.
+                kubectl create event "genieai-profile-drift-$(date +%s)" \
+                  --type=Warning \
+                  --reason=ClusterProfileDetected \
+                  --message="cluster-profile mismatch: namespace label '$detected' != rendered clusterProfile '$rendered' — pass --set clusterProfile=$detected at the next install/upgrade to align" \
+                  --for=namespace/"$ns" \
+                  -n "$ns" >/dev/null 2>&1 || true
+              fi
+              # Drift detection is advisory: a mismatch (or an unreadable
+              # label) must never block the upgrade itself.
+              exit 0

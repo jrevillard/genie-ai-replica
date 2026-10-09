@@ -4,7 +4,7 @@
 
 **Goal:** Ship the data tier of the GENIE.AI Helm chart: 3 new Helm `dependencies` (CloudNativePG, kube-arangodb, sealed-secrets 2.20.0+) plus the keycloak-operator as a **cluster bootstrap prerequisite** (installed via OLM/static YAML — its Helm repo URL serves no index; verified 2026-10-08), the rendered CRs (CNPG Postgres cluster for keycloak-db, ArangoDeployment, `Keycloak` + `KeycloakRealmImport`, and a SealedSecret framework (4 CRs here; the rest ship with their consumers in Plans 3+). Kong is REMOVED — audit decision 7), plus the dependency-graph enforcement + ClusterProfile auto-detection hook. Establishes the pattern service-tier plans (3+) build on.
 
-**Architecture:** The umbrella chart pulls three operators as Helm `dependencies` with `condition:` toggles; the keycloak-operator is a documented bootstrap prerequisite (the chart renders only the CRs it manages). The chart renders the operator-managed CRs (Postgres Cluster, ArangoDeployment, KeycloakRealm, SealedSecret) declaratively. A pre-install hook Job validates that the user's selected service tier (keycloak, arangodb, kong) has its declared data dependencies enabled — fails-fast at install time, not at first Pod crash. ClusterProfile is auto-detected from a namespace label when the pre-install Job runs, then inherited by templates via `--set clusterProfile=...`.
+**Architecture:** The umbrella chart pulls three operators as Helm `dependencies` with `condition:` toggles; the keycloak-operator is a documented bootstrap prerequisite (the chart renders only the CRs it manages). The chart renders the operator-managed CRs (Postgres Cluster, ArangoDeployment, Keycloak + KeycloakRealmImport, SealedSecret) declaratively. A pre-install hook Job validates that the user's selected service tier (keycloak, arangodb, kong) has its declared data dependencies enabled — fails-fast at install time, not at first Pod crash. ClusterProfile is auto-detected from a namespace label when the pre-install Job runs, then inherited by templates via `--set clusterProfile=...`.
 
 **Tech Stack:** Helm 4.x, chart-testing (`ct` v3.x), CNPG operator (v1.30 / chart `~> 0.30.0`), kube-arangodb (`~> 1.4.5`), keycloak-operator 26.x (bootstrap prerequisite, NOT a chart dep), sealed-secrets helm chart `~> 2.20.0` (controller v0.40.0), kind 1.33, kubectl 1.33+, kustomize 5.x.
 
@@ -1261,7 +1261,7 @@ Kong is deleted from the chart (k8s-native-audit decision 7, user-confirmed 2026
 **Files:**
 - Create: `charts/genieai-umbrella/templates/secrets/arango-secrets.yaml` (ArangoDB-specific: 2 SealedSecrets)
 - Create: `charts/genieai-umbrella/templates/secrets/keycloak-secrets.yaml` (Keycloak bootstrap: 2 SealedSecrets)
-- Create: `charts/genieai-umbrella/templates/hooks/pre-upgrade-sealed-secret-validate.yaml` (drift check via SealedSecret `invalid` annotation, no kubeseal CLI needed)
+- Create: `charts/genieai-umbrella/templates/hooks/pre-upgrade-sealed-secret-validate.yaml` (drift check via SealedSecret status.conditions Synced=False, no kubeseal CLI needed)
 
 **Interfaces:**
 - Consumes: `secrets.sealedSecrets.enabled`, `secrets.sealedSecrets.publicKeyFingerprint`.
@@ -1315,7 +1315,7 @@ spec:
 
          — the `PLACEHOLDER_*` literals below are not valid
          base64 (underscores outside the alphabet). The sealed-secrets
-         controller fails to decrypt, marks the resource `invalid`, and
+         controller fails to decrypt (Synced=False, ErrorDecrypt), and
          never materialises the underlying K8s Secret. The CI helm-test
  would always fail on a fresh kind install until an
          operator re-seals real values — unacceptable for green CI.
@@ -1341,7 +1341,7 @@ spec:
 ```yaml
 {{- if and .Values.secrets.sealedSecrets.enabled .Values.data.keycloak.enabled -}}
 {{- /* Keycloak-bootstrap secrets needed by CNPG Cluster (keycloak-db-
-       credentials) and KeycloakRealm (genie-admin credentials). Remaining
+       credentials) and KeycloakRealmImport (genie-admin credentials). Remaining
        Keycloak-connected secrets ship in Plans 3+ (keycloakClientSecret,
        keycloakProxyClientSecret, kcDataprepClientSecret, kcGrafanaClientSecret). */ -}}
 {{- range $secretName := list "keycloak-db-credentials" "genie-admin-credentials" }}
@@ -1391,7 +1391,7 @@ metadata:
     # the task helm test, which runs post-install and waits for the K8s
     # Secrets to materialize (PLACEHOLDER+ blobs never do — the controller
     # marks the SealedSecret `status.conditions[type=Synced]
-    # .status=True` and CNPG/ArangoDeployment pods hang in
+    # .status=False` (reason ErrorDecrypt) and CNPG/ArangoDeployment pods hang in
     # `Waiting for secret`; the test's materialization timeout catches it).
     "helm.sh/hook": pre-upgrade
     "helm.sh/hook-weight": "0"
@@ -1623,7 +1623,9 @@ Foundation plan + Plan 2 (data layer) complete. Next: Plan 3 (service tier Group
 
 - Helm API v2. Helm 4.x.
 - No secrets in `values-override.yaml`. Use SealedSecret resources (Plan 2 default backend).
-- Tests live in each chart's `tests/` directory; `ct install` for integration, `helm test` for smoke.
+- Tests live in each chart's `templates/tests/` directory (Helm convention)
+- Install requires `-n <ns> --create-namespace` (the Namespace is a regular resource; the release Secret and hooks need it first)
+- Vendored dep tarballs + Chart.lock are generated, not tracked — run `make deps` (from `charts/`) after cloning or dep changes; `ct install` for integration, `helm test` for smoke.
 - Pre-install hooks in `templates/hooks/*.yaml` carry `helm.sh/hook: pre-install` annotations (Helm 3 scans recursively).
 EOF
 
@@ -1666,7 +1668,7 @@ hook needs must itself be a lower-weight hook):
 2. `-20` — dep-graph ConfigMap (dependency-graph.json + enabled.json)
 3. `-10` — cluster-profile auto-detect (reads namespace label, emits an Event)
 4. `-5`  — dependency graph validation (services/data require their deps)
-5. `0` on pre-upgrade only — SealedSecret drift validation (`sealedsecrets.bitnami.com/invalid` annotation sweep)
+5. `0` on pre-upgrade only — SealedSecret drift validation (status.conditions[type=Synced].status=False sweep)
 
 ## Tests
 
@@ -1723,7 +1725,7 @@ After writing all 13 tasks, run this checklist against the spec.
 2. ClusterProfile auto-detection race → Task 7 Step 2 (30s polling loop).
 3. ArangoDB single → cluster in-place upgrade fails → Task 9 Step 5 (docs/charts/arangodb-mode-migration.md written).
 4. ~~Kong DB-less misconfig~~ — moot: Kong REMOVED (decision 7); edge concerns move to Envoy Gateway (Plan 6).
-5. SealedSecrets undecryptable after operator-initiated cluster key rotation → Task 11 Step 4 (pre-upgrade Job sweeps `sealedsecrets.bitnami.com/invalid` annotations).
+5. SealedSecrets undecryptable after operator-initiated cluster key rotation → Task 11 Step 4 (pre-upgrade Job sweeps status.conditions[type=Synced].status=False).
 
 All five covered. The helm test for #1 (Task 6 Step 5) doubles as runtime test in CI.
 

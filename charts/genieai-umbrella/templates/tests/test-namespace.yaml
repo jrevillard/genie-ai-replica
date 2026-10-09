@@ -37,6 +37,6 @@ spec:
           set -eu
           ns="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
           echo "test Pod running in namespace: $ns"
-          [ "$ns" = "{{ .Values.namespace }}" ] \
-            || { echo "FAIL: namespace mismatch, expected {{ .Values.namespace }}"; exit 1; }
+          [ "$ns" = "{{ .Release.Namespace }}" ] \
+            || { echo "FAIL: namespace mismatch, expected {{ .Release.Namespace }}"; exit 1; }
           echo "PASS"

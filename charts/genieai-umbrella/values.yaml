@@ -46,7 +46,13 @@ data:
     storageSize: 10Gi
   arangodb:
     enabled: true
-    mode: single                       # cluster for prod/staging via clusterProfile
+    # Arango deployment mode. `clusterProfile` in {prod,staging} IGNORES
+    # this value and promotes to cluster — the promotion template runs
+    # unconditionally for those profiles. To pin single mode on a
+    # staging-like cluster, set data.arangodb.mode=cluster then override
+    # the per-group counts out-of-band (not yet exposed) or set
+    # clusterProfile=dev.
+    mode: single
     storageSize: 50Gi
     agentsStorageSize: 2Gi             # cluster-mode Agency volume — config state (MBs), not document data
   keycloak:
@@ -77,9 +83,10 @@ data:
       dataprep: change-me-dataprep-client
       grafana: change-me-grafana-client
     # Fail the render when any clientSecrets value is still a change-me
-    # placeholder; enable in prod overrides (default keeps dev/kind
-    # renders working).
-    failOnPlaceholderSecrets: false
+    # placeholder. Default is TRUE so a default install with
+    # `change-me-*` client secrets now FAILS the render; opt back to
+    # false only in dev/kind where the placeholder is acceptable.
+    failOnPlaceholderSecrets: true
     # SMTP for email verification — leave null to disable (no smtpServer
     # block renders); set all fields in the environment override when used.
     smtp: null

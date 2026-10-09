@@ -12,6 +12,12 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   restartPolicy: Never
+  # The hook-owned dep-check SA (read-only ClusterRole grant on
+  # `namespaces`/get) — the same SA the pre-upgrade hooks and the
+  # data-deps test pod use. Reused here because the new assertion
+  # queries `kubectl get ns`, which is NOT a noop: it requires both
+  # the kubectl binary (alpine lacks it) and an SA-bound RBAC grant.
+  serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
   {{- with .Values.global.imagePullSecrets }}
   imagePullSecrets:
     {{- toYaml . | nindent 4 }}
@@ -24,7 +30,10 @@ spec:
       type: RuntimeDefault
   containers:
     - name: test
-      image: "{{ .Values.global.imageRegistry | default "docker.io" }}/alpine:3.20"
+      # registry.k8s.io/kubectl: kubectl is NOT in alpine base (the
+      # bitnami/kubectl version tags were purged from Docker Hub). SA =
+      # the hook-owned dep-check SA (read-only ClusterRole on namespaces).
+      image: "{{ .Values.global.imageRegistry | default "registry.k8s.io" }}/kubectl:v1.33.0"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false
@@ -41,8 +50,20 @@ spec:
           set -eu
           ns="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
           echo "test Pod running in namespace: $ns"
-          [ "$ns" = "{{ .Release.Namespace }}" ] \
-            || { echo "FAIL: namespace mismatch, expected {{ .Release.Namespace }}"; exit 1; }
+          # Read-only assertion via kubectl (read-only RBAC in
+          # charts/genieai-umbrella/templates/rbac/): the release namespace
+          # must carry the chart's PSA labels and MUST NOT carry the
+          # genieai.io/cluster-profile label (the cluster-profile label
+          # lives on the host namespace, not on the release namespace).
+          enforce=$(kubectl get ns "$ns" -o jsonpath='{.metadata.labels.pod-security\.kubernetes\.io/enforce}' 2>/dev/null || true)
+          enforce_ver=$(kubectl get ns "$ns" -o jsonpath='{.metadata.labels.pod-security\.kubernetes\.io/enforce-version}' 2>/dev/null || true)
+          cluster_profile=$(kubectl get ns "$ns" -o jsonpath='{.metadata.labels.genieai\.io/cluster-profile}' 2>/dev/null || true)
+          [ "$enforce" = "restricted" ] \
+            || { echo "FAIL: pod-security.kubernetes.io/enforce missing or != restricted (got: '$enforce')"; exit 1; }
+          [ -n "$enforce_ver" ] \
+            || { echo "FAIL: pod-security.kubernetes.io/enforce-version missing (got: '$enforce_ver')"; exit 1; }
+          [ -z "$cluster_profile" ] \
+            || { echo "FAIL: genieai.io/cluster-profile label should live on the host namespace, not on the release namespace (got: '$cluster_profile')"; exit 1; }
           echo "PASS"
 {{- /* Gated on SealedSecrets AND at least one data tier rendering them —
        the test asserts the tier-specific Secrets exist, so a release with

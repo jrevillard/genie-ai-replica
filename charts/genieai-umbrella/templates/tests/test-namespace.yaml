@@ -74,9 +74,11 @@ spec:
       type: RuntimeDefault
   containers:
     - name: t
-      # bitnami/kubectl: kubectl is NOT in alpine base. SA = the hook-owned
-      # dep-check SA (persists between hook fires via before-hook-creation).
-      image: "{{ .Values.global.imageRegistry | default "docker.io" }}/bitnami/kubectl:1.33"
+      # registry.k8s.io/kubectl: kubectl is NOT in alpine base (the
+      # bitnami/kubectl version tags were purged from Docker Hub). SA = the
+      # hook-owned dep-check SA (persists between hook fires via
+      # before-hook-creation).
+      image: "{{ .Values.global.imageRegistry | default "registry.k8s.io" }}/kubectl:v1.33.0"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false

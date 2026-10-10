@@ -2821,7 +2821,17 @@ export default {
         answerable: 'answerable',
         weak: 'weak match',
         unanswerable: 'not in corpus',
-        unknown: 'unknown'
+        unknown: 'unknown',
+        title: 'Corpus test — summary',
+        close: 'Close the summary',
+        chunksScanned: 'corpus chunks scanned',
+        headLeg: 'Head verdict',
+        headNotClaimed: 'does not claim',
+        corpusLeg: 'Corpus coverage',
+        files: 'Reference files',
+        colScore: 'Rerank score',
+        colFile: 'File',
+        colContent: 'Chunk content'
       }
     }
   },

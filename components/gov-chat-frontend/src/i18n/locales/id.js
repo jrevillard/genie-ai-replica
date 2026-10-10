@@ -2844,7 +2844,17 @@ export default {
         answerable: 'bisa dijawab',
         weak: 'kecocokan lemah',
         unanswerable: 'tidak ada di korpus',
-        unknown: 'tidak diketahui'
+        unknown: 'tidak diketahui',
+        title: 'Uji korpus — ringkasan',
+        close: 'Tutup ringkasan',
+        chunksScanned: 'potongan korpus dipindai',
+        headLeg: 'Putusan Head',
+        headNotClaimed: 'tanpa klaim',
+        corpusLeg: 'Cakupan korpus',
+        files: 'File referensi',
+        colScore: 'Skor rerank',
+        colFile: 'File',
+        colContent: 'Isi potongan'
       }
     }
   },

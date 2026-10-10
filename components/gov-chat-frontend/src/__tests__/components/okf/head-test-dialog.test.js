@@ -1109,6 +1109,43 @@ it('1-8g: onProbeRow surfaces the error strip when the probe fails', async () =>
   expect(w.vm.suite.payload.positive[0].lastProbe).toBeUndefined();
 });
 
+it('1-8g: the probe summary panel renders head + corpus legs, the reason, reference files and top chunks', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  dispatch.mockImplementation((action) => {
+    if (action === 'okf/headSuiteProbe') {
+      return Promise.resolve({
+        ok: true,
+        result: {
+          suite_key: 's1',
+          query: 'positive query 0',
+          docs: 24,
+          elapsed_ms: 812,
+          top_score: 0.83,
+          verdict: 'answerable',
+          reason: 'Best chunk scores 0.83 (≥ 0.5 answer bar) — "colorectal screening every 2 years"',
+          files: [{ id: 'files/f1', name: 'ncd-guidelines.md', chunks: 12 }],
+          top_chunks: [{ score: 0.83, preview: 'colorectal screening every 2 years', file: 'ncd-guidelines.md' }],
+          head: { claimed: true, claim: 'cancer-screening', score: 0.7 }
+        }
+      });
+    }
+    return Promise.resolve({ ok: true });
+  });
+  w.vm.suite = {
+    suite_key: 's1',
+    payload: { positive: [{ query: 'positive query 0' }], negative: [] }
+  };
+  await w.vm.onProbeRow(w.vm.suite.payload.positive[0]);
+  expect(w.vm.probePanel).toMatchObject({ verdict: 'answerable', docs: 24, elapsed_ms: 812 });
+  const html = w.element.innerHTML;
+  expect(html).toContain('positive query 0');
+  expect(html).toContain('Best chunk scores 0.83');
+  expect(html).toContain('ncd-guidelines.md');
+  expect(html).toContain('colorectal screening every 2 years');
+  expect(html).toContain('812ms');
+});
+
 it('1-8g: onDeleteSuite removes the suite from the list and clears a loaded copy', async () => {
   const w = mountDialog({ initialTab: 'suites' });
   await w.vm.$nextTick();

@@ -1246,7 +1246,13 @@ describe('1-8g — default suite naming, delete, and the corpus probe', () => {
         top_score: 0.83,
         verdict: 'answerable'
       });
-      expect(res.top_chunks[0].score).toBeCloseTo(0.82, 3);
+      // top_chunks are RERANK-ordered now (the rerank-best 0.83 leads,
+      // not the vector-best 0.82) — the summary panel's order of truth
+      expect(res.top_chunks[0].score).toBeCloseTo(0.83, 3);
+      expect(res.top_chunks[0].preview).toMatch(/colorectal/i);
+      // the head leg rides the response (verdict from routingTest — the
+      // panel shows BOTH legs side by side)
+      expect(res.head).toBeDefined();
       // persisted on the matching positive row
       const after = await svc.getSuite('me', suite._key, {});
       expect(after.payload.positive[0].lastProbe).toMatchObject({ verdict: 'answerable', top_score: 0.83 });

@@ -2863,7 +2863,17 @@ export default {
         answerable: 'beantwortbar',
         weak: 'schwache Übereinstimmung',
         unanswerable: 'nicht im Korpus',
-        unknown: 'unbekannt'
+        unknown: 'unbekannt',
+        title: 'Korpus-Test — Zusammenfassung',
+        close: 'Zusammenfassung schließen',
+        chunksScanned: 'Korpus-Chunks durchsucht',
+        headLeg: 'Head-Urteil',
+        headNotClaimed: 'keine Zuordnung',
+        corpusLeg: 'Korpus-Abdeckung',
+        files: 'Referenzdateien',
+        colScore: 'Rerank-Score',
+        colFile: 'Datei',
+        colContent: 'Chunk-Inhalt'
       }
     }
   },

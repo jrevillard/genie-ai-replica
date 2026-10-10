@@ -2841,7 +2841,17 @@ export default {
         answerable: 'ina jibu',
         weak: 'mfanano dhaifu',
         unanswerable: 'haipo kwenye korpusi',
-        unknown: 'haijulikani'
+        unknown: 'haijulikani',
+        title: 'Jaribio la korpusi — muhtasari',
+        close: 'Funga muhtasari',
+        chunksScanned: 'vipande vya korpusi vimekaguliwa',
+        headLeg: 'Uamuzi wa Head',
+        headNotClaimed: 'haitambuliwi',
+        corpusLeg: 'Ufunivu wa korpusi',
+        files: 'Marejeleo ya faili',
+        colScore: 'Alama ya rerank',
+        colFile: 'Faili',
+        colContent: 'Maudhui ya kipande'
       }
     }
   },

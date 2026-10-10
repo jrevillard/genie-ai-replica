@@ -2854,7 +2854,17 @@ export default {
         answerable: 'respondível',
         weak: 'correspondência fraca',
         unanswerable: 'não está no corpus',
-        unknown: 'desconhecido'
+        unknown: 'desconhecido',
+        title: 'Teste do corpus — resumo',
+        close: 'Fechar o resumo',
+        chunksScanned: 'fragmentos do corpus analisados',
+        headLeg: 'Veredito Head',
+        headNotClaimed: 'sem atribuição',
+        corpusLeg: 'Cobertura do corpus',
+        files: 'Arquivos de referência',
+        colScore: 'Pontuação de rerank',
+        colFile: 'Arquivo',
+        colContent: 'Conteúdo do fragmento'
       }
     }
   },

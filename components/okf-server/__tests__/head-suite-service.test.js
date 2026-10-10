@@ -1175,3 +1175,111 @@ describe('getSuite vs an in-flight generation (1-8f2 — the honest envelope)', 
     });
   });
 });
+
+describe('1-8g — default suite naming, delete, and the corpus probe', () => {
+  it('names an unnamed suite "<Repo> suite N" (N = this repo\'s suite count + 1)', async () => {
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes("d.kind == 'suite'") && aql.includes('COLLECT WITH COUNT')) {
+        return { all: async () => [2] };
+      }
+      return { all: async () => [] };
+    });
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({ positive: [{ query: 'q1' }], negative: [], keywords: [] })
+    );
+    const suite = await svc.generateSuite('me', { n_positive: 1 }, {});
+    expect(suite.name).toBe('NCD Information suite 3');
+    // an explicit name always wins
+    const named = await svc.generateSuite('me', { n_positive: 1, name: 'My batch' }, {});
+    expect(named.name).toBe('My batch');
+  });
+
+  it('deleteSuite removes the suite + its runs; unknown keys 404; in-flight 409s', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    __mockDb.query.mockResolvedValue({ all: async () => [{ _key: 'r1' }, { _key: 'r2' }] });
+    const removeSpy = jest.spyOn(__mockDb.collection('okf_head_test_runs'), 'remove');
+    const res = await svc.deleteSuite('me', suite._key, {});
+    expect(res).toMatchObject({ deleted: true, suite_key: suite._key, runs_removed: 2 });
+    expect(removeSpy).toHaveBeenCalledWith(suite._key);
+    removeSpy.mockRestore();
+    await expect(svc.deleteSuite('me', 's9999999-nope00', {})).rejects.toMatchObject({
+      code: 'SUITE_NOT_FOUND',
+      status: 404
+    });
+  });
+
+  it('probeSuiteQuery: embed → top-K → rerank → verdict bands, persisted on matching rows', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    const query = suite.payload.positive[0].query;
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'NCD Information',
+      ingested_graph_name: 'OKF_me_v1'
+    });
+    frontmatterService.teiEmbed.mockResolvedValue([[0.1, 0.2, 0.3]]);
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('APPROX_NEAR_COSINE')) {
+        return {
+          all: async () => [
+            { text: 'WHO guidance colorectal screening every 10 years', score: 0.82 },
+            { text: 'unrelated weather text', score: 0.1 }
+          ]
+        };
+      }
+      return { all: async () => [] };
+    });
+    const realFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [
+        { index: 1, score: 0.00002 },
+        { index: 0, score: 0.83 }
+      ]
+    });
+    try {
+      process.env.OKF_RERANK_ENDPOINT = 'https://tei.example/rerank';
+      const res = await svc.probeSuiteQuery('me', suite._key, { query }, {});
+      expect(res).toMatchObject({
+        suite_key: suite._key,
+        docs: 2,
+        top_score: 0.83,
+        verdict: 'answerable'
+      });
+      expect(res.top_chunks[0].score).toBeCloseTo(0.82, 3);
+      // persisted on the matching positive row
+      const after = await svc.getSuite('me', suite._key, {});
+      expect(after.payload.positive[0].lastProbe).toMatchObject({ verdict: 'answerable', top_score: 0.83 });
+      // bands: weak + unanswerable
+      expect(svc.probeVerdict(0.3)).toBe('weak');
+      expect(svc.probeVerdict(0.01)).toBe('unanswerable');
+      expect(svc.probeVerdict(null)).toBe('unknown');
+    } finally {
+      global.fetch = realFetch;
+      delete process.env.OKF_RERANK_ENDPOINT;
+    }
+  });
+
+  it('probeSuiteQuery: empty query 400s; no corpus 409s; unconfigured rerank → unknown', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    await expect(svc.probeSuiteQuery('me', suite._key, { query: '   ' }, {})).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
+    const repo = repositoryService.getById;
+    repo.mockResolvedValueOnce({ id: 'me', name: 'NCD Information', ingested_graph_name: null });
+    await expect(svc.probeSuiteQuery('me', suite._key, { query: 'x' }, {})).rejects.toMatchObject({
+      code: 'REPO_NOT_INGESTED',
+      status: 409
+    });
+    repo.mockResolvedValueOnce({ id: 'me', name: 'NCD Information', ingested_graph_name: 'OKF_me_v1' });
+    frontmatterService.teiEmbed.mockResolvedValue([[0.1, 0.2, 0.3]]);
+    __mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ text: 'chunk text', score: 0.5 }]
+    });
+    delete process.env.OKF_RERANK_ENDPOINT;
+    const res = await svc.probeSuiteQuery('me', suite._key, { query: 'x' }, {});
+    expect(res.verdict).toBe('unknown');
+    expect(res.note).toMatch(/OKF_RERANK_ENDPOINT/);
+  });
+});

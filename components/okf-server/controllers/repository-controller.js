@@ -1546,6 +1546,36 @@ async function renameTestSuite(req, res, next) {
   }
 }
 
+// 1-8g — DELETE the suite + its run docs (the curator's list cleanup).
+async function deleteTestSuite(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const result = await headSuiteService.deleteSuite(req.params.repo_id, req.params.suite_key, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// 1-8g — the click-test: one query against the LIVE corpus (embed → top-K
+// from the repo's SOURCE → the pipeline's TEI rerank → coverage verdict),
+// persisted on the matching suite rows.
+async function probeTestSuiteQuery(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const result = await headSuiteService.probeSuiteQuery(req.params.repo_id, req.params.suite_key, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 /**
  * Story 1-8 MR-B — POST /repos/:repo_id/routing-testsuite/:suite_key/run.
  * Executes every suite query through the routing test, aggregates
@@ -1619,6 +1649,8 @@ module.exports = {
   getTestSuite,
   updateTestSuiteRows,
   renameTestSuite,
+  deleteTestSuite,
+  probeTestSuiteQuery,
   runTestSuite,
   explainTestSuiteFailures,
   listTestSuiteRuns,

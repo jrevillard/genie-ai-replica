@@ -2756,7 +2756,8 @@ export default {
           headVersion: 'Head',
           tags: 'Matag',
           actions: 'Lokisa',
-          name: 'Lebitso'
+          name: 'Lebitso',
+          corpus: 'Korpusi'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2804,7 +2805,9 @@ export default {
         load: 'Jarisa',
         flipTip: 'Fetola lokisa ho khetha / se khethe',
         deleteTip: 'Tlosa mola ona seteng',
-        namePlaceholder: 'Lebitso la sete (ha ho hlokahale) — mohl. sete ea NCD'
+        namePlaceholder: 'Lebitso la sete (ha ho hlokahale) — mohl. sete ea NCD',
+        probeTip: 'Lekola potso ena ka korpusi ea ntseng e le teng',
+        deleteSuiteTip: 'Tlosa sete sena le nalane ea sona'
       },
       error: {
         explain: 'Tlhaloso e hlolehile',
@@ -2823,7 +2826,9 @@ export default {
         suiteLoad: 'Ho hlolehile ho jarisa sete',
         suiteUpdate: 'Ho hlolehile ho ntlafatsa sete',
         suiteRename: 'Ho hlolehile ho reha sete ka lebitso le lecha',
-        generateTimeout: 'Sete se nka nako e fetileng haholo — se ka hlaha ho tse bolokiloeng; sheba hape ka motsotso.'
+        generateTimeout: 'Sete se nka nako e fetileng haholo — se ka hlaha ho tse bolokiloeng; sheba hape ka motsotso.',
+        probe: 'Lekala la korpusi le hlotsoe',
+        suiteDelete: 'Ha e khone ho tlosa sete'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2844,6 +2849,12 @@ export default {
         predicted: 'e boleloa pele',
         scope: ' (lipotso {q} ho tswa ho tsamaello {r} tsa kajeno)',
         applying: 'E sebelisa: ho boloka matag, ho haha hlooho hape, ho phethahatsa sete hape…'
+      },
+      probe: {
+        answerable: 'e ka araba',
+        weak: 'tsʼebetso e sa matla',
+        unanswerable: 'ha e korpusing',
+        unknown: 'ea sa tsejoeng'
       }
     }
   },

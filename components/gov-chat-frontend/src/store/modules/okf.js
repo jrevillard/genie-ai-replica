@@ -1000,6 +1000,35 @@ const actions = {
     }
   },
 
+  /** Story 1-8g — delete a saved suite (and its run docs). */
+  async headSuiteDelete(_ctx, { repoId, suiteKey } = {}) {
+    try {
+      const result = await headTestService.deleteSuite(repoId, suiteKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'SUITE_DELETE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8g — the click-test: one query against the LIVE corpus
+   * (coverage verdict via the pipeline's reranker). */
+  async headSuiteProbe(_ctx, { repoId, suiteKey, query } = {}) {
+    try {
+      const result = await headTestService.probeSuiteQuery(repoId, suiteKey, query);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'PROBE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
   /** Run every suite query + aggregate pass rates / margins / steals. */
   async headSuiteRun(_ctx, { repoId, suiteKey } = {}) {
     try {

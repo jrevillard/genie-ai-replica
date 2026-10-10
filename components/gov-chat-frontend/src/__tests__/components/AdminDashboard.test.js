@@ -1675,6 +1675,50 @@ describe('AdminDashboard', () => {
       expect(wrapper.vm.deleteRefuseReason).toBeNull();
     });
 
+    // 2026-10-10 (live: David selected pending rows to clean up, ONE row had
+    // gone Ingesting, the whole batch silently refused via a tooltip-only
+    // disabled button — read as "it failed"): a MIXED selection deletes the
+    // clean subset and reports the skipped rows instead of refusing.
+    it('delete: a mixed selection deletes only the deletable rows and keeps the blocked selected', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', file_id: 'a-1', dataprep: { status: 'pending' } },
+        { _key: 'b', file_id: 'b-1', dataprep: { status: 'pending' } },
+        { _key: 'c', file_id: 'c-1', dataprep: { status: 'ingesting' } }
+      ];
+      wrapper.vm.selectedDocuments = ['a-1', 'b-1', 'c-1'];
+      expect(wrapper.vm.deletableSelection).toEqual(['a-1', 'b-1']);
+      expect(wrapper.vm.blockedSelection.map((d) => d.file_id)).toEqual(['c-1']);
+      expect(wrapper.vm.deleteRefuseReason).toMatch(/1/);
+
+      await wrapper.vm.handleBatchAction('delete');
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+      // The confirm names what will be skipped.
+      expect(wrapper.vm.confirmDialogState.message).toMatch(/SKIPPED/i);
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(documentFileService.deleteMultipleFiles).toHaveBeenCalledWith(['a-1', 'b-1']);
+      // Blocked row STAYS selected (it was not deleted); the deleted rows
+      // drop out.
+      expect(wrapper.vm.selectedDocuments).toEqual(['c-1']);
+      const ok = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'success');
+      expect(ok).toBeTruthy();
+    });
+
+    it('delete: all-blocked still refuses outright', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [{ _key: 'c', file_id: 'c-1', dataprep: { status: 'ingested' } }];
+      wrapper.vm.selectedDocuments = ['c-1'];
+      await wrapper.vm.handleBatchAction('delete');
+      expect(wrapper.vm.confirmDialogState.visible).toBe(false);
+      expect(documentFileService.deleteMultipleFiles).not.toHaveBeenCalled();
+      const err = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'error');
+      expect(err).toBeTruthy();
+    });
+
     it('delete: 403 BUNDLE_PROTECTED surfaces the verbatim backend message', async () => {
       const documentFileService = require('../../services/documentFileService');
       // Simulate the 403 shape doc-repo returns for bundles

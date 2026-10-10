@@ -516,17 +516,21 @@ export default {
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
+        "Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{\'{\'}count{\'}\'} file(s) deleted.",
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
-      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
-      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
+      deletePartialFailure: "{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}",
+      deleteAllFailed: "All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}",
+      deleteRefuseReason: "{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.",
       retractAllFailed: 'فشل جميع الملفات {count}: {detail}',
       uploadSuccessMultiple: 'تم تحميل {count} ملف(ات) بنجاح.',
       linkSubmitSuccess: 'تم الزحف وحفظ "{fileName}" بنجاح.',
       actionSuccess: 'الإجراء "{action}" على الملف {fileId} كان ناجحًا.',
-      metadataUpdateSuccess: 'تم تحديث البيانات الوصفية للملف {fileId}.'
+      metadataUpdateSuccess: 'تم تحديث البيانات الوصفية للملف {fileId}.',
+      deletePartialNotice:
+        "{\'{\'{\'}\'}blocked{\'}\'} من الملفات المحددة لا يمكن حذفها ({\'{\'{\'}\'}reason{\'}\'}) — سيُحذف الملفات الأخرى فقط بعدد {\'{\'{\'}\'}n{\'}\'}.",
+      confirmDeleteSkipped:
+        "{\'{\'{\'}\'}count{\'}\'} من الملفات المستوعبة/قيد الاستيعاب ستُتخطى — اسحبها أولًا لحذفها."
     },
     queryInspector: {
       search: 'بحث',
@@ -741,7 +745,7 @@ export default {
     chatTitle: 'عنوان المحادثة',
     chatTitlePlaceholder: 'أدخل عنوانًا لهذه المحادثة',
     deleteFolder: 'حذف المجلد',
-    deleteFolderConfirm: "هل أنت متأكد من أنك تريد حذف المجلد '{name}'؟",
+    deleteFolderConfirm: "هل أنت متأكد من أنك تريد حذف المجلد \'{name}\'؟",
     chatsMoveWarning: 'سيتم نقل جميع المحادثات في هذا المجلد إلى المجلد الافتراضي.',
     weatherTitle: 'توقعات الطقس',
     weatherLoading: 'جاري تحميل بيانات الطقس...',
@@ -1283,23 +1287,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "تصرف كخبير تسجيل مدني كيني متعاون. اشرح خطوات الحصول على بطاقة الهوية الوطنية (Maisha Namba) أو استبدال بطاقة مفقودة. هام: قدم قائمة واضحة بالوثائق المطلوبة (مثل شهادة الميلاد، نسخ من بطاقات هوية الوالدين) وانصح المستخدم بزيارة أقرب مركز Huduma أو مكتب السجل المدني. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كخبير تسجيل مدني كيني متعاون. اشرح خطوات الحصول على بطاقة الهوية الوطنية (Maisha Namba) أو استبدال بطاقة مفقودة. هام: قدم قائمة واضحة بالوثائق المطلوبة (مثل شهادة الميلاد، نسخ من بطاقات هوية الوالدين) وانصح المستخدم بزيارة أقرب مركز Huduma أو مكتب السجل المدني. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.",
     payTaxesPrompt:
-      "تصرف كمرشد لهيئة الإيرادات الكينية (KRA). اشرح عملية تقديم الإقرارات الضريبية، أو التقدم للحصول على KRA PIN، أو إعادة تعيين كلمة المرور على بوابة iTax. هام: ذكّر المستخدم بالموعد النهائي للإقرارات السنوية في 30 يونيو ووجهه حول كيفية تقديم إقرارات صفرية إذا لم يكن لديه دخل. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمرشد لهيئة الإيرادات الكينية (KRA). اشرح عملية تقديم الإقرارات الضريبية، أو التقدم للحصول على KRA PIN، أو إعادة تعيين كلمة المرور على بوابة iTax. هام: ذكّر المستخدم بالموعد النهائي للإقرارات السنوية في 30 يونيو ووجهه حول كيفية تقديم إقرارات صفرية إذا لم يكن لديه دخل. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.",
     startBusinessPrompt:
-      "تصرف كمستشار أعمال لخدمات eCitizen. وجه المستخدم خلال حجز اسم تجاري وتسجيل شركة في كينيا. هام: اشرح التكاليف الحالية للبحث عن الاسم والتسجيل، ووجّه المستخدم إلى بوابة eCitizen الرسمية لإكمال الطلب. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمستشار أعمال لخدمات eCitizen. وجه المستخدم خلال حجز اسم تجاري وتسجيل شركة في كينيا. هام: اشرح التكاليف الحالية للبحث عن الاسم والتسجيل، ووجّه المستخدم إلى بوابة eCitizen الرسمية لإكمال الطلب. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.",
     findHealthcarePrompt:
-      "تصرف كمرشد للخدمات الصحية. قدم معلومات حول الانتقال من NHIF إلى SHIF (صندوق التأمين الصحي الاجتماعي) وكيفية التسجيل. هام: شارك رموز USSD الرسمية (مثل *263#) أو روابط مواقع الويب للتسجيل واشرح مزايا التغطية الصحية العامة. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمرشد للخدمات الصحية. قدم معلومات حول الانتقال من NHIF إلى SHIF (صندوق التأمين الصحي الاجتماعي) وكيفية التسجيل. هام: شارك رموز USSD الرسمية (مثل *263#) أو روابط مواقع الويب للتسجيل واشرح مزايا التغطية الصحية العامة. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.",
     educationServicesPrompt:
-      "تصرف كمستشار تعليمي. ناقش منهج CBC، أو التسجيل في NEMIS، أو تنسيق القبول الجامعي عبر KUCCPS. هام: اشرح كيف يمكن لأولياء الأمور التحقق من نتائج الامتحانات الوطنية عبر الرسائل القصيرة (SMS) أو بوابة KNEC عند صدورها. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمستشار تعليمي. ناقش منهج CBC، أو التسجيل في NEMIS، أو تنسيق القبول الجامعي عبر KUCCPS. هام: اشرح كيف يمكن لأولياء الأمور التحقق من نتائج الامتحانات الوطنية عبر الرسائل القصيرة (SMS) أو بوابة KNEC عند صدورها. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.",
     transportLicensesPrompt:
-      "تصرف كمرشد لخدمات NTSA. اشرح إجراءات تجديد رخصة القيادة، أو فحص المركبات، أو إدارة حساب TIMS. هام: وجه المستخدم حول كيفية تسجيل الدخول إلى بوابة eCitizen NTSA للتقدم بطلب للحصول على رخصة القيادة الذكية (Smart DL) أو حجز موعد لفحص المركبة. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمرشد لخدمات NTSA. اشرح إجراءات تجديد رخصة القيادة، أو فحص المركبات، أو إدارة حساب TIMS. هام: وجه المستخدم حول كيفية تسجيل الدخول إلى بوابة eCitizen NTSA للتقدم بطلب للحصول على رخصة القيادة الذكية (Smart DL) أو حجز موعد لفحص المركبة. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.",
     housingProgramsPrompt:
-      "تصرف كمستشار لبرامج الإسكان. اشرح برنامج الإسكان ميسور التكلفة (Boma Yangu) وعملية التسجيل والمساهمة الطوعية. هام: وجه المستخدم إلى بوابة Boma Yangu لعرض المشاريع واشرح معايير الأهلية للتخصيص. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمستشار لبرامج الإسكان. اشرح برنامج الإسكان ميسور التكلفة (Boma Yangu) وعملية التسجيل والمساهمة الطوعية. هام: وجه المستخدم إلى بوابة Boma Yangu لعرض المشاريع واشرح معايير الأهلية للتخصيص. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.",
     findJobsPrompt:
-      "تصرف كمدرب مهني للخدمة العامة. وجه المستخدم حول إنشاء ملف تعريفي والتقدم للوظائف الشاغرة عبر بوابة لجنة الخدمة العامة (PSC). هام: انصح المستخدم بإبقاء شهاداته الأكاديمية جاهزة ومراجعة موقع PSC بانتظام أو الصحف اليومية المحلية لإعلانات MyGov. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمدرب مهني للخدمة العامة. وجه المستخدم حول إنشاء ملف تعريفي والتقدم للوظائف الشاغرة عبر بوابة لجنة الخدمة العامة (PSC). هام: انصح المستخدم بإبقاء شهاداته الأكاديمية جاهزة ومراجعة موقع PSC بانتظام أو الصحف اليومية المحلية لإعلانات MyGov. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'.",
     justChatPrompt:
-      "تصرف كرفيق محلي ودود. كن مهذبًا، ومفيدًا، ومطلعًا على الثقافة الكينية والحياة اليومية. هام: ذكّر المستخدم أنه بينما يمكنك الدردشة حول أي شيء، فإن نقطة قوتك الرئيسية هي مساعدتهم في تصفح خدمات الحكومة الكينية مثل **الهويات** و**الضرائب** و**تسجيل الشركات**. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'."
+      "تصرف كرفيق محلي ودود. كن مهذبًا، ومفيدًا، ومطلعًا على الثقافة الكينية والحياة اليومية. هام: ذكّر المستخدم أنه بينما يمكنك الدردشة حول أي شيء، فإن نقطة قوتك الرئيسية هي مساعدتهم في تصفح خدمات الحكومة الكينية مثل **الهويات** و**الضرائب** و**تسجيل الشركات**. قاعدة: أشر دائمًا إلى التطبيق باسم \'Genie AI\'."
   },
   common: {
     cancel: 'إلغاء',
@@ -1976,7 +1980,7 @@ export default {
       lifecycle:
         'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.",
       reviewHandoff:
         'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
       piiReview:
@@ -2236,7 +2240,7 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        adjust: "Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.",
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {

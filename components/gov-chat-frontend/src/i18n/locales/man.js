@@ -514,17 +514,21 @@ export default {
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
+        "Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{\'{\'}count{\'}\'} file(s) deleted.",
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
-      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
-      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
+      deletePartialFailure: "{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}",
+      deleteAllFailed: "All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}",
+      deleteRefuseReason: "{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.",
       retractAllFailed: 'Fayil {count} bee filita: {detail}',
       uploadSuccessMultiple: 'Fayil {count} yeleta benta.',
       linkSubmitSuccess: '"{fileName}" ñiningta ani a marata benta.',
       actionSuccess: 'Baara "{action}" fayil {fileId} to benta.',
-      metadataUpdateSuccess: 'Metadeta fayil {fileId} yailamata.'
+      metadataUpdateSuccess: 'Metadeta fayil {fileId} yailamata.',
+      deletePartialNotice:
+        "{\'{\'{\'}\'}blocked{\'}\'} selected file(s) cannot be deleted ({\'{\'{\'}\'}reason{\'}\'}) — only the other {\'{\'{\'}\'}n{\'}\'} will be deleted.",
+      confirmDeleteSkipped:
+        "{\'{\'{\'}\'}count{\'}\'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
     },
     queryInspector: {
       search: 'A nyining',
@@ -739,7 +743,7 @@ export default {
     chatTitle: 'Kuma Toh',
     chatTitlePlaceholder: 'Kuma toh kura nyining',
     deleteFolder: 'Folda Fiti',
-    deleteFolderConfirm: "I lafiya la ka '{name}' folda fiti le ti?",
+    deleteFolderConfirm: "I lafiya la ka \'{name}\' folda fiti le ti?",
     chatsMoveWarning: 'Nying folda kono kumal bee si tita folda-ceng-to.',
     weatherTitle: 'Sanoo Kibaroo',
     weatherLoading: 'Sanoo kibaro ka looti...',
@@ -1132,7 +1136,7 @@ export default {
       male: 'Kee',
       female: 'Muso',
       other: 'Doo',
-      preferNot: "N ti lafiya k'a fo"
+      preferNot: "N ti lafiya k\'a fo"
     },
     maritalStatus: {
       single: 'Muso/Kee ti muta (Singiri)',
@@ -1279,23 +1283,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "Jerbal āinwōt juon ri-jel̦ā kōn rejistōr an armij ro ilo Kenya. Kōmel̦el̦eik buñtōn ko ñan bōk National ID (Maisha Namba) ak ukōt juon me ear joko. MEN EAUJELOK: Lelok juon laajrak ealikkar kōn peba ko rej aikuji (āinwōt Peba in L̦otak, kopi in ID ko an jinen im jemān) im kappe armij eo bwe en etal ñan Huduma Centre ak opij an Registrar of Persons eo epaaktata. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
+      "Jerbal āinwōt juon ri-jel̦ā kōn rejistōr an armij ro ilo Kenya. Kōmel̦el̦eik buñtōn ko ñan bōk National ID (Maisha Namba) ak ukōt juon me ear joko. MEN EAUJELOK: Lelok juon laajrak ealikkar kōn peba ko rej aikuji (āinwōt Peba in L̦otak, kopi in ID ko an jinen im jemān) im kappe armij eo bwe en etal ñan Huduma Centre ak opij an Registrar of Persons eo epaaktata. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.",
     payTaxesPrompt:
-      "Jerbal āinwōt juon ri-tōl an KRA (Kenya Revenue Authority). Kōmel̦el̦eik wāween kōllā taaj, kajjitōk kōn KRA PIN, ak bar kōm̦m̦an password ekāāl ilo portal an iTax. MEN EAUJELOK: Kakememej armij eo kōn Raan 30 in Juun bwe eñin ej jem̦l̦o̦k eo an taaj kōn iiō eo im tōl er ilo an kōllā Nil returns ñe ejjel̦o̦k wōr aer m̦ōni. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
+      "Jerbal āinwōt juon ri-tōl an KRA (Kenya Revenue Authority). Kōmel̦el̦eik wāween kōllā taaj, kajjitōk kōn KRA PIN, ak bar kōm̦m̦an password ekāāl ilo portal an iTax. MEN EAUJELOK: Kakememej armij eo kōn Raan 30 in Juun bwe eñin ej jem̦l̦o̦k eo an taaj kōn iiō eo im tōl er ilo an kōllā Nil returns ñe ejjel̦o̦k wōr aer m̦ōni. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.",
     startBusinessPrompt:
-      "Jerbal āinwōt juon ri-kappe kōn būjinij ilo jikin jerbal ko an eCitizen. Tōl armij eo ilo an kōjparok āt an būjinij im rejistōr kōmboni ilo Kenya. MEN EAUJELOK: Kōmel̦el̦eik on̦ean pukot āt im rejistōr kiiō, im jilkinl̦o̦k armij eo ñan portal em̦ool an eCitizen bwe en dedel̦o̦k application eo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
+      "Jerbal āinwōt juon ri-kappe kōn būjinij ilo jikin jerbal ko an eCitizen. Tōl armij eo ilo an kōjparok āt an būjinij im rejistōr kōmboni ilo Kenya. MEN EAUJELOK: Kōmel̦el̦eik on̦ean pukot āt im rejistōr kiiō, im jilkinl̦o̦k armij eo ñan portal em̦ool an eCitizen bwe en dedel̦o̦k application eo. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.",
     findHealthcarePrompt:
-      "Jerbal āinwōt juon ri-tōl ilo jikin jipañ ko an ājmour. Lelok melele kōn oktak jān NHIF ñan SHIF (Social Health Insurance Fund) im ewi wāween rejistōr. MEN EAUJELOK: Kwal̦o̦k code ko an USSD (āinwōt *263#) ak website ko ñan rejistōr im kōmel̦el̦eik em̦m̦an ko an jipañ in ājmour an aolep. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
+      "Jerbal āinwōt juon ri-tōl ilo jikin jipañ ko an ājmour. Lelok melele kōn oktak jān NHIF ñan SHIF (Social Health Insurance Fund) im ewi wāween rejistōr. MEN EAUJELOK: Kwal̦o̦k code ko an USSD (āinwōt *263#) ak website ko ñan rejistōr im kōmel̦el̦eik em̦m̦an ko an jipañ in ājmour an aolep. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.",
     educationServicesPrompt:
-      "Jerbal āinwōt juon ri-kappe kōn jikuul̦. Kōnono kōn CBC curriculum, NEMIS registration, ak jikin ilo jikuul̦ el̦ap ikkijeen KUCCPS. MEN EAUJELOK: Kōmel̦el̦eik ewi wāween jemān im jinen remaron̦ lale jem̦l̦o̦k in ekkatak ko ikkijeen SMS ak portal an KNEC ñe rej wal̦o̦k. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
+      "Jerbal āinwōt juon ri-kappe kōn jikuul̦. Kōnono kōn CBC curriculum, NEMIS registration, ak jikin ilo jikuul̦ el̦ap ikkijeen KUCCPS. MEN EAUJELOK: Kōmel̦el̦eik ewi wāween jemān im jinen remaron̦ lale jem̦l̦o̦k in ekkatak ko ikkijeen SMS ak portal an KNEC ñe rej wal̦o̦k. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.",
     transportLicensesPrompt:
-      "Jerbal āinwōt juon ri-tōl an jikin jerbal ko an NTSA. Kōmel̦el̦eik wāween kōkāāl laijen in tōrreep, etale wa ko, ak jerbale account an TIMS. MEN EAUJELOK: Tōl armij eo ilo wāween an deļo̧ñ ilo portal an eCitizen NTSA ñan kajjitōk kōn Smart DL ak kāālet iien ñan etale wa eo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
+      "Jerbal āinwōt juon ri-tōl an jikin jerbal ko an NTSA. Kōmel̦el̦eik wāween kōkāāl laijen in tōrreep, etale wa ko, ak jerbale account an TIMS. MEN EAUJELOK: Tōl armij eo ilo wāween an deļo̧ñ ilo portal an eCitizen NTSA ñan kajjitōk kōn Smart DL ak kāālet iien ñan etale wa eo. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.",
     housingProgramsPrompt:
-      "Jerbal āinwōt juon ri-kappe kōn pōrōkram̦ in m̦ōn em̧m̧akūt. Kōmel̦el̦eik Affordable Housing Program (Boma Yangu) rejistōr im wāween kōllā ilo anan. MEN EAUJELOK: Tōl armij eo ñan portal an Boma Yangu bwe en lo jerbal ko im kōmel̦el̦eik kakien ko ñan bōk juon m̦weo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
+      "Jerbal āinwōt juon ri-kappe kōn pōrōkram̦ in m̦ōn em̧m̧akūt. Kōmel̦el̦eik Affordable Housing Program (Boma Yangu) rejistōr im wāween kōllā ilo anan. MEN EAUJELOK: Tōl armij eo ñan portal an Boma Yangu bwe en lo jerbal ko im kōmel̦el̦eik kakien ko ñan bōk juon m̦weo. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.",
     findJobsPrompt:
-      "Jerbal āinwōt juon ri-kappe kōn jerbal ilo kien. Tōl armij eo ilo an kōm̦m̦an pōrofael im kajjitōk kōn jerbal ko reppālõt ikkijeen portal an Public Service Commission (PSC). MEN EAUJELOK: Kappe armij eo bwe en kōpooj peba in jikuul̦ ko an im lale website an PSC ak nuujpeba ko kōn kōkalikkar an MyGov. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
+      "Jerbal āinwōt juon ri-kappe kōn jerbal ilo kien. Tōl armij eo ilo an kōm̦m̦an pōrofael im kajjitōk kōn jerbal ko reppālõt ikkijeen portal an Public Service Commission (PSC). MEN EAUJELOK: Kappe armij eo bwe en kōpooj peba in jikuul̦ ko an im lale website an PSC ak nuujpeba ko kōn kōkalikkar an MyGov. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.",
     justChatPrompt:
-      "Jerbal āinwōt juon m̦ōttam̦ em̦m̦an. Kōm̦m̦an māniti, jipañ, im jel̦ā kōn mānit an Kenya im mour an kajojo raan. MEN EAUJELOK: Kakememej armij eo bwe meñe kwomaron̦ bwebwenato kōn jabdewōt men, kajoor eo am el̦aptata ej jipañ er ilo jikin jerbal ko an kien Kenya āinwōt **ID ko**, **Taaj ko**, im **Rejistōr Būjinij**. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'."
+      "Jerbal āinwōt juon m̦ōttam̦ em̦m̦an. Kōm̦m̦an māniti, jipañ, im jel̦ā kōn mānit an Kenya im mour an kajojo raan. MEN EAUJELOK: Kakememej armij eo bwe meñe kwomaron̦ bwebwenato kōn jabdewōt men, kajoor eo am el̦aptata ej jipañ er ilo jikin jerbal ko an kien Kenya āinwōt **ID ko**, **Taaj ko**, im **Rejistōr Būjinij**. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'."
   },
   common: {
     cancel: 'A bula',
@@ -1760,7 +1764,7 @@ export default {
       topics: 'kuuolu',
       unpublish: {
         title: 'Falsifya bugbugu',
-        body: "Wannan na tsayawar ba da {name} ga wakilan RAG nan da nan. Babban bundle zip da tarihin siguna suna nan; ma'ajiyar ta koma 'Ana Duba' domin gyara. Sake bugbugu sannan ka yi Ingest don sake ba da.",
+        body: "Wannan na tsayawar ba da {name} ga wakilan RAG nan da nan. Babban bundle zip da tarihin siguna suna nan; ma\'ajiyar ta koma \'Ana Duba\' domin gyara. Sake bugbugu sannan ka yi Ingest don sake ba da.",
         confirm: 'Falsifya bugbugu'
       },
       lane: {
@@ -1971,7 +1975,7 @@ export default {
       lifecycle:
         'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.",
       reviewHandoff:
         'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
       piiReview:
@@ -2232,7 +2236,7 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        adjust: "Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.",
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {
@@ -2683,7 +2687,7 @@ export default {
         negativeRandom: 'Off-domain',
         meta: 'Meta',
         nearMiss: 'Near miss',
-        hint: "Forbidden-derived rows scale with the repository's forbidden tag count — they cannot be set here."
+        hint: "Forbidden-derived rows scale with the repository\'s forbidden tag count — they cannot be set here."
       },
       cls: {
         nearMiss: 'Near miss',

@@ -2850,7 +2850,17 @@ export default {
         answerable: 'ответ найдётся',
         weak: 'слабое совпадение',
         unanswerable: 'нет в корпусе',
-        unknown: 'неизвестно'
+        unknown: 'неизвестно',
+        title: 'Проверка корпуса — сводка',
+        close: 'Закрыть сводку',
+        chunksScanned: 'фрагментов корпуса проверено',
+        headLeg: 'Вердикт Head',
+        headNotClaimed: 'без привязки',
+        corpusLeg: 'Покрытие корпуса',
+        files: 'Файлы-источники',
+        colScore: 'Оценка rerank',
+        colFile: 'Файл',
+        colContent: 'Содержимое фрагмента'
       }
     }
   },

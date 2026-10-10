@@ -178,7 +178,34 @@ async function generateSuite(body) {
       credentials: [{ type: 'password', value: SMOKE_PW, temporary: false }]
     }
   });
-  if (mk.status !== 201) throw new Error('user create ' + mk.status);
+  if (mk.status === 409) {
+    // Self-heal: a leftover from an interrupted run owns this username —
+    // delete it and create fresh (the user is the smoke's own fixture).
+    console.log('[2] leftover smoke user found — replacing it');
+    const leftover = j(
+      await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/users?username=${SMOKE_USER}&exact=true`, {
+        token: ADMIN_TOKEN
+      })
+    );
+    for (const u of leftover) {
+      await req('DELETE', `${AUTH_BASE}/admin/realms/${REALM}/users/${u.id}`, { token: ADMIN_TOKEN });
+    }
+    const retry = await req('POST', `${AUTH_BASE}/admin/realms/${REALM}/users`, {
+      token: ADMIN_TOKEN,
+      json: {
+        username: SMOKE_USER,
+        email: 'okf-smoke-18d@example.invalid',
+        emailVerified: true,
+        firstName: 'Smoke',
+        lastName: 'OneEightD',
+        enabled: true,
+        credentials: [{ type: 'password', value: SMOKE_PW, temporary: false }]
+      }
+    });
+    if (retry.status !== 201) throw new Error('user create after cleanup ' + retry.status);
+  } else if (mk.status !== 201) {
+    throw new Error('user create ' + mk.status);
+  }
   const users = j(
     await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/users?username=${SMOKE_USER}&exact=true`, {
       token: ADMIN_TOKEN

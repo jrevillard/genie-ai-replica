@@ -466,6 +466,81 @@
         </DsSpinner>
 
         <div v-if="suite" class="okf-headtest__suite">
+          <!-- 1-8g: the click-test summary panel — ALL statistics for the
+               probed query: the HEAD verdict, the corpus-coverage verdict
+               with its exact reason, reference files, and the rerank-ranked
+               chunks. David: "it should popup a panel with a summary of ALL
+               the statistics". -->
+          <div v-if="probePanel" ref="probePanel" class="okf-headtest__probe-panel">
+            <div class="okf-headtest__probe-head">
+              <h4 class="okf-headtest__pane-title">
+                {{ translate('okf.headTest.probe.title', 'Corpus test — summary') }}
+              </h4>
+              <button
+                type="button"
+                class="okf-headtest__row-btn"
+                :title="translate('okf.headTest.probe.close', 'Close the summary')"
+                @click="probePanel = null"
+              >
+                ×
+              </button>
+            </div>
+            <p class="okf-headtest__probe-query">
+              <code>{{ probePanel.query }}</code>
+              <span class="okf-headtest__probe-meta">
+                {{ probePanel.docs }} {{ translate('okf.headTest.probe.chunksScanned', 'corpus chunks scanned') }} ·
+                {{ probePanel.elapsed_ms }}ms
+              </span>
+            </p>
+            <div class="okf-headtest__probe-legs">
+              <div class="okf-headtest__probe-leg">
+                <strong>{{ translate('okf.headTest.probe.headLeg', 'Head verdict') }}</strong>
+                <DsPill v-if="probePanel.head && probePanel.head.claimed" variant="info">
+                  {{ probePanel.head.claim || 'claim' }}
+                  <template v-if="probePanel.head.score != null"> · {{ probePanel.head.score }}</template>
+                </DsPill>
+                <DsPill v-else variant="secondary">
+                  {{ translate('okf.headTest.probe.headNotClaimed', 'does not claim') }}
+                </DsPill>
+              </div>
+              <div class="okf-headtest__probe-leg">
+                <strong>{{ translate('okf.headTest.probe.corpusLeg', 'Corpus coverage') }}</strong>
+                <DsPill v-if="probePanel.verdict === 'answerable'" variant="success">
+                  {{ translate('okf.headTest.probe.answerable', 'answerable') }} · {{ probePanel.top_score }}
+                </DsPill>
+                <DsPill v-else-if="probePanel.verdict === 'weak'" variant="warning">
+                  {{ translate('okf.headTest.probe.weak', 'weak match') }} · {{ probePanel.top_score }}
+                </DsPill>
+                <DsPill v-else-if="probePanel.verdict === 'unanswerable'" variant="danger">
+                  {{ translate('okf.headTest.probe.unanswerable', 'not in corpus') }} · {{ probePanel.top_score }}
+                </DsPill>
+                <DsPill v-else variant="secondary">
+                  {{ translate('okf.headTest.probe.unknown', 'unknown') }}
+                </DsPill>
+              </div>
+            </div>
+            <p v-if="probePanel.reason" class="okf-headtest__probe-reason">{{ probePanel.reason }}</p>
+            <div v-if="probePanel.files && probePanel.files.length" class="okf-headtest__probe-files">
+              <strong>{{ translate('okf.headTest.probe.files', 'Reference files') }}</strong>
+              <DsTag v-for="f in probePanel.files" :key="f.id"> {{ f.name }} ({{ f.chunks }}) </DsTag>
+            </div>
+            <table v-if="probePanel.top_chunks && probePanel.top_chunks.length" class="okf-headtest__scores">
+              <thead>
+                <tr>
+                  <th>{{ translate('okf.headTest.probe.colScore', 'Rerank score') }}</th>
+                  <th>{{ translate('okf.headTest.probe.colFile', 'File') }}</th>
+                  <th>{{ translate('okf.headTest.probe.colContent', 'Chunk content') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(c, ci) in probePanel.top_chunks" :key="ci">
+                  <td>{{ c.score }}</td>
+                  <td>{{ c.file || '—' }}</td>
+                  <td class="okf-headtest__probe-preview">{{ c.preview }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <h4 class="okf-headtest__suite-title">
             {{ translate('okf.headTest.suites.current', 'Current suite') }}
             <code>{{ suite.suite_key }}</code>
@@ -1086,6 +1161,10 @@ export default {
       runs: [],
       // 1-8f: persisted suites (kind 'suite') — the Load targets.
       savedSuites: [],
+      // 1-8g: the click-test's full result (head verdict + corpus verdict +
+      // reason + reference files + rerank-ranked chunks) — rendered as the
+      // summary panel at the top of the Suites tab.
+      probePanel: null,
       // 1-8f: optional name for the next generated suite.
       suiteName: '',
       // 1-8c: user-controlled per-class query counts (server clamps).
@@ -1327,7 +1406,15 @@ export default {
       const rows = [];
       const push = (arr, kind) =>
         (Array.isArray(arr) ? arr : []).forEach((r) =>
-          rows.push({ query: r.query, kind, cls: r.cls || null, source: r.source || null })
+          rows.push({
+            query: r.query,
+            kind,
+            cls: r.cls || null,
+            source: r.source || null,
+            // 1-8g: the click-test's coverage verdict rides the row —
+            // dropping it here blanked the Corpus column (live bug).
+            lastProbe: r.lastProbe || null
+          })
         );
       push(s.payload.positive, 'positive');
       push(s.payload.negative, 'negative');
@@ -2263,6 +2350,12 @@ export default {
           if (r && r.query === row.query) r.lastProbe = probe;
         }
       }
+      // 1-8g: popup the summary panel with ALL statistics for this query.
+      this.probePanel = res.result;
+      this.$nextTick(() => {
+        const el = this.$refs.probePanel;
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
     },
     /** 1-8g: hover text for a probe chip — score + doc count + when. */
     probeTip(p) {
@@ -2562,6 +2655,66 @@ export default {
   margin: var(--space-sm) 0 0;
   font-size: var(--text-sm);
   font-weight: 600;
+}
+/* 1-8g — the click-test summary panel (all statistics for one query). */
+.okf-headtest__probe-panel {
+  margin: var(--space-sm) 0;
+  padding: var(--space-sm);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+.okf-headtest__probe-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.okf-headtest__probe-query {
+  margin: var(--space-xs) 0;
+  word-break: break-word;
+}
+.okf-headtest__probe-query code {
+  font-size: var(--text-sm);
+}
+.okf-headtest__probe-meta {
+  display: block;
+  margin-top: var(--space-2xs);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.okf-headtest__probe-legs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin: var(--space-xs) 0;
+}
+.okf-headtest__probe-leg {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+}
+.okf-headtest__probe-reason {
+  margin: var(--space-xs) 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.okf-headtest__probe-files {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: var(--space-xs) 0;
+  font-size: var(--text-sm);
+}
+.okf-headtest__probe-preview {
+  max-width: 30rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
 }
 .okf-headtest__summary {
   display: flex;

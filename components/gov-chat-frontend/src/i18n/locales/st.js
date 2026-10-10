@@ -2854,7 +2854,17 @@ export default {
         answerable: 'e ka araba',
         weak: 'tsʼebetso e sa matla',
         unanswerable: 'ha e korpusing',
-        unknown: 'ea sa tsejoeng'
+        unknown: 'ea sa tsejoeng',
+        title: 'Lekala la korpusi — kakaretso',
+        close: 'Kwala kakaretso',
+        chunksScanned: 'liphisego tsa korpusi li hlahlobiloe',
+        headLeg: 'Uamuzi oa Head',
+        headNotClaimed: 'ha ho boikakabelo',
+        corpusLeg: 'Tšireletseho ea korpusi',
+        files: 'Lifaele tsa motheo',
+        colScore: 'Sekala sa rerank',
+        colFile: 'Faele',
+        colContent: 'Tsa kahare tsa phisege'
       }
     }
   },

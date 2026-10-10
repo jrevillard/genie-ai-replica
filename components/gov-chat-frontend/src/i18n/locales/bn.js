@@ -2838,7 +2838,17 @@ export default {
         answerable: 'উত্তর আছে',
         weak: 'দুর্বল মিল',
         unanswerable: 'কর্পাসে নেই',
-        unknown: 'অজানা'
+        unknown: 'অজানা',
+        title: 'কর্পাস পরীক্ষা — সারসংক্ষেপ',
+        close: 'সারসংক্ষেপ বন্ধ করুন',
+        chunksScanned: 'টি কর্পাস চাঙ্ক স্ক্যান হয়েছে',
+        headLeg: 'Head রায়',
+        headNotClaimed: 'দাবি নেই',
+        corpusLeg: 'কর্পাস কভারেজ',
+        files: 'রেফারেন্স ফাইল',
+        colScore: 'Rerank স্কোর',
+        colFile: 'ফাইল',
+        colContent: 'চাঙ্কের বিষয়বস্তু'
       }
     }
   },

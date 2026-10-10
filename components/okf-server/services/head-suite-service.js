@@ -990,6 +990,57 @@ function probeVerdict(topScore) {
   return 'unanswerable';
 }
 
+// 1-8g (David): "the analysis of unanswerable queries must state exactly
+// why it is unanswerable". Deterministic evidence-based reason built from
+// the rerank-best chunk: the score gap PLUS whether the corpus even
+// mentions the question's terms (topical overlap vs no coverage at all).
+const PROBE_STOPWORDS = new Set([
+  'what', 'are', 'the', 'how', 'often', 'should', 'for', 'of', 'in', 'a', 'an',
+  'is', 'do', 'does', 'to', 'and', 'with', 'on', 'at', 'by', 'from', 'can',
+  'be', 'it', 'this', 'that', 'which', 'when', 'who', 'whom', 'list', 'give',
+  'tell', 'about', 'there', 'any', 'have', 'has', 'was', 'were', 'adults',
+  'people', 'patients', 'user', 'users', 'please', 'me', 'my', 'i', 'you',
+  'your', 'their', 'they', 'its', 'new', 'latest', 'current', 'best'
+]);
+
+function probeReason(verdict, topScore, best, query) {
+  const preview = best && best.text ? best.text.replace(/\s+/g, ' ').trim().slice(0, 140) : '';
+  if (verdict === 'unknown') return 'no rerank score — the corpus ranking could not be evaluated';
+  if (verdict === 'answerable') {
+    return (
+      `Best chunk scores ${topScore} (≥ 0.5 answer bar)` +
+      (preview ? ` — "${preview}"` : '')
+    );
+  }
+  // Content-term overlap between the question and the best candidate.
+  const terms = String(query || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3 && !PROBE_STOPWORDS.has(w));
+  const hay = (best && best.text ? best.text : '').toLowerCase();
+  const overlap = terms.filter((t) => hay.includes(t));
+  if (verdict === 'weak') {
+    if (overlap.length >= 2) {
+      return (
+        `Best chunk scores only ${topScore} (needs ≥ 0.5). The corpus discusses ${overlap.slice(0, 3).join(', ')} ` +
+        `but the closest content — "${preview}" — does not answer this specific question`
+      );
+    }
+    return `Best chunk scores only ${topScore} (needs ≥ 0.5); the closest content — "${preview}" — is only loosely related`;
+  }
+  // unanswerable
+  if (overlap.length >= 2) {
+    return (
+      `The corpus mentions ${overlap.slice(0, 3).join(', ')} but no chunk answers this question: ` +
+      `the best candidate ("${preview}") scores just ${topScore} where an answer needs ≥ 0.5`
+    );
+  }
+  return (
+    `No corpus content matches this question — the best candidate scores just ${topScore}` +
+    (preview ? ` ("${preview}")` : '')
+  );
+}
+
 async function probeSuiteQuery(repoId, suiteKey, payload = {}, opts = {}) {
   return withSpan('okf.headsuite.probe', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
@@ -1028,21 +1079,52 @@ async function probeSuiteQuery(repoId, suiteKey, payload = {}, opts = {}) {
       throw err;
     }
 
-    // 2. Top-K chunks from THIS repo's ingested corpus.
+    // 2. Top-K chunks from THIS repo's ingested corpus (file_ids ride along
+    //    for the reference-files summary).
     const rows = (
       await (
         await db.query(
           `FOR c IN \`${graphName}_SOURCE\` ` +
             'LET s = APPROX_NEAR_COSINE(c.embedding, @emb) ' +
             'SORT s DESC LIMIT @k ' +
-            'RETURN { text: c.text, score: s }',
+            'RETURN { text: c.text, score: s, file_ids: c.file_ids || [] }',
           { emb, k: PROBE_TOP_K }
         )
       ).all()
-    ).map((r) => ({ text: String(r.text || '').slice(0, PROBE_TEXT_CAP), score: Number(r.score) || 0 }));
+    ).map((r) => ({
+      text: String(r.text || '').slice(0, PROBE_TEXT_CAP),
+      score: Number(r.score) || 0,
+      file_ids: Array.isArray(r.file_ids) ? r.file_ids : []
+    }));
 
     const at = new Date().toISOString();
+    const t0 = Date.now();
     const probe = { at, query, docs: rows.length, top_score: null, verdict: 'unknown' };
+    let rerankTop = [];
+
+    // 3b. The HEAD verdict for the same query — the summary panel shows
+    // BOTH legs (domain routing AND corpus coverage) in one view. This is
+    // the full answer to "passed the head test but the chatbot fails":
+    // the head leg and the corpus leg, side by side.
+    let head = null;
+    try {
+      const rt = await headTestService.routingTest(repoId, { query }, { authz: opts.authz });
+      const ut = rt && rt.under_test;
+      if (ut) {
+        head = {
+          claimed: ut.head_claimed === true,
+          claim: ut.head_claim || null,
+          score:
+            typeof ut.score === 'number'
+              ? Number(ut.score.toFixed(4))
+              : typeof ut.similarity === 'number'
+                ? Number(ut.similarity.toFixed(4))
+                : null
+        };
+      }
+    } catch (e) {
+      head = { claimed: null, claim: null, score: null, note: e.message };
+    }
 
     // 3. Rerank through the SAME endpoint the pipeline grounds on.
     const rerankUrl = process.env.OKF_RERANK_ENDPOINT || '';
@@ -1075,11 +1157,54 @@ async function probeSuiteQuery(repoId, suiteKey, payload = {}, opts = {}) {
         const top = decoded.reduce((m, r) => Math.max(m, Number(r && r.score) || 0), 0);
         probe.top_score = Number(top.toFixed(4));
         probe.verdict = probeVerdict(probe.top_score);
+        // 1-8g (David): state EXACTLY why a query is unanswerable/weak —
+        // the rerank-best chunk is the evidence. Keep it rerank-ordered.
+        rerankTop = decoded
+          .slice()
+          .sort((a, b) => (Number(b && b.score) || 0) - (Number(a && a.score) || 0))
+          .map((r) => ({
+            score: Number(Number(r && r.score).toFixed(4)),
+            text: rows[Number(r && r.index)] ? rows[Number(r && r.index)].text : '',
+            file_ids: (rows[Number(r && r.index)] && rows[Number(r && r.index)].file_ids) || []
+          }));
+        probe.reason = probeReason(probe.verdict, probe.top_score, rerankTop[0], query);
       } catch (e) {
         logger.error('head-suite.probe.rerank_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message });
         probe.note = `rerank failed: ${e.message}`;
       }
     }
+
+    // 3c. Reference FILES for the top chunks (David: "a summary of the
+    // query stats — number of chunks and reference files etc." must be
+    // displayed). Resolved to file names via the files collection.
+    const chunkTop = (rerankTop.length ? rerankTop : rows.slice(0, 8)).slice(0, 8);
+    const fileRefs = {};
+    for (const c of chunkTop) {
+      for (const fid of c.file_ids || []) {
+        if (!fileRefs[fid]) fileRefs[fid] = { id: fid, chunks: 0 };
+        fileRefs[fid].chunks += 1;
+      }
+    }
+    const fileIds = Object.keys(fileRefs);
+    if (fileIds.length) {
+      try {
+        const fRows = await (
+          await db.query('FOR f IN files FILTER f._id IN @ids RETURN { id: f._id, name: f.file_name }', {
+            ids: fileIds
+          })
+        ).all();
+        for (const f of fRows) {
+          if (fileRefs[f.id] && f.name) fileRefs[f.id].name = f.name;
+        }
+      } catch (e) {
+        logger.error('head-suite.probe.file_lookup_failed', { repo_id: repoId, error: e.message });
+      }
+    }
+    const files = fileIds.map((id) => ({
+      id,
+      name: fileRefs[id].name || id,
+      chunks: fileRefs[id].chunks
+    }));
 
     // 4. Persist on EVERY matching row (positives and negatives share text
     //    space only by contradiction-check, so match both) and return.
@@ -1110,11 +1235,15 @@ async function probeSuiteQuery(repoId, suiteKey, payload = {}, opts = {}) {
     return {
       suite_key: suiteKey,
       ...probe,
-      top_chunks: rows
-        .slice()
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 3)
-        .map((r) => ({ score: Number(r.score.toFixed(4)), preview: r.text.slice(0, 160) }))
+      head,
+      elapsed_ms: Date.now() - t0,
+      files,
+      top_chunks: chunkTop.map((c) => ({
+        score: c.score,
+        preview: c.text.slice(0, 200),
+        file_ids: c.file_ids || [],
+        file: (c.file_ids || []).map((fid) => (fileRefs[fid] && fileRefs[fid].name) || fid).join(', ') || null
+      }))
     };
   });
 }
@@ -1781,6 +1910,7 @@ module.exports = {
   deleteSuite,
   probeSuiteQuery,
   probeVerdict,
+  probeReason,
   runSuite,
   listRuns,
   explainSuiteFailures,

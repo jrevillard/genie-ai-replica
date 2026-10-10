@@ -529,8 +529,7 @@ export default {
       metadataUpdateSuccess: 'تم تحديث البيانات الوصفية للملف {fileId}.',
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} من الملفات المحددة لا يمكن حذفها ({'{'{'}'}reason{'}'}) — سيُحذف الملفات الأخرى فقط بعدد {'{'{'}'}n{'}'}.",
-      confirmDeleteSkipped:
-        "{'{'{'}'}count{'}'} من الملفات المستوعبة/قيد الاستيعاب ستُتخطى — اسحبها أولًا لحذفها."
+      confirmDeleteSkipped: "{'{'{'}'}count{'}'} من الملفات المستوعبة/قيد الاستيعاب ستُتخطى — اسحبها أولًا لحذفها."
     },
     queryInspector: {
       search: 'بحث',

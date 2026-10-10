@@ -528,8 +528,7 @@ export default {
       metadataUpdateSuccess: 'Metadata ya faili {fileId} imesasishwa.',
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} faili zilizochaguliwa haziwezi kufutwa ({'{'{'}'}reason{'}'}) — zingine {'{'{'}'}n{'}'} tu zitafutwa.",
-      confirmDeleteSkipped:
-        "{'{'{'}'}count{'}'} faili zilizoingizwa/zinaingizwa ZITARUKWA — rejesha kwanza kuzifuta."
+      confirmDeleteSkipped: "{'{'{'}'}count{'}'} faili zilizoingizwa/zinaingizwa ZITARUKWA — rejesha kwanza kuzifuta."
     },
     queryInspector: {
       search: 'Tafuta',

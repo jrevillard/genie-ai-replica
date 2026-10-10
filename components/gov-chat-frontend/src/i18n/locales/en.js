@@ -41,7 +41,7 @@ export default {
     CG: 'Congo',
     CD: 'Congo, Democratic Republic of the',
     CR: 'Costa Rica',
-    CI: "Côte d\'Ivoire",
+    CI: "Côte d'Ivoire",
     HR: 'Croatia',
     CU: 'Cuba',
     CY: 'Cyprus',
@@ -514,21 +514,21 @@ export default {
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
-        "Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{\'{\'}count{\'}\'} file(s) deleted.",
+        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}",
-      deleteAllFailed: "All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}",
-      deleteRefuseReason: "{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.",
+      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
+      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
+      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
       retractAllFailed: 'All {count} file(s) failed: {detail}',
       uploadSuccessMultiple: '{count} file(s) uploaded successfully.',
       linkSubmitSuccess: 'Successfully crawled and saved "{fileName}".',
       actionSuccess: 'Action "{action}" on file {fileId} was successful.',
       metadataUpdateSuccess: 'Metadata for file {fileId} was updated.',
       deletePartialNotice:
-        "{\'{\'{\'}\'}blocked{\'}\'} selected file(s) cannot be deleted ({\'{\'{\'}\'}reason{\'}\'}) — only the other {\'{\'{\'}\'}n{\'}\'} will be deleted.",
+        "{'{'{'}'}blocked{'}'} selected file(s) cannot be deleted ({'{'{'}'}reason{'}'}) — only the other {'{'{'}'}n{'}'} will be deleted.",
       confirmDeleteSkipped:
-        "{\'{\'{\'}\'}count{\'}\'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
+        "{'{'{'}'}count{'}'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
     },
     queryInspector: {
       search: 'Search',
@@ -743,7 +743,7 @@ export default {
     chatTitle: 'Chat Title',
     chatTitlePlaceholder: 'Enter a title for this chat',
     deleteFolder: 'Delete Folder',
-    deleteFolderConfirm: "Are you sure you want to delete \'{name}\' folder?",
+    deleteFolderConfirm: "Are you sure you want to delete '{name}' folder?",
     chatsMoveWarning: 'All chats in this folder will be moved to the default folder.',
     weatherTitle: 'Weather Forecast',
     collapse: 'Collapse sidebar',
@@ -857,7 +857,7 @@ export default {
     cat7: {
       name: '7. Transportation & Mobility',
       children:
-        "Driver\'s licenses and vehicle registration,Public transit and infrastructure,Traffic violations and fines,Road safety programs"
+        "Driver's licenses and vehicle registration,Public transit and infrastructure,Traffic violations and fines,Road safety programs"
     },
     cat8: {
       name: '8. Housing & Urban Development',
@@ -956,7 +956,7 @@ export default {
   userProfile: {
     title: 'User Profile',
     privacyInfo:
-      "By providing more information, you\'ll get more accurate and meaningful responses from the chatbot. Please review our",
+      "By providing more information, you'll get more accurate and meaningful responses from the chatbot. Please review our",
     privacyPolicyLink: 'Privacy Policy',
     tabComingSoon: 'This tab is under development and will be available soon.',
     saveSuccess: 'Profile saved successfully',
@@ -1027,7 +1027,7 @@ export default {
       landRecords: 'Land and property ownership records',
       idCard: 'National ID card number',
       passport: 'Passport details',
-      driversLicense: "Driver\'s license",
+      driversLicense: "Driver's license",
       voterId: 'Voter ID',
       ssn: 'Social Security / National Insurance Number',
       militaryRecords: 'Military service records',
@@ -1173,8 +1173,8 @@ export default {
       highSchool: 'High School',
       vocational: 'Vocational Training',
       associate: 'Associate Degree',
-      bachelor: "Bachelor\'s Degree",
-      master: "Master\'s Degree",
+      bachelor: "Bachelor's Degree",
+      master: "Master's Degree",
       doctoral: 'Doctoral Degree',
       professional: 'Professional Degree',
       other: 'Other'
@@ -1289,23 +1289,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents\' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as \'Genie AI\'.",
+      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as \'Genie AI\'.",
+      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as \'Genie AI\'.",
+      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as \'Genie AI\'.",
+      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as \'Genie AI\'.",
+      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as \'Genie AI\'.",
+      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as \'Genie AI\'.",
+      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as \'Genie AI\'.",
+      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as \'Genie AI\'."
+      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
   },
   common: {
     cancel: 'Cancel',
@@ -1375,7 +1375,7 @@ export default {
       detailsHint:
         'Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.',
       dashboardHint:
-        "Live view of this file\'s website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.",
+        "Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.",
       crawlLogHint:
         'Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.',
       ingestionLogHint:
@@ -1518,7 +1518,7 @@ export default {
         negativeRandom: 'Off-domain',
         meta: 'Meta',
         nearMiss: 'Near miss',
-        hint: "Forbidden-derived rows scale with the repository\'s forbidden tag count — they cannot be set here."
+        hint: "Forbidden-derived rows scale with the repository's forbidden tag count — they cannot be set here."
       },
       cls: {
         nearMiss: 'Near miss',
@@ -2276,7 +2276,7 @@ export default {
       lifecycle:
         'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.",
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
       reviewHandoff:
         'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
       piiReview:
@@ -2536,7 +2536,7 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.",
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {
@@ -2651,7 +2651,7 @@ export default {
       progressDownload: 'Downloading crawled content...',
       progressSplit: 'Splitting into concepts...',
       progressIngest: 'Adding concepts (batch [i] of [n])...',
-      postCrawlHint: "After the crawl finishes, you can turn it into an OKF repository from the file\'s Dashboard tab.",
+      postCrawlHint: "After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.",
       creating: 'Creating OKF repository...',
       createOk: 'OKF repository created. Opening the Studio to curate.',
       createOkRenamed: 'OKF repository created as "[name]". Opening the Studio to curate.',

@@ -512,20 +512,20 @@ export default {
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
-        "Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{\'{\'}count{\'}\'} file(s) deleted.",
+        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}",
-      deleteAllFailed: "All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}",
-      deleteRefuseReason: "{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.",
+      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
+      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
+      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
       retractAllFailed: '全部 {count} 个文件撤回失败：{detail}',
       uploadSuccessMultiple: '{count} 个文件上传成功。',
       linkSubmitSuccess: '成功爬取并保存 "{fileName}"。',
       actionSuccess: '对文件 {fileId} 的操作 "{action}" 成功。',
       metadataUpdateSuccess: '文件 {fileId} 的元数据已更新。',
       deletePartialNotice:
-        "{\'{\'{\'}\'}blocked{\'}\'} 个所选文件无法删除（{\'{\'{\'}\'}reason{\'}\'}）——只会删除其余的 {\'{\'{\'}\'}n{\'}\'} 个。",
-      confirmDeleteSkipped: "{\'{\'{\'}\'}count{\'}\'} 个已摄取/摄取中的文件将被跳过——请先撤回它们才能删除。"
+        "{'{'{'}'}blocked{'}'} 个所选文件无法删除（{'{'{'}'}reason{'}'}）——只会删除其余的 {'{'{'}'}n{'}'} 个。",
+      confirmDeleteSkipped: "{'{'{'}'}count{'}'} 个已摄取/摄取中的文件将被跳过——请先撤回它们才能删除。"
     },
     queryInspector: {
       search: '搜索',
@@ -740,7 +740,7 @@ export default {
     chatTitle: '聊天标题',
     chatTitlePlaceholder: '为此聊天输入标题',
     deleteFolder: '删除文件夹',
-    deleteFolderConfirm: "您确定要删除 \'{name}\' 文件夹吗？",
+    deleteFolderConfirm: "您确定要删除 '{name}' 文件夹吗？",
     chatsMoveWarning: '此文件夹中的所有聊天将移动到默认文件夹。',
     weatherTitle: '天气预报',
     weatherLoading: '正在加载天气数据...',
@@ -1954,7 +1954,7 @@ export default {
       lifecycle:
         'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.",
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
       reviewHandoff:
         'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
       piiReview:
@@ -2214,7 +2214,7 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.",
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {

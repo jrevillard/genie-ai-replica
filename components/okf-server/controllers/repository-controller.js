@@ -1587,7 +1587,10 @@ async function runTestSuite(req, res, next) {
     const headSuiteService = require('../services/head-suite-service');
     const run = await headSuiteService.runSuite(req.params.repo_id, req.params.suite_key, {
       authz: authzForService(req),
-      actor: actorFrom(req)
+      actor: actorFrom(req),
+      // 1-8g: the corpus probe leg defaults ON (Run All fills the Corpus
+      // column); scripts can opt out with {"probe": false}.
+      probe: !(req.body && req.body.probe === false)
     });
     res.status(200).json(run);
   } catch (err) {

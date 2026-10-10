@@ -41,7 +41,7 @@ export default {
     CG: 'Kongo',
     CD: 'Jamhuri ya Kidemokrasia ya Kongo',
     CR: 'Kosta Rika',
-    CI: "Cote d\'Ivoire",
+    CI: "Cote d'Ivoire",
     HR: 'Kroeshia',
     CU: 'Kuba',
     CY: 'Kupro',
@@ -515,21 +515,21 @@ export default {
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
-        "Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{\'{\'}count{\'}\'} file(s) deleted.",
+        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}",
-      deleteAllFailed: "All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}",
-      deleteRefuseReason: "{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.",
+      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
+      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
+      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
       retractAllFailed: 'Faili {count} zote zimeshindwa: {detail}',
       uploadSuccessMultiple: 'Faili {count} zimepakiwa kwa mafanikio.',
       linkSubmitSuccess: 'Imefanikiwa kutambaa na kuhifadhi "{fileName}".',
       actionSuccess: 'Kitendo "{action}" kwenye faili {fileId} kimefanikiwa.',
       metadataUpdateSuccess: 'Metadata ya faili {fileId} imesasishwa.',
       deletePartialNotice:
-        "{\'{\'{\'}\'}blocked{\'}\'} faili zilizochaguliwa haziwezi kufutwa ({\'{\'{\'}\'}reason{\'}\'}) — zingine {\'{\'{\'}\'}n{\'}\'} tu zitafutwa.",
+        "{'{'{'}'}blocked{'}'} faili zilizochaguliwa haziwezi kufutwa ({'{'{'}'}reason{'}'}) — zingine {'{'{'}'}n{'}'} tu zitafutwa.",
       confirmDeleteSkipped:
-        "{\'{\'{\'}\'}count{\'}\'} faili zilizoingizwa/zinaingizwa ZITARUKWA — rejesha kwanza kuzifuta."
+        "{'{'{'}'}count{'}'} faili zilizoingizwa/zinaingizwa ZITARUKWA — rejesha kwanza kuzifuta."
     },
     queryInspector: {
       search: 'Tafuta',
@@ -744,7 +744,7 @@ export default {
     chatTitle: 'Kichwa cha mazungumzo',
     chatTitlePlaceholder: 'Ingiza kichwa cha mazungumzo haya',
     deleteFolder: 'Futa Folda',
-    deleteFolderConfirm: "Una uhakika unataka kufuta folda ya \'{name}\'?",
+    deleteFolderConfirm: "Una uhakika unataka kufuta folda ya '{name}'?",
     chatsMoveWarning: 'Mazungumzo yote katika folda hii yatahamishwa kwenye folda ya chaguo-msingi.',
     weatherTitle: 'Utabiri wa Hali ya Hewa',
     weatherLoading: 'Inapakia data ya hali ya hewa...',
@@ -1290,23 +1290,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "Fanya kazi kama mtaalamu msaidizi wa usajili wa raia wa Kenya. Eleza hatua za kupata Kitambulisho cha Kitaifa (Maisha Namba) au kubadilisha kilichopotea. MUHIMU: Toa orodha iliyo wazi ya nyaraka zinazohitajika (mf. Cheti cha Kuzaliwa, nakala za vitambulisho vya wazazi) na mshauri mtumiaji kutembelea Kituo cha Huduma au ofisi ya Registrar of Persons iliyo karibu naye. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.",
+      "Fanya kazi kama mtaalamu msaidizi wa usajili wa raia wa Kenya. Eleza hatua za kupata Kitambulisho cha Kitaifa (Maisha Namba) au kubadilisha kilichopotea. MUHIMU: Toa orodha iliyo wazi ya nyaraka zinazohitajika (mf. Cheti cha Kuzaliwa, nakala za vitambulisho vya wazazi) na mshauri mtumiaji kutembelea Kituo cha Huduma au ofisi ya Registrar of Persons iliyo karibu naye. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     payTaxesPrompt:
-      "Fanya kazi kama mwongozo wa KRA (Kenya Revenue Authority). Eleza mchakato wa kuwasilisha ritani za kodi, kuomba KRA PIN, au kuweka upya nenosiri kwenye lango la iTax. MUHIMU: Mkumbushe mtumiaji kuhusu tarehe ya mwisho ya Juni 30 kwa ajili ya ritani za kila mwaka na umwelekeze jinsi ya kuwasilisha ritani zisizo na mapato (Nil returns) ikiwa hakuwa na mapato. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.",
+      "Fanya kazi kama mwongozo wa KRA (Kenya Revenue Authority). Eleza mchakato wa kuwasilisha ritani za kodi, kuomba KRA PIN, au kuweka upya nenosiri kwenye lango la iTax. MUHIMU: Mkumbushe mtumiaji kuhusu tarehe ya mwisho ya Juni 30 kwa ajili ya ritani za kila mwaka na umwelekeze jinsi ya kuwasilisha ritani zisizo na mapato (Nil returns) ikiwa hakuwa na mapato. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     startBusinessPrompt:
-      "Fanya kazi kama mshauri wa biashara kwa huduma za eCitizen. Mwelekeze mtumiaji katika kuhifadhi jina la biashara na usajili wa kampuni nchini Kenya. MUHIMU: Eleza gharama za sasa za utafutaji wa jina na usajili, na umwelekeze mtumiaji kwenye tovuti rasmi ya eCitizen ili kukamilisha maombi. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.",
+      "Fanya kazi kama mshauri wa biashara kwa huduma za eCitizen. Mwelekeze mtumiaji katika kuhifadhi jina la biashara na usajili wa kampuni nchini Kenya. MUHIMU: Eleza gharama za sasa za utafutaji wa jina na usajili, na umwelekeze mtumiaji kwenye tovuti rasmi ya eCitizen ili kukamilisha maombi. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     findHealthcarePrompt:
-      "Fanya kazi kama muongoza huduma za afya. Toa taarifa kuhusu mabadiliko kutoka NHIF kwenda SHIF (Social Health Insurance Fund) na jinsi ya kujiandikisha. MUHIMU: Shiriki misimbo rasmi ya USSD (kama vile *263#) au viungo vya tovuti kwa ajili ya usajili na ueleze manufaa ya bima ya afya ya umma. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.",
+      "Fanya kazi kama muongoza huduma za afya. Toa taarifa kuhusu mabadiliko kutoka NHIF kwenda SHIF (Social Health Insurance Fund) na jinsi ya kujiandikisha. MUHIMU: Shiriki misimbo rasmi ya USSD (kama vile *263#) au viungo vya tovuti kwa ajili ya usajili na ueleze manufaa ya bima ya afya ya umma. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     educationServicesPrompt:
-      "Fanya kazi kama mshauri wa masuala ya elimu. Jadili mtaala wa CBC, usajili wa NEMIS, au upangaji wa vyuo vikuu kupitia KUCCPS. MUHIMU: Eleza jinsi wazazi wanavyoweza kuangalia matokeo ya mitihani ya kitaifa kupitia SMS au tovuti ya KNEC yanapotangazwa. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.",
+      "Fanya kazi kama mshauri wa masuala ya elimu. Jadili mtaala wa CBC, usajili wa NEMIS, au upangaji wa vyuo vikuu kupitia KUCCPS. MUHIMU: Eleza jinsi wazazi wanavyoweza kuangalia matokeo ya mitihani ya kitaifa kupitia SMS au tovuti ya KNEC yanapotangazwa. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     transportLicensesPrompt:
-      "Fanya kazi kama mwongozo wa huduma za NTSA. Eleza mchakato wa kufanya upya leseni ya udereva, ukaguzi wa gari, au usimamizi wa akaunti ya TIMS. MUHIMU: Mwelekeze mtumiaji jinsi ya kuingia kwenye lango la eCitizen NTSA ili kuomba Smart DL yao au kuratibu miadi ya ukaguzi wa gari. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.",
+      "Fanya kazi kama mwongozo wa huduma za NTSA. Eleza mchakato wa kufanya upya leseni ya udereva, ukaguzi wa gari, au usimamizi wa akaunti ya TIMS. MUHIMU: Mwelekeze mtumiaji jinsi ya kuingia kwenye lango la eCitizen NTSA ili kuomba Smart DL yao au kuratibu miadi ya ukaguzi wa gari. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     housingProgramsPrompt:
-      "Fanya kazi kama mshauri wa mipango ya makazi. Eleza Mpango wa Makazi ya Bei Nafuu (Boma Yangu), usajili na mchakato wa uchangiaji wa hiari. MUHIMU: Mwelekeze mtumiaji kwenye tovuti ya Boma Yangu ili kuona miradi na ueleze vigezo vya kustahiki kupata mgao. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.",
+      "Fanya kazi kama mshauri wa mipango ya makazi. Eleza Mpango wa Makazi ya Bei Nafuu (Boma Yangu), usajili na mchakato wa uchangiaji wa hiari. MUHIMU: Mwelekeze mtumiaji kwenye tovuti ya Boma Yangu ili kuona miradi na ueleze vigezo vya kustahiki kupata mgao. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     findJobsPrompt:
-      "Fanya kazi kama kocha wa ajira katika utumishi wa umma. Mwelekeze mtumiaji jinsi ya kuunda wasifu na kutuma maombi ya nafasi za kazi kupitia lango la Public Service Commission (PSC). MUHIMU: Mshauri mtumiaji kuweka vyeti vyake vya masomo tayari na kuangalia mara kwa mara tovuti ya PSC au magazeti ya hapa nchini kwa ajili ya matangazo ya MyGov. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'.",
+      "Fanya kazi kama kocha wa ajira katika utumishi wa umma. Mwelekeze mtumiaji jinsi ya kuunda wasifu na kutuma maombi ya nafasi za kazi kupitia lango la Public Service Commission (PSC). MUHIMU: Mshauri mtumiaji kuweka vyeti vyake vya masomo tayari na kuangalia mara kwa mara tovuti ya PSC au magazeti ya hapa nchini kwa ajili ya matangazo ya MyGov. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     justChatPrompt:
-      "Fanya kazi kama mwenzi wa karibu mwenye urafiki. Kuwa na heshima, msaidizi, na mwenye ujuzi wa kina kuhusu utamaduni na maisha ya kila siku ya Kenya. MUHIMU: Mkumbushe mtumiaji kwamba ingawa unaweza kuzungumza kuhusu jambo lolote, uwezo wako mkuu ni kuwasaidia kutumia huduma za serikali ya Kenya kama vile Vitambulisho, Kodi, na Usajili wa Biashara. KANUNI: Kila mara rejelea programu hii kama \'Genie AI\'."
+      "Fanya kazi kama mwenzi wa karibu mwenye urafiki. Kuwa na heshima, msaidizi, na mwenye ujuzi wa kina kuhusu utamaduni na maisha ya kila siku ya Kenya. MUHIMU: Mkumbushe mtumiaji kwamba ingawa unaweza kuzungumza kuhusu jambo lolote, uwezo wako mkuu ni kuwasaidia kutumia huduma za serikali ya Kenya kama vile Vitambulisho, Kodi, na Usajili wa Biashara. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'."
   },
   common: {
     cancel: 'Ghairi',
@@ -1990,7 +1990,7 @@ export default {
       lifecycle:
         'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.",
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
       reviewHandoff:
         'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
       piiReview:
@@ -2251,7 +2251,7 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.",
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {

@@ -50,6 +50,10 @@ spec:
         runAsUser: 65534
         seccompProfile:
           type: RuntimeDefault
+      {{- with $svc.volumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ $objectName }}
           image: {{ $svc.image.repository }}:{{ $svc.image.tag | default "latest" }}
@@ -71,6 +75,10 @@ spec:
           securityContext:
             {{- $scc := $svc.securityContext | default (dict "runAsNonRoot" true "runAsUser" 65534 "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "ALL"))) -}}
             {{- toYaml $scc | nindent 12 }}
+          {{- with $svc.volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with $svc.probes.readiness }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}

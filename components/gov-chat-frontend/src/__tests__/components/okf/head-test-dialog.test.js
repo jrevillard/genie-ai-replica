@@ -842,6 +842,82 @@ it('1-8e: Apply owns ONE busy token across save → rebuild → re-run and never
   expect(w.vm.lastRunSummary.pass_rate).toBe(1);
 });
 
+it('1-8g: blocked removals render as confirm chips and Apply includes the confirmed extras', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  w.vm.advisor = {
+    changes: { add: [], remove: [] },
+    add_eval: [],
+    remove_eval: [],
+    blocked_removals: [
+      { tag: 'meat-packaging', predicted_positive_gain: 16, predicted_negative_loss: 2, reason: 'curator_original' },
+      { tag: 'food-safety-testing', predicted_positive_gain: 6, predicted_negative_loss: 0, reason: 'history_rotated' }
+    ],
+    narrow_options: [
+      {
+        remove: 'meat-packaging',
+        add: 'meat-packaging-narrow',
+        predicted_positive_gain: 16,
+        predicted_negative_loss: 0
+      }
+    ],
+    scope: {
+      suites: ['s1'],
+      runs: [{ run_key: 'r1', suite_key: 's1', created_at: 'x', tagset: { hash8: 'aa11' } }],
+      embedding_prefixed: true,
+      embedding_model: 'm'
+    }
+  };
+  await w.vm.$nextTick();
+  const html = w.element.innerHTML;
+  expect(html).toContain('meat-packaging');
+  expect(html).toContain('recovers 16 positive');
+  // Confirm BOTH blocked removals + the narrow pair — Apply must carry all
+  // of them in the ONE save (the pair's add joins the adds; its remove
+  // joins the removes).
+  w.vm.toggleExtraRemove('meat-packaging');
+  w.vm.toggleExtraRemove('food-safety-testing');
+  w.vm.toggleNarrowPair(w.vm.advisorNarrowOptions[0]);
+  dispatch.mockResolvedValueOnce({ ok: true }); // saveFrontmatter
+  dispatch.mockResolvedValueOnce({ ok: true, result: { dim: 1024 } }); // headRebuild
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: { payload: { summary: { pass_rate: 1, positive_passed: 1, positive_total: 1 }, results: [] } }
+  });
+  dispatch.mockResolvedValueOnce({ ok: true, runs: [] }); // refreshRuns
+  await w.vm.onAdvisorApply();
+  const save = dispatch.mock.calls.find((c) => c[0] === 'okf/saveFrontmatter');
+  const shape = save[1].shape;
+  // The three removals applied, the narrow add kept, the untouched
+  // curator tag ('mental-health' from the REPO fixture) preserved.
+  expect(shape.forbidden).toEqual(['mental-health', 'meat-packaging-narrow']);
+  expect(w.vm.busy).toBeNull();
+  expect(w.vm.error).toBe('');
+});
+
+it('1-8g: the advisor scope line names the suites and tag sets when the server sends scope', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.advisor = {
+    queries_considered: 100,
+    runs_considered: 2,
+    current_scorecard: { positive_claimed: 13, positive_total: 50, negative_suppressed: 45, negative_total: 50 },
+    recommended_scorecard: { positive_claimed: 13, positive_total: 50, negative_suppressed: 47, negative_total: 50 },
+    scope: {
+      suites: ['s-a', 's-b'],
+      runs: [
+        { run_key: 'r1', suite_key: 's-a', tagset: { hash8: 'aa11' } },
+        { run_key: 'r2', suite_key: 's-b', tagset: { hash8: 'bb22' } }
+      ]
+    }
+  };
+  const text = w.vm.advisorScoreText;
+  expect(text).toContain('(across 100 queries from the last 2 runs)');
+  expect(text).toContain('s-a, s-b');
+  expect(text).toContain('aa11, bb22');
+});
+
 it('1-8e: a failed rebuild during Apply surfaces the error instead of stopping silently', async () => {
   const w = mountDialog({ initialTab: 'suites' });
   await w.vm.$nextTick();

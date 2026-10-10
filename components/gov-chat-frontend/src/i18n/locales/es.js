@@ -2856,7 +2856,14 @@ export default {
         now: 'Ahora',
         predicted: 'previsto',
         scope: ' (sobre {q} consultas de las últimas {r} ejecuciones)',
-        applying: 'Aplicando: guardando etiquetas, reconstruyendo el head, relanzando la suite…'
+        applying: 'Aplicando: guardando etiquetas, reconstruyendo el head, relanzando la suite…',
+        blockedTitle: 'Eliminaciones bloqueadas — haga clic para incluirlas en Aplicar',
+        blockedGain: 'recupera {n} positiva(s)',
+        narrowTitle: 'Reemplazos más estrechos — recupera positivas sin readmitir negativas',
+        narrowChip: 'Quitar la etiqueta amplia, añadir la estrecha',
+        reasonCurator: 'usted declaró esta etiqueta originalmente — confirme antes de quitarla',
+        reasonRotated: 'el historial pasó la línea base — confirme antes de quitarla',
+        scopeDetail: 'suites: {s} · conjuntos de etiquetas: {t}'
       },
       probe: {
         answerable: 'respondible',

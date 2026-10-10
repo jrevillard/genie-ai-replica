@@ -1262,27 +1262,34 @@ describe('getSuite + updateSuiteRows (1-8f)', () => {
     expect(flipped).toMatchObject({ kind: 'negative', cls: null, source: 'manual' });
   });
 
-  it('updateSuiteRows removes rows and rejects a resulting contradiction (same text both kinds)', async () => {
+  it('updateSuiteRows removes rows cleanly and RESOLVES the ambiguous shared-text flip (1-8g-p)', async () => {
     const suite = await seedRows();
     // Removing the insurance near-miss is fine.
     const out = await svc.updateSuiteRows('me', suite._key, {
       removes: [{ query: 'insurance plans cover screening', kind: 'negative' }]
     });
     expect(out.payload.negative).toHaveLength(1);
-    // A flip that would put the SAME text in both kinds is a contradiction:
-    // 'shared text' exists as a positive AND as a mislabeled positive in the
-    // negative array — flipping it lands the text in both arrays.
+    // 1-8g-p: the previously-refused ambiguous flip — 'shared text' is BOTH
+    // a genuine positive AND a mislabeled positive inside negatives — now
+    // RESOLVES: the flip moves every copy of text+kind (both arrays) and
+    // lands ONE clean negative. The mislabel is fixed as a side effect; no
+    // 409 deadlock.
     const s2 = await seedRows();
     s2.payload.positive.push({ query: 'shared text', kind: 'positive', cls: null, source: 'llm' });
     s2.payload.negative.push({ query: 'shared text', kind: 'positive', cls: null, source: 'llm' });
     __mockDb.collection('okf_head_test_runs').replace(s2._key, s2);
-    await expect(
-      svc.updateSuiteRows('me', s2._key, {
-        updates: [{ match: { query: 'shared text', kind: 'positive' }, set: { kind: 'negative' } }]
-      })
-      // Either 409 guard is a correct refusal here (contradiction OR the
-      // text duplicating within one kind — the match is ambiguous input).
-    ).rejects.toMatchObject({ status: 409 });
+    const out2 = await svc.updateSuiteRows('me', s2._key, {
+      updates: [{ match: { query: 'shared text', kind: 'positive' }, set: { kind: 'negative' } }]
+    });
+    expect(out2.payload.positive.map((r) => r.query)).toEqual([
+      'breast cancer screening guidance',
+      'asthma management protocol'
+    ]);
+    expect(out2.payload.negative.filter((r) => r.query === 'shared text')).toHaveLength(1);
+    expect(out2.payload.negative.find((r) => r.query === 'shared text')).toMatchObject({
+      kind: 'negative',
+      cls: null
+    });
   });
 
   it('updateSuiteRows 400s an empty body', async () => {
@@ -1291,6 +1298,94 @@ describe('getSuite + updateSuiteRows (1-8f)', () => {
       code: 'VALIDATION_ERROR',
       status: 400
     });
+  });
+
+  // 1-8g-p — pre-1-8g-h suites carry duplicate rows (live: one text ×3 in
+  // the negatives, 16/66 rows duplicated) and the strict guards write-locked
+  // them: every single-row edit left a duplicate → 409 forever. Deleting one
+  // copy must heal the whole family; a flip must move ALL copies.
+  it('updateSuiteRows: deleting ONE copy of a triplicated negative heals the whole duplicate family', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    const T = 'Map the distribution of slaughterhouses across the country.';
+    suite.payload.positive = [{ query: 'p1 clean positive', kind: 'positive', cls: null, source: 'llm' }];
+    suite.payload.negative = [1, 2, 3].map((i) => ({
+      query: T,
+      kind: 'negative',
+      cls: 'off-domain',
+      source: 'llm',
+      _copy: i
+    }));
+    __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
+    const out = await svc.updateSuiteRows('me', suite._key, {
+      removes: [{ query: T, kind: 'negative' }]
+    });
+    // the click removed one copy; normalization drops the interchangeable
+    // extras — the text is GONE, not half-gone (the old behavior 409'd here)
+    expect(out.payload.negative).toHaveLength(0);
+    expect(out.payload.positive).toHaveLength(1);
+  });
+
+  it('updateSuiteRows: flipping a duplicated row moves ALL copies — the text wins wholesale', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    const T = 'map the distribution of slaughterhouses across the country.';
+    suite.payload.positive = [{ query: 'p1 clean positive', kind: 'positive', cls: null, source: 'llm' }];
+    suite.payload.negative = [1, 2].map((i) => ({
+      query: T,
+      kind: 'negative',
+      cls: 'off-domain',
+      source: 'llm',
+      _copy: i
+    }));
+    __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
+    const out = await svc.updateSuiteRows(
+      'me',
+      suite._key,
+      { updates: [{ match: { query: T, kind: 'negative' }, set: { kind: 'positive' } }] },
+      { actor: { user_id: 'u1' } }
+    );
+    // moving one copy would leave the twin → contradiction 409 → the suite
+    // stayed locked. The flip takes the whole family: negatives empty, the
+    // text lands in positives exactly once.
+    expect(out.payload.negative).toHaveLength(0);
+    expect(out.payload.positive.map((r) => r.query.toLowerCase())).toEqual(['p1 clean positive', T]);
+  });
+
+  it('updateSuiteRows: flip into a kind that already holds the text 409s with the way out', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    const T = 'shared text between kinds';
+    suite.payload.positive = [{ query: T, kind: 'positive', cls: null, source: 'llm' }];
+    suite.payload.negative = [{ query: T, kind: 'negative', cls: 'confusable', source: 'llm' }];
+    __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
+    await expect(
+      svc.updateSuiteRows('me', suite._key, {
+        updates: [{ match: { query: T, kind: 'negative' }, set: { kind: 'positive' } }]
+      })
+    ).rejects.toMatchObject({
+      code: 'SUITE_CONTRADICTION',
+      status: 409,
+      message: /already exists in the positive list — delete that copy first/
+    });
+  });
+
+  it('updateSuiteRows: a pre-existing cross-kind contradiction still blocks unrelated edits (escapable, not silent)', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    const T = 'contradicted text';
+    suite.payload.positive = [
+      { query: T, kind: 'positive', cls: null, source: 'llm' },
+      { query: 'another positive', kind: 'positive', cls: null, source: 'llm' }
+    ];
+    suite.payload.negative = [{ query: T, kind: 'negative', cls: 'confusable', source: 'llm' }];
+    __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
+    // an edit that does not touch the contradiction cannot sneak it through
+    await expect(
+      svc.updateSuiteRows('me', suite._key, { removes: [{ query: 'another positive', kind: 'positive' }] })
+    ).rejects.toMatchObject({ code: 'SUITE_CONTRADICTION', status: 409, message: /delete one of the two rows/ });
+    // …but deleting one CONTRADICTED copy resolves it — always a way out
+    const out = await svc.updateSuiteRows('me', suite._key, {
+      removes: [{ query: T, kind: 'negative' }]
+    });
+    expect(out.payload.positive.map((r) => r.query)).toContain(T);
+    expect(out.payload.negative).toHaveLength(0);
   });
 });
 

@@ -267,3 +267,36 @@ slaughter-fees query "weak" (0.19, the PDF-link chunk) while chat grounded
 0.61-0.96 on real fee-schedule chunks — probe-cosine and reranker score
 disagree on this repo; chat was right. Expect Lab-probe↔chat disagreement
 when a repo's best chunk is a link row.
+
+## 1-8g-o — Run All corpus probes show "unknown": rerank 429s with no retry (FIXED on fix/1-8g-o-probe-rerank-429-retry, post-!521)
+
+David, 2026-10-10 ~16:35 UTC: "several query rows turned up unknown in the
+CORPUS column... when I run them individually afterward they seemed to be
+corrected."
+
+**Evidence (run doc `r1791649769837-4cd742`, suite
+`s1791637021770-ca5aed`, Slaugherhouse Heuristics):** 116 rows probed,
+19 verdicts `unknown`, every note identical — `rerank failed: HTTP 429`.
+The failures cluster in the early 4-way probe window (the remote TEI
+rerank token bucket); the remaining ~97 probes in the same run scored
+normally, and every one-at-a-time ▶ probe afterward succeeded. The embeds
+never failed (teiEmbed already retries via withTeiRetry) — `rerankTexts`
+was the one network call in the probe path with NO retry.
+
+**Fix (components/okf-server/services/head-suite-service.js):**
+`rerankTexts` retries 429/502/503/504 up to 3 attempts with jittered
+backoff (600ms·attempt + 0-250ms); a numeric `Retry-After` header wins
+when sent. Timeouts are deliberately NOT retried (a hanging endpoint
+stays bounded at PROBE_TIMEOUT_MS per attempt). Exhausted retries throw
+`HTTP 429 after 3 attempts` so the row note stays honest. Added
+`head-suite.probe_rerank_failed` warn (VictoriaLogs visibility — the row
+note alone is invisible to ops). `probeQueryLight` and `probeSuiteQuery`
+share `rerankTexts`, so both legs heal.
+
+**Deliberately NOT changed:** PROBE_CONCURRENCY stays 4 — the data shows
+a burst bucket, not a sustained limit; retries absorb the burst. If a
+sustained-limit deployment ever appears, the knob is a two-line change.
+
+**Tests:** head-suite-service.test.js — retry recovers a burst 429
+(verdict answerable, fetch×3 for two distinct seeded queries) + exhausted
+429s degrade to `unknown` with the attempts note, fetch bounded at 3.

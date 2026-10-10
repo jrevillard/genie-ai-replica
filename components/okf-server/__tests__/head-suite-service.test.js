@@ -1580,4 +1580,71 @@ describe('1-8g — default suite naming, delete, and the corpus probe', () => {
     expect(res.verdict).toBe('unknown');
     expect(res.note).toMatch(/OKF_RERANK_ENDPOINT/);
   });
+
+  // 1-8g-o (live 2026-10-10): the remote TEI rerank 429'd 19/116 Run-All
+  // probes (bursty 4-way pool) → 'unknown' rows; individual probes never
+  // trip it. The shared rerankTexts must retry transient statuses so the
+  // batch leg self-heals instead of showing unknown.
+  it('runSuite probe: retries a burst rerank 429 and still fills the Corpus column', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'NCD Information',
+      ingested_graph_name: 'OKF_me_v1'
+    });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.7, 0));
+    frontmatterService.teiEmbed.mockResolvedValue([[0.1, 0.2, 0.3]]);
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('APPROX_NEAR_COSINE')) {
+        return { all: async () => [{ text: 'WHO guidance colorectal screening every 10 years', score: 0.82 }] };
+      }
+      return { all: async () => [] };
+    });
+    const realFetch = global.fetch;
+    // first call 429s (no Retry-After header), second succeeds — the
+    // verdict must be a real band, not 'unknown'
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 429, headers: { get: () => null } })
+      .mockResolvedValue({ ok: true, status: 200, json: async () => [{ index: 0, score: 0.91 }] });
+    try {
+      process.env.OKF_RERANK_ENDPOINT = 'https://tei.example/rerank';
+      const run = await svc.runSuite('me', suite._key, {});
+      expect(run.payload.results[0].probe).toMatchObject({ docs: 1, top_score: 0.91, verdict: 'answerable' });
+      // 3 calls: seeded positive 429s once then succeeds, the seeded
+      // forbidden-negative (a different query text) succeeds first try
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+    } finally {
+      global.fetch = realFetch;
+      delete process.env.OKF_RERANK_ENDPOINT;
+    }
+  });
+
+  it('probeSuiteQuery: rerank 429s exhausted → honest unknown note naming the attempts', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'NCD Information',
+      ingested_graph_name: 'OKF_me_v1'
+    });
+    frontmatterService.teiEmbed.mockResolvedValue([[0.1, 0.2, 0.3]]);
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('APPROX_NEAR_COSINE')) {
+        return { all: async () => [{ text: 'chunk text', score: 0.5 }] };
+      }
+      return { all: async () => [] };
+    });
+    const realFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 429, headers: { get: () => null } });
+    try {
+      process.env.OKF_RERANK_ENDPOINT = 'https://tei.example/rerank';
+      const res = await svc.probeSuiteQuery('me', suite._key, { query: 'q' }, {});
+      expect(res.verdict).toBe('unknown');
+      expect(res.note).toMatch(/HTTP 429 after 3 attempts/);
+      expect(global.fetch).toHaveBeenCalledTimes(3); // bounded — not an infinite loop
+    } finally {
+      global.fetch = realFetch;
+      delete process.env.OKF_RERANK_ENDPOINT;
+    }
+  });
 });

@@ -406,3 +406,32 @@ run; that also explains the earlier 6 "failures").
 
 Tests: okf-server 847, frontend 1669, live smoke 23/23 (1 skipped),
 verify-local-build 46/46.
+
+## 14. 1-8g — the Lab click-test (corpus coverage), default names, suite delete (2026-10-10, 7707f2dd2)
+
+David's ruling after the colorectal post-mortem: "point 2 is very
+valuable" + click-test each query against the live corpus + default
+suite names + suite delete.
+
+**Corpus probe (the click-test).** POST /routing-testsuite/:key/probe
+{query}: embed (TEI, BGE query-prefix) → top-24 from the repo's ingested
+<graph>_SOURCE → the pipeline's TEI /rerank (OKF_RERANK_ENDPOINT; empty
+default = verdict 'unknown' + honest note) → coverage bands answerable
+>= 0.5 / weak >= 0.15 / unanswerable (calibrated live: true match
+0.94-0.95, related 0.05-0.13, garbage 0.00002). Persisted on every
+matching row as lastProbe; the Lab grows a Corpus column (in-domain is
+NOT answerable — the colorectal query scored 0.07 because the corpus
+lacks screening-frequency content; the badge was the system telling the
+truth).
+
+**Default suite names**: unnamed generations land as "<Repo> suite N"
+(the repo's running count); rename still wins.
+
+**Suite delete**: DELETE /routing-testsuite/:key (admin) — removes the
+suite + its run docs; advisor/explain audit docs stay; in-flight
+generation 409s.
+
+ENV plumbing: OKF_RERANK_ENDPOINT (env S15, compose empty-default,
+env.j2, config-validator 45/45). Smoke sections 15-17 (naming, probe
+shape + persistence + auth, delete lifecycle). Tests: okf-server 851
+(+4), frontend 1672 (+3). Committed 7707f2dd2 (29 files).

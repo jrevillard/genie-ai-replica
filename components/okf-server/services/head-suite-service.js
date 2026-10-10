@@ -1155,7 +1155,23 @@ function probeReason(verdict, topScore, best, query) {
  * service) passes anonymously, node fetch does not — send the Bearer token
  * explicitly when configured (live 2026-10-10: anonymous node fetch → HTTP
  * 401 on every call). Returns the decoded score array; throws on failure.
+ *
+ * 1-8g-o (live 2026-10-10): the remote TEI also rate-limits bursty probe
+ * pools with HTTP 429 — David's Run All came back with 19/116 rows
+ * 'unknown', every note "rerank failed: HTTP 429", while the individual
+ * probes that followed (1-at-a-time) all succeeded. The batch embeds never
+ * failed (teiEmbed already retries) — only the bare rerank call had no
+ * retry. Retry the transient statuses with jittered backoff (a burst token
+ * bucket refills in ~1s, so the next attempt lands); Retry-After wins when
+ * the server sends it. Timeouts are NOT retried — a hanging endpoint must
+ * stay bounded at PROBE_TIMEOUT_MS per attempt, not 3×.
  */
+const RERANK_RETRY_STATUSES = new Set([429, 502, 503, 504]);
+const RERANK_RETRY_ATTEMPTS = 3;
+const RERANK_RETRY_BASE_MS = 600;
+
+const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function rerankTexts(query, texts) {
   const rerankUrl = process.env.OKF_RERANK_ENDPOINT || '';
   if (!rerankUrl) {
@@ -1163,25 +1179,51 @@ async function rerankTexts(query, texts) {
     err.code = 'RERANK_NOT_CONFIGURED';
     throw err;
   }
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   const rerankToken = process.env.OKF_RERANK_TOKEN || '';
   const headers = { 'Content-Type': 'application/json' };
   if (rerankToken) headers.Authorization = `Bearer ${rerankToken}`;
-  try {
-    const resp = await fetch(rerankUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ query, texts }),
-      signal: controller.signal
-    });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const decoded = await resp.json();
-    if (!Array.isArray(decoded)) throw new Error('unexpected rerank response shape');
-    return decoded;
-  } finally {
-    clearTimeout(timer);
+  for (let attempt = 1; attempt <= RERANK_RETRY_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+    try {
+      const resp = await fetch(rerankUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ query, texts }),
+        signal: controller.signal
+      });
+      if (!resp.ok) {
+        const err = new Error(`HTTP ${resp.status}`);
+        err.status = resp.status;
+        err.retryable = RERANK_RETRY_STATUSES.has(resp.status);
+        const ra = Number(resp.headers && resp.headers.get && resp.headers.get('retry-after'));
+        if (Number.isFinite(ra) && ra > 0) err.retryAfterMs = ra * 1000;
+        if (err.retryable && attempt >= RERANK_RETRY_ATTEMPTS) {
+          err.message = `HTTP ${resp.status} after ${RERANK_RETRY_ATTEMPTS} attempts`;
+        }
+        throw err;
+      }
+      const decoded = await resp.json();
+      if (!Array.isArray(decoded)) throw new Error('unexpected rerank response shape');
+      return decoded;
+    } catch (e) {
+      if (e.retryable === true && attempt < RERANK_RETRY_ATTEMPTS) {
+        const delay = e.retryAfterMs || RERANK_RETRY_BASE_MS * attempt + Math.floor(Math.random() * 250);
+        logger.warn('head-suite.rerank_retry', {
+          attempt,
+          status: e.status,
+          delay_ms: delay,
+          texts: texts.length
+        });
+        await sleepMs(delay);
+        continue;
+      }
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  throw new Error('rerank failed: retry loop exited unexpectedly'); // defensive, unreachable
 }
 
 /**
@@ -1242,6 +1284,9 @@ async function probeQueryLight(db, graphName, query) {
       probe.reason = probeReason(probe.verdict, probe.top_score, best, query);
     } catch (e) {
       probe.note = e.code === 'RERANK_NOT_CONFIGURED' ? e.message : `rerank failed: ${e.message}`;
+      // 1-8g-o: an 'unknown' row must be diagnosable from the logs too —
+      // the note lives on the row, this warn lives in VictoriaLogs.
+      logger.warn('head-suite.probe_rerank_failed', { query: String(query).slice(0, 120), error: e.message });
     }
   } catch (e) {
     probe.note = `probe failed: ${e.message}`;

@@ -1,0 +1,67 @@
+{{- if .Values.services.clamav.enabled -}}
+{{- $ctx := dict "name" "clamav" "component" "clamav" "Values" .Values "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clamav
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clamav") | nindent 4 }}
+spec:
+  ports:
+    - name: avscanner
+      port: 3310
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clamav") | nindent 4 }}
+---
+# Ingress from document-repository ONLY (the sole consumer in this
+# tier). Egress limited to DNS and the CVD signature-update ports;
+# see egress note for the FQDN-allowlist gap.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: clamav
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clamav") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: clamav
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: 3310
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    # CVD signature updates on 80/443. NetworkPolicy peers are limited
+    # to podSelector / namespaceSelector / ipBlock — `host:` is not a
+    # valid peer and was rejected by the API server. Domain allowlisting
+    # requires DNS-policy engines (Cilium / Calico FQDN rules) and is
+    # left to a follow-up; the port-scoped ipBlock below is the
+    # closest NetworkPolicy-native approximation.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+{{- end -}}

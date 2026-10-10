@@ -1966,8 +1966,7 @@ export default {
       subjectArea:
         'Tsebo ee e hlahela kae? Sebaka sa Taba se arola polokelo ea hau le ho tsepamisa maikutlo ho lileibole tseo u ka li khethang. Ha se khone ho fetoloa kamora ho thehoa.',
       selectSubjectArea: 'Khetha sebaka sa taba…',
-      subjectAreaMissing:
-        "Sebaka sa Taba sa polokelo ena ha se eo ho Thulaganyo ea Tsebo — e bontša leibole ka 'ngoe.",
+      subjectAreaMissing: "Sebaka sa Taba sa polokelo ena ha se eo ho Thulaganyo ea Tsebo — e bontša leibole ka 'ngoe.",
       label:
         'Sehlopha se tsoang ho Thulaganyo ea Tsebo se bolellang mothusi hore na mohopolo ona ke mofuta ofe oa ntho. Lileibole ke tsela eo likarabo li fumanang litaba tse nepahetseng ka eona.',
       bundle:

@@ -82,10 +82,12 @@
         <template v-if="selectedRow">
           <OkfConceptEditor
             ref="conceptEditor"
+            :key="selectedRow.concept_id + ':' + conceptReloadKey"
             :repo-id="repoId"
             :concept-id="selectedRow.concept_id"
             :read-only="readOnly"
             :label-options="labelOptions"
+            :repo-tag-summary="repoTagSummary"
             @saved="onConceptSaved"
           />
         </template>
@@ -414,6 +416,12 @@ export default {
       // 3.10 T-editor (D6): add-sources picker + post-conversion note
       sourceOpen: false,
       sourceNote: '',
+      // Frontmatter chip-panel saves rewrite the index.md YAML under the
+      // open concept; bump to remount the ConceptEditor so the center pane
+      // re-reads the freshly-saved YAML (same pattern as Curate.vue's
+      // editorReloadKey — without it the pane showed STALE frontmatter
+      // until the editor was closed and reopened, David 2026-10-09).
+      conceptReloadKey: 0,
       // Story 1-8: the right-rail head badge opens the Routing Lab here.
       headTestOpen: false,
       typeOptions: TYPE_OPTIONS,
@@ -503,6 +511,25 @@ export default {
     },
     headTestRepo() {
       return this.repo && this.repo.repo_id ? this.repo : null;
+    },
+    /** 2026-10-10: one-line summary of the REPO-level tags for the concept
+     * editor's frontmatter bar — the per-concept form shows only the
+     * concept's own YAML, so without this the repo tags are invisible THERE
+     * and an empty form reads as lost data (live report on Slaugherhouse). */
+    repoTagSummary() {
+      const fm = this.repo && this.repo.frontmatter;
+      if (!fm) return '';
+      const parts = [];
+      for (const [field, label] of [
+        ['topic', 'topic'],
+        ['forbidden', 'forbidden'],
+        ['entity', 'entity'],
+        ['keyword', 'keyword']
+      ]) {
+        const n = Array.isArray(fm[field]) ? fm[field].length : 0;
+        if (n) parts.push(`${n} ${label}`);
+      }
+      return parts.join(' · ');
     },
     hasIndex() {
       return this.concepts.some((c) => c.is_index);
@@ -634,6 +661,12 @@ export default {
     // step in the wizard) re-evaluates on the next render.
     onFrontmatterPanelSaved() {
       this.$store.dispatch('okf/fetchConcepts', this.repoId);
+      // The save also rewrote okf_repositories.frontmatter (and possibly the
+      // index.md YAML under the open concept): refresh the cached repo doc
+      // (badges / gates) AND remount the ConceptEditor so the center pane
+      // re-reads the freshly-saved YAML instead of its stale draft.
+      this.$store.dispatch('okf/fetchRepos');
+      this.conceptReloadKey += 1;
     },
     // Story 1-8: a head rebuild inside the Routing Lab rewrites the repo
     // doc — refresh the cached repo so the badge + gates re-evaluate.

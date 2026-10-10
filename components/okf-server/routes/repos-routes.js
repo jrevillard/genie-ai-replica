@@ -58,6 +58,11 @@ router.post('/:repo_id/ingest', requireRepoScope('repo_id', 'admin'), ctrl.retir
 // admin-scoped — the test burns a TEI embed per query.
 router.post('/:repo_id/head/rebuild', requireRepoScope('repo_id', 'admin'), ctrl.rebuildRepoHead);
 router.post('/:repo_id/routing-test', requireRepoScope('repo_id', 'admin'), ctrl.routingTest);
+// Story 1-8c — single-query gate explanation + forbidden-tag suggestion.
+router.post('/:repo_id/routing-explain', requireRepoScope('repo_id', 'admin'), ctrl.routingExplain);
+// Story 1-8d — frontmatter save history + revert (the Lab's undo).
+router.get('/:repo_id/frontmatter/history', requireRepoScope('repo_id', 'read'), ctrl.frontmatterHistory);
+router.post('/:repo_id/frontmatter/revert', requireRepoScope('repo_id', 'admin'), ctrl.revertFrontmatter);
 
 // Story 1-8 MR-B (2026-10-08) — test suites + run analytics. The
 // generator is ONE guided-JSON vLLM call (admin — LLM-burning, 5-15s);
@@ -67,8 +72,45 @@ router.post('/:repo_id/routing-test', requireRepoScope('repo_id', 'admin'), ctrl
 // runs listing is read-scope (analytics history across tag cycles) and
 // MUST stay above any /:suite_key route so 'runs' is never parsed as a key.
 router.get('/:repo_id/routing-testsuite/runs', requireRepoScope('repo_id', 'read'), ctrl.listTestSuiteRuns);
+// Story 1-8f — load ONE saved suite (full rows) back into the Lab; edit
+// its rows in place (kind flips + removes). GET is read-scope (same as
+// the runs listing); the rows PATCH is an admin mutation like /queries.
+// 'runs' above must stay first so it is never parsed as a suite key.
+router.get('/:repo_id/routing-testsuite/:suite_key', requireRepoScope('repo_id', 'read'), ctrl.getTestSuite);
 router.post('/:repo_id/routing-testsuite', requireRepoScope('repo_id', 'admin'), ctrl.generateTestSuite);
 router.post('/:repo_id/routing-testsuite/:suite_key/run', requireRepoScope('repo_id', 'admin'), ctrl.runTestSuite);
+router.post(
+  '/:repo_id/routing-testsuite/:suite_key/rows',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.updateTestSuiteRows
+);
+// Story 1-8f — name/rename a suite (admin mutation).
+router.post(
+  '/:repo_id/routing-testsuite/:suite_key/rename',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.renameTestSuite
+);
+// Story 1-8g — delete a suite from the Saved list (admin; removes the
+// suite doc + its run docs).
+router.delete('/:repo_id/routing-testsuite/:suite_key', requireRepoScope('repo_id', 'admin'), ctrl.deleteTestSuite);
+// Story 1-8g — the click-test: one query against the LIVE corpus (embed →
+// top-K → the pipeline's TEI rerank → coverage verdict), persisted on the
+// matching suite rows (admin mutation — it writes lastProbe).
+router.post(
+  '/:repo_id/routing-testsuite/:suite_key/probe',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.probeTestSuiteQuery
+);
+// Story 1-8c — batch advice for a suite run's failing negatives.
+router.post(
+  '/:repo_id/routing-testsuite/:suite_key/explain',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.explainTestSuiteFailures
+);
+// Story 1-8d — the COMPREHENSIVE advisor: aggregates recent runs (all
+// classes), simulates tag-set changes against the gate, recommends the
+// globally-optimal add/remove set under a zero-positive-harm constraint.
+router.post('/:repo_id/routing-advisor', requireRepoScope('repo_id', 'admin'), ctrl.recommendTagSet);
 router.post(
   '/:repo_id/routing-testsuite/:suite_key/queries',
   requireRepoScope('repo_id', 'admin'),

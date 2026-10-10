@@ -921,10 +921,19 @@ const actions = {
     }
   },
 
-  /** Generate a test suite (LLM + forbidden-derived negatives). */
-  async headSuiteGenerate(_ctx, { repoId, nPositive, nNegative } = {}) {
+  /** Generate a test suite (LLM + forbidden-derived negatives). The
+   * 1-8c count knobs are optional — undefined lets the server apply its
+   * own per-class defaults/clamps. */
+  async headSuiteGenerate(_ctx, { repoId, nPositive, nNegative, nNegativeRandom, nMeta, nNearMiss, name } = {}) {
     try {
-      const result = await headTestService.generateSuite(repoId, { n_positive: nPositive, n_negative: nNegative });
+      const result = await headTestService.generateSuite(repoId, {
+        n_positive: nPositive,
+        n_negative: nNegative,
+        n_negative_random: nNegativeRandom,
+        n_meta: nMeta,
+        n_near_miss: nNearMiss,
+        name
+      });
       return { ok: true, result };
     } catch (err) {
       return {
@@ -949,6 +958,77 @@ const actions = {
     }
   },
 
+  /** Story 1-8f — load ONE saved suite (full rows) back into the Lab. */
+  async headSuiteGet(_ctx, { repoId, suiteKey } = {}) {
+    try {
+      const result = await headTestService.getSuite(repoId, suiteKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'SUITE_LOAD_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8f — edit a suite's rows in place (kind flips + removes). */
+  async headSuiteUpdateRows(_ctx, { repoId, suiteKey, payload } = {}) {
+    try {
+      const result = await headTestService.updateSuiteRows(repoId, suiteKey, payload);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'SUITE_UPDATE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8f — name/rename a suite. */
+  async headSuiteRename(_ctx, { repoId, suiteKey, name } = {}) {
+    try {
+      const result = await headTestService.renameSuite(repoId, suiteKey, name);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'SUITE_RENAME_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8g — delete a saved suite (and its run docs). */
+  async headSuiteDelete(_ctx, { repoId, suiteKey } = {}) {
+    try {
+      const result = await headTestService.deleteSuite(repoId, suiteKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'SUITE_DELETE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8g — the click-test: one query against the LIVE corpus
+   * (coverage verdict via the pipeline's reranker). */
+  async headSuiteProbe(_ctx, { repoId, suiteKey, query } = {}) {
+    try {
+      const result = await headTestService.probeSuiteQuery(repoId, suiteKey, query);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'PROBE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
   /** Run every suite query + aggregate pass rates / margins / steals. */
   async headSuiteRun(_ctx, { repoId, suiteKey } = {}) {
     try {
@@ -963,6 +1043,38 @@ const actions = {
     }
   },
 
+  /** Story 1-8c — explain ONE query's gate outcome; the result carries
+   * suggestion {tags, source, reason} when the head (wrongly) claims it.
+   * The teaching half of the Lab loop. */
+  async headRoutingExplain(_ctx, { repoId, query } = {}) {
+    try {
+      const result = await headTestService.explainRouting(repoId, query);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'EXPLAIN_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8c — BATCH advice for the latest run of a suite: every
+   * failing negative, ONE LLM call, consolidated suggested forbidden
+   * tags (the anti-treadmill: one review per run). */
+  async headSuiteExplainFailures(_ctx, { repoId, suiteKey } = {}) {
+    try {
+      const result = await headTestService.explainSuiteFailures(repoId, suiteKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'EXPLAIN_FAILED',
+        message: err.message
+      };
+    }
+  },
+
   /** Analytics history across tag cycles. */
   async headSuiteListRuns(_ctx, { repoId, kind = 'all', limit = 20 } = {}) {
     try {
@@ -972,6 +1084,55 @@ const actions = {
       return {
         ok: false,
         code: (err && (err.code || (err.data && err.data.error))) || 'RUNS_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8d — the bounded frontmatter save history (the Lab's
+   * Revert-tags panel). Returns {ok, entries: [{saved_at, actor,
+   * forbidden_count, shape}]}. */
+  async frontmatterHistory(_ctx, { repoId } = {}) {
+    try {
+      const entries = await headTestService.frontmatterHistory(repoId);
+      return { ok: true, entries };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'HISTORY_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8d — restore the frontmatter snapshotted at saved_at. The
+   * server re-enters update(), so the revert itself is snapshotted.
+   * Returns {ok, result: {repo_id, reverted_to, frontmatter}}. */
+  async frontmatterRevert(_ctx, { repoId, savedAt } = {}) {
+    try {
+      const result = await headTestService.revertFrontmatter(repoId, savedAt);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'REVERT_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Story 1-8d — the comprehensive advisor: aggregates recent runs (all
+   * classes), simulates tag-set configurations against the gate, recommends
+   * the globally-optimal add/remove set. Returns
+   * {ok, result: {current_scorecard, recommended_scorecard, changes, ...}}. */
+  async headRecommend(_ctx, { repoId, runLimit } = {}) {
+    try {
+      const result = await headTestService.recommendTags(repoId, runLimit ? { run_limit: runLimit } : {});
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'ADVISE_FAILED',
         message: err.message
       };
     }

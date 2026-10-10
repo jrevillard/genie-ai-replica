@@ -530,7 +530,11 @@ export default {
       uploadSuccessMultiple: '{count} fichier(s) téléchargé(s) avec succès.',
       linkSubmitSuccess: '"{fileName}" a été exploré et enregistré avec succès.',
       actionSuccess: 'L\'action "{action}" sur le fichier {fileId} a réussi.',
-      metadataUpdateSuccess: 'Les métadonnées du fichier {fileId} ont été mises à jour.'
+      metadataUpdateSuccess: 'Les métadonnées du fichier {fileId} ont été mises à jour.',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} fichier(s) sélectionné(s) ne peuvent pas être supprimés ({'{'{'}'}reason{'}'}) — seuls les {'{'{'}'}n{'}'} autres seront supprimés.",
+      confirmDeleteSkipped:
+        "{'{'{'}'}count{'}'} fichier(s) ingéré(s)/en cours seront IGNORÉS — rétractez-les d’abord pour les supprimer."
     },
     queryInspector: {
       search: 'Rechercher',
@@ -1478,7 +1482,7 @@ export default {
       none: "Aucune version générée pour l'instant — l'action publish crée la version v1.",
       notServing: 'Hors service',
       publish: 'Créer une nouvelle version',
-      published: "Version v{'{'}v{'}'} publiée — archive {'{'}f{'}'} stockée dans le référentiel de documents.",
+      published: 'Version v{v} publiée — archive {f} stockée dans le référentiel de documents.',
       serving: 'Traitée par ingest (serving)',
       title: 'Versions'
     },
@@ -1498,7 +1502,7 @@ export default {
         note: 'Les entités signalées font partie du contenu publié. Si vous les avez vérifiées (par ex. des coordonnées officielles), acquittez et continuez.'
       },
       publish: {
-        body: "L'action publish génère la version v{'{'}n{'}'} et stocke l'archive « {'{'}file{'}'} » dans le référentiel de documents, remplaçant tout zip précédent. La nouvelle version n'est pas en état serving tant que vous n'avez pas exécuté Ingest.",
+        body: "L'action publish génère la version v{n} et stocke l'archive « {file} » dans le référentiel de documents, remplaçant tout zip précédent. La nouvelle version n'est pas en état serving tant que vous n'avez pas exécuté Ingest.",
         confirm: 'Publier',
         inProgress: 'Publication en cours — export et transfert de l’archive…',
         title: 'Publier'
@@ -1512,22 +1516,22 @@ export default {
         editor: 'Éditeur',
         wizard: 'Assistant'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{n}',
       versions: 'Versions',
       deleteLabel: 'Supprimer',
       headTest: 'Routing Lab'
     },
     logs: {
-      labeled: "étiquetés : {'{'}n{'}'}",
-      fallbacks: "solutions de repli LLM : {'{'}n{'}'}",
-      concepts: "concepts : {'{'}n{'}'}",
+      labeled: 'étiquetés : {n}',
+      fallbacks: 'solutions de repli LLM : {n}',
+      concepts: 'concepts : {n}',
       col: {
         action: 'Action',
         description: 'Description',
         user: 'Utilisateur',
         when: 'Date et heure'
       },
-      count: "{'{'}n{'}'} entrées",
+      count: '{n} entrées',
       loadFailed: "Impossible de charger le journal d'activité.",
       none: "Aucune activité enregistrée pour l'instant — les actions du référentiel s'affichent ici en temps réel.",
       title: "Journal d'activité"
@@ -1545,8 +1549,8 @@ export default {
       zoomIn: 'Zoomer',
       zoomOut: 'Dézoomer',
       card: {
-        links: "{'{'}n{'}'} liens",
-        chunks: "{'{'}n{'}'} fragments",
+        links: '{n} liens',
+        chunks: '{n} fragments',
         failed: "échec de l'indexation",
         flagged: 'entités signalées',
         hub: 'Nœud index',
@@ -1618,8 +1622,8 @@ export default {
           problem: 'Le problème',
           noError: 'Marqué échoué sans raison enregistrée.',
           fixLabel: 'Comment corriger',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               'Le worker d’ingest a cessé d’attendre dans sa fenêtre de grâce (le drainage était saturé) — le contenu est intact. Correction : modifiez légèrement ce fichier et enregistrez pour le remettre en file, ou retirez et re-ingestez tout le dépôt.',
@@ -1701,9 +1705,9 @@ export default {
       saveFailed: "Échec de l'enregistrement — réessayer",
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: 'Caviarder tout le contenu signalé',
           remove: 'Supprimer tout le contenu signalé',
@@ -1716,7 +1720,7 @@ export default {
           accept:
             "Toutes les entités signalées sont marquées comme vérifiées et conservées — elles ne seront plus signalées à moins d'exécuter une nouvelle analyse."
         },
-        scope: "Concepts concernés : {'{'}n{'}'}.",
+        scope: 'Concepts concernés : {n}.',
         confirm: 'Appliquer',
         failed: "L'action PII groupée a échoué — réessayez."
       },
@@ -1735,11 +1739,11 @@ export default {
       bulk: {
         body: "Chaque référentiel fait l'objet d'un contrôle de validation complet (examen PII, indexation, conformité) lors de l'action publish. Résultats par référentiel :",
         pending: 'Confirmez pour exécuter publish sur les référentiels sélectionnés.',
-        publishConfirm: "Publier {'{'}n{'}'}",
+        publishConfirm: 'Publier {n}',
         title: 'Publier les référentiels sélectionnés'
       },
       card: {
-        actions: "Actions pour {'{'}name{'}'}",
+        actions: 'Actions pour {name}',
         building: 'Construction…',
         buildingAria: 'Génération en cours — le fichier source est toujours en cours de traitement',
         delete: 'Supprimer',
@@ -1765,23 +1769,23 @@ export default {
         note: 'Les entités signalées font partie du contenu publié. Si vous les avez vérifiées (par ex. des coordonnées officielles), acquittez et continuez.'
       },
       publish: {
-        body: "L'action publish génère la version v{'{'}n{'}'} et stocke l'archive « {'{'}file{'}'} » dans le référentiel de documents, remplaçant le zip précédent. La nouvelle version n'est pas en état serving tant que vous n'avez pas exécuté Ingest.",
+        body: "L'action publish génère la version v{n} et stocke l'archive « {file} » dans le référentiel de documents, remplaçant le zip précédent. La nouvelle version n'est pas en état serving tant que vous n'avez pas exécuté Ingest.",
         confirm: 'Publier',
         title: 'Publier'
       },
       search: 'Rechercher...',
-      select: "Sélectionner {'{'}name{'}'} pour la publication groupée",
+      select: 'Sélectionner {name} pour la publication groupée',
       stage: {
         drainFailed: "Échec de l'action ingest",
-        queueBehind: "{'{'}n{'}'} en file d’attente · ingest dans {'{'}m{'}'} dépôt(s)",
+        queueBehind: '{n} en file d’attente · ingest dans {m} dépôt(s)',
         redraining: 'Redrainage…',
         building: 'Construction…',
         draft: 'Brouillon',
         inReview: "En cours d'examen",
-        ingested: "v{'{'}n{'}'} traitée par ingest",
-        published: "v{'{'}n{'}'} publiée",
+        ingested: 'v{n} traitée par ingest',
+        published: 'v{n} publiée',
         retracted: 'Retiré',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: 'Dépôts',
       topics: 'sujets',
@@ -1807,7 +1811,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} de plus",
+        more: '+ {n} de plus',
         fixPath: 'Ré-exécuter ingest pour réessayer : retract → créer une version → ingest.'
       },
       curation: {
@@ -1821,9 +1825,9 @@ export default {
       bytes: 'Source lue',
       conceptsIndexed: 'concepts indexés',
       elapsed: {
-        hr: "Démarré il y a {'{'}n{'}'} h",
+        hr: 'Démarré il y a {n} h',
         lt1: "Démarré il y a moins d'une minute",
-        min: "Démarré il y a {'{'}n{'}'} min"
+        min: 'Démarré il y a {n} min'
       },
       hint: {
         import: "Le référentiel reste dans l'état Import jusqu'à ce que la conversion du fichier soit terminée.",
@@ -1867,7 +1871,7 @@ export default {
     },
     create: {
       zipOnly: "Choisissez un fichier d'archive .zip.",
-      stagedFile: "Prêt : {'{'}name{'}'}",
+      stagedFile: 'Prêt : {name}',
       staged: "Archive prête — cliquez sur Créer un référentiel pour lancer l'importation.",
       openExisting: 'Ouvrir un référentiel existant',
       name: 'Nom du référentiel',
@@ -1945,7 +1949,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Les tags de niveau dépôt ({summary}) appartiennent au dépôt, pas à ce concept — gérez-les dans le panneau Tags du rail droit.'
     },
     glossary: {
       addConcept:
@@ -2089,7 +2095,7 @@ export default {
       },
       stage: {
         inReview: 'En cours de review',
-        stepOf: "Étape {'{'}n{'}'} sur 10",
+        stepOf: 'Étape {n} sur 10',
         draft: 'Brouillon'
       },
       dashboard: {
@@ -2102,7 +2108,7 @@ export default {
         stale: 'obsolète',
         stage: {
           inReview: 'En cours de review',
-          stepOf: "Étape {'{'}n{'}'} sur 10",
+          stepOf: 'Étape {n} sur 10',
           draft: 'Brouillon'
         },
         bulk: {
@@ -2213,11 +2219,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2441,16 +2447,16 @@ export default {
     },
     validation: {
       frozen:
-        "Contenu figé à la version {'{'}v{'}'} — aperçu en lecture seule. Exécutez retract sur la version serving pour apporter des modifications.",
+        'Contenu figé à la version {v} — aperçu en lecture seule. Exécutez retract sur la version serving pour apporter des modifications.',
       none: 'Aucun',
       expertHint:
         'Passez en mode Expert pour afficher le format JSON brut de validation, filtrer par gravité et passer outre certaines vérifications.',
       headline: {
-        blockers: "{'{'}n{'}'} problème(s) bloquant(s) — à corriger avant de remettre le référentiel",
-        warnings: "{'{'}n{'}'} élément(s) requièrent votre attention",
+        blockers: '{n} problème(s) bloquant(s) — à corriger avant de remettre le référentiel',
+        warnings: '{n} élément(s) requièrent votre attention',
         ok: 'Tout est correct. Rien à corriger.'
       },
-      summary: "{'{'}clean{'}'} sans erreur · {'{'}warnings{'}'} à vérifier · {'{'}blockers{'}'} bloquant(s)",
+      summary: '{clean} sans erreur · {warnings} à vérifier · {blockers} bloquant(s)',
       formatter: {
         notReady: "L'outil de formatage arrive dans la Story 4.2b."
       },
@@ -2484,8 +2490,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2499,12 +2505,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2521,7 +2527,7 @@ export default {
     },
     pii: {
       panel: 'Entités signalées',
-      nFlagged: "{'{'}n{'}'} trouvée(s)",
+      nFlagged: '{n} trouvée(s)',
       rescan: 'Re-scanner',
       scanning: 'Scan en cours…',
       clean: 'Aucune entité signalée — ce concept est propre.',
@@ -2602,7 +2608,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)",
+      total: '{n} document(s)',
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2611,12 +2617,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
@@ -2632,6 +2638,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2701,11 +2708,54 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Filtre',
+        floor: 'Seuil minimum',
+        veto: 'Tags interdits',
+        margin: 'Marge',
+        claim: 'Revendique',
+        pass: 'réussi',
+        fail: 'échoué',
+        na: 'n/a'
+      },
+      counts: {
+        positive: 'Positives',
+        negative: 'Confusables',
+        negativeRandom: 'Hors domaine',
+        meta: 'Meta',
+        nearMiss: 'Presque pertinent',
+        hint: 'Les lignes dérivées des tags interdits suivent le nombre de tags interdits du dépôt — elles ne se règlent pas ici.'
+      },
+      cls: {
+        nearMiss: 'Presque pertinent',
+        confusable: 'Confusable',
+        forbidden: 'Interdit',
+        offDomain: 'Hors domaine',
+        meta: 'Meta'
+      },
+      teach: {
+        claim:
+          'La tête RÉCLAME cette requête — elle a passé les trois barrières. Si elle ne doit PAS router ici, demandez des tags interdits excluant son sujet, ajoutez-les, puis reconstruisez la tête.',
+        explain: 'Expliquer et suggérer',
+        explainBusy: 'Explication en cours — le modèle propose des tags interdits…',
+        addTag: 'Ajouter aux tags interdits',
+        suggestNone:
+          "Aucun tag interdit n'a été suggéré — vérifiez manuellement la requête par rapport au périmètre déclaré.",
+        added: 'Ajouté aux tags interdits — reconstruisez la tête pour les appliquer.',
+        rebuildRerun: 'Reconstruire la tête et relancer',
+        savingTag: 'Enregistrement du tag interdit…',
+        rebuildBusy: 'Reconstruction de la tête et relance…',
+        title: 'Ce que cela signifie',
+        veto: 'Cette requête correspond fortement au tag interdit « {tag} ». Si elle DOIT appartenir à ce dépôt, retirez « {tag} » des tags interdits dans le Frontmatter, puis republiez pour reconstruire le head.',
+        floor:
+          'La requête est sans rapport avec le sujet de ce dépôt (score en dessous du seuil minimum du domaine) — aucun changement de tag ne corrige cela ; le filtrage est correct.',
+        rejected: 'Écarté par le garde-fou — un tag interdit ne doit pas correspondre au propre sujet de ce dépôt.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+          'Le LLM écrit les requêtes par lots de 30 par classe — une grande demande (100+) prend quelques minutes. La suite apparaît ici et dans les suites enregistrées une fois terminée.',
+        generating: 'Génération par lots — les grandes demandes prennent quelques minutes…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -2716,7 +2766,11 @@ export default {
           run: 'Run',
           when: 'When',
           passRate: 'Pass rate',
-          headVersion: 'Head'
+          headVersion: 'Head',
+          tags: 'Tags',
+          actions: 'Modifier',
+          name: 'Nom',
+          corpus: 'Corpus'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2732,14 +2786,63 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Expliquer les échecs',
+        explainBusy: 'Explication des échecs — un appel au modèle pour chaque négatif en échec…',
+        batchTitle: 'Pourquoi les négatifs en échec ont routé ici',
+        batchNone:
+          "Aucune correction n'a été suggérée — vérifiez manuellement les requêtes en échec par rapport au périmètre déclaré.",
+        addAll: 'Tout ajouter',
+        rebuildRerun: 'Reconstruire la tête et relancer la suite',
+        positiveFailuresTitle: 'Pourquoi les positifs ne passent plus',
+        positiveFailures:
+          '{n} test(s) positif(s) ont été supprimés lors de cette exécution — les tags interdits englobent trop largement le périmètre du dépôt.',
+        vetoedBy: 'Veto de',
+        marginKilled: '{n} test(s) positif(s) perdus sur la marge (aucun tag de veto unique).',
+        removals: 'Tags à retirer (ils posent un veto sur les positifs propres à ce dépôt)',
+        removeTip: 'Retirer « {tag} » — il a mis un veto sur {n} test(s) positif(s)',
+        tripwire: 'Ce cycle a cassé {n} tests positifs — les tags ajoutés sur-suppriment. Revenir en arrière ?',
+        tripwireRevert: 'Options de retour arrière',
+        staleSnapshot:
+          'Les tags ont changé depuis la génération de cette suite — régénérez pour des lignes interdites à jour.',
+        revertTitle: 'Revenir sur les tags',
+        revertForbiddenCount: '{n} tags interdits',
+        revertAction: 'Revenir',
+        revertBusy: 'Chargement de l’historique des enregistrements…',
+        revertSaving: 'Restauration du frontmatter…',
+        revertEmpty: 'Aucun enregistrement de frontmatter pour le moment.',
+        revertDone: 'Frontmatter restauré — reconstruisez la tête et relancez pour l’appliquer.',
+        removeTag: 'Retirer des tags interdits',
+        tagsetTip: 'Tags interdits pour cette exécution',
+        savedTitle: 'Suites enregistrées',
+        load: 'Charger',
+        flipTip: 'Basculer doit-sélectionner / ne-doit-pas-sélectionner',
+        deleteTip: 'Retirer cette ligne de la suite',
+        namePlaceholder: 'Nom de la suite (facultatif) — ex. ensemble de régression NCD',
+        probeTip: 'Tester cette requête sur le corpus réel',
+        deleteSuiteTip: 'Supprimer cette suite et son historique',
+        corpusNeedsIngest: "Ingérez d'abord le dépôt — le test du corpus interroge le corpus ingéré"
       },
       error: {
+        explain: "Échec de l'explication",
+        saveTag: "Impossible d'enregistrer le tag interdit",
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Impossible de charger l’historique des enregistrements',
+        revert: 'Impossible de revenir sur le frontmatter',
+        advisor: 'Échec du conseiller',
+        noSuite: "Générez d'abord une suite, puis reconstruisez et relancez.",
+        applyNoSuite: 'Tags enregistrés et tête reconstruite — générez une suite, puis lancez tout pour voir l’effet.',
+        suiteLoad: 'Impossible de charger la suite',
+        suiteUpdate: 'Impossible de mettre à jour la suite',
+        suiteRename: 'Impossible de renommer la suite',
+        generateTimeout:
+          'La suite tarde anormalement — elle apparaîtra peut-être dans les suites enregistrées ; vérifiez dans une minute.',
+        probe: 'Échec du test du corpus',
+        suiteDelete: 'Impossible de supprimer la suite'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2749,6 +2852,40 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Conseiller : recommander des changements de tags',
+        busy: 'Simulation des changements de tags sur les exécutions récentes…',
+        title: 'Recommandation de jeu de tags (simulée sur les exécutions récentes)',
+        apply: 'Appliquer les changements, reconstruire et relancer la suite',
+        scorecard: 'positifs {p}/{pt} acceptés · négatifs {n}/{nt} supprimés',
+        now: 'Actuellement',
+        predicted: 'prédit',
+        scope: ' (sur {q} requêtes des {r} dernières exécutions)',
+        applying: 'Application : enregistrement des tags, reconstruction de la tête, relance de la suite…',
+        blockedTitle: 'Suppressions bloquées — cliquez pour les inclure à Appliquer',
+        blockedGain: 'récupère {n} positive(s)',
+        narrowTitle: 'Remplacements plus étroits — récupère les positives sans ré-admettre les négatives',
+        narrowChip: 'Retirer le tag large, ajouter le tag étroit',
+        reasonCurator: 'vous avez déclaré ce tag à l’origine — confirmez avant de le retirer',
+        reasonRotated: 'l’historique a dépassé la ligne de base — confirmez avant de le retirer',
+        scopeDetail: 'suites : {s} · jeux de tags : {t}'
+      },
+      probe: {
+        answerable: 'répondable',
+        weak: 'correspondance faible',
+        unanswerable: 'absent du corpus',
+        unknown: 'inconnu',
+        title: 'Test du corpus — résumé',
+        close: 'Fermer le résumé',
+        chunksScanned: 'segments du corpus analysés',
+        headLeg: 'Verdict Head',
+        headNotClaimed: 'sans attribution',
+        corpusLeg: 'Couverture du corpus',
+        files: 'Fichiers de référence',
+        colScore: 'Score de rerank',
+        colFile: 'Fichier',
+        colContent: 'Contenu du segment'
       }
     }
   },

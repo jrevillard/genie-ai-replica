@@ -715,6 +715,18 @@ services:
       # the head-test query embeds (production chatqna parity). Unset =
       # no prefix, honestly reported by the lab as "unknown (no prefix)".
       - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID:-}
+      # Story 1-8d teaching-loop guardrail — mechanical rejection of suggested
+      # forbidden tags that are self-forbidding (cosine vs the repo's OWN
+      # topic/entity/keyword vectors >= threshold; the 2026-10-09 poisoning
+      # forbade 'lung-cancer', the repo's own entity tag) or near-duplicates
+      # of already-forbidden tags. Defaults live in the service (0.55 / 0.9).
+      - OKF_GUARD_SELF_SUBJECT=${OKF_GUARD_SELF_SUBJECT:-}
+      - OKF_GUARD_DUPLICATE_FORBIDDEN=${OKF_GUARD_DUPLICATE_FORBIDDEN:-}
+      # Story 1-8g — the Lab click-test reranks a query against the repo
+      # corpus through the SAME TEI /rerank the pipeline grounds on. Empty =
+      # the probe reports verdict unknown with an honest note.
+      - OKF_RERANK_ENDPOINT=${OKF_RERANK_ENDPOINT:-}
+      - OKF_RERANK_TOKEN=${OKF_RERANK_TOKEN:-}
       - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
       - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
       # Stuck-parsed reaper signals (claim-stamp semantics): a claimed row with
@@ -1514,12 +1526,20 @@ services:
       # for the adaptive reranker (keep aligned with chatqna's RERANKING_STRATEGY).
       RERANKING_STRATEGY: ${RERANKING_STRATEGY:-slice}
       RETRIEVER_SUMMARIZER_ENABLED: ${RETRIEVER_SUMMARIZER_ENABLED:-false}
+      # Story 1-8 routing head — OKF graph affinity + the forbidden/noise gate
+      # (read only by the retriever's graph routing; knob semantics + calibration
+      # in genie-ai-overlay/retriever/config.py; rollback: WEIGHT=0.0).
+      RETRIEVER_ROUTE_HEAD_WEIGHT: ${RETRIEVER_ROUTE_HEAD_WEIGHT:-1.0}
+      RETRIEVER_ROUTE_HEAD_MARGIN: ${RETRIEVER_ROUTE_HEAD_MARGIN:-0.01}
+      RETRIEVER_ROUTE_HEAD_FLOOR: ${RETRIEVER_ROUTE_HEAD_FLOOR:-0.55}
+      RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX: ${RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX:-0.55}
+      RETRIEVER_ROUTE_HEADS_SUPERSEDE: ${RETRIEVER_ROUTE_HEADS_SUPERSEDE:-true}
       # Graph traversal
       RETRIEVER_ARANGO_TRAVERSAL_ENABLED: ${RETRIEVER_ARANGO_TRAVERSAL_ENABLED:-true}
       RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH:-2}
       RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED:-5}
       RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD:-0.7}
-      RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES: ${RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES:-10}
+      RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES: ${RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES:-1}
       # AI services endpoints
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}

@@ -522,7 +522,10 @@ export default {
       uploadSuccessMultiple: '{count} 个文件上传成功。',
       linkSubmitSuccess: '成功爬取并保存 "{fileName}"。',
       actionSuccess: '对文件 {fileId} 的操作 "{action}" 成功。',
-      metadataUpdateSuccess: '文件 {fileId} 的元数据已更新。'
+      metadataUpdateSuccess: '文件 {fileId} 的元数据已更新。',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} 个所选文件无法删除（{'{'{'}'}reason{'}'}）——只会删除其余的 {'{'{'}'}n{'}'} 个。",
+      confirmDeleteSkipped: "{'{'{'}'}count{'}'} 个已摄取/摄取中的文件将被跳过——请先撤回它们才能删除。"
     },
     queryInspector: {
       search: '搜索',
@@ -1443,7 +1446,7 @@ export default {
       none: '尚未铸造任何版本 — 执行 publish 将创建 v1。',
       notServing: '未服务',
       publish: '创建新版本',
-      published: "版本 v{'{'}v{'}'} 已发布 — 资产包 {'{'}f{'}'} 已存入文档库。",
+      published: '版本 v{v} 已发布 — 资产包 {f} 已存入文档库。',
       serving: '已完成 ingest（serving）',
       title: '版本'
     },
@@ -1463,7 +1466,7 @@ export default {
         note: '标记的实体属于已发布内容的一部分。如果您已完成核对（例如：官方公开联络方式），请确认并继续。'
       },
       publish: {
-        body: "执行 publish 将生成版本 v{'{'}n{'}'}，并将资产包“{'{'}file{'}'}\"存储在文档库中，取代以往的任何 zip。在对其执行 Ingest 之前，新版本暂不处于 serving 状态。",
+        body: '执行 publish 将生成版本 v{n}，并将资产包“{file}"存储在文档库中，取代以往的任何 zip。在对其执行 Ingest 之前，新版本暂不处于 serving 状态。',
         confirm: '发布',
         inProgress: '正在发布 — 正在导出并传输资产包…',
         title: '发布'
@@ -1477,22 +1480,22 @@ export default {
         editor: '编辑器',
         wizard: '向导'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{n}',
       versions: '版本',
       deleteLabel: '删除',
       headTest: 'Routing Lab'
     },
     logs: {
-      labeled: "已标注：{'{'}n{'}'}",
-      fallbacks: "LLM 回退：{'{'}n{'}'}",
-      concepts: "概念：{'{'}n{'}'}",
+      labeled: '已标注：{n}',
+      fallbacks: 'LLM 回退：{n}',
+      concepts: '概念：{n}',
       col: {
         action: '操作',
         description: '描述',
         user: '用户',
         when: '日期和时间'
       },
-      count: "{'{'}n{'}'} 条记录",
+      count: '{n} 条记录',
       loadFailed: '加载活动日志失败。',
       none: '暂无活动记录 — 知识库的操作发生时将实时显示于此处。',
       title: '活动日志'
@@ -1510,8 +1513,8 @@ export default {
       zoomIn: '放大',
       zoomOut: '缩小',
       card: {
-        links: "{'{'}n{'}'} 条链接",
-        chunks: "{'{'}n{'}'} 个分块",
+        links: '{n} 条链接',
+        chunks: '{n} 个分块',
         failed: '索引失败',
         flagged: '个标记实体',
         hub: '索引中心',
@@ -1581,8 +1584,8 @@ export default {
           problem: '问题',
           noError: '被标记为失败，但没有记录原因。',
           fixLabel: '如何修复',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               '摄取工作进程在宽限期内停止等待（排空已饱和）——内容完好无损。修复方法：对此文件稍作修改并保存即可重新入队；或撤回整个仓库并重新摄取。',
@@ -1662,9 +1665,9 @@ export default {
       saveFailed: '保存失败 — 请重试',
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: '遮盖所有标记内容',
           remove: '移除所有标记内容',
@@ -1675,7 +1678,7 @@ export default {
           remove: '每个被标记概念的正文都将被清空。此操作无法撤销。',
           accept: '所有被标记实体均被设为“已核对并保留” — 除非重新扫描，否则它们将不再被标记。'
         },
-        scope: "受影响的概念数：{'{'}n{'}'}。",
+        scope: '受影响的概念数：{n}。',
         confirm: '应用',
         failed: '批量 PII 操作失败 — 请重试。'
       },
@@ -1694,11 +1697,11 @@ export default {
       bulk: {
         body: '每个知识库都会经过完整的关卡检查（PII 审查、索引编制、规范符合性）后执行 publish。按知识库分类的结果：',
         pending: '确认对所选知识库执行 publish。',
-        publishConfirm: "发布 {'{'}n{'}'} 个",
+        publishConfirm: '发布 {n} 个',
         title: '发布所选知识库'
       },
       card: {
-        actions: "{'{'}name{'}'} 的操作",
+        actions: '{name} 的操作',
         building: '构建中…',
         buildingAria: '正在构建 — 源文件仍在处理中',
         delete: '删除',
@@ -1724,23 +1727,23 @@ export default {
         note: '标记的实体属于已发布内容的一部分。如果您已完成核对（例如：官方公开联络方式），请确认并继续。'
       },
       publish: {
-        body: "执行 publish 将生成版本 v{'{'}n{'}'}，并将资产包“{'{'}file{'}'}”存储在文档库中，取代此前的 zip。在对其执行 Ingest 之前，新版本暂不处于 serving 状态。",
+        body: '执行 publish 将生成版本 v{n}，并将资产包“{file}”存储在文档库中，取代此前的 zip。在对其执行 Ingest 之前，新版本暂不处于 serving 状态。',
         confirm: '发布',
         title: '发布'
       },
       search: '搜索...',
-      select: "选择 {'{'}name{'}'} 进行批量发布",
+      select: '选择 {name} 进行批量发布',
       stage: {
         drainFailed: 'Ingest 失败',
-        queueBehind: "{'{'}n{'}'} 个排队中 · 正在从 {'{'}m{'}'} 个仓库摄取",
+        queueBehind: '{n} 个排队中 · 正在从 {m} 个仓库摄取',
         redraining: '重新排出…',
         building: '构建中…',
         draft: '草稿',
         inReview: '审核中',
-        ingested: "已完成 ingest v{'{'}n{'}'}",
-        published: "已 publish v{'{'}n{'}'}",
+        ingested: '已完成 ingest v{n}',
+        published: '已 publish v{n}',
         retracted: '已撤回',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: '存储库',
       topics: '主题',
@@ -1766,7 +1769,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ 另有 {'{'}n{'}'} 项",
+        more: '+ 另有 {n} 项',
         fixPath: '重新执行 ingest 以重试：retract → 创建版本 → ingest。'
       },
       curation: {
@@ -1780,9 +1783,9 @@ export default {
       bytes: '源读取',
       conceptsIndexed: '个概念已建立索引',
       elapsed: {
-        hr: "启动于 {'{'}n{'}'} 小时前",
+        hr: '启动于 {n} 小时前',
         lt1: '启动于不到 1 分钟前',
-        min: "启动于 {'{'}n{'}'} 分钟前"
+        min: '启动于 {n} 分钟前'
       },
       hint: {
         import: '知识库保持在 Import 状态，直至文件转换完成。',
@@ -1825,7 +1828,7 @@ export default {
     },
     create: {
       zipOnly: '请选择 .zip 资产包文件。',
-      stagedFile: "已暂存：{'{'}name{'}'}",
+      stagedFile: '已暂存：{name}',
       staged: '资产包已暂存 — 单击“创建知识库”开始导入。',
       openExisting: '打开已有知识库',
       name: '知识库名称',
@@ -1902,7 +1905,8 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint: '仓库级标签（{summary}）属于仓库而非此概念——请在右侧栏的标签面板中管理。'
     },
     glossary: {
       addConcept:
@@ -2036,7 +2040,7 @@ export default {
       },
       stage: {
         inReview: '处于 review 状态',
-        stepOf: "第 {'{'}n{'}'} 步，共 10 步",
+        stepOf: '第 {n} 步，共 10 步',
         draft: '草稿'
       },
       dashboard: {
@@ -2049,7 +2053,7 @@ export default {
         stale: '已陈旧',
         stage: {
           inReview: '处于 review 状态',
-          stepOf: "第 {'{'}n{'}'} 步，共 10 步",
+          stepOf: '第 {n} 步，共 10 步',
           draft: '草稿'
         },
         bulk: {
@@ -2160,11 +2164,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2383,15 +2387,15 @@ export default {
       saveBlocked: '保存已被阻止：请先修复规范符合性问题。'
     },
     validation: {
-      frozen: "内容已冻结于 {'{'}v{'}'} — 仅供只读预览。如需更改，请先对 serving 版本执行 retract。",
+      frozen: '内容已冻结于 {v} — 仅供只读预览。如需更改，请先对 serving 版本执行 retract。',
       none: '无',
       expertHint: '切换至专家模式可查看原始校验 JSON、按严重级别过滤并覆盖检查项。',
       headline: {
-        blockers: "{'{'}n{'}'} 个阻塞性问题 — 请在移交知识库前修复",
-        warnings: "{'{'}n{'}'} 项内容需要您核对",
+        blockers: '{n} 个阻塞性问题 — 请在移交知识库前修复',
+        warnings: '{n} 项内容需要您核对',
         ok: '一切就绪。没有需要修复的问题。'
       },
-      summary: "{'{'}clean{'}'} 项正常 · {'{'}warnings{'}'} 项需复核 · {'{'}blockers{'}'} 项阻断",
+      summary: '{clean} 项正常 · {warnings} 项需复核 · {blockers} 项阻断',
       formatter: {
         notReady: '格式化工具将在故事 4.2b 中落地。'
       },
@@ -2425,8 +2429,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2440,12 +2444,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2462,7 +2466,7 @@ export default {
     },
     pii: {
       panel: '标记的实体',
-      nFlagged: "找到 {'{'}n{'}'} 个",
+      nFlagged: '找到 {n} 个',
       rescan: '重新扫描',
       scanning: '扫描中…',
       clean: '没有标记的实体 — 此 concept 正常。',
@@ -2542,7 +2546,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)",
+      total: '{n} document(s)',
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2551,12 +2555,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
@@ -2572,6 +2576,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2641,11 +2646,51 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: '门控',
+        floor: '下限',
+        veto: '禁用标签',
+        margin: '余量',
+        claim: '认领',
+        pass: '通过',
+        fail: '未通过',
+        na: '不适用'
+      },
+      counts: {
+        positive: '正向',
+        negative: '易混淆',
+        negativeRandom: '跨域',
+        meta: '元查询',
+        nearMiss: '近似擦边',
+        hint: '禁用标签衍生的行数随仓库禁用标签的数量增减——无法在此设置。'
+      },
+      cls: {
+        nearMiss: '近似擦边',
+        confusable: '易混淆',
+        forbidden: '禁用',
+        offDomain: '跨域',
+        meta: '元查询'
+      },
+      teach: {
+        claim:
+          'Head 认领了这条查询——它通过了全部三道闸。如果它不应路由到这里，请让系统建议能排除其主题的禁用标签，添加后重建 head。',
+        explain: '解释并建议',
+        explainBusy: '解释中——模型正在建议禁用标签…',
+        addTag: '添加到禁用标签',
+        suggestNone: '没有建议任何禁用标签——请人工将查询与声明的范围进行比对。',
+        added: '已添加到禁用标签——请重建 head 以使其生效。',
+        rebuildRerun: '重建 head 并重跑',
+        savingTag: '正在保存禁用标签…',
+        rebuildBusy: '正在重建 head 并重跑…',
+        title: '这意味着什么',
+        veto: '该查询与禁用标签“{tag}”高度匹配。如果它应当属于此仓库，请在 Frontmatter 的禁用标签中移除“{tag}”，然后重新发布以重建 head。',
+        floor: '该查询与此仓库的主题无关（分数低于领域下限）——更改标签无法解决此问题；这是正确的抑制。',
+        rejected: '已被护栏过滤——禁用标签不得与该仓库自身的主题匹配。'
+      },
       suites: {
         generate: 'Generate test suite',
-        generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+        generateTip: 'LLM 按每类 30 条分批生成 — 大批量（100+）需要几分钟。完成后测试集会出现在此处和已保存列表中。',
+        generating: '正在分批生成 — 大批量需要几分钟…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -2656,7 +2701,11 @@ export default {
           run: 'Run',
           when: 'When',
           passRate: 'Pass rate',
-          headVersion: 'Head'
+          headVersion: 'Head',
+          tags: '标签',
+          actions: '编辑',
+          name: '名称',
+          corpus: '语料'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2672,14 +2721,59 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: '解释失败项',
+        explainBusy: '正在解释失败项——对每个失败的负向查询一次模型调用…',
+        batchTitle: '失败的负向查询为何路由到这里',
+        batchNone: '没有建议任何修复——请人工将失败的查询与声明的范围进行比对。',
+        addAll: '全部添加',
+        rebuildRerun: '重建 head 并重跑测试集',
+        positiveFailuresTitle: '为什么正例不再通过',
+        positiveFailures: '本轮有 {n} 个正例测试被抑制——禁用标签过度匹配仓库范围。',
+        vetoedBy: '否决来源',
+        marginKilled: '{n} 个正例测试因 margin 落败（无单一否决标签）。',
+        removals: '建议移除的标签（它们否决了该仓库自身的正例）',
+        removeTip: '移除“{tag}”——它否决了 {n} 个正例测试',
+        tripwire: '本轮周期破坏了 {n} 个正例测试——新增标签过度抑制。是否回滚？',
+        tripwireRevert: '查看回滚选项',
+        staleSnapshot: '自该测试套件生成以来标签已变更——请重新生成以获得最新的禁用行。',
+        revertTitle: '回滚标签',
+        revertForbiddenCount: '{n} 个禁用标签',
+        revertAction: '回滚',
+        revertBusy: '正在加载保存历史…',
+        revertSaving: '正在恢复 frontmatter…',
+        revertEmpty: '尚无 frontmatter 保存记录。',
+        revertDone: 'Frontmatter 已恢复——请重建 head 并重跑以使其生效。',
+        removeTag: '从禁止标签中移除',
+        tagsetTip: '本次运行的禁止标签',
+        savedTitle: '已保存的测试集',
+        load: '加载',
+        flipTip: '切换 应选择 / 不应选择',
+        deleteTip: '从测试集中移除此行',
+        namePlaceholder: '测试集名称（可选）— 例如：NCD 回归集',
+        probeTip: '用真实语料测试此查询',
+        deleteSuiteTip: '删除此测试集及其历史',
+        corpusNeedsIngest: '请先摄取仓库——语料测试搜索的是已摄取的语料'
       },
       error: {
+        explain: '解释失败',
+        saveTag: '无法保存禁用标签',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: '加载保存历史失败',
+        revert: '回滚 frontmatter 失败',
+        advisor: '顾问失败',
+        noSuite: '请先生成测试集，然后重建并重新运行。',
+        applyNoSuite: '标签已保存、head 已重建——请生成测试集并运行全部以查看效果。',
+        suiteLoad: '无法加载测试集',
+        suiteUpdate: '无法更新测试集',
+        suiteRename: '无法重命名测试集',
+        generateTimeout: '测试集耗时异常 — 可能稍后会出现在已保存列表中；请一分钟后查看。',
+        probe: '语料测试失败',
+        suiteDelete: '无法删除测试集'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2689,6 +2783,40 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: '顾问：推荐标签调整',
+        busy: '正在根据近期运行模拟标签调整…',
+        title: '标签集建议（基于近期运行模拟）',
+        apply: '应用更改、重建 head 并重新运行测试集',
+        scorecard: '正例 {p}/{pt} 通过 · 负例 {n}/{nt} 拦截',
+        now: '当前',
+        predicted: '预测',
+        scope: '（最近 {r} 次运行共 {q} 条查询）',
+        applying: '正在应用：保存标签、重建 head、重新运行测试集…',
+        blockedTitle: '受阻的移除——点击以加入"应用"',
+        blockedGain: '可挽回 {n} 个正向用例',
+        narrowTitle: '更窄的替代标签——挽回正向用例而不重新放进负向用例',
+        narrowChip: '移除宽泛标签，添加窄标签',
+        reasonCurator: '此标签由您最初声明——移除前请确认',
+        reasonRotated: '编辑历史已滚过基线——移除前请确认',
+        scopeDetail: '测试集：{s} · 标签集：{t}'
+      },
+      probe: {
+        answerable: '可回答',
+        weak: '弱匹配',
+        unanswerable: '语料中无此内容',
+        unknown: '未知',
+        title: '语料测试 — 摘要',
+        close: '关闭摘要',
+        chunksScanned: '个语料块已扫描',
+        headLeg: 'Head 判定',
+        headNotClaimed: '未归属',
+        corpusLeg: '语料覆盖',
+        files: '参考文件',
+        colScore: '重排序得分',
+        colFile: '文件',
+        colContent: '块内容'
       }
     }
   },

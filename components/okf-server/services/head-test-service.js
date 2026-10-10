@@ -95,6 +95,20 @@ const ROUTE_RETRY = parseInt(process.env.RETRIEVER_ROUTE_RETRY || '1', 10);
 // factors for cancer" — David: "probably in, given the tags"; on-topic
 // positives +0.106..+0.122). Default 0.01 sits centered in the gap.
 const ROUTE_HEAD_MARGIN = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_MARGIN || '0.01');
+// Story 1-8b (David 2026-10-09: "forbidden is forbidden — that is a hard
+// contract, it should immediately score zero") — the gate hardens from one
+// margin rule to a three-condition claim. Calibrated on NCD 2026-10-09
+// (19-query probe, gate-probe-inner.js):
+//   FLOOR: unrelated queries score 0.32-0.48 on ANY head ("capital of
+//   France" 0.321, "forbidden noise gate" 0.407, "weather today" 0.484)
+//   and the margin rule cannot see them (France claimed at +0.012). Legit
+//   claims start at 0.614 → 0.55 sits mid-gap.
+const ROUTE_HEAD_FLOOR = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_FLOOR || '0.55');
+//   VETO: a mixed-subject query (genetics+cancer 0.617, epidemiology+lung
+//   0.619, exercise+asthma 0.638, incidence-trends 0.567) slips past the
+//   averaged forbidden centroid but not its single dominant forbidden tag.
+//   Legit claims never exceed 0.529 on any forbidden tag → 0.55 separates.
+const ROUTE_FORBIDDEN_TAG_MAX = parseFloat(process.env.RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX || '0.55');
 const SIBLING_LIMIT = parseInt(process.env.OKF_HEAD_TEST_SIBLING_LIMIT || '20', 10);
 
 // ---------- math helpers ----------
@@ -123,22 +137,35 @@ const DEFAULT_WEIGHTS = { topic: 1.0, entity: 0.7, keyword: 0.5, summary: 0.5, s
  * for a recompute formula).
  */
 function scoreHead(head, queryVec, formula) {
-  if (!head || !Array.isArray(head.vector)) return { score: null, per_field: null };
+  if (!head || !Array.isArray(head.vector)) return { score: null, per_field: null, tag_cosines: [] };
   const perFieldCos = {};
   for (const f of POSITIVE_FIELDS.concat(['forbidden'])) {
     const v = head.per_field && head.per_field[f];
     perFieldCos[f] = Array.isArray(v) ? cosine(queryVec, v) : null;
   }
+  // Story 1-8b — per-tag forbidden cosines for the hard veto gate. Each
+  // forbidden tag was embedded individually at head build time
+  // (per_field.forbidden_vectors = [{tag, vector}]).
+  const tagCosines = [];
+  const forbiddenVectors = (head.per_field && head.per_field.forbidden_vectors) || [];
+  if (Array.isArray(forbiddenVectors)) {
+    for (const fv of forbiddenVectors) {
+      if (!fv || typeof fv.tag !== 'string' || !Array.isArray(fv.vector)) continue;
+      const c = cosine(queryVec, fv.vector);
+      if (c !== null) tagCosines.push({ tag: fv.tag, cosine: c });
+    }
+  }
   if (formula === 'default' || formula === undefined || formula === null) {
     return {
       score: cosine(queryVec, head.vector),
       per_field: perFieldCos,
+      tag_cosines: tagCosines,
       formula_used: 'default(stored-vector)'
     };
   }
   // Recompute formulas need per_field vectors.
   const hasAny = POSITIVE_FIELDS.some((f) => perFieldCos[f] !== null);
-  if (!hasAny) return { score: null, per_field: perFieldCos, formula_used: String(formula) };
+  if (!hasAny) return { score: null, per_field: perFieldCos, tag_cosines: tagCosines, formula_used: String(formula) };
   const weights =
     formula === 'uniform' ? { topic: 1, entity: 1, keyword: 1, summary: 1, scope: 1, forbidden: 0 } : formula; // caller-validated object
   let acc = 0;
@@ -149,7 +176,8 @@ function scoreHead(head, queryVec, formula) {
     acc += w * perFieldCos[f];
     totalW += w;
   }
-  if (totalW === 0) return { score: null, per_field: perFieldCos, formula_used: String(formula) };
+  if (totalW === 0)
+    return { score: null, per_field: perFieldCos, tag_cosines: tagCosines, formula_used: String(formula) };
   let score = acc / totalW;
   const wf = typeof weights.forbidden === 'number' ? weights.forbidden : 0;
   if (wf > 0 && perFieldCos.forbidden !== null) {
@@ -158,7 +186,7 @@ function scoreHead(head, queryVec, formula) {
     // never earns a bonus).
     score -= wf * Math.max(0, perFieldCos.forbidden);
   }
-  return { score, per_field: perFieldCos, formula_used: String(formula) };
+  return { score, per_field: perFieldCos, tag_cosines: tagCosines, formula_used: String(formula) };
 }
 
 // ---------- query embedding ----------
@@ -179,6 +207,21 @@ async function embedQuery(query) {
     throw err;
   }
   return { vector: v, prefixed: prefix.length > 0, model: EMBED_MODEL_ID || 'unknown' };
+}
+
+/**
+ * Batch variant of embedQuery — the SAME prefix contract, one TEI call
+ * (teiEmbed chunks internally). 1-8g-b (live): the advisor's gate
+ * simulation embedded BARE queries while the live gate embeds prefixed
+ * ones — different vector spaces — and at margin 0.01 the simulated
+ * verdicts diverged wholesale from the real runs ("Now 13/50" vs the
+ * run's 29/50). Anything that simulates the gate MUST embed through
+ * this contract.
+ */
+async function embedQueryBatch(queries) {
+  const prefix = queryInstructionFor(EMBED_MODEL_ID);
+  const vecs = await frontmatterService.teiEmbed(queries.map((q) => prefix + q));
+  return { vectors: vecs, prefixed: prefix.length > 0, model: EMBED_MODEL_ID || 'unknown' };
 }
 
 // ---------- chunk-probe replay (LEG B) ----------
@@ -372,6 +415,7 @@ async function routingTest(repoId, payload = {}, opts = {}) {
         name: s.name,
         score: null,
         per_field: null,
+        tag_cosines: [],
         is_under_test: false
       });
     }
@@ -387,6 +431,7 @@ async function routingTest(repoId, payload = {}, opts = {}) {
         const sc = scoreHead(headsById[headRows[i].repo_id], emb.vector, formula);
         headRows[i].score = sc.score;
         headRows[i].per_field = sc.per_field;
+        headRows[i].tag_cosines = sc.tag_cosines || [];
       }
     }
     // Rank the head leg (nulls sink).
@@ -394,15 +439,33 @@ async function routingTest(repoId, payload = {}, opts = {}) {
     ranked.forEach((r, i) => {
       r.head_rank = i + 1;
     });
-    // Story 1-8a — the forbidden/noise gate. A repo CLAIMS the head leg only
-    // when its score clears its own forbidden centroid by ROUTE_HEAD_MARGIN.
-    // A head whose forbidden centroid is missing (pre-1.8a rebuild) claims
-    // freely — the gate degrades open, never silently suppresses.
+    // Story 1-8a/1-8b — the forbidden contract, three conditions. A repo
+    // CLAIMS the head leg only when ALL of:
+    //   floor  — score ≥ ROUTE_HEAD_FLOOR (off-domain noise can never win;
+    //            the margin rule alone is blind to fully-unrelated queries).
+    //   veto   — NO forbidden tag individually matches the query at/above
+    //            ROUTE_FORBIDDEN_TAG_MAX ("forbidden is forbidden — a hard
+    //            contract; it should immediately score zero").
+    //   margin — the score still clears the averaged forbidden centroid.
+    // Degradation: a head without forbidden data (pre-1-8b rebuild has no
+    // per-tag vectors) skips the veto but still applies floor+margin —
+    // the gate never silently suppresses on missing data.
     for (const r of ranked) {
       const forb = r.per_field ? r.per_field.forbidden : null;
       r.forbidden_cosine = typeof forb === 'number' ? forb : null;
       r.head_margin = r.forbidden_cosine !== null ? r.score - r.forbidden_cosine : null;
-      r.head_claimed = r.forbidden_cosine === null || r.head_margin > ROUTE_HEAD_MARGIN;
+      const tags = Array.isArray(r.tag_cosines) ? r.tag_cosines : [];
+      const worst = tags.reduce((a, t) => (!a || t.cosine > a.cosine ? t : a), null);
+      r.max_tag_cosine = worst ? worst.cosine : null;
+      // Story 1-8d — the nearest forbidden tag is named ALWAYS (not only on
+      // veto) so margin-killed positives carry their attribution into run
+      // rows and the improvement advice.
+      r.max_tag = worst ? worst.tag : null;
+      r.tag_veto = worst && worst.cosine >= ROUTE_FORBIDDEN_TAG_MAX ? worst.tag : null;
+      r.floor_pass = r.score >= ROUTE_HEAD_FLOOR;
+      const marginPass = r.forbidden_cosine === null || r.head_margin > ROUTE_HEAD_MARGIN;
+      r.head_claimed = r.floor_pass && !r.tag_veto && marginPass;
+      r.head_claim = !r.floor_pass ? 'floor' : r.tag_veto ? 'veto' : !marginPass ? 'margin' : 'claim';
     }
     const topRanked = ranked.length ? ranked[0] : null;
     const headWinner = topRanked && topRanked.head_claimed ? topRanked : null;
@@ -496,10 +559,14 @@ async function routingTest(repoId, payload = {}, opts = {}) {
         head_score: utRow.score,
         head_rank: utRow.head_rank || null,
         per_field: utRow.per_field,
-        // Story 1-8a gate telemetry: does this head CLAIM the query, and by
-        // what margin over its own forbidden centroid.
+        // Story 1-8a/1-8b gate telemetry: does this head CLAIM the query,
+        // and which condition decided (floor | veto | margin | claim).
         forbidden_cosine: utRow.forbidden_cosine !== undefined ? utRow.forbidden_cosine : null,
         head_margin: utRow.head_margin !== undefined ? utRow.head_margin : null,
+        tag_veto: utRow.tag_veto || null,
+        max_tag_cosine: utRow.max_tag_cosine !== undefined ? utRow.max_tag_cosine : null,
+        floor_pass: !!utRow.floor_pass,
+        head_claim: utRow.head_claim || null,
         head_claimed: !!utRow.head_claimed,
         probe: probeOutcome ? probeOutcome.per_repo[repoId] || null : null
       },
@@ -520,12 +587,24 @@ async function routingTest(repoId, payload = {}, opts = {}) {
               ? 'floor'
               : 'qualified'
           : topRanked && !topRanked.head_claimed
-            ? 'head-suppressed (forbidden/noise)'
+            ? topRanked.head_claim === 'floor'
+              ? 'head-suppressed (off-domain)'
+              : topRanked.head_claim === 'veto'
+                ? `head-suppressed (forbidden: ${topRanked.tag_veto})`
+                : 'head-suppressed (forbidden/noise)'
             : 'head-only (no graph under test)'
       },
       fidelity: {
-        algorithm: 'story-1.3-replay+v1',
-        knobs: { ROUTE_TOP_K, ROUTE_MIN_CHUNKS, ROUTE_PROBE_TIMEOUT_MS, ROUTE_RETRY, ROUTE_HEAD_MARGIN }
+        algorithm: 'story-1.3-replay+v2',
+        knobs: {
+          ROUTE_TOP_K,
+          ROUTE_MIN_CHUNKS,
+          ROUTE_PROBE_TIMEOUT_MS,
+          ROUTE_RETRY,
+          ROUTE_HEAD_MARGIN,
+          ROUTE_HEAD_FLOOR,
+          ROUTE_FORBIDDEN_TAG_MAX
+        }
       }
     };
     span.setAttribute('okf.headtest.head_winner', result.verdict.head_routing_winner || '');
@@ -539,9 +618,218 @@ async function routingTest(repoId, payload = {}, opts = {}) {
   });
 }
 
+/**
+ * Story 1-8c — explain ONE query's gate outcome and, when it wrongly
+ * CLAIMS, suggest forbidden tags that would exclude it. The teaching half
+ * of the Lab loop: fail -> advice -> edit tags -> rebuild -> retest.
+ * Reuses routingTest for the full verdict, then adds the suggestion.
+ */
+async function explainRouting(repoId, payload = {}, opts = {}) {
+  const query = typeof payload.query === 'string' ? payload.query.trim() : '';
+  if (!query) {
+    const err = new Error('query is required');
+    err.code = 'VALIDATION_ERROR';
+    err.status = 400;
+    throw err;
+  }
+  const result = await routingTest(repoId, { query, include_probes: false, formula: payload.formula }, opts);
+  const ut = result.under_test || {};
+  let suggestion = { tags: [], source: 'none', reason: '' };
+  if (ut.head_claimed) {
+    // It claims — the interesting case. LLM proposes 1-3 kebab-case
+    // forbidden tags excluding this query's subject WITHOUT excluding the
+    // declared scope. Deterministic empty fallback: the UI still teaches
+    // ("no forbidden tag covers this subject — consider adding one").
+    let fm = null;
+    try {
+      fm = await frontmatterService.readFrontmatterFromRepoDoc(repoId);
+    } catch (e) {
+      logger.warn('head-test.explain.fm_read_failed', { repo_id: repoId, error: e.message });
+    }
+    if (fm) {
+      try {
+        const prompt = `A retrieval repository must NOT route the query below, but its vectorized
+head currently claims it (score ${ut.head_score != null ? ut.head_score.toFixed(3) : 'n/a'},
+max forbidden-tag similarity ${ut.max_tag_cosine != null ? ut.max_tag_cosine.toFixed(3) : 'n/a'}).
+
+REPOSITORY scope — topics: ${(fm.topic || []).join(', ')}; entities: ${(fm.entity || []).join(', ')};
+already forbidden: ${(fm.forbidden || []).join(', ') || '(none)'}; summary: ${fm.summary || ''}
+
+QUERY: ${query}
+
+Propose 1-3 NEW forbidden tags (lowercase kebab-case, each 1-3 words) that
+capture what this query is about and that the repository's scope genuinely
+EXCLUDES. They must not overlap the already-forbidden list and must not
+exclude the repository's own topics/entities. Respond with ONLY a JSON
+object: {"tags": ["...", "..."]}`;
+        const resp = await frontmatterService.vllmChatCompletions([{ role: 'user', content: prompt }], {
+          maxTokens: 200,
+          temperature: 0.2
+        });
+        const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
+        const parsed = (() => {
+          const m = content && content.content && content.content.match(/\{[\s\S]*\}/);
+          if (!m) return null;
+          try {
+            return JSON.parse(m[0]);
+          } catch {
+            return null;
+          }
+        })();
+        const tags = (parsed && Array.isArray(parsed.tags) ? parsed.tags : [])
+          .filter((t) => typeof t === 'string' && t.trim())
+          .map((t) => t.trim().toLowerCase().replace(/\s+/g, '-'))
+          .filter((t) => !(fm.forbidden || []).includes(t))
+          .slice(0, 3);
+        // Story 1-8d — mechanical guardrail before anything reaches the UI.
+        const guard = await guardSuggestions(repoId, tags, opts);
+        suggestion = guard.accepted.length
+          ? {
+              tags: guard.accepted,
+              rejected: guard.rejected,
+              source: 'llm',
+              reason: "suggested forbidden tags for this query's subject (guardrail-screened)"
+            }
+          : {
+              tags: [],
+              rejected: guard.rejected,
+              source: guard.rejected.length ? 'guardrail' : 'none',
+              reason: guard.rejected.length
+                ? 'every proposal was screened out by the guardrail — the query matches the declared scope'
+                : 'the model proposed no non-overlapping tags — review the query against the declared scope manually'
+            };
+      } catch (e) {
+        logger.warn('head-test.explain.llm_failed', { repo_id: repoId, error: e.message });
+        suggestion = {
+          tags: [],
+          rejected: [],
+          source: 'none',
+          reason:
+            'the suggestion model is unreachable — no forbidden tag matches this query; consider adding one for its subject'
+        };
+      }
+    }
+  }
+  return { ...result, suggestion };
+}
+
+// Story 1-8d — the MECHANICAL suggestion guardrail. A proposed forbidden
+// tag must not match the repository's own subject: cosine vs ANY topic/
+// entity/keyword vector at/above GUARD_SELF_SUBJECT rejects it. This exists
+// because prompt-only constraints failed in production: the 3-cycle
+// poisoning (2026-10-09) applied 'lung-cancer' — the repo's OWN entity tag
+// — and positives collapsed 7/8 -> 2/8. Near-duplicates of already-forbidden
+// tags are rejected too (nothing new to learn).
+const GUARD_SELF_SUBJECT = parseFloat(process.env.OKF_GUARD_SELF_SUBJECT || '0.55');
+const GUARD_DUPLICATE_FORBIDDEN = parseFloat(process.env.OKF_GUARD_DUPLICATE_FORBIDDEN || '0.9');
+
+/**
+ * Screen candidate forbidden tags against the repo's own head vectors AND,
+ * when positive test queries are supplied, against the vetoes they would
+ * cause. The impact simulation is the decisive guard: a candidate that
+ * would suppress even ONE gold positive test is rejected regardless of how
+ * sensible its embedding looks ("cardiovascular-pharmacology" vetoes half
+ * a clinical corpus at the 0.55 bar). Returns
+ * {accepted: [tag], rejected: [{tag, reason}]} — accepted entries are
+ * still suggestions; the curator confirms via the chip flow.
+ */
+async function guardSuggestions(repoId, candidates, opts = {}) {
+  const list = (Array.isArray(candidates) ? candidates : []).filter((t) => typeof t === 'string' && t.trim());
+  if (!list.length) return { accepted: [], rejected: [] };
+  const repositoryService = require('./repository-service');
+  const repo = await repositoryService.getById(repoId, { authz: opts.authz });
+  const head = repo && repo.head;
+  const ownVectors = [];
+  if (head && head.per_field) {
+    for (const f of POSITIVE_FIELDS) {
+      if (Array.isArray(head.per_field[f])) ownVectors.push(head.per_field[f]);
+    }
+  }
+  const existingForbidden =
+    head && head.per_field && Array.isArray(head.per_field.forbidden_vectors) ? head.per_field.forbidden_vectors : [];
+  const positiveQueries = Array.isArray(opts.positiveQueries) ? opts.positiveQueries.filter(Boolean) : [];
+  const positiveVectors = positiveQueries.length
+    ? await frontmatterService.teiEmbed(positiveQueries.map((q) => q.query || q))
+    : [];
+  const vecs = await frontmatterService.teiEmbed(list);
+  // Per-tag naming data: the repo's own topic/entity/keyword VALUES (the
+  // head carries only their centroids — the naming pass needs the tags).
+  const ownTags = [];
+  const fm = repo.frontmatter || {};
+  for (const f of POSITIVE_FIELDS) {
+    for (const v of Array.isArray(fm[f]) ? fm[f] : []) ownTags.push({ field: f, value: String(v) });
+  }
+  const ownTagVecs = ownTags.length ? await frontmatterService.teiEmbed(ownTags.map((t) => t.value)) : [];
+  const accepted = [];
+  const rejected = [];
+  list.forEach((tag, i) => {
+    const v = vecs && vecs[i];
+    if (!Array.isArray(v)) {
+      rejected.push({ tag, reason: 'embedding failed — cannot verify against the repository scope' });
+      return;
+    }
+    let worst = null;
+    for (const ov of ownVectors) {
+      const c = cosine(v, ov);
+      if (c !== null && (!worst || c > worst.cosine)) worst = { cosine: c };
+    }
+    if (worst && worst.cosine >= GUARD_SELF_SUBJECT) {
+      // Name the offending OWN TAG (2026-10-09: David read "must not match
+      // the repository's own subject" as being about the forbidden list —
+      // the guard actually fires against the repo's OWN topic/entity/
+      // keyword tags, e.g. 'lung-cancer-treatment' vs own entity
+      // 'lung-cancer'). The per_field vectors are centroids, so embed the
+      // repo's own tag values once and find the closest one.
+      let closest = null;
+      ownTags.forEach((t, ti) => {
+        const c = cosine(v, ownTagVecs[ti]);
+        if (c !== null && (!closest || c > closest.cosine)) closest = { ...t, cosine: c };
+      });
+      const detail =
+        closest && closest.cosine >= GUARD_SELF_SUBJECT
+          ? ` — closest own tag: ${closest.field} "${closest.value}" (${closest.cosine.toFixed(2)})`
+          : '';
+      rejected.push({
+        tag,
+        reason: `too close to the repository's own subject (similarity ${worst.cosine.toFixed(2)} >= ${GUARD_SELF_SUBJECT})${detail}`
+      });
+      return;
+    }
+    // Veto-impact simulation — the 2026-10-09 poisoning guard.
+    if (positiveVectors.length) {
+      const killed = [];
+      positiveVectors.forEach((qv, qi) => {
+        const c = cosine(v, qv);
+        if (c !== null && c >= ROUTE_FORBIDDEN_TAG_MAX) killed.push(positiveQueries[qi].query || positiveQueries[qi]);
+      });
+      if (killed.length) {
+        rejected.push({
+          tag,
+          reason: `would suppress ${killed.length} positive test${killed.length > 1 ? 's' : ''} (e.g. "${String(killed[0]).slice(0, 60)}")`
+        });
+        return;
+      }
+    }
+    let dup = null;
+    for (const fv of existingForbidden) {
+      const c = fv && Array.isArray(fv.vector) ? cosine(v, fv.vector) : null;
+      if (c !== null && (dup === null || c > dup)) dup = c;
+    }
+    if (dup !== null && dup >= GUARD_DUPLICATE_FORBIDDEN) {
+      rejected.push({ tag, reason: 'already covered by an existing forbidden tag' });
+      return;
+    }
+    accepted.push(tag);
+  });
+  return { accepted, rejected };
+}
+
 module.exports = {
   rebuildHead,
   routingTest,
+  explainRouting,
+  guardSuggestions,
+  embedQueryBatch,
   // test surface
   _internals: {
     cosine,
@@ -550,6 +838,8 @@ module.exports = {
     queryInstructionFor,
     normalizeFormula,
     POSITIVE_FIELDS,
-    DEFAULT_WEIGHTS
+    DEFAULT_WEIGHTS,
+    GUARD_SELF_SUBJECT,
+    GUARD_DUPLICATE_FORBIDDEN
   }
 };

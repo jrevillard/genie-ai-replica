@@ -524,7 +524,11 @@ export default {
       uploadSuccessMultiple: 'Fayil {count} yeleta benta.',
       linkSubmitSuccess: '"{fileName}" ñiningta ani a marata benta.',
       actionSuccess: 'Baara "{action}" fayil {fileId} to benta.',
-      metadataUpdateSuccess: 'Metadeta fayil {fileId} yailamata.'
+      metadataUpdateSuccess: 'Metadeta fayil {fileId} yailamata.',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} selected file(s) cannot be deleted ({'{'{'}'}reason{'}'}) — only the other {'{'{'}'}n{'}'} will be deleted.",
+      confirmDeleteSkipped:
+        "{'{'{'}'}count{'}'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
     },
     queryInspector: {
       search: 'A nyining',
@@ -1454,7 +1458,7 @@ export default {
       none: 'Ejjan̄in wōr wāween em̦ōj kōm̦m̦an — publishing ej kōm̦m̦an v1.',
       notServing: 'Hani baara nte',
       publish: 'Kōm̦m̦an wāween ekāāl',
-      published: "Wāween v{'{'}v{'}'} em̦ōj publish — bundle {'{'}f{'}'} em̦ōj kakkwon ilo jikin kakwōn peba.",
+      published: 'Wāween v{v} em̦ōj publish — bundle {f} em̦ōj kakkwon ilo jikin kakwōn peba.',
       serving: 'A marata (baara)',
       title: 'Berolu'
     },
@@ -1474,7 +1478,7 @@ export default {
         note: 'Men ko rej kakōl̦l̦e rej koba ilo melele ko enaj publish. Ñe kwom̦ōj am lali (āinwōt numba in talboon ko an opij), kam̦ool im wōnm̦aanl̦o̦k.'
       },
       publish: {
-        body: "Publishing ej kōm̦m̦an v{'{'}n{'}'} im kakkwon bundle \"{'{'}file{'}'}\" ilo jikin kakwōn peba, bōk jikin jabdewōt zip m̦okta. Wāween in ekāāl ejjab serving m̦ae iien kwoj Ingest e.",
+        body: 'Publishing ej kōm̦m̦an v{n} im kakkwon bundle "{file}" ilo jikin kakwōn peba, bōk jikin jabdewōt zip m̦okta. Wāween in ekāāl ejjab serving m̦ae iien kwoj Ingest e.',
         confirm: 'A ke',
         inProgress: 'A kabuḷo publishing — a bōk eddo kakkwon bundle im jōt e…',
         title: 'A ke'
@@ -1488,22 +1492,22 @@ export default {
         editor: 'Safelaa',
         wizard: 'Madi'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{n}',
       versions: 'Berolu',
       deleteLabel: 'A kuntu',
       headTest: 'Routing Lab'
     },
     logs: {
-      labeled: "kakōl̦l̦eiki: {'{'}n{'}'}",
-      fallbacks: "jipañ ko an LLM: {'{'}n{'}'}",
-      concepts: "kōm̦m̦an ko: {'{'}n{'}'}",
+      labeled: 'kakōl̦l̦eiki: {n}',
+      fallbacks: 'jipañ ko an LLM: {n}',
+      concepts: 'kōm̦m̦an ko: {n}',
       col: {
         action: 'Kuu',
         description: 'Kibaru',
         user: 'Baaralaa',
         when: 'Lung ani waatoo'
       },
-      count: "{'{'}n{'}'} jikin ko",
+      count: '{n} jikin ko',
       loadFailed: 'Ban kōdāl̦o̦k ripot in m̦akūtkūt ko.',
       none: 'Ejjan̄in wōr m̦akūtkūt em̦ōj jeje — jerbal ko an jikin kakwōn renaj wal̦o̦k ijin ilo aer wal̦o̦k.',
       title: 'Baara safuo'
@@ -1521,8 +1525,8 @@ export default {
       zoomIn: 'A sutuya',
       zoomOut: 'A masorong',
       card: {
-        links: "{'{'}n{'}'} kebaake ko",
-        chunks: "{'{'}n{'}'} kōkōm̧bōļ ko",
+        links: '{n} kebaake ko',
+        chunks: '{n} kōkōm̧bōļ ko',
         failed: 'laajrak ear l̦apier',
         flagged: 'men ko ewōr kakōl̦l̦e ie',
         hub: 'Indeksi bolo',
@@ -1594,8 +1598,8 @@ export default {
           problem: 'The problem',
           noError: 'Marked failed without a recorded reason.',
           fixLabel: 'How to fix',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               'The ingest worker gave up waiting within its grace window (the drain was saturated) — the content is intact. Fix: edit this file slightly and save to re-queue it, or retract and re-ingest the whole repo.',
@@ -1676,9 +1680,9 @@ export default {
       saveFailed: 'Kōjparok ear l̦apier — bar kajjieon̦',
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: 'Bwōbwe aolep men ko ewōr kakōl̦l̦e ie',
           remove: 'Jol̦o̦k aolep kobba ko ewōr kakōl̦l̦e ie',
@@ -1689,7 +1693,7 @@ export default {
           remove: 'Kobban kajojo kōm̦m̦an ewōr kakōl̦l̦e ie ej ejjel̦o̦kl̦o̦k. Ban maron̦ bar kōjepel̦o̦ke.',
           accept: 'Aolep men ko ewōr kakōl̦l̦e ie rej etale-im-kōjparok — ban bar kakōl̦l̦e m̦ae iien kwobar lale.'
         },
-        scope: "Kōm̦m̦an ko ear jelōti: {'{'}n{'}'}.",
+        scope: 'Kōm̦m̦an ko ear jelōti: {n}.',
         confirm: 'A ke',
         failed: 'Jerbal an PII l̦apier — bar kajjieon̦.'
       },
@@ -1708,11 +1712,11 @@ export default {
       bulk: {
         body: 'Kajojo jikin kakwōn ej publish kōn aolep etale ko (PII etale, kakoba ilo laajrak, jim̦we). Jem̦l̦o̦k an kajojo:',
         pending: 'Kam̦ool ñan publish jikin kakwōn ko em̦ōj kāāleti.',
-        publishConfirm: "{'{'}n{'}'} Kwalok",
+        publishConfirm: '{n} Kwalok',
         title: 'Publish jikin kakwōn ko em̦ōj kāāleti'
       },
       card: {
-        actions: "Kōm̦m̦an ko ñan {'{'}name{'}'}",
+        actions: 'Kōm̦m̦an ko ñan {name}',
         building: 'A bering loo…',
         buildingAria: 'Ej kōm̦m̦an — peba in jikin eo ej pād ilo wāween jerbal',
         delete: 'A kuntu',
@@ -1738,23 +1742,23 @@ export default {
         note: 'Men ko rej kakōl̦l̦e rej koba ilo melele ko enaj publish. Ñe kwom̦ōj am lali (āinwōt numba in talboon ko an opij), kam̦ool im wōnm̦aanl̦o̦k.'
       },
       publish: {
-        body: "Publishing ej kōm̦m̦an v{'{'}n{'}'} im kakkwon bundle \"{'{'}file{'}'}\" ilo jikin kakwōn peba, bōk jikin zip eo m̦okta. Wāween in ekāāl ejjab serving m̦ae iien kwoj Ingest e.",
+        body: 'Publishing ej kōm̦m̦an v{n} im kakkwon bundle "{file}" ilo jikin kakwōn peba, bōk jikin zip eo m̦okta. Wāween in ekāāl ejjab serving m̦ae iien kwoj Ingest e.',
         confirm: 'A ke',
         title: 'A ke'
       },
       search: 'A nyining...',
-      select: "Kāālet {'{'}name{'}'} ñan l̦ap an publish",
+      select: 'Kāālet {name} ñan l̦ap an publish',
       stage: {
         drainFailed: 'Ingest ear l̦apier',
-        queueBehind: "{'{'}n{'}'} nderi e haande · inngest wooɗɗa {'{'}m{'}'} repo",
+        queueBehind: '{n} nderi e haande · inngest wooɗɗa {m} repo',
         redraining: 'A bering bo-kuta…',
         building: 'A bering loo…',
         draft: 'Binoo',
         inReview: 'A bering juube',
-        ingested: "A marata v{'{'}n{'}'}",
-        published: "A keta v{'{'}n{'}'}",
+        ingested: 'A marata v{n}',
+        published: 'A keta v{n}',
         retracted: 'A sayita',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: 'Kafuolu',
       topics: 'kuuolu',
@@ -1780,7 +1784,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ bar {'{'}n{'}'}",
+        more: '+ bar {n}',
         fixPath: 'Bar ingest ñan kajjieon̦ bar juon alen: retract → kōm̦m̦an bar juon wāween → ingest.'
       },
       curation: {
@@ -1794,9 +1798,9 @@ export default {
       bytes: 'Asili karan',
       conceptsIndexed: 'kōm̦m̦an ko em̦ōj laajraki',
       elapsed: {
-        hr: "Jinoe ilo {'{'}n{'}'} awa jim̦m̦a",
+        hr: 'Jinoe ilo {n} awa jim̦m̦a',
         lt1: 'Jinoe dikl̦o̦k jān juon minit jim̦m̦a',
-        min: "Jinoe ilo {'{'}n{'}'} minit jim̦m̦a"
+        min: 'Jinoe ilo {n} minit jim̦m̦a'
       },
       hint: {
         import: 'Jikin kakwōn eo ej pād ilo Import m̦ae iien peba eo ej dedel̦o̦k an oktak.',
@@ -1839,7 +1843,7 @@ export default {
     },
     create: {
       zipOnly: 'Kāālet juon fail in bundle .zip.',
-      stagedFile: "Em̦ōj kōpooj: {'{'}name{'}'}",
+      stagedFile: 'Em̦ōj kōpooj: {name}',
       staged: 'Bundle em̦ōj kōpooje — jidduuki Kōm̦m̦an Jikin Kakwōn ñan jino bōktok.',
       openExisting: 'Kipel̦o̦k jikin kakwōn em̦ōj kōm̦m̦ane',
       name: 'Āt an jikin kakwōn',
@@ -1916,7 +1920,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Repository-level tags ({summary}) live on the repo, not this concept — manage them in the Tags panel in the right rail.'
     },
     glossary: {
       addConcept:
@@ -2056,7 +2062,7 @@ export default {
       },
       stage: {
         inReview: 'Pād ilo review',
-        stepOf: "Buñtōn {'{'}n{'}'} jān 10",
+        stepOf: 'Buñtōn {n} jān 10',
         draft: 'Binoo'
       },
       dashboard: {
@@ -2069,7 +2075,7 @@ export default {
         stale: 'ritto',
         stage: {
           inReview: 'Pād ilo review',
-          stepOf: "Buñtōn {'{'}n{'}'} jān 10",
+          stepOf: 'Buñtōn {n} jān 10',
           draft: 'Binoo'
         },
         bulk: {
@@ -2180,11 +2186,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2405,16 +2411,16 @@ export default {
       saveBlocked: 'Bōjrak kōjparok: kōm̦m̦an bwe en jim̦we wāween ko m̦oktata.'
     },
     validation: {
-      frozen: "Kobban em̦ōj kabōjrak ilo {'{'}v{'}'} — riiti wōt. Retract wāween eo ej serving bwe kwōn kōm̦m̦an oktak.",
+      frozen: 'Kobban em̦ōj kabōjrak ilo {v} — riiti wōt. Retract wāween eo ej serving bwe kwōn kōm̦m̦an oktak.',
       none: 'Ejjel̦o̦k',
       expertHint:
         'Ukōt ñan wāween Expert bwe kwōn lo JSON kam̦ool eo, kāālet ekkar ñan l̦ap an l̦apier, im jol̦o̦k etale ko.',
       headline: {
-        blockers: "{'{'}n{'}'} blocking issue(s) — fix before you hand the repository off",
-        warnings: "{'{'}n{'}'} men ko rej aikuj am bar lale",
+        blockers: '{n} blocking issue(s) — fix before you hand the repository off',
+        warnings: '{n} men ko rej aikuj am bar lale',
         ok: 'Em̦m̦an aolep men. Ejjel̦o̦k men in kōm̦m̦ane.'
       },
-      summary: "{'{'}clean{'}'} erreo · {'{'}warnings{'}'} aikuj etale · {'{'}blockers{'}'} kabōjrak",
+      summary: '{clean} erreo · {warnings} aikuj etale · {blockers} kabōjrak',
       formatter: {
         notReady: 'Ri-kōm̦m̦an enaj itok ilo Bwebwenato 4.2b.'
       },
@@ -2448,8 +2454,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2463,12 +2469,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2485,7 +2491,7 @@ export default {
     },
     pii: {
       panel: 'Men ko ewōr kakōl̦l̦e ie',
-      nFlagged: "{'{'}n{'}'} soto",
+      nFlagged: '{n} soto',
       rescan: 'Scan kuta',
       scanning: 'Scan…',
       clean: 'Flagged entities amatta yaode — concept asi clear oire.',
@@ -2565,7 +2571,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)",
+      total: '{n} document(s)',
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2574,12 +2580,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
@@ -2595,6 +2601,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2664,11 +2671,53 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Gate',
+        floor: 'Floor',
+        veto: 'Forbidden tags',
+        margin: 'Margin',
+        claim: 'Claim',
+        pass: 'pass',
+        fail: 'fail',
+        na: 'n/a'
+      },
+      counts: {
+        positive: 'Positives',
+        negative: 'Confusable',
+        negativeRandom: 'Off-domain',
+        meta: 'Meta',
+        nearMiss: 'Near miss',
+        hint: "Forbidden-derived rows scale with the repository's forbidden tag count — they cannot be set here."
+      },
+      cls: {
+        nearMiss: 'Near miss',
+        confusable: 'Confusable',
+        forbidden: 'Forbidden',
+        offDomain: 'Off-domain',
+        meta: 'Meta'
+      },
+      teach: {
+        claim:
+          'The head CLAIMS this query — it passed all three gates. If it should NOT route here, ask for forbidden tags that exclude its subject, add them, then rebuild the head.',
+        explain: 'Explain & suggest',
+        explainBusy: 'Explaining — the model is proposing forbidden tags…',
+        addTag: 'Add to forbidden tags',
+        suggestNone: 'No forbidden tag was suggested — review the query against the declared scope manually.',
+        added: 'Added to the forbidden tags — rebuild the head to apply them.',
+        rebuildRerun: 'Rebuild head & re-run',
+        savingTag: 'Saving the forbidden tag…',
+        rebuildBusy: 'Rebuilding the head and re-running…',
+        title: 'Ta ṇe?',
+        veto: 'Kajjitōk in ej lukkun im forbidden tag “{tag}”. Elane e jikin ilo repo in, jol̦o̦k “{tag}” ilo forbidden tags ko ilo Frontmatter, im publish ak in rebuild head eo.',
+        floor:
+          'Kajjitōk in ejab naan ko ilo repo in (score eo ej jab elōn floor eo) — tag ko enaj jab kōm̦m̦an melele; kōnka ej suppress eo em̦ōj.',
+        rejected: 'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+          'The LLM writes the queries in batches of 30 per class — a large ask (100+) takes a few minutes. The suite lands here and in Saved suites when done.',
+        generating: 'Generating in batches — large asks take a few minutes…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -2679,7 +2728,11 @@ export default {
           run: 'Run',
           when: 'When',
           passRate: 'Pass rate',
-          headVersion: 'Head'
+          headVersion: 'Head',
+          tags: 'Tags',
+          actions: 'Edit',
+          name: 'Name',
+          corpus: 'Corpus'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2695,14 +2748,61 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Explain failures',
+        explainBusy: 'Explaining the failures — one model call for every failing negative…',
+        batchTitle: 'Why the failing negatives routed here',
+        batchNone: 'No fix was suggested — review the failing queries against the declared scope manually.',
+        addAll: 'Add all',
+        rebuildRerun: 'Rebuild head & re-run suite',
+        positiveFailuresTitle: 'Why positives stopped passing',
+        positiveFailures:
+          '{n} positive test(s) were suppressed this run — the forbidden tags over-match the repository scope.',
+        vetoedBy: 'Vetoed by',
+        marginKilled: '{n} positive test(s) lost on margin (no single veto tag).',
+        removals: 'Tags to remove (they veto this repository’s own positives)',
+        removeTip: 'Remove "{tag}" — it vetoed {n} positive test(s)',
+        tripwire: 'This cycle broke {n} positive tests — the added tags over-suppress. Revert?',
+        tripwireRevert: 'View revert options',
+        staleSnapshot: 'Tags changed since this suite was generated — regenerate for fresh forbidden rows.',
+        revertTitle: 'Revert tags',
+        revertForbiddenCount: '{n} forbidden tags',
+        revertAction: 'Revert',
+        revertBusy: 'Loading save history…',
+        revertSaving: 'Restoring the frontmatter…',
+        revertEmpty: 'No frontmatter saves recorded yet.',
+        revertDone: 'Frontmatter restored — rebuild the head and re-run to apply it.',
+        removeTag: 'Remove from forbidden tags',
+        tagsetTip: 'Forbidden tags for this run',
+        savedTitle: 'Saved suites',
+        load: 'Load',
+        flipTip: 'Flip should-select / should-NOT-select',
+        deleteTip: 'Remove this row from the suite',
+        namePlaceholder: 'Suite name (optional) — e.g. NCD regression set',
+        probeTip: 'Test this query against the live corpus',
+        deleteSuiteTip: 'Delete this suite and its run history',
+        corpusNeedsIngest: 'Ingest the repository first — the corpus test searches the ingested corpus'
       },
       error: {
+        explain: 'Explain failed',
+        saveTag: 'Could not save the forbidden tag',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Could not load the save history',
+        revert: 'Could not revert the frontmatter',
+        advisor: 'Advisor failed',
+        noSuite: 'Generate a suite first, then rebuild + re-run.',
+        applyNoSuite: 'Tags saved and the head rebuilt — generate a suite, then Run all to see the effect.',
+        suiteLoad: 'Could not load the suite',
+        suiteUpdate: 'Could not update the suite',
+        suiteRename: 'Could not rename the suite',
+        generateTimeout:
+          'The suite is taking unusually long — it may still land in Saved suites; check there in a minute.',
+        probe: 'Corpus test failed',
+        suiteDelete: 'Could not delete the suite'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2712,6 +2812,40 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Advisor: recommend tag changes',
+        busy: 'Simulating tag changes across recent runs…',
+        title: 'Tag-set recommendation (simulated across recent runs)',
+        apply: 'Apply changes & rebuild & re-run suite',
+        scorecard: 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed',
+        now: 'Now',
+        predicted: 'predicted',
+        scope: ' (across {q} queries from the last {r} runs)',
+        applying: 'Applying: saving tags, rebuilding the head, re-running the suite…',
+        blockedTitle: 'Blocked removals — click to include in Apply',
+        blockedGain: 'recovers {n} positive(s)',
+        narrowTitle: 'Narrower replacements — recover positives without re-admitting negatives',
+        narrowChip: 'Remove the broad tag, add the narrow one',
+        reasonCurator: 'you declared this tag originally — confirm before removing',
+        reasonRotated: 'the edit history has rotated past the baseline — confirm before removing',
+        scopeDetail: 'suites: {s} · tag sets: {t}'
+      },
+      probe: {
+        answerable: 'answerable',
+        weak: 'weak match',
+        unanswerable: 'not in corpus',
+        unknown: 'unknown',
+        title: 'Corpus test — summary',
+        close: 'Close the summary',
+        chunksScanned: 'corpus chunks scanned',
+        headLeg: 'Head verdict',
+        headNotClaimed: 'does not claim',
+        corpusLeg: 'Corpus coverage',
+        files: 'Reference files',
+        colScore: 'Rerank score',
+        colFile: 'File',
+        colContent: 'Chunk content'
       }
     }
   },

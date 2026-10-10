@@ -529,7 +529,11 @@ export default {
       uploadSuccessMultiple: '{count} Datei(en) erfolgreich hochgeladen.',
       linkSubmitSuccess: 'Erfolgreich gecrawlt und "{fileName}" gespeichert.',
       actionSuccess: 'Aktion "{action}" für Datei {fileId} war erfolgreich.',
-      metadataUpdateSuccess: 'Metadaten für Datei {fileId} wurden aktualisiert.'
+      metadataUpdateSuccess: 'Metadaten für Datei {fileId} wurden aktualisiert.',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} ausgewählte Datei(en) können nicht gelöscht werden ({'{'{'}'}reason{'}'}) — nur die anderen {'{'{'}'}n{'}'} werden gelöscht.",
+      confirmDeleteSkipped:
+        "{'{'{'}'}count{'}'} inginierte/in Arbeit befindliche Datei(en) werden ÜBERSPRUNGEN — erst zurückziehen, dann löschen."
     },
     queryInspector: {
       search: 'Suchen',
@@ -1476,7 +1480,7 @@ export default {
       none: 'Noch keine Versionen erstellt — publish erzeugt v1.',
       notServing: 'Nicht bereitgestellt',
       publish: 'Neue Version erstellen',
-      published: "Version v{'{'}v{'}'} veröffentlicht — Bundle {'{'}f{'}'} im Dokumenten-Repository gespeichert.",
+      published: 'Version v{v} veröffentlicht — Bundle {f} im Dokumenten-Repository gespeichert.',
       serving: 'Aufgenommen (bereitgestellt)',
       title: 'Versionen'
     },
@@ -1496,7 +1500,7 @@ export default {
         note: 'Die markierten Entitäten sind Teil des veröffentlichten Inhalts. Wenn Sie diese überprüft haben (z. B. offizielle Kontaktdaten), bestätigen Sie dies und fahren Sie fort.'
       },
       publish: {
-        body: "Das Ausführen von publish erstellt v{'{'}n{'}'} und speichert das Bundle „{'{'}file{'}'}“ im Dokumenten-Repository, wodurch jede vorherige zip ersetzt wird. Die neue Version ist erst im Status serving, wenn Sie Ingest ausführen.",
+        body: 'Das Ausführen von publish erstellt v{n} und speichert das Bundle „{file}“ im Dokumenten-Repository, wodurch jede vorherige zip ersetzt wird. Die neue Version ist erst im Status serving, wenn Sie Ingest ausführen.',
         confirm: 'Veröffentlichen',
         inProgress: 'Wird veröffentlicht — Bundle wird exportiert und übertragen…',
         title: 'Veröffentlichen'
@@ -1510,22 +1514,22 @@ export default {
         editor: 'Editor',
         wizard: 'Assistent'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{n}',
       versions: 'Versionen',
       deleteLabel: 'Löschen',
       headTest: 'Routing Lab'
     },
     logs: {
-      labeled: "mit Label: {'{'}n{'}'}",
-      fallbacks: "LLM-Fallbacks: {'{'}n{'}'}",
-      concepts: "Konzepte: {'{'}n{'}'}",
+      labeled: 'mit Label: {n}',
+      fallbacks: 'LLM-Fallbacks: {n}',
+      concepts: 'Konzepte: {n}',
       col: {
         action: 'Aktion',
         description: 'Beschreibung',
         user: 'Benutzer',
         when: 'Datum & Uhrzeit'
       },
-      count: "{'{'}n{'}'} Einträge",
+      count: '{n} Einträge',
       loadFailed: 'Aktivitätsprotokoll konnte nicht geladen werden.',
       none: 'Noch keine Aktivität erfasst — Aktionen am Repository erscheinen hier in Echtzeit.',
       title: 'Aktivitätsprotokoll'
@@ -1543,8 +1547,8 @@ export default {
       zoomIn: 'Vergrößern',
       zoomOut: 'Verkleinern',
       card: {
-        links: "{'{'}n{'}'} Verknüpfungen",
-        chunks: "{'{'}n{'}'} Chunks",
+        links: '{n} Verknüpfungen',
+        chunks: '{n} Chunks',
         failed: 'Indexierung fehlgeschlagen',
         flagged: 'markierte Entitäten',
         hub: 'Index-Hub',
@@ -1616,8 +1620,8 @@ export default {
           problem: 'Das Problem',
           noError: 'Als fehlgeschlagen markiert — ohne aufgezeichneten Grund.',
           fixLabel: 'So wird es behoben',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               'Der Ingest-Worker hat innerhalb des Gnadenfensters aufgehört zu warten (die Dränage war ausgelastet) — der Inhalt ist intakt. Behebung: Datei leicht bearbeiten und speichern, um sie neu einzureihen; oder das Repo zurückziehen und komplett neu ingestieren.',
@@ -1699,9 +1703,9 @@ export default {
       saveFailed: 'Speichern fehlgeschlagen — wiederholen',
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: 'Alle markierten Inhalte schwärzen',
           remove: 'Alle markierten Inhalte entfernen',
@@ -1714,7 +1718,7 @@ export default {
           accept:
             'Alle markierten Entitäten werden als geprüft und beibehalten markiert — sie werden erst nach einem erneuten Scan wieder markiert.'
         },
-        scope: "Betroffene Konzepte: {'{'}n{'}'}.",
+        scope: 'Betroffene Konzepte: {n}.',
         confirm: 'Anwenden',
         failed: 'Die PII-Massenaktion ist fehlgeschlagen — versuchen Sie es erneut.'
       },
@@ -1733,11 +1737,11 @@ export default {
       bulk: {
         body: 'Jedes Repository wird mit der vollständigen Gate-Prüfung veröffentlicht (PII-Prüfung, Indexierung, Konformität). Ergebnisse pro Repository:',
         pending: 'Bestätigen, um ausgewählte Repositories zu publish.',
-        publishConfirm: "{'{'}n{'}'} veröffentlichen",
+        publishConfirm: '{n} veröffentlichen',
         title: 'Ausgewählte Repositories veröffentlichen'
       },
       card: {
-        actions: "Aktionen für {'{'}name{'}'}",
+        actions: 'Aktionen für {name}',
         building: 'Wird erstellt…',
         buildingAria: 'Wird erstellt — die Quelldatei wird noch verarbeitet',
         delete: 'Löschen',
@@ -1763,23 +1767,23 @@ export default {
         note: 'Die markierten Entitäten sind Teil des veröffentlichten Inhalts. Wenn Sie diese überprüft haben (z. B. offizielle Kontaktdaten), bestätigen Sie dies und fahren Sie fort.'
       },
       publish: {
-        body: "Das Ausführen von publish erstellt v{'{'}n{'}'} und speichert das Bundle „{'{'}file{'}'}“ im Dokumenten-Repository, wodurch die vorherige zip ersetzt wird. Die neue Version ist erst im Status serving, wenn Sie Ingest ausführen.",
+        body: 'Das Ausführen von publish erstellt v{n} und speichert das Bundle „{file}“ im Dokumenten-Repository, wodurch die vorherige zip ersetzt wird. Die neue Version ist erst im Status serving, wenn Sie Ingest ausführen.',
         confirm: 'Veröffentlichen',
         title: 'Veröffentlichen'
       },
       search: 'Suchen...',
-      select: "{'{'}name{'}'} für Massenveröffentlichung auswählen",
+      select: '{name} für Massenveröffentlichung auswählen',
       stage: {
         drainFailed: 'Ingest fehlgeschlagen',
-        queueBehind: "{'{'}n{'}'} in Warteschlange · Ingest in {'{'}m{'}'} Repo(s)",
+        queueBehind: '{n} in Warteschlange · Ingest in {m} Repo(s)',
         redraining: 'Erneut entleeren…',
         building: 'Wird erstellt…',
         draft: 'Entwurf',
         inReview: 'In Überprüfung',
-        ingested: "Ingest abgeschlossen für v{'{'}n{'}'}",
-        published: "Veröffentlicht v{'{'}n{'}'}",
+        ingested: 'Ingest abgeschlossen für v{n}',
+        published: 'Veröffentlicht v{n}',
         retracted: 'Zurückgezogen',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: 'Repositories',
       topics: 'Themen',
@@ -1805,7 +1809,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} weitere",
+        more: '+ {n} weitere',
         fixPath: 'Erneut ingestieren für Neuversuch: retract → Version erstellen → ingest.'
       },
       curation: {
@@ -1819,9 +1823,9 @@ export default {
       bytes: 'Quelle gelesen',
       conceptsIndexed: 'Konzepte indexiert',
       elapsed: {
-        hr: "Vor {'{'}n{'}'} Std. gestartet",
+        hr: 'Vor {n} Std. gestartet',
         lt1: 'Vor weniger als einer Minute gestartet',
-        min: "Vor {'{'}n{'}'} Min. gestartet"
+        min: 'Vor {n} Min. gestartet'
       },
       hint: {
         import: 'Das Repository bleibt im Status Import, bis die Dateikonvertierung abgeschlossen ist.',
@@ -1865,7 +1869,7 @@ export default {
     },
     create: {
       zipOnly: 'Wählen Sie eine .zip-Bundle-Datei aus.',
-      stagedFile: "Bereitgestellt: {'{'}name{'}'}",
+      stagedFile: 'Bereitgestellt: {name}',
       staged: 'Bundle bereitgestellt — auf Repository erstellen klicken, um den Import zu starten.',
       openExisting: 'Vorhandenes Repository öffnen',
       name: 'Repository-Name',
@@ -1944,7 +1948,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Tags auf Repository-Ebene ({summary}) gehören zum Repository, nicht zu diesem Konzept — verwalten Sie sie im Tags-Panel in der rechten Leiste.'
     },
     glossary: {
       addConcept:
@@ -2088,7 +2094,7 @@ export default {
       },
       stage: {
         inReview: 'In Überprüfung',
-        stepOf: "Schritt {'{'}n{'}'} von 10",
+        stepOf: 'Schritt {n} von 10',
         draft: 'Entwurf'
       },
       dashboard: {
@@ -2101,7 +2107,7 @@ export default {
         stale: 'veraltet',
         stage: {
           inReview: 'In Überprüfung',
-          stepOf: "Schritt {'{'}n{'}'} von 10",
+          stepOf: 'Schritt {n} von 10',
           draft: 'Entwurf'
         },
         bulk: {
@@ -2212,11 +2218,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2440,16 +2446,16 @@ export default {
     },
     validation: {
       frozen:
-        "Inhalt bei {'{'}v{'}'} eingefroren — schreibgeschützte Vorschau. Retract für die serving-Version ausführen, um Änderungen vorzunehmen.",
+        'Inhalt bei {v} eingefroren — schreibgeschützte Vorschau. Retract für die serving-Version ausführen, um Änderungen vorzunehmen.',
       none: 'Keine',
       expertHint:
         'Wechseln Sie in den Expertenmodus, um rohes Validierungs-JSON anzuzeigen, nach Schweregrad zu filtern und Prüfungen zu überschreiben.',
       headline: {
-        blockers: "{'{'}n{'}'} blockierende(s) Problem(e) — beheben Sie es, bevor Sie das Repository übergeben",
-        warnings: "{'{'}n{'}'} Punkt(e) erfordern Ihre Überprüfung",
+        blockers: '{n} blockierende(s) Problem(e) — beheben Sie es, bevor Sie das Repository übergeben',
+        warnings: '{n} Punkt(e) erfordern Ihre Überprüfung',
         ok: 'Sieht gut aus. Nichts zu beheben.'
       },
-      summary: "{'{'}clean{'}'} fehlerfrei · {'{'}warnings{'}'} erfordert Prüfung · {'{'}blockers{'}'} blockierend",
+      summary: '{clean} fehlerfrei · {warnings} erfordert Prüfung · {blockers} blockierend',
       formatter: {
         notReady: 'Formatierer folgt in Story 4.2b.'
       },
@@ -2483,8 +2489,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2498,12 +2504,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2520,7 +2526,7 @@ export default {
     },
     pii: {
       panel: 'Markierte Entitäten',
-      nFlagged: "{'{'}n{'}'} gefunden",
+      nFlagged: '{n} gefunden',
       rescan: 'Neu scannen',
       scanning: 'Scannen…',
       clean: 'Keine markierten Entitäten — dieses concept ist unbedenklich.',
@@ -2602,7 +2608,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)",
+      total: '{n} document(s)',
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2611,12 +2617,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
@@ -2632,6 +2638,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2701,11 +2708,54 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Gate',
+        floor: 'Untergrenze',
+        veto: 'Verbotene Tags',
+        margin: 'Abstand',
+        claim: 'Anspruch',
+        pass: 'bestanden',
+        fail: 'nicht bestanden',
+        na: 'n/a'
+      },
+      counts: {
+        positive: 'Positive Abfragen',
+        negative: 'Verwechselbare',
+        negativeRandom: 'Außerhalb des Fachgebiets',
+        meta: 'Meta',
+        nearMiss: 'Beinahe-Treffer',
+        hint: 'Die aus verbotenen Tags abgeleiteten Zeilen richten sich nach der Anzahl der verbotenen Tags des Repositorys — sie lassen sich hier nicht einstellen.'
+      },
+      cls: {
+        nearMiss: 'Beinahe-Treffer',
+        confusable: 'Verwechselbar',
+        forbidden: 'Verboten',
+        offDomain: 'Außerhalb des Fachgebiets',
+        meta: 'Meta'
+      },
+      teach: {
+        claim:
+          'Der Head BEANSPRUCHT diese Abfrage — sie hat alle drei Schranken passiert. Soll sie NICHT hierher routen, lassen Sie verbotene Tags vorschlagen, die ihr Thema ausschließen, fügen Sie sie hinzu und bauen Sie den Head neu.',
+        explain: 'Erklären & vorschlagen',
+        explainBusy: 'Erklärung läuft — das Modell schlägt verbotene Tags vor…',
+        addTag: 'Zu verbotenen Tags hinzufügen',
+        suggestNone:
+          'Es wurde kein verbotener Tag vorgeschlagen — prüfen Sie die Abfrage manuell gegen den deklarierten Umfang.',
+        added: 'Zu den verbotenen Tags hinzugefügt — bauen Sie den Head neu, um sie anzuwenden.',
+        rebuildRerun: 'Head neu bauen & erneut testen',
+        savingTag: 'Verbotener Tag wird gespeichert…',
+        rebuildBusy: 'Head wird neu gebaut und erneut ausgeführt…',
+        title: 'Was das bedeutet',
+        veto: 'Diese Abfrage stimmt stark mit dem verbotenen Tag „{tag}“ überein. Sollte sie zu diesem Repository gehören, entfernen Sie „{tag}“ aus den verbotenen Tags im Frontmatter und veröffentlichen Sie erneut, um den Head neu zu bauen.',
+        floor:
+          'Die Abfrage hat keinen Bezug zum Thema dieses Repositorys (Wert unter der Domain-Untergrenze) — keine Tag-Änderung behebt das; die Unterdrückung ist korrekt.',
+        rejected: 'Vom Guardrail abgelehnt — ein verbotenes Tag darf nicht zum eigenen Thema des Repositorys passen.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+          'Das LLM schreibt die Abfragen in 30er-Stapeln pro Klasse — eine große Anfrage (100+) dauert einige Minuten. Die Suite erscheint hier und in den gespeicherten Suiten.',
+        generating: 'Stapelweise Generierung — große Anfragen dauern einige Minuten…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -2716,7 +2766,11 @@ export default {
           run: 'Run',
           when: 'When',
           passRate: 'Pass rate',
-          headVersion: 'Head'
+          headVersion: 'Head',
+          tags: 'Tags',
+          actions: 'Bearbeiten',
+          name: 'Name',
+          corpus: 'Korpus'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2732,14 +2786,65 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Fehler erklären',
+        explainBusy: 'Fehler werden erklärt — ein Modellaufruf für jede fehlgeschlagene Negativ-Abfrage…',
+        batchTitle: 'Warum die fehlgeschlagenen Negativ-Abfragen hierher geroutet wurden',
+        batchNone:
+          'Es wurde keine Korrektur vorgeschlagen — prüfen Sie die fehlgeschlagenen Abfragen manuell gegen den deklarierten Umfang.',
+        addAll: 'Alle hinzufügen',
+        rebuildRerun: 'Head neu bauen & Suite erneut ausführen',
+        positiveFailuresTitle: 'Warum die Positivfälle nicht mehr bestehen',
+        positiveFailures:
+          'In diesem Durchlauf wurde(n) {n} Positiv-Test(s) unterdrückt — die verbotenen Tags treffen über das Repository-Scope hinaus zu.',
+        vetoedBy: 'Veto durch',
+        marginKilled: '{n} Positiv-Test(s) am Margin gescheitert (kein einzelnes Veto-Tag).',
+        removals: 'Zu entfernende Tags (sie legen Veto gegen die eigenen Positivfälle dieses Repositorys ein)',
+        removeTip: '"{tag}" entfernen — es hat {n} Positiv-Test(s) mit Veto blockiert',
+        tripwire:
+          'Dieser Zyklus hat {n} Positiv-Tests gebrochen — die hinzugefügten Tags unterdrücken zu viel. Zurücksetzen?',
+        tripwireRevert: 'Wiederherstellungsoptionen ansehen',
+        staleSnapshot:
+          'Tags wurden seit der Erzeugung dieser Suite geändert — für aktuelle verbotene Zeilen neu erzeugen.',
+        revertTitle: 'Tags zurücksetzen',
+        revertForbiddenCount: '{n} verbotene Tags',
+        revertAction: 'Zurücksetzen',
+        revertBusy: 'Speicherhistorie wird geladen…',
+        revertSaving: 'Frontmatter wird wiederhergestellt…',
+        revertEmpty: 'Noch keine Frontmatter-Speicherungen aufgezeichnet.',
+        revertDone: 'Frontmatter wiederhergestellt — Head neu bauen und erneut ausführen, um es anzuwenden.',
+        removeTag: 'Aus den Sperr-Tags entfernen',
+        tagsetTip: 'Sperr-Tags dieses Laufs',
+        savedTitle: 'Gespeicherte Suiten',
+        load: 'Laden',
+        flipTip: 'Wechseln zwischen soll-selektieren / nicht-selektieren',
+        deleteTip: 'Diese Zeile aus der Suite entfernen',
+        namePlaceholder: 'Suiten-Name (optional) — z. B. NCD-Regressionssatz',
+        probeTip: 'Diese Abfrage gegen den Live-Korpus testen',
+        deleteSuiteTip: 'Diese Suite und ihren Verlauf löschen',
+        corpusNeedsIngest: 'Inigieren Sie zuerst das Repository — der Korpus-Test durchsucht den inginierten Korpus'
       },
       error: {
+        explain: 'Erklärung fehlgeschlagen',
+        saveTag: 'Verbotener Tag konnte nicht gespeichert werden',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Speicherhistorie konnte nicht geladen werden',
+        revert: 'Frontmatter konnte nicht zurückgesetzt werden',
+        advisor: 'Berater fehlgeschlagen',
+        noSuite: 'Erstellen Sie zuerst eine Suite, dann Head neu bauen & neu ausführen.',
+        applyNoSuite:
+          'Tags gespeichert und Head neu gebaut — erstellen Sie eine Suite und führen Sie alles aus, um den Effekt zu sehen.',
+        suiteLoad: 'Suite konnte nicht geladen werden',
+        suiteUpdate: 'Suite konnte nicht aktualisiert werden',
+        suiteRename: 'Suite konnte nicht umbenannt werden',
+        generateTimeout:
+          'Die Suite dauert ungewöhnlich lange — sie könnte in den gespeicherten Suiten landen; in einer Minute dort nachsehen.',
+        probe: 'Korpus-Test fehlgeschlagen',
+        suiteDelete: 'Suite konnte nicht gelöscht werden'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2749,6 +2854,40 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Berater: Tag-Änderungen empfehlen',
+        busy: 'Tag-Änderungen über die letzten Läufe simulieren…',
+        title: 'Tag-Set-Empfehlung (simuliert über die letzten Läufe)',
+        apply: 'Änderungen anwenden, Head neu bauen & Suite neu ausführen',
+        scorecard: 'Positive {p}/{pt} akzeptiert · Negative {n}/{nt} unterdrückt',
+        now: 'Jetzt',
+        predicted: 'prognostiziert',
+        scope: ' (über {q} Abfragen aus den letzten {r} Läufen)',
+        applying: 'Anwenden: Tags speichern, Head neu bauen, Suite neu ausführen…',
+        blockedTitle: 'Blockierte Entfernungen — klicken, um sie in Übernehmen aufzunehmen',
+        blockedGain: 'holt {n} Positive zurück',
+        narrowTitle: 'Engere Ersatz-Tags — holt Positive zurück, ohne Negative wieder zuzulassen',
+        narrowChip: 'Breites Tag entfernen, enges Tag hinzufügen',
+        reasonCurator: 'Sie haben dieses Tag ursprünglich deklariert — vor dem Entfernen bestätigen',
+        reasonRotated: 'Der Verlauf ist über die Basislinie hinaus rotiert — vor dem Entfernen bestätigen',
+        scopeDetail: 'Suiten: {s} · Tag-Sets: {t}'
+      },
+      probe: {
+        answerable: 'beantwortbar',
+        weak: 'schwache Übereinstimmung',
+        unanswerable: 'nicht im Korpus',
+        unknown: 'unbekannt',
+        title: 'Korpus-Test — Zusammenfassung',
+        close: 'Zusammenfassung schließen',
+        chunksScanned: 'Korpus-Chunks durchsucht',
+        headLeg: 'Head-Urteil',
+        headNotClaimed: 'keine Zuordnung',
+        corpusLeg: 'Korpus-Abdeckung',
+        files: 'Referenzdateien',
+        colScore: 'Rerank-Score',
+        colFile: 'Datei',
+        colContent: 'Chunk-Inhalt'
       }
     }
   },

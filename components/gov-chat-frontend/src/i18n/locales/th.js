@@ -525,7 +525,10 @@ export default {
       uploadSuccessMultiple: 'อัปโหลดไฟล์ {count} ไฟล์สำเร็จ',
       linkSubmitSuccess: 'รวบรวมข้อมูลและบันทึก "{fileName}" สำเร็จ',
       actionSuccess: 'การดำเนินการ "{action}" กับไฟล์ {fileId} สำเร็จ',
-      metadataUpdateSuccess: 'อัปเดตข้อมูลเมตาสำหรับไฟล์ {fileId} แล้ว'
+      metadataUpdateSuccess: 'อัปเดตข้อมูลเมตาสำหรับไฟล์ {fileId} แล้ว',
+      deletePartialNotice:
+        "ไฟล์ที่เลือก {'{'{'}'}blocked{'}'} ไฟล์ลบไม่ได้ ({'{'{'}'}reason{'}'}) — จะลบเฉพาะที่เหลืออีก {'{'{'}'}n{'}'} ไฟล์",
+      confirmDeleteSkipped: "ไฟล์ที่ ingest แล้ว/กำลัง ingest {'{'{'}'}count{'}'} ไฟล์จะถูกข้าม — ถอนคืนก่อนจึงจะลบได้"
     },
     queryInspector: {
       search: 'ค้นหา',
@@ -1458,7 +1461,7 @@ export default {
       none: 'ยังไม่มีการสร้างเวอร์ชัน — การ publish จะสร้าง v1',
       notServing: 'ไม่ได้ให้บริการ',
       publish: 'สร้างเวอร์ชันใหม่',
-      published: "เผยแพร่เวอร์ชัน v{'{'}v{'}'} แล้ว — จัดเก็บชุดไฟล์ {'{'}f{'}'} ไว้ในที่เก็บเอกสารเรียบร้อยแล้ว",
+      published: 'เผยแพร่เวอร์ชัน v{v} แล้ว — จัดเก็บชุดไฟล์ {f} ไว้ในที่เก็บเอกสารเรียบร้อยแล้ว',
       serving: 'ทำ ingest แล้ว (serving)',
       title: 'เวอร์ชัน'
     },
@@ -1478,7 +1481,7 @@ export default {
         note: 'เอนทิตีที่ถูกแจ้งเตือนเป็นส่วนหนึ่งของเนื้อหาที่เผยแพร่ หากคุณได้ตรวจสอบแล้ว (เช่น รายละเอียดการติดต่ออย่างเป็นทางการ) ให้รับทราบและดำเนินการต่อ'
       },
       publish: {
-        body: "การ publish จะสร้าง v{'{'}n{'}'} และจัดเก็บชุดไฟล์ \"{'{'}file{'}'}\" ไว้ในที่เก็บเอกสาร โดยแทนที่ไฟล์ zip ก่อนหน้า เวอร์ชันใหม่นี้จะยังไม่ serving จนกว่าคุณจะทำ Ingest",
+        body: 'การ publish จะสร้าง v{n} และจัดเก็บชุดไฟล์ "{file}" ไว้ในที่เก็บเอกสาร โดยแทนที่ไฟล์ zip ก่อนหน้า เวอร์ชันใหม่นี้จะยังไม่ serving จนกว่าคุณจะทำ Ingest',
         confirm: 'เผยแพร่',
         inProgress: 'กำลังเผยแพร่ — กำลังส่งออกและถ่ายโอนชุดไฟล์…',
         title: 'เผยแพร่'
@@ -1492,22 +1495,22 @@ export default {
         editor: 'บรรณาธิการ',
         wizard: 'วิซาร์ด'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{n}',
       versions: 'เวอร์ชัน',
       deleteLabel: 'ลบ',
       headTest: 'Routing Lab'
     },
     logs: {
-      labeled: "ติดป้ายกำกับแล้ว: {'{'}n{'}'}",
-      fallbacks: "การสำรองข้อมูล LLM: {'{'}n{'}'}",
-      concepts: "แนวคิด: {'{'}n{'}'}",
+      labeled: 'ติดป้ายกำกับแล้ว: {n}',
+      fallbacks: 'การสำรองข้อมูล LLM: {n}',
+      concepts: 'แนวคิด: {n}',
       col: {
         action: 'การดำเนินการ',
         description: 'คำอธิบาย',
         user: 'ผู้ใช้',
         when: 'วันที่และเวลา'
       },
-      count: "{'{'}n{'}'} รายการ",
+      count: '{n} รายการ',
       loadFailed: 'โหลดบันทึกกิจกรรมไม่สำเร็จ',
       none: 'ยังไม่มีกิจกรรมที่บันทึกไว้ — การดำเนินการของที่เก็บจะปรากฏที่นี่เมื่อเกิดขึ้น',
       title: 'บันทึกกิจกรรม'
@@ -1525,8 +1528,8 @@ export default {
       zoomIn: 'ซูมเข้า',
       zoomOut: 'ซูมออก',
       card: {
-        links: "{'{'}n{'}'} ลิงก์",
-        chunks: "{'{'}n{'}'} ชิ้นส่วน",
+        links: '{n} ลิงก์',
+        chunks: '{n} ชิ้นส่วน',
         failed: 'การสร้างดัชนีล้มเหลว',
         flagged: 'เอนทิตีที่ถูกแจ้งเตือน',
         hub: 'ศูนย์กลางดัชนี',
@@ -1597,8 +1600,8 @@ export default {
           problem: 'ปัญหา',
           noError: 'ทำเครื่องหมายว่าล้มเหลวโดยไม่มีเหตุผลที่บันทึกไว้',
           fixLabel: 'วิธีแก้ไข',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               'ตัวทำงานนำเข้าหยุดรอภายในกรอบเวลาผ่อนปรนเพราะท่อระบายแน่นเกินไป — เนื้อหาไม่เสียหาย วิธีแก้: แก้ไขไฟล์นี้เล็กน้อยแล้วบันทึกเพื่อเข้าคิวใหม่ หรือถอนคืนแล้วนำเข้าทั้งรีโปใหม่',
@@ -1679,9 +1682,9 @@ export default {
       saveFailed: 'การบันทึกล้มเหลว — ลองใหม่',
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: 'เซ็นเซอร์เนื้อหาที่ถูกแจ้งเตือนทั้งหมด',
           remove: 'ลบเนื้อหาที่ถูกแจ้งเตือนทั้งหมด',
@@ -1693,7 +1696,7 @@ export default {
           accept:
             'เอนทิตีที่ถูกแจ้งเตือนทั้งหมดจะถูกทำเครื่องหมายว่าตรวจสอบแล้วและเก็บไว้ — จะไม่ถูกแจ้งเตือนอีกเว้นแต่คุณจะสแกนใหม่'
         },
-        scope: "แนวคิดที่ได้รับผลกระทบ: {'{'}n{'}'} รายการ",
+        scope: 'แนวคิดที่ได้รับผลกระทบ: {n} รายการ',
         confirm: 'นำไปใช้',
         failed: 'การดำเนินการ PII แบบกลุ่มล้มเหลว — โปรดลองอีกครั้ง'
       },
@@ -1712,11 +1715,11 @@ export default {
       bulk: {
         body: 'ที่เก็บแต่ละแห่งจะได้รับการเผยแพร่พร้อมการตรวจสอบอย่างสมบูรณ์ (การตรวจทาน PII การจัดทำดัชนี ความสอดคล้อง) ผลลัพธ์ของแต่ละที่เก็บ:',
         pending: 'ยืนยันเพื่อ publish ที่เก็บที่เลือก',
-        publishConfirm: "เผยแพร่ {'{'}n{'}'} รายการ",
+        publishConfirm: 'เผยแพร่ {n} รายการ',
         title: 'เผยแพร่ที่เก็บที่เลือก'
       },
       card: {
-        actions: "การดำเนินการสำหรับ {'{'}name{'}'}",
+        actions: 'การดำเนินการสำหรับ {name}',
         building: 'กำลังสร้าง…',
         buildingAria: 'กำลังสร้าง — ไฟล์ต้นฉบับยังอยู่ระหว่างการประมวลผล',
         delete: 'ลบ',
@@ -1742,23 +1745,23 @@ export default {
         note: 'เอนทิตีที่ถูกแจ้งเตือนเป็นส่วนหนึ่งของเนื้อหาที่เผยแพร่ หากคุณได้ตรวจสอบแล้ว (เช่น รายละเอียดการติดต่ออย่างเป็นทางการ) ให้รับทราบและดำเนินการต่อ'
       },
       publish: {
-        body: "การ publish จะสร้าง v{'{'}n{'}'} และจัดเก็บชุดไฟล์ \"{'{'}file{'}'}\" ไว้ในที่เก็บเอกสาร โดยแทนที่ไฟล์ zip ก่อนหน้า เวอร์ชันใหม่นี้จะยังไม่ serving จนกว่าคุณจะทำ Ingest",
+        body: 'การ publish จะสร้าง v{n} และจัดเก็บชุดไฟล์ "{file}" ไว้ในที่เก็บเอกสาร โดยแทนที่ไฟล์ zip ก่อนหน้า เวอร์ชันใหม่นี้จะยังไม่ serving จนกว่าคุณจะทำ Ingest',
         confirm: 'เผยแพร่',
         title: 'เผยแพร่'
       },
       search: 'ค้นหา...',
-      select: "เลือก {'{'}name{'}'} สำหรับการเผยแพร่จำนวนมาก",
+      select: 'เลือก {name} สำหรับการเผยแพร่จำนวนมาก',
       stage: {
         drainFailed: 'การ ingest ล้มเหลว',
-        queueBehind: "{'{'}n{'}'} ในคิว · กำลัง ingest {'{'}m{'}'} repo",
+        queueBehind: '{n} ในคิว · กำลัง ingest {m} repo',
         redraining: 'กำลังระบายใหม่…',
         building: 'กำลังสร้าง…',
         draft: 'ฉบับร่าง',
         inReview: 'กำลังตรวจสอบ',
-        ingested: "ทำ ingest แล้ว v{'{'}n{'}'}",
-        published: "เผยแพร่แล้ว v{'{'}n{'}'}",
+        ingested: 'ทำ ingest แล้ว v{n}',
+        published: 'เผยแพร่แล้ว v{n}',
         retracted: 'เพิกถอนแล้ว',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: 'ที่เก็บข้อมูล',
       topics: 'หัวข้อ',
@@ -1784,7 +1787,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ อีก {'{'}n{'}'} รายการ",
+        more: '+ อีก {n} รายการ',
         fixPath: 'ทำ ingest ใหม่อีกครั้งเพื่อลองใหม่: retract → สร้างเวอร์ชัน → ingest'
       },
       curation: {
@@ -1798,9 +1801,9 @@ export default {
       bytes: 'อ่านแหล่งที่มา',
       conceptsIndexed: 'แนวคิดที่สร้างดัชนีแล้ว',
       elapsed: {
-        hr: "เริ่มต้นเมื่อ {'{'}n{'}'} ชม. ที่แล้ว",
+        hr: 'เริ่มต้นเมื่อ {n} ชม. ที่แล้ว',
         lt1: 'เริ่มต้นเมื่อไม่ถึงหนึ่งนาทีที่แล้ว',
-        min: "เริ่มต้นเมื่อ {'{'}n{'}'} นาทีที่แล้ว"
+        min: 'เริ่มต้นเมื่อ {n} นาทีที่แล้ว'
       },
       hint: {
         import: 'ที่เก็บจะยังคงอยู่ในสถานะ Import จนกว่าการแปลงไฟล์จะเสร็จสมบูรณ์',
@@ -1843,7 +1846,7 @@ export default {
     },
     create: {
       zipOnly: 'เลือกไฟล์ชุดข้อมูล .zip',
-      stagedFile: "จัดเตรียมแล้ว: {'{'}name{'}'}",
+      stagedFile: 'จัดเตรียมแล้ว: {name}',
       staged: 'จัดเตรียมชุดไฟล์แล้ว — คลิกสร้างที่เก็บเพื่อเริ่มการนำเข้า',
       openExisting: 'เปิดที่เก็บที่มีอยู่',
       name: 'ชื่อที่เก็บ',
@@ -1920,7 +1923,8 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint: 'แท็กระดับรีปอซิทอรี ({summary}) เป็นของรีปอ — ไม่ใช่ของคอนเซปต์นี้ จัดการที่แผงแท็กในแถบด้านขวา'
     },
     glossary: {
       addConcept:
@@ -2062,7 +2066,7 @@ export default {
       },
       stage: {
         inReview: 'อยู่ระหว่าง review',
-        stepOf: "ขั้นตอนที่ {'{'}n{'}'} จาก 10",
+        stepOf: 'ขั้นตอนที่ {n} จาก 10',
         draft: 'ฉบับร่าง'
       },
       dashboard: {
@@ -2075,7 +2079,7 @@ export default {
         stale: 'ล้าสมัย',
         stage: {
           inReview: 'อยู่ระหว่าง review',
-          stepOf: "ขั้นตอนที่ {'{'}n{'}'} จาก 10",
+          stepOf: 'ขั้นตอนที่ {n} จาก 10',
           draft: 'ฉบับร่าง'
         },
         bulk: {
@@ -2186,11 +2190,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2412,15 +2416,15 @@ export default {
     },
     validation: {
       frozen:
-        "เนื้อหาถูกตรึงไว้ที่ {'{'}v{'}'} — ดูตัวอย่างแบบอ่านอย่างเดียว ทำ retract เวอร์ชันที่ serving เพื่อทำการเปลี่ยนแปลง",
+        'เนื้อหาถูกตรึงไว้ที่ {v} — ดูตัวอย่างแบบอ่านอย่างเดียว ทำ retract เวอร์ชันที่ serving เพื่อทำการเปลี่ยนแปลง',
       none: 'ไม่มี',
       expertHint: 'สลับเป็นโหมดผู้เชี่ยวชาญเพื่อดู JSON การตรวจสอบแบบดิบ กรองตามระดับความรุนแรง และแทนที่ผลการตรวจสอบ',
       headline: {
-        blockers: "มี {'{'}n{'}'} ปัญหาที่บล็อก — แก้ไขก่อนส่งมอบคลัง",
-        warnings: "{'{'}n{'}'} รายการต้องได้รับการตรวจทานจากคุณ",
+        blockers: 'มี {n} ปัญหาที่บล็อก — แก้ไขก่อนส่งมอบคลัง',
+        warnings: '{n} รายการต้องได้รับการตรวจทานจากคุณ',
         ok: 'ดูเรียบร้อยดี ไม่มีส่วนที่ต้องแก้ไข'
       },
-      summary: "{'{'}clean{'}'} รายการสมบูรณ์ · {'{'}warnings{'}'} รายการต้องตรวจทาน · {'{'}blockers{'}'} รายการติดขัด",
+      summary: '{clean} รายการสมบูรณ์ · {warnings} รายการต้องตรวจทาน · {blockers} รายการติดขัด',
       formatter: {
         notReady: 'ตัวจัดรูปแบบจะพร้อมใช้งานในเรื่องราว 4.2b'
       },
@@ -2454,8 +2458,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2469,12 +2473,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2491,7 +2495,7 @@ export default {
     },
     pii: {
       panel: 'เอนทิตีที่ถูกแจ้งเตือน',
-      nFlagged: "พบ {'{'}n{'}'} รายการ",
+      nFlagged: 'พบ {n} รายการ',
       rescan: 'สแกนอีกครั้ง',
       scanning: 'กำลังสแกน…',
       clean: 'ไม่มีเอนทิตีที่ถูกตั้งค่าสถานะ — concept นี้ปลอดภัย',
@@ -2571,7 +2575,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)",
+      total: '{n} document(s)',
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2580,12 +2584,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
@@ -2601,6 +2605,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2670,11 +2675,53 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'ด่าน',
+        floor: 'คะแนนขั้นต่ำ',
+        veto: 'แท็กต้องห้าม',
+        margin: 'ระยะปลอดภัย',
+        claim: 'ยืนยัน',
+        pass: 'ผ่าน',
+        fail: 'ไม่ผ่าน',
+        na: 'ไม่มีข้อมูล'
+      },
+      counts: {
+        positive: 'เชิงบวก',
+        negative: 'ที่สับสนได้',
+        negativeRandom: 'นอกโดเมน',
+        meta: 'เมตา',
+        nearMiss: 'ใกล้เคียงแต่ผิด',
+        hint: 'แถวที่ได้จากแท็กต้องห้ามขึ้นกับจำนวนแท็กต้องห้ามของคลังข้อมูล — ตั้งค่าที่นี่ไม่ได้'
+      },
+      cls: {
+        nearMiss: 'ใกล้เคียงแต่ผิด',
+        confusable: 'สับสน',
+        forbidden: 'ต้องห้าม',
+        offDomain: 'นอกโดเมน',
+        meta: 'เมตา'
+      },
+      teach: {
+        claim:
+          'หัว (head) อ้างสิทธิ์คำค้นนี้ — ผ่านประตูทั้งสามบาน หากไม่ควรถูกกำหนดเส้นทางมาที่นี่ ให้ขอแท็กต้องห้ามที่ตัดหัวข้อนี้ออก เพิ่ม แล้วสร้างหัวใหม่',
+        explain: 'อธิบายและเสนอ',
+        explainBusy: 'กำลังอธิบาย — โมเดลกำลังเสนอแท็กต้องห้าม…',
+        addTag: 'เพิ่มไปยังแท็กต้องห้าม',
+        suggestNone: 'ไม่มีแท็กต้องห้ามที่ถูกเสนอ — โปรดตรวจสอบคำค้นเทียบกับขอบเขตที่ประกาศด้วยตนเอง',
+        added: 'เพิ่มไปยังแท็กต้องห้ามแล้ว — สร้างหัวใหม่เพื่อใช้งาน',
+        rebuildRerun: 'สร้างหัวใหม่และรันซ้ำ',
+        savingTag: 'กำลังบันทึกแท็กต้องห้าม…',
+        rebuildBusy: 'กำลังสร้างหัวใหม่และรันซ้ำ…',
+        title: 'สิ่งนี้หมายความว่าอย่างไร',
+        veto: 'คำค้นนี้ตรงกับแท็กต้องห้าม “{tag}” อย่างมาก หากควรเป็นของคลังข้อมูลนี้ ให้ลบ “{tag}” ออกจากแท็กต้องห้ามใน Frontmatter แล้วเผยแพร่ใหม่เพื่อสร้าง head ใหม่',
+        floor:
+          'คำค้นนี้ไม่เกี่ยวข้องกับหัวข้อของคลังข้อมูลนี้ (คะแนนต่ำกว่าคะแนนขั้นต่ำของโดเมน) — การเปลี่ยนแท็กจะไม่ช่วยแก้ไข นี่คือการกดที่ถูกต้อง',
+        rejected: 'ถูกปฏิเสธโดยระบบป้องกัน — แท็กต้องห้ามต้องไม่ตรงกับหัวข้อของคลังข้อมูลนี้เอง'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+          'LLM เขียนคำถามเป็นชุดละ 30 ต่อประเภท — จำนวนมาก (100+) ใช้เวลาหลายนาที เสร็จแล้วชุดทดสอบจะปรากฏที่นี่และในรายการที่บันทึกไว้',
+        generating: 'กำลังสร้างเป็นชุด — จำนวนมากใช้เวลาหลายนาที…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -2685,7 +2732,11 @@ export default {
           run: 'Run',
           when: 'When',
           passRate: 'Pass rate',
-          headVersion: 'Head'
+          headVersion: 'Head',
+          tags: 'แท็ก',
+          actions: 'แก้ไข',
+          name: 'ชื่อ',
+          corpus: 'คลังข้อมูล'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2701,14 +2752,59 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'อธิบายความล้มเหลว',
+        explainBusy: 'กำลังอธิบายความล้มเหลว — เรียกโมเดลหนึ่งครั้งสำหรับข้อลบที่ล้มเหลวแต่ละรายการ…',
+        batchTitle: 'ทำไมข้อลบที่ล้มเหลวจึงถูกกำหนดเส้นทางมาที่นี่',
+        batchNone: 'ไม่มีการแนะนำวิธีแก้ — โปรดตรวจสอบคำค้นที่ล้มเหลวเทียบกับขอบเขตที่ประกาศด้วยตนเอง',
+        addAll: 'เพิ่มทั้งหมด',
+        rebuildRerun: 'สร้างหัวใหม่และรันชุดทดสอบซ้ำ',
+        positiveFailuresTitle: 'ทำไมกรณีบวกจึงผ่านไม่ได้อีกต่อไป',
+        positiveFailures: 'ในรอบนี้มีการทดสอบบวกถูกกด {n} รายการ — แท็กต้องห้ามครอบคลุมขอบเขตของคลังข้อมูลมากเกินไป',
+        vetoedBy: 'ถูกยับยั้งโดย',
+        marginKilled: 'การทดสอบบวก {n} รายการแพ้ด้วยระยะ margin (ไม่มีแท็กยับยั้งเดี่ยว)',
+        removals: 'แท็กที่ควรลบ (แท็กเหล่านี้ยับยั้งกรณีบวกของคลังข้อมูลนี้เอง)',
+        removeTip: 'ลบ "{tag}" — ยับยั้งการทดสอบบวก {n} รายการ',
+        tripwire: 'รอบนี้ทำให้การทดสอบบวกล้มเหลว {n} รายการ — แท็กที่เพิ่มกดมากเกินไป ต้องการย้อนกลับหรือไม่?',
+        tripwireRevert: 'ดูตัวเลือกการย้อนกลับ',
+        staleSnapshot: 'แท็กเปลี่ยนแปลงหลังจากสร้างชุดทดสอบนี้ — สร้างใหม่เพื่อให้แถวต้องห้ามเป็นปัจจุบัน',
+        revertTitle: 'ย้อนกลับแท็ก',
+        revertForbiddenCount: '{n} แท็กต้องห้าม',
+        revertAction: 'ย้อนกลับ',
+        revertBusy: 'กำลังโหลดประวัติการบันทึก…',
+        revertSaving: 'กำลังกู้คืน frontmatter…',
+        revertEmpty: 'ยังไม่มีประวัติการบันทึก frontmatter',
+        revertDone: 'กู้คืน frontmatter แล้ว — สร้างหัวใหม่และรันซ้ำเพื่อใช้งาน',
+        removeTag: 'นำออกจากแท็กต้องห้าม',
+        tagsetTip: 'แท็กต้องห้ามของการรันนี้',
+        savedTitle: 'ชุดทดสอบที่บันทึกไว้',
+        load: 'โหลด',
+        flipTip: 'สลับ ควรเลือก / ไม่ควรเลือก',
+        deleteTip: 'นำแถวนี้ออกจากชุดทดสอบ',
+        namePlaceholder: 'ชื่อชุดทดสอบ (ไม่บังคับ) — เช่น ชุดทดสอบย้อนหลัง NCD',
+        probeTip: 'ทดสอบคำถามนี้กับคลังข้อมูลจริง',
+        deleteSuiteTip: 'ลบชุดทดสอบนี้และประวัติของมัน',
+        corpusNeedsIngest: 'โปรด ingest รีปอซิทอรีก่อน — การทดสอบคลังข้อมูลค้นจากคลังที่ ingest แล้ว'
       },
       error: {
+        explain: 'การอธิบายล้มเหลว',
+        saveTag: 'ไม่สามารถบันทึกแท็กต้องห้ามได้',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'โหลดประวัติการบันทึกไม่สำเร็จ',
+        revert: 'ย้อนกลับ frontmatter ไม่สำเร็จ',
+        advisor: 'ที่ปรึกษาล้มเหลว',
+        noSuite: 'สร้างชุดทดสอบก่อน จากนั้นจึงสร้างใหม่และรันซ้ำ',
+        applyNoSuite: 'บันทึกแท็กและสร้าง head ใหม่แล้ว — สร้างชุดทดสอบแล้วรันทั้งหมดเพื่อดูผล',
+        suiteLoad: 'โหลดชุดทดสอบไม่สำเร็จ',
+        suiteUpdate: 'อัปเดตชุดทดสอบไม่สำเร็จ',
+        suiteRename: 'เปลี่ยนชื่อชุดทดสอบไม่สำเร็จ',
+        generateTimeout: 'ชุดทดสอบใช้เวลานานผิดปกติ — อาจปรากฏในรายการที่บันทึกไว้ ตรวจสอบอีกครั้งในหนึ่งนาที',
+        probe: 'การทดสอบคลังข้อมูลล้มเหลว',
+        suiteDelete: 'ลบชุดทดสอบไม่สำเร็จ'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2718,6 +2814,40 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'ที่ปรึกษา: แนะนำการปรับแท็ก',
+        busy: 'กำลังจำลองการปรับแท็กจากการรันล่าสุด…',
+        title: 'คำแนะนำชุดแท็ก (จำลองจากการรันล่าสุด)',
+        apply: 'ใช้การเปลี่ยนแปลง สร้าง head ใหม่ และรันชุดทดสอบซ้ำ',
+        scorecard: 'บวก {p}/{pt} ผ่าน · ลบ {n}/{nt} ถูกปิดกั้น',
+        now: 'ปัจจุบัน',
+        predicted: 'คาดการณ์',
+        scope: ' (จาก {q} คำถามในการรันล่าสุด {r} ครั้ง)',
+        applying: 'กำลังใช้งาน: บันทึกแท็ก สร้าง head ใหม่ รันชุดทดสอบซ้ำ…',
+        blockedTitle: 'การลบที่ถูกบล็อก — คลิกเพื่อรวมในการนำไปใช้',
+        blockedGain: 'กู้คืน {n} เคสบวก',
+        narrowTitle: 'แท็กที่แคบลง — กู้คืนเคสบวกโดยไม่รับเคสลบกลับมา',
+        narrowChip: 'ลบแท็กกว้าง เพิ่มแท็กแคบ',
+        reasonCurator: 'คุณเป็นผู้ประกาศแท็กนี้แต่แรก — ยืนยันก่อนลบ',
+        reasonRotated: 'ประวัติการแก้ไขเลยเส้นฐานแล้ว — ยืนยันก่อนลบ',
+        scopeDetail: 'ชุดทดสอบ: {s} · ชุดแท็ก: {t}'
+      },
+      probe: {
+        answerable: 'ตอบได้',
+        weak: 'ตรงกันบางส่วน',
+        unanswerable: 'ไม่มีในคลังข้อมูล',
+        unknown: 'ไม่ทราบ',
+        title: 'การทดสอบคลังข้อมูล — สรุป',
+        close: 'ปิดสรุป',
+        chunksScanned: 'ชังก์ที่สแกนจากคลังข้อมูล',
+        headLeg: 'คำตัดสิน Head',
+        headNotClaimed: 'ไม่ระบุกราฟ',
+        corpusLeg: 'การครอบคลุมคลังข้อมูล',
+        files: 'ไฟล์อ้างอิง',
+        colScore: 'คะแนน rerank',
+        colFile: 'ไฟล์',
+        colContent: 'เนื้อหาชังก์'
       }
     }
   },

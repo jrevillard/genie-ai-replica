@@ -103,6 +103,59 @@ describe('repository-service', () => {
       expect(updated.updated_at).toEqual(expect.any(String));
     });
 
+    test('dedups frontmatter tag arrays at the write boundary (2026-10-09 dup incident)', async () => {
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      const fm = {
+        topic: ['cancer-screening', 'cancer-screening'],
+        entity: ['asthma'],
+        scope: 'healthcare',
+        // Verbatim duplicate shape the suggester once emitted and the UI saved.
+        forbidden: ['mental-health', 'communicable-diseases', 'mental-health', 'mental-health'],
+        summary: '',
+        keyword: ['who', 'WHO']
+      };
+      const updated = await repoService.update(created.repo_id, { frontmatter: fm }, ACTOR);
+      expect(updated.frontmatter.forbidden).toEqual(['mental-health', 'communicable-diseases']);
+      expect(updated.frontmatter.topic).toEqual(['cancer-screening']);
+      // Case-insensitive: the second 'WHO' (different case) is still a dup.
+      expect(updated.frontmatter.keyword).toEqual(['who']);
+      // The history snapshot stores the CLEANED shape, not the dup payload.
+      const stored = db._stores.okf_repositories[created.repo_id];
+      expect(stored.frontmatter_history[0].shape.forbidden).toEqual(['mental-health', 'communicable-diseases']);
+    });
+
+    test('restamps frontmatter.updated_at on every frontmatter write (2026-10-10 live bug)', async () => {
+      // The chip panels replace frontmatter WITHOUT a timestamp; the import
+      // stamp then survives forever and the Lab's stale badge (fm.updated_at
+      // vs head.computed_at) reads a lie. The stamp is a SERVER invariant.
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      // Client sends a shape with NO updated_at (what FrontmatterPanel saves).
+      const first = await repoService.update(
+        created.repo_id,
+        { frontmatter: { topic: ['x'], entity: [], scope: '', forbidden: ['y'], summary: '', keyword: [] } },
+        ACTOR
+      );
+      expect(first.frontmatter.updated_at).toEqual(expect.any(String));
+      // A client-supplied stale stamp is overwritten, never trusted.
+      const again = await repoService.update(
+        created.repo_id,
+        {
+          frontmatter: {
+            topic: ['x'],
+            entity: [],
+            scope: '',
+            forbidden: ['y'],
+            summary: '',
+            keyword: [],
+            updated_at: '2000-01-01T00:00:00.000Z'
+          }
+        },
+        ACTOR
+      );
+      expect(again.frontmatter.updated_at).toEqual(expect.any(String));
+      expect(again.frontmatter.updated_at).not.toBe('2000-01-01T00:00:00.000Z');
+    });
+
     test('409 when attempting to change graph_name (immutable)', async () => {
       const created = await repoService.create(validCreateInput(), ACTOR);
       await expect(repoService.update(created.repo_id, { graph_name: 'OKF_other' }, ACTOR)).rejects.toMatchObject({

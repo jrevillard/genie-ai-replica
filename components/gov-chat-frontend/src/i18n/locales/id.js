@@ -528,7 +528,11 @@ export default {
       uploadSuccessMultiple: '{count} file berhasil diunggah.',
       linkSubmitSuccess: 'Berhasil merayapi dan menyimpan "{fileName}".',
       actionSuccess: 'Tindakan "{action}" pada file {fileId} berhasil.',
-      metadataUpdateSuccess: 'Metadata untuk file {fileId} telah diperbarui.'
+      metadataUpdateSuccess: 'Metadata untuk file {fileId} telah diperbarui.',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} file terpilih tidak dapat dihapus ({'{'{'}'}reason{'}'}) — hanya {'{'{'}'}n{'}'} lainnya yang akan dihapus.",
+      confirmDeleteSkipped:
+        "{'{'{'}'}count{'}'} file yang di-ingest/sedang di-ingest akan DILEWATI — retract dulu untuk menghapusnya."
     },
     queryInspector: {
       search: 'Cari',
@@ -1470,7 +1474,7 @@ export default {
       none: 'Belum ada versi yang dicetak — melakukan publish akan membuat v1.',
       notServing: 'Tidak melayani',
       publish: 'Buat versi baru',
-      published: "Versi v{'{'}v{'}'} dipublikasikan — bundel {'{'}f{'}'} disimpan di repositori dokumen.",
+      published: 'Versi v{v} dipublikasikan — bundel {f} disimpan di repositori dokumen.',
       serving: 'Di-ingest (serving)',
       title: 'Versi'
     },
@@ -1490,7 +1494,7 @@ export default {
         note: 'Entitas yang ditandai adalah bagian dari konten yang dipublikasikan. Jika Anda telah meninjaunya (mis. rincian kontak resmi), konfirmasikan dan lanjutkan.'
       },
       publish: {
-        body: "Melakukan publish akan mencetak v{'{'}n{'}'} dan menyimpan bundel \"{'{'}file{'}'}\" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.",
+        body: 'Melakukan publish akan mencetak v{n} dan menyimpan bundel "{file}" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.',
         confirm: 'Publikasikan',
         inProgress: 'Menerbitkan — mengekspor dan mentransfer bundel…',
         title: 'Publikasikan'
@@ -1504,22 +1508,22 @@ export default {
         editor: 'Editor',
         wizard: 'Wisaya'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{n}',
       versions: 'Versi',
       deleteLabel: 'Hapus',
       headTest: 'Routing Lab'
     },
     logs: {
-      labeled: "diberi label: {'{'}n{'}'}",
-      fallbacks: "fallback LLM: {'{'}n{'}'}",
-      concepts: "konsep: {'{'}n{'}'}",
+      labeled: 'diberi label: {n}',
+      fallbacks: 'fallback LLM: {n}',
+      concepts: 'konsep: {n}',
       col: {
         action: 'Tindakan',
         description: 'Deskripsi',
         user: 'Pengguna',
         when: 'Tanggal & waktu'
       },
-      count: "{'{'}n{'}'} entri",
+      count: '{n} entri',
       loadFailed: 'Gagal memuat log aktivitas.',
       none: 'Belum ada aktivitas yang dicatat — tindakan repositori muncul di sini saat terjadi.',
       title: 'Log aktivitas'
@@ -1537,8 +1541,8 @@ export default {
       zoomIn: 'Perbesar',
       zoomOut: 'Perkecil',
       card: {
-        links: "{'{'}n{'}'} tautan",
-        chunks: "{'{'}n{'}'} potongan",
+        links: '{n} tautan',
+        chunks: '{n} potongan',
         failed: 'pengindeksan gagal',
         flagged: 'entitas ditandai',
         hub: 'Hub indeks',
@@ -1609,8 +1613,8 @@ export default {
           problem: 'Masalahnya',
           noError: 'Ditandai gagal tanpa alasan tercatat.',
           fixLabel: 'Cara memperbaiki',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               'Worker ingest berhenti menunggu dalam batas waktunya (drain penuh) — konten tetap utuh. Perbaikan: edit sedikit file ini lalu simpan untuk mengantri ulang, atau retract dan ingest ulang seluruh repo.',
@@ -1691,9 +1695,9 @@ export default {
       saveFailed: 'Penyimpanan gagal — coba lagi',
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: 'Redaksi semua konten yang ditandai',
           remove: 'Hapus semua konten yang ditandai',
@@ -1706,7 +1710,7 @@ export default {
           accept:
             'Semua entitas yang ditandai ditandai sebagai ditinjau-dan-disimpan — entitas tersebut tidak akan ditandai lagi kecuali Anda memindai ulang.'
         },
-        scope: "Konsep yang terpengaruh: {'{'}n{'}'}.",
+        scope: 'Konsep yang terpengaruh: {n}.',
         confirm: 'Terapkan',
         failed: 'Tindakan PII massal gagal — coba lagi.'
       },
@@ -1725,11 +1729,11 @@ export default {
       bulk: {
         body: 'Setiap repositori dipublikasikan dengan pemeriksaan gerbang penuh (peninjauan PII, pengindeksan, kesesuaian). Hasil per repositori:',
         pending: 'Konfirmasikan untuk melakukan publish pada repositori yang dipilih.',
-        publishConfirm: "Publikasikan {'{'}n{'}'}",
+        publishConfirm: 'Publikasikan {n}',
         title: 'Publikasikan repositori yang dipilih'
       },
       card: {
-        actions: "Tindakan untuk {'{'}name{'}'}",
+        actions: 'Tindakan untuk {name}',
         building: 'Membangun…',
         buildingAria: 'Membangun — berkas sumber masih diproses',
         delete: 'Hapus',
@@ -1755,23 +1759,23 @@ export default {
         note: 'Entitas yang ditandai adalah bagian dari konten yang dipublikasikan. Jika Anda telah meninjaunya (mis. rincian kontak resmi), konfirmasikan dan lanjutkan.'
       },
       publish: {
-        body: "Melakukan publish akan mencetak v{'{'}n{'}'} dan menyimpan bundel \"{'{'}file{'}'}\" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.",
+        body: 'Melakukan publish akan mencetak v{n} dan menyimpan bundel "{file}" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.',
         confirm: 'Publikasikan',
         title: 'Publikasikan'
       },
       search: 'Cari...',
-      select: "Pilih {'{'}name{'}'} untuk publikasi massal",
+      select: 'Pilih {name} untuk publikasi massal',
       stage: {
         drainFailed: 'Proses ingest gagal',
-        queueBehind: "{'{'}n{'}'} dalam antrean · meng-ingest {'{'}m{'}'} repo",
+        queueBehind: '{n} dalam antrean · meng-ingest {m} repo',
         redraining: 'Mengosongkan ulang…',
         building: 'Membangun…',
         draft: 'Draf',
         inReview: 'Dalam tinjauan',
-        ingested: "Di-ingest v{'{'}n{'}'}",
-        published: "Dipublikasikan v{'{'}n{'}'}",
+        ingested: 'Di-ingest v{n}',
+        published: 'Dipublikasikan v{n}',
         retracted: 'Ditarik',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: 'Repositori',
       topics: 'topik',
@@ -1797,7 +1801,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} lainnya",
+        more: '+ {n} lainnya',
         fixPath: 'Lakukan ingest ulang untuk mencoba lagi: retract → buat versi → ingest.'
       },
       curation: {
@@ -1811,9 +1815,9 @@ export default {
       bytes: 'Sumber dibaca',
       conceptsIndexed: 'konsep diindeks',
       elapsed: {
-        hr: "Dimulai {'{'}n{'}'} jam lalu",
+        hr: 'Dimulai {n} jam lalu',
         lt1: 'Dimulai kurang dari satu menit lalu',
-        min: "Dimulai {'{'}n{'}'} menit lalu"
+        min: 'Dimulai {n} menit lalu'
       },
       hint: {
         import: 'Repositori tetap dalam status Import hingga konversi berkas selesai.',
@@ -1856,7 +1860,7 @@ export default {
     },
     create: {
       zipOnly: 'Pilih berkas bundel .zip.',
-      stagedFile: "Disiapkan: {'{'}name{'}'}",
+      stagedFile: 'Disiapkan: {name}',
       staged: 'Bundel disiapkan — klik Buat Repositori untuk memulai impor.',
       openExisting: 'Buka repositori yang ada',
       name: 'Nama repositori',
@@ -1933,7 +1937,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Tag tingkat repositori ({summary}) milik repositori, bukan konsep ini — kelola di panel Tag di rail kanan.'
     },
     glossary: {
       addConcept:
@@ -2075,7 +2081,7 @@ export default {
       },
       stage: {
         inReview: 'Dalam status review',
-        stepOf: "Langkah {'{'}n{'}'} dari 10",
+        stepOf: 'Langkah {n} dari 10',
         draft: 'Draf'
       },
       dashboard: {
@@ -2088,7 +2094,7 @@ export default {
         stale: 'usang',
         stage: {
           inReview: 'Dalam status review',
-          stepOf: "Langkah {'{'}n{'}'} dari 10",
+          stepOf: 'Langkah {n} dari 10',
           draft: 'Draf'
         },
         bulk: {
@@ -2199,11 +2205,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2426,16 +2432,16 @@ export default {
     },
     validation: {
       frozen:
-        "Konten dibekukan pada {'{'}v{'}'} — pratinjau hanya-baca. Lakukan retract pada versi yang sedang serving untuk membuat perubahan.",
+        'Konten dibekukan pada {v} — pratinjau hanya-baca. Lakukan retract pada versi yang sedang serving untuk membuat perubahan.',
       none: 'Tidak ada',
       expertHint:
         'Beralih ke mode Pakar untuk melihat JSON validasi mentah, memfilter berdasarkan tingkat keparahan, dan mengesampingkan pemeriksaan.',
       headline: {
-        blockers: "{'{'}n{'}'} masalah penghenti — perbaiki sebelum menyerahkan repositori",
-        warnings: "{'{'}n{'}'} hal memerlukan peninjauan Anda",
+        blockers: '{n} masalah penghenti — perbaiki sebelum menyerahkan repositori',
+        warnings: '{n} hal memerlukan peninjauan Anda',
         ok: 'Terlihat bagus. Tidak ada yang perlu diperbaiki.'
       },
-      summary: "{'{'}clean{'}'} bersih · {'{'}warnings{'}'} perlu peninjauan · {'{'}blockers{'}'} memblokir",
+      summary: '{clean} bersih · {warnings} perlu peninjauan · {blockers} memblokir',
       formatter: {
         notReady: 'Pemformat hadir di Story 4.2b.'
       },
@@ -2469,8 +2475,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2484,12 +2490,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2506,7 +2512,7 @@ export default {
     },
     pii: {
       panel: 'Entitas yang ditandai',
-      nFlagged: "Ditemukan {'{'}n{'}'}",
+      nFlagged: 'Ditemukan {n}',
       rescan: 'Pindai ulang',
       scanning: 'Memindai…',
       clean: 'Tidak ada entitas yang ditandai — concept ini aman.',
@@ -2587,7 +2593,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)",
+      total: '{n} document(s)',
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2596,12 +2602,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
@@ -2617,6 +2623,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2686,11 +2693,54 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Gerbang',
+        floor: 'Batas minimum',
+        veto: 'Tag terlarang',
+        margin: 'Margin',
+        claim: 'Klaim',
+        pass: 'lolos',
+        fail: 'gagal',
+        na: 'n/a'
+      },
+      counts: {
+        positive: 'Positif',
+        negative: 'Membingungkan',
+        negativeRandom: 'Luar domain',
+        meta: 'Meta',
+        nearMiss: 'Hampir tepat',
+        hint: 'Baris turunan tag terlarang mengikuti jumlah tag terlarang repositori — tidak dapat diatur di sini.'
+      },
+      cls: {
+        nearMiss: 'Hampir tepat',
+        confusable: 'Membingungkan',
+        forbidden: 'Terlarang',
+        offDomain: 'Luar domain',
+        meta: 'Meta'
+      },
+      teach: {
+        claim:
+          'Head MENGAKUI kueri ini — ia melewati ketiga gerbang. Jika seharusnya TIDAK merute ke sini, minta tag terlarang yang menyingkirkan subjeknya, tambahkan, lalu bangun ulang head.',
+        explain: 'Jelaskan & sarankan',
+        explainBusy: 'Menjelaskan — model mengusulkan tag terlarang…',
+        addTag: 'Tambahkan ke tag terlarang',
+        suggestNone:
+          'Tidak ada tag terlarang yang disarankan — tinjau kueri terhadap cakupan yang dinyatakan secara manual.',
+        added: 'Ditambahkan ke tag terlarang — bangun ulang head untuk menerapkannya.',
+        rebuildRerun: 'Bangun ulang head & jalankan ulang',
+        savingTag: 'Menyimpan tag terlarang…',
+        rebuildBusy: 'Membangun ulang head dan menjalankan ulang…',
+        title: 'Apa artinya ini',
+        veto: 'Kueri ini sangat cocok dengan tag terlarang “{tag}”. Jika seharusnya termasuk dalam repositori ini, hapus “{tag}” dari tag terlarang di Frontmatter, lalu terbitkan ulang untuk membangun ulang head.',
+        floor:
+          'Kueri ini tidak berhubungan dengan topik repositori ini (skor di bawah batas minimum domain) — perubahan tag tidak akan memperbaiki ini; ini adalah penekanan yang benar.',
+        rejected: 'Ditolak oleh pagar pengaman — tag terlarang tidak boleh cocok dengan topik repositori ini sendiri.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+          'LLM menulis kueri dalam batch 30 per kelas — permintaan besar (100+) butuh beberapa menit. Suite muncul di sini dan di suite tersimpan saat selesai.',
+        generating: 'Menghasilkan per batch — permintaan besar butuh beberapa menit…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -2701,7 +2751,11 @@ export default {
           run: 'Run',
           when: 'When',
           passRate: 'Pass rate',
-          headVersion: 'Head'
+          headVersion: 'Head',
+          tags: 'Tag',
+          actions: 'Edit',
+          name: 'Nama',
+          corpus: 'Korpus'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2717,14 +2771,61 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Jelaskan kegagalan',
+        explainBusy: 'Menjelaskan kegagalan — satu panggilan model untuk setiap negatif yang gagal…',
+        batchTitle: 'Mengapa negatif yang gagal dirute ke sini',
+        batchNone:
+          'Tidak ada perbaikan yang disarankan — tinjau kueri yang gagal terhadap cakupan yang dinyatakan secara manual.',
+        addAll: 'Tambahkan semua',
+        rebuildRerun: 'Bangun ulang head & jalankan ulang suite',
+        positiveFailuresTitle: 'Mengapa positif berhenti lolos',
+        positiveFailures:
+          '{n} tes positif ditekan pada run ini — tag terlarang mencakup cakupan repositori terlalu luas.',
+        vetoedBy: 'Diveto oleh',
+        marginKilled: '{n} tes positif kalah pada margin (tanpa tag veto tunggal).',
+        removals: 'Tag untuk dihapus (tag ini memveto positif milik repositori ini sendiri)',
+        removeTip: 'Hapus "{tag}" — tag ini memveto {n} tes positif',
+        tripwire: 'Siklus ini merusak {n} tes positif — tag yang ditambahkan terlalu menekan. Kembalikan?',
+        tripwireRevert: 'Lihat opsi pengembalian',
+        staleSnapshot: 'Tag berubah sejak suite ini dibuat — buat ulang untuk baris terlarang yang terbaru.',
+        revertTitle: 'Kembalikan tag',
+        revertForbiddenCount: '{n} tag terlarang',
+        revertAction: 'Kembalikan',
+        revertBusy: 'Memuat riwayat penyimpanan…',
+        revertSaving: 'Memulihkan frontmatter…',
+        revertEmpty: 'Belum ada penyimpanan frontmatter yang tercatat.',
+        revertDone: 'Frontmatter dipulihkan — bangun ulang head dan jalankan ulang untuk menerapkannya.',
+        removeTag: 'Hapus dari tag terlarang',
+        tagsetTip: 'Tag terlarang untuk eksekusi ini',
+        savedTitle: 'Suite tersimpan',
+        load: 'Muat',
+        flipTip: 'Balikkan harus-dipilih / tidak-harus-dipilih',
+        deleteTip: 'Hapus baris ini dari suite',
+        namePlaceholder: 'Nama suite (opsional) — mis. set regresi NCD',
+        probeTip: 'Uji kueri ini terhadap korpus langsung',
+        deleteSuiteTip: 'Hapus suite ini dan riwayatnya',
+        corpusNeedsIngest: 'Ingest repositori dulu — uji korpus mencari di korpus yang sudah di-ingest'
       },
       error: {
+        explain: 'Penjelasan gagal',
+        saveTag: 'Tidak dapat menyimpan tag terlarang',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Tidak dapat memuat riwayat penyimpanan',
+        revert: 'Tidak dapat mengembalikan frontmatter',
+        advisor: 'Penasihat gagal',
+        noSuite: 'Buat suite terlebih dahulu, lalu bangun ulang dan jalankan ulang.',
+        applyNoSuite: 'Tag tersimpan dan head dibangun ulang — buat suite lalu jalankan semua untuk melihat efeknya.',
+        suiteLoad: 'Gagal memuat suite',
+        suiteUpdate: 'Gagal memperbarui suite',
+        suiteRename: 'Gagal mengganti nama suite',
+        generateTimeout: 'Suite terlalu lama — mungkin muncul di suite tersimpan; periksa lagi dalam satu menit.',
+        probe: 'Uji korpus gagal',
+        suiteDelete: 'Tidak dapat menghapus suite'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2734,6 +2835,40 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Penasihat: rekomendasikan perubahan tag',
+        busy: 'Menyimulasikan perubahan tag pada eksekusi terbaru…',
+        title: 'Rekomendasi set tag (disimulasikan pada eksekusi terbaru)',
+        apply: 'Terapkan perubahan, bangun ulang head & jalankan ulang suite',
+        scorecard: 'positif {p}/{pt} diterima · negatif {n}/{nt} ditekan',
+        now: 'Saat ini',
+        predicted: 'perkiraan',
+        scope: ' (atas {q} kueri dari {r} eksekusi terakhir)',
+        applying: 'Menerapkan: menyimpan tag, membangun ulang head, menjalankan ulang suite…',
+        blockedTitle: 'Penghapusan terblokir — klik untuk menyertakan dalam Terapkan',
+        blockedGain: 'memulihkan {n} positif',
+        narrowTitle: 'Pengganti yang lebih sempit — memulihkan positif tanpa memasukkan kembali negatif',
+        narrowChip: 'Hapus tag luas, tambahkan tag sempit',
+        reasonCurator: 'Anda yang mendeklarasikan tag ini semula — konfirmasi sebelum menghapus',
+        reasonRotated: 'riwayat sudah melewati baseline — konfirmasi sebelum menghapus',
+        scopeDetail: 'suite: {s} · set tag: {t}'
+      },
+      probe: {
+        answerable: 'bisa dijawab',
+        weak: 'kecocokan lemah',
+        unanswerable: 'tidak ada di korpus',
+        unknown: 'tidak diketahui',
+        title: 'Uji korpus — ringkasan',
+        close: 'Tutup ringkasan',
+        chunksScanned: 'potongan korpus dipindai',
+        headLeg: 'Putusan Head',
+        headNotClaimed: 'tanpa klaim',
+        corpusLeg: 'Cakupan korpus',
+        files: 'File referensi',
+        colScore: 'Skor rerank',
+        colFile: 'File',
+        colContent: 'Isi potongan'
       }
     }
   },

@@ -1,4 +1,3 @@
-// i18n English source of truth (newest keys safe-added by add-amendmenta-keys.cjs)
 export default {
   countries: {
     AF: 'Afghanistan',
@@ -525,7 +524,11 @@ export default {
       uploadSuccessMultiple: '{count} file(s) uploaded successfully.',
       linkSubmitSuccess: 'Successfully crawled and saved "{fileName}".',
       actionSuccess: 'Action "{action}" on file {fileId} was successful.',
-      metadataUpdateSuccess: 'Metadata for file {fileId} was updated.'
+      metadataUpdateSuccess: 'Metadata for file {fileId} was updated.',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} selected file(s) cannot be deleted ({'{'{'}'}reason{'}'}) — only the other {'{'{'}'}n{'}'} will be deleted.",
+      confirmDeleteSkipped:
+        "{'{'{'}'}count{'}'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
     },
     queryInspector: {
       search: 'Search',
@@ -1448,7 +1451,6 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
-    // Story 1-8 (2026-10-08): the Head Tester / Routing Lab.
     headTest: {
       title: 'Routing Lab — head test',
       cta: 'Routing Lab',
@@ -1500,11 +1502,53 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'Gate',
+        floor: 'Floor',
+        veto: 'Forbidden tags',
+        margin: 'Margin',
+        claim: 'Claim',
+        pass: 'pass',
+        fail: 'fail',
+        na: 'n/a'
+      },
+      counts: {
+        positive: 'Positives',
+        negative: 'Confusable',
+        negativeRandom: 'Off-domain',
+        meta: 'Meta',
+        nearMiss: 'Near miss',
+        hint: "Forbidden-derived rows scale with the repository's forbidden tag count — they cannot be set here."
+      },
+      cls: {
+        nearMiss: 'Near miss',
+        confusable: 'Confusable',
+        forbidden: 'Forbidden',
+        offDomain: 'Off-domain',
+        meta: 'Meta'
+      },
+      teach: {
+        claim:
+          'The head CLAIMS this query — it passed all three gates. If it should NOT route here, ask for forbidden tags that exclude its subject, add them, then rebuild the head.',
+        explain: 'Explain & suggest',
+        explainBusy: 'Explaining — the model is proposing forbidden tags…',
+        addTag: 'Add to forbidden tags',
+        suggestNone: 'No forbidden tag was suggested — review the query against the declared scope manually.',
+        added: 'Added to the forbidden tags — rebuild the head to apply them.',
+        rebuildRerun: 'Rebuild head & re-run',
+        savingTag: 'Saving the forbidden tag…',
+        rebuildBusy: 'Rebuilding the head and re-running…',
+        title: 'What this means',
+        veto: 'This query strongly matches the forbidden tag "{tag}". If it SHOULD belong to this repository, remove "{tag}" from the forbidden tags in Frontmatter, then republish to rebuild the head.',
+        floor:
+          'The query is unrelated to the subject matter of this repository (score below the domain floor) — no tag change fixes this; it is correct suppression.',
+        rejected: 'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+          'The LLM writes the queries in batches of 30 per class — a large ask (100+) takes a few minutes. The suite lands here and in Saved suites when done.',
+        generating: 'Generating in batches — large asks take a few minutes…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -1515,7 +1559,11 @@ export default {
           run: 'Run',
           when: 'When',
           passRate: 'Pass rate',
-          headVersion: 'Head'
+          headVersion: 'Head',
+          tags: 'Tags',
+          actions: 'Edit',
+          name: 'Name',
+          corpus: 'Corpus'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -1531,14 +1579,61 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Explain failures',
+        explainBusy: 'Explaining the failures — one model call for every failing negative…',
+        batchTitle: 'Why the failing negatives routed here',
+        batchNone: 'No fix was suggested — review the failing queries against the declared scope manually.',
+        addAll: 'Add all',
+        rebuildRerun: 'Rebuild head & re-run suite',
+        positiveFailuresTitle: 'Why positives stopped passing',
+        positiveFailures:
+          '{n} positive test(s) were suppressed this run — the forbidden tags over-match the repository scope.',
+        vetoedBy: 'Vetoed by',
+        marginKilled: '{n} positive test(s) lost on margin (no single veto tag).',
+        removals: 'Tags to remove (they veto this repository’s own positives)',
+        removeTip: 'Remove "{tag}" — it vetoed {n} positive test(s)',
+        tripwire: 'This cycle broke {n} positive tests — the added tags over-suppress. Revert?',
+        tripwireRevert: 'View revert options',
+        staleSnapshot: 'Tags changed since this suite was generated — regenerate for fresh forbidden rows.',
+        revertTitle: 'Revert tags',
+        revertForbiddenCount: '{n} forbidden tags',
+        revertAction: 'Revert',
+        revertBusy: 'Loading save history…',
+        revertSaving: 'Restoring the frontmatter…',
+        revertEmpty: 'No frontmatter saves recorded yet.',
+        revertDone: 'Frontmatter restored — rebuild the head and re-run to apply it.',
+        removeTag: 'Remove from forbidden tags',
+        tagsetTip: 'Forbidden tags for this run',
+        savedTitle: 'Saved suites',
+        load: 'Load',
+        flipTip: 'Flip should-select / should-NOT-select',
+        deleteTip: 'Remove this row from the suite',
+        namePlaceholder: 'Suite name (optional) — e.g. NCD regression set',
+        probeTip: 'Test this query against the live corpus',
+        deleteSuiteTip: 'Delete this suite and its run history',
+        corpusNeedsIngest: 'Ingest the repository first — the corpus test searches the ingested corpus'
       },
       error: {
+        explain: 'Explain failed',
+        saveTag: 'Could not save the forbidden tag',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'Could not load the save history',
+        revert: 'Could not revert the frontmatter',
+        advisor: 'Advisor failed',
+        noSuite: 'Generate a suite first, then rebuild + re-run.',
+        applyNoSuite: 'Tags saved and the head rebuilt — generate a suite, then Run all to see the effect.',
+        suiteLoad: 'Could not load the suite',
+        suiteUpdate: 'Could not update the suite',
+        suiteRename: 'Could not rename the suite',
+        generateTimeout:
+          'The suite is taking unusually long — it may still land in Saved suites; check there in a minute.',
+        probe: 'Corpus test failed',
+        suiteDelete: 'Could not delete the suite'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -1548,6 +1643,40 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Advisor: recommend tag changes',
+        busy: 'Simulating tag changes across recent runs…',
+        title: 'Tag-set recommendation (simulated across recent runs)',
+        apply: 'Apply changes & rebuild & re-run suite',
+        scorecard: 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed',
+        now: 'Now',
+        predicted: 'predicted',
+        scope: ' (across {q} queries from the last {r} runs)',
+        applying: 'Applying: saving tags, rebuilding the head, re-running the suite…',
+        blockedTitle: 'Blocked removals — click to include in Apply',
+        blockedGain: 'recovers {n} positive(s)',
+        narrowTitle: 'Narrower replacements — recover positives without re-admitting negatives',
+        narrowChip: 'Remove the broad tag, add the narrow one',
+        reasonCurator: 'you declared this tag originally — confirm before removing',
+        reasonRotated: 'the edit history has rotated past the baseline — confirm before removing',
+        scopeDetail: 'suites: {s} · tag sets: {t}'
+      },
+      probe: {
+        answerable: 'answerable',
+        weak: 'weak match',
+        unanswerable: 'not in corpus',
+        unknown: 'unknown',
+        title: 'Corpus test — summary',
+        close: 'Close the summary',
+        chunksScanned: 'corpus chunks scanned',
+        headLeg: 'Head verdict',
+        headNotClaimed: 'does not claim',
+        corpusLeg: 'Corpus coverage',
+        files: 'Reference files',
+        colScore: 'Rerank score',
+        colFile: 'File',
+        colContent: 'Chunk content'
       }
     },
     versions: {
@@ -1565,7 +1694,7 @@ export default {
       none: 'No versions minted yet — publishing creates v1.',
       notServing: 'Not serving',
       publish: 'Create new version',
-      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
+      published: 'Version v{v} published — bundle {f} stored in the document repository.',
       serving: 'Ingested (serving)',
       title: 'Versions'
     },
@@ -1585,7 +1714,7 @@ export default {
         note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        body: 'Publishing mints v{n} and stores bundle "{file}" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.',
         confirm: 'Publish',
         inProgress: 'Publishing — exporting and transferring the bundle…',
         title: 'Publish'
@@ -1599,22 +1728,22 @@ export default {
         editor: 'Editor',
         wizard: 'Wizard'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{n}',
       versions: 'Versions',
       headTest: 'Routing Lab',
       deleteLabel: 'Delete'
     },
     logs: {
-      labeled: "labeled: {'{'}n{'}'}",
-      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
-      concepts: "concepts: {'{'}n{'}'}",
+      labeled: 'labeled: {n}',
+      fallbacks: 'LLM fallbacks: {n}',
+      concepts: 'concepts: {n}',
       col: {
         action: 'Action',
         description: 'Description',
         user: 'User',
         when: 'Date & time'
       },
-      count: "{'{'}n{'}'} entries",
+      count: '{n} entries',
       loadFailed: 'Failed to load the activity log.',
       none: 'No activity recorded yet — repository actions appear here as they happen.',
       title: 'Activity log'
@@ -1623,11 +1752,11 @@ export default {
       aria: 'Concept graph',
       building: 'Preparing graph…',
       card: {
-        chunks: "{'{'}n{'}'} chunks",
+        chunks: '{n} chunks',
         failed: 'indexing failed',
         flagged: 'flagged entities',
         hub: 'Index hub',
-        links: "{'{'}n{'}'} links",
+        links: '{n} links',
         pending: 'not indexed yet'
       },
       concepts: 'concepts',
@@ -1666,7 +1795,7 @@ export default {
     },
     pii: {
       panel: 'Flagged entities',
-      nFlagged: "{'{'}n{'}'} found",
+      nFlagged: '{n} found',
       rescan: 'Re-scan',
       scanning: 'Scanning…',
       clean: 'No flagged entities — this concept is clear.',
@@ -1780,8 +1909,8 @@ export default {
           problem: 'The problem',
           noError: 'Marked failed without a recorded reason.',
           fixLabel: 'How to fix',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               'The ingest worker gave up waiting within its grace window (the drain was saturated) — the content is intact. Fix: edit this file slightly and save to re-queue it, or retract and re-ingest the whole repo.',
@@ -1836,9 +1965,9 @@ export default {
       pickConcept: 'Select a concept from the list to start editing.',
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: 'Redact all flagged content',
           remove: 'Remove all flagged content',
@@ -1850,7 +1979,7 @@ export default {
           accept:
             'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
         },
-        scope: "Concepts affected: {'{'}n{'}'}.",
+        scope: 'Concepts affected: {n}.',
         confirm: 'Apply',
         failed: 'The bulk PII action failed — try again.'
       },
@@ -1882,11 +2011,11 @@ export default {
       bulk: {
         body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
         pending: 'Confirm to publish the selected repositories.',
-        publishConfirm: "Publish {'{'}n{'}'}",
+        publishConfirm: 'Publish {n}',
         title: 'Publish selected repositories'
       },
       card: {
-        actions: "Actions for {'{'}name{'}'}",
+        actions: 'Actions for {name}',
         building: 'Building…',
         buildingAria: 'Building — the source file is still being processed',
         delete: 'Delete',
@@ -1912,29 +2041,29 @@ export default {
         note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        body: 'Publishing mints v{n} and stores bundle "{file}" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.',
         confirm: 'Publish',
         title: 'Publish'
       },
       search: 'Search...',
-      select: "Select {'{'}name{'}'} for bulk publish",
+      select: 'Select {name} for bulk publish',
       stage: {
         drainFailed: 'Ingest failed',
-        queueBehind: "{'{'}n{'}'} queued · {'{'}m{'}'} repo(s) ingesting",
+        queueBehind: '{n} queued · {m} repo(s) ingesting',
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',
         inReview: 'In review',
-        ingested: "Ingested v{'{'}n{'}'}",
-        published: "Published v{'{'}n{'}'}",
+        ingested: 'Ingested v{n}',
+        published: 'Published v{n}',
         retracted: 'Retracted',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: 'Repositories',
       topics: 'topics',
       unpublish: {
         title: 'Unpublish',
-        body: "This stops serving {'{'}name{'}'} to RAG agents immediately. The published bundle zip and version history are kept; the repository returns to In Review so you can correct it. Publish again and Ingest to serve it once more.",
+        body: 'This stops serving {name} to RAG agents immediately. The published bundle zip and version history are kept; the repository returns to In Review so you can correct it. Publish again and Ingest to serve it once more.',
         confirm: 'Unpublish'
       },
       lane: {
@@ -1954,7 +2083,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} more",
+        more: '+ {n} more',
         fixPath: 'Re-ingest to retry: retract → create version → ingest.'
       },
       curation: {
@@ -1968,9 +2097,9 @@ export default {
       bytes: 'Source read',
       conceptsIndexed: 'concepts indexed',
       elapsed: {
-        hr: "Started {'{'}n{'}'} h ago",
+        hr: 'Started {n} h ago',
         lt1: 'Started less than a minute ago',
-        min: "Started {'{'}n{'}'} min ago"
+        min: 'Started {n} min ago'
       },
       pages: 'Pages processed',
       serving: {
@@ -2013,7 +2142,7 @@ export default {
     },
     create: {
       zipOnly: 'Pick a .zip bundle file.',
-      stagedFile: "Staged: {'{'}name{'}'}",
+      stagedFile: 'Staged: {name}',
       staged: 'Bundle staged — click Create Repository to start the import.',
       openExisting: 'Open existing repository',
       name: 'Repository name',
@@ -2067,10 +2196,6 @@ export default {
       descriptionLabel: 'Description',
       save: 'Save frontmatter',
       saveFailed: 'Frontmatter save failed',
-      // Story 1.7 (2026-10-08): per-repo frontmatter rendered as a
-      // dedicated section in the dialog (topic/entity/scope/forbidden/
-      // summary/keyword). Same data as the chip panel; both editors
-      // write through to the repo doc field.
       perRepoTitle: 'Routing tags — what this repo is about',
       perRepoHint:
         'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
@@ -2082,9 +2207,6 @@ export default {
         summary: 'Summary',
         keyword: 'Keyword'
       },
-      // Per-field placeholder + hint for the textarea control (array
-      // fields only — scalar fields reuse the field name as the
-      // placeholder).
       perRepoPh: {
         topic: 'One topic per line',
         entity: 'One entity per line',
@@ -2097,7 +2219,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Repository-level tags ({summary}) live on the repo, not this concept — manage them in the Tags panel in the right rail.'
     },
     glossary: {
       pickSource:
@@ -2238,7 +2362,7 @@ export default {
       },
       stage: {
         inReview: 'In review',
-        stepOf: "Step {'{'}n{'}'} of 10",
+        stepOf: 'Step {n} of 10',
         draft: 'Draft'
       },
       dashboard: {
@@ -2251,7 +2375,7 @@ export default {
         stale: 'stale',
         stage: {
           inReview: 'In review',
-          stepOf: "Step {'{'}n{'}'} of 10",
+          stepOf: 'Step {n} of 10',
           draft: 'Draft'
         },
         bulk: {
@@ -2362,11 +2486,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2567,10 +2691,6 @@ export default {
         empty: 'No labels yet.',
         notReady: 'Labels saved locally — server sync coming soon.'
       },
-      // Story 1.6→1.7 dialog fields + the per-repo-only InfoTip key
-      // (merged 2026-10-08: two `frontmatter:` literals in one object
-      // is a no-dupe-keys lint error and the second silently shadowed
-      // the first at runtime).
       frontmatter: {
         label: 'Frontmatter',
         edit: 'Edit frontmatter',
@@ -2591,15 +2711,15 @@ export default {
       saveBlocked: 'Save blocked: fix conformance issues first.'
     },
     validation: {
-      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
+      frozen: 'Content frozen at {v} — read-only preview. Retract the serving version to make changes.',
       none: 'None',
       expertHint: 'Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.',
       headline: {
-        blockers: "{'{'}n{'}'} blocking issue(s) — fix before you hand the repository off",
-        warnings: "{'{'}n{'}'} thing(s) need your review",
+        blockers: '{n} blocking issue(s) — fix before you hand the repository off',
+        warnings: '{n} thing(s) need your review',
         ok: 'Looks good. Nothing to fix.'
       },
-      summary: "{'{'}clean{'}'} clean · {'{'}warnings{'}'} needs review · {'{'}blockers{'}'} blocking",
+      summary: '{clean} clean · {warnings} needs review · {blockers} blocking',
       formatter: {
         notReady: 'Formatter lands in Story 4.2b.'
       },
@@ -2633,8 +2753,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2648,12 +2768,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2689,12 +2809,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       servingBadge: 'serving free-form RAG',
       alreadyBadge: 'already in an OKF repo',
@@ -2709,16 +2829,8 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)"
+      total: '{n} document(s)'
     },
-    // Story 1.7 (2026-10-08, simplified 2026-10-08): the per-repo
-    // frontmatter chip UI (Refresh / Save tags) used in BOTH the
-    // wizard's Curate step and the OKF Studio editor's right rail.
-    // Per David: the tags ARE the frontmatter — no approve state.
-    // The curator can edit the chips here OR the YAML in the center
-    // pane. The values match the translateMixin default strings in
-    // components/okf/FrontmatterPanel.vue so the locale tree is the
-    // source of truth and the inline fallbacks are the safety net.
     frontmatter: {
       title: 'Frontmatter tags — what this repo is about',
       help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
@@ -2726,6 +2838,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',

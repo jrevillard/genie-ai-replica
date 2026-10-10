@@ -286,6 +286,34 @@ ROUTE_HEAD_WEIGHT = float(os.getenv("RETRIEVER_ROUTE_HEAD_WEIGHT", "1.0"))
 # ("genetic risk factors for cancer" — borderline IN, per David). Heads
 # without a forbidden centroid claim freely (gate degrades open).
 ROUTE_HEAD_MARGIN = float(os.getenv("RETRIEVER_ROUTE_HEAD_MARGIN", "0.01"))
+# Story 1-8b (David 2026-10-09: "forbidden is forbidden — a hard contract,
+# it should immediately score zero") — the head pseudo-row is emitted only
+# when ALL of: FLOOR (score ≥ this — unrelated queries score 0.32-0.48 on
+# any head and the margin rule is blind to them; "capital of France"
+# claimed at +0.012 under margin-only. Calibrated: unrelated ≤ 0.484,
+# legit claims ≥ 0.614 → 0.55 mid-gap), VETO (no single forbidden tag
+# matches the query at/above this — mixed-subject queries like
+# genetics+cancer slip the averaged centroid but not their dominant tag;
+# failing queries ≥ 0.567 vs their tag, legit claims ≤ 0.529), and the
+# 1-8a MARGIN. Heads without per-tag vectors (pre-1-8b rebuild) skip the
+# veto; heads without a forbidden centroid skip margin (1-8a semantics).
+ROUTE_HEAD_FLOOR = float(os.getenv("RETRIEVER_ROUTE_HEAD_FLOOR", "0.55"))
+ROUTE_FORBIDDEN_TAG_MAX = float(os.getenv("RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX", "0.55"))
+# Story 1-8f3 (David 2026-10-10: "CLEARLY IT SHOULD HAVE HIT THE NCD
+# Information graph (only)") — heads SUPERSEDE chunk competition. When ≥1
+# gate-passing head claims the query, ONLY claimed graphs route and the
+# chunk-level probe is SKIPPED entirely: headless corpora (bulk-ingested,
+# untagged, no head to gate) must not pollute the pool, and probing them
+# was the latency (live: a 4-graph probe across ~100k-chunk graphs cost
+# 78s of a 122s answer). The legacy GRAPH leg is ALSO excluded under an
+# active claim (D8 superseded for the claimed case — live: 20 unrelated
+# Kenya legacy chunks were the only content reranked for an NCD-routed
+# asthma query when the NCD leg returned 0 documents). With NO claims the
+# legacy chunk competition runs unchanged (un-headed deployments keep
+# Story 1.3 behavior; degraded all-graph fallback untouched). false
+# restores the 1-8 MR-D pool semantics (head rows as one vote among
+# chunks, GRAPH always searched).
+ROUTE_HEADS_SUPERSEDE = os.getenv("RETRIEVER_ROUTE_HEADS_SUPERSEDE", "true").lower() == "true"
 
 # Summarizer Configuration
 SUMMARIZER_ENABLED = os.getenv("RETRIEVER_SUMMARIZER_ENABLED", "false").lower() == "true"

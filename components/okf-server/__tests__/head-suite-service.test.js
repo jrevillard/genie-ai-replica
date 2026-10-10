@@ -1,9 +1,11 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 // Story 1-8 MR-B — head-suite-service unit tests: the LLM suite
-// generator (guided-JSON contract + forbidden-derived negatives), the
-// curator free-text additions, the run aggregation (pass rates with
-// honest-empty semantics for negatives, margins, steals), and the runs
+// generator (guided-JSON contract + the four negative classes of
+// Story 1-8b: forbidden / confusable / off-domain / meta, with the
+// deterministic random-pool fallback), the curator free-text additions,
+// the run aggregation (pass rates with honest-empty semantics for
+// negatives, suppression reasons, margins, steals), and the runs
 // listing. vLLM/TEI/Arango mocked.
 
 jest.mock('../shared-lib/logger', () => ({
@@ -25,7 +27,15 @@ jest.mock('../services/repository-service', () => ({
   getById: jest.fn()
 }));
 jest.mock('../services/head-test-service', () => ({
-  routingTest: jest.fn()
+  routingTest: jest.fn(),
+  guardSuggestions: jest.fn(),
+  // 1-8g-b: the advisor's simulation embeds through the GATE's prefixed
+  // contract now — the mock returns one vector per query by default.
+  embedQueryBatch: jest.fn(async (queries) => ({
+    vectors: queries.map(() => [0.1, 0.2, 0.3]),
+    prefixed: true,
+    model: 'test-model'
+  }))
 }));
 
 const svc = require('../services/head-suite-service');
@@ -60,59 +70,255 @@ beforeEach(() => {
 });
 
 describe('generateSuite', () => {
-  it('merges LLM positives/negatives with forbidden-derived negatives and persists a suite doc', async () => {
-    frontmatterService.vllmChatCompletions.mockResolvedValue(
-      llmResponse({
-        positive: [
-          { query: 'breast cancer screening age recommendations', reason: 'topic hit' },
-          { query: '', reason: 'dropped — empty' }
-        ],
-        negative: [{ query: 'hospital bed capacity statistics', expected_repo: 'Kenya Services', reason: 'sibling' }],
-        keywords: ['screening', 'hearts', 42]
-      })
-    );
-    // Sibling context query (repos with heads).
-    __mockDb.query.mockImplementation(async (aql) => {
-      if (aql.includes('r.head != null')) {
-        return { all: async () => [{ repo_id: 'sib1', name: 'Kenya Services', text: 'Kenya gov services' }] };
-      }
-      return { all: async () => [] };
-    });
+  it('merges all four negative classes, labels every row with cls, and persists a suite doc', async () => {
+    // Deterministic pool sampling: Math.random()=0 always pops pool[0]
+    // → topics [geography, sports, cooking, music] (default n=4).
+    const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      frontmatterService.vllmChatCompletions.mockResolvedValue(
+        llmResponse({
+          positive: [
+            { query: 'breast cancer screening age recommendations', reason: 'topic hit' },
+            { query: '', reason: 'dropped — empty' }
+          ],
+          negative: [{ query: 'hospital bed capacity statistics', expected_repo: 'Kenya Services', reason: 'sibling' }],
+          off_domain: [{ topic: 'cooking', query: 'How do I make sourdough bread at home?' }],
+          // meta OMITTED by the LLM → the class falls back, never empty
+          keywords: ['screening', 'hearts', 42]
+        })
+      );
+      // Sibling context query (repos with heads).
+      __mockDb.query.mockImplementation(async (aql) => {
+        if (aql.includes('r.head != null')) {
+          return { all: async () => [{ repo_id: 'sib1', name: 'Kenya Services', text: 'Kenya gov services' }] };
+        }
+        return { all: async () => [] };
+      });
 
-    const suite = await svc.generateSuite('me', { n_positive: 5, n_negative: 4 }, { actor: { user_id: 'u1' } });
-    expect(suite.kind).toBe('suite');
-    expect(suite.repo_id).toBe('me');
-    expect(suite.created_by).toBe('u1');
-    expect(suite.head_version).toBe(42);
-    expect(suite.payload.positive).toHaveLength(1); // empty query dropped
-    expect(suite.payload.positive[0]).toMatchObject({ kind: 'positive', source: 'llm' });
-    // 1 LLM negative + forbidden-derived (3 forbidden tags → 3 queries)
-    expect(suite.payload.negative).toHaveLength(4);
-    const forbidden = suite.payload.negative.filter((n) => n.source === 'forbidden');
-    expect(forbidden).toHaveLength(3);
-    expect(forbidden[0].query).toContain('mental-health');
-    // keywords: strings only
-    expect(suite.payload.keywords).toEqual(['screening', 'hearts']);
-    // the prompt carries the sibling context + strict format contract
-    const prompt = frontmatterService.vllmChatCompletions.mock.calls[0][0][0].content;
-    expect(prompt).toContain('NCD Information');
-    expect(prompt).toContain('Kenya Services');
-    expect(prompt).toContain('"positive"');
-    // persisted in the runs collection
-    expect(Object.keys(__mockDb._stores.okf_head_test_runs)).toHaveLength(1);
+      const suite = await svc.generateSuite('me', { n_positive: 5, n_negative: 4 }, { actor: { user_id: 'u1' } });
+      expect(suite.kind).toBe('suite');
+      expect(suite.repo_id).toBe('me');
+      expect(suite.created_by).toBe('u1');
+      expect(suite.head_version).toBe(42);
+      expect(suite.payload.positive).toHaveLength(1); // empty query dropped
+      expect(suite.payload.positive[0]).toMatchObject({ kind: 'positive', source: 'llm' });
+      const neg = suite.payload.negative;
+      // 1 confusable + 3 forbidden + 4 near-miss + 4 off-domain + 3 meta fallback
+      expect(neg).toHaveLength(15);
+      expect(neg.filter((q) => q.cls === 'confusable')).toHaveLength(1);
+      const forbidden = neg.filter((q) => q.cls === 'forbidden');
+      expect(forbidden).toHaveLength(3);
+      expect(forbidden[0].query).toContain('mental-health');
+      expect(forbidden[0].source).toBe('forbidden');
+      // off-domain: the LLM row for the covered topic, deterministic
+      // templates for the topics it skipped; every row keeps its topic
+      const off = neg.filter((q) => q.cls === 'off-domain');
+      expect(off).toHaveLength(4);
+      expect(suite.payload.off_domain_topics).toEqual(['geography', 'sports', 'cooking', 'music']);
+      expect(off.find((q) => q.topic === 'cooking')).toMatchObject({
+        query: 'How do I make sourdough bread at home?',
+        source: 'llm',
+        expected_repo: null
+      });
+      expect(off.find((q) => q.topic === 'geography').query).toBe('Give me a general overview of geography');
+      expect(off.find((q) => q.topic === 'sports').query).toBe('Latest news about sports');
+      expect(off.find((q) => q.topic === 'music').source).toBe('fallback');
+      // meta omitted by the LLM → 3 deterministic fallbacks
+      const meta = neg.filter((q) => q.cls === 'meta');
+      expect(meta).toHaveLength(3);
+      expect(meta.every((q) => q.source === 'fallback')).toBe(true);
+      expect(neg.every((q) => q.kind === 'negative')).toBe(true);
+      // keywords: strings only
+      expect(suite.payload.keywords).toEqual(['screening', 'hearts']);
+      // the prompt carries the sibling context + strict format contract
+      const prompt = frontmatterService.vllmChatCompletions.mock.calls[0][0][0].content;
+      expect(prompt).toContain('NCD Information');
+      expect(prompt).toContain('Kenya Services');
+      expect(prompt).toContain('"positive"');
+      expect(prompt).toContain('"off_domain"');
+      expect(prompt).toContain('geography, sports, cooking, music');
+      // persisted in the runs collection
+      expect(Object.keys(__mockDb._stores.okf_head_test_runs)).toHaveLength(1);
+    } finally {
+      randSpy.mockRestore();
+    }
   });
 
-  it('still builds a forbidden-only suite when the LLM call fails (honest degradation)', async () => {
+  it('still builds a full fallback suite when the LLM call fails (honest degradation, classes never empty)', async () => {
     frontmatterService.vllmChatCompletions.mockRejectedValue(new Error('vllm down'));
     __mockDb.query.mockResolvedValue({ all: async () => [] });
     const suite = await svc.generateSuite('me', {}, {});
     expect(suite.payload.positive).toHaveLength(0);
-    expect(suite.payload.negative).toHaveLength(3); // forbidden-derived only
+    const neg = suite.payload.negative;
+    // 3 forbidden + 4 off-domain templates + 3 meta templates
+    expect(neg.filter((q) => q.cls === 'forbidden')).toHaveLength(3);
+    expect(neg.filter((q) => q.cls === 'off-domain')).toHaveLength(4);
+    expect(neg.filter((q) => q.cls === 'meta')).toHaveLength(3);
+    expect(neg.filter((q) => q.cls === 'off-domain').every((q) => q.source === 'fallback')).toBe(true);
+    expect(neg.filter((q) => q.cls === 'meta').every((q) => q.source === 'fallback')).toBe(true);
+    // solo universe → the confusable class cannot exist
+    expect(neg.some((q) => q.cls === 'confusable')).toBe(false);
+  });
+
+  it('respects n_negative_random (default 4; 99 requested delivers 99 — the 1-8f uncapped pool)', async () => {
+    const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      __mockDb.query.mockResolvedValue({ all: async () => [] });
+      frontmatterService.vllmChatCompletions.mockResolvedValue(
+        llmResponse({ positive: [], negative: [], keywords: [] })
+      );
+
+      const s2 = await svc.generateSuite('me', { n_negative_random: 2 }, {});
+      const s12 = await svc.generateSuite('me', { n_negative_random: 99 }, {});
+      const sDefault = await svc.generateSuite('me', {}, {});
+      expect(s2.payload.negative.filter((q) => q.cls === 'off-domain')).toHaveLength(2);
+      // 1-8f asked for an uncapped pool; 1-8g-h SUPERSEDES the cycling:
+      // the finite topic pool cycles to the same TEXTS, and duplicate rows
+      // are suite noise (live: 16/66 rows duplicated) — the delivered rows
+      // are UNIQUE texts, never padded copies.
+      const off12 = s12.payload.negative.filter((q) => q.cls === 'off-domain');
+      expect(off12.length).toBe(new Set(off12.map((q) => q.query.trim().toLowerCase())).size);
+      expect(off12.length).toBeLessThan(99);
+      expect(sDefault.payload.negative.filter((q) => q.cls === 'off-domain')).toHaveLength(4); // default
+      // the prompt lists the sampled topics + asks for the adversarial
+      // off-domain class; the call passes adversarial temperature
+      const prompt = frontmatterService.vllmChatCompletions.mock.calls[2][0][0].content;
+      expect(prompt).toContain('geography, sports, cooking, music');
+      expect(prompt).toContain('completely UNRELATED');
+      expect(frontmatterService.vllmChatCompletions.mock.calls[2][1]).toMatchObject({ temperature: 0.7 });
+    } finally {
+      randSpy.mockRestore();
+    }
+  });
+
+  it('produces NO confusable rows without siblings (the class exists only when competitors exist)', async () => {
+    __mockDb.query.mockResolvedValue({ all: async () => [] }); // solo universe
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [],
+        negative: [{ query: 'orphan confusable query', expected_repo: '', reason: 'none' }],
+        keywords: []
+      })
+    );
+    const suite = await svc.generateSuite('me', {}, {});
+    expect(suite.payload.negative.some((q) => q.cls === 'confusable')).toBe(false);
+    const prompt = frontmatterService.vllmChatCompletions.mock.calls[0][0][0].content;
+    expect(prompt).toContain('NO competing repositories');
+  });
+
+  it('uses LLM-authored meta rows first, then fills to the requested count (1-8f)', async () => {
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [],
+        negative: [],
+        meta: [
+          { query: 'How does the routing lab work?', reason: 'system probe' },
+          { query: 'Who maintains the forbidden tags?', reason: 'system probe' }
+        ],
+        keywords: []
+      })
+    );
+    const suite = await svc.generateSuite('me', {}, {});
+    const meta = suite.payload.negative.filter((q) => q.cls === 'meta');
+    // 1-8f: meta fills to the requested count (default 3) — 2 LLM rows +
+    // 1 deterministic fallback; LLM rows always come first.
+    expect(meta).toHaveLength(3);
+    expect(meta.slice(0, 2).every((q) => q.source === 'llm')).toBe(true);
+    expect(meta[2].source).toBe('fallback');
   });
 
   it('409s without stored frontmatter', async () => {
     frontmatterService.readFrontmatterFromRepoDoc.mockResolvedValue(null);
     await expect(svc.generateSuite('me', {}, {})).rejects.toMatchObject({ status: 409, code: 'NO_FRONTMATTER' });
+  });
+});
+
+// ---------- Story 1-8c: the near-miss class ("similar but wrong") ----------
+
+describe('near-miss negative class (Story 1-8c)', () => {
+  const TWO_ENTITY_FM = { entity: ['breast-cancer', 'diabetes'] };
+
+  it('nearMissQueries uses LLM rows first, then fills from entity-templated fallbacks', () => {
+    const rows = svc._internals.nearMissQueries(
+      [
+        { query: 'best hospitals for breast cancer surgery', reason: 'wrong intent: providers' },
+        { query: 'treatment costs for breast cancer', reason: 'wrong intent: costs' }
+      ],
+      { entity: ['breast-cancer'] },
+      4
+    );
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toMatchObject({
+      query: 'best hospitals for breast cancer surgery',
+      kind: 'negative',
+      cls: 'near-miss',
+      source: 'llm',
+      expected_repo: null,
+      reason: 'wrong intent: providers'
+    });
+    // The fallback fills the remainder from the repo's OWN vocabulary.
+    expect(rows.slice(2).map((q) => q.source)).toEqual(['fallback', 'fallback']);
+    expect(rows.slice(2).every((q) => q.query.includes('breast-cancer'))).toBe(true);
+    expect(new Set(rows.map((q) => q.query.toLowerCase())).size).toBe(4); // no duplicate queries
+  });
+
+  it('nearMissQueries falls back entirely to entity templates when the LLM omits the class', () => {
+    const rows = svc._internals.nearMissQueries([], TWO_ENTITY_FM, 4);
+    expect(rows).toHaveLength(4);
+    expect(rows.every((q) => q.cls === 'near-miss' && q.source === 'fallback')).toBe(true);
+    expect(rows.every((q) => q.kind === 'negative' && q.expected_repo === null)).toBe(true);
+    expect(rows.every((q) => /breast-cancer|diabetes/.test(q.query))).toBe(true);
+  });
+
+  it('nearMissQueries stays duplicate-free while capping at 10 rows', () => {
+    // 5 wrong-intent templates x 2 entities = 10 distinct rows — the cap
+    // is reachable without a collision.
+    const rows = svc._internals.nearMissQueries([], TWO_ENTITY_FM, 10);
+    expect(rows).toHaveLength(10);
+    expect(new Set(rows.map((q) => q.query.toLowerCase())).size).toBe(10);
+  });
+
+  it('n_near_miss defaults to 4 and caps at 10 (clampCount)', () => {
+    expect(svc._internals.clampCount(undefined, 4, 10)).toBe(4);
+    expect(svc._internals.clampCount(1, 4, 10)).toBe(1);
+    expect(svc._internals.clampCount(99, 4, 10)).toBe(10);
+    expect(svc._internals.clampCount('bad', 4, 10)).toBe(4);
+  });
+
+  it('generateSuite: LLM near_miss rows flow into the suite and the prompt asks for NEAR-MISS', async () => {
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [],
+        negative: [],
+        keywords: [],
+        near_miss: [{ query: 'clinical trials recruiting breast cancer patients', reason: 'wrong intent' }]
+      })
+    );
+    const suite = await svc.generateSuite('me', {}, {});
+    const nm = suite.payload.negative.filter((q) => q.cls === 'near-miss');
+    expect(nm).toHaveLength(4); // default n_near_miss; LLM row first, fallback fills
+    expect(nm[0]).toMatchObject({ query: 'clinical trials recruiting breast cancer patients', source: 'llm' });
+    const prompt = frontmatterService.vllmChatCompletions.mock.calls[0][0][0].content;
+    expect(prompt).toContain('NEAR-MISS');
+    expect(prompt).toContain('"near_miss"');
+  });
+
+  it('generateSuite: n_meta slices the meta class (n_meta=1 → one row; default 3)', async () => {
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [],
+        negative: [],
+        keywords: [],
+        meta: [{ query: 'meta one' }, { query: 'meta two' }, { query: 'meta three' }]
+      })
+    );
+    const one = await svc.generateSuite('me', { n_meta: 1 }, {});
+    expect(one.payload.negative.filter((q) => q.cls === 'meta')).toHaveLength(1);
+    const all = await svc.generateSuite('me', {}, {});
+    expect(all.payload.negative.filter((q) => q.cls === 'meta')).toHaveLength(3);
   });
 });
 
@@ -222,12 +428,94 @@ describe('runSuite + summarizeRun', () => {
     expect(s.negative_pass_rate).toBe(0);
   });
 
-  it('captures per-query errors without failing the whole run', async () => {
-    const suite = await seedSuite({ positive: 2, negativeForbidden: 0 });
+  // ─── Story 1-8b: the four negative classes in the run + suppression reasons ───
+  it('1-8b: new classes count as negatives; run rows carry cls/head_claim/tag_veto + suppress_reason', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1, negativeRandom: 2, negativeMeta: 1 });
+    // Rename the random rows so the mock can key on them (topics are random).
+    let i = 0;
+    suite.payload.negative.forEach((q) => {
+      if (q.cls === 'off-domain') q.query = `off probe ${i++}`;
+      if (q.cls === 'meta') q.query = 'meta probe';
+    });
+    __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
+
+    headTestService.routingTest.mockImplementation(async (repoId, body) => {
+      if (body.query === 'positive query 0') return fakeResult(true, 0.2, 1, 'claimed');
+      if (body.query === 'off probe 1') return fakeResult(false, -0.1, 0, 'suppressed', 'veto');
+      return fakeResult(false, -0.1, 0, 'suppressed', 'floor'); // forbidden + meta + off probe 0
+    });
+
+    const run = await svc.runSuite('me', suite._key, {});
+    const s = run.payload.summary;
+    expect(s.negative_total).toBe(4); // 1 forbidden + 2 off-domain + 1 meta
+    expect(s.negative_evaluatable).toBe(4);
+    expect(s.negative_passed).toBe(4); // every row suppressed
+    expect(s.pass_rate).toBe(1);
+
+    const rows = run.payload.results;
+    const off0 = rows.find((r) => r.query === 'off probe 0');
+    expect(off0).toMatchObject({
+      cls: 'off-domain',
+      head_claim: 'floor',
+      tag_veto: null,
+      head_claimed: false,
+      suppress_reason: 'off-domain'
+    });
+    const off1 = rows.find((r) => r.query === 'off probe 1');
+    expect(off1).toMatchObject({
+      cls: 'off-domain',
+      head_claim: 'veto',
+      tag_veto: 'genetics',
+      suppress_reason: 'forbidden:genetics'
+    });
+    const metaRow = rows.find((r) => r.cls === 'meta');
+    expect(metaRow.suppress_reason).toBe('off-domain'); // floor-suppressed
+    const pos = rows.find((r) => r.kind === 'positive');
+    expect(pos.suppress_reason).toBeNull(); // positives are never "suppressed"
+  });
+
+  it('1-8b: summarizeRun treats EVERY non-positive row as a negative across all classes', () => {
+    const s = svc._internals.summarizeRun([
+      { query: 'p-win', kind: 'positive', under_test_wins_head: true, sibling_count: 2, margin: 0.1 },
+      {
+        query: 'p-lose',
+        kind: 'positive',
+        under_test_wins_head: false,
+        sibling_count: 2,
+        margin: 0.1,
+        winner_name: 'Sib'
+      },
+      {
+        query: 'f',
+        kind: 'negative',
+        cls: 'forbidden',
+        head_claimed: false,
+        head_claim: 'veto',
+        tag_veto: 'genetics',
+        sibling_count: 0
+      },
+      { query: 'o', kind: 'negative', cls: 'off-domain', head_claimed: false, head_claim: 'floor', sibling_count: 0 },
+      { query: 'm', kind: 'negative', cls: 'meta', head_claimed: false, head_claim: 'floor', sibling_count: 0 },
+      { query: 'c', kind: 'negative', cls: 'confusable', head_claimed: true, head_claim: 'claim', sibling_count: 2 }
+    ]);
+    expect(s.n_queries).toBe(6);
+    expect(s.positive_total).toBe(2);
+    expect(s.negative_total).toBe(4);
+    expect(s.negative_evaluatable).toBe(4); // gate-era rows evaluate solo
+    expect(s.negative_passed).toBe(3); // only the CLAIMED confusable fails
+    expect(s.negative_pass_rate).toBeCloseTo(3 / 4, 5);
+    expect(s.pass_rate).toBeCloseTo(4 / 6, 5);
+    expect(s.steals).toEqual([{ by_repo: 'Sib', count: 1 }]);
+  });
+
+  it('captures per-query errors without failing the whole run (cls passthrough on error rows)', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
     headTestService.routingTest.mockRejectedValue(new Error('TEI 503'));
     const run = await svc.runSuite('me', suite._key, {});
     expect(run.payload.summary.n_errors).toBe(2);
     expect(run.payload.results.every((r) => r.error === 'TEI 503')).toBe(true);
+    expect(run.payload.results.find((r) => r.cls === 'forbidden')).toBeTruthy();
+    expect(run.payload.results.find((r) => r.kind === 'positive').cls).toBeNull();
   });
 
   it('404s for an unknown suite', async () => {
@@ -261,12 +549,250 @@ describe('listRuns', () => {
   });
 });
 
+// ---------- Story 1-8c: explainSuiteFailures (batch advice, ONE LLM call) ----------
+
+describe('explainSuiteFailures (Story 1-8c — batch advice for the latest run)', () => {
+  // The run lookup is the only db.query the explainer makes; the suite
+  // itself never needs to exist for this path.
+  function mockRunLookup(runDoc) {
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('r.kind == "run"')) return { all: async () => (runDoc ? [runDoc] : []) };
+      return { all: async () => [] };
+    });
+  }
+
+  function seedRun(results, key = 'r1') {
+    return {
+      _key: key,
+      repo_id: 'me',
+      kind: 'run',
+      suite_key: 's1',
+      created_at: '2026-10-09T00:00:00.000Z',
+      payload: { results, summary: { pass_rate: 0.5 } }
+    };
+  }
+
+  it('ONE vllm call advises on ALL failing negatives: failing_queries carry cls+head_claim, tags normalized/deduped/capped at 5, guardrail-screened (Story 1-8d)', async () => {
+    mockRunLookup(
+      seedRun([
+        {
+          query: 'hiv prevalence surveillance data',
+          kind: 'negative',
+          cls: 'near-miss',
+          head_claimed: true,
+          head_claim: 'claim'
+        },
+        {
+          query: 'exercise guidelines for seniors',
+          kind: 'negative',
+          cls: 'forbidden',
+          head_claimed: true,
+          head_claim: 'claim'
+        },
+        { query: 'capital of France', kind: 'negative', cls: 'off-domain', head_claimed: false, head_claim: 'floor' },
+        { query: 'breast cancer screening age', kind: 'positive', head_claimed: true, head_claim: 'claim' }
+      ])
+    );
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        tags: [
+          'Communicable Disease',
+          'Mental Health',
+          'HIV AIDS',
+          'Physical Fitness',
+          'Nutrition Science',
+          'Hospital Beds'
+        ],
+        notes: 'covers the failing subjects'
+      })
+    );
+    const GUARD = {
+      accepted: ['communicable-disease', 'hiv-aids', 'physical-fitness', 'hospital-beds'],
+      rejected: [
+        { tag: 'nutrition-science', reason: "too close to the repository's own subject (similarity 0.61 >= 0.55)" }
+      ]
+    };
+    headTestService.guardSuggestions.mockResolvedValue(GUARD);
+    const out = await svc.explainSuiteFailures('me', 's1', {});
+    expect(out.suite_key).toBe('s1');
+    expect(out.run_key).toBe('r1');
+    expect(out.run_created_at).toBe('2026-10-09T00:00:00.000Z');
+    expect(out.failing_count).toBe(2);
+    expect(out.failing_queries).toEqual([
+      { query: 'hiv prevalence surveillance data', cls: 'near-miss', head_claim: 'claim' },
+      { query: 'exercise guidelines for seniors', cls: 'forbidden', head_claim: 'claim' }
+    ]);
+    // 'Mental Health' normalizes to 'mental-health' — already forbidden →
+    // dropped; the remaining six clean tags are capped at 5 BEFORE the
+    // guardrail, whose verdict splits the survivors into chips + rejected.
+    expect(out.suggested_tags).toEqual(GUARD.accepted);
+    expect(out.rejected).toEqual(GUARD.rejected);
+    expect(out.source).toBe('llm');
+    expect(out.note).toBe('covers the failing subjects');
+    // the guardrail sees the FULL normalized proposal set AND this run's
+    // positive queries (the veto-impact simulation input)
+    expect(headTestService.guardSuggestions).toHaveBeenCalledTimes(1);
+    expect(headTestService.guardSuggestions).toHaveBeenCalledWith('me', expect.any(Array), {
+      positiveQueries: ['breast cancer screening age']
+    });
+    expect(headTestService.guardSuggestions.mock.calls[0][1]).toEqual([
+      'communicable-disease',
+      'hiv-aids',
+      'physical-fitness',
+      'nutrition-science',
+      'hospital-beds'
+    ]);
+    // ONE call for the WHOLE batch; the prompt carries only the failing
+    // queries — passing negatives and (claimed) positives stay out.
+    expect(frontmatterService.vllmChatCompletions).toHaveBeenCalledTimes(1);
+    const [messages, opts] = frontmatterService.vllmChatCompletions.mock.calls[0];
+    expect(messages[0].content).toContain('hiv prevalence surveillance data');
+    expect(messages[0].content).toContain('exercise guidelines for seniors');
+    expect(messages[0].content).not.toContain('capital of France');
+    expect(messages[0].content).not.toContain('breast cancer screening age');
+    expect(messages[0].content).toContain('mental-health');
+    expect(opts).toMatchObject({ maxTokens: 300, temperature: 0.2 });
+    // Story 1-8d — the advice is persisted as an auditable explain doc.
+    const explain = Object.values(__mockDb._stores.okf_head_test_runs).find((d) => d.kind === 'explain');
+    expect(explain).toMatchObject({ repo_id: 'me', suite_key: 's1', run_key: 'r1' });
+    expect(explain.payload.suggested_tags).toEqual(GUARD.accepted);
+    expect(explain.payload.rejected).toEqual(GUARD.rejected);
+  });
+
+  it('a fully screened-out proposal set lands as source guardrail — a poisoned chip never forms', async () => {
+    // The 2026-10-09 regression shape at the suite level: every LLM
+    // proposal dies in the guardrail, so suggested_tags stays empty and
+    // the rejections are carried + persisted for the audit trail.
+    mockRunLookup(
+      seedRun([
+        {
+          query: 'lung cancer staging details',
+          kind: 'negative',
+          cls: 'near-miss',
+          head_claimed: true,
+          head_claim: 'claim'
+        }
+      ])
+    );
+    frontmatterService.vllmChatCompletions.mockResolvedValue(llmResponse({ tags: ['Lung Cancer'], notes: '' }));
+    headTestService.guardSuggestions.mockResolvedValue({
+      accepted: [],
+      rejected: [{ tag: 'lung-cancer', reason: "too close to the repository's own subject (similarity 1.00 >= 0.55)" }]
+    });
+    const out = await svc.explainSuiteFailures('me', 's1', {});
+    expect(out.suggested_tags).toEqual([]);
+    expect(out.rejected).toEqual([
+      { tag: 'lung-cancer', reason: "too close to the repository's own subject (similarity 1.00 >= 0.55)" }
+    ]);
+    expect(out.source).toBe('guardrail');
+    const explain = Object.values(__mockDb._stores.okf_head_test_runs).find((d) => d.kind === 'explain');
+    expect(explain.payload.rejected).toHaveLength(1);
+  });
+
+  it('positives-only failure: removal_suggestions aggregate tag_veto attribution — no LLM, no additions', async () => {
+    // The over-suppression signature: negatives look perfect, positives
+    // die. The advice flips to tag REMOVAL, sorted by kill count, and no
+    // suggestion model is involved.
+    mockRunLookup(
+      seedRun([
+        { query: 'p1', kind: 'positive', head_claimed: false, tag_veto: 'lung-cancer' },
+        { query: 'p2', kind: 'positive', head_claimed: false, tag_veto: 'lung-cancer' },
+        { query: 'p3', kind: 'positive', head_claimed: false, tag_veto: 'non-smoking' },
+        { query: 'p4', kind: 'positive', head_claimed: false, tag_veto: null }, // margin-killed
+        { query: 'p5', kind: 'positive', head_claimed: true } // passing positive — not a kill
+      ])
+    );
+    const out = await svc.explainSuiteFailures('me', 's1', {});
+    expect(out.failing_count).toBe(0);
+    expect(out.removal_suggestions).toEqual([
+      { tag: 'lung-cancer', killed: 2 },
+      { tag: 'non-smoking', killed: 1 }
+    ]);
+    expect(out.positive_failures).toEqual({
+      count: 4,
+      veto_counts: { 'lung-cancer': 2, 'non-smoking': 1 },
+      margin_killed: 1
+    });
+    expect(out.note).toBe(
+      'no wrongly-claimed negatives — the failures are suppressed positives (see removal_suggestions)'
+    );
+    expect(out.suggested_tags).toEqual([]);
+    expect(out.source).toBe('none');
+    // the positive-improvement advice names the vetoing tags
+    expect(out.improvements).toContain('remove or narrow lung-cancer, non-smoking');
+    expect(frontmatterService.vllmChatCompletions).not.toHaveBeenCalled();
+    expect(headTestService.guardSuggestions).not.toHaveBeenCalled();
+    // still persisted — the cycle stays auditable in every direction
+    const explain = Object.values(__mockDb._stores.okf_head_test_runs).find((d) => d.kind === 'explain');
+    expect(explain.payload.removal_suggestions).toHaveLength(2);
+    expect(explain.payload.positive_failures.count).toBe(4);
+  });
+
+  it('404s RUN_NOT_FOUND when the suite has never been run', async () => {
+    mockRunLookup(null);
+    await expect(svc.explainSuiteFailures('me', 's1', {})).rejects.toMatchObject({
+      status: 404,
+      code: 'RUN_NOT_FOUND'
+    });
+  });
+
+  it('zero failures → an honest note, NO LLM call, and nothing persisted', async () => {
+    mockRunLookup(
+      seedRun([
+        { query: 'capital of France', kind: 'negative', cls: 'off-domain', head_claimed: false, head_claim: 'floor' },
+        { query: 'breast cancer screening age', kind: 'positive', head_claimed: true }
+      ])
+    );
+    const out = await svc.explainSuiteFailures('me', 's1', {});
+    expect(out.failing_count).toBe(0);
+    expect(out.suggested_tags).toEqual([]);
+    expect(out.source).toBe('none');
+    expect(out.note).toBe('no failures in the latest run — nothing to explain');
+    expect(frontmatterService.vllmChatCompletions).not.toHaveBeenCalled();
+    expect(headTestService.guardSuggestions).not.toHaveBeenCalled();
+    // the early return skips the explain-doc persistence — nothing to audit
+    expect(Object.values(__mockDb._stores.okf_head_test_runs || {})).toHaveLength(0);
+  });
+
+  it('an LLM failure degrades honestly (source none, note, no throw) and still persists the advice', async () => {
+    mockRunLookup(
+      seedRun([
+        { query: 'exercise guidelines', kind: 'negative', cls: 'forbidden', head_claimed: true, head_claim: 'claim' }
+      ])
+    );
+    frontmatterService.vllmChatCompletions.mockRejectedValue(new Error('vllm down'));
+    const out = await svc.explainSuiteFailures('me', 's1', {});
+    expect(out.suggested_tags).toEqual([]);
+    expect(out.source).toBe('none');
+    expect(out.note).toContain('unreachable');
+    // regression guard: the persist block reads the actor from the (fixed)
+    // opts param — an explain doc must land even when the model is down
+    const explain = Object.values(__mockDb._stores.okf_head_test_runs).find((d) => d.kind === 'explain');
+    expect(explain).toMatchObject({ repo_id: 'me', suite_key: 's1', run_key: 'r1' });
+    expect(explain.payload.note).toContain('unreachable');
+  });
+
+  it('unparseable LLM output → source none with empty tags', async () => {
+    mockRunLookup(
+      seedRun([
+        { query: 'exercise guidelines', kind: 'negative', cls: 'forbidden', head_claimed: true, head_claim: 'claim' }
+      ])
+    );
+    frontmatterService.vllmChatCompletions.mockResolvedValue(llmResponse({ no_tags_here: true }));
+    const out = await svc.explainSuiteFailures('me', 's1', {});
+    expect(out.suggested_tags).toEqual([]);
+    expect(out.source).toBe('none');
+  });
+});
+
 // ---------- helpers ----------
 
-function fakeResult(underTestWins, margin, siblingCount, gate = null) {
+function fakeResult(underTestWins, margin, siblingCount, gate = null, headClaim = null) {
   const winner = underTestWins ? 'me' : 'sib1';
   // gate: null = legacy response (pre-1-8a); 'claimed' | 'suppressed' = gate era.
+  // headClaim: which condition suppressed ('floor' | 'veto' | 'margin'); 'floor' default.
   const claimed = gate === 'claimed' ? true : gate === 'suppressed' ? false : null;
+  const claim = gate === 'claimed' ? 'claim' : gate === 'suppressed' ? headClaim || 'floor' : null;
   return {
     query: '',
     embedded_with: 'test',
@@ -277,6 +803,10 @@ function fakeResult(underTestWins, margin, siblingCount, gate = null) {
       head_rank: underTestWins ? 1 : 2,
       forbidden_cosine: gate ? 0.45 : null,
       head_margin: gate ? (claimed ? 0.05 : -0.02) : null,
+      head_claim: claim,
+      tag_veto: claim === 'veto' ? 'genetics' : null,
+      max_tag_cosine: claim === 'veto' ? 0.62 : null,
+      floor_pass: claim ? claim !== 'floor' : false,
       head_claimed: claimed
     },
     siblings: Array.from({ length: siblingCount }, (_, i) => ({
@@ -289,12 +819,19 @@ function fakeResult(underTestWins, margin, siblingCount, gate = null) {
       under_test_wins_head: underTestWins && claimed !== false,
       head_suppressed: claimed === false,
       margin,
-      provenance: claimed === false ? 'head-suppressed (forbidden/noise)' : 'head-only (no graph under test)'
+      provenance:
+        claimed === false
+          ? claim === 'floor'
+            ? 'head-suppressed (off-domain)'
+            : claim === 'veto'
+              ? 'head-suppressed (forbidden: genetics)'
+              : 'head-suppressed (forbidden/noise)'
+          : 'head-only (no graph under test)'
     }
   };
 }
 
-async function seedSuite({ positive = 1, negativeForbidden = 1 } = {}) {
+async function seedSuite({ positive = 1, negativeForbidden = 1, negativeRandom = 0, negativeMeta = 0 } = {}) {
   frontmatterService.vllmChatCompletions.mockResolvedValue(
     llmResponse({
       positive: Array.from({ length: positive }, (_, i) => ({ query: `positive query ${i}`, reason: 'r' })),
@@ -304,8 +841,743 @@ async function seedSuite({ positive = 1, negativeForbidden = 1 } = {}) {
   );
   __mockDb.query.mockResolvedValue({ all: async () => [] });
   const suite = await svc.generateSuite('me', {}, {});
-  // Trim the forbidden-derived negatives to the requested count.
-  suite.payload.negative = suite.payload.negative.slice(0, negativeForbidden);
+  // Trim each negative class to the requested count.
+  const neg = suite.payload.negative;
+  suite.payload.negative = [
+    ...neg.filter((q) => q.cls === 'forbidden').slice(0, negativeForbidden),
+    ...neg.filter((q) => q.cls === 'off-domain').slice(0, negativeRandom),
+    ...neg.filter((q) => q.cls === 'meta').slice(0, negativeMeta)
+  ];
   __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
   return suite;
 }
+
+// ─── Story 1-8e: the tuning identity + the anti-treadmill damping ──────────
+
+describe('runSuite tagset stamp (1-8e)', () => {
+  it('records the forbidden tag set + hash on every run doc (the tuning identity)', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.7, 0, 'claimed'));
+    // The run reads the repo doc — give it a frontmatter to stamp from.
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'NCD Information',
+      version: 3,
+      head: { version: 42 },
+      frontmatter: FM
+    });
+    const run = await svc.runSuite('me', suite._key, {});
+    expect(run.tagset).toBeTruthy();
+    expect(run.tagset.forbidden).toEqual(FM.forbidden);
+    expect(run.tagset.hash).toMatch(/^[0-9a-f]{8}$/);
+  });
+
+  it('stamps hash "empty" when the repo has no forbidden tags', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.7, 0, 'claimed'));
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      version: 3,
+      head: { version: 42 },
+      frontmatter: { ...FM, forbidden: [] }
+    });
+    const run = await svc.runSuite('me', suite._key, {});
+    expect(run.tagset.forbidden).toEqual([]);
+    expect(run.tagset.hash).toBe('empty');
+  });
+});
+
+describe('recommendTagSet damping (1-8e — the anti-treadmill guard)', () => {
+  // Orthogonal 7-dim universe: head vector = e1; negatives sit at
+  // normalize(e1 + e_i) (cos 0.707 — above the floor, so they CLAIM in the
+  // baseline); tag k = e_{k+2} vetoes exactly the negatives aligned with it
+  // (cos 0.707 >= 0.55). Nine negatives total: tag-one..tag-three each
+  // suppress two, tag-five suppresses two, tag-low suppresses ONE.
+  const DIM = 7;
+  const unit = (v) => {
+    const n = Math.sqrt(v.reduce((a, x) => a + x * x, 0));
+    return v.map((x) => x / n);
+  };
+  const basis = (i) => unit(Array.from({ length: DIM }, (_, k) => (k === i ? 1 : 0)));
+  const HEAD_VEC = basis(0);
+  const NEG_DIRS = [1, 1, 2, 2, 3, 3, 4, 4, 5].map((i) =>
+    unit([1, ...Array.from({ length: DIM - 1 }, (_, k) => (k === i - 1 ? 1 : 0))])
+  ); // cos(head)=0.707 -> claims; cos(tag)=0.707 -> veto
+  const TAG_VECS = {
+    'tag-one': basis(1),
+    'tag-two': basis(2),
+    'tag-three': basis(3),
+    'tag-five': basis(4),
+    'tag-low': basis(5)
+  };
+  const QUERIES = [
+    { query: 'pos one', kind: 'positive', cls: null },
+    { query: 'pos two', kind: 'positive', cls: null },
+    ...NEG_DIRS.map((_, i) => ({ query: `neg ${i + 1}`, kind: 'negative', cls: 'near-miss' }))
+  ];
+
+  function seedAdvisor({ history = [] } = {}) {
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('r.kind == "run"')) {
+        return {
+          all: async () => [
+            {
+              _key: 'r1',
+              repo_id: 'me',
+              kind: 'run',
+              created_at: new Date().toISOString(),
+              payload: { results: QUERIES.map((q) => ({ ...q, head_claimed: q.kind === 'positive' })) }
+            }
+          ]
+        };
+      }
+      return { all: async () => [] };
+    });
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      version: 1,
+      frontmatter_history: history,
+      head: { version: 9, vector: HEAD_VEC, per_field: { topic: [HEAD_VEC], forbidden_vectors: [] } }
+    });
+    frontmatterService.teiEmbed.mockImplementation(async (texts) =>
+      texts.map((t) => {
+        if (TAG_VECS[t]) return TAG_VECS[t];
+        if (t.startsWith('neg ')) return NEG_DIRS[Number(t.slice(4)) - 1];
+        if (t.startsWith('pos ')) return HEAD_VEC;
+        return basis(6); // current tags: orthogonal junk — no gate effect
+      })
+    );
+    // 1-8g-b: the advisor embeds its QUERY vectors through the gate's
+    // prefixed contract (embedQueryBatch) — the sim lives in the same
+    // vector space as the live runs.
+    headTestService.embedQueryBatch.mockImplementation(async (queries) => ({
+      vectors: queries.map((t) => {
+        if (t.startsWith('neg ')) return NEG_DIRS[Number(t.slice(4)) - 1];
+        if (t.startsWith('pos ')) return HEAD_VEC;
+        return basis(6);
+      }),
+      prefixed: true,
+      model: 'test-model'
+    }));
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({ add: ['tag-low', 'tag-one', 'tag-two', 'tag-three', 'tag-five'] })
+    );
+  }
+
+  it('damps a one-negative gain, caps adds per run, and reports both in the payload', async () => {
+    seedAdvisor();
+    const out = await svc.recommendTagSet('me', {});
+    // tag-low: suppresses ONE negative → below the 2-gain noise-fit guard.
+    const lowEval = out.add_eval.find((e) => e.tag === 'tag-low');
+    expect(lowEval.rejected).toMatch(/below the 2-gain noise-fit guard/);
+    expect(out.damped_adds).toBe(1);
+    // tag-one..three each suppress two → accepted up to the cap of 3.
+    expect(out.changes.add).toEqual(['tag-one', 'tag-two', 'tag-three']);
+    // tag-five would also suppress two — but the per-run add cap hit first.
+    const capEval = out.add_eval.find((e) => e.tag === 'tag-five');
+    expect(capEval.rejected).toMatch(/add cap reached/);
+    expect(out.damping).toEqual({ min_negative_gain: 2, max_adds: 3 });
+    // Predicted scorecard: 6 of 9 negatives suppressed, both positives kept.
+    expect(out.recommended_scorecard.negative_suppressed).toBe(6);
+    expect(out.recommended_scorecard.positive_claimed).toBe(2);
+    expect(out.current_scorecard.negative_suppressed).toBe(0);
+  });
+
+  it('baseline: with no LLM candidates nothing is added and the scorecards agree', async () => {
+    seedAdvisor();
+    frontmatterService.vllmChatCompletions.mockResolvedValue(llmResponse({ add: [] }));
+    const out = await svc.recommendTagSet('me', {});
+    expect(out.changes.add).toEqual([]);
+    expect(out.changes.remove).toEqual([]);
+    expect(out.current_scorecard.negative_suppressed).toBe(out.recommended_scorecard.negative_suppressed);
+  });
+});
+
+// ─── Story 1-8f: suites are savable, modifiable and rerunnable ─────────────
+
+describe('1-8g b/c/d/h — advisor parity, blocked removals, add-LLM class filter, dedup', () => {
+  // Orthogonal 7-dim universe built to EXERCISE the 2026-10-10 live
+  // geometry: a curator-original forbidden tag T vetoes a positive AND
+  // suppresses a negative, so removing T gains a positive but re-admits
+  // the negative — and a narrower replacement T2 suppresses the negative
+  // while sparing the positive (the narrow pair).
+  //   cos(pos,head)=0.581 · cos(pos,T)=0.575 veto · cos(pos,T2)=0.234 spare
+  //   cos(neg,head)=0.651 · cos(neg,T)=0.736 veto · cos(neg,T2)=0.735 veto
+  const DIM = 7;
+  const unit = (v) => {
+    const n = Math.sqrt(v.reduce((a, x) => a + x * x, 0));
+    return v.map((x) => x / n);
+  };
+  const basis = (i) => unit(Array.from({ length: DIM }, (_, k) => (k === i ? 1 : 0)));
+  const HEAD_VEC = basis(0);
+  const POS_VEC = unit([1, 1.4, 0, 0, 0, 0, 0]);
+  const NEG_VEC = unit([1, 0.6, 1, 0, 0, 0, 0]);
+  const T_VEC = unit([0, 1, 1, 0, 0, 0, 0]);
+  const T2_VEC = unit([0, 0.3, 1, 0, 0, 0, 0]);
+
+  function seedBlocked() {
+    const QUERIES = [
+      { query: 'pos one', kind: 'positive', cls: null },
+      { query: 'neg one', kind: 'negative', cls: 'off-domain' }
+    ];
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('r.kind == "run"')) {
+        return {
+          all: async () => [
+            {
+              _key: 'r1',
+              repo_id: 'me',
+              kind: 'run',
+              created_at: new Date().toISOString(),
+              suite_key: 's-suite-1',
+              tagset: { forbidden: ['tag-t'], hash8: 'deadbeef' },
+              payload: { results: QUERIES.map((q) => ({ ...q, head_claimed: q.kind === 'positive' })) }
+            }
+          ]
+        };
+      }
+      return { all: async () => [] };
+    });
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      version: 1,
+      frontmatter_history: [],
+      head: { version: 9, vector: HEAD_VEC, per_field: { topic: [HEAD_VEC], forbidden_vectors: [] } }
+    });
+    const VEC_OF = { 'pos one': POS_VEC, 'neg one': NEG_VEC, 'tag-t': T_VEC, 'tag-t2': T2_VEC };
+    const embed = (texts) => texts.map((t) => VEC_OF[t] || basis(6));
+    frontmatterService.teiEmbed.mockImplementation(embed);
+    headTestService.embedQueryBatch.mockImplementation(async (queries) => ({
+      vectors: embed(queries),
+      prefixed: true,
+      model: 'test-model'
+    }));
+    return QUERIES;
+  }
+
+  it('b: the scorecard scope names the suites/runs/tagset and the prefixed embedding contract', async () => {
+    seedBlocked();
+    frontmatterService.vllmChatCompletions.mockResolvedValue(llmResponse({ add: [] }));
+    const out = await svc.recommendTagSet('me', {});
+    expect(out.scope.suites).toEqual(['s-suite-1']);
+    expect(out.scope.runs[0]).toMatchObject({ suite_key: 's-suite-1', tagset: { hash8: 'deadbeef' } });
+    expect(out.scope.embedding_prefixed).toBe(true);
+    // parity: the sim's query vectors went through embedQueryBatch, NOT
+    // bare teiEmbed (the live bug that made "Now" fictional)
+    expect(headTestService.embedQueryBatch).toHaveBeenCalled();
+  });
+
+  it('c: a curator-original tag that vetoes positives surfaces as a blocked removal', async () => {
+    seedBlocked();
+    frontmatterService.vllmChatCompletions.mockResolvedValue(llmResponse({ add: [] }));
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      version: 1,
+      frontmatter: { forbidden: ['tag-t'] },
+      frontmatter_history: [],
+      head: { version: 9, vector: HEAD_VEC, per_field: { topic: [HEAD_VEC], forbidden_vectors: [] } }
+    });
+    // readFrontmatterFromRepoDoc drives the advisor's view of `current`.
+    frontmatterService.readFrontmatterFromRepoDoc.mockResolvedValue({
+      topic: ['x'],
+      entity: [],
+      scope: '',
+      forbidden: ['tag-t'],
+      summary: '',
+      keyword: []
+    });
+    const out = await svc.recommendTagSet('me', {});
+    expect(out.changes.remove).toEqual([]); // never auto-applied
+    expect(out.blocked_removals).toHaveLength(1);
+    expect(out.blocked_removals[0]).toMatchObject({
+      tag: 'tag-t',
+      predicted_positive_gain: 1,
+      predicted_negative_loss: 1,
+      reason: 'curator_original'
+    });
+  });
+
+  it('c: a narrow pair recovers the positive without re-admitting the negative', async () => {
+    seedBlocked();
+    frontmatterService.vllmChatCompletions.mockResolvedValue(llmResponse({ add: ['tag-t2'] }));
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      version: 1,
+      frontmatter: { forbidden: ['tag-t'] },
+      frontmatter_history: [],
+      head: { version: 9, vector: HEAD_VEC, per_field: { topic: [HEAD_VEC], forbidden_vectors: [] } }
+    });
+    frontmatterService.readFrontmatterFromRepoDoc.mockResolvedValue({
+      topic: ['x'],
+      entity: [],
+      scope: '',
+      forbidden: ['tag-t'],
+      summary: '',
+      keyword: []
+    });
+    const out = await svc.recommendTagSet('me', {});
+    const pair = out.narrow_options.find((p) => p.remove === 'tag-t');
+    expect(pair).toMatchObject({
+      add: 'tag-t2',
+      predicted_positive_gain: 1,
+      predicted_negative_loss: 0
+    });
+  });
+
+  it('d: the add-LLM prompt carries only veto-leg classes — confusable and meta never seed tags', async () => {
+    seedBlocked();
+    frontmatterService.vllmChatCompletions.mockResolvedValue(llmResponse({ add: [] }));
+    // A run carrying one row per class — each row embedded ABOVE the floor
+    // with no tag veto, so every row is a CLAIMED negative (failing). The
+    // prompt must list ONLY the veto-leg classes (off-domain, near-miss);
+    // confusable (the sibling-select leg) and meta (Lab-noise) never seed
+    // forbidden-tag proposals.
+    const FAILING_VEC = unit([1, 0.5, 0, 0, 0, 0, 0]); // cos(head) 0.894, no tag overlap
+    const QUERIES_D = [
+      { query: 'an off-domain question', kind: 'negative', cls: 'off-domain' },
+      { query: 'a confusable question', kind: 'negative', cls: 'confusable' },
+      { query: 'a meta question', kind: 'negative', cls: 'meta' },
+      { query: 'a near-miss question', kind: 'negative', cls: 'near-miss' }
+    ];
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('r.kind == "run"')) {
+        return {
+          all: async () => [
+            {
+              _key: 'r1',
+              repo_id: 'me',
+              kind: 'run',
+              created_at: new Date().toISOString(),
+              payload: { results: QUERIES_D.map((q) => ({ ...q, head_claimed: true })) }
+            }
+          ]
+        };
+      }
+      return { all: async () => [] };
+    });
+    const embedD = (texts) => texts.map((t) => (QUERIES_D.some((q) => q.query === t) ? FAILING_VEC : basis(6)));
+    frontmatterService.teiEmbed.mockImplementation(embedD);
+    headTestService.embedQueryBatch.mockImplementation(async (queries) => ({
+      vectors: embedD(queries),
+      prefixed: true,
+      model: 'test-model'
+    }));
+    await svc.recommendTagSet('me', {});
+    const call = frontmatterService.vllmChatCompletions.mock.calls.find((c) =>
+      String(c[0][0].content).includes('FAILING QUERIES')
+    );
+    const prompt = String(call[0][0].content);
+    expect(prompt).toContain('an off-domain question');
+    expect(prompt).toContain('a near-miss question');
+    expect(prompt).not.toContain('a confusable question');
+    expect(prompt).not.toContain('a meta question');
+  });
+
+  it('h: manual additions dedup against the suite — same kind dropped, cross-kind dropped', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    const existing = suite.payload.positive[0].query;
+    const res = await svc.addQueries('me', suite._key, {
+      queries: [
+        { query: existing, kind: 'positive' }, // dup of an existing positive
+        { query: 'Brand new question', kind: 'positive' }, // lands
+        { query: suite.payload.negative[0].query, kind: 'negative' }, // dup of an existing negative
+        { query: 'Brand new question', kind: 'negative' } // cross-kind contradiction — dropped
+      ]
+    });
+    expect(res.added).toBe(1);
+    expect(res.duplicates_dropped).toBe(3);
+    expect(res.payload.positive).toHaveLength(2);
+    expect(res.payload.negative).toHaveLength(1);
+  });
+
+  it('h: the generator never emits the same text twice or across kinds', async () => {
+    __mockDb.query.mockResolvedValue({ all: async () => [] }); // solo universe
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [
+          { query: 'What is the licensing fee?', reason: 'topic hit' },
+          { query: 'What is the licensing fee?', reason: 'duplicate from the model' }
+        ],
+        negative: [
+          { query: 'What is the licensing fee?', reason: 'the model also emitted it as a negative' },
+          { query: 'Totally unrelated weather', reason: 'off-domain' }
+        ],
+        keywords: []
+      })
+    );
+    const s = await svc.generateSuite('me', { n_positive: 2, n_negative: 2 }, {});
+    const posTexts = s.payload.positive.map((q) => q.query);
+    expect(posTexts).toEqual(['What is the licensing fee?']); // the dup positive dropped
+    const negTexts = s.payload.negative.map((q) => q.query);
+    expect(negTexts).not.toContain('What is the licensing fee?'); // cross-kind dropped
+    expect(new Set(negTexts).size).toBe(negTexts.length); // no in-kind dups
+  });
+});
+
+describe('getSuite + updateSuiteRows (1-8f)', () => {
+  const ROWS = {
+    positive: [
+      { query: 'breast cancer screening guidance', kind: 'positive', cls: null, source: 'llm' },
+      { query: 'asthma management protocol', kind: 'positive', cls: null, source: 'llm' }
+    ],
+    negative: [
+      { query: 'insurance plans cover screening', kind: 'negative', cls: 'near-miss', source: 'llm' },
+      { query: 'HIV causes and symptoms', kind: 'positive', cls: null, source: 'manual' }
+    ]
+  };
+
+  async function seedRows() {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    suite.payload.positive = ROWS.positive.map((r) => ({ ...r }));
+    suite.payload.negative = ROWS.negative.map((r) => ({ ...r }));
+    __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
+    return suite;
+  }
+
+  it('getSuite returns the full saved suite (rows included)', async () => {
+    const suite = await seedRows();
+    const got = await svc.getSuite('me', suite._key, {});
+    expect(got._key).toBe(suite._key);
+    expect(got.payload.positive).toHaveLength(2);
+    expect(got.payload.negative).toHaveLength(2);
+  });
+
+  it('getSuite 404s an unknown key', async () => {
+    await expect(svc.getSuite('me', 'nope', {})).rejects.toMatchObject({ code: 'SUITE_NOT_FOUND', status: 404 });
+  });
+
+  it('updateSuiteRows flips a row kind (the mislabel fix) — moves arrays, clears cls', async () => {
+    const suite = await seedRows();
+    const out = await svc.updateSuiteRows(
+      'me',
+      suite._key,
+      { updates: [{ match: { query: 'HIV causes and symptoms', kind: 'positive' }, set: { kind: 'negative' } }] },
+      { actor: { user_id: 'u1' } }
+    );
+    // The mislabeled row lived in the NEGATIVE array with kind:'positive' —
+    // the flip searches BOTH arrays; the positive array never held it.
+    expect(out.payload.positive).toHaveLength(2);
+    expect(out.payload.negative).toHaveLength(2);
+    const flipped = out.payload.negative.find((r) => r.query === 'HIV causes and symptoms');
+    expect(flipped).toMatchObject({ kind: 'negative', cls: null, source: 'manual' });
+  });
+
+  it('updateSuiteRows removes rows and rejects a resulting contradiction (same text both kinds)', async () => {
+    const suite = await seedRows();
+    // Removing the insurance near-miss is fine.
+    const out = await svc.updateSuiteRows('me', suite._key, {
+      removes: [{ query: 'insurance plans cover screening', kind: 'negative' }]
+    });
+    expect(out.payload.negative).toHaveLength(1);
+    // A flip that would put the SAME text in both kinds is a contradiction:
+    // 'shared text' exists as a positive AND as a mislabeled positive in the
+    // negative array — flipping it lands the text in both arrays.
+    const s2 = await seedRows();
+    s2.payload.positive.push({ query: 'shared text', kind: 'positive', cls: null, source: 'llm' });
+    s2.payload.negative.push({ query: 'shared text', kind: 'positive', cls: null, source: 'llm' });
+    __mockDb.collection('okf_head_test_runs').replace(s2._key, s2);
+    await expect(
+      svc.updateSuiteRows('me', s2._key, {
+        updates: [{ match: { query: 'shared text', kind: 'positive' }, set: { kind: 'negative' } }]
+      })
+      // Either 409 guard is a correct refusal here (contradiction OR the
+      // text duplicating within one kind — the match is ambiguous input).
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('updateSuiteRows 400s an empty body', async () => {
+    const suite = await seedRows();
+    await expect(svc.updateSuiteRows('me', suite._key, {})).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
+  });
+});
+
+// ─── Story 1-8f part 2: any number of tests + suite names ──────────────────
+
+describe('generateSuite batching + names (1-8f2)', () => {
+  it('batches a large ask across LLM calls, dedupes, and delivers the count', async () => {
+    const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      let call = 0;
+      frontmatterService.vllmChatCompletions.mockImplementation(async () => {
+        call += 1;
+        const base = (call - 1) * 30;
+        return llmResponse({
+          positive: Array.from({ length: 30 }, (_, i) => ({
+            query: `positive probe ${base + i + 1} for the repository`,
+            reason: 'batched'
+          })),
+          // one dup + one fresh negative per call
+          negative: [
+            { query: 'shared negative probe', expected_repo: 'Sibling Repo', reason: 'x' },
+            { query: `negative probe ${call}`, expected_repo: 'Sibling Repo', reason: 'x' }
+          ],
+          near_miss: [],
+          off_domain: [],
+          meta: [],
+          keywords: ['who']
+        });
+      });
+      __mockDb.query.mockImplementation(async (aql) => {
+        if (aql.includes('r.head != null')) {
+          return { all: async () => [{ repo_id: 'sib1', name: 'Sibling Repo', text: 'sibling text' }] };
+        }
+        return { all: async () => [] };
+      });
+      const suite = await svc.generateSuite('me', { n_positive: 60, n_negative: 6 }, {});
+      // 60 positives delivered across 2 batched calls (30 + 30).
+      expect(call).toBeGreaterThanOrEqual(2);
+      const texts = suite.payload.positive.map((r) => r.query);
+      expect(suite.payload.positive).toHaveLength(60);
+      expect(new Set(texts.map((t) => t.toLowerCase())).size).toBe(60);
+      // negatives deduped across calls: 1 shared + 1 unique per call —
+      // the shared dup is dropped, uniques kept (5 calls: 2 for positives,
+      // 3 topping up the negative backlog to the requested 6).
+      const neg = suite.payload.negative.filter((q) => q.cls === 'confusable');
+      expect(neg).toHaveLength(6);
+    } finally {
+      randSpy.mockRestore();
+    }
+  });
+
+  it('persists the suite name (trimmed) and 400s an empty rename', async () => {
+    __mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
+    frontmatterService.vllmChatCompletions.mockImplementation(async () => {
+      // no progress on the first call → immediate fallback suite
+      return llmResponse({ positive: [], negative: [], near_miss: [], off_domain: [], meta: [] });
+    });
+    const suite = await svc.generateSuite('me', { name: '  NCD regression set  ' }, {});
+    expect(suite.name).toBe('NCD regression set');
+    await expect(svc.renameSuite('me', suite._key, { name: '   ' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
+    const renamed = await svc.renameSuite('me', suite._key, { name: 'Regressão NCD' }, { actor: { user_id: 'u1' } });
+    expect(renamed.name).toBe('Regressão NCD');
+  });
+});
+
+describe('beginSuiteGeneration (1-8f2 — async 202 + poll)', () => {
+  it('mints the key up-front, lands the doc under it, and refuses a concurrent generate', async () => {
+    let release;
+    const gate = new Promise((r) => {
+      release = r;
+    });
+    __mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
+    frontmatterService.vllmChatCompletions.mockImplementation(async () => {
+      await gate; // hold the first generation IN FLIGHT
+      return llmResponse({ positive: [], negative: [], near_miss: [], off_domain: [], meta: [] });
+    });
+    const started = svc.beginSuiteGeneration('me', { n_positive: 2 }, {});
+    expect(started.suite_key).toMatch(/^s\d+-[0-9a-f]{6}$/);
+    // sync contract: the in-flight check throws before any async work
+    expect(() => svc.beginSuiteGeneration('me', {})).toThrow(
+      expect.objectContaining({ code: 'GENERATION_IN_FLIGHT', status: 409 })
+    );
+    release();
+    const suite = await started.done;
+    expect(suite._key).toBe(started.suite_key);
+    // the in-flight slot cleared — a fresh generation is accepted
+    const again = svc.beginSuiteGeneration('me', {}, {});
+    const done2 = await again.done;
+    expect(done2._key).toBe(again.suite_key);
+  });
+});
+
+describe('getSuite vs an in-flight generation (1-8f2 — the honest envelope)', () => {
+  it('answers {suite_key, status:"generating"} for a minted in-flight key; 404 only for unknown keys', async () => {
+    let release;
+    const gate = new Promise((r) => {
+      release = r;
+    });
+    __mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
+    frontmatterService.vllmChatCompletions.mockImplementation(async () => {
+      await gate;
+      return llmResponse({ positive: [], negative: [], near_miss: [], off_domain: [], meta: [] });
+    });
+    const started = svc.beginSuiteGeneration('me', { n_positive: 2 }, {});
+    try {
+      // in-flight: the poll's keep-waiting envelope, NOT a 404
+      const env = await svc.getSuite('me', started.suite_key, {});
+      expect(env).toEqual({ suite_key: started.suite_key, status: 'generating' });
+      expect(svc.suiteGenerationInFlight('me', started.suite_key)).toBe(true);
+    } finally {
+      release();
+      await started.done;
+    }
+    // landed: the doc is returned, and the in-flight flag cleared
+    const suite = await svc.getSuite('me', started.suite_key, {});
+    expect(suite._key).toBe(started.suite_key);
+    expect(svc.suiteGenerationInFlight('me', started.suite_key)).toBe(false);
+    // a key that was never minted still 404s
+    await expect(svc.getSuite('me', 's9999999-dead00', {})).rejects.toMatchObject({
+      code: 'SUITE_NOT_FOUND',
+      status: 404
+    });
+  });
+});
+
+describe('1-8g — runSuite probes the corpus (Run All fills the Corpus column)', () => {
+  it('stamps a light probe on every result row + persists lastProbe on the suite rows', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'NCD Information',
+      ingested_graph_name: 'OKF_me_v1'
+    });
+    headTestService.routingTest.mockImplementation(async (repoId, body) => {
+      const isPositive = suite.payload.positive.some((q) => q.query === body.query);
+      return fakeResult(isPositive, isPositive ? 0.7 : 0.05, 0, isPositive ? 'claimed' : 'suppressed');
+    });
+    frontmatterService.teiEmbed.mockResolvedValue([[0.1, 0.2, 0.3]]);
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('APPROX_NEAR_COSINE')) {
+        return { all: async () => [{ text: 'WHO guidance colorectal screening every 10 years', score: 0.82 }] };
+      }
+      return { all: async () => [] };
+    });
+    const realFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [{ index: 0, score: 0.91 }]
+    });
+    try {
+      process.env.OKF_RERANK_ENDPOINT = 'https://tei.example/rerank';
+      const run = await svc.runSuite('me', suite._key, {});
+      for (const r of run.payload.results) {
+        expect(r.probe).toMatchObject({ docs: 1, top_score: 0.91, verdict: 'answerable' });
+      }
+      // persisted on the suite rows — a later Load keeps the chips
+      const after = await svc.getSuite('me', suite._key, {});
+      expect(after.payload.positive[0].lastProbe).toMatchObject({ verdict: 'answerable', top_score: 0.91 });
+      expect(after.payload.negative[0].lastProbe).toMatchObject({ verdict: 'answerable' });
+    } finally {
+      global.fetch = realFetch;
+      delete process.env.OKF_RERANK_ENDPOINT;
+    }
+  });
+
+  it('skips the probe leg cleanly when the repo has no ingested corpus (head-only run)', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.7, 0));
+    const run = await svc.runSuite('me', suite._key, {});
+    expect(run.payload.results[0].probe).toBeUndefined();
+  });
+});
+
+describe('1-8g — default suite naming, delete, and the corpus probe', () => {
+  it('names an unnamed suite "<Repo> suite N" (N = this repo\'s suite count + 1)', async () => {
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes("d.kind == 'suite'") && aql.includes('COLLECT WITH COUNT')) {
+        return { all: async () => [2] };
+      }
+      return { all: async () => [] };
+    });
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({ positive: [{ query: 'q1' }], negative: [], keywords: [] })
+    );
+    const suite = await svc.generateSuite('me', { n_positive: 1 }, {});
+    expect(suite.name).toBe('NCD Information suite 3');
+    // an explicit name always wins
+    const named = await svc.generateSuite('me', { n_positive: 1, name: 'My batch' }, {});
+    expect(named.name).toBe('My batch');
+  });
+
+  it('deleteSuite removes the suite + its runs; unknown keys 404; in-flight 409s', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    __mockDb.query.mockResolvedValue({ all: async () => [{ _key: 'r1' }, { _key: 'r2' }] });
+    const removeSpy = jest.spyOn(__mockDb.collection('okf_head_test_runs'), 'remove');
+    const res = await svc.deleteSuite('me', suite._key, {});
+    expect(res).toMatchObject({ deleted: true, suite_key: suite._key, runs_removed: 2 });
+    expect(removeSpy).toHaveBeenCalledWith(suite._key);
+    removeSpy.mockRestore();
+    await expect(svc.deleteSuite('me', 's9999999-nope00', {})).rejects.toMatchObject({
+      code: 'SUITE_NOT_FOUND',
+      status: 404
+    });
+  });
+
+  it('probeSuiteQuery: embed → top-K → rerank → verdict bands, persisted on matching rows', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    const query = suite.payload.positive[0].query;
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'NCD Information',
+      ingested_graph_name: 'OKF_me_v1'
+    });
+    frontmatterService.teiEmbed.mockResolvedValue([[0.1, 0.2, 0.3]]);
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('APPROX_NEAR_COSINE')) {
+        return {
+          all: async () => [
+            { text: 'WHO guidance colorectal screening every 10 years', score: 0.82 },
+            { text: 'unrelated weather text', score: 0.1 }
+          ]
+        };
+      }
+      return { all: async () => [] };
+    });
+    const realFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [
+        { index: 1, score: 0.00002 },
+        { index: 0, score: 0.83 }
+      ]
+    });
+    try {
+      process.env.OKF_RERANK_ENDPOINT = 'https://tei.example/rerank';
+      const res = await svc.probeSuiteQuery('me', suite._key, { query }, {});
+      expect(res).toMatchObject({
+        suite_key: suite._key,
+        docs: 2,
+        top_score: 0.83,
+        verdict: 'answerable'
+      });
+      // top_chunks are RERANK-ordered now (the rerank-best 0.83 leads,
+      // not the vector-best 0.82) — the summary panel's order of truth
+      expect(res.top_chunks[0].score).toBeCloseTo(0.83, 3);
+      expect(res.top_chunks[0].preview).toMatch(/colorectal/i);
+      // the head leg rides the response (verdict from routingTest — the
+      // panel shows BOTH legs side by side)
+      expect(res.head).toBeDefined();
+      // persisted on the matching positive row
+      const after = await svc.getSuite('me', suite._key, {});
+      expect(after.payload.positive[0].lastProbe).toMatchObject({ verdict: 'answerable', top_score: 0.83 });
+      // bands: weak + unanswerable
+      expect(svc.probeVerdict(0.3)).toBe('weak');
+      expect(svc.probeVerdict(0.01)).toBe('unanswerable');
+      expect(svc.probeVerdict(null)).toBe('unknown');
+    } finally {
+      global.fetch = realFetch;
+      delete process.env.OKF_RERANK_ENDPOINT;
+    }
+  });
+
+  it('probeSuiteQuery: empty query 400s; no corpus 409s; unconfigured rerank → unknown', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    await expect(svc.probeSuiteQuery('me', suite._key, { query: '   ' }, {})).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
+    const repo = repositoryService.getById;
+    repo.mockResolvedValueOnce({ id: 'me', name: 'NCD Information', ingested_graph_name: null });
+    await expect(svc.probeSuiteQuery('me', suite._key, { query: 'x' }, {})).rejects.toMatchObject({
+      code: 'REPO_NOT_INGESTED',
+      status: 409
+    });
+    repo.mockResolvedValueOnce({ id: 'me', name: 'NCD Information', ingested_graph_name: 'OKF_me_v1' });
+    frontmatterService.teiEmbed.mockResolvedValue([[0.1, 0.2, 0.3]]);
+    __mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ text: 'chunk text', score: 0.5 }]
+    });
+    delete process.env.OKF_RERANK_ENDPOINT;
+    const res = await svc.probeSuiteQuery('me', suite._key, { query: 'x' }, {});
+    expect(res.verdict).toBe('unknown');
+    expect(res.note).toMatch(/OKF_RERANK_ENDPOINT/);
+  });
+});

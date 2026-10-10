@@ -526,7 +526,11 @@ export default {
       uploadSuccessMultiple: '{count} টি ফাইল সফলভাবে আপলোড হয়েছে।',
       linkSubmitSuccess: '"{fileName}" সফলভাবে ক্রল এবং সেভ করা হয়েছে।',
       actionSuccess: '{fileId} ফাইলের উপর "{action}" অ্যাকশন সফল হয়েছে।',
-      metadataUpdateSuccess: '{fileId} ফাইলের মেটাডেটা আপডেট করা হয়েছে।'
+      metadataUpdateSuccess: '{fileId} ফাইলের মেটাডেটা আপডেট করা হয়েছে।',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'}টি নির্বাচিত ফাইল মুছা যাবে না ({'{'{'}'}reason{'}'}) — বাকি {'{'{'}'}n{'}'}টি মুছা হবে।",
+      confirmDeleteSkipped:
+        "{'{'{'}'}count{'}'}টি ইনজেস্ট করা/হচ্ছে ফাইল বাদ যাবে — মুছতে প্রথমে সেগুলি রিট্র্যাক্ট করুন।"
     },
     queryInspector: {
       search: 'অনুসন্ধান',
@@ -1463,7 +1467,7 @@ export default {
       none: 'এখনো কোনো সংস্করণ তৈরি হয়নি — publish করলে v1 তৈরি হয়।',
       notServing: 'পরিবেশন করা হচ্ছে না',
       publish: 'নতুন সংস্করণ তৈরি করুন',
-      published: "সংস্করণ v{'{'}v{'}'} প্রকাশিত হয়েছে — ডকুমেন্ট রিপোজিটরিতে {'{'}f{'}'} বান্ডিল সংরক্ষিত হয়েছে।",
+      published: 'সংস্করণ v{v} প্রকাশিত হয়েছে — ডকুমেন্ট রিপোজিটরিতে {f} বান্ডিল সংরক্ষিত হয়েছে।',
       serving: 'গৃহীত (পরিবেশন করা হচ্ছে)',
       title: 'সংস্করণ'
     },
@@ -1483,7 +1487,7 @@ export default {
         note: 'চিহ্নিত সত্ত্বাগুলি প্রকাশিত সামগ্রীর অংশ। আপনি যদি সেগুলি পর্যালোচনা করে থাকেন (যেমন অফিসিয়াল যোগাযোগের বিবরণ), স্বীকার করুন এবং চালিয়ে যান।'
       },
       publish: {
-        body: "Publish করলে v{'{'}n{'}'} মিন্ট হয় এবং ডকুমেন্ট রিপোজিটরিতে \"{'{'}file{'}'}\" বান্ডিল সংরক্ষণ করে, যা পূর্ববর্তী যেকোনো zip-কে প্রতিস্থাপন করে। আপনি Ingest না করা পর্যন্ত নতুন সংস্করণটি serving করবে না।",
+        body: 'Publish করলে v{n} মিন্ট হয় এবং ডকুমেন্ট রিপোজিটরিতে "{file}" বান্ডিল সংরক্ষণ করে, যা পূর্ববর্তী যেকোনো zip-কে প্রতিস্থাপন করে। আপনি Ingest না করা পর্যন্ত নতুন সংস্করণটি serving করবে না।',
         confirm: 'প্রকাশ করুন',
         inProgress: 'প্রকাশ চলছে — বান্ডিল রপ্তানি ও স্থানান্তর হচ্ছে…',
         title: 'প্রকাশ করুন'
@@ -1497,22 +1501,22 @@ export default {
         editor: 'এডিটর',
         wizard: 'উইজার্ড'
       },
-      version: "v{'{'}n{'}'}",
+      version: 'v{n}',
       versions: 'সংস্করণ',
       deleteLabel: 'মুছুন',
       headTest: 'Routing Lab'
     },
     logs: {
-      labeled: "লেবেলযুক্ত: {'{'}n{'}'}",
-      fallbacks: "LLM ফলব্যাক: {'{'}n{'}'}",
-      concepts: "ধারণা: {'{'}n{'}'}",
+      labeled: 'লেবেলযুক্ত: {n}',
+      fallbacks: 'LLM ফলব্যাক: {n}',
+      concepts: 'ধারণা: {n}',
       col: {
         action: 'কার্যকলাপ',
         description: 'বিবরণ',
         user: 'ব্যবহারকারী',
         when: 'তারিখ ও সময়'
       },
-      count: "{'{'}n{'}'}টি এন্ট্রি",
+      count: '{n}টি এন্ট্রি',
       loadFailed: 'কার্যকলাপ লগ লোড করতে ব্যর্থ হয়েছে।',
       none: 'এখনো কোনো কার্যকলাপ রেকর্ড করা হয়নি — রিপোজিটরির পদক্ষেপগুলি ঘটার সাথে সাথে এখানে উপস্থিত হবে।',
       title: 'অ্যাক্টিভিটি লগ'
@@ -1530,8 +1534,8 @@ export default {
       zoomIn: 'জুম ইন',
       zoomOut: 'জুম আউট',
       card: {
-        links: "{'{'}n{'}'}টি লিঙ্ক",
-        chunks: "{'{'}n{'}'}টি চাঙ্ক",
+        links: '{n}টি লিঙ্ক',
+        chunks: '{n}টি চাঙ্ক',
         failed: 'ইনডেক্সিং ব্যর্থ হয়েছে',
         flagged: 'চিহ্নিত সত্ত্বা',
         hub: 'ইনডেক্স হাব',
@@ -1603,8 +1607,8 @@ export default {
           problem: 'সমস্যা',
           noError: 'কোনো কারণ রেকর্ড ছাড়াই ব্যর্থ চিহ্নিত।',
           fixLabel: 'সমাধান',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               'গ্রেস উইন্ডোর মধ্যে ইনজেস্ট ওয়ার্কার অপেক্ষা ছেড়ে দিয়েছে (ড্রেন পরিপূর্ণ ছিল) — বিষয়বস্তু অক্ষত। সমাধান: ফাইলটি সামান্য সম্পাদনা করে সেভ করুন, অথবা পুরো রিপো রিট্র্যাক্ট করে পুনরায় ইনজেস্ট করুন।',
@@ -1686,9 +1690,9 @@ export default {
       saveFailed: 'সংরক্ষণ ব্যর্থ হয়েছে — আবার চেষ্টা করুন',
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: 'সমস্ত চিহ্নিত সামগ্রী সেন্সর (redact) করুন',
           remove: 'সমস্ত চিহ্নিত সামগ্রী সরান',
@@ -1701,7 +1705,7 @@ export default {
           accept:
             'সমস্ত চিহ্নিত সত্ত্বা পর্যালোচিত-এবং-রাখা হয়েছে হিসেবে চিহ্নিত — আপনি পুনরায় স্ক্যান না করা পর্যন্ত সেগুলি আর চিহ্নিত হবে না।'
         },
-        scope: "প্রভাবিত ধারণা: {'{'}n{'}'}টি।",
+        scope: 'প্রভাবিত ধারণা: {n}টি।',
         confirm: 'প্রয়োগ করুন',
         failed: 'বাল্ক PII পদক্ষেপ ব্যর্থ হয়েছে — আবার চেষ্টা করুন।'
       },
@@ -1720,11 +1724,11 @@ export default {
       bulk: {
         body: 'প্রতিটি রিপোজিটরি সম্পূর্ণ গেট চেক (PII পর্যালোচনা, ইনডেক্সিং, সঙ্গতি) সহ প্রকাশিত হয়। রিপোজিটরি ভিত্তিক ফলাফল:',
         pending: 'নির্বাচিত রিপোজিটরিগুলি publish করতে নিশ্চিত করুন।',
-        publishConfirm: "{'{'}n{'}'}টি প্রকাশ করুন",
+        publishConfirm: '{n}টি প্রকাশ করুন',
         title: 'নির্বাচিত রিপোজিটরিগুলি প্রকাশ করুন'
       },
       card: {
-        actions: "{'{'}name{'}'}-এর জন্য ক্রিয়া",
+        actions: '{name}-এর জন্য ক্রিয়া',
         building: 'তৈরি করা হচ্ছে…',
         buildingAria: 'তৈরি হচ্ছে — উৎস ফাইলটি এখনও প্রক্রিয়াজাত হচ্ছে',
         delete: 'মুছুন',
@@ -1750,23 +1754,23 @@ export default {
         note: 'চিহ্নিত সত্ত্বাগুলি প্রকাশিত সামগ্রীর অংশ। আপনি যদি সেগুলি পর্যালোচনা করে থাকেন (যেমন অফিসিয়াল যোগাযোগের বিবরণ), স্বীকার করুন এবং চালিয়ে যান।'
       },
       publish: {
-        body: "Publish করলে v{'{'}n{'}'} মিন্ট হয় এবং ডকুমেন্ট রিপোজিটরিতে \"{'{'}file{'}'}\" বান্ডিল সংরক্ষণ করে, যা পূর্ববর্তী zip-কে প্রতিস্থাপন করে। আপনি Ingest না করা পর্যন্ত নতুন সংস্করণটি serving করবে না।",
+        body: 'Publish করলে v{n} মিন্ট হয় এবং ডকুমেন্ট রিপোজিটরিতে "{file}" বান্ডিল সংরক্ষণ করে, যা পূর্ববর্তী zip-কে প্রতিস্থাপন করে। আপনি Ingest না করা পর্যন্ত নতুন সংস্করণটি serving করবে না।',
         confirm: 'প্রকাশ করুন',
         title: 'প্রকাশ করুন'
       },
       search: 'অনুসন্ধান...',
-      select: "বাল্ক প্রকাশের জন্য {'{'}name{'}'} নির্বাচন করুন",
+      select: 'বাল্ক প্রকাশের জন্য {name} নির্বাচন করুন',
       stage: {
         drainFailed: 'Ingest ব্যর্থ হয়েছে',
-        queueBehind: "{'{'}n{'}'} সারিবদ্ধ · {'{'}m{'}'}টি রেপো ইনজেস্ট হচ্ছে",
+        queueBehind: '{n} সারিবদ্ধ · {m}টি রেপো ইনজেস্ট হচ্ছে',
         redraining: 'পুনরায় ড্রেন করা হচ্ছে…',
         building: 'তৈরি করা হচ্ছে…',
         draft: 'খসড়া',
         inReview: 'পর্যালোচনা চলছে',
-        ingested: "গৃহীত সংস্করণ {'{'}n{'}'}",
-        published: "প্রকাশিত সংস্করণ {'{'}n{'}'}",
+        ingested: 'গৃহীত সংস্করণ {n}',
+        published: 'প্রকাশিত সংস্করণ {n}',
         retracted: 'প্রত্যাহার করা হয়েছে',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: 'রিপোজিটরি',
       topics: 'টপিক',
@@ -1792,7 +1796,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ আরও {'{'}n{'}'}টি",
+        more: '+ আরও {n}টি',
         fixPath: 'পুনরায় চেষ্টা করতে re-ingest করুন: retract → সংস্করণ তৈরি করুন → ingest।'
       },
       curation: {
@@ -1806,9 +1810,9 @@ export default {
       bytes: 'উৎস পড়া হয়েছে',
       conceptsIndexed: 'ধারণা ইনডেক্স করা হয়েছে',
       elapsed: {
-        hr: "{'{'}n{'}'} ঘণ্টা আগে শুরু হয়েছে",
+        hr: '{n} ঘণ্টা আগে শুরু হয়েছে',
         lt1: 'এক মিনিটেরও কম সময় আগে শুরু হয়েছে',
-        min: "{'{'}n{'}'} মিনিট আগে শুরু হয়েছে"
+        min: '{n} মিনিট আগে শুরু হয়েছে'
       },
       hint: {
         import: 'ফাইল রূপান্তর সম্পন্ন না হওয়া পর্যন্ত রিপোজিটরিটি Import-এ থাকে।',
@@ -1851,7 +1855,7 @@ export default {
     },
     create: {
       zipOnly: 'একটি .zip বান্ডিল ফাইল বেছে নিন।',
-      stagedFile: "স্টেজ করা হয়েছে: {'{'}name{'}'}",
+      stagedFile: 'স্টেজ করা হয়েছে: {name}',
       staged: 'বান্ডিল স্টেজ করা হয়েছে — আমদানি শুরু করতে রিপোজিটরি তৈরি করুন-এ ক্লিক করুন।',
       openExisting: 'বিদ্যমান রিপোজিটরি খুলুন',
       name: 'রিপোজিটরির নাম',
@@ -1928,7 +1932,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'রিপোজিটরি-স্তরের ট্যাগ ({summary}) রিপোজিটরির, এই কনসেপ্টের নয় — ডানদিকের রেলের ট্যাগ প্যানেলে পরিচালনা করুন।'
     },
     glossary: {
       addConcept:
@@ -2069,7 +2075,7 @@ export default {
       },
       stage: {
         inReview: 'Review-তে আছে',
-        stepOf: "ধাপ {'{'}n{'}'}/১০",
+        stepOf: 'ধাপ {n}/১০',
         draft: 'খসড়া'
       },
       dashboard: {
@@ -2082,7 +2088,7 @@ export default {
         stale: 'পুরানো',
         stage: {
           inReview: 'Review-তে আছে',
-          stepOf: "ধাপ {'{'}n{'}'}/১০",
+          stepOf: 'ধাপ {n}/১০',
           draft: 'খসড়া'
         },
         bulk: {
@@ -2193,11 +2199,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2420,16 +2426,16 @@ export default {
     },
     validation: {
       frozen:
-        "{'{'}v{'}'}-এ সামগ্রী স্থির করা হয়েছে — শুধুমাত্র পড়ার জন্য পূর্বরূপ। পরিবর্তন করতে serving সংস্করণটি retract করুন।",
+        '{v}-এ সামগ্রী স্থির করা হয়েছে — শুধুমাত্র পড়ার জন্য পূর্বরূপ। পরিবর্তন করতে serving সংস্করণটি retract করুন।',
       none: 'কিছুই না',
       expertHint:
         'কাঁচা বৈধকরণ JSON দেখতে, গুরুত্ব অনুসারে ফিল্টার করতে এবং পরীক্ষাগুলি ওভাররাইড করতে বিশেষজ্ঞ মোডে স্যুইচ করুন।',
       headline: {
-        blockers: "{'{'}n{'}'}টি বাধাদানকারী সমস্যা — ভান্ডার হস্তান্তরের আগে সেগুলি ঠিক করুন",
-        warnings: "{'{'}n{'}'}টি বিষয় আপনার পর্যালোচনা প্রয়োজন",
+        blockers: '{n}টি বাধাদানকারী সমস্যা — ভান্ডার হস্তান্তরের আগে সেগুলি ঠিক করুন',
+        warnings: '{n}টি বিষয় আপনার পর্যালোচনা প্রয়োজন',
         ok: 'সব ঠিক আছে। ঠিক করার কিছু নেই।'
       },
-      summary: "{'{'}clean{'}'}টি ত্রুটিহীন · {'{'}warnings{'}'}টি পর্যালোচনার প্রয়োজন · {'{'}blockers{'}'}টি ব্লকিং",
+      summary: '{clean}টি ত্রুটিহীন · {warnings}টি পর্যালোচনার প্রয়োজন · {blockers}টি ব্লকিং',
       formatter: {
         notReady: 'ফরম্যাটার গল্প ৪.২b-এ আসবে।'
       },
@@ -2463,8 +2469,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2478,12 +2484,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2500,7 +2506,7 @@ export default {
     },
     pii: {
       panel: 'চিহ্নিত সত্ত্বা',
-      nFlagged: "{'{'}n{'}'} টি পাওয়া গেছে",
+      nFlagged: '{n} টি পাওয়া গেছে',
       rescan: 'পুনরায় স্ক্যান করুন',
       scanning: 'স্ক্যান করা হচ্ছে…',
       clean: 'কোনো চিহ্নিত সত্তা নেই — এই concept পরিষ্কার।',
@@ -2581,7 +2587,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)",
+      total: '{n} document(s)',
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2590,12 +2596,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
@@ -2611,6 +2617,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2680,11 +2687,54 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'গেট',
+        floor: 'ন্যূনতম সীমা',
+        veto: 'নিষিদ্ধ ট্যাগ',
+        margin: 'মার্জিন',
+        claim: 'দাবি',
+        pass: 'উত্তীর্ণ',
+        fail: 'ব্যর্থ',
+        na: 'প্রযোজ্য নয়'
+      },
+      counts: {
+        positive: 'পজিটিভ',
+        negative: 'বিভ্রান্তিকর',
+        negativeRandom: 'ডোমেইনের বাইরে',
+        meta: 'মেটা',
+        nearMiss: 'কাছাকাছি ভুল',
+        hint: 'নিষিদ্ধ ট্যাগ থেকে আসা সারিগুলি রিপোজিটরির নিষিদ্ধ ট্যাগের সংখ্যার সাথে বাড়ে — এখানে সেট করা যায় না।'
+      },
+      cls: {
+        nearMiss: 'কাছাকাছি ভুল',
+        confusable: 'বিভ্রান্তিকর',
+        forbidden: 'নিষিদ্ধ',
+        offDomain: 'ডোমেইনের বাইরে',
+        meta: 'মেটা'
+      },
+      teach: {
+        claim:
+          'হেড এই কোয়েরিটি দাবি করছে — এটি তিনটি গেটই পাস করেছে। যদি এটি এখানে রাউট না হওয়া উচিত হয়, তার বিষয় বাদ দেওয়ার নিষিদ্ধ ট্যাগ চান, সেগুলি যোগ করুন, তারপর হেড পুনর্নির্মাণ করুন।',
+        explain: 'ব্যাখ্যা ও পরামর্শ',
+        explainBusy: 'ব্যাখ্যা চলছে — মডেল নিষিদ্ধ ট্যাগের পরামর্শ দিচ্ছে…',
+        addTag: 'নিষিদ্ধ ট্যাগে যোগ করুন',
+        suggestNone:
+          'কোনো নিষিদ্ধ ট্যাগের পরামর্শ দেওয়া হয়নি — ঘোষিত সুযোগের সাথে কোয়েরিটি ম্যানুয়ালি পর্যালোচনা করুন।',
+        added: 'নিষিদ্ধ ট্যাগে যোগ করা হয়েছে — প্রয়োগ করতে হেড পুনর্নির্মাণ করুন।',
+        rebuildRerun: 'হেড পুনর্নির্মাণ ও পুনরায় চালান',
+        savingTag: 'নিষিদ্ধ ট্যাগ সংরক্ষণ করা হচ্ছে…',
+        rebuildBusy: 'হেড পুনর্নির্মাণ ও পুনরায় চালানো হচ্ছে…',
+        title: 'এর অর্থ কী',
+        veto: 'এই কোয়েরিটি নিষিদ্ধ ট্যাগ “{tag}” এর সাথে দৃঢ়ভাবে মেলে। যদি এটি এই রিপোজিটরির অন্তর্ভুক্ত হওয়া উচিত হয়, তবে Frontmatter-এর নিষিদ্ধ ট্যাগ থেকে “{tag}” সরিয়ে ফেলুন, তারপর head পুনর্নির্মাণের জন্য পুনরায় প্রকাশ করুন।',
+        floor:
+          'কোয়েরিটি এই রিপোজিটরির বিষয়বস্তুর সাথে সম্পর্কিত নয় (স্কোর ডোমেনের ন্যূনতম সীমার নিচে) — ট্যাগ পরিবর্তনে এটি ঠিক হয় না; এটি সঠিক বর্জন।',
+        rejected: 'গার্ডরেল দ্বারা বাতিল — একটি নিষিদ্ধ ট্যাগ এই রিপোজিটরির নিজস্ব বিষয়ের সাথে মিলতে পারে না।'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+          'LLM প্রতি শ্রেণিতে ৩০ করে ব্যাচে কোয়েরি লেখে — বড় অনুরোধ (১০০+) কয়েক মিনিট নেয়। শেষ হলে suite এখানে ও সংরক্ষিত তালিকায় দেখা যাবে।',
+        generating: 'ব্যাচে তৈরি হচ্ছে — বড় অনুরোধ কয়েক মিনিট নেয়…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -2695,7 +2745,11 @@ export default {
           run: 'Run',
           when: 'When',
           passRate: 'Pass rate',
-          headVersion: 'Head'
+          headVersion: 'Head',
+          tags: 'ট্যাগ',
+          actions: 'সম্পাদনা',
+          name: 'নাম',
+          corpus: 'কর্পাস'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2711,14 +2765,61 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'ব্যর্থতা ব্যাখ্যা করুন',
+        explainBusy: 'ব্যর্থতা ব্যাখ্যা করা হচ্ছে — প্রতিটি ব্যর্থ নেগেটিভের জন্য একটি মডেল কল…',
+        batchTitle: 'ব্যর্থ নেগেটিভগুলি কেন এখানে রাউট হয়েছে',
+        batchNone:
+          'কোনো সমাধানের পরামর্শ দেওয়া হয়নি — ব্যর্থ কোয়েরিগুলি ঘোষিত সুযোগের সাথে ম্যানুয়ালি পর্যালোচনা করুন।',
+        addAll: 'সব যোগ করুন',
+        rebuildRerun: 'হেড পুনর্নির্মাণ ও স্যুট পুনরায় চালান',
+        positiveFailuresTitle: 'পজিটিভগুলো কেন পাস করা বন্ধ করেছে',
+        positiveFailures:
+          'এই রানে {n}টি পজিটিভ টেস্ট সংযত হয়েছে — নিষিদ্ধ ট্যাগগুলো রিপোজিটরির স্কোপের সাথে অতিরিক্ত মিলছে।',
+        vetoedBy: 'ভেটো করেছে',
+        marginKilled: '{n}টি পজিটিভ টেস্ট মার্জিনে হেরেছে (কোনো একক ভেটো ট্যাগ নেই)।',
+        removals: 'অপসারণযোগ্য ট্যাগ (এগুলো এই রিপোজিটরির নিজস্ব পজিটিভগুলোতে ভেটো দেয়)',
+        removeTip: '"{tag}" সরান — এটি {n}টি পজিটিভ টেস্টে ভেটো দিয়েছে',
+        tripwire: 'এই চক্রে {n}টি পজিটিভ টেস্ট ভেঙেছে — যোগ করা ট্যাগগুলো অতিরিক্ত সংযত করছে। ফিরিয়ে আনবেন?',
+        tripwireRevert: 'ফিরিয়ে আনার বিকল্প',
+        staleSnapshot: 'এই স্যুট তৈরির পর থেকে ট্যাগ পরিবর্তন হয়েছে — নতুন নিষিদ্ধ সারির জন্য পুনরায় তৈরি করুন।',
+        revertTitle: 'ট্যাগ ফিরিয়ে আনুন',
+        revertForbiddenCount: '{n}টি নিষিদ্ধ ট্যাগ',
+        revertAction: 'ফিরিয়ে আনুন',
+        revertBusy: 'সেভ ইতিহাস লোড হচ্ছে…',
+        revertSaving: 'ফ্রন্টম্যাটার পুনরুদ্ধার হচ্ছে…',
+        revertEmpty: 'এখনো কোনো ফ্রন্টম্যাটার সেভ রেকর্ড করা হয়নি।',
+        revertDone: 'ফ্রন্টম্যাটার পুনরুদ্ধার হয়েছে — প্রয়োগ করতে head পুনর্নির্মাণ ও পুনরায় চালান।',
+        removeTag: 'নিষিদ্ধ ট্যাগ থেকে সরান',
+        tagsetTip: 'এই রানের নিষিদ্ধ ট্যাগ',
+        savedTitle: 'সংরক্ষিত suite',
+        load: 'লোড করুন',
+        flipTip: 'নির্বাচন-করবে / নির্বাচন-করবে-না উল্টে দিন',
+        deleteTip: 'suite থেকে এই সারিটি সরান',
+        namePlaceholder: 'Suite-এর নাম (ঐচ্ছিক) — যেমন NCD রিগ্রেশন সেট',
+        probeTip: 'প্রকৃত কর্পাসের বিরুদ্ধে এই কোয়েরি পরীক্ষা করুন',
+        deleteSuiteTip: 'এই suite ও তার ইতিহাস মুছুন',
+        corpusNeedsIngest: 'প্রথমে রিপোজিটরি ইনজেস্ট করুন — কর্পাস পরীক্ষা ইনজেস্ট করা কর্পাসে খোঁজে'
       },
       error: {
+        explain: 'ব্যাখ্যা ব্যর্থ হয়েছে',
+        saveTag: 'নিষিদ্ধ ট্যাগ সংরক্ষণ করা যায়নি',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'সেভ ইতিহাস লোড করা যায়নি',
+        revert: 'ফ্রন্টম্যাটার ফিরিয়ে আনা যায়নি',
+        advisor: 'উপদেষ্টা ব্যর্থ হয়েছে',
+        noSuite: 'প্রথমে একটি suite তৈরি করুন, তারপর পুনর্নির্মাণ ও পুনরায় চালান।',
+        applyNoSuite: 'ট্যাগ সংরক্ষিত ও head পুনর্নির্মিত — প্রভাব দেখতে একটি suite তৈরি করে সব চালান।',
+        suiteLoad: 'suite লোড করা যায়নি',
+        suiteUpdate: 'suite আপডেট করা যায়নি',
+        suiteRename: 'suite-এর নাম পরিবর্তন করা যায়নি',
+        generateTimeout: 'suite অস্বাভাবিক দেরি হচ্ছে — সংরক্ষিত তালিকায় দেখা দিতে পারে; এক মিনিট পরে দেখুন।',
+        probe: 'কর্পাস পরীক্ষা ব্যর্থ',
+        suiteDelete: 'suite মুছতে ব্যর্থ'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2728,6 +2829,40 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'উপদেষ্টা: ট্যাগ পরিবর্তনের সুপারিশ করুন',
+        busy: 'সাম্প্রতিক রানগুলিতে ট্যাগ পরিবর্তন অনুকরণ করা হচ্ছে…',
+        title: 'ট্যাগ-সেট সুপারিশ (সাম্প্রতিক রানগুলিতে অনুকরিত)',
+        apply: 'পরিবর্তন প্রয়োগ করুন, head পুনর্নির্মাণ ও suite পুনরায় চালান',
+        scorecard: 'পজিটিভ {p}/{pt} গৃহীত · নেগেটিভ {n}/{nt} প্রতিহত',
+        now: 'বর্তমান',
+        predicted: 'পূর্বানুমান',
+        scope: ' (সর্বশেষ {r} রানের {q}টি কোয়েরি জুড়ে)',
+        applying: 'প্রয়োগ চলছে: ট্যাগ সংরক্ষণ, head পুনর্নির্মাণ, suite পুনরায় চালানো…',
+        blockedTitle: 'ব্লক করা অপসারণ — Apply-তে অন্তর্ভুক্ত করতে ক্লিক করুন',
+        blockedGain: '{n}টি পজিটিভ ফেরত আনে',
+        narrowTitle: 'আরও সংকীর্ণ বিকল্প — নেগেটিভ ফিরিয়ে না এনে পজিটিভ ফেরত আনে',
+        narrowChip: 'প্রশস্ত ট্যাগ সরিয়ে সংকীর্ণ ট্যাগ যোগ করুন',
+        reasonCurator: 'এই ট্যাগটি আপনিই প্রথম ঘোষণা করেছিলেন — সরানোর আগে নিশ্চিত করুন',
+        reasonRotated: 'সম্পাদনার ইতিহাস বেসলাইন পেরিয়ে গেছে — সরানোর আগে নিশ্চিত করুন',
+        scopeDetail: 'স্যুট: {s} · ট্যাগ সেট: {t}'
+      },
+      probe: {
+        answerable: 'উত্তর আছে',
+        weak: 'দুর্বল মিল',
+        unanswerable: 'কর্পাসে নেই',
+        unknown: 'অজানা',
+        title: 'কর্পাস পরীক্ষা — সারসংক্ষেপ',
+        close: 'সারসংক্ষেপ বন্ধ করুন',
+        chunksScanned: 'টি কর্পাস চাঙ্ক স্ক্যান হয়েছে',
+        headLeg: 'Head রায়',
+        headNotClaimed: 'দাবি নেই',
+        corpusLeg: 'কর্পাস কভারেজ',
+        files: 'রেফারেন্স ফাইল',
+        colScore: 'Rerank স্কোর',
+        colFile: 'ফাইল',
+        colContent: 'চাঙ্কের বিষয়বস্তু'
       }
     }
   },

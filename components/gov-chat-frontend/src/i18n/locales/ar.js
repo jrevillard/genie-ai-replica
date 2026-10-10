@@ -526,7 +526,10 @@ export default {
       uploadSuccessMultiple: 'تم تحميل {count} ملف(ات) بنجاح.',
       linkSubmitSuccess: 'تم الزحف وحفظ "{fileName}" بنجاح.',
       actionSuccess: 'الإجراء "{action}" على الملف {fileId} كان ناجحًا.',
-      metadataUpdateSuccess: 'تم تحديث البيانات الوصفية للملف {fileId}.'
+      metadataUpdateSuccess: 'تم تحديث البيانات الوصفية للملف {fileId}.',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} من الملفات المحددة لا يمكن حذفها ({'{'{'}'}reason{'}'}) — سيُحذف الملفات الأخرى فقط بعدد {'{'{'}'}n{'}'}.",
+      confirmDeleteSkipped: "{'{'{'}'}count{'}'} من الملفات المستوعبة/قيد الاستيعاب ستُتخطى — اسحبها أولًا لحذفها."
     },
     queryInspector: {
       search: 'بحث',
@@ -1459,7 +1462,7 @@ export default {
       none: 'لم يتم إصدار أي إصدارات حتى الآن — النشر ينشئ الإصدار v1.',
       notServing: 'لا يخدم',
       publish: 'إنشاء إصدار جديد',
-      published: "تم نشر الإصدار v{'{'}v{'}'} — تم تخزين الحزمة {'{'}f{'}'} في مستودع المستندات.",
+      published: 'تم نشر الإصدار v{v} — تم تخزين الحزمة {f} في مستودع المستندات.',
       serving: 'مستوعب (قيد الخدمة)',
       title: 'الإصدارات'
     },
@@ -1479,7 +1482,7 @@ export default {
         note: 'الكيانات المميزة بنجمة هي جزء من المحتوى المنشور. إذا قمت بمراجعتها (مثل تفاصيل الاتصال الرسمية)، فأقر وتابع.'
       },
       publish: {
-        body: "يؤدي النشر إلى إنشاء الإصدار v{'{'}n{'}'} وتخزين الحزمة \"{'{'}file{'}'}\" في مستودع المستندات، ليحل محل أي ملف zip سابق. الإصدار الجديد لن يكون متاحًا للخدمة حتى تستوعبه.",
+        body: 'يؤدي النشر إلى إنشاء الإصدار v{n} وتخزين الحزمة "{file}" في مستودع المستندات، ليحل محل أي ملف zip سابق. الإصدار الجديد لن يكون متاحًا للخدمة حتى تستوعبه.',
         confirm: 'نشر',
         inProgress: 'جارٍ النشر — تصدير الحزمة ونقلها…',
         title: 'نشر'
@@ -1493,22 +1496,22 @@ export default {
         editor: 'المحرر',
         wizard: 'المعالج'
       },
-      version: "الإصدار {'{'}n{'}'}",
+      version: 'الإصدار {n}',
       versions: 'الإصدارات',
       deleteLabel: 'حذف',
       headTest: 'Routing Lab'
     },
     logs: {
-      labeled: "تمت تسميتها: {'{'}n{'}'}",
-      fallbacks: "بدائل LLM الاحتياطية: {'{'}n{'}'}",
-      concepts: "المفاهيم: {'{'}n{'}'}",
+      labeled: 'تمت تسميتها: {n}',
+      fallbacks: 'بدائل LLM الاحتياطية: {n}',
+      concepts: 'المفاهيم: {n}',
       col: {
         action: 'الإجراء',
         description: 'الوصف',
         user: 'المستخدم',
         when: 'التاريخ والوقت'
       },
-      count: "{'{'}n{'}'} مدخلات",
+      count: '{n} مدخلات',
       loadFailed: 'فشل تحميل سجل النشاط.',
       none: 'لم يتم تسجيل أي نشاط حتى الآن — تظهر إجراءات المستودع هنا فور حدوثها.',
       title: 'سجل النشاط'
@@ -1526,8 +1529,8 @@ export default {
       zoomIn: 'تكبير',
       zoomOut: 'تصغير',
       card: {
-        links: "{'{'}n{'}'} روابط",
-        chunks: "{'{'}n{'}'} أجزاء",
+        links: '{n} روابط',
+        chunks: '{n} أجزاء',
         failed: 'فشلت الفهرسة',
         flagged: 'كيانات مميزة بنجمة',
         hub: 'مركز الفهرس',
@@ -1598,8 +1601,8 @@ export default {
           problem: 'المشكلة',
           noError: 'وُسم فاشلًا دون سبب مسجَّل.',
           fixLabel: 'كيفية الإصلاح',
-          attempts: "Attempts: {'{'}n{'}'}",
-          when: "Last attempt {'{'}when{'}'}",
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
           fix: {
             reaper:
               'توقف عامل الاستيعاب عن الانتظار خلال نافذة السماح لأن التصريف كان مشبعًا — المحتوى سليم. للإصلاح: عدِّل هذا الملف تعديلًا بسيطًا واحفظ لإعادة إدراجه في الطابور، أو اسحب المستودع وأعد الاستيعاب بالكامل.',
@@ -1680,9 +1683,9 @@ export default {
       saveFailed: 'فشل الحفظ — أعد المحاولة',
       piiBulk: {
         done_accept:
-          "Done — every flagged entity is marked reviewed-and-kept on {'{'}n{'}'} concept(s). The PII flags are cleared.",
-        done_redact: "Done — the flagged content on {'{'}n{'}'} concept(s) is replaced with the redaction notice.",
-        done_remove: "Done — the flagged content on {'{'}n{'}'} concept(s) is removed.",
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
           redact: 'حجب جميع المحتويات المميزة',
           remove: 'إزالة جميع المحتويات المميزة',
@@ -1694,7 +1697,7 @@ export default {
           accept:
             'تم وضع علامة تمت المراجعة والاحتفاظ على جميع الكيانات المميزة — لن يتم وضع علامة عليها مرة أخرى إلا إذا أعدت الفحص.'
         },
-        scope: "المفاهيم المتأثرة: {'{'}n{'}'}.",
+        scope: 'المفاهيم المتأثرة: {n}.',
         confirm: 'تطبيق',
         failed: 'فشل إجراء PII المجمع — حاول مرة أخرى.'
       },
@@ -1713,11 +1716,11 @@ export default {
       bulk: {
         body: 'يتم نشر كل مستودع مع الفحص الكامل للبوابة (مراجعة PII، الفهرسة، المطابقة). النتائج لكل مستودع:',
         pending: 'تأكيد publish للمستودعات المحددة.',
-        publishConfirm: "نشر {'{'}n{'}'}",
+        publishConfirm: 'نشر {n}',
         title: 'نشر المستودعات المحددة'
       },
       card: {
-        actions: "إجراءات {'{'}name{'}'}",
+        actions: 'إجراءات {name}',
         building: 'يبني…',
         buildingAria: 'قيد الإنشاء — لا يزال الملف المصدر قيد المعالجة',
         delete: 'حذف',
@@ -1743,23 +1746,23 @@ export default {
         note: 'الكيانات المميزة بنجمة هي جزء من المحتوى المنشور. إذا قمت بمراجعتها (مثل تفاصيل الاتصال الرسمية)، فأقر وتابع.'
       },
       publish: {
-        body: "يُنشئ إجراء publish الإصدار v{'{'}n{'}'} ويخزن الحزمة \"{'{'}file{'}'}\" في مستودع المستندات، ليحل محل ملف zip السابق. الإصدار الجديد لن يكون في حالة serving حتى تقوم بإجراء Ingest له.",
+        body: 'يُنشئ إجراء publish الإصدار v{n} ويخزن الحزمة "{file}" في مستودع المستندات، ليحل محل ملف zip السابق. الإصدار الجديد لن يكون في حالة serving حتى تقوم بإجراء Ingest له.',
         confirm: 'نشر',
         title: 'نشر'
       },
       search: 'بحث...',
-      select: "تحديد {'{'}name{'}'} للنشر المجمع",
+      select: 'تحديد {name} للنشر المجمع',
       stage: {
         drainFailed: 'فشلت عملية ingest',
-        queueBehind: "{'{'}n{'}'} في قائمة الانتظار · يجري الاستيعاب من {'{'}m{'}'} مستودع/مستودعات",
+        queueBehind: '{n} في قائمة الانتظار · يجري الاستيعاب من {m} مستودع/مستودعات',
         redraining: 'إعادة استنزاف…',
         building: 'يبني…',
         draft: 'مسودة',
         inReview: 'قيد المراجعة',
-        ingested: "تمت عملية ingest لـ v{'{'}n{'}'}",
-        published: "تم publish لـ v{'{'}n{'}'}",
+        ingested: 'تمت عملية ingest لـ v{n}',
+        published: 'تم publish لـ v{n}',
         retracted: 'مسحوب',
-        stepOf: "Step {'{'}n{'}'} of 10"
+        stepOf: 'Step {n} of 10'
       },
       title: 'المستودعات',
       topics: 'المواضيع',
@@ -1785,7 +1788,7 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} المزيد",
+        more: '+ {n} المزيد',
         fixPath: 'أعد إجراء ingest للمحاولة مرة أخرى: retract → إنشاء إصدار → ingest.'
       },
       curation: {
@@ -1799,9 +1802,9 @@ export default {
       bytes: 'قراءة المصدر',
       conceptsIndexed: 'المفاهيم المفهرسة',
       elapsed: {
-        hr: "بدأ منذ {'{'}n{'}'} ساعة",
+        hr: 'بدأ منذ {n} ساعة',
         lt1: 'بدأ منذ أقل من دقيقة',
-        min: "بدأ منذ {'{'}n{'}'} دقيقة"
+        min: 'بدأ منذ {n} دقيقة'
       },
       hint: {
         import: 'يبقى المستودع في حالة استيراد حتى يكتمل تحويل الملف.',
@@ -1844,7 +1847,7 @@ export default {
     },
     create: {
       zipOnly: 'اختر ملف حزمة .zip.',
-      stagedFile: "المجهز: {'{'}name{'}'}",
+      stagedFile: 'المجهز: {name}',
       staged: 'تم تجهيز الحزمة — انقر على إنشاء مستودع لبدء الاستيراد.',
       openExisting: 'فتح مستودع موجود',
       name: 'اسم المستودع',
@@ -1921,7 +1924,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'الوسوم على مستوى المستودع ({summary}) تخص المستودع وليس هذا المفهوم — أدرها من لوحة الوسوم في الشريط الأيمن.'
     },
     glossary: {
       addConcept:
@@ -2060,7 +2065,7 @@ export default {
       },
       stage: {
         inReview: 'قيد المراجعة',
-        stepOf: "الخطوة {'{'}n{'}'} من 10",
+        stepOf: 'الخطوة {n} من 10',
         draft: 'مسودة'
       },
       dashboard: {
@@ -2073,7 +2078,7 @@ export default {
         stale: 'قديم',
         stage: {
           inReview: 'قيد المراجعة',
-          stepOf: "الخطوة {'{'}n{'}'} من 10",
+          stepOf: 'الخطوة {n} من 10',
           draft: 'مسودة'
         },
         bulk: {
@@ -2184,11 +2189,11 @@ export default {
         skippedEmpty: '{n} empty file(s) skipped.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
-        moreN: " +{'{'}n{'}'} more",
+        moreN: ' +{n} more',
         noRepo: 'Create the repository first (go back to Entry).',
         noRepoYet: 'Create the repository first (go back to Entry).',
         benchTitle: 'Topics in this repository',
-        benchCount: "{'{'}n{'}'}",
+        benchCount: '{n}',
         benchLoading: 'Reading topics…',
         benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
         benchFailed: 'Could not read the topics right now.',
@@ -2407,15 +2412,15 @@ export default {
       saveBlocked: 'تم حظر الحفظ: أصلح مشكلات المطابقة أولاً.'
     },
     validation: {
-      frozen: "المحتوى مجمد عند {'{'}v{'}'} — معاينة للقراءة فقط. اسحب الإصدار المتاح للخدمة لإجراء تغييرات.",
+      frozen: 'المحتوى مجمد عند {v} — معاينة للقراءة فقط. اسحب الإصدار المتاح للخدمة لإجراء تغييرات.',
       none: 'لا يوجد',
       expertHint: 'قم بالتبديل إلى وضع الخبير لرؤية كائن JSON الأولي للتحقق، والتصفية حسب الأهمية، وتجاوز الفحوصات.',
       headline: {
-        blockers: "{'{'}n{'}'} مشكلة(مشكلات) معيقة — أصلحها قبل تسليم المستودع",
-        warnings: "{'{'}n{'}'} عنصر (عناصر) تحتاج إلى مراجعتك",
+        blockers: '{n} مشكلة(مشكلات) معيقة — أصلحها قبل تسليم المستودع',
+        warnings: '{n} عنصر (عناصر) تحتاج إلى مراجعتك',
         ok: 'يبدو جيدًا. لا يوجد شيء للإصلاح.'
       },
-      summary: "{'{'}clean{'}'} سليم · {'{'}warnings{'}'} يحتاج إلى مراجعة · {'{'}blockers{'}'} معرقل",
+      summary: '{clean} سليم · {warnings} يحتاج إلى مراجعة · {blockers} معرقل',
       formatter: {
         notReady: 'ستتوفر أداة التنسيق في المهمة 4.2b.'
       },
@@ -2449,8 +2454,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: "Create the Sources page and link {'{'}n{'}'} page(s)",
-        wireExisting: "Link {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\"",
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2464,12 +2469,12 @@ export default {
       nearDup: {
         keepHint: 'Keep one copy — delete the rest.'
       },
-      wireDone: "Linked {'{'}n{'}'} page(s) to \"{'{'}hub{'}'}\".",
-      wireCreated: "Created the Sources page and linked {'{'}n{'}'} page(s).",
-      mergedPages: "{'{'}n{'}'} pages",
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: "First {'{'}n{'}'} characters — open the editor for the full page."
+        truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
         conformance:
@@ -2486,7 +2491,7 @@ export default {
     },
     pii: {
       panel: 'الكيانات المميزة بنجمة',
-      nFlagged: "تم العثور على {'{'}n{'}'}",
+      nFlagged: 'تم العثور على {n}',
       rescan: 'إعادة المسح',
       scanning: 'جارٍ المسح…',
       clean: 'لا توجد كيانات مميزة — هذا الـ concept سليم.',
@@ -2567,7 +2572,7 @@ export default {
       noMatches: 'Nothing matches this search or filter.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
-      total: "{'{'}n{'}'} document(s)",
+      total: '{n} document(s)',
       titleSingle: 'Choose the crawled document',
       loading: 'Loading documents…',
       retry: 'Retry',
@@ -2576,12 +2581,12 @@ export default {
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
-      uploaded: "{'{'}n{'}'} file(s) uploaded.",
+      uploaded: '{n} file(s) uploaded.',
       uploadFailed: 'An upload failed — check the files and retry.',
       fsNote: 'Uploaded files join the document repository and are selected here automatically.',
-      count: "Selected: {'{'}n{'}'}",
+      count: 'Selected: {n}',
       needOne: 'Select at least one source.',
-      confirm: "Use {'{'}n{'}'} source(s)",
+      confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
@@ -2597,6 +2602,7 @@ export default {
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
       suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2666,11 +2672,53 @@ export default {
         claimed: 'claims',
         suppressed: 'suppressed'
       },
+      gate: {
+        title: 'البوابة',
+        floor: 'الحد الأدنى',
+        veto: 'الوسوم المحظورة',
+        margin: 'الهامش',
+        claim: 'المطالبة',
+        pass: 'ناجح',
+        fail: 'راسب',
+        na: 'لا ينطبق'
+      },
+      counts: {
+        positive: 'إيجابية',
+        negative: 'مربكة',
+        negativeRandom: 'خارج النطاق',
+        meta: 'ميتا',
+        nearMiss: 'شبه مطابقة',
+        hint: 'تتدرج الصفوف المشتقة من الوسوم المحظورة مع عدد الوسوم المحظورة للمستودع — لا يمكن تعيينها هنا.'
+      },
+      cls: {
+        nearMiss: 'شبه مطابقة',
+        confusable: 'مربك',
+        forbidden: 'محظور',
+        offDomain: 'خارج النطاق',
+        meta: 'ميتا'
+      },
+      teach: {
+        claim:
+          'الرأس يطالب بهذا الاستعلام — لقد اجتاز البوابات الثلاثة. إذا كان لا ينبغي توجيهه إلى هنا، فاطلب وسومًا محظورة تستبعد موضوعه، وأضفها، ثم أعد بناء الرأس.',
+        explain: 'اشرح واقترح',
+        explainBusy: 'جارٍ الشرح — النموذج يقترح وسومًا محظورة…',
+        addTag: 'أضف إلى الوسوم المحظورة',
+        suggestNone: 'لم يُقترح أي وسم محظور — راجع الاستعلام مقابل النطاق المعلن يدويًا.',
+        added: 'أُضيفت إلى الوسوم المحظورة — أعد بناء الرأس لتطبيقها.',
+        rebuildRerun: 'أعد بناء الرأس وأعد التشغيل',
+        savingTag: 'جارٍ حفظ الوسم المحظور…',
+        rebuildBusy: 'جارٍ إعادة بناء الرأس وإعادة التشغيل…',
+        title: 'ماذا يعني هذا',
+        veto: 'هذا الاستعلام يطابق الوسم المحظور «{tag}» بقوة. إذا كان ينبغي أن ينتمي إلى هذا المستودع، فاحذف «{tag}» من الوسوم المحظورة في Frontmatter، ثم أعد النشر لإعادة بناء الرأس.',
+        floor:
+          'الاستعلام لا علاقة له بموضوع هذا المستودع (النتيجة أقل من الحد الأدنى للمجال) — لا يعالج تغيير الوسوم هذه المشكلة؛ هذا استبعاد صحيح.',
+        rejected: 'تم رفضه بواسطة الحاجز الآلي — يجب ألا يطابق الوسم المحظور موضوع هذا المستودع نفسه.'
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes should-route-here queries plus confusable near-miss queries from the competing repositories; the forbidden tags add must-NOT-route queries. Takes 5-15 seconds.',
-        generating: 'Generating — the LLM is writing the queries…',
+          'يكتب النموذج الاستعلامات على دفعات من 30 لكل فئة — الطلب الكبير (100+) يستغرق دقائق. تظهر المجموعة هنا وفي المجموعات المحفوظة عند الانتهاء.',
+        generating: 'جارٍ التوليد على دفعات — الطلبات الكبيرة تستغرق دقائق…',
         run: 'Run all queries',
         running: 'Running every suite query…',
         current: 'Current suite',
@@ -2681,7 +2729,11 @@ export default {
           run: 'Run',
           when: 'When',
           passRate: 'Pass rate',
-          headVersion: 'Head'
+          headVersion: 'Head',
+          tags: 'الوسوم',
+          actions: 'تعديل',
+          name: 'الاسم',
+          corpus: 'المتن'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2697,14 +2749,60 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.'
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'اشرح الإخفاقات',
+        explainBusy: 'جارٍ شرح الإخفاقات — نداء واحد للنموذج لكل سالب فاشل…',
+        batchTitle: 'لماذا تم توجيه السالبة الفاشلة إلى هنا',
+        batchNone: 'لم يُقترح أي إصلاح — راجع الاستعلامات الفاشلة مقابل النطاق المعلن يدويًا.',
+        addAll: 'أضف الكل',
+        rebuildRerun: 'أعد بناء الرأس وأعد تشغيل المجموعة',
+        positiveFailuresTitle: 'لماذا توقف نجاح الإيجابيات',
+        positiveFailures:
+          'تم كبح {n} من اختبارات الإيجابية في هذه الجولة — وسوم المنع تطابق نطاق المستودع أكثر من اللازم.',
+        vetoedBy: 'استُبعد بواسطة',
+        marginKilled: 'خسر {n} من اختبارات الإيجابية بسبب الهامش (دون فيتو من وسم واحد).',
+        removals: 'وسوم لإزالتها (تمارس الفيتو ضد إيجابيات هذا المستودع نفسه)',
+        removeTip: 'أزِل "{tag}" — أنهى الفيتو {n} من الاختبارات الإيجابية',
+        tripwire: 'كسرت هذه الدورة {n} من الاختبارات الإيجابية — الوسوم المضافة تبالغ في الكبح. هل تريد التراجع؟',
+        tripwireRevert: 'خيارات التراجع',
+        staleSnapshot: 'تغيّرت الوسوم منذ توليد هذه المجموعة — أعد التوليد للحصول على صفوف منع حديثة.',
+        revertTitle: 'التراجع عن الوسوم',
+        revertForbiddenCount: '{n} وسم محظور',
+        revertAction: 'تراجع',
+        revertBusy: 'جارٍ تحميل سجل الحفظ…',
+        revertSaving: 'جارٍ استعادة الـ frontmatter…',
+        revertEmpty: 'لا توجد عمليات حفظ مسجلة بعد.',
+        revertDone: 'تمت الاستعادة — أعد بناء الرأس وأعد التشغيل لتطبيقها.',
+        removeTag: 'إزالة من الوسوم المحظورة',
+        tagsetTip: 'الوسوم المحظورة لهذا التشغيل',
+        savedTitle: 'المجموعات المحفوظة',
+        load: 'تحميل',
+        flipTip: 'التبديل بين يجب-اختياره / يجب-عدم-اختياره',
+        deleteTip: 'إزالة هذا الصف من المجموعة',
+        namePlaceholder: 'اسم المجموعة (اختياري) — مثال: مجموعة انحدار الأمراض غير السارية',
+        probeTip: 'اختبر هذا الاستعلام ضد المتن الحي',
+        deleteSuiteTip: 'احذف هذه المجموعة وسجلها',
+        corpusNeedsIngest: 'قم أولاً باستيعاب المستودع — اختبار المتن يبحث في المتن المستوعب'
       },
       error: {
+        explain: 'فشل الشرح',
+        saveTag: 'تعذر حفظ الوسم المحظور',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
-        add: 'Could not add the query'
+        add: 'Could not add the query',
+        history: 'تعذر تحميل سجل الحفظ',
+        revert: 'تعذر التراجع عن الوسوم',
+        advisor: 'فشل المستشار',
+        noSuite: 'أنشئ مجموعة اختبارات أولاً، ثم أعد بناء head وأعد التشغيل.',
+        applyNoSuite: 'تم حفظ الوسوم وإعادة بناء head — أنشئ مجموعة اختبارات ثم شغّل الكل لرؤية التأثير.',
+        suiteLoad: 'تعذر تحميل المجموعة',
+        suiteUpdate: 'تعذر تحديث المجموعة',
+        suiteRename: 'تعذر إعادة تسمية المجموعة',
+        generateTimeout: 'المجموعة تتأخر بشكل غير معتاد — قد تظهر في المجموعات المحفوظة؛ تحقق بعد دقيقة.',
+        probe: 'فشل اختبار المتن',
+        suiteDelete: 'تعذر حذف المجموعة'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2714,6 +2812,40 @@ export default {
           'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'المستشار: اقتراح تغييرات على الوسوم',
+        busy: 'محاكاة تغييرات الوسوم عبر التشغيلات الأخيرة…',
+        title: 'توصية مجموعة الوسوم (محاكاة عبر التشغيلات الأخيرة)',
+        apply: 'تطبيق التغييرات وإعادة بناء head وإعادة تشغيل المجموعة',
+        scorecard: 'الموجبات {p}/{pt} مقبولة · السالبات {n}/{nt} محظورة',
+        now: 'الآن',
+        predicted: 'المتوقع',
+        scope: ' (عبر {q} استعلامات من آخر {r} تشغيلات)',
+        applying: 'جارٍ التطبيق: حفظ الوسوم، إعادة بناء head، إعادة تشغيل المجموعة…',
+        blockedTitle: 'إزالات محظورة — انقر لتضمينها في التطبيق',
+        blockedGain: 'يستعيد {n} استعلامًا إيجابيًا',
+        narrowTitle: 'بدائل أضيق — يستعيد الإيجابيات دون إعادة قبول السلبيات',
+        narrowChip: 'أزل الوسم الواسع وأضف الضيق',
+        reasonCurator: 'أنت من أعلن هذا الوسم أصلًا — أكّد قبل الإزالة',
+        reasonRotated: 'تجاوز السجل خط الأساس — أكّد قبل الإزالة',
+        scopeDetail: 'المجموعات: {s} · أطقم الوسوم: {t}'
+      },
+      probe: {
+        answerable: 'قابلة للإجابة',
+        weak: 'مطابقة ضعيفة',
+        unanswerable: 'غير موجود في المتن',
+        unknown: 'غير معروف',
+        title: 'اختبار المتن — ملخص',
+        close: 'إغلاق الملخص',
+        chunksScanned: 'مقاطع المتن المفحوصة',
+        headLeg: 'حكم Head',
+        headNotClaimed: 'بدون إسناد',
+        corpusLeg: 'تغطية المتن',
+        files: 'ملفات مرجعية',
+        colScore: 'نتيجة إعادة الترتيب',
+        colFile: 'ملف',
+        colContent: 'محتوى المقطع'
       }
     }
   },

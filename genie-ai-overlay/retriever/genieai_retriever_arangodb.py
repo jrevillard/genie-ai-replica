@@ -65,8 +65,11 @@ from .config import (
     OPENAI_EMBED_ENABLED,
     OPENAI_EMBED_MODEL,
     ROUTE_ENABLED,
+    ROUTE_FORBIDDEN_TAG_MAX,
+    ROUTE_HEAD_FLOOR,
     ROUTE_HEAD_MARGIN,
     ROUTE_HEAD_WEIGHT,
+    ROUTE_HEADS_SUPERSEDE,
     ROUTE_MIN_CHUNKS,
     ROUTE_PROBE_TIMEOUT_MS,
     ROUTE_RETRY,
@@ -1290,6 +1293,8 @@ class GenieaiArangoRetriever(OpeaComponent):
             # the empty-check so a BM25 hit can rescue a dense-empty result (the
             # exact case lexical search excels at). OFF is a true no-op (the
             # whole block is skipped). Only applies to a chunk search start.
+            dense_count = len(search_res) if search_start == "chunk" else None
+            bm25_count = None
             if HYBRID_RETRIEVAL_ENABLED and search_start == "chunk":
                 try:
                     bm25_n = max(int(input.k), HYBRID_BM25_CANDIDATES)
@@ -1301,12 +1306,24 @@ class GenieaiArangoRetriever(OpeaComponent):
                         filter_strategy=filter_strategy,
                         aql_filter_clause=aql_filter_clause if search_start == "chunk" else "",
                     )
+                    bm25_count = len(bm25_res)
                     if bm25_res:
                         search_res = rrf_fuse(search_res, bm25_res)[: int(input.k)]
                         logger.info(f"Hybrid RRF fusion: {len(search_res)} documents after fusing dense + BM25.")
                 except Exception as e:
                     # Graceful degradation: never let the hybrid channel break the request.
                     logger.error(f"Hybrid BM25+RRF fusion failed, falling back to dense-only: {e}")
+
+            if search_start == "chunk":
+                # 1-8f3 instrumentation (the asthma-query mystery, David
+                # 2026-10-10): a leg returned 0 documents at default log level
+                # with NO signal why — the per-request filter inputs and
+                # per-channel row counts were debug-only. Log both at INFO.
+                logger.info(
+                    f"Extraction summary — graph={graph_name}, dense={dense_count}, "
+                    f"bm25={bm25_count}, fused={len(search_res)}, "
+                    f"labels={labels_to_filter or []}, filter_strategy={filter_strategy}"
+                )
 
             if not search_res:
                 logger.info("No documents found.")
@@ -1737,6 +1754,113 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
     t0 = time.time()
     okf_graphs = [g for g in encoded_graph_names if g != "GRAPH"]
 
+    # Story 1-8 MR-D + 1-8f3 — heads are fetched and gated FIRST. A
+    # gate-passing head (FLOOR/VETO/MARGIN, 1-8b) is an AFFIRMATIVE claim,
+    # and under ROUTE_HEADS_SUPERSEDE claims are DECISIVE (David,
+    # 2026-10-10: "CLEARLY IT SHOULD HAVE HIT THE NCD Information graph
+    # (only)"): when any head claims, ONLY claimed graphs route and the
+    # chunk probe is SKIPPED — headless bulk corpora (untagged, ungatable)
+    # must not pollute the rerank pool, and probing them was the latency
+    # (live: a 4-graph probe across ~100k-chunk graphs cost 78s of a 122s
+    # answer). With no claims the legacy chunk competition runs unchanged.
+    head_pass = []  # gate-passing (graph, score) — claims + pool pseudo-rows
+    heads_gated = 0
+    heads_floored = 0
+    heads_vetoed = 0
+    if ROUTE_HEAD_WEIGHT > 0 and okf_graphs:
+        try:
+            head_rows = list(
+                self.db.aql.execute(
+                    "FOR r IN okf_repositories FILTER r.deleted_at == null "
+                    "FILTER r.ingested_graph_name != null FILTER r.head != null "
+                    "RETURN {g: r.ingested_graph_name, v: r.head.vector, "
+                    "fv: (r.head.per_field || {}).forbidden || null, "
+                    "fvs: (r.head.per_field || {}).forbidden_vectors || [], "
+                    "dim: r.head.dim, model: r.head.model}"
+                )
+            )
+            qdim = len(query_embedding)
+            for row in head_rows:
+                g, v = row.get("g"), row.get("v")
+                if g not in okf_graphs or not isinstance(v, (list, tuple)) or len(v) != qdim:
+                    continue
+                hmodel = row.get("model") or ""
+                if hmodel and TEI_EMBED_MODEL and hmodel not in TEI_EMBED_MODEL and TEI_EMBED_MODEL not in hmodel:
+                    logger.info(
+                        f"Routing head skipped (model mismatch) — graph={g}, "
+                        f"head_model={hmodel}, service_model={TEI_EMBED_MODEL}"
+                    )
+                    continue
+                score = _head_cosine(query_embedding, v)
+                if score is None:
+                    continue
+                # Story 1-8b (David 2026-10-09: "forbidden is forbidden — a
+                # hard contract, it should immediately score zero") — the
+                # head CLAIMS the query only when ALL of: FLOOR, VETO, and
+                # the 1-8a MARGIN over the forbidden centroid. Degradation:
+                # heads without per-tag vectors skip the veto; heads without
+                # a forbidden centroid skip margin.
+                if score < ROUTE_HEAD_FLOOR:
+                    heads_floored += 1
+                    continue
+                fvs = row.get("fvs")
+                vetoed = False
+                if isinstance(fvs, list):
+                    for fv in fvs:
+                        if not isinstance(fv, dict):
+                            continue
+                        tv = fv.get("vector")
+                        if not isinstance(tv, (list, tuple)) or len(tv) != qdim:
+                            continue
+                        tscore = _head_cosine(query_embedding, tv)
+                        if tscore is not None and tscore >= ROUTE_FORBIDDEN_TAG_MAX:
+                            heads_vetoed += 1
+                            vetoed = True
+                            break
+                if vetoed:
+                    continue
+                fv = row.get("fv")
+                if isinstance(fv, (list, tuple)) and len(fv) == qdim:
+                    fscore = _head_cosine(query_embedding, fv)
+                    if fscore is not None and score - fscore <= ROUTE_HEAD_MARGIN:
+                        heads_gated += 1
+                        continue
+                head_pass.append((g, score))
+        except Exception as e:
+            logger.info(f"Routing head fetch failed (continuing without head signal) — error={e}")
+
+    if ROUTE_HEADS_SUPERSEDE and head_pass:
+        # 1-8f3: the claim is decisive for the WHOLE search set — including
+        # the legacy GRAPH leg. Live 2026-10-10: an asthma query routed to
+        # NCD, the NCD leg returned 0 documents, and the only content that
+        # reached the reranker was 20 unrelated legacy-Kenya GRAPH chunks —
+        # the reranker rightly rejected them all → grounding verdict 0 →
+        # general-knowledge fallback. Under an active claim the legacy leg
+        # (D8's "always searched") is excluded with the headless OKF graphs;
+        # no-claim paths keep it (recall-maximizing degradation untouched).
+        claimed = sorted(g for g, _s in head_pass)
+        selected = set(claimed)
+        routed = [g for g in encoded_graph_names if g in selected]
+        route_span.set_attribute("rag.route.mode", "heads-supersede")
+        route_span.set_attribute("rag.route.selected", ",".join(claimed))
+        route_span.set_attribute("rag.route.dropped", ",".join(g for g in okf_graphs if g not in selected))
+        route_span.set_attribute("rag.route.probed", 0)
+        route_span.set_attribute("rag.route.head_weight", ROUTE_HEAD_WEIGHT)
+        route_span.set_attribute("rag.route.head_rows", len(head_pass))
+        route_span.set_attribute("rag.route.heads_gated", heads_gated)
+        route_span.set_attribute("rag.route.heads_floored", heads_floored)
+        route_span.set_attribute("rag.route.heads_vetoed", heads_vetoed)
+        route_span.set_attribute("rag.route.wall_ms", int((time.time() - t0) * 1000))
+        logger.info(
+            f"Graph routing (heads supersede — probe skipped) — claimed={claimed}, "
+            f"head_rows={len(head_pass)}, heads_gated={heads_gated}, "
+            f"heads_floored={heads_floored}, heads_vetoed={heads_vetoed}, "
+            f"routed={len(routed)}/{len(encoded_graph_names)}, "
+            f"wall={(time.time() - t0):.2f}s"
+        )
+        route_span.end()
+        return routed, False
+
     async def _probe(graph_name):
         aql = (
             f"FOR doc IN `{graph_name}_SOURCE` "
@@ -1780,55 +1904,12 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
 
     # Global chunk-level competition (size-fair): every probed chunk competes on
     # cosine regardless of corpus size; qualification is by chunk COUNT.
-    # Story 1-8 MR-D — vectorized-head affinity (RETRIEVER_ROUTE_HEAD_WEIGHT,
-    # default 1.0, 0.0 = rollback): each carrier graph's okf_repositories.head
-    # contributes ONE weighted pseudo-row to this same pool. Dim + model
-    # guards; head fetch is best-effort (a failure logs and continues with
-    # the probe results alone — never the degraded path).
-    head_rows_injected = 0
-    heads_gated = 0
-    if ROUTE_HEAD_WEIGHT > 0 and okf_graphs:
-        try:
-            head_rows = list(
-                self.db.aql.execute(
-                    "FOR r IN okf_repositories FILTER r.deleted_at == null "
-                    "FILTER r.ingested_graph_name != null FILTER r.head != null "
-                    "RETURN {g: r.ingested_graph_name, v: r.head.vector, "
-                    "fv: (r.head.per_field || {}).forbidden || null, "
-                    "dim: r.head.dim, model: r.head.model}"
-                )
-            )
-            qdim = len(query_embedding)
-            for row in head_rows:
-                g, v = row.get("g"), row.get("v")
-                if g not in okf_graphs or not isinstance(v, (list, tuple)) or len(v) != qdim:
-                    continue
-                hmodel = row.get("model") or ""
-                if hmodel and TEI_EMBED_MODEL and hmodel not in TEI_EMBED_MODEL and TEI_EMBED_MODEL not in hmodel:
-                    logger.info(
-                        f"Routing head skipped (model mismatch) — graph={g}, "
-                        f"head_model={hmodel}, service_model={TEI_EMBED_MODEL}"
-                    )
-                    continue
-                score = _head_cosine(query_embedding, v)
-                if score is None:
-                    continue
-                # Story 1-8a (David 2026-10-08: "under no circumstances should
-                # 'fun in Indonesia' be routed to the NCD repo"): the head only
-                # CLAIMS a query when its score clears its OWN forbidden
-                # centroid by ROUTE_HEAD_MARGIN — forbidden-dominant and
-                # noise-floor queries contribute NO head vote. A head without
-                # a forbidden centroid (pre-1.8a rebuild) claims freely.
-                fv = row.get("fv")
-                if isinstance(fv, (list, tuple)) and len(fv) == qdim:
-                    fscore = _head_cosine(query_embedding, fv)
-                    if fscore is not None and score - fscore <= ROUTE_HEAD_MARGIN:
-                        heads_gated += 1
-                        continue
-                all_rows.append((g, ROUTE_HEAD_WEIGHT * score))
-                head_rows_injected += 1
-        except Exception as e:
-            logger.info(f"Routing head fetch failed (continuing without head signal) — error={e}")
+    # Story 1-8 MR-D — the heads gated ABOVE (head_pass) contribute their ONE
+    # weighted pseudo-row each to this same pool (RETRIEVER_ROUTE_HEAD_WEIGHT,
+    # default 1.0, 0.0 = rollback — weight 0 skips the whole head pass).
+    for g, score in head_pass:
+        all_rows.append((g, ROUTE_HEAD_WEIGHT * score))
+    head_rows_injected = len(head_pass)
     all_rows.sort(key=lambda r: r[1], reverse=True)
     top = all_rows[:ROUTE_TOP_K]
     counts: dict[str, int] = {}
@@ -1842,16 +1923,20 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
         floor_note = f" (floor: top-1 → {best})"
     selected = set(qualified)
     routed = [g for g in encoded_graph_names if g == "GRAPH" or g in selected]
+    route_span.set_attribute("rag.route.mode", "chunk-competition")
     route_span.set_attribute("rag.route.selected", ",".join(qualified))
     route_span.set_attribute("rag.route.dropped", ",".join(g for g in okf_graphs if g not in selected))
     route_span.set_attribute("rag.route.probed", len(okf_graphs))
     route_span.set_attribute("rag.route.head_weight", ROUTE_HEAD_WEIGHT)
     route_span.set_attribute("rag.route.head_rows", head_rows_injected)
     route_span.set_attribute("rag.route.heads_gated", heads_gated)
+    route_span.set_attribute("rag.route.heads_floored", heads_floored)
+    route_span.set_attribute("rag.route.heads_vetoed", heads_vetoed)
     route_span.set_attribute("rag.route.wall_ms", int((time.time() - t0) * 1000))
     logger.info(
         f"Graph routing — probed={len(okf_graphs)}, global_top={len(top)}, "
         f"head_rows={head_rows_injected}, heads_gated={heads_gated}, "
+        f"heads_floored={heads_floored}, heads_vetoed={heads_vetoed}, "
         f"counts={ {g: counts.get(g, 0) for g in okf_graphs} }, "
         f"qualified={qualified}{floor_note}, routed={len(routed)}/{len(encoded_graph_names)}, "
         f"wall={(time.time() - t0):.2f}s"
@@ -1882,11 +1967,14 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
     span.set_attribute("okf.fanout.timeout_ms", FANOUT_PER_GRAPH_TIMEOUT_MS)
 
     # Story 1.3 — query-affinity routing: prune OKF legs before extraction.
-    # The legacy GRAPH leg is always searched (hybrid) and never routed (D8);
-    # sticky conversation graphs bypass qualification (continuity contract).
-    # Failure modes degrade towards MORE recall, never less: no embedding,
-    # routing disabled, single-OKF-graph carriers, or degraded probes all fall
-    # back to the full carrier.
+    # The legacy GRAPH leg is always searched (hybrid) and never routed (D8)
+    # — EXCEPT under heads-supersede (1-8f3): _route_graphs encodes an active
+    # claim by OMITTING GRAPH from `routed`, and the search set below trusts
+    # `routed` verbatim. Sticky conversation graphs bypass qualification
+    # (continuity contract; GRAPH can never be sticky). Failure modes still
+    # degrade towards MORE recall, never less: no embedding, routing disabled,
+    # single-OKF-graph carriers, or degraded probes all fall back to the full
+    # carrier.
     from core.label_contract import decode_sticky
 
     search_set = list(encoded_graph_names)
@@ -1911,7 +1999,11 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
             routed, degraded = await _route_graphs(self, encoded_graph_names, query_embedding)
             routed_set = set(routed)
             sticky_set = set(sticky_valid)
-            search_set = [g for g in encoded_graph_names if g == "GRAPH" or g in routed_set or g in sticky_set]
+            # `routed` is the single source of truth for the search set: it
+            # carries GRAPH on every path EXCEPT the heads-supersede claim
+            # (1-8f3 — the legacy leg is intentionally dropped there). Sticky
+            # graphs restore OKF legs exactly as before.
+            search_set = [g for g in encoded_graph_names if g in routed_set or g in sticky_set]
             span.set_attribute("rag.route.applied", True)
             span.set_attribute("rag.route.degraded", degraded)
             span.set_attribute("rag.route.search_set", ",".join(search_set))

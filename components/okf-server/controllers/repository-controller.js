@@ -1386,6 +1386,81 @@ async function routingTest(req, res, next) {
 }
 
 /**
+ * Story 1-8d — POST /api/okf/repos/:repo_id/routing-advisor.
+ * The comprehensive advisor: aggregates the queries of the last N runs
+ * (all classes), simulates candidate tag-set configurations against the
+ * production gate, and recommends the globally-optimal add/remove set
+ * under a hard zero-positive-harm constraint. Admin-scoped (LLM call).
+ */
+async function recommendTagSet(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const result = await headSuiteService.recommendTagSet(req.params.repo_id, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 1-8d — GET /api/okf/repos/:repo_id/frontmatter/history.
+ * Bounded save history for the Lab's Revert-tags panel (read scope).
+ */
+async function frontmatterHistory(req, res, next) {
+  try {
+    const repoService = require('../services/repository-service');
+    const result = await repoService.frontmatterHistory(req.params.repo_id, { authz: authzForService(req) });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 1-8d — POST /api/okf/repos/:repo_id/frontmatter/revert  {saved_at}.
+ * Restores the frontmatter shape snapshotted at saved_at. Goes back
+ * through update(), so the revert itself is snapshotted. Admin-scoped.
+ */
+async function revertFrontmatter(req, res, next) {
+  try {
+    const repoService = require('../services/repository-service');
+    const savedAt = req.body && typeof req.body.saved_at === 'string' ? req.body.saved_at : '';
+    if (!savedAt) {
+      const err = new Error('saved_at is required');
+      err.code = 'VALIDATION_ERROR';
+      err.status = 400;
+      throw err;
+    }
+    const result = await repoService.revertFrontmatter(req.params.repo_id, savedAt, actorFrom(req));
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 1-8c — POST /api/okf/repos/:repo_id/routing-explain.
+ * Explains one query's gate outcome; when it (wrongly) CLAIMS, proposes
+ * forbidden tags that would exclude it. Admin-scoped — may burn one LLM
+ * call for the suggestion.
+ */
+async function routingExplain(req, res, next) {
+  try {
+    const headTestService = require('../services/head-test-service');
+    const result = await headTestService.explainRouting(req.params.repo_id, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Story 1-8 MR-B (2026-10-08) — POST /api/okf/repos/:repo_id/routing-testsuite.
  * Generates a test suite: ONE guided-JSON vLLM call (positives +
  * confusable-sibling negatives + keywords) plus deterministic
@@ -1395,11 +1470,16 @@ async function routingTest(req, res, next) {
 async function generateTestSuite(req, res, next) {
   try {
     const headSuiteService = require('../services/head-suite-service');
-    const suite = await headSuiteService.generateSuite(req.params.repo_id, req.body || {}, {
+    // Story 1-8f2 — 202 + poll. Large asks batch across minutes of LLM
+    // calls; the synchronous request died at the gateway (the suite saved
+    // at minute 5 while the browser gave up at 60s). The key is minted
+    // up-front; the UI polls GET /routing-testsuite/:key until it lands.
+    const { suite_key, done } = headSuiteService.beginSuiteGeneration(req.params.repo_id, req.body || {}, {
       authz: authzForService(req),
       actor: actorFrom(req)
     });
-    res.status(201).json(suite);
+    done.catch(() => {}); // the service logs; the poll surfaces the timeout
+    res.status(202).json({ suite_key, status: 'generating' });
   } catch (err) {
     next(err);
   }
@@ -1423,6 +1503,79 @@ async function addTestSuiteQueries(req, res, next) {
   }
 }
 
+// Story 1-8f — load ONE saved suite (full rows) back into the Lab, and
+// edit its rows in place (kind flips + removes; adds stay on /queries).
+// Read scope for the load, admin for the edit — same split as the
+// runs listing vs the suite mutations.
+async function getTestSuite(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const suite = await headSuiteService.getSuite(req.params.repo_id, req.params.suite_key, {
+      authz: authzForService(req)
+    });
+    res.status(200).json(suite);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function updateTestSuiteRows(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const suite = await headSuiteService.updateSuiteRows(req.params.repo_id, req.params.suite_key, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(suite);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Story 1-8f — name/rename a suite (the Saved-suites table renders it).
+async function renameTestSuite(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const suite = await headSuiteService.renameSuite(req.params.repo_id, req.params.suite_key, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(suite);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// 1-8g — DELETE the suite + its run docs (the curator's list cleanup).
+async function deleteTestSuite(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const result = await headSuiteService.deleteSuite(req.params.repo_id, req.params.suite_key, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// 1-8g — the click-test: one query against the LIVE corpus (embed → top-K
+// from the repo's SOURCE → the pipeline's TEI rerank → coverage verdict),
+// persisted on the matching suite rows.
+async function probeTestSuiteQuery(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const result = await headSuiteService.probeSuiteQuery(req.params.repo_id, req.params.suite_key, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 /**
  * Story 1-8 MR-B — POST /repos/:repo_id/routing-testsuite/:suite_key/run.
  * Executes every suite query through the routing test, aggregates
@@ -1434,9 +1587,30 @@ async function runTestSuite(req, res, next) {
     const headSuiteService = require('../services/head-suite-service');
     const run = await headSuiteService.runSuite(req.params.repo_id, req.params.suite_key, {
       authz: authzForService(req),
-      actor: actorFrom(req)
+      actor: actorFrom(req),
+      // 1-8g: the corpus probe leg defaults ON (Run All fills the Corpus
+      // column); scripts can opt out with {"probe": false}.
+      probe: !(req.body && req.body.probe === false)
     });
     res.status(200).json(run);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 1-8c — POST /api/okf/repos/:repo_id/routing-testsuite/:suite_key/explain.
+ * BATCH advice for the latest run of the suite: every failing negative in
+ * one pass, ONE LLM call, consolidated suggested forbidden tags. Admin-scoped.
+ */
+async function explainTestSuiteFailures(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const result = await headSuiteService.explainSuiteFailures(req.params.repo_id, req.params.suite_key, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
   } catch (err) {
     next(err);
   }
@@ -1469,9 +1643,19 @@ module.exports = {
   deleteRepo,
   rebuildRepoHead,
   routingTest,
+  routingExplain,
+  frontmatterHistory,
+  revertFrontmatter,
+  recommendTagSet,
   generateTestSuite,
   addTestSuiteQueries,
+  getTestSuite,
+  updateTestSuiteRows,
+  renameTestSuite,
+  deleteTestSuite,
+  probeTestSuiteQuery,
   runTestSuite,
+  explainTestSuiteFailures,
   listTestSuiteRuns,
   piiScan,
   importRepoConcepts,

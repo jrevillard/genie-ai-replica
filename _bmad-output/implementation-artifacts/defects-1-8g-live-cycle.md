@@ -213,3 +213,15 @@ MR time). okf-server 860/860, frontend 1678/1678.
   `duplicates_dropped` so the curator is never silently ignored. The
   99-random contract test now asserts the UNIQUE-pool semantics that
   supersede the 1-8f cycling behavior.
+- **1-8g-i DONE** (c04496cb9) — the document-management batch delete
+  refused wholesale when ONE selected row was ingested/ingesting, with a
+  tooltip-only signal (the live "it failed": the Slaugherhouse bundle was
+  mid-ingest). The refusal is now a visible strip; a mixed selection
+  deletes the clean subset (the confirm names the skipped rows; blocked
+  rows stay selected); i18n ×14 + deleteRefuseReason backfilled.
+- **1-8g-j DONE** (781d6474d) — dataprep's per-concept status callbacks
+  fell through to the doc-repo PATCH when concept_id was lost, logging
+  6× ERROR "Metadata not found" per OKF ingest (concept ids are not
+  doc-repo files). Origin fix: the routing keys on the JOB (OKF ingest
+  context) — the callback goes to the OKF control plane even without
+  concept_id; only legacy single-file jobs PATCH doc-repo.

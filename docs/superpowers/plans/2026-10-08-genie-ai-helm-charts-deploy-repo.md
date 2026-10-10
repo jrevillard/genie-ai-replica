@@ -21,6 +21,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-08-genie-ai-helm-charts-design.md` — implements §19 (per-env Kustomize + GitOps) + §19.3.2 (Flux layout example) + §6.2 (SealedSecret backend) + §18 (audit + signed manifests). Plan 6 covers the chart-side ingress; this plan covers the deploy-repo side.
 
+**Spec deviation (call out for amendment):** the spec's §19.3.1 example uses `deploy/environments/<env>/` inside the `genie-ai` repo and a per-env namespace `genieai-dev`. The user explicitly rejected both: a separate `genie-ai-deploy` repo, a single chart-wide `genieai` namespace. The spec's §19.3.1 example was illustrative, not prescriptive — but the text reads as prescriptive. **Action item:** amend spec §19.3.1 to reflect the separate-repo model and the chart-wide namespace convention. (A code-review follow-up after Plan 9 lands will catch this.)
+
 ## Global Constraints
 
 - Two repos, no cross-pollution. `genie-ai` is app + chart; `genie-ai-deploy` is deploy config only. No file in `genie-ai-deploy/` references application source code paths; no file in `genie-ai/` references deploy values, cluster config, or secrets.
@@ -141,12 +143,8 @@ if [ -f "sops/${cluster}.age" ] || [ -f "sops/${cluster}.age.pub" ]; then
   echo "key already exists for ${cluster}; refusing to overwrite" >&2
   exit 1
 fi
-age-keygen -o "sops/${cluster}.age" 2>/dev/null
-# move the .pub sibling that age-keygen produces
-mv "sops/${cluster}.age.pub" "_tmp.pub" 2>/dev/null || true
-# age-keygen writes both halves to the same file; split with `age-keygen -y` (prints pub)
-# Actually: `age-keygen -o key.age` writes ONLY the private key; pub is printed to stderr.
-# So we capture stderr.
+# `age-keygen -o file.age` writes only the private key to the file and
+# prints the public key to stderr. Capture stderr to the .pub file.
 age-keygen -o "sops/${cluster}.age" 2> "sops/${cluster}.age.pub"
 # Verify
 grep -q "public key:" "sops/${cluster}.age.pub" || { echo "keygen failed"; exit 1; }
@@ -281,7 +279,7 @@ metadata:
 spec: { replicas: 1, selector: { matchLabels: { app: gitlab-agent } },
   template: { metadata: { labels: { app: gitlab-agent } },
   spec: { serviceAccountName: gitlab-agent,
-    containers: [{ name: agent, image: "registry.gitlab.com/gitlab-org/cluster-integration/gitlab-agent/agentk:v17.5.0-rc1",
+    containers: [{ name: agent, image: "registry.gitlab.com/gitlab-org/cluster-integration/gitlab-agent/agentk:v17.5.0",
       args: ["--token-file=/config/token"],
       volumeMounts: [{ name: token, mountPath: /config, readOnly: true }],
       volumes: [{ name: token, secret: { secretName: gitlab-agent-token } }] }] } } }
@@ -355,9 +353,12 @@ spec:
   url: https://opensource.unicc.org/un/itu/genie-ai-deploy.git
   ref:
     branch: main
-  # For PRIVATE repos, the agent uses its own token; for INTERNAL repos, the URL alone works.
-  secretRef:
-    name: flux-system  # auto-created by the GitLab Agent with read access to the project
+  # No secretRef: the GitLab Agent uses its OWN project-bound token to
+  # read the deploy repo on behalf of the cluster. This is the GitLab
+  # Agent gitops module's "use the agent's identity" mode. For repos
+  # outside the Agent's project, the GitRepository needs its own
+  # `secretRef` pointing to a Secret created with `flux create secret
+  # git` (out of scope for this plan).
 ```
 
 - [ ] **Step 2: Author the root `Kustomization`**
@@ -443,18 +444,9 @@ git commit -m "feat(deploy-repo): Flux GitRepository + root Kustomization for mi
 - Consumes: the chart `GitRepository` (from a chart-publishing CI in Plan 7 — for the bootstrap, pin the SHA manually), the per-pays SOPS-encrypted Secret (from Task 2)
 - Produces: a Flux `HelmRelease` that applies the chart with the per-env values
 
-- [ ] **Step 1: Create the namespace manifest**
+- [ ] **Step 1: Skip the namespace manifest — the chart creates it**
 
-`overlays/minikube/dev/namespace.yaml`:
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: genieai
-  labels:
-    pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/enforce-version: v1.33
-```
+The chart's `templates/namespace.yaml` already emits the `Namespace` resource (name `genieai`, PSA-restricted labels, profile label, part-of label). Helm's `--create-namespace` flag (default in `HelmRelease` when `targetNamespace` is set) tells Flux to create the namespace if it doesn't exist. Re-emitting the Namespace here would cause a server-side apply ownership fight.
 
 - [ ] **Step 2: Create the chart `GitRepository`**
 
@@ -473,8 +465,8 @@ spec:
     # each chart release (Plan 7). Manual update for the bootstrap.
     # Run: git ls-remote https://opensource.unicc.org/un/itu/genie-ai.git refs/heads/feat/k8s-migration
     commit: "81821ea1193aded5a55b2576cb20085c9d2f720b"
-  secretRef:
-    name: flux-system
+  # No secretRef: same reason as the deploy repo's GitRepository
+  # (GitLab Agent auths via project token at the cluster level).
 ```
 
 - [ ] **Step 3: Create the `HelmRelease`**
@@ -507,10 +499,20 @@ spec:
       retries: 3
   valuesFrom:
     - name: genieai-dev-public
-      kind: ConfigMap    # OR Secret for SOPS-encrypted values
+      kind: ConfigMap
+    - name: genieai-dev-secrets
+      kind: Secret
   values:
     # Inline overrides that don't contain secrets
     clusterProfile: dev
+    # The chart's `data.keycloak.failOnPlaceholderSecrets` defaults to
+    # `true` (prod safety). For the dev minikube cluster we set it to
+    # `false` so the chart renders with the SOPS-decrypted client
+    # secrets above (no PLACEHOLDER+ sentinels). For staging/prod, the
+    # secrets are real and `failOnPlaceholderSecrets: true` stays on.
+    data:
+      keycloak:
+        failOnPlaceholderSecrets: false
     namespace: genieai
 ```
 
@@ -527,52 +529,57 @@ data:
   values.yaml: |
     clusterProfile: dev
     namespace: genieai
-    # ... other public values (no secrets) ...
+    # Public values (no secrets) — example for the dev minikube cluster.
+    # Add cluster-specific values here as the operator onboards new
+    # overlays (e.g. ingress hostname, storage class).
 ```
 
-- [ ] **Step 5: Create the SOPS-encrypted secrets**
+- [ ] **Step 5: Create the SOPS-encrypted secrets file (NOT a Secret resource)**
 
-```bash
-# Operator creates a file with the private values, then encrypts it.
-cat > /tmp/secrets.yaml <<EOF
-data:
-  keycloak:
-    clientSecrets:
-      proxyClient: "real-value-from-password-manager"
-      dataprep:   "real-value-from-password-manager"
-      grafana:    "real-value-from-password-manager"
-      smtp:
-        host: smtp.example.com
-        port: 587
-        user: genie-admin@example.com
-EOF
-sops --encrypt --age "$(cat sops/minikube.age.pub)" --in-place /tmp/secrets.yaml
-# Move the encrypted file into the repo
-mv /tmp/secrets.yaml overlays/minikube/dev/secrets.sops.yaml
-```
+The Flux v2 decryption model: the `kustomize-controller` decrypts SOPS-encrypted YAML files referenced from a `Kustomization.spec.path` BEFORE applying. The decrypted output is applied to the cluster. There is no `fluxcd.io/sops` annotation — the decryption is configured on the Kustomization itself.
 
-- [ ] **Step 6: Author the Secret manifest**
+`overlays/minikube/dev/secrets.sops.yaml` (the file IS the SOPS envelope; edit via `sops overlays/minikube/dev/secrets.sops.yaml`):
 
-`overlays/minikube/dev/secrets-secret.yaml`:
 ```yaml
+# Edit this file with: sops overlays/minikube/dev/secrets.sops.yaml
+# SOPS will decrypt it locally for editing, then re-encrypt on save.
 apiVersion: v1
 kind: Secret
 metadata:
   name: genieai-dev-secrets
   namespace: flux-system
-  # The encrypted data is inline; the kustomize-controller decrypts it
-  # at apply time using the sops-age Secret in the same namespace.
-  # NOTE: this file IS the SOPS-encrypted payload — the YAML structure
-  # is the SOPS envelope. Edit via: sops overlays/minikube/dev/secrets.sops.yaml
-  annotations:
-    fluxcd.io/sops: "true"  # marker so the controller decrypts this Secret
 stringData:
-  # SOPS envelope — the values.yaml inside is the decrypted content
-  sops: |
-    <SOPS-encrypted YAML, generated by sops --encrypt>
+  # This is the inner values.yaml that the HelmRelease consumes via
+  # valuesFrom. Contains the same shape as the chart's values.yaml
+  # but ONLY the keys that contain secrets.
+  values.yaml: |
+    data:
+      keycloak:
+        clientSecrets:
+          proxyClient: "real-value-from-password-manager"
+          dataprep:   "real-value-from-password-manager"
+          grafana:    "real-value-from-password-manager"
+          smtp:
+            host: smtp.example.com
+            port: 587
+            user: genie-admin@example.com
 ```
 
-(Concretely, the operator runs `sops --encrypt --in-place overlays/minikube/dev/secrets.sops.yaml`; the resulting file IS the SOPS-encrypted YAML, and the HelmRelease references it as a value source via `valuesFrom:` pointing at the decrypted Secret.)
+Operator workflow to encrypt:
+
+```bash
+# 1. Edit the plaintext file (no secrets in plaintext on disk for long)
+cp overlays/minikube/dev/secrets.sops.yaml /tmp/secrets.yaml
+# Strip the SOPS envelope (it's a plain Secret manifest at this point)
+$EDITOR /tmp/secrets.yaml
+# 2. Re-encrypt in place
+sops --encrypt --age "$(cat sops/minikube.age.pub)" --in-place /tmp/secrets.yaml
+mv /tmp/secrets.yaml overlays/minikube/dev/secrets.sops.yaml
+# 3. Commit — the committed file is the SOPS-encrypted envelope
+git add overlays/minikube/dev/secrets.sops.yaml
+```
+
+The kustomize-controller decrypts the file at apply time using the `sops-age` Secret in the `flux-system` namespace (created in Task 2 via `scripts/sops-install-cluster-secret.sh`). The result is a `Secret` named `genieai-dev-secrets` in the cluster, which the HelmRelease consumes via `valuesFrom: - name: genieai-dev-secrets / kind: Secret / valuesKey: values.yaml`.
 
 - [ ] **Step 7: Verify reconciliation**
 
@@ -702,26 +709,42 @@ teardown:minikube-dev:
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
+# `exit 1` inside a `find | while read` pipeline runs in a SUBSHELL —
+# the parent script's `set -e` does NOT trip. Use process substitution
+# (or a for-loop) so the script's main shell sees the failure.
+fail=0
+
 # 1. Every overlay/<pays>/<env>/ contains a helmrelease.yaml
-find overlays -mindepth 2 -maxdepth 2 -type d | while read -r envdir; do
-  test -f "${envdir}/helmrelease.yaml" || { echo "missing: ${envdir}/helmrelease.yaml"; exit 1; }
-done
+while read -r envdir; do
+  test -f "${envdir}/helmrelease.yaml" || {
+    echo "missing: ${envdir}/helmrelease.yaml"
+    fail=1
+  }
+done < <(find overlays -mindepth 2 -maxdepth 2 -type d)
+
 # 2. Every GitRepository points to opensource.unicc.org (no external URLs)
-find overlays clusters -name 'gitrepository*.yaml' -exec grep -l 'url:' {} \; | while read -r f; do
+while read -r f; do
   url=$(grep 'url:' "$f" | head -1 | awk '{print $2}')
   case "$url" in
     https://opensource.unicc.org/*) ;;
-    *) echo "forbidden external URL in $f: $url"; exit 1 ;;
+    *) echo "forbidden external URL in $f: $url"; fail=1 ;;
   esac
-done
-# 3. Every .gitlab/agents/<cluster>/config.yaml has gitops.manifest_projects with paths scoped to overlays/<cluster>/**
-for cfg in .gitlab/agents/*/config.yaml; do
+done < <(find overlays clusters -name 'gitrepository*.yaml' -exec grep -l 'url:' {} \;)
+
+# 3. Every .gitlab/agents/<cluster>/config.yaml has gitops.manifest_projects
+#    with paths scoped to overlays/<cluster>/**
+while read -r cfg; do
   cluster=$(basename "$(dirname "$cfg")")
-  grep -A 5 "manifest_projects:" "$cfg" | grep -q "overlays/${cluster}/" || {
+  if ! grep -A 5 "manifest_projects:" "$cfg" | grep -q "overlays/${cluster}/"; then
     echo "Agent ${cluster} does not scope paths to overlays/${cluster}/**"
-    exit 1
-  }
-done
+    fail=1
+  fi
+done < <(find .gitlab/agents -name config.yaml)
+
+if [ "$fail" -ne 0 ]; then
+  echo "lint FAILED"
+  exit 1
+fi
 echo "lint OK"
 ```
 

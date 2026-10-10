@@ -580,7 +580,12 @@ async function generateSuite(body) {
   // it the verdict is honestly 'unknown' (the check below still passes on
   // the shape — the pipeline-not-configured case is a valid state).
   console.log('[16] corpus probe (click-test)');
-  const probeQuery = (latestSuite.payload && latestSuite.payload.positive && latestSuite.payload.positive[0] && latestSuite.payload.positive[0].query) || 'colorectal cancer screening guidelines';
+  // probe a query from the SERVER's copy of the suite (the in-memory
+  // latestSuite from section 11 predates the section-14 row edits)
+  const probeQuery =
+    (latest.payload && latest.payload.positive && latest.payload.positive[0] && latest.payload.positive[0].query) ||
+    (latestSuite.payload && latestSuite.payload.positive && latestSuite.payload.positive[0] && latestSuite.payload.positive[0].query) ||
+    'colorectal cancer screening guidelines';
   const probe = j(
     await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/probe`, {
       token: USER_TOKEN,

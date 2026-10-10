@@ -120,6 +120,8 @@ dependencyGraph:
     backend:
       - keycloak
       - arangodb
+      - redisCache
+    redisCache: []
     frontend:
       - backend
     documentRepository:
@@ -272,6 +274,18 @@ services:
     probes:
       readiness: { tcpSocket: { port: 3310 }, initialDelaySeconds: 60, periodSeconds: 30 }
       liveness:  { tcpSocket: { port: 3310 }, initialDelaySeconds: 120, periodSeconds: 60, failureThreshold: 5 }
+    podDisruptionBudget: null
+    serviceMonitor: false
+
+  redisCache:
+    enabled: true
+    replicas: 1
+    image: { repository: redis, tag: "7-alpine" }
+    port: 6379
+    resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 250m, memory: 512Mi } }
+    pvc:
+      enabled: true                          # appendonly persistence
+      storageSize: 5Gi
     podDisruptionBudget: null
     serviceMonitor: false
 

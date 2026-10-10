@@ -15,7 +15,7 @@ spec:
   template:
     metadata:
       labels:
-        genieai.io/component: redis-cache
+        {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 8 }}
     spec:
       securityContext:
         runAsNonRoot: true
@@ -110,7 +110,7 @@ spec:
     - name: redis
       port: {{ $svc.port }}
   selector:
-    genieai.io/component: redis-cache
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
 ---
 # Ingress from backend ONLY (the sole consumer); egress DNS only.
 apiVersion: networking.k8s.io/v1

@@ -45,11 +45,11 @@ data:
   # controllers that reconcile them (CNPG, kube-arangodb, keycloak-operator)
   # are cluster bootstrap prerequisites — see the README's Cluster
   # prerequisites section.
-  # The services tier's enabled toggles are added with the service-tier plan
-  # (Plan 3); until then the dep-check validates only the data tier
-  # (default). The dep-check loop iterates both `services` and `data`
-  # tiers but reads `false` for every services.* key until those toggles
-  # land — the service→data validation half is therefore decorative today.
+  # `services` tier enabled toggles are NOT yet declared in this values
+  # surface, so the dep-check loop currently asserts only the data tier
+  # (it iterates both `services` and `data` maps but reads `false` for
+  # every services.* key until those entries are added — the
+  # service→data validation half is therefore decorative today).
   postgres:
     enabled: true
     # CNPG Cluster resources for the keycloak-db (the only Postgres; the edge

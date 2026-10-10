@@ -468,21 +468,42 @@
                       </DsButton>
                     </div>
                     <div v-if="showDeleteButton" class="card-actions">
-                      <!-- #1042 BATCH DELETE: adjacent to Retract per David's UX
-                           rule. DISABLED while any selected file is INGESTED
-                           (would orphan indexed chunks + audit trail) — the
-                           hover title tells the steward to retract first.
-                           Bundle-zip refusal happens via 403 BUNDLE_PROTECTED
-                           on the server; the toast surfaces that text. -->
+                      <!-- #1042 BATCH DELETE, AMENDED 2026-10-10 (live: David
+                           selected pending rows to clean up and the whole
+                           batch silently refused because ONE row had gone
+                           Ingesting — the only signal was a hover tooltip on
+                           a disabled button, read as "it failed"): the
+                           refusal is now a VISIBLE strip, and a selection
+                           with BOTH blocked and deletable rows deletes the
+                           deletable subset (the confirm says exactly what
+                           will be skipped). Full-disable only when NOTHING
+                           is deletable. -->
                       <DsButton
                         variant="danger"
-                        :disabled="!!deleteRefuseReason"
+                        :disabled="!!deleteRefuseReason && !deletableSelection.length"
                         :title="deleteRefuseReason"
                         @click="handleBatchAction('delete')"
                       >
                         {{ translate('admin.documents.deleteSelected', 'Delete Selected') }}
-                        ({{ selectedDocuments.length }})
+                        ({{
+                          deleteRefuseReason && deletableSelection.length
+                            ? deletableSelection.length
+                            : selectedDocuments.length
+                        }})
                       </DsButton>
+                      <span v-if="deleteRefuseReason" class="delete-refuse-strip">
+                        {{
+                          deletableSelection.length
+                            ? translate(
+                                'admin.documents.deletePartialNotice',
+                                '{blocked} selected file(s) cannot be deleted ({reason}) — only the other {n} will be deleted.'
+                              )
+                                .replace('{blocked}', String(blockedSelection.length))
+                                .replace('{reason}', deleteRefuseReason)
+                                .replace('{n}', String(deletableSelection.length))
+                            : deleteRefuseReason
+                        }}
+                      </span>
                     </div>
                   </div>
 
@@ -1968,17 +1989,29 @@ export default {
     // files so the message is actionable.
     deleteRefuseReason() {
       if (this.selectedDocuments.length === 0) return null;
+      if (!this.blockedSelection.length) return null;
+      return this.translate(
+        'admin.documents.deleteRefuseReason',
+        '{count} file(s) are still ingested — retract them first.'
+      ).replace('{count}', String(this.blockedSelection.length));
+    },
+    /** 2026-10-10 (live): the selected rows that the delete gate BLOCKS
+     * (ingested/ingesting — deleting would orphan the served corpus). */
+    blockedSelection() {
+      if (this.selectedDocuments.length === 0) return [];
       const ids = new Set(this.selectedDocuments);
-      const blocked = this.documents.filter((doc) => {
+      return this.documents.filter((doc) => {
         if (!ids.has(doc.file_id)) return false;
         const s = doc.dataprep && String(doc.dataprep.status).toLowerCase().trim();
         return s === 'ingested' || s === 'ingesting';
       });
-      if (!blocked.length) return null;
-      return this.translate(
-        'admin.documents.deleteRefuseReason',
-        '{count} file(s) are still ingested — retract them first.'
-      ).replace('{count}', String(blocked.length));
+    },
+    /** 2026-10-10: the selected rows that ARE deletable — a mixed
+     * selection deletes this subset instead of refusing wholesale. */
+    deletableSelection() {
+      if (this.selectedDocuments.length === 0) return [];
+      const blockedIds = new Set(this.blockedSelection.map((d) => d.file_id));
+      return this.selectedDocuments.filter((id) => !blockedIds.has(id));
     },
 
     // Gate for the "Create OKF repository" button. AMENDED (Story 7.7,
@@ -3392,29 +3425,42 @@ export default {
           }
         });
       } else if (action === 'delete') {
-        // #1042 BATCH DELETE: same toast-shape as retract. The backend
-        // refuses bundles with 403 BUNDLE_PROTECTED and an ingested
-        // selection is filtered out client-side (deleteRefuseReason disables
-        // the button), so the per-file result list usually has 0 failures.
-        const count = this.selectedDocuments.length;
-        if (this.deleteRefuseReason) {
-          // Belt-and-braces: the button is :disabled too, but if they reached
-          // here some other path triggered the action, refuse clearly.
+        // #1042 BATCH DELETE, AMENDED 2026-10-10 (live): a selection mixing
+        // blocked rows (ingested/ingesting — they must be retracted first)
+        // with clean rows now deletes the CLEAN subset and says exactly
+        // what was skipped, instead of refusing the whole batch with a
+        // tooltip-only signal. All-blocked still refuses outright.
+        const blockedIds = new Set(this.blockedSelection.map((d) => d.file_id));
+        const deletable = this.deletableSelection;
+        if (this.deleteRefuseReason && !deletable.length) {
+          // Nothing deletable — refuse clearly (the button is disabled too;
+          // this is the belt-and-braces path).
           this.showNotification(this.deleteRefuseReason, 'error');
           return;
         }
+        const count = deletable.length;
         this.showConfirmDialog({
           title: this.translate('admin.documents.confirmDeleteTitle', 'Confirm Batch Deletion'),
-          message: this.translate(
-            'admin.documents.confirmDeleteSelected',
-            `Are you sure you want to permanently delete {count} file(s)? This cannot be undone.`
-          ).replace('{count}', count),
+          message:
+            this.translate(
+              'admin.documents.confirmDeleteSelected',
+              `Are you sure you want to permanently delete {count} file(s)? This cannot be undone.`
+            ).replace('{count}', count) +
+            (blockedIds.size
+              ? ' ' +
+                this.translate(
+                  'admin.documents.confirmDeleteSkipped',
+                  '{count} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them.'
+                ).replace('{count}', String(blockedIds.size))
+              : ''),
           confirmText: this.translate('admin.documents.delete', 'Delete'),
           cancelText: this.translate('common.cancel', 'Cancel'),
           onConfirm: async () => {
             this.isLoading = true;
             try {
-              const res = await documentFileService.deleteMultipleFiles(this.selectedDocuments);
+              // 2026-10-10: delete the CLEAN subset only — blocked rows stay
+              // selected (their refusal reason is visible on the strip).
+              const res = await documentFileService.deleteMultipleFiles(deletable);
               const results = (res && res.results) || [];
               const successCount = results.filter((r) => r.success).length;
               const failed = results.filter((r) => !r.success);
@@ -3428,7 +3474,9 @@ export default {
                   ),
                   'success'
                 );
-                this.selectedDocuments = [];
+                // Keep the blocked rows selected (they were NOT deleted);
+                // drop everything else.
+                this.selectedDocuments = [...blockedIds];
               } else if (successCount === 0) {
                 const detail = failed.map((r) => r.error || 'unknown error').join('; ');
                 this.showNotification(
@@ -3437,7 +3485,7 @@ export default {
                     .replace('{detail}', detail),
                   'error'
                 );
-                this.selectedDocuments = failed.map((r) => r.fileId);
+                this.selectedDocuments = [...new Set([...failed.map((r) => r.fileId), ...blockedIds])];
               } else {
                 const detail = failed.map((r) => r.error || 'unknown error').join('; ');
                 this.showNotification(
@@ -3450,7 +3498,7 @@ export default {
                     .replace('{detail}', detail),
                   'warning'
                 );
-                this.selectedDocuments = failed.map((r) => r.fileId);
+                this.selectedDocuments = [...new Set([...failed.map((r) => r.fileId), ...blockedIds])];
               }
               try {
                 await this.loadDocuments();
@@ -3654,6 +3702,15 @@ export default {
   padding: 0;
   box-sizing: border-box;
   font-family: var(--font-body);
+}
+
+/* 2026-10-10: the batch-delete refusal is a VISIBLE strip, not a tooltip
+   on a disabled button (the live "it failed" report). */
+.delete-refuse-strip {
+  align-self: center;
+  max-width: 40rem;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
 }
 
 /* Modal backdrop */

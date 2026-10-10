@@ -518,17 +518,21 @@ export default {
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
+        "Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{\'{\'}count{\'}\'} file(s) deleted.",
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
-      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
-      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
+      deletePartialFailure: "{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}",
+      deleteAllFailed: "All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}",
+      deleteRefuseReason: "{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.",
       retractAllFailed: 'Semua {count} file gagal: {detail}',
       uploadSuccessMultiple: '{count} file berhasil diunggah.',
       linkSubmitSuccess: 'Berhasil merayapi dan menyimpan "{fileName}".',
       actionSuccess: 'Tindakan "{action}" pada file {fileId} berhasil.',
-      metadataUpdateSuccess: 'Metadata untuk file {fileId} telah diperbarui.'
+      metadataUpdateSuccess: 'Metadata untuk file {fileId} telah diperbarui.',
+      deletePartialNotice:
+        "{\'{\'{\'}\'}blocked{\'}\'} file terpilih tidak dapat dihapus ({\'{\'{\'}\'}reason{\'}\'}) — hanya {\'{\'{\'}\'}n{\'}\'} lainnya yang akan dihapus.",
+      confirmDeleteSkipped:
+        "{\'{\'{\'}\'}count{\'}\'} file yang di-ingest/sedang di-ingest akan DILEWATI — retract dulu untuk menghapusnya."
     },
     queryInspector: {
       search: 'Cari',
@@ -743,7 +747,7 @@ export default {
     chatTitle: 'Judul Obrolan',
     chatTitlePlaceholder: 'Masukkan judul untuk obrolan ini',
     deleteFolder: 'Hapus Folder',
-    deleteFolderConfirm: "Apakah Anda yakin ingin menghapus folder '{name}'?",
+    deleteFolderConfirm: "Apakah Anda yakin ingin menghapus folder \'{name}\'?",
     chatsMoveWarning: 'Semua obrolan di folder ini akan dipindahkan ke folder default.',
     weatherTitle: 'Prakiraan Cuaca',
     weatherLoading: 'Memuat data cuaca...',
@@ -1292,23 +1296,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "Bertindaklah sebagai pakar pendaftaran sipil Kenya yang solutif. Jelaskan langkah-langkah untuk mendapatkan KTP Nasional (Maisha Namba) atau mengganti yang hilang. PENTING: Berikan daftar dokumen yang diperlukan secara jelas (mis. Akta Kelahiran, salinan KTP orang tua) dan sarankan pengguna untuk mengunjungi Huduma Centre atau kantor Registrar of Persons terdekat. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
+      "Bertindaklah sebagai pakar pendaftaran sipil Kenya yang solutif. Jelaskan langkah-langkah untuk mendapatkan KTP Nasional (Maisha Namba) atau mengganti yang hilang. PENTING: Berikan daftar dokumen yang diperlukan secara jelas (mis. Akta Kelahiran, salinan KTP orang tua) dan sarankan pengguna untuk mengunjungi Huduma Centre atau kantor Registrar of Persons terdekat. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.",
     payTaxesPrompt:
-      "Bertindaklah sebagai pemandu KRA (Kenya Revenue Authority). Jelaskan proses pelaporan SPT, pengajuan KRA PIN, atau pengaturan ulang kata sandi di portal iTax. PENTING: Ingatkan pengguna tentang batas waktu 30 Juni untuk pelaporan tahunan dan pandu mereka tentang cara mengajukan SPT Nihil jika mereka tidak memiliki penghasilan. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
+      "Bertindaklah sebagai pemandu KRA (Kenya Revenue Authority). Jelaskan proses pelaporan SPT, pengajuan KRA PIN, atau pengaturan ulang kata sandi di portal iTax. PENTING: Ingatkan pengguna tentang batas waktu 30 Juni untuk pelaporan tahunan dan pandu mereka tentang cara mengajukan SPT Nihil jika mereka tidak memiliki penghasilan. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.",
     startBusinessPrompt:
-      "Bertindaklah sebagai konsultan bisnis untuk layanan eCitizen. Pandu pengguna melalui reservasi nama bisnis dan pendaftaran perusahaan di Kenya. PENTING: Jelaskan biaya terkini untuk pencarian nama dan pendaftaran, dan arahkan pengguna ke portal resmi eCitizen untuk menyelesaikan aplikasi. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
+      "Bertindaklah sebagai konsultan bisnis untuk layanan eCitizen. Pandu pengguna melalui reservasi nama bisnis dan pendaftaran perusahaan di Kenya. PENTING: Jelaskan biaya terkini untuk pencarian nama dan pendaftaran, dan arahkan pengguna ke portal resmi eCitizen untuk menyelesaikan aplikasi. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.",
     findHealthcarePrompt:
-      "Bertindaklah sebagai pemandu layanan kesehatan. Berikan informasi tentang transisi dari NHIF ke SHIF (Social Health Insurance Fund) dan cara mendaftar. PENTING: Bagikan kode USSD resmi (seperti *263#) atau tautan situs web untuk pendaftaran dan jelaskan manfaat perlindungan kesehatan masyarakat. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
+      "Bertindaklah sebagai pemandu layanan kesehatan. Berikan informasi tentang transisi dari NHIF ke SHIF (Social Health Insurance Fund) dan cara mendaftar. PENTING: Bagikan kode USSD resmi (seperti *263#) atau tautan situs web untuk pendaftaran dan jelaskan manfaat perlindungan kesehatan masyarakat. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.",
     educationServicesPrompt:
-      "Bertindaklah sebagai konselor pendidikan. Bahas kurikulum CBC, pendaftaran NEMIS, atau penempatan universitas melalui KUCCPS. PENTING: Jelaskan bagaimana orang tua dapat memeriksa hasil ujian nasional melalui SMS atau portal KNEC saat dirilis. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
+      "Bertindaklah sebagai konselor pendidikan. Bahas kurikulum CBC, pendaftaran NEMIS, atau penempatan universitas melalui KUCCPS. PENTING: Jelaskan bagaimana orang tua dapat memeriksa hasil ujian nasional melalui SMS atau portal KNEC saat dirilis. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.",
     transportLicensesPrompt:
-      "Bertindaklah sebagai pemandu layanan NTSA. Jelaskan proses pembaruan SIM, uji kelayakan kendaraan, atau pengelolaan akun TIMS. PENTING: Pandu pengguna tentang cara masuk ke portal eCitizen NTSA untuk mengajukan Smart DL mereka atau memesan jadwal uji kelayakan kendaraan. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
+      "Bertindaklah sebagai pemandu layanan NTSA. Jelaskan proses pembaruan SIM, uji kelayakan kendaraan, atau pengelolaan akun TIMS. PENTING: Pandu pengguna tentang cara masuk ke portal eCitizen NTSA untuk mengajukan Smart DL mereka atau memesan jadwal uji kelayakan kendaraan. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.",
     housingProgramsPrompt:
-      "Bertindaklah sebagai penasihat program perumahan. Jelaskan pendaftaran Program Perumahan Terjangkau (Boma Yangu) dan proses kontribusi sukarela. PENTING: Arahkan pengguna ke portal Boma Yangu untuk melihat proyek dan jelaskan kriteria kelayakan untuk alokasi. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
+      "Bertindaklah sebagai penasihat program perumahan. Jelaskan pendaftaran Program Perumahan Terjangkau (Boma Yangu) dan proses kontribusi sukarela. PENTING: Arahkan pengguna ke portal Boma Yangu untuk melihat proyek dan jelaskan kriteria kelayakan untuk alokasi. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.",
     findJobsPrompt:
-      "Bertindaklah sebagai pelatih karier untuk pelayanan publik. Pandu pengguna dalam membuat profil dan melamar lowongan melalui portal Public Service Commission (PSC). PENTING: Sarankan pengguna untuk menyiapkan sertifikat akademik mereka dan secara rutin memeriksa situs web PSC atau harian lokal untuk iklan MyGov. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
+      "Bertindaklah sebagai pelatih karier untuk pelayanan publik. Pandu pengguna dalam membuat profil dan melamar lowongan melalui portal Public Service Commission (PSC). PENTING: Sarankan pengguna untuk menyiapkan sertifikat akademik mereka dan secara rutin memeriksa situs web PSC atau harian lokal untuk iklan MyGov. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'.",
     justChatPrompt:
-      "Bertindaklah sebagai pendamping lokal yang ramah. Bersikap sopan, membantu, dan berpengetahuan luas tentang budaya dan kehidupan sehari-hari Kenya. PENTING: Ingatkan pengguna bahwa meskipun Anda dapat mengobrol tentang apa pun, kekuatan utama Anda adalah membantu mereka menavigasi layanan pemerintah Kenya seperti **KTP**, **Pajak**, dan **Pendaftaran Usaha**. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'."
+      "Bertindaklah sebagai pendamping lokal yang ramah. Bersikap sopan, membantu, dan berpengetahuan luas tentang budaya dan kehidupan sehari-hari Kenya. PENTING: Ingatkan pengguna bahwa meskipun Anda dapat mengobrol tentang apa pun, kekuatan utama Anda adalah membantu mereka menavigasi layanan pemerintah Kenya seperti **KTP**, **Pajak**, dan **Pendaftaran Usaha**. ATURAN: Selalu sebut aplikasi sebagai \'Genie AI\'."
   },
   common: {
     cancel: 'Batal',
@@ -1990,7 +1994,7 @@ export default {
       lifecycle:
         'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.",
       reviewHandoff:
         'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
       piiReview:
@@ -2251,7 +2255,7 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        adjust: "Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.",
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {

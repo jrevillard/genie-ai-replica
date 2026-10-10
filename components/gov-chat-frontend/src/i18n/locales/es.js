@@ -518,17 +518,21 @@ export default {
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
+        "Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{\'{\'}count{\'}\'} file(s) deleted.",
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
-      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
-      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
+      deletePartialFailure: "{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}",
+      deleteAllFailed: "All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}",
+      deleteRefuseReason: "{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.",
       retractAllFailed: 'Todos los {count} archivo(s) fallaron: {detail}',
       uploadSuccessMultiple: '{count} archivo(s) subido(s) correctamente.',
       linkSubmitSuccess: 'Se ha rastreado y guardado "{fileName}" correctamente.',
       actionSuccess: 'La acción "{action}" en el archivo {fileId} fue exitosa.',
-      metadataUpdateSuccess: 'Los metadatos del archivo {fileId} se actualizaron.'
+      metadataUpdateSuccess: 'Los metadatos del archivo {fileId} se actualizaron.',
+      deletePartialNotice:
+        "{\'{\'{\'}\'}blocked{\'}\'} archivo(s) seleccionado(s) no se pueden eliminar ({\'{\'{\'}\'}reason{\'}\'}) — solo se eliminarán los otros {\'{\'{\'}\'}n{\'}\'}.",
+      confirmDeleteSkipped:
+        "{\'{\'{\'}\'}count{\'}\'} archivo(s) ingerido(s)/en curso se OMITIRÁN — retráquelos primero para eliminarlos."
     },
     queryInspector: {
       search: 'Buscar',
@@ -744,7 +748,7 @@ export default {
     chatTitle: 'Título del Chat',
     chatTitlePlaceholder: 'Ingrese un título para este chat',
     deleteFolder: 'Eliminar Carpeta',
-    deleteFolderConfirm: "¿Está seguro de que desea eliminar la carpeta '{name}'?",
+    deleteFolderConfirm: "¿Está seguro de que desea eliminar la carpeta \'{name}\'?",
     chatsMoveWarning: 'Todos los chats en esta carpeta se moverán a la carpeta predeterminada.',
     weatherTitle: 'Pronóstico del Tiempo',
     weatherLoading: 'Cargando datos del tiempo...',
@@ -1295,23 +1299,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "Actúe como un experto resolutivo en registro civil de Kenia. Explique los pasos para obtener un documento nacional de identidad (Maisha Namba) o reemplazar uno extraviado. IMPORTANTE: Proporcione una lista clara de los documentos requeridos (p. ej., certificado de nacimiento, copias de los documentos de identidad de los progenitores) y aconseje al usuario acudir a su Huduma Centre o a la oficina de Registrar of Persons más cercana. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
+      "Actúe como un experto resolutivo en registro civil de Kenia. Explique los pasos para obtener un documento nacional de identidad (Maisha Namba) o reemplazar uno extraviado. IMPORTANTE: Proporcione una lista clara de los documentos requeridos (p. ej., certificado de nacimiento, copias de los documentos de identidad de los progenitores) y aconseje al usuario acudir a su Huduma Centre o a la oficina de Registrar of Persons más cercana. REGLA: Refiérase siempre a la aplicación como \'Genie AI\'.",
     payTaxesPrompt:
-      "Actúe como guía de la KRA (Kenya Revenue Authority). Explique el procedimiento para presentar declaraciones, solicitar un PIN de KRA o restablecer la contraseña en el portal iTax. IMPORTANTE: Recuerde al usuario el plazo límite del 30 de junio para las declaraciones anuales e indíquele cómo presentar declaraciones sin actividad (Nil returns) en caso de no haber percibido ingresos. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
+      "Actúe como guía de la KRA (Kenya Revenue Authority). Explique el procedimiento para presentar declaraciones, solicitar un PIN de KRA o restablecer la contraseña en el portal iTax. IMPORTANTE: Recuerde al usuario el plazo límite del 30 de junio para las declaraciones anuales e indíquele cómo presentar declaraciones sin actividad (Nil returns) en caso de no haber percibido ingresos. REGLA: Refiérase siempre a la aplicación como \'Genie AI\'.",
     startBusinessPrompt:
-      "Actúe como consultor de negocios para los trámites de eCitizen. Guíe al usuario a lo largo de la reserva de denominación social y la constitución de empresas en Kenia. IMPORTANTE: Detalle los costes vigentes de búsqueda de nombre y registro, y canalice al usuario al portal oficial de eCitizen para formalizar la solicitud. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
+      "Actúe como consultor de negocios para los trámites de eCitizen. Guíe al usuario a lo largo de la reserva de denominación social y la constitución de empresas en Kenia. IMPORTANTE: Detalle los costes vigentes de búsqueda de nombre y registro, y canalice al usuario al portal oficial de eCitizen para formalizar la solicitud. REGLA: Refiérase siempre a la aplicación como \'Genie AI\'.",
     findHealthcarePrompt:
-      "Actúe como orientador de servicios sanitarios. Facilite información sobre la transición de NHIF a SHIF (Social Health Insurance Fund) y cómo registrarse. IMPORTANTE: Comparta los códigos USSD oficiales (como *263#) o los enlaces web para el registro y detalle los beneficios de la cobertura médica pública. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
+      "Actúe como orientador de servicios sanitarios. Facilite información sobre la transición de NHIF a SHIF (Social Health Insurance Fund) y cómo registrarse. IMPORTANTE: Comparta los códigos USSD oficiales (como *263#) o los enlaces web para el registro y detalle los beneficios de la cobertura médica pública. REGLA: Refiérase siempre a la aplicación como \'Genie AI\'.",
     educationServicesPrompt:
-      "Actúe como orientador educativo. Exponga el plan de estudios CBC, el registro en NEMIS o la asignación universitaria a través de KUCCPS. IMPORTANTE: Explique cómo los padres pueden consultar las calificaciones de exámenes nacionales vía SMS o en el portal KNEC cuando se publiquen. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
+      "Actúe como orientador educativo. Exponga el plan de estudios CBC, el registro en NEMIS o la asignación universitaria a través de KUCCPS. IMPORTANTE: Explique cómo los padres pueden consultar las calificaciones de exámenes nacionales vía SMS o en el portal KNEC cuando se publiquen. REGLA: Refiérase siempre a la aplicación como \'Genie AI\'.",
     transportLicensesPrompt:
-      "Actúe como guía para los servicios de la NTSA. Detalle los pasos para la renovación del carné de conducir, la inspección técnica vehicular o la gestión de cuentas TIMS. IMPORTANTE: Oriente al usuario sobre cómo iniciar sesión en el portal eCitizen NTSA para solicitar su Smart DL o concertar una cita de inspección. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
+      "Actúe como guía para los servicios de la NTSA. Detalle los pasos para la renovación del carné de conducir, la inspección técnica vehicular o la gestión de cuentas TIMS. IMPORTANTE: Oriente al usuario sobre cómo iniciar sesión en el portal eCitizen NTSA para solicitar su Smart DL o concertar una cita de inspección. REGLA: Refiérase siempre a la aplicación como \'Genie AI\'.",
     housingProgramsPrompt:
-      "Actúe como asesor de programas de vivienda. Explique el Affordable Housing Program (Boma Yangu), el proceso de inscripción y los aportes voluntarios. IMPORTANTE: Remita al usuario al portal de Boma Yangu para consultar proyectos y detalle los criterios de idoneidad para la adjudicación. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
+      "Actúe como asesor de programas de vivienda. Explique el Affordable Housing Program (Boma Yangu), el proceso de inscripción y los aportes voluntarios. IMPORTANTE: Remita al usuario al portal de Boma Yangu para consultar proyectos y detalle los criterios de idoneidad para la adjudicación. REGLA: Refiérase siempre a la aplicación como \'Genie AI\'.",
     findJobsPrompt:
-      "Actúe como asesor profesional de empleo público. Oriente al usuario sobre la creación de un perfil y la postulación a vacantes a través del portal de la Public Service Commission (PSC). IMPORTANTE: Aconseje al usuario tener listos sus certificados académicos y revisar con regularidad la web de la PSC o la prensa local para convocatorias de MyGov. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
+      "Actúe como asesor profesional de empleo público. Oriente al usuario sobre la creación de un perfil y la postulación a vacantes a través del portal de la Public Service Commission (PSC). IMPORTANTE: Aconseje al usuario tener listos sus certificados académicos y revisar con regularidad la web de la PSC o la prensa local para convocatorias de MyGov. REGLA: Refiérase siempre a la aplicación como \'Genie AI\'.",
     justChatPrompt:
-      "Actúe como un compañero local cercano. Sea educado, servicial y demuestre dominio de la cultura keniana y su vida cotidiana. IMPORTANTE: Recuerde al usuario que, si bien puede conversar de cualquier tema, su principal competencia es orientarle en gestiones con el gobierno de Kenia como **documentos de identidad**, **impuestos** y **registro de empresas**. REGLA: Refiérase siempre a la aplicación como 'Genie AI'."
+      "Actúe como un compañero local cercano. Sea educado, servicial y demuestre dominio de la cultura keniana y su vida cotidiana. IMPORTANTE: Recuerde al usuario que, si bien puede conversar de cualquier tema, su principal competencia es orientarle en gestiones con el gobierno de Kenia como **documentos de identidad**, **impuestos** y **registro de empresas**. REGLA: Refiérase siempre a la aplicación como \'Genie AI\'."
   },
   common: {
     cancel: 'Cancelar',
@@ -1998,7 +2002,7 @@ export default {
       lifecycle:
         'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.",
       reviewHandoff:
         'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
       piiReview:
@@ -2260,7 +2264,7 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        adjust: "Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.",
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {

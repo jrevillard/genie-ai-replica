@@ -2748,7 +2748,8 @@ export default {
           headVersion: 'Head',
           tags: 'Tag',
           actions: 'Edit',
-          name: 'Nama'
+          name: 'Nama',
+          corpus: 'Korpus'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2795,7 +2796,9 @@ export default {
         load: 'Muat',
         flipTip: 'Balikkan harus-dipilih / tidak-harus-dipilih',
         deleteTip: 'Hapus baris ini dari suite',
-        namePlaceholder: 'Nama suite (opsional) — mis. set regresi NCD'
+        namePlaceholder: 'Nama suite (opsional) — mis. set regresi NCD',
+        probeTip: 'Uji kueri ini terhadap korpus langsung',
+        deleteSuiteTip: 'Hapus suite ini dan riwayatnya'
       },
       error: {
         explain: 'Penjelasan gagal',
@@ -2813,7 +2816,9 @@ export default {
         suiteLoad: 'Gagal memuat suite',
         suiteUpdate: 'Gagal memperbarui suite',
         suiteRename: 'Gagal mengganti nama suite',
-        generateTimeout: 'Suite terlalu lama — mungkin muncul di suite tersimpan; periksa lagi dalam satu menit.'
+        generateTimeout: 'Suite terlalu lama — mungkin muncul di suite tersimpan; periksa lagi dalam satu menit.',
+        probe: 'Uji korpus gagal',
+        suiteDelete: 'Tidak dapat menghapus suite'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2834,6 +2839,12 @@ export default {
         predicted: 'perkiraan',
         scope: ' (atas {q} kueri dari {r} eksekusi terakhir)',
         applying: 'Menerapkan: menyimpan tag, membangun ulang head, menjalankan ulang suite…'
+      },
+      probe: {
+        answerable: 'bisa dijawab',
+        weak: 'kecocokan lemah',
+        unanswerable: 'tidak ada di korpus',
+        unknown: 'tidak diketahui'
       }
     }
   },

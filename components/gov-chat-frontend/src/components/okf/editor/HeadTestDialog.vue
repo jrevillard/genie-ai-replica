@@ -492,6 +492,9 @@
                 <th>{{ translate('okf.headTest.suites.col.query', 'Query') }}</th>
                 <th>{{ translate('okf.headTest.suites.col.kind', 'Kind') }}</th>
                 <th>{{ translate('okf.headTest.suites.col.outcome', 'Outcome') }}</th>
+                <!-- 1-8g: the click-test's corpus-coverage verdict (in-domain
+                     is NOT answerable — the asthma/colorectal lesson). -->
+                <th v-if="!readOnly">{{ translate('okf.headTest.suites.col.corpus', 'Corpus') }}</th>
                 <th v-if="!readOnly">{{ translate('okf.headTest.suites.col.actions', 'Edit') }}</th>
               </tr>
             </thead>
@@ -526,7 +529,46 @@
                   </DsPill>
                   <span v-else>—</span>
                 </td>
+                <td v-if="!readOnly">
+                  <!-- 1-8g click-test result: the corpus-coverage verdict of
+                       the last probe of THIS row's query (persisted server-
+                       side). In-domain ≠ answerable — the chip says which. -->
+                  <DsPill
+                    v-if="row.lastProbe && row.lastProbe.verdict === 'answerable'"
+                    variant="success"
+                    :title="probeTip(row.lastProbe)"
+                  >
+                    {{ translate('okf.headTest.probe.answerable', 'answerable') }}
+                  </DsPill>
+                  <DsPill
+                    v-else-if="row.lastProbe && row.lastProbe.verdict === 'weak'"
+                    variant="warning"
+                    :title="probeTip(row.lastProbe)"
+                  >
+                    {{ translate('okf.headTest.probe.weak', 'weak match') }}
+                  </DsPill>
+                  <DsPill
+                    v-else-if="row.lastProbe && row.lastProbe.verdict === 'unanswerable'"
+                    variant="danger"
+                    :title="probeTip(row.lastProbe)"
+                  >
+                    {{ translate('okf.headTest.probe.unanswerable', 'not in corpus') }}
+                  </DsPill>
+                  <span v-else-if="row.lastProbe" :title="probeTip(row.lastProbe)">
+                    {{ translate('okf.headTest.probe.unknown', 'unknown') }}
+                  </span>
+                  <span v-else>—</span>
+                </td>
                 <td v-if="!readOnly" class="okf-headtest__row-actions">
+                  <button
+                    type="button"
+                    class="okf-headtest__row-btn"
+                    :disabled="busy !== null"
+                    :title="translate('okf.headTest.suites.probeTip', 'Test this query against the live corpus')"
+                    @click="onProbeRow(row)"
+                  >
+                    ▶
+                  </button>
                   <button
                     type="button"
                     class="okf-headtest__row-btn"
@@ -967,6 +1009,18 @@
                   >
                     {{ translate('okf.headTest.suites.load', 'Load') }}
                   </DsButton>
+                  <!-- 1-8g: remove the suite (and its run docs) from the
+                       Saved list — including the currently-loaded one
+                       (the local copy clears with it). -->
+                  <button
+                    type="button"
+                    class="okf-headtest__row-btn okf-headtest__row-btn--danger"
+                    :disabled="busy !== null"
+                    :title="translate('okf.headTest.suites.deleteSuiteTip', 'Delete this suite and its run history')"
+                    @click="onDeleteSuite(s)"
+                  >
+                    ×
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -2155,6 +2209,65 @@ export default {
       // when the name changes — keep it simple and re-read).
       const saved = this.savedSuites.find((s) => s._key === suite._key);
       if (saved) saved.name = res.result.name;
+    },
+    /** 1-8g: delete a saved suite (and its run docs) from the list. The
+     * currently-loaded suite may be deleted too — the local copy clears. */
+    async onDeleteSuite(s) {
+      if (this.busy !== null || !s) return;
+      this.busy = 'suite-delete';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headSuiteDelete', {
+        repoId: this.repo.repo_id,
+        suiteKey: s._key
+      });
+      this.busy = null;
+      if (!res || !res.ok) {
+        this.error =
+          (res && res.message) || this.translate('okf.headTest.error.suiteDelete', 'Could not delete the suite');
+        return;
+      }
+      this.savedSuites = this.savedSuites.filter((x) => x._key !== s._key);
+      if (this.suite && this.suite.suite_key === s._key) {
+        this.suite = null;
+        this.lastRunSummary = null;
+        this.lastRunSuiteKey = null;
+      }
+    },
+    /** 1-8g: the click-test — run THIS row's query against the live corpus
+     * (embed → top-K → the pipeline's reranker → coverage verdict). The
+     * server persists the probe on every matching row; the local copy is
+     * patched from the response. */
+    async onProbeRow(row) {
+      if (this.busy !== null || !row || !this.suite) return;
+      this.busy = 'probe';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headSuiteProbe', {
+        repoId: this.repo.repo_id,
+        suiteKey: this.suite.suite_key,
+        query: row.query
+      });
+      this.busy = null;
+      if (!res || !res.ok) {
+        this.error = (res && res.message) || this.translate('okf.headTest.error.probe', 'Corpus test failed');
+        return;
+      }
+      const probe = {
+        at: res.result.at,
+        docs: res.result.docs,
+        top_score: res.result.top_score,
+        verdict: res.result.verdict,
+        note: res.result.note
+      };
+      for (const arr of [this.suite.payload.positive, this.suite.payload.negative]) {
+        for (const r of arr || []) {
+          if (r && r.query === row.query) r.lastProbe = probe;
+        }
+      }
+    },
+    /** 1-8g: hover text for a probe chip — score + doc count + when. */
+    probeTip(p) {
+      const score = p.top_score != null ? `top=${p.top_score}` : 'no score';
+      return `${score} · ${p.docs} docs · ${p.at || ''}${p.note ? ' · ' + p.note : ''}`;
     },
     /** 1-8f: load a saved suite back into the Lab — its rows become the
      * editable current suite (flip kinds, remove rows, re-run). */

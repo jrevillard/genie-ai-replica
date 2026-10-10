@@ -607,6 +607,20 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     // request returns 202 immediately and the UI polls for this key).
     const suiteKey = opts.suiteKey || `s${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
     const now = new Date().toISOString();
+    // 1-8g — a corpus-based DEFAULT name ("<Repo> suite N", N = the running
+    // count of this repo's suites) so the Saved-suites list is scannable
+    // without renaming; the curator can always override it inline (the
+    // 1-8f rename endpoint).
+    let finalName = suiteName;
+    if (!finalName) {
+      const countRows = await (
+        await db.query(
+          `FOR d IN ${HEAD_TEST_RUNS_COLLECTION} FILTER d.repo_id == @rid && d.kind == 'suite' COLLECT WITH COUNT INTO n RETURN n`,
+          { rid: repoId }
+        )
+      ).all();
+      finalName = `${repo.name || 'Repository'} suite ${Number(countRows[0] || 0) + 1}`.slice(0, 80);
+    }
     const suiteDoc = {
       _key: suiteKey,
       repo_id: repoId,
@@ -614,7 +628,8 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       suite_key: suiteKey,
       // Story 1-8f — the curator's name for the suite (optional; the key
       // remains the identity). Rendered in the Saved-suites table.
-      name: suiteName,
+      // 1-8g — defaults to "<Repo> suite N" when the curator names nothing.
+      name: finalName,
       repo_version: repo.version || null,
       head_version: repo.head ? repo.head.version || null : null,
       created_at: now,
@@ -913,6 +928,187 @@ async function renameSuite(repoId, suiteKey, payload = {}, opts = {}) {
     await db.collection(HEAD_TEST_RUNS_COLLECTION).replace(suite._key, suite);
     logger.info('head-suite.renamed', { repo_id: repoId, suite_key: suiteKey, was, name });
     return suite;
+  });
+}
+
+// ---------- public: delete (1-8g) ----------
+
+async function deleteSuite(repoId, suiteKey, opts = {}) {
+  return withSpan('okf.headsuite.delete', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
+    await repositoryService.getById(repoId, { authz: opts.authz });
+    const db = await dbService.getConnection();
+    await ensureCollection(db);
+    if (suiteGenerationInFlight(repoId, suiteKey)) {
+      const err = new Error('a generation is in flight for this suite — wait for it to land');
+      err.code = 'GENERATION_IN_FLIGHT';
+      err.status = 409;
+      throw err;
+    }
+    const suite = await loadSuiteDoc(db, repoId, suiteKey);
+    if (suite.repo_id !== repoId) {
+      const err = new Error(`suite ${suiteKey} not found for repo ${repoId}`);
+      err.code = 'SUITE_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+    // Runs of a deleted suite are meaningless without it — remove both.
+    // Advisor/explain docs (kind != 'run') stay: audit trail.
+    await db.collection(HEAD_TEST_RUNS_COLLECTION).remove(suiteKey);
+    const runRows = await (
+      await db.query(
+        `FOR d IN ${HEAD_TEST_RUNS_COLLECTION} FILTER d.repo_id == @rid && d.suite_key == @k && d.kind == 'run' REMOVE d IN ${HEAD_TEST_RUNS_COLLECTION} RETURN OLD`,
+        { rid: repoId, k: suiteKey }
+      )
+    ).all();
+    logger.info('head-suite.deleted', { repo_id: repoId, suite_key: suiteKey, runs_removed: runRows.length });
+    return { deleted: true, suite_key: suiteKey, runs_removed: runRows.length };
+  });
+}
+
+// ---------- public: corpus probe (1-8g — the click-test) ----------
+//
+// David, 2026-10-10 ("it passed the head test … then the chatbot answers
+// from general knowledge — why?"): the head verdict asserts DOMAIN match,
+// never CORPUS COVERAGE. The probe closes that gap per query: embed →
+// top-K chunks from the repo's ingested corpus → the SAME TEI rerank the
+// pipeline grounds on → an honest coverage verdict, persisted on the
+// suite row and shown in the Lab.
+//
+// Verdict bands calibrated live 2026-10-10 against the remote bge
+// reranker: true match 0.94-0.95, related-but-not-answering 0.05-0.13,
+// garbage 0.00002.
+
+const PROBE_TOP_K = 24;
+const PROBE_TEXT_CAP = 4000; // rerankers truncate ~512 tokens; bound the body
+const PROBE_TIMEOUT_MS = 15000;
+
+function probeVerdict(topScore) {
+  if (topScore == null) return 'unknown';
+  if (topScore >= 0.5) return 'answerable';
+  if (topScore >= 0.15) return 'weak';
+  return 'unanswerable';
+}
+
+async function probeSuiteQuery(repoId, suiteKey, payload = {}, opts = {}) {
+  return withSpan('okf.headsuite.probe', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
+    const query = typeof payload.query === 'string' ? payload.query.trim() : '';
+    if (!query) {
+      const err = new Error('query is required');
+      err.code = 'VALIDATION_ERROR';
+      err.status = 400;
+      throw err;
+    }
+    const repo = await repositoryService.getById(repoId, { authz: opts.authz });
+    const db = await dbService.getConnection();
+    await ensureCollection(db);
+    const suite = await loadSuiteDoc(db, repoId, suiteKey);
+    if (suite.repo_id !== repoId) {
+      const err = new Error(`suite ${suiteKey} not found for repo ${repoId}`);
+      err.code = 'SUITE_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+    const graphName = repo.ingested_graph_name;
+    if (!graphName) {
+      const err = new Error('the repository has no ingested corpus — publish and ingest first');
+      err.code = 'REPO_NOT_INGESTED';
+      err.status = 409;
+      throw err;
+    }
+
+    // 1. Embed the query (same TEI + BGE query-prefix contract as routing).
+    const embeddings = await frontmatterService.teiEmbed([query]);
+    const emb = Array.isArray(embeddings) && embeddings[0];
+    if (!emb) {
+      const err = new Error('query embedding failed');
+      err.code = 'PROBE_EMBED_FAILED';
+      err.status = 502;
+      throw err;
+    }
+
+    // 2. Top-K chunks from THIS repo's ingested corpus.
+    const rows = (
+      await (
+        await db.query(
+          `FOR c IN \`${graphName}_SOURCE\` ` +
+            'LET s = APPROX_NEAR_COSINE(c.embedding, @emb) ' +
+            'SORT s DESC LIMIT @k ' +
+            'RETURN { text: c.text, score: s }',
+          { emb, k: PROBE_TOP_K }
+        )
+      ).all()
+    ).map((r) => ({ text: String(r.text || '').slice(0, PROBE_TEXT_CAP), score: Number(r.score) || 0 }));
+
+    const at = new Date().toISOString();
+    const probe = { at, query, docs: rows.length, top_score: null, verdict: 'unknown' };
+
+    // 3. Rerank through the SAME endpoint the pipeline grounds on.
+    const rerankUrl = process.env.OKF_RERANK_ENDPOINT || '';
+    if (!rows.length) {
+      probe.verdict = 'unanswerable'; // empty corpus cannot answer
+      probe.note = 'no chunks in the ingested corpus';
+    } else if (!rerankUrl) {
+      probe.note = 'rerank endpoint not configured (OKF_RERANK_ENDPOINT)';
+    } else {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+        const resp = await fetch(rerankUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, texts: rows.map((r) => r.text) }),
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const decoded = await resp.json();
+        if (!Array.isArray(decoded)) throw new Error('unexpected rerank response shape');
+        const top = decoded.reduce((m, r) => Math.max(m, Number(r && r.score) || 0), 0);
+        probe.top_score = Number(top.toFixed(4));
+        probe.verdict = probeVerdict(probe.top_score);
+      } catch (e) {
+        logger.error('head-suite.probe.rerank_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message });
+        probe.note = `rerank failed: ${e.message}`;
+      }
+    }
+
+    // 4. Persist on EVERY matching row (positives and negatives share text
+    //    space only by contradiction-check, so match both) and return.
+    let touched = 0;
+    for (const arr of [suite.payload.positive, suite.payload.negative]) {
+      for (const row of arr || []) {
+        if (row && typeof row.query === 'string' && row.query.trim() === query) {
+          row.lastProbe = probe;
+          touched += 1;
+        }
+      }
+    }
+    if (touched) {
+      suite.updated_at = at;
+      await db.collection(HEAD_TEST_RUNS_COLLECTION).replace(suite._key, suite);
+    }
+    span.setAttribute('okf.probe.verdict', probe.verdict);
+    span.setAttribute('okf.probe.top_score', probe.top_score == null ? -1 : probe.top_score);
+    logger.info('head-suite.probed', {
+      repo_id: repoId,
+      suite_key: suiteKey,
+      query: query.slice(0, 120),
+      docs: probe.docs,
+      top_score: probe.top_score,
+      verdict: probe.verdict,
+      rows_updated: touched
+    });
+    return {
+      suite_key: suiteKey,
+      ...probe,
+      top_chunks: rows
+        .slice()
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3)
+        .map((r) => ({ score: Number(r.score.toFixed(4)), preview: r.text.slice(0, 160) }))
+    };
   });
 }
 
@@ -1575,6 +1771,9 @@ module.exports = {
   getSuite,
   updateSuiteRows,
   renameSuite,
+  deleteSuite,
+  probeSuiteQuery,
+  probeVerdict,
   runSuite,
   listRuns,
   explainSuiteFailures,

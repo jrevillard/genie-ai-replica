@@ -2757,7 +2757,8 @@ export default {
           headVersion: 'Head',
           tags: 'Tags',
           actions: 'Editar',
-          name: 'Nome'
+          name: 'Nome',
+          corpus: 'Corpus'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2805,7 +2806,9 @@ export default {
         load: 'Carregar',
         flipTip: 'Alternar deve-selecionar / não-deve-selecionar',
         deleteTip: 'Remover esta linha da suíte',
-        namePlaceholder: 'Nome da suíte (opcional) — ex. conjunto de regressão DCNT'
+        namePlaceholder: 'Nome da suíte (opcional) — ex. conjunto de regressão DCNT',
+        probeTip: 'Testar esta consulta no corpus real',
+        deleteSuiteTip: 'Excluir esta suíte e seu histórico'
       },
       error: {
         explain: 'A explicação falhou',
@@ -2823,7 +2826,9 @@ export default {
         suiteLoad: 'Não foi possível carregar a suíte',
         suiteUpdate: 'Não foi possível atualizar a suíte',
         suiteRename: 'Não foi possível renomear a suíte',
-        generateTimeout: 'A suíte está demorando muito — pode aparecer em suítes salvas; verifique em um minuto.'
+        generateTimeout: 'A suíte está demorando muito — pode aparecer em suítes salvas; verifique em um minuto.',
+        probe: 'Falha no teste do corpus',
+        suiteDelete: 'Não foi possível excluir a suíte'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2844,6 +2849,12 @@ export default {
         predicted: 'previsto',
         scope: ' (em {q} consultas das últimas {r} execuções)',
         applying: 'Aplicando: salvando tags, reconstruindo o head, executando novamente a suíte…'
+      },
+      probe: {
+        answerable: 'respondível',
+        weak: 'correspondência fraca',
+        unanswerable: 'não está no corpus',
+        unknown: 'desconhecido'
       }
     }
   },

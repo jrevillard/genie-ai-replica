@@ -1558,7 +1558,8 @@ export default {
           headVersion: 'Head',
           tags: 'Tags',
           actions: 'Edit',
-          name: 'Name'
+          name: 'Name',
+          corpus: 'Corpus'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -1604,7 +1605,9 @@ export default {
         load: 'Load',
         flipTip: 'Flip should-select / should-NOT-select',
         deleteTip: 'Remove this row from the suite',
-        namePlaceholder: 'Suite name (optional) — e.g. NCD regression set'
+        namePlaceholder: 'Suite name (optional) — e.g. NCD regression set',
+        probeTip: 'Test this query against the live corpus',
+        deleteSuiteTip: 'Delete this suite and its run history'
       },
       error: {
         explain: 'Explain failed',
@@ -1623,7 +1626,9 @@ export default {
         suiteUpdate: 'Could not update the suite',
         suiteRename: 'Could not rename the suite',
         generateTimeout:
-          'The suite is taking unusually long — it may still land in Saved suites; check there in a minute.'
+          'The suite is taking unusually long — it may still land in Saved suites; check there in a minute.',
+        probe: 'Corpus test failed',
+        suiteDelete: 'Could not delete the suite'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -1644,6 +1649,12 @@ export default {
         predicted: 'predicted',
         scope: ' (across {q} queries from the last {r} runs)',
         applying: 'Applying: saving tags, rebuilding the head, re-running the suite…'
+      },
+      probe: {
+        answerable: 'answerable',
+        weak: 'weak match',
+        unanswerable: 'not in corpus',
+        unknown: 'unknown'
       }
     },
     versions: {

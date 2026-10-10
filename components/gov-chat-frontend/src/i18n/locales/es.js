@@ -2761,7 +2761,8 @@ export default {
           headVersion: 'Head',
           tags: 'Etiquetas',
           actions: 'Editar',
-          name: 'Nombre'
+          name: 'Nombre',
+          corpus: 'Corpus'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2809,7 +2810,9 @@ export default {
         load: 'Cargar',
         flipTip: 'Cambiar debe-seleccionar / no-debe-seleccionar',
         deleteTip: 'Quitar esta fila de la suite',
-        namePlaceholder: 'Nombre de la suite (opcional): p. ej. conjunto de regresión ECD'
+        namePlaceholder: 'Nombre de la suite (opcional): p. ej. conjunto de regresión ECD',
+        probeTip: 'Probar esta consulta contra el corpus real',
+        deleteSuiteTip: 'Eliminar esta suite y su historial'
       },
       error: {
         explain: 'La explicación falló',
@@ -2828,7 +2831,9 @@ export default {
         suiteUpdate: 'No se pudo actualizar la suite',
         suiteRename: 'No se pudo renombrar la suite',
         generateTimeout:
-          'La suite está tardando demasiado — puede que aparezca en suites guardadas; revise en un minuto.'
+          'La suite está tardando demasiado — puede que aparezca en suites guardadas; revise en un minuto.',
+        probe: 'Falló la prueba del corpus',
+        suiteDelete: 'No se pudo eliminar la suite'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2849,6 +2854,12 @@ export default {
         predicted: 'previsto',
         scope: ' (sobre {q} consultas de las últimas {r} ejecuciones)',
         applying: 'Aplicando: guardando etiquetas, reconstruyendo el head, relanzando la suite…'
+      },
+      probe: {
+        answerable: 'respondible',
+        weak: 'coincidencia débil',
+        unanswerable: 'no está en el corpus',
+        unknown: 'desconocido'
       }
     }
   },

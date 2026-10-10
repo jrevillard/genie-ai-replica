@@ -555,6 +555,72 @@ async function generateSuite(body) {
   const noauthEdit = await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/rows`, { json: flipBody });
   check('suite edit: unauthenticated rejected', noauthEdit.status === 401 || noauthEdit.status === 403, `status=${noauthEdit.status}`);
 
+  // ---- 15. DEFAULT SUITE NAME (1-8g) ----
+  // An unnamed generation lands as "<Repo> suite N" (N = the repo's running
+  // suite count) — the Saved list stays scannable; rename still wins.
+  console.log('[15] default suite name');
+  const latest = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}`, { token: USER_TOKEN }));
+  const expectedPrefix = `${latest.repo_name || 'NCD Information'} suite `;
+  check(
+    'naming: unnamed suite carries the "<repo> suite N" default',
+    typeof latest.name === 'string' && latest.name.startsWith(expectedPrefix) && /suite \d+$/.test(latest.name),
+    `name=${JSON.stringify(latest.name)}`
+  );
+  const named = await generateSuite({ n_positive: 1, name: 'smoke-named-suite' });
+  check(
+    'naming: an explicit name is respected',
+    named && named.name === 'smoke-named-suite',
+    `name=${JSON.stringify(named && named.name)}`
+  );
+
+  // ---- 16. CORPUS PROBE / CLICK-TEST (1-8g) ----
+  // One query against the LIVE corpus: embed → top-K from <graph>_SOURCE →
+  // the pipeline's TEI rerank → coverage verdict, persisted on the rows.
+  // NOTE: requires OKF_RERANK_ENDPOINT on the okf-server container; without
+  // it the verdict is honestly 'unknown' (the check below still passes on
+  // the shape — the pipeline-not-configured case is a valid state).
+  console.log('[16] corpus probe (click-test)');
+  const probeQuery = (latestSuite.payload && latestSuite.payload.positive && latestSuite.payload.positive[0] && latestSuite.payload.positive[0].query) || 'colorectal cancer screening guidelines';
+  const probe = j(
+    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/probe`, {
+      token: USER_TOKEN,
+      json: { query: probeQuery }
+    })
+  );
+  check(
+    'probe: verdict + score shape (answerable|weak|unanswerable|unknown)',
+    ['answerable', 'weak', 'unanswerable', 'unknown'].includes(probe.verdict) &&
+      (probe.top_score === null || typeof probe.top_score === 'number'),
+    `verdict=${probe.verdict} top=${probe.top_score} docs=${probe.docs} note=${probe.note || ''}`
+  );
+  const probeBack = j(
+    await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}`, { token: USER_TOKEN })
+  );
+  const probedRow = [...(probeBack.payload.positive || []), ...(probeBack.payload.negative || [])].find(
+    (r) => r.query === probeQuery && r.lastProbe
+  );
+  check(
+    'probe: result persisted on the matching row',
+    !!probedRow && probedRow.lastProbe.verdict === probe.verdict,
+    probedRow ? `row.lastProbe.verdict=${probedRow.lastProbe.verdict}` : 'row not found / not persisted'
+  );
+  const probeNoauth = await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/probe`, {
+    json: { query: probeQuery }
+  });
+  check('probe: unauthenticated rejected', probeNoauth.status === 401 || probeNoauth.status === 403, `status=${probeNoauth.status}`);
+
+  // ---- 17. DELETE SUITE (1-8g) ----
+  console.log('[17] delete suite');
+  const doomed = await generateSuite({ n_positive: 1, name: 'smoke-doomed-suite' });
+  const del = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${doomed.suite_key}`, { token: USER_TOKEN });
+  check('delete: 200 + deleted flag', del.status === 200 && j(del).deleted === true, `status=${del.status}`);
+  const gone = await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${doomed.suite_key}`, { token: USER_TOKEN });
+  check('delete: the suite is gone (404 on re-read)', gone.status === 404, `status=${gone.status}`);
+  const delAgain = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${doomed.suite_key}`, { token: USER_TOKEN });
+  check('delete: double-delete 404s', delAgain.status === 404, `status=${delAgain.status}`);
+  const delNoauth = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${doomed.suite_key}`, {});
+  check('delete: unauthenticated rejected', delNoauth.status === 401 || delNoauth.status === 403, `status=${delNoauth.status}`);
+
   const failed = results.filter((r) => !r.ok);
   const skipped = results.filter((r) => r.skipped).length;
   const active = results.length - skipped;

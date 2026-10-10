@@ -1246,6 +1246,14 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   — the mechanical backstop after the 2026-10-09 teaching-loop poisoning
 #   applied 'lung-cancer', the repo's OWN entity tag, and positives collapsed
 #   7/8 -> 2/8). Used by: okf-server head tests (guardSuggestions).
+# --- okf-server: corpus probe / click-test (Story 1-8g) ---
+# OKF_RERANK_ENDPOINT=https://<tei-host>:444/rerank
+#   Default: EMPTY (the probe answers verdict=unknown with an honest note).
+#   The TEI /rerank endpoint okf-server calls for the Lab click-test — the
+#   SAME reranker the chat pipeline grounds on (bge cross-encoder). Set it
+#   to the reranker stack's TEI endpoint so click-tests report real
+#   coverage verdicts (answerable >= 0.5, weak >= 0.15, else unanswerable).
+#   Used by: okf-server (probeSuiteQuery). Compose: yes (empty default).
 #   Compose: yes. Ansible: yes.
 # OKF_GUARD_DUPLICATE_FORBIDDEN=0.9
 #   Default: 0.9 (cosine vs an existing forbidden vector at/above this rejects

@@ -528,4 +528,30 @@ describe('Configuration Validation Suite', () => {
     });
   });
 
+  // Story 1-8g: the Lab click-test reranks a query against the repo corpus
+  // through the pipeline's TEI /rerank. Empty default = the probe answers
+  // verdict=unknown with an honest note (never a fake score).
+  describe('Story 1-8g: OKF corpus-probe rerank endpoint plumbing', () => {
+    test('OKF_RERANK_ENDPOINT is piped in the okf-server compose block with an empty default', () => {
+      const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = composeText.slice(composeText.indexOf('  okf-server:'), composeText.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(/- OKF_RERANK_ENDPOINT=\$\{OKF_RERANK_ENDPOINT:-\}/);
+    });
+
+    test('OKF_RERANK_ENDPOINT is documented in the env template', () => {
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*OKF_RERANK_ENDPOINT=\S.*$/m);
+    });
+
+    test('OKF_RERANK_ENDPOINT is emitted by ansible env.j2 (empty default)', () => {
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect({ found: !!vars.OKF_RERANK_ENDPOINT, default: vars.OKF_RERANK_ENDPOINT ? vars.OKF_RERANK_ENDPOINT.default : null }).toEqual({
+        found: true,
+        default: ''
+      });
+    });
+  });
+
 });

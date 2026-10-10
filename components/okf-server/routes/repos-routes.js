@@ -90,6 +90,17 @@ router.post(
   requireRepoScope('repo_id', 'admin'),
   ctrl.renameTestSuite
 );
+// Story 1-8g — delete a suite from the Saved list (admin; removes the
+// suite doc + its run docs).
+router.delete('/:repo_id/routing-testsuite/:suite_key', requireRepoScope('repo_id', 'admin'), ctrl.deleteTestSuite);
+// Story 1-8g — the click-test: one query against the LIVE corpus (embed →
+// top-K → the pipeline's TEI rerank → coverage verdict), persisted on the
+// matching suite rows (admin mutation — it writes lastProbe).
+router.post(
+  '/:repo_id/routing-testsuite/:suite_key/probe',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.probeTestSuiteQuery
+);
 // Story 1-8c — batch advice for a suite run's failing negatives.
 router.post(
   '/:repo_id/routing-testsuite/:suite_key/explain',

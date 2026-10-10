@@ -2727,7 +2727,8 @@ export default {
           headVersion: 'Head',
           tags: 'الوسوم',
           actions: 'تعديل',
-          name: 'الاسم'
+          name: 'الاسم',
+          corpus: 'المتن'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2773,7 +2774,9 @@ export default {
         load: 'تحميل',
         flipTip: 'التبديل بين يجب-اختياره / يجب-عدم-اختياره',
         deleteTip: 'إزالة هذا الصف من المجموعة',
-        namePlaceholder: 'اسم المجموعة (اختياري) — مثال: مجموعة انحدار الأمراض غير السارية'
+        namePlaceholder: 'اسم المجموعة (اختياري) — مثال: مجموعة انحدار الأمراض غير السارية',
+        probeTip: 'اختبر هذا الاستعلام ضد المتن الحي',
+        deleteSuiteTip: 'احذف هذه المجموعة وسجلها'
       },
       error: {
         explain: 'فشل الشرح',
@@ -2791,7 +2794,9 @@ export default {
         suiteLoad: 'تعذر تحميل المجموعة',
         suiteUpdate: 'تعذر تحديث المجموعة',
         suiteRename: 'تعذر إعادة تسمية المجموعة',
-        generateTimeout: 'المجموعة تتأخر بشكل غير معتاد — قد تظهر في المجموعات المحفوظة؛ تحقق بعد دقيقة.'
+        generateTimeout: 'المجموعة تتأخر بشكل غير معتاد — قد تظهر في المجموعات المحفوظة؛ تحقق بعد دقيقة.',
+        probe: 'فشل اختبار المتن',
+        suiteDelete: 'تعذر حذف المجموعة'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2812,6 +2817,12 @@ export default {
         predicted: 'المتوقع',
         scope: ' (عبر {q} استعلامات من آخر {r} تشغيلات)',
         applying: 'جارٍ التطبيق: حفظ الوسوم، إعادة بناء head، إعادة تشغيل المجموعة…'
+      },
+      probe: {
+        answerable: 'قابلة للإجابة',
+        weak: 'مطابقة ضعيفة',
+        unanswerable: 'غير موجود في المتن',
+        unknown: 'غير معروف'
       }
     }
   },

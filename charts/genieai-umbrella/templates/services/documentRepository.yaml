@@ -1,13 +1,22 @@
 {{- if .Values.services.documentRepository.enabled -}}
 {{- $ns := .Values.namespace -}}
+{{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
 {{- $vals := deepCopy .Values -}}
 {{- $urls := list
+    (dict "name" "KEYCLOAK_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
+    (dict "name" "KC_REALM" "value" "genie")
+    (dict "name" "KC_CLIENT_ID" "value" "dataprep-service-client")
+    (dict "name" "ARANGO_URL" "value" (printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns))
+    (dict "name" "ARANGO_DB" "value" "_system")
     (dict "name" "BACKEND_URL" "value" (printf "http://backend.%s.svc.cluster.local:80" $ns))
     (dict "name" "CLAMAV_HOST" "value" "clamav")
     (dict "name" "CLAMAV_PORT" "value" "3310")
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (printf "http://genieai-collector-collector.%s.svc.cluster.local:4318" $ns))
 -}}
-{{- $_ := set $vals.services.documentRepository "env" $urls -}}
+{{- $secretEnv := list
+    (dict "name" "ARANGO_PASSWORD" "valueFrom" (dict "secretKeyRef" (dict "name" "arango-root-secret" "key" "password")))
+-}}
+{{- $_ := set $vals.services.documentRepository "env" (concat $urls $secretEnv) -}}
 {{- $ctx := dict "name" "documentRepository" "component" "documentRepository" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---

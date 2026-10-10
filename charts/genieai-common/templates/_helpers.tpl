@@ -65,3 +65,20 @@ Note: must NOT include version (selector is immutable).
 app.kubernetes.io/name: {{ include "genieai-common.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
+
+{{/*
+Service selector labels — used in Deployment selectors, Service selectors,
+and pod template labels. Includes name, instance, and component labels;
+omits chart, version, and managed-by (those mutate across chart upgrades
+and would break selector immutability).
+
+Call sites pass the per-template component name in the context dict
+(`(dict "Chart" .Chart "Release" .Release "Values" .Values
+"component" <name>)`); the helper emits both component labels from that
+single value, matching `genieai-common.labels`.
+*/}}
+{{- define "genieai-common.serviceSelector" -}}
+{{- include "genieai-common.selectorLabels" . }}
+app.kubernetes.io/component: {{ .component | default "umbrella" | quote }}
+genieai.io/component: {{ .component | default "umbrella" | quote }}
+{{- end -}}

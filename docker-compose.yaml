@@ -726,6 +726,7 @@ services:
       # corpus through the SAME TEI /rerank the pipeline grounds on. Empty =
       # the probe reports verdict unknown with an honest note.
       - OKF_RERANK_ENDPOINT=${OKF_RERANK_ENDPOINT:-}
+      - OKF_RERANK_TOKEN=${OKF_RERANK_TOKEN:-}
       - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
       - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
       # Stuck-parsed reaper signals (claim-stamp semantics): a claimed row with

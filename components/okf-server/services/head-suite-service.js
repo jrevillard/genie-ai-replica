@@ -1055,9 +1055,16 @@ async function probeSuiteQuery(repoId, suiteKey, payload = {}, opts = {}) {
       try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+        // The remote TEI's nginx 401s by client fingerprint: aiohttp (the
+        // reranker service) passes anonymously, node fetch does not — send
+        // the Bearer token explicitly when configured (live 2026-10-10:
+        // anonymous node fetch → HTTP 401 on every call).
+        const rerankToken = process.env.OKF_RERANK_TOKEN || '';
+        const headers = { 'Content-Type': 'application/json' };
+        if (rerankToken) headers.Authorization = `Bearer ${rerankToken}`;
         const resp = await fetch(rerankUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ query, texts: rows.map((r) => r.text) }),
           signal: controller.signal
         });

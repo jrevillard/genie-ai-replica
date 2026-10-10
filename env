@@ -1254,6 +1254,11 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   to the reranker stack's TEI endpoint so click-tests report real
 #   coverage verdicts (answerable >= 0.5, weak >= 0.15, else unanswerable).
 #   Used by: okf-server (probeSuiteQuery). Compose: yes (empty default).
+# OKF_RERANK_TOKEN=<bearer token for OKF_RERANK_ENDPOINT>
+#   Default: EMPTY (anonymous call — works against TEI stacks without
+#   auth). The remote nginx 401s node-fetch clients that aiohttp passes,
+#   so cloud deployments against the shared TEI set this (same token the
+#   reranker stack uses). Used by: okf-server (probeSuiteQuery).
 #   Compose: yes. Ansible: yes.
 # OKF_GUARD_DUPLICATE_FORBIDDEN=0.9
 #   Default: 0.9 (cosine vs an existing forbidden vector at/above this rejects

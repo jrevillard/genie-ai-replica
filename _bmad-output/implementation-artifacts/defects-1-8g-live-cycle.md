@@ -351,3 +351,50 @@ ships.
 all copies; flip-into-genuine → actionable 409; pre-existing contradiction
 escapable) + the ambiguous-input test rewritten to the resolution semantics.
 61/61 green; eslint + prettier clean.
+
+## 1-8g-q — serving repos were fully READ-ONLY: the head (tags + regenerate) could not be maintained in place (FIXED, worktree fix/1-8g-q-serving-head-maintenance)
+
+David, 2026-10-11: "I cannot modify the head (i.e. remove or add tags and
+regenerate) while the repo is ingested. Is there any reason for this
+limitation?" … "I cannot think of any reason for this constraint" … "I see
+it as a maintenance operation, similar to indexing a database."
+
+**Cause (two blanket guards, both dating from the pre-Routing-Lab lifecycle
+design where 'retracted' was THE edit state):**
+1. `repository-service.update()` 409'd EVERY patch on a repo with
+   `ingested_at` (comment's own rationale: renaming would desync the
+   versioned serving-graph name) — including the `frontmatter` patch the
+   FrontmatterPanel saves (PATCH /api/okf/repos/:id).
+2. `lifecycleService.assertWritable` 409'd every concept write — including
+   the index-concept markdown write that is the FIRST leg of the two-write
+   frontmatter save.
+
+Result: every published+ingested repo — the only repos actually serving —
+had a read-only editor; the Routing Lab's tune loop could not act on them.
+
+**Fix (scoped, not blanket-removed):**
+- `update()`: serving repos accept `frontmatter`-only patches (audited as
+  'frontmatter_maintenance'); any other key → 409 naming the real rule
+  ("only head/metadata (frontmatter) maintenance is allowed — retract it
+  to change: <keys>").
+- `patchConcept`: the INDEX concept's markdown write bypasses
+  assertWritable (the head YAML lives there); every other concept, and
+  body/label writes anywhere, stay frozen (their content is baked into the
+  serving graph's chunks).
+- Frontend: FrontmatterPanel unlocked unconditionally (tag editing is
+  always maintenance); concepts/list/meta/autocorrect keep `readOnly`; the
+  shell pill now says "CONTENT READ ONLY — head/tags stay editable"
+  (i18n ×14 via scripts/add-18g-q-readonly-i18n.cjs).
+- Rename stays blocked while serving (graph-name desync — the guard's
+  original, still-valid reason). Lifecycle transitions write the repo doc
+  directly (raw collection), untouched by the scoped guard — verified.
+
+**Aftermath note:** re-tagging a serving repo stales the chunk LABELS baked
+at ingest until the next Ingest — exactly the DB-analogy index-rebuild
+David named; the explicit Ingest action remains the re-index.
+
+**Tests:** repos-routes 101/101 (+3: index-markdown maintenance 200,
+non-index markdown still 409, label-write 409 pinned), repository-service
+56/56 (+2: serving frontmatter patch succeeds + restamps; rename and
+studio_step still 409 with the new message), full okf-server 870/870,
+frontend OKF 246/246, localeConsistency 7/7, eslint + prettier clean.

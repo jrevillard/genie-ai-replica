@@ -1487,7 +1487,7 @@ export default {
         inProgress: 'جارٍ النشر — تصدير الحزمة ونقلها…',
         title: 'نشر'
       },
-      readonly: 'للقراءة فقط',
+      readonly: 'المحتوى للقراءة فقط — يمكن تحرير الرأس والوسوم',
       serving: 'يخدم',
       state: {
         ingested: 'مستوعب'

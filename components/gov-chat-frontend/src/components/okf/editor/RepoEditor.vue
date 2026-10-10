@@ -133,10 +133,14 @@
            can — including Refresh suggestions). On a non-index
            concept the per-concept metadata form appears below the
            chip panel. -->
+      <!-- 1-8g-q (David: "a maintenance operation, similar to indexing a
+           database"): the head tag-set stays EDITABLE on a serving repo —
+           the whole point of the Routing Lab loop. readOnly is false
+           unconditionally; content (concepts) below keeps the lock. -->
       <FrontmatterPanel
         v-if="repoId"
         :repo-id="repoId"
-        :read-only="readOnly"
+        :read-only="false"
         :show-title="true"
         :compact="true"
         @saved="onFrontmatterPanelSaved"

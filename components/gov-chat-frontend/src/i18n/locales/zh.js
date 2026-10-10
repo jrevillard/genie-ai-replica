@@ -1471,7 +1471,7 @@ export default {
         inProgress: '正在发布 — 正在导出并传输资产包…',
         title: '发布'
       },
-      readonly: '只读',
+      readonly: '内容只读 — 头部/标签可编辑',
       serving: '服务中',
       state: {
         ingested: '已摄取'

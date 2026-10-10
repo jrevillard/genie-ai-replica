@@ -1507,7 +1507,7 @@ export default {
         inProgress: 'Publication en cours — export et transfert de l’archive…',
         title: 'Publier'
       },
-      readonly: 'LECTURE SEULE',
+      readonly: 'CONTENU EN LECTURE SEULE — head/étiquettes modifiables',
       serving: 'En service',
       state: {
         ingested: 'Ingéré'

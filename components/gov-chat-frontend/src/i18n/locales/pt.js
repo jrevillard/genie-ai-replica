@@ -1503,7 +1503,7 @@ export default {
         inProgress: 'Publicando — exportando e transferindo o pacote…',
         title: 'Publicar'
       },
-      readonly: 'SOMENTE LEITURA',
+      readonly: 'CONTEÚDO SOMENTE LEITURA — head/etiquetas editáveis',
       serving: 'Servindo',
       state: {
         ingested: 'Ingerido'

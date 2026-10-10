@@ -931,6 +931,47 @@ describe('PATCH /api/okf/repos/:repo_id/concepts/:concept_id (Story #978)', () =
     expect(res.body.error).toBe('REPO_READ_ONLY');
     expect(conceptMetaService.patchConceptFields).not.toHaveBeenCalled();
   });
+
+  // 1-8g-q (David: "a maintenance operation, similar to indexing a
+  // database"): the INDEX concept IS the head — its markdown (frontmatter
+  // YAML) stays editable while the repo is serving; every other concept
+  // stays frozen.
+  test('200 head maintenance — serving repo accepts a markdown patch on the index concept', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', ingested_at: '2026-09-01T00:00:00Z' });
+    parserService.parseConcept.mockResolvedValue({
+      concept_id: 'index',
+      repo_id: 'repoA',
+      path: 'index.md',
+      frontmatter: { topic: ['a'] },
+      body: 'body'
+    });
+    conceptMetaService.patchConceptMeta.mockResolvedValue({
+      concept_id: 'index',
+      repo_id: 'repoA',
+      content_hash: 'HEADHASH',
+      index_status: 'parsed',
+      updated_at: '2026-10-11T00:00:00Z'
+    });
+    const res = await request(createApp())
+      .patch('/api/okf/repos/repoA/concepts/index')
+      .set('Authorization', TOKEN)
+      .send({ markdown: '---\ntopic: [a]\n---\nbody' });
+    expect(res.status).toBe(200);
+    expect(conceptMetaService.patchConceptMeta).toHaveBeenCalledTimes(1);
+  });
+
+  test('409 REPO_READ_ONLY — serving repo still freezes markdown patches on non-index concepts', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', ingested_at: '2026-09-01T00:00:00Z' });
+    const res = await request(createApp())
+      .patch('/api/okf/repos/repoA/concepts/conceptA')
+      .set('Authorization', TOKEN)
+      .send({ markdown: '# x' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('REPO_READ_ONLY');
+    expect(conceptMetaService.patchConceptMeta).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/okf/repos/:repo_id/concepts (Story #978 — editor list)', () => {

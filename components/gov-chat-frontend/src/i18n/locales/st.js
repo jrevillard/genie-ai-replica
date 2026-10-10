@@ -1504,7 +1504,7 @@ export default {
         inProgress: 'E phatlalatsa — ho romela le ho fetisetsa ngata…',
         title: 'Phatlalatsa'
       },
-      readonly: 'PALA FELA',
+      readonly: 'CONTENT READ ONLY — head/tags stay editable',
       serving: 'E sebeletsa',
       state: {
         ingested: 'Ingested'

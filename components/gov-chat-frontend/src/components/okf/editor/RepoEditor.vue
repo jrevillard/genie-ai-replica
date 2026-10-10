@@ -87,6 +87,7 @@
             :concept-id="selectedRow.concept_id"
             :read-only="readOnly"
             :label-options="labelOptions"
+            :repo-tag-summary="repoTagSummary"
             @saved="onConceptSaved"
           />
         </template>
@@ -510,6 +511,25 @@ export default {
     },
     headTestRepo() {
       return this.repo && this.repo.repo_id ? this.repo : null;
+    },
+    /** 2026-10-10: one-line summary of the REPO-level tags for the concept
+     * editor's frontmatter bar — the per-concept form shows only the
+     * concept's own YAML, so without this the repo tags are invisible THERE
+     * and an empty form reads as lost data (live report on Slaugherhouse). */
+    repoTagSummary() {
+      const fm = this.repo && this.repo.frontmatter;
+      if (!fm) return '';
+      const parts = [];
+      for (const [field, label] of [
+        ['topic', 'topic'],
+        ['forbidden', 'forbidden'],
+        ['entity', 'entity'],
+        ['keyword', 'keyword']
+      ]) {
+        const n = Array.isArray(fm[field]) ? fm[field].length : 0;
+        if (n) parts.push(`${n} ${label}`);
+      }
+      return parts.join(' · ');
     },
     hasIndex() {
       return this.concepts.some((c) => c.is_index);

@@ -1100,7 +1100,9 @@ class TestUpdateDocStatusRouting:
         token = dp_module._INGEST_CTX.set({"repo_id": "repo-1"})
         try:
             with (
-                patch.object(dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}),
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
                 patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
                 patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
                 patch.object(dp_module.propagate, "inject"),
@@ -1126,7 +1128,9 @@ class TestUpdateDocStatusRouting:
         token = dp_module._INGEST_CTX.set({})
         try:
             with (
-                patch.object(dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}),
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
                 patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
                 patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
                 patch.object(dp_module.propagate, "inject"),

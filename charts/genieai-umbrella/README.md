@@ -9,7 +9,7 @@ with one `helm install`.
 |---|---|
 | Foundation (namespace, ArgoCD example, chart-testing baseline) | ✅ Shipped |
 | Data layer (CNPG, kube-arangodb, sealed-secrets CRs; operators = bootstrap prerequisites) | ✅ Shipped |
-| Service tier (stateless app: backend + frontend + document-repository + nginx + clamav + gateway) | ⏳ Next |
+| Service tier (stateless app: backend + frontend + document-repository + nginx + clamav) | ✅ Shipped |
 | Observability (vmoperator VMSingle/Cluster + OTel operator + serviceMonitors) | ⏳ Planned |
 | AI/ML (vLLM + TEI + OPEA microservices + GPU operator) | ⏳ Planned |
 | Per-env config + ingress (Envoy Gateway + cert-manager) | ⏳ Planned |
@@ -105,3 +105,46 @@ committed blobs in `deploy/environments/<env>/secrets/*.yaml` next to those
 blobs — e.g. the certificate fingerprint from `kubeseal --fetch-cert` in a
 comment or the environment's README. The chart reads no fingerprint value;
 runtime enforcement is the drift hook above.
+
+## Stateless service tier
+
+Renders the five application-tier services (Deployments + Services + default-deny
+NetworkPolicies). Each service reads its config from the `services.<name>` key in
+`values.yaml`; prod / staging overrides go through `clusterProfileReplicas`.
+
+| Service | Component label | Container port | Service port | Replicas (default → prod) |
+|---|---|---|---|---|
+| `backend` | `backend` | 3000 | 80 | 1 → 3 |
+| `frontend` | `frontend` | 8090 | 80 | 1 → 2 |
+| `documentRepository` | `documentRepository` | 3001 | 80 | 1 → 2 |
+| `nginx` | `nginx` | 8080 | 80 | 1 |
+| `clamav` | `clamav` | 3310 | 3310 | 1 |
+
+Each rendered service ships a Deployment, a Service, a default-deny NetworkPolicy,
+and (where applicable) envFrom secret references + a PDB.
+
+### Sealed Secrets in this tier
+
+`templates/secrets/group5-secrets.yaml` renders four SealedSecrets that the backend
+consumes via envFrom:
+
+- `email-password`
+- `keycloak-client-secret`
+- `huggingface-hub-token`
+- `translation-cache-password`
+
+Each resource ships with a `PLACEHOLDER+` sentinel value; the CI conftest gates a
+real commit on those sentinels being absent.
+
+### PodDisruptionBudget
+
+A PDB is rendered **only when `replicas >= 2`** for that service. With baseline
+`replicas: 1` for every entry, no PDB lands until `clusterProfileReplicas.prod`
+activates (backend, frontend, documentRepository qualify; nginx and clamav stay
+singletons). This avoids voluntary-disruption blocks on services that cannot
+survive a drain.
+
+### CORS
+
+Handled at the edge tier (Envoy Gateway policy); origins derive from
+`ingress.host`. No per-service CORS plumbing here.

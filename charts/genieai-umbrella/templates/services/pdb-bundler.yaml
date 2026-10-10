@@ -1,8 +1,18 @@
 {{- if and (or .Values.services.backend.enabled .Values.services.frontend.enabled .Values.services.documentRepository.enabled .Values.services.nginx.enabled .Values.services.clamav.enabled .Values.services.redisCache.enabled) -}}
-{{- range $svcName := list "backend" "frontend" "documentRepository" "nginx" "clamav" "redisCache" -}}
-{{- $enabled := index (index $.Values.services $svcName) "enabled" -}}
-{{- if $enabled -}}
-{{ include "genieai-umbrella.pdbForService" (dict "component" $svcName "Values" $.Values "Chart" $.Chart "Release" $.Release) }}
+{{- /*
+  The bundler pairs each values key (left) with the component label
+  the corresponding Pod template carries (right). The two are
+  identical for backend/frontend/nginx/clamav but differ for
+  documentRepository (camelCase values key, camelCase pod label)
+  and redisCache (camelCase values key, kebab-case pod label).
+  The PDB helper emits a selector that must match the pod labels,
+  so the right-hand value is the one passed to the helper.
+*/ -}}
+{{- range $pair := list (list "backend" "backend") (list "frontend" "frontend") (list "documentRepository" "documentRepository") (list "nginx" "nginx") (list "clamav" "clamav") (list "redisCache" "redis-cache") -}}
+{{- $valuesKey := index $pair 0 -}}
+{{- $component := index $pair 1 -}}
+{{- if index (index $.Values.services $valuesKey) "enabled" -}}
+{{ include "genieai-umbrella.pdbForService" (dict "component" $component "Values" $.Values "Chart" $.Chart "Release" $.Release) }}
 {{- end -}}
 {{- end -}}
 {{- end -}}

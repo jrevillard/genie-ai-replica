@@ -81,6 +81,18 @@
             {{ fmOpen ? translate('common.close', 'Close') : translate('okf.fm.edit', 'Edit') }}
           </DsButton>
         </header>
+        <!-- 2026-10-10 (David live report): he saved REPO-level tags in the
+             wizard, opened a concept's frontmatter HERE and read the empty
+             per-concept form as data loss. Scope confusion is a UI defect —
+             say plainly that the repo tags are a different surface. -->
+        <p v-if="repoTagSummary" class="okf-ce__fm-repo-tags">
+          {{
+            translate(
+              'okf.fm.repoTagsHint',
+              'Repository-level tags ({summary}) live on the repo, not this concept — manage them in the Tags panel in the right rail.'
+            ).replace('{summary}', repoTagSummary)
+          }}
+        </p>
         <dl v-if="!fmOpen" class="okf-ce__fm-rows">
           <div v-for="row in fmRows" :key="row.k" class="okf-ce__fm-row">
             <dt>{{ row.k }}</dt>
@@ -331,7 +343,11 @@ export default {
     readOnly: { type: Boolean, default: false },
     // Bounded Knowledge-Hierarchy label options (services under the repo's
     // Subject Area) — threaded from RepoEditor for the fm-bar labels field.
-    labelOptions: { type: Array, default: () => [] }
+    labelOptions: { type: Array, default: () => [] },
+    // 2026-10-10: one-line summary of the REPO-level tags ("6 topic · 6
+    // forbidden") shown above the per-concept form so repo tags are never
+    // mistaken for this concept's (empty) frontmatter. Empty = no tags.
+    repoTagSummary: { type: String, default: '' }
   },
   emits: ['saved'],
   data() {
@@ -1163,6 +1179,11 @@ export default {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
+}
+.okf-ce__fm-repo-tags {
+  margin: var(--space-2xs) 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
 }
 .okf-ce__fm-term {
   display: inline-flex;

@@ -27,10 +27,11 @@ top-level `.Values.component` (default: "umbrella") instead.
 {{- end -}}
 {{- end -}}
 {{- $component := $ctx.component | default $svcName -}}
+{{- $objectName := lower $svcName -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "genieai-common.fullname" $ctx }}-{{ $svcName }}
+  name: {{ include "genieai-common.fullname" $ctx }}-{{ $objectName }}
   namespace: {{ $ctx.Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" $ctx.Values "component" $component) | nindent 4 }}
@@ -50,7 +51,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: {{ $svcName }}
+        - name: {{ $objectName }}
           image: {{ $svc.image.repository }}:{{ $svc.image.tag | default "latest" }}
           imagePullPolicy: {{ $ctx.Values.global.imagePullPolicy | default "IfNotPresent" }}
           ports:

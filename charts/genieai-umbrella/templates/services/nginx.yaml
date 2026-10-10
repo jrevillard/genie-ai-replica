@@ -68,4 +68,12 @@ spec:
       ports:
         - protocol: TCP
           port: 3000
+    # OTLP exporter: required for the observability pipeline. Without
+    # this port the default-deny policy drops all traces at the source.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4318
 {{- end -}}

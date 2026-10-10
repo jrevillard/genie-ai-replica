@@ -1,0 +1,146 @@
+{{- if .Values.services.redisCache.enabled -}}
+{{- $svc := .Values.services.redisCache -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicas }}
+  selector:
+    matchLabels:
+      genieai.io/component: redis-cache
+  template:
+    metadata:
+      labels:
+        genieai.io/component: redis-cache
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999                     # redis:7-alpine `redis` account
+        runAsGroup: 999
+        fsGroup: 999                       # /data writable for AOF
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis-cache
+          image: "{{ $svc.image.repository }}:{{ $svc.image.tag }}"
+          # $(VAR) in args expands against the container env below
+          # (Kubernetes native expansion).
+          args:
+            - redis-server
+            - --appendonly
+            - "yes"
+            - --maxmemory-policy
+            - noeviction
+            - --requirepass
+            - $(TRANSLATION_CACHE_PASSWORD)
+          env:
+            # redis-cli consumes REDISCLI_AUTH automatically for the
+            # health probes below.
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: translation-cache-password
+                  key: TRANSLATION_CACHE_PASSWORD
+            - name: TRANSLATION_CACHE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: translation-cache-password
+                  key: TRANSLATION_CACHE_PASSWORD
+          ports:
+            - name: redis
+              containerPort: {{ $svc.port }}
+          readinessProbe:
+            exec: { command: ["sh", "-c", "redis-cli ping"] }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec: { command: ["sh", "-c", "redis-cli ping"] }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        - name: data
+        {{- if $svc.pvc.enabled }}
+          persistentVolumeClaim:
+            claimName: redis-cache-data
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+{{- if $svc.pvc.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-cache-data
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ $svc.pvc.storageSize }}
+  {{- with .Values.pluggable.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
+spec:
+  ports:
+    - name: redis
+      port: 6379
+  selector:
+    genieai.io/component: redis-cache
+---
+# Ingress from backend ONLY (the sole consumer); egress DNS only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: redis-cache
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 6379
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+{{- end -}}

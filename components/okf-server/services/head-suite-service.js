@@ -995,22 +995,71 @@ function probeVerdict(topScore) {
 // the rerank-best chunk: the score gap PLUS whether the corpus even
 // mentions the question's terms (topical overlap vs no coverage at all).
 const PROBE_STOPWORDS = new Set([
-  'what', 'are', 'the', 'how', 'often', 'should', 'for', 'of', 'in', 'a', 'an',
-  'is', 'do', 'does', 'to', 'and', 'with', 'on', 'at', 'by', 'from', 'can',
-  'be', 'it', 'this', 'that', 'which', 'when', 'who', 'whom', 'list', 'give',
-  'tell', 'about', 'there', 'any', 'have', 'has', 'was', 'were', 'adults',
-  'people', 'patients', 'user', 'users', 'please', 'me', 'my', 'i', 'you',
-  'your', 'their', 'they', 'its', 'new', 'latest', 'current', 'best'
+  'what',
+  'are',
+  'the',
+  'how',
+  'often',
+  'should',
+  'for',
+  'of',
+  'in',
+  'a',
+  'an',
+  'is',
+  'do',
+  'does',
+  'to',
+  'and',
+  'with',
+  'on',
+  'at',
+  'by',
+  'from',
+  'can',
+  'be',
+  'it',
+  'this',
+  'that',
+  'which',
+  'when',
+  'who',
+  'whom',
+  'list',
+  'give',
+  'tell',
+  'about',
+  'there',
+  'any',
+  'have',
+  'has',
+  'was',
+  'were',
+  'adults',
+  'people',
+  'patients',
+  'user',
+  'users',
+  'please',
+  'me',
+  'my',
+  'i',
+  'you',
+  'your',
+  'their',
+  'they',
+  'its',
+  'new',
+  'latest',
+  'current',
+  'best'
 ]);
 
 function probeReason(verdict, topScore, best, query) {
   const preview = best && best.text ? best.text.replace(/\s+/g, ' ').trim().slice(0, 140) : '';
   if (verdict === 'unknown') return 'no rerank score — the corpus ranking could not be evaluated';
   if (verdict === 'answerable') {
-    return (
-      `Best chunk scores ${topScore} (≥ 0.5 answer bar)` +
-      (preview ? ` — "${preview}"` : '')
-    );
+    return `Best chunk scores ${topScore} (≥ 0.5 answer bar)` + (preview ? ` — "${preview}"` : '');
   }
   // Content-term overlap between the question and the best candidate.
   const terms = String(query || '')
@@ -1039,6 +1088,106 @@ function probeReason(verdict, topScore, best, query) {
     `No corpus content matches this question — the best candidate scores just ${topScore}` +
     (preview ? ` ("${preview}")` : '')
   );
+}
+
+/**
+ * 1-8g — ONE rerank call through the SAME endpoint the pipeline grounds on.
+ * The remote TEI's nginx 401s by client fingerprint: aiohttp (the reranker
+ * service) passes anonymously, node fetch does not — send the Bearer token
+ * explicitly when configured (live 2026-10-10: anonymous node fetch → HTTP
+ * 401 on every call). Returns the decoded score array; throws on failure.
+ */
+async function rerankTexts(query, texts) {
+  const rerankUrl = process.env.OKF_RERANK_ENDPOINT || '';
+  if (!rerankUrl) {
+    const err = new Error('rerank endpoint not configured (OKF_RERANK_ENDPOINT)');
+    err.code = 'RERANK_NOT_CONFIGURED';
+    throw err;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  const rerankToken = process.env.OKF_RERANK_TOKEN || '';
+  const headers = { 'Content-Type': 'application/json' };
+  if (rerankToken) headers.Authorization = `Bearer ${rerankToken}`;
+  try {
+    const resp = await fetch(rerankUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query, texts }),
+      signal: controller.signal
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const decoded = await resp.json();
+    if (!Array.isArray(decoded)) throw new Error('unexpected rerank response shape');
+    return decoded;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * 1-8g — the LIGHT probe: embed → top-K from the repo's ingested corpus →
+ * rerank → coverage verdict. This is the per-row core of probeSuiteQuery
+ * WITHOUT the panel extras (head leg, reference files, top-chunk table) —
+ * the shape persisted as lastProbe and stamped onto run results. Never
+ * throws: any failure degrades to verdict 'unknown' with an honest note.
+ */
+async function probeQueryLight(db, graphName, query) {
+  const at = new Date().toISOString();
+  const probe = { at, query, docs: 0, top_score: null, verdict: 'unknown' };
+  try {
+    // 1. Embed (same TEI + BGE query-prefix contract as routing).
+    const embeddings = await frontmatterService.teiEmbed([query]);
+    const emb = Array.isArray(embeddings) && embeddings[0];
+    if (!emb) {
+      probe.note = 'query embedding failed';
+      return probe;
+    }
+
+    // 2. Top-K chunks from THIS repo's ingested corpus.
+    const rows = (
+      await (
+        await db.query(
+          `FOR c IN \`${graphName}_SOURCE\` ` +
+            'LET s = APPROX_NEAR_COSINE(c.embedding, @emb) ' +
+            'SORT s DESC LIMIT @k ' +
+            'RETURN { text: c.text, score: s }',
+          { emb, k: PROBE_TOP_K }
+        )
+      ).all()
+    ).map((r) => ({ text: String(r.text || '').slice(0, PROBE_TEXT_CAP), score: Number(r.score) || 0 }));
+    probe.docs = rows.length;
+    if (!rows.length) {
+      probe.verdict = 'unanswerable'; // empty corpus cannot answer
+      probe.note = 'no chunks in the ingested corpus';
+      return probe;
+    }
+
+    // 3. Rerank through the pipeline's endpoint.
+    let best = null;
+    try {
+      const decoded = await rerankTexts(
+        query,
+        rows.map((r) => r.text)
+      );
+      let top = 0;
+      for (const r of decoded) {
+        const s = Number(r && r.score) || 0;
+        if (!best || s > top) {
+          top = s;
+          best = rows[Number(r && r.index)] || null;
+        }
+      }
+      probe.top_score = Number(top.toFixed(4));
+      probe.verdict = probeVerdict(probe.top_score);
+      probe.reason = probeReason(probe.verdict, probe.top_score, best, query);
+    } catch (e) {
+      probe.note = e.code === 'RERANK_NOT_CONFIGURED' ? e.message : `rerank failed: ${e.message}`;
+    }
+  } catch (e) {
+    probe.note = `probe failed: ${e.message}`;
+  }
+  return probe;
 }
 
 async function probeSuiteQuery(repoId, suiteKey, payload = {}, opts = {}) {
@@ -1127,33 +1276,15 @@ async function probeSuiteQuery(repoId, suiteKey, payload = {}, opts = {}) {
     }
 
     // 3. Rerank through the SAME endpoint the pipeline grounds on.
-    const rerankUrl = process.env.OKF_RERANK_ENDPOINT || '';
     if (!rows.length) {
       probe.verdict = 'unanswerable'; // empty corpus cannot answer
       probe.note = 'no chunks in the ingested corpus';
-    } else if (!rerankUrl) {
-      probe.note = 'rerank endpoint not configured (OKF_RERANK_ENDPOINT)';
     } else {
       try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-        // The remote TEI's nginx 401s by client fingerprint: aiohttp (the
-        // reranker service) passes anonymously, node fetch does not — send
-        // the Bearer token explicitly when configured (live 2026-10-10:
-        // anonymous node fetch → HTTP 401 on every call).
-        const rerankToken = process.env.OKF_RERANK_TOKEN || '';
-        const headers = { 'Content-Type': 'application/json' };
-        if (rerankToken) headers.Authorization = `Bearer ${rerankToken}`;
-        const resp = await fetch(rerankUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ query, texts: rows.map((r) => r.text) }),
-          signal: controller.signal
-        });
-        clearTimeout(timer);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const decoded = await resp.json();
-        if (!Array.isArray(decoded)) throw new Error('unexpected rerank response shape');
+        const decoded = await rerankTexts(
+          query,
+          rows.map((r) => r.text)
+        );
         const top = decoded.reduce((m, r) => Math.max(m, Number(r && r.score) || 0), 0);
         probe.top_score = Number(top.toFixed(4));
         probe.verdict = probeVerdict(probe.top_score);
@@ -1170,7 +1301,7 @@ async function probeSuiteQuery(repoId, suiteKey, payload = {}, opts = {}) {
         probe.reason = probeReason(probe.verdict, probe.top_score, rerankTop[0], query);
       } catch (e) {
         logger.error('head-suite.probe.rerank_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message });
-        probe.note = `rerank failed: ${e.message}`;
+        probe.note = e.code === 'RERANK_NOT_CONFIGURED' ? e.message : `rerank failed: ${e.message}`;
       }
     }
 
@@ -1312,6 +1443,64 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           error: e.message
         });
       }
+    }
+
+    // 1-8g (David): Run All fills the Corpus column — every row is ALSO
+    // probed against the live corpus (embed → top-K → the pipeline's
+    // rerank → coverage verdict). The light probes ride each result; the
+    // verdicts persist on the suite rows so a reload keeps the chips.
+    // Default ON; opt out with {probe:false}. A repo without an ingested
+    // corpus has nothing to probe — the leg skips cleanly.
+    if (opts.probe !== false && repo.ingested_graph_name) {
+      const graphName = repo.ingested_graph_name;
+      const t0 = Date.now();
+      const PROBE_CONCURRENCY = 4;
+      const queue = all.slice();
+      const probeMap = new Map();
+      const worker = async () => {
+        for (;;) {
+          const q = queue.shift();
+          if (!q) return;
+          if (probeMap.has(q.query)) continue; // same text can sit in both arrays
+          probeMap.set(q.query, await probeQueryLight(db, graphName, q.query));
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(PROBE_CONCURRENCY, queue.length) }, worker));
+      for (const r of results) {
+        const p = probeMap.get(r.query);
+        if (p) {
+          r.probe = {
+            at: p.at,
+            docs: p.docs,
+            top_score: p.top_score,
+            verdict: p.verdict,
+            reason: p.reason || null,
+            note: p.note || null
+          };
+        }
+      }
+      // Persist the verdicts on the suite rows (a later Load keeps the chips).
+      let touched = 0;
+      for (const arr of [suite.payload.positive, suite.payload.negative]) {
+        for (const row of arr || []) {
+          const p = row && probeMap.get(row.query);
+          if (p) {
+            row.lastProbe = p;
+            touched += 1;
+          }
+        }
+      }
+      if (touched) {
+        suite.updated_at = new Date().toISOString();
+        await db.collection(HEAD_TEST_RUNS_COLLECTION).replace(suite._key, suite);
+      }
+      span.setAttribute('okf.headsuite.probe_rows', probeMap.size);
+      logger.info('head-suite.run_probed', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        probed: probeMap.size,
+        elapsed_ms: Date.now() - t0
+      });
     }
 
     const summary = summarizeRun(results);
@@ -1912,6 +2101,7 @@ module.exports = {
   probeVerdict,
   probeReason,
   runSuite,
+  probeQueryLight,
   listRuns,
   explainSuiteFailures,
   recommendTagSet,

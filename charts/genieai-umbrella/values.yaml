@@ -151,7 +151,8 @@ secrets:
 #   port: container port (also the Service port)
 #   resources: k8s requests + limits (CPU + memory)
 #   env: raw env entries appended to the rendered Deployment
-#   secrets: K8s Secret names consumed via envFrom (key = env var name)
+#   secrets: K8s Secret refs consumed via envFrom (each entry: {name: <secret-name>};
+#            the whole Secret is mounted — every key in the Secret becomes an env var)
 #   pvc: optional PersistentVolumeClaim spec for stateful services
 #   probes: readiness/liveness/startup probe definitions
 #   podDisruptionBudget: optional PDB; null disables
@@ -232,9 +233,10 @@ services:
     replicas: 1
     image: { repository: clamav/clamav, tag: "1.3" }
     port: 3310
-    # The factory applies a default non-root securityContext; this service
-    # requires a fully-restated block because runAsUser must match the
-    # upstream image's clamav account (uid 100).
+    # The shared per-service template applies a default non-root
+    # securityContext; this service requires a fully-restated block
+    # because runAsUser must match the upstream image's clamav account
+    # (uid 100).
     securityContext:
       runAsNonRoot: true
       runAsUser: 100

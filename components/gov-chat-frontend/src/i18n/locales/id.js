@@ -1499,7 +1499,7 @@ export default {
         inProgress: 'Menerbitkan — mengekspor dan mentransfer bundel…',
         title: 'Publikasikan'
       },
-      readonly: 'BACA SAJA',
+      readonly: 'KONTEN HANYA BACA — head/tag tetap dapat diedit',
       serving: 'Melayani',
       state: {
         ingested: 'Diserap'

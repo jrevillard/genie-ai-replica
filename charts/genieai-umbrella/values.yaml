@@ -154,6 +154,8 @@ secrets:
 #   secrets: K8s Secret refs consumed via envFrom (each entry: {name: <secret-name>};
 #            the whole Secret is mounted — every key in the Secret becomes an env var)
 #   pvc: optional PersistentVolumeClaim spec for stateful services
+#   volumes: optional PodSpec volumes (PVC, ConfigMap, emptyDir, ...)
+#   volumeMounts: optional container volumeMounts (subPath supported)
 #   probes: readiness/liveness/startup probe definitions
 #   podDisruptionBudget: optional PDB; null disables
 #   serviceMonitor: opt-in Prometheus scrape; gated by observability.enabled
@@ -204,6 +206,13 @@ services:
     pvc:
       enabled: true                     # rendered as PVC by the doc-repo template
       storageSize: 20Gi
+    volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: document-repository-uploads
+    volumeMounts:
+      - name: uploads
+        mountPath: /app/uploads
     probes:
       readiness: { httpGet: { path: /health, port: 3001 }, initialDelaySeconds: 10, periodSeconds: 10 }
       liveness:  { tcpSocket: { port: 3001 }, initialDelaySeconds: 30, periodSeconds: 30 }
@@ -222,6 +231,20 @@ services:
     env: []
     secrets: []
     pvc: null
+    # The genie-ai-nginx entrypoint envsubst-renders default.conf FROM its
+    # baked template AT STARTUP; mounting a read-only subPath OVER the
+    # rendered file would fail with EROFS. Mount the ConfigMap over the
+    # template PATH so envsubst reads the override and emits a writable
+    # default.conf.
+    volumes:
+      - name: conf
+        configMap:
+          name: nginx-override
+          defaultMode: 0o444
+    volumeMounts:
+      - name: conf
+        mountPath: /etc/nginx/conf.d/default.conf.template
+        subPath: default.conf.template
     probes:
       readiness: { httpGet: { path: /healthz, port: 8080 }, initialDelaySeconds: 5, periodSeconds: 10 }
       liveness:  { httpGet: { path: /healthz, port: 8080 }, initialDelaySeconds: 30, periodSeconds: 30 }

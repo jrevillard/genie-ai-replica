@@ -546,7 +546,7 @@ describe('Configuration Validation Suite', () => {
     test('OKF_RERANK_TOKEN is piped in the okf-server compose block with an empty default', () => {
       const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const okfBlock = composeText.slice(composeText.indexOf('  okf-server:'), composeText.indexOf('  pii-service:'));
-      expect(okfBlock).toMatch(/- OKF_RERANK_TOKEN=${OKF_RERANK_TOKEN:-}/);
+      expect(okfBlock).toMatch(/- OKF_RERANK_TOKEN=\$\{OKF_RERANK_TOKEN:-\}/);
     });
 
     test('OKF_RERANK_ENDPOINT is emitted by ansible env.j2 (empty default)', () => {

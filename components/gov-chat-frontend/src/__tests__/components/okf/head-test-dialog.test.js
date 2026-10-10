@@ -1146,6 +1146,75 @@ it('1-8g: the probe summary panel renders head + corpus legs, the reason, refere
   expect(html).toContain('812ms');
 });
 
+it('1-8g: suiteEditableRows carries lastProbe through the final map (the Corpus-column regression)', async () => {
+  // THE live bug (2026-10-10): the computed's final map rebuilt every row
+  // WITHOUT lastProbe — the payload kept it, the rendered rows lost it, and
+  // the Corpus column stayed blank for everyone. Assert the OUTPUT.
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = {
+    suite_key: 's1',
+    payload: {
+      positive: [{ query: 'q1', lastProbe: { verdict: 'weak', top_score: 0.3, docs: 24 } }],
+      negative: []
+    }
+  };
+  const row = w.vm.suiteEditableRows.find((r) => r.query === 'q1');
+  expect(row.lastProbe).toMatchObject({ verdict: 'weak', top_score: 0.3 });
+});
+
+it('1-8g: Run All merges the run per-row corpus probes into the suite rows', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  dispatch.mockImplementation((action) => {
+    if (action === 'okf/headSuiteRun') {
+      return Promise.resolve({
+        ok: true,
+        result: {
+          payload: {
+            summary: {
+              pass_rate: 1,
+              positive_passed: 1,
+              positive_total: 1,
+              negative_passed: 0,
+              negative_evaluatable: 0,
+              negative_pass_rate: null,
+              steals: []
+            },
+            results: [
+              {
+                query: 'q1',
+                kind: 'positive',
+                source: 'llm',
+                under_test_wins_head: true,
+                sibling_count: 0,
+                probe: { at: '2026-10-10T10:00:00Z', docs: 24, top_score: 0.83, verdict: 'answerable' }
+              }
+            ]
+          }
+        }
+      });
+    }
+    return Promise.resolve({ ok: true, runs: [] });
+  });
+  w.vm.suite = { suite_key: 's1', payload: { positive: [{ query: 'q1' }], negative: [] } };
+  await w.vm.onRunSuite();
+  expect(w.vm.suite.payload.positive[0].lastProbe).toMatchObject({ verdict: 'answerable', top_score: 0.83 });
+  expect(w.vm.busy).toBeNull();
+});
+
+it('1-8g: the corpus probe affordances gate on an ingested corpus (the live 409)', async () => {
+  // REPO fixture has no ingested_graph_name → ▶ disabled + hint shown.
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  expect(w.vm.corpusAvailable).toBe(false);
+  w.vm.suite = { suite_key: 's1', payload: { positive: [{ query: 'q1' }], negative: [] } };
+  await w.vm.$nextTick();
+  const btn = w.element.querySelector('.okf-headtest__row-btn');
+  expect(btn).not.toBeNull();
+  expect(btn.disabled).toBe(true);
+});
+
 it('1-8g: onDeleteSuite removes the suite from the list and clears a loaded copy', async () => {
   const w = mountDialog({ initialTab: 'suites' });
   await w.vm.$nextTick();

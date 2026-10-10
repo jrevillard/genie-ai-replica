@@ -560,6 +560,16 @@
                 )
               }}
             </span>
+            <!-- 2026-10-10 (live 409): say WHY the corpus column cannot fill
+                 on a repo that was never ingested. -->
+            <span v-if="!corpusAvailable" class="okf-headtest__stale-suite">
+              {{
+                translate(
+                  'okf.headTest.suites.corpusNeedsIngest',
+                  'Ingest the repository first — the corpus test searches the ingested corpus'
+                )
+              }}
+            </span>
           </div>
           <table class="okf-headtest__scores">
             <thead>
@@ -635,11 +645,22 @@
                   <span v-else>—</span>
                 </td>
                 <td v-if="!readOnly" class="okf-headtest__row-actions">
+                  <!-- 2026-10-10 (live 409): the probe searches the INGESTED
+                       corpus — on a published-but-uningested repo every ▶
+                       409'd (REPO_NOT_INGESTED). Disabled with the reason,
+                       never a dead button. -->
                   <button
                     type="button"
                     class="okf-headtest__row-btn"
-                    :disabled="busy !== null"
-                    :title="translate('okf.headTest.suites.probeTip', 'Test this query against the live corpus')"
+                    :disabled="busy !== null || !corpusAvailable"
+                    :title="
+                      corpusAvailable
+                        ? translate('okf.headTest.suites.probeTip', 'Test this query against the live corpus')
+                        : translate(
+                            'okf.headTest.suites.corpusNeedsIngest',
+                            'Ingest the repository first — the corpus test searches the ingested corpus'
+                          )
+                    "
                     @click="onProbeRow(row)"
                   >
                     ▶
@@ -1427,11 +1448,21 @@ export default {
           kind: r.kind,
           cls: r.cls,
           source: r.source,
+          // 1-8g: the final map REBUILDS the row — dropping lastProbe here
+          // blanked the Corpus column even though the push above kept it
+          // (the live bug: chips never rendered for anyone).
+          lastProbe: r.lastProbe || null,
           pass: o ? o.pass : null,
           failLabel: o ? o.failLabel : null,
           error: o ? o.error : null
         };
       });
+    },
+    /** 2026-10-10 (live 409): the corpus probe searches the INGESTED
+     * corpus — routing/head tests work without ingestion, the ▶ click-test
+     * does not. Gate the affordance instead of letting every click 409. */
+    corpusAvailable() {
+      return !!(this.repo && this.repo.ingested_graph_name);
     },
     negLabel() {
       const s = this.lastRunSummary;
@@ -2158,6 +2189,16 @@ export default {
         pass: this.outcomeOf(r),
         failLabel: this.failLabelOf(r)
       }));
+      // 1-8g: Run All probes every row against the live corpus — merge the
+      // verdicts into the suite rows so the Corpus column fills for the
+      // whole suite, not only for one-at-a-time click-tests.
+      const probes = new Map(results.filter((r) => r.probe).map((r) => [r.query, r.probe]));
+      for (const arr of [this.suite.payload.positive, this.suite.payload.negative]) {
+        for (const r of arr || []) {
+          const p = r && probes.get(r.query);
+          if (p) r.lastProbe = p;
+        }
+      }
       this.batchAdvice = null; // a fresh run makes the previous advice stale
       this.checkTripwire(baseline, this.lastRunSummary);
       this.refreshRuns();

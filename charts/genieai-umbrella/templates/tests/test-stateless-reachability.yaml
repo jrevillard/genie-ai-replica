@@ -1,10 +1,10 @@
-{{- /* Group 5 service-tier reachability smoke test. Probes each Service's
-       /health endpoint (or TCP-open for clamd) and asserts the response.
-       Skips disabled services. */ -}}
+{{- /* Stateless-tier service reachability smoke test. Probes each Service's
+       /health endpoint (or TCP-open for clamd / redis-cache) and asserts
+       the response. Skips disabled services. */ -}}
 apiVersion: v1
 kind: Pod
 metadata:
-  name: {{ include "genieai-common.fullname" . }}-test-group5-reach
+  name: {{ include "genieai-common.fullname" . }}-test-stateless-reach
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test") | nindent 4 }}
@@ -50,9 +50,28 @@ spec:
               failures=$((failures+1))
             fi
           }
-          {{- /* Checks hit the SERVICE ports (80; clamav 3310), NOT the
-                 container ports — Services are the stable in-cluster
-                 contract. */ -}}
+          # TCP-open probe for binary-protocol services (clamav, redis-cache).
+          # The test image (curlimages/curl) ships no bash, so /dev/tcp is
+          # unavailable; probe with curl's telnet:// scheme instead:
+          # connection refused exits 7, DNS failure exits 6; a timeout
+          # (exit 28) or clean close means the TCP port answered.
+          check_tcp() {
+            host=$1
+            port=$2
+            curl_code=$(curl -s -o /dev/null --max-time 3 "telnet://${host}:${port}" </dev/null; echo $?)
+            case "$curl_code" in
+              6|7)
+                echo "FAIL: ${host}:${port} tcp closed (curl exit $curl_code)"
+                failures=$((failures+1))
+                ;;
+              *)
+                echo "PASS: ${host}:${port} tcp open (curl exit $curl_code)"
+                ;;
+            esac
+          }
+          {{- /* Checks hit the SERVICE ports (80; non-HTTP probes use their
+                 configured port), NOT the container ports — Services are
+                 the stable in-cluster contract. */ -}}
           {{- if .Values.services.backend.enabled }}
           check backend 80 /api/health 200
           {{- end }}
@@ -66,24 +85,13 @@ spec:
           check nginx 80 /healthz 200
           {{- end }}
           {{- if .Values.services.clamav.enabled }}
-          # clamd is a binary protocol, not HTTP — TCP-open probe only.
-          # The test image (curlimages/curl) ships no bash, so /dev/tcp is
-          # unavailable; probe with curl's telnet:// scheme instead:
-          # connection refused exits 7, DNS failure exits 6; a timeout
-          # (exit 28) or clean close means the TCP port answered.
-          curl_code=$(curl -s -o /dev/null --max-time 3 telnet://clamav:3310 </dev/null; echo $?)
-          case "$curl_code" in
-            6|7)
-              echo "FAIL: clamav:3310 tcp closed (curl exit $curl_code)"
-              failures=$((failures+1))
-              ;;
-            *)
-              echo "PASS: clamav:3310 tcp open (curl exit $curl_code)"
-              ;;
-          esac
+          check_tcp clamav 3310
+          {{- end }}
+          {{- if .Values.services.redisCache.enabled }}
+          check_tcp redis-cache 6379
           {{- end }}
           if [ "$failures" -gt 0 ]; then
             echo "FAIL: $failures service(s) unreachable"
             exit 1
           fi
-          echo "PASS: all Group 5 reachable"
+          echo "PASS: all stateless-tier services reachable"

@@ -1,0 +1,17 @@
+{{- if and .Values.services.documentRepository.enabled .Values.services.documentRepository.pvc.enabled -}}
+{{- $pvc := .Values.services.documentRepository.pvc -}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: document-repository-uploads
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.pluggable.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $pvc.storageSize | default "20Gi" }}
+{{- end -}}

@@ -185,6 +185,39 @@ describe('repository-service', () => {
       const updates = Object.values(db._stores.okf_audit_logs || {}).filter((a) => a.action === 'repo.update');
       expect(updates).toHaveLength(1);
     });
+
+    // 1-8g-q (David: "a maintenance operation, similar to indexing a
+    // database"): a serving repo accepts HEAD/metadata maintenance
+    // (frontmatter — the tag-set the vectorized head is built from) but
+    // nothing that would desync the versioned serving graph or its name.
+    test('serving repo: frontmatter patch succeeds (head maintenance in place)', async () => {
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      // simulate the serving state the ingest flip stamps (direct doc
+      // write, exactly like lifecycle-service's promote flip)
+      db._stores.okf_repositories[created.repo_id].ingested_at = '2026-10-11T00:00:00.000Z';
+      db._stores.okf_repositories[created.repo_id].ingested_graph_name = 'OKF_x_v1';
+      const updated = await repoService.update(
+        created.repo_id,
+        { frontmatter: { topic: ['retuned'], entity: [], scope: '', forbidden: [], summary: '', keyword: [] } },
+        ACTOR
+      );
+      expect(updated.frontmatter.topic).toEqual(['retuned']);
+      expect(updated.frontmatter.updated_at).toEqual(expect.any(String));
+    });
+
+    test('serving repo: non-frontmatter patches (rename, studio_step) still 409 REPO_READ_ONLY', async () => {
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      db._stores.okf_repositories[created.repo_id].ingested_at = '2026-10-11T00:00:00.000Z';
+      await expect(repoService.update(created.repo_id, { name: 'Renamed' }, ACTOR)).rejects.toMatchObject({
+        code: 'REPO_READ_ONLY',
+        status: 409,
+        message: /only head\/metadata \(frontmatter\) maintenance is allowed/
+      });
+      await expect(repoService.update(created.repo_id, { studio_step: 3 }, ACTOR)).rejects.toMatchObject({
+        code: 'REPO_READ_ONLY',
+        status: 409
+      });
+    });
   });
 
   describe('remove (delete — cleans everything)', () => {

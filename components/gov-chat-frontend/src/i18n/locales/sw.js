@@ -1492,7 +1492,7 @@ export default {
         inProgress: 'Inachapishwa — kunasafirisha na kuhamisha kifurushi…',
         title: 'Chapisha'
       },
-      readonly: 'SOMA TU',
+      readonly: 'MAUDHIRI YA KUSOMA TU — kichwa/lebo zinaweza kuhaririwa',
       serving: 'Inahudumia',
       state: {
         ingested: 'Imemezwa'

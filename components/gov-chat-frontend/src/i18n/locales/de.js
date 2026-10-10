@@ -1505,7 +1505,7 @@ export default {
         inProgress: 'Wird veröffentlicht — Bundle wird exportiert und übertragen…',
         title: 'Veröffentlichen'
       },
-      readonly: 'NUR LESEN',
+      readonly: 'INHALT SCHREIBGESCHÜTZT — Head/Tags bearbeitbar',
       serving: 'Wird bereitgestellt',
       state: {
         ingested: 'Aufgenommen'

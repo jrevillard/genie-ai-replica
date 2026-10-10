@@ -1483,7 +1483,7 @@ export default {
         inProgress: 'A kabuḷo publishing — a bōk eddo kakkwon bundle im jōt e…',
         title: 'A ke'
       },
-      readonly: 'A KARAN DAMA',
+      readonly: 'CONTENT READ ONLY — head/tags stay editable',
       serving: 'A bering baara',
       state: {
         ingested: 'A marata'

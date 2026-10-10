@@ -35,7 +35,11 @@
           "
         />
       </DsPill>
-      <DsPill v-if="readOnly" variant="warning">{{ translate('okf.shell.readonly', 'READ ONLY') }}</DsPill>
+      <!-- 1-8g-q: the lock is CONTENT-only now — the head/tags stay
+           editable on a serving repo, so the pill says exactly that. -->
+      <DsPill v-if="readOnly" variant="warning">{{
+        translate('okf.shell.readonly', 'CONTENT READ ONLY — head/tags stay editable')
+      }}</DsPill>
       <span v-if="serving && graphName" class="okf-shell__graph" :title="graphName">
         <code>{{ graphName }}</code>
       </span>

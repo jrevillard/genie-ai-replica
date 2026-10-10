@@ -108,7 +108,7 @@ metadata:
 spec:
   ports:
     - name: redis
-      port: 6379
+      port: {{ $svc.port }}
   selector:
     genieai.io/component: redis-cache
 ---

@@ -1,0 +1,81 @@
+{{- if .Values.services.frontend.enabled -}}
+{{- $ns := .Values.namespace -}}
+{{- $vals := deepCopy .Values -}}
+{{- $urls := list
+    (dict "name" "VUE_APP_API_URL" "value" (printf "http://backend.%s.svc.cluster.local" $ns))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (printf "http://genieai-collector-collector.%s.svc.cluster.local:4318" $ns))
+-}}
+{{- $_ := set $vals.services.frontend "env" $urls -}}
+{{- $ctx := dict "name" "frontend" "component" "frontend" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "frontend") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8090
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "frontend") | nindent 4 }}
+---
+# Default-deny with ingress allowlist from the edge proxy and egress
+# scoped to the BFF plus the OTLP collector.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "frontend") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # nginx routes the SPA. Same-namespace peers permitted on the
+    # container port (post-DNAT). AuthN/AuthZ is enforced at the edge
+    # gateway; an explicit podSelector from the gateway namespace will
+    # land with the gateway tier.
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: nginx
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8090
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    # Backend BFF. Post-DNAT pod port (3000), not the Service port (80).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 3000
+    # OTLP exporter. Required for the observability pipeline; without
+    # this port the default-deny policy drops frontend telemetry.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4318
+{{- end -}}

@@ -140,3 +140,129 @@ secrets:
     enabled: false                     # plug-point; ESO controller installs separately
   secretProviderClass:
     enabled: false                     # plug-point; SecretProviderClass resources managed externally
+
+# Stateless application tier. Each entry drives a per-service Deployment
+# rendered by the corresponding template under templates/services/.
+#
+# Per-service entry shape:
+#   enabled: master toggle for the rendered resource
+#   replicas: pod count baseline; prod/staging overrides in clusterProfileReplicas
+#   image.repository / image.tag: container image pulled at deploy time
+#   port: container port (also the Service port)
+#   resources: k8s requests + limits (CPU + memory)
+#   env: raw env entries appended to the rendered Deployment
+#   secrets: K8s Secret names consumed via envFrom (key = env var name)
+#   pvc: optional PersistentVolumeClaim spec for stateful services
+#   probes: readiness/liveness/startup probe definitions
+#   podDisruptionBudget: optional PDB; null disables
+#   serviceMonitor: opt-in Prometheus scrape; gated by observability.enabled
+services:
+  backend:
+    enabled: true
+    replicas: 1
+    image: { repository: registry.example.org/genie-ai-backend, tag: "1.0.0" }
+    port: 3000
+    resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
+    env: []
+    secrets:
+      - name: keycloak-client-secret
+      - name: huggingface-hub-token
+      - name: email-password
+      - name: translation-cache-password
+    pvc: null
+    probes:
+      readiness: { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 10, periodSeconds: 10 }
+      liveness:  { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 30, periodSeconds: 30 }
+      startup:   { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 5, failureThreshold: 12 }
+    podDisruptionBudget: { minAvailable: 1 }
+    serviceMonitor: false
+
+  frontend:
+    enabled: true
+    replicas: 1
+    image: { repository: registry.example.org/genie-ai-frontend, tag: "1.0.0" }
+    port: 8090
+    resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+    env: []
+    secrets: []
+    pvc: null
+    probes:
+      readiness: { httpGet: { path: /health, port: 8090 }, initialDelaySeconds: 5, periodSeconds: 10 }
+      liveness:  { httpGet: { path: /health, port: 8090 }, initialDelaySeconds: 30, periodSeconds: 30 }
+    podDisruptionBudget: null
+    serviceMonitor: false
+
+  documentRepository:
+    enabled: true
+    replicas: 1
+    image: { repository: registry.example.org/genie-ai-document-repository, tag: "1.0.0" }
+    port: 3001
+    resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
+    env: []
+    secrets: []
+    pvc:
+      enabled: true                     # rendered as PVC by the doc-repo template
+      storageSize: 20Gi
+    probes:
+      readiness: { httpGet: { path: /health, port: 3001 }, initialDelaySeconds: 10, periodSeconds: 10 }
+      liveness:  { tcpSocket: { port: 3001 }, initialDelaySeconds: 30, periodSeconds: 30 }
+    podDisruptionBudget: null
+    serviceMonitor: false
+
+  nginx:
+    enabled: true
+    replicas: 1
+    # The stock image's baked nginx config proxies /api to the Kong gateway,
+    # which is no longer deployed. The edge tier mounts a ConfigMap over
+    # the upstream template so this image can serve the SPA + backend proxy.
+    image: { repository: registry.example.org/genie-ai-nginx, tag: "1.0.0" }
+    port: 8080
+    resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
+    env: []
+    secrets: []
+    pvc: null
+    probes:
+      readiness: { httpGet: { path: /healthz, port: 8080 }, initialDelaySeconds: 5, periodSeconds: 10 }
+      liveness:  { httpGet: { path: /healthz, port: 8080 }, initialDelaySeconds: 30, periodSeconds: 30 }
+    podDisruptionBudget: null
+    serviceMonitor: false
+
+  clamav:
+    enabled: true
+    replicas: 1
+    image: { repository: clamav/clamav, tag: "1.3" }
+    port: 3310
+    # The factory applies a default non-root securityContext; this service
+    # requires a fully-restated block because runAsUser must match the
+    # upstream image's clamav account (uid 100).
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 100
+      allowPrivilegeEscalation: false
+      capabilities: { drop: ["ALL"] }
+    resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { cpu: 1, memory: 1Gi } }
+    env: []
+    secrets: []
+    pvc: null
+    probes:
+      readiness: { tcpSocket: { port: 3310 }, initialDelaySeconds: 60, periodSeconds: 30 }
+      liveness:  { tcpSocket: { port: 3310 }, initialDelaySeconds: 120, periodSeconds: 60, failureThreshold: 5 }
+    podDisruptionBudget: null
+    serviceMonitor: false
+
+# clusterProfile-driven replica overrides. prod runs multiple replicas per
+# stateless service for zero-downtime rolling updates; staging runs a
+# reduced subset; sovereign matches dev (single replica).
+clusterProfileReplicas:
+  prod:
+    backend: 3
+    frontend: 2
+    documentRepository: 2
+  staging:
+    backend: 2
+    frontend: 2
+    documentRepository: 1
+  sovereign:
+    backend: 1
+    frontend: 1
+    documentRepository: 1

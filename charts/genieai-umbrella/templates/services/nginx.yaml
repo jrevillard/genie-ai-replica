@@ -1,0 +1,71 @@
+{{- if .Values.services.nginx.enabled -}}
+{{- $ctx := dict "name" "nginx" "component" "nginx" "Values" .Values "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "nginx") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "nginx") | nindent 4 }}
+---
+# Default-deny with ingress from same-namespace clients and egress
+# scoped to the SPA, the BFF, and DNS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nginx
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "nginx") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: nginx
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Same-namespace peers on the container port (post-DNAT). The
+    # edge gateway reaches nginx via a routed path; an explicit
+    # podSelector from the gateway namespace will land with the
+    # gateway tier.
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    # Frontend SPA. Post-DNAT pod port (8090).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: frontend
+      ports:
+        - protocol: TCP
+          port: 8090
+    # Backend BFF. Post-DNAT pod port (3000); nginx proxies /api/*.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 3000
+{{- end -}}

@@ -643,6 +643,13 @@ async function update(repo_id, patch, actor) {
           });
         }
       }
+      // The save timestamp is a SERVER invariant, not a client courtesy:
+      // every frontmatter write through update() restamps updated_at. The
+      // 2026-10-10 live bug: chip-panel saves replaced frontmatter without
+      // updated_at, so okf_repositories.frontmatter.updated_at kept the
+      // IMPORT-time stamp — the Lab's stale badge (fm.updated_at vs
+      // head.computed_at) and any freshness consumer read a 14h-old lie.
+      setFields.frontmatter.updated_at = nowIso();
     }
     // Story 1-8d — bounded frontmatter save history (the Lab's Revert-tags
     // panel). Every save that CHANGES frontmatter snapshots the shape; the

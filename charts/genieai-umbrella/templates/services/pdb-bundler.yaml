@@ -1,0 +1,8 @@
+{{- if and (or .Values.services.backend.enabled .Values.services.frontend.enabled .Values.services.documentRepository.enabled .Values.services.nginx.enabled .Values.services.clamav.enabled .Values.services.redisCache.enabled) -}}
+{{- range $svcName := list "backend" "frontend" "documentRepository" "nginx" "clamav" "redisCache" -}}
+{{- $enabled := index (index $.Values.services $svcName) "enabled" -}}
+{{- if $enabled -}}
+{{ include "genieai-umbrella.pdbForService" (dict "component" $svcName "Values" $.Values "Chart" $.Chart "Release" $.Release) }}
+{{- end -}}
+{{- end -}}
+{{- end -}}

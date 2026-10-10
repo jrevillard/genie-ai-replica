@@ -813,10 +813,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 logger.warning(f"Skipping status update for {file_id} due to missing auth token.")
             return
 
-        if concept_id:
+        ctx = _INGEST_CTX.get()
+        current_repo = (ctx or {}).get("repo_id") or getattr(self, "_current_repo_id", None)
+        # 2026-10-10 (live, 6× ERROR during the Slaugherhouse ingest): a call
+        # site that lost concept_id still carried a CONCEPT id as file_id —
+        # the fallthrough PATCHed doc-repo, which rightly has no metadata for
+        # concept ids ("Metadata not found"), poisoning every log sweep. An
+        # OKF ingest (ctx has repo_id) routes to the OKF control plane EVEN
+        # when concept_id is missing — the endpoint resolves by file_id.
+        is_okf_job = bool(concept_id or current_repo)
+        if is_okf_job:
             # Story 4.8-amend: OKF concept completion → okf-server concept-status
             # endpoint (the control plane that owns index_status + edges).
-            url = f"{OKF_SERVER_URL}/api/okf/internal/concepts/{concept_id}/status"
+            url = f"{OKF_SERVER_URL}/api/okf/internal/concepts/{concept_id or file_id}/status"
             payload = {"file_id": file_id, "status": status}
             if chunk_count is not None:
                 payload["chunk_count"] = chunk_count
@@ -825,8 +834,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # Exact-lookup key: the same concept_id can exist in multiple repos
             # (clones, smoke scratch repos); the okf-server resolves repo from
             # this when present instead of an ambiguous repo-wide search.
-            ctx = _INGEST_CTX.get()
-            current_repo = (ctx or {}).get("repo_id") or getattr(self, "_current_repo_id", None)
             if current_repo:
                 payload["repo_id"] = current_repo
             # Internal cross-service auth: the shared secret (fail-closed — an

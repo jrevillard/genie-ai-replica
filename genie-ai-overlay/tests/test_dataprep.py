@@ -1063,6 +1063,87 @@ class TestLabelWithBm25:
 
 
 # ---------------------------------------------------------------------------
+# TestUpdateDocStatusRouting (2026-10-10 live: 6× ERROR "Metadata not found"
+# during the Slaugherhouse ingest — a call site that lost concept_id still
+# carried a CONCEPT id as file_id and the fallthrough PATCHed doc-repo,
+# which rightly has no metadata for concept ids. An OKF-context job must
+# route to the OKF control plane even without concept_id.)
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateDocStatusRouting:
+    """Tests for _update_doc_status() endpoint routing."""
+
+    def _mock_session(self):
+        import aiohttp as aiohttp_mod
+
+        mock_session = MagicMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.text = AsyncMock(return_value="ok")
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=False)
+        mock_session.patch.return_value = mock_resp
+        aiohttp_mod.ClientSession.return_value = mock_session
+        aiohttp_mod.ClientTimeout.return_value = MagicMock()
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_okf_context_without_concept_id_routes_to_okf_server(self):
+        """file_id is a CONCEPT id and concept_id was lost — the OKF ingest
+        context (repo_id in ctx) still routes the callback to the OKF
+        control plane, never to doc-repo (the 404-noise origin fix)."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({"repo_id": "repo-1"})
+        try:
+            with (
+                patch.object(dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}),
+                patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+            ):
+                session = self._mock_session()
+                await dp._update_doc_status("guidance-doc-import-smoke-1789404732138-sec5", "Ingested", chunk_count=8)
+
+            called_url = session.patch.call_args[0][0]
+            assert "/api/okf/internal/concepts/" in called_url
+            assert "/api/files/" not in called_url
+            payload = session.patch.call_args[1]["json"]
+            assert payload["repo_id"] == "repo-1"
+            assert payload["file_id"] == "guidance-doc-import-smoke-1789404732138-sec5"
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    @pytest.mark.asyncio
+    async def test_legacy_job_without_okf_context_routes_to_doc_repo(self):
+        """No concept_id and no OKF context = a legacy single-file ingest —
+        the doc-repo status PATCH is preserved unchanged."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({})
+        try:
+            with (
+                patch.object(dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}),
+                patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+            ):
+                session = self._mock_session()
+                await dp._update_doc_status("1791566703011_a807dad8", "Ingested", chunk_count=12)
+
+            called_url = session.patch.call_args[0][0]
+            assert "/api/files/1791566703011_a807dad8/status" in called_url
+            assert "/api/okf/" not in called_url
+            payload = session.patch.call_args[1]["json"]
+            assert payload["dataprep"]["status"] == "Ingested"
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+
+# ---------------------------------------------------------------------------
 # TestIngestFileWithGuardrail
 # ---------------------------------------------------------------------------
 

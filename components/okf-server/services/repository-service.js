@@ -582,15 +582,28 @@ async function update(repo_id, patch, actor) {
       throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
     }
 
-    // READ-ONLY while serving (David, 2026-08-30): a serving repo cannot be
-    // updated (renaming it would desync the versioned serving-graph name).
+    // SERVING MAINTENANCE (1-8g-q, David 2026-10-11: "I see it as a
+    // maintenance operation, similar to indexing a database"): a serving
+    // repo accepts HEAD/METADATA patches — `frontmatter`, the tag-set the
+    // vectorized head is built from; the Routing Lab + advisor exist to
+    // tune exactly this, and the old blanket lock (2026-08-30) froze the
+    // whole editor on every ingested repo, making the tuning loop
+    // read-only for the only repos that are actually serving. Still
+    // rejected while serving: everything that would desync the versioned
+    // serving graph or its NAME — a rename orphans `OKF_<name-slug>_v<N>`,
+    // and content/structure mutations belong to retract → edit → publish.
     if (existing.ingested_at) {
-      recordOp('update', 'read_only');
-      throw new RepoError(
-        'REPO_READ_ONLY',
-        'repository is serving (ingested) and is READ ONLY — retract it to make changes',
-        409
-      );
+      const disallowed = Object.keys(patch).filter((k) => k !== 'frontmatter');
+      if (disallowed.length) {
+        recordOp('update', 'read_only');
+        throw new RepoError(
+          'REPO_READ_ONLY',
+          'repository is serving (ingested): only head/metadata (frontmatter) ' +
+            `maintenance is allowed — retract it to change: ${disallowed.join(', ')}`,
+          409
+        );
+      }
+      recordOp('update', 'frontmatter_maintenance');
     }
 
     // If renaming, reject collision with another LIVE repo in the same domain.

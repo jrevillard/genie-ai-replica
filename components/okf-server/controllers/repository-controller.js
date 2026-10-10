@@ -958,8 +958,17 @@ async function patchConcept(req, res, next) {
       ]);
     }
     // Authz + writability FIRST — a frozen repo 409s before content parsing.
+    // 1-8g-q (David, 2026-10-11: "I see it as a maintenance operation,
+    // similar to indexing a database"): the INDEX concept IS the head — its
+    // markdown carries the repo frontmatter YAML (the tag-set the vectorized
+    // head is built from), and the FrontmatterPanel saves exactly this. A
+    // serving repo accepts that ONE maintenance write; every other concept,
+    // and body/label writes anywhere else, stay frozen until retract (their
+    // content is baked into the serving graph's chunks).
     const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
-    assertWritable(repoDoc);
+    if (!(concept_id === 'index' && hasMarkdown)) {
+      assertWritable(repoDoc);
+    }
     let updated;
     let mode;
     if (hasMarkdown) {

@@ -1719,7 +1719,7 @@ export default {
         inProgress: 'Publishing — exporting and transferring the bundle…',
         title: 'Publish'
       },
-      readonly: 'READ ONLY',
+      readonly: 'CONTENT READ ONLY — head/tags stay editable',
       serving: 'Serving',
       state: {
         ingested: 'Ingested'

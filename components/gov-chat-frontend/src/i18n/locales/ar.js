@@ -1921,7 +1921,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'الوسوم على مستوى المستودع ({summary}) تخص المستودع وليس هذا المفهوم — أدرها من لوحة الوسوم في الشريط الأيمن.'
     },
     glossary: {
       addConcept:
@@ -2776,7 +2778,8 @@ export default {
         deleteTip: 'إزالة هذا الصف من المجموعة',
         namePlaceholder: 'اسم المجموعة (اختياري) — مثال: مجموعة انحدار الأمراض غير السارية',
         probeTip: 'اختبر هذا الاستعلام ضد المتن الحي',
-        deleteSuiteTip: 'احذف هذه المجموعة وسجلها'
+        deleteSuiteTip: 'احذف هذه المجموعة وسجلها',
+        corpusNeedsIngest: 'قم أولاً باستيعاب المستودع — اختبار المتن يبحث في المتن المستوعب'
       },
       error: {
         explain: 'فشل الشرح',

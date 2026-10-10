@@ -1934,7 +1934,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Теги уровня репозитория ({summary}) живут в репозитории, а не в этом концепте — управляйте ими в панели тегов правой панели.'
     },
     glossary: {
       addConcept:
@@ -2803,7 +2805,8 @@ export default {
         deleteTip: 'Убрать эту строку из набора',
         namePlaceholder: 'Имя набора (необязательно) — напр. регрессионный набор НИЗ',
         probeTip: 'Проверить этот запрос на живом корпусе',
-        deleteSuiteTip: 'Удалить этот набор и его историю'
+        deleteSuiteTip: 'Удалить этот набор и его историю',
+        corpusNeedsIngest: 'Сначала загрузите репозиторий — тест корпуса ищет по загруженному корпусу'
       },
       error: {
         explain: 'Не удалось объяснить',

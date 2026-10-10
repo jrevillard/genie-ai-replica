@@ -1944,7 +1944,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Tags auf Repository-Ebene ({summary}) gehören zum Repository, nicht zu diesem Konzept — verwalten Sie sie im Tags-Panel in der rechten Leiste.'
     },
     glossary: {
       addConcept:
@@ -2815,7 +2817,8 @@ export default {
         deleteTip: 'Diese Zeile aus der Suite entfernen',
         namePlaceholder: 'Suiten-Name (optional) — z. B. NCD-Regressionssatz',
         probeTip: 'Diese Abfrage gegen den Live-Korpus testen',
-        deleteSuiteTip: 'Diese Suite und ihren Verlauf löschen'
+        deleteSuiteTip: 'Diese Suite und ihren Verlauf löschen',
+        corpusNeedsIngest: 'Inigieren Sie zuerst das Repository — der Korpus-Test durchsucht den inginierten Korpus'
       },
       error: {
         explain: 'Erklärung fehlgeschlagen',

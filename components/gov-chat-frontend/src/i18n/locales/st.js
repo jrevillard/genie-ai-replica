@@ -2851,7 +2851,14 @@ export default {
         now: 'Hona joale',
         predicted: 'e boleloa pele',
         scope: ' (lipotso {q} ho tswa ho tsamaello {r} tsa kajeno)',
-        applying: 'E sebelisa: ho boloka matag, ho haha hlooho hape, ho phethahatsa sete hape…'
+        applying: 'E sebelisa: ho boloka matag, ho haha hlooho hape, ho phethahatsa sete hape…',
+        blockedTitle: 'Tlosong tse koalloeng — tobetsa ho li kenyelle ho Apply',
+        blockedGain: 'e busetsa {n} e teng',
+        narrowTitle: 'Mekhopolo e tletseng — e busetsa tse teng ntle ho ho ngola tse sieo hape',
+        narrowChip: 'Tlosa lebitla se pharaletseng, kenya se lutsehisi',
+        reasonCurator: 'ke wena ya tlileng ka lebitla lena — netefatsa pele ua le tlosa',
+        reasonRotated: 'nalane e fetile motheo — netefatsa pele ua le tlosa',
+        scopeDetail: 'li-suite: {s} · mehloso ea melaetana: {t}'
       },
       probe: {
         answerable: 'e ka araba',

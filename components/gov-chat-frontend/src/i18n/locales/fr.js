@@ -2858,7 +2858,14 @@ export default {
         now: 'Actuellement',
         predicted: 'prédit',
         scope: ' (sur {q} requêtes des {r} dernières exécutions)',
-        applying: 'Application : enregistrement des tags, reconstruction de la tête, relance de la suite…'
+        applying: 'Application : enregistrement des tags, reconstruction de la tête, relance de la suite…',
+        blockedTitle: 'Suppressions bloquées — cliquez pour les inclure à Appliquer',
+        blockedGain: 'récupère {n} positive(s)',
+        narrowTitle: 'Remplacements plus étroits — récupère les positives sans ré-admettre les négatives',
+        narrowChip: 'Retirer le tag large, ajouter le tag étroit',
+        reasonCurator: 'vous avez déclaré ce tag à l’origine — confirmez avant de le retirer',
+        reasonRotated: 'l’historique a dépassé la ligne de base — confirmez avant de le retirer',
+        scopeDetail: 'suites : {s} · jeux de tags : {t}'
       },
       probe: {
         answerable: 'répondable',

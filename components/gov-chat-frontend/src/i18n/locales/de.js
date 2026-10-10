@@ -2860,7 +2860,14 @@ export default {
         now: 'Jetzt',
         predicted: 'prognostiziert',
         scope: ' (über {q} Abfragen aus den letzten {r} Läufen)',
-        applying: 'Anwenden: Tags speichern, Head neu bauen, Suite neu ausführen…'
+        applying: 'Anwenden: Tags speichern, Head neu bauen, Suite neu ausführen…',
+        blockedTitle: 'Blockierte Entfernungen — klicken, um sie in Übernehmen aufzunehmen',
+        blockedGain: 'holt {n} Positive zurück',
+        narrowTitle: 'Engere Ersatz-Tags — holt Positive zurück, ohne Negative wieder zuzulassen',
+        narrowChip: 'Breites Tag entfernen, enges Tag hinzufügen',
+        reasonCurator: 'Sie haben dieses Tag ursprünglich deklariert — vor dem Entfernen bestätigen',
+        reasonRotated: 'Der Verlauf ist über die Basislinie hinaus rotiert — vor dem Entfernen bestätigen',
+        scopeDetail: 'Suiten: {s} · Tag-Sets: {t}'
       },
       probe: {
         answerable: 'beantwortbar',

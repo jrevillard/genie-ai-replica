@@ -2841,7 +2841,14 @@ export default {
         now: 'Saat ini',
         predicted: 'perkiraan',
         scope: ' (atas {q} kueri dari {r} eksekusi terakhir)',
-        applying: 'Menerapkan: menyimpan tag, membangun ulang head, menjalankan ulang suite…'
+        applying: 'Menerapkan: menyimpan tag, membangun ulang head, menjalankan ulang suite…',
+        blockedTitle: 'Penghapusan terblokir — klik untuk menyertakan dalam Terapkan',
+        blockedGain: 'memulihkan {n} positif',
+        narrowTitle: 'Pengganti yang lebih sempit — memulihkan positif tanpa memasukkan kembali negatif',
+        narrowChip: 'Hapus tag luas, tambahkan tag sempit',
+        reasonCurator: 'Anda yang mendeklarasikan tag ini semula — konfirmasi sebelum menghapus',
+        reasonRotated: 'riwayat sudah melewati baseline — konfirmasi sebelum menghapus',
+        scopeDetail: 'suite: {s} · set tag: {t}'
       },
       probe: {
         answerable: 'bisa dijawab',

@@ -2818,7 +2818,14 @@ export default {
         now: 'Now',
         predicted: 'predicted',
         scope: ' (across {q} queries from the last {r} runs)',
-        applying: 'Applying: saving tags, rebuilding the head, re-running the suite…'
+        applying: 'Applying: saving tags, rebuilding the head, re-running the suite…',
+        blockedTitle: 'Blocked removals — click to include in Apply',
+        blockedGain: 'recovers {n} positive(s)',
+        narrowTitle: 'Narrower replacements — recover positives without re-admitting negatives',
+        narrowChip: 'Remove the broad tag, add the narrow one',
+        reasonCurator: 'you declared this tag originally — confirm before removing',
+        reasonRotated: 'the edit history has rotated past the baseline — confirm before removing',
+        scopeDetail: 'suites: {s} · tag sets: {t}'
       },
       probe: {
         answerable: 'answerable',

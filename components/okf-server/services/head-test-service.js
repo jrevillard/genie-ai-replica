@@ -209,6 +209,21 @@ async function embedQuery(query) {
   return { vector: v, prefixed: prefix.length > 0, model: EMBED_MODEL_ID || 'unknown' };
 }
 
+/**
+ * Batch variant of embedQuery — the SAME prefix contract, one TEI call
+ * (teiEmbed chunks internally). 1-8g-b (live): the advisor's gate
+ * simulation embedded BARE queries while the live gate embeds prefixed
+ * ones — different vector spaces — and at margin 0.01 the simulated
+ * verdicts diverged wholesale from the real runs ("Now 13/50" vs the
+ * run's 29/50). Anything that simulates the gate MUST embed through
+ * this contract.
+ */
+async function embedQueryBatch(queries) {
+  const prefix = queryInstructionFor(EMBED_MODEL_ID);
+  const vecs = await frontmatterService.teiEmbed(queries.map((q) => prefix + q));
+  return { vectors: vecs, prefixed: prefix.length > 0, model: EMBED_MODEL_ID || 'unknown' };
+}
+
 // ---------- chunk-probe replay (LEG B) ----------
 
 /**
@@ -814,6 +829,7 @@ module.exports = {
   routingTest,
   explainRouting,
   guardSuggestions,
+  embedQueryBatch,
   // test surface
   _internals: {
     cosine,

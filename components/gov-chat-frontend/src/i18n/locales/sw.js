@@ -2838,7 +2838,14 @@ export default {
         now: 'Sasa',
         predicted: 'makadirio',
         scope: ' (maswali {q} kutoka ukimbiaji {r} wa hivi karibuni)',
-        applying: 'Inatekeleza: kuhifadhi tag, kujenga upya head, kuendesha upya kipima…'
+        applying: 'Inatekeleza: kuhifadhi tag, kujenga upya head, kuendesha upya kipima…',
+        blockedTitle: 'Uondolewa uliozuiwa — bofya ili ujasishwe katika Kutumia',
+        blockedGain: 'inarejesha {n} chanya',
+        narrowTitle: 'Vibadala vikuu — huinarejesha chanya bila kurudisha hasi',
+        narrowChip: 'Ondoa lebe pana, ongeza lebe nyuso',
+        reasonCurator: 'wewe ndiye uliytangaza lebe hii mwanzoni — thibitisha kabla ya kuondoa',
+        reasonRotated: 'historia imevuka mstari wa msingi — thibitisha kabla ya kuondoa',
+        scopeDetail: 'vipima: {s} · seti za lebe: {t}'
       },
       probe: {
         answerable: 'ina jibu',

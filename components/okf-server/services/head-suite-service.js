@@ -234,6 +234,15 @@ Generate:
   Example: "${META_TEMPLATES[0]}"
 - 5-8 KEYWORDS: single-domain terms strongly identifying THIS repository.
 
+UNIQUENESS (CRITICAL — duplicated queries are DISCARDED and the count comes
+up short; 2026-10-10 live: one response returned the same query 3× and put
+the same text in two classes):
+- Every query string MUST be unique across the WHOLE response — no repeats
+  within a class, and NEVER the same query in two different classes (one
+  query cannot be both positive and negative).
+- Vary substance, not just phrasing: each query asks about a DIFFERENT
+  facet (a different entity, step, requirement, penalty, or intent).
+
 OUTPUT FORMAT (CRITICAL — the parser is strict, no synonyms):
   { "positive": [ {"query": "...", "reason": "<one sentence>"} ],
     "negative": [ {"query": "...", "expected_repo": "...", "reason": "<one sentence>"} ],
@@ -875,15 +884,32 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
     const neg = suite.payload.negative || [];
     let removed = 0;
     let relabeled = 0;
+    // 1-8g-p — duplicates absorbed by flips + by the normalization sweep.
+    let normalizedAway = 0;
+    const norm = (s) =>
+      String(s || '')
+        .trim()
+        .toLowerCase();
 
-    // 1. Removes — every exact {query, kind} match goes.
+    // 1. Removes — every {query, kind} match goes, in BOTH arrays (a
+    //    mislabeled kind:'negative' row can sit inside payload.positive).
+    //    1-8g-p: ALL same-text copies go with it — the clicked row
+    //    represents the TEXT (a pre-1-8g-h suite can hold it 3×; deleting
+    //    one and leaving the twins re-triggered the duplicate guard on the
+    //    next save and write-locked the suite).
     for (const r of removes.filter(validRow)) {
-      const target = r.kind === 'positive' ? pos : neg;
-      const idx = target.findIndex((row) => row.query === r.query.trim() && row.kind === r.kind);
-      if (idx >= 0) {
-        target.splice(idx, 1);
-        removed += 1;
+      let matches = [];
+      for (const arr of [pos, neg]) {
+        matches = matches.concat(arr.filter((row) => row.query === r.query.trim() && row.kind === r.kind));
       }
+      for (const arr of [pos, neg]) {
+        for (const m of matches) {
+          const i = arr.indexOf(m);
+          if (i >= 0) arr.splice(i, 1);
+        }
+      }
+      normalizedAway += Math.max(0, matches.length - 1);
+      removed += matches.length;
     }
 
     // 2. Updates — kind flips only (v1). The row MOVES to the array matching
@@ -897,41 +923,100 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
       const to = u.set.kind;
       if (from === to) continue;
       const dst = to === 'positive' ? pos : neg;
-      const idxIn = (arr) => arr.findIndex((row) => row.query === u.match.query.trim() && row.kind === from);
-      let idx = idxIn(pos);
-      let srcArr = pos;
-      if (idx < 0) {
-        idx = idxIn(neg);
-        srcArr = neg;
+      // 1-8g-p: a flip INTO a kind that already GENUINELY holds the same
+      // text (row.kind === to) would create the exact self-refuting
+      // contradiction the guard below rejects — and before normalization
+      // existed, pre-1-8g-h suites (generated with duplicate rows) were
+      // WRITE-LOCKED: every single-row edit left a duplicate somewhere,
+      // every request 409'd, nothing could ever be fixed through the API.
+      // Refuse UP FRONT with the way out. Mislabeled rows in the
+      // destination array (kind !== to — the very thing this endpoint
+      // fixes) are EXCLUDED: they move with the flip, they are not
+      // conflicting residents.
+      const flipText = norm(u.match.query);
+      if (dst.some((row) => norm(row.query) === flipText && row.kind === to)) {
+        const err = new Error(
+          `"${u.match.query.trim().slice(0, 80)}" already exists in the ${to} list — delete that copy first, then re-run the flip`
+        );
+        err.code = 'SUITE_CONTRADICTION';
+        err.status = 409;
+        throw err;
       }
-      if (idx < 0) continue;
-      const [row] = srcArr.splice(idx, 1);
-      dst.push({ ...row, kind: to, cls: null });
+      // The clicked row represents text+kind across BOTH arrays — a
+      // pre-1-8g-h suite can hold the text duplicated, and a MISLABELED
+      // copy (kind:'positive' inside payload.negative) is the same text
+      // with the same kind. Move every copy out, land ONE flipped row;
+      // the absorbed extras count as normalized duplicates (visible in
+      // the log, never silent).
+      const moved = [pos, neg]
+        .map((arr) => arr.filter((row) => row.query === u.match.query.trim() && row.kind === from))
+        .flat();
+      for (const arr of [pos, neg]) {
+        for (const m of moved) {
+          const i = arr.indexOf(m);
+          if (i >= 0) arr.splice(i, 1);
+        }
+      }
+      normalizedAway += Math.max(0, moved.length - 1);
+      dst.push({ ...moved[0], kind: to, cls: null });
       relabeled += 1;
     }
 
-    // 3. Invariants — no contradiction (same text in BOTH arrays makes every
-    //    run self-refuting) and no text duplicated within an array (the run
-    //    would count it twice); caps as a sanity backstop.
-    const norm = (s) =>
-      String(s || '')
-        .trim()
-        .toLowerCase();
-    const contradiction = pos.find((r) => neg.some((n) => norm(n.query) === norm(r.query)));
+    // 3. 1-8g-p — normalize within-kind duplicates ON SAVE (keep the first
+    //    copy). Legacy suites were generated before the 1-8g-h assembly
+    //    dedup and carry duplicate rows; the old strict guard made them
+    //    uneditable (deleting ONE copy still left the others → 409
+    //    forever). Duplicate rows are interchangeable observations —
+    //    dropping the extras IS the repair the curator's delete click
+    //    already asked for; the log makes it visible, never silent.
+    const dedupKind = (arr) => {
+      const seen = new Set();
+      const kept = [];
+      for (const row of arr) {
+        const k = norm(row.query);
+        if (seen.has(k)) {
+          normalizedAway += 1;
+          continue;
+        }
+        seen.add(k);
+        kept.push(row);
+      }
+      return kept;
+    };
+    const dedupedPos = dedupKind(pos);
+    const dedupedNeg = dedupKind(neg);
+    if (normalizedAway) {
+      logger.info('head-suite.rows_normalized', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        duplicates_dropped: normalizedAway,
+        positives: dedupedPos.length,
+        negatives: dedupedNeg.length
+      });
+    }
+
+    // 4. Invariants — no contradiction (same text in BOTH arrays makes every
+    //    run self-refuting; which kind to keep is the CURATOR's call, not
+    //    ours — the flip pre-validation above names the copy to delete
+    //    first). The within-kind duplicate check is now a backstop only —
+    //    step 3 makes it unreachable. Caps as a sanity backstop.
+    const contradiction = dedupedPos.find((r) => dedupedNeg.some((n) => norm(n.query) === norm(r.query)));
     if (contradiction) {
-      const err = new Error(`query is both positive and negative: "${contradiction.query.slice(0, 80)}"`);
+      const err = new Error(
+        `query is both positive and negative: "${contradiction.query.slice(0, 80)}" — delete one of the two rows to resolve`
+      );
       err.code = 'SUITE_CONTRADICTION';
       err.status = 409;
       throw err;
     }
     const dupIn = (arr) => arr.some((r, i) => arr.findIndex((x) => norm(x.query) === norm(r.query)) !== i);
-    if (dupIn(pos) || dupIn(neg)) {
+    if (dupIn(dedupedPos) || dupIn(dedupedNeg)) {
       const err = new Error('duplicate query text within one kind after the update');
       err.code = 'SUITE_DUPLICATE';
       err.status = 409;
       throw err;
     }
-    if (pos.length > SUITE_ROW_CAPS.positive || neg.length > SUITE_ROW_CAPS.negative) {
+    if (dedupedPos.length > SUITE_ROW_CAPS.positive || dedupedNeg.length > SUITE_ROW_CAPS.negative) {
       const err = new Error(
         `suite row cap exceeded (positive ≤ ${SUITE_ROW_CAPS.positive}, negative ≤ ${SUITE_ROW_CAPS.negative})`
       );
@@ -940,20 +1025,22 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
       throw err;
     }
 
-    suite.payload.positive = pos;
-    suite.payload.negative = neg;
+    suite.payload.positive = dedupedPos;
+    suite.payload.negative = dedupedNeg;
     suite.updated_at = new Date().toISOString();
     suite.updated_by = (opts.actor && opts.actor.user_id) || 'system';
     await db.collection(HEAD_TEST_RUNS_COLLECTION).replace(suite._key, suite);
     span.setAttribute('okf.headsuite.relabeled', relabeled);
     span.setAttribute('okf.headsuite.removed', removed);
+    span.setAttribute('okf.headsuite.duplicates_dropped', normalizedAway);
     logger.info('head-suite.rows_updated', {
       repo_id: repoId,
       suite_key: suiteKey,
       relabeled,
       removed,
-      positives: pos.length,
-      negatives: neg.length
+      duplicates_dropped: normalizedAway,
+      positives: dedupedPos.length,
+      negatives: dedupedNeg.length
     });
     return suite;
   });

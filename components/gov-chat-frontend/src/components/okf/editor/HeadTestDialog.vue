@@ -786,6 +786,59 @@
                 − {{ r.tag }}
               </DsTag>
             </div>
+            <!-- 1-8g-c (live: 23 positive veto-kills, remove=[] forever): the
+                 removals the advisor may not auto-apply are SURFACED with
+                 their predicted gain — the curator confirms, Apply includes
+                 them. Not in the predicted scorecard. -->
+            <template v-if="advisorBlockedRemovals.length">
+              <p class="okf-headtest__teach-text okf-headtest__blocked-title">
+                {{ translate('okf.headTest.advisor.blockedTitle', 'Blocked removals — click to include in Apply') }}
+              </p>
+              <div class="okf-headtest__chips">
+                <DsTag
+                  v-for="b in advisorBlockedRemovals"
+                  :key="'adv-b-' + b.tag"
+                  :variant="advisorExtraRemove.includes(b.tag) ? 'danger' : 'neutral'"
+                  class="okf-headtest__remove-chip"
+                  role="button"
+                  :title="blockedReasonText(b.reason)"
+                  @click="toggleExtraRemove(b.tag)"
+                >
+                  {{ advisorExtraRemove.includes(b.tag) ? '✓' : '+' }} − {{ b.tag }} ({{
+                    translate('okf.headTest.advisor.blockedGain', 'recovers {n} positive(s)').replace(
+                      '{n}',
+                      String(b.predicted_positive_gain)
+                    )
+                  }})
+                </DsTag>
+              </div>
+            </template>
+            <template v-if="advisorNarrowOptions.length">
+              <p class="okf-headtest__teach-text okf-headtest__blocked-title">
+                {{
+                  translate(
+                    'okf.headTest.advisor.narrowTitle',
+                    'Narrower replacements — recover positives without re-admitting negatives'
+                  )
+                }}
+              </p>
+              <div class="okf-headtest__chips">
+                <DsTag
+                  v-for="p in advisorNarrowOptions"
+                  :key="'adv-n-' + p.remove + '>' + p.add"
+                  :variant="
+                    advisorNarrowPairs.some((x) => x.remove === p.remove && x.add === p.add) ? 'accent' : 'neutral'
+                  "
+                  class="okf-headtest__add-chip"
+                  role="button"
+                  :title="translate('okf.headTest.advisor.narrowChip', 'Remove the broad tag, add the narrow one')"
+                  @click="toggleNarrowPair(p)"
+                >
+                  {{ advisorNarrowPairs.some((x) => x.remove === p.remove && x.add === p.add) ? '✓' : '+' }}
+                  − {{ p.remove }} + {{ p.add }}
+                </DsTag>
+              </div>
+            </template>
             <ul v-if="advisorVerdicts.length" class="okf-headtest__failing">
               <li v-for="v in advisorVerdicts" :key="v.tag + (v.rejected || '')">
                 <span>{{ v.rejected ? '✗' : '✓' }} {{ v.tag }}{{ v.rejected ? ' — ' + v.rejected : '' }}</span>
@@ -793,7 +846,12 @@
             </ul>
             <div class="okf-headtest__pane-actions">
               <DsButton
-                v-if="advisorAddTags.length || advisorRemoveTags.length"
+                v-if="
+                  advisorAddTags.length ||
+                  advisorRemoveTags.length ||
+                  advisorExtraRemove.length ||
+                  advisorNarrowPairs.length
+                "
                 variant="primary"
                 small
                 :disabled="busy !== null"
@@ -1198,6 +1256,11 @@ export default {
       // 1-8d: the comprehensive advisor's latest result (scorecards +
       // simulated add/remove changes across recent runs).
       advisor: null,
+      // 1-8g-c: the curator's confirmation state for the BLOCKED removals
+      // (tags to include in Apply) and the accepted narrow pairs
+      // (remove+add combos) — reset whenever the recommendation is spent.
+      advisorExtraRemove: [],
+      advisorNarrowPairs: [],
       taughtTags: [],
       // 1-8d: the guarded cycle — removedTags mirrors taughtTags for the
       // removal chips; tripwire holds a positive-regression detection for
@@ -1608,6 +1671,17 @@ export default {
       ).slice(0, 8);
       return addEval.concat(removeEval);
     },
+    /** 1-8g-c: removals the advisor may not auto-apply (curator originals,
+     * rotated-baseline writes) that the simulation predicts WOULD recover
+     * positives — the one action that moves the positives, surfaced. */
+    advisorBlockedRemovals() {
+      return this.advisor && Array.isArray(this.advisor.blocked_removals) ? this.advisor.blocked_removals : [];
+    },
+    /** 1-8g-c: remove-broad/add-narrow pairs that dominate a blocked
+     * removal alone (positives up, negatives not re-admitted). */
+    advisorNarrowOptions() {
+      return this.advisor && Array.isArray(this.advisor.narrow_options) ? this.advisor.narrow_options : [];
+    },
     /** 1-8d: the before/after scorecard line for the advisor panel. */
     advisorScoreText() {
       const a = this.advisor;
@@ -1627,7 +1701,19 @@ export default {
         )}: ${fmt(rec)}` +
         this.translate('okf.headTest.advisor.scope', ' (across {q} queries from the last {r} runs)')
           .replace('{q}', String(a.queries_considered))
-          .replace('{r}', String(a.runs_considered))
+          .replace('{r}', String(a.runs_considered)) +
+        // 1-8g-b: name the aggregated scope so "which suite / which tag
+        // set" is never a guess (older advisor docs carry no scope).
+        (a.scope && Array.isArray(a.scope.suites)
+          ? ' ' +
+            this.translate('okf.headTest.advisor.scopeDetail', 'suites: {s} · tag sets: {t}')
+              .replace('{s}', a.scope.suites.join(', ') || '—')
+              .replace(
+                '{t}',
+                [...new Set((a.scope.runs || []).map((r) => r.tagset && r.tagset.hash8).filter(Boolean))].join(', ') ||
+                  '—'
+              )
+          : '')
       );
     },
     /** 1-8d: the suite's forbidden-derived rows were derived from the
@@ -1982,6 +2068,37 @@ export default {
         return;
       }
       this.advisor = res.result;
+      this.advisorExtraRemove = [];
+      this.advisorNarrowPairs = [];
+    },
+    /** 1-8g-c: the blocked-removal chips toggle into the Apply set; the
+     * narrow chips toggle a remove+add PAIR. Both are curator-confirmed —
+     * the advisor itself never auto-applies a curator original. */
+    toggleExtraRemove(tag) {
+      this.advisorExtraRemove = this.advisorExtraRemove.includes(tag)
+        ? this.advisorExtraRemove.filter((t) => t !== tag)
+        : [...this.advisorExtraRemove, tag];
+    },
+    toggleNarrowPair(pair) {
+      const has = this.advisorNarrowPairs.some((p) => p.remove === pair.remove && p.add === pair.add);
+      this.advisorNarrowPairs = has
+        ? this.advisorNarrowPairs.filter((p) => !(p.remove === pair.remove && p.add === pair.add))
+        : [...this.advisorNarrowPairs, { remove: pair.remove, add: pair.add }];
+    },
+    blockedReasonText(reason) {
+      if (reason === 'curator_original') {
+        return this.translate(
+          'okf.headTest.advisor.reasonCurator',
+          'you declared this tag originally — confirm before removing'
+        );
+      }
+      if (reason === 'history_rotated') {
+        return this.translate(
+          'okf.headTest.advisor.reasonRotated',
+          'the edit history has rotated past the baseline — confirm before removing'
+        );
+      }
+      return reason || '';
     },
     /** 1-8d: apply the advisor's recommendation in ONE frontmatter save
      * (adds and removes together — never two half-states), then hand off
@@ -1989,8 +2106,16 @@ export default {
      * refreshes against real runs (the tripwire guards this like any
      * other cycle). */
     async onAdvisorApply() {
-      const addTags = this.advisorAddTags;
-      const removeTags = this.advisorRemoveTags.map((r) => r.tag);
+      // 1-8g-c: the confirmed blocked removals and narrow pairs join the
+      // recommendation's own adds/removes in the ONE save.
+      const addTags = [...new Set([...this.advisorAddTags, ...this.advisorNarrowPairs.map((p) => p.add)])];
+      const removeTags = [
+        ...new Set([
+          ...this.advisorRemoveTags.map((r) => r.tag),
+          ...this.advisorExtraRemove,
+          ...this.advisorNarrowPairs.map((p) => p.remove)
+        ])
+      ].filter((t) => !addTags.includes(t));
       if ((!addTags.length && !removeTags.length) || this.busy !== null) return;
       // 1-8e race fix: ONE busy token owns the whole leg (save → rebuild →
       // re-run). The previous version handed off through
@@ -2013,6 +2138,8 @@ export default {
       for (const t of addTags) if (!this.taughtTags.includes(t)) this.taughtTags.push(t);
       for (const t of removeTags) if (!this.removedTags.includes(t)) this.removedTags.push(t);
       this.advisor = null; // the recommendation is spent — the re-run shows the effect
+      this.advisorExtraRemove = [];
+      this.advisorNarrowPairs = [];
       this.$emit('changed', { frontmatter: true });
       const reb = await this.$store.dispatch('okf/headRebuild', { repoId: this.repo.repo_id });
       if (!reb || !reb.ok) {
@@ -2421,6 +2548,8 @@ export default {
       this.batchAdvice = null;
       this.tripwire = null;
       this.advisor = null;
+      this.advisorExtraRemove = [];
+      this.advisorNarrowPairs = [];
       this.lastRunSuiteKey = this.suite ? this.suite.suite_key : null;
     },
     /** 1-8f: flip a row's kind (positive ↔ negative) — THE mislabel fix.
@@ -2845,6 +2974,10 @@ export default {
 }
 .okf-headtest__remove-chip {
   cursor: pointer;
+}
+.okf-headtest__blocked-title {
+  margin: var(--space-xs) 0 0;
+  font-weight: 600;
 }
 .okf-headtest__positive-fail {
   display: flex;

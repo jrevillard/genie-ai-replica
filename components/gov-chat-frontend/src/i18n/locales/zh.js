@@ -2790,7 +2790,14 @@ export default {
         now: '当前',
         predicted: '预测',
         scope: '（最近 {r} 次运行共 {q} 条查询）',
-        applying: '正在应用：保存标签、重建 head、重新运行测试集…'
+        applying: '正在应用：保存标签、重建 head、重新运行测试集…',
+        blockedTitle: '受阻的移除——点击以加入"应用"',
+        blockedGain: '可挽回 {n} 个正向用例',
+        narrowTitle: '更窄的替代标签——挽回正向用例而不重新放进负向用例',
+        narrowChip: '移除宽泛标签，添加窄标签',
+        reasonCurator: '此标签由您最初声明——移除前请确认',
+        reasonRotated: '编辑历史已滚过基线——移除前请确认',
+        scopeDetail: '测试集：{s} · 标签集：{t}'
       },
       probe: {
         answerable: '可回答',

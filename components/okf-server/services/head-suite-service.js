@@ -621,6 +621,37 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       ).all();
       finalName = `${repo.name || 'Repository'} suite ${Number(countRows[0] || 0) + 1}`.slice(0, 80);
     }
+    // 1-8g-h: the classes are assembled independently and DO overlap (live:
+    // "Map the distribution of slaughterhouses across the country." landed
+    // ×3 in one suite, 16/66 rows duplicated) — dedup by normalized text,
+    // first occurrence wins, order preserved; a text that is already a
+    // positive is dropped from the negatives entirely (a row can never sit
+    // in both arrays — the same contradiction updateSuiteRows rejects).
+    const normText = (s) =>
+      String(s || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ');
+    const seenPos = new Set();
+    const dedupedPositives = positive.filter((q) => {
+      const k = normText(q.query);
+      if (seenPos.has(k)) return false;
+      seenPos.add(k);
+      return true;
+    });
+    const seenNeg = new Set();
+    const dedupedNegatives = [
+      ...llmNegatives,
+      ...forbiddenDerivedQueries(fm),
+      ...nearMiss,
+      ...offDomain,
+      ...meta
+    ].filter((q) => {
+      const k = normText(q.query);
+      if (seenPos.has(k) || seenNeg.has(k)) return false;
+      seenNeg.add(k);
+      return true;
+    });
     const suiteDoc = {
       _key: suiteKey,
       repo_id: repoId,
@@ -642,8 +673,8 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         // The UI flags "tags changed since generation" when it drifts (the
         // forbidden-derived rows go stale on any tag change).
         forbidden_snapshot: [...(fm.forbidden || [])],
-        positive,
-        negative: [...llmNegatives, ...forbiddenDerivedQueries(fm), ...nearMiss, ...offDomain, ...meta],
+        positive: dedupedPositives,
+        negative: dedupedNegatives,
         keywords: llm.keywords.filter((k) => typeof k === 'string'),
         notes: []
       }
@@ -654,7 +685,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       m[k] = (m[k] || 0) + 1;
       return m;
     }, {});
-    span.setAttribute('okf.headsuite.positives', positive.length);
+    span.setAttribute('okf.headsuite.positives', dedupedPositives.length);
     span.setAttribute('okf.headsuite.negatives', suiteDoc.payload.negative.length);
     span.setAttribute('okf.headsuite.offdomain', byClass['off-domain'] || 0);
     span.setAttribute('okf.headsuite.meta', byClass.meta || 0);
@@ -662,7 +693,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     logger.info('head-suite.generated', {
       repo_id: repoId,
       suite_key: suiteKey,
-      positives: positive.length,
+      positives: dedupedPositives.length,
       negatives: suiteDoc.payload.negative.length,
       by_class: byClass,
       off_domain_topics: randomTopics
@@ -748,11 +779,39 @@ async function addQueries(repoId, suiteKey, payload = {}, opts = {}) {
       err.status = 404;
       throw err;
     }
-    suite.payload.positive.push(...clean.filter((q) => q.kind === 'positive'));
-    suite.payload.negative.push(...clean.filter((q) => q.kind === 'negative'));
+    // 1-8g-h: a manual addition that duplicates an existing row (either
+    // kind — a cross-kind dup is the very contradiction updateSuiteRows
+    // rejects) is dropped, not appended; the response reports the count so
+    // the curator is never silently ignored.
+    const normText = (s) =>
+      String(s || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ');
+    const existing = new Set(
+      [...(suite.payload.positive || []), ...(suite.payload.negative || [])].map((q) => normText(q.query))
+    );
+    const fresh = [];
+    let duplicatesDropped = 0;
+    for (const q of clean) {
+      const k = normText(q.query);
+      if (existing.has(k)) {
+        duplicatesDropped += 1;
+        continue;
+      }
+      existing.add(k);
+      fresh.push(q);
+    }
+    suite.payload.positive.push(...fresh.filter((q) => q.kind === 'positive'));
+    suite.payload.negative.push(...fresh.filter((q) => q.kind === 'negative'));
     await db.collection(HEAD_TEST_RUNS_COLLECTION).replace(suite._key, suite);
-    logger.info('head-suite.queries_added', { repo_id: repoId, suite_key: suiteKey, added: clean.length });
-    return suite;
+    logger.info('head-suite.queries_added', {
+      repo_id: repoId,
+      suite_key: suiteKey,
+      added: fresh.length,
+      duplicates_dropped: duplicatesDropped
+    });
+    return { ...suite, added: fresh.length, duplicates_dropped: duplicatesDropped };
   });
 }
 
@@ -1859,10 +1918,15 @@ async function recommendTagSet(repoId, payload = {}, opts = {}) {
       throw err;
     }
 
-    // 2. Embed everything once. Tag vectors: reuse the head's stored
-    //    per-tag forbidden vectors where present (exact); embed fresh
-    //    otherwise (same TEI path the head build uses).
-    const qvecs = await frontmatterService.teiEmbed(queries.map((q) => q.query));
+    // 2. Embed everything once — through the GATE's embedding contract
+    //    (BGE query-instruction prefix; 1-8g-b: bare teiEmbed here put the
+    //    simulation in a different vector space than the live gate and the
+    //    scorecard's "Now" diverged wholesale from the real runs). Tag
+    //    vectors: reuse the head's stored per-tag forbidden vectors where
+    //    present (exact); embed fresh otherwise (same TEI path the head
+    //    build uses).
+    const qmeta = await headTestService.embedQueryBatch(queries.map((q) => q.query));
+    const qvecs = qmeta.vectors;
     const headTagVectors = new Map();
     for (const fv of (head.per_field && head.per_field.forbidden_vectors) || []) {
       if (fv && typeof fv.tag === 'string' && Array.isArray(fv.vector)) headTagVectors.set(fv.tag, fv.vector);
@@ -1935,9 +1999,16 @@ async function recommendTagSet(repoId, payload = {}, opts = {}) {
     const before = await evalConfig(current);
     const goldPositives = before.per.filter((p) => p.kind === 'positive' && p.claimed);
 
-    // 3. LLM proposals — additions for EVERY failing class, removals are
-    //    only sourced from the loop's own recent writes.
+    // 3. LLM proposals — additions ONLY for the classes a forbidden tag can
+    //    legitimately exclude. 1-8g-d (live on Slaugherhouse): confusable
+    //    rows belong to the sibling-SELECT leg (this repo must NOT veto
+    //    them — the sibling should win them) and meta rows describe the Lab
+    //    itself — a meta query once proposed "query-selection-process" and
+    //    the simulation ACCEPTED it into a head. Positives are handled by
+    //    removal/narrowing, never by adds.
+    const ADD_LLM_CLASSES = new Set(['off-domain', 'forbidden', 'near-miss']);
     const failing = before.per.filter((p) => (p.kind === 'positive' ? !p.claimed : p.claimed));
+    const failingForAdds = failing.filter((p) => p.kind === 'negative' && (!p.cls || ADD_LLM_CLASSES.has(p.cls)));
     let llmAdds = [];
     try {
       const prompt = `A retrieval repository's routing test suite fails some queries across classes.
@@ -1946,7 +2017,7 @@ REPOSITORY scope — topics: ${(fm.topic || []).join(', ')}; entities: ${(fm.ent
 already forbidden: ${current.join(', ') || '(none)'}; summary: ${fm.summary || ''}
 
 FAILING QUERIES (label — what went wrong):
-${failing.map((q) => `- [${q.kind}${q.cls ? '/' + q.cls : ''}] ${q.query}`).join('\n')}
+${failingForAdds.map((q) => `- [${q.kind}${q.cls ? '/' + q.cls : ''}] ${q.query}`).join('\n')}
 
 For the NEGATIVE queries that were wrongly claimed: propose UP TO 6 NEW
 forbidden tags (lowercase kebab-case, 1-3 words) that exclude their
@@ -2045,20 +2116,96 @@ Respond with ONLY: {"add": ["...", "..."]}`;
     ))
       addResults.push(await considerAdd(tag));
 
+    // 6. 1-8g-c (live: 23 positive veto-kills, remove=[] forever): a tag the
+    //    advisor may NOT auto-remove (curator original, or the sliding
+    //    history window rotated the baseline away) can still be THE fix.
+    //    Simulate the config WITHOUT it and surface the gain as a BLOCKED
+    //    removal — tell the operator the one action that recovers positives
+    //    instead of silently omitting it. Reason is a CODE (the UI
+    //    translates): 'curator_original' | 'history_rotated'.
+    const blockedRemovals = [];
+    for (const tag of current) {
+      if (removalCandidates.includes(tag)) continue;
+      const trial = await evalConfig(current.filter((t) => t !== tag));
+      const gain = trial.scorecard.positive_claimed - before.scorecard.positive_claimed;
+      if (gain <= 0) continue;
+      blockedRemovals.push({
+        tag,
+        predicted_positive_gain: gain,
+        predicted_negative_loss: Math.max(
+          0,
+          before.scorecard.negative_suppressed - trial.scorecard.negative_suppressed
+        ),
+        predicted_score: trial.scorecard.score,
+        reason: loopWritten.has(String(tag).toLowerCase()) ? 'history_rotated' : 'curator_original'
+      });
+    }
+    blockedRemovals.sort((a, b) => b.predicted_positive_gain - a.predicted_positive_gain);
+
+    // 7. Narrow options: a blocked removal whose cost is re-admitted
+    //    negatives can often be REPLACED — remove the broad tag, add one of
+    //    the already-proposed narrow candidates instead. Simulated as a
+    //    PAIR against the current config; the best pair per blocked tag is
+    //    surfaced when it strictly dominates (positives up, negatives not
+    //    re-admitted). No extra LLM call — reuses llmAdds.
+    const narrowOptions = [];
+    for (const blocked of blockedRemovals) {
+      if (!blocked.predicted_negative_loss || !llmAdds.length) continue;
+      const base = current.filter((t) => t !== blocked.tag);
+      let bestPair = null;
+      for (const candidate of llmAdds) {
+        if (base.includes(candidate)) continue;
+        const trial = await evalConfig([...base, candidate]);
+        const gainsPos = trial.scorecard.positive_claimed - before.scorecard.positive_claimed;
+        const losesNeg = before.scorecard.negative_suppressed - trial.scorecard.negative_suppressed > 0;
+        if (gainsPos <= 0 || losesNeg) continue;
+        if (!bestPair || trial.scorecard.score > bestPair.predicted_score) {
+          bestPair = {
+            remove: blocked.tag,
+            add: candidate,
+            predicted_positive_gain: gainsPos,
+            predicted_negative_loss: 0,
+            predicted_score: trial.scorecard.score
+          };
+        }
+      }
+      if (bestPair) narrowOptions.push(bestPair);
+    }
+
     const out = {
       repo_id: repoId,
       runs_considered: runs.length,
       queries_considered: queries.length,
+      // 1-8g-b: the scope the scorecard aggregated — the UI renders it so
+      // "which suite / which tag set am I looking at" is never a guess.
+      scope: {
+        suites: [...new Set(runs.map((r) => r.suite_key).filter(Boolean))],
+        runs: runs.map((r) => ({
+          run_key: r._key,
+          suite_key: r.suite_key,
+          created_at: r.created_at,
+          tagset: r.tagset || null
+        })),
+        embedding_prefixed: qmeta.prefixed,
+        embedding_model: qmeta.model
+      },
       current_scorecard: before.scorecard,
       recommended_scorecard: best.scorecard,
       changes: { add: applied.add, remove: applied.remove },
       add_eval: addResults,
       remove_eval: removeResults,
+      // 1-8g-c: the removals the advisor may not auto-apply, with their
+      // predicted gains — and the narrow pairs that recover positives
+      // without re-admitting negatives.
+      blocked_removals: blockedRemovals,
+      narrow_options: narrowOptions,
       gold_positives: goldPositives.length,
       note:
         applied.add.length || applied.remove.length
           ? 'apply the changes, rebuild the head, re-run the suite — predicted scorecard above'
-          : 'no tag-set change predicts an improvement — the remaining fails are curator tradeoffs or need head-topic growth',
+          : blockedRemovals.length
+            ? 'no auto-applicable change predicts an improvement — the blocked removals below are what recovers the positives'
+            : 'no tag-set change predicts an improvement — the remaining fails are curator tradeoffs or need head-topic growth',
       damped_adds: dampedAdds,
       damping: { min_negative_gain: ADVISOR_MIN_NEGATIVE_GAIN, max_adds: ADVISOR_MAX_ADDS }
     };
@@ -2082,6 +2229,8 @@ Respond with ONLY: {"add": ["...", "..."]}`;
       queries: queries.length,
       add: applied.add,
       remove: applied.remove,
+      blocked_removals: blockedRemovals.map((b) => b.tag),
+      narrow_options: narrowOptions.length,
       score: `${before.scorecard.score} -> ${best.scorecard.score}`
     });
     return out;

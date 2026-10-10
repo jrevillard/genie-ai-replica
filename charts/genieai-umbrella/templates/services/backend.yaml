@@ -1,0 +1,98 @@
+{{- if .Values.services.backend.enabled -}}
+{{- $ns := .Values.namespace -}}
+{{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
+{{- $backendVals := deepCopy .Values -}}
+{{- $urls := list
+    (dict "name" "KEYCLOAK_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
+    (dict "name" "ARANGO_URL" "value" (printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (printf "http://genieai-collector-collector.%s.svc.cluster.local:4318" $ns))
+    (dict "name" "TRANSLATION_CACHE_HOST" "value" (printf "redis-cache.%s.svc.cluster.local" $ns))
+    (dict "name" "TRANSLATION_CACHE_PORT" "value" "6379")
+-}}
+{{- $_ := set $backendVals.services.backend "env" $urls -}}
+{{- $ctx := dict "name" "backend" "component" "backend" "Values" $backendVals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 4 }}
+---
+# Default-deny with ingress allowlist and egress scoped to the data tier.
+# Egress uses port-scoped ipBlock rules because the operator-managed peers
+# (kube-arangodb, CloudNative-PG, Keycloak operator) expose their real pod
+# labels only at runtime; guessed labels silently block traffic. The
+# verified-peer pass tightens these to namespaceSelector/podSelector
+# peers after live label inspection.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Same-namespace pods on the app port. AuthN/AuthZ is enforced at the
+    # edge (Envoy Gateway); the gateway's data-plane pods live in their
+    # own namespace and reach backend via a routed path rather than a
+    # direct pod-to-pod peer in this namespace.
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    # Data tier: ArangoDB (8529), CNPG keycloak-db (5432), Keycloak (8080),
+    # Redis cache (6379). Port-scoped any-destination pending verified
+    # peer labels — see header note above.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8529
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 6379
+        # OTLP exporter: required for the observability pipeline. Without
+        # this port the default-deny policy drops all traces at the source.
+        - protocol: TCP
+          port: 4318
+    # document-repository (file references) — post-DNAT pod port 3001;
+    # the doc-repo ingress rule already permits backend as a peer.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: 3001
+{{- end -}}

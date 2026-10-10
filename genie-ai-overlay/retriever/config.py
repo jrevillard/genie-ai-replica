@@ -305,9 +305,14 @@ ROUTE_FORBIDDEN_TAG_MAX = float(os.getenv("RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX", "
 # chunk-level probe is SKIPPED entirely: headless corpora (bulk-ingested,
 # untagged, no head to gate) must not pollute the pool, and probing them
 # was the latency (live: a 4-graph probe across ~100k-chunk graphs cost
-# 78s of a 122s answer). With NO claims the legacy chunk competition runs
-# unchanged (un-headed deployments keep Story 1.3 behavior). false restores
-# the 1-8 MR-D pool semantics (head rows as one vote among chunks).
+# 78s of a 122s answer). The legacy GRAPH leg is ALSO excluded under an
+# active claim (D8 superseded for the claimed case — live: 20 unrelated
+# Kenya legacy chunks were the only content reranked for an NCD-routed
+# asthma query when the NCD leg returned 0 documents). With NO claims the
+# legacy chunk competition runs unchanged (un-headed deployments keep
+# Story 1.3 behavior; degraded all-graph fallback untouched). false
+# restores the 1-8 MR-D pool semantics (head rows as one vote among
+# chunks, GRAPH always searched).
 ROUTE_HEADS_SUPERSEDE = os.getenv("RETRIEVER_ROUTE_HEADS_SUPERSEDE", "true").lower() == "true"
 
 # Summarizer Configuration

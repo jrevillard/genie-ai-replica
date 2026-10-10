@@ -1293,6 +1293,8 @@ class GenieaiArangoRetriever(OpeaComponent):
             # the empty-check so a BM25 hit can rescue a dense-empty result (the
             # exact case lexical search excels at). OFF is a true no-op (the
             # whole block is skipped). Only applies to a chunk search start.
+            dense_count = len(search_res) if search_start == "chunk" else None
+            bm25_count = None
             if HYBRID_RETRIEVAL_ENABLED and search_start == "chunk":
                 try:
                     bm25_n = max(int(input.k), HYBRID_BM25_CANDIDATES)
@@ -1304,12 +1306,24 @@ class GenieaiArangoRetriever(OpeaComponent):
                         filter_strategy=filter_strategy,
                         aql_filter_clause=aql_filter_clause if search_start == "chunk" else "",
                     )
+                    bm25_count = len(bm25_res)
                     if bm25_res:
                         search_res = rrf_fuse(search_res, bm25_res)[: int(input.k)]
                         logger.info(f"Hybrid RRF fusion: {len(search_res)} documents after fusing dense + BM25.")
                 except Exception as e:
                     # Graceful degradation: never let the hybrid channel break the request.
                     logger.error(f"Hybrid BM25+RRF fusion failed, falling back to dense-only: {e}")
+
+            if search_start == "chunk":
+                # 1-8f3 instrumentation (the asthma-query mystery, David
+                # 2026-10-10): a leg returned 0 documents at default log level
+                # with NO signal why — the per-request filter inputs and
+                # per-channel row counts were debug-only. Log both at INFO.
+                logger.info(
+                    f"Extraction summary — graph={graph_name}, dense={dense_count}, "
+                    f"bm25={bm25_count}, fused={len(search_res)}, "
+                    f"labels={labels_to_filter or []}, filter_strategy={filter_strategy}"
+                )
 
             if not search_res:
                 logger.info("No documents found.")
@@ -1816,9 +1830,17 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
             logger.info(f"Routing head fetch failed (continuing without head signal) — error={e}")
 
     if ROUTE_HEADS_SUPERSEDE and head_pass:
+        # 1-8f3: the claim is decisive for the WHOLE search set — including
+        # the legacy GRAPH leg. Live 2026-10-10: an asthma query routed to
+        # NCD, the NCD leg returned 0 documents, and the only content that
+        # reached the reranker was 20 unrelated legacy-Kenya GRAPH chunks —
+        # the reranker rightly rejected them all → grounding verdict 0 →
+        # general-knowledge fallback. Under an active claim the legacy leg
+        # (D8's "always searched") is excluded with the headless OKF graphs;
+        # no-claim paths keep it (recall-maximizing degradation untouched).
         claimed = sorted(g for g, _s in head_pass)
         selected = set(claimed)
-        routed = [g for g in encoded_graph_names if g == "GRAPH" or g in selected]
+        routed = [g for g in encoded_graph_names if g in selected]
         route_span.set_attribute("rag.route.mode", "heads-supersede")
         route_span.set_attribute("rag.route.selected", ",".join(claimed))
         route_span.set_attribute("rag.route.dropped", ",".join(g for g in okf_graphs if g not in selected))
@@ -1945,11 +1967,14 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
     span.set_attribute("okf.fanout.timeout_ms", FANOUT_PER_GRAPH_TIMEOUT_MS)
 
     # Story 1.3 — query-affinity routing: prune OKF legs before extraction.
-    # The legacy GRAPH leg is always searched (hybrid) and never routed (D8);
-    # sticky conversation graphs bypass qualification (continuity contract).
-    # Failure modes degrade towards MORE recall, never less: no embedding,
-    # routing disabled, single-OKF-graph carriers, or degraded probes all fall
-    # back to the full carrier.
+    # The legacy GRAPH leg is always searched (hybrid) and never routed (D8)
+    # — EXCEPT under heads-supersede (1-8f3): _route_graphs encodes an active
+    # claim by OMITTING GRAPH from `routed`, and the search set below trusts
+    # `routed` verbatim. Sticky conversation graphs bypass qualification
+    # (continuity contract; GRAPH can never be sticky). Failure modes still
+    # degrade towards MORE recall, never less: no embedding, routing disabled,
+    # single-OKF-graph carriers, or degraded probes all fall back to the full
+    # carrier.
     from core.label_contract import decode_sticky
 
     search_set = list(encoded_graph_names)
@@ -1974,7 +1999,11 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
             routed, degraded = await _route_graphs(self, encoded_graph_names, query_embedding)
             routed_set = set(routed)
             sticky_set = set(sticky_valid)
-            search_set = [g for g in encoded_graph_names if g == "GRAPH" or g in routed_set or g in sticky_set]
+            # `routed` is the single source of truth for the search set: it
+            # carries GRAPH on every path EXCEPT the heads-supersede claim
+            # (1-8f3 — the legacy leg is intentionally dropped there). Sticky
+            # graphs restore OKF legs exactly as before.
+            search_set = [g for g in encoded_graph_names if g in routed_set or g in sticky_set]
             span.set_attribute("rag.route.applied", True)
             span.set_attribute("rag.route.degraded", degraded)
             span.set_attribute("rag.route.search_set", ",".join(search_set))

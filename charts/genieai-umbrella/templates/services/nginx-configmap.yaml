@@ -18,6 +18,10 @@ data:
     upstream genieai_docrepo  { server document-repository:80; }
     server {
       listen 8080;
+      # Exact-match /healthz beats the catch-all `location /` below, so
+      # the readiness/liveness probe and helm-test pod validate nginx
+      # itself rather than proxying through to the frontend index page.
+      location = /healthz { return 200 'ok'; add_header Content-Type text/plain; }
       location /api/      { proxy_pass http://genieai_backend; }
       location /api-docs/ { proxy_pass http://genieai_backend; }
       location /uploads/  { proxy_pass http://genieai_docrepo; }

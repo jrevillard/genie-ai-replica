@@ -125,7 +125,7 @@ and (where applicable) envFrom secret references + a PDB.
 
 ### Sealed Secrets in this tier
 
-`templates/secrets/group5-secrets.yaml` renders four SealedSecrets that the backend
+`templates/secrets/stateless-tier-secrets.yaml` renders four SealedSecrets that the backend
 consumes via envFrom:
 
 - `email-password`

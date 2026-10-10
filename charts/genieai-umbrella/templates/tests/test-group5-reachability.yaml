@@ -42,8 +42,8 @@ spec:
             port=$2
             path=${3:-/health}
             expected=$4
-            code=$(curl -s -o /dev/null -w '%{http_code}' "http://${host}:${port}${path}" 2>/dev/null || echo 000)
-            if [ "$code" = "$expected" ] || { [ "$expected" = "reachable" ] && [ "$code" != "000" ]; }; then
+            code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "http://${host}:${port}${path}" 2>/dev/null || echo 000)
+            if [ "$code" = "$expected" ]; then
               echo "PASS: ${host}:${port}${path} -> ${code}"
             else
               echo "FAIL: ${host}:${port}${path} expected ${expected}, got ${code}"

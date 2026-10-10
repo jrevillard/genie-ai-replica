@@ -1933,7 +1933,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Tag tingkat repositori ({summary}) milik repositori, bukan konsep ini — kelola di panel Tag di rail kanan.'
     },
     glossary: {
       addConcept:
@@ -2798,7 +2800,8 @@ export default {
         deleteTip: 'Hapus baris ini dari suite',
         namePlaceholder: 'Nama suite (opsional) — mis. set regresi NCD',
         probeTip: 'Uji kueri ini terhadap korpus langsung',
-        deleteSuiteTip: 'Hapus suite ini dan riwayatnya'
+        deleteSuiteTip: 'Hapus suite ini dan riwayatnya',
+        corpusNeedsIngest: 'Ingest repositori dulu — uji korpus mencari di korpus yang sudah di-ingest'
       },
       error: {
         explain: 'Penjelasan gagal',

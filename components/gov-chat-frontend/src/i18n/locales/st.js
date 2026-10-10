@@ -1941,7 +1941,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Malaete a boemo ba repo ({summary}) ke a repo, eseng sa sehlooho sena — laola tsona paneleng ya malaete ka ho le letona.'
     },
     glossary: {
       addConcept:
@@ -2807,7 +2809,8 @@ export default {
         deleteTip: 'Tlosa mola ona seteng',
         namePlaceholder: 'Lebitso la sete (ha ho hlokahale) — mohl. sete ea NCD',
         probeTip: 'Lekola potso ena ka korpusi ea ntseng e le teng',
-        deleteSuiteTip: 'Tlosa sete sena le nalane ea sona'
+        deleteSuiteTip: 'Tlosa sete sena le nalane ea sona',
+        corpusNeedsIngest: 'Kennya ntswe pele — lekala la korpusi le batla korpusing e kennyang'
       },
       error: {
         explain: 'Tlhaloso e hlolehile',

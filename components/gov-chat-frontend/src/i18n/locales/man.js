@@ -1916,7 +1916,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Repository-level tags ({summary}) live on the repo, not this concept — manage them in the Tags panel in the right rail.'
     },
     glossary: {
       addConcept:
@@ -2774,7 +2776,8 @@ export default {
         deleteTip: 'Remove this row from the suite',
         namePlaceholder: 'Suite name (optional) — e.g. NCD regression set',
         probeTip: 'Test this query against the live corpus',
-        deleteSuiteTip: 'Delete this suite and its run history'
+        deleteSuiteTip: 'Delete this suite and its run history',
+        corpusNeedsIngest: 'Ingest the repository first — the corpus test searches the ingested corpus'
       },
       error: {
         explain: 'Explain failed',

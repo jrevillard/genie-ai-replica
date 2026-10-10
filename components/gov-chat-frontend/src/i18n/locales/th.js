@@ -1920,7 +1920,8 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint: 'แท็กระดับรีปอซิทอรี ({summary}) เป็นของรีปอ — ไม่ใช่ของคอนเซปต์นี้ จัดการที่แผงแท็กในแถบด้านขวา'
     },
     glossary: {
       addConcept:
@@ -2779,7 +2780,8 @@ export default {
         deleteTip: 'นำแถวนี้ออกจากชุดทดสอบ',
         namePlaceholder: 'ชื่อชุดทดสอบ (ไม่บังคับ) — เช่น ชุดทดสอบย้อนหลัง NCD',
         probeTip: 'ทดสอบคำถามนี้กับคลังข้อมูลจริง',
-        deleteSuiteTip: 'ลบชุดทดสอบนี้และประวัติของมัน'
+        deleteSuiteTip: 'ลบชุดทดสอบนี้และประวัติของมัน',
+        corpusNeedsIngest: 'โปรด ingest รีปอซิทอรีก่อน — การทดสอบคลังข้อมูลค้นจากคลังที่ ingest แล้ว'
       },
       error: {
         explain: 'การอธิบายล้มเหลว',

@@ -1928,7 +1928,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'রিপোজিটরি-স্তরের ট্যাগ ({summary}) রিপোজিটরির, এই কনসেপ্টের নয় — ডানদিকের রেলের ট্যাগ প্যানেলে পরিচালনা করুন।'
     },
     glossary: {
       addConcept:
@@ -2792,7 +2794,8 @@ export default {
         deleteTip: 'suite থেকে এই সারিটি সরান',
         namePlaceholder: 'Suite-এর নাম (ঐচ্ছিক) — যেমন NCD রিগ্রেশন সেট',
         probeTip: 'প্রকৃত কর্পাসের বিরুদ্ধে এই কোয়েরি পরীক্ষা করুন',
-        deleteSuiteTip: 'এই suite ও তার ইতিহাস মুছুন'
+        deleteSuiteTip: 'এই suite ও তার ইতিহাস মুছুন',
+        corpusNeedsIngest: 'প্রথমে রিপোজিটরি ইনজেস্ট করুন — কর্পাস পরীক্ষা ইনজেস্ট করা কর্পাসে খোঁজে'
       },
       error: {
         explain: 'ব্যাখ্যা ব্যর্থ হয়েছে',

@@ -1945,7 +1945,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Les tags de niveau dépôt ({summary}) appartiennent au dépôt, pas à ce concept — gérez-les dans le panneau Tags du rail droit.'
     },
     glossary: {
       addConcept:
@@ -2814,7 +2816,8 @@ export default {
         deleteTip: 'Retirer cette ligne de la suite',
         namePlaceholder: 'Nom de la suite (facultatif) — ex. ensemble de régression NCD',
         probeTip: 'Tester cette requête sur le corpus réel',
-        deleteSuiteTip: 'Supprimer cette suite et son historique'
+        deleteSuiteTip: 'Supprimer cette suite et son historique',
+        corpusNeedsIngest: "Ingérez d'abord le dépôt — le test du corpus interroge le corpus ingéré"
       },
       error: {
         explain: "Échec de l'explication",

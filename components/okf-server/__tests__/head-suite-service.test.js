@@ -1176,6 +1176,55 @@ describe('getSuite vs an in-flight generation (1-8f2 — the honest envelope)', 
   });
 });
 
+describe('1-8g — runSuite probes the corpus (Run All fills the Corpus column)', () => {
+  it('stamps a light probe on every result row + persists lastProbe on the suite rows', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'NCD Information',
+      ingested_graph_name: 'OKF_me_v1'
+    });
+    headTestService.routingTest.mockImplementation(async (repoId, body) => {
+      const isPositive = suite.payload.positive.some((q) => q.query === body.query);
+      return fakeResult(isPositive, isPositive ? 0.7 : 0.05, 0, isPositive ? 'claimed' : 'suppressed');
+    });
+    frontmatterService.teiEmbed.mockResolvedValue([[0.1, 0.2, 0.3]]);
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('APPROX_NEAR_COSINE')) {
+        return { all: async () => [{ text: 'WHO guidance colorectal screening every 10 years', score: 0.82 }] };
+      }
+      return { all: async () => [] };
+    });
+    const realFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [{ index: 0, score: 0.91 }]
+    });
+    try {
+      process.env.OKF_RERANK_ENDPOINT = 'https://tei.example/rerank';
+      const run = await svc.runSuite('me', suite._key, {});
+      for (const r of run.payload.results) {
+        expect(r.probe).toMatchObject({ docs: 1, top_score: 0.91, verdict: 'answerable' });
+      }
+      // persisted on the suite rows — a later Load keeps the chips
+      const after = await svc.getSuite('me', suite._key, {});
+      expect(after.payload.positive[0].lastProbe).toMatchObject({ verdict: 'answerable', top_score: 0.91 });
+      expect(after.payload.negative[0].lastProbe).toMatchObject({ verdict: 'answerable' });
+    } finally {
+      global.fetch = realFetch;
+      delete process.env.OKF_RERANK_ENDPOINT;
+    }
+  });
+
+  it('skips the probe leg cleanly when the repo has no ingested corpus (head-only run)', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.7, 0));
+    const run = await svc.runSuite('me', suite._key, {});
+    expect(run.payload.results[0].probe).toBeUndefined();
+  });
+});
+
 describe('1-8g — default suite naming, delete, and the corpus probe', () => {
   it('names an unnamed suite "<Repo> suite N" (N = this repo\'s suite count + 1)', async () => {
     __mockDb.query.mockImplementation(async (aql) => {

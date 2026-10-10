@@ -1,3 +1,13 @@
+{{- /*
+  documentRepository depends on:
+    - the ArangoDB Service from the data tier (kube-arangodb operator owns
+      the Service name — the hostname comes from the arangoHost helper
+      which honors .Values.data.arangodb.mode)
+    - the `arango-root-secret` SealedSecret rendered by the data tier, which
+      supplies ARANGO_PASSWORD via secretKeyRef below
+  Both prerequisites are required for this Deployment's pods to schedule
+  and become ready.
+*/ -}}
 {{- if .Values.services.documentRepository.enabled -}}
 {{- $ns := .Values.namespace -}}
 {{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}

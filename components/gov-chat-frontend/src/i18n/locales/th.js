@@ -2731,7 +2731,8 @@ export default {
           headVersion: 'Head',
           tags: 'แท็ก',
           actions: 'แก้ไข',
-          name: 'ชื่อ'
+          name: 'ชื่อ',
+          corpus: 'คลังข้อมูล'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2776,7 +2777,9 @@ export default {
         load: 'โหลด',
         flipTip: 'สลับ ควรเลือก / ไม่ควรเลือก',
         deleteTip: 'นำแถวนี้ออกจากชุดทดสอบ',
-        namePlaceholder: 'ชื่อชุดทดสอบ (ไม่บังคับ) — เช่น ชุดทดสอบย้อนหลัง NCD'
+        namePlaceholder: 'ชื่อชุดทดสอบ (ไม่บังคับ) — เช่น ชุดทดสอบย้อนหลัง NCD',
+        probeTip: 'ทดสอบคำถามนี้กับคลังข้อมูลจริง',
+        deleteSuiteTip: 'ลบชุดทดสอบนี้และประวัติของมัน'
       },
       error: {
         explain: 'การอธิบายล้มเหลว',
@@ -2794,7 +2797,9 @@ export default {
         suiteLoad: 'โหลดชุดทดสอบไม่สำเร็จ',
         suiteUpdate: 'อัปเดตชุดทดสอบไม่สำเร็จ',
         suiteRename: 'เปลี่ยนชื่อชุดทดสอบไม่สำเร็จ',
-        generateTimeout: 'ชุดทดสอบใช้เวลานานผิดปกติ — อาจปรากฏในรายการที่บันทึกไว้ ตรวจสอบอีกครั้งในหนึ่งนาที'
+        generateTimeout: 'ชุดทดสอบใช้เวลานานผิดปกติ — อาจปรากฏในรายการที่บันทึกไว้ ตรวจสอบอีกครั้งในหนึ่งนาที',
+        probe: 'การทดสอบคลังข้อมูลล้มเหลว',
+        suiteDelete: 'ลบชุดทดสอบไม่สำเร็จ'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2815,6 +2820,12 @@ export default {
         predicted: 'คาดการณ์',
         scope: ' (จาก {q} คำถามในการรันล่าสุด {r} ครั้ง)',
         applying: 'กำลังใช้งาน: บันทึกแท็ก สร้าง head ใหม่ รันชุดทดสอบซ้ำ…'
+      },
+      probe: {
+        answerable: 'ตอบได้',
+        weak: 'ตรงกันบางส่วน',
+        unanswerable: 'ไม่มีในคลังข้อมูล',
+        unknown: 'ไม่ทราบ'
       }
     }
   },

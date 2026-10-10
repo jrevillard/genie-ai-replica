@@ -2700,7 +2700,8 @@ export default {
           headVersion: 'Head',
           tags: '标签',
           actions: '编辑',
-          name: '名称'
+          name: '名称',
+          corpus: '语料'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2745,7 +2746,9 @@ export default {
         load: '加载',
         flipTip: '切换 应选择 / 不应选择',
         deleteTip: '从测试集中移除此行',
-        namePlaceholder: '测试集名称（可选）— 例如：NCD 回归集'
+        namePlaceholder: '测试集名称（可选）— 例如：NCD 回归集',
+        probeTip: '用真实语料测试此查询',
+        deleteSuiteTip: '删除此测试集及其历史'
       },
       error: {
         explain: '解释失败',
@@ -2763,7 +2766,9 @@ export default {
         suiteLoad: '无法加载测试集',
         suiteUpdate: '无法更新测试集',
         suiteRename: '无法重命名测试集',
-        generateTimeout: '测试集耗时异常 — 可能稍后会出现在已保存列表中；请一分钟后查看。'
+        generateTimeout: '测试集耗时异常 — 可能稍后会出现在已保存列表中；请一分钟后查看。',
+        probe: '语料测试失败',
+        suiteDelete: '无法删除测试集'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2784,6 +2789,12 @@ export default {
         predicted: '预测',
         scope: '（最近 {r} 次运行共 {q} 条查询）',
         applying: '正在应用：保存标签、重建 head、重新运行测试集…'
+      },
+      probe: {
+        answerable: '可回答',
+        weak: '弱匹配',
+        unanswerable: '语料中无此内容',
+        unknown: '未知'
       }
     }
   },

@@ -2763,7 +2763,8 @@ export default {
           headVersion: 'Head',
           tags: 'Tags',
           actions: 'Modifier',
-          name: 'Nom'
+          name: 'Nom',
+          corpus: 'Corpus'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2811,7 +2812,9 @@ export default {
         load: 'Charger',
         flipTip: 'Basculer doit-sélectionner / ne-doit-pas-sélectionner',
         deleteTip: 'Retirer cette ligne de la suite',
-        namePlaceholder: 'Nom de la suite (facultatif) — ex. ensemble de régression NCD'
+        namePlaceholder: 'Nom de la suite (facultatif) — ex. ensemble de régression NCD',
+        probeTip: 'Tester cette requête sur le corpus réel',
+        deleteSuiteTip: 'Supprimer cette suite et son historique'
       },
       error: {
         explain: "Échec de l'explication",
@@ -2830,7 +2833,9 @@ export default {
         suiteUpdate: 'Impossible de mettre à jour la suite',
         suiteRename: 'Impossible de renommer la suite',
         generateTimeout:
-          'La suite tarde anormalement — elle apparaîtra peut-être dans les suites enregistrées ; vérifiez dans une minute.'
+          'La suite tarde anormalement — elle apparaîtra peut-être dans les suites enregistrées ; vérifiez dans une minute.',
+        probe: 'Échec du test du corpus',
+        suiteDelete: 'Impossible de supprimer la suite'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2851,6 +2856,12 @@ export default {
         predicted: 'prédit',
         scope: ' (sur {q} requêtes des {r} dernières exécutions)',
         applying: 'Application : enregistrement des tags, reconstruction de la tête, relance de la suite…'
+      },
+      probe: {
+        answerable: 'répondable',
+        weak: 'correspondance faible',
+        unanswerable: 'absent du corpus',
+        unknown: 'inconnu'
       }
     }
   },

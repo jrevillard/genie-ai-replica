@@ -1074,3 +1074,54 @@ it('1-8f2: pollForSuite keeps waiting on the {status:"generating"} envelope and 
   const suite = await w.vm.pollForSuite('s-x');
   expect(suite).toBe(landed); // NOT the generating envelope
 });
+
+it('1-8g: onProbeRow runs the click-test and patches matching rows with the probe result', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  const probe = { at: '2026-10-10T10:00:00Z', docs: 24, top_score: 0.83, verdict: 'answerable' };
+  dispatch.mockImplementation((action, payload) => {
+    if (action === 'okf/headSuiteProbe') {
+      expect(payload).toMatchObject({ repoId: 'r-1', suiteKey: 's1', query: 'positive query 0' });
+      return Promise.resolve({ ok: true, result: { suite_key: 's1', query: 'positive query 0', ...probe } });
+    }
+    return Promise.resolve({ ok: true });
+  });
+  w.vm.suite = {
+    suite_key: 's1',
+    payload: {
+      positive: [{ query: 'positive query 0' }],
+      negative: [{ query: 'negative query 0' }]
+    }
+  };
+  await w.vm.onProbeRow(w.vm.suite.payload.positive[0]);
+  expect(w.vm.busy).toBeNull();
+  expect(w.vm.suite.payload.positive[0].lastProbe).toMatchObject({ verdict: 'answerable', top_score: 0.83 });
+  expect(w.vm.suite.payload.negative[0].lastProbe).toBeUndefined();
+});
+
+it('1-8g: onProbeRow surfaces the error strip when the probe fails', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  dispatch.mockResolvedValue({ ok: false, message: 'boom' });
+  w.vm.suite = { suite_key: 's1', payload: { positive: [{ query: 'q' }], negative: [] } };
+  await w.vm.onProbeRow(w.vm.suite.payload.positive[0]);
+  expect(w.vm.error).toBe('boom');
+  expect(w.vm.suite.payload.positive[0].lastProbe).toBeUndefined();
+});
+
+it('1-8g: onDeleteSuite removes the suite from the list and clears a loaded copy', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  dispatch.mockImplementation((action) => {
+    if (action === 'okf/headSuiteDelete') return Promise.resolve({ ok: true, result: { deleted: true } });
+    return Promise.resolve({ ok: true });
+  });
+  w.vm.savedSuites = [{ _key: 's1' }, { _key: 's2' }];
+  w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  w.vm.lastRunSummary = { pass_rate: 0.5 };
+  await w.vm.onDeleteSuite(w.vm.savedSuites[0]);
+  expect(w.vm.savedSuites.map((s) => s._key)).toEqual(['s2']);
+  expect(w.vm.suite).toBeNull();
+  expect(w.vm.lastRunSummary).toBeNull();
+  expect(w.vm.busy).toBeNull();
+});

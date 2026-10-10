@@ -722,6 +722,10 @@ services:
       # of already-forbidden tags. Defaults live in the service (0.55 / 0.9).
       - OKF_GUARD_SELF_SUBJECT=${OKF_GUARD_SELF_SUBJECT:-}
       - OKF_GUARD_DUPLICATE_FORBIDDEN=${OKF_GUARD_DUPLICATE_FORBIDDEN:-}
+      # Story 1-8g — the Lab click-test reranks a query against the repo
+      # corpus through the SAME TEI /rerank the pipeline grounds on. Empty =
+      # the probe reports verdict unknown with an honest note.
+      - OKF_RERANK_ENDPOINT=${OKF_RERANK_ENDPOINT:-}
       - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
       - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
       # Stuck-parsed reaper signals (claim-stamp semantics): a claimed row with

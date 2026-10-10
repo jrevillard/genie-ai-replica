@@ -2742,7 +2742,8 @@ export default {
           headVersion: 'Head',
           tags: 'ট্যাগ',
           actions: 'সম্পাদনা',
-          name: 'নাম'
+          name: 'নাম',
+          corpus: 'কর্পাস'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2789,7 +2790,9 @@ export default {
         load: 'লোড করুন',
         flipTip: 'নির্বাচন-করবে / নির্বাচন-করবে-না উল্টে দিন',
         deleteTip: 'suite থেকে এই সারিটি সরান',
-        namePlaceholder: 'Suite-এর নাম (ঐচ্ছিক) — যেমন NCD রিগ্রেশন সেট'
+        namePlaceholder: 'Suite-এর নাম (ঐচ্ছিক) — যেমন NCD রিগ্রেশন সেট',
+        probeTip: 'প্রকৃত কর্পাসের বিরুদ্ধে এই কোয়েরি পরীক্ষা করুন',
+        deleteSuiteTip: 'এই suite ও তার ইতিহাস মুছুন'
       },
       error: {
         explain: 'ব্যাখ্যা ব্যর্থ হয়েছে',
@@ -2807,7 +2810,9 @@ export default {
         suiteLoad: 'suite লোড করা যায়নি',
         suiteUpdate: 'suite আপডেট করা যায়নি',
         suiteRename: 'suite-এর নাম পরিবর্তন করা যায়নি',
-        generateTimeout: 'suite অস্বাভাবিক দেরি হচ্ছে — সংরক্ষিত তালিকায় দেখা দিতে পারে; এক মিনিট পরে দেখুন।'
+        generateTimeout: 'suite অস্বাভাবিক দেরি হচ্ছে — সংরক্ষিত তালিকায় দেখা দিতে পারে; এক মিনিট পরে দেখুন।',
+        probe: 'কর্পাস পরীক্ষা ব্যর্থ',
+        suiteDelete: 'suite মুছতে ব্যর্থ'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2828,6 +2833,12 @@ export default {
         predicted: 'পূর্বানুমান',
         scope: ' (সর্বশেষ {r} রানের {q}টি কোয়েরি জুড়ে)',
         applying: 'প্রয়োগ চলছে: ট্যাগ সংরক্ষণ, head পুনর্নির্মাণ, suite পুনরায় চালানো…'
+      },
+      probe: {
+        answerable: 'উত্তর আছে',
+        weak: 'দুর্বল মিল',
+        unanswerable: 'কর্পাসে নেই',
+        unknown: 'অজানা'
       }
     }
   },

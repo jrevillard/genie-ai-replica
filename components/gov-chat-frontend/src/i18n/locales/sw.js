@@ -2743,7 +2743,8 @@ export default {
           headVersion: 'Head',
           tags: 'Tag',
           actions: 'Hariri',
-          name: 'Jina'
+          name: 'Jina',
+          corpus: 'Korpusi'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2790,7 +2791,9 @@ export default {
         load: 'Pakia',
         flipTip: 'Badilisha iwe-chaguliwe / isiwe-chaguliwe',
         deleteTip: 'Ondoa mstari huu kwenye kipima',
-        namePlaceholder: 'Jina la kipima (si lazima) — mf. seti ya urejesho wa NCD'
+        namePlaceholder: 'Jina la kipima (si lazima) — mf. seti ya urejesho wa NCD',
+        probeTip: 'Jaribu swali hili kwa korpusi hai',
+        deleteSuiteTip: 'Futa kipima hiki na historia yake'
       },
       error: {
         explain: 'Uelelezo umeshindikana',
@@ -2810,7 +2813,9 @@ export default {
         suiteUpdate: 'Imeshindikana kusasisha kipima',
         suiteRename: 'Imeshindikana kubadilisha jina la kipima',
         generateTimeout:
-          'Kipima kimechukua muda mrefu zaidi ya kawaida — kinaweza kutokea kwenye vilivyohifadhiwa; angalia baada ya dakika moja.'
+          'Kipima kimechukua muda mrefu zaidi ya kawaida — kinaweza kutokea kwenye vilivyohifadhiwa; angalia baada ya dakika moja.',
+        probe: 'Jaribio la korpusi limefaili',
+        suiteDelete: 'Imeshindwa kufuta kipima'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2831,6 +2836,12 @@ export default {
         predicted: 'makadirio',
         scope: ' (maswali {q} kutoka ukimbiaji {r} wa hivi karibuni)',
         applying: 'Inatekeleza: kuhifadhi tag, kujenga upya head, kuendesha upya kipima…'
+      },
+      probe: {
+        answerable: 'ina jibu',
+        weak: 'mfanano dhaifu',
+        unanswerable: 'haipo kwenye korpusi',
+        unknown: 'haijulikani'
       }
     }
   },

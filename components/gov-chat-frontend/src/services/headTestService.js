@@ -75,6 +75,25 @@ const headTestService = {
     return res && res.data ? res.data : null;
   },
 
+  /** Story 1-8g — delete a saved suite (and its run docs). */
+  async deleteSuite(repoId, suiteKey) {
+    const res = await httpService.delete(`/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}`);
+    return res && res.data ? res.data : null;
+  },
+
+  /** Story 1-8g — the click-test: one query against the LIVE corpus
+   * (embed → top-K → the pipeline's TEI rerank → coverage verdict),
+   * persisted on the matching suite rows. */
+  async probeSuiteQuery(repoId, suiteKey, query) {
+    const res = await httpService.post(
+      `/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}/probe`,
+      {
+        query
+      }
+    );
+    return res && res.data ? res.data : null;
+  },
+
   /** Story 1-8f — edit a suite's rows in place: kind flips (the mislabel
    * fix — the row is searched in BOTH arrays) and removes. Returns the
    * updated suite doc. */

@@ -2763,7 +2763,8 @@ export default {
           headVersion: 'Head',
           tags: 'Tags',
           actions: 'Bearbeiten',
-          name: 'Name'
+          name: 'Name',
+          corpus: 'Korpus'
         },
         notEvaluatable: 'not evaluatable (no competitors)',
         pass: 'pass',
@@ -2812,7 +2813,9 @@ export default {
         load: 'Laden',
         flipTip: 'Wechseln zwischen soll-selektieren / nicht-selektieren',
         deleteTip: 'Diese Zeile aus der Suite entfernen',
-        namePlaceholder: 'Suiten-Name (optional) — z. B. NCD-Regressionssatz'
+        namePlaceholder: 'Suiten-Name (optional) — z. B. NCD-Regressionssatz',
+        probeTip: 'Diese Abfrage gegen den Live-Korpus testen',
+        deleteSuiteTip: 'Diese Suite und ihren Verlauf löschen'
       },
       error: {
         explain: 'Erklärung fehlgeschlagen',
@@ -2832,7 +2835,9 @@ export default {
         suiteUpdate: 'Suite konnte nicht aktualisiert werden',
         suiteRename: 'Suite konnte nicht umbenannt werden',
         generateTimeout:
-          'Die Suite dauert ungewöhnlich lange — sie könnte in den gespeicherten Suiten landen; in einer Minute dort nachsehen.'
+          'Die Suite dauert ungewöhnlich lange — sie könnte in den gespeicherten Suiten landen; in einer Minute dort nachsehen.',
+        probe: 'Korpus-Test fehlgeschlagen',
+        suiteDelete: 'Suite konnte nicht gelöscht werden'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2853,6 +2858,12 @@ export default {
         predicted: 'prognostiziert',
         scope: ' (über {q} Abfragen aus den letzten {r} Läufen)',
         applying: 'Anwenden: Tags speichern, Head neu bauen, Suite neu ausführen…'
+      },
+      probe: {
+        answerable: 'beantwortbar',
+        weak: 'schwache Übereinstimmung',
+        unanswerable: 'nicht im Korpus',
+        unknown: 'unbekannt'
       }
     }
   },

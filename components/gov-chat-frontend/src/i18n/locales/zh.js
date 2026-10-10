@@ -2794,7 +2794,17 @@ export default {
         answerable: '可回答',
         weak: '弱匹配',
         unanswerable: '语料中无此内容',
-        unknown: '未知'
+        unknown: '未知',
+        title: '语料测试 — 摘要',
+        close: '关闭摘要',
+        chunksScanned: '个语料块已扫描',
+        headLeg: 'Head 判定',
+        headNotClaimed: '未归属',
+        corpusLeg: '语料覆盖',
+        files: '参考文件',
+        colScore: '重排序得分',
+        colFile: '文件',
+        colContent: '块内容'
       }
     }
   },

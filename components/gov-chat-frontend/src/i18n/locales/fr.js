@@ -2861,7 +2861,17 @@ export default {
         answerable: 'répondable',
         weak: 'correspondance faible',
         unanswerable: 'absent du corpus',
-        unknown: 'inconnu'
+        unknown: 'inconnu',
+        title: 'Test du corpus — résumé',
+        close: 'Fermer le résumé',
+        chunksScanned: 'segments du corpus analysés',
+        headLeg: 'Verdict Head',
+        headNotClaimed: 'sans attribution',
+        corpusLeg: 'Couverture du corpus',
+        files: 'Fichiers de référence',
+        colScore: 'Score de rerank',
+        colFile: 'Fichier',
+        colContent: 'Contenu du segment'
       }
     }
   },

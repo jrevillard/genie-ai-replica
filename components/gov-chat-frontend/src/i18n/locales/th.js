@@ -2825,7 +2825,17 @@ export default {
         answerable: 'ตอบได้',
         weak: 'ตรงกันบางส่วน',
         unanswerable: 'ไม่มีในคลังข้อมูล',
-        unknown: 'ไม่ทราบ'
+        unknown: 'ไม่ทราบ',
+        title: 'การทดสอบคลังข้อมูล — สรุป',
+        close: 'ปิดสรุป',
+        chunksScanned: 'ชังก์ที่สแกนจากคลังข้อมูล',
+        headLeg: 'คำตัดสิน Head',
+        headNotClaimed: 'ไม่ระบุกราฟ',
+        corpusLeg: 'การครอบคลุมคลังข้อมูล',
+        files: 'ไฟล์อ้างอิง',
+        colScore: 'คะแนน rerank',
+        colFile: 'ไฟล์',
+        colContent: 'เนื้อหาชังก์'
       }
     }
   },

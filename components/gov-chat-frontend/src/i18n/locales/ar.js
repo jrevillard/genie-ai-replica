@@ -2822,7 +2822,17 @@ export default {
         answerable: 'قابلة للإجابة',
         weak: 'مطابقة ضعيفة',
         unanswerable: 'غير موجود في المتن',
-        unknown: 'غير معروف'
+        unknown: 'غير معروف',
+        title: 'اختبار المتن — ملخص',
+        close: 'إغلاق الملخص',
+        chunksScanned: 'مقاطع المتن المفحوصة',
+        headLeg: 'حكم Head',
+        headNotClaimed: 'بدون إسناد',
+        corpusLeg: 'تغطية المتن',
+        files: 'ملفات مرجعية',
+        colScore: 'نتيجة إعادة الترتيب',
+        colFile: 'ملف',
+        colContent: 'محتوى المقطع'
       }
     }
   },

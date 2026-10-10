@@ -1902,7 +1902,8 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint: '仓库级标签（{summary}）属于仓库而非此概念——请在右侧栏的标签面板中管理。'
     },
     glossary: {
       addConcept:
@@ -2748,7 +2749,8 @@ export default {
         deleteTip: '从测试集中移除此行',
         namePlaceholder: '测试集名称（可选）— 例如：NCD 回归集',
         probeTip: '用真实语料测试此查询',
-        deleteSuiteTip: '删除此测试集及其历史'
+        deleteSuiteTip: '删除此测试集及其历史',
+        corpusNeedsIngest: '请先摄取仓库——语料测试搜索的是已摄取的语料'
       },
       error: {
         explain: '解释失败',

@@ -1929,7 +1929,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Lebe za kiwango cha hazina ({summary}) ni za hazina, si la dhana hii — dhibiti kutoka kipanele cha lebe kwenye reli ya kulia.'
     },
     glossary: {
       addConcept:
@@ -2793,7 +2795,8 @@ export default {
         deleteTip: 'Ondoa mstari huu kwenye kipima',
         namePlaceholder: 'Jina la kipima (si lazima) — mf. seti ya urejesho wa NCD',
         probeTip: 'Jaribu swali hili kwa korpusi hai',
-        deleteSuiteTip: 'Futa kipima hiki na historia yake'
+        deleteSuiteTip: 'Futa kipima hiki na historia yake',
+        corpusNeedsIngest: 'Ingiza hazina kwanza — jaribio la korpusi hutafuta korpusi iliyoingizwa'
       },
       error: {
         explain: 'Uelelezo umeshindikana',

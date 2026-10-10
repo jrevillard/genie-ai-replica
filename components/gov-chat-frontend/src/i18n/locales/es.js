@@ -1940,7 +1940,9 @@ export default {
         forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.'
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Las etiquetas a nivel de repositorio ({summary}) viven en el repositorio, no en este concepto — gestiónelas en el panel de etiquetas del raíl derecho.'
     },
     glossary: {
       addConcept:
@@ -2812,7 +2814,8 @@ export default {
         deleteTip: 'Quitar esta fila de la suite',
         namePlaceholder: 'Nombre de la suite (opcional): p. ej. conjunto de regresión ECD',
         probeTip: 'Probar esta consulta contra el corpus real',
-        deleteSuiteTip: 'Eliminar esta suite y su historial'
+        deleteSuiteTip: 'Eliminar esta suite y su historial',
+        corpusNeedsIngest: 'Ingera primero el repositorio — la prueba del corpus busca en el corpus ingerido'
       },
       error: {
         explain: 'La explicación falló',

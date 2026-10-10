@@ -435,3 +435,37 @@ ENV plumbing: OKF_RERANK_ENDPOINT (env S15, compose empty-default,
 env.j2, config-validator 45/45). Smoke sections 15-17 (naming, probe
 shape + persistence + auth, delete lifecycle). Tests: okf-server 851
 (+4), frontend 1672 (+3). Committed 7707f2dd2 (29 files).
+
+## 15. 1-8g — the probe summary panel + exact reasons + the Corpus-column fix (2026-10-10, df8aa9539)
+
+David's live-build feedback, three parts: "no summary of the query
+response in the UI — it should popup a panel with ALL the statistics",
+"the Corpus column displays nothing afterward", and "unanswerable
+analysis must state exactly WHY; when answerable, show the stats
+(chunks, reference files)".
+
+**The panel.** The probe response now carries everything the panel
+needs: `head` {claimed, claim, score} (from routingTest), reference
+`files` [{id, name, chunks}] (resolved via the files collection from
+the rerank candidates' file_ids), and rerank-ordered top_chunks
+[{score, preview, file}]. probeReason() states the verdict's evidence
+in words — answerable: best chunk vs the 0.5 answer bar with the chunk
+preview; weak/unanswerable: term-overlap analysis of the query vs the
+best candidate ("the corpus mentions X, Y but no chunk answers this";
+"No corpus content matches this question"). HeadTestDialog renders it
+above the current suite: title + close, query + chunks-scanned +
+elapsed, a Head-verdict leg and a Corpus-coverage leg (DsPills), the
+reason paragraph, Reference-files tags, and the top-chunks table
+(rerank score / file / content).
+
+**The Corpus-column fix.** The column stayed blank because
+suiteEditableRows dropped lastProbe in its passthrough — the run-map
+kept it but the editable rows (what the column renders) lost it.
+Pinned by test.
+
+ENV/tests: i18n probe-panel keys ×14 (codemod
+add-18g-probe-panel-i18n.cjs); okf-server 850/851 (import-links
+timeout flake under load, green isolated), frontend 1673 (+1 panel
+test), smoke §16 unchanged (panel is UI-side). Smoke: user-create 409
+self-heal (leftover fixture from an interrupted run is deleted and
+recreated). Committed df8aa9539.

@@ -225,3 +225,45 @@ MR time). okf-server 860/860, frontend 1678/1678.
   doc-repo files). Origin fix: the routing keys on the JOB (OKF ingest
   context) — the callback goes to the OKF control plane even without
   concept_id; only legacy single-file jobs PATCH doc-repo.
+
+## Query audit (2026-10-10, David: "evaluate the last 8 queries") — verdict + work items k/m/n/l
+
+Independent agent audit of the 8 RAG chat queries 13:10–15:01 UTC (traces +
+logs + run docs + SOURCE spot-checks): **David's "looks pretty good" is
+CONFIRMED** — routing 5/8 ideal (heads-supersede exclusive on clean claims,
+legacy excluded, sticky carrier held across a repeat), 3/3 grounded answers
+calibration-clean (top rerank 0.61/0.99/0.96, cited chunks verified to
+exist), zero hallucinated-as-grounded answers, honest abstentions on all
+off-corpus probes, and the earlier NCD zero-hit anomaly did NOT recur (the
+one NCD leg in the window returned 20 chunks in 1.28s).
+
+Real findings, each its own work item:
+
+- **1-8g-k — abandoned retriever fanout worker threads (BUG, rework).**
+  4× in 3 min: `Fan-out leg TIMED OUT after 9.91s (limit 8000ms) —
+  worker thread abandoned in background`; the abandoned traversals keep
+  hitting Arango and die at the 60s read timeout; spans stay open 86-119s
+  (a 119.4s leg ends ~106s after the response shipped), dashboards lie,
+  and the piled traversals plausibly slowed a probe 0.4s → 5.8s mid-window.
+  Fix direction: real thread cancellation / detached-leg reaping + a span
+  that ENDS when the leg is abandoned. Own MR.
+- **1-8g-l — OKF_indonesia-history-llm_v1 pathological traversal
+  (investigation).** Every competition leg on that graph timed out (8s
+  limit) — competition silently degenerated to legacy-GRAPH-only on 3
+  queries. Bali-drain family (oversized traversal neighborhood; check
+  _LINKS_TO cardinality). Outcomes stayed honest, but stale-GRAPH-only
+  grounding is a latent accuracy hazard. Own MR.
+- **1-8g-m DONE** (this commit) — compose shipped
+  RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES default **10** against the
+  retriever's code default 1 and safe cap 4 → an ERROR-level cap warning on
+  EVERY leg. Compose default aligned to the code default (1).
+- **1-8g-n — the 8s leg-timeout is enforced by waiting (backlog, design).**
+  ~10s of the user-facing wall on floored-head competition queries is
+  spent inside the retrieval POST before fallback. Fail-fast or real
+  cancellation reclaims it — folds into k's rework.
+
+Calibration note (no action): the Lab's corpus probe scored the
+slaughter-fees query "weak" (0.19, the PDF-link chunk) while chat grounded
+0.61-0.96 on real fee-schedule chunks — probe-cosine and reranker score
+disagree on this repo; chat was right. Expect Lab-probe↔chat disagreement
+when a repo's best chunk is a link row.

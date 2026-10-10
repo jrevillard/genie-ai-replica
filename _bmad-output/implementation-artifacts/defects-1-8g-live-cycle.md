@@ -175,3 +175,41 @@ boundary uses).
 - Fix commits: d66544128 (a+g), ba53cc140 (i18n), 3e30a8078 (f),
   95638ec30 (e). Suite state at commit: okf-server 854/854,
   frontend 1676/1676, lint+prettier clean.
+
+---
+
+## Resolution addendum (2026-10-10, later cycle — David: "we need b, c, d and h fixed")
+
+All four BACKLOG items above are now FIXED in c4bcb8619 (one rework commit —
+the four fixes interleave in recommendTagSet/generateSuite/addQueries; the
+per-item tests pin each behavior so cherry-pick splits remain possible at
+MR time). okf-server 860/860, frontend 1678/1678.
+
+- **1-8g-b DONE** — headTestService.embedQueryBatch() is the gate's
+  embedding contract, batched; recommendTagSet embeds its query vectors
+  through it (the sim and the live runs now share ONE vector space); the
+  payload carries `scope` {suites, runs[{run_key, suite_key, created_at,
+  tagset}], embedding_prefixed, embedding_model} and the scorecard line
+  renders "suites: … · tag sets: …". Tests: parity + scope.
+- **1-8g-c DONE** — recommendTagSet simulates EVERY non-candidate
+  forbidden tag: `blocked_removals` [{tag, predicted_positive_gain,
+  predicted_negative_loss, predicted_score, reason:
+  'curator_original'|'history_rotated'}]; the Lab renders them as
+  confirm chips (✓ toggles) that join Apply in the ONE frontmatter
+  save. `narrow_options` = remove-broad/add-narrow pairs simulated
+  against the current config that strictly dominate a bare removal —
+  same chips, same save. The meat-packaging class of deadlocks now ends
+  with the curator confirming the one action that recovers the
+  positives. (The topic-add lever for genuinely floor-failing repos
+  stays future — §c (f) — this repo had zero floor-fails.)
+- **1-8g-d DONE** — the add-LLM's failing set filters to
+  cls ∈ {off-domain, forbidden, near-miss}; confusable and meta rows
+  can never seed a forbidden-tag proposal again (the prompt test pins
+  the exclusion).
+- **1-8g-h DONE** — generateSuite dedups positives and negatives by
+  normalized text (first occurrence wins, order preserved) and drops
+  negatives that duplicate a positive; addQueries dedups manual
+  additions against the suite (same OR opposite kind) and reports
+  `duplicates_dropped` so the curator is never silently ignored. The
+  99-random contract test now asserts the UNIQUE-pool semantics that
+  supersede the 1-8f cycling behavior.

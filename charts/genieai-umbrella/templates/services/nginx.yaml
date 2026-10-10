@@ -68,6 +68,14 @@ spec:
       ports:
         - protocol: TCP
           port: 3000
+    # document-repository (for /uploads/ route in the override ConfigMap).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: 3001
     # OTLP exporter: required for the observability pipeline. Without
     # this port the default-deny policy drops all traces at the source.
     - to:

@@ -6,6 +6,7 @@
     (dict "name" "KEYCLOAK_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
     (dict "name" "ARANGO_URL" "value" (printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (printf "http://genieai-collector-collector.%s.svc.cluster.local:4318" $ns))
+    (dict "name" "TRANSLATION_CACHE" "value" "on")
     (dict "name" "TRANSLATION_CACHE_HOST" "value" (printf "redis-cache.%s.svc.cluster.local" $ns))
     (dict "name" "TRANSLATION_CACHE_PORT" "value" "6379")
 -}}
@@ -31,9 +32,10 @@ spec:
 # Default-deny with ingress allowlist and egress scoped to the data tier.
 # Egress uses port-scoped ipBlock rules because the operator-managed peers
 # (kube-arangodb, CloudNative-PG, Keycloak operator) expose their real pod
-# labels only at runtime; guessed labels silently block traffic. The
-# verified-peer pass tightens these to namespaceSelector/podSelector
-# peers after live label inspection.
+# labels only at runtime; guessed labels silently block traffic. A
+# follow-up that inspects live pod labels can tighten these to
+# namespaceSelector / podSelector peers when the operator label shape
+# is known.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

@@ -5,7 +5,8 @@
     (dict "name" "VUE_APP_API_URL" "value" (printf "http://backend.%s.svc.cluster.local" $ns))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}
-{{- $_ := set $vals.services.frontend "env" $urls -}}
+{{- $existing := index $vals.services.frontend "env" | default list -}}
+{{- $_ := set $vals.services.frontend "env" (concat $existing $urls) -}}
 {{- $ctx := dict "name" "frontend" "component" "frontend" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---

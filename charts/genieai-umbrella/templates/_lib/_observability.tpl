@@ -9,11 +9,18 @@
   `Values.observability.collectorCRName`; the helper does the rename for
   them everywhere the endpoint is referenced.
 
+  The Collector OTLP/HTTP listener port (default 4318) is also a
+  values override (`Values.observability.collectorPort`): a cluster
+  with a non-default `spec.ports[0].port` on the operator-managed
+  Service would otherwise see every span dropped at the source with
+  no obvious error.
+
   Returns the full http URL: scheme + authority only — no path, no port
-  beyond the collector's listener (4318 OTLP/HTTP). The path component
-  is appended by the OTel SDK at export time.
+  beyond the collector's listener. The path component is appended by
+  the OTel SDK at export time.
 */}}
 {{- define "genieai-umbrella.otlpEndpoint" -}}
 {{- $cr := .Values.observability.collectorCRName | default "genieai-collector" -}}
-{{- printf "http://%s-collector.%s.svc.cluster.local:4318" $cr .Values.namespace -}}
+{{- $port := .Values.observability.collectorPort | default 4318 -}}
+{{- printf "http://%s-collector.%s.svc.cluster.local:%d" $cr .Values.namespace (int $port) -}}
 {{- end -}}

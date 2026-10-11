@@ -226,20 +226,39 @@ class HttpService {
       if (status === 401 && !originalRequest._retryCount) {
         originalRequest._retryCount = 1;
 
+        // A SERVER-SIDE failure on the retry (502/504/timeout/network) is NOT a
+        // dead session (David's 2026-10-11 logout: one transient failure threw
+        // the user to the login page and discarded a good session). Only a 401
+        // on the retried request may escalate to a redirect — and even then the
+        // stored user is checked first, so a live session is never discarded.
         try {
           const refreshedUser = await keycloakAuthService.signinSilent();
 
           if (refreshedUser?.access_token) {
             originalRequest.headers.Authorization = `Bearer ${refreshedUser.access_token}`;
-            return this.axios(originalRequest);
+            try {
+              return await this.axios(originalRequest);
+            } catch (retryError) {
+              const retryStatus = retryError.response ? retryError.response.status : null;
+              if (retryStatus !== 401) {
+                // Server-side problem: surface it verbatim. Redirecting here is
+                // how a gateway blip used to look like an expired session.
+                return Promise.reject(retryError);
+              }
+            }
           }
         } catch (refreshError) {
           console.error('[HttpService] Token refresh failed:', refreshError.message);
         }
 
-        // Refresh failed or no token — redirect to Keycloak login
-        if (typeof window !== 'undefined') {
-          await keycloakAuthService.login();
+        // The refresh yielded no usable token, or the retry came back 401 —
+        // the only two cases where the session may genuinely be gone. Check the
+        // STORED user before discarding it.
+        const user = await keycloakAuthService.getUser();
+        if (!user || user.expired) {
+          if (typeof window !== 'undefined') {
+            await keycloakAuthService.login();
+          }
         }
 
         return Promise.reject({

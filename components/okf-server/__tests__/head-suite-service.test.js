@@ -2040,3 +2040,106 @@ describe('beginRunSuite — async run lifecycle (1-8g-v/w)', () => {
     await done;
   });
 });
+// ─── 1-8g-x: the run progress bar ──────────────────────────────────────────
+// David (live 2026-10-11): "the UI should show a progress bar for the run" —
+// and, after 1-8g-w, a run that finishes but shows nothing is worse than one
+// that visibly progresses. The worker reports {phase, done, total}; the async
+// caller throttles those into the run doc; the poll's live envelope carries
+// the last value so the dialog can render a REAL percentage.
+describe('1-8g-x — run progress reporting', () => {
+  const { logger } = require('../shared-lib/logger');
+
+  // The seeder may add derived rows (forbidden-derived etc.) beyond the
+  // requested counts, so every expectation below derives the real row count
+  // from the suite instead of hard-coding it.
+  const rowCount = (suite) => suite.payload.positive.length + suite.payload.negative.length;
+
+  it('runSuite reports the routing leg monotonically and lands exactly on total', async () => {
+    const suite = await seedSuite({ positive: 3, negativeForbidden: 2 });
+    const total = rowCount(suite);
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.3, 1));
+    const seen = [];
+    await svc.runSuite('me', suite._key, { reportProgress: async (p) => seen.push(p) });
+    const routing = seen.filter((p) => p.phase === 'routing');
+    expect(routing.length).toBeGreaterThan(1); // not just the opening report
+    expect(routing[0]).toMatchObject({ phase: 'routing', done: 0, total });
+    // every report carries the suite's full row count
+    expect(routing.every((p) => p.total === total)).toBe(true);
+    // monotonic, and the worker finishes its rows
+    const dones = routing.map((p) => p.done);
+    expect(dones).toEqual([...dones].sort((a, b) => a - b));
+    expect(Math.max(...dones)).toBe(total);
+  });
+
+  it('a failing progress sink never fails the run (best-effort telemetry)', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    const total = rowCount(suite);
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.5, 0));
+    // the sink rejects — the run must still complete with its docs
+    const run = await svc.runSuite('me', suite._key, {
+      reportProgress: async () => {
+        throw new Error('progress sink down');
+      }
+    });
+    expect(run.payload.results).toHaveLength(total);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'head-suite.run.progress_report_failed',
+      expect.objectContaining({ suite_key: suite._key, error: 'progress sink down' })
+    );
+  });
+
+  it('no reportProgress option = zero progress calls (the sync path is unchanged)', async () => {
+    const suite = await seedSuite({ positive: 2 });
+    const total = rowCount(suite);
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.5, 0));
+    const run = await svc.runSuite('me', suite._key, {});
+    expect(run.payload.results).toHaveLength(total);
+  });
+
+  it('beginRunSuite persists throttled progress onto the run doc', async () => {
+    const suite = await seedSuite({ positive: 3, negativeForbidden: 1 });
+    headTestService.routingTest.mockImplementation(async () => {
+      // let the throttle window elapse between rows so >1 write lands
+      await new Promise((r) => setTimeout(r, 5));
+      return fakeResult(true, 0.3, 1);
+    });
+    const handle = __mockDb.collection('okf_head_test_runs');
+    const updatesBefore = handle.update.mock.calls.length;
+    const { run_key, done } = await svc.beginRunSuite('me', suite._key, {});
+    await done;
+    const updates = handle.update.mock.calls.slice(updatesBefore);
+    expect(updates.length).toBeGreaterThan(0);
+    for (const [key, patch] of updates) {
+      expect(key).toBe(run_key);
+      expect(patch.progress).toMatchObject({ phase: expect.any(String), done: expect.any(Number) });
+      expect(patch.updated_at).toEqual(expect.any(String));
+    }
+  });
+
+  it('the live poll envelope carries the persisted progress (the bar has something to draw)', async () => {
+    const suite = await seedSuite({ positive: 2 });
+    headTestService.routingTest.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      return fakeResult(true, 0.5, 0);
+    });
+    // seed a progress value the way the throttled writer would
+    const { run_key, done } = await svc.beginRunSuite('me', suite._key, {});
+    await __mockDb
+      .collection('okf_head_test_runs')
+      .update(run_key, { progress: { phase: 'routing', done: 1, total: 2 } });
+    const live = await svc.getRunSuite('me', suite._key, run_key);
+    expect(live.status).toBe('running');
+    expect(live.progress).toMatchObject({ phase: 'routing', done: 1, total: 2 });
+    await done;
+  });
+
+  it('listRuns projects the progress field so a history row can show it', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.5, 0));
+    __mockDb.query.mockResolvedValue({
+      all: async () => [{ _key: 'r1', repo_id: 'me', kind: 'run', suite_key: suite._key, status: 'running' }]
+    });
+    const rows = await svc.listRuns('me', { kind: 'run', limit: 10 });
+    expect(rows).toHaveLength(1);
+  });
+});

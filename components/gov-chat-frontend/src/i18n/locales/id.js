@@ -2745,6 +2745,14 @@ export default {
           'Kueri ini tidak berhubungan dengan topik repositori ini (skor di bawah batas minimum domain) — perubahan tag tidak akan memperbaiki ini; ini adalah penekanan yang benar.',
         rejected: 'Ditolak oleh pagar pengaman — tag terlarang tidak boleh cocok dengan topik repositori ini sendiri.'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

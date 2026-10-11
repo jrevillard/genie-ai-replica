@@ -1544,6 +1544,14 @@ export default {
           'The query is unrelated to the subject matter of this repository (score below the domain floor) — no tag change fixes this; it is correct suppression.',
         rejected: 'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

@@ -2726,6 +2726,14 @@ export default {
           'คำค้นนี้ไม่เกี่ยวข้องกับหัวข้อของคลังข้อมูลนี้ (คะแนนต่ำกว่าคะแนนขั้นต่ำของโดเมน) — การเปลี่ยนแท็กจะไม่ช่วยแก้ไข นี่คือการกดที่ถูกต้อง',
         rejected: 'ถูกปฏิเสธโดยระบบป้องกัน — แท็กต้องห้ามต้องไม่ตรงกับหัวข้อของคลังข้อมูลนี้เอง'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

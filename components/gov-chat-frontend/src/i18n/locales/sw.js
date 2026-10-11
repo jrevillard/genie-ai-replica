@@ -2739,6 +2739,14 @@ export default {
           'Hoja hii haihusiani na mada ya repository hii (alama iko chini ya kiwango cha chini cha domain) — kubadilisha lebo hakurekebishi hili; hii ni uzuiaji sahihi.',
         rejected: 'Imezuiwa na ulinzi — lebo iliyozuiwa haipaswi kulingana na mada ya hifadhi hii yenyewe.'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

@@ -2760,6 +2760,14 @@ export default {
           'Die Abfrage hat keinen Bezug zum Thema dieses Repositorys (Wert unter der Domain-Untergrenze) — keine Tag-Änderung behebt das; die Unterdrückung ist korrekt.',
         rejected: 'Vom Guardrail abgelehnt — ein verbotenes Tag darf nicht zum eigenen Thema des Repositorys passen.'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

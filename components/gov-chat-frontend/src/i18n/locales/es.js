@@ -2759,6 +2759,14 @@ export default {
         rejected:
           'Descartado por el guardián — una etiqueta prohibida no debe coincidir con el propio tema de este repositorio.'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

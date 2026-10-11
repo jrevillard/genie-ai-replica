@@ -2739,6 +2739,14 @@ export default {
           'কোয়েরিটি এই রিপোজিটরির বিষয়বস্তুর সাথে সম্পর্কিত নয় (স্কোর ডোমেনের ন্যূনতম সীমার নিচে) — ট্যাগ পরিবর্তনে এটি ঠিক হয় না; এটি সঠিক বর্জন।',
         rejected: 'গার্ডরেল দ্বারা বাতিল — একটি নিষিদ্ধ ট্যাগ এই রিপোজিটরির নিজস্ব বিষয়ের সাথে মিলতে পারে না।'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

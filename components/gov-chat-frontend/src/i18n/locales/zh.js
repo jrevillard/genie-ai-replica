@@ -2696,6 +2696,14 @@ export default {
         floor: '该查询与此仓库的主题无关（分数低于领域下限）——更改标签无法解决此问题；这是正确的抑制。',
         rejected: '已被护栏过滤——禁用标签不得与该仓库自身的主题匹配。'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip: 'LLM 按每类 30 条分批生成 — 大批量（100+）需要几分钟。完成后测试集会出现在此处和已保存列表中。',

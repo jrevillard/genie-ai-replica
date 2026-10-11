@@ -2722,6 +2722,14 @@ export default {
           'Kajjitōk in ejab naan ko ilo repo in (score eo ej jab elōn floor eo) — tag ko enaj jab kōm̦m̦an melele; kōnka ej suppress eo em̦ōj.',
         rejected: 'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

@@ -2750,6 +2750,14 @@ export default {
         rejected:
           'Отклонено защитным фильтром — запрещённый тег не должен совпадать с собственной темой этого репозитория.'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

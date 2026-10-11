@@ -2761,6 +2761,14 @@ export default {
           'La requête est sans rapport avec le sujet de ce dépôt (score en dessous du seuil minimum du domaine) — aucun changement de tag ne corrige cela ; le filtrage est correct.',
         rejected: 'Écarté par le garde-fou — un tag interdit ne doit pas correspondre au propre sujet de ce dépôt.'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

@@ -2754,6 +2754,14 @@ export default {
           'Potso ena ha e amane le taba ea polokelo ena (score e tlaase ho moeli oa domain) — ho fetola matag ha ho lokise sena; ke thibelo e nepahetseng.',
         rejected: 'E lokotsoe ke guardrail — tag e thibetsitseng ha eao lumana le taba ea polokelo ena ka boeona.'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

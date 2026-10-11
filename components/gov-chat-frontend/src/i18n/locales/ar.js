@@ -2723,6 +2723,14 @@ export default {
           'الاستعلام لا علاقة له بموضوع هذا المستودع (النتيجة أقل من الحد الأدنى للمجال) — لا يعالج تغيير الوسوم هذه المشكلة؛ هذا استبعاد صحيح.',
         rejected: 'تم رفضه بواسطة الحاجز الآلي — يجب ألا يطابق الوسم المحظور موضوع هذا المستودع نفسه.'
       },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
       suites: {
         generate: 'Generate test suite',
         generateTip:

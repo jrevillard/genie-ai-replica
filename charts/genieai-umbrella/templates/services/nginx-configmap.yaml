@@ -13,6 +13,11 @@ data:
   # placeholders, so envsubst copies it through verbatim and the upstream
   # image's baked-in Kong-based default.conf never reaches the listener.
   default.conf.template: |
+    # Upstream Service names + ports. These are NOT templated against
+    # values.yaml — ConfigMaps are not rendered from values by Helm or
+    # Flux, so operators changing a Service port must update BOTH the
+    # Service spec (templates/services/<name>.yaml) AND this block, or
+    # nginx 502s silently when the upstream port no longer matches.
     upstream genieai_frontend { server frontend:80; }
     upstream genieai_backend  { server backend:80; }
     upstream genieai_docrepo  { server document-repository:80; }

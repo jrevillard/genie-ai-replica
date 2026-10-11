@@ -63,7 +63,10 @@ spec:
     - Egress
   ingress:
     # Backend (file references) plus same-namespace peers on the
-    # container port (post-DNAT).
+    # container port (post-DNAT). The `podSelector: {}` below is a
+    # placeholder for the gateway-tier selector (Plan 6/ingress will
+    # tighten it to a specific peer label once the edge gateway's
+    # data-plane label shape is known).
     - from:
         - podSelector:
             matchLabels:
@@ -98,6 +101,14 @@ spec:
       ports:
         - protocol: TCP
           port: 3310
+    # Data tier: ArangoDB (8529) — pending verified peer labels.
+    # Same port-scoped pattern as the backend's data-tier egress.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8529
     # OTLP exporter. Required for the observability pipeline; without
     # this port the default-deny policy drops document-repository
     # telemetry.

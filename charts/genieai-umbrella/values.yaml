@@ -196,6 +196,11 @@ services:
       - name: huggingface-hub-token
       - name: email-password
       - name: translation-cache-password
+      # ARANGO_PASSWORD for the data-tier ArangoDB. The same SealedSecret
+      # rendered by the data tier is consumed by document-repository via
+      # secretKeyRef; backend reads it via envFrom here so its ArangoDB
+      # driver authenticates with the operator-managed root account.
+      - name: arango-root-secret
     pvc: null
     probes:
       readiness: { httpGet: { path: /api/health, port: 3000 }, initialDelaySeconds: 10, periodSeconds: 10 }

@@ -37,7 +37,10 @@ spec:
     # Same-namespace peers on the container port (post-DNAT). The
     # edge gateway reaches nginx via a routed path; an explicit
     # podSelector from the gateway namespace will land with the
-    # gateway tier.
+    # gateway tier. The `podSelector: {}` below is a placeholder for
+    # the gateway-tier selector (Plan 6/ingress will tighten it to a
+    # specific peer label once the edge gateway's data-plane label
+    # shape is known).
     - from:
         - podSelector: {}
       ports:

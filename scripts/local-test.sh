@@ -6,6 +6,10 @@
 # Operator prerequisites (keycloak-operator, cloudnative-pg, kube-arangodb,
 # sealed-secrets) are installed cluster-wide by `./scripts/install-prereqs.sh`
 # (separate script; this file assumes they are present).
+#
+# Teardown: `./scripts/local-teardown.sh` removes the chart release and
+# `genieai` namespace only; pass `--with-operators` to also uninstall the
+# 4 cluster operators.
 
 set -euo pipefail
 CHART=charts/genieai-umbrella

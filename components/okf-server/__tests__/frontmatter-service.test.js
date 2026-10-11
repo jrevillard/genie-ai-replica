@@ -48,6 +48,21 @@ const CONCEPT_ROWS = [
   }
 ];
 
+// 1-8g-m: the concept query now returns GROUPS (one per primary label) —
+// {label, total, sample[]} — so the sampler sees the complete label
+// distribution AND a bounded per-label sample in one pass. This mirrors the
+// AQL: FOR m ... LET lab = m.labels[0] ... COLLECT lab = lab INTO rows = m
+//       LET s = (FOR x IN (FOR r2 IN rows SORT r2._key LIMIT @perLabel) RETURN {...})
+function groupConcepts(concepts) {
+  const byLabel = new Map();
+  for (const c of concepts) {
+    const label = (Array.isArray(c.labels) && c.labels.length && c.labels[0]) || '(unlabeled)';
+    if (!byLabel.has(label)) byLabel.set(label, []);
+    byLabel.get(label).push(c);
+  }
+  return [...byLabel.entries()].map(([label, rows]) => ({ label, total: rows.length, sample: rows }));
+}
+
 function seedDb({ concepts = CONCEPT_ROWS } = {}) {
   __mockDb.query.mockImplementation((q) => {
     const text = typeof q === 'string' ? q : q && q.query ? q.query : '';
@@ -55,7 +70,7 @@ function seedDb({ concepts = CONCEPT_ROWS } = {}) {
       return Promise.resolve({ all: async () => [REPO_ROW] });
     }
     if (text.includes('okf_concepts_meta')) {
-      return Promise.resolve({ all: async () => concepts });
+      return Promise.resolve({ all: async () => groupConcepts(concepts) });
     }
     return Promise.resolve({ all: async () => [] });
   });
@@ -186,5 +201,199 @@ describe('frontmatterService.suggestTags — forbidden suggestion contract', () 
       { value: 'mental-health', suggested: true },
       { value: 'communicable-diseases', suggested: true }
     ]);
+  });
+});
+// ─── 1-8g-m: label-grounded suggestions ─────────────────────────────────────
+// Live 2026-10-11 (Indonesia History, 999 concepts): the sampler took the
+// FIRST 20 by auto-key, so the prompt saw History(14)+Prehistory(5) while the
+// real surface was History 513 / Politics 133 / Culture 99 / Economics 68 /
+// Religion 29 — and the LLM then suggested FORBIDDEN "modern-politics" and
+// "contemporary-culture" for a corpus holding 133 politics + 99 culture
+// concepts (a live hard-veto trap). Two fixes: label-stratified sampling with
+// the complete histogram, and a mechanical forbidden guard.
+
+describe('1-8g-m — label-stratified sampling', () => {
+  const { buildSuggestContext } = svc._internals;
+
+  // A miniature of the live Indonesia shape: one dominant label and a tail
+  // that an alphabetical slice would have missed entirely.
+  const GROUPS = [
+    {
+      label: 'History',
+      total: 513,
+      sample: [
+        { concept_id: 'h1', title: 'H1' },
+        { concept_id: 'h2', title: 'H2' }
+      ]
+    },
+    { label: 'Politics', total: 133, sample: [{ concept_id: 'p1', title: 'P1' }] },
+    { label: 'Culture', total: 99, sample: [{ concept_id: 'c1', title: 'C1' }] },
+    { label: 'Economics', total: 68, sample: [{ concept_id: 'e1', title: 'E1' }] },
+    { label: 'Religion', total: 29, sample: [{ concept_id: 'r1', title: 'R1' }] },
+    { label: 'Kingdoms', total: 1, sample: [{ concept_id: 'k1', title: 'K1' }] }
+  ];
+
+  test('the histogram counts EVERY concept, not the sample', () => {
+    const { histogram } = buildSuggestContext(GROUPS, 20);
+    expect(histogram[0]).toEqual({ label: 'History', count: 513 });
+    expect(histogram.map((h) => h.count)).toEqual([513, 133, 99, 68, 29, 1]);
+    expect(histogram.reduce((s, h) => s + h.count, 0)).toBe(843);
+  });
+
+  test('a small sample still represents EVERY label — the tail is not sampled away', () => {
+    // The legacy sampler returned History-only rows for a 20-row budget.
+    const { concepts } = buildSuggestContext(GROUPS, 6);
+    const labels = [...new Set(concepts.map((c) => c._sample_label))];
+    for (const l of ['History', 'Politics', 'Culture', 'Economics', 'Religion', 'Kingdoms']) {
+      expect(labels).toContain(l);
+    }
+  });
+
+  test('coverage reports what the curator was actually shown', () => {
+    const { coverage } = buildSuggestContext(GROUPS, 20);
+    expect(coverage.concepts_total).toBe(843);
+    expect(coverage.concepts_sampled).toBeGreaterThan(0);
+    expect(coverage.concepts_sampled).toBeLessThanOrEqual(20);
+    expect(coverage.label_count).toBe(6);
+    expect(coverage.histogram[0]).toEqual({ label: 'History', count: 513 });
+  });
+
+  test('an unlabeled-only repo still samples (the (unlabeled) bucket)', () => {
+    const { concepts, histogram } = buildSuggestContext(
+      [{ label: '(unlabeled)', total: 3, sample: [{ concept_id: 'x1' }, { concept_id: 'x2' }] }],
+      20
+    );
+    expect(histogram).toEqual([{ label: '(unlabeled)', count: 3 }]);
+    expect(concepts.length).toBeGreaterThan(0);
+  });
+
+  test('empty groups yield an empty context (NO_CONCEPTS path stays reachable)', () => {
+    const ctx = buildSuggestContext([], 20);
+    expect(ctx.concepts).toEqual([]);
+    expect(ctx.histogram).toEqual([]);
+    expect(ctx.coverage.concepts_total).toBe(0);
+  });
+});
+
+describe('1-8g-m — mechanical forbidden guard', () => {
+  const { screenForbiddenAgainstCorpus } = svc._internals;
+
+  // The live histogram: the corpus DEMONSTRABLY contains politics and culture.
+  const HIST = [
+    { label: 'History', count: 513 },
+    { label: 'Politics', count: 133 },
+    { label: 'Culture', count: 99 },
+    { label: 'Religion', count: 29 },
+    { label: 'Kingdoms', count: 1 }
+  ];
+
+  test('the live failure is caught: modern-politics and contemporary-culture are rejected', () => {
+    const { kept, rejected } = screenForbiddenAgainstCorpus(
+      ['modern-politics', 'contemporary-culture', 'tourism'],
+      HIST
+    );
+    expect(kept).toEqual(['tourism']);
+    expect(rejected.map((r) => r.value)).toEqual(['modern-politics', 'contemporary-culture']);
+    // the reason is traceable back to the corpus evidence
+    expect(rejected[0]).toMatchObject({ value: 'modern-politics', label: 'Politics', label_count: 133 });
+  });
+
+  test('a genuinely absent domain is kept (the guard never over-rejects)', () => {
+    const { kept, rejected } = screenForbiddenAgainstCorpus(['sports', 'modern-sports'], HIST);
+    expect(kept).toEqual(['sports', 'modern-sports']);
+    expect(rejected).toEqual([]);
+  });
+
+  test('a label below the count floor is not evidence enough to reject', () => {
+    // Kingdoms has exactly 1 concept — far too thin to forbid a whole domain.
+    const { kept } = screenForbiddenAgainstCorpus(['kingdoms'], HIST);
+    expect(kept).toEqual(['kingdoms']);
+  });
+
+  test('exact and partial matches both collide', () => {
+    expect(screenForbiddenAgainstCorpus(['politics'], HIST).rejected).toHaveLength(1);
+    expect(screenForbiddenAgainstCorpus(['indonesian-politics'], HIST).rejected).toHaveLength(1);
+    expect(screenForbiddenAgainstCorpus(['religion'], HIST).rejected).toHaveLength(1);
+    // a near-miss word shares no token with any label — not a collision
+    expect(screenForbiddenAgainstCorpus(['archaeology'], HIST).rejected).toEqual([]);
+  });
+});
+
+describe('1-8g-m — suggestTags integration', () => {
+  test('a forbidden tag the corpus contains is dropped and REPORTED, not silently swallowed', async () => {
+    // The verbatim live response that poisoned the Indonesia head.
+    // The corpus guard needs MIN_FORBIDDEN_LABEL_COUNT (5) concepts behind a
+    // label before it treats it as evidence — seed past the floor, as the
+    // live Indonesia repo did (133 Politics).
+    seedDb({
+      concepts: [
+        ...Array.from({ length: 6 }, (_, i) => ({
+          concept_id: `p${i}`,
+          title: `P${i}`,
+          labels: ['Politics'],
+          type: 'topic',
+          tags: [],
+          summary: ''
+        })),
+        ...Array.from({ length: 5 }, (_, i) => ({
+          concept_id: `c${i}`,
+          title: `C${i}`,
+          labels: ['Culture'],
+          type: 'topic',
+          tags: [],
+          summary: ''
+        }))
+      ]
+    });
+    axios.post.mockResolvedValue(
+      vllmResponse(
+        JSON.stringify({
+          topic: ['indonesian-politics'],
+          entity: [],
+          scope: 'historical',
+          forbidden: ['modern-politics', 'contemporary-culture', 'tourism'],
+          summary: 'x',
+          keyword: []
+        })
+      )
+    );
+    const out = await svc.suggestTags(REPO_ID);
+    expect(out.forbidden).toEqual(['tourism']);
+    expect(out.forbidden_suggestions).toEqual([{ value: 'tourism', suggested: true }]);
+    // the curator sees WHY the other two vanished and can re-add deliberately
+    expect(out.forbidden_rejected).toHaveLength(2);
+    expect(out.forbidden_rejected[0]).toMatchObject({
+      value: 'modern-politics',
+      corpus_label: 'Politics',
+      corpus_label_count: 6
+    });
+    expect(out.forbidden_rejected[0].reason).toMatch(/Politics/);
+  });
+
+  test('the prompt carries the complete distribution AND the never-forbid-what-you-contain rule', async () => {
+    seedDb({
+      concepts: [
+        { concept_id: 'a', title: 'A', labels: ['History'], type: 'topic', tags: [], summary: '' },
+        { concept_id: 'b', title: 'B', labels: ['Religion'], type: 'topic', tags: [], summary: '' }
+      ]
+    });
+    axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['x'], forbidden: [], summary: '' })));
+    await svc.suggestTags(REPO_ID);
+    const prompt = axios.post.mock.calls[0][1].messages[0].content;
+    expect(prompt).toContain('COMPLETE SUBJECT DISTRIBUTION');
+    expect(prompt).toMatch(/History: 1 concept/);
+    expect(prompt).toMatch(/Religion: 1 concept/);
+    expect(prompt).toContain('NEVER forbid a subject the corpus demonstrably CONTAINS');
+    expect(prompt).toContain('COVERAGE IS A HARD REQUIREMENT');
+  });
+
+  test('coverage rides the response so the UI can state the sample honestly', async () => {
+    seedDb();
+    axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['x'], forbidden: [], summary: '' })));
+    const out = await svc.suggestTags(REPO_ID);
+    expect(out.coverage).toBeDefined();
+    expect(out.coverage.concepts_total).toBe(2);
+    expect(out.coverage.label_count).toBe(2); // Health + (unlabeled)
+    expect(Array.isArray(out.forbidden_rejected)).toBe(true);
   });
 });

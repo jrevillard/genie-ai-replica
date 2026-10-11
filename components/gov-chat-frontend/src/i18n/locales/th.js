@@ -2604,6 +2604,7 @@ export default {
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestCoverage: 'ได้มาจาก {sampled} จาก {total} แนวคิด ครอบคลุม {labels} ป้ายกำกับของลำดับชั้นความรู้',
       suggestFailed: 'Suggest failed.',
       suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',

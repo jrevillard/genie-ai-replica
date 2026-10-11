@@ -2627,6 +2627,7 @@ export default {
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestCoverage: 'Получено из {sampled} из {total} концепций, по {labels} меткам иерархии знаний.',
       suggestFailed: 'Suggest failed.',
       suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',

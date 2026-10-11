@@ -688,7 +688,7 @@ async function transition(repoId, action, actor, opts = {}) {
           // 4. No frontmatter in the repo doc and none supplied — run the
           //    LLM auto-suggest path (the same as Story 1.6, but the
           //    write target is the repo doc, not the old collection).
-          const suggested = await frontmatterService.suggestTags(repoId, { sampleN: 20 });
+          const suggested = await frontmatterService.suggestTags(repoId, {});
           const validation = await frontmatterService.validateFrontmatter(repoId, suggested);
           if (!validation.validated) {
             logger.warn('[OKF-PUBLISH] frontmatter validation flagged inconsistencies', {

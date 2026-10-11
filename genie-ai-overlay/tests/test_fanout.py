@@ -937,3 +937,229 @@ class TestFanoutRoutingHook:
             await mod.invoke_fanout(stub, input, input_dict, ["GRAPH", "OKF_A_v1", "OKF_B_v1"])
         mock_route.assert_not_called()
         assert sorted(seen) == ["GRAPH", "OKF_A_v1", "OKF_B_v1"]
+
+
+class TestFanoutBoundAndFallback:
+    """1-8g-l — the traversal can no longer starve a claimed leg.
+
+    Live 2026-10-11 (Indonesia History, 9/9 chat answers ungrounded): each
+    claimed leg fused 20 on-point documents, then its traversal overran the
+    8s leg budget on a 1,046,217-edge graph; _invoke_leg abandoned the leg
+    and DISCARDED the fused docs → fused=0 → the LLM abstained. The fix:
+    (a) a graph-size gate (skip traversal above ARANGO_TRAVERSAL_MAX_LINKS),
+    (b) per-hop AQL caps + a traversal sub-budget (overrun → continue
+    WITHOUT enrichment), (c) a claimed-leg-empty fallback (one vector-only
+    retry), (d) the legs= log now counts the search set, not the carrier.
+    """
+
+    def _supersede_env(self):
+        """A heads-supersede shaped fixture: the claim on OKF_A_v1 dropped
+        GRAPH and OKF_B_v1 from the search set (routed == ['OKF_A_v1'])."""
+        import retriever.genieai_retriever_arangodb as mod
+
+        async def fake_route(self_, carrier, emb):
+            return ["OKF_A_v1"], False
+
+        input = MagicMock()
+        input.embedding = [0.1] * 8
+        input.k = 10
+        input_dict = {"search_start": "chunk::graphs:GRAPH,OKF_A_v1,OKF_B_v1", "text": "q"}
+        return mod, fake_route, input, input_dict
+
+    async def test_claimed_leg_starved_falls_back_to_vector_only(self):
+        """The decisive claim's leg returns [] (traversal starvation shape) —
+        one vector-only retry (enable_traversal forced False, NO second leg
+        for GRAPH) rescues the answer instead of shipping fused=0."""
+        mod, fake_route, input, input_dict = self._supersede_env()
+        calls = []
+
+        async def fake_leg(self_, graph_name, leg_input_dict, input, query=None):
+            calls.append((graph_name, dict(leg_input_dict)))
+            if len(calls) == 1:
+                return []  # first pass: the traversal-starved leg
+            return [{"doc": "rescued-borobudur-chunk", "score": 0.9}]
+
+        stub = type("StubRetriever", (), {"_invoke_leg": fake_leg})()
+        with (
+            patch("tracing.get_tracer") as mock_tracer,
+            patch.object(mod, "_invoke_leg", fake_leg),
+            patch.object(mod, "_route_graphs", fake_route),
+        ):
+            span = MagicMock()
+            mock_tracer.return_value.start_span.return_value = span
+            fused = await mod.invoke_fanout(stub, input, input_dict, ["GRAPH", "OKF_A_v1", "OKF_B_v1"])
+        # exactly ONE graph, searched twice (leg pass + vector-only retry);
+        # the dropped GRAPH leg never runs.
+        assert [g for g, _ in calls] == ["OKF_A_v1", "OKF_A_v1"]
+        assert calls[0][1].get("enable_traversal") is not False
+        assert calls[1][1].get("enable_traversal") is False
+        assert fused, "the fallback must recover documents, not abstain"
+        assert span.set_attribute.call_args_list.__contains__(("okf.fanout.leg_empty_fallback", True)) or any(
+            c.args == ("okf.fanout.leg_empty_fallback", True) for c in span.set_attribute.call_args_list
+        )
+
+    async def test_no_fallback_when_competition_shape_returns_zero(self):
+        """When the legacy competition ran (GRAPH present in the search set),
+        fused=0 means the competition itself found nothing — no retry."""
+        import retriever.genieai_retriever_arangodb as mod
+
+        async def fake_route(self_, carrier, emb):
+            return ["GRAPH", "OKF_A_v1"], False
+
+        input = MagicMock()
+        input.embedding = [0.1] * 8
+        input.k = 10
+        input_dict = {"search_start": "chunk::graphs:GRAPH,OKF_A_v1", "text": "q"}
+        calls = []
+
+        async def fake_leg(self_, graph_name, leg_input_dict, input, query=None):
+            calls.append(graph_name)
+            return []
+
+        stub = type("StubRetriever", (), {"_invoke_leg": fake_leg})()
+        with (
+            patch("tracing.get_tracer") as mock_tracer,
+            patch.object(mod, "_invoke_leg", fake_leg),
+            patch.object(mod, "_route_graphs", fake_route),
+        ):
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            fused = await mod.invoke_fanout(stub, input, input_dict, ["GRAPH", "OKF_A_v1"])
+        assert fused == []
+        assert sorted(calls) == ["GRAPH", "OKF_A_v1"]  # no second round
+
+    async def test_no_fallback_when_legs_succeed(self):
+        """A healthy claimed leg never triggers the retry path."""
+        mod, fake_route, input, input_dict = self._supersede_env()
+        calls = []
+
+        async def fake_leg(self_, graph_name, leg_input_dict, input, query=None):
+            calls.append(graph_name)
+            return [{"doc": "hit", "score": 0.9}]
+
+        stub = type("StubRetriever", (), {"_invoke_leg": fake_leg})()
+        with (
+            patch("tracing.get_tracer") as mock_tracer,
+            patch.object(mod, "_invoke_leg", fake_leg),
+            patch.object(mod, "_route_graphs", fake_route),
+        ):
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            fused = await mod.invoke_fanout(stub, input, input_dict, ["GRAPH", "OKF_A_v1", "OKF_B_v1"])
+        assert calls == ["OKF_A_v1"]  # one pass, no retry
+        assert fused
+
+    def test_traversal_skip_reason_size_gate(self):
+        """The size gate: graphs above ARANGO_TRAVERSAL_MAX_LINKS sit the
+        traversal out; healthy graphs pass; a count failure is NOT a skip."""
+        import retriever.genieai_retriever_arangodb as mod
+
+        with patch.object(mod, "ARANGO_TRAVERSAL_MAX_LINKS", 300000):
+            huge = MagicMock()
+            huge.db.collection.return_value.count.return_value = 1_046_217
+            reason = mod.GenieaiArangoRetriever._traversal_skip_reason(
+                "OKF_indonesia-history-llm_v1", huge, elapsed_s=0.5, budget_s=6.75
+            )
+            assert reason is not None and "ARANGO_TRAVERSAL_MAX_LINKS" in reason
+
+            healthy = MagicMock()
+            healthy.db.collection.return_value.count.return_value = 80_535
+            assert (
+                mod.GenieaiArangoRetriever._traversal_skip_reason("OKF_other_v1", healthy, elapsed_s=0.5, budget_s=6.75)
+                is None
+            )
+
+            broken = MagicMock()
+            broken.db.collection.return_value.count.side_effect = RuntimeError("db down")
+            assert (
+                mod.GenieaiArangoRetriever._traversal_skip_reason("OKF_other_v1", broken, elapsed_s=0.5, budget_s=6.75)
+                is None
+            )
+
+        with patch.object(mod, "ARANGO_TRAVERSAL_MAX_LINKS", 0):
+            unbounded = MagicMock()
+            unbounded.db.collection.return_value.count.return_value = 10**9
+            assert (
+                mod.GenieaiArangoRetriever._traversal_skip_reason("OKF_any_v1", unbounded, elapsed_s=0.5, budget_s=6.75)
+                is None
+            )
+
+    def test_traversal_skip_reason_budget_exhausted(self):
+        """A leg that already burned its budget sits the traversal out even
+        below the size gate."""
+        import retriever.genieai_retriever_arangodb as mod
+
+        with patch.object(mod, "ARANGO_TRAVERSAL_MAX_LINKS", 300000):
+            vb = MagicMock()
+            vb.db.collection.return_value.count.return_value = 100
+            reason = mod.GenieaiArangoRetriever._traversal_skip_reason(
+                "OKF_small_v1", vb, elapsed_s=7.5, budget_s=-0.25
+            )
+            assert reason is not None and "budget" in reason
+
+    def test_chunk_subquery_carries_edge_cap(self):
+        """The traversal AQL interpolates the per-hop edge cap so a hub
+        entity cannot submit unbounded cosine evaluations."""
+        import retriever.genieai_retriever_arangodb as mod
+
+        stub = type("S", (), {})()
+        bind = {}
+        with patch.object(mod, "ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE", 2000):
+            q = mod.GenieaiArangoRetriever._build_subquery(
+                stub,
+                "OKF_g_v1",
+                "chunk",
+                [0.1] * 8,
+                1,
+                3,
+                0.5,
+                None,
+                "cosine",
+                "COSINE_SIMILARITY",
+                "DESC",
+                bind,
+                "OKF_g_v1_SOURCE",
+            )
+            assert "LIMIT 2000" in q
+            assert "SORT item.score DESC" in q
+            assert bind.get("query_embedding") == [0.1] * 8
+
+        with patch.object(mod, "ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE", 0):
+            q_uncapped = mod.GenieaiArangoRetriever._build_subquery(
+                stub,
+                "OKF_g_v1",
+                "chunk",
+                [0.1] * 8,
+                1,
+                3,
+                0.5,
+                None,
+                "cosine",
+                "COSINE_SIMILARITY",
+                "DESC",
+                bind,
+                "OKF_g_v1_SOURCE",
+            )
+            assert "LIMIT 2000" not in q_uncapped  # legacy unbounded shape
+
+    def test_node_subquery_carries_edge_cap(self):
+        """Same cap on the node-mode subquery (the compose default mode)."""
+        import retriever.genieai_retriever_arangodb as mod
+
+        stub = type("S", (), {})()
+        bind = {}
+        with patch.object(mod, "ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE", 500):
+            q = mod.GenieaiArangoRetriever._build_subquery(
+                stub,
+                "OKF_g_v1",
+                "node",
+                [0.1] * 8,
+                1,
+                3,
+                0.5,
+                None,
+                "cosine",
+                "COSINE_SIMILARITY",
+                "DESC",
+                bind,
+                "OKF_g_v1_SOURCE",
+            )
+            assert "LIMIT 500" in q

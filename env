@@ -181,6 +181,12 @@ HUGGING_FACE_HUB_TOKEN=
 # RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED=3
 # RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD=0.5
 # RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES=1
+# RETRIEVER_ARANGO_TRAVERSAL_MAX_LINKS=300000             # 1-8g-l: skip the traversal above this many
+#                                                         # <GRAPH>_LINKS_TO edges (vector results stand
+#                                                         # alone; 0 = unbounded). Calibrated live: indonesia
+#                                                         # 1.05M edges starved every answer in the 8s leg.
+# RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE=2000      # 1-8g-l: per-hop edge-visit cap in the traversal
+#                                                         # AQL (0 = unbounded) — bounds hub-entity cost.
 
 # Retriever tuning (used by retriever and chatqna)
 # RETRIEVER_ARANGO_K=4

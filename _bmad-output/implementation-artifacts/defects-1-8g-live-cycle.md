@@ -602,3 +602,57 @@ manual reload, and old-client/new-server mismatches look exactly like
 build-id ping (index.html already revalidates; the app compares its bundle
 id against a cheap version endpoint) + a reload toast closes the class.
 App-wide scope beyond the Lab — David's go pending.
+
+## 1-8g-l — the oversized-graph traversal starved EVERY chat answer: claimed legs discarded their own fused results (FIXED, worktree fix/1-8g-l-fanout)
+
+**Reported (David, live 2026-10-11):** 6 chat queries (Borobudur/Mahayana, Sumatra
+pre-10k-BCE, Bima Kingdom, Melayu timeline, pan-civilization influence, Buni
+culture) — all answerable (the Lab scored the Borobudur query answerable
+0.9318, head claim rank-1), all answered ungrounded ("The search query
+returned no relevant documents"). Then 3 more the same afternoon — same shape.
+
+**Investigation (3+3-agent sweeps, code + DB + logs):** routing was NEVER the
+problem — the Indonesia head CLAIMED all 9/9 attempts (borobudur IS a
+suggested entity tag; head_score 0.5742, rank 1), and dense+BM25+RRF fused 20
+on-point documents in **0.4-0.5s**. The killer is the NEXT stage: the graph
+fan-out traversal hops depth-1 through `OKF_indonesia-history-llm_v1_LINKS_TO`
+— **1,046,217 edges, each scored with a 1024-dim COSINE_SIMILARITY** — with
+no LIMIT until after full materialization. It cannot finish inside the 8s
+`FANOUT_PER_GRAPH_TIMEOUT_MS` (or Arango's 60s read timeout). `_invoke_leg`
+then abandoned the worker thread AND **discarded the leg's entire result —
+including the 20 already-fused documents** (`asyncio.wait` pending → `return
+[]`), the fan-out merged `fused=0`, and chatqna — honestly — abstained. The
+abandoned AQL kept burning server-side for ~60s more ("Task exception was
+never retrieved … ReadTimeout"). Since the current retriever instance came up
+(2026-10-10T17:07Z): 9/9 retrievals claimed Indonesia, 9/9 starved, ZERO
+grounded answers. Bonus instrumentation bug: the completion log printed
+`legs=<carrier size>` (5), masking that only ONE leg ran.
+
+**Fix (three bounds + one rescue; routing/gate semantics untouched):**
+- **Graph-size gate** (`ARANGO_TRAVERSAL_MAX_LINKS`, default 300,000, 0 =
+  legacy): graphs above the cap skip the traversal entirely — the fused
+  vector results stand alone. Calibrated live: indonesia 1,046,217 (skips),
+  gov-uk 80,535 / ncd 8,546 / slaughterhouse 1,623 (keep traversal) — >3x
+  margin both sides.
+- **Per-hop AQL cap** (`ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE`, default 2,000,
+  0 = legacy): interpolated into both the chunk- and node-mode traversal
+  subqueries so a hub entity cannot submit unbounded cosine evaluations.
+- **Traversal sub-budget**: the traversal now runs under
+  `asyncio.wait_for(to_thread(...), remaining_leg_budget - 0.75s)`; an
+  overrun logs `Fan-out traversal exceeded its leg budget … continuing
+  WITHOUT graph enrichment` and the leg SUCCEEDS with its fused documents.
+  A traversal crash likewise degrades to no-enrichment, never to no-docs.
+- **Claimed-leg-empty fallback**: under heads-supersede, if every
+  claimed/sticky leg returns empty, ONE vector-only retry
+  (`enable_traversal=False`) runs before giving up — the competition shape
+  (GRAPH present) does not retry. Span attr `okf.fanout.leg_empty_fallback`.
+- `legs=` log now counts the search set; a wrapped E501 comment is the only
+  touch outside the fix.
+
+**Tests:** +7 in `tests/test_fanout.py` (55 file / 909 suite green; the 5
+suite failures are pre-existing on the pristine tree — trace-logging +
+docarray-shim env tests). Covers: fallback fires and forces
+`enable_traversal=False` (and never runs a GRAPH leg), no-fallback for the
+competition shape and for healthy legs, size-gate accept/skip/count-failure/
+disabled, budget-exhausted skip, edge-cap interpolation in both subquery
+modes. ruff + ruff-format clean.

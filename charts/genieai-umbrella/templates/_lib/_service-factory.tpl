@@ -54,9 +54,13 @@ spec:
       volumes:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with $ctx.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ $objectName }}
-          image: {{ $svc.image.repository }}:{{ $svc.image.tag | default "latest" }}
+          image: {{- if $ctx.Values.global.imageRegistry }} {{ $ctx.Values.global.imageRegistry }}/{{ $svc.image.repository }}{{ else }} {{ $svc.image.repository }}{{ end }}:{{ $svc.image.tag | default "latest" }}
           imagePullPolicy: {{ $ctx.Values.global.imagePullPolicy | default "IfNotPresent" }}
           ports:
             - name: http

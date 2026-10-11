@@ -1483,7 +1483,10 @@ async function generateTestSuite(req, res, next) {
     // calls; the synchronous request died at the gateway (the suite saved
     // at minute 5 while the browser gave up at 60s). The key is minted
     // up-front; the UI polls GET /routing-testsuite/:key until it lands.
-    const { suite_key, done } = headSuiteService.beginSuiteGeneration(req.params.repo_id, req.body || {}, {
+    // 1-8g-u: begin is ASYNC — it validates the no-frontmatter precondition
+    // BEFORE minting, so a tag-less repo gets an immediate 409 + guidance
+    // instead of a poll of a key whose worker died in its first millisecond.
+    const { suite_key, done } = await headSuiteService.beginSuiteGeneration(req.params.repo_id, req.body || {}, {
       authz: authzForService(req),
       actor: actorFrom(req)
     });

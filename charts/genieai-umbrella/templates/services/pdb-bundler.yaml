@@ -12,7 +12,8 @@
 {{- $valuesKey := index $pair 0 -}}
 {{- $component := index $pair 1 -}}
 {{- if index (index $.Values.services $valuesKey) "enabled" -}}
-{{ include "genieai-umbrella.pdbForService" (dict "component" $component "Values" $.Values "Chart" $.Chart "Release" $.Release) }}
+{{- if ne $valuesKey "backend" }}---{{ end -}}
+{{ include "genieai-umbrella.pdbForService" (dict "name" $valuesKey "component" $component "Values" $.Values "Chart" $.Chart "Release" $.Release) }}
 {{- end -}}
 {{- end -}}
 {{- end -}}

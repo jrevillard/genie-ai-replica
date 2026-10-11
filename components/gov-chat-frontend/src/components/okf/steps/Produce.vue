@@ -118,7 +118,22 @@ export default {
       // T3 (D2/D3): multi-crawl conversion queue + per-source accounting.
       sourceQueue: [],
       sourceLog: [],
-      conceptCount: 0
+      conceptCount: 0,
+      // MUST be declared here, not just assigned on the instance (David,
+      // 2026-10-11: "the files bar is not moving" — live, step 4 frozen on
+      // "Waiting" while the server ran 50/50 files, 913/913 concepts and
+      // curation climbing 259→282→314 of 587).
+      // In Vue 3 only properties returned from data() are REACTIVE: a bare
+      // `this.liveRepo = repo` in the poll tick creates a plain instance
+      // field, so the stageList computed had no reactive dependency and kept
+      // its FIRST evaluation (liveRepo undefined => every row "Waiting")
+      // for the whole run. The bars never moved, and the empty catch in
+      // poll()'s tick hid the fact that the fetch was working fine.
+      // Names carry NO underscore: Vue reserves `_`/`$`-prefixed keys, so a
+      // declared `_liveRepo` is flagged by vue/no-reserved-keys and is not
+      // reachable as `this._liveRepo` the way a normal data key is.
+      liveRepo: null,
+      lastConv: null
     };
   },
   computed: {
@@ -134,8 +149,8 @@ export default {
      * look frozen.
      */
     stageList() {
-      const conv = (this._liveRepo && this._liveRepo.conversion) || this._lastConv || {};
-      const repo = this._liveRepo || {};
+      const conv = (this.liveRepo && this.liveRepo.conversion) || this.lastConv || {};
+      const repo = this.liveRepo || {};
       const stage = conv.stage || conv.status || '';
       const running = this.status === 'running';
       const finished = this.status === 'done';
@@ -547,7 +562,7 @@ export default {
       // B1 (audit): prefer the server's ingest summary (created/updated) over
       // the raw count delta — "updated" IS the exact-slug auto-merge count,
       // and the summary excludes the index concept the delta over-counts.
-      const summary = this._lastConv && this._lastConv.summary;
+      const summary = this.lastConv && this.lastConv.summary;
       const count = await this.fetchConceptCount();
       const delta = Math.max(0, count - (this._lastCount || 0));
       this.conceptCount = count;
@@ -616,8 +631,8 @@ export default {
         try {
           const repo = await repoOkfService.get(repoId);
           const conv = repo && repo.conversion;
-          this._lastConv = conv; // B1: the done-branch accounting reads the summary
-          this._liveRepo = repo; // per-stage bars read curation + link_progress off the live doc
+          this.lastConv = conv; // B1: the done-branch accounting reads the summary
+          this.liveRepo = repo; // per-stage bars read curation + link_progress off the live doc
           const st = conv ? conv.status : null;
           if (st === 'done') {
             clearInterval(this.pollTimer);

@@ -45,7 +45,10 @@ spec:
     # nginx routes the SPA. Same-namespace peers permitted on the
     # container port (post-DNAT). AuthN/AuthZ is enforced at the edge
     # gateway; an explicit podSelector from the gateway namespace will
-    # land with the gateway tier.
+    # land with the gateway tier. The `podSelector: {}` below is a
+    # placeholder for the gateway-tier selector (Plan 6/ingress will
+    # tighten it to a specific peer label once the edge gateway's
+    # data-plane label shape is known).
     - from:
         - podSelector:
             matchLabels:

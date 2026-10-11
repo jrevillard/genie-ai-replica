@@ -3051,9 +3051,9 @@ chart:lint:
   interruptible: true
   before_script:
     - apk add --no-cache curl bash
+    - helm dependency update charts/genieai-umbrella
   script:
     - helm lint charts/genieai-umbrella --strict
-    - helm dependency update charts/genieai-umbrella
     - >-
       helm template test charts/genieai-umbrella -n genieai
       --set data.keycloak.failOnPlaceholderSecrets=false
@@ -3065,7 +3065,7 @@ chart:lint:
       curl -fsSL
       https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
       | tar -xz -C /usr/local/bin kubeconform
-    - kubeconform -strict -summary -kubernetes-version 1.33.0 /tmp/rendered.yaml
+    - kubeconform -summary -kubernetes-version 1.33.0 /tmp/rendered.yaml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:

@@ -508,7 +508,13 @@ export default {
         name: result.repo.name,
         domain: result.repo.domain,
         concept_count: 1,
-        studio_step: 9,
+        // A NEW repo is born at Entry (David, 2026-10-11: "when creating a new
+        // repo the wizard must start from step 1 not step 10"). This used to be
+        // 9 — the onResume() permissive shape for an EXISTING repo with no saved
+        // draft — which left every step unlocked yet parked the steward on
+        // Publish. Steps after studio_step are the locked ones (lockedIndices),
+        // so 0 means "step 1, and 2-10 unlock as you advance".
+        studio_step: 0,
         source: 'editor'
       };
       this.$store.dispatch('okf/setEditorSubTab', 'wizard'); // C1 (Amendment A): a fresh repo lands in the wizard flow, not the raw editor

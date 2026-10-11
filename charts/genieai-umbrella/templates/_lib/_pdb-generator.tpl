@@ -16,7 +16,7 @@ Usage:
 */}}
 {{- define "genieai-umbrella.pdbForService" -}}
 {{- $ctx := . -}}
-{{- $svc := index $ctx.Values.services $ctx.component -}}
+{{- $svc := index $ctx.Values.services $ctx.name -}}
 {{- $replicas := int ($svc.replicas | default 1) -}}
 {{- with $ctx.Values.clusterProfileReplicas -}}
 {{- if hasKey . $ctx.Values.clusterProfile -}}

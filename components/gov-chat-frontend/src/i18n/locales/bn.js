@@ -2616,6 +2616,7 @@ export default {
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestCoverage: '{total}টির মধ্যে {sampled}টি ধারণা থেকে প্রাপ্ত, {labels}টি জ্ঞান-শ্রেণি লেবেলে।',
       suggestFailed: 'Suggest failed.',
       suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',

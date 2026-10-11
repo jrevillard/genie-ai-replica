@@ -402,6 +402,57 @@ async function getRepoValidation(req, res, next) {
 }
 
 /**
+ * START A WHOLE-CORPUS TOPIC-LINK RUN (Story 1-8g-p). The SAME
+ * authorRepoTopicLinks pass the wizard runs at import time — generic by
+ * construction (no domain lexicon): it authors the cross-links a corpus that
+ * never cites itself is born without.
+ *
+ * DETACHED by design: a 1000-concept repo costs minutes of LLM time and the
+ * gateway caps a request at 60s, so the work is started and the caller polls
+ * GET /:repo_id/topic-links. Returns 202 with the initial run state.
+ * Admin-scope mutation; frozen repos refuse (same gate as other restructurings).
+ */
+async function startTopicLinks(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    const topicLinks = require('../services/topic-link-authoring-service');
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    assertWritable(repoDoc);
+    const run = await topicLinks.startTopicLinkRun(repoDoc, {
+      dryRun: (req.body || {}).dry_run === true,
+      actor: actorFrom(req).sub || 'system'
+    });
+    await auditService.writeAudit({
+      actor: actorFrom(req).sub || 'system',
+      actor_name: actorFrom(req).name || null,
+      action: 'repo.topic_links.start',
+      repo_id,
+      source_ip: actorFrom(req).source_ip || null,
+      description: `Started a whole-corpus topic-link run${run.dry_run ? ' (dry run)' : ''}`
+    });
+    res.status(202).json({ success: true, ...run });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * The topic-link run state (poll target for the editor). Read-scope. A run left
+ * 'running' by a dead process is reported as failed rather than shown as an
+ * eternal spinner.
+ */
+async function getTopicLinks(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    const topicLinks = require('../services/topic-link-authoring-service');
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    res.status(200).json({ success: true, run: await topicLinks.getTopicLinkRunState(repoDoc) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * CITATION HUB WIRING (#1036, David's rule: every citing page must LINK to
  * the Sources hub so citations reach the graph at ingest). Creates the hub
  * when the bundle has none; wires frontmatter links[] on every citing page.
@@ -1699,6 +1750,8 @@ module.exports = {
   importRepoConcepts,
   retiredIngestRoute,
   getRepoValidation,
+  startTopicLinks,
+  getTopicLinks,
   wireRepoCitations,
   suggestConceptLinks,
   acceptConceptLink,

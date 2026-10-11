@@ -1214,6 +1214,34 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # OKF_CURATION_LANES=4
 #   Default: 4 parallel labeling lanes. Compose: yes (empty passthrough). Ansible: guarded.
 
+# --- okf-server: WHOLE-CORPUS TOPIC-LINK AUTHORING (Story 1-8g-p) -----------
+# The import wizard authors the cross-links a corpus that never cites itself is
+# born without (a corpus of bulletins imports with an empty graph otherwise,
+# and graph retrieval then returns isolated hits). The SAME pass is available
+# on demand from the editor (Step 7 "Cross-link topics"), so a repository built
+# before this feature can be cross-linked without re-importing. It is GENERIC:
+# candidate pairs come from token overlap + an assistant pass over title and
+# summary, with no lexicon and no domain assumption — bean bulletins, asteroids
+# and statute sections all cross-link through the same code path. Re-running is
+# safe: existing links are kept and only new ones are added.
+# OKF_TOPIC_LINK_ENABLED=true
+#   Default: true (the import runs the pass automatically). Set 0 to skip it
+#   import-time — the assistant calls are the only cost worth avoiding.
+#   Compose: yes. Ansible: yes (guarded).
+# OKF_TOPIC_LINK_TIMEOUT_MS=60000
+#   Default: 60000 per assistant call (a large batch prompt takes ~25s).
+#   Compose: yes (empty passthrough). Ansible: guarded.
+# OKF_TOPIC_LINK_LANES=4
+#   Default: 4 concurrent assistant calls. Lower it when the GPU is shared and
+#   you want the pass to queue rather than compete for the model server.
+#   Compose: yes (empty passthrough). Ansible: guarded.
+# OKF_TOPIC_LINK_BATCH=8
+#   Default: 8 concepts per assistant call (prompt size vs call count).
+#   Compose: yes (empty passthrough). Ansible: guarded.
+# OKF_TOPIC_LINK_MAX_PER_CONCEPT=6
+#   Default: 6 links written per page (graph density; higher = denser but
+#   noisier traversal). Compose: yes (empty passthrough). Ansible: guarded.
+
 # --- okf-server: TEI embedding + the vectorized head (Story 1.7a / 1-8) ---
 # TEI_EMBED_HOST=https://GPU_HOST:444
 #   Default: http://tei:80 (local full stack). The TEI embed service runs

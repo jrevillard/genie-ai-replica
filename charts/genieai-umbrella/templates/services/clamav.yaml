@@ -59,13 +59,31 @@ spec:
     # Each entry in `.Values.services.clamav.cvdAllowedCIDRs` becomes its
     # own ipBlock egress rule (one ipBlock.cidr per rule is the API
     # contract — comma-joining into one string would either be ignored
-    # by the validator or rejected). Empty list = single `0.0.0.0/0`
-    # block, which preserves the original ANY-destination fallback.
-    {{- $cidrs := .Values.services.clamav.cvdAllowedCIDRs | default (list "0.0.0.0/0") -}}
-    {{- range $cidr := $cidrs }}
+    # by the validator or rejected).
+    # `default` triggers only on NIL — an empty list (`[]`, the
+    # values.yaml default) is NOT nil and the helper would emit zero
+    # blocks, breaking freshclam. Branch explicitly on the empty case
+    # so operators get the documented ANY-destination fallback when
+    # they leave the list unset.
+    {{- if .Values.services.clamav.cvdAllowedCIDRs }}
+    {{- range $cidr := .Values.services.clamav.cvdAllowedCIDRs }}
     - to:
         - ipBlock:
             cidr: {{ $cidr }}
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+    {{- end }}
+    {{- else }}
+    # Default: allow all IPv4 destinations on 80/443. NetworkPolicy
+    # has no FQDN selectors (that requires Cilium / Calico); for stricter
+    # control, operators should override `services.clamav.cvdAllowedCIDRs`
+    # with the resolved IPs of database.clamav.net.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
       ports:
         - protocol: TCP
           port: 80

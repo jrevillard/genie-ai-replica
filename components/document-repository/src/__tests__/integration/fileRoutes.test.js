@@ -467,6 +467,35 @@ describe('File Routes Integration', () => {
 
       expect(res.status).toBe(400);
     });
+
+    // Story 1-8g-q (2026-10-11): okf-server stamps okf_repo_id through this
+    // route so the wizard can tell a file that already belongs to a repository
+    // from a free-form one. The stamp failed on EVERY imported file for two
+    // independent reasons, neither covered by a test: the route was Admin-only
+    // while the stamp is sent with the okf-service token, and Joi rejects
+    // unknown keys so the body was refused even once the gate was fixed. The
+    // integration suite mocks authorizeRole, so the role list is asserted
+    // directly below; the schema case is a real request.
+    it('accepts the okf_repo_id stamp (the okf-server service client writes it)', async () => {
+      const mockCursor = { next: jest.fn().mockResolvedValue(mockFileRecord) };
+      const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
+      fileService.getDb.mockResolvedValue(mockDb);
+      metadataService.getMetadataById.mockResolvedValue(mockFileRecord);
+
+      const res = await request(app).patch('/api/files/file-abc123').send({ okf_repo_id: 'repo-abc' });
+
+      expect(res.status).toBe(200);
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ updates: expect.objectContaining({ okf_repo_id: 'repo-abc' }) })
+      );
+    });
+
+    it('permits the okf-service role on this route (the 403 that shipped the broken stamp)', () => {
+      const roles = require('../../routes/fileRoutes').UPDATE_FILE_ROLES;
+      expect(roles).toContain('okf-service');
+      expect(roles).toContain('Admin'); // the human steward keeps access
+    });
   });
 
   // --- Site crawl ---

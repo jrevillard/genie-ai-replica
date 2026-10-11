@@ -35,6 +35,7 @@ const mockDb = require('../shared-lib/db-connection-service').__mockDb;
 const { authedAxios } = require('../services/service-token');
 const { ingestRepoConcepts, runImportCuration } = require('../services/ingest-service');
 const { Readable } = require('stream');
+const { logger } = require('../shared-lib/logger');
 
 const producer = require('../services/producer-service');
 const lifecycle = require('../services/lifecycle-service');
@@ -467,6 +468,24 @@ describe('producer-service — startDocumentsConversion + run', () => {
       { okf_repo_id: RID },
       expect.anything()
     );
+  });
+
+  // Story 1-8g-q (2026-10-11): a stamp failure is per-file and non-fatal, but a
+  // 100% failure rate means the "already in an OKF repo" guard is silently
+  // DISABLED for the whole repository — which is exactly how a 41/41 stamp
+  // failure went unnoticed. One aggregated ERROR, not 41 WARNs.
+  it('reports a TOTAL stamp failure as one error (a 100% rate disables the duplicate guard)', async () => {
+    logger.error.mockClear();
+    logger.warn.mockClear();
+    authedAxios.patch.mockRejectedValue(new Error('403 FORBIDDEN'));
+    await producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1', 'f2'], actor: 'tester' });
+    await new Promise((r) => setTimeout(r, 50));
+    const totals = logger.error.mock.calls.filter((c) =>
+      String(c[0]).includes('okf_repo_id stamp:')
+    );
+    expect(totals).toHaveLength(1);
+    expect(String(totals[0][0])).toContain('2/2');
+    expect(totals[0][1]).toMatchObject({ stamp_failures: 2, files: 2 });
   });
 
   it('per-file isolation: a failing document lands in per_file and never aborts the batch', async () => {

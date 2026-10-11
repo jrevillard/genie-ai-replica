@@ -762,6 +762,9 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
     err.code = 'GENERATION_IN_FLIGHT';
     err.status = 409;
     err.suite_key = inflight;
+    // 1-8g-w: parity with RUN_IN_FLIGHT — the key rides `details` so the
+    // client can adopt the in-flight generation.
+    err.details = { suite_key: inflight };
     throw err;
   }
   const fm = await frontmatterService.readFrontmatterFromRepoDoc(repoId);
@@ -1152,6 +1155,15 @@ async function deleteSuite(repoId, suiteKey, opts = {}) {
       const err = new Error('a generation is in flight for this suite — wait for it to land');
       err.code = 'GENERATION_IN_FLIGHT';
       err.status = 409;
+      throw err;
+    }
+    // 1-8g-w: a run executing for this suite pins its rows — deleting the
+    // suite mid-run made the worker write a failed doc for a deleted suite.
+    if (suiteRunInFlight.has(suiteKey)) {
+      const err = new Error('a run is executing for this suite — wait for it to land before deleting');
+      err.code = 'RUN_IN_FLIGHT';
+      err.status = 409;
+      err.details = { run_key: suiteRunInFlight.get(suiteKey) };
       throw err;
     }
     const suite = await loadSuiteDoc(db, repoId, suiteKey);
@@ -1787,7 +1799,10 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       // curator compares like with like instead of seeing phantom
       // regressions while tuning.
       tagset: tagsetOf(repo),
-      created_at: new Date().toISOString(),
+      // 1-8g-w: the run's identity is its MINT time (== the _key epoch);
+      // completion must not reorder history. Async callers pass the
+      // placeholder's created_at through.
+      created_at: opts.startedAt || new Date().toISOString(),
       created_by: (opts.actor && opts.actor.user_id) || 'system',
       payload: {
         suite_created_at: suite.created_at,
@@ -1796,7 +1811,28 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         summary
       }
     };
-    await db.collection(HEAD_TEST_RUNS_COLLECTION).save(runDoc);
+    // 1-8g-w (live 2026-10-11, Indonesia Suite 1 ×2): the async path's
+    // placeholder already occupies this _key — save() is an INSERT and
+    // threw "unique constraint violated" AFTER all ~60s of work, and the
+    // catch converted both completed runs to status:'failed'. The key was
+    // handed in → REPLACE the placeholder; sync callers still INSERT.
+    try {
+      if (opts.runKey) {
+        await db.collection(HEAD_TEST_RUNS_COLLECTION).replace(runKey, runDoc);
+      } else {
+        await db.collection(HEAD_TEST_RUNS_COLLECTION).save(runDoc);
+      }
+    } catch (e) {
+      logger.error('head-suite.run.persist_failed', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        run_key: runKey,
+        error: e.message
+      });
+      const err = new Error(`run results were computed but the final save failed: ${e.message}`);
+      err.code = 'RUN_PERSIST_FAILED';
+      throw err;
+    }
     span.setAttribute('okf.headsuite.pass_rate', summary.pass_rate);
     logger.info('head-suite.run', {
       repo_id: repoId,
@@ -1841,6 +1877,10 @@ async function beginRunSuite(repoId, suiteKey, opts = {}) {
     err.code = 'RUN_IN_FLIGHT';
     err.status = 409;
     err.run_key = inflight;
+    // 1-8g-w: error-handler serializes `details` for client errors — the
+    // client needs the run_key to ADOPT the in-flight run (resume polling)
+    // instead of dead-ending in an error (David, live 2026-10-11).
+    err.details = { run_key: inflight };
     throw err;
   }
   const runKey = `r${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
@@ -1855,21 +1895,49 @@ async function beginRunSuite(repoId, suiteKey, opts = {}) {
     created_by: (opts.actor && opts.actor.user_id) || 'system',
     payload: {}
   };
-  await db.collection(HEAD_TEST_RUNS_COLLECTION).save(placeholder);
-  const done = runSuite(repoId, suiteKey, { ...opts, runKey })
+  try {
+    await db.collection(HEAD_TEST_RUNS_COLLECTION).save(placeholder);
+  } catch (e) {
+    // 1-8g-w: the lock is set BEFORE this awaited save — a failure here
+    // used to leak the Map entry and lock the suite (RUN_IN_FLIGHT) until
+    // process restart, with no placeholder doc behind the 409's run_key.
+    suiteRunInFlight.delete(suiteKey);
+    throw e;
+  }
+  logger.info('head-suite.run_started', {
+    repo_id: repoId,
+    suite_key: suiteKey,
+    run_key: runKey,
+    positives: Array.isArray(suite.payload && suite.payload.positive) ? suite.payload.positive.length : 0,
+    negatives: Array.isArray(suite.payload && suite.payload.negative) ? suite.payload.negative.length : 0
+  });
+  const done = runSuite(repoId, suiteKey, { ...opts, runKey, startedAt: placeholder.created_at })
     .then((runDoc) => runDoc)
     .catch(async (e) => {
-      // replace the placeholder with the honest terminal failure
+      // Replace the placeholder with the honest terminal failure. 1-8g-w:
+      // keep the MINT time (created_at is the run's identity — the failure
+      // must not reorder history), and never leak a numeric driver code
+      // (the Arango driver sets e.code=409 on write conflicts, which
+      // overrode RUN_FAILED in both live failures).
+      const code = typeof e.code === 'string' && e.code ? e.code : 'RUN_FAILED';
       const failDoc = {
         ...placeholder,
         status: 'failed',
-        created_at: new Date().toISOString(),
-        error: { code: e.code || 'RUN_FAILED', message: e.message }
+        error: { code, message: e.message }
       };
       await db
         .collection(HEAD_TEST_RUNS_COLLECTION)
         .replace(runKey, failDoc)
-        .catch(() => {});
+        .catch((dbErr) => {
+          // 1-8g-w: a swallowed failure here silently left status:'running'
+          // forever (getRunSuite now reaps orphans lazily, but log it).
+          logger.error('head-suite.run.fail_persist_failed', {
+            repo_id: repoId,
+            suite_key: suiteKey,
+            run_key: runKey,
+            error: dbErr.message
+          });
+        });
       throw e;
     })
     .finally(() => suiteRunInFlight.delete(suiteKey));
@@ -1897,10 +1965,54 @@ async function getRunSuite(repoId, suiteKey, runKey) {
     err.status = 404;
     throw err;
   }
+  if (doc.status === 'running') {
+    // 1-8g-w: a 'running' DOC with no live lock is an orphan — the worker
+    // died without writing its terminal state (crash, or the failure
+    // replace itself failed). Reap lazily so the poll TERMINATES with the
+    // truth instead of spinning forever on a ghost.
+    const failDoc = {
+      ...doc,
+      status: 'failed',
+      error: {
+        code: 'RUN_INTERRUPTED',
+        message: 'the run was interrupted (worker died or the server restarted) — start a new run'
+      }
+    };
+    await db
+      .collection(HEAD_TEST_RUNS_COLLECTION)
+      .replace(doc._key, failDoc)
+      .catch(() => {});
+    return { run_key: runKey, suite_key: suiteKey, status: 'failed', error: failDoc.error };
+  }
   if (doc.status === 'failed') {
     return { run_key: runKey, suite_key: suiteKey, status: 'failed', error: doc.error || null };
   }
   return doc;
+}
+
+// ---------- 1-8g-w: interrupted-run sweep ----------
+//
+// The in-flight lock is per-process; after a restart EVERY status:'running'
+// doc is an orphan (the worker died with the process, getRunSuite's lazy
+// reap only fires when someone polls THAT run). One-shot at boot, mirroring
+// crawl-conversion-service.sweepInterruptedOnce(): dead runs become honest
+// failures instead of immortal ghosts in the runs history.
+async function sweepInterruptedRuns() {
+  const db = await dbService.getConnection();
+  await ensureCollection(db);
+  const cursor = await db.query(
+    `FOR d IN ${HEAD_TEST_RUNS_COLLECTION} FILTER d.kind == 'run' && d.status == 'running' UPDATE d WITH ` +
+      `{ status: 'failed', error: { code: 'RUN_INTERRUPTED', message: 'the server restarted while this run was executing — start a new run' } } ` +
+      `IN ${HEAD_TEST_RUNS_COLLECTION} RETURN OLD`
+  );
+  const reaped = await cursor.all();
+  if (reaped.length) {
+    logger.warn('head-suite.run.sweep_interrupted', {
+      reaped: reaped.length,
+      run_keys: reaped.map((d) => d._key)
+    });
+  }
+  return reaped.length;
 }
 
 /**
@@ -1993,7 +2105,11 @@ async function listRuns(repoId, payload = {}) {
       kindFilter +
       'SORT d.created_at DESC LIMIT @lim RETURN MERGE(KEEP(d, ["_key", "repo_id", "kind", "suite_key", ' +
       '"name", "repo_version", "head_version", "tagset", "created_at", "created_by"]), ' +
-      '{ summary: HAS(d.payload, "summary") ? d.payload.summary : null, ' +
+      // 1-8g-w: the lifecycle fields ride the listing so the UI can badge
+      // Running/Failed rows (a 'running' placeholder was indistinguishable
+      // from a dead run) and find the in-flight run to re-attach to.
+      '{ status: d.status || null, error: HAS(d, "error") ? d.error : null, ' +
+      'summary: HAS(d.payload, "summary") ? d.payload.summary : null, ' +
       'positives: HAS(d.payload, "positive") ? LENGTH(d.payload.positive) : null, ' +
       'negatives: HAS(d.payload, "negative") ? LENGTH(d.payload.negative) : null })',
     bindVars
@@ -2601,6 +2717,7 @@ module.exports = {
   beginRunSuite,
   getRunSuite,
   suiteRunRunning,
+  sweepInterruptedRuns,
   renameSuite,
   deleteSuite,
   probeSuiteQuery,

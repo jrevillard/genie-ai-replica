@@ -127,7 +127,16 @@ const updateFileSchema = Joi.object({
   create_date: Joi.date().optional(),
   crawl_date: Joi.date().optional(),
   source_url: Joi.string().uri().optional(),
-  language: Joi.string().min(2).max(5).optional()
+  language: Joi.string().min(2).max(5).optional(),
+  // Story 1-8g-q (2026-10-11): okf-server stamps okf_repo_id onto each source
+  // file it imports, so the wizard can tell a file that already belongs to a
+  // repository from a free-form one. Joi rejects unknown keys by default, so
+  // without this the stamp is refused as a 400 the moment the route gate is
+  // fixed — two independent blockers, both needed for the stamp to land.
+  // Loose string (not .uuid()), matching repo_id above: repository ids in this
+  // system are not guaranteed UUID-shaped, and the stamp must be clearable on
+  // detach. Additive: this only widens the whitelist.
+  okf_repo_id: Joi.string().allow(null, '').max(256).optional()
 });
 
 // --- NEW SCHEMAS ADDED ---

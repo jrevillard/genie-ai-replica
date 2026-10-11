@@ -412,9 +412,12 @@ export default {
       gitRepoAccess: 'การพยายามเข้าถึงที่เก็บ Git',
       gitRepoAccessDesc: 'ตรวจพบการพยายามเข้าถึงไฟล์ที่เก็บ Git',
       recommendedAction: 'การกระทำที่แนะนำ',
-      rateLimitRecommendation: 'พิจารณาการนำขีดจำกัดอัตรา, การบล็อก IP สำหรับผู้กระทำผิดซ้ำ และตรวจสอบให้แน่ใจว่ามีการแข็งตัวของเซิร์ฟเวอร์ที่เหมาะสม',
-      envFileRecommendation: 'ตรวจสอบให้แน่ใจว่าไฟล์สภาพแวดล้อมไม่สามารถเข้าถึงได้จากไดเรกทอรีเว็บ และการกำหนดค่าเซิร์ฟเวอร์บล็อกการเข้าถึงไฟล์ที่ละเอียดอ่อนอย่างเหมาะสม',
-      gitRepoRecommendation: 'ตรวจสอบให้แน่ใจว่าไดเรกทอรี .git ถูกรักษาความปลอดภัยอย่างเหมาะสมและไม่สามารถเข้าถึงได้จากเว็บ',
+      rateLimitRecommendation:
+        'พิจารณาการนำขีดจำกัดอัตรา, การบล็อก IP สำหรับผู้กระทำผิดซ้ำ และตรวจสอบให้แน่ใจว่ามีการแข็งตัวของเซิร์ฟเวอร์ที่เหมาะสม',
+      envFileRecommendation:
+        'ตรวจสอบให้แน่ใจว่าไฟล์สภาพแวดล้อมไม่สามารถเข้าถึงได้จากไดเรกทอรีเว็บ และการกำหนดค่าเซิร์ฟเวอร์บล็อกการเข้าถึงไฟล์ที่ละเอียดอ่อนอย่างเหมาะสม',
+      gitRepoRecommendation:
+        'ตรวจสอบให้แน่ใจว่าไดเรกทอรี .git ถูกรักษาความปลอดภัยอย่างเหมาะสมและไม่สามารถเข้าถึงได้จากเว็บ',
       logPatternMatches: 'รูปแบบบันทึกที่พบ',
       patternMatchNote: 'คำที่พบในข้อความบันทึก การสแกนรายงานสตริงย่อย ไม่ใช่การโจมตีที่ยืนยันแล้ว — ดูบรรทัดจริง',
       patternMatchSummaryNote: '(พบสตริงย่อยในข้อความบันทึก ไม่ใช่การโจมตีที่ยืนยันแล้ว)',
@@ -511,19 +514,21 @@ export default {
       retractPartialFailure: 'ดึงกลับสำเร็จ {successCount} จาก {count} ไฟล์ ล้มเหลว: {detail}',
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
-      confirmDeleteSelected: 'Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.',
-      deleteQueuedSuccess: '{\'{\'}count{\'}\'} file(s) deleted.',
+      confirmDeleteSelected:
+        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: '{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}',
-      deleteAllFailed: 'All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}',
-      deleteRefuseReason: '{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.',
+      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
+      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
+      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
       retractAllFailed: 'ไฟล์ทั้งหมด {count} ไฟล์ล้มเหลว: {detail}',
       uploadSuccessMultiple: 'อัปโหลดไฟล์ {count} ไฟล์สำเร็จ',
       linkSubmitSuccess: 'รวบรวมข้อมูลและบันทึก "{fileName}" สำเร็จ',
       actionSuccess: 'การดำเนินการ "{action}" กับไฟล์ {fileId} สำเร็จ',
       metadataUpdateSuccess: 'อัปเดตข้อมูลเมตาสำหรับไฟล์ {fileId} แล้ว',
-      deletePartialNotice: 'ไฟล์ที่เลือก {\'{\'{\'}\'}blocked{\'}\'} ไฟล์ลบไม่ได้ ({\'{\'{\'}\'}reason{\'}\'}) — จะลบเฉพาะที่เหลืออีก {\'{\'{\'}\'}n{\'}\'} ไฟล์',
-      confirmDeleteSkipped: 'ไฟล์ที่ ingest แล้ว/กำลัง ingest {\'{\'{\'}\'}count{\'}\'} ไฟล์จะถูกข้าม — ถอนคืนก่อนจึงจะลบได้'
+      deletePartialNotice:
+        "ไฟล์ที่เลือก {'{'{'}'}blocked{'}'} ไฟล์ลบไม่ได้ ({'{'{'}'}reason{'}'}) — จะลบเฉพาะที่เหลืออีก {'{'{'}'}n{'}'} ไฟล์",
+      confirmDeleteSkipped: "ไฟล์ที่ ingest แล้ว/กำลัง ingest {'{'{'}'}count{'}'} ไฟล์จะถูกข้าม — ถอนคืนก่อนจึงจะลบได้"
     },
     queryInspector: {
       search: 'ค้นหา',
@@ -738,7 +743,7 @@ export default {
     chatTitle: 'ชื่อแชท',
     chatTitlePlaceholder: 'ป้อนชื่อสำหรับแชทนี้',
     deleteFolder: 'ลบโฟลเดอร์',
-    deleteFolderConfirm: 'คุณแน่ใจว่าต้องการลบโฟลเดอร์ \'{name}\' หรือไม่?',
+    deleteFolderConfirm: "คุณแน่ใจว่าต้องการลบโฟลเดอร์ '{name}' หรือไม่?",
     chatsMoveWarning: 'แชททั้งหมดในโฟลเดอร์นี้จะถูกย้ายไปยังโฟลเดอร์เริ่มต้น',
     weatherTitle: 'พยากรณ์อากาศ',
     weatherLoading: 'กำลังโหลดข้อมูลอากาศ...',
@@ -828,15 +833,18 @@ export default {
     },
     cat2: {
       name: '2. การดูแลสุขภาพและบริการสังคม',
-      children: 'การเข้าถึงการดูแลสุขภาพสาธารณะ,โปรแกรมการฉีดวัคซีน,ประกันสุขภาพ,ผลประโยชน์คนพิการ,สวัสดิการและความช่วยเหลือด้านอาหาร'
+      children:
+        'การเข้าถึงการดูแลสุขภาพสาธารณะ,โปรแกรมการฉีดวัคซีน,ประกันสุขภาพ,ผลประโยชน์คนพิการ,สวัสดิการและความช่วยเหลือด้านอาหาร'
     },
     cat3: {
       name: '3. การศึกษาและการเรียนรู้',
-      children: 'โรงเรียนรัฐและมหาวิทยาลัย,ทุนการศึกษาและเงินกู้ยืมนักศึกษา,โปรแกรมการศึกษาผู้ใหญ่,ทรัพยากรการเรียนรู้ออนไลน์'
+      children:
+        'โรงเรียนรัฐและมหาวิทยาลัย,ทุนการศึกษาและเงินกู้ยืมนักศึกษา,โปรแกรมการศึกษาผู้ใหญ่,ทรัพยากรการเรียนรู้ออนไลน์'
     },
     cat4: {
       name: '4. การจ้างงานและบริการแรงงาน',
-      children: 'การค้นหางานและผลประโยชน์การว่างงาน,การคุ้มครองแรงงานและสิทธิแรงงาน,กฎระเบียบความปลอดภัยในที่ทำงาน,การฝึกทักษะและการฝึกงาน'
+      children:
+        'การค้นหางานและผลประโยชน์การว่างงาน,การคุ้มครองแรงงานและสิทธิแรงงาน,กฎระเบียบความปลอดภัยในที่ทำงาน,การฝึกทักษะและการฝึกงาน'
     },
     cat5: {
       name: '5. ภาษีและรายได้',
@@ -848,11 +856,13 @@ export default {
     },
     cat7: {
       name: '7. การขนส่งและการเคลื่อนไหว',
-      children: 'ใบขับขี่และการจดทะเบียนยานพาหนะ,การขนส่งสาธารณะและโครงสร้างพื้นฐาน,การละเมิดกฎจราจรและค่าปรับ,โปรแกรมความปลอดภัยทางถนน'
+      children:
+        'ใบขับขี่และการจดทะเบียนยานพาหนะ,การขนส่งสาธารณะและโครงสร้างพื้นฐาน,การละเมิดกฎจราจรและค่าปรับ,โปรแกรมความปลอดภัยทางถนน'
     },
     cat8: {
       name: '8. ที่อยู่อาศัยและการพัฒนาเมือง',
-      children: 'ความช่วยเหลือที่อยู่อาศัยสาธารณะ,การจดทะเบียนทรัพย์สินและบันทึกที่ดิน,เงินกู้และเงินอุดหนุนที่อยู่อาศัย,การแบ่งเขตและใบอนุญาตก่อสร้าง'
+      children:
+        'ความช่วยเหลือที่อยู่อาศัยสาธารณะ,การจดทะเบียนทรัพย์สินและบันทึกที่ดิน,เงินกู้และเงินอุดหนุนที่อยู่อาศัย,การแบ่งเขตและใบอนุญาตก่อสร้าง'
     },
     cat9: {
       name: '9. สาธารณูปโภคและสิ่งแวดล้อม',
@@ -860,7 +870,8 @@ export default {
     },
     cat10: {
       name: '10. ธุรกิจและการค้า',
-      children: 'การจดทะเบียนและใบอนุญาตธุรกิจ,กฎระเบียบและใบอนุญาตการค้า,ทุนและสิ่งจูงใจธุรกิจขนาดเล็ก,การสนับสนุนอีคอมเมิร์ซและธุรกิจดิจิทัล'
+      children:
+        'การจดทะเบียนและใบอนุญาตธุรกิจ,กฎระเบียบและใบอนุญาตการค้า,ทุนและสิ่งจูงใจธุรกิจขนาดเล็ก,การสนับสนุนอีคอมเมิร์ซและธุรกิจดิจิทัล'
     },
     cat11: {
       name: '11. ประกันสังคมและบำนาญ',
@@ -868,7 +879,8 @@ export default {
     },
     cat12: {
       name: '12. ชุมชนและการมีส่วนร่วมพลเมือง',
-      children: 'การลงคะแนนและการเลือกตั้ง,ความคิดเห็นสาธารณะและข้อร้องเรียนพลเมือง,อาสาสมัครและโปรแกรมชุมชน,การมีส่วนร่วมในรัฐบาลท้องถิ่น'
+      children:
+        'การลงคะแนนและการเลือกตั้ง,ความคิดเห็นสาธารณะและข้อร้องเรียนพลเมือง,อาสาสมัครและโปรแกรมชุมชน,การมีส่วนร่วมในรัฐบาลท้องถิ่น'
     }
   },
   settings: {
@@ -929,7 +941,8 @@ export default {
     user: 'ผู้ใช้',
     loadingUserInfo: 'กำลังโหลดข้อมูลผู้ใช้...',
     resetUserDataTitle: 'รีเซ็ตข้อมูลผู้ใช้',
-    confirmResetUserData: 'คุณแน่ใจว่าต้องการรีเซ็ตข้อมูลโปรไฟล์ทั้งหมดของคุณหรือไม่? นี้จะล้างข้อมูลโปรไฟล์และประวัติแชททั้งหมดของคุณ แต่รักษาข้อมูลประจำตัวบัญชีของคุณ',
+    confirmResetUserData:
+      'คุณแน่ใจว่าต้องการรีเซ็ตข้อมูลโปรไฟล์ทั้งหมดของคุณหรือไม่? นี้จะล้างข้อมูลโปรไฟล์และประวัติแชททั้งหมดของคุณ แต่รักษาข้อมูลประจำตัวบัญชีของคุณ',
     reset: 'รีเซ็ต',
     deleteAccount: 'ลบบัญชีของฉัน',
     deleteAccountDesc: 'ลบบัญชีและข้อมูลทั้งหมดของคุณอย่างถาวร การดำเนินการนี้ไม่สามารถย้อนกลับได้',
@@ -1205,8 +1218,10 @@ export default {
     noMatchingCountries: 'ไม่พบประเทศที่ตรงกัน',
     noMatchingDisciplines: 'ไม่พบสาขาที่ตรงกัน',
     noMatchingDegrees: 'ไม่พบปริญญาที่ตรงกัน',
-    educationOptions: 'บัญชี,วิศวกรรมการบินและอวกาศ,วิทยาศาสตร์การเกษตร,มานุษยวิทยา,สถาปัตยกรรม,ประวัติศาสตร์ศิลปะ,ปัญญาประดิษฐ์,ดาราศาสตร์,ฟิสิกส์ดาราศาสตร์,ชีวเคมี,วิศวกรรมชีวการแพทย์,เทคโนโลยีชีวภาพ,บริหารธุรกิจ,วิศวกรรมเคมี,เคมี,วิศวกรรมโยธา,การสื่อสาร,วิศวกรรมคอมพิวเตอร์,วิทยาการคอมพิวเตอร์,การจัดการก่อสร้าง,กระบวนการยุติธรรมอาญา,ความปลอดภัยทางไซเบอร์,วิทยาศาสตร์ข้อมูล,ทันตกรรม,เศรษฐศาสตร์,การศึกษา,วิศวกรรมไฟฟ้า,การศึกษาปฐมวัย,วรรณคดีอังกฤษ,วิศวกรรมสิ่งแวดล้อม,วิทยาศาสตร์สิ่งแวดล้อม,การออกแบบแฟชั่น,การศึกษาภาพยนตร์,การเงิน,ศิลปกรรม,วิทยาศาสตร์อาหาร,วิทยาศาสตร์นิติวิทยาศาสตร์,การออกแบบเกม,ภูมิศาสตร์,ธรณีวิทยา,การออกแบบกราฟิก,การบริหารสุขภาพ,ประวัติศาสตร์,การจัดการการโรงแรม,ทรัพยากรมนุษย์,การออกแบบอุตสาหกรรม,วิศวกรรมอุตสาหกรรม,ระบบสารสนเทศ,เทคโนโลยีสารสนเทศ,การออกแบบภายใน,ธุรกิจระหว่างประเทศ,ความสัมพันธ์ระหว่างประเทศ,วารสารศาสตร์,กฎหมาย,บรรณารักษศาสตร์,ภาษาศาสตร์,การจัดการ,การตลาด,วิทยาศาสตร์วัสดุ,คณิตศาสตร์,วิศวกรรมเครื่องกล,การศึกษาสื่อ,แพทยศาสตร์,อุตุนิยมวิทยา,จุลชีววิทยา,ดนตรี,เทคโนโลยีนาโน,พยาบาล,โภชนาการ,อาชีวบำบัด,สมุทรศาสตร์,วิศวกรรมปิโตรเลียม,เภสัชศาสตร์,ปรัชญา,การถ่ายภาพ,พลศึกษา,กายภาพบำบัด,ฟิสิกส์,รัฐศาสตร์,จิตวิทยา,การบริหารรัฐกิจ,สาธารณสุข,ประชาสัมพันธ์,หุ่นยนต์,การศึกษามัธยม,งานสังคมสงเคราะห์,สังคมวิทยา,วิศวกรรมซอฟต์แวร์,การศึกษาพิเศษ,การจัดการกีฬา,สถิติ,วิศวกรรมระบบ,ศิลปะการละคร,การท่องเที่ยว,การวางผังเมือง,สัตวแพทยศาสตร์,การพัฒนาเว็บ,ชีววิทยาสัตว์ป่า,สัตววิทยา',
-    degreeOptions: 'อนุปริญญา,ศิลปศาสตรบัณฑิต (BA),วิทยาศาสตรบัณฑิต (BS),วิศวกรรมศาสตรบัณฑิต (BEng),บริหารธุรกิจบัณฑิต (BBA),ศิลปกรรมศาสตรบัณฑิต (BFA),ศึกษาศาสตรบัณฑิต (BEd),แพทยศาสตรบัณฑิต (MBBS),นิติศาสตรบัณฑิต (LLB),ศิลปศาสตรมหาบัณฑิต (MA),วิทยาศาสตรมหาบัณฑิต (MS),บริหารธุรกิจมหาบัณฑิต (MBA),วิศวกรรมศาสตรมหาบัณฑิต (MEng),ศิลปกรรมศาสตรมหาบัณฑิต (MFA),ศึกษาศาสตรมหาบัณฑิต (MEd),นิติศาสตรมหาบัณฑิต (LLM),สาธารณสุขศาสตรมหาบัณฑิต (MPH),ปรัชญาดุษฎีบัณฑิต (PhD),แพทยศาสตรดุษฎีบัณฑิต (MD),ศึกษาศาสตร์ดุษฎีบัณฑิต (EdD),บริหารธุรกิจดุษฎีบัณฑิต (DBA),นิติศาสตร์ดุษฎีบัณฑิต (JD),ประกาศนียบัตรวิชาชีพ,ประกาศนียบัตรเทคนิค,ประกาศนียบัตรอาชีวะ,ประกาศนียบัตรบัณฑิต,อนุปริญญาบัณฑิต,หลังปริญญาเอก',
+    educationOptions:
+      'บัญชี,วิศวกรรมการบินและอวกาศ,วิทยาศาสตร์การเกษตร,มานุษยวิทยา,สถาปัตยกรรม,ประวัติศาสตร์ศิลปะ,ปัญญาประดิษฐ์,ดาราศาสตร์,ฟิสิกส์ดาราศาสตร์,ชีวเคมี,วิศวกรรมชีวการแพทย์,เทคโนโลยีชีวภาพ,บริหารธุรกิจ,วิศวกรรมเคมี,เคมี,วิศวกรรมโยธา,การสื่อสาร,วิศวกรรมคอมพิวเตอร์,วิทยาการคอมพิวเตอร์,การจัดการก่อสร้าง,กระบวนการยุติธรรมอาญา,ความปลอดภัยทางไซเบอร์,วิทยาศาสตร์ข้อมูล,ทันตกรรม,เศรษฐศาสตร์,การศึกษา,วิศวกรรมไฟฟ้า,การศึกษาปฐมวัย,วรรณคดีอังกฤษ,วิศวกรรมสิ่งแวดล้อม,วิทยาศาสตร์สิ่งแวดล้อม,การออกแบบแฟชั่น,การศึกษาภาพยนตร์,การเงิน,ศิลปกรรม,วิทยาศาสตร์อาหาร,วิทยาศาสตร์นิติวิทยาศาสตร์,การออกแบบเกม,ภูมิศาสตร์,ธรณีวิทยา,การออกแบบกราฟิก,การบริหารสุขภาพ,ประวัติศาสตร์,การจัดการการโรงแรม,ทรัพยากรมนุษย์,การออกแบบอุตสาหกรรม,วิศวกรรมอุตสาหกรรม,ระบบสารสนเทศ,เทคโนโลยีสารสนเทศ,การออกแบบภายใน,ธุรกิจระหว่างประเทศ,ความสัมพันธ์ระหว่างประเทศ,วารสารศาสตร์,กฎหมาย,บรรณารักษศาสตร์,ภาษาศาสตร์,การจัดการ,การตลาด,วิทยาศาสตร์วัสดุ,คณิตศาสตร์,วิศวกรรมเครื่องกล,การศึกษาสื่อ,แพทยศาสตร์,อุตุนิยมวิทยา,จุลชีววิทยา,ดนตรี,เทคโนโลยีนาโน,พยาบาล,โภชนาการ,อาชีวบำบัด,สมุทรศาสตร์,วิศวกรรมปิโตรเลียม,เภสัชศาสตร์,ปรัชญา,การถ่ายภาพ,พลศึกษา,กายภาพบำบัด,ฟิสิกส์,รัฐศาสตร์,จิตวิทยา,การบริหารรัฐกิจ,สาธารณสุข,ประชาสัมพันธ์,หุ่นยนต์,การศึกษามัธยม,งานสังคมสงเคราะห์,สังคมวิทยา,วิศวกรรมซอฟต์แวร์,การศึกษาพิเศษ,การจัดการกีฬา,สถิติ,วิศวกรรมระบบ,ศิลปะการละคร,การท่องเที่ยว,การวางผังเมือง,สัตวแพทยศาสตร์,การพัฒนาเว็บ,ชีววิทยาสัตว์ป่า,สัตววิทยา',
+    degreeOptions:
+      'อนุปริญญา,ศิลปศาสตรบัณฑิต (BA),วิทยาศาสตรบัณฑิต (BS),วิศวกรรมศาสตรบัณฑิต (BEng),บริหารธุรกิจบัณฑิต (BBA),ศิลปกรรมศาสตรบัณฑิต (BFA),ศึกษาศาสตรบัณฑิต (BEd),แพทยศาสตรบัณฑิต (MBBS),นิติศาสตรบัณฑิต (LLB),ศิลปศาสตรมหาบัณฑิต (MA),วิทยาศาสตรมหาบัณฑิต (MS),บริหารธุรกิจมหาบัณฑิต (MBA),วิศวกรรมศาสตรมหาบัณฑิต (MEng),ศิลปกรรมศาสตรมหาบัณฑิต (MFA),ศึกษาศาสตรมหาบัณฑิต (MEd),นิติศาสตรมหาบัณฑิต (LLM),สาธารณสุขศาสตรมหาบัณฑิต (MPH),ปรัชญาดุษฎีบัณฑิต (PhD),แพทยศาสตรดุษฎีบัณฑิต (MD),ศึกษาศาสตร์ดุษฎีบัณฑิต (EdD),บริหารธุรกิจดุษฎีบัณฑิต (DBA),นิติศาสตร์ดุษฎีบัณฑิต (JD),ประกาศนียบัตรวิชาชีพ,ประกาศนียบัตรเทคนิค,ประกาศนียบัตรอาชีวะ,ประกาศนียบัตรบัณฑิต,อนุปริญญาบัณฑิต,หลังปริญญาเอก',
     aria: {
       tabList: 'ส่วนฟอร์มโปรไฟล์',
       nextButton: 'ไปยังส่วนถัดไป',
@@ -1253,7 +1268,8 @@ export default {
     saveConfirmTitle: 'บันทึกการสนทนาที่มีอยู่',
     saveConfirmMessage: 'บันทึกการสนทนาที่มีอยู่?',
     loadConfirmTitle: 'โหลดการสนทนาที่มีอยู่',
-    loadConfirmMessage: 'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณต้องการยกเลิกและโหลดการสนทนาที่เลือก หรือบันทึกการสนทนาปัจจุบันก่อน?',
+    loadConfirmMessage:
+      'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณต้องการยกเลิกและโหลดการสนทนาที่เลือก หรือบันทึกการสนทนาปัจจุบันก่อน?',
     loadAndDiscard: 'โหลดและยกเลิก',
     saveAndLoad: 'บันทึกและโหลด',
     saveAndStartNew: 'บันทึกและเริ่มใหม่',
@@ -1268,15 +1284,24 @@ export default {
     removeItem: 'ลบ'
   },
   quickhelp: {
-    applyForIDPrompt: 'ทำหน้าที่เป็นผู้เชี่ยวชาญด้านการจดทะเบียนราษฎรของเคนยาที่พร้อมช่วยเหลือ อธิบายขั้นตอนการขอรับบัตรประจำตัวประชาชน (Maisha Namba) หรือการขอออกบัตรใหม่กรณีสูญหาย ข้อสำคัญ: ระบุรายการเอกสารที่จำเป็นอย่างชัดเจน (เช่น สูติบัตร สำเนาบัตรประจำตัวประชาชนของบิดามารดา) และแนะนำให้ผู้ใช้เดินทางไปยังศูนย์ Huduma หรือสำนักงานนายทะเบียนราษฎร (Registrar of Persons) ที่ใกล้ที่สุด กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ \'Genie AI\' เสมอ',
-    payTaxesPrompt: 'ทำหน้าที่เป็นผู้ให้คำแนะนำเกี่ยวกับ KRA (กรมสรรพากรเคนยา) อธิบายขั้นตอนการยื่นแบบแสดงรายการภาษี การขอ KRA PIN หรือการรีเซ็ตรหัสผ่านบนพอร์ทัล iTax ข้อสำคัญ: เตือนผู้ใช้เกี่ยวกับกำหนดเวลาสิ้นสุดวันที่ 30 มิถุนายนสำหรับการยื่นแบบประจำปี และแนะนำวิธียื่นแบบแสดงรายการเป็นศูนย์ (Nil return) หากไม่มีรายได้ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ \'Genie AI\' เสมอ',
-    startBusinessPrompt: 'ทำหน้าที่เป็นที่ปรึกษาทางธุรกิจสำหรับบริการ eCitizen แนะนำผู้ใช้ตลอดขั้นตอนการจองชื่อธุรกิจและการจดทะเบียนบริษัทในเคนยา ข้อสำคัญ: อธิบายค่าใช้จ่ายปัจจุบันสำหรับการค้นหาชื่อและการจดทะเบียน และนำผู้ใช้ไปยังพอร์ทัล eCitizen อย่างเป็นทางการเพื่อกรอกใบสมัครให้เสร็จสมบูรณ์ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ \'Genie AI\' เสมอ',
-    findHealthcarePrompt: 'ทำหน้าที่เป็นผู้นำทางบริการด้านสุขภาพ ให้ข้อมูลเกี่ยวกับการเปลี่ยนผ่านจาก NHIF ไปเป็น SHIF (กองทุนประกันสุขภาพเพื่อสังคม) และขั้นตอนการลงทะเบียน ข้อสำคัญ: แบ่งปันรหัส USSD อย่างเป็นทางการ (เช่น *263#) หรือลิงก์เว็บไซต์สำหรับลงทะเบียน พร้อมอธิบายสิทธิประโยชน์ของความคุ้มครองสุขภาพภาครัฐ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ \'Genie AI\' เสมอ',
-    educationServicesPrompt: 'ทำหน้าที่เป็นที่ปรึกษาด้านการศึกษา ให้คำแนะนำเกี่ยวกับหลักสูตร CBC การลงทะเบียน NEMIS หรือการจัดสรรที่เรียนในมหาวิทยาลัยผ่าน KUCCPS ข้อสำคัญ: อธิบายวิธีที่ผู้ปกครองสามารถตรวจสอบผลการสอบระดับชาติผ่าน SMS หรือพอร์ทัล KNEC เมื่อมีการประกาศผล กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ \'Genie AI\' เสมอ',
-    transportLicensesPrompt: 'ทำหน้าที่เป็นผู้ให้คำแนะนำบริการของ NTSA อธิบายขั้นตอนการต่ออายุใบขับขี่ การตรวจสภาพรถยนต์ หรือการจัดการบัญชี TIMS ข้อสำคัญ: แนะนำผู้ใช้วิธีเข้าสู่ระบบพอร์ทัล eCitizen NTSA เพื่อขอรับใบขับขี่อัจฉริยะ (Smart DL) หรือจองคิวตรวจสภาพรถยนต์ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ \'Genie AI\' เสมอ',
-    housingProgramsPrompt: 'ทำหน้าที่เป็นที่ปรึกษาโครงการที่อยู่อาศัย อธิบายโครงการที่อยู่อาศัยราคาประหยัด (Boma Yangu) การลงทะเบียน และขั้นตอนการสมทบทุนโดยสมัครใจ ข้อสำคัญ: แนะนำผู้ใช้ไปยังพอร์ทัล Boma Yangu เพื่อดูโครงการต่างๆ และอธิบายเกณฑ์คุณสมบัติในการได้รับการจัดสรร กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ \'Genie AI\' เสมอ',
-    findJobsPrompt: 'ทำหน้าที่เป็นโค้ชแนะแนวอาชีพสำหรับงานราชการ แนะนำผู้ใช้เกี่ยวกับการสร้างโปรไฟล์และการสมัครงานในตำแหน่งที่เปิดรับผ่านพอร์ทัลคณะกรรมการข้าราชการพลเรือน (PSC) ข้อสำคัญ: แนะนำให้ผู้ใช้เตรียมเอกสารรับรองคุณวุฒิการศึกษาให้พร้อม และหมั่นตรวจสอบเว็บไซต์ PSC หรือหนังสือพิมพ์รายวันท้องถิ่นเพื่อดูประกาศจาก MyGov เป็นประจำ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ \'Genie AI\' เสมอ',
-    justChatPrompt: 'ทำหน้าที่เป็นเพื่อนร่วมพูดคุยท้องถิ่นที่เป็นมิตร สุภาพ ให้ความช่วยเหลือเป็นอย่างดี และรอบรู้เกี่ยวกับวัฒนธรรมเคนยารวมถึงชีวิตประจำวัน ข้อสำคัญ: เตือนผู้ใช้ว่าแม้คุณจะสามารถพูดคุยได้ทุกเรื่อง แต่จุดแข็งหลักของคุณคือการช่วยแนะนำการเข้าถึงบริการของรัฐบาลเคนยา เช่น **บัตรประจำตัวประชาชน**, **ภาษี** และ **การจดทะเบียนธุรกิจ** กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ \'Genie AI\' เสมอ'
+    applyForIDPrompt:
+      "ทำหน้าที่เป็นผู้เชี่ยวชาญด้านการจดทะเบียนราษฎรของเคนยาที่พร้อมช่วยเหลือ อธิบายขั้นตอนการขอรับบัตรประจำตัวประชาชน (Maisha Namba) หรือการขอออกบัตรใหม่กรณีสูญหาย ข้อสำคัญ: ระบุรายการเอกสารที่จำเป็นอย่างชัดเจน (เช่น สูติบัตร สำเนาบัตรประจำตัวประชาชนของบิดามารดา) และแนะนำให้ผู้ใช้เดินทางไปยังศูนย์ Huduma หรือสำนักงานนายทะเบียนราษฎร (Registrar of Persons) ที่ใกล้ที่สุด กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
+    payTaxesPrompt:
+      "ทำหน้าที่เป็นผู้ให้คำแนะนำเกี่ยวกับ KRA (กรมสรรพากรเคนยา) อธิบายขั้นตอนการยื่นแบบแสดงรายการภาษี การขอ KRA PIN หรือการรีเซ็ตรหัสผ่านบนพอร์ทัล iTax ข้อสำคัญ: เตือนผู้ใช้เกี่ยวกับกำหนดเวลาสิ้นสุดวันที่ 30 มิถุนายนสำหรับการยื่นแบบประจำปี และแนะนำวิธียื่นแบบแสดงรายการเป็นศูนย์ (Nil return) หากไม่มีรายได้ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
+    startBusinessPrompt:
+      "ทำหน้าที่เป็นที่ปรึกษาทางธุรกิจสำหรับบริการ eCitizen แนะนำผู้ใช้ตลอดขั้นตอนการจองชื่อธุรกิจและการจดทะเบียนบริษัทในเคนยา ข้อสำคัญ: อธิบายค่าใช้จ่ายปัจจุบันสำหรับการค้นหาชื่อและการจดทะเบียน และนำผู้ใช้ไปยังพอร์ทัล eCitizen อย่างเป็นทางการเพื่อกรอกใบสมัครให้เสร็จสมบูรณ์ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
+    findHealthcarePrompt:
+      "ทำหน้าที่เป็นผู้นำทางบริการด้านสุขภาพ ให้ข้อมูลเกี่ยวกับการเปลี่ยนผ่านจาก NHIF ไปเป็น SHIF (กองทุนประกันสุขภาพเพื่อสังคม) และขั้นตอนการลงทะเบียน ข้อสำคัญ: แบ่งปันรหัส USSD อย่างเป็นทางการ (เช่น *263#) หรือลิงก์เว็บไซต์สำหรับลงทะเบียน พร้อมอธิบายสิทธิประโยชน์ของความคุ้มครองสุขภาพภาครัฐ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
+    educationServicesPrompt:
+      "ทำหน้าที่เป็นที่ปรึกษาด้านการศึกษา ให้คำแนะนำเกี่ยวกับหลักสูตร CBC การลงทะเบียน NEMIS หรือการจัดสรรที่เรียนในมหาวิทยาลัยผ่าน KUCCPS ข้อสำคัญ: อธิบายวิธีที่ผู้ปกครองสามารถตรวจสอบผลการสอบระดับชาติผ่าน SMS หรือพอร์ทัล KNEC เมื่อมีการประกาศผล กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
+    transportLicensesPrompt:
+      "ทำหน้าที่เป็นผู้ให้คำแนะนำบริการของ NTSA อธิบายขั้นตอนการต่ออายุใบขับขี่ การตรวจสภาพรถยนต์ หรือการจัดการบัญชี TIMS ข้อสำคัญ: แนะนำผู้ใช้วิธีเข้าสู่ระบบพอร์ทัล eCitizen NTSA เพื่อขอรับใบขับขี่อัจฉริยะ (Smart DL) หรือจองคิวตรวจสภาพรถยนต์ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
+    housingProgramsPrompt:
+      "ทำหน้าที่เป็นที่ปรึกษาโครงการที่อยู่อาศัย อธิบายโครงการที่อยู่อาศัยราคาประหยัด (Boma Yangu) การลงทะเบียน และขั้นตอนการสมทบทุนโดยสมัครใจ ข้อสำคัญ: แนะนำผู้ใช้ไปยังพอร์ทัล Boma Yangu เพื่อดูโครงการต่างๆ และอธิบายเกณฑ์คุณสมบัติในการได้รับการจัดสรร กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
+    findJobsPrompt:
+      "ทำหน้าที่เป็นโค้ชแนะแนวอาชีพสำหรับงานราชการ แนะนำผู้ใช้เกี่ยวกับการสร้างโปรไฟล์และการสมัครงานในตำแหน่งที่เปิดรับผ่านพอร์ทัลคณะกรรมการข้าราชการพลเรือน (PSC) ข้อสำคัญ: แนะนำให้ผู้ใช้เตรียมเอกสารรับรองคุณวุฒิการศึกษาให้พร้อม และหมั่นตรวจสอบเว็บไซต์ PSC หรือหนังสือพิมพ์รายวันท้องถิ่นเพื่อดูประกาศจาก MyGov เป็นประจำ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
+    justChatPrompt:
+      "ทำหน้าที่เป็นเพื่อนร่วมพูดคุยท้องถิ่นที่เป็นมิตร สุภาพ ให้ความช่วยเหลือเป็นอย่างดี และรอบรู้เกี่ยวกับวัฒนธรรมเคนยารวมถึงชีวิตประจำวัน ข้อสำคัญ: เตือนผู้ใช้ว่าแม้คุณจะสามารถพูดคุยได้ทุกเรื่อง แต่จุดแข็งหลักของคุณคือการช่วยแนะนำการเข้าถึงบริการของรัฐบาลเคนยา เช่น **บัตรประจำตัวประชาชน**, **ภาษี** และ **การจดทะเบียนธุรกิจ** กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ"
   },
   common: {
     cancel: 'ยกเลิก',
@@ -1343,10 +1368,14 @@ export default {
     tabs: {
       details: 'รายละเอียด',
       ingestionLog: 'บันทึกการนำเข้าข้อมูล',
-      detailsHint: 'ข้อมูลเมตาสำหรับไฟล์นี้: ชื่อ ผู้เขียน และป้ายกำกับลำดับชั้นความรู้ที่ AI ใช้กำหนดเส้นทางคำถาม การ ingest ต้องมีป้ายกำกับอย่างน้อยหนึ่งรายการ',
-      dashboardHint: 'มุมมองสดของการรวบรวมข้อมูลเว็บไซต์สำหรับไฟล์นี้: อัตรา คิว ข้อผิดพลาด และความคืบหน้า เมื่อการรวบรวมข้อมูลสำเร็จ ส่วนท้ายด้านล่างจะแปลงเป็นที่เก็บ OKF',
-      crawlLogHint: 'บันทึกการรวบรวมข้อมูลเว็บไซต์แบบรายหน้า: URL ใดที่ดึงข้อมูลสำเร็จ เปลี่ยนเส้นทาง หรือล้มเหลว ซึ่งจะถูกบันทึกขณะกำลังรวบรวมข้อมูล',
-      ingestionLogHint: 'ความคืบหน้าทีละขั้นตอนในการจัดเตรียมไฟล์นี้สำหรับคำตอบของ AI: การแบ่งส่วนย่อย (chunking) การติดป้ายกำกับ การทำ embedding และการสร้างดัชนี ข้อผิดพลาดที่นี่จะแสดงจุดที่การ ingest หยุดลงอย่างแน่นอน'
+      detailsHint:
+        'ข้อมูลเมตาสำหรับไฟล์นี้: ชื่อ ผู้เขียน และป้ายกำกับลำดับชั้นความรู้ที่ AI ใช้กำหนดเส้นทางคำถาม การ ingest ต้องมีป้ายกำกับอย่างน้อยหนึ่งรายการ',
+      dashboardHint:
+        'มุมมองสดของการรวบรวมข้อมูลเว็บไซต์สำหรับไฟล์นี้: อัตรา คิว ข้อผิดพลาด และความคืบหน้า เมื่อการรวบรวมข้อมูลสำเร็จ ส่วนท้ายด้านล่างจะแปลงเป็นที่เก็บ OKF',
+      crawlLogHint:
+        'บันทึกการรวบรวมข้อมูลเว็บไซต์แบบรายหน้า: URL ใดที่ดึงข้อมูลสำเร็จ เปลี่ยนเส้นทาง หรือล้มเหลว ซึ่งจะถูกบันทึกขณะกำลังรวบรวมข้อมูล',
+      ingestionLogHint:
+        'ความคืบหน้าทีละขั้นตอนในการจัดเตรียมไฟล์นี้สำหรับคำตอบของ AI: การแบ่งส่วนย่อย (chunking) การติดป้ายกำกับ การทำ embedding และการสร้างดัชนี ข้อผิดพลาดที่นี่จะแสดงจุดที่การ ingest หยุดลงอย่างแน่นอน'
     },
     log: {
       killActions: 'การดำเนินการหยุด:',
@@ -1394,7 +1423,8 @@ export default {
       killDocTitle: 'หยุดการนำเข้าข้อมูลเอกสาร',
       killDoc: 'คุณแน่ใจหรือไม่ว่าต้องการหยุดงานนำเข้าข้อมูลสำหรับเอกสารนี้? ระบบจะพยายามย้อนกลับอย่างปลอดภัย',
       killProcTitle: 'หยุดกระบวนการนำเข้าข้อมูลทั้งหมด',
-      killProc: 'คำเตือน: นี่จะเป็นการหยุดบริการนำเข้าข้อมูลแบ็กเอนด์ทั้งหมด ซึ่งส่งผลกระทบต่อไฟล์ทั้งหมดที่กำลังประมวลผลอยู่ คุณแน่ใจหรือไม่?'
+      killProc:
+        'คำเตือน: นี่จะเป็นการหยุดบริการนำเข้าข้อมูลแบ็กเอนด์ทั้งหมด ซึ่งส่งผลกระทบต่อไฟล์ทั้งหมดที่กำลังประมวลผลอยู่ คุณแน่ใจหรือไม่?'
     }
   },
   uploadDialog: {
@@ -1412,7 +1442,8 @@ export default {
       uploadSuccess: 'อัปโหลด {fileName} สำเร็จ',
       uploadFailed: 'ล้มเหลวในการอัปโหลด {fileName}'
     },
-    ragTip: 'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
     versions: {
@@ -1520,7 +1551,8 @@ export default {
       alreadyBadge: 'อยู่ในรีโป OKF อื่นแล้ว',
       servingTip: 'เอกสารนี้กำลังให้บริการคอร์ปัสอิสระ — รีโปใหม่จะนำเข้าไม่ได้จนกว่าจะถอนคืน',
       alreadyTip: 'เอกสารนี้เป็นที่มาของรีโป OKF อื่นอยู่แล้ว',
-      servingWarn: 'เอกสาร {n} รายการยังให้บริการคอร์ปัสอิสระ การนำเข้าสำเร็จ แต่รีโปนี้นำเข้าไม่ได้จนกว่าจะถอนคืนเอกสารเหล่านั้น',
+      servingWarn:
+        'เอกสาร {n} รายการยังให้บริการคอร์ปัสอิสระ การนำเข้าสำเร็จ แต่รีโปนี้นำเข้าไม่ได้จนกว่าจะถอนคืนเอกสารเหล่านั้น',
       cancel: 'ยกเลิก',
       importing: 'กำลังนำเข้า…',
       go: 'นำเข้า',
@@ -1571,9 +1603,12 @@ export default {
           attempts: 'Attempts: {n}',
           when: 'Last attempt {when}',
           fix: {
-            reaper: 'ตัวทำงานนำเข้าหยุดรอภายในกรอบเวลาผ่อนปรนเพราะท่อระบายแน่นเกินไป — เนื้อหาไม่เสียหาย วิธีแก้: แก้ไขไฟล์นี้เล็กน้อยแล้วบันทึกเพื่อเข้าคิวใหม่ หรือถอนคืนแล้วนำเข้าทั้งรีโปใหม่',
-            dataprep: 'บริการเตรียมเนื้อหาล้มเหลวในการนำเข้านี้ วิธีแก้: แก้ไขแล้วบันทึกเพื่อเข้าคิวใหม่ หากซ้ำให้ตรวจสอบสถานะบริการ dataprep',
-            generic: 'การทำดัชนีล้มเหลว วิธีแก้: แก้ไขเนื้อหาแล้วบันทึกเพื่อเข้าคิวใหม่ หรือถอนคืนแล้วนำเข้าทั้งรีโปใหม่'
+            reaper:
+              'ตัวทำงานนำเข้าหยุดรอภายในกรอบเวลาผ่อนปรนเพราะท่อระบายแน่นเกินไป — เนื้อหาไม่เสียหาย วิธีแก้: แก้ไขไฟล์นี้เล็กน้อยแล้วบันทึกเพื่อเข้าคิวใหม่ หรือถอนคืนแล้วนำเข้าทั้งรีโปใหม่',
+            dataprep:
+              'บริการเตรียมเนื้อหาล้มเหลวในการนำเข้านี้ วิธีแก้: แก้ไขแล้วบันทึกเพื่อเข้าคิวใหม่ หากซ้ำให้ตรวจสอบสถานะบริการ dataprep',
+            generic:
+              'การทำดัชนีล้มเหลว วิธีแก้: แก้ไขเนื้อหาแล้วบันทึกเพื่อเข้าคิวใหม่ หรือถอนคืนแล้วนำเข้าทั้งรีโปใหม่'
           }
         },
         indexBadge: 'ดัชนี',
@@ -1581,7 +1616,8 @@ export default {
         loading: 'กำลังโหลด…',
         resplit: 'แยกใหม่',
         flagged: 'ถูกตั้งค่าสถานะ',
-        flaggedTip: 'แนวคิดที่มีเอนทิตีที่ถูกแจ้งเตือน — เปิดแต่ละรายการ ลบหรือแก้ไขเอนทิตี บันทึก (จะสแกนใหม่โดยอัตโนมัติ) หรือรับทราบเมื่อทำการ publish',
+        flaggedTip:
+          'แนวคิดที่มีเอนทิตีที่ถูกแจ้งเตือน — เปิดแต่ละรายการ ลบหรือแก้ไขเอนทิตี บันทึก (จะสแกนใหม่โดยอัตโนมัติ) หรือรับทราบเมื่อทำการ publish',
         piiBadge: 'PII',
         piiTip: 'เอนทิตีที่ถูกแจ้งเตือน: {k} เปิด ลบ หรือแก้ไข จากนั้นบันทึก — ระบบจะสแกนใหม่โดยอัตโนมัติ',
         piiTipBare: 'เอนทิตีที่ถูกแจ้งเตือน — เปิด ตรวจทาน แล้วบันทึกเพื่อสแกนใหม่',
@@ -1645,7 +1681,8 @@ export default {
       paneLabel: 'บานหน้าต่างมุมมอง',
       saveFailed: 'การบันทึกล้มเหลว — ลองใหม่',
       piiBulk: {
-        done_accept: 'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_accept:
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
         done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
         done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
@@ -1656,7 +1693,8 @@ export default {
         body: {
           redact: 'เนื้อหาหลักของทุกแนวคิดที่ถูกแจ้งเตือนจะถูกแทนที่ด้วยประกาศการเซ็นเซอร์ ไม่สามารถยกเลิกได้',
           remove: 'เนื้อหาหลักของทุกแนวคิดที่ถูกแจ้งเตือนจะถูกลบว่างเปล่า ไม่สามารถยกเลิกได้',
-          accept: 'เอนทิตีที่ถูกแจ้งเตือนทั้งหมดจะถูกทำเครื่องหมายว่าตรวจสอบแล้วและเก็บไว้ — จะไม่ถูกแจ้งเตือนอีกเว้นแต่คุณจะสแกนใหม่'
+          accept:
+            'เอนทิตีที่ถูกแจ้งเตือนทั้งหมดจะถูกทำเครื่องหมายว่าตรวจสอบแล้วและเก็บไว้ — จะไม่ถูกแจ้งเตือนอีกเว้นแต่คุณจะสแกนใหม่'
         },
         scope: 'แนวคิดที่ได้รับผลกระทบ: {n} รายการ',
         confirm: 'นำไปใช้',
@@ -1863,7 +1901,8 @@ export default {
       save: 'บันทึก frontmatter',
       saveFailed: 'การบันทึก frontmatter ล้มเหลว',
       perRepoTitle: 'Routing tags — what this repo is about',
-      perRepoHint: 'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoHint:
+        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -1888,39 +1927,63 @@ export default {
       repoTagsHint: 'แท็กระดับรีปอซิทอรี ({summary}) เป็นของรีปอ — ไม่ใช่ของคอนเซปต์นี้ จัดการที่แผงแท็กในแถบด้านขวา'
     },
     glossary: {
-      addConcept: 'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
       type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
-      title: 'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
-      indexStatus: 'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
-      trustTier: 'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
-      concept: 'รายการหนึ่งรายการในที่เก็บของคุณ — มักจะเป็นหน้าเดียวหรือหัวข้อเดียว แต่ละแนวคิดมี frontmatter ที่มีโครงสร้างซึ่งระบบผู้ช่วยอ่านได้ ควบคู่ไปกับข้อความ markdown ที่ใช้อ้างอิงในการตอบ',
-      repository: 'คอลเลกชันของแนวคิดที่ได้รับการดูแลจัดการรอบสาขาวิชาหนึ่งๆ ซึ่งจะกลายเป็นชุดไฟล์ OKF ที่คุณ publish กำหนดเวอร์ชัน และเปิดให้ผู้ช่วยใช้งาน',
-      subjectArea: 'ความรู้นี้อยู่ในหมวดหมู่ใด? สาขาวิชาจะจัดกลุ่มที่เก็บของคุณและกำหนดป้ายกำกับที่คุณสามารถเลือกได้ ไม่สามารถเปลี่ยนแปลงได้หลังจากการสร้าง',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept:
+        'รายการหนึ่งรายการในที่เก็บของคุณ — มักจะเป็นหน้าเดียวหรือหัวข้อเดียว แต่ละแนวคิดมี frontmatter ที่มีโครงสร้างซึ่งระบบผู้ช่วยอ่านได้ ควบคู่ไปกับข้อความ markdown ที่ใช้อ้างอิงในการตอบ',
+      repository:
+        'คอลเลกชันของแนวคิดที่ได้รับการดูแลจัดการรอบสาขาวิชาหนึ่งๆ ซึ่งจะกลายเป็นชุดไฟล์ OKF ที่คุณ publish กำหนดเวอร์ชัน และเปิดให้ผู้ช่วยใช้งาน',
+      subjectArea:
+        'ความรู้นี้อยู่ในหมวดหมู่ใด? สาขาวิชาจะจัดกลุ่มที่เก็บของคุณและกำหนดป้ายกำกับที่คุณสามารถเลือกได้ ไม่สามารถเปลี่ยนแปลงได้หลังจากการสร้าง',
       selectSubjectArea: 'เลือกสาขาวิชา…',
       subjectAreaMissing: 'สาขาวิชาของที่เก็บนี้ไม่อยู่ในลำดับชั้นความรู้ — แสดงป้ายกำกับทั้งหมด',
-      label: 'หมวดหมู่จากลำดับชั้นความรู้ที่บอกผู้ช่วยว่าแนวคิดนี้เป็นสิ่งประเภทใด ป้ายกำกับช่วยให้คำตอบค้นพบเนื้อหาที่ถูกต้อง',
-      bundle: 'การส่งออกที่เก็บเป็นไฟล์ zip — รวบรวมแนวคิด โครงสร้าง และข้อมูลเมตาไว้ในไฟล์เดียว ชุดไฟล์เป็นวิธีถ่ายโอนที่เก็บระหว่างระบบต่างๆ',
-      version: 'สแนปชอตที่คงที่ของที่เก็บ ณ เวลาที่ publish การแก้ไขจะดำเนินต่อไปในเวอร์ชันถัดไป — เวอร์ชันที่เผยแพร่แล้วจะไม่เปลี่ยนแปลง',
-      serving: 'เวอร์ชันนี้ใช้งานอยู่: ผู้ช่วยจะอ่านเนื้อหาของเวอร์ชันนี้เมื่อตอบคำถาม ให้ทำ retract เพื่อทำการเปลี่ยนแปลง',
-      ingestion: 'ขั้นตอนที่เวอร์ชันที่เผยแพร่ได้รับการจัดเตรียมเพื่อใช้ในการตอบ — ข้อความจะถูกแบ่งส่วน ทำ embedding และเชื่อมโยง ไม่มีสิ่งใดส่งไปยังผู้ช่วยก่อนขั้นตอนนี้',
-      classification: 'วิธีที่เราใช้กำหนดว่าแต่ละแนวคิดคืออะไร (หัวข้อ เอนทิตี กระบวนการ…) ฮิวริสติกส์จะอ่านหน้าเว็บโดยอัตโนมัติ ตัวเลือก LLM จะช้ากว่าแต่สามารถจัดการกับหน้าที่ซับซ้อนได้ดี',
-      resplit: 'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      label:
+        'หมวดหมู่จากลำดับชั้นความรู้ที่บอกผู้ช่วยว่าแนวคิดนี้เป็นสิ่งประเภทใด ป้ายกำกับช่วยให้คำตอบค้นพบเนื้อหาที่ถูกต้อง',
+      bundle:
+        'การส่งออกที่เก็บเป็นไฟล์ zip — รวบรวมแนวคิด โครงสร้าง และข้อมูลเมตาไว้ในไฟล์เดียว ชุดไฟล์เป็นวิธีถ่ายโอนที่เก็บระหว่างระบบต่างๆ',
+      version:
+        'สแนปชอตที่คงที่ของที่เก็บ ณ เวลาที่ publish การแก้ไขจะดำเนินต่อไปในเวอร์ชันถัดไป — เวอร์ชันที่เผยแพร่แล้วจะไม่เปลี่ยนแปลง',
+      serving:
+        'เวอร์ชันนี้ใช้งานอยู่: ผู้ช่วยจะอ่านเนื้อหาของเวอร์ชันนี้เมื่อตอบคำถาม ให้ทำ retract เพื่อทำการเปลี่ยนแปลง',
+      ingestion:
+        'ขั้นตอนที่เวอร์ชันที่เผยแพร่ได้รับการจัดเตรียมเพื่อใช้ในการตอบ — ข้อความจะถูกแบ่งส่วน ทำ embedding และเชื่อมโยง ไม่มีสิ่งใดส่งไปยังผู้ช่วยก่อนขั้นตอนนี้',
+      classification:
+        'วิธีที่เราใช้กำหนดว่าแต่ละแนวคิดคืออะไร (หัวข้อ เอนทิตี กระบวนการ…) ฮิวริสติกส์จะอ่านหน้าเว็บโดยอัตโนมัติ ตัวเลือก LLM จะช้ากว่าแต่สามารถจัดการกับหน้าที่ซับซ้อนได้ดี',
+      resplit:
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'บันทึกล้มเหลว',
       importFailedTitle: 'การนำเข้าล้มเหลว — ไม่สามารถแปลงไฟล์ต้นฉบับได้',
       importFailedHint: 'ลบที่เก็บนี้และนำเข้าไฟล์ต้นฉบับอีกครั้ง',
-      frontmatter: 'ข้อมูลที่มีโครงสร้างที่ด้านบนของแต่ละไฟล์ — ประเภท ชื่อ ป้ายกำกับ ผู้ช่วยใช้ข้อมูลนี้เพื่อให้ทราบว่าแต่ละแนวคิดเกี่ยวกับอะไร',
-      pickSource: 'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
-      classificationStrategy: 'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      frontmatter:
+        'ข้อมูลที่มีโครงสร้างที่ด้านบนของแต่ละไฟล์ — ประเภท ชื่อ ป้ายกำกับ ผู้ช่วยใช้ข้อมูลนี้เพื่อให้ทราบว่าแต่ละแนวคิดเกี่ยวกับอะไร',
+      pickSource:
+        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy:
+        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
       clsHeur: 'Heuristics (fast, no LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
-      fsPick: 'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
-      autocorrect: 'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
-      handoff: 'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
-      lifecycle: 'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
-      labelsAuto: 'Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.',
-      reviewHandoff: 'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
-      piiReview: 'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+      fsPick:
+        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect:
+        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff:
+        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      lifecycle:
+        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto:
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+      reviewHandoff:
+        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview:
+        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
     },
     md: {
       toolbar: 'การจัดรูปแบบ',
@@ -1938,20 +2001,34 @@ export default {
       rendering: 'กำลังเรนเดอร์…'
     },
     narrative: {
-      intro: 'ที่เก็บ OKF คือคอลเลกชันหัวข้อที่มีโครงสร้างและมีการกำหนดเวอร์ชัน ซึ่งคำตอบในแชทของคุณสามารถอ้างอิงได้ เปรียบเสมือนชั้นภววิทยาแบบกระชับสำหรับโดเมนของคุณ — ป้ายกำกับใช้กำหนดหมวดหมู่ หัวข้อใช้กำหนดเอนทิตี แหล่งที่มาใช้ระบุที่มา',
-      step0: 'ที่เก็บ OKF คือคอลเลกชันของหัวข้อที่ได้รับการดูแลจัดการและมีการกำหนดเวอร์ชัน เปรียบเสมือนชั้นภววิทยาแบบกระชับสำหรับโดเมนของคุณ — ป้ายกำกับกำหนดหมวดหมู่ หัวข้อกำหนดเอนทิตี แหล่งที่มากำหนดที่มา เมื่อเผยแพร่แล้ว คำตอบในแชทปลายทางจะอ้างอิงหัวข้อเหล่านี้ตาม id',
-      step1: 'สามวิธีในการเริ่มต้นที่เก็บ OKF: ดึงหัวข้อจากการรวบรวมข้อมูลเว็บไซต์ สกัดหัวข้อจากเอกสารที่คุณอัปโหลดไว้แล้ว หรือเริ่มต้นจากหน้ากระดาษว่างเปล่า การโคลนที่เก็บที่มีอยู่จะคัดลอกหัวข้อและช่วยให้คุณแตกแขนงงานต่อได้',
-      step2: 'แต่ละเอกสารจะกลายเป็นแหล่งที่มาของหัวข้อ โมดูลตัวสร้างจะอ่านเอกสาร สกัดหัวข้อที่เป็นตัวเลือก และเสนอโครงสร้างลำดับชั้น คุณจะได้ตรวจสอบทุกหัวข้อในขั้นตอนถัดไป — จะไม่มีสิ่งใดถูกบันทึกถาวรจนกว่าคุณจะอนุมัติ',
-      step3: 'เรากำลังอ่านแหล่งที่มาของคุณและเสนอหัวข้อ หัวข้อจะจัดกลุ่มภายใต้ป้ายกำกับหมวดหมู่ที่คุณเลือก โมดูลตัวสร้างจะทำงานอย่างระมัดระวัง — โดยเน้นเสนอหัวข้อที่มีคุณภาพและชัดเจนในจำนวนที่น้อยกว่า แทนที่จะเสนอหัวข้อจำนวนมากที่ซ้ำซ้อน',
-      step4: 'ป้ายกำกับคือแกนตามหมวดหมู่ของภววิทยาของคุณ — หัวข้อนี้เป็นสิ่งประเภทใด? เลือก 3-7 ป้ายกำกับที่ครอบคลุมแกนหลัก โดยโมดูลตัวสร้างจะใช้สิ่งเหล่านี้เป็นโครงร่างสำหรับลำดับชั้นของหัวข้อ',
-      step5: 'นี่คือหัวใจสำคัญของงาน แต่ละหัวข้อคือหน่วยความรู้ขนาดเล็กที่สามารถอ้างอิงได้ หัวข้อจะได้รับชื่อ คำอธิบาย และสืบทอดป้ายกำกับที่คุณเลือก งานของคุณคือทำให้ข้อมูลมีความน่าเชื่อถือ: เปลี่ยนชื่อที่ไม่ชัดเจน รวมรายการที่ซ้ำกัน และตัดรายการที่ไม่มีแหล่งที่มารองรับออก',
-      step6: 'เราตรวจสอบความสอดคล้อง: ทุกหัวข้อมีชื่อหรือไม่ ป้ายกำกับถูกต้องหรือไม่ การระบุแหล่งที่มาครบถ้วนหรือไม่ ปัญหาที่บล็อกต้องแก้ไขก่อนส่งมอบคลัง คำเตือนสามารถยอมรับได้',
-      step7: 'คำเตือนบางอย่างสามารถแก้ไขได้โดยอัตโนมัติ: ค่าสถานะสามารถปรับให้อยู่ใน enum ที่ถูกต้อง สามารถเติมฟิลด์ที่ขาดหายไปได้ด้วยค่าเริ่มต้นที่สมเหตุสมผล นำการแก้ไขที่คุณเห็นชอบไปปรับใช้ จากนั้นกลับไปตรวจสอบที่โมดูลดูแลจัดการ',
-      step8: 'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
-      step9: 'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
-      docMgmtEntry: 'สร้างที่เก็บ OKF ใหม่จากเอกสารที่เลือก เอกสารจะกลายเป็นแหล่งที่มา คุณจะได้ตรวจสอบและตั้งชื่อหัวข้อที่สร้างขึ้นก่อนที่จะเผยแพร่สิ่งใด',
-      crawlSegment: 'ที่เก็บ OKF คือคอลเลกชันหัวข้อที่มีโครงสร้างและมีการกำหนดเวอร์ชัน ซึ่งคำตอบในแชทของคุณสามารถอ้างอิงได้',
-      emptyDashboard: 'คุณยังไม่ได้สร้างที่เก็บ OKF ใดๆ เลย ที่เก็บ OKF คือชุดหัวข้อที่มีโครงสร้างและสามารถอ้างอิงได้ ซึ่งคำตอบในแชทของคุณสามารถนำไปใช้งานได้',
+      intro:
+        'ที่เก็บ OKF คือคอลเลกชันหัวข้อที่มีโครงสร้างและมีการกำหนดเวอร์ชัน ซึ่งคำตอบในแชทของคุณสามารถอ้างอิงได้ เปรียบเสมือนชั้นภววิทยาแบบกระชับสำหรับโดเมนของคุณ — ป้ายกำกับใช้กำหนดหมวดหมู่ หัวข้อใช้กำหนดเอนทิตี แหล่งที่มาใช้ระบุที่มา',
+      step0:
+        'ที่เก็บ OKF คือคอลเลกชันของหัวข้อที่ได้รับการดูแลจัดการและมีการกำหนดเวอร์ชัน เปรียบเสมือนชั้นภววิทยาแบบกระชับสำหรับโดเมนของคุณ — ป้ายกำกับกำหนดหมวดหมู่ หัวข้อกำหนดเอนทิตี แหล่งที่มากำหนดที่มา เมื่อเผยแพร่แล้ว คำตอบในแชทปลายทางจะอ้างอิงหัวข้อเหล่านี้ตาม id',
+      step1:
+        'สามวิธีในการเริ่มต้นที่เก็บ OKF: ดึงหัวข้อจากการรวบรวมข้อมูลเว็บไซต์ สกัดหัวข้อจากเอกสารที่คุณอัปโหลดไว้แล้ว หรือเริ่มต้นจากหน้ากระดาษว่างเปล่า การโคลนที่เก็บที่มีอยู่จะคัดลอกหัวข้อและช่วยให้คุณแตกแขนงงานต่อได้',
+      step2:
+        'แต่ละเอกสารจะกลายเป็นแหล่งที่มาของหัวข้อ โมดูลตัวสร้างจะอ่านเอกสาร สกัดหัวข้อที่เป็นตัวเลือก และเสนอโครงสร้างลำดับชั้น คุณจะได้ตรวจสอบทุกหัวข้อในขั้นตอนถัดไป — จะไม่มีสิ่งใดถูกบันทึกถาวรจนกว่าคุณจะอนุมัติ',
+      step3:
+        'เรากำลังอ่านแหล่งที่มาของคุณและเสนอหัวข้อ หัวข้อจะจัดกลุ่มภายใต้ป้ายกำกับหมวดหมู่ที่คุณเลือก โมดูลตัวสร้างจะทำงานอย่างระมัดระวัง — โดยเน้นเสนอหัวข้อที่มีคุณภาพและชัดเจนในจำนวนที่น้อยกว่า แทนที่จะเสนอหัวข้อจำนวนมากที่ซ้ำซ้อน',
+      step4:
+        'ป้ายกำกับคือแกนตามหมวดหมู่ของภววิทยาของคุณ — หัวข้อนี้เป็นสิ่งประเภทใด? เลือก 3-7 ป้ายกำกับที่ครอบคลุมแกนหลัก โดยโมดูลตัวสร้างจะใช้สิ่งเหล่านี้เป็นโครงร่างสำหรับลำดับชั้นของหัวข้อ',
+      step5:
+        'นี่คือหัวใจสำคัญของงาน แต่ละหัวข้อคือหน่วยความรู้ขนาดเล็กที่สามารถอ้างอิงได้ หัวข้อจะได้รับชื่อ คำอธิบาย และสืบทอดป้ายกำกับที่คุณเลือก งานของคุณคือทำให้ข้อมูลมีความน่าเชื่อถือ: เปลี่ยนชื่อที่ไม่ชัดเจน รวมรายการที่ซ้ำกัน และตัดรายการที่ไม่มีแหล่งที่มารองรับออก',
+      step6:
+        'เราตรวจสอบความสอดคล้อง: ทุกหัวข้อมีชื่อหรือไม่ ป้ายกำกับถูกต้องหรือไม่ การระบุแหล่งที่มาครบถ้วนหรือไม่ ปัญหาที่บล็อกต้องแก้ไขก่อนส่งมอบคลัง คำเตือนสามารถยอมรับได้',
+      step7:
+        'คำเตือนบางอย่างสามารถแก้ไขได้โดยอัตโนมัติ: ค่าสถานะสามารถปรับให้อยู่ใน enum ที่ถูกต้อง สามารถเติมฟิลด์ที่ขาดหายไปได้ด้วยค่าเริ่มต้นที่สมเหตุสมผล นำการแก้ไขที่คุณเห็นชอบไปปรับใช้ จากนั้นกลับไปตรวจสอบที่โมดูลดูแลจัดการ',
+      step8:
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9:
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry:
+        'สร้างที่เก็บ OKF ใหม่จากเอกสารที่เลือก เอกสารจะกลายเป็นแหล่งที่มา คุณจะได้ตรวจสอบและตั้งชื่อหัวข้อที่สร้างขึ้นก่อนที่จะเผยแพร่สิ่งใด',
+      crawlSegment:
+        'ที่เก็บ OKF คือคอลเลกชันหัวข้อที่มีโครงสร้างและมีการกำหนดเวอร์ชัน ซึ่งคำตอบในแชทของคุณสามารถอ้างอิงได้',
+      emptyDashboard:
+        'คุณยังไม่ได้สร้างที่เก็บ OKF ใดๆ เลย ที่เก็บ OKF คือชุดหัวข้อที่มีโครงสร้างและสามารถอ้างอิงได้ ซึ่งคำตอบในแชทของคุณสามารถนำไปใช้งานได้',
       labels: 'ป้ายกำกับคือแกนตามหมวดหมู่ของภววิทยาของคุณ — ซึ่งตอบคำถามว่า "หัวข้อนี้เป็นสิ่งประเภทใด?"',
       hide: 'ซ่อน',
       whatIsThis: 'สิ่งนี้คืออะไร?'
@@ -1967,7 +2044,8 @@ export default {
       title: 'OKF Studio',
       help: 'วิธีใช้',
       helpTitle: 'เกี่ยวกับ OKF Studio',
-      helpBody: 'ที่เก็บ OKF เป็นชั้นภววิทยาแบบกระชับ — ป้ายกำกับกำหนดหมวดหมู่ หัวข้อกำหนดเอนทิตี แหล่งที่มากำหนดที่มา เมื่อเผยแพร่แล้ว คำตอบในแชทจะอ้างอิงหัวข้อตาม id และแสดงที่มาของข้อมูล',
+      helpBody:
+        'ที่เก็บ OKF เป็นชั้นภววิทยาแบบกระชับ — ป้ายกำกับกำหนดหมวดหมู่ หัวข้อกำหนดเอนทิตี แหล่งที่มากำหนดที่มา เมื่อเผยแพร่แล้ว คำตอบในแชทจะอ้างอิงหัวข้อตาม id และแสดงที่มาของข้อมูล',
       view: {
         dashboard: 'แดชบอร์ด',
         wizard: 'วิซาร์ด'
@@ -2142,7 +2220,8 @@ export default {
         neverStarted: 'The conversion did not start — retry.',
         manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
         labelDone: 'Conversion complete',
-        dupContent: 'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        dupContent:
+          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
@@ -2161,11 +2240,12 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: 'Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {
-        embedHint: 'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
         noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'ตรวจสอบหัวข้อ',
         hint: 'แต่ละหัวข้อคือหน่วยความรู้ขนาดเล็กที่สามารถอ้างอิงได้ แก้ไขชื่อและคำอธิบาย',
@@ -2192,9 +2272,11 @@ export default {
         sources: 'แหล่งที่มา',
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
-        browserHint: 'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
+        browserHint:
+          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
         noRepo: 'No repository yet — the file review appears here once a repository exists.',
-        ritualOutside: 'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        ritualOutside:
+          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2211,7 +2293,8 @@ export default {
         topicsServing: 'Topics serving',
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
-        ritual: 'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        ritual:
+          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2236,7 +2319,8 @@ export default {
         emptySelection: 'เลือกเอกสารอย่างน้อยหนึ่งรายการ',
         alreadyInOkf: 'ลบเอกสารที่อยู่ในที่เก็บ OKF แล้ว',
         alreadyIngested: 'ลบเอกสารที่ผ่านการ ingest แล้ว',
-        servingWarn: 'เอกสารที่เลือก {n} รายการยังให้บริการคอร์ปัสอิสระอยู่ — รีโปใหม่จะนำเข้าไม่ได้จนกว่าจะถอนคืนเอกสารเหล่านั้น'
+        servingWarn:
+          'เอกสารที่เลือก {n} รายการยังให้บริการคอร์ปัสอิสระอยู่ — รีโปใหม่จะนำเข้าไม่ได้จนกว่าจะถอนคืนเอกสารเหล่านั้น'
       },
       produce: {
         notReady: 'โมดูลตัวสร้างจะเชื่อมต่อในเรื่องราวถัดไป'
@@ -2249,9 +2333,11 @@ export default {
       classHeuristics: 'ฮิวริสติกส์ (ค่าเริ่มต้น)',
       classHeuristicsHint: 'การจำแนกตามกฎอย่างรวดเร็ว — ไม่มีค่าใช้จ่าย LLM เหมาะสำหรับการรวบรวมข้อมูลที่มีโครงสร้างดี',
       classLlm: 'ใช้ LLM ช่วย',
-      classLlmHint: 'LLM ดูแลจัดการทุกแนวคิด — ประเภท ป้ายกำกับลำดับชั้นความรู้ และคำอธิบาย แม่นยำและสมบูรณ์กว่าฮิวริสติกส์มาก แต่อาจต้องใช้เวลาเพิ่มเติมต่อแนวคิด',
+      classLlmHint:
+        'LLM ดูแลจัดการทุกแนวคิด — ประเภท ป้ายกำกับลำดับชั้นความรู้ และคำอธิบาย แม่นยำและสมบูรณ์กว่าฮิวริสติกส์มาก แต่อาจต้องใช้เวลาเพิ่มเติมต่อแนวคิด',
       classHybrid: 'ไฮบริด',
-      classHybridHint: 'ฮิวริสติกส์ก่อน LLM จะตรวจสอบกรณีที่ไม่แน่นอนและเติมเต็มช่องว่าง เพื่อสมดุลระหว่างเวลาและความสมบูรณ์',
+      classHybridHint:
+        'ฮิวริสติกส์ก่อน LLM จะตรวจสอบกรณีที่ไม่แน่นอนและเติมเต็มช่องว่าง เพื่อสมดุลระหว่างเวลาและความสมบูรณ์',
       targetLabel: 'สิ่งนี้ควรบันทึกไว้ที่ใด?',
       target: {
         freeform: 'รวบรวมข้อมูลไปยังคลังข้อความอิสระ',
@@ -2329,7 +2415,8 @@ export default {
       saveBlocked: 'การบันทึกถูกบล็อก: โปรดแก้ไขปัญหาความสอดคล้องก่อน'
     },
     validation: {
-      frozen: 'เนื้อหาถูกตรึงไว้ที่ {v} — ดูตัวอย่างแบบอ่านอย่างเดียว ทำ retract เวอร์ชันที่ serving เพื่อทำการเปลี่ยนแปลง',
+      frozen:
+        'เนื้อหาถูกตรึงไว้ที่ {v} — ดูตัวอย่างแบบอ่านอย่างเดียว ทำ retract เวอร์ชันที่ serving เพื่อทำการเปลี่ยนแปลง',
       none: 'ไม่มี',
       expertHint: 'สลับเป็นโหมดผู้เชี่ยวชาญเพื่อดู JSON การตรวจสอบแบบดิบ กรองตามระดับความรุนแรง และแทนที่ผลการตรวจสอบ',
       headline: {
@@ -2351,7 +2438,8 @@ export default {
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
       indexFailed: 'Re-index failed — edit or re-split the page.',
-      indexFailedRemedy: 'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      indexFailedRemedy:
+        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2393,11 +2481,16 @@ export default {
         truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
-        conformance: 'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
-        orphan: 'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
-        near_duplicate: 'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
-        citation: 'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
-        index_failed: 'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+        conformance:
+          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan:
+          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate:
+          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation:
+          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed:
+          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
       }
     },
     pii: {
@@ -2500,7 +2593,8 @@ export default {
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
-      servingTip: 'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
       alreadyBadge: 'already in an OKF repo',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     },
@@ -2549,7 +2643,8 @@ export default {
         version: 'Head version',
         computedAt: 'Computed',
         staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
-        missingNote: 'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+        missingNote:
+          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
         rebuild: 'Rebuild head',
         rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
         rebuildBusy: 'Rebuilding — embedding the tag fields…'
@@ -2568,13 +2663,15 @@ export default {
           claimed: 'Claims query'
         },
         provenance: 'Routing provenance',
-        empty: 'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
+        empty:
+          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
         pass: 'PASS — this repository wins the head routing.',
         fail: 'FAIL — {repo} wins the head routing for this query.',
         passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
         passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
-        notSelectedSuppressed: 'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        notSelectedSuppressed:
+          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -2604,7 +2701,8 @@ export default {
         meta: 'เมตา'
       },
       teach: {
-        claim: 'หัว (head) อ้างสิทธิ์คำค้นนี้ — ผ่านประตูทั้งสามบาน หากไม่ควรถูกกำหนดเส้นทางมาที่นี่ ให้ขอแท็กต้องห้ามที่ตัดหัวข้อนี้ออก เพิ่ม แล้วสร้างหัวใหม่',
+        claim:
+          'หัว (head) อ้างสิทธิ์คำค้นนี้ — ผ่านประตูทั้งสามบาน หากไม่ควรถูกกำหนดเส้นทางมาที่นี่ ให้ขอแท็กต้องห้ามที่ตัดหัวข้อนี้ออก เพิ่ม แล้วสร้างหัวใหม่',
         explain: 'อธิบายและเสนอ',
         explainBusy: 'กำลังอธิบาย — โมเดลกำลังเสนอแท็กต้องห้าม…',
         addTag: 'เพิ่มไปยังแท็กต้องห้าม',
@@ -2615,12 +2713,14 @@ export default {
         rebuildBusy: 'กำลังสร้างหัวใหม่และรันซ้ำ…',
         title: 'สิ่งนี้หมายความว่าอย่างไร',
         veto: 'คำค้นนี้ตรงกับแท็กต้องห้าม “{tag}” อย่างมาก หากควรเป็นของคลังข้อมูลนี้ ให้ลบ “{tag}” ออกจากแท็กต้องห้ามใน Frontmatter แล้วเผยแพร่ใหม่เพื่อสร้าง head ใหม่',
-        floor: 'คำค้นนี้ไม่เกี่ยวข้องกับหัวข้อของคลังข้อมูลนี้ (คะแนนต่ำกว่าคะแนนขั้นต่ำของโดเมน) — การเปลี่ยนแท็กจะไม่ช่วยแก้ไข นี่คือการกดที่ถูกต้อง',
+        floor:
+          'คำค้นนี้ไม่เกี่ยวข้องกับหัวข้อของคลังข้อมูลนี้ (คะแนนต่ำกว่าคะแนนขั้นต่ำของโดเมน) — การเปลี่ยนแท็กจะไม่ช่วยแก้ไข นี่คือการกดที่ถูกต้อง',
         rejected: 'ถูกปฏิเสธโดยระบบป้องกัน — แท็กต้องห้ามต้องไม่ตรงกับหัวข้อของคลังข้อมูลนี้เอง'
       },
       suites: {
         generate: 'Generate test suite',
-        generateTip: 'LLM เขียนคำถามเป็นชุดละ 30 ต่อประเภท — จำนวนมาก (100+) ใช้เวลาหลายนาที เสร็จแล้วชุดทดสอบจะปรากฏที่นี่และในรายการที่บันทึกไว้',
+        generateTip:
+          'LLM เขียนคำถามเป็นชุดละ 30 ต่อประเภท — จำนวนมาก (100+) ใช้เวลาหลายนาที เสร็จแล้วชุดทดสอบจะปรากฏที่นี่และในรายการที่บันทึกไว้',
         generating: 'กำลังสร้างเป็นชุด — จำนวนมากใช้เวลาหลายนาที…',
         run: 'Run all queries',
         running: 'Running every suite query…',
@@ -2710,13 +2810,15 @@ export default {
         generateTimeout: 'ชุดทดสอบใช้เวลานานผิดปกติ — อาจปรากฏในรายการที่บันทึกไว้ ตรวจสอบอีกครั้งในหนึ่งนาที',
         probe: 'การทดสอบคลังข้อมูลล้มเหลว',
         suiteDelete: 'ลบชุดทดสอบไม่สำเร็จ',
-        noFrontmatter: 'ที่เก็บนี้ยังไม่มีแท็กหัว — สร้างแท็กในแผง Frontmatter (หรือใช้suggestแท็ก) แล้วจึงสร้างชุดทดสอบ'
+        noFrontmatter:
+          'ที่เก็บนี้ยังไม่มีแท็กหัว — สร้างแท็กในแผง Frontmatter (หรือใช้suggestแท็ก) แล้วจึงสร้างชุดทดสอบ'
       },
       footer: {
         unpublish: 'Unpublish to review'
       },
       publishCard: {
-        present: 'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
+        present:
+          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
       },
@@ -2739,7 +2841,8 @@ export default {
         scopeDetail: 'ชุดทดสอบ: {s} · ชุดแท็ก: {t}',
         rowActionsTitle: 'การพลิกตามคลังข้อมูล — คลังข้อมูลตอบ "เคสลบ" เหล่านี้: พลิกเป็นเคสบวก',
         flipToPositive: 'พลิกเป็นเคสบวก',
-        ungroundedNote: 'เคสลบที่ล้มเหลว {n} รายการไม่มีเชิงอ้างอิงในคลังข้อมูลและไม่มีแท็กที่ปลอดภัย — คู่แข่งต้องเป็นผู้ชนะ'
+        ungroundedNote:
+          'เคสลบที่ล้มเหลว {n} รายการไม่มีเชิงอ้างอิงในคลังข้อมูลและไม่มีแท็กที่ปลอดภัย — คู่แข่งต้องเป็นผู้ชนะ'
       },
       probe: {
         answerable: 'ตอบได้',
@@ -2760,6 +2863,7 @@ export default {
     }
   },
   link: {
-    ragTip: 'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

@@ -73,6 +73,7 @@ function releaseSlot() {
 async function stampSources(repoId, fileIds) {
   const db = await getDb();
   const metas = [];
+  let stampFailures = 0;
   for (const file_id of fileIds) {
     let meta = { file_id, file_name: null, file_type: null, size_bytes: null, uploaded_date: null };
     try {
@@ -101,8 +102,25 @@ async function stampSources(repoId, fileIds) {
         { timeout: 10000 }
       );
     } catch (err) {
+      stampFailures += 1;
       logger.warn('okf_repo_id stamp failed (non-fatal)', { file_id, error: err.message });
     }
+  }
+  // A stamp failure is per-file and non-fatal (the import must complete), but a
+  // 100% failure rate means the "already in an OKF repo" guard is silently
+  // DISABLED for the whole repository — which is how a 41/41 stamp failure went
+  // unnoticed (2026-10-11: doc-repo's PATCH /api/files/:id was Admin-only while
+  // the stamp is sent with the okf-service token). Say so ONCE, loudly, instead
+  // of one WARN per file that reads as noise nobody can aggregate.
+  if (stampFailures > 0) {
+    logger[stampFailures === fileIds.length ? 'error' : 'warn'](
+      `okf_repo_id stamp: ${stampFailures}/${fileIds.length} source file(s) NOT stamped — ` +
+        (stampFailures === fileIds.length
+          ? 'EVERY file failed, so this repository is not protected against a duplicate import. ' +
+            'Check that doc-repo PATCH /api/files/:id permits the okf-service role AND its update schema accepts okf_repo_id.'
+          : 'some files are not protected against a duplicate import.'),
+      { repo_id: repoId, stamp_failures: stampFailures, files: fileIds.length }
+    );
   }
   try {
     await db.query(

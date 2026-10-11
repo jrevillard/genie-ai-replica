@@ -26,6 +26,15 @@ global:
 # land with the sovereign deployment tier; it is rejected until then).
 clusterProfile: dev
 
+# Observability. The OpenTelemetry Collector CR is reconciled by the
+# OpenTelemetry Operator; the operator creates a Service named
+# `<cr-name>-collector` and the umbrella chart points in-cluster OTLP
+# exporters at that service (see templates/_lib/_observability.tpl).
+# Override `collectorCRName` when running parallel stacks or when the
+# CR is renamed to avoid hostname collisions.
+observability:
+  collectorCRName: genieai-collector
+
 # data layer values
 
 # Declared alongside the templates that dereference them:
@@ -266,6 +275,12 @@ services:
       runAsNonRoot: true
       runAsUser: 100
       allowPrivilegeEscalation: false
+      # ClamAV's writable paths in the runtime image are tmpfs-mounted
+      # (/tmp, /run) or backed by an explicit volume mounted at
+      # /var/lib/clamav by the service factory when one is set. A
+      # read-only root filesystem keeps the on-disk attack surface
+      # limited to those mount points.
+      readOnlyRootFilesystem: true
       capabilities: { drop: ["ALL"] }
     resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { cpu: 1, memory: 1Gi } }
     env: []
@@ -276,6 +291,15 @@ services:
       liveness:  { tcpSocket: { port: 3310 }, initialDelaySeconds: 120, periodSeconds: 60, failureThreshold: 5 }
     podDisruptionBudget: null
     serviceMonitor: false
+    # Egress to the ClamAV signature-distribution network on 80/443.
+    # `database.clamav.net` is a CNAME-to-A round-robin and the IP set
+    # shifts; pin resolved IPs in this list (run `dig +short
+    # database.clamav.net` against the operators' authoritative resolver
+    # and replace quarterly). Empty = fall back to the network-policy
+    # wildcard `0.0.0.0/0`, which permits every IPv4 destination on the
+    # CVD ports — only acceptable for dev clusters or when running
+    # behind a private ClamAV mirror.
+    cvdAllowedCIDRs: []
 
   redisCache:
     enabled: true

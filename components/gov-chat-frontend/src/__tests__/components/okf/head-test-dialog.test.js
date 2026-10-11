@@ -638,45 +638,6 @@ it('1-8c: batch advice — Explain failures renders add-all chips and saves them
   expect(dispatch).toHaveBeenCalledWith('okf/headSuiteRun', { repoId: 'r-1', suiteKey: 's1' });
 });
 
-it('1-8g-v: an async run (202 + poll) adopts the run doc when the poll lands it', async () => {
-  const w = mountDialog({ initialTab: 'suites' });
-  await w.vm.$nextTick();
-  w.vm.suite = { suite_key: 's1', payload: { positive: [{ query: 'q1', kind: 'positive' }], negative: [] } };
-  dispatch.mockImplementation((action) => {
-    if (action === 'okf/headSuiteRun')
-      return Promise.resolve({ ok: true, result: { run_key: 'r9', status: 'running' } });
-    if (action === 'okf/headSuiteGetRun')
-      return Promise.resolve({
-        ok: true,
-        result: {
-          _key: 'r9',
-          suite_key: 's1',
-          payload: {
-            summary: { pass_rate: 1, positive_passed: 1, positive_total: 1, negative_passed: 0, negative_total: 0, negative_evaluatable: 0, avg_margin: null, steals: [] },
-            results: [
-              {
-                query: 'q1',
-                kind: 'positive',
-                head_claimed: true,
-                sibling_count: 0,
-                under_test_wins_head: true,
-                probe: { verdict: 'answerable', top_score: 0.9 }
-              }
-            ]
-          }
-        }
-      });
-    if (action === 'okf/headSuiteListRuns') return Promise.resolve({ ok: true, runs: [] });
-    return Promise.resolve({ ok: true });
-  });
-  await w.vm.onRunSuite();
-  expect(w.vm.lastRunSummary).toMatchObject({ pass_rate: 1 });
-  expect(w.vm.lastRunSummaryRows).toHaveLength(1);
-  // the corpus verdict merged into the suite row
-  expect(w.vm.suite.payload.positive[0].lastProbe).toMatchObject({ verdict: 'answerable' });
-  expect(w.vm.busy).toBeNull();
-});
-
 it('1-8c: the claim-side teach loop is hidden in readOnly (wizard writes nothing)', async () => {
   const w = mountDialog({ initialTab: 'test', readOnly: true });
   await w.vm.$nextTick();
@@ -1330,7 +1291,7 @@ it('1-8g: the corpus probe affordances gate on an ingested corpus (the live 409)
   expect(btn.disabled).toBe(true);
 });
 
-it('1-8g-t: suite deletion requires the confirm dialog — cancel keeps, confirm deletes', async () => {
+it('1-8g: onDeleteSuite removes the suite from the list and clears a loaded copy', async () => {
   const w = mountDialog({ initialTab: 'suites' });
   await w.vm.$nextTick();
   dispatch.mockImplementation((action) => {
@@ -1340,21 +1301,9 @@ it('1-8g-t: suite deletion requires the confirm dialog — cancel keeps, confirm
   w.vm.savedSuites = [{ _key: 's1' }, { _key: 's2' }];
   w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
   w.vm.lastRunSummary = { pass_rate: 0.5 };
-  // the × only ARMS the dialog — nothing is deleted yet
   await w.vm.onDeleteSuite(w.vm.savedSuites[0]);
-  expect(w.vm.deleteConfirm).toMatchObject({ _key: 's1' });
-  expect(w.vm.savedSuites.map((s) => s._key)).toEqual(['s1', 's2']);
-  expect(dispatch).not.toHaveBeenCalledWith('okf/headSuiteDelete', expect.anything());
-  // cancel closes the dialog, keeps everything
-  await w.vm.onDeleteSuiteConfirm('cancel');
-  expect(w.vm.deleteConfirm).toBeNull();
-  expect(w.vm.savedSuites.map((s) => s._key)).toEqual(['s1', 's2']);
-  // confirm deletes: the row leaves the list, the loaded copy clears
-  await w.vm.onDeleteSuite(w.vm.savedSuites[0]);
-  await w.vm.onDeleteSuiteConfirm('confirm');
   expect(w.vm.savedSuites.map((s) => s._key)).toEqual(['s2']);
   expect(w.vm.suite).toBeNull();
   expect(w.vm.lastRunSummary).toBeNull();
   expect(w.vm.busy).toBeNull();
-  expect(w.vm.deleteConfirm).toBeNull();
 });

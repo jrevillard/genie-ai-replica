@@ -1662,6 +1662,20 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     }
 
     const all = [...suite.payload.positive.map((q) => ({ ...q })), ...suite.payload.negative.map((q) => ({ ...q }))];
+    // 1-8g-x (David: "the UI should show a progress bar for the run"): the
+    // worker reports {phase, done, total} through opts.reportProgress — the
+    // async caller (beginRunSuite) throttles it into the placeholder doc so
+    // the poll renders a REAL bar, not a fake animation. Phase-boundary
+    // reports are awaited; per-item reports are fire-and-forget.
+    const report = async (progress) => {
+      if (!opts.reportProgress) return;
+      try {
+        await opts.reportProgress(progress);
+      } catch (e) {
+        logger.warn('head-suite.run.progress_report_failed', { suite_key: suiteKey, error: e.message });
+      }
+    };
+    await report({ phase: 'routing', done: 0, total: all.length });
     // 1-8g-v: the head legs run 4-WAY concurrent (the probe pool's pattern)
     // — a 200-row suite took ~40-60s SERIAL just for the head legs (live:
     // Indonesia History 100+100 blew the gateway's 60s on its own); the
@@ -1669,6 +1683,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     const results = new Array(all.length);
     const RUN_CONCURRENCY = 4;
     const runQueue = all.map((q, i) => ({ q, i }));
+    let headDone = 0;
     const runWorker = async () => {
       for (;;) {
         const item = runQueue.shift();
@@ -1719,6 +1734,10 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             error: e.message
           };
         }
+        headDone += 1;
+        if (opts.reportProgress) {
+          opts.reportProgress({ phase: 'routing', done: headDone, total: all.length }).catch(() => {});
+        }
       }
     };
     await Promise.all(Array.from({ length: Math.min(RUN_CONCURRENCY, runQueue.length) }, runWorker));
@@ -1734,6 +1753,8 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       const t0 = Date.now();
       const PROBE_CONCURRENCY = 4;
       const queue = all.slice();
+      const probeTotal = new Set(all.map((q) => q.query)).size;
+      await report({ phase: 'corpus', done: 0, total: probeTotal });
       const probeMap = new Map();
       const worker = async () => {
         for (;;) {
@@ -1741,6 +1762,9 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           if (!q) return;
           if (probeMap.has(q.query)) continue; // same text can sit in both arrays
           probeMap.set(q.query, await probeQueryLight(db, graphName, q.query));
+          if (opts.reportProgress) {
+            opts.reportProgress({ phase: 'corpus', done: probeMap.size, total: probeTotal }).catch(() => {});
+          }
         }
       };
       await Promise.all(Array.from({ length: Math.min(PROBE_CONCURRENCY, queue.length) }, worker));
@@ -1911,7 +1935,23 @@ async function beginRunSuite(repoId, suiteKey, opts = {}) {
     positives: Array.isArray(suite.payload && suite.payload.positive) ? suite.payload.positive.length : 0,
     negatives: Array.isArray(suite.payload && suite.payload.negative) ? suite.payload.negative.length : 0
   });
-  const done = runSuite(repoId, suiteKey, { ...opts, runKey, startedAt: placeholder.created_at })
+  // 1-8g-x: the worker's progress reports land in the placeholder doc
+  // (throttled — a 200-probe run would otherwise hammer the DB) so the
+  // poll can render a real bar. Write failures never fail the run.
+  const PROGRESS_WRITE_MIN_MS = 2000;
+  let lastProgressWrite = 0;
+  const reportProgress = async (progress) => {
+    const now = Date.now();
+    if (now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
+    lastProgressWrite = now;
+    await db
+      .collection(HEAD_TEST_RUNS_COLLECTION)
+      .update(runKey, { progress, updated_at: new Date().toISOString() })
+      .catch((e) => {
+        logger.warn('head-suite.run.progress_write_failed', { run_key: runKey, error: e.message });
+      });
+  };
+  const done = runSuite(repoId, suiteKey, { ...opts, runKey, startedAt: placeholder.created_at, reportProgress })
     .then((runDoc) => runDoc)
     .catch(async (e) => {
       // Replace the placeholder with the honest terminal failure. 1-8g-w:
@@ -1956,7 +1996,11 @@ async function getRunSuite(repoId, suiteKey, runKey) {
   const db = await dbService.getConnection();
   await ensureCollection(db);
   if (suiteRunRunning(suiteKey, runKey)) {
-    return { run_key: runKey, suite_key: suiteKey, status: 'running' };
+    // 1-8g-x: the live envelope carries the persisted progress ({phase,
+    // done, total}) so the UI's bar moves; the doc may briefly predate the
+    // first report (ms window between lock-set and placeholder-save).
+    const live = await loadSuiteDoc(db, repoId, runKey).catch(() => null);
+    return { run_key: runKey, suite_key: suiteKey, status: 'running', progress: (live && live.progress) || null };
   }
   const doc = await loadSuiteDoc(db, repoId, runKey); // same collection
   if (doc.repo_id !== repoId || doc.suite_key !== suiteKey) {

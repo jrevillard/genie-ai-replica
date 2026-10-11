@@ -464,6 +464,21 @@
         <DsSpinner v-if="busy === 'run'" size="sm" class="okf-headtest__busy">
           {{ translate('okf.headTest.suites.running', 'Running every suite query…') }}
         </DsSpinner>
+        <!-- 1-8g-x: a REAL progress bar for the run (David: "the UI should
+             show a progress bar for the run"). The server reports
+             {phase, done, total} through the live run envelope, so this is the
+             actual number of queries scored — not an animation. Indeterminate
+             until the first count arrives, so the first seconds are honest
+             rather than a bar stuck at 0%. -->
+        <div v-if="busy === 'run'" class="okf-headtest__run-progress" role="status" aria-live="polite">
+          <DsProgress
+            :value="runProgress && runProgress.total ? runProgress.done : 0"
+            :max="runProgress && runProgress.total ? runProgress.total : 100"
+            :indeterminate="!runProgress || !runProgress.total"
+            size="xs"
+          />
+          <span class="okf-headtest__run-progress-label">{{ runProgressLabel }}</span>
+        </div>
 
         <div v-if="suite" class="okf-headtest__suite">
           <!-- 1-8g: the click-test summary panel — ALL statistics for the
@@ -1263,6 +1278,7 @@ import DsPill from '../../ds/Pill.vue';
 import DsTag from '../../ds/Tag.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
+import DsProgress from '../../ds/Progress.vue';
 
 // The head text is assembled server-side as "Label: v1, v2. …" lines; the
 // panel re-renders each frontmatter field from the STORED frontmatter on
@@ -1277,7 +1293,7 @@ const HEAD_FIELDS = [
 
 export default {
   name: 'OkfHeadTestDialog',
-  components: { DsDialog, DsTabs, DsButton, DsInput, DsSelect, DsPill, DsTag, DsSpinner, DsInfoTip },
+  components: { DsDialog, DsTabs, DsButton, DsInput, DsSelect, DsPill, DsTag, DsSpinner, DsInfoTip, DsProgress },
   mixins: [translateMixin],
   props: {
     visible: { type: Boolean, default: false },
@@ -1293,6 +1309,8 @@ export default {
     return {
       tab: this.initialTab,
       busy: null,
+      // 1-8g-x: live {phase, done, total} for the run progress bar.
+      runProgress: null,
       error: '',
       query: '',
       adversarial: false,
@@ -1343,6 +1361,27 @@ export default {
     };
   },
   computed: {
+    /** 1-8g-x: what the run bar says. The phase comes from the server, so the
+     * label names the actual stage ("scoring routes" / "checking the corpus")
+     * instead of a generic spinner caption. */
+    runProgressLabel() {
+      const p = this.runProgress;
+      if (!p || !p.total) {
+        return this.translate('okf.headTest.run.progressStarting', 'Starting the run…');
+      }
+      const pct = Math.min(100, Math.round((p.done / p.total) * 100));
+      const phase = p.phase
+        ? this.translate(
+            `okf.headTest.run.phase.${p.phase}`,
+            p.phase === 'corpus' ? 'Checking the corpus' : 'Scoring routes'
+          )
+        : '';
+      const base = this.translate('okf.headTest.run.progress', '{done} of {total} queries ({pct}%)')
+        .replace('{done}', String(p.done))
+        .replace('{total}', String(p.total))
+        .replace('{pct}', String(pct));
+      return phase ? `${phase} — ${base}` : base;
+    },
     serving() {
       return !!(this.repo && this.repo.ingested_at);
     },
@@ -2386,6 +2425,8 @@ export default {
     async onRunSuite() {
       if (!this.suite) return;
       this.busy = 'run';
+      // 1-8g-x: never show the previous run's counts while the new one starts.
+      this.runProgress = null;
       this.error = '';
       // 1-8d: tripwire baseline — the run being REPLACED, only when it
       // belongs to the SAME suite (never compare across suites).
@@ -2439,6 +2480,11 @@ export default {
       for (let i = 0; i < attempts; i += 1) {
         const res = await this.$store.dispatch('okf/headSuiteGetRun', { repoId: this.repo.repo_id, suiteKey, runKey });
         const doc = res && res.ok ? res.result : null;
+        // 1-8g-x: keep the LIVE progress while waiting — the run envelope
+        // carries {phase, done, total} (server half of this story), so the bar
+        // reflects queries actually scored rather than a spinner that tells the
+        // user nothing about a 100+100 run that takes minutes.
+        if (doc && doc.progress && doc.progress.total) this.runProgress = doc.progress;
         if (doc && (!doc.status || doc.status === 'failed')) return doc;
         await new Promise((resolve) => setTimeout(resolve, 2500));
       }
@@ -3255,6 +3301,19 @@ export default {
 }
 .okf-headtest__busy {
   align-self: flex-start;
+}
+/* 1-8g-x: the run progress bar. Full width under the spinner so a 100+100 run
+   shows a real, advancing count instead of an unexplained pause. */
+.okf-headtest__run-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-xs) 0;
+}
+.okf-headtest__run-progress-label {
+  color: var(--muted);
+  font-size: var(--text-xs);
 }
 .okf-headtest__error {
   color: var(--danger);

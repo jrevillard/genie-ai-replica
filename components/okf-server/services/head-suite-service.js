@@ -1650,54 +1650,66 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     }
 
     const all = [...suite.payload.positive.map((q) => ({ ...q })), ...suite.payload.negative.map((q) => ({ ...q }))];
-    const results = [];
-    for (const q of all) {
-      try {
-        const r = await headTestService.routingTest(repoId, { query: q.query, include_probes: false }, opts);
-        results.push({
-          query: q.query,
-          kind: q.kind,
-          cls: q.cls || null,
-          source: q.source || 'llm',
-          expected_repo: q.expected_repo || null,
-          head_score: r.under_test.head_score,
-          head_rank: r.under_test.head_rank,
-          forbidden_cosine: r.under_test.forbidden_cosine !== undefined ? r.under_test.forbidden_cosine : null,
-          head_margin: r.under_test.head_margin !== undefined ? r.under_test.head_margin : null,
-          head_claim: r.under_test.head_claim || null,
-          tag_veto: r.under_test.tag_veto || null,
-          max_tag: r.under_test.max_tag || null,
-          max_tag_cosine:
-            r.under_test.max_tag_cosine !== undefined && r.under_test.max_tag_cosine !== null
-              ? r.under_test.max_tag_cosine
-              : null,
-          head_claimed:
-            r.under_test.head_claimed === undefined || r.under_test.head_claimed === null
-              ? null
-              : !!r.under_test.head_claimed,
-          suppress_reason: suppressReason(q, r.under_test),
-          winner: r.verdict.head_routing_winner,
-          winner_name:
-            r.verdict.head_routing_winner === repoId
-              ? r.under_test.name
-              : (r.siblings.find((s) => s.repo_id === r.verdict.head_routing_winner) || {}).name || null,
-          under_test_wins_head: r.verdict.under_test_wins_head,
-          margin: r.verdict.margin,
-          sibling_count: r.siblings.length,
-          top_competitors: r.siblings.slice(0, 3).map((s) => ({ name: s.name, head_score: s.head_score })),
-          error: null
-        });
-      } catch (e) {
-        results.push({
-          query: q.query,
-          kind: q.kind,
-          cls: q.cls || null,
-          source: q.source || 'llm',
-          expected_repo: q.expected_repo || null,
-          error: e.message
-        });
+    // 1-8g-v: the head legs run 4-WAY concurrent (the probe pool's pattern)
+    // — a 200-row suite took ~40-60s SERIAL just for the head legs (live:
+    // Indonesia History 100+100 blew the gateway's 60s on its own); the
+    // pool writes results[i] BY INDEX so order always matches the suite.
+    const results = new Array(all.length);
+    const RUN_CONCURRENCY = 4;
+    const runQueue = all.map((q, i) => ({ q, i }));
+    const runWorker = async () => {
+      for (;;) {
+        const item = runQueue.shift();
+        if (!item) return;
+        const { q, i } = item;
+        try {
+          const r = await headTestService.routingTest(repoId, { query: q.query, include_probes: false }, opts);
+          results[i] = {
+            query: q.query,
+            kind: q.kind,
+            cls: q.cls || null,
+            source: q.source || 'llm',
+            expected_repo: q.expected_repo || null,
+            head_score: r.under_test.head_score,
+            head_rank: r.under_test.head_rank,
+            forbidden_cosine: r.under_test.forbidden_cosine !== undefined ? r.under_test.forbidden_cosine : null,
+            head_margin: r.under_test.head_margin !== undefined ? r.under_test.head_margin : null,
+            head_claim: r.under_test.head_claim || null,
+            tag_veto: r.under_test.tag_veto || null,
+            max_tag: r.under_test.max_tag || null,
+            max_tag_cosine:
+              r.under_test.max_tag_cosine !== undefined && r.under_test.max_tag_cosine !== null
+                ? r.under_test.max_tag_cosine
+                : null,
+            head_claimed:
+              r.under_test.head_claimed === undefined || r.under_test.head_claimed === null
+                ? null
+                : !!r.under_test.head_claimed,
+            suppress_reason: suppressReason(q, r.under_test),
+            winner: r.verdict.head_routing_winner,
+            winner_name:
+              r.verdict.head_routing_winner === repoId
+                ? r.under_test.name
+                : (r.siblings.find((s) => s.repo_id === r.verdict.head_routing_winner) || {}).name || null,
+            under_test_wins_head: r.verdict.under_test_wins_head,
+            margin: r.verdict.margin,
+            sibling_count: r.siblings.length,
+            top_competitors: r.siblings.slice(0, 3).map((s) => ({ name: s.name, head_score: s.head_score })),
+            error: null
+          };
+        } catch (e) {
+          results[i] = {
+            query: q.query,
+            kind: q.kind,
+            cls: q.cls || null,
+            source: q.source || 'llm',
+            expected_repo: q.expected_repo || null,
+            error: e.message
+          };
+        }
       }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(RUN_CONCURRENCY, runQueue.length) }, runWorker));
 
     // 1-8g (David): Run All fills the Corpus column — every row is ALSO
     // probed against the live corpus (embed → top-K → the pipeline's
@@ -1758,7 +1770,9 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     }
 
     const summary = summarizeRun(results);
-    const runKey = `r${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
+    // 1-8g-v: async runs hand the key in (the placeholder doc was saved at
+    // begin); sync callers (tests) let it mint as before.
+    const runKey = opts.runKey || `r${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
     const runDoc = {
       _key: runKey,
       repo_id: repoId,
@@ -1793,6 +1807,100 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     });
     return runDoc;
   });
+}
+
+// ---------- 1-8g-v — ASYNC suite runs (David: "runs like this on a large
+// repo will always take longer than 60 seconds"). Live 2026-10-11: a
+// 100+100 suite on Indonesia History finished server-side at ~70s but the
+// gateway 504'd at 60s TWICE — the results existed, the curator never saw
+// them. The generation pattern (mint key → placeholder doc → detached
+// worker → poll) applied to runs: the placeholder carries status:'running'
+// and the final doc replaces it; a failed worker replaces it with
+// status:'failed' + the error. One run per suite at a time.
+
+const suiteRunInFlight = new Map(); // suite_key -> run_key
+
+function suiteRunRunning(suiteKey, runKey) {
+  return suiteRunInFlight.get(suiteKey) === runKey;
+}
+
+async function beginRunSuite(repoId, suiteKey, opts = {}) {
+  const db = await dbService.getConnection();
+  await ensureCollection(db);
+  // validate the suite BEFORE minting (sync 404/409 — no phantom keys)
+  const suite = await loadSuiteDoc(db, repoId, suiteKey);
+  if (suite.repo_id !== repoId) {
+    const err = new Error(`suite ${suiteKey} not found for repo ${repoId}`);
+    err.code = 'SUITE_NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
+  const inflight = suiteRunInFlight.get(suiteKey);
+  if (inflight) {
+    const err = new Error('a run is already executing for this suite');
+    err.code = 'RUN_IN_FLIGHT';
+    err.status = 409;
+    err.run_key = inflight;
+    throw err;
+  }
+  const runKey = `r${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
+  suiteRunInFlight.set(suiteKey, runKey);
+  const placeholder = {
+    _key: runKey,
+    repo_id: repoId,
+    kind: 'run',
+    status: 'running',
+    suite_key: suiteKey,
+    created_at: new Date().toISOString(),
+    created_by: (opts.actor && opts.actor.user_id) || 'system',
+    payload: {}
+  };
+  await db.collection(HEAD_TEST_RUNS_COLLECTION).save(placeholder);
+  const done = runSuite(repoId, suiteKey, { ...opts, runKey })
+    .then((runDoc) => runDoc)
+    .catch(async (e) => {
+      // replace the placeholder with the honest terminal failure
+      const failDoc = {
+        ...placeholder,
+        status: 'failed',
+        created_at: new Date().toISOString(),
+        error: { code: e.code || 'RUN_FAILED', message: e.message }
+      };
+      await db
+        .collection(HEAD_TEST_RUNS_COLLECTION)
+        .replace(runKey, failDoc)
+        .catch(() => {});
+      throw e;
+    })
+    .finally(() => suiteRunInFlight.delete(suiteKey));
+  done.catch((e) =>
+    logger.error('head-suite.run.async_failed', {
+      repo_id: repoId,
+      suite_key: suiteKey,
+      run_key: runKey,
+      error: e.message
+    })
+  );
+  return { run_key: runKey, done };
+}
+
+async function getRunSuite(repoId, suiteKey, runKey) {
+  const db = await dbService.getConnection();
+  await ensureCollection(db);
+  if (suiteRunRunning(suiteKey, runKey)) {
+    return { run_key: runKey, suite_key: suiteKey, status: 'running' };
+  }
+  const doc = await loadSuiteDoc(db, repoId, runKey); // same collection
+  if (doc.repo_id !== repoId || doc.suite_key !== suiteKey) {
+    const err = new Error(`run ${runKey} not found for suite ${suiteKey}`);
+    err.code = 'RUN_NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
+  if (doc.status === 'failed') {
+    return { run_key: runKey, suite_key: suiteKey, status: 'failed', error: doc.error || null };
+  }
+  return doc;
 }
 
 /**
@@ -2490,6 +2598,9 @@ module.exports = {
   addQueries,
   getSuite,
   updateSuiteRows,
+  beginRunSuite,
+  getRunSuite,
+  suiteRunRunning,
   renameSuite,
   deleteSuite,
   probeSuiteQuery,

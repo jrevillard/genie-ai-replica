@@ -1597,14 +1597,39 @@ async function probeTestSuiteQuery(req, res, next) {
 async function runTestSuite(req, res, next) {
   try {
     const headSuiteService = require('../services/head-suite-service');
-    const run = await headSuiteService.runSuite(req.params.repo_id, req.params.suite_key, {
+    // 1-8g-v (David: "runs like this on a large repo will always take
+    // longer than 60 seconds"): the run is ASYNC — 202 + poll. A 100+100
+    // suite finished server-side at ~70s but the gateway 504'd twice; the
+    // results existed and the curator never saw them. The placeholder run
+    // doc carries status:'running'; the poll endpoint answers running /
+    // failed / the full doc.
+    const { run_key, done } = await headSuiteService.beginRunSuite(req.params.repo_id, req.params.suite_key, {
       authz: authzForService(req),
       actor: actorFrom(req),
       // 1-8g: the corpus probe leg defaults ON (Run All fills the Corpus
       // column); scripts can opt out with {"probe": false}.
       probe: !(req.body && req.body.probe === false)
     });
-    res.status(200).json(run);
+    done.catch(() => {}); // the service logs + records the failure doc
+    res.status(202).json({ run_key, status: 'running' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 1-8g-v — GET /repos/:repo_id/routing-testsuite/:suite_key/runs/:run_key.
+ * The async run's poll: {status:'running'} keep-waiting, {status:'failed',
+ * error}, or the full run doc. Read scope. Also the UI's load-one-run path
+ * (a timed-out run's results were invisible even though persisted).
+ */
+async function getTestSuiteRun(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const doc = await headSuiteService.getRunSuite(req.params.repo_id, req.params.suite_key, req.params.run_key, {
+      authz: authzForService(req)
+    });
+    res.status(200).json(doc);
   } catch (err) {
     next(err);
   }
@@ -1662,6 +1687,7 @@ module.exports = {
   generateTestSuite,
   addTestSuiteQueries,
   getTestSuite,
+  getTestSuiteRun,
   updateTestSuiteRows,
   renameTestSuite,
   deleteTestSuite,

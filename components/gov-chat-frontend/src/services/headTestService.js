@@ -105,10 +105,23 @@ const headTestService = {
     return res && res.data ? res.data : null;
   },
 
-  /** Execute every suite query, aggregate pass rates / margins / steals. */
+  /** Execute every suite query, aggregate pass rates / margins / steals.
+   * 1-8g-v: the run is ASYNC — 202 {run_key, status:'running'}; the dialog
+   * polls getRun until the doc lands (a 100+100 suite outlives the
+   * gateway's 60s; live 2026-10-11 the results 504'd twice and were never
+   * shown even though the server finished them). */
   async runSuite(repoId, suiteKey) {
     const res = await httpService.post(
       `/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}/run`
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  /** 1-8g-v — poll/load ONE run: {status:'running'} keep-waiting,
+   * {status:'failed', error}, or the full run doc. */
+  async getRun(repoId, suiteKey, runKey) {
+    const res = await httpService.get(
+      `/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}/runs/${encodeURIComponent(runKey)}`
     );
     return res && res.data ? res.data : null;
   },

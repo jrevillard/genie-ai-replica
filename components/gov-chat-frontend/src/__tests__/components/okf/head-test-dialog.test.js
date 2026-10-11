@@ -638,6 +638,45 @@ it('1-8c: batch advice — Explain failures renders add-all chips and saves them
   expect(dispatch).toHaveBeenCalledWith('okf/headSuiteRun', { repoId: 'r-1', suiteKey: 's1' });
 });
 
+it('1-8g-v: an async run (202 + poll) adopts the run doc when the poll lands it', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = { suite_key: 's1', payload: { positive: [{ query: 'q1', kind: 'positive' }], negative: [] } };
+  dispatch.mockImplementation((action) => {
+    if (action === 'okf/headSuiteRun')
+      return Promise.resolve({ ok: true, result: { run_key: 'r9', status: 'running' } });
+    if (action === 'okf/headSuiteGetRun')
+      return Promise.resolve({
+        ok: true,
+        result: {
+          _key: 'r9',
+          suite_key: 's1',
+          payload: {
+            summary: { pass_rate: 1, positive_passed: 1, positive_total: 1, negative_passed: 0, negative_total: 0, negative_evaluatable: 0, avg_margin: null, steals: [] },
+            results: [
+              {
+                query: 'q1',
+                kind: 'positive',
+                head_claimed: true,
+                sibling_count: 0,
+                under_test_wins_head: true,
+                probe: { verdict: 'answerable', top_score: 0.9 }
+              }
+            ]
+          }
+        }
+      });
+    if (action === 'okf/headSuiteListRuns') return Promise.resolve({ ok: true, runs: [] });
+    return Promise.resolve({ ok: true });
+  });
+  await w.vm.onRunSuite();
+  expect(w.vm.lastRunSummary).toMatchObject({ pass_rate: 1 });
+  expect(w.vm.lastRunSummaryRows).toHaveLength(1);
+  // the corpus verdict merged into the suite row
+  expect(w.vm.suite.payload.positive[0].lastProbe).toMatchObject({ verdict: 'answerable' });
+  expect(w.vm.busy).toBeNull();
+});
+
 it('1-8c: the claim-side teach loop is hidden in readOnly (wizard writes nothing)', async () => {
   const w = mountDialog({ initialTab: 'test', readOnly: true });
   await w.vm.$nextTick();

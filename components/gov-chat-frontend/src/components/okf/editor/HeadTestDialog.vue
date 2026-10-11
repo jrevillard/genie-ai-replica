@@ -2362,6 +2362,10 @@ export default {
       this.tripwire = null;
       this.lastRunSuiteKey = this.suite ? this.suite.suite_key : null;
       this.refreshRuns();
+      // 1-8g-v: a REgenerated suite is new (no runs yet), but the async
+      // generation may have raced older runs — adopting the latest keeps
+      // the columns honest either way (no-op when none exist).
+      await this.loadLatestRunForSuite(this.suite.suite_key);
     },
     /** 1-8f2: poll GET /:suite_key until the async generation lands the
      * doc (2.5s interval, ~4min budget), or give up with null. */
@@ -2393,15 +2397,61 @@ export default {
         repoId: this.repo.repo_id,
         suiteKey: this.suite.suite_key
       });
-      this.busy = null;
       if (!res.ok) {
+        this.busy = null;
         this.error = res.message || this.translate('okf.headTest.error.run', 'Suite run failed');
         return;
       }
-      this.lastRunSummary = res.result.payload.summary;
-      this.lastRunSuiteKey = this.suite.suite_key;
+      // 1-8g-v: the run is ASYNC (202 + poll) — large suites outlive the
+      // gateway (live: a 100+100 run finished server-side at ~70s but 504'd
+      // twice; the results existed and were never shown).
+      const started = res.result;
+      let runDoc = null;
+      if (started && started.status === 'running' && started.run_key) {
+        runDoc = await this.pollForRun(this.suite.suite_key, started.run_key);
+        if (runDoc && runDoc.status === 'failed') {
+          this.busy = null;
+          this.error =
+            (runDoc.error && runDoc.error.message) || this.translate('okf.headTest.error.run', 'Suite run failed');
+          this.refreshRuns();
+          return;
+        }
+      } else if (started && started.payload) {
+        runDoc = started; // legacy synchronous response
+      }
+      this.busy = null;
+      if (!runDoc || !runDoc.payload || !runDoc.payload.summary) {
+        this.error = this.translate(
+          'okf.headTest.error.runTimeout',
+          'The run is taking unusually long — it keeps going server-side and will appear in the runs history; reopen this suite in a minute.'
+        );
+        this.refreshRuns();
+        return;
+      }
+      this.adoptRunDoc(runDoc);
+      this.checkTripwire(baseline, this.lastRunSummary);
+      this.refreshRuns();
+    },
+    /** 1-8g-v: poll the run doc (2.5s interval, ~6min budget) until it
+     * leaves 'running'; returns the envelope (running/failed/full doc). */
+    async pollForRun(suiteKey, runKey) {
+      const attempts = 144; // 144 × 2.5s ≈ 6 min
+      for (let i = 0; i < attempts; i += 1) {
+        const res = await this.$store.dispatch('okf/headSuiteGetRun', { repoId: this.repo.repo_id, suiteKey, runKey });
+        const doc = res && res.ok ? res.result : null;
+        if (doc && (!doc.status || doc.status === 'failed')) return doc;
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
+      return null;
+    },
+    /** 1-8g-v: adopt a completed run doc — the summary line, the per-row
+     * OUTCOME column, and the corpus verdicts merged into the suite rows.
+     * Shared by the async run and the load-latest-run path. */
+    adoptRunDoc(runDoc) {
+      this.lastRunSummary = runDoc.payload.summary;
+      this.lastRunSuiteKey = runDoc.suite_key || (this.suite && this.suite.suite_key) || null;
       // Map the summary onto the suite's queries for the outcome column.
-      const results = (res.result.payload && res.result.payload.results) || [];
+      const results = runDoc.payload.results || [];
       this.lastRunSummaryRows = results.map((r, i) => ({
         key: r.query + ':' + i,
         query: r.query,
@@ -2423,8 +2473,29 @@ export default {
         }
       }
       this.batchAdvice = null; // a fresh run makes the previous advice stale
-      this.checkTripwire(baseline, this.lastRunSummary);
-      this.refreshRuns();
+    },
+    /** 1-8g-v: after loading/generating a suite, ADOPT its latest completed
+     * run — the timed-out runs' results were persisted but forever
+     * invisible (live 2026-10-11: the 92.86% Indonesia run existed only in
+     * the DB). The Outcome/Corpus columns fill immediately. */
+    async loadLatestRunForSuite(suiteKey) {
+      if (!suiteKey) return;
+      const list = await this.$store.dispatch('okf/headSuiteListRuns', {
+        repoId: this.repo.repo_id,
+        kind: 'run',
+        limit: 50
+      });
+      if (!list.ok) return;
+      const latest = (list.runs || []).find((r) => r.suite_key === suiteKey && r.summary);
+      if (!latest) return;
+      const res = await this.$store.dispatch('okf/headSuiteGetRun', {
+        repoId: this.repo.repo_id,
+        suiteKey,
+        runKey: latest._key
+      });
+      if (res.ok && res.result && res.result.payload && res.result.payload.summary && this.suite) {
+        this.adoptRunDoc(res.result);
+      }
     },
     /** 1-8c: batch advice for the latest run of the current suite — every
      * failing negative, ONE LLM call (the anti-treadmill affordance). */
@@ -2659,6 +2730,10 @@ export default {
       this.advisorExtraRemove = [];
       this.advisorNarrowPairs = [];
       this.lastRunSuiteKey = this.suite ? this.suite.suite_key : null;
+      // 1-8g-v: loading a suite ADOPTS its latest completed run — a run
+      // that timed out at the gateway (or predates the session) still
+      // fills the Outcome/Corpus columns instead of reading as dashes.
+      await this.loadLatestRunForSuite(suiteKey);
     },
     /** 1-8f: flip a row's kind (positive ↔ negative) — THE mislabel fix.
      * The server searches both arrays (a mislabeled row sits in the wrong

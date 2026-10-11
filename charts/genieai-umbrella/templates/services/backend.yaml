@@ -55,7 +55,10 @@ spec:
     # Same-namespace pods on the app port. AuthN/AuthZ is enforced at the
     # edge (Envoy Gateway); the gateway's data-plane pods live in their
     # own namespace and reach backend via a routed path rather than a
-    # direct pod-to-pod peer in this namespace.
+    # direct pod-to-pod peer in this namespace. The `podSelector: {}`
+    # below is a placeholder for the gateway-tier selector (Plan 6/ingress
+    # will tighten it to a specific peer label once the edge gateway's
+    # data-plane label shape is known).
     - from:
         - podSelector: {}
       ports:
@@ -72,7 +75,10 @@ spec:
           port: 53
     # Data tier: ArangoDB (8529), CNPG keycloak-db (5432), Keycloak (8080),
     # Redis cache (6379). Port-scoped any-destination pending verified
-    # peer labels — see header note above.
+    # peer labels — see header note above. Operators tightening to
+    # specific peers should override this rule via the pluggable
+    # `networkPolicy.peers` surface (Plan 6) rather than editing the
+    # rendered NetworkPolicy in place.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

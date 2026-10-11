@@ -220,6 +220,23 @@ ARANGO_TRAVERSAL_QUERY = os.getenv("ARANGO_TRAVERSAL_QUERY")
 ARANGO_TRAVERSAL_CONCURRENT_BATCHES = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES", 1))
 ARANGO_FILTER_STRATEGY = os.getenv("ARANGO_FILTER_STRATEGY", "OR")  # for label filtering
 
+# 1-8g-l (2026-10-11, live incident: Indonesia History — 144k chunks, 633k
+# entities, 1,046,217 LINKS_TO edges — starved EVERY chat answer 9/9: the
+# depth-1 traversal scores a 1024-dim cosine per visited edge, cannot finish
+# inside the 8s leg budget, and the abandoned leg discarded its own already-
+# fused 20 on-point documents → fused=0 → the LLM abstained ungrounded).
+# MAX_LINKS: skip the traversal entirely above this many <GRAPH>_LINKS_TO
+# edges — the fused vector results stand alone (0 = legacy unbounded).
+# Live calibration: indonesia 1,046,217 (skip), gov-uk 80,535 / ncd 8,546 /
+# slaughterhouse 1,623 (keep) — a 300k default separates broken from healthy
+# with >3x margin on both sides.
+ARANGO_TRAVERSAL_MAX_LINKS = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_LINKS", "300000"))
+# Per-seed-entity edge cap interpolated into the traversal AQL — bounds the
+# worst-case cosine evaluations when a hub entity carries thousands of
+# LINKS_TO edges (0 = legacy unbounded). Generous: healthy graphs never
+# approach it; pathological hub nodes no longer dominate the leg budget.
+ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE", "2000"))
+
 # Hybrid BM25 + RRF Retrieval (Contextual Retrieval Part B)
 # Opt-in lexical (BM25) channel over <GRAPH>_SOURCE.text, fused with the dense
 # results via weighted Reciprocal Rank Fusion. OFF = true no-op (dense-only).

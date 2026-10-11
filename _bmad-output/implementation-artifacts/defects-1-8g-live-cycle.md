@@ -422,3 +422,61 @@ the moment the fix deploys.
 
 **Tests:** +3 (100-positive suite editable; over-cap shrinks allowed;
 growth past cap still 409). 64/64; eslint + prettier clean.
+
+## 1-8g-s — the advisor had NO row lever and never read the probe verdicts: 8 near-miss fails, zero recommendations (FIXED, same MR as t/u)
+
+David, 2026-10-11 ~03:13: "3 answerable fails... why is the advisor not
+recommending any changes in tags?" Logs: `explain_failures.done failing:8
+suggested:0`, `recommend.done add=[] remove=[] narrow_options=0 score
+243->243`.
+
+**Why silence was the only possible answer:** (1) the add-LLM correctly
+refuses near-miss subjects (they ARE the repo's own vocabulary — the prompt
+forbids tags excluding own topics); (2) removals are loop-written-tags-only
+(anti-treadmill); (3) `byText` DROPPED the probe verdict the 1-8g run rows
+carry — the corpus evidence David was looking at never reached the advisor,
+and the advisor had no ROW lever anyway.
+
+**Fix (recommendTagSet + advisor UI):** the probe verdict rides into the
+advisor; failing negatives with probe answerable/weak become
+`row_actions: [{query, action:'flip', verdict, top_score, reason}]` — a
+positive-in-disguise recommendation with evidence; the UI renders them with
+one-click Flip (through the normal row endpoint, 1-8g-p semantics).
+Failing negatives WITHOUT grounding count as `ungrounded_negative_fails`
+and the note says so honestly — never silence. Tests: +2.
+
+## 1-8g-t — suite deletion is irreversible and unconfirmed (FIXED, same MR)
+
+David: "when a saved suite is being deleted, the deletion must be confirmed
+with a dialog." Also investigated "I deleted a bunch of saved suites and
+they were not deleted": ALL 15 deletes he clicked SUCCEEDED (server logs
+03:26:30-03:27:06, keys absent from the DB) — what remained was 13 LEGACY
+suites from Oct 8-9 with `name: null` (pre-dating the 1-8g naming fix),
+rendering as blank-name rows that made the list look undeleted. Not a
+delete bug — a UX gap + legacy clutter.
+
+**Fix:** the × only ARMS a DsDialog confirmation (suite key + name +
+irreversible-consequence text; Cancel / Delete suite); the delete fires
+solely from Confirm. i18n ×14 (deleteConfirm* + unnamedFallback). Test
+rewritten to arm→cancel→confirm.
+
+## 1-8g-u — "suite <> not found for repo <>": a tag-less repo's async generation died silently and the poll 404'd until timeout (FIXED, same MR)
+
+David: kicked off suite generation on Indonesia History (ingested, NO
+frontmatter) → every 3s poll logged SUITE_NOT_FOUND (03:38:32-03:38:41)
+while the real error (`head-suite.generate.async_failed: repo has no
+stored frontmatter`) only reached the logs. `beginSuiteGeneration` minted
+the key and kicked the worker detached; the NO_FRONTMATTER guard killed it
+in its first millisecond; `.finally()` cleared the in-flight marker — the
+key was neither in-flight nor saved. The 202-and-poll design assumed
+failures take as long as successes.
+
+**Fix:** (1) begin validates preconditions BEFORE minting (now async; the
+controller awaits) — a tag-less repo gets an immediate 409 NO_FRONTMATTER
+and the UI says "create tags in the Frontmatter panel (or use Suggest
+tags), then generate" — David's prescription verbatim; (2) async failures
+are recorded per repo — the poll's key answers
+`{status:'failed', error:{code,message}}` terminally instead of 404; the
+next begin clears it. i18n error.noFrontmatter ×14. Tests: +3 (tag-less
+rejected pre-mint with no in-flight slot; failure recorded + terminal
+envelope + cleared on retry; legacy begins updated to the async signature).

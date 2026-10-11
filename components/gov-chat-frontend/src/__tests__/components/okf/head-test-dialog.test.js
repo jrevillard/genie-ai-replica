@@ -1291,7 +1291,7 @@ it('1-8g: the corpus probe affordances gate on an ingested corpus (the live 409)
   expect(btn.disabled).toBe(true);
 });
 
-it('1-8g: onDeleteSuite removes the suite from the list and clears a loaded copy', async () => {
+it('1-8g-t: suite deletion requires the confirm dialog — cancel keeps, confirm deletes', async () => {
   const w = mountDialog({ initialTab: 'suites' });
   await w.vm.$nextTick();
   dispatch.mockImplementation((action) => {
@@ -1301,9 +1301,21 @@ it('1-8g: onDeleteSuite removes the suite from the list and clears a loaded copy
   w.vm.savedSuites = [{ _key: 's1' }, { _key: 's2' }];
   w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
   w.vm.lastRunSummary = { pass_rate: 0.5 };
+  // the × only ARMS the dialog — nothing is deleted yet
   await w.vm.onDeleteSuite(w.vm.savedSuites[0]);
+  expect(w.vm.deleteConfirm).toMatchObject({ _key: 's1' });
+  expect(w.vm.savedSuites.map((s) => s._key)).toEqual(['s1', 's2']);
+  expect(dispatch).not.toHaveBeenCalledWith('okf/headSuiteDelete', expect.anything());
+  // cancel closes the dialog, keeps everything
+  await w.vm.onDeleteSuiteConfirm('cancel');
+  expect(w.vm.deleteConfirm).toBeNull();
+  expect(w.vm.savedSuites.map((s) => s._key)).toEqual(['s1', 's2']);
+  // confirm deletes: the row leaves the list, the loaded copy clears
+  await w.vm.onDeleteSuite(w.vm.savedSuites[0]);
+  await w.vm.onDeleteSuiteConfirm('confirm');
   expect(w.vm.savedSuites.map((s) => s._key)).toEqual(['s2']);
   expect(w.vm.suite).toBeNull();
   expect(w.vm.lastRunSummary).toBeNull();
   expect(w.vm.busy).toBeNull();
+  expect(w.vm.deleteConfirm).toBeNull();
 });

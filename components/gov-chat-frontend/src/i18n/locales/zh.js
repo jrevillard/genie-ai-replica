@@ -511,21 +511,19 @@ export default {
       retractPartialFailure: '已撤回 {successCount}/{count} 个文件。失败：{detail}',
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
-      confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
+      confirmDeleteSelected: 'Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.',
+      deleteQueuedSuccess: '{\'{\'}count{\'}\'} file(s) deleted.',
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
-      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
-      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
+      deletePartialFailure: '{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}',
+      deleteAllFailed: 'All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}',
+      deleteRefuseReason: '{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.',
       retractAllFailed: '全部 {count} 个文件撤回失败：{detail}',
       uploadSuccessMultiple: '{count} 个文件上传成功。',
       linkSubmitSuccess: '成功爬取并保存 "{fileName}"。',
       actionSuccess: '对文件 {fileId} 的操作 "{action}" 成功。',
       metadataUpdateSuccess: '文件 {fileId} 的元数据已更新。',
-      deletePartialNotice:
-        "{'{'{'}'}blocked{'}'} 个所选文件无法删除（{'{'{'}'}reason{'}'}）——只会删除其余的 {'{'{'}'}n{'}'} 个。",
-      confirmDeleteSkipped: "{'{'{'}'}count{'}'} 个已摄取/摄取中的文件将被跳过——请先撤回它们才能删除。"
+      deletePartialNotice: '{\'{\'{\'}\'}blocked{\'}\'} 个所选文件无法删除（{\'{\'{\'}\'}reason{\'}\'}）——只会删除其余的 {\'{\'{\'}\'}n{\'}\'} 个。',
+      confirmDeleteSkipped: '{\'{\'{\'}\'}count{\'}\'} 个已摄取/摄取中的文件将被跳过——请先撤回它们才能删除。'
     },
     queryInspector: {
       search: '搜索',
@@ -740,7 +738,7 @@ export default {
     chatTitle: '聊天标题',
     chatTitlePlaceholder: '为此聊天输入标题',
     deleteFolder: '删除文件夹',
-    deleteFolderConfirm: "您确定要删除 '{name}' 文件夹吗？",
+    deleteFolderConfirm: '您确定要删除 \'{name}\' 文件夹吗？',
     chatsMoveWarning: '此文件夹中的所有聊天将移动到默认文件夹。',
     weatherTitle: '天气预报',
     weatherLoading: '正在加载天气数据...',
@@ -1207,10 +1205,8 @@ export default {
     noMatchingCountries: '未找到匹配的国家',
     noMatchingDisciplines: '未找到匹配的学科',
     noMatchingDegrees: '未找到匹配的学位',
-    educationOptions:
-      '会计,航空工程,农业科学,人类学,建筑,艺术史,人工智能,天文学,天体物理学,生物化学,生物医学工程,生物技术,工商管理,化学工程,化学,土木工程,通信,计算机工程,计算机科学,建筑管理,刑事司法,网络安全,数据科学,牙科,经济学,教育,电气工程,小学教育,英国文学,环境工程,环境科学,时尚设计,电影研究,金融,美术,食品科学,法医学,游戏设计,地理,地质学,平面设计,卫生管理,历史,酒店管理,人力资源,工业设计,工业工程,信息系统,信息技术,室内设计,国际商务,国际关系,新闻学,法律,图书馆学,语言学,管理,营销,材料科学,数学,机械工程,媒体研究,医学,气象学,微生物学,音乐,纳米技术,护理,营养,职业治疗,海洋学,石油工程,药学,哲学,摄影,体育教育,物理治疗,物理,政治学,心理学,公共管理,公共卫生,公共关系,机器人,中学教育,社会工作,社会学,软件工程,特殊教育,体育管理,统计学,系统工程,戏剧艺术,旅游,城市规划,兽医学,网页开发,野生生物学,动物学',
-    degreeOptions:
-      '副学士学位,文学学士 (BA),理学学士 (BS),工程学学士 (BEng),工商管理学士 (BBA),美术学士 (BFA),教育学学士 (BEd),医学学士 (MBBS),法学学士 (LLB),文学硕士 (MA),理学硕士 (MS),工商管理硕士 (MBA),工程学硕士 (MEng),美术硕士 (MFA),教育学硕士 (MEd),法学硕士 (LLM),公共卫生硕士 (MPH),哲学博士 (PhD),医学博士 (MD),教育博士 (EdD),工商管理博士 (DBA),法学博士 (JD),专业文凭,技术文凭,职业证书,研究生证书,研究生文凭,博士后',
+    educationOptions: '会计,航空工程,农业科学,人类学,建筑,艺术史,人工智能,天文学,天体物理学,生物化学,生物医学工程,生物技术,工商管理,化学工程,化学,土木工程,通信,计算机工程,计算机科学,建筑管理,刑事司法,网络安全,数据科学,牙科,经济学,教育,电气工程,小学教育,英国文学,环境工程,环境科学,时尚设计,电影研究,金融,美术,食品科学,法医学,游戏设计,地理,地质学,平面设计,卫生管理,历史,酒店管理,人力资源,工业设计,工业工程,信息系统,信息技术,室内设计,国际商务,国际关系,新闻学,法律,图书馆学,语言学,管理,营销,材料科学,数学,机械工程,媒体研究,医学,气象学,微生物学,音乐,纳米技术,护理,营养,职业治疗,海洋学,石油工程,药学,哲学,摄影,体育教育,物理治疗,物理,政治学,心理学,公共管理,公共卫生,公共关系,机器人,中学教育,社会工作,社会学,软件工程,特殊教育,体育管理,统计学,系统工程,戏剧艺术,旅游,城市规划,兽医学,网页开发,野生生物学,动物学',
+    degreeOptions: '副学士学位,文学学士 (BA),理学学士 (BS),工程学学士 (BEng),工商管理学士 (BBA),美术学士 (BFA),教育学学士 (BEd),医学学士 (MBBS),法学学士 (LLB),文学硕士 (MA),理学硕士 (MS),工商管理硕士 (MBA),工程学硕士 (MEng),美术硕士 (MFA),教育学硕士 (MEd),法学硕士 (LLM),公共卫生硕士 (MPH),哲学博士 (PhD),医学博士 (MD),教育博士 (EdD),工商管理博士 (DBA),法学博士 (JD),专业文凭,技术文凭,职业证书,研究生证书,研究生文凭,博士后',
     aria: {
       tabList: '资料表单部分',
       nextButton: '转到下一节',
@@ -1272,24 +1268,15 @@ export default {
     removeItem: '移除'
   },
   quickhelp: {
-    applyForIDPrompt:
-      '请扮演一位热心助人的肯尼亚民事登记专家。说明申领国民身份证（Maisha Namba）或补办遗失身份证的步骤。重点：提供一份清晰的必备文件清单（例如：出生证明、父母身份证复印件），并建议用户前往就近的 Huduma Centre 或 Registrar of Persons 办事处办理。规则：始终将本应用称为“Genie AI”。',
-    payTaxesPrompt:
-      '请扮演一位 KRA（肯尼亚税务局）指引顾问。解释报税、申请 KRA PIN 码或在 iTax 门户重置密码的具体步骤。重点：提醒用户 6 月 30 日为年度个税申报截止日期，并指引其在无应税收入时如何按规定完成零申报（Nil returns）。规则：始终将本应用称为“Genie AI”。',
-    startBusinessPrompt:
-      '请扮演一位精通 eCitizen 服务的商业顾问。引导用户在肯尼亚办理企业字号核准与公司注册登记。重点：说明当前核名与企业登记的官方规费，并引导用户前往 eCitizen 官方门户提交办结申请。规则：始终将本应用称为“Genie AI”。',
-    findHealthcarePrompt:
-      '请扮演一位医疗卫生服务引导员。提供有关从 NHIF 向 SHIF（社会健康保险基金）过渡的信息以及登记流程。重点：分享用于注册的官方 USSD 代码（如 *263#）或官方网站链接，并阐述全民公共医疗保障的各项权益。规则：始终将本应用称为“Genie AI”。',
-    educationServicesPrompt:
-      '请扮演一位教育咨询师。讨论 CBC 课程体系、NEMIS 注册或通过 KUCCPS 进行的高校录取派位事宜。重点：说明家长在全国考试成绩放榜时，如何通过短信（SMS）或 KNEC 门户网站进行查询。规则：始终将本应用称为“Genie AI”。',
-    transportLicensesPrompt:
-      '请扮演一位 NTSA（国家运输安全局）业务指引顾问。解释驾驶证期满换发、机动车年检或 TIMS 账户管理的办理流程。重点：指导用户如何登录 eCitizen NTSA 门户在线申请电子驾照（Smart DL）或预约车辆检验。规则：始终将本应用称为“Genie AI”。',
-    housingProgramsPrompt:
-      '请扮演一位住房保障计划顾问。解释经济适用房计划（Boma Yangu）的申请流程及自愿缴费机制。重点：引导用户访问 Boma Yangu 门户网站以查阅房产项目，并说明房源配租配售的资格准入标准。规则：始终将本应用称为“Genie AI”。',
-    findJobsPrompt:
-      '请扮演一位公共服务职业指导顾问。指导用户如何建立个人档案，并通过公共服务委员会（PSC）门户网站申请空缺职位。重点：提醒用户备齐学历与资质证明，并定期查看 PSC 官网或当地主流日报上的 MyGov 公告。规则：始终将本应用称为“Genie AI”。',
-    justChatPrompt:
-      '请扮演一位亲切随和的本地向导伙伴。言语礼貌、乐于助人，且通晓肯尼亚本土文化及市井日常生活。重点：提醒用户，虽然您可以畅聊任何话题，但您的核心专长在于协助他们轻松办理各项肯尼亚政务服务，例如**身份证**、**税务**以及**企业工商登记**。规则：始终将本应用称为“Genie AI”。'
+    applyForIDPrompt: '请扮演一位热心助人的肯尼亚民事登记专家。说明申领国民身份证（Maisha Namba）或补办遗失身份证的步骤。重点：提供一份清晰的必备文件清单（例如：出生证明、父母身份证复印件），并建议用户前往就近的 Huduma Centre 或 Registrar of Persons 办事处办理。规则：始终将本应用称为“Genie AI”。',
+    payTaxesPrompt: '请扮演一位 KRA（肯尼亚税务局）指引顾问。解释报税、申请 KRA PIN 码或在 iTax 门户重置密码的具体步骤。重点：提醒用户 6 月 30 日为年度个税申报截止日期，并指引其在无应税收入时如何按规定完成零申报（Nil returns）。规则：始终将本应用称为“Genie AI”。',
+    startBusinessPrompt: '请扮演一位精通 eCitizen 服务的商业顾问。引导用户在肯尼亚办理企业字号核准与公司注册登记。重点：说明当前核名与企业登记的官方规费，并引导用户前往 eCitizen 官方门户提交办结申请。规则：始终将本应用称为“Genie AI”。',
+    findHealthcarePrompt: '请扮演一位医疗卫生服务引导员。提供有关从 NHIF 向 SHIF（社会健康保险基金）过渡的信息以及登记流程。重点：分享用于注册的官方 USSD 代码（如 *263#）或官方网站链接，并阐述全民公共医疗保障的各项权益。规则：始终将本应用称为“Genie AI”。',
+    educationServicesPrompt: '请扮演一位教育咨询师。讨论 CBC 课程体系、NEMIS 注册或通过 KUCCPS 进行的高校录取派位事宜。重点：说明家长在全国考试成绩放榜时，如何通过短信（SMS）或 KNEC 门户网站进行查询。规则：始终将本应用称为“Genie AI”。',
+    transportLicensesPrompt: '请扮演一位 NTSA（国家运输安全局）业务指引顾问。解释驾驶证期满换发、机动车年检或 TIMS 账户管理的办理流程。重点：指导用户如何登录 eCitizen NTSA 门户在线申请电子驾照（Smart DL）或预约车辆检验。规则：始终将本应用称为“Genie AI”。',
+    housingProgramsPrompt: '请扮演一位住房保障计划顾问。解释经济适用房计划（Boma Yangu）的申请流程及自愿缴费机制。重点：引导用户访问 Boma Yangu 门户网站以查阅房产项目，并说明房源配租配售的资格准入标准。规则：始终将本应用称为“Genie AI”。',
+    findJobsPrompt: '请扮演一位公共服务职业指导顾问。指导用户如何建立个人档案，并通过公共服务委员会（PSC）门户网站申请空缺职位。重点：提醒用户备齐学历与资质证明，并定期查看 PSC 官网或当地主流日报上的 MyGov 公告。规则：始终将本应用称为“Genie AI”。',
+    justChatPrompt: '请扮演一位亲切随和的本地向导伙伴。言语礼貌、乐于助人，且通晓肯尼亚本土文化及市井日常生活。重点：提醒用户，虽然您可以畅聊任何话题，但您的核心专长在于协助他们轻松办理各项肯尼亚政务服务，例如**身份证**、**税务**以及**企业工商登记**。规则：始终将本应用称为“Genie AI”。'
   },
   common: {
     cancel: '取消',
@@ -1357,11 +1344,9 @@ export default {
       details: '详情',
       ingestionLog: '提取日志',
       detailsHint: '该文件的元数据：名称、作者以及 AI 用于路由问题的知识层级标签。执行 ingest 至少需要一个标签。',
-      dashboardHint:
-        '该文件网站抓取状态的实时视图：速率、队列、错误与进度。抓取成功后，下方的页脚会将其转换为 OKF 知识库。',
+      dashboardHint: '该文件网站抓取状态的实时视图：速率、队列、错误与进度。抓取成功后，下方的页脚会将其转换为 OKF 知识库。',
       crawlLogHint: '网站抓取的分页日志：哪些 URL 已成功抓取、重定向或失败。在抓取运行时实时写入。',
-      ingestionLogHint:
-        '为 AI 回答准备该文件的分阶段进度：分块（chunking）、标注、向量化（embedding）与索引编制。此处的错误会精确指示 ingest 停止的位置。'
+      ingestionLogHint: '为 AI 回答准备该文件的分阶段进度：分块（chunking）、标注、向量化（embedding）与索引编制。此处的错误会精确指示 ingest 停止的位置。'
     },
     log: {
       killActions: '终止操作:',
@@ -1427,8 +1412,7 @@ export default {
       uploadSuccess: '成功上传 {fileName}',
       uploadFailed: '上传 {fileName} 失败。'
     },
-    ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+    ragTip: 'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
     versions: {
@@ -1587,10 +1571,8 @@ export default {
           attempts: 'Attempts: {n}',
           when: 'Last attempt {when}',
           fix: {
-            reaper:
-              '摄取工作进程在宽限期内停止等待（排空已饱和）——内容完好无损。修复方法：对此文件稍作修改并保存即可重新入队；或撤回整个仓库并重新摄取。',
-            dataprep:
-              '内容准备服务未能处理此次摄取。修复方法：编辑并保存以重新入队；若反复失败，请检查 dataprep 服务的健康状态。',
+            reaper: '摄取工作进程在宽限期内停止等待（排空已饱和）——内容完好无损。修复方法：对此文件稍作修改并保存即可重新入队；或撤回整个仓库并重新摄取。',
+            dataprep: '内容准备服务未能处理此次摄取。修复方法：编辑并保存以重新入队；若反复失败，请检查 dataprep 服务的健康状态。',
             generic: '索引失败。修复方法：编辑内容并保存以重新入队，或撤回整个仓库并重新摄取。'
           }
         },
@@ -1599,8 +1581,7 @@ export default {
         loading: '加载中…',
         resplit: '重新拆分',
         flagged: '已标记',
-        flaggedTip:
-          '包含标记实体的概念 — 逐一打开并删除或修改该实体后保存（将自动重新扫描）；或在 publish 时予以确认。',
+        flaggedTip: '包含标记实体的概念 — 逐一打开并删除或修改该实体后保存（将自动重新扫描）；或在 publish 时予以确认。',
         piiBadge: 'PII',
         piiTip: '标记的实体：{k}。打开、删除或修改它们并保存 — 系统将自动重新扫描。',
         piiTipBare: '标记的实体 — 打开、核对并保存以重新扫描。',
@@ -1664,8 +1645,7 @@ export default {
       paneLabel: '视图窗格',
       saveFailed: '保存失败 — 请重试',
       piiBulk: {
-        done_accept:
-          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_accept: 'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
         done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
         done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
@@ -1883,8 +1863,7 @@ export default {
       save: '保存 frontmatter',
       saveFailed: 'Frontmatter 保存失败',
       perRepoTitle: 'Routing tags — what this repo is about',
-      perRepoHint:
-        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoHint: 'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -1909,19 +1888,13 @@ export default {
       repoTagsHint: '仓库级标签（{summary}）属于仓库而非此概念——请在右侧栏的标签面板中管理。'
     },
     glossary: {
-      addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      addConcept: 'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
       type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
-      title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
-      indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
-      trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
-      concept:
-        '知识库中的一个条目 — 通常为单页或单一主题。每个概念都具备供助手读取的结构化 frontmatter，以及用于生成答案的 markdown 正文。',
-      repository:
-        '围绕某一主题领域精心策展的一组概念集合。它最终打包为 OKF 资产包，供您 publish、管理版本并提供给助手调用。',
+      title: 'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus: 'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier: 'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept: '知识库中的一个条目 — 通常为单页或单一主题。每个概念都具备供助手读取的结构化 frontmatter，以及用于生成答案的 markdown 正文。',
+      repository: '围绕某一主题领域精心策展的一组概念集合。它最终打包为 OKF 资产包，供您 publish、管理版本并提供给助手调用。',
       subjectArea: '该知识归属于何处？主题领域用于组织您的知识库并约束可选标签范围。创建后无法更改。',
       selectSubjectArea: '选择主题领域…',
       subjectAreaMissing: '此知识库的主题领域不存在于知识层级中 — 现显示全部标签。',
@@ -1930,35 +1903,24 @@ export default {
       version: '知识库在执行 publish 时刻的静态冻结快照。编辑操作将在后续版本上继续 — 已发布版本永不变更。',
       serving: '此版本处于在线生效状态：助手在应答时将调阅其内容。执行 retract 即可对其进行修改。',
       ingestion: '为已发布的版本建立应答准备的步骤 — 文本将被分块、向量化与关联。在此之前，任何内容均不会触达助手。',
-      classification:
-        '判定每个概念“究竟是什么”（主题、实体、流程…）的逻辑。启发式规则会自动解析页面；LLM 选项耗时稍长，但能处理结构复杂的页面。',
-      resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      classification: '判定每个概念“究竟是什么”（主题、实体、流程…）的逻辑。启发式规则会自动解析页面；LLM 选项耗时稍长，但能处理结构复杂的页面。',
+      resplit: 'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: '保存失败',
       importFailedTitle: '导入失败 — 源文件未能完成转换。',
       importFailedHint: '请删除此知识库并重新导入源文件。',
       frontmatter: '位于每个文件顶部的结构化元数据 — 包含类型、标题与标签。助手依此明确每个概念的主旨内容。',
-      pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
-      classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      pickSource: 'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy: 'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
       clsHeur: 'Heuristics (fast, no LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
-      fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
-      autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
-      handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
-      lifecycle:
-        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
-      labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
-      reviewHandoff:
-        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
-      piiReview:
-        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+      fsPick: 'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect: 'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff: 'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      lifecycle: 'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto: 'Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.',
+      reviewHandoff: 'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview: 'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
     },
     md: {
       toolbar: '格式化',
@@ -1976,33 +1938,20 @@ export default {
       rendering: '渲染中…'
     },
     narrative: {
-      intro:
-        'OKF 知识库是一个结构化、版本化的主题集合，供您的对话回答作为引用出处。可将其视为针对您业务领域的轻量本体层 — 标签定义分类，主题定义实体，来源明确出处。',
-      step0:
-        'OKF 知识库是一个经策展、带版本的结构化主题集合。可将其视为您业务领域的轻量本体层 — 标签确立分类，主题确立实体，来源追溯出处。一旦发布，下游的对话回答即可按 ID 引用这些主题。',
-      step1:
-        '启动 OKF 知识库的三种方式：从网站抓取中提取主题、从已上传文档中提炼主题，或从空白画布开始起步。克隆现有知识库将复制其主题，方便您在此基础上派生开展新工作。',
-      step2:
-        '每份文档都将成为主题的来源。生产模块会解析它们、提取候选主题并提议层级结构。您将在下一步逐一复核每个主题 — 在您审核批准前不会确认任何内容。',
-      step3:
-        '我们正在读取您的来源并提议主题。主题将归聚在您挑选的分类标签之下。生产模块秉持审慎原则 — 宁可推荐少量规整的主题，也不引入大量杂乱内容。',
-      step4:
-        '标签是您本体架构的分类维度 — 该主题属于何种实体性质？请挑选 3 至 7 个能概括主轴的标签；生产模块将以此作为主题层级结构的骨架。',
-      step5:
-        '这是工作的核心所在。每个主题都是一个细粒度、可被引用的知识单元。主题拥有标题、描述并继承您所选的标签。您的职责是确保其严谨可靠：更正含糊的标题、合并近似重复项、剔除缺乏来源佐证的内容。',
-      step6:
-        '我们运行合规性检查：每个主题都有标题吗？标签有效吗？来源归属完整吗？阻塞性问题必须在移交知识库之前修复；警告可以确认。',
-      step7:
-        '部分警告支持自动修复：状态值可自动对齐至有效枚举，缺失字段可由合理的默认值补齐。应用您认同的修复项，随后返回策展视图进行核对。',
-      step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
-      step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
-      docMgmtEntry:
-        '基于所选文档创建新的 OKF 知识库。文档将作为来源；在正式发布任何内容前，您将核对并命名由其生成的主题。',
+      intro: 'OKF 知识库是一个结构化、版本化的主题集合，供您的对话回答作为引用出处。可将其视为针对您业务领域的轻量本体层 — 标签定义分类，主题定义实体，来源明确出处。',
+      step0: 'OKF 知识库是一个经策展、带版本的结构化主题集合。可将其视为您业务领域的轻量本体层 — 标签确立分类，主题确立实体，来源追溯出处。一旦发布，下游的对话回答即可按 ID 引用这些主题。',
+      step1: '启动 OKF 知识库的三种方式：从网站抓取中提取主题、从已上传文档中提炼主题，或从空白画布开始起步。克隆现有知识库将复制其主题，方便您在此基础上派生开展新工作。',
+      step2: '每份文档都将成为主题的来源。生产模块会解析它们、提取候选主题并提议层级结构。您将在下一步逐一复核每个主题 — 在您审核批准前不会确认任何内容。',
+      step3: '我们正在读取您的来源并提议主题。主题将归聚在您挑选的分类标签之下。生产模块秉持审慎原则 — 宁可推荐少量规整的主题，也不引入大量杂乱内容。',
+      step4: '标签是您本体架构的分类维度 — 该主题属于何种实体性质？请挑选 3 至 7 个能概括主轴的标签；生产模块将以此作为主题层级结构的骨架。',
+      step5: '这是工作的核心所在。每个主题都是一个细粒度、可被引用的知识单元。主题拥有标题、描述并继承您所选的标签。您的职责是确保其严谨可靠：更正含糊的标题、合并近似重复项、剔除缺乏来源佐证的内容。',
+      step6: '我们运行合规性检查：每个主题都有标题吗？标签有效吗？来源归属完整吗？阻塞性问题必须在移交知识库之前修复；警告可以确认。',
+      step7: '部分警告支持自动修复：状态值可自动对齐至有效枚举，缺失字段可由合理的默认值补齐。应用您认同的修复项，随后返回策展视图进行核对。',
+      step8: 'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9: 'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry: '基于所选文档创建新的 OKF 知识库。文档将作为来源；在正式发布任何内容前，您将核对并命名由其生成的主题。',
       crawlSegment: 'OKF 知识库是一个结构化、版本化的主题集合，可供对话回答作为引用出处。',
-      emptyDashboard:
-        '您尚未创建任何 OKF 知识库。OKF 知识库是一个结构化、可引用的主题集合，供您的对话回答从中提取支撑依据。',
+      emptyDashboard: '您尚未创建任何 OKF 知识库。OKF 知识库是一个结构化、可引用的主题集合，供您的对话回答从中提取支撑依据。',
       labels: '标签是您本体架构的分类维度 — 旨在解答“该主题属于何种实体性质？”。',
       hide: '隐藏',
       whatIsThis: '这是什么？'
@@ -2018,8 +1967,7 @@ export default {
       title: 'OKF Studio',
       help: '帮助',
       helpTitle: '关于 OKF Studio',
-      helpBody:
-        'OKF 知识库是一个轻量本体层 — 标签定义分类，主题定义实体，来源追溯出处。一旦发布，对话回答将按 ID 引用各主题并呈现其数据源溯源信息。',
+      helpBody: 'OKF 知识库是一个轻量本体层 — 标签定义分类，主题定义实体，来源追溯出处。一旦发布，对话回答将按 ID 引用各主题并呈现其数据源溯源信息。',
       view: {
         dashboard: '仪表盘',
         wizard: '向导'
@@ -2194,8 +2142,7 @@ export default {
         neverStarted: 'The conversion did not start — retry.',
         manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
         labelDone: 'Conversion complete',
-        dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        dupContent: 'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
@@ -2214,12 +2161,11 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        adjust: 'Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.',
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {
-        embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        embedHint: 'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
         noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: '审核主题',
         hint: '每个主题都是一个细粒度、可引用的知识单元。支持编辑标题与描述。',
@@ -2246,11 +2192,9 @@ export default {
         sources: '来源',
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
-        browserHint:
-          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
+        browserHint: 'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
         noRepo: 'No repository yet — the file review appears here once a repository exists.',
-        ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        ritualOutside: 'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2267,8 +2211,7 @@ export default {
         topicsServing: 'Topics serving',
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
-        ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        ritual: 'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2306,8 +2249,7 @@ export default {
       classHeuristics: '启发式规则（默认）',
       classHeuristicsHint: '快速基于规则分类 — 无 LLM 成本，适用于结构规范的抓取内容。',
       classLlm: 'LLM 辅助',
-      classLlmHint:
-        '由 LLM 策展每个概念 — 包含类型、知识层级标签与描述。相较启发式规则更加精准详尽；每个概念预计耗时更长。',
+      classLlmHint: '由 LLM 策展每个概念 — 包含类型、知识层级标签与描述。相较启发式规则更加精准详尽；每个概念预计耗时更长。',
       classHybrid: '混合',
       classHybridHint: '启发式优先；LLM 介入复核存疑情形并填补空白。兼顾耗时与完整性。',
       targetLabel: '目标保存位置',
@@ -2409,8 +2351,7 @@ export default {
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
       indexFailed: 'Re-index failed — edit or re-split the page.',
-      indexFailedRemedy:
-        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      indexFailedRemedy: 'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2452,16 +2393,11 @@ export default {
         truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
-        conformance:
-          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
-        orphan:
-          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
-        near_duplicate:
-          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
-        citation:
-          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
-        index_failed:
-          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+        conformance: 'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan: 'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate: 'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation: 'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed: 'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
       }
     },
     pii: {
@@ -2564,8 +2500,7 @@ export default {
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
-      servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      servingTip: 'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
       alreadyBadge: 'already in an OKF repo',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     },
@@ -2614,8 +2549,7 @@ export default {
         version: 'Head version',
         computedAt: 'Computed',
         staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
-        missingNote:
-          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+        missingNote: 'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
         rebuild: 'Rebuild head',
         rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
         rebuildBusy: 'Rebuilding — embedding the tag fields…'
@@ -2634,15 +2568,13 @@ export default {
           claimed: 'Claims query'
         },
         provenance: 'Routing provenance',
-        empty:
-          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
+        empty: 'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
         pass: 'PASS — this repository wins the head routing.',
         fail: 'FAIL — {repo} wins the head routing for this query.',
         passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
         passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
-        notSelectedSuppressed:
-          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        notSelectedSuppressed: 'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -2672,8 +2604,7 @@ export default {
         meta: '元查询'
       },
       teach: {
-        claim:
-          'Head 认领了这条查询——它通过了全部三道闸。如果它不应路由到这里，请让系统建议能排除其主题的禁用标签，添加后重建 head。',
+        claim: 'Head 认领了这条查询——它通过了全部三道闸。如果它不应路由到这里，请让系统建议能排除其主题的禁用标签，添加后重建 head。',
         explain: '解释并建议',
         explainBusy: '解释中——模型正在建议禁用标签…',
         addTag: '添加到禁用标签',
@@ -2753,7 +2684,12 @@ export default {
         namePlaceholder: '测试集名称（可选）— 例如：NCD 回归集',
         probeTip: '用真实语料测试此查询',
         deleteSuiteTip: '删除此测试集及其历史',
-        corpusNeedsIngest: '请先摄取仓库——语料测试搜索的是已摄取的语料'
+        corpusNeedsIngest: '请先摄取仓库——语料测试搜索的是已摄取的语料',
+        deleteConfirmTitle: '删除这个测试集？',
+        deleteConfirmBody: '这将永久删除该测试集及其运行历史，无法撤销。',
+        deleteConfirm: '删除测试集',
+        deleteCancel: '取消',
+        unnamedFallback: '未命名测试集'
       },
       error: {
         explain: '解释失败',
@@ -2773,14 +2709,14 @@ export default {
         suiteRename: '无法重命名测试集',
         generateTimeout: '测试集耗时异常 — 可能稍后会出现在已保存列表中；请一分钟后查看。',
         probe: '语料测试失败',
-        suiteDelete: '无法删除测试集'
+        suiteDelete: '无法删除测试集',
+        noFrontmatter: '该仓库还没有头部标签 — 请在 Frontmatter 面板中创建标签（或使用“建议标签”），然后再生成测试集。'
       },
       footer: {
         unpublish: 'Unpublish to review'
       },
       publishCard: {
-        present:
-          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
+        present: 'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
       },
@@ -2800,7 +2736,10 @@ export default {
         narrowChip: '移除宽泛标签，添加窄标签',
         reasonCurator: '此标签由您最初声明——移除前请确认',
         reasonRotated: '编辑历史已滚过基线——移除前请确认',
-        scopeDetail: '测试集：{s} · 标签集：{t}'
+        scopeDetail: '测试集：{s} · 标签集：{t}',
+        rowActionsTitle: '基于语料的翻转 — 语料能回答这些“负向”查询：将它们翻转为正向',
+        flipToPositive: '翻转为正向',
+        ungroundedNote: '{n} 个失败的负向查询既无语料支撑也无安全的标签杠杆 — 应由竞争仓库胜出。'
       },
       probe: {
         answerable: '可回答',
@@ -2821,7 +2760,6 @@ export default {
     }
   },
   link: {
-    ragTip:
-      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
+    ragTip: 'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

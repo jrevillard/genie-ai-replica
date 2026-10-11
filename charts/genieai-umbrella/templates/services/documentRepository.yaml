@@ -21,7 +21,7 @@
     (dict "name" "BACKEND_URL" "value" (printf "http://backend.%s.svc.cluster.local:80" $ns))
     (dict "name" "CLAMAV_HOST" "value" "clamav")
     (dict "name" "CLAMAV_PORT" "value" "3310")
-    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (printf "http://genieai-collector-collector.%s.svc.cluster.local:4318" $ns))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}
 {{- $secretEnv := list
     (dict "name" "ARANGO_PASSWORD" "valueFrom" (dict "secretKeyRef" (dict "name" "arango-root-secret" "key" "password")))

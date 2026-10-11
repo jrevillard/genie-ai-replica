@@ -14,9 +14,13 @@
     9  Publish
 
   Step-lock rule:
-    locked = (draft?.studio_step ?? 0) <= i ? false : true
+    locked = i > (draft?.studio_step ?? 0)
     every step AFTER the saved step is locked, every step UP TO AND INCLUDING
-    is unlocked — back-nav non-destructive.
+    is unlocked — back-nav non-destructive. This matches lockedIndices()
+    below ("for (let i = saved + 1; i < 10; i++)"). The formula here used to be
+    written inverted, which is what made a NEW repo's studio_step: 9 (StudioTab
+    onCreate) read as "steps 1-9 locked, so land on 10" — the opposite of what
+    it does. Do not re-derive this from the comment; lockedIndices is the truth.
 
   Narrative cards (rule 8) mount via OkfNarrative pinned above each step body.
   Context rail (right) shows name + subject + trust_tier pill + stale badge +

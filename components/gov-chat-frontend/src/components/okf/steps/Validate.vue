@@ -187,6 +187,35 @@
       </ul>
     </div>
 
+    <!-- WHOLE-CORPUS TOPIC LINKS (Story 1-8g-p): the SAME generic pass the
+      wizard runs at import time, re-runnable here on any repository. Graph
+      retrieval walks LINKS, so a corpus whose pages never cite each other
+      returns isolated hits; this authors the missing edges over the WHOLE
+      corpus (no domain assumptions — it works for any subject matter). The
+      run is detached server-side (minutes, not seconds), so the button arms it
+      and the panel polls until the run reaches a terminal state. -->
+    <div v-if="!frozenAt" class="okf-step-validate__topic-links">
+      <p class="okf-step-validate__topic-links-title">
+        {{ translate('okf.validation.topicLinks.title', 'Cross-link topics') }}
+        <DsInfoTip
+          :text="
+            translate(
+              'okf.validation.topicLinks.tip',
+              'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.'
+            )
+          "
+        />
+      </p>
+      <p v-if="topicLinksNote" class="okf-step-validate__topic-links-note">{{ topicLinksNote }}</p>
+      <DsButton variant="secondary" small :disabled="topicLinksBusy" @click="onStartTopicLinks">
+        {{
+          topicLinksBusy
+            ? translate('okf.validation.action.working', 'Working…')
+            : translate('okf.validation.action.topicLinks', 'Cross-link topics')
+        }}
+      </DsButton>
+    </div>
+
     <!-- PII REMEDIATION (Amendment A decision #3, David 2026-09-27): the
       FULL panel is embedded — pick a flagged concept, redact/replace/remove/
       accept each entity right here (the same OkfPiiOccurrences the editor
@@ -291,6 +320,10 @@ export default {
       suggestion: null,
       acceptBusy: false,
       deleting: null,
+      // whole-corpus topic-link run (Story 1-8g-p) — detached server-side, so
+      // the panel polls until the run reports a terminal state.
+      topicLinksBusy: false,
+      topicLinksNote: '',
       // near-duplicate preview (#1039)
       previewFor: null,
       previewBusy: null,
@@ -391,6 +424,9 @@ export default {
   },
   mounted() {
     this.refresh();
+  },
+  beforeUnmount() {
+    this._stopTopicLinkPolling();
   },
   methods: {
     conceptTitle(cid) {
@@ -562,6 +598,59 @@ export default {
       // and refresh; a resolved concept leaves the flagged list.
       this.piiRevision += 1;
       this.refresh();
+    },
+    // ── WHOLE-CORPUS TOPIC LINKS (Story 1-8g-p) ─────────────────────────────
+    // The server runs the pass detached (a large repository costs minutes of
+    // assistant time), so we arm it, then poll until the run reports done or
+    // failed. Re-running is safe: existing links are kept, only new ones added.
+    _stopTopicLinkPolling() {
+      if (this._topicLinkTimer) {
+        clearTimeout(this._topicLinkTimer);
+        this._topicLinkTimer = null;
+      }
+    },
+    async onStartTopicLinks() {
+      if (this.topicLinksBusy) return;
+      this.topicLinksBusy = true;
+      this.topicLinksNote = '';
+      const res = await this.$store.dispatch('okf/startTopicLinks', { repoId: this.repoId });
+      if (!res || !res.ok) {
+        this.topicLinksBusy = false;
+        this.topicLinksNote = (res && res.error) || '';
+        return;
+      }
+      this._pollTopicLinks();
+    },
+    async _pollTopicLinks() {
+      const res = await this.$store.dispatch('okf/getTopicLinkRun', { repoId: this.repoId });
+      const run = res && res.ok ? res.result : null;
+      if (!run) {
+        this.topicLinksBusy = false;
+        return;
+      }
+      if (run.status === 'running') {
+        const done = Number(run.batches_done || 0);
+        const total = Number(run.batches_total || 0);
+        this.topicLinksNote = total
+          ? this.translate('okf.validation.topicLinks.progress', 'Cross-linking… {done} of {total} batches')
+              .replace('{done}', String(done))
+              .replace('{total}', String(total))
+          : this.translate('okf.validation.topicLinks.progressIdle', 'Cross-linking… reading the repository');
+        this._topicLinkTimer = setTimeout(() => this._pollTopicLinks(), 3000);
+        return;
+      }
+      this.topicLinksBusy = false;
+      if (run.status === 'failed') {
+        this.topicLinksNote = this.translate('okf.validation.topicLinks.failed', 'Cross-linking failed: {msg}').replace(
+          '{msg}',
+          run.error || 'unknown error'
+        );
+        return;
+      }
+      this.topicLinksNote = this.translate('okf.validation.topicLinks.done', 'Added {n} link(s) across {c} page(s).')
+        .replace('{n}', String(run.written != null ? run.written : 0))
+        .replace('{c}', String(run.concepts_linked != null ? run.concepts_linked : 0));
+      this.refresh();
     }
   }
 };
@@ -729,6 +818,30 @@ export default {
 }
 .okf-step-validate__wire-note {
   color: var(--success, var(--accent));
+}
+/* Story 1-8g-p: the whole-corpus topic-link run — a repo-wide remedy, so it
+   reads as its own block rather than another row on one issue. */
+.okf-step-validate__topic-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.okf-step-validate__topic-links-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-sm);
+}
+.okf-step-validate__topic-links-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 /* #1039 density: merged conformance rows + near-dup groups show their page
    ids as a wrapped chip row instead of one row per page. */

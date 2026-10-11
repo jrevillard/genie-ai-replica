@@ -1043,6 +1043,21 @@ const actions = {
     }
   },
 
+  /** 1-8g-v — poll/load ONE run doc (the async run's keep-waiting
+   * envelope, its terminal failure, or the full doc). */
+  async headSuiteGetRun(_ctx, { repoId, suiteKey, runKey } = {}) {
+    try {
+      const result = await headTestService.getRun(repoId, suiteKey, runKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RUN_NOT_FOUND',
+        message: err.message
+      };
+    }
+  },
+
   /** Story 1-8c — explain ONE query's gate outcome; the result carries
    * suggestion {tags, source, reason} when the head (wrongly) claims it.
    * The teaching half of the Lab loop. */

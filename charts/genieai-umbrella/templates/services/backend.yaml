@@ -10,7 +10,8 @@
     (dict "name" "TRANSLATION_CACHE_HOST" "value" (printf "redis-cache.%s.svc.cluster.local" $ns))
     (dict "name" "TRANSLATION_CACHE_PORT" "value" "6379")
 -}}
-{{- $_ := set $backendVals.services.backend "env" $urls -}}
+{{- $existing := index $backendVals.services.backend "env" | default list -}}
+{{- $_ := set $backendVals.services.backend "env" (concat $existing $urls) -}}
 {{- $ctx := dict "name" "backend" "component" "backend" "Values" $backendVals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---

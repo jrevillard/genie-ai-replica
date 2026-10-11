@@ -64,6 +64,8 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+            - name: tmp
+              mountPath: /tmp
           resources:
             {{- toYaml $svc.resources | nindent 12 }}
           securityContext:
@@ -79,6 +81,14 @@ spec:
         {{- else }}
           emptyDir: {}
         {{- end }}
+        # redis 7 writes cluster-config + RDB snapshots to /tmp at
+        # startup; with readOnlyRootFilesystem: true the server
+        # exits with "Read-only file system". A tmpfs-backed emptyDir
+        # satisfies the writes while keeping the on-disk attack
+        # surface limited to /data + /tmp.
+        - name: tmp
+          emptyDir:
+            medium: Memory
 {{- if $svc.pvc.enabled }}
 ---
 apiVersion: v1

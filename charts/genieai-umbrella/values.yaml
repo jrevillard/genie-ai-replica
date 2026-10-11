@@ -34,6 +34,11 @@ clusterProfile: dev
 # CR is renamed to avoid hostname collisions.
 observability:
   collectorCRName: genieai-collector
+  # Collector OTLP/HTTP listener port. Default 4318 matches the
+  # OpenTelemetry Operator's default `spec.ports[0].port`. Override
+  # when the cluster-side Collector Service exposes a non-default
+  # port (e.g. port collisions on a shared node).
+  collectorPort: 4318
 
 # data layer values
 
@@ -136,6 +141,10 @@ dependencyGraph:
     documentRepository:
       - backend
     clamav: []
+    nginx:
+      - frontend
+      - backend
+      - documentRepository
   data:
     postgres:
       - ""                                # no deps; lowest tier
@@ -215,6 +224,14 @@ services:
     replicas: 1
     image: { repository: registry.example.org/genie-ai-document-repository, tag: "1.0.0" }
     port: 3001
+    # ClamAV service discovery. Defaults assume the in-cluster
+    # Service rendered by charts/genieai-umbrella/templates/services/clamav.yaml;
+    # operators with an external ClamAV (separate namespace, dedicated
+    # cluster) override `clamavHost` with the FQDN/hostname the
+    # documentRepository pod can resolve (e.g. clamav.corp.example.com
+    # or clamav.<other-namespace>.svc.cluster.local).
+    clamavHost: clamav
+    clamavPort: 3310
     resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
     env: []
     secrets: []

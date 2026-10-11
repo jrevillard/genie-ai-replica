@@ -21,8 +21,8 @@ Usage:
 {{- with $ctx.Values.clusterProfileReplicas -}}
 {{- if hasKey . $ctx.Values.clusterProfile -}}
 {{- $profileReplicas := index . $ctx.Values.clusterProfile -}}
-{{- if hasKey $profileReplicas $ctx.component -}}
-{{- $replicas = int (index $profileReplicas $ctx.component) -}}
+{{- if hasKey $profileReplicas $ctx.name -}}
+{{- $replicas = int (index $profileReplicas $ctx.name) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

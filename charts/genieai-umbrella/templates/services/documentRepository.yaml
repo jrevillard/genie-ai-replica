@@ -19,8 +19,8 @@
     (dict "name" "ARANGO_URL" "value" (printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns))
     (dict "name" "ARANGO_DB" "value" "_system")
     (dict "name" "BACKEND_URL" "value" (printf "http://backend.%s.svc.cluster.local:80" $ns))
-    (dict "name" "CLAMAV_HOST" "value" "clamav")
-    (dict "name" "CLAMAV_PORT" "value" "3310")
+    (dict "name" "CLAMAV_HOST" "value" .Values.services.documentRepository.clamavHost)
+    (dict "name" "CLAMAV_PORT" "value" (.Values.services.documentRepository.clamavPort | toString))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}
 {{- $secretEnv := list

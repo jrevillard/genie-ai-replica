@@ -1,3 +1,27 @@
+{{- /* Render-time cross-check: a `services.X.enabled: true` (or
+       `data.X.enabled: true`) MUST have a matching entry in
+       `dependencyGraph.{services,data}`. Without it, the dep-check
+       Job below treats the missing graph node as `enabled: false`
+       (no validation), and the install proceeds with a service that
+       has no graph-validated dependencies. The service then fails
+       to start, far from this hook. Fail the render here.
+       The toRawJson|fromJson round-trip converts the chart-supplied
+       common.Values to a plain map[string]interface{} that Sprig's
+       `dig` can navigate (the dep-check enabled.json below does the
+       same for the same reason). */ -}}
+{{- $vals := .Values | toRawJson | fromJson -}}
+{{- $svcGraph := dig "dependencyGraph" "services" dict $vals -}}
+{{- range $name, $cfg := dig "services" dict $vals }}
+{{- if and (kindIs "map" $cfg) (dig "enabled" false $cfg) (not (hasKey $svcGraph $name)) }}
+{{- fail (printf "services.%s.enabled is true but dependencyGraph.services has no '%s' entry; add it to dependencyGraph.services.%s (with deps: [...]) so the pre-install dep-check validates its requirements" $name $name $name) -}}
+{{- end }}
+{{- end }}
+{{- $dataGraph := dig "dependencyGraph" "data" dict $vals -}}
+{{- range $name, $cfg := dig "data" dict $vals }}
+{{- if and (kindIs "map" $cfg) (dig "enabled" false $cfg) (not (hasKey $dataGraph $name)) }}
+{{- fail (printf "data.%s.enabled is true but dependencyGraph.data has no '%s' entry; add it to dependencyGraph.data.%s (with deps: [...]) so the pre-install dep-check validates its requirements" $name $name $name) -}}
+{{- end }}
+{{- end }}
 apiVersion: batch/v1
 kind: Job
 metadata:

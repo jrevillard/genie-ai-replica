@@ -1870,3 +1870,173 @@ describe('1-8g — default suite naming, delete, and the corpus probe', () => {
     }
   });
 });
+
+// ─── 1-8g-v/w: the ASYNC run lifecycle ─────────────────────────────────────
+// Live 2026-10-11 (Indonesia Suite 1 ×2): every async run did ~60s of work
+// and then DIED at the final persist — save() INSERTed a _key the placeholder
+// already occupied, the catch converted both completed runs to status:'failed',
+// and the curator saw nothing. These tests pin the whole lifecycle: replace
+// semantics, the honest failDoc, the 409 envelope, orphan reaping, and the
+// delete guard.
+describe('beginRunSuite — async run lifecycle (1-8g-v/w)', () => {
+  const { logger } = require('../shared-lib/logger');
+
+  function runHandle() {
+    return __mockDb.collection('okf_head_test_runs');
+  }
+
+  it('1-8g-w REGRESSION: the final persist REPLACES the placeholder (save() would unique-constraint the run to death)', async () => {
+    const suite = await seedSuite({ positive: 2, negativeForbidden: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.3, 1));
+    const handle = runHandle();
+    const savesAfterSeed = handle.save.mock.calls.length;
+    const replacesAfterSeed = handle.replace.mock.calls.length;
+    const { run_key, done } = await svc.beginRunSuite('me', suite._key, { actor: { user_id: 'u1' } });
+    await done;
+    // exactly ONE insert happened after the seed — the placeholder
+    expect(handle.save.mock.calls.length).toBe(savesAfterSeed + 1);
+    const placeholderCall = handle.save.mock.calls[savesAfterSeed][0];
+    expect(placeholderCall).toMatchObject({ _key: run_key, status: 'running', kind: 'run' });
+    // the final doc landed via REPLACE on the same key, with results
+    const finalReplace = handle.replace.mock.calls
+      .slice(replacesAfterSeed)
+      .find((c) => c[0] === run_key && c[1].kind === 'run');
+    expect(finalReplace).toBeTruthy();
+    expect(finalReplace[1].payload.results).toHaveLength(3);
+    expect(finalReplace[1].payload.summary).toBeTruthy();
+    // created_at is the MINT time (== the placeholder's), not completion time
+    expect(finalReplace[1].created_at).toBe(placeholderCall.created_at);
+    // stored doc is terminal-complete: no status field (legacy completed shape)
+    const stored = __mockDb._stores.okf_head_test_runs[run_key];
+    expect(stored.status).toBeUndefined();
+    // the mint is visible in the logs (1-8g-w run-start observability)
+    expect(logger.info).toHaveBeenCalledWith(
+      'head-suite.run_started',
+      expect.objectContaining({ run_key, positives: 2, negatives: 1 })
+    );
+  });
+
+  it('RUN_IN_FLIGHT 409 carries details.run_key — the client can adopt the in-flight run', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.5, 0));
+    const { run_key, done } = await svc.beginRunSuite('me', suite._key, {});
+    await expect(svc.beginRunSuite('me', suite._key, {})).rejects.toMatchObject({
+      code: 'RUN_IN_FLIGHT',
+      status: 409,
+      details: { run_key }
+    });
+    await done;
+  });
+
+  it('a failing worker writes status:"failed" with a STRING code and the MINT created_at, and clears the lock', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    repositoryService.getById.mockRejectedValue(new Error('db exploded mid-run'));
+    const handle = runHandle();
+    const savesAfterSeed = handle.save.mock.calls.length;
+    const { run_key, done } = await svc.beginRunSuite('me', suite._key, {});
+    await expect(done).rejects.toThrow('db exploded mid-run');
+    const failDoc = __mockDb._stores.okf_head_test_runs[run_key];
+    expect(failDoc.status).toBe('failed');
+    expect(failDoc.error).toMatchObject({ code: 'RUN_FAILED', message: 'db exploded mid-run' });
+    // the failure must not reorder history: created_at stays the mint time
+    expect(failDoc.created_at).toBe(handle.save.mock.calls[savesAfterSeed][0].created_at);
+    // lock cleared → a fresh begin is admitted
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'NCD Information',
+      version: 3,
+      head: { version: 42 }
+    });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.5, 0));
+    const second = await svc.beginRunSuite('me', suite._key, {});
+    await second.done;
+  });
+
+  it('a numeric driver code never leaks into the failDoc; a persist failure surfaces RUN_PERSIST_FAILED', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.5, 0));
+    const handle = runHandle();
+    const realReplace = handle.replace.getMockImplementation();
+    const { run_key, done } = await svc.beginRunSuite('me', suite._key, {});
+    // fail ONLY the run-doc replace (the final persist), once, the way the
+    // Arango driver does on a write conflict: numeric code
+    handle.replace.mockImplementationOnce(async (key, doc) => {
+      if (key === run_key && doc.kind === 'run') {
+        const e = new Error('unique constraint violated');
+        e.code = 409;
+        throw e;
+      }
+      return realReplace(key, doc);
+    });
+    await expect(done).rejects.toMatchObject({ code: 'RUN_PERSIST_FAILED' });
+    // the failDoc write (second replace) went through the real impl
+    const stored = __mockDb._stores.okf_head_test_runs[run_key];
+    expect(stored.status).toBe('failed');
+    expect(stored.error.code).toBe('RUN_PERSIST_FAILED');
+    expect(stored.error.message).toContain('final save failed');
+  });
+
+  it('an orphaned running doc (no live lock) is reaped lazily on read — the poll terminates', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    const handle = runHandle();
+    await handle.save({
+      _key: 'rOrphan',
+      repo_id: 'me',
+      kind: 'run',
+      status: 'running',
+      suite_key: suite._key,
+      created_at: '2026-10-11T00:00:00.000Z',
+      payload: {}
+    });
+    const out = await svc.getRunSuite('me', suite._key, 'rOrphan');
+    expect(out.status).toBe('failed');
+    expect(out.error.code).toBe('RUN_INTERRUPTED');
+    const stored = __mockDb._stores.okf_head_test_runs.rOrphan;
+    expect(stored.status).toBe('failed');
+    expect(stored.error.message).toContain('interrupted');
+  });
+
+  it('the boot sweep marks every running doc failed (sweepInterruptedRuns)', async () => {
+    await seedSuite({ positive: 1 });
+    __mockDb.query.mockResolvedValueOnce({ all: async () => [{ _key: 'rGhost1' }, { _key: 'rGhost2' }] });
+    const n = await svc.sweepInterruptedRuns();
+    expect(n).toBe(2);
+    const sweepCall = __mockDb.query.mock.calls.find((c) => c[0] && c[0].includes('RUN_INTERRUPTED'));
+    expect(sweepCall).toBeTruthy();
+    const [aql] = sweepCall;
+    expect(aql).toContain("d.kind == 'run'");
+    expect(aql).toContain("d.status == 'running'");
+    expect(aql).toContain('UPDATE d WITH');
+    expect(aql).toContain('RUN_INTERRUPTED');
+    expect(logger.warn).toHaveBeenCalledWith(
+      'head-suite.run.sweep_interrupted',
+      expect.objectContaining({ reaped: 2, run_keys: ['rGhost1', 'rGhost2'] })
+    );
+  });
+
+  it('deleteSuite refuses while a run is executing, and succeeds once it lands', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.5, 0));
+    const { done } = await svc.beginRunSuite('me', suite._key, {});
+    await expect(svc.deleteSuite('me', suite._key, {})).rejects.toMatchObject({
+      code: 'RUN_IN_FLIGHT',
+      status: 409
+    });
+    await done;
+    const out = await svc.deleteSuite('me', suite._key, {});
+    expect(out.deleted).toBe(true);
+  });
+
+  it('a placeholder-save failure cleans the lock (no RUN_IN_FLIGHT leak until restart)', async () => {
+    const suite = await seedSuite({ positive: 1 });
+    const handle = runHandle();
+    handle.save.mockImplementationOnce(async () => {
+      throw new Error('arango down');
+    });
+    await expect(svc.beginRunSuite('me', suite._key, {})).rejects.toThrow('arango down');
+    // the suite is NOT locked — a fresh begin saves the placeholder and runs
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.5, 0));
+    const { done } = await svc.beginRunSuite('me', suite._key, {});
+    await done;
+  });
+});

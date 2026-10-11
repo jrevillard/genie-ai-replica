@@ -515,3 +515,90 @@ load-one-run path existed).
 **Tests:** +1 UI async-poll adoption; backend begins/polls covered via the
 refactored suite (order-stability through the pool asserted by the
 existing per-row tests). okf-server 877/877; dialog 49/49.
+
+## 1-8g-w — every ASYNC run died at the final save: `save()` INSERTed over its own placeholder (FIXED, worktree fix/1-8g-w-run-persist)
+
+**Reported (David, live 2026-10-11 ~12:22-12:28 local):** "executed run for the
+suite and the UI did not show a spinner"; after closing/reopening the lab, "a
+run is already executing for this suite"; "even after the run apparently
+finished the results are not displayed when I close and re-open the lab".
+
+**Evidence (5-agent sweep: served bundle, okf-server logs, ArangoDB, UI audit,
+server audit):** Indonesia Suite 1 (`s1791690235910-0dba38`, repo
+`f5299e77…6204`) ran THREE times:
+- `r1791696163542-cb5f41` minted 05:22:43Z, routing leg 23s + **154 corpus
+  probes in 36.5s** (15 rerank-429 retry warns — !522 holding), then at
+  05:23:43 `head-suite.run.async_failed`: **"unique constraint violated …
+  conflicting key: r1791696163542-cb5f41"**.
+- `r1791696474473-b06d04` (a third, un-narrated click 05:27:54) — identical
+  cycle, identical death at 05:28:49.
+- Root cause: `beginRunSuite` saves a placeholder `{_key: runKey,
+  status:'running'}`, and `runSuite`'s final persist (then :1799) did
+  **`.save(runDoc)` — an INSERT — with the same `_key`**. The §v entry above
+  says "the final doc REPLACES the placeholder" — the comment described intent
+  the code never implemented (jest missed it: the sync path mints its own key).
+  Every async run that finished was destroyed at the last step; both docs sit
+  in the DB as `status:'failed', payload:{}` with the raw DB error text
+  (`error.code` was even polluted to numeric `409` by the driver).
+- Why the UI looked dead ON TOP of that: (1) the browser tab predates the
+  11:23 redeploy — the old client read `res.result.payload.summary` off the
+  new 202 envelope → silent TypeError ms after the click; closing/reopening
+  the DIALOG never reloads JS (no new-version toast exists — see 1-8g-y).
+  (2) Even the new UI's only indicator is a size-sm spinner ~85 markup lines
+  above the Run button; `loadLatestRunForSuite` adopts only runs WITH a
+  summary — a `running` placeholder (or a failed run) shows as "—".
+
+**Fix (this MR — server correctness; UI progress/resume = 1-8g-x next):**
+- Final persist: `replace(runKey, runDoc)` when `opts.runKey` was handed in;
+  sync callers keep `save()`. A persist failure now surfaces as
+  `RUN_PERSIST_FAILED` ("run results were computed but the final save
+  failed: …") instead of the raw constraint text.
+- `created_at` is the MINT time end-to-end (runDoc and failDoc keep the
+  placeholder's — completion/failure no longer reorders history; the driver's
+  numeric `e.code` never overrides a string code).
+- `RUN_IN_FLIGHT` / `GENERATION_IN_FLIGHT` carry `err.details.run_key` /
+  `suite_key` (error-handler already serializes `details`) — the client can
+  ADOPT the in-flight run.
+- Boot sweep `sweepInterruptedRuns()` (index.js, mirrors
+  `sweepInterruptedOnce`): after a restart every `status:'running'` doc is an
+  orphan (the in-memory lock died with the process) → marked
+  `RUN_INTERRUPTED`. `getRunSuite` reaps no-lock running docs lazily, so a
+  poll TERMINATES on a ghost instead of spinning forever.
+- Placeholder-save failure cleans the in-flight lock (was: suite locked
+  until restart, with no doc behind the 409's run_key).
+- `deleteSuite` refuses while a run executes (the worker was writing failed
+  docs for deleted suites).
+- `listRuns` projection carries `status`/`error` — Running/Failed rows become
+  badgeable and the in-flight run findable.
+- `head-suite.run_started` info log at mint (runs were invisible at start).
+
+**Tests:** 8 new lifecycle tests in `head-suite-service.test.js` (76 total
+file, 885 suite green, eslint/prettier clean) — the regression test pins
+replace-not-save by asserting on the collection METHOD (the arango mock's
+`save` doesn't enforce uniqueness, so only the spy catches it).
+
+## 1-8g-x — the run UX is blind: no progress, no resume, 409 dead-ends (NEXT MR — David: "the UI should show a progress bar for the run")
+
+Server contract now exposes everything needed (w): `details.run_key` on 409,
+`status`/`error` in the runs listing, lazy orphan reaping. UI legs:
+- **Progress bar at the Run button** — server persists throttled
+  `{done, total, phase}` progress into the placeholder during the run
+  (batched every N probes); poll renders a real %, not a fake animation;
+  elapsed seconds alongside.
+- **Reopen resumes**: `loadLatestRunForSuite` adopts the latest run whatever
+  its status — `running` → re-attach the poll + bar, completed → current
+  adopt, `failed` → show the failure text (never silent "—"). Called from the
+  visible watcher, not only generate/load.
+- **409 adopts**: onRunSuite catches `RUN_IN_FLIGHT` + `details.run_key` →
+  resumes polling instead of dead-ending in the error strip.
+- Runs-history table gets a status badge (Running/Failed distinguishable;
+  ghosts no longer render as ordinary "—" rows).
+
+## 1-8g-y — PROPOSED: "new version available — reload" app toast
+
+Deploys silently fork already-open tabs: old JS keeps executing until a
+manual reload, and old-client/new-server mismatches look exactly like
+1-8g-w's report (silent first action, confusing 409 on the second). A
+build-id ping (index.html already revalidates; the app compares its bundle
+id against a cheap version endpoint) + a reload toast closes the class.
+App-wide scope beyond the Lab — David's go pending.

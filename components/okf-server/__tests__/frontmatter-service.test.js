@@ -319,6 +319,33 @@ describe('1-8g-m — mechanical forbidden guard', () => {
   });
 });
 
+describe('1-8g-m2 — the concept-sampling AQL is syntactically legal', () => {
+  // The arango mock returns canned rows whatever the AQL says, so the jest
+  // suite is structurally blind to AQL syntax. This pins the two rules the
+  // live 500 broke on; a real parse check runs against the build's database.
+  test('no variable is bound twice (LET x … COLLECT x = x is rejected by ArangoDB)', async () => {
+    seedDb();
+    axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['x'], forbidden: [], summary: '' })));
+    await svc.suggestTags(REPO_ID);
+    const aql = __mockDb.query.mock.calls.map((c) => (typeof c[0] === 'string' ? c[0] : '')).join('\n');
+    const conceptsQuery = aql.split('okf_concepts_meta')[1] || '';
+    // every `LET name` must not reappear as the COLLECT group key
+    const lets = [...conceptsQuery.matchAll(/LET\s+(\w+)\s*=/g)].map((m) => m[1]);
+    const collectKeys = [...conceptsQuery.matchAll(/COLLECT\s+(\w+)\s*=/g)].map((m) => m[1]);
+    for (const key of collectKeys) {
+      expect(lets).not.toContain(key);
+    }
+  });
+
+  test('the group key is returned under `label` (buildSuggestContext reads g.label)', async () => {
+    seedDb();
+    axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['x'], forbidden: [], summary: '' })));
+    await svc.suggestTags(REPO_ID);
+    const aql = __mockDb.query.mock.calls.map((c) => (typeof c[0] === 'string' ? c[0] : '')).join('\n');
+    expect(aql).toMatch(/RETURN\s*\{\s*label:\s*label/);
+  });
+});
+
 describe('1-8g-m — suggestTags integration', () => {
   test('a forbidden tag the corpus contains is dropped and REPORTED, not silently swallowed', async () => {
     // The verbatim live response that poisoned the Indonesia head.

@@ -384,7 +384,8 @@ export default {
       logSearch: {
         noResultsFound: 'Nenhum log corresponde aos seus critérios de busca',
         resultsFound: 'Encontradas {count} entradas de log',
-        degraded: 'Mostrando resultados parciais devido a uma interrupção do VictoriaLogs. Algumas entradas de registro recentes podem estar faltando.'
+        degraded:
+          'Mostrando resultados parciais devido a uma interrupção do VictoriaLogs. Algumas entradas de registro recentes podem estar faltando.'
       }
     },
     security: {
@@ -412,11 +413,15 @@ export default {
       gitRepoAccess: 'Tentativas de Acesso ao Repositório Git',
       gitRepoAccessDesc: 'tentativas de acessar arquivos do repositório Git detectadas',
       recommendedAction: 'Ação Recomendada',
-      rateLimitRecommendation: 'Considere implementar limitação de taxa, bloqueio de IP para infratores persistentes e garantir que o hardening do servidor esteja no lugar.',
-      envFileRecommendation: 'Garanta que arquivos de ambiente não sejam acessíveis de diretórios web e configurações de servidor bloqueiem adequadamente o acesso a arquivos sensíveis.',
-      gitRepoRecommendation: 'Certifique-se de que diretórios .git estejam adequadamente seguros e não acessíveis da web.',
+      rateLimitRecommendation:
+        'Considere implementar limitação de taxa, bloqueio de IP para infratores persistentes e garantir que o hardening do servidor esteja no lugar.',
+      envFileRecommendation:
+        'Garanta que arquivos de ambiente não sejam acessíveis de diretórios web e configurações de servidor bloqueiem adequadamente o acesso a arquivos sensíveis.',
+      gitRepoRecommendation:
+        'Certifique-se de que diretórios .git estejam adequadamente seguros e não acessíveis da web.',
       logPatternMatches: 'Padrões de log encontrados',
-      patternMatchNote: 'Termos encontrados no texto dos logs. A verificação reporta a substring, não um ataque confirmado — leia a linha.',
+      patternMatchNote:
+        'Termos encontrados no texto dos logs. A verificação reporta a substring, não um ataque confirmado — leia a linha.',
       patternMatchSummaryNote: '(substring encontrada no texto dos logs, não um ataque confirmado)',
       noVulnerabilitiesFound: 'Nenhuma Vulnerabilidade Encontrada',
       systemSecure: 'Seu sistema parece seguro. Continue monitorando regularmente.',
@@ -466,8 +471,10 @@ export default {
       confirmCancelEdit: 'Você tem alterações não salvas. Tem certeza de que deseja cancelar?',
       confirmDeleteTitleCategory: 'Excluir Categoria?',
       confirmDeleteTitleService: 'Excluir Serviço?',
-      confirmDeleteCategory: 'Tem certeza de que deseja excluir a Categoria "{itemName}"? Esta ação não pode ser desfeita.',
-      confirmDeleteService: 'Tem certeza de que deseja excluir o Serviço "{itemName}"? Esta ação não pode ser desfeita.',
+      confirmDeleteCategory:
+        'Tem certeza de que deseja excluir a Categoria "{itemName}"? Esta ação não pode ser desfeita.',
+      confirmDeleteService:
+        'Tem certeza de que deseja excluir o Serviço "{itemName}"? Esta ação não pode ser desfeita.',
       deleteSuccessCategory: 'Categoria excluída com sucesso.',
       deleteSuccessService: 'Serviço excluído com sucesso.',
       deleteErrorCategory: 'Falha ao excluir a Categoria.',
@@ -511,19 +518,22 @@ export default {
       retractPartialFailure: '{successCount} de {count} arquivo(s) retirado(s). Falharam: {detail}',
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
-      confirmDeleteSelected: 'Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.',
-      deleteQueuedSuccess: '{\'{\'}count{\'}\'} file(s) deleted.',
+      confirmDeleteSelected:
+        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: '{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}',
-      deleteAllFailed: 'All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}',
-      deleteRefuseReason: '{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.',
+      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
+      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
+      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
       retractAllFailed: 'Todos os {count} arquivo(s) falharam: {detail}',
       uploadSuccessMultiple: '{count} arquivo(s) carregados com sucesso.',
       linkSubmitSuccess: 'Rastreado e salvo "{fileName}" com sucesso.',
       actionSuccess: 'Ação "{action}" no arquivo {fileId} foi bem-sucedida.',
       metadataUpdateSuccess: 'Metadados do arquivo {fileId} foram atualizados.',
-      deletePartialNotice: '{\'{\'{\'}\'}blocked{\'}\'} arquivo(s) selecionado(s) não podem ser excluídos ({\'{\'{\'}\'}reason{\'}\'}) — apenas os outros {\'{\'{\'}\'}n{\'}\'} serão excluídos.',
-      confirmDeleteSkipped: '{\'{\'{\'}\'}count{\'}\'} arquivo(s) ingerido(s)/em andamento serão PULADOS — retrate-os primeiro para excluí-los.'
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} arquivo(s) selecionado(s) não podem ser excluídos ({'{'{'}'}reason{'}'}) — apenas os outros {'{'{'}'}n{'}'} serão excluídos.",
+      confirmDeleteSkipped:
+        "{'{'{'}'}count{'}'} arquivo(s) ingerido(s)/em andamento serão PULADOS — retrate-os primeiro para excluí-los."
     },
     queryInspector: {
       search: 'Buscar',
@@ -578,7 +588,8 @@ export default {
       tokenExpired: 'Sua sessão expirou. Por favor, faça login novamente.',
       tokenInvalid: 'Sua sessão não é válida. Por favor, faça login novamente.',
       insufficientRoles: 'Você não possui as permissões necessárias. Entre em contato com seu administrador.',
-      serviceUnavailable: 'O serviço de autenticação está temporariamente indisponível. Por favor, tente novamente mais tarde.',
+      serviceUnavailable:
+        'O serviço de autenticação está temporariamente indisponível. Por favor, tente novamente mais tarde.',
       provisioningFailed: 'Ocorreu um erro do sistema. Por favor, tente novamente mais tarde.',
       default: 'Ocorreu um erro'
     }
@@ -738,7 +749,7 @@ export default {
     chatTitle: 'Título do Chat',
     chatTitlePlaceholder: 'Digite um título para este chat',
     deleteFolder: 'Excluir Pasta',
-    deleteFolderConfirm: 'Tem certeza de que deseja excluir a pasta \'{name}\'?',
+    deleteFolderConfirm: "Tem certeza de que deseja excluir a pasta '{name}'?",
     chatsMoveWarning: 'Todos os chats nesta pasta serão movidos para a pasta padrão.',
     weatherTitle: 'Previsão do Tempo',
     weatherLoading: 'Carregando dados do tempo...',
@@ -824,51 +835,63 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. Identidade & Registro Civil',
-      children: 'Certidões de nascimento,Cartões de ID nacional,Passaportes,Certidões de casamento e óbito,Registro de eleitores'
+      children:
+        'Certidões de nascimento,Cartões de ID nacional,Passaportes,Certidões de casamento e óbito,Registro de eleitores'
     },
     cat2: {
       name: '2. Saúde & Serviços Sociais',
-      children: 'Acesso à saúde pública,Programas de vacinação,Seguro de saúde,Benefícios por deficiência,Assistência social e alimentar'
+      children:
+        'Acesso à saúde pública,Programas de vacinação,Seguro de saúde,Benefícios por deficiência,Assistência social e alimentar'
     },
     cat3: {
       name: '3. Educação & Aprendizagem',
-      children: 'Escolas públicas e universidades,Bolsas e empréstimos estudantis,Programas de educação para adultos,Recursos de aprendizado online'
+      children:
+        'Escolas públicas e universidades,Bolsas e empréstimos estudantis,Programas de educação para adultos,Recursos de aprendizado online'
     },
     cat4: {
       name: '4. Emprego & Serviços Trabalhistas',
-      children: 'Busca de emprego e benefícios de desemprego,Proteções ao trabalhador e direitos laborais,Regulamentos de segurança no trabalho,Treinamento de habilidades e aprendizados'
+      children:
+        'Busca de emprego e benefícios de desemprego,Proteções ao trabalhador e direitos laborais,Regulamentos de segurança no trabalho,Treinamento de habilidades e aprendizados'
     },
     cat5: {
       name: '5. Impostos & Receita',
-      children: 'Declaração de imposto de renda e reembolsos,Pagamentos de imposto sobre propriedade,Conformidade fiscal empresarial,Alfândega e direitos de importação'
+      children:
+        'Declaração de imposto de renda e reembolsos,Pagamentos de imposto sobre propriedade,Conformidade fiscal empresarial,Alfândega e direitos de importação'
     },
     cat6: {
       name: '6. Segurança Pública & Justiça',
-      children: 'Polícia e serviços de emergência,Tribunais e serviços de assistência legal,Relato de crimes,Leis de proteção ao consumidor'
+      children:
+        'Polícia e serviços de emergência,Tribunais e serviços de assistência legal,Relato de crimes,Leis de proteção ao consumidor'
     },
     cat7: {
       name: '7. Transporte & Mobilidade',
-      children: 'Carteiras de motorista e registro de veículos,Transporte público e infraestrutura,Violações de trânsito e multas,Programas de segurança rodoviária'
+      children:
+        'Carteiras de motorista e registro de veículos,Transporte público e infraestrutura,Violações de trânsito e multas,Programas de segurança rodoviária'
     },
     cat8: {
       name: '8. Habitação & Desenvolvimento Urbano',
-      children: 'Assistência habitacional pública,Registro de propriedade e registros de terras,Empréstimos e subsídios habitacionais,Zoneamento e permissões de construção'
+      children:
+        'Assistência habitacional pública,Registro de propriedade e registros de terras,Empréstimos e subsídios habitacionais,Zoneamento e permissões de construção'
     },
     cat9: {
       name: '9. Utilidades & Meio Ambiente',
-      children: 'Serviços de água e eletricidade,Gerenciamento de resíduos e reciclagem,Regulamentos ambientais,Iniciativas de energia renovável'
+      children:
+        'Serviços de água e eletricidade,Gerenciamento de resíduos e reciclagem,Regulamentos ambientais,Iniciativas de energia renovável'
     },
     cat10: {
       name: '10. Negócios & Comércio',
-      children: 'Registro e licenciamento de negócios,Regulamentos e permissões comerciais,Subsídios e incentivos para pequenas empresas,Suporte a e-commerce e negócios digitais'
+      children:
+        'Registro e licenciamento de negócios,Regulamentos e permissões comerciais,Subsídios e incentivos para pequenas empresas,Suporte a e-commerce e negócios digitais'
     },
     cat11: {
       name: '11. Segurança Social & Pensões',
-      children: 'Benefícios de aposentadoria,Gerenciamento de fundos de pensão,Benefícios para sobreviventes,Pensões por deficiência'
+      children:
+        'Benefícios de aposentadoria,Gerenciamento de fundos de pensão,Benefícios para sobreviventes,Pensões por deficiência'
     },
     cat12: {
       name: '12. Comunidade & Engajamento Cívico',
-      children: 'Votação e eleições,Feedback público e reclamações de cidadãos,Voluntariado e programas comunitários,Participação no governo local'
+      children:
+        'Votação e eleições,Feedback público e reclamações de cidadãos,Voluntariado e programas comunitários,Participação no governo local'
     }
   },
   settings: {
@@ -928,19 +951,22 @@ export default {
     user: 'Usuário',
     loadingUserInfo: 'Carregando informações do usuário...',
     resetUserDataTitle: 'Redefinir Dados do Usuário',
-    confirmResetUserData: 'Tem certeza de que deseja redefinir todos os dados do seu perfil? Isso limpará todas as informações do seu perfil e histórico de chat, mas manterá suas credenciais de conta.',
+    confirmResetUserData:
+      'Tem certeza de que deseja redefinir todos os dados do seu perfil? Isso limpará todas as informações do seu perfil e histórico de chat, mas manterá suas credenciais de conta.',
     reset: 'Redefinir',
     deleteAccount: 'Excluir minha conta',
     deleteAccountDesc: 'Excluir permanentemente sua conta e todos os dados. Isso não pode ser desfeito.',
     deleteAccountTitle: 'Excluir Conta',
-    confirmDeleteAccount: 'Tem certeza de que deseja excluir sua conta? Esta ação é permanente e não pode ser desfeita. Todos os seus dados serão apagados.',
+    confirmDeleteAccount:
+      'Tem certeza de que deseja excluir sua conta? Esta ação é permanente e não pode ser desfeita. Todos os seus dados serão apagados.',
     delete: 'Excluir',
     accountDeleted: 'Sua conta foi excluída.',
     failedToDeleteAccount: 'Falha ao excluir sua conta. Por favor, tente novamente mais tarde.'
   },
   userProfile: {
     title: 'Perfil do Usuário',
-    privacyInfo: 'Ao fornecer mais informações, você obterá respostas mais precisas e significativas do chatbot. Por favor, revise nossa',
+    privacyInfo:
+      'Ao fornecer mais informações, você obterá respostas mais precisas e significativas do chatbot. Por favor, revise nossa',
     privacyPolicyLink: 'Política de Privacidade',
     tabComingSoon: 'Esta aba está em desenvolvimento e estará disponível em breve.',
     saveSuccess: 'Perfil salvo com sucesso',
@@ -1205,8 +1231,10 @@ export default {
     noMatchingCountries: 'Nenhum país correspondente encontrado',
     noMatchingDisciplines: 'Nenhuma disciplina correspondente encontrada',
     noMatchingDegrees: 'Nenhum grau correspondente encontrado',
-    educationOptions: 'Contabilidade,Engenharia Aeroespacial,Ciência Agrícola,Antropologia,Arquitetura,História da Arte,Inteligência Artificial,Astronomia,Astrofísica,Bioquímica,Engenharia Biomédica,Biotecnologia,Administração de Empresas,Engenharia Química,Química,Engenharia Civil,Comunicações,Engenharia de Computação,Ciência da Computação,Gerenciamento de Construção,Justiça Criminal,Cibersegurança,Ciência de Dados,Odontologia,Economia,Educação,Engenharia Elétrica,Educação Elementar,Literatura Inglesa,Engenharia Ambiental,Ciência Ambiental,Design de Moda,Estudos Cinematográficos,Finanças,Belas Artes,Ciência de Alimentos,Ciência Forense,Design de Jogos,Geografia,Geologia,Design Gráfico,Administração de Saúde,História,Gerenciamento de Hospitalidade,Recursos Humanos,Design Industrial,Engenharia Industrial,Sistemas de Informação,Tecnologia da Informação,Design de Interiores,Negócios Internacionais,Relações Internacionais,Jornalismo,Direito,Ciência da Biblioteca,Linguística,Gerenciamento,Marketing,Ciência de Materiais,Matemática,Engenharia Mecânica,Estudos de Mídia,Medicina,Meteorologia,Microbiologia,Música,Nanotecnologia,Enfermagem,Nutrição,Terapia Ocupacional,Oceanografia,Engenharia de Petróleo,Farmácia,Filosofia,Fotografia,Educação Física,Fisioterapia,Física,Ciência Política,Psicologia,Administração Pública,Saúde Pública,Relações Públicas,Robótica,Educação Secundária,Trabalho Social,Sociologia,Engenharia de Software,Educação Especial,Gerenciamento Esportivo,Estatística,Engenharia de Sistemas,Artes Teatrais,Turismo,Planejamento Urbano,Medicina Veterinária,Desenvolvimento Web,Biologia da Vida Selvagem,Zoologia',
-    degreeOptions: 'Grau Associado,Bacharel em Artes (BA),Bacharel em Ciências (BS),Bacharel em Engenharia (BEng),Bacharel em Administração de Empresas (BBA),Bacharel em Belas Artes (BFA),Bacharel em Educação (BEd),Bacharel em Medicina (MBBS),Bacharel em Direito (LLB),Mestre em Artes (MA),Mestre em Ciências (MS),Mestre em Administração de Empresas (MBA),Mestre em Engenharia (MEng),Mestre em Belas Artes (MFA),Mestre em Educação (MEd),Mestre em Direito (LLM),Mestre em Saúde Pública (MPH),Doutor em Filosofia (PhD),Doutor em Medicina (MD),Doutor em Educação (EdD),Doutor em Administração de Empresas (DBA),Doutor em Jurisprudência (JD),Diploma Profissional,Diploma Técnico,Certificado Vocacional,Certificado de Pós-Graduação,Diploma de Pós-Graduação,Pós-Doutorado',
+    educationOptions:
+      'Contabilidade,Engenharia Aeroespacial,Ciência Agrícola,Antropologia,Arquitetura,História da Arte,Inteligência Artificial,Astronomia,Astrofísica,Bioquímica,Engenharia Biomédica,Biotecnologia,Administração de Empresas,Engenharia Química,Química,Engenharia Civil,Comunicações,Engenharia de Computação,Ciência da Computação,Gerenciamento de Construção,Justiça Criminal,Cibersegurança,Ciência de Dados,Odontologia,Economia,Educação,Engenharia Elétrica,Educação Elementar,Literatura Inglesa,Engenharia Ambiental,Ciência Ambiental,Design de Moda,Estudos Cinematográficos,Finanças,Belas Artes,Ciência de Alimentos,Ciência Forense,Design de Jogos,Geografia,Geologia,Design Gráfico,Administração de Saúde,História,Gerenciamento de Hospitalidade,Recursos Humanos,Design Industrial,Engenharia Industrial,Sistemas de Informação,Tecnologia da Informação,Design de Interiores,Negócios Internacionais,Relações Internacionais,Jornalismo,Direito,Ciência da Biblioteca,Linguística,Gerenciamento,Marketing,Ciência de Materiais,Matemática,Engenharia Mecânica,Estudos de Mídia,Medicina,Meteorologia,Microbiologia,Música,Nanotecnologia,Enfermagem,Nutrição,Terapia Ocupacional,Oceanografia,Engenharia de Petróleo,Farmácia,Filosofia,Fotografia,Educação Física,Fisioterapia,Física,Ciência Política,Psicologia,Administração Pública,Saúde Pública,Relações Públicas,Robótica,Educação Secundária,Trabalho Social,Sociologia,Engenharia de Software,Educação Especial,Gerenciamento Esportivo,Estatística,Engenharia de Sistemas,Artes Teatrais,Turismo,Planejamento Urbano,Medicina Veterinária,Desenvolvimento Web,Biologia da Vida Selvagem,Zoologia',
+    degreeOptions:
+      'Grau Associado,Bacharel em Artes (BA),Bacharel em Ciências (BS),Bacharel em Engenharia (BEng),Bacharel em Administração de Empresas (BBA),Bacharel em Belas Artes (BFA),Bacharel em Educação (BEd),Bacharel em Medicina (MBBS),Bacharel em Direito (LLB),Mestre em Artes (MA),Mestre em Ciências (MS),Mestre em Administração de Empresas (MBA),Mestre em Engenharia (MEng),Mestre em Belas Artes (MFA),Mestre em Educação (MEd),Mestre em Direito (LLM),Mestre em Saúde Pública (MPH),Doutor em Filosofia (PhD),Doutor em Medicina (MD),Doutor em Educação (EdD),Doutor em Administração de Empresas (DBA),Doutor em Jurisprudência (JD),Diploma Profissional,Diploma Técnico,Certificado Vocacional,Certificado de Pós-Graduação,Diploma de Pós-Graduação,Pós-Doutorado',
     aria: {
       tabList: 'Seções do formulário de perfil',
       nextButton: 'Ir para a próxima seção',
@@ -1221,9 +1249,11 @@ export default {
     streamingError: 'A resposta foi interrompida. Tente novamente.',
     aiGeneratedNoDocs: 'Gerado por IA — não baseado em documentos da biblioteca',
     welcomeMessage: 'Boas-vindas! Como posso ajudar você hoje?',
-    configMismatchWarning: 'Incompatibilidade de configuração: {warnings}. Verifique a Ajuda Rápida e a configuração da hierarquia de conhecimento.',
+    configMismatchWarning:
+      'Incompatibilidade de configuração: {warnings}. Verifique a Ajuda Rápida e a configuração da hierarquia de conhecimento.',
     categoryNotFound: 'Categoria "{label}" não encontrada na hierarquia de conhecimento',
-    serviceLabelMismatch: 'O serviço "{label}" utiliza um rótulo de UI que pode não corresponder à hierarquia de conhecimento',
+    serviceLabelMismatch:
+      'O serviço "{label}" utiliza um rótulo de UI que pode não corresponder à hierarquia de conhecimento',
     noFilterWarning: 'Nenhum filtro de contexto ativo — a consulta não será filtrada.',
     placeholder: 'Digite sua consulta aqui...',
     sendButton: 'Enviar',
@@ -1253,7 +1283,8 @@ export default {
     saveConfirmTitle: 'Salvar Conversa Existente',
     saveConfirmMessage: 'Salvar conversa existente?',
     loadConfirmTitle: 'Carregar Conversa Existente',
-    loadConfirmMessage: 'Você tem alterações não salvas. Deseja descartá-las e carregar a conversa selecionada, ou salvar a conversa atual primeiro?',
+    loadConfirmMessage:
+      'Você tem alterações não salvas. Deseja descartá-las e carregar a conversa selecionada, ou salvar a conversa atual primeiro?',
     loadAndDiscard: 'Carregar e Descartar',
     saveAndLoad: 'Salvar e Carregar',
     saveAndStartNew: 'Salvar e Iniciar Novo',
@@ -1268,15 +1299,24 @@ export default {
     removeItem: 'Remover'
   },
   quickhelp: {
-    applyForIDPrompt: 'Atue como um especialista atencioso em registro civil do Quênia. Explique as etapas para obter uma Identidade Nacional (Maisha Namba) ou substituir uma perdida. IMPORTANTE: Forneça uma lista clara dos documentos necessários (por exemplo, Certidão de Nascimento, cópias dos documentos de identidade dos pais) e oriente o usuário a procurar o Huduma Centre ou o escritório do Registrar of Persons mais próximo. REGRA: Refira-se sempre ao aplicativo como \'Genie AI\'.',
-    payTaxesPrompt: 'Atue como um guia da KRA (Kenya Revenue Authority). Explique o processo de envio de declarações, solicitação de KRA PIN ou redefinição de senha no portal iTax. IMPORTANTE: Lembre o usuário do prazo final de 30 de junho para declarações anuais e oriente-o sobre como enviar declarações zeradas (Nil returns) caso não tenha obtido rendimentos. REGRA: Refira-se sempre ao aplicativo como \'Genie AI\'.',
-    startBusinessPrompt: 'Atue como consultor de negócios para serviços do eCitizen. Guie o usuário na reserva de nome comercial e no registro de empresas no Quênia. IMPORTANTE: Detalhe as taxas atuais para busca de nome e registro, e direcione o usuário ao portal oficial do eCitizen para concluir a solicitação. REGRA: Refira-se sempre ao aplicativo como \'Genie AI\'.',
-    findHealthcarePrompt: 'Atue como um guia de serviços de saúde. Forneça informações sobre a transição do NHIF para o SHIF (Fundo Social de Seguro de Saúde) e instruções sobre como se cadastrar. IMPORTANTE: Compartilhe os códigos USSD oficiais (como *263#) ou links de sites para registro e explique os benefícios da cobertura de saúde pública. REGRA: Refira-se sempre ao aplicativo como \'Genie AI\'.',
-    educationServicesPrompt: 'Atue como um orientador educacional. Aborde o currículo CBC, o registro no NEMIS ou o ingresso na universidade via KUCCPS. IMPORTANTE: Explique como os pais podem consultar os resultados dos exames nacionais via SMS ou pelo portal KNEC assim que forem divulgados. REGRA: Refira-se sempre ao aplicativo como \'Genie AI\'.',
-    transportLicensesPrompt: 'Atue como um guia de serviços da NTSA. Explique os procedimentos para renovação de carteira de habilitação, inspeção veicular ou gerenciamento de conta TIMS. IMPORTANTE: Oriente o usuário sobre como fazer login no portal eCitizen NTSA para solicitar sua Smart DL ou agendar uma inspeção veicular. REGRA: Refira-se sempre ao aplicativo como \'Genie AI\'.',
-    housingProgramsPrompt: 'Atue como consultor de programas habitacionais. Explique o Programa de Habitação Acessível (Boma Yangu), o cadastro e o processo de contribuição voluntária. IMPORTANTE: Direcione o usuário ao portal Boma Yangu para ver projetos e explique os critérios de elegibilidade para alocação. REGRA: Refira-se sempre ao aplicativo como \'Genie AI\'.',
-    findJobsPrompt: 'Atue como um orientador de carreira para o serviço público. Oriente o usuário sobre a criação de um perfil e a candidatura a vagas pelo portal da Public Service Commission (PSC). IMPORTANTE: Aconselhe o usuário a manter seus certificados acadêmicos organizados e a consultar periodicamente o site da PSC ou os jornais locais para conferir os anúncios do MyGov. REGRA: Refira-se sempre ao aplicativo como \'Genie AI\'.',
-    justChatPrompt: 'Atue como um companheiro local amigável. Seja educado, prestativo e demonstre amplo conhecimento sobre a cultura queniana e o dia a dia no país. IMPORTANTE: Lembre o usuário de que, embora você possa conversar sobre qualquer assunto, seu principal ponto forte é auxiliá-lo com os serviços do governo queniano, como **Identidades**, **Impostos** e **Registro de Empresas**. REGRA: Refira-se sempre ao aplicativo como \'Genie AI\'.'
+    applyForIDPrompt:
+      "Atue como um especialista atencioso em registro civil do Quênia. Explique as etapas para obter uma Identidade Nacional (Maisha Namba) ou substituir uma perdida. IMPORTANTE: Forneça uma lista clara dos documentos necessários (por exemplo, Certidão de Nascimento, cópias dos documentos de identidade dos pais) e oriente o usuário a procurar o Huduma Centre ou o escritório do Registrar of Persons mais próximo. REGRA: Refira-se sempre ao aplicativo como 'Genie AI'.",
+    payTaxesPrompt:
+      "Atue como um guia da KRA (Kenya Revenue Authority). Explique o processo de envio de declarações, solicitação de KRA PIN ou redefinição de senha no portal iTax. IMPORTANTE: Lembre o usuário do prazo final de 30 de junho para declarações anuais e oriente-o sobre como enviar declarações zeradas (Nil returns) caso não tenha obtido rendimentos. REGRA: Refira-se sempre ao aplicativo como 'Genie AI'.",
+    startBusinessPrompt:
+      "Atue como consultor de negócios para serviços do eCitizen. Guie o usuário na reserva de nome comercial e no registro de empresas no Quênia. IMPORTANTE: Detalhe as taxas atuais para busca de nome e registro, e direcione o usuário ao portal oficial do eCitizen para concluir a solicitação. REGRA: Refira-se sempre ao aplicativo como 'Genie AI'.",
+    findHealthcarePrompt:
+      "Atue como um guia de serviços de saúde. Forneça informações sobre a transição do NHIF para o SHIF (Fundo Social de Seguro de Saúde) e instruções sobre como se cadastrar. IMPORTANTE: Compartilhe os códigos USSD oficiais (como *263#) ou links de sites para registro e explique os benefícios da cobertura de saúde pública. REGRA: Refira-se sempre ao aplicativo como 'Genie AI'.",
+    educationServicesPrompt:
+      "Atue como um orientador educacional. Aborde o currículo CBC, o registro no NEMIS ou o ingresso na universidade via KUCCPS. IMPORTANTE: Explique como os pais podem consultar os resultados dos exames nacionais via SMS ou pelo portal KNEC assim que forem divulgados. REGRA: Refira-se sempre ao aplicativo como 'Genie AI'.",
+    transportLicensesPrompt:
+      "Atue como um guia de serviços da NTSA. Explique os procedimentos para renovação de carteira de habilitação, inspeção veicular ou gerenciamento de conta TIMS. IMPORTANTE: Oriente o usuário sobre como fazer login no portal eCitizen NTSA para solicitar sua Smart DL ou agendar uma inspeção veicular. REGRA: Refira-se sempre ao aplicativo como 'Genie AI'.",
+    housingProgramsPrompt:
+      "Atue como consultor de programas habitacionais. Explique o Programa de Habitação Acessível (Boma Yangu), o cadastro e o processo de contribuição voluntária. IMPORTANTE: Direcione o usuário ao portal Boma Yangu para ver projetos e explique os critérios de elegibilidade para alocação. REGRA: Refira-se sempre ao aplicativo como 'Genie AI'.",
+    findJobsPrompt:
+      "Atue como um orientador de carreira para o serviço público. Oriente o usuário sobre a criação de um perfil e a candidatura a vagas pelo portal da Public Service Commission (PSC). IMPORTANTE: Aconselhe o usuário a manter seus certificados acadêmicos organizados e a consultar periodicamente o site da PSC ou os jornais locais para conferir os anúncios do MyGov. REGRA: Refira-se sempre ao aplicativo como 'Genie AI'.",
+    justChatPrompt:
+      "Atue como um companheiro local amigável. Seja educado, prestativo e demonstre amplo conhecimento sobre a cultura queniana e o dia a dia no país. IMPORTANTE: Lembre o usuário de que, embora você possa conversar sobre qualquer assunto, seu principal ponto forte é auxiliá-lo com os serviços do governo queniano, como **Identidades**, **Impostos** e **Registro de Empresas**. REGRA: Refira-se sempre ao aplicativo como 'Genie AI'."
   },
   common: {
     cancel: 'Cancelar',
@@ -1343,10 +1383,14 @@ export default {
     tabs: {
       details: 'Detalhes',
       ingestionLog: 'Log de Ingestão',
-      detailsHint: 'Metadados deste arquivo: nome, autor e os rótulos de hierarquia de conhecimento que a IA utiliza para rotear perguntas. Ingest exige pelo menos um rótulo.',
-      dashboardHint: 'Visualização em tempo real da varredura do site deste arquivo: taxa, fila, erros e progresso. Quando a varredura for concluída com sucesso, o rodapé abaixo a converterá em um repositório OKF.',
-      crawlLogHint: 'Registro por página da varredura do site: quais URLs foram buscadas, redirecionadas ou falharam. Gravado enquanto a varredura é executada.',
-      ingestionLogHint: 'Progresso etapa por etapa da preparação deste arquivo para respostas de IA: divisão em blocos (chunking), rotulagem, geração de embeddings e indexação. Os erros aqui mostram exatamente onde ingest parou.'
+      detailsHint:
+        'Metadados deste arquivo: nome, autor e os rótulos de hierarquia de conhecimento que a IA utiliza para rotear perguntas. Ingest exige pelo menos um rótulo.',
+      dashboardHint:
+        'Visualização em tempo real da varredura do site deste arquivo: taxa, fila, erros e progresso. Quando a varredura for concluída com sucesso, o rodapé abaixo a converterá em um repositório OKF.',
+      crawlLogHint:
+        'Registro por página da varredura do site: quais URLs foram buscadas, redirecionadas ou falharam. Gravado enquanto a varredura é executada.',
+      ingestionLogHint:
+        'Progresso etapa por etapa da preparação deste arquivo para respostas de IA: divisão em blocos (chunking), rotulagem, geração de embeddings e indexação. Os erros aqui mostram exatamente onde ingest parou.'
     },
     log: {
       killActions: 'Ações de Interrupção:',
@@ -1392,9 +1436,11 @@ export default {
       retractTitle: 'Confirmar Retirada',
       deleteTitle: 'Confirmar Exclusão',
       killDocTitle: 'Interromper Ingestão do Documento',
-      killDoc: 'Tem a certeza de que quer interromper a tarefa de ingestão para ESTE documento? O processo tentará uma reversão segura.',
+      killDoc:
+        'Tem a certeza de que quer interromper a tarefa de ingestão para ESTE documento? O processo tentará uma reversão segura.',
       killProcTitle: 'Interromper TODO o Processo de Ingestão',
-      killProc: 'AVISO: Isto irá interromper todo o serviço de ingestão de backend, afetando TODOS os ficheiros atualmente em processamento. Tem a certeza absoluta?'
+      killProc:
+        'AVISO: Isto irá interromper todo o serviço de ingestão de backend, afetando TODOS os ficheiros atualmente em processamento. Tem a certeza absoluta?'
     }
   },
   uploadDialog: {
@@ -1405,14 +1451,16 @@ export default {
     remove: 'Remover',
     uploading: 'A carregar...',
     notifications: {
-      dropError: 'Apenas ficheiros podem ser largados. Verifique se está a arrastar um ficheiro válido do seu computador.',
+      dropError:
+        'Apenas ficheiros podem ser largados. Verifique se está a arrastar um ficheiro válido do seu computador.',
       typeNotAllowed: 'O tipo de ficheiro "{extension}" não é permitido.',
       shortcutUnsupported: 'Ficheiros de atalho (.url) não são suportados. Por favor, arraste o ficheiro real.',
       duplicate: 'O ficheiro "{fileName}" já foi adicionado.',
       uploadSuccess: '{fileName} carregado com sucesso',
       uploadFailed: 'Falha ao carregar {fileName}.'
     },
-    ragTip: 'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
     versions: {
@@ -1518,9 +1566,11 @@ export default {
       files: 'Documentos selecionados',
       servingBadge: 'serve o RAG livre',
       alreadyBadge: 'já em um repositório OKF',
-      servingTip: 'Este documento atualmente serve o corpus livre — o novo repositório não pode sofrer ingest até ser retirado.',
+      servingTip:
+        'Este documento atualmente serve o corpus livre — o novo repositório não pode sofrer ingest até ser retirado.',
       alreadyTip: 'Este documento já é origem de outro repositório OKF.',
-      servingWarn: '{n} documento(s) ainda servem o corpus livre. A importação tem sucesso, mas este repositório não pode sofrer ingest até que sejam retirados.',
+      servingWarn:
+        '{n} documento(s) ainda servem o corpus livre. A importação tem sucesso, mas este repositório não pode sofrer ingest até que sejam retirados.',
       cancel: 'Cancelar',
       importing: 'Importando…',
       go: 'Importar',
@@ -1571,9 +1621,12 @@ export default {
           attempts: 'Attempts: {n}',
           when: 'Last attempt {when}',
           fix: {
-            reaper: 'O worker de ingest parou de esperar dentro da sua janela de carência (a drenagem estava saturada) — o conteúdo está intacto. Correção: edite levemente este arquivo e salve para reenfileirá-lo, ou faça retract e re-ingest do repositório inteiro.',
-            dataprep: 'O serviço de preparação de conteúdo falhou neste ingest. Correção: edite e salve para reenfileirar; se repetir, verifique a saúde do serviço dataprep.',
-            generic: 'A indexação falhou. Correção: edite o conteúdo e salve para reenfileirar, ou faça retract e re-ingest do repositório inteiro.'
+            reaper:
+              'O worker de ingest parou de esperar dentro da sua janela de carência (a drenagem estava saturada) — o conteúdo está intacto. Correção: edite levemente este arquivo e salve para reenfileirá-lo, ou faça retract e re-ingest do repositório inteiro.',
+            dataprep:
+              'O serviço de preparação de conteúdo falhou neste ingest. Correção: edite e salve para reenfileirar; se repetir, verifique a saúde do serviço dataprep.',
+            generic:
+              'A indexação falhou. Correção: edite o conteúdo e salve para reenfileirar, ou faça retract e re-ingest do repositório inteiro.'
           }
         },
         indexBadge: 'índice',
@@ -1581,9 +1634,11 @@ export default {
         loading: 'Carregando…',
         resplit: 'Re-dividir',
         flagged: 'sinalizado',
-        flaggedTip: 'Conceitos com entidades sinalizadas — abra cada um, remova ou altere a entidade, salve (a nova verificação é feita automaticamente); ou reconheça-as ao executar publish.',
+        flaggedTip:
+          'Conceitos com entidades sinalizadas — abra cada um, remova ou altere a entidade, salve (a nova verificação é feita automaticamente); ou reconheça-as ao executar publish.',
         piiBadge: 'PII',
-        piiTip: 'Entidades sinalizadas: {k}. Abra, remova ou altere-as e salve — a nova verificação ocorre automaticamente.',
+        piiTip:
+          'Entidades sinalizadas: {k}. Abra, remova ou altere-as e salve — a nova verificação ocorre automaticamente.',
         piiTipBare: 'Entidades sinalizadas — abra, revise e salve para verificar novamente.',
         sourceLabel: 'Documento de origem',
         sourceView: 'Abrir o documento de origem',
@@ -1645,7 +1700,8 @@ export default {
       paneLabel: 'Painel de exibição',
       saveFailed: 'Falha ao salvar — tente novamente',
       piiBulk: {
-        done_accept: 'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_accept:
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
         done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
         done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
@@ -1654,9 +1710,11 @@ export default {
           accept: 'Aceitar todas as entidades sinalizadas'
         },
         body: {
-          redact: 'O corpo de cada conceito sinalizado é substituído pelo aviso de ocultação. Esta ação não pode ser desfeita.',
+          redact:
+            'O corpo de cada conceito sinalizado é substituído pelo aviso de ocultação. Esta ação não pode ser desfeita.',
           remove: 'O corpo de cada conceito sinalizado é esvaziado. Esta ação não pode ser desfeita.',
-          accept: 'Todas as entidades sinalizadas são marcadas como revisadas e mantidas — elas não serão sinalizadas novamente, a menos que você refaça a verificação.'
+          accept:
+            'Todas as entidades sinalizadas são marcadas como revisadas e mantidas — elas não serão sinalizadas novamente, a menos que você refaça a verificação.'
         },
         scope: 'Conceitos afetados: {n}.',
         confirm: 'Aplicar',
@@ -1863,7 +1921,8 @@ export default {
       save: 'Salvar frontmatter',
       saveFailed: 'Falha ao salvar frontmatter',
       perRepoTitle: 'Routing tags — what this repo is about',
-      perRepoHint: 'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoHint:
+        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -1885,42 +1944,68 @@ export default {
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
       perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
-      repoTagsHint: 'Etiquetas ao nível do repositório ({summary}) pertencem ao repositório, não a este conceito — gerencie-as no painel de etiquetas na barra direita.'
+      repoTagsHint:
+        'Etiquetas ao nível do repositório ({summary}) pertencem ao repositório, não a este conceito — gerencie-as no painel de etiquetas na barra direita.'
     },
     glossary: {
-      addConcept: 'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
       type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
-      title: 'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
-      indexStatus: 'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
-      trustTier: 'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
-      concept: 'Uma entrada no seu repositório — geralmente uma única página ou tópico. Cada conceito possui frontmatter estruturado que o assistente lê, além do texto em markdown a partir do qual ele responde.',
-      repository: 'Uma coleção de conceitos curados em torno de uma Área Temática. Torna-se um pacote OKF que você publica, versiona e disponibiliza ao assistente.',
-      subjectArea: 'A qual domínio pertence esse conhecimento? A Área Temática agrupa seu repositório e direciona quais rótulos você pode escolher. Não pode ser alterada após a criação.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept:
+        'Uma entrada no seu repositório — geralmente uma única página ou tópico. Cada conceito possui frontmatter estruturado que o assistente lê, além do texto em markdown a partir do qual ele responde.',
+      repository:
+        'Uma coleção de conceitos curados em torno de uma Área Temática. Torna-se um pacote OKF que você publica, versiona e disponibiliza ao assistente.',
+      subjectArea:
+        'A qual domínio pertence esse conhecimento? A Área Temática agrupa seu repositório e direciona quais rótulos você pode escolher. Não pode ser alterada após a criação.',
       selectSubjectArea: 'Selecione uma área temática…',
-      subjectAreaMissing: 'A Área Temática deste repositório não está na Hierarquia de Conhecimento — exibindo todos os rótulos.',
-      label: 'Uma categoria da Hierarquia de Conhecimento que informa ao assistente que tipo de entidade é este conceito. Os rótulos são como as respostas encontram o conteúdo certo.',
-      bundle: 'A exportação em zip de um repositório — seus conceitos, estrutura e metadados em um único arquivo. Os pacotes são a forma como os repositórios transitam entre sistemas.',
-      version: 'Um instantâneo congelado de um repositório no momento de publish. A edição continua na próxima versão — versões publicadas nunca mudam.',
-      serving: 'Esta versão está ativa: o assistente lê seu conteúdo ao responder. Execute retract para fazer alterações.',
-      ingestion: 'A etapa em que uma versão publicada é preparada para responder — o texto é dividido, vetorizado e vinculado. Nada chega ao assistente antes disso.',
-      classification: 'Como decidimos o que cada conceito É (um tópico, uma entidade, um processo…). A heurística lê a página automaticamente; a opção com LLM é mais lenta, mas lida bem com páginas complexas.',
-      resplit: 'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      subjectAreaMissing:
+        'A Área Temática deste repositório não está na Hierarquia de Conhecimento — exibindo todos os rótulos.',
+      label:
+        'Uma categoria da Hierarquia de Conhecimento que informa ao assistente que tipo de entidade é este conceito. Os rótulos são como as respostas encontram o conteúdo certo.',
+      bundle:
+        'A exportação em zip de um repositório — seus conceitos, estrutura e metadados em um único arquivo. Os pacotes são a forma como os repositórios transitam entre sistemas.',
+      version:
+        'Um instantâneo congelado de um repositório no momento de publish. A edição continua na próxima versão — versões publicadas nunca mudam.',
+      serving:
+        'Esta versão está ativa: o assistente lê seu conteúdo ao responder. Execute retract para fazer alterações.',
+      ingestion:
+        'A etapa em que uma versão publicada é preparada para responder — o texto é dividido, vetorizado e vinculado. Nada chega ao assistente antes disso.',
+      classification:
+        'Como decidimos o que cada conceito É (um tópico, uma entidade, um processo…). A heurística lê a página automaticamente; a opção com LLM é mais lenta, mas lida bem com páginas complexas.',
+      resplit:
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'Falha ao salvar',
       importFailedTitle: 'A importação falhou — o arquivo de origem não pôde ser convertido.',
       importFailedHint: 'Exclua este repositório e importe o arquivo de origem novamente.',
-      frontmatter: 'As informações estruturadas no topo de cada arquivo — tipo, título, rótulos. O assistente as utiliza para saber sobre o que é cada conceito.',
-      pickSource: 'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
-      classificationStrategy: 'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      frontmatter:
+        'As informações estruturadas no topo de cada arquivo — tipo, título, rótulos. O assistente as utiliza para saber sobre o que é cada conceito.',
+      pickSource:
+        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy:
+        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
       clsHeur: 'Heuristics (fast, no LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
-      fsPick: 'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
-      autocorrect: 'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
-      handoff: 'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
-      lifecycle: 'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
-      labelsAuto: 'Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.',
-      reviewHandoff: 'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
-      piiReview: 'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+      fsPick:
+        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect:
+        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff:
+        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      lifecycle:
+        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto:
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+      reviewHandoff:
+        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview:
+        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
     },
     md: {
       toolbar: 'Formatação',
@@ -1938,21 +2023,36 @@ export default {
       rendering: 'Renderizando…'
     },
     narrative: {
-      intro: 'Um repositório OKF é uma coleção estruturada e versionada de tópicos que suas respostas no chat podem citar. Pense nele como uma camada ontológica leve para o seu domínio — os rótulos definem as categorias, os tópicos definem as entidades e as fontes definem a procedência.',
-      step0: 'Um repositório OKF é uma coleção curada e versionada de tópicos. Pense nele como uma camada ontológica leve para o seu domínio — os rótulos definem categorias, os tópicos definem entidades e as fontes definem procedência. Uma vez publicado, as respostas do chat citam esses tópicos por ID.',
-      step1: 'Três maneiras de iniciar um repositório OKF: extrair tópicos de uma varredura de site, extraí-los de documentos que você já enviou ou começar do zero. Clonar um repositório existente copia seus tópicos e permite que você bifurque o trabalho.',
-      step2: 'Cada documento se torna uma fonte de tópicos. O produtor faz a leitura, extrai candidatos a tópicos e propõe uma hierarquia. Você revisará cada tópico na próxima etapa — nada é confirmado até você aprovar.',
-      step3: 'Estamos lendo suas fontes e propondo tópicos. Os tópicos se agrupam sob os rótulos de categoria que você escolher. O produtor é conservador — prefere sugerir menos tópicos bem estruturados do que muitos tópicos com ruído.',
-      step4: 'Os rótulos são os eixos categóricos da sua ontologia — que tipo de entidade é este tópico? Escolha de 3 a 7 rótulos que capturem os eixos principais; o produtor os utiliza como base estrutural para a hierarquia de tópicos.',
-      step5: 'Este é o núcleo do trabalho. Cada tópico é uma unidade pequena e citável de conhecimento. Os tópicos recebem um título, uma descrição e herdam os rótulos escolhidos. Seu papel é torná-lo consistente: renomeie títulos vagos, mescle duplicatas próximas e descarte aqueles que não puder respaldar com uma fonte.',
-      step6: 'Executamos verificações de conformidade: cada tópico tem um título? Os rótulos são válidos? As atribuições de fonte estão intactas? Os problemas bloqueantes devem ser corrigidos antes de entregar o repositório; avisos podem ser reconhecidos.',
-      step7: 'Alguns avisos podem ser corrigidos automaticamente: valores de status podem ser ajustados para enums válidos, campos ausentes podem ser preenchidos com padrões razoáveis. Aplique as correções com as quais concorda e retorne ao curador para revisar.',
-      step8: 'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
-      step9: 'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
-      docMgmtEntry: 'Crie um novo repositório OKF a partir dos documentos selecionados. Os documentos se tornarão fontes; você revisará e nomeará os tópicos produzidos antes que qualquer coisa seja publicada.',
-      crawlSegment: 'Um repositório OKF é uma coleção estruturada e versionada de tópicos que suas respostas no chat podem citar.',
-      emptyDashboard: 'Você ainda não criou nenhum repositório OKF. Um repositório OKF é um conjunto estruturado e citável de tópicos no qual suas respostas do chat podem se basear.',
-      labels: 'Os rótulos são os eixos categóricos da sua ontologia — eles respondem "que tipo de entidade é este tópico?".',
+      intro:
+        'Um repositório OKF é uma coleção estruturada e versionada de tópicos que suas respostas no chat podem citar. Pense nele como uma camada ontológica leve para o seu domínio — os rótulos definem as categorias, os tópicos definem as entidades e as fontes definem a procedência.',
+      step0:
+        'Um repositório OKF é uma coleção curada e versionada de tópicos. Pense nele como uma camada ontológica leve para o seu domínio — os rótulos definem categorias, os tópicos definem entidades e as fontes definem procedência. Uma vez publicado, as respostas do chat citam esses tópicos por ID.',
+      step1:
+        'Três maneiras de iniciar um repositório OKF: extrair tópicos de uma varredura de site, extraí-los de documentos que você já enviou ou começar do zero. Clonar um repositório existente copia seus tópicos e permite que você bifurque o trabalho.',
+      step2:
+        'Cada documento se torna uma fonte de tópicos. O produtor faz a leitura, extrai candidatos a tópicos e propõe uma hierarquia. Você revisará cada tópico na próxima etapa — nada é confirmado até você aprovar.',
+      step3:
+        'Estamos lendo suas fontes e propondo tópicos. Os tópicos se agrupam sob os rótulos de categoria que você escolher. O produtor é conservador — prefere sugerir menos tópicos bem estruturados do que muitos tópicos com ruído.',
+      step4:
+        'Os rótulos são os eixos categóricos da sua ontologia — que tipo de entidade é este tópico? Escolha de 3 a 7 rótulos que capturem os eixos principais; o produtor os utiliza como base estrutural para a hierarquia de tópicos.',
+      step5:
+        'Este é o núcleo do trabalho. Cada tópico é uma unidade pequena e citável de conhecimento. Os tópicos recebem um título, uma descrição e herdam os rótulos escolhidos. Seu papel é torná-lo consistente: renomeie títulos vagos, mescle duplicatas próximas e descarte aqueles que não puder respaldar com uma fonte.',
+      step6:
+        'Executamos verificações de conformidade: cada tópico tem um título? Os rótulos são válidos? As atribuições de fonte estão intactas? Os problemas bloqueantes devem ser corrigidos antes de entregar o repositório; avisos podem ser reconhecidos.',
+      step7:
+        'Alguns avisos podem ser corrigidos automaticamente: valores de status podem ser ajustados para enums válidos, campos ausentes podem ser preenchidos com padrões razoáveis. Aplique as correções com as quais concorda e retorne ao curador para revisar.',
+      step8:
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9:
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry:
+        'Crie um novo repositório OKF a partir dos documentos selecionados. Os documentos se tornarão fontes; você revisará e nomeará os tópicos produzidos antes que qualquer coisa seja publicada.',
+      crawlSegment:
+        'Um repositório OKF é uma coleção estruturada e versionada de tópicos que suas respostas no chat podem citar.',
+      emptyDashboard:
+        'Você ainda não criou nenhum repositório OKF. Um repositório OKF é um conjunto estruturado e citável de tópicos no qual suas respostas do chat podem se basear.',
+      labels:
+        'Os rótulos são os eixos categóricos da sua ontologia — eles respondem "que tipo de entidade é este tópico?".',
       hide: 'Ocultar',
       whatIsThis: 'O que é isto?'
     },
@@ -1967,7 +2067,8 @@ export default {
       title: 'OKF Studio',
       help: 'Ajuda',
       helpTitle: 'Sobre o OKF Studio',
-      helpBody: 'Os repositórios OKF são uma camada ontológica leve — rótulos definem categorias, tópicos definem entidades, fontes definem procedência. Uma vez publicados, as respostas do chat citam tópicos por ID e expõem sua procedência.',
+      helpBody:
+        'Os repositórios OKF são uma camada ontológica leve — rótulos definem categorias, tópicos definem entidades, fontes definem procedência. Uma vez publicados, as respostas do chat citam tópicos por ID e expõem sua procedência.',
       view: {
         dashboard: 'Painel',
         wizard: 'Assistente'
@@ -2142,7 +2243,8 @@ export default {
         neverStarted: 'The conversion did not start — retry.',
         manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
         labelDone: 'Conversion complete',
-        dupContent: 'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        dupContent:
+          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
@@ -2161,11 +2263,12 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: 'Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {
-        embedHint: 'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
         noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'Revisar os tópicos',
         hint: 'Cada tópico é uma unidade pequena e citável de conhecimento. Edite o título e a descrição.',
@@ -2192,9 +2295,11 @@ export default {
         sources: 'Fontes',
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
-        browserHint: 'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
+        browserHint:
+          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
         noRepo: 'No repository yet — the file review appears here once a repository exists.',
-        ritualOutside: 'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        ritualOutside:
+          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2211,7 +2316,8 @@ export default {
         topicsServing: 'Topics serving',
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
-        ritual: 'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        ritual:
+          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2236,7 +2342,8 @@ export default {
         emptySelection: 'Selecione pelo menos um documento',
         alreadyInOkf: 'Remover documentos que já estão em um repositório OKF',
         alreadyIngested: 'Remover documentos que já passaram por ingest',
-        servingWarn: '{n} documento(s) selecionado(s) ainda servem o corpus livre — o novo repositório não pode sofrer ingest até que sejam retirados.'
+        servingWarn:
+          '{n} documento(s) selecionado(s) ainda servem o corpus livre — o novo repositório não pode sofrer ingest até que sejam retirados.'
       },
       produce: {
         notReady: 'A integração com o produtor virá em uma história posterior.'
@@ -2247,11 +2354,14 @@ export default {
       domainPlaceholder: 'Selecione uma área temática…',
       classLabel: 'Classificação de conceitos',
       classHeuristics: 'Heurística (padrão)',
-      classHeuristicsHint: 'Classificação rápida baseada em regras — sem custo de LLM, ideal para varreduras bem estruturadas.',
+      classHeuristicsHint:
+        'Classificação rápida baseada em regras — sem custo de LLM, ideal para varreduras bem estruturadas.',
       classLlm: 'Assistido por LLM',
-      classLlmHint: 'O LLM faz a curadoria de cada conceito — tipo, rótulo de Hierarquia de Conhecimento e descrição. Muito mais preciso e completo do que a heurística; espere tempo adicional por conceito.',
+      classLlmHint:
+        'O LLM faz a curadoria de cada conceito — tipo, rótulo de Hierarquia de Conhecimento e descrição. Muito mais preciso e completo do que a heurística; espere tempo adicional por conceito.',
       classHybrid: 'Híbrido',
-      classHybridHint: 'Heurística primeiro; o LLM analisa casos incertos e preenche lacunas. Equilíbrio entre tempo e abrangência.',
+      classHybridHint:
+        'Heurística primeiro; o LLM analisa casos incertos e preenche lacunas. Equilíbrio entre tempo e abrangência.',
       targetLabel: 'Para onde isso deve ir?',
       target: {
         freeform: 'Varrer para corpus de formato livre',
@@ -2269,7 +2379,8 @@ export default {
       progressDownload: 'Baixando conteúdo verificado...',
       progressSplit: 'Dividindo em conceitos...',
       progressIngest: 'Adicionando conceitos (lote [i] de [n])...',
-      postCrawlHint: 'Depois que a varredura terminar, você poderá transformá-la em um repositório OKF na aba Painel do arquivo.',
+      postCrawlHint:
+        'Depois que a varredura terminar, você poderá transformá-la em um repositório OKF na aba Painel do arquivo.',
       creating: 'Criando repositório OKF...',
       createOk: 'Repositório OKF criado. Abrindo o Studio para curadoria.',
       createOkRenamed: 'Repositório OKF criado como "[name]". Abrindo o Studio para curadoria.',
@@ -2329,9 +2440,11 @@ export default {
       saveBlocked: 'Salvamento bloqueado: corrija os problemas de conformidade primeiro.'
     },
     validation: {
-      frozen: 'Conteúdo congelado em {v} — visualização somente leitura. Execute retract na versão em serving para fazer alterações.',
+      frozen:
+        'Conteúdo congelado em {v} — visualização somente leitura. Execute retract na versão em serving para fazer alterações.',
       none: 'Nenhum',
-      expertHint: 'Mude para o modo Especialista para ver o JSON de validação bruto, filtrar por gravidade e substituir verificações.',
+      expertHint:
+        'Mude para o modo Especialista para ver o JSON de validação bruto, filtrar por gravidade e substituir verificações.',
       headline: {
         blockers: '{n} problema(s) bloqueante(s) — corrija antes de entregar o repositório',
         warnings: '{n} item(ns) precisam da sua revisão',
@@ -2351,7 +2464,8 @@ export default {
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
       indexFailed: 'Re-index failed — edit or re-split the page.',
-      indexFailedRemedy: 'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      indexFailedRemedy:
+        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2393,11 +2507,16 @@ export default {
         truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
-        conformance: 'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
-        orphan: 'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
-        near_duplicate: 'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
-        citation: 'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
-        index_failed: 'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+        conformance:
+          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan:
+          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate:
+          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation:
+          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed:
+          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
       }
     },
     pii: {
@@ -2500,7 +2619,8 @@ export default {
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
-      servingTip: 'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
       alreadyBadge: 'already in an OKF repo',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     },
@@ -2549,7 +2669,8 @@ export default {
         version: 'Head version',
         computedAt: 'Computed',
         staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
-        missingNote: 'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+        missingNote:
+          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
         rebuild: 'Rebuild head',
         rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
         rebuildBusy: 'Rebuilding — embedding the tag fields…'
@@ -2568,13 +2689,15 @@ export default {
           claimed: 'Claims query'
         },
         provenance: 'Routing provenance',
-        empty: 'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
+        empty:
+          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
         pass: 'PASS — this repository wins the head routing.',
         fail: 'FAIL — {repo} wins the head routing for this query.',
         passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
         passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
-        notSelectedSuppressed: 'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        notSelectedSuppressed:
+          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -2604,23 +2727,28 @@ export default {
         meta: 'Meta'
       },
       teach: {
-        claim: 'A cabeça RECLAMA esta consulta — passou nas três barreiras. Se NÃO deve rotear para cá, peça tags proibidas que excluam o assunto dela, adicione-as e reconstrua a cabeça.',
+        claim:
+          'A cabeça RECLAMA esta consulta — passou nas três barreiras. Se NÃO deve rotear para cá, peça tags proibidas que excluam o assunto dela, adicione-as e reconstrua a cabeça.',
         explain: 'Explicar e sugerir',
         explainBusy: 'Explicando — o modelo está propondo tags proibidas…',
         addTag: 'Adicionar às tags proibidas',
-        suggestNone: 'Nenhuma tag proibida foi sugerida — revise a consulta em relação ao escopo declarado manualmente.',
+        suggestNone:
+          'Nenhuma tag proibida foi sugerida — revise a consulta em relação ao escopo declarado manualmente.',
         added: 'Adicionado às tags proibidas — reconstrua a cabeça para aplicá-las.',
         rebuildRerun: 'Reconstruir cabeça e reexecutar',
         savingTag: 'Guardando a tag proibida…',
         rebuildBusy: 'Reconstruindo a cabeça e reexecutando…',
         title: 'O que isto significa',
         veto: 'Esta consulta corresponde fortemente à tag proibida “{tag}”. Se DEVERIA pertencer a este repositório, remova “{tag}” das tags proibidas no Frontmatter e publique novamente para reconstruir o head.',
-        floor: 'A consulta não tem relação com o tema deste repositório (pontuação abaixo do piso mínimo do domínio) — nenhuma alteração de tags corrige isto; é uma supressão correta.',
-        rejected: 'Rejeitado pelo guarda-corpo — uma tag proibida não deve corresponder ao próprio assunto deste repositório.'
+        floor:
+          'A consulta não tem relação com o tema deste repositório (pontuação abaixo do piso mínimo do domínio) — nenhuma alteração de tags corrige isto; é uma supressão correta.',
+        rejected:
+          'Rejeitado pelo guarda-corpo — uma tag proibida não deve corresponder ao próprio assunto deste repositório.'
       },
       suites: {
         generate: 'Generate test suite',
-        generateTip: 'O LLM escreve as consultas em lotes de 30 por classe — um pedido grande (100+) leva alguns minutos. A suíte aparece aqui e em suítes salvas ao terminar.',
+        generateTip:
+          'O LLM escreve as consultas em lotes de 30 por classe — um pedido grande (100+) leva alguns minutos. A suíte aparece aqui e em suítes salvas ao terminar.',
         generating: 'Gerando em lotes — pedidos grandes levam alguns minutos…',
         run: 'Run all queries',
         running: 'Running every suite query…',
@@ -2656,18 +2784,21 @@ export default {
         explainFailures: 'Explicar falhas',
         explainBusy: 'Explicando as falhas — uma chamada ao modelo para cada negativo que falhou…',
         batchTitle: 'Por que os negativos que falharam rotearam para cá',
-        batchNone: 'Nenhuma correção foi sugerida — revise as consultas que falharam em relação ao escopo declarado manualmente.',
+        batchNone:
+          'Nenhuma correção foi sugerida — revise as consultas que falharam em relação ao escopo declarado manualmente.',
         addAll: 'Adicionar todas',
         rebuildRerun: 'Reconstruir cabeça e reexecutar a suíte',
         positiveFailuresTitle: 'Por que os positivos deixaram de passar',
-        positiveFailures: '{n} teste(s) positivo(s) foram suprimidos nesta execução — as tags proibidas excedem o escopo do repositório.',
+        positiveFailures:
+          '{n} teste(s) positivo(s) foram suprimidos nesta execução — as tags proibidas excedem o escopo do repositório.',
         vetoedBy: 'Vetado por',
         marginKilled: '{n} teste(s) positivo(s) perderam por margem (sem tag de veto única).',
         removals: 'Tags a remover (vetam os positivos do próprio repositório)',
         removeTip: 'Remover "{tag}" — vetou {n} teste(s) positivo(s)',
         tripwire: 'Este ciclo quebrou {n} testes positivos — as tags adicionadas suprimem demais. Reverter?',
         tripwireRevert: 'Ver opções de reversão',
-        staleSnapshot: 'As tags mudaram desde que esta suíte foi gerada — gere novamente para obter linhas proibidas atualizadas.',
+        staleSnapshot:
+          'As tags mudaram desde que esta suíte foi gerada — gere novamente para obter linhas proibidas atualizadas.',
         revertTitle: 'Reverter tags',
         revertForbiddenCount: '{n} tags proibidas',
         revertAction: 'Reverter',
@@ -2710,13 +2841,15 @@ export default {
         generateTimeout: 'A suíte está demorando muito — pode aparecer em suítes salvas; verifique em um minuto.',
         probe: 'Falha no teste do corpus',
         suiteDelete: 'Não foi possível excluir a suíte',
-        noFrontmatter: 'Este repositório ainda não tem tags de cabeça — crie tags no painel Frontmatter (ou use Sugerir tags) e depois gere uma suíte.'
+        noFrontmatter:
+          'Este repositório ainda não tem tags de cabeça — crie tags no painel Frontmatter (ou use Sugerir tags) e depois gere uma suíte.'
       },
       footer: {
         unpublish: 'Unpublish to review'
       },
       publishCard: {
-        present: 'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
+        present:
+          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
       },
@@ -2737,9 +2870,11 @@ export default {
         reasonCurator: 'você declarou esta etiqueta originalmente — confirme antes de remover',
         reasonRotated: 'o histórico passou da linha de base — confirme antes de remover',
         scopeDetail: 'suítes: {s} · conjuntos de etiquetas: {t}',
-        rowActionsTitle: 'Inversões fundamentadas no corpus — o corpus responde a estes "negativos": torne-os positivos',
+        rowActionsTitle:
+          'Inversões fundamentadas no corpus — o corpus responde a estes "negativos": torne-os positivos',
         flipToPositive: 'Tornar positivo',
-        ungroundedNote: '{n} negativo(s) reprovado(s) sem lastro no corpus e sem alavanca de tag segura — o repositório concorrente deve vencê-los.'
+        ungroundedNote:
+          '{n} negativo(s) reprovado(s) sem lastro no corpus e sem alavanca de tag segura — o repositório concorrente deve vencê-los.'
       },
       probe: {
         answerable: 'respondível',
@@ -2760,6 +2895,7 @@ export default {
     }
   },
   link: {
-    ragTip: 'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

@@ -27,6 +27,11 @@ const { ingestRepoConcepts } = require('./ingest-service');
 const { withSpan } = require('../shared-lib/tracing');
 const crawlConversion = require('./crawl-conversion-service');
 const { convertXlsx, slugify } = require('./converters/xlsxSheetConverter');
+// Story 1-8g-p: whole-corpus topic-link authoring. Lazy-required inside the
+// runner (house style — the service pulls in the LLM client) but the predicate
+// is read at module scope for the early-out below.
+const topicLinkAuthoring = require('./topic-link-authoring-service');
+const { authorRepoTopicLinks, enabled: topicLinkAuthoringEnabled } = topicLinkAuthoring;
 
 const COLLECTION = 'okf_repositories';
 
@@ -579,6 +584,28 @@ async function runDocumentsConversion(job) {
       }
     }
 
+    // WHOLE-CORPUS TOPIC LINK AUTHORING (Story 1-8g-p): the import above only
+    // links what the source documents already cite. A corpus of bulletins that
+    // never cites itself lands with an empty graph — this authors the missing
+    // edges with the SAME generic service the editor exposes on demand
+    // (POST /repos/:id/topic-links). Runs AFTER labeling so the neighbour index
+    // sees labels + summaries. Fail-soft: a failed pass leaves the structural
+    // links intact and the import still reports done.
+    let topicLinks = null;
+    if (topicLinkAuthoringEnabled()) {
+      await patchConversion(repo_id, { status: 'linking-topics', stage: 'linking-topics' });
+      try {
+        const cDb = await getDb();
+        const cRepo = await cDb.collection(COLLECTION).document(repo_id);
+        topicLinks = await authorRepoTopicLinks(cRepo, { actor });
+        logger.info(
+          `Documents topic-link authoring: ${topicLinks.written} link(s) across ${topicLinks.concepts_linked}/${topicLinks.total} concept(s) in ${topicLinks.elapsed_ms}ms`
+        );
+      } catch (err) {
+        logger.warn('Documents topic-link authoring failed (non-fatal)', { repo_id, error: err.message });
+      }
+    }
+
     const failedFiles = perFile.filter((p) => p.status === 'failed').length;
     await patchConversion(repo_id, {
       status: 'done',
@@ -594,6 +621,10 @@ async function runDocumentsConversion(job) {
         files_failed: failedFiles,
         concepts: allDrafts.length,
         links: linkCount,
+        // Story 1-8g-p: structural (authored-in-source) vs AUTHORED
+        // (whole-corpus semantic) edges are counted separately so the wizard
+        // can say which mechanism produced the graph.
+        authored_links: topicLinks ? topicLinks.written : 0,
         created: ingestSummary.created,
         updated: ingestSummary.updated,
         skipped_dedup: ingestSummary.skipped_dedup
@@ -601,7 +632,8 @@ async function runDocumentsConversion(job) {
       finished_at: new Date().toISOString()
     });
     logger.info(
-      `Documents conversion DONE repo=${repo_id} files=${filesDone}/${file_ids.length} concepts=${allDrafts.length} links=${linkCount}`
+      `Documents conversion DONE repo=${repo_id} files=${filesDone}/${file_ids.length} concepts=${allDrafts.length} links=${linkCount}` +
+        (topicLinks ? ` authored=${topicLinks.written}` : '')
     );
   } catch (err) {
     logger.error(`Documents conversion FAILED repo=${repo_id} code=${err.code || '-'}: ${err.message}`);

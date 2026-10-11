@@ -680,6 +680,13 @@ async function authorRepoTopicLinks(repo, opts = {}) {
       already_linked: stats.already_linked,
       over_cap: stats.over_cap,
       batches_total: batchesTotal,
+      // The pass is finished by the time this object is built, so every batch
+      // is done. The terminal onProgress emit spreads THIS object, and the
+      // consumer defaults a missing batches_done to 0 — without this the last
+      // write (which is never throttled, and therefore the one that always
+      // lands) reported 0 of N batches while the links were all written
+      // (live 2026-10-11: "0 of 75 batches - 448 links written").
+      batches_done: batchesTotal,
       failures,
       // Named stage so a progress bar can SAY what is happening rather than
       // showing an anonymous counter (David, 2026-10-11: the Step-4 bars must

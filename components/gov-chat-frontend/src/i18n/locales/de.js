@@ -2637,6 +2637,7 @@ export default {
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestCoverage: 'Abgeleitet aus {sampled} von {total} Konzepten, über {labels} Labels der Wissenshierarchie.',
       suggestFailed: 'Suggest failed.',
       suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',

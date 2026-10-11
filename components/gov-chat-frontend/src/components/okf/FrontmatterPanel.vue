@@ -118,6 +118,26 @@
       </div>
     </div>
     <p v-if="suggestionError" class="okf-fmp__error">{{ suggestionError }}</p>
+    <!-- 1-8g-m: what the suggestion was drawn from, and what was dropped
+    from it. Both were invisible before, which is how a sample of 20 of 999
+    concepts (missing 4 of 7 subject areas) read as "the LLM decided this
+    repo isn't about religion". -->
+    <p v-if="suggestionCoverage" class="okf-fmp__coverage">
+      {{
+        translate(
+          'okf.frontmatter.suggestCoverage',
+          'Derived from {sampled} of {total} concepts across {labels} knowledge-hierarchy labels.'
+        )
+          .replace('{sampled}', String(suggestionCoverage.concepts_sampled))
+          .replace('{total}', String(suggestionCoverage.concepts_total))
+          .replace('{labels}', String(suggestionCoverage.label_count))
+      }}
+    </p>
+    <ul v-if="suggestionRejected.length" class="okf-fmp__rejected">
+      <li v-for="r in suggestionRejected" :key="r.value">
+        <strong>{{ r.value }}</strong> — {{ r.reason }}
+      </li>
+    </ul>
     <p v-if="error" class="okf-fmp__error">{{ error }}</p>
     <footer v-if="!readOnly" class="okf-fmp__footer">
       <DsButton variant="primary" small :disabled="!canSave || saving" @click="onSave">
@@ -176,6 +196,10 @@ export default {
       addDrafts: { topic: '', entity: '', scope: '', forbidden: '', summary: '', keyword: '' },
       suggesting: false,
       suggestionError: null,
+      // 1-8g-m — provenance of the current suggestion (see the coverage /
+      // rejected notes above the footer).
+      suggestionCoverage: null,
+      suggestionRejected: [],
       // Forbidden values the LLM proposed (Routing-gate contract,
       // 2026-10-09). A forbidden chip whose value is listed here renders
       // with the suggestion style: accept = leave it and Save, dismiss =
@@ -282,6 +306,8 @@ export default {
     async onSuggestTags() {
       this.suggesting = true;
       this.suggestionError = null;
+      this.suggestionCoverage = null;
+      this.suggestionRejected = [];
       try {
         const res = await suggestFrontmatter(this.repoId);
         const suggested = (res && res.suggested) || null;
@@ -315,6 +341,10 @@ export default {
           : Array.isArray(suggested.forbidden)
             ? suggested.forbidden.slice()
             : [];
+        // 1-8g-m — surface what the suggestion was derived from and what
+        // the server's corpus guard removed, so nothing disappears silently.
+        this.suggestionCoverage = suggested.coverage || null;
+        this.suggestionRejected = Array.isArray(suggested.forbidden_rejected) ? suggested.forbidden_rejected : [];
         this.savedAt = null;
       } catch (e) {
         this.suggestionError =
@@ -469,6 +499,19 @@ export default {
 .okf-fmp__error {
   margin: 0;
   color: var(--color-danger, currentColor);
+  font-size: var(--text-xs);
+}
+/* 1-8g-m — suggestion provenance: what it was derived from, and what the
+   corpus guard removed. Deliberately quieter than an error. */
+.okf-fmp__coverage {
+  margin: 0;
+  color: var(--color-text-secondary, currentColor);
+  font-size: var(--text-xs);
+}
+.okf-fmp__rejected {
+  margin: 0;
+  padding-left: var(--space-md);
+  color: var(--color-text-secondary, currentColor);
   font-size: var(--text-xs);
 }
 .okf-fmp__footer {

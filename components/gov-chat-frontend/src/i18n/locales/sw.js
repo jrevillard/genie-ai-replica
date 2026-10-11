@@ -2617,6 +2617,7 @@ export default {
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestCoverage: 'Imetokana na {sampled} kati ya {total} dhana, katika {labels} lebo za mpangilio wa maarifa.',
       suggestFailed: 'Suggest failed.',
       suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',

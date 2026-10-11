@@ -2575,6 +2575,7 @@ export default {
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
       suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestCoverage: '基于 {total} 个概念中的 {sampled} 个生成，覆盖 {labels} 个知识层级标签。',
       suggestFailed: 'Suggest failed.',
       suggestedTag: 'LLM suggestion — remove to dismiss.',
       removeTag: 'Remove tag',

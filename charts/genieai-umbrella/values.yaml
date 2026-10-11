@@ -179,7 +179,11 @@ services:
     resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
     env: []
     secrets:
-      - name: keycloak-client-secret
+      # KEYCLOAK_PROXY_CLIENT_SECRET for the genie-proxy-client service
+      # account (the realm's admin-API proxy). Must equal
+      # data.keycloak.clientSecrets.proxyClient rendered into the realm
+      # CR (the realm import cannot read K8s Secrets).
+      - name: keycloak-proxy-client-secret
       - name: huggingface-hub-token
       - name: email-password
       - name: translation-cache-password

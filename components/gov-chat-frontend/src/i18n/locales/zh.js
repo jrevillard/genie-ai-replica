@@ -2197,6 +2197,18 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2695,6 +2707,14 @@ export default {
         veto: '该查询与禁用标签“{tag}”高度匹配。如果它应当属于此仓库，请在 Frontmatter 的禁用标签中移除“{tag}”，然后重新发布以重建 head。',
         floor: '该查询与此仓库的主题无关（分数低于领域下限）——更改标签无法解决此问题；这是正确的抑制。',
         rejected: '已被护栏过滤——禁用标签不得与该仓库自身的主题匹配。'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
       },
       suites: {
         generate: 'Generate test suite',

@@ -2247,6 +2247,18 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2753,6 +2765,14 @@ export default {
         floor:
           'Potso ena ha e amane le taba ea polokelo ena (score e tlaase ho moeli oa domain) — ho fetola matag ha ho lokise sena; ke thibelo e nepahetseng.',
         rejected: 'E lokotsoe ke guardrail — tag e thibetsitseng ha eao lumana le taba ea polokelo ena ka boeona.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
       },
       suites: {
         generate: 'Generate test suite',

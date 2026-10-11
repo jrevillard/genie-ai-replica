@@ -20,19 +20,37 @@
     </p>
 
     <template v-if="needsProduction">
-      <div class="okf-step__progress">
-        <DsProgress
-          :value="progressPct"
-          :indeterminate="status === 'running' && progressPct === 0"
-          :show-label="true"
-          :label="progressLabel"
-        />
-      </div>
+      <!-- PER-STAGE PROGRESS (David, 2026-10-11: "we need progress bars with
+           each of the stages being depicted in Step 4"; and "the 3 stages are
+           1) Files, 2) Concepts, 3) Curating"). The single aggregate bar keyed
+           on FILES hit 100% the moment conversion ended while two more stages
+           ran for minutes — so Step 4 looked stuck with a full bar. One row
+           per stage, each with its OWN count, the active one highlighted. -->
+      <ol class="okf-step__stages">
+        <li
+          v-for="s in stageList"
+          :key="s.key"
+          class="okf-step__stage"
+          :class="{ 'okf-step__stage--active': s.active, 'okf-step__stage--done': s.done }"
+        >
+          <div class="okf-step__stage-head">
+            <span class="okf-step__stage-name">{{ s.label }}</span>
+            <span class="okf-step__stage-count">{{ s.count }}</span>
+          </div>
+          <DsProgress
+            :value="s.pct"
+            :max="100"
+            :indeterminate="s.active && s.pct === 0"
+            size="xs"
+            :aria-label="s.label"
+          />
+        </li>
+      </ol>
       <p v-if="status === 'running'" class="okf-step__note">
         {{
           translate(
             'okf.steps.produce.running',
-            'Converting… you can watch progress here; nothing is committed until you review in Curate.'
+            'Working through each stage below; nothing is committed until you review in Curate.'
           )
         }}
       </p>
@@ -104,6 +122,108 @@ export default {
     };
   },
   computed: {
+    /**
+     * ONE ROW PER STAGE, each with its own bar and its own real count
+     * (David, 2026-10-11: "we need progress bars with each of the stages being
+     * depicted in Step 4" — "1) Files, 2) Concepts, 3) Curating").
+     *
+     * The stage a leg is in comes from the server (`conversion.stage`), never
+     * from guesswork, so the highlighted row is the leg actually running.
+     * The cross-link row appears only when that stage runs: it is real work
+     * that takes minutes, and folding it into "Curating" is what made Step 4
+     * look frozen.
+     */
+    stageList() {
+      const conv = (this._liveRepo && this._liveRepo.conversion) || this._lastConv || {};
+      const repo = this._liveRepo || {};
+      const stage = conv.stage || conv.status || '';
+      const running = this.status === 'running';
+      const finished = this.status === 'done';
+      const curation = repo.curation || {};
+      const link = conv.link_progress || {};
+
+      const pctOf = (done, total) => (total > 0 ? Math.min(100, Math.round(((done || 0) / total) * 100)) : 0);
+
+      // FILES — documents converted (the crawl leg counts pages instead).
+      const filesTotal = conv.files_total || conv.pages_total || 0;
+      const filesDone = conv.files_done || conv.pages_done || 0;
+      const filesDoneStage = ['cross-linking', 'classifying', 'curating', 'linking-topics'].includes(stage);
+
+      // CONCEPTS — topics written out of the documents.
+      const conceptsTotal = conv.concepts_total || 0;
+      const conceptsDone = conv.concepts_done || 0;
+
+      // CURATING — the LLM labeling/describing pass (repo.curation).
+      const curTotal = curation.total || 0;
+      const curDone = curation.done || curation.curated || 0;
+
+      // CROSS-LINK — the whole-corpus authoring pass (Story 1-8g-p).
+      const linkTotal = link.batches_total || 0;
+      const linkDone = link.batches_done || 0;
+
+      const rows = [
+        {
+          key: 'files',
+          label: this.translate('okf.steps.produce.stage.files', 'Files'),
+          pct: pctOf(filesDone, filesTotal),
+          count: filesTotal
+            ? this.translate('okf.steps.produce.stage.filesCount', '{done} of {total} documents')
+                .replace('{done}', String(filesDone || 0))
+                .replace('{total}', String(filesTotal))
+            : this.translate('okf.steps.produce.stage.waiting', 'Waiting'),
+          active: running && !filesDoneStage && filesDone < filesTotal,
+          done: filesTotal > 0 && filesDone >= filesTotal
+        },
+        {
+          key: 'concepts',
+          label: this.translate('okf.steps.produce.stage.concepts', 'Concepts'),
+          pct: pctOf(conceptsDone, conceptsTotal),
+          count: conceptsTotal
+            ? this.translate('okf.steps.produce.stage.conceptsCount', '{done} of {total} topics')
+                .replace('{done}', String(conceptsDone))
+                .replace('{total}', String(conceptsTotal))
+            : conceptsDone
+              ? this.translate('okf.steps.produce.stage.conceptsSoFar', '{n} topics so far').replace(
+                  '{n}',
+                  String(conceptsDone)
+                )
+              : this.translate('okf.steps.produce.stage.waiting', 'Waiting'),
+          active: running && (stage === 'classifying' || stage === 'cross-linking') && conceptsDone < conceptsTotal,
+          done: conceptsTotal > 0 && conceptsDone >= conceptsTotal
+        },
+        {
+          key: 'curating',
+          label: this.translate('okf.steps.produce.stage.curating', 'Curating'),
+          pct: pctOf(curDone, curTotal),
+          count: curTotal
+            ? this.translate('okf.steps.produce.stage.curatingCount', '{done} of {total} concepts labelled')
+                .replace('{done}', String(curDone))
+                .replace('{total}', String(curTotal))
+            : this.translate('okf.steps.produce.stage.waiting', 'Waiting'),
+          active: running && (stage === 'curating' || stage === 'classifying') && curDone < curTotal,
+          done: curTotal > 0 && curDone >= curTotal
+        }
+      ];
+
+      if (stage === 'linking-topics' || linkTotal > 0) {
+        rows.push({
+          key: 'crosslink',
+          label: this.translate('okf.steps.produce.stage.crosslink', 'Cross-linking topics'),
+          pct: pctOf(linkDone, linkTotal),
+          count: linkTotal
+            ? this.translate('okf.steps.produce.stage.linkCount', '{done} of {total} batches · {w} links written')
+                .replace('{done}', String(linkDone))
+                .replace('{total}', String(linkTotal))
+                .replace('{w}', String(link.written || 0))
+            : this.translate('okf.steps.produce.stage.waiting', 'Waiting'),
+          active: running && stage === 'linking-topics' && linkDone < linkTotal,
+          done: linkTotal > 0 && linkDone >= linkTotal
+        });
+      }
+
+      if (finished) for (const r of rows) r.done = true;
+      return rows;
+    },
     needsProduction() {
       // T3 (D6): production is DATA-driven, not variant-driven — whatever
       // sources were picked in Input (in ANY variant) convert here.
@@ -497,6 +617,7 @@ export default {
           const repo = await repoOkfService.get(repoId);
           const conv = repo && repo.conversion;
           this._lastConv = conv; // B1: the done-branch accounting reads the summary
+          this._liveRepo = repo; // per-stage bars read curation + link_progress off the live doc
           const st = conv ? conv.status : null;
           if (st === 'done') {
             clearInterval(this.pollTimer);
@@ -586,6 +707,49 @@ export default {
 }
 .okf-step__progress {
   width: 100%;
+}
+/* Per-stage progress (Story: Step 4 depicts each stage). One row per stage so
+   the steward can see WHICH stage is running and how far it has got — the
+   single aggregate bar sat at 100% while later stages were still working. */
+.okf-step__stages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.okf-step__stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
+}
+.okf-step__stage-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.okf-step__stage-name {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.okf-step__stage-count {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+/* The running leg is the only one that reads as active — everything else is
+   recessive, so a glance answers "where is it?" without reading numbers. */
+.okf-step__stage--active .okf-step__stage-name,
+.okf-step__stage--active .okf-step__stage-count {
+  color: var(--fg);
+  font-weight: var(--font-weight-semibold);
+}
+.okf-step__stage--done .okf-step__stage-name {
+  color: var(--fg);
 }
 .okf-step__note {
   margin: 0;

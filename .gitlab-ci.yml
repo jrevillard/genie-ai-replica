@@ -3041,6 +3041,118 @@ test:flutter:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+# Helm chart lint + render-validate — fast (~30s), runs on shared runners.
+# Pin a Helm image that ships kubectl + bash so kubeconform can validate
+# the rendered API manifest. kubeconform is shipped as a tarball so install
+# directly from stdin.
+chart:lint:
+  image: dtzar/helm-kubectl:3.16.0
+  stage: test
+  interruptible: true
+  before_script:
+    - apk add --no-cache curl bash
+  script:
+    - helm lint charts/genieai-umbrella --strict
+    - helm dependency update charts/genieai-umbrella
+    - >-
+      helm template test charts/genieai-umbrella -n genieai
+      --set data.keycloak.failOnPlaceholderSecrets=false
+      --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
+      --set 'data.keycloak.clientSecrets.dataprep=lint-dummy'
+      --set 'data.keycloak.clientSecrets.grafana=lint-dummy'
+      > /tmp/rendered.yaml
+    - >-
+      curl -fsSL
+      https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+      | tar -xz -C /usr/local/bin kubeconform
+    - kubeconform -strict -summary -kubernetes-version 1.33.0 /tmp/rendered.yaml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - charts/**/*
+        - scripts/**/*
+        - .gitlab-ci.yml
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH'
+      changes:
+        - charts/**/*
+        - scripts/**/*
+        - .gitlab-ci.yml
+
+# Helm chart end-to-end — kind cluster inside DinD, install 4 cluster
+# operators via scripts/install-prereqs.sh, then install + helm-test the
+# genie-ai umbrella chart. allow_failure because the operator + chart
+# fan-out is resource-sensitive on the shared docker runner pool.
+chart:install:
+  image: docker:28-dind
+  stage: test
+  tags: [docker]
+  services:
+    - name: docker:28-dind
+      alias: docker
+  variables:
+    KUBECONFIG: /tmp/kubeconfig
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: /certs
+  interruptible: true
+  before_script:
+    - apk add --no-cache curl bash
+    - curl -fsSL https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | tar -xz -C /tmp
+    - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+    - curl -fsSL -o /usr/local/bin/kubectl https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl
+    - install -m 0755 /usr/local/bin/kubectl /usr/local/bin/kubectl.real
+    - mv /usr/local/bin/kubectl.real /usr/local/bin/kubectl
+    - curl -fsSL -o /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
+    - install -m 0755 /usr/local/bin/kind /usr/local/bin/kind.real
+    - mv /usr/local/bin/kind.real /usr/local/bin/kind
+    - helm version --short
+    - kubectl version --client
+    - kind version
+  script:
+    - kind create cluster --image kindest/node:v1.33.0 --wait 5m
+    - kind get kubeconfig --name kind > "$KUBECONFIG"
+    - export KUBECONFIG
+    - ./scripts/install-prereqs.sh
+    - >-
+      helm install test charts/genieai-umbrella -n genieai --create-namespace
+      --set data.keycloak.failOnPlaceholderSecrets=false
+      --set "data.keycloak.clientSecrets.proxyClient=${CI_JOB_ID}-proxy"
+      --set "data.keycloak.clientSecrets.dataprep=${CI_JOB_ID}-dataprep"
+      --set "data.keycloak.clientSecrets.grafana=${CI_JOB_ID}-grafana"
+      --wait --timeout 15m
+    - kubectl wait --for=condition=Ready pods --all -n genieai --timeout=10m
+    - helm test test -n genieai --logs
+    - mkdir -p chart-test-logs
+    - >-
+      for r in $(kubectl get deploy -n genieai -o name); do
+      kubectl logs -n genieai "$r" --all-containers
+      > "chart-test-logs/${r##*/}.log" 2>&1 || true;
+      done
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - chart-test-logs/
+  allow_failure: true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - charts/**/*
+        - scripts/**/*
+        - .gitlab-ci.yml
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == "feat/k8s-migration"'
+      changes:
+        - charts/**/*
+        - scripts/**/*
+        - .gitlab-ci.yml
+      when: on_success
+
 # Patrol E2E tests — DinD emulator (shared with scheduled:e2e-mobile)
 e2e:integration:
   extends: .e2e_integration_base

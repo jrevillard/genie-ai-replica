@@ -2238,6 +2238,18 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2744,6 +2756,14 @@ export default {
         floor:
           'Kueri ini tidak berhubungan dengan topik repositori ini (skor di bawah batas minimum domain) — perubahan tag tidak akan memperbaiki ini; ini adalah penekanan yang benar.',
         rejected: 'Ditolak oleh pagar pengaman — tag terlarang tidak boleh cocok dengan topik repositori ini sendiri.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
       },
       suites: {
         generate: 'Generate test suite',

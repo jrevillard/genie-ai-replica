@@ -2753,7 +2753,12 @@ export default {
         namePlaceholder: '测试集名称（可选）— 例如：NCD 回归集',
         probeTip: '用真实语料测试此查询',
         deleteSuiteTip: '删除此测试集及其历史',
-        corpusNeedsIngest: '请先摄取仓库——语料测试搜索的是已摄取的语料'
+        corpusNeedsIngest: '请先摄取仓库——语料测试搜索的是已摄取的语料',
+        deleteConfirmTitle: '删除这个测试集？',
+        deleteConfirmBody: '这将永久删除该测试集及其运行历史，无法撤销。',
+        deleteConfirm: '删除测试集',
+        deleteCancel: '取消',
+        unnamedFallback: '未命名测试集'
       },
       error: {
         explain: '解释失败',
@@ -2773,7 +2778,8 @@ export default {
         suiteRename: '无法重命名测试集',
         generateTimeout: '测试集耗时异常 — 可能稍后会出现在已保存列表中；请一分钟后查看。',
         probe: '语料测试失败',
-        suiteDelete: '无法删除测试集'
+        suiteDelete: '无法删除测试集',
+        noFrontmatter: '该仓库还没有头部标签 — 请在 Frontmatter 面板中创建标签（或使用“建议标签”），然后再生成测试集。'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2800,7 +2806,10 @@ export default {
         narrowChip: '移除宽泛标签，添加窄标签',
         reasonCurator: '此标签由您最初声明——移除前请确认',
         reasonRotated: '编辑历史已滚过基线——移除前请确认',
-        scopeDetail: '测试集：{s} · 标签集：{t}'
+        scopeDetail: '测试集：{s} · 标签集：{t}',
+        rowActionsTitle: '基于语料的翻转 — 语料能回答这些“负向”查询：将它们翻转为正向',
+        flipToPositive: '翻转为正向',
+        ungroundedNote: '{n} 个失败的负向查询既无语料支撑也无安全的标签杠杆 — 应由竞争仓库胜出。'
       },
       probe: {
         answerable: '可回答',

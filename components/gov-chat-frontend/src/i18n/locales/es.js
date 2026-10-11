@@ -2819,7 +2819,12 @@ export default {
         namePlaceholder: 'Nombre de la suite (opcional): p. ej. conjunto de regresión ECD',
         probeTip: 'Probar esta consulta contra el corpus real',
         deleteSuiteTip: 'Eliminar esta suite y su historial',
-        corpusNeedsIngest: 'Ingera primero el repositorio — la prueba del corpus busca en el corpus ingerido'
+        corpusNeedsIngest: 'Ingera primero el repositorio — la prueba del corpus busca en el corpus ingerido',
+        deleteConfirmTitle: '¿Eliminar esta suite?',
+        deleteConfirmBody: 'Esto elimina permanentemente la suite y su historial de ejecuciones. No se puede deshacer.',
+        deleteConfirm: 'Eliminar suite',
+        deleteCancel: 'Cancelar',
+        unnamedFallback: 'suite sin nombre'
       },
       error: {
         explain: 'La explicación falló',
@@ -2840,7 +2845,9 @@ export default {
         generateTimeout:
           'La suite está tardando demasiado — puede que aparezca en suites guardadas; revise en un minuto.',
         probe: 'Falló la prueba del corpus',
-        suiteDelete: 'No se pudo eliminar la suite'
+        suiteDelete: 'No se pudo eliminar la suite',
+        noFrontmatter:
+          'Este repositorio aún no tiene etiquetas de cabecera: cree etiquetas en el panel Frontmatter (o use Sugerir etiquetas) y luego genere una suite.'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2867,7 +2874,12 @@ export default {
         narrowChip: 'Quitar la etiqueta amplia, añadir la estrecha',
         reasonCurator: 'usted declaró esta etiqueta originalmente — confirme antes de quitarla',
         reasonRotated: 'el historial pasó la línea base — confirme antes de quitarla',
-        scopeDetail: 'suites: {s} · conjuntos de etiquetas: {t}'
+        scopeDetail: 'suites: {s} · conjuntos de etiquetas: {t}',
+        rowActionsTitle:
+          'Cambios respaldados por el corpus — el corpus responde a estos "negativos": conviértelos en positivos',
+        flipToPositive: 'Convertir en positivo',
+        ungroundedNote:
+          '{n} negativo(s) fallido(s) sin respaldo en el corpus y sin palanca de etiquetas segura: el repositorio competidor debe ganarlos.'
       },
       probe: {
         answerable: 'respondible',

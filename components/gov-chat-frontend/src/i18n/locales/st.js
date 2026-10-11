@@ -2814,7 +2814,12 @@ export default {
         namePlaceholder: 'Lebitso la sete (ha ho hlokahale) — mohl. sete ea NCD',
         probeTip: 'Lekola potso ena ka korpusi ea ntseng e le teng',
         deleteSuiteTip: 'Tlosa sete sena le nalane ea sona',
-        corpusNeedsIngest: 'Kennya ntswe pele — lekala la korpusi le batla korpusing e kennyang'
+        corpusNeedsIngest: 'Kennya ntswe pele — lekala la korpusi le batla korpusing e kennyang',
+        deleteConfirmTitle: 'Tlosa li-suite tse?',
+        deleteConfirmBody: 'Sena se tlosa li-suite le nalanete ea tsona sa ho sa felise. Ha ho khutleiso.',
+        deleteConfirm: 'Tlosa li-suite',
+        deleteCancel: 'Khutlisa',
+        unnamedFallback: 'li-suite tse se nang bitso'
       },
       error: {
         explain: 'Tlhaloso e hlolehile',
@@ -2835,7 +2840,9 @@ export default {
         suiteRename: 'Ho hlolehile ho reha sete ka lebitso le lecha',
         generateTimeout: 'Sete se nka nako e fetileng haholo — se ka hlaha ho tse bolokiloeng; sheba hape ka motsotso.',
         probe: 'Lekala la korpusi le hlotsoe',
-        suiteDelete: 'Ha e khone ho tlosa sete'
+        suiteDelete: 'Ha e khone ho tlosa sete',
+        noFrontmatter:
+          'Sena sena li-tag tsa hloho — etsa li-tag ka Frontmatter (kapa sebelisa Suggest tags), ebe u etsa li-suite.'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2862,7 +2869,11 @@ export default {
         narrowChip: 'Tlosa lebitla se pharaletseng, kenya se lutsehisi',
         reasonCurator: 'ke wena ya tlileng ka lebitla lena — netefatsa pele ua le tlosa',
         reasonRotated: 'nalane e fetile motheo — netefatsa pele ua le tlosa',
-        scopeDetail: 'li-suite: {s} · mehloso ea melaetana: {t}'
+        scopeDetail: 'li-suite: {s} · mehloso ea melaetana: {t}',
+        rowActionsTitle: 'Liphetoa ka motheo wa corpus — corpus e araba tse "tse sieo": li fetole hore e be tse teng',
+        flipToPositive: 'Etsa e teng',
+        ungroundedNote:
+          '{n} tse sieo tse hlolehetseng tse se nang motheo corpus le sebaka sa tag se bolokehileng — moqhahamotsedi o tlameha o di hlola.'
       },
       probe: {
         answerable: 'e ka araba',

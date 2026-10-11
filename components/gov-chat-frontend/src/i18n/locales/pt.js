@@ -2815,7 +2815,12 @@ export default {
         namePlaceholder: 'Nome da suíte (opcional) — ex. conjunto de regressão DCNT',
         probeTip: 'Testar esta consulta no corpus real',
         deleteSuiteTip: 'Excluir esta suíte e seu histórico',
-        corpusNeedsIngest: 'Primeiro ingira o repositório — o teste do corpus busca no corpus ingerido'
+        corpusNeedsIngest: 'Primeiro ingira o repositório — o teste do corpus busca no corpus ingerido',
+        deleteConfirmTitle: 'Eliminar esta suíte?',
+        deleteConfirmBody: 'Isto remove permanentemente a suíte e o seu histórico de execuções. Não pode ser desfeito.',
+        deleteConfirm: 'Eliminar suíte',
+        deleteCancel: 'Cancelar',
+        unnamedFallback: 'suíte sem nome'
       },
       error: {
         explain: 'A explicação falhou',
@@ -2835,7 +2840,9 @@ export default {
         suiteRename: 'Não foi possível renomear a suíte',
         generateTimeout: 'A suíte está demorando muito — pode aparecer em suítes salvas; verifique em um minuto.',
         probe: 'Falha no teste do corpus',
-        suiteDelete: 'Não foi possível excluir a suíte'
+        suiteDelete: 'Não foi possível excluir a suíte',
+        noFrontmatter:
+          'Este repositório ainda não tem tags de cabeça — crie tags no painel Frontmatter (ou use Sugerir tags) e depois gere uma suíte.'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2862,7 +2869,12 @@ export default {
         narrowChip: 'Remover a etiqueta ampla, adicionar a estreita',
         reasonCurator: 'você declarou esta etiqueta originalmente — confirme antes de remover',
         reasonRotated: 'o histórico passou da linha de base — confirme antes de remover',
-        scopeDetail: 'suítes: {s} · conjuntos de etiquetas: {t}'
+        scopeDetail: 'suítes: {s} · conjuntos de etiquetas: {t}',
+        rowActionsTitle:
+          'Inversões fundamentadas no corpus — o corpus responde a estes "negativos": torne-os positivos',
+        flipToPositive: 'Tornar positivo',
+        ungroundedNote:
+          '{n} negativo(s) reprovado(s) sem lastro no corpus e sem alavanca de tag segura — o repositório concorrente deve vencê-los.'
       },
       probe: {
         answerable: 'respondível',

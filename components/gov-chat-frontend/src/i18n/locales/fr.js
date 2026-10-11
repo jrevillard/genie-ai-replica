@@ -2821,7 +2821,12 @@ export default {
         namePlaceholder: 'Nom de la suite (facultatif) — ex. ensemble de régression NCD',
         probeTip: 'Tester cette requête sur le corpus réel',
         deleteSuiteTip: 'Supprimer cette suite et son historique',
-        corpusNeedsIngest: "Ingérez d'abord le dépôt — le test du corpus interroge le corpus ingéré"
+        corpusNeedsIngest: "Ingérez d'abord le dépôt — le test du corpus interroge le corpus ingéré",
+        deleteConfirmTitle: 'Supprimer cette suite ?',
+        deleteConfirmBody: 'Cela supprime définitivement la suite et son historique d’exécution. Irréversible.',
+        deleteConfirm: 'Supprimer la suite',
+        deleteCancel: 'Annuler',
+        unnamedFallback: 'suite sans nom'
       },
       error: {
         explain: "Échec de l'explication",
@@ -2842,7 +2847,9 @@ export default {
         generateTimeout:
           'La suite tarde anormalement — elle apparaîtra peut-être dans les suites enregistrées ; vérifiez dans une minute.',
         probe: 'Échec du test du corpus',
-        suiteDelete: 'Impossible de supprimer la suite'
+        suiteDelete: 'Impossible de supprimer la suite',
+        noFrontmatter:
+          'Ce dépôt n’a pas encore de tags de tête — créez des tags dans le panneau Frontmatter (ou utilisez Suggérer des tags), puis générez une suite.'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2869,7 +2876,12 @@ export default {
         narrowChip: 'Retirer le tag large, ajouter le tag étroit',
         reasonCurator: 'vous avez déclaré ce tag à l’origine — confirmez avant de le retirer',
         reasonRotated: 'l’historique a dépassé la ligne de base — confirmez avant de le retirer',
-        scopeDetail: 'suites : {s} · jeux de tags : {t}'
+        scopeDetail: 'suites : {s} · jeux de tags : {t}',
+        rowActionsTitle:
+          'Retournements fondés sur le corpus — le corpus répond à ces « négatifs » : retournez-les en positifs',
+        flipToPositive: 'Rendre positif',
+        ungroundedNote:
+          '{n} négatif(s) en échec sans ancrage dans le corpus ni levier de tag sûr — le dépôt concurrent doit les remporter.'
       },
       probe: {
         answerable: 'répondable',

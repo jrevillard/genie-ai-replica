@@ -2799,7 +2799,12 @@ export default {
         namePlaceholder: 'Jina la kipima (si lazima) — mf. seti ya urejesho wa NCD',
         probeTip: 'Jaribu swali hili kwa korpusi hai',
         deleteSuiteTip: 'Futa kipima hiki na historia yake',
-        corpusNeedsIngest: 'Ingiza hazina kwanza — jaribio la korpusi hutafuta korpusi iliyoingizwa'
+        corpusNeedsIngest: 'Ingiza hazina kwanza — jaribio la korpusi hutafuta korpusi iliyoingizwa',
+        deleteConfirmTitle: 'Ufute vipima hiki?',
+        deleteConfirmBody: 'Hiki kinaondoa kabisa vipima na historia yake ya upimaji. Hakiwezi kurejeshwa.',
+        deleteConfirm: 'Futa vipima',
+        deleteCancel: 'Ghairi',
+        unnamedFallback: 'vipima isiyo na jina'
       },
       error: {
         explain: 'Uelelezo umeshindikana',
@@ -2821,7 +2826,9 @@ export default {
         generateTimeout:
           'Kipima kimechukua muda mrefu zaidi ya kawaida — kinaweza kutokea kwenye vilivyohifadhiwa; angalia baada ya dakika moja.',
         probe: 'Jaribio la korpusi limefaili',
-        suiteDelete: 'Imeshindwa kufuta kipima'
+        suiteDelete: 'Imeshindwa kufuta kipima',
+        noFrontmatter:
+          'Hazina ya hii bado ina lebe za kichwa — tengeneza lebe kwenye Frontmatter (au tumia Pendekeza lebe), kisha tengeneza vipima.'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2848,7 +2855,11 @@ export default {
         narrowChip: 'Ondoa lebe pana, ongeza lebe nyuso',
         reasonCurator: 'wewe ndiye uliytangaza lebe hii mwanzoni — thibitisha kabla ya kuondoa',
         reasonRotated: 'historia imevuka mstari wa msingi — thibitisha kabla ya kuondoa',
-        scopeDetail: 'vipima: {s} · seti za lebe: {t}'
+        scopeDetail: 'vipima: {s} · seti za lebe: {t}',
+        rowActionsTitle: 'Kubadilisha kwa msingi wa makusanyo — makusanyo yajibu haya "hasi": yabadilishe kuwa chanya',
+        flipToPositive: 'Geuza kuwa chanya',
+        ungroundedNote:
+          '{n} hasi zilizoshindwa zisio na misingi katika makusanyo wala lebe salama — hazina ya mashindano lazima iyashinde.'
       },
       probe: {
         answerable: 'ina jibu',

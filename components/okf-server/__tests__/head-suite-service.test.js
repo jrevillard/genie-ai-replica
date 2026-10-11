@@ -916,7 +916,7 @@ describe('recommendTagSet damping (1-8e — the anti-treadmill guard)', () => {
     ...NEG_DIRS.map((_, i) => ({ query: `neg ${i + 1}`, kind: 'negative', cls: 'near-miss' }))
   ];
 
-  function seedAdvisor({ history = [] } = {}) {
+  function seedAdvisor({ history = [], probes = {} } = {}) {
     __mockDb.query.mockImplementation(async (aql) => {
       if (aql.includes('r.kind == "run"')) {
         return {
@@ -926,7 +926,13 @@ describe('recommendTagSet damping (1-8e — the anti-treadmill guard)', () => {
               repo_id: 'me',
               kind: 'run',
               created_at: new Date().toISOString(),
-              payload: { results: QUERIES.map((q) => ({ ...q, head_claimed: q.kind === 'positive' })) }
+              payload: {
+                results: QUERIES.map((q) => ({
+                  ...q,
+                  head_claimed: q.kind === 'positive',
+                  ...(probes[q.query] ? { probe: probes[q.query] } : {})
+                }))
+              }
             }
           ]
         };
@@ -963,6 +969,39 @@ describe('recommendTagSet damping (1-8e — the anti-treadmill guard)', () => {
       llmResponse({ add: ['tag-low', 'tag-one', 'tag-two', 'tag-three', 'tag-five'] })
     );
   }
+
+  // 1-8g-s — the corpus lever: a failing negative whose probe ANSWERED is
+  // a positive in disguise; the advisor must surface a row flip with the
+  // evidence instead of going silent (David: 3 answerable near-miss fails
+  // and zero recommendations).
+  it('surfaces row flips for failing negatives the corpus answers, counts the ungrounded rest', async () => {
+    seedAdvisor({
+      probes: {
+        'neg 1': { verdict: 'answerable', top_score: 0.91 },
+        'neg 2': { verdict: 'weak', top_score: 0.31 },
+        'neg 3': { verdict: 'unanswerable', top_score: 0.002 }
+      }
+    });
+    const out = await svc.recommendTagSet('me', {});
+    expect(out.row_actions).toHaveLength(2); // answerable + weak only
+    expect(out.row_actions.map((r) => r.query)).toEqual(['neg 1', 'neg 2']);
+    expect(out.row_actions[0]).toMatchObject({
+      action: 'flip',
+      to_kind: 'positive',
+      verdict: 'answerable',
+      top_score: 0.91
+    });
+    expect(out.row_actions[0].reason).toMatch(/corpus answers this query/);
+    // the 6 unprobed + 1 unanswerable negatives count as ungrounded
+    expect(out.ungrounded_negative_fails).toBe(7);
+  });
+
+  it('recommends no row flips when no failing negative has a corpus verdict (legacy runs)', async () => {
+    seedAdvisor();
+    const out = await svc.recommendTagSet('me', {});
+    expect(out.row_actions).toEqual([]);
+    expect(out.ungrounded_negative_fails).toBeGreaterThan(0);
+  });
 
   it('damps a one-negative gain, caps adds per run, and reports both in the payload', async () => {
     seedAdvisor();
@@ -1517,19 +1556,55 @@ describe('beginSuiteGeneration (1-8f2 — async 202 + poll)', () => {
       await gate; // hold the first generation IN FLIGHT
       return llmResponse({ positive: [], negative: [], near_miss: [], off_domain: [], meta: [] });
     });
-    const started = svc.beginSuiteGeneration('me', { n_positive: 2 }, {});
+    const started = await svc.beginSuiteGeneration('me', { n_positive: 2 }, {});
     expect(started.suite_key).toMatch(/^s\d+-[0-9a-f]{6}$/);
     // sync contract: the in-flight check throws before any async work
-    expect(() => svc.beginSuiteGeneration('me', {})).toThrow(
-      expect.objectContaining({ code: 'GENERATION_IN_FLIGHT', status: 409 })
-    );
+    await expect(svc.beginSuiteGeneration('me', {})).rejects.toMatchObject({
+      code: 'GENERATION_IN_FLIGHT',
+      status: 409
+    });
     release();
     const suite = await started.done;
     expect(suite._key).toBe(started.suite_key);
     // the in-flight slot cleared — a fresh generation is accepted
-    const again = svc.beginSuiteGeneration('me', {}, {});
+    const again = await svc.beginSuiteGeneration('me', {}, {});
     const done2 = await again.done;
     expect(done2._key).toBe(again.suite_key);
+  });
+
+  // 1-8g-u (live 2026-10-11, Indonesia History): a tag-less repo used to
+  // mint a key, die on NO_FRONTMATTER in the worker's first millisecond,
+  // and leave the poll 404-ing "suite not found" until timeout. Now the
+  // precondition fails BEFORE minting, with the guidance code.
+  it('rejects a tag-less repo BEFORE minting (NO_FRONTMATTER, no in-flight slot)', async () => {
+    frontmatterService.readFrontmatterFromRepoDoc.mockResolvedValue(null);
+    await expect(svc.beginSuiteGeneration('me', { n_positive: 2 }, {})).rejects.toMatchObject({
+      code: 'NO_FRONTMATTER',
+      status: 409,
+      message: /create head tags first/
+    });
+    expect(svc.suiteGenerationInFlight('me', 'anything')).toBe(false);
+  });
+
+  it('records an async generation failure — the poll gets {status:"failed"} instead of 404', async () => {
+    // generateSuite CATCHES LLM failures (fallback classes still make a
+    // usable suite) — the failure must come from an uncaught leg: the
+    // default-name count query throws → done rejects.
+    __mockDb.query.mockRejectedValue(new Error('db exploded'));
+    const started = await svc.beginSuiteGeneration('me', { n_positive: 2 }, {});
+    await expect(started.done).rejects.toBeTruthy();
+    // the poll's terminal, honest envelope — never a SUITE_NOT_FOUND loop
+    __mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
+    const env = await svc.getSuite('me', started.suite_key, {});
+    expect(env).toMatchObject({
+      suite_key: started.suite_key,
+      status: 'failed',
+      error: { code: 'GENERATION_FAILED', message: 'db exploded' }
+    });
+    // the next attempt clears the stale failure
+    const again = await svc.beginSuiteGeneration('me', {}, {});
+    expect(svc.suiteGenerationFailed('me', started.suite_key)).toBe(null);
+    await again.done;
   });
 });
 
@@ -1544,7 +1619,7 @@ describe('getSuite vs an in-flight generation (1-8f2 — the honest envelope)', 
       await gate;
       return llmResponse({ positive: [], negative: [], near_miss: [], off_domain: [], meta: [] });
     });
-    const started = svc.beginSuiteGeneration('me', { n_positive: 2 }, {});
+    const started = await svc.beginSuiteGeneration('me', { n_positive: 2 }, {});
     try {
       // in-flight: the poll's keep-waiting envelope, NOT a 404
       const env = await svc.getSuite('me', started.suite_key, {});

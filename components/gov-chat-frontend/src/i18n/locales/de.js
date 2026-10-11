@@ -2822,7 +2822,12 @@ export default {
         namePlaceholder: 'Suiten-Name (optional) — z. B. NCD-Regressionssatz',
         probeTip: 'Diese Abfrage gegen den Live-Korpus testen',
         deleteSuiteTip: 'Diese Suite und ihren Verlauf löschen',
-        corpusNeedsIngest: 'Inigieren Sie zuerst das Repository — der Korpus-Test durchsucht den inginierten Korpus'
+        corpusNeedsIngest: 'Inigieren Sie zuerst das Repository — der Korpus-Test durchsucht den inginierten Korpus',
+        deleteConfirmTitle: 'Diese Suite löschen?',
+        deleteConfirmBody: 'Dies entfernt die Suite und ihren Laufverlauf endgültig. Nicht widerrufbar.',
+        deleteConfirm: 'Suite löschen',
+        deleteCancel: 'Abbrechen',
+        unnamedFallback: 'unbenannte Suite'
       },
       error: {
         explain: 'Erklärung fehlgeschlagen',
@@ -2844,7 +2849,9 @@ export default {
         generateTimeout:
           'Die Suite dauert ungewöhnlich lange — sie könnte in den gespeicherten Suiten landen; in einer Minute dort nachsehen.',
         probe: 'Korpus-Test fehlgeschlagen',
-        suiteDelete: 'Suite konnte nicht gelöscht werden'
+        suiteDelete: 'Suite konnte nicht gelöscht werden',
+        noFrontmatter:
+          'Dieses Repository hat noch keine Head-Tags — erstellen Sie Tags im Frontmatter-Panel (oder über Tag-Vorschläge) und generieren Sie dann eine Suite.'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2871,7 +2878,12 @@ export default {
         narrowChip: 'Breites Tag entfernen, enges Tag hinzufügen',
         reasonCurator: 'Sie haben dieses Tag ursprünglich deklariert — vor dem Entfernen bestätigen',
         reasonRotated: 'Der Verlauf ist über die Basislinie hinaus rotiert — vor dem Entfernen bestätigen',
-        scopeDetail: 'Suiten: {s} · Tag-Sets: {t}'
+        scopeDetail: 'Suiten: {s} · Tag-Sets: {t}',
+        rowActionsTitle:
+          'Korpus-begründete Umbuchungen — der Korpus beantwortet diese „Negativen“: in Positive umwandeln',
+        flipToPositive: 'Zu Positiv umwandeln',
+        ungroundedNote:
+          '{n} fehlgeschlagene Negative ohne Korpus-Abdeckung und ohne sichere Tag-Hebel — das konkurrierende Repository muss sie gewinnen.'
       },
       probe: {
         answerable: 'beantwortbar',

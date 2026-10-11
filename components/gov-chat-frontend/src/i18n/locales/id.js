@@ -2805,7 +2805,12 @@ export default {
         namePlaceholder: 'Nama suite (opsional) — mis. set regresi NCD',
         probeTip: 'Uji kueri ini terhadap korpus langsung',
         deleteSuiteTip: 'Hapus suite ini dan riwayatnya',
-        corpusNeedsIngest: 'Ingest repositori dulu — uji korpus mencari di korpus yang sudah di-ingest'
+        corpusNeedsIngest: 'Ingest repositori dulu — uji korpus mencari di korpus yang sudah di-ingest',
+        deleteConfirmTitle: 'Hapus suite ini?',
+        deleteConfirmBody: 'Ini menghapus suite beserta riwayat eksekusinya secara permanen. Tidak dapat dibatalkan.',
+        deleteConfirm: 'Hapus suite',
+        deleteCancel: 'Batal',
+        unnamedFallback: 'suite tanpa nama'
       },
       error: {
         explain: 'Penjelasan gagal',
@@ -2825,7 +2830,9 @@ export default {
         suiteRename: 'Gagal mengganti nama suite',
         generateTimeout: 'Suite terlalu lama — mungkin muncul di suite tersimpan; periksa lagi dalam satu menit.',
         probe: 'Uji korpus gagal',
-        suiteDelete: 'Tidak dapat menghapus suite'
+        suiteDelete: 'Tidak dapat menghapus suite',
+        noFrontmatter:
+          'Repositori ini belum punya tag kepala — buat tag di panel Frontmatter (atau gunakan Sarankan tag), lalu buat suite.'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2852,7 +2859,11 @@ export default {
         narrowChip: 'Hapus tag luas, tambahkan tag sempit',
         reasonCurator: 'Anda yang mendeklarasikan tag ini semula — konfirmasi sebelum menghapus',
         reasonRotated: 'riwayat sudah melewati baseline — konfirmasi sebelum menghapus',
-        scopeDetail: 'suite: {s} · set tag: {t}'
+        scopeDetail: 'suite: {s} · set tag: {t}',
+        rowActionsTitle: 'Pembalikan berbasis korpus — korpus menjawab "negatif" ini: ubah menjadi positif',
+        flipToPositive: 'Ubah ke positif',
+        ungroundedNote:
+          '{n} negatif gagal tanpa dukungan korpus dan tanpa tag pengungkit yang aman — repositori pesaing haruslah yang menang.'
       },
       probe: {
         answerable: 'bisa dijawab',

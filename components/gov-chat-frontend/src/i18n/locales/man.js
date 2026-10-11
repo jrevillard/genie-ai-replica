@@ -2781,7 +2781,12 @@ export default {
         namePlaceholder: 'Suite name (optional) — e.g. NCD regression set',
         probeTip: 'Test this query against the live corpus',
         deleteSuiteTip: 'Delete this suite and its run history',
-        corpusNeedsIngest: 'Ingest the repository first — the corpus test searches the ingested corpus'
+        corpusNeedsIngest: 'Ingest the repository first — the corpus test searches the ingested corpus',
+        deleteConfirmTitle: 'Delete this suite?',
+        deleteConfirmBody: 'This permanently removes the suite and its run history. This cannot be undone.',
+        deleteConfirm: 'Delete suite',
+        deleteCancel: 'Cancel',
+        unnamedFallback: 'unnamed suite'
       },
       error: {
         explain: 'Explain failed',
@@ -2802,7 +2807,9 @@ export default {
         generateTimeout:
           'The suite is taking unusually long — it may still land in Saved suites; check there in a minute.',
         probe: 'Corpus test failed',
-        suiteDelete: 'Could not delete the suite'
+        suiteDelete: 'Could not delete the suite',
+        noFrontmatter:
+          'This repository has no head tags yet — create tags in the Frontmatter panel (or use Suggest tags), then generate a suite.'
       },
       footer: {
         unpublish: 'Unpublish to review'
@@ -2829,7 +2836,11 @@ export default {
         narrowChip: 'Remove the broad tag, add the narrow one',
         reasonCurator: 'you declared this tag originally — confirm before removing',
         reasonRotated: 'the edit history has rotated past the baseline — confirm before removing',
-        scopeDetail: 'suites: {s} · tag sets: {t}'
+        scopeDetail: 'suites: {s} · tag sets: {t}',
+        rowActionsTitle: 'Corpus-grounded flips — the corpus answers these "negatives": flip them to positives',
+        flipToPositive: 'Flip to positive',
+        ungroundedNote:
+          '{n} failing negative(s) have no corpus grounding and no safe tag lever — the competing repository must win them.'
       },
       probe: {
         answerable: 'answerable',

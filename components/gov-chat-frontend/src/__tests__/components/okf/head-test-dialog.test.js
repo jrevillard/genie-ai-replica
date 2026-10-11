@@ -652,7 +652,16 @@ it('1-8g-v: an async run (202 + poll) adopts the run doc when the poll lands it'
           _key: 'r9',
           suite_key: 's1',
           payload: {
-            summary: { pass_rate: 1, positive_passed: 1, positive_total: 1, negative_passed: 0, negative_total: 0, negative_evaluatable: 0, avg_margin: null, steals: [] },
+            summary: {
+              pass_rate: 1,
+              positive_passed: 1,
+              positive_total: 1,
+              negative_passed: 0,
+              negative_total: 0,
+              negative_evaluatable: 0,
+              avg_margin: null,
+              steals: []
+            },
             results: [
               {
                 query: 'q1',

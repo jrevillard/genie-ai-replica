@@ -1387,6 +1387,58 @@ describe('getSuite + updateSuiteRows (1-8f)', () => {
     expect(out.payload.positive.map((r) => r.query)).toContain(T);
     expect(out.payload.negative).toHaveLength(0);
   });
+
+  // 1-8g-r — the old hand-picked caps (positive ≤ 60) sat BELOW what the
+  // generator legally produces (CLASS_MAX positive 1000): David's
+  // legitimate 100-positive NCD suite 409'd on EVERY row edit.
+  it('updateSuiteRows: a 100-positive suite (a legal 1-8f generation) is editable', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    suite.payload.positive = Array.from({ length: 100 }, (_, i) => ({
+      query: `positive query number ${i}`,
+      kind: 'positive',
+      cls: null,
+      source: 'llm'
+    }));
+    suite.payload.negative = [{ query: 'one negative', kind: 'negative', cls: 'off-domain', source: 'llm' }];
+    __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
+    const out = await svc.updateSuiteRows('me', suite._key, {
+      removes: [{ query: 'positive query number 7', kind: 'positive' }]
+    });
+    expect(out.payload.positive).toHaveLength(99);
+  });
+
+  it('updateSuiteRows: an over-cap suite can always be edited DOWNWARD (delta guard)', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    suite.payload.positive = Array.from({ length: 1001 }, (_, i) => ({
+      query: `bulk positive ${i}`,
+      kind: 'positive',
+      cls: null,
+      source: 'llm'
+    }));
+    suite.payload.negative = [];
+    __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
+    const out = await svc.updateSuiteRows('me', suite._key, {
+      removes: [{ query: 'bulk positive 500', kind: 'positive' }]
+    });
+    expect(out.payload.positive).toHaveLength(1000);
+  });
+
+  it('updateSuiteRows: growth PAST the cap still 409s (SUITE_CAP)', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    suite.payload.positive = Array.from({ length: 1000 }, (_, i) => ({
+      query: `at-cap positive ${i}`,
+      kind: 'positive',
+      cls: null,
+      source: 'llm'
+    }));
+    suite.payload.negative = [{ query: 'the only negative', kind: 'negative', cls: 'off-domain', source: 'llm' }];
+    __mockDb.collection('okf_head_test_runs').replace(suite._key, suite);
+    await expect(
+      svc.updateSuiteRows('me', suite._key, {
+        updates: [{ match: { query: 'the only negative', kind: 'negative' }, set: { kind: 'positive' } }]
+      })
+    ).rejects.toMatchObject({ code: 'SUITE_CAP', status: 409 });
+  });
 });
 
 // ─── Story 1-8f part 2: any number of tests + suite names ──────────────────

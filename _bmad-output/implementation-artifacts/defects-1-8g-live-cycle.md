@@ -398,3 +398,27 @@ non-index markdown still 409, label-write 409 pinned), repository-service
 56/56 (+2: serving frontmatter patch succeeds + restamps; rename and
 studio_step still 409 with the new message), full okf-server 870/870,
 frontend OKF 246/246, localeConsistency 7/7, eslint + prettier clean.
+
+## 1-8g-r — SUITE_ROW_CAPS (60/150) sat below the generator's own ceilings: a legal 100-positive suite could not be edited (FIXED, worktree fix/1-8g-r-suite-cap-generator-parity)
+
+David, 2026-10-11 ~02:59 UTC: 7× `suite row cap exceeded (positive ≤ 60,
+negative ≤ 150)` from updateSuiteRows on the NCD Information suite
+(`s1791565037101-e6a1b1`) — which holds **100 positives**, a legitimate
+Story 1-8f generation (the generator's CLASS_MAX allows 1000/500×4).
+Write-lock #2 of the day, same class as 1-8g-p: an absolute-size backstop
+applied to legacy suites locks every edit.
+
+**Fix (head-suite-service.js):**
+- `SUITE_ROW_CAPS` now DERIVES from `CLASS_MAX`: positive 1000; negative
+  = negative + random + meta + nearMiss = 2000 (negatives merge the four
+  classes). Every suite the generator can legally produce is editable.
+- The cap rejects only NET GROWTH past the ceiling (pre-edit sizes
+  captured; shrink-always-allowed) — even a genuinely over-cap suite
+  stays editable downward, so no future cap change can re-create the
+  deadlock.
+
+**No DB repair needed**: David's 100-positive suite is under the new cap
+the moment the fix deploys.
+
+**Tests:** +3 (100-positive suite editable; over-cap shrinks allowed;
+growth past cap still 409). 64/64; eslint + prettier clean.

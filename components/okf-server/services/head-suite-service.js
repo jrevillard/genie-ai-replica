@@ -831,7 +831,16 @@ async function addQueries(repoId, suiteKey, payload = {}, opts = {}) {
 // a row could only be ADDED, so a mislabeled row (the HIV positive) was
 // permanent noise and had to be duplicated with the other kind.
 
-const SUITE_ROW_CAPS = { positive: 60, negative: 150 };
+// 1-8g-r: the editor's caps DERIVE from the generator's own CLASS_MAX
+// ceilings (Story 1-8f: "any number of tests for any type"). The old
+// hand-picked 60/150 sat BELOW what the generator legally produces — a
+// legitimate 100-positive suite could not be edited at all (every row
+// edit 409'd; write-lock #2 of 2026-10-11, same class as 1-8g-p).
+// Negatives merge the four negative classes, so the ceiling sums them.
+const SUITE_ROW_CAPS = {
+  positive: CLASS_MAX.positive,
+  negative: CLASS_MAX.negative + CLASS_MAX.random + CLASS_MAX.meta + CLASS_MAX.nearMiss
+};
 
 async function getSuite(repoId, suiteKey, opts = {}) {
   return withSpan('okf.headsuite.get', async (span) => {
@@ -882,6 +891,12 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
     }
     const pos = suite.payload.positive || [];
     const neg = suite.payload.negative || [];
+    // 1-8g-r: pre-edit sizes — the cap guard rejects only NET GROWTH past
+    // the ceiling (an edit that keeps or shrinks an over-cap kind is
+    // always allowed; an absolute-size check would write-lock legacy
+    // oversized suites, the same deadlock class as 1-8g-p).
+    const beforePos = pos.length;
+    const beforeNeg = neg.length;
     let removed = 0;
     let relabeled = 0;
     // 1-8g-p — duplicates absorbed by flips + by the normalization sweep.
@@ -1016,7 +1031,10 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
       err.status = 409;
       throw err;
     }
-    if (dedupedPos.length > SUITE_ROW_CAPS.positive || dedupedNeg.length > SUITE_ROW_CAPS.negative) {
+    if (
+      (dedupedPos.length > SUITE_ROW_CAPS.positive && dedupedPos.length > beforePos) ||
+      (dedupedNeg.length > SUITE_ROW_CAPS.negative && dedupedNeg.length > beforeNeg)
+    ) {
       const err = new Error(
         `suite row cap exceeded (positive ≤ ${SUITE_ROW_CAPS.positive}, negative ≤ ${SUITE_ROW_CAPS.negative})`
       );

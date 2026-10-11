@@ -1,6 +1,7 @@
 # Copyright (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import inspect
 import json
 import contextlib
@@ -45,6 +46,8 @@ from .config import (
     ARANGO_TRAVERSAL_CONCURRENT_BATCHES,
     ARANGO_TRAVERSAL_ENABLED,
     ARANGO_TRAVERSAL_MAX_DEPTH,
+    ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE,
+    ARANGO_TRAVERSAL_MAX_LINKS,
     ARANGO_TRAVERSAL_MAX_RETURNED,
     ARANGO_TRAVERSAL_QUERY,
     ARANGO_TRAVERSAL_SCORE_THRESHOLD,
@@ -91,6 +94,12 @@ from .config import (
     VLLM_TOP_P,
     get_query_instruction,
 )
+
+# 1-8g-l: the graph traversal's share of the per-graph leg budget keeps this
+# reserve for result assembly + Level-1 fusion (see _extract_for_graph's
+# bounded traversal — an overrun there must never consume the whole leg
+# timeout, which used to discard the leg's already-fused vector documents).
+TRAVERSAL_BUDGET_RESERVE_S = 0.75
 
 
 # Defining a custom data subclass
@@ -968,10 +977,22 @@ class GenieaiArangoRetriever(OpeaComponent):
         if search_start == "chunk":
             bind_vars["query_embedding"] = query_embedding
 
+            # 1-8g-l: bound the worst case. The legacy query scored a
+            # 1024-dim cosine on EVERY depth-1 LINKS_TO edge of every seed
+            # entity (indonesia: 1,046,217 edges → >60s, leg abandoned) and
+            # materialized edge.text for EVERY passing candidate before the
+            # final LIMIT 3. The per-hop LIMIT caps edge visits per seed
+            # entity; the post-FILTER LIMIT caps text materialization.
+            edge_cap_clause = (
+                f"\n                            LIMIT {ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE}"
+                if ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE and ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE > 0
+                else ""
+            )
+
             return f"""
                 LET raw = (
                     FOR node IN 1..1 INBOUND doc `{graph_name}_HAS_SOURCE`
-                        FOR node2, edge IN 1..{traversal_max_depth} ANY node `{graph_name}_LINKS_TO`
+                        FOR node2, edge IN 1..{traversal_max_depth} ANY node `{graph_name}_LINKS_TO`{edge_cap_clause}
                             LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
                             FILTER score >= {traversal_score_threshold}
 
@@ -1006,9 +1027,16 @@ class GenieaiArangoRetriever(OpeaComponent):
         elif search_start == "node":
             bind_vars["query_embedding"] = query_embedding
 
+            # 1-8g-l: same per-hop edge cap as the chunk mode above.
+            node_cap_clause = (
+                f"\n                    LIMIT {ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE}"
+                if ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE and ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE > 0
+                else ""
+            )
+
             return f"""
                 FOR node, edge IN 1..{traversal_max_depth} ANY doc `{graph_name}_LINKS_TO`
-                    OPTIONS {{ bfs: true, uniqueVertices: "global" }}
+                    OPTIONS {{ bfs: true, uniqueVertices: "global" }}{node_cap_clause}
 
                     LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
 
@@ -1201,6 +1229,31 @@ class GenieaiArangoRetriever(OpeaComponent):
         except Exception:
             span.end()
             raise
+
+    @staticmethod
+    def _traversal_skip_reason(graph_name, vector_db, elapsed_s, budget_s):
+        """1-8g-l — decide whether the graph traversal must sit this leg out.
+
+        Returns None when the traversal may run, else a human-readable reason:
+        the graph-size gate (LINKS_TO edges above ARANGO_TRAVERSAL_MAX_LINKS —
+        live: indonesia 1,046,217 edges could not finish inside the 8s leg
+        budget, ever) or an exhausted leg budget. A count failure is NOT a
+        skip (legacy behavior: traverse and let the budget bound it).
+        """
+        links_cap = ARANGO_TRAVERSAL_MAX_LINKS
+        if links_cap and links_cap > 0:
+            try:
+                links_count = vector_db.db.collection(f"{graph_name}_LINKS_TO").count()
+            except Exception as e:
+                logger.info(
+                    f"Traversal size-gate count failed (continuing with traversal) — graph={graph_name}, error={e}"
+                )
+                links_count = None
+            if links_count is not None and links_count > links_cap:
+                return f"<GRAPH>_LINKS_TO count {links_count} > ARANGO_TRAVERSAL_MAX_LINKS {links_cap}"
+        if budget_s < 0.5:
+            return f"leg budget exhausted (elapsed {elapsed_s:.2f}s, remaining {budget_s:.2f}s)"
+        return None
 
     async def _extract_for_graph(
         self,
@@ -1595,89 +1648,135 @@ class GenieaiArangoRetriever(OpeaComponent):
             #######################################################################
 
             if enable_traversal:
+                # 1-8g-l: the traversal must never starve the leg. Two bounds
+                # replace the old fire-and-pray call (whose overruns let
+                # _invoke_leg abandon the WHOLE leg — discarding its already-
+                # fused vector documents; live 2026-10-11 that starved 9/9
+                # chat answers on the Indonesia graph):
+                #   (a) the SIZE GATE — graphs above ARANGO_TRAVERSAL_MAX_LINKS
+                #       skip the traversal entirely (their fused vector results
+                #       stand alone; healthy graphs keep graph enrichment);
+                #   (b) the SUB-BUDGET — the traversal gets the leg's remaining
+                #       time minus a reserve, runs on its own thread, and an
+                #       overrun CONTINUES without enrichment instead of
+                #       poisoning the leg.
                 keys = [r["doc"].id for r in search_res]
-
-                neighborhoods = self.fetch_neighborhoods(
-                    db=vector_db.db,
-                    keys=keys,  # A list of ids
-                    graph_name=graph_name,
-                    search_start=search_start,
-                    query_embedding=embedding,
-                    collection_name=collection_name,
-                    traversal_max_depth=traversal_max_depth,
-                    traversal_max_returned=traversal_max_returned,
-                    traversal_score_threshold=traversal_score_threshold,
-                    traversal_query=traversal_query,
-                    distance_strategy=distance_strategy,
+                elapsed_s = time.time() - start_time
+                budget_s = FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0 - elapsed_s - TRAVERSAL_BUDGET_RESERVE_S
+                neighborhoods = None
+                skip_reason = self._traversal_skip_reason(
+                    graph_name=graph_name, vector_db=vector_db, elapsed_s=elapsed_s, budget_s=budget_s
                 )
+                if skip_reason:
+                    logger.info(
+                        f"Fan-out traversal skipped — graph={graph_name}: {skip_reason}; "
+                        f"the fused vector results stand alone"
+                    )
+                else:
+                    try:
+                        neighborhoods = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                self.fetch_neighborhoods,
+                                db=vector_db.db,
+                                keys=keys,  # A list of ids
+                                graph_name=graph_name,
+                                search_start=search_start,
+                                query_embedding=embedding,
+                                collection_name=collection_name,
+                                traversal_max_depth=traversal_max_depth,
+                                traversal_max_returned=traversal_max_returned,
+                                traversal_score_threshold=traversal_score_threshold,
+                                traversal_query=traversal_query,
+                                distance_strategy=distance_strategy,
+                            ),
+                            timeout=budget_s,
+                        )
+                    except TimeoutError:  # py3.11: asyncio.TimeoutError IS builtin TimeoutError
+                        neighborhoods = None
+                        logger.warning(
+                            f"Fan-out traversal exceeded its leg budget ({budget_s:.2f}s) — "
+                            f"continuing WITHOUT graph enrichment; graph={graph_name}"
+                        )
+                    except Exception as e:
+                        neighborhoods = None
+                        logger.warning(
+                            f"Fan-out traversal failed — continuing WITHOUT graph "
+                            f"enrichment; graph={graph_name}, error={e}"
+                        )
 
-                logger.info(f"Results after fetching neighborhood: {neighborhoods}")
                 _injected_docs = 0
                 _injected_neighbor_items = 0
-                for r in search_res:
-                    neighborhood = neighborhoods.get(r["doc"].id)
+                if neighborhoods:
+                    logger.info(f"Results after fetching neighborhood: {neighborhoods}")
+                    for r in search_res:
+                        neighborhood = neighborhoods.get(r["doc"].id)
 
-                    if not neighborhood:
-                        continue
+                        if not neighborhood:
+                            continue
 
-                    # Counted AFTER the empty-neighborhood guard, so these are
-                    # documents that actually received injected content -- not
-                    # documents the traversal was merely asked about.
-                    _injected_docs += 1
-                    _injected_neighbor_items += len(neighborhood) if isinstance(neighborhood, (list, tuple)) else 1
+                        # Counted AFTER the empty-neighborhood guard, so these are
+                        # documents that actually received injected content -- not
+                        # documents the traversal was merely asked about.
+                        # (merge note: kept at the guarded loop's level from
+                        # 1-8g-l so a failed traversal stays zeros — main's
+                        # tracing contract — without the None.get crash.)
+                        _injected_docs += 1
+                        _injected_neighbor_items += len(neighborhood) if isinstance(neighborhood, (list, tuple)) else 1
 
-                    # Common header for added related info
-                    r["doc"].page_content += "\n------\nRELATED INFORMATION:\n------\n"
+                        # Common header for added related info
+                        r["doc"].page_content += "\n------\nRELATED INFORMATION:\n------\n"
 
-                    if search_start == "chunk":
-                        # neighborhood may be a list or other structure
-                        r["doc"].page_content += str(neighborhood)
+                        if search_start == "chunk":
+                            # neighborhood may be a list or other structure
+                            r["doc"].page_content += str(neighborhood)
 
-                    elif search_start == "edge":
-                        # neighborhood is expected to be a list with one dict: [{ "chunk_text": ..., "file_id": ... }]
-                        first = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
-                        if isinstance(first, dict):
-                            # first may contain 'chunk_text' and 'file_id' keys directly
-                            chunk_text = first.get("chunk_text")
-                            file_id = first.get("file_id")
-                        else:
-                            # fallback: if it's nested like { edge_text: { "chunk_text": ..., "file_id": ... } }
-                            chunk_text = None
-                            file_id = None
+                        elif search_start == "edge":
+                            # neighborhood is expected to be a list with one
+                            # dict: [{ "chunk_text": ..., "file_id": ... }]
+
+                            first = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
                             if isinstance(first, dict):
-                                inner = next(iter(first.values()), None)
-                                if isinstance(inner, dict):
-                                    chunk_text = inner.get("chunk_text")
-                                    file_id = inner.get("file_id")
+                                # first may contain 'chunk_text' and 'file_id' keys directly
+                                chunk_text = first.get("chunk_text")
+                                file_id = first.get("file_id")
+                            else:
+                                # fallback: if it's nested like { edge_text: { "chunk_text": ..., "file_id": ... } }
+                                chunk_text = None
+                                file_id = None
+                                if isinstance(first, dict):
+                                    inner = next(iter(first.values()), None)
+                                    if isinstance(inner, dict):
+                                        chunk_text = inner.get("chunk_text")
+                                        file_id = inner.get("file_id")
 
-                        if chunk_text:
-                            r["doc"].page_content += str(chunk_text)
-                        if file_id:
-                            r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
-
-                    else:
-                        # search_start == 'node'
-                        # neighborhood: list of dicts, each with single key mapping to inner dict:
-                        # e.g. [{ edge_text: { "chunk_text": ..., "file_id": ... } }, ...]
-                        first_item = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
-                        inner = None
-
-                        if isinstance(first_item, dict):
-                            # normally it's a dict mapping edge_text -> {...}
-                            inner = next(iter(first_item.values()), None)
-                        elif isinstance(first_item, list):
-                            # defensive: if it's a nested list (older bug) take first element
-                            maybe = first_item[0] if first_item else None
-                            if isinstance(maybe, dict):
-                                inner = next(iter(maybe.values()), None)
-
-                        if isinstance(inner, dict):
-                            chunk_text = inner.get("chunk_text")
-                            file_id = inner.get("file_id")
                             if chunk_text:
                                 r["doc"].page_content += str(chunk_text)
                             if file_id:
                                 r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
+
+                        else:
+                            # search_start == 'node'
+                            # neighborhood: list of dicts, each with single key mapping to inner dict:
+                            # e.g. [{ edge_text: { "chunk_text": ..., "file_id": ... } }, ...]
+                            first_item = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
+                            inner = None
+
+                            if isinstance(first_item, dict):
+                                # normally it's a dict mapping edge_text -> {...}
+                                inner = next(iter(first_item.values()), None)
+                            elif isinstance(first_item, list):
+                                # defensive: if it's a nested list (older bug) take first element
+                                maybe = first_item[0] if first_item else None
+                                if isinstance(maybe, dict):
+                                    inner = next(iter(maybe.values()), None)
+
+                            if isinstance(inner, dict):
+                                chunk_text = inner.get("chunk_text")
+                                file_id = inner.get("file_id")
+                                if chunk_text:
+                                    r["doc"].page_content += str(chunk_text)
+                                if file_id:
+                                    r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
 
                 span.set_attribute(A["traversal_injected_docs"], _injected_docs)
                 span.set_attribute(A["traversal_injected_neighbor_items"], _injected_neighbor_items)
@@ -2305,11 +2404,11 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
     span.set_attribute("okf.fanout.graph_count", len(search_set))
     sem = asyncio.Semaphore(FANOUT_MAX_GRAPHS)
 
-    async def _leg(graph_name):
+    async def _leg(graph_name, idict=None):
         async with sem:
             try:
                 return await _invoke_leg(
-                    self, graph_name, input_dict, input, query=input_dict.get("input", input_dict.get("text"))
+                    self, graph_name, idict or input_dict, input, query=input_dict.get("input", input_dict.get("text"))
                 )
             except TimeoutError:
                 logger.info(
@@ -2332,12 +2431,43 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
         per_graph.append((graph_name, enriched))
     target_k = min(int(input.k) if input.k else 10, FANOUT_CANDIDATE_CAP_GLOBAL)
     fused = _merge_per_graph_results(per_graph, k=target_k)
+
+    # 1-8g-l — claimed-leg-empty fallback. Under heads-supersede the claim is
+    # DECISIVE: the chunk competition is skipped AND the legacy GRAPH leg is
+    # dropped, so a claimed graph whose leg died (traversal starvation, a db
+    # hiccup) used to ship fused=0 to the LLM → a guaranteed ungrounded
+    # answer (live 2026-10-11: 9/9 chat answers starved exactly this way —
+    # each leg had already fused 20 on-point documents before its traversal
+    # overran). One vector-only retry (traversal force-disabled; the vector
+    # legs complete in ~0.5s live) rescues the answer; if it ALSO returns
+    # nothing, the abstention is honest. Sets shaped like the legacy
+    # competition (GRAPH present) don't retry: fused=0 there means the
+    # competition itself found nothing, and probing again finds the same.
+    if not fused and search_set and "GRAPH" not in search_set:
+        logger.warning(
+            f"Fan-out fused 0 from {len(search_set)} claimed/sticky leg(s) — "
+            f"retrying vector-only (traversal disabled): {search_set}"
+        )
+        span.set_attribute("okf.fanout.leg_empty_fallback", True)
+        retry_dict = dict(input_dict)
+        retry_dict["enable_traversal"] = False
+        retry_results = await asyncio.gather(*[_leg(g, retry_dict) for g in search_set])
+        retry_per_graph = [
+            (graph_name, _attach_provenance(items, graph_name))
+            for graph_name, items in zip(search_set, retry_results, strict=True)
+        ]
+        fused = _merge_per_graph_results(retry_per_graph, k=target_k)
+        if fused:
+            logger.info(f"Claimed-leg fallback recovered {len(fused)} document(s) (vector-only retry)")
+
     # Span attributes (Story 1.6 + ADR-039 D5 — for the Studio card).
     span.set_attribute("okf.fanout.legs_succeeded", sum(1 for r in leg_results if r))
     span.set_attribute("okf.fanout.legs_failed", sum(1 for r in leg_results if not r))
     span.set_attribute("okf.fanout.fused_count", len(fused))
+    # 1-8g-l: legs= printed the CARRIER size, not the actual search set —
+    # live "legs=5, failed=1" was ONE claimed leg timing out, not five.
     logger.info(
-        f"Fan-out complete — legs={len(encoded_graph_names)}, fused={len(fused)}, "
+        f"Fan-out complete — legs={len(search_set)}, fused={len(fused)}, "
         f"succeeded={sum(1 for r in leg_results if r)}, failed={sum(1 for r in leg_results if not r)}"
     )
     span.end()

@@ -439,16 +439,29 @@ async function sampleConceptsFromRepo(db, repoId, n) {
   // Group every concept by its PRIMARY (first) label; return both the group
   // size (the histogram) and a bounded deterministic sample per group. One
   // pass, no full-corpus fetch.
+  //
+  // 1-8g-m2 (live 500, David 2026-10-11 11:40Z): this query shipped broken
+  // and the jest suite could not see it — the arango mock returns canned rows
+  // regardless of AQL text. Two AQL rules were violated:
+  //   (1) `LET lab = ...` followed by `COLLECT lab = lab` assigns the SAME
+  //       variable twice — ArangoDB rejects the whole query
+  //       ("variable 'lab' is assigned multiple times"). Fixed by naming the
+  //       LET result `primary` and collecting into `label`.
+  //   (2) a nested `FOR x IN (subquery) RETURN …` did not parse. Fixed by a
+  //       single subquery carrying the LIMIT itself.
+  // Verified against the live database before this fix (Indonesia History:
+  // 8 groups, 999 concepts — History 513 / (unlabeled) 147 / Politics 133 /
+  // Culture 99 / Economics 68 / Religion 29 / Prehistory 9 / Kingdoms 1).
   const cq = await db.query(
     `FOR m IN okf_concepts_meta FILTER m.repo_id == @rid
-       LET lab = (LENGTH(m.labels) > 0 && m.labels[0] != null) ? m.labels[0] : "(unlabeled)"
-       COLLECT lab = lab INTO rows = m
+       LET primary = (LENGTH(m.labels) > 0 && m.labels[0] != null) ? m.labels[0] : "(unlabeled)"
+       COLLECT label = primary INTO rows = m
        LET s = (
-         FOR x IN (FOR r2 IN rows SORT r2._key LIMIT @perLabel)
-           RETURN { concept_id: r2.concept_id, title: r2.title, type: r2.type,
-                    tags: r2.tags, labels: r2.labels, summary: r2.summary }
+         FOR r2 IN rows SORT r2._key LIMIT @perLabel
+         RETURN { concept_id: r2.concept_id, title: r2.title, type: r2.type,
+                  tags: r2.tags, labels: r2.labels, summary: r2.summary }
        )
-       RETURN { label: lab, total: LENGTH(rows), sample: s }`,
+       RETURN { label: label, total: LENGTH(rows), sample: s }`,
     { rid: repoId, perLabel: Math.max(1, Math.ceil(n / 4)) }
   );
   const groups = await cq.all();

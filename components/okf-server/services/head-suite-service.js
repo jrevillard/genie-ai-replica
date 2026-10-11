@@ -721,6 +721,13 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
 // polls GET /routing-testsuite/:key until the doc lands. One generation
 // per repo at a time (a second begin while one is in flight is a 409).
 const suiteGenInFlight = new Map(); // repo_id -> suite_key
+// 1-8g-u: the last async generation FAILURE per repo — the poll consults
+// it so a dead generation answers {status:'failed', error} instead of
+// 404-ing forever (live 2026-10-11: a tag-less repo's generation died on
+// the NO_FRONTMATTER guard in its first millisecond, `.finally()` cleared
+// the in-flight marker, and every 3s poll logged "suite not found" until
+// the UI timed out — the real error only ever reached the logs).
+const suiteGenFailure = new Map(); // repo_id -> {suite_key, code, message, at}
 
 // 1-8f2: is this (repo, key) pair a LIVE async generation? getSuite consults
 // this before its 404 — a minted key that is still generating must answer
@@ -733,7 +740,22 @@ function suiteGenerationInFlight(repoId, suiteKey) {
   return suiteGenInFlight.get(repoId) === suiteKey;
 }
 
-function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
+// 1-8g-u: did this (repo, key) pair DIE? getSuite answers the recorded
+// failure terminally; beginSuiteGeneration clears it on the next attempt.
+function suiteGenerationFailed(repoId, suiteKey) {
+  const f = suiteGenFailure.get(repoId);
+  return f && f.suite_key === suiteKey ? f : null;
+}
+
+/**
+ * 1-8g-u: beginSuiteGeneration validates the SYNCHRONOUS preconditions
+ * BEFORE minting a key (async — the controller awaits it): a tag-less repo
+ * is told NOW with NO_FRONTMATTER (the UI points at the Frontmatter panel
+ * + Suggest tags), not left polling a key whose generation died in its
+ * first millisecond. generateSuite re-validates; this is the fast-fail
+ * gate that keeps 202-and-poll honest for validation-class failures.
+ */
+async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
   const inflight = suiteGenInFlight.get(repoId);
   if (inflight) {
     const err = new Error('a suite generation is already running for this repository');
@@ -742,17 +764,33 @@ function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
     err.suite_key = inflight;
     throw err;
   }
+  const fm = await frontmatterService.readFrontmatterFromRepoDoc(repoId);
+  if (!fm) {
+    const err = new Error(
+      'repo has no stored frontmatter — create head tags first (Frontmatter panel → Suggest tags), then generate a suite'
+    );
+    err.code = 'NO_FRONTMATTER';
+    err.status = 409;
+    throw err;
+  }
   const suiteKey = `s${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
   suiteGenInFlight.set(repoId, suiteKey);
+  suiteGenFailure.delete(repoId); // a fresh attempt supersedes the last failure
   const done = generateSuite(repoId, payload, { ...opts, suiteKey })
     .then((suite) => suite)
     .finally(() => suiteGenInFlight.delete(repoId));
   // The controller responds 202 without awaiting `done`; a hard failure
-  // (DB down) means no doc ever lands — the UI's poll times out with an
-  // honest message. Log it here so the failure is visible.
-  done.catch((e) =>
-    logger.error('head-suite.generate.async_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message })
-  );
+  // (DB down) means no doc ever lands — the poll reads the recorded
+  // failure from suiteGenFailure (terminal, honest) instead of 404-ing.
+  done.catch((e) => {
+    suiteGenFailure.set(repoId, {
+      suite_key: suiteKey,
+      code: e.code || 'GENERATION_FAILED',
+      message: e.message,
+      at: new Date().toISOString()
+    });
+    logger.error('head-suite.generate.async_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message });
+  });
   return { suite_key: suiteKey, done };
 }
 
@@ -852,6 +890,13 @@ async function getSuite(repoId, suiteKey, opts = {}) {
       // minted + worker running — the doc persists only when generation ends
       span.setAttribute('okf.suite_status', 'generating');
       return { suite_key: suiteKey, status: 'generating' };
+    }
+    // 1-8g-u: a recorded generation failure answers TERMINALLY — the poll
+    // stops and shows the real error, instead of 404-ing until timeout.
+    const failed = suiteGenerationFailed(repoId, suiteKey);
+    if (failed) {
+      span.setAttribute('okf.suite_status', 'failed');
+      return { suite_key: suiteKey, status: 'failed', error: { code: failed.code, message: failed.message } };
     }
     const suite = await loadSuiteDoc(db, repoId, suiteKey);
     if (suite.repo_id !== repoId) {
@@ -2057,7 +2102,17 @@ async function recommendTagSet(repoId, payload = {}, opts = {}) {
         if (!q || !q.query || !q.kind) continue;
         const key = q.query.trim().toLowerCase();
         if (!byText.has(key))
-          byText.set(key, { query: q.query, kind: q.kind, cls: q.cls || null, claimed: !!q.head_claimed });
+          byText.set(key, {
+            query: q.query,
+            kind: q.kind,
+            cls: q.cls || null,
+            claimed: !!q.head_claimed,
+            // 1-8g-s: the corpus verdict rides along — a negative failure
+            // the corpus ANSWERS is a row problem (positive in disguise),
+            // not a tag problem. Without this the advisor was blind to
+            // exactly the evidence the Lab's Corpus column shows.
+            probe: q.probe || null
+          });
       }
     }
     const queries = [...byText.values()];
@@ -2159,6 +2214,35 @@ async function recommendTagSet(repoId, payload = {}, opts = {}) {
     const ADD_LLM_CLASSES = new Set(['off-domain', 'forbidden', 'near-miss']);
     const failing = before.per.filter((p) => (p.kind === 'positive' ? !p.claimed : p.claimed));
     const failingForAdds = failing.filter((p) => p.kind === 'negative' && (!p.cls || ADD_LLM_CLASSES.has(p.cls)));
+    // 1-8g-s — the corpus lever: a negative failure whose probe verdict is
+    // answerable/weak is a ROW problem, not a tag problem — the ingested
+    // corpus ANSWERS the query, so the row is a positive in disguise (the
+    // tags and the corpus disagree, and the corpus is ground truth for
+    // coverage). The advisor surfaces a flip recommendation with the
+    // evidence; the UI applies it through the normal row flip. (Live
+    // 2026-10-11, David: 3 answerable near-miss fails on NCD Information
+    // and the advisor said nothing — it had NO row lever and never read
+    // the probe verdicts; forbidden-tag adds can't fix near-misses by
+    // design, their subjects ARE this repo's vocabulary.)
+    const rowActions = failing
+      .filter((p) => p.kind === 'negative' && p.probe && ['answerable', 'weak'].includes(p.probe.verdict))
+      .slice(0, 10)
+      .map((p) => ({
+        query: p.query,
+        cls: p.cls || null,
+        action: 'flip',
+        to_kind: 'positive',
+        verdict: p.probe.verdict,
+        top_score: p.probe.top_score,
+        reason: `the corpus answers this query (rerank ${p.probe.top_score}, ${p.probe.verdict}) — it is a positive in disguise, not a routing failure`
+      }));
+    // The honest remainder: negative failures with NO corpus grounding —
+    // a forbidden tag cannot fix them (the competitor must win them) and
+    // the corpus does not support a flip either. Counted, never silently
+    // dropped: the silence David saw is the bug this works against.
+    const ungroundedNegativeFails = failing.filter(
+      (p) => p.kind === 'negative' && (!p.probe || !['answerable', 'weak'].includes(p.probe.verdict))
+    ).length;
     let llmAdds = [];
     try {
       const prompt = `A retrieval repository's routing test suite fails some queries across classes.
@@ -2349,13 +2433,22 @@ Respond with ONLY: {"add": ["...", "..."]}`;
       // without re-admitting negatives.
       blocked_removals: blockedRemovals,
       narrow_options: narrowOptions,
+      // 1-8g-s: row-level recommendations from the corpus leg — flips for
+      // negatives the corpus answers; plus the count of ungrounded
+      // negative fails the advisor deliberately does NOT touch.
+      row_actions: rowActions,
+      ungrounded_negative_fails: ungroundedNegativeFails,
       gold_positives: goldPositives.length,
       note:
         applied.add.length || applied.remove.length
           ? 'apply the changes, rebuild the head, re-run the suite — predicted scorecard above'
-          : blockedRemovals.length
-            ? 'no auto-applicable change predicts an improvement — the blocked removals below are what recovers the positives'
-            : 'no tag-set change predicts an improvement — the remaining fails are curator tradeoffs or need head-topic growth',
+          : rowActions.length
+            ? `no tag-set change predicts an improvement — but ${rowActions.length} failing negative${rowActions.length === 1 ? '' : 's'} ${rowActions.length === 1 ? 'is' : 'are'} grounded in the corpus: flip ${rowActions.length === 1 ? 'it' : 'them'} to positives (row actions below)`
+            : blockedRemovals.length
+              ? 'no auto-applicable change predicts an improvement — the blocked removals below are what recovers the positives'
+              : ungroundedNegativeFails
+                ? `no tag-set change predicts an improvement — ${ungroundedNegativeFails} negative fail${ungroundedNegativeFails === 1 ? '' : 's'} have no corpus grounding and no safe tag lever (the competitor must win them)`
+                : 'no tag-set change predicts an improvement — the remaining fails are curator tradeoffs or need head-topic growth',
       damped_adds: dampedAdds,
       damping: { min_negative_gain: ADVISOR_MIN_NEGATIVE_GAIN, max_adds: ADVISOR_MAX_ADDS }
     };
@@ -2381,6 +2474,8 @@ Respond with ONLY: {"add": ["...", "..."]}`;
       remove: applied.remove,
       blocked_removals: blockedRemovals.map((b) => b.tag),
       narrow_options: narrowOptions.length,
+      row_actions: rowActions.length,
+      ungrounded_negative_fails: ungroundedNegativeFails,
       score: `${before.scorecard.score} -> ${best.scorecard.score}`
     });
     return out;
@@ -2391,6 +2486,7 @@ module.exports = {
   generateSuite,
   beginSuiteGeneration,
   suiteGenerationInFlight,
+  suiteGenerationFailed,
   addQueries,
   getSuite,
   updateSuiteRows,

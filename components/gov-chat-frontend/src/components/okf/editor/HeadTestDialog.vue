@@ -839,6 +839,40 @@
                 </DsTag>
               </div>
             </template>
+            <!-- 1-8g-s: the corpus lever — failing negatives the probe
+                 ANSWERED are positives in disguise; one click flips them
+                 through the normal row-flip endpoint (1-8g-p semantics:
+                 the whole duplicate family moves). -->
+            <template v-if="advisorRowActions.length">
+              <p class="okf-headtest__teach-text okf-headtest__blocked-title">
+                {{
+                  translate(
+                    'okf.headTest.advisor.rowActionsTitle',
+                    'Corpus-grounded flips — the corpus answers these "negatives": flip them to positives'
+                  )
+                }}
+              </p>
+              <ul class="okf-headtest__failing">
+                <li v-for="(ra, ri) in advisorRowActions" :key="'adv-ra-' + ri" class="okf-headtest__row-action">
+                  <span>{{ ra.query }}</span>
+                  <span class="okf-headtest__empty">{{ ra.verdict }} · {{ ra.top_score }}</span>
+                  <DsButton variant="secondary" small :disabled="busy !== null" @click="onAdvisorFlip(ra)">
+                    {{ translate('okf.headTest.advisor.flipToPositive', 'Flip to positive') }}
+                  </DsButton>
+                </li>
+              </ul>
+            </template>
+            <p
+              v-if="!advisorRowActions.length && advisorUngroundedCount > 0"
+              class="okf-headtest__teach-text okf-headtest__empty"
+            >
+              {{
+                translate(
+                  'okf.headTest.advisor.ungroundedNote',
+                  '{n} failing negative(s) have no corpus grounding and no safe tag lever — the competing repository must win them.'
+                ).replace('{n}', String(advisorUngroundedCount))
+              }}
+            </p>
             <ul v-if="advisorVerdicts.length" class="okf-headtest__failing">
               <li v-for="v in advisorVerdicts" :key="v.tag + (v.rejected || '')">
                 <span>{{ v.rejected ? '✗' : '✓' }} {{ v.tag }}{{ v.rejected ? ' — ' + v.rejected : '' }}</span>
@@ -1182,6 +1216,38 @@
         </div>
         <p v-if="error" class="okf-headtest__error">{{ error }}</p>
       </div>
+      <!-- 1-8g-t (David): suite deletion MUST be confirmed with a dialog —
+           the × button only ARMS the confirmation; the delete fires solely
+           from the dialog's Confirm. Names the suite + the consequence. -->
+      <DsDialog
+        :visible="deleteConfirm !== null"
+        :title="translate('okf.headTest.suites.deleteConfirmTitle', 'Delete this suite?')"
+        size="sm"
+        :actions="[
+          { key: 'cancel', label: translate('okf.headTest.suites.deleteCancel', 'Cancel'), variant: 'secondary' },
+          {
+            key: 'confirm',
+            label: translate('okf.headTest.suites.deleteConfirm', 'Delete suite'),
+            variant: 'primary',
+            disabled: busy !== null
+          }
+        ]"
+        @close="deleteConfirm = null"
+        @action="onDeleteSuiteConfirm"
+      >
+        <p class="okf-headtest__teach-text">
+          {{
+            translate(
+              'okf.headTest.suites.deleteConfirmBody',
+              'This permanently removes the suite and its run history. This cannot be undone.'
+            )
+          }}
+        </p>
+        <p v-if="deleteConfirm" class="okf-headtest__teach-text okf-headtest__empty">
+          <code>{{ deleteConfirm._key }}</code>
+          — {{ deleteConfirm.name || translate('okf.headTest.suites.unnamedFallback', 'unnamed suite') }}
+        </p>
+      </DsDialog>
     </DsTabs>
   </DsDialog>
 </template>
@@ -1240,6 +1306,7 @@ export default {
       runs: [],
       // 1-8f: persisted suites (kind 'suite') — the Load targets.
       savedSuites: [],
+      deleteConfirm: null,
       // 1-8g: the click-test's full result (head verdict + corpus verdict +
       // reason + reference files + rerank-ranked chunks) — rendered as the
       // summary panel at the top of the Suites tab.
@@ -1681,6 +1748,18 @@ export default {
      * removal alone (positives up, negatives not re-admitted). */
     advisorNarrowOptions() {
       return this.advisor && Array.isArray(this.advisor.narrow_options) ? this.advisor.narrow_options : [];
+    },
+    /** 1-8g-s: the corpus lever — failing negatives the probe ANSWERED
+     * (answerable/weak). They are positives in disguise; the advisor
+     * recommends flipping them, with the rerank evidence attached. */
+    advisorRowActions() {
+      return this.advisor && Array.isArray(this.advisor.row_actions) ? this.advisor.row_actions : [];
+    },
+    /** 1-8g-s: negative fails with no grounding and no safe tag lever —
+     * counted honestly instead of vanished. */
+    advisorUngroundedCount() {
+      const n = this.advisor && this.advisor.ungrounded_negative_fails;
+      return typeof n === 'number' ? n : 0;
     },
     /** 1-8d: the before/after scorecard line for the advisor panel. */
     advisorScoreText() {
@@ -2239,12 +2318,29 @@ export default {
       this.suiteName = '';
       if (!res.ok) {
         this.busy = null;
-        this.error = res.message || this.translate('okf.headTest.error.generate', 'Suite generation failed');
+        // 1-8g-u (David): a tag-less repo is told NOW what to do — create
+        // tags (Frontmatter panel) or use Suggest tags — not left polling.
+        this.error =
+          res.code === 'NO_FRONTMATTER'
+            ? this.translate(
+                'okf.headTest.error.noFrontmatter',
+                'This repository has no head tags yet — create tags in the Frontmatter panel (or use Suggest tags), then generate a suite.'
+              )
+            : res.message || this.translate('okf.headTest.error.generate', 'Suite generation failed');
         return;
       }
       let suite = null;
       if (res.result && res.result.status === 'generating' && res.result.suite_key) {
         suite = await this.pollForSuite(res.result.suite_key);
+        // 1-8g-u: a recorded generation failure surfaces the REAL error.
+        if (suite && suite.status === 'failed') {
+          this.busy = null;
+          this.error =
+            (suite.error && suite.error.message) ||
+            this.translate('okf.headTest.error.generate', 'Suite generation failed');
+          this.refreshRuns();
+          return;
+        }
       } else if (res.result && res.result.suite_key) {
         suite = res.result; // legacy synchronous response
       }
@@ -2467,8 +2563,19 @@ export default {
     },
     /** 1-8g: delete a saved suite (and its run docs) from the list. The
      * currently-loaded suite may be deleted too — the local copy clears. */
-    async onDeleteSuite(s) {
+    /** 1-8g-t: the × only ARMS the confirmation — the delete fires solely
+     * from the dialog's Confirm button. */
+    onDeleteSuite(s) {
       if (this.busy !== null || !s) return;
+      this.deleteConfirm = s;
+    },
+    async onDeleteSuiteConfirm(action) {
+      const s = this.deleteConfirm;
+      if (action !== 'confirm' || !s) {
+        this.deleteConfirm = null;
+        return;
+      }
+      if (this.busy !== null) return;
       this.busy = 'suite-delete';
       this.error = '';
       const res = await this.$store.dispatch('okf/headSuiteDelete', {
@@ -2476,6 +2583,7 @@ export default {
         suiteKey: s._key
       });
       this.busy = null;
+      this.deleteConfirm = null;
       if (!res || !res.ok) {
         this.error =
           (res && res.message) || this.translate('okf.headTest.error.suiteDelete', 'Could not delete the suite');
@@ -2578,6 +2686,30 @@ export default {
         return;
       }
       this.suite = res.result;
+    },
+    /** 1-8g-s: apply an advisor row action — flip a corpus-grounded
+     * negative to positive through the normal row endpoint. The action
+     * leaves the recommendation list on success. */
+    async onAdvisorFlip(ra) {
+      if (this.busy !== null || !this.suite) return;
+      this.busy = 'suite-edit';
+      this.error = '';
+      const res = await this.$store.dispatch('okf/headSuiteUpdateRows', {
+        repoId: this.repo.repo_id,
+        suiteKey: this.suite.suite_key,
+        payload: { updates: [{ match: { query: ra.query, kind: 'negative' }, set: { kind: 'positive' } }] }
+      });
+      this.busy = null;
+      if (!res || !res.ok) {
+        this.error =
+          (res && res.message) || this.translate('okf.headTest.error.suiteUpdate', 'Could not update the suite');
+        return;
+      }
+      this.suite = res.result;
+      this.advisor = {
+        ...this.advisor,
+        row_actions: this.advisorRowActions.filter((x) => x.query !== ra.query)
+      };
     },
     /** 1-8f: remove a row from the suite entirely. */
     async onDeleteRow(row) {

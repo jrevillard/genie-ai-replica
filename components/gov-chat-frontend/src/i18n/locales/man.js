@@ -413,12 +413,10 @@ export default {
       gitRepoAccessDesc: 'kataa ka Git repositri fayilolu je',
       recommendedAction: 'Kewol Nimalolu',
       rateLimitRecommendation: 'Hali ka tambi-da muta, IP kandi mutol ye, ani ibay ka i la sistemoo bambang.',
-      envFileRecommendation:
-        'A kumpabo ko envayro fayilolu man nanta banta web dulaa to ani ka kang ka dulaa kantata muta.',
+      envFileRecommendation: 'A kumpabo ko envayro fayilolu man nanta banta web dulaa to ani ka kang ka dulaa kantata muta.',
       gitRepoRecommendation: 'A kumpabo ko .git dulaalu kantata le banta web to.',
       logPatternMatches: 'Lipuo tsa log tse fumueng',
-      patternMatchNote:
-        'Mafoko a a fumatseng mo mongwatsi oa log. Scan e tlisa karolo e itseng, ha e na le tlhaselo e e netweng — bala kae.',
+      patternMatchNote: 'Mafoko a a fumatseng mo mongwatsi oa log. Scan e tlisa karolo e itseng, ha e na le tlhaselo e e netweng — bala kae.',
       patternMatchSummaryNote: '(karolo e fumatseng mo mongwatsi oa log, ha e na le tlhaselo e e netweng)',
       noVulnerabilitiesFound: 'Filiyal/Koyal mang je',
       systemSecure: 'I la sistemoo kantata le baa. Hali ka kumpabo luming.',
@@ -513,22 +511,19 @@ export default {
       retractPartialFailure: '{count} to {successCount} botata. Filita: {detail}',
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
-      confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
+      confirmDeleteSelected: 'Are you sure you want to permanently delete {\'{\'}count{\'}\'} file(s)? This cannot be undone.',
+      deleteQueuedSuccess: '{\'{\'}count{\'}\'} file(s) deleted.',
       deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
-      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
-      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
+      deletePartialFailure: '{\'{\'}successCount{\'}\'} of {\'{\'}count{\'}\'} deleted. Failed: {\'{\'}detail{\'}\'}',
+      deleteAllFailed: 'All {\'{\'}count{\'}\'} file(s) failed: {\'{\'}detail{\'}\'}',
+      deleteRefuseReason: '{\'{\'}count{\'}\'} file(s) are still ingested — retract them first.',
       retractAllFailed: 'Fayil {count} bee filita: {detail}',
       uploadSuccessMultiple: 'Fayil {count} yeleta benta.',
       linkSubmitSuccess: '"{fileName}" ñiningta ani a marata benta.',
       actionSuccess: 'Baara "{action}" fayil {fileId} to benta.',
       metadataUpdateSuccess: 'Metadeta fayil {fileId} yailamata.',
-      deletePartialNotice:
-        "{'{'{'}'}blocked{'}'} selected file(s) cannot be deleted ({'{'{'}'}reason{'}'}) — only the other {'{'{'}'}n{'}'} will be deleted.",
-      confirmDeleteSkipped:
-        "{'{'{'}'}count{'}'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
+      deletePartialNotice: '{\'{\'{\'}\'}blocked{\'}\'} selected file(s) cannot be deleted ({\'{\'{\'}\'}reason{\'}\'}) — only the other {\'{\'{\'}\'}n{\'}\'} will be deleted.',
+      confirmDeleteSkipped: '{\'{\'{\'}\'}count{\'}\'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them.'
     },
     queryInspector: {
       search: 'A nyining',
@@ -743,7 +738,7 @@ export default {
     chatTitle: 'Kuma Toh',
     chatTitlePlaceholder: 'Kuma toh kura nyining',
     deleteFolder: 'Folda Fiti',
-    deleteFolderConfirm: "I lafiya la ka '{name}' folda fiti le ti?",
+    deleteFolderConfirm: 'I lafiya la ka \'{name}\' folda fiti le ti?',
     chatsMoveWarning: 'Nying folda kono kumal bee si tita folda-ceng-to.',
     weatherTitle: 'Sanoo Kibaroo',
     weatherLoading: 'Sanoo kibaro ka looti...',
@@ -833,8 +828,7 @@ export default {
     },
     cat2: {
       name: '2. Kenda-yaa ani Jamaa Baaralu',
-      children:
-        'Pablik kenda-yaa dulaalu,Dokotoro dulaalu,Kenda-yaa insooransi,Seng-moo la baaralu,Moolu dulaa ani nimal'
+      children: 'Pablik kenda-yaa dulaalu,Dokotoro dulaalu,Kenda-yaa insooransi,Seng-moo la baaralu,Moolu dulaa ani nimal'
     },
     cat3: {
       name: '3. Karandiri ani Longo',
@@ -934,14 +928,12 @@ export default {
     user: 'Moo',
     loadingUserInfo: 'Moo kibaro ka looti...',
     resetUserDataTitle: 'Moo Kibaroo Fitindi',
-    confirmResetUserData:
-      'I lafiya la ka i la moo-kibaroo bee fitindi le ti? Nying si i la kibaro bee fiti ani kuma koto, kani i la akaanti dung-kumol si tu yeng.',
+    confirmResetUserData: 'I lafiya la ka i la moo-kibaroo bee fitindi le ti? Nying si i la kibaro bee fiti ani kuma koto, kani i la akaanti dung-kumol si tu yeng.',
     reset: 'Kurandi (Reset)',
     deleteAccount: 'I la akaanti kpalan',
     deleteAccountDesc: 'I la akaanti bee ni datha bee kpalan be maan. Nying si tɛna kurun.',
     deleteAccountTitle: 'Akaanti Kpalan',
-    confirmDeleteAccount:
-      'I lafiya la ka i la akaanti kpalan le ti? Nye nungo in maan, nying si tɛna kurun. I la datha bee yɛrɛ kpalan.',
+    confirmDeleteAccount: 'I lafiya la ka i la akaanti kpalan le ti? Nye nungo in maan, nying si tɛna kurun. I la datha bee yɛrɛ kpalan.',
     delete: 'Kpalan',
     accountDeleted: 'I la akaanti ye kpalan don.',
     failedToDeleteAccount: 'Akaanti kpalan ma ɲin. I si ñining tugung hake.'
@@ -1114,8 +1106,7 @@ export default {
     instructions: {
       fullNameHelp: 'I la toh faata nyining ko a be i la dokuuma to coko min',
       dobHelp: 'I la bulu-lung nyining MM/DD/YYYY to',
-      uploadPhotoHelp:
-        'Foto saaying-saaying yela. Fayiloo nanta ka ke JPG, PNG, wala GIF ani a nanta ka dooyata 2MB to',
+      uploadPhotoHelp: 'Foto saaying-saaying yela. Fayiloo nanta ka ke JPG, PNG, wala GIF ani a nanta ka dooyata 2MB to',
       documentHelp: 'Fayilolu sota: PDF, JPG, PNG (tambi-da 5MB)',
       requiredFields: 'Dulaalu mata * lafiya-le',
       selectFromList: 'Ibay dii ceng kafo kono',
@@ -1136,7 +1127,7 @@ export default {
       male: 'Kee',
       female: 'Muso',
       other: 'Doo',
-      preferNot: "N ti lafiya k'a fo"
+      preferNot: 'N ti lafiya k\'a fo'
     },
     maritalStatus: {
       single: 'Muso/Kee ti muta (Singiri)',
@@ -1214,10 +1205,8 @@ export default {
     noMatchingCountries: 'Bankoo mang ben',
     noMatchingDisciplines: 'Baara-fata mang ben',
     noMatchingDegrees: 'Degri mang ben',
-    educationOptions:
-      'Accounting (Kodo lataramoo),Aerospace (Kulong-santo baara),Sene baaralu,Moo-longo (Anthropology),Loo baaralu,Foto tariiki,AI,Salo longoo,Salo-koo longoo,Biochemistry,Kenda-yaa Enginering,Biyo-baara,Bita Lataramoo,Kimikal Enginering,Kimikal longoo,Suw Enginering,Kuma-longo,Kompuuta Enginering,Kompuuta longoo,Loo lataramoo,Kiti-yaa longoo,Kompuuta kantari,Data longoo,Nyin longoo,Kodo-longoo,Karandiri,Elektrik Enginering,Sukuul-ding karandiri,Angalee karandiri,Dulaa-kenda-yaa Enginering,Dulaa-kenda-yaa longoo,Dondiko dada,Film longoo,Kodo (Finance),Fayn Arts,Daa-longoo,Polisi longoo,Geym dada,Geografi,Banko longoo,Grafik dada,Kenda-yaa lataramoo,Tariiki,Makaamoo lataramoo,Moo baara,Fengo dada,Sati-baa Enginering,Kibaro lataramoo,Longo baara (IT),Suw-kono dada,Banko-teema bita,Banko-teema kuma,Kibaro-folaa,Lawu,Buku longoo,Kang-longoo,Lataramoo,Jula-yaa (Marketing),Murumuru longoo,Matematiki,Makin Enginering,Media longoo,Dokotoro,Sanoo longoo,Mikro-longoo,Muzik,Nanolongo,Nasi baara,Baloo longoo,Kenda-yaa baara,Baa-longoo,Jiyo Enginering,Farmasi (Basi),Filosofi,Foto-mutalaa,Fari kenda-yaa,Fari kenda-yaa baara,Fisiks,Politiki longoo,Hakili longoo,Jamo Lataramoo,Jamo kenda-yaa,Jamo kuma,Robootik,Sukuul-teema karandiri,Moo baara,Sosioloji,Softweya Enginering,Karandiri-doo,Tolong lataramoo,Statistika,Sistem Enginering,Sinima baara,Taa-ani-Naa baara,Sati lataramoo,Bisi Dokotoro,Web dada,Wulo-sugo longoo,Sugo longoo',
-    degreeOptions:
-      'Associate Degri,Bachelor of Arts (BA),Bachelor of Science (BS),Bachelor of Engineering (BEng),Bachelor of Business Administration (BBA),Bachelor of Fine Arts (BFA),Bachelor of Education (BEd),Bachelor of Medicine (MBBS),Bachelor of Laws (LLB),Master of Arts (MA),Master of Science (MS),Master of Business Administration (MBA),Master of Engineering (MEng),Master of Fine Arts (MFA),Master of Education (MEd),Master of Laws (LLM),Master of Public Health (MPH),Doctor of Philosophy (PhD),Doctor of Medicine (MD),Doctor of Education (EdD),Doctor of Business Administration (DBA),Doctor of Jurisprudence (JD),Professional Diplom,Teknikal Diplom,Vokesonal Diplom,Graduate Diplom,Post-Graduate Diplom,Post-Doctoral',
+    educationOptions: 'Accounting (Kodo lataramoo),Aerospace (Kulong-santo baara),Sene baaralu,Moo-longo (Anthropology),Loo baaralu,Foto tariiki,AI,Salo longoo,Salo-koo longoo,Biochemistry,Kenda-yaa Enginering,Biyo-baara,Bita Lataramoo,Kimikal Enginering,Kimikal longoo,Suw Enginering,Kuma-longo,Kompuuta Enginering,Kompuuta longoo,Loo lataramoo,Kiti-yaa longoo,Kompuuta kantari,Data longoo,Nyin longoo,Kodo-longoo,Karandiri,Elektrik Enginering,Sukuul-ding karandiri,Angalee karandiri,Dulaa-kenda-yaa Enginering,Dulaa-kenda-yaa longoo,Dondiko dada,Film longoo,Kodo (Finance),Fayn Arts,Daa-longoo,Polisi longoo,Geym dada,Geografi,Banko longoo,Grafik dada,Kenda-yaa lataramoo,Tariiki,Makaamoo lataramoo,Moo baara,Fengo dada,Sati-baa Enginering,Kibaro lataramoo,Longo baara (IT),Suw-kono dada,Banko-teema bita,Banko-teema kuma,Kibaro-folaa,Lawu,Buku longoo,Kang-longoo,Lataramoo,Jula-yaa (Marketing),Murumuru longoo,Matematiki,Makin Enginering,Media longoo,Dokotoro,Sanoo longoo,Mikro-longoo,Muzik,Nanolongo,Nasi baara,Baloo longoo,Kenda-yaa baara,Baa-longoo,Jiyo Enginering,Farmasi (Basi),Filosofi,Foto-mutalaa,Fari kenda-yaa,Fari kenda-yaa baara,Fisiks,Politiki longoo,Hakili longoo,Jamo Lataramoo,Jamo kenda-yaa,Jamo kuma,Robootik,Sukuul-teema karandiri,Moo baara,Sosioloji,Softweya Enginering,Karandiri-doo,Tolong lataramoo,Statistika,Sistem Enginering,Sinima baara,Taa-ani-Naa baara,Sati lataramoo,Bisi Dokotoro,Web dada,Wulo-sugo longoo,Sugo longoo',
+    degreeOptions: 'Associate Degri,Bachelor of Arts (BA),Bachelor of Science (BS),Bachelor of Engineering (BEng),Bachelor of Business Administration (BBA),Bachelor of Fine Arts (BFA),Bachelor of Education (BEd),Bachelor of Medicine (MBBS),Bachelor of Laws (LLB),Master of Arts (MA),Master of Science (MS),Master of Business Administration (MBA),Master of Engineering (MEng),Master of Fine Arts (MFA),Master of Education (MEd),Master of Laws (LLM),Master of Public Health (MPH),Doctor of Philosophy (PhD),Doctor of Medicine (MD),Doctor of Education (EdD),Doctor of Business Administration (DBA),Doctor of Jurisprudence (JD),Professional Diplom,Teknikal Diplom,Vokesonal Diplom,Graduate Diplom,Post-Graduate Diplom,Post-Doctoral',
     aria: {
       tabList: 'Moo-kibaroo fata-fata',
       nextButton: 'Taa dulaa kura to',
@@ -1232,11 +1221,9 @@ export default {
     streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
     aiGeneratedNoDocs: 'AI-e kõm̦m̦ane — ejjab pedped ioon peba ko ilo laibri',
     welcomeMessage: 'Iakwe! Ewi wāween aõ maron̦ jipañ eok rainin?',
-    configMismatchWarning:
-      'Kajuuj eo ejjab errā: {warnings}. Jouj im etale Jipañ M̦ōkaj eo im kajuuj eo an laajrak in jel̦āl̦o̦kjen̦.',
+    configMismatchWarning: 'Kajuuj eo ejjab errā: {warnings}. Jouj im etale Jipañ M̦ōkaj eo im kajuuj eo an laajrak in jel̦āl̦o̦kjen̦.',
     categoryNotFound: 'Katiikori "{label}" ejjab wal̦o̦k ilo laajrak in jel̦āl̦o̦kjen̦',
-    serviceLabelMismatch:
-      'Jikin jerbal "{label}" ej kōjerbal kakōl̦l̦e in UI eo emaron̦ ban errā ibben laajrak in jel̦āl̦o̦kjen̦',
+    serviceLabelMismatch: 'Jikin jerbal "{label}" ej kōjerbal kakōl̦l̦e in UI eo emaron̦ ban errā ibben laajrak in jel̦āl̦o̦kjen̦',
     noFilterWarning: 'Ejjel̦o̦k kajjitōk in kapijuknen em̦ool — kajjitōk enaj alikkar aolepen.',
     placeholder: 'I la ñiningo nyining jang...',
     sendButton: 'Kii',
@@ -1266,8 +1253,7 @@ export default {
     saveConfirmTitle: 'Kuma Mara saaying',
     saveConfirmMessage: 'Kuma mara saaying?',
     loadConfirmTitle: 'Kuma Koto Looti',
-    loadConfirmMessage:
-      'I la yailamawol ti mara. I lafiya la ka yailamawol fiti ani kuma koto looti le ti, wala ka kuma saaying mara folo?',
+    loadConfirmMessage: 'I la yailamawol ti mara. I lafiya la ka yailamawol fiti ani kuma koto looti le ti, wala ka kuma saaying mara folo?',
     loadAndDiscard: 'Looti ani Fiti',
     saveAndLoad: 'Mara ani Looti',
     saveAndStartNew: 'Mara ani Damina Kura',
@@ -1282,24 +1268,15 @@ export default {
     removeItem: 'Bɔ yi'
   },
   quickhelp: {
-    applyForIDPrompt:
-      "Jerbal āinwōt juon ri-jel̦ā kōn rejistōr an armij ro ilo Kenya. Kōmel̦el̦eik buñtōn ko ñan bōk National ID (Maisha Namba) ak ukōt juon me ear joko. MEN EAUJELOK: Lelok juon laajrak ealikkar kōn peba ko rej aikuji (āinwōt Peba in L̦otak, kopi in ID ko an jinen im jemān) im kappe armij eo bwe en etal ñan Huduma Centre ak opij an Registrar of Persons eo epaaktata. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
-    payTaxesPrompt:
-      "Jerbal āinwōt juon ri-tōl an KRA (Kenya Revenue Authority). Kōmel̦el̦eik wāween kōllā taaj, kajjitōk kōn KRA PIN, ak bar kōm̦m̦an password ekāāl ilo portal an iTax. MEN EAUJELOK: Kakememej armij eo kōn Raan 30 in Juun bwe eñin ej jem̦l̦o̦k eo an taaj kōn iiō eo im tōl er ilo an kōllā Nil returns ñe ejjel̦o̦k wōr aer m̦ōni. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
-    startBusinessPrompt:
-      "Jerbal āinwōt juon ri-kappe kōn būjinij ilo jikin jerbal ko an eCitizen. Tōl armij eo ilo an kōjparok āt an būjinij im rejistōr kōmboni ilo Kenya. MEN EAUJELOK: Kōmel̦el̦eik on̦ean pukot āt im rejistōr kiiō, im jilkinl̦o̦k armij eo ñan portal em̦ool an eCitizen bwe en dedel̦o̦k application eo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
-    findHealthcarePrompt:
-      "Jerbal āinwōt juon ri-tōl ilo jikin jipañ ko an ājmour. Lelok melele kōn oktak jān NHIF ñan SHIF (Social Health Insurance Fund) im ewi wāween rejistōr. MEN EAUJELOK: Kwal̦o̦k code ko an USSD (āinwōt *263#) ak website ko ñan rejistōr im kōmel̦el̦eik em̦m̦an ko an jipañ in ājmour an aolep. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
-    educationServicesPrompt:
-      "Jerbal āinwōt juon ri-kappe kōn jikuul̦. Kōnono kōn CBC curriculum, NEMIS registration, ak jikin ilo jikuul̦ el̦ap ikkijeen KUCCPS. MEN EAUJELOK: Kōmel̦el̦eik ewi wāween jemān im jinen remaron̦ lale jem̦l̦o̦k in ekkatak ko ikkijeen SMS ak portal an KNEC ñe rej wal̦o̦k. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
-    transportLicensesPrompt:
-      "Jerbal āinwōt juon ri-tōl an jikin jerbal ko an NTSA. Kōmel̦el̦eik wāween kōkāāl laijen in tōrreep, etale wa ko, ak jerbale account an TIMS. MEN EAUJELOK: Tōl armij eo ilo wāween an deļo̧ñ ilo portal an eCitizen NTSA ñan kajjitōk kōn Smart DL ak kāālet iien ñan etale wa eo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
-    housingProgramsPrompt:
-      "Jerbal āinwōt juon ri-kappe kōn pōrōkram̦ in m̦ōn em̧m̧akūt. Kōmel̦el̦eik Affordable Housing Program (Boma Yangu) rejistōr im wāween kōllā ilo anan. MEN EAUJELOK: Tōl armij eo ñan portal an Boma Yangu bwe en lo jerbal ko im kōmel̦el̦eik kakien ko ñan bōk juon m̦weo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
-    findJobsPrompt:
-      "Jerbal āinwōt juon ri-kappe kōn jerbal ilo kien. Tōl armij eo ilo an kōm̦m̦an pōrofael im kajjitōk kōn jerbal ko reppālõt ikkijeen portal an Public Service Commission (PSC). MEN EAUJELOK: Kappe armij eo bwe en kōpooj peba in jikuul̦ ko an im lale website an PSC ak nuujpeba ko kōn kōkalikkar an MyGov. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
-    justChatPrompt:
-      "Jerbal āinwōt juon m̦ōttam̦ em̦m̦an. Kōm̦m̦an māniti, jipañ, im jel̦ā kōn mānit an Kenya im mour an kajojo raan. MEN EAUJELOK: Kakememej armij eo bwe meñe kwomaron̦ bwebwenato kōn jabdewōt men, kajoor eo am el̦aptata ej jipañ er ilo jikin jerbal ko an kien Kenya āinwōt **ID ko**, **Taaj ko**, im **Rejistōr Būjinij**. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'."
+    applyForIDPrompt: 'Jerbal āinwōt juon ri-jel̦ā kōn rejistōr an armij ro ilo Kenya. Kōmel̦el̦eik buñtōn ko ñan bōk National ID (Maisha Namba) ak ukōt juon me ear joko. MEN EAUJELOK: Lelok juon laajrak ealikkar kōn peba ko rej aikuji (āinwōt Peba in L̦otak, kopi in ID ko an jinen im jemān) im kappe armij eo bwe en etal ñan Huduma Centre ak opij an Registrar of Persons eo epaaktata. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.',
+    payTaxesPrompt: 'Jerbal āinwōt juon ri-tōl an KRA (Kenya Revenue Authority). Kōmel̦el̦eik wāween kōllā taaj, kajjitōk kōn KRA PIN, ak bar kōm̦m̦an password ekāāl ilo portal an iTax. MEN EAUJELOK: Kakememej armij eo kōn Raan 30 in Juun bwe eñin ej jem̦l̦o̦k eo an taaj kōn iiō eo im tōl er ilo an kōllā Nil returns ñe ejjel̦o̦k wōr aer m̦ōni. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.',
+    startBusinessPrompt: 'Jerbal āinwōt juon ri-kappe kōn būjinij ilo jikin jerbal ko an eCitizen. Tōl armij eo ilo an kōjparok āt an būjinij im rejistōr kōmboni ilo Kenya. MEN EAUJELOK: Kōmel̦el̦eik on̦ean pukot āt im rejistōr kiiō, im jilkinl̦o̦k armij eo ñan portal em̦ool an eCitizen bwe en dedel̦o̦k application eo. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.',
+    findHealthcarePrompt: 'Jerbal āinwōt juon ri-tōl ilo jikin jipañ ko an ājmour. Lelok melele kōn oktak jān NHIF ñan SHIF (Social Health Insurance Fund) im ewi wāween rejistōr. MEN EAUJELOK: Kwal̦o̦k code ko an USSD (āinwōt *263#) ak website ko ñan rejistōr im kōmel̦el̦eik em̦m̦an ko an jipañ in ājmour an aolep. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.',
+    educationServicesPrompt: 'Jerbal āinwōt juon ri-kappe kōn jikuul̦. Kōnono kōn CBC curriculum, NEMIS registration, ak jikin ilo jikuul̦ el̦ap ikkijeen KUCCPS. MEN EAUJELOK: Kōmel̦el̦eik ewi wāween jemān im jinen remaron̦ lale jem̦l̦o̦k in ekkatak ko ikkijeen SMS ak portal an KNEC ñe rej wal̦o̦k. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.',
+    transportLicensesPrompt: 'Jerbal āinwōt juon ri-tōl an jikin jerbal ko an NTSA. Kōmel̦el̦eik wāween kōkāāl laijen in tōrreep, etale wa ko, ak jerbale account an TIMS. MEN EAUJELOK: Tōl armij eo ilo wāween an deļo̧ñ ilo portal an eCitizen NTSA ñan kajjitōk kōn Smart DL ak kāālet iien ñan etale wa eo. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.',
+    housingProgramsPrompt: 'Jerbal āinwōt juon ri-kappe kōn pōrōkram̦ in m̦ōn em̧m̧akūt. Kōmel̦el̦eik Affordable Housing Program (Boma Yangu) rejistōr im wāween kōllā ilo anan. MEN EAUJELOK: Tōl armij eo ñan portal an Boma Yangu bwe en lo jerbal ko im kōmel̦el̦eik kakien ko ñan bōk juon m̦weo. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.',
+    findJobsPrompt: 'Jerbal āinwōt juon ri-kappe kōn jerbal ilo kien. Tōl armij eo ilo an kōm̦m̦an pōrofael im kajjitōk kōn jerbal ko reppālõt ikkijeen portal an Public Service Commission (PSC). MEN EAUJELOK: Kappe armij eo bwe en kōpooj peba in jikuul̦ ko an im lale website an PSC ak nuujpeba ko kōn kōkalikkar an MyGov. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.',
+    justChatPrompt: 'Jerbal āinwōt juon m̦ōttam̦ em̦m̦an. Kōm̦m̦an māniti, jipañ, im jel̦ā kōn mānit an Kenya im mour an kajojo raan. MEN EAUJELOK: Kakememej armij eo bwe meñe kwomaron̦ bwebwenato kōn jabdewōt men, kajoor eo am el̦aptata ej jipañ er ilo jikin jerbal ko an kien Kenya āinwōt **ID ko**, **Taaj ko**, im **Rejistōr Būjinij**. KIEN: Iien otemjej kowadoñ application in āinwōt \'Genie AI\'.'
   },
   common: {
     cancel: 'A bula',
@@ -1366,14 +1343,10 @@ export default {
     tabs: {
       details: 'Kibaroo',
       ingestionLog: 'Dung Log',
-      detailsHint:
-        'Melele kōn fail in: ēt, ri-jeje im kakōl̦l̦e in laajrak in jel̦āl̦o̦kjen̦ ko AI ej kōjerbali ñan jilkinl̦o̦k kajjitōk ko. Ingest ej aikuj jañin kab juon kakōl̦l̦e.',
-      dashboardHint:
-        'Kalimjōk ilo iien em̦ool crawl an website kōn fail in: tōrrein, laan̦, l̦apier im wōnm̦aanl̦o̦k. Ñe em̦ōj an tōp crawl eo, jikin jeje eo ilal̦ ej kōm̦m̦an bwe en jikin kakwōn OKF.',
-      crawlLogHint:
-        'Ripot an kajojo peij kōn crawl an website: URL ta ko em̦ōj bōki, kōrōl̦o̦ki ak l̦apier. Jeje ilo iien eo crawl ej em̦m̦akūt.',
-      ingestionLogHint:
-        'Wōnm̦aanl̦o̦k an kajojo wāween kōpooj fail in ñan uwaak ko an AI: kōm̦m̦an kōkōm̧bōļ (chunking), kakōl̦l̦e, embedding im kakoba ilo laajrak. L̦apier ilo ijin rej kwal̦o̦k kajjien ia eo ingest ear bōjrak ie.'
+      detailsHint: 'Melele kōn fail in: ēt, ri-jeje im kakōl̦l̦e in laajrak in jel̦āl̦o̦kjen̦ ko AI ej kōjerbali ñan jilkinl̦o̦k kajjitōk ko. Ingest ej aikuj jañin kab juon kakōl̦l̦e.',
+      dashboardHint: 'Kalimjōk ilo iien em̦ool crawl an website kōn fail in: tōrrein, laan̦, l̦apier im wōnm̦aanl̦o̦k. Ñe em̦ōj an tōp crawl eo, jikin jeje eo ilal̦ ej kōm̦m̦an bwe en jikin kakwōn OKF.',
+      crawlLogHint: 'Ripot an kajojo peij kōn crawl an website: URL ta ko em̦ōj bōki, kōrōl̦o̦ki ak l̦apier. Jeje ilo iien eo crawl ej em̦m̦akūt.',
+      ingestionLogHint: 'Wōnm̦aanl̦o̦k an kajojo wāween kōpooj fail in ñan uwaak ko an AI: kōm̦m̦an kōkōm̧bōļ (chunking), kakōl̦l̦e, embedding im kakoba ilo laajrak. L̦apier ilo ijin rej kwal̦o̦k kajjien ia eo ingest ear bōjrak ie.'
     },
     log: {
       killActions: 'Faha Kewol (Kill Actions):',
@@ -1439,8 +1412,7 @@ export default {
       uploadSuccess: '{fileName} yeleta benta',
       uploadFailed: 'Filiyata {fileName} yele to.'
     },
-    ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+    ragTip: 'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
   },
   okf: {
     versions: {
@@ -1546,11 +1518,9 @@ export default {
       files: 'Selected documents',
       servingBadge: 'serving free-form RAG',
       alreadyBadge: 'already in an OKF repo',
-      servingTip:
-        'This document currently serves the free-form RAG corpus — the new repository cannot be ingested until it is retracted.',
+      servingTip: 'This document currently serves the free-form RAG corpus — the new repository cannot be ingested until it is retracted.',
       alreadyTip: 'This document is already the source of another OKF repository.',
-      servingWarn:
-        '{n} document(s) still serve the free-form corpus. The import succeeds, but this repository cannot be ingested until they are retracted.',
+      servingWarn: '{n} document(s) still serve the free-form corpus. The import succeeds, but this repository cannot be ingested until they are retracted.',
       cancel: 'Cancel',
       importing: 'Importing…',
       go: 'Import',
@@ -1601,12 +1571,9 @@ export default {
           attempts: 'Attempts: {n}',
           when: 'Last attempt {when}',
           fix: {
-            reaper:
-              'The ingest worker gave up waiting within its grace window (the drain was saturated) — the content is intact. Fix: edit this file slightly and save to re-queue it, or retract and re-ingest the whole repo.',
-            dataprep:
-              'The content-preparation service failed this ingest. Fix: edit and save to re-queue it; if it repeats, check the dataprep service health.',
-            generic:
-              'Indexing failed. Fix: edit the content and save to re-queue it, or retract and re-ingest the whole repo.'
+            reaper: 'The ingest worker gave up waiting within its grace window (the drain was saturated) — the content is intact. Fix: edit this file slightly and save to re-queue it, or retract and re-ingest the whole repo.',
+            dataprep: 'The content-preparation service failed this ingest. Fix: edit and save to re-queue it; if it repeats, check the dataprep service health.',
+            generic: 'Indexing failed. Fix: edit the content and save to re-queue it, or retract and re-ingest the whole repo.'
           }
         },
         indexBadge: 'indeksi',
@@ -1614,8 +1581,7 @@ export default {
         loading: 'A bering soto…',
         resplit: 'A farra kuta',
         flagged: 'a juubeta',
-        flaggedTip:
-          'Kōm̦m̦an ko ewōr kakōl̦l̦e ie — kipel̦o̦k kajojo, jol̦o̦k ak ukōt men eo, kōjparok (ej make bar lale); ak kwal̦o̦k bwe kwojel̦ā ie ilo iien publish.',
+        flaggedTip: 'Kōm̦m̦an ko ewōr kakōl̦l̦e ie — kipel̦o̦k kajojo, jol̦o̦k ak ukōt men eo, kōjparok (ej make bar lale); ak kwal̦o̦k bwe kwojel̦ā ie ilo iien publish.',
         piiBadge: 'PII',
         piiTip: 'Men ko ewōr kakōl̦l̦e ie: {k}. Kipel̦o̦k, jol̦o̦k ak ukōti, innem kōjparok — ej make bar lale.',
         piiTipBare: 'Men ko ewōr kakōl̦l̦e ie — kipel̦o̦k, etale, innem kōjparok bwe en bar lale.',
@@ -1679,8 +1645,7 @@ export default {
       paneLabel: 'Juube-dulaa',
       saveFailed: 'Kōjparok ear l̦apier — bar kajjieon̦',
       piiBulk: {
-        done_accept:
-          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_accept: 'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
         done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
         done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
         title: {
@@ -1764,7 +1729,7 @@ export default {
       topics: 'kuuolu',
       unpublish: {
         title: 'Falsifya bugbugu',
-        body: "Wannan na tsayawar ba da {name} ga wakilan RAG nan da nan. Babban bundle zip da tarihin siguna suna nan; ma'ajiyar ta koma 'Ana Duba' domin gyara. Sake bugbugu sannan ka yi Ingest don sake ba da.",
+        body: 'Wannan na tsayawar ba da {name} ga wakilan RAG nan da nan. Babban bundle zip da tarihin siguna suna nan; ma\'ajiyar ta koma \'Ana Duba\' domin gyara. Sake bugbugu sannan ka yi Ingest don sake ba da.',
         confirm: 'Falsifya bugbugu'
       },
       lane: {
@@ -1898,8 +1863,7 @@ export default {
       save: 'Kōjparok frontmatter',
       saveFailed: 'Kōjparok frontmatter ear l̦apier',
       perRepoTitle: 'Routing tags — what this repo is about',
-      perRepoHint:
-        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoHint: 'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -1921,65 +1885,42 @@ export default {
         keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
       },
       perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
-      repoTagsHint:
-        'Repository-level tags ({summary}) live on the repo, not this concept — manage them in the Tags panel in the right rail.'
+      repoTagsHint: 'Repository-level tags ({summary}) live on the repo, not this concept — manage them in the Tags panel in the right rail.'
     },
     glossary: {
-      addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      addConcept: 'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
       type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
-      title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
-      indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
-      trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
-      concept:
-        'Juon bwijin ilo jikin kakwōn eo am — juon wōt peij ak un. Kajojo kōm̦m̦an ewōr frontmatter ie me jipañ eo ej riiti, koba markdown me ej uwaak jān e.',
-      repository:
-        'Aolep kōm̦m̦an ko kōn juon wōt Un. Enaj erom juon OKF bundle me kwoj publish, bōk nōmba, im kōpel̦o̦k ñan jipañ eo.',
-      subjectArea:
-        'Jel̦āl̦o̦kjen̦ in epād ia? Un ko rej kobaik jikin kakwōn eo am im kalikkar kakōl̦l̦e ta ko kwomaron̦ kāāleti. Ban maron̦ ukōt ālikin an kōm̦m̦an.',
+      title: 'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus: 'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier: 'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept: 'Juon bwijin ilo jikin kakwōn eo am — juon wōt peij ak un. Kajojo kōm̦m̦an ewōr frontmatter ie me jipañ eo ej riiti, koba markdown me ej uwaak jān e.',
+      repository: 'Aolep kōm̦m̦an ko kōn juon wōt Un. Enaj erom juon OKF bundle me kwoj publish, bōk nōmba, im kōpel̦o̦k ñan jipañ eo.',
+      subjectArea: 'Jel̦āl̦o̦kjen̦ in epād ia? Un ko rej kobaik jikin kakwōn eo am im kalikkar kakōl̦l̦e ta ko kwomaron̦ kāāleti. Ban maron̦ ukōt ālikin an kōm̦m̦an.',
       selectSubjectArea: 'Kāālet un ko…',
       subjectAreaMissing: 'Un an jikin kakwōn in ejjab pād ilo Laajrak in Jel̦āl̦o̦kjen̦ — kwal̦o̦k aolep kakōl̦l̦e.',
-      label:
-        'Juon laajrak jān Laajrak in Jel̦āl̦o̦kjen̦ me ej jiron̦ jipañ eo ta kain kōm̦m̦an in. Kakōl̦l̦e ko rej jipañ uwaak ko lo melele ko rejim̦we.',
-      bundle:
-        'Zip kōm̦m̦an an jikin kakwōn — kōm̦m̦an ko, ejaak im melele ko ilo juon fail. Bundle ko rej wāween an jikin kakwōn em̦m̦akūt ilo buñtōn ko.',
-      version:
-        'Juon pija em̦ōj kōjparoke ilo iien publish. Jeje ej wōnm̦aanl̦o̦k ilo wāween eo juon — wāween ko em̦ōj publish ban oktak.',
+      label: 'Juon laajrak jān Laajrak in Jel̦āl̦o̦kjen̦ me ej jiron̦ jipañ eo ta kain kōm̦m̦an in. Kakōl̦l̦e ko rej jipañ uwaak ko lo melele ko rejim̦we.',
+      bundle: 'Zip kōm̦m̦an an jikin kakwōn — kōm̦m̦an ko, ejaak im melele ko ilo juon fail. Bundle ko rej wāween an jikin kakwōn em̦m̦akūt ilo buñtōn ko.',
+      version: 'Juon pija em̦ōj kōjparoke ilo iien publish. Jeje ej wōnm̦aanl̦o̦k ilo wāween eo juon — wāween ko em̦ōj publish ban oktak.',
       serving: 'Wāween in ej jerbal: jipañ eo ej riiti melele ko ilo an uwaak. Retract e bwe kwōn kōm̦m̦an oktak.',
-      ingestion:
-        'Buñtōn eo me em̦ōj publish wāween eo ñan uwaak — bōjrak, embedded im kobaiki. Ejjel̦o̦k ej tōbar jipañ eo m̦okta jān men in.',
-      classification:
-        'Ewi wāween ad kalikkar ta in kōm̦m̦an eo (un, m̦ōttan, wāween…). Heuristics ej riiti peij eo ilo make; LLM ej etto l̦o̦k ak emaron̦ jerbale peij ko rekanooj ben.',
-      resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      ingestion: 'Buñtōn eo me em̦ōj publish wāween eo ñan uwaak — bōjrak, embedded im kobaiki. Ejjel̦o̦k ej tōbar jipañ eo m̦okta jān men in.',
+      classification: 'Ewi wāween ad kalikkar ta in kōm̦m̦an eo (un, m̦ōttan, wāween…). Heuristics ej riiti peij eo ilo make; LLM ej etto l̦o̦k ak emaron̦ jerbale peij ko rekanooj ben.',
+      resplit: 'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
       saveFailed: 'A mara baata',
       importFailedTitle: 'Bōktok ear l̦apier — ban ukōt fail eo.',
       importFailedHint: 'Jol̦o̦k jikin kakwōn in innem bar bōktok fail eo jān jikin eo.',
       frontmatter: 'Melele ko ioon aolep fail — kain, āt, kakōl̦l̦e. Jipañ eo ej kōjerbale bwe en jel̦ā ta in kōm̦m̦an eo.',
-      pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
-      classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      pickSource: 'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy: 'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
       clsHeur: 'Heuristics (fast, no LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
-      fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
-      autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
-      handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
-      lifecycle:
-        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
-      labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
-      reviewHandoff:
-        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
-      piiReview:
-        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+      fsPick: 'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect: 'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff: 'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      lifecycle: 'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto: 'Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository\'s Subject Area. Review and adjust them per topic in Curate.',
+      reviewHandoff: 'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview: 'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
     },
     md: {
       toolbar: 'Cogo kuta',
@@ -1997,34 +1938,20 @@ export default {
       rendering: 'A bering keta…'
     },
     narrative: {
-      intro:
-        'Jikin kakwōn OKF ej juon ejaak, koba in un ko ewōr aer wāween me uwaak ko ilo chat remaron̦ kōjerbali. Lale āinwōt juon buñtōn kōm̦m̦an ilo domain eo am — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e.',
-      step0:
-        'Jikin kakwōn OKF ej juon koba in un ko em̦ōj karōki. Kalimjōke āinwōt juon buñtōn kōm̦m̦an ilo domain eo am — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e. Ñe em̦ōj publish, uwaak ko an chat rej kōjerbal un kein kōn ID.',
-      step1:
-        'Jilu wāween ñan jino jikin kakwōn OKF: bōk un ko jān crawl an website, bōki jān peba ko kwom̦ōj kalōki, ak jino jān ejjel̦o̦k men. Kōm̦m̦an kopi in juon repo ej bōk aolep un ko im kwomaron̦ wōnm̦aanl̦o̦k kōn jerbal eo.',
-      step2:
-        'Kajojo peba ej erom jikin bōk melele ñan un ko. Ri-kōm̦m̦an eo ej riiti, kalikkar un ko, im kōpooj juon laajrak. Kwonaj etale kajojo un ilo buñtōn eo juon — ejjel̦o̦k ej koba m̦ae iien kwoj kam̦ool.',
-      step3:
-        'Kōmij riiti jikin ko am im kōpooj un ko. Un ko rej koba ippān doon ilo kakōl̦l̦e ko kwoj kāāleti. Ri-kōm̦m̦an eo ej lale em̦m̦an — ej kāālet bwe en dik un ko reim̦m̦an jān an el̦ap ak bōtata.',
-      step4:
-        'Kakōl̦l̦e ko rej aolep kain laajrak ko am — ta kain men in un in? Kāālet 3-7 kakōl̦l̦e ko me rej bōk aolep melele; ri-kōm̦m̦an eo ej kōjerbali ñan ejaak an un ko.',
-      step5:
-        'Eñin ej aolepen jerbal eo. Kajojo un ej juon m̦ōttan dik in jel̦āl̦o̦kjen̦ me kwomaron̦ kōjerbale. Un ko rej bōk āt, melele, im kakōl̦l̦e ko kwoar kāāleti. Jerbal eo am ej bwe en alikkar: ukōt āt ko rejjab alikkar, kobaik men ko reāinwōt doon, jol̦o̦k men ko ejjel̦o̦k jikin aer itok jān e.',
-      step6:
-        'We run conformance checks: does every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before you hand the repository off; warnings can be acknowledged.',
-      step7:
-        'Jet kakkōl remaron̦ make jim̦we: wāween ko remaron̦ pedped ioon kien ko, jikin ko ejjel̦o̦k kobbaer remaron̦ koba melele ko rejim̦we. Jerbale jim̦we ko kwotōmak ie, innem jeblak ñan ri-karōk eo ñan etale.',
-      step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
-      step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
-      docMgmtEntry:
-        'Kōm̦m̦an juon jikin kakwōn OKF ekāāl jān peba ko em̦ōj kāāleti. Peba ko renaj jikin bōk melele; kwonaj etale im nōmbaar un ko renaj kōm̦m̦ani m̦okta jān an jabdewōt publish.',
-      crawlSegment:
-        'Jikin kakwōn OKF ej juon ejaak, koba in un ko ewōr aer wāween me uwaak ko ilo chat remaron̦ kōjerbali.',
-      emptyDashboard:
-        'Kwojan̄in kōm̦m̦an jabdewōt jikin kakwōn OKF. Jikin kakwōn OKF ej juon karōk, koba in un ko kwomaron̦ kōjerbali bwe uwaak ko ilo chat ren bōk melele jān er.',
+      intro: 'Jikin kakwōn OKF ej juon ejaak, koba in un ko ewōr aer wāween me uwaak ko ilo chat remaron̦ kōjerbali. Lale āinwōt juon buñtōn kōm̦m̦an ilo domain eo am — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e.',
+      step0: 'Jikin kakwōn OKF ej juon koba in un ko em̦ōj karōki. Kalimjōke āinwōt juon buñtōn kōm̦m̦an ilo domain eo am — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e. Ñe em̦ōj publish, uwaak ko an chat rej kōjerbal un kein kōn ID.',
+      step1: 'Jilu wāween ñan jino jikin kakwōn OKF: bōk un ko jān crawl an website, bōki jān peba ko kwom̦ōj kalōki, ak jino jān ejjel̦o̦k men. Kōm̦m̦an kopi in juon repo ej bōk aolep un ko im kwomaron̦ wōnm̦aanl̦o̦k kōn jerbal eo.',
+      step2: 'Kajojo peba ej erom jikin bōk melele ñan un ko. Ri-kōm̦m̦an eo ej riiti, kalikkar un ko, im kōpooj juon laajrak. Kwonaj etale kajojo un ilo buñtōn eo juon — ejjel̦o̦k ej koba m̦ae iien kwoj kam̦ool.',
+      step3: 'Kōmij riiti jikin ko am im kōpooj un ko. Un ko rej koba ippān doon ilo kakōl̦l̦e ko kwoj kāāleti. Ri-kōm̦m̦an eo ej lale em̦m̦an — ej kāālet bwe en dik un ko reim̦m̦an jān an el̦ap ak bōtata.',
+      step4: 'Kakōl̦l̦e ko rej aolep kain laajrak ko am — ta kain men in un in? Kāālet 3-7 kakōl̦l̦e ko me rej bōk aolep melele; ri-kōm̦m̦an eo ej kōjerbali ñan ejaak an un ko.',
+      step5: 'Eñin ej aolepen jerbal eo. Kajojo un ej juon m̦ōttan dik in jel̦āl̦o̦kjen̦ me kwomaron̦ kōjerbale. Un ko rej bōk āt, melele, im kakōl̦l̦e ko kwoar kāāleti. Jerbal eo am ej bwe en alikkar: ukōt āt ko rejjab alikkar, kobaik men ko reāinwōt doon, jol̦o̦k men ko ejjel̦o̦k jikin aer itok jān e.',
+      step6: 'We run conformance checks: does every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before you hand the repository off; warnings can be acknowledged.',
+      step7: 'Jet kakkōl remaron̦ make jim̦we: wāween ko remaron̦ pedped ioon kien ko, jikin ko ejjel̦o̦k kobbaer remaron̦ koba melele ko rejim̦we. Jerbale jim̦we ko kwotōmak ie, innem jeblak ñan ri-karōk eo ñan etale.',
+      step8: 'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9: 'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry: 'Kōm̦m̦an juon jikin kakwōn OKF ekāāl jān peba ko em̦ōj kāāleti. Peba ko renaj jikin bōk melele; kwonaj etale im nōmbaar un ko renaj kōm̦m̦ani m̦okta jān an jabdewōt publish.',
+      crawlSegment: 'Jikin kakwōn OKF ej juon ejaak, koba in un ko ewōr aer wāween me uwaak ko ilo chat remaron̦ kōjerbali.',
+      emptyDashboard: 'Kwojan̄in kōm̦m̦an jabdewōt jikin kakwōn OKF. Jikin kakwōn OKF ej juon karōk, koba in un ko kwomaron̦ kōjerbali bwe uwaak ko ilo chat ren bōk melele jān er.',
       labels: 'Kakōl̦l̦e ko rej aolep kain laajrak ko am — rej uwaake "ta kain men in un in?".',
       hide: 'Nooje',
       whatIsThis: 'Ta in?'
@@ -2040,8 +1967,7 @@ export default {
       title: 'OKF Studio',
       help: 'Jipañ',
       helpTitle: 'Kōn OKF Studio',
-      helpBody:
-        'Jikin kakwōn OKF ej juon buñtōn kōm̦m̦an me — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e. Ñe em̦ōj publish, uwaak ko ilo chat rej kwal̦o̦k un ko kōn ID im kwal̦o̦k ia eo ear itok jān e.',
+      helpBody: 'Jikin kakwōn OKF ej juon buñtōn kōm̦m̦an me — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e. Ñe em̦ōj publish, uwaak ko ilo chat rej kwal̦o̦k un ko kōn ID im kwal̦o̦k ia eo ear itok jān e.',
       view: {
         dashboard: 'Dajiboodi',
         wizard: 'Madi'
@@ -2216,8 +2142,7 @@ export default {
         neverStarted: 'The conversion did not start — retry.',
         manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
         labelDone: 'Conversion complete',
-        dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        dupContent: 'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
@@ -2236,12 +2161,11 @@ export default {
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        adjust: 'Adjust any topic\'s labels in Curate — labels stay bounded to this repository\'s Subject Area.',
         loadFailed: 'Could not read the labels right now.'
       },
       curate: {
-        embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        embedHint: 'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
         noRepo: 'No repository yet — go back to Entry and create or choose one first.',
         title: 'Etale un ko',
         hint: 'Kajojo un ej juon m̦ōttan dik in jel̦āl̦o̦kjen̦ me kwomaron̦ kōjerbale. Jeje āt im melele eo.',
@@ -2268,11 +2192,9 @@ export default {
         sources: 'Jikin ko',
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
-        browserHint:
-          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
+        browserHint: 'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
         noRepo: 'No repository yet — the file review appears here once a repository exists.',
-        ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        ritualOutside: 'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
@@ -2289,8 +2211,7 @@ export default {
         topicsServing: 'Topics serving',
         noTopics: 'No topics yet — go back to Curate to produce or write them.',
         frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
-        ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        ritual: 'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2315,8 +2236,7 @@ export default {
         emptySelection: 'Kāālet juon peba ak el̦ap l̦o̦k',
         alreadyInOkf: 'Jol̦o̦k peba ko epād m̦okta ilo jikin kakwōn OKF',
         alreadyIngested: 'Jol̦o̦k peba ko em̦ōj an ingest',
-        servingWarn:
-          '{n} selected document(s) still serve the free-form corpus — the new repository cannot be ingested until they are retracted.'
+        servingWarn: '{n} selected document(s) still serve the free-form corpus — the new repository cannot be ingested until they are retracted.'
       },
       produce: {
         notReady: 'Kōm̦m̦an in ej pād ilo bwebwenato ko tok ālik.'
@@ -2329,11 +2249,9 @@ export default {
       classHeuristics: 'Heuristics (kakōl̦l̦e kajjien)',
       classHeuristicsHint: 'Laajrak m̦ōkaj kōn kien ko — ejjel̦o̦k on̦ean LLM, em̦m̦an ñan crawl ko reim̦m̦an am karōki.',
       classLlm: 'LLM-demba',
-      classLlmHint:
-        'LLM ej kōm̦m̦an aolep kōm̦m̦an — kajejjet, kakōl̦l̦e in laajrak in jel̦āl̦o̦kjen̦ im melele. Ekanooj l̦ap an jim̦we im bwe jān heuristics; kōttar bwe en bōk iien ñan kōm̦m̦an ko.',
+      classLlmHint: 'LLM ej kōm̦m̦an aolep kōm̦m̦an — kajejjet, kakōl̦l̦e in laajrak in jel̦āl̦o̦kjen̦ im melele. Ekanooj l̦ap an jim̦we im bwe jān heuristics; kōttar bwe en bōk iien ñan kōm̦m̦an ko.',
       classHybrid: 'Hybird',
-      classHybridHint:
-        'Heuristics m̦oktata; LLM ej bar etale men ko rejjab alikkar im kobikobi jikin ko rebwāt. Em̦m̦an aolepen kōn iien im kadede.',
+      classHybridHint: 'Heuristics m̦oktata; LLM ej bar etale men ko rejjab alikkar im kobikobi jikin ko rebwāt. Em̦m̦an aolepen kōn iien im kadede.',
       targetLabel: 'Eaikuj etal ñan ia?',
       target: {
         freeform: 'Crawl ñan jikin melele ebar karōk',
@@ -2413,8 +2331,7 @@ export default {
     validation: {
       frozen: 'Kobban em̦ōj kabōjrak ilo {v} — riiti wōt. Retract wāween eo ej serving bwe kwōn kōm̦m̦an oktak.',
       none: 'Ejjel̦o̦k',
-      expertHint:
-        'Ukōt ñan wāween Expert bwe kwōn lo JSON kam̦ool eo, kāālet ekkar ñan l̦ap an l̦apier, im jol̦o̦k etale ko.',
+      expertHint: 'Ukōt ñan wāween Expert bwe kwōn lo JSON kam̦ool eo, kāālet ekkar ñan l̦ap an l̦apier, im jol̦o̦k etale ko.',
       headline: {
         blockers: '{n} blocking issue(s) — fix before you hand the repository off',
         warnings: '{n} men ko rej aikuj am bar lale',
@@ -2434,8 +2351,7 @@ export default {
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
       indexFailed: 'Re-index failed — edit or re-split the page.',
-      indexFailedRemedy:
-        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      indexFailedRemedy: 'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2477,16 +2393,11 @@ export default {
         truncated: 'First {n} characters — open the editor for the full page.'
       },
       tip: {
-        conformance:
-          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
-        orphan:
-          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
-        near_duplicate:
-          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
-        citation:
-          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
-        index_failed:
-          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+        conformance: 'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan: 'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate: 'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation: 'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed: 'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
       }
     },
     pii: {
@@ -2589,8 +2500,7 @@ export default {
       cancel: 'Cancel',
       loadFailed: 'Could not load the document list.',
       servingBadge: 'serving free-form RAG',
-      servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      servingTip: 'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
       alreadyBadge: 'already in an OKF repo',
       alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
     },
@@ -2639,8 +2549,7 @@ export default {
         version: 'Head version',
         computedAt: 'Computed',
         staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
-        missingNote:
-          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+        missingNote: 'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
         rebuild: 'Rebuild head',
         rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
         rebuildBusy: 'Rebuilding — embedding the tag fields…'
@@ -2659,15 +2568,13 @@ export default {
           claimed: 'Claims query'
         },
         provenance: 'Routing provenance',
-        empty:
-          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
+        empty: 'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
         pass: 'PASS — this repository wins the head routing.',
         fail: 'FAIL — {repo} wins the head routing for this query.',
         passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
         passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
-        notSelectedSuppressed:
-          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        notSelectedSuppressed: 'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -2687,7 +2594,7 @@ export default {
         negativeRandom: 'Off-domain',
         meta: 'Meta',
         nearMiss: 'Near miss',
-        hint: "Forbidden-derived rows scale with the repository's forbidden tag count — they cannot be set here."
+        hint: 'Forbidden-derived rows scale with the repository\'s forbidden tag count — they cannot be set here.'
       },
       cls: {
         nearMiss: 'Near miss',
@@ -2697,8 +2604,7 @@ export default {
         meta: 'Meta'
       },
       teach: {
-        claim:
-          'The head CLAIMS this query — it passed all three gates. If it should NOT route here, ask for forbidden tags that exclude its subject, add them, then rebuild the head.',
+        claim: 'The head CLAIMS this query — it passed all three gates. If it should NOT route here, ask for forbidden tags that exclude its subject, add them, then rebuild the head.',
         explain: 'Explain & suggest',
         explainBusy: 'Explaining — the model is proposing forbidden tags…',
         addTag: 'Add to forbidden tags',
@@ -2709,14 +2615,12 @@ export default {
         rebuildBusy: 'Rebuilding the head and re-running…',
         title: 'Ta ṇe?',
         veto: 'Kajjitōk in ej lukkun im forbidden tag “{tag}”. Elane e jikin ilo repo in, jol̦o̦k “{tag}” ilo forbidden tags ko ilo Frontmatter, im publish ak in rebuild head eo.',
-        floor:
-          'Kajjitōk in ejab naan ko ilo repo in (score eo ej jab elōn floor eo) — tag ko enaj jab kōm̦m̦an melele; kōnka ej suppress eo em̦ōj.',
+        floor: 'Kajjitōk in ejab naan ko ilo repo in (score eo ej jab elōn floor eo) — tag ko enaj jab kōm̦m̦an melele; kōnka ej suppress eo em̦ōj.',
         rejected: 'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
       },
       suites: {
         generate: 'Generate test suite',
-        generateTip:
-          'The LLM writes the queries in batches of 30 per class — a large ask (100+) takes a few minutes. The suite lands here and in Saved suites when done.',
+        generateTip: 'The LLM writes the queries in batches of 30 per class — a large ask (100+) takes a few minutes. The suite lands here and in Saved suites when done.',
         generating: 'Generating in batches — large asks take a few minutes…',
         run: 'Run all queries',
         running: 'Running every suite query…',
@@ -2756,8 +2660,7 @@ export default {
         addAll: 'Add all',
         rebuildRerun: 'Rebuild head & re-run suite',
         positiveFailuresTitle: 'Why positives stopped passing',
-        positiveFailures:
-          '{n} positive test(s) were suppressed this run — the forbidden tags over-match the repository scope.',
+        positiveFailures: '{n} positive test(s) were suppressed this run — the forbidden tags over-match the repository scope.',
         vetoedBy: 'Vetoed by',
         marginKilled: '{n} positive test(s) lost on margin (no single veto tag).',
         removals: 'Tags to remove (they veto this repository’s own positives)',
@@ -2781,7 +2684,12 @@ export default {
         namePlaceholder: 'Suite name (optional) — e.g. NCD regression set',
         probeTip: 'Test this query against the live corpus',
         deleteSuiteTip: 'Delete this suite and its run history',
-        corpusNeedsIngest: 'Ingest the repository first — the corpus test searches the ingested corpus'
+        corpusNeedsIngest: 'Ingest the repository first — the corpus test searches the ingested corpus',
+        deleteConfirmTitle: 'Delete this suite?',
+        deleteConfirmBody: 'This permanently removes the suite and its run history. This cannot be undone.',
+        deleteConfirm: 'Delete suite',
+        deleteCancel: 'Cancel',
+        unnamedFallback: 'unnamed suite'
       },
       error: {
         explain: 'Explain failed',
@@ -2799,17 +2707,16 @@ export default {
         suiteLoad: 'Could not load the suite',
         suiteUpdate: 'Could not update the suite',
         suiteRename: 'Could not rename the suite',
-        generateTimeout:
-          'The suite is taking unusually long — it may still land in Saved suites; check there in a minute.',
+        generateTimeout: 'The suite is taking unusually long — it may still land in Saved suites; check there in a minute.',
         probe: 'Corpus test failed',
-        suiteDelete: 'Could not delete the suite'
+        suiteDelete: 'Could not delete the suite',
+        noFrontmatter: 'This repository has no head tags yet — create tags in the Frontmatter panel (or use Suggest tags), then generate a suite.'
       },
       footer: {
         unpublish: 'Unpublish to review'
       },
       publishCard: {
-        present:
-          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
+        present: 'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
         stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
         missing: 'No vectorized head yet — publishing builds it from the approved tags.'
       },
@@ -2829,7 +2736,10 @@ export default {
         narrowChip: 'Remove the broad tag, add the narrow one',
         reasonCurator: 'you declared this tag originally — confirm before removing',
         reasonRotated: 'the edit history has rotated past the baseline — confirm before removing',
-        scopeDetail: 'suites: {s} · tag sets: {t}'
+        scopeDetail: 'suites: {s} · tag sets: {t}',
+        rowActionsTitle: 'Corpus-grounded flips — the corpus answers these "negatives": flip them to positives',
+        flipToPositive: 'Flip to positive',
+        ungroundedNote: '{n} failing negative(s) have no corpus grounding and no safe tag lever — the competing repository must win them.'
       },
       probe: {
         answerable: 'answerable',
@@ -2850,7 +2760,6 @@ export default {
     }
   },
   link: {
-    ragTip:
-      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
+    ragTip: 'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

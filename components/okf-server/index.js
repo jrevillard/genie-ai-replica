@@ -76,6 +76,13 @@ if (require.main === module) {
       require('./services/crawl-conversion-service')
         .sweepInterruptedOnce()
         .catch((err) => logger.error('Conversion boot sweep failed (non-fatal)', { error: err.message }));
+      // 1-8g-w (2026-10-11): same self-heal for async suite runs — the
+      // in-memory run lock dies with the process, so every 'running'
+      // placeholder after a restart is an orphan. Mark them failed (the
+      // poll-side lazy reap in getRunSuite covers the no-restart crash).
+      require('./services/head-suite-service')
+        .sweepInterruptedRuns()
+        .catch((err) => logger.error('Head-suite run boot sweep failed (non-fatal)', { error: err.message }));
     });
 }
 

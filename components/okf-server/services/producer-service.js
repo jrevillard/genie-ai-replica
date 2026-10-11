@@ -546,7 +546,17 @@ async function runDocumentsConversion(job) {
     const linkCount = resolveCrossFileLinks(allDrafts);
 
     // Batched ingest (crawl-parity sizes).
-    await patchConversion(repo_id, { status: 'classifying', stage: 'classifying' });
+    // CONCEPTS TOTAL published up front (David, 2026-10-11: "we need progress
+    // bars with each of the stages being depicted in Step 4"). allDrafts is
+    // complete by now — the file loop above drafted every topic — so the
+    // denominator is known and the bar is a REAL count, not a guess. Without it
+    // the concepts stage had no bar at all and Step 4 sat at 100% on files
+    // while the topics were still being written.
+    await patchConversion(repo_id, {
+      status: 'classifying',
+      stage: 'classifying',
+      concepts_total: allDrafts.length
+    });
     const BATCH = 200;
     let batches = 0;
     for (let i = 0; i < allDrafts.length; i += BATCH) {
@@ -615,7 +625,29 @@ async function runDocumentsConversion(job) {
       try {
         const cDb = await getDb();
         const cRepo = await cDb.collection(COLLECTION).document(repo_id);
-        topicLinks = await authorRepoTopicLinks(cRepo, { actor });
+        // Per-batch progress so Step 4 can draw a REAL bar for this stage
+        // (David, 2026-10-11: "we need progress bars with each of the stages
+        // being depicted in Step 4"). Without it the stage is a flat panel for
+        // ~3 minutes with no indication anything is happening — the exact
+        // complaint. Throttled to one write per 2s; the final call passes
+        // through unthrottled so the terminal counters are never lost.
+        let lastLinkWrite = 0;
+        topicLinks = await authorRepoTopicLinks(cRepo, {
+          actor,
+          onProgress: (p) => {
+            const now = Date.now();
+            if (!p.final && now - lastLinkWrite < 2000) return;
+            lastLinkWrite = now;
+            patchConversion(repo_id, {
+              link_progress: {
+                phase: p.phase || null,
+                batches_done: p.batches_done || 0,
+                batches_total: p.batches_total || 0,
+                written: p.written || 0
+              }
+            }).catch(() => {});
+          }
+        });
         logger.info(
           `Documents topic-link authoring: ${topicLinks.written} link(s) across ${topicLinks.concepts_linked}/${topicLinks.total} concept(s) in ${topicLinks.elapsed_ms}ms`
         );

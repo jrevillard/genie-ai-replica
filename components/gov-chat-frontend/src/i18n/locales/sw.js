@@ -2233,6 +2233,18 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2738,6 +2750,14 @@ export default {
         floor:
           'Hoja hii haihusiani na mada ya repository hii (alama iko chini ya kiwango cha chini cha domain) — kubadilisha lebo hakurekebishi hili; hii ni uzuiaji sahihi.',
         rejected: 'Imezuiwa na ulinzi — lebo iliyozuiwa haipaswi kulingana na mada ya hifadhi hii yenyewe.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
       },
       suites: {
         generate: 'Generate test suite',

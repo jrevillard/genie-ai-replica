@@ -56,12 +56,20 @@ spec:
     # requires DNS-policy engines (Cilium / Calico FQDN rules) and is
     # left to a follow-up; the port-scoped ipBlock below is the
     # closest NetworkPolicy-native approximation.
+    # Each entry in `.Values.services.clamav.cvdAllowedCIDRs` becomes its
+    # own ipBlock egress rule (one ipBlock.cidr per rule is the API
+    # contract — comma-joining into one string would either be ignored
+    # by the validator or rejected). Empty list = single `0.0.0.0/0`
+    # block, which preserves the original ANY-destination fallback.
+    {{- $cidrs := .Values.services.clamav.cvdAllowedCIDRs | default (list "0.0.0.0/0") -}}
+    {{- range $cidr := $cidrs }}
     - to:
         - ipBlock:
-            cidr: 0.0.0.0/0
+            cidr: {{ $cidr }}
       ports:
         - protocol: TCP
           port: 80
         - protocol: TCP
           port: 443
+    {{- end }}
 {{- end -}}

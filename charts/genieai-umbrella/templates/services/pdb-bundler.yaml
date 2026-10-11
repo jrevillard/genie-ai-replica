@@ -8,12 +8,16 @@
   The PDB helper emits a selector that must match the pod labels,
   so the right-hand value is the one passed to the helper.
 */ -}}
+{{- $first := true -}}
 {{- range $pair := list (list "backend" "backend") (list "frontend" "frontend") (list "documentRepository" "documentRepository") (list "nginx" "nginx") (list "clamav" "clamav") (list "redisCache" "redis-cache") -}}
 {{- $valuesKey := index $pair 0 -}}
 {{- $component := index $pair 1 -}}
 {{- if index (index $.Values.services $valuesKey) "enabled" -}}
-{{- if ne $valuesKey "backend" }}---{{ end -}}
-{{ include "genieai-umbrella.pdbForService" (dict "name" $valuesKey "component" $component "Values" $.Values "Chart" $.Chart "Release" $.Release) }}
+{{- if not $first }}
+---
+{{ end -}}
+{{- include "genieai-umbrella.pdbForService" (dict "name" $valuesKey "component" $component "Values" $.Values "Chart" $.Chart "Release" $.Release) -}}
+{{- $first = false -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

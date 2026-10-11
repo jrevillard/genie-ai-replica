@@ -632,22 +632,38 @@ async function runDocumentsConversion(job) {
         // complaint. Throttled to one write per 2s; the final call passes
         // through unthrottled so the terminal counters are never lost.
         let lastLinkWrite = 0;
+        // Progress writes are SERIALISED through one chain and the chain is
+        // awaited before the run returns. Fired detached, an intermediate
+        // write could land AFTER the terminal one, so the last value the UI
+        // ever saw was a stale partial counter rather than the final state.
+        let linkWrites = Promise.resolve();
+        const writeLinkProgress = (p) => {
+          linkWrites = linkWrites
+            .then(() =>
+              patchConversion(repo_id, {
+                link_progress: {
+                  phase: p.phase || null,
+                  batches_done: p.batches_done || 0,
+                  batches_total: p.batches_total || 0,
+                  written: p.written || 0
+                }
+              })
+            )
+            .catch((e) =>
+              logger.warn('OKF topic-link progress write failed: ' + e.message, { repo_id })
+            );
+          return linkWrites;
+        };
         topicLinks = await authorRepoTopicLinks(cRepo, {
           actor,
           onProgress: (p) => {
             const now = Date.now();
             if (!p.final && now - lastLinkWrite < 2000) return;
             lastLinkWrite = now;
-            patchConversion(repo_id, {
-              link_progress: {
-                phase: p.phase || null,
-                batches_done: p.batches_done || 0,
-                batches_total: p.batches_total || 0,
-                written: p.written || 0
-              }
-            }).catch(() => {});
+            writeLinkProgress(p);
           }
         });
+        await linkWrites; // the terminal counters are durable before the run moves on
         logger.info(
           `Documents topic-link authoring: ${topicLinks.written} link(s) across ${topicLinks.concepts_linked}/${topicLinks.total} concept(s) in ${topicLinks.elapsed_ms}ms`
         );

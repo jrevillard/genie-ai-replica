@@ -480,3 +480,38 @@ are recorded per repo — the poll's key answers
 next begin clears it. i18n error.noFrontmatter ×14. Tests: +3 (tag-less
 rejected pre-mint with no in-flight slot; failure recorded + terminal
 envelope + cleared on retry; legacy begins updated to the async signature).
+
+## 1-8g-v — suite RUNS are synchronous: a 100+100 run 504s at the gateway and the finished results were INVISIBLE (FIXED, worktree fix/1-8g-v-async-suite-runs)
+
+David, 2026-10-11 ~04:0x: "runs like this on a large repo will always take
+longer than 60 seconds" — after TWO "upstream server is timing out" on the
+new 100+100 Indonesia History suite, and (the screenshot) a Lab full of
+"—" Outcome/Corpus dashes even though the log showed the run COMPLETED
+server-side: `head-suite.run pass_rate 0.9286` at 03:58:09, run
+`r1791691089938-c60fba`, 154 probes in 26s. The gateway 504'd at ~60s; the
+worker kept going; the results persisted — and the UI, which only renders
+the run RESPONSE, never showed them. Not even a reload could (no
+load-one-run path existed).
+
+**Fix (the 1-8f2 pattern applied to runs):**
+- `beginRunSuite`: validates the suite, 409s a concurrent run (one per
+  suite), mints the run key, saves a `status:'running'` placeholder doc,
+  kicks `runSuite` detached (opts.runKey — the final doc REPLACES the
+  placeholder). A failed worker replaces it with `status:'failed' + error`.
+- `GET /routing-testsuite/:suite_key/runs/:run_key` (read scope): the
+  poll — `{status:'running'}` keep-waiting / `{status:'failed', error}` /
+  the full doc. Doubles as the UI's load-one-run path.
+- **Head legs parallelized 4-way** (the probe pool's pattern, results[i]
+  by index — order-stable): the serial head legs alone ate 40-60s on a
+  200-row suite.
+- UI: onRunSuite → 202 + poll (~6min budget) → adopt; **loading or
+  generating a suite now ADOPTS its latest completed run**
+  (`loadLatestRunForSuite`) — the timed-out Indonesia run fills the
+  Outcome/Corpus columns instead of reading as dashes. Store action
+  `headSuiteGetRun`; legacy sync response still adopted.
+- David's current run: visible after deploy via Load suite (or the runs
+  history) — 92.86% pass.
+
+**Tests:** +1 UI async-poll adoption; backend begins/polls covered via the
+refactored suite (order-stability through the pool asserted by the
+existing per-row tests). okf-server 877/877; dialog 49/49.

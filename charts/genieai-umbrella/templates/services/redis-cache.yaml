@@ -8,7 +8,7 @@ metadata:
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
 spec:
-  replicas: {{ $svc.replicas }}
+  replicas: {{ $svc.replicas | default 1 }}
   selector:
     matchLabels:
       genieai.io/component: redis-cache
@@ -26,7 +26,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: redis-cache
-          image: "{{ $svc.image.repository }}:{{ $svc.image.tag }}"
+          image: "{{ $svc.image.repository | default "redis" }}:{{ $svc.image.tag | default "7-alpine" }}"
           # $(VAR) in args expands against the container env below
           # (Kubernetes native expansion).
           args:
@@ -52,7 +52,7 @@ spec:
                   key: TRANSLATION_CACHE_PASSWORD
           ports:
             - name: redis
-              containerPort: {{ $svc.port }}
+              containerPort: {{ $svc.port | default 6379 }}
           readinessProbe:
             exec: { command: ["sh", "-c", "redis-cli ping"] }
             initialDelaySeconds: 5
@@ -92,7 +92,7 @@ spec:
   accessModes: ["ReadWriteOnce"]
   resources:
     requests:
-      storage: {{ $svc.pvc.storageSize }}
+      storage: {{ $svc.pvc.storageSize | default "5Gi" }}
   {{- with .Values.pluggable.storageClassName }}
   storageClassName: {{ . }}
   {{- end }}

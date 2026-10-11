@@ -71,7 +71,7 @@ const DEFAULT_MAX_PER_CONCEPT = parseInt(process.env.OKF_TOPIC_LINK_MAX_PER_CONC
 const DEFAULT_NEIGHBORS = parseInt(process.env.OKF_TOPIC_LINK_NEIGHBORS, 10) || 12;
 const DEFAULT_SNIPPET_CHARS = parseInt(process.env.OKF_TOPIC_LINK_SNIPPET_CHARS, 10) || 700;
 const DEFAULT_CATALOG_CAP = parseInt(process.env.OKF_TOPIC_LINK_CATALOG_CAP, 10) || 60;
-const MAX_TOKENS = parseInt(process.env.OKF_TOPIC_LINK_MAX_TOKENS, 10) || 1500;
+const MAX_TOKENS = parseInt(process.env.OKF_TOPIC_LINK_MAX_TOKENS, 10) || 2000;
 const TIMEOUT_MS = parseInt(process.env.OKF_TOPIC_LINK_TIMEOUT_MS, 10) || 60000;
 
 /** Progress writes are throttled — a repo-wide pass patches the same doc hundreds
@@ -249,38 +249,125 @@ async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
  * vocabulary is fixed, so the same prompt authors cross-links for beans,
  * asteroids or statutes with no code change.
  */
+/**
+ * Build the MAP prompt.
+ *
+ * SHORT HANDLES, not concept ids (live probe 2026-10-11). Concept ids are long
+ * slugs — `122-manejo-agroecologico-del-gusano-cogollero-del-maiz-en-me-sec1`
+ * is ~20 tokens — and every link repeats BOTH ids. At 8 concepts x 6 links
+ * that is ~2000 tokens of pure identifier, which blew the completion budget:
+ * the first live run came back `finish_reason: length` with the JSON truncated
+ * mid-string (Unterminated string at position 4119). The model then spends the
+ * whole pass unparseable.
+ *
+ * So the prompt hands out D1..Dn / P1..Pm handles and the REDUCE stage maps
+ * them back. A handle is 3 tokens; the ids never leave the process. The
+ * response is still tolerant of a raw id (models sometimes echo one), so a
+ * stray echo degrades to a dangling drop rather than an exception.
+ */
 function buildLinkMapPrompt(batch, catalog) {
+  const handles = new Map(); // handle -> concept_id
+  const docHandle = new Map(); // concept_id -> handle
+  const docs = batch
+    .map((c, i) => {
+      const h = `D${i + 1}`;
+      handles.set(h, c.concept_id);
+      docHandle.set(c.concept_id, h);
+      const snippet = String(c.body || c.summary || '')
+        .replace(/\s+/g, ' ')
+        .slice(0, DEFAULT_SNIPPET_CHARS);
+      return `- ${h}: ${c.title || c.concept_id}\n  excerpt: ${snippet}`;
+    })
+    .join('\n');
+  const cands = catalog.length
+    ? catalog
+        .map((c, i) => {
+          const h = `P${i + 1}`;
+          handles.set(h, c.concept_id);
+          return `- ${h}: ${c.title || c.concept_id}`;
+        })
+        .join('\n')
+    : '(none)';
   const system =
     'You link documents in a knowledge base whose subject domain is arbitrary — ' +
     'agriculture, astronomy, law, engineering, or anything else. You never assume a domain. ' +
     'Answer with STRICT JSON only, in exactly this shape: ' +
-    '{"links": [{"from": "<document id>", "to": "<document id>", "type": "<relation>", "label": "<short phrase>"}]}. ' +
+    '{"links": [{"from": "<handle>", "to": "<handle>", "type": "<relation>", "label": "<phrase>"}]}. ' +
+    `"from" MUST be a D handle (a document being linked) and "to" MUST be a D or P handle — ` +
+    'never invent a handle, never use any other identifier. ' +
     `The "type" MUST be one of ${JSON.stringify(LINK_TYPES)}. ` +
-    'Rules: (1) "from" and "to" MUST both be ids listed under Documents or Candidates — ' +
-    'never invent one; (2) never link a document to itself; (3) link a pair ONLY when a reader of one ' +
+    'Rules: (1) never link a document to itself; (2) link a pair ONLY when a reader of one ' +
     'would genuinely want to follow the link to the other to understand it — they share a subject, ' +
     'one qualifies or constrains the other, one is a case or instance of the other, or they are ' +
-    'worth setting side by side; (4) prefer the most SPECIFIC relation type that is true over the ' +
-    'generic "related_to"; (5) at most 6 links per document; (6) "label" is a short anchor phrase ' +
-    'of at most 6 words naming the relation. Return {"links": []} when nothing genuinely relates.';
-  const docs = batch
-    .map((c) => {
-      const snippet = String(c.body || c.summary || '')
-        .replace(/\s+/g, ' ')
-        .slice(0, DEFAULT_SNIPPET_CHARS);
-      return `- id: ${c.concept_id}\n  title: ${c.title || c.concept_id}\n  excerpt: ${snippet}`;
-    })
-    .join('\n');
-  const cands = catalog.length
-    ? catalog.map((c) => `- ${c.concept_id} — ${c.title || c.concept_id}`).join('\n')
-    : '(none)';
+    'worth setting side by side; (3) prefer the most SPECIFIC relation type that is true over the ' +
+    'generic "related_to"; (4) at most 4 links per document, and never more than 2 to the same ' +
+    'target; (5) "label" is at most 4 words naming the relation. ' +
+    'Return {"links": []} when nothing genuinely relates.';
   const user = `Documents:\n${docs}\n\nCandidate link targets:\n${cands}`;
   return {
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: user }
-    ]
+    ],
+    handles
   };
+}
+
+/**
+ * Resolve a handle (or a raw concept id the model echoed back) to a real
+ * concept id. Tolerant by design: an unresolvable value returns null and the
+ * reduce stage drops it as a dangling target — the same fate as a hallucinated
+ * id, which is the correct outcome either way.
+ */
+function resolveHandle(value, handles) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  if (handles.has(raw)) return handles.get(raw);
+  const direct = norm(raw);
+  for (const id of handles.values()) if (norm(id) === direct) return id;
+  return null;
+}
+
+/**
+ * Deal concepts into batches that SPAN documents.
+ *
+ * A segmented import produces many concepts per source file (`…-sec1`, `…-sec2`,
+ * …), and sorting by id put seven siblings of one bulletin in the first batch
+ * (live probe). That spends the pass on intra-document edges and starves the
+ * cross-document linking the feature exists for. Round-robin dealing across
+ * source documents keeps every batch representative — and it stays
+ * deterministic, so a re-run batches identically.
+ */
+function buildBatches(concepts, size) {
+  const bySource = new Map();
+  for (const c of concepts) {
+    // The source document is the id without its segment suffix — the producer
+    // mints `<slug>-secN` per section. Fall back to the whole id.
+    const key = String(c.concept_id).replace(/-sec\d+$/i, '');
+    if (!bySource.has(key)) bySource.set(key, []);
+    bySource.get(key).push(c);
+  }
+  const groups = [...bySource.values()];
+  const batches = [];
+  for (let i = 0; i < groups.length; i += size) {
+    // Deal one from each source group per batch before starting a second round.
+    const batch = [];
+    for (const g of groups) {
+      const idx = i + (batch.length % Math.max(1, Math.ceil(groups.length / size)));
+      if (g[idx]) batch.push(g[idx]);
+      if (batch.length >= size) break;
+    }
+    if (batch.length) batches.push(batch);
+  }
+  // Any group longer than what the deal above consumed (a single document with
+  // more sections than the batch size) is appended in order — never dropped.
+  const seen = new Set(batches.flat().map((c) => c.concept_id));
+  const overflow = concepts.filter((c) => !seen.has(c.concept_id));
+  for (let i = 0; i < overflow.length; i += size) {
+    const chunk = overflow.slice(i, i + size);
+    if (chunk.length) batches.push(chunk);
+  }
+  return batches;
 }
 
 /**
@@ -402,15 +489,15 @@ async function loadConcepts(repoId) {
 }
 
 /**
- * The MAP stage: batch the concepts, give each batch the neighbour catalog the
- * inverted index produced for its members, ask the LLM which candidates are
- * real. One failing batch never fails the pass.
+ * The MAP stage: batch the concepts (spanning source documents), give each
+ * batch the neighbour catalog the inverted index produced for its members,
+ * ask the LLM which candidates are real, and map the short handles it answers
+ * with back to real concept ids. One failing batch never fails the pass.
  */
 async function mapProposals(concepts, neighbors, byId, { onProgress, progressState } = {}) {
   const batchSize = Math.max(1, DEFAULT_BATCH);
   const lanes = Math.max(1, DEFAULT_LANES);
-  const batches = [];
-  for (let i = 0; i < concepts.length; i += batchSize) batches.push(concepts.slice(i, i + batchSize));
+  const batches = buildBatches(concepts, batchSize);
   const proposals = [];
   let done = 0;
   let failures = 0;
@@ -425,7 +512,7 @@ async function mapProposals(concepts, neighbors, byId, { onProgress, progressSta
     }
     const catalog = [...catalogIds].map((id) => ({ concept_id: id, title: byId.get(id) && byId.get(id).title }));
     try {
-      const { messages } = buildLinkMapPrompt(batch, catalog);
+      const { messages, handles } = buildLinkMapPrompt(batch, catalog);
       const raw = await withSpan('okf.llm.topic-link-map', async (span) => {
         span.setAttribute('okf.concepts_in_batch', batch.length);
         span.setAttribute('okf.catalog_rows', catalog.length);
@@ -436,14 +523,25 @@ async function mapProposals(concepts, neighbors, byId, { onProgress, progressSta
         j = JSON.parse(raw);
       } catch {
         failures += 1;
+        // A truncated response means the budget ran out mid-JSON — say so, the
+        // number is a prompt-size signal, not a flake.
+        const truncated = /\{"links":\s*\[?\s*$|Unterminated/.test(raw) || raw.length > 0;
         logger.warn('OKF topic links: unparseable batch response — skipped', {
           batch_size: batch.length,
+          response_chars: raw.length,
+          likely_truncated: truncated,
           ids: batch.map((c) => c.concept_id).slice(0, 5)
         });
         return;
       }
       for (const l of Array.isArray(j.links) ? j.links : []) {
-        if (l && l.from && l.to) proposals.push(l);
+        if (!l) continue;
+        const from = resolveHandle(l.from, handles);
+        const to = resolveHandle(l.to, handles);
+        // An unresolved handle is dropped HERE rather than pushed as null, so
+        // the reduce stats stay honest about what the model actually proposed.
+        if (!from || !to) continue;
+        proposals.push({ from, to, type: l.type, label: l.label });
       }
     } catch (e) {
       failures += 1;
@@ -503,14 +601,21 @@ async function applyLinkPlan(repoId, plan, { actor } = {}) {
 
 const REPOS_COLLECTION = 'okf_repositories';
 
+/** DOCUMENT(collection, key) — BOTH arguments are bound, and they are NOT the
+ * same value: ArangoDB reads the FIRST slot as the collection name. A live
+ * probe (2026-10-11) caught the first draft binding the repo id to both, so
+ * the lookup silently matched nothing and returned 0 documents — no error, the
+ * run state just never landed. `_key === repo_id` for this collection
+ * (repository-service.document(repo_id)). Exported so the test suite can pin
+ * the two-slot invariant that unit mocks can never see. */
+const RUN_STATE_AQL =
+  'LET doc = DOCUMENT(@collection, @repo_id) FILTER doc != null UPDATE doc WITH { topic_links: @patch } IN ' +
+  REPOS_COLLECTION +
+  ' RETURN doc';
+
 async function patchRunState(repoId, patch) {
   const db = await dbService.getConnection('default');
-  await db.query(
-    'LET doc = DOCUMENT(@repo_id, @repo_id) FILTER doc != null UPDATE doc WITH { topic_links: @patch } IN ' +
-      REPOS_COLLECTION +
-      ' RETURN doc',
-    { repo_id: repoId, patch }
-  );
+  await db.query(RUN_STATE_AQL, { collection: REPOS_COLLECTION, repo_id: repoId, patch });
 }
 
 /**
@@ -575,7 +680,11 @@ async function authorRepoTopicLinks(repo, opts = {}) {
       already_linked: stats.already_linked,
       over_cap: stats.over_cap,
       batches_total: batchesTotal,
-      failures
+      failures,
+      // Named stage so a progress bar can SAY what is happening rather than
+      // showing an anonymous counter (David, 2026-10-11: the Step-4 bars must
+      // depict each stage, not just tick).
+      phase: 'authoring'
     };
     if (dryRun) {
       summary.written = 0;
@@ -649,31 +758,49 @@ async function startTopicLinkRun(repoDoc, { dryRun = false, actor } = {}) {
   inflight.add(repoId);
   const state = { ...initial };
   let lastWrite = 0;
+  // Progress writes are SERIALISED through one chain and the terminal state is
+  // set by the write itself. The first draft fired each write detached and
+  // cleared `inflight` in a finally — so a poll landing between "pass
+  // finished" and "terminal state written" read status:'running' with no live
+  // worker and reported a SUCCESSFUL run as 'the run was interrupted' (live,
+  // 2026-10-11: 472 links written, status failed). Serialising the writes and
+  // awaiting the chain before clearing `inflight` closes that window.
+  let pending = Promise.resolve();
+  const writeState = (patch) => {
+    pending = pending
+      .then(() => patchRunState(repoId, patch))
+      .catch((e) => logger.warn('OKF topic links: progress write failed: ' + e.message, { repo_id: repoId }));
+    return pending;
+  };
   const onProgress = (p) => {
     Object.assign(state, p);
+    const terminal = !!p.final;
     const now = Date.now();
-    if (p.final || now - lastWrite >= PROGRESS_WRITE_MIN_MS) {
-      lastWrite = now;
-      patchRunState(repoId, {
-        ...state,
-        finished_at: p.final ? new Date().toISOString() : null
-      }).catch((e) => logger.warn('OKF topic links: progress write failed: ' + e.message, { repo_id: repoId }));
-    }
+    if (!terminal && now - lastWrite < PROGRESS_WRITE_MIN_MS) return;
+    lastWrite = now;
+    writeState({
+      ...state,
+      status: terminal ? 'done' : 'running',
+      stage: terminal ? 'done' : state.stage,
+      error: null,
+      finished_at: terminal ? new Date().toISOString() : null
+    });
   };
   const runner = (async () => {
     try {
       const result = await authorRepoTopicLinks(repoDoc, { onProgress, dryRun, actor });
+      await pending; // the terminal state is durable before the run stops
       return result;
     } catch (err) {
       logger.error('OKF topic links run failed: ' + err.message, { repo_id: repoId });
-      await patchRunState(repoId, {
+      await writeState({
         ...state,
         status: 'failed',
         stage: 'failed',
         error: err.message,
         code: err.code || 'TOPIC_LINK_RUN_FAILED',
         finished_at: new Date().toISOString()
-      }).catch(() => {});
+      });
       return null;
     } finally {
       inflight.delete(repoId);
@@ -697,12 +824,16 @@ async function getTopicLinkRunState(repoDoc) {
 
 module.exports = {
   LINK_TYPES,
+  RUN_STATE_AQL,
+  REPOS_COLLECTION,
   authorRepoTopicLinks,
   startTopicLinkRun,
   getTopicLinkRunState,
   // pure, exported for unit tests
   buildNeighborIndex,
   buildLinkMapPrompt,
+  buildBatches,
+  resolveHandle,
   reduceProposals,
   tokensFor,
   norm,

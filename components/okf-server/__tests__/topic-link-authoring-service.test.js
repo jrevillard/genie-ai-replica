@@ -25,7 +25,10 @@ const {
   tokensFor,
   norm,
   LINK_TYPES,
-  enabled
+  enabled,
+  RUN_STATE_AQL,
+  buildBatches,
+  resolveHandle
 } = require('../services/topic-link-authoring-service');
 
 const concept = (id, title, extra = {}) => ({ concept_id: id, title, summary: '', links: [], ...extra });
@@ -225,6 +228,99 @@ describe('topic-link-authoring-service — reduce (the write-safety net)', () =>
   });
 });
 
+describe('topic-link-authoring-service — the run-state AQL (a live-probe catch)', () => {
+  // Unit mocks never execute AQL, so the first draft of the progress channel
+  // bound the repo id to BOTH slots of DOCUMENT() and shipped: ArangoDB reads
+  // the FIRST as the collection name, matched nothing and returned 0 documents
+  // — no error, the run state simply never landed, and the editor's poll would
+  // have seen a null state forever. This pins the two-slot invariant.
+  it('DOCUMENT() binds a collection identifier and a key, never the same value twice', () => {
+    const args = RUN_STATE_AQL.match(/DOCUMENT\(([^)]*)\)/)[1]
+      .split(',')
+      .map((s) => s.trim());
+    expect(args).toHaveLength(2);
+    expect(args[0]).toMatch(/^@\w+$/);
+    expect(args[1]).toMatch(/^@\w+$/);
+    expect(args[0]).not.toBe(args[1]);
+  });
+
+  it('every @bind in the query text is supplied (ArangoDB rejects declared-but-unused)', () => {
+    const declared = [...RUN_STATE_AQL.matchAll(/@(\w+)/g)].map((m) => m[1]);
+    expect(new Set(declared)).toEqual(new Set(['collection', 'repo_id', 'patch']));
+  });
+});
+
+describe('topic-link-authoring-service — the detached run reaches a DURABLE terminal state', () => {
+  // Live catch (2026-10-11): the run wrote 472 links and reported status
+  // 'failed' with "the run was interrupted before it finished". The progress
+  // writes were fire-and-forget and `inflight` was cleared in a finally, so a
+  // poll landing between "pass finished" and "terminal state written" read
+  // running-with-no-worker and the guard called it an interruption. These pin
+  // the ordering that closes the window.
+  let svc;
+  let db;
+  let written;
+
+  beforeEach(() => {
+    jest.resetModules();
+    for (const k of ['VLLM_ENDPOINT', 'VLLM_MODEL_ID']) process.env[k] = 'http://vllm.test:8000/v1';
+    process.env.VLLM_MODEL_ID = 'test-model';
+    svc = require('../services/topic-link-authoring-service');
+    db = require('../shared-lib/db-connection-service');
+    const http = require('axios');
+    const rows = [
+      concept('a', 'Alpha subject', { summary: 'alpha' }),
+      concept('b', 'Beta subject', { summary: 'beta' })
+    ];
+    written = [];
+    db.getConnection.mockResolvedValue({
+      query: jest.fn((q, bind) => {
+        if (String(q).includes('okf_concepts_meta')) return { all: async () => rows };
+        // Every state write is recorded; the LAST one is what a poll would read.
+        if (bind && bind.patch) written.push({ ...bind.patch });
+        return { all: async () => [] };
+      })
+    });
+    http.post.mockResolvedValue({
+      data: {
+        choices: [
+          { message: { content: JSON.stringify({ links: [{ from: 'D1', to: 'P1', type: 'is_a', label: 'x' }] }) } }
+        ]
+      }
+    });
+  });
+
+  afterEach(() => {
+    delete process.env.VLLM_ENDPOINT;
+    delete process.env.VLLM_MODEL_ID;
+  });
+
+  it('writes a terminal status of done, and it is the LAST state written', async () => {
+    const { status } = await svc.startTopicLinkRun({ repo_id: 'r1' });
+    expect(status).toBe('running'); // the 202 payload
+    // Let the detached runner finish.
+    for (let i = 0; i < 20 && !written.some((w) => w.status === 'done'); i += 1) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(written.length).toBeGreaterThan(1);
+    expect(written[written.length - 1].status).toBe('done');
+    expect(written[written.length - 1].finished_at).toBeTruthy();
+    // The state a poll would read is terminal — never the mid-run 'running'.
+    const polled = await svc.getTopicLinkRunState({ repo_id: 'r1', topic_links: written[written.length - 1] });
+    expect(polled.status).toBe('done');
+  });
+
+  it('never leaves a non-terminal state once the runner has settled', async () => {
+    await svc.startTopicLinkRun({ repo_id: 'r1' });
+    for (let i = 0; i < 20 && !written.some((w) => w.status === 'done'); i += 1) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    await new Promise((r) => setTimeout(r, 40));
+    const tail = written[written.length - 1];
+    expect(['done', 'failed']).toContain(tail.status);
+  });
+});
+
 describe('topic-link-authoring-service — map prompt', () => {
   it('states the domain is arbitrary and pins the response shape + vocabulary', () => {
     const { messages } = buildLinkMapPrompt(
@@ -235,13 +331,65 @@ describe('topic-link-authoring-service — map prompt', () => {
     expect(system).toContain('subject domain is arbitrary');
     expect(system).toContain('STRICT JSON');
     for (const t of LINK_TYPES) expect(system).toContain(t);
-    expect(messages[1].content).toContain('m1');
-    expect(messages[1].content).toContain('m2');
+    expect(messages[1].content).toContain('D1: Ceres');
+    expect(messages[1].content).toContain('P1: Vesta');
   });
 
-  it('feeds the LLM only ids that exist — the reduce stage is the backstop', () => {
-    const { messages } = buildLinkMapPrompt([concept('m1', 'Ceres')], [{ concept_id: 'm2', title: 'Vesta' }]);
-    expect(messages[1].content).toContain('m2 — Vesta');
+  it('NEVER puts a raw concept id in the prompt (live: long slugs ate the whole completion budget)', () => {
+    // The first live run returned finish_reason=length with the JSON truncated
+    // mid-string, because every link repeated two ~20-token slugs. Handles keep
+    // the ids in the process; the prompt carries titles only.
+    const longId = '122-manejo-agroecologico-del-gusano-cogollero-del-maiz-en-me-sec1';
+    const { messages, handles } = buildLinkMapPrompt(
+      [concept(longId, 'Fall Armyworm management', { body: 'x' })],
+      [{ concept_id: `${longId}-peer`, title: 'Fall Armyworm in maize' }]
+    );
+    const prompt = messages.map((m) => m.content).join('\n');
+    expect(prompt).not.toContain(longId);
+    expect(prompt).toContain('Fall Armyworm management');
+    expect(handles.get('D1')).toBe(longId);
+    expect(handles.get('P1')).toBe(`${longId}-peer`);
+  });
+
+  it('resolves a handle back to the real id, and tolerates a raw id the model echoed', () => {
+    const { handles } = buildLinkMapPrompt([concept('a1', 'A')], [{ concept_id: 'b1', title: 'B' }]);
+    expect(resolveHandle('D1', handles)).toBe('a1');
+    expect(resolveHandle('P1', handles)).toBe('b1');
+    expect(resolveHandle('a1', handles)).toBe('a1'); // echoed back verbatim
+    expect(resolveHandle('concepts/a1.md', handles)).toBe('a1'); // decorated echo
+    expect(resolveHandle('P99', handles)).toBeNull(); // hallucinated handle
+    expect(resolveHandle(undefined, handles)).toBeNull();
+  });
+});
+
+describe('topic-link-authoring-service — batching spans source documents', () => {
+  it('does not deal seven sections of ONE document into the same batch', () => {
+    // Live: sorting by concept_id put `…-sec1` … `…-sec7` in batch 1, spending
+    // the pass on intra-document edges instead of cross-document linking.
+    const concepts = [
+      ...Array.from({ length: 7 }, (_, i) => concept(`bulletin-a-sec${i + 1}`, `A${i + 1}`)),
+      ...Array.from({ length: 3 }, (_, i) => concept(`bulletin-b-sec${i + 1}`, `B${i + 1}`)),
+      ...Array.from({ length: 3 }, (_, i) => concept(`bulletin-c-sec${i + 1}`, `C${i + 1}`))
+    ];
+    const batches = buildBatches(concepts, 6);
+    const sources = batches[0].map((c) => c.concept_id.replace(/-sec\d+$/, ''));
+    expect(new Set(sources).size).toBeGreaterThan(1);
+  });
+
+  it('loses nothing: every concept appears in exactly one batch', () => {
+    const concepts = [
+      ...Array.from({ length: 40 }, (_, i) => concept(`big-doc-sec${i + 1}`, `T${i + 1}`)),
+      ...Array.from({ length: 5 }, (_, i) => concept(`other-${i}`, `O${i}`))
+    ];
+    const batches = buildBatches(concepts, 8);
+    const flat = batches.flat().map((c) => c.concept_id);
+    expect(flat).toHaveLength(concepts.length);
+    expect(new Set(flat).size).toBe(concepts.length);
+  });
+
+  it('is deterministic — a re-run batches identically (the cap is order-sensitive)', () => {
+    const concepts = Array.from({ length: 30 }, (_, i) => concept(`d${i % 6}-sec${i}`, `T${i}`));
+    expect(buildBatches(concepts, 7)).toEqual(buildBatches(concepts, 7));
   });
 });
 

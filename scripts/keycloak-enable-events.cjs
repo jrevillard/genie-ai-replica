@@ -65,7 +65,22 @@ const b = (o) => Buffer.from(JSON.stringify(o)).toString('base64');
   }
   console.log('PUT accepted (HTTP %s)', put.status);
 
-  const after = await (await fetch(url, { headers: H })).json();
+  // Re-read the realm and CONVERGE. Reading once straight after the PUT is
+  // unreliable: the first GET after a realm write can return a representation
+  // that predates the field write, so eventsEnabled/adminEventsEnabled come
+  // back undefined and a correct run reports "VERIFY FAILED" (observed live
+  // 2026-10-11). Poll until the four fields agree, then report what we got.
+  let after = null;
+  for (let attempt = 1; attempt <= 10; attempt += 1) {
+    after = await (await fetch(url, { headers: H })).json();
+    const settled =
+      after.eventsEnabled === true &&
+      after.adminEventsEnabled === true &&
+      after.adminEventsDetailsEnabled === true &&
+      Number(after.eventsExpiration) === 7776000;
+    if (settled) break;
+    await new Promise((res) => setTimeout(res, 1000));
+  }
   console.log(
     'AFTER  eventsEnabled=%s adminEventsEnabled=%s adminEventsDetailsEnabled=%s eventsExpiration=%s',
     after.eventsEnabled,

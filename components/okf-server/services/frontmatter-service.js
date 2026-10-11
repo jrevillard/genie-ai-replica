@@ -291,6 +291,14 @@ Use the EXACT field names shown above (topic, entity, scope, forbidden,
 summary, keyword) — the parser does not accept synonyms. Output ONLY the
 JSON object, no prose, no markdown fences.
 
+EACH VALUE EXACTLY ONCE (CRITICAL): no string may appear twice anywhere in
+this object. Before you emit an item, check it is not already there. Repeating
+one value over and over until your output runs out is THE most common way this
+call fails, and it voids the whole response — the run is scored on unique,
+complete fields, not on volume. Respect every per-array count above as a HARD
+STOP: once you have that many distinct values, move to the next field. Do not
+pad an array by repeating what you already have.
+
 CONCEPTS:
 ${conceptsText}
 `;
@@ -319,14 +327,89 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   return withVllmRetry(fn, { endpoint: '/v1/chat/completions' });
 }
 
-function extractJson(content) {
-  const m = content && content.match(/\{[\s\S]*\}/);
-  if (!m) return null;
+// When the model runs out of tokens mid-object the content is a valid JSON
+// PREFIX — the last value is half-written and every bracket is still open.
+// JSON.parse rejects it, the /\{[\s\S]*\}/ regex finds no closing brace, and
+// the whole response is lost INCLUDING the fields that were already complete.
+// Live evidence 2026-10-11 (repo da894635, 586 El Salvador concepts): granite
+// looped on "centa-cpc" inside the entity array, burned all 1000 max_tokens
+// (finish_reason "length"), and the 8 good topics it HAD written were thrown
+// away with the whole call. Repair cuts the prefix back to the last complete
+// string literal and closes the brackets, salvaging the finished values.
+// Only reached when the caller passes repair:true — i.e. the model reported
+// finish_reason "length" and really was cut off. Nothing is invented: the
+// partial value is dropped, never guessed at.
+function repairTruncatedJson(content) {
+  if (typeof content !== 'string') return null;
+  const start = content.indexOf('{');
+  if (start === -1) return null;
+  const src = content.slice(start);
+
+  // Every position at which a JSON string literal closed, ascending. Each is a
+  // candidate cut; we try from the LAST backwards and take the first that
+  // parses. Backing up matters because a closed string is not always a safe
+  // cut: if it was a KEY the model was cut before writing the value, and
+  // `{"topic":["a"],"summary"}` is not JSON. The previous cut drops that
+  // whole unfinished pair instead.
+  const cuts = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < src.length; i += 1) {
+    const ch = src[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') {
+        inString = false;
+        cuts.push(i + 1);
+      }
+    } else if (ch === '"') {
+      inString = true;
+    }
+  }
+  for (let k = cuts.length - 1; k >= 0; k -= 1) {
+    const parsed = closeAndParse(src, cuts[k]);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+// Close every bracket src[0..cut) left open, innermost first, and parse.
+function closeAndParse(src, cut) {
+  const open = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < cut; i += 1) {
+    const ch = src[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') {
+      inString = true;
+    } else if (ch === '{' || ch === '[') {
+      open.push(ch === '{' ? '}' : ']');
+    } else if (ch === '}' || ch === ']') {
+      open.pop();
+    }
+  }
   try {
-    return JSON.parse(m[0]);
+    return JSON.parse(src.slice(0, cut) + open.reverse().join(''));
   } catch {
     return null;
   }
+}
+
+function extractJson(content, opts = {}) {
+  const m = content && content.match(/\{[\s\S]*\}/);
+  if (m) {
+    try {
+      return JSON.parse(m[0]);
+    } catch {
+      if (!opts.repair) return null;
+    }
+  }
+  return opts.repair ? repairTruncatedJson(content) : null;
 }
 
 // ---------- TEI embed call ----------
@@ -671,13 +754,20 @@ async function suggestTags(repoId, _opts = {}) {
       model: VLLM_LLM_MODEL_ID,
       prompt_chars: prompt.length
     });
-    const resp = await vllmChatCompletions([{ role: 'user', content: prompt }], { maxTokens: 1000 });
+    // maxTokens 1000 was NOT headroom, it was a live failure: on a 586-concept
+    // corpus the model looped, spent all 1000 tokens and still returned no
+    // closing brace (finish_reason "length"). The prompt now caps each array
+    // and forbids repeats; this is the second line of defence for corpora
+    // legitimately wider than the ranges above.
+    const resp = await vllmChatCompletions([{ role: 'user', content: prompt }], { maxTokens: 1500 });
     const content =
       resp.data &&
       resp.data.choices &&
       resp.data.choices[0] &&
       resp.data.choices[0].message &&
       resp.data.choices[0].message.content;
+    const finishReason =
+      (resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].finish_reason) || null;
     // DEBUG (David 2026-10-08: "read the fucking logs and figure out what
     // happened" — suggest returned 0 tags, the log only shows counts, we
     // need the raw LLM content + finish_reason to know whether the model
@@ -686,17 +776,29 @@ async function suggestTags(repoId, _opts = {}) {
       repo_id: repoId,
       content_preview: (content || '').slice(0, 600),
       content_length: (content || '').length,
-      finish_reason:
-        (resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].finish_reason) || null,
+      finish_reason: finishReason,
       usage: (resp.data && resp.data.usage) || null
     });
-    const parsed = extractJson(content);
+    // finish_reason "length" = the model was cut off mid-object. Salvage the
+    // values it did finish instead of 502-ing the whole call away.
+    const parsed = extractJson(content, { repair: finishReason === 'length' });
     if (!parsed) {
       logger.error('frontmatter.suggest.parse_failed', {
         repo_id: repoId,
+        finish_reason: finishReason,
         content_preview: (content || '').slice(0, 200)
       });
       throw new FrontmatterError('LLM_PARSE', 'LLM returned unparseable JSON', 502);
+    }
+    if (finishReason === 'length') {
+      // Honest about the degradation: the surviving fields are valid but the
+      // last one written was cut mid-value and dropped.
+      logger.warn('frontmatter.suggest.truncated', {
+        repo_id: repoId,
+        content_length: (content || '').length,
+        recovered_fields: Object.keys(parsed),
+        note: 'model hit max_tokens mid-object; salvaged the complete values, dropped the partial one'
+      });
     }
     // Normalize shape. Per David 2026-10-08: the LLM is intelligent enough
     // to recognize the task but used semantically-similar but not identical
@@ -826,7 +928,13 @@ async function validateFrontmatter(repoId, frontmatter, _opts = {}) {
             resp.data.choices[0] &&
             resp.data.choices[0].message &&
             resp.data.choices[0].message.content;
-          const parsed = extractJson(content);
+          const parsed = extractJson(content, {
+            repair:
+              (resp.data &&
+                resp.data.choices &&
+                resp.data.choices[0] &&
+                resp.data.choices[0].finish_reason) === 'length'
+          });
           const results = parsed && parsed.results;
           if (!Array.isArray(results)) return { tag, inconsistent: false, match_ratio: 0, reason: 'parse_failed' };
           const yes = results.filter((r) => r.match === 'yes').length;

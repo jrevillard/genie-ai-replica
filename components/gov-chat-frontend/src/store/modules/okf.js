@@ -888,6 +888,27 @@ const actions = {
     }
   },
 
+  /** Start a whole-corpus topic-link run (Story 1-8g-p) — the same generic
+   * pass the wizard runs at import time. Detached server-side. */
+  async startTopicLinks(_ctx, { repoId, dryRun } = {}) {
+    try {
+      const result = await repoOkfService.startTopicLinks(repoId, dryRun);
+      return { ok: true, result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Poll the topic-link run state (null when the repo never ran one). */
+  async getTopicLinkRun(_ctx, { repoId } = {}) {
+    try {
+      const result = await repoOkfService.getTopicLinkRun(repoId);
+      return { ok: true, result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
   // ─── Story 1-8 (2026-10-08): Head Tester / Routing Lab ─────────────────────
   // All wrap headTestService and return {ok, code?, message?, result?} —
   // the dialog renders err.data.error/message (server envelope) like

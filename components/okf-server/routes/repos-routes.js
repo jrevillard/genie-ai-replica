@@ -183,6 +183,14 @@ router.get('/:repo_id/validation', requireRepoScope('repo_id', 'read'), ctrl.get
 // links[], born right, feeding the graph at ingest. Admin-scope mutation.
 router.post('/:repo_id/citations/wire', requireRepoScope('repo_id', 'admin'), ctrl.wireRepoCitations);
 
+// WHOLE-CORPUS TOPIC-LINK AUTHORING (Story 1-8g-p): the SAME pass the wizard
+// runs at import time, re-runnable on demand from the editor. Generic — no
+// domain lexicon; it works for any subject matter. Detached (202 + poll)
+// because a large repo costs minutes of LLM time and the gateway caps a
+// request at 60s. Read-scope for the state, admin-scope to start a run.
+router.post('/:repo_id/topic-links', requireRepoScope('repo_id', 'admin'), ctrl.startTopicLinks);
+router.get('/:repo_id/topic-links', requireRepoScope('repo_id', 'read'), ctrl.getTopicLinks);
+
 // Multi-domain discovery (Story E — tier 1 of the retrieval fan-out): score
 // every settled bundle manifest against the query (label overlap + name/domain
 // token match) and return the top-K candidate repos. Read-scope (it reads

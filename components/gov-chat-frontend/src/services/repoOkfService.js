@@ -498,9 +498,30 @@ export async function acceptLink(repoId, conceptId, toConceptId, label) {
   return res && res.data ? res.data : null;
 }
 
+/** START a whole-corpus topic-link run (Story 1-8g-p) — the SAME generic pass
+ * the wizard runs at import time (no domain lexicon; works for any subject).
+ * Detached server-side (202), so this resolves as soon as the run is armed;
+ * poll getTopicLinkRun for progress. */
+export async function startTopicLinks(repoId, dryRun) {
+  const res = await httpService.post(
+    `/okf/repos/${encodeURIComponent(repoId)}/topic-links`,
+    dryRun ? { dry_run: true } : {},
+    { silent: true }
+  );
+  return res && res.data ? res.data : null;
+}
+
+/** The topic-link run state (poll target) — null when the repo never ran one. */
+export async function getTopicLinkRun(repoId) {
+  const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/topic-links`, {}, { silent: true });
+  return res && res.data ? res.data.run || null : null;
+}
+
 // Default-object surface (the store lazy-requires .default) — the inverse of
 // the PII twin pattern above.
 repoOkfService.getValidation = getValidation;
 repoOkfService.wireCitations = wireCitations;
 repoOkfService.suggestLinks = suggestLinks;
 repoOkfService.acceptLink = acceptLink;
+repoOkfService.startTopicLinks = startTopicLinks;
+repoOkfService.getTopicLinkRun = getTopicLinkRun;

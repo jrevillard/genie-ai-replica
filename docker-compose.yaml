@@ -731,6 +731,17 @@ services:
       - OKF_RERANK_TOKEN=${OKF_RERANK_TOKEN:-}
       - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
       - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
+      # Story 1-8g-p: whole-corpus TOPIC-LINK AUTHORING. The import wizard runs
+      # it automatically and the editor re-runs it on demand; it authors the
+      # cross-links a corpus that never cites itself is born without. Generic
+      # by construction (no domain lexicon), so it behaves identically for any
+      # subject matter. Set OKF_TOPIC_LINK_ENABLED=0 to skip the import-time
+      # pass (the LLM cost is the reason to switch it off).
+      - OKF_TOPIC_LINK_ENABLED=${OKF_TOPIC_LINK_ENABLED:-true}
+      - OKF_TOPIC_LINK_TIMEOUT_MS=${OKF_TOPIC_LINK_TIMEOUT_MS:-}
+      - OKF_TOPIC_LINK_LANES=${OKF_TOPIC_LINK_LANES:-}
+      - OKF_TOPIC_LINK_BATCH=${OKF_TOPIC_LINK_BATCH:-}
+      - OKF_TOPIC_LINK_MAX_PER_CONCEPT=${OKF_TOPIC_LINK_MAX_PER_CONCEPT:-}
       # Stuck-parsed reaper signals (claim-stamp semantics): a claimed row with
       # no terminal callback after REAP_GRACE_MS, or one claimed too many
       # times, is dead-lettered. WAITING rows are never reaped.

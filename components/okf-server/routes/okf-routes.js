@@ -53,7 +53,7 @@ router.get('/authz/graphs', authzResolverController.getGraphs);
 const frontmatterService = require('../services/frontmatter-service');
 router.post('/repos/:id/frontmatter/suggest', requireScope('admin'), async (req, res, next) => {
   try {
-    const suggested = await frontmatterService.suggestTags(req.params.id, { sampleN: 20 });
+    const suggested = await frontmatterService.suggestTags(req.params.id, {});
     let validation = { validated: true, inconsistencies: [] };
     try {
       validation = await frontmatterService.validateFrontmatter(req.params.id, suggested);

@@ -189,7 +189,8 @@ async function withTeiRetry(fn, ctx) {
 
 const TAG_PROMPT = (
   sampleSize,
-  conceptsText
+  conceptsText,
+  distributionText
 ) => `You are a curator for an enterprise knowledge-base system. A repository
 contains ${sampleSize} concepts (curator-authored knowledge entries). Each
 concept below has a title, a type (topic | entity | process | event | source),
@@ -197,7 +198,17 @@ the curator's own per-concept TOPICS (the "tags" field — these are the
 single source of truth for what this repo is about), the
 Knowledge-Hierarchy labels the curator assigned, and a one-line summary.
 
-YOUR JOB IS AGGREGATION, NOT INVENTION. The curator has already decided
+${
+  distributionText
+    ? `COMPLETE SUBJECT DISTRIBUTION (every concept in this repo, counted):
+${distributionText}
+
+This histogram is the repo's REAL subject surface — it counts every concept,
+not just the sample below. Use it to drive coverage.
+
+`
+    : ''
+}YOUR JOB IS AGGREGATION, NOT INVENTION. The curator has already decided
 what the repo is about by setting per-concept topics. You must:
 
   1. Roll the per-concept topics up into a REPO-LEVEL topic set (3-8
@@ -205,6 +216,15 @@ what the repo is about by setting per-concept topics. You must:
      siblings. The topic set must FULLY cover the per-concept topic
      surface — a sibling repo should have an unambiguously different
      topic set.
+${
+  distributionText
+    ? `     COVERAGE IS A HARD REQUIREMENT: every label with a real count in
+     the distribution above MUST be represented in "topic" or "entity".
+     A subject area with hundreds of concepts that appears nowhere in your
+     tag set is a routing failure — queries about it will never reach this
+     repo. Prefer specific, named subjects over generic ones.`
+    : ''
+}
   2. Identify the named entities across the concepts (people, products,
      places, organizations) — pull from the per-concept tags and labels.
   3. Infer the repo's scope from the concept types and topics.
@@ -213,9 +233,22 @@ what the repo is about by setting per-concept topics. You must:
      corpus does NOT cover. Think in whole domains, not just the nearest
      topic: a non-communicable-disease (NCD) corpus should list
      communicable-disease and mental-health; a repo of bali-hindu-rituals
-     should list bali-beach-tourism and bali-history. A query inside a
+     should list bali-beach-tourism. A query inside a
      forbidden domain must NEVER route to this repo, so cover every
      plausible confusable neighbor of the topic surface.
+${
+  distributionText
+    ? `
+     ABSOLUTE RULE (1-8g-m, learned from a live routing failure): you must
+     NEVER forbid a subject the corpus demonstrably CONTAINS. The
+     distribution above IS that evidence — if a label appears there with a
+     real count, that subject is part of this repo and must NOT be
+     forbidden, nor any tag containing that word (forbidding "modern-politics"
+     when the corpus holds hundreds of politics concepts will hard-veto
+     legitimate queries). Only forbid subjects that are ABSENT from the
+     distribution.`
+    : ''
+}
   5. Phrase a 1-2 sentence summary from the user's perspective.
 
 The tag strings must be SHORT (1-3 words), lowercase, hyphenated. Be
@@ -383,23 +416,98 @@ async function sampleConceptsFromRepo(db, repoId, n) {
   // files in the repo to the LLM — this must be lightweight"). We do NOT
   // load full concept bodies; only the small per-row signal the LLM needs
   // to derive a topic set (title + tags + labels + summary + type). The
-  // AQL reads just those fields — no body text, no chunk embeddings. The
-  // n cap is intentionally small (default 20) so the resulting prompt is
-  // bounded: a concept row is ~150-300 bytes of signal, so 20 rows =
-  // ~5KB of LLM input even in the worst case. The cap is enough to
-  // characterize a repo's topic surface (the worst case is hundreds of
-  // concepts; the typical case is 5-20), and deterministic by _key so a
-  // re-suggest returns the same input.
+  // AQL reads just those fields — no body text, no chunk embeddings.
+  //
+  // 1-8g-m (David 2026-10-11: "the tags on the repo head suggested are a
+  // very good base for routing queries, whether the repo is large or
+  // small"): the legacy `SORT m._key LIMIT n` took the FIRST n concepts by
+  // auto-generated key — an alphabetical slice, not a representative one.
+  // Live on Indonesia History (999 concepts): the 20 sampled rows carried
+  // only History(14)+Prehistory(5) while the real label surface was
+  // History 513 / Politics 133 / Culture 99 / Economics 68 / Religion 29.
+  // Four subject areas were invisible to the LLM, and it then FORBIDDENED
+  // modern-politics + contemporary-culture — domains the corpus has in
+  // abundance (a live veto trap). Two things now happen in ONE query:
+  //   - the COMPLETE per-label distribution (a COLLECT over every concept,
+  //     so it is accurate at ANY repo size), and
+  //   - a LABEL-STRATIFIED sample (a few rows per label, round-robin by
+  //     label size) so every subject area is represented in the prompt.
   const q = await db.query(`FOR r IN okf_repositories FILTER r._key == @rid LIMIT 1 RETURN r`, { rid: repoId });
   const list = await q.all();
   const repo = list && list[0];
   if (!repo) throw new FrontmatterError('REPO_NOT_FOUND', `repo ${repoId} not found`, 404);
+  // Group every concept by its PRIMARY (first) label; return both the group
+  // size (the histogram) and a bounded deterministic sample per group. One
+  // pass, no full-corpus fetch.
   const cq = await db.query(
-    `FOR m IN okf_concepts_meta FILTER m.repo_id == @rid SORT m._key LIMIT @n RETURN { concept_id: m.concept_id, title: m.title, type: m.type, tags: m.tags, labels: m.labels, summary: m.summary }`,
-    { rid: repoId, n }
+    `FOR m IN okf_concepts_meta FILTER m.repo_id == @rid
+       LET lab = (LENGTH(m.labels) > 0 && m.labels[0] != null) ? m.labels[0] : "(unlabeled)"
+       COLLECT lab = lab INTO rows = m
+       LET s = (
+         FOR x IN (FOR r2 IN rows SORT r2._key LIMIT @perLabel)
+           RETURN { concept_id: r2.concept_id, title: r2.title, type: r2.type,
+                    tags: r2.tags, labels: r2.labels, summary: r2.summary }
+       )
+       RETURN { label: lab, total: LENGTH(rows), sample: s }`,
+    { rid: repoId, perLabel: Math.max(1, Math.ceil(n / 4)) }
   );
-  const concepts = await cq.all();
-  return { repo, concepts };
+  const groups = await cq.all();
+  return { repo, groups };
+}
+
+// Turn the grouped AQL result into (a) the label distribution the prompt
+// needs, (b) a label-stratified concept sample (largest labels first, then
+// the tail — so a 999-concept repo still shows its rare subjects), and
+// (c) honest coverage counters the UI renders ("derived from N of M").
+function buildSuggestContext(groups, n) {
+  const usable = (groups || []).filter((g) => g && (g.total || 0) > 0);
+  // Histogram: biggest subject first, alphabetical tie-break (deterministic).
+  const histogram = usable
+    .map((g) => ({ label: g.label, count: g.total }))
+    .sort((a, b) => b.count - a.count || String(a.label).localeCompare(String(b.label)));
+  // Stratified sample: quota per label = its share, at least 1, capped so
+  // the dominant label cannot eat the whole budget. Round-robin fill from
+  // the ordered groups until n is reached.
+  const ordered = usable.slice().sort((a, b) => b.total - a.total || String(a.label).localeCompare(String(b.label)));
+  const quotas = new Map();
+  const total = histogram.reduce((s, h) => s + h.count, 0);
+  for (const g of ordered) {
+    const share = Math.max(1, Math.floor((g.total / Math.max(total, 1)) * n));
+    quotas.set(g.label, Math.min(share, Math.max(1, Math.ceil(g.sample.length))));
+  }
+  const concepts = [];
+  let progress = true;
+  while (concepts.length < n && progress) {
+    progress = false;
+    for (const g of ordered) {
+      const quota = quotas.get(g.label) || 0;
+      if (concepts.length >= n) break;
+      const already = concepts.filter((c) => c._sample_label === g.label).length;
+      if (already < quota && already < (g.sample || []).length) {
+        const row = { ...g.sample[already], _sample_label: g.label };
+        concepts.push(row);
+        progress = true;
+      }
+    }
+  }
+  const conceptsTotal = total;
+  const conceptsSampled = concepts.length;
+  const labelsInPrompt = [...new Set(concepts.map((c) => c._sample_label))];
+  const unrepresented = histogram.filter((h) => !labelsInPrompt.includes(h.label));
+  return {
+    concepts,
+    histogram,
+    coverage: {
+      concepts_total: conceptsTotal,
+      concepts_sampled: conceptsSampled,
+      label_count: histogram.length,
+      labels_represented: labelsInPrompt.length,
+      // Labels absent from the SAMPLE (the distribution still carries them
+      // to the LLM, so this is a transparency signal, not a blind spot).
+      labels_unrepresented: unrepresented.map((h) => h.label),
+      histogram: histogram.slice(0, 24)
+    }
+  };
 }
 
 // Format the lightweight concept rows into a single prompt block. Each
@@ -425,6 +533,50 @@ function formatConceptsForPrompt(concepts) {
     .join('\n');
 }
 
+// 1-8g-m: the mechanical forbidden guard — a suggested forbidden tag whose
+// text collides with a subject the corpus DEMONSTRABLY contains is dropped
+// before it can be stored. Live failure (Indonesia History): the LLM
+// suggested "modern-politics" and "contemporary-culture" while the corpus
+// held 133 Politics and 99 Culture concepts — forbidden tags hard-veto
+// queries (ROUTE_FORBIDDEN_TAG_MAX), so those two were a live trap for
+// legitimate questions about subjects the repo actually answers.
+//
+// Matching is deliberately CONSERVATIVE: a token of the forbidden tag must
+// equal (or contain) a label's normalized token, AND that label must carry
+// at least MIN_FORBIDDEN_LABEL_COUNT concepts. "modern-politics" contains
+// the label "politics" → dropped. "tourism" (no such label) → kept. This
+// is a floor on tag quality, not a curator decision: everything it drops is
+// returned to the UI with its reason so the curator can re-add deliberately.
+const MIN_FORBIDDEN_LABEL_COUNT = 5;
+
+function normalizeForMatch(value) {
+  return String(value || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function screenForbiddenAgainstCorpus(forbidden, histogram) {
+  const present = (histogram || [])
+    .filter((h) => h && h.label && h.count >= MIN_FORBIDDEN_LABEL_COUNT)
+    .map((h) => ({ label: h.label, count: h.count, tokens: normalizeForMatch(h.label) }));
+  const collides = (tagTokens, labelTokens) =>
+    tagTokens.some((t) => labelTokens.some((l) => l === t || l.includes(t) || t.includes(l)));
+  const kept = [];
+  const rejected = [];
+  for (const tag of forbidden || []) {
+    const tokens = normalizeForMatch(tag);
+    if (!tokens.length) continue;
+    const hit = present.find((p) => collides(tokens, p.tokens));
+    if (hit) {
+      rejected.push({ value: tag, label: hit.label, label_count: hit.count });
+    } else {
+      kept.push(tag);
+    }
+  }
+  return { kept, rejected };
+}
+
 // ---------- Public methods ----------
 
 async function suggestTags(repoId, opts = {}) {
@@ -432,7 +584,8 @@ async function suggestTags(repoId, opts = {}) {
     span.setAttribute('okf.repo_id', repoId);
     const db = await dbService.getConnection();
     const sampleN = opts.sampleN || OKF_FRONTMATTER_SAMPLE_N;
-    const { concepts } = await sampleConceptsFromRepo(db, repoId, sampleN);
+    const { groups } = await sampleConceptsFromRepo(db, repoId, sampleN);
+    const { concepts, histogram, coverage } = buildSuggestContext(groups, sampleN);
     if (!concepts.length) {
       // 400 with a clear directive: per-repo tags require at least one
       // concept (curator's authoring). Chunks are NOT a fallback — the
@@ -440,11 +593,25 @@ async function suggestTags(repoId, opts = {}) {
       throw new FrontmatterError('NO_CONCEPTS', 'Add at least one concept before requesting tag suggestions.', 400);
     }
     span.setAttribute('okf.sample_size', concepts.length);
+    span.setAttribute('okf.concepts_total', coverage.concepts_total);
+    span.setAttribute('okf.label_count', coverage.label_count);
+    // 1-8g-m: the histogram IS the corpus's real subject surface — hand it
+    // to the LLM (bounded to the top 24 labels) so the tag set covers what
+    // the corpus actually contains, not what an alphabetical slice showed.
+    const distributionText = histogram.length
+      ? histogram
+          .slice(0, 24)
+          .map((h) => `  - ${h.label}: ${h.count} concept${h.count === 1 ? '' : 's'}`)
+          .join('\n') + (histogram.length > 24 ? `\n  - (+${histogram.length - 24} further labels)` : '')
+      : '';
     const conceptsText = formatConceptsForPrompt(concepts).slice(0, 6000);
-    const prompt = TAG_PROMPT(concepts.length, conceptsText);
+    const prompt = TAG_PROMPT(concepts.length, conceptsText, distributionText);
     logger.info('frontmatter.suggest.start', {
       repo_id: repoId,
       sample_size: concepts.length,
+      concepts_total: coverage.concepts_total,
+      label_count: coverage.label_count,
+      labels_represented: coverage.labels_represented,
       vllm_host: VLLM_LLM_HOST,
       model: VLLM_LLM_MODEL_ID,
       prompt_chars: prompt.length
@@ -495,6 +662,21 @@ async function suggestTags(repoId, opts = {}) {
     // straight through to the stored frontmatter). normalizeTag has already
     // lowercased everything, so first-occurrence Set dedup is exact.
     const uniqTags = (list) => [...new Set(list)];
+    const forbiddenRaw = uniqTags(
+      arr('forbidden', 'forbidden_topics', 'exclusions', 'not_about').map(normalizeTag).filter(Boolean)
+    );
+    // 1-8g-m: drop forbidden tags the corpus demonstrably CONTAINS. This is
+    // mechanical (zero LLM, no embedding) and runs BEFORE anything is
+    // stored, so a poisoned veto can never reach the routing gate.
+    const screened = screenForbiddenAgainstCorpus(forbiddenRaw, histogram);
+    if (screened.rejected.length) {
+      logger.warn('frontmatter.suggest.forbidden_rejected', {
+        repo_id: repoId,
+        rejected: screened.rejected.map((r) => ({ value: r.value, corpus_label: r.label, label_count: r.label_count })),
+        kept: screened.kept
+      });
+    }
+    span.setAttribute('okf.forbidden_rejected', screened.rejected.length);
     const out = {
       topic: uniqTags(
         arr('topic', 'topics', 'repo_level_topics', 'topic_set', 'subjects').map(normalizeTag).filter(Boolean)
@@ -503,9 +685,7 @@ async function suggestTags(repoId, opts = {}) {
         arr('entity', 'entities', 'named_entities', 'people_products_places').map(normalizeTag).filter(Boolean)
       ),
       scope: normalizeTag(parsed.scope || parsed.scope_label || parsed.scope_word || parsed.scope_kind),
-      forbidden: uniqTags(
-        arr('forbidden', 'forbidden_topics', 'exclusions', 'not_about').map(normalizeTag).filter(Boolean)
-      ),
+      forbidden: screened.kept,
       summary:
         typeof parsed.summary === 'string'
           ? parsed.summary.slice(0, 512)
@@ -528,13 +708,27 @@ async function suggestTags(repoId, opts = {}) {
     // tags are excluded from the head vector average; they only power the
     // gate.
     out.forbidden_suggestions = out.forbidden.map((value) => ({ value, suggested: true }));
+    // 1-8g-m: honesty + transparency the curator needs. Coverage says what
+    // the sample was drawn from (so "derived from 21 of 999 concepts" is
+    // visible, not implied); forbidden_rejected says which suggestions were
+    // dropped and WHY, so a silently-removed tag can be re-added on purpose.
+    out.coverage = coverage;
+    out.forbidden_rejected = screened.rejected.map((r) => ({
+      value: r.value,
+      reason: `the corpus contains ${r.label_count} "${r.label}" concepts — forbidding this would veto valid queries`,
+      corpus_label: r.label,
+      corpus_label_count: r.label_count
+    }));
     span.setAttribute('okf.suggested.topic_count', out.topic.length);
     span.setAttribute('okf.suggested.forbidden_count', out.forbidden.length);
     logger.info('frontmatter.suggest.done', {
       repo_id: repoId,
       topic: out.topic.length,
       entity: out.entity.length,
-      forbidden: out.forbidden.length
+      forbidden: out.forbidden.length,
+      forbidden_rejected: screened.rejected.length,
+      concepts_sampled: coverage.concepts_sampled,
+      concepts_total: coverage.concepts_total
     });
     return out;
   });
@@ -1008,6 +1202,13 @@ module.exports = {
   FRONTMATTER_COLLECTION,
   FRONTMATTER_SUMMARY_COLLECTION,
   FIELD_RANGES,
+  // 1-8g-m test surface: the label-stratified sampler + the mechanical
+  // forbidden guard (both are pure and carry the whole live failure).
+  _internals: {
+    buildSuggestContext,
+    screenForbiddenAgainstCorpus,
+    MIN_FORBIDDEN_LABEL_COUNT
+  },
   // error class
   FrontmatterError
 };

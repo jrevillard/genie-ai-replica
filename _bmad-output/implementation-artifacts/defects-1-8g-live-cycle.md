@@ -656,3 +656,63 @@ docarray-shim env tests). Covers: fallback fires and forces
 competition shape and for healthy legs, size-gate accept/skip/count-failure/
 disabled, budget-exhausted skip, edge-cap interpolation in both subquery
 modes. ruff + ruff-format clean.
+## 1-8g-m — suggested tags were drawn from an alphabetical slice, and the LLM then FORBIDDENED subjects the corpus contains (FIXED, worktree fix/1-8g-m-label-grounded-suggestions)
+
+**Directive (David, 2026-10-11):** "the tags on the repo head suggested are a
+very good base for routing queries, whether the repo is large or small" — plus
+"never regress existing features".
+
+**Evidence (3-agent sweep, code + DB):** `suggestTags` sampled
+`SORT m._key LIMIT 20` of `okf_concepts_meta` (first-20-by-AUTO-KEY — an
+alphabetical slice, not a representative sample) and made ONE LLM call on a
+6KB slice. On the 999-concept Indonesia History repo the sampled rows carried
+only History(14)+Prehistory(5); the real label surface was **History 513 /
+Politics 133 / Culture 99 / Economics 68 / Religion 29 / Prehistory 9 /
+Kingdoms 1**. Borobudur was covered by alphabetical luck. The damage was
+double:
+1. **No signal** for religion / culture / economics / politics → the head had
+   no tags covering those subject areas.
+2. **A live veto trap** — the suggested forbidden set named `modern-politics`
+   and `contemporary-culture` for a corpus holding **133 Politics and 99
+   Culture** concepts. Forbidden tags hard-veto queries
+   (`ROUTE_FORBIDDEN_TAG_MAX` 0.55), so those two would have suppressed
+   legitimate questions the repo answers.
+
+The prompt made it worse: it instructed the model to invent "adjacent domains
+this corpus does NOT cover" **without ever telling it what the corpus
+contains**.
+
+**Fix:**
+- **One query, two outputs.** `sampleConceptsFromRepo` now COLLECTs every
+  concept by its primary label, returning each group's **total** (the complete
+  histogram — accurate at ANY repo size) plus a bounded per-label **sample**.
+  `buildSuggestContext` turns that into a histogram + a label-STRATIFIED
+  concept sample (quota per label, round-robin), so a 20-row budget now spans
+  every subject area instead of the first alphabet.
+- **The prompt gets the truth.** The distribution block (label: count) is
+  injected, with two hard rules: every label with a real count MUST be
+  represented in topic/entity, and **never forbid a subject the corpus
+  demonstrably contains**.
+- **Mechanical forbidden guard (zero-LLM).** `screenForbiddenAgainstCorpus`
+  drops any forbidden tag colliding with a label carrying ≥
+  `MIN_FORBIDDEN_LABEL_COUNT` (5) concepts — `modern-politics` vs Politics(133)
+  → dropped; `tourism` (no such label) → kept. Conservative by design: every
+  drop is REPORTED with its corpus evidence, so the curator can re-add
+  deliberately.
+- **Honest provenance.** The response carries `coverage` (concepts_total,
+  concepts_sampled, label_count, histogram) and `forbidden_rejected`
+  (value + reason + corpus label + count); the panel renders both. A sample
+  that missed four of seven subject areas is no longer invisible.
+- The dead `OKF_FRONTMATTER_SAMPLE_N` knob now works (both callers passed a
+  hard-coded `sampleN: 20`).
+
+**Tests:** +12 backend (okf-server 897/897) — histogram counts every concept;
+stratified sample still represents every label incl. the 1-concept tail;
+coverage counters; the unlabeled bucket; the live failure pair rejected;
+absent domains kept; sub-floor labels not evidence enough; exact + partial
+matches; the integration path dropping AND reporting. +6 frontend (new
+`frontmatter-panel-suggest.test.js` — the component had NO test at all):
+suggestion still replaces the shape, coverage renders, a rejected tag is shown
+with its reason, a legacy server response renders nothing extra, re-suggest
+clears stale notes, empty suggestion still errors. Full frontend 1687/1687
+(83 suites) + locale parity 14/14. eslint + prettier clean.

@@ -68,7 +68,29 @@ const OKF_FRONTMATTER_VALIDATE_BATCH_SIZE = Math.max(
   1,
   parseInt(process.env.OKF_FRONTMATTER_VALIDATE_BATCH_SIZE || '4', 10)
 );
-const OKF_FRONTMATTER_SAMPLE_N = parseInt(process.env.OKF_FRONTMATTER_SAMPLE_N || '20', 10);
+// 1-8g-n (David 2026-10-11: "why is the budget 20 rows... the resultant
+// labels would hardly describe a 900 topic repository adequately" / "can we
+// make it dynamic"): the flat 20 was sized when repos held 5-20 concepts.
+// Concept COUNT does not discriminate real repos (Indonesia 999 concepts /
+// 7 labels vs www-gov-uk 997 / 24 — nearly identical size, very different
+// subject surface). The dimension that matters is the LABEL SURFACE, so the
+// sample is spent ROUND-ROBIN across labels until the prompt budget is full:
+//
+//   rows = fill(labels, per-label cap) subject to (a) a per-label ceiling, so
+//   no single label dominates, and (b) the prompt character budget, so a
+//   wide repo simply gets a wider prompt — still ONE call.
+//
+// The two knobs are safety rails, not the policy. Their VALUES are set from
+// a MEASURED latency budget, not guessed: the endpoint is SYNCHRONOUS and the
+// gateway caps at 60s, so we keep the prompt in the range where one call
+// returns comfortably. Measured 2026-10-11 against the live vLLM: 30KB of
+// prompt took 25.7s (finish_reason 'length'), so the ceiling here is ~20KB
+// (~15-17s) — a 5x improvement on the old 20-row/6KB prompt while staying
+// well inside the timeout. Going wider needs the async (202+poll) treatment
+// the suite generator already uses; that is the queued follow-up.
+const SUGGEST_PER_LABEL_ROWS = parseInt(process.env.OKF_FRONTMATTER_PER_LABEL_ROWS || '4', 10);
+const OKF_FRONTMATTER_SAMPLE_N = parseInt(process.env.OKF_FRONTMATTER_SAMPLE_N || '400', 10);
+const OKF_FRONTMATTER_PROMPT_CHARS = parseInt(process.env.OKF_FRONTMATTER_PROMPT_CHARS || '20000', 10);
 const OKF_FRONTMATTER_VALIDATE_SAMPLE_PCT = parseFloat(process.env.OKF_FRONTMATTER_VALIDATE_SAMPLE_PCT || '0.1');
 const OKF_FRONTMATTER_INCONSISTENCY_THRESHOLD = parseFloat(
   process.env.OKF_FRONTMATTER_INCONSISTENCY_THRESHOLD || '0.3'
@@ -399,7 +421,7 @@ async function ensureCollections(db) {
   _frontmatterEnsured = true;
 }
 
-async function sampleConceptsFromRepo(db, repoId, n) {
+async function sampleConceptsFromRepo(db, repoId) {
   // Per David 2026-10-08: per-repo frontmatter tags originate ONLY from
   // concept-meta rows. Chunks are NOT a permitted source — at the moment
   // suggestTags runs (inside the publish hook, BEFORE the lifecycle ingest
@@ -462,35 +484,48 @@ async function sampleConceptsFromRepo(db, repoId, n) {
                   tags: r2.tags, labels: r2.labels, summary: r2.summary }
        )
        RETURN { label: label, total: LENGTH(rows), sample: s }`,
-    { rid: repoId, perLabel: Math.max(1, Math.ceil(n / 4)) }
+    { rid: repoId, perLabel: Math.max(1, Math.min(SUGGEST_PER_LABEL_ROWS, OKF_FRONTMATTER_SAMPLE_N)) }
   );
   const groups = await cq.all();
   return { repo, groups };
 }
 
 // Turn the grouped AQL result into (a) the label distribution the prompt
-// needs, (b) a label-stratified concept sample (largest labels first, then
-// the tail — so a 999-concept repo still shows its rare subjects), and
-// (c) honest coverage counters the UI renders ("derived from N of M").
+// needs, (b) a label-stratified concept sample, and (c) honest coverage
+// counters the UI renders ("derived from N of M").
+//
+// 1-8g-n (David 2026-10-11: "why is the budget 20 rows... the resultant
+// labels would hardly describe a 900 topic repository adequately"):
+// the sample budget must scale with the LABEL SURFACE, not sit at a flat
+// 20. At 20 rows a 24-label repo (www-gov-uk-full-crawl: Departments 358,
+// Guidance and regulation 231, Money and tax 52, Visas 33 … 997 concepts)
+// got LESS THAN ONE concrete row per label — the LLM could see the label
+// NAMES but no subject material, so it could only invent. The quota is now
+// a flat per-label allowance (never proportional: a proportional quota hands
+// the dominant label most of the budget, which is the exact failure we are
+// fixing), and the total budget is perLabel × labelCount under a hard cap.
 function buildSuggestContext(groups, n) {
   const usable = (groups || []).filter((g) => g && (g.total || 0) > 0);
   // Histogram: biggest subject first, alphabetical tie-break (deterministic).
   const histogram = usable
     .map((g) => ({ label: g.label, count: g.total }))
     .sort((a, b) => b.count - a.count || String(a.label).localeCompare(String(b.label)));
-  // Stratified sample: quota per label = its share, at least 1, capped so
-  // the dominant label cannot eat the whole budget. Round-robin fill from
-  // the ordered groups until n is reached.
-  const ordered = usable.slice().sort((a, b) => b.total - a.total || String(a.label).localeCompare(String(b.label)));
+  // Per-label quota is FLAT (equal material per subject), bounded by what the
+  // group actually has and by SUGGEST_PER_LABEL_ROWS so one huge label can't
+  // flood the prompt. `n` and the char budget are the overall rails.
+  const ordered = usable
+    .slice()
+    .sort((a, b) => b.total - a.total || String(a.label).localeCompare(String(b.label)));
+  const perLabel = Math.max(1, SUGGEST_PER_LABEL_ROWS);
+  const charBudget = Math.max(2000, n);
   const quotas = new Map();
-  const total = histogram.reduce((s, h) => s + h.count, 0);
   for (const g of ordered) {
-    const share = Math.max(1, Math.floor((g.total / Math.max(total, 1)) * n));
-    quotas.set(g.label, Math.min(share, Math.max(1, Math.ceil(g.sample.length))));
+    quotas.set(g.label, Math.min(perLabel, Math.max(1, g.sample.length)));
   }
   const concepts = [];
+  let chars = 0;
   let progress = true;
-  while (concepts.length < n && progress) {
+  while (progress) {
     progress = false;
     for (const g of ordered) {
       const quota = quotas.get(g.label) || 0;
@@ -498,12 +533,17 @@ function buildSuggestContext(groups, n) {
       const already = concepts.filter((c) => c._sample_label === g.label).length;
       if (already < quota && already < (g.sample || []).length) {
         const row = { ...g.sample[already], _sample_label: g.label };
+        // Estimate the formatted cost; stop before the prompt budget is blown
+        // (the caller slices the final text to the same limit anyway).
+        const cost = 40 + String(row.title || row.concept_id || '').length + String(row.summary || '').length;
+        if (chars + cost > charBudget && concepts.length >= ordered.length) break;
+        chars += cost;
         concepts.push(row);
         progress = true;
       }
     }
   }
-  const conceptsTotal = total;
+  const conceptsTotal = histogram.reduce((s, h) => s + h.count, 0);
   const conceptsSampled = concepts.length;
   const labelsInPrompt = [...new Set(concepts.map((c) => c._sample_label))];
   const unrepresented = histogram.filter((h) => !labelsInPrompt.includes(h.label));
@@ -592,13 +632,15 @@ function screenForbiddenAgainstCorpus(forbidden, histogram) {
 
 // ---------- Public methods ----------
 
-async function suggestTags(repoId, opts = {}) {
+async function suggestTags(repoId, _opts = {}) {
   return withSpan('okf.frontmatter.suggest', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
     const db = await dbService.getConnection();
-    const sampleN = opts.sampleN || OKF_FRONTMATTER_SAMPLE_N;
-    const { groups } = await sampleConceptsFromRepo(db, repoId, sampleN);
-    const { concepts, histogram, coverage } = buildSuggestContext(groups, sampleN);
+    const { groups } = await sampleConceptsFromRepo(db, repoId);
+    // 1-8g-n: the builder's second arg is the PROMPT BUDGET (chars), not a
+    // row count — the row count is now derived from the label surface and
+    // this budget, per David's "can we make it dynamic".
+    const { concepts, histogram, coverage } = buildSuggestContext(groups, OKF_FRONTMATTER_PROMPT_CHARS);
     if (!concepts.length) {
       // 400 with a clear directive: per-repo tags require at least one
       // concept (curator's authoring). Chunks are NOT a fallback — the
@@ -617,7 +659,7 @@ async function suggestTags(repoId, opts = {}) {
           .map((h) => `  - ${h.label}: ${h.count} concept${h.count === 1 ? '' : 's'}`)
           .join('\n') + (histogram.length > 24 ? `\n  - (+${histogram.length - 24} further labels)` : '')
       : '';
-    const conceptsText = formatConceptsForPrompt(concepts).slice(0, 6000);
+    const conceptsText = formatConceptsForPrompt(concepts).slice(0, OKF_FRONTMATTER_PROMPT_CHARS);
     const prompt = TAG_PROMPT(concepts.length, conceptsText, distributionText);
     logger.info('frontmatter.suggest.start', {
       repo_id: repoId,

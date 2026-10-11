@@ -654,7 +654,17 @@ router.delete('/', authorizeRole(['Admin']), fileController.deleteMultipleFiles)
  *       '404':
  *         description: File not found
  */
-router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
+// okf-service allowed (Story 1-8g-q, 2026-10-11): okf-server stamps
+// okf_repo_id onto each source file it imports (producer-service
+// stampSources), so the wizard can tell a file that already belongs to a
+// repository from a free-form one. That stamp was 403-ing 41/41 files —
+// this route alone carried the Admin-only gate while every comparable
+// orchestrator mutation below (ingest, retract, delete, enqueue, status)
+// already permitted the same service account. This restores the intended
+// role; it is not an admin escalation (mapRole maps okf-service to exactly
+// that scalar — it holds no admin composite).
+const UPDATE_FILE_ROLES = ['Admin', 'okf-service'];
+router.patch('/:fileId', authorizeRole(UPDATE_FILE_ROLES), fileController.updateFile);
 
 /**
  * @swagger
@@ -994,3 +1004,8 @@ router.patch(
 );
 
 module.exports = router;
+// The role list PATCH /:fileId is registered with, exported so the regression
+// that shipped the broken stamp (2026-10-11) cannot come back: the okf-server
+// orchestrator stamps okf_repo_id through this route, and the integration suite
+// mocks authorizeRole, so nothing else asserts who may write.
+module.exports.UPDATE_FILE_ROLES = UPDATE_FILE_ROLES;

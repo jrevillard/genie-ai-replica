@@ -75,7 +75,19 @@ The convergence Job's `KEYCLOAK_AVAILABILITYCHECK_*` waits for Keycloak HTTP rea
 
 `genie-realm.yaml` is already fully parameterised — its `$(env:VAR)` placeholders cover everything that varies per deployment (`KC_PUBLIC_ORIGIN` for the ingress host, `KEYCLOAK_PASSWORD_POLICY`, `KC_MOBILE_CLIENT_ID`, `KEYCLOAK_SUPPORTED_LOCALES`, all client secrets, all SMTP fields). There is nothing left to template. Rendering the realm from Helm values would mean re-inventing a realm-authoring engine in YAML-inside-YAML (~300 lines) to reproduce a file that is already parameterised.
 
-The file moves to `charts/genieai-umbrella/files/genie-realm.yaml` and becomes the **single canonical copy**. `configs/keycloak/Dockerfile.config-cli` changes its `COPY` source to that path so the compose path consumes the same file. Two copies would guarantee drift.
+The file moves to `charts/genieai-umbrella/files/genie-realm.yaml` and becomes the **single canonical copy**. Two copies would guarantee drift.
+
+Moving it out of `configs/keycloak/` breaks three build definitions that pin `configs/keycloak/` as their Docker context, so all three are changed together:
+
+| Where | Current | Becomes |
+|---|---|---|
+| `configs/keycloak/Dockerfile.config-cli:18-19` | `COPY genie-realm.yaml …` / `COPY config-and-sleep.sh …` | `COPY charts/genieai-umbrella/files/genie-realm.yaml /config/genie-realm.yaml` / `COPY configs/keycloak/config-and-sleep.sh …` |
+| `docker-compose.yaml` `keycloak-config.build` | `context: configs/keycloak/` | `context: .` with `dockerfile: configs/keycloak/Dockerfile.config-cli` |
+| `.gitlab-ci.yml` `build:keycloak-config` | `CONTEXT: "configs/keycloak/"` | `CONTEXT: "."` |
+
+The repo-root build context is an existing pattern in this pipeline — three other build jobs already use `CONTEXT: "."` — and the repo-root `.dockerignore` (62 lines, excluding `.git`, `**/node_modules`, `**/dist`, `data/`, `logs/`, `.env*`) already bounds the transferred size. Docker rejects `COPY` paths outside the build context, so this change is mandatory, not optional.
+
+The CI job's `rules:changes:paths` list must also gain `charts/genieai-umbrella/files/**/*`, otherwise the image silently stops rebuilding when the realm file changes — the most dangerous form of this break, because nothing fails.
 
 Per-env variation reaches the file through two distinct channels, matching what compose already does:
 
@@ -140,11 +152,19 @@ This is strictly better than the compose path, which approximates the same thing
 | non-secret realm parameters | plain `env` from `.Values` |
 | every `$(env:VAR)` that names a secret | one `secretKeyRef` each, from `data.keycloak.convergence.envSecrets` |
 
-`data.keycloak.convergence.envSecrets` is a list of `{envVar, secretName, secretKey}`. The chart wires the reference; the operator declares which Secret holds which value.
+`data.keycloak.convergence.envSecrets` is a list of `{envVar, secretName, secretKey}` with an explicit `[]` default in `values.yaml`. The chart wires the reference; the operator declares which Secret holds which value.
 
-### D6 — `clientSecrets.*` and `failOnPlaceholderSecrets` are repurposed
+**Completeness is asserted at render time.** The realm body lives in a chart file, not in template text, so the check runs over the file's content rather than over rendered template output. The convergence-Job template does `regexFindAll "\\$\\(env:([A-Z_][A-Z0-9_]*)\\)" (.Files.Get "files/genie-realm.yaml")` and asserts that every captured name is satisfied by either a plain `env` entry derived from `.Values` or an `envSecrets` row. An unsatisfied placeholder is otherwise invisible to Helm and surfaces only as a keycloak-config-cli parse error at Job runtime.
 
-With the realm import gone, its `change-me-*` `fail()` loop is dead code and is deleted. `data.keycloak.clientSecrets.{proxyClient,dataprep,grafana}` keep their `change-me-*` defaults but their role changes: they are no longer rendered as literal values into a CR — they feed the `$(env:VC_PROXY_CLIENT_SECRET)`-style Job env vars, which resolve from Secrets at runtime. `failOnPlaceholderSecrets` keeps guarding that the values passed through the override are real, because a `change-me-*` reaching the Job produces a client whose secret no consumer in the cluster holds — the same silent-auth-failure class the guard was written for.
+### D6 — `clientSecrets.*` and `failOnPlaceholderSecrets` are repurposed, with a named home
+
+With the realm import gone, its `change-me-*` `fail()` loop (currently `keycloak-realm-import.yaml:33-38`) is dead code and is deleted. The guard itself must not disappear: a `change-me-*` reaching the Job produces a client whose secret no consumer in the cluster holds — the same silent-auth-failure class the guard was written for, and with no realm import there is nothing else that would catch it.
+
+**The guard lives in the convergence-Job template.** Before rendering, `templates/data/keycloak-convergence-job.yaml` runs the same three-mode check the realm import ran (missing key / empty value / `change-me-*` prefix) over `data.keycloak.clientSecrets.{proxyClient,dataprep,grafana}`, and over every non-empty entry of `data.keycloak.convergence.envSecrets` that targets a `clientSecrets`-backed variable. A hit is a `fail()` at render time, gated by `data.keycloak.failOnPlaceholderSecrets`.
+
+`data.keycloak.clientSecrets.*` keeps its `change-me-*` defaults; only its role changes — from literal values rendered into a CR to the values operators pass in the override, which the template wires as `valueFrom.secretKeyRef` targets for the realm's `$(env:VAR)` placeholders. No client secret is ever rendered as a literal.
+
+Two values cleanups in the same edit: `data.keycloak.bootstrapAdmin.user.username` and `data.keycloak.bootstrapAdmin.user.password` (currently `""` defaults at `values.yaml:170-173`) are removed — only `bootstrapAdmin.userSecret` survives D3 — and `data.keycloak.convergence.envSecrets` is added with an explicit `[]` default, so a base install renders rather than failing on an absent key.
 
 ### D7 — Correct the ArgoCD example's false claims
 
@@ -156,18 +176,19 @@ With the realm import gone, its `change-me-*` `fail()` loop is dead code and is 
 |---|---|
 | `charts/genieai-umbrella/files/genie-realm.yaml` | **new** — canonical realm file, moved from `configs/keycloak/genie-realm.yaml` verbatim |
 | `charts/genieai-umbrella/templates/data/keycloak-instance.yaml` | add `bootstrapAdmin.user.secret` |
-| `charts/genieai-umbrella/templates/data/keycloak-realm-import.yaml` | **deleted** — kcc owns the realm |
-| `charts/genieai-umbrella/templates/data/keycloak-convergence-job.yaml` | **new** — the kcc post-upgrade hook Job |
-| `charts/genieai-umbrella/values.yaml` | add `bootstrapAdmin.userSecret`, `convergence.{enabled,backoffLimit,envSecrets}`; document `clientSecrets.*`'s new role |
+| `charts/genieai-umbrella/templates/data/keycloak-realm-import.yaml` | **deleted** — kcc owns the realm; its `change-me-*` guard moves to the Job template |
+| `charts/genieai-umbrella/templates/data/keycloak-convergence-job.yaml` | **new** — the kcc post-upgrade hook Job, carrying the `change-me-*` guard and the `$(env:VAR)` completeness assertion |
+| `charts/genieai-umbrella/values.yaml` | add `bootstrapAdmin.userSecret`, `convergence.{enabled,backoffLimit,envSecrets: []}`; **remove** `bootstrapAdmin.user.{username,password}`; document `clientSecrets.*`'s new role |
 | `charts/genieai-umbrella/templates/rbac/dep-check-rbac.yaml` | drop `keycloakrealmimports` from the RBAC list (no longer rendered) |
 | `charts/genieai-umbrella/examples/argocd-application.yaml` | correct the false hook claims |
 | `charts/genieai-umbrella/README.md` | document the single-owner model and the convergence Job |
 | `configs/keycloak/genie-realm.yaml` | **deleted** — moved into the chart |
-| `configs/keycloak/Dockerfile.config-cli` | `COPY` source points at the chart's copy |
-| `docker-compose.yaml` | verify the build context still resolves the moved file |
+| `configs/keycloak/Dockerfile.config-cli` | both `COPY` sources re-pathed to the repo-root context |
+| `docker-compose.yaml` | `keycloak-config.build.context` → `.`, `dockerfile` → `configs/keycloak/Dockerfile.config-cli` |
+| `.gitlab-ci.yml` | `build:keycloak-config` `CONTEXT` → `"."`; `rules:changes:paths` gains `charts/genieai-umbrella/files/**/*` |
 | `CHANGELOG.md` | bullets |
 
-This MR touches the Swarm compose path as well as the chart — that is the cost of a single canonical realm file, and it is preferable to two copies that drift.
+This MR touches the Swarm compose path and the CI build definitions as well as the chart. That is the cost of a single canonical realm file, and it is preferable to two copies that drift. The `.gitlab-ci.yml` change is the one to review most carefully: a missed `paths` entry silently disables image rebuilds rather than failing.
 
 ## Out of scope (explicit)
 
@@ -192,8 +213,10 @@ This MR touches the Swarm compose path as well as the chart — that is the cost
 
 1. `helm lint charts/genieai-umbrella/ --strict` — clean
 2. `helm template test charts/genieai-umbrella/ -n genieai --set <3 clientSecrets + failOnPlaceholderSecrets=false>` renders: the `Keycloak` CR with `bootstrapAdmin.user.secret`, the convergence Job with its hook annotations, `secretKeyRef` wiring and availability-check env, and **no `KeycloakRealmImport`**
-3. **Placeholder cross-check** — extract every `$(env:VAR)` from the rendered realm body and assert each one is satisfied by either a plain `env` entry derived from `.Values` or an `envSecrets` entry. This is a render-time assertion in the template, not a manual grep: an unwired placeholder is a runtime keycloak-config-cli parse failure, not a Helm failure, so nothing else would catch it.
-4. **Secret-leak scan** — assert no rendered manifest contains a literal value for any variable declared in `data.keycloak.clientSecrets.*`; the rendered realm body must contain only `$(env:VAR)` placeholders. This is the regression test for defect #2, which the earlier tasks in this branch never had.
+3. **Placeholder completeness** — the render-time assertion in the Job template fires when a `$(env:VAR)` in `files/genie-realm.yaml` has neither a `.Values`-derived `env` entry nor an `envSecrets` row. Verified by removing one `envSecrets` row and confirming `helm template` fails.
+4. **Secret-leak scan** — assert that for every variable backed by `data.keycloak.clientSecrets.*`, the rendered Job uses `valueFrom.secretKeyRef` and never a literal `value:`. This is the regression test for defect #2, which the earlier tasks in this branch never had.
 5. `helm template ... | grep -c "kind: KeycloakRealmImport"` → `0`
-6. Compose path unaffected — `docker compose config` still resolves the keycloak-config service, and the moved realm file is COPY-able from the new path.
-7. First laptop run measures the real convergence duration and records it against the `900s` HelmRelease timeout.
+6. **Guard still trips** — a render with `change-me-*` client secrets and `failOnPlaceholderSecrets=true` fails; with `false` it renders and the Job carries `secretKeyRef`, not literals.
+7. **Compose build** — `docker compose build keycloak-config` succeeds from the repo-root context and the built image contains `/config/genie-realm.yaml` byte-identical to `charts/genieai-umbrella/files/genie-realm.yaml`.
+8. **CI trigger** — a commit touching only `charts/genieai-umbrella/files/genie-realm.yaml` produces a `build:keycloak-config` job. Without the `rules:changes:paths` addition this job is silently skipped, so it is checked explicitly rather than assumed.
+9. First laptop run measures the real convergence duration. If it exceeds 900s, the HelmRelease `spec.upgrade.timeout` is raised to the measured value plus headroom and the value recorded in this spec; if it exceeds the operator's own reconcile budget, that is an escalation, not a timeout to keep raising.

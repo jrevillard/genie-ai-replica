@@ -134,6 +134,35 @@ data:
     smtp: null
     mobileClientId: genie-mobile          # Flutter OIDC client (public, PKCE)
     mobileRedirectScheme: genieai         # <scheme>://callback redirect
+    # ── Keycloak 26 v2beta1 connection + behavior knobs ──
+    # CNPG Read-Write Service name (default for Cluster `keycloak-db`).
+    # The Keycloak CR's spec.db.host is set to "<cnpgServiceName>.<namespace>.svc.cluster.local".
+    cnpgServiceName: keycloak-db
+    # Database connection secret (the chart does NOT materialize it — operator
+    # wires it from their secret backend; the secret MUST carry both
+    # `username` and `password` keys for CNPG to bootstrap).
+    db:
+      secretName: keycloak-db-credentials
+      vendor: postgres
+      port: 5432
+      database: keycloak
+    # HTTP listener (TLS terminates at Envoy Gateway, not here).
+    http:
+      httpEnabled: true
+    # Hostname strict mode: false for lab/staging (Envoy rewrites the public
+    # hostname via proxy headers); true in prod via spec.hostname.hostname.
+    hostname:
+      strict: false
+    # Trust X-Forwarded-* from Envoy Gateway. KC_PROXY=edge env was removed
+    # in KC 24+; spec.proxy.headers is the only path.
+    proxy:
+      headers: xforwarded
+    # Keycloak 26 prod start mode (--optimized flag).
+    startOptimized: true
+    # Image-bump requires single-replica mode (DB migrations need exclusive
+    # access). Chart's instances=1 by default; prod bumps to 2 + manual drain.
+    update:
+      strategy: RecreateOnImageChange
 
 # service ↔ data dependency graph (used by pre-install hook).
 # Read by the dependency-check hook Job; values are intentionally declarative

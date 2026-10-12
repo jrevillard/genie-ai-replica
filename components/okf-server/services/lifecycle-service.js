@@ -538,6 +538,33 @@ async function transition(repoId, action, actor, opts = {}) {
           409
         );
       }
+      // PUBLISH IDEMPOTENCY (live 2026-10-12: Bali minted v18/v19/v20 in
+      // eight seconds from three clicks, each requeuing all 1001 meta rows
+      // for a full re-drain, while an ingest was running). Nothing changed
+      // between those clicks, so the extra versions were pure churn: a new
+      // bundle, a new graph name, a whole corpus re-drained.
+      //
+      // Compare the concepts as they stand NOW against the fingerprint the
+      // current version recorded. Equal means "this exact content is already
+      // published as v{N}" — refuse with a 409 naming that version instead of
+      // minting an identical one. Bypassed when the repo has never published
+      // (no fingerprint to compare) so the FIRST publish always proceeds.
+      const [liveFingerprint, currentFingerprint] = await Promise.all([
+        versionService.currentFingerprint(repoId),
+        versionService.fingerprintOfCurrentVersion(repoId)
+      ]);
+      if (currentFingerprint && currentFingerprint === liveFingerprint) {
+        logger.info('[OKF-PUBLISH] step=noop (content unchanged)', {
+          repo_id: repoId,
+          version: repo.version
+        });
+        throw new LifecycleError(
+          'PUBLISH_NO_CHANGES',
+          `nothing has changed since version ${repo.version} — edit or annotate a concept first, ` +
+            'or retract and publish again to force a new version',
+          409
+        );
+      }
       // An empty repo must not publish — the mint would snapshot zero concepts.
       logger.info('[OKF-PUBLISH] step=counting concepts', { repo_id: repoId });
       const conceptCount = (

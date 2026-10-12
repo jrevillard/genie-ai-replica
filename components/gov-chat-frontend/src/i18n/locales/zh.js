@@ -2207,6 +2207,8 @@ export default {
           curatingCount: '{done} of {total} concepts labelled',
           crosslink: 'Cross-linking topics',
           linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
           waiting: 'Waiting'
         },
         filesNote: '{done} of {total} documents converted',
@@ -2482,12 +2484,42 @@ export default {
           'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
         index_failed:
           'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
       }
     },
     pii: {
       panel: '标记的实体',
       nFlagged: '找到 {n} 个',
       rescan: '重新扫描',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
       scanning: '扫描中…',
       clean: '没有标记的实体 — 此 concept 正常。',
       how: '修复：移除或重新表述（例如将名字改为职位），然后保存 — 重新扫描会更新此列表。',

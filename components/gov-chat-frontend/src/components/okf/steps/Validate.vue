@@ -219,8 +219,15 @@
     <!-- PII REMEDIATION (Amendment A decision #3, David 2026-09-27): the
       FULL panel is embedded — pick a flagged concept, redact/replace/remove/
       accept each entity right here (the same OkfPiiOccurrences the editor
-      uses). No hop to Curate for personal-data fixes. -->
-    <div v-if="piiConcepts.length" class="okf-step-validate__pii">
+      uses). No hop to Curate for personal-data fixes.
+
+      REPO-WIDE RE-SCAN (2026-10-12): a concept whose scan ERRORED cannot be
+      cleared by any per-occurrence action — 'Accept all' subtracts
+      occurrences and an errored concept has none (and an 'error' is
+      deliberately NOT waivable by acknowledgement). The only cure is a real
+      scan, so the panel offers one over the whole repository and reports the
+      per-concept tally it got back, errors included. -->
+    <div v-if="piiConcepts.length || piiRescanError" class="okf-step-validate__pii">
       <p class="okf-step-validate__pii-title">
         {{ translate('okf.validation.piiTitle', 'Personal data — review each flagged concept') }}
         <DsInfoTip
@@ -232,7 +239,63 @@
           "
         />
       </p>
-      <div class="okf-step-validate__pii-cols">
+      <div class="okf-step-validate__pii-rescan">
+        <DsButton v-if="!frozenAt" variant="secondary" small :disabled="piiRescanBusy" @click="onRescanAllPii">
+          <DsSpinner v-if="piiRescanBusy" size="sm" />
+          {{
+            piiRescanBusy
+              ? translate('okf.validation.piiRescanWorking', 'Re-scanning every page…')
+              : translate('okf.validation.piiRescan', 'Re-scan all pages')
+          }}
+        </DsButton>
+        <p v-if="piiRescanNote" class="okf-step-validate__pii-rescan-note">{{ piiRescanNote }}</p>
+        <p v-if="piiRescanError" class="okf-step-validate__pii-rescan-error">{{ piiRescanError }}</p>
+        <!-- THE TALLY: the per-concept counts the server actually wrote.
+             Error rows are listed individually — they are the concepts the
+             publish gate is still refusing, and a bare "1 scan error" does
+             not tell the curator which page to open. -->
+        <ul v-if="piiRescanTally" class="okf-step-validate__pii-tally">
+          <li class="okf-step-validate__pii-tally-row">
+            <DsStatusTag :variant="piiRescanTally.error ? 'error' : 'success'" small>
+              {{
+                translate('okf.validation.piiTally.scanned', '{n} page(s) re-scanned').replace(
+                  '{n}',
+                  String(piiRescanTally.scanned)
+                )
+              }}
+            </DsStatusTag>
+            <span class="okf-step-validate__pii-tally-parts">
+              <span class="okf-step-validate__pii-tally-part"
+                >{{ piiRescanTally.clean }} {{ translate('okf.validation.piiTally.clean', 'clear') }}</span
+              >
+              <span class="okf-step-validate__pii-tally-part"
+                >{{ piiRescanTally.hit }} {{ translate('okf.validation.piiTally.hit', 'flagged') }}</span
+              >
+              <span
+                class="okf-step-validate__pii-tally-part"
+                :class="{ 'okf-step-validate__pii-tally-part--error': piiRescanTally.error }"
+              >
+                {{ piiRescanTally.error }} {{ translate('okf.validation.piiTally.error', 'scan error') }}
+              </span>
+              <span
+                v-if="piiRescanTally.missing"
+                class="okf-step-validate__pii-tally-part"
+                :class="{ 'okf-step-validate__pii-tally-part--error': piiRescanTally.missing }"
+              >
+                {{ piiRescanTally.missing }} {{ translate('okf.validation.piiTally.missing', 'vanished') }}
+              </span>
+            </span>
+          </li>
+          <li v-for="r in piiRescanErrors" :key="r.concept_id" class="okf-step-validate__pii-tally-row">
+            <DsStatusTag variant="error" small>{{
+              translate('okf.validation.piiTally.stillBlocking', 'Still blocking')
+            }}</DsStatusTag>
+            <code class="okf-step-validate__pii-tally-id">{{ r.concept_id }}</code>
+            <span v-if="r.reason" class="okf-step-validate__pii-tally-detail">{{ r.reason }}</span>
+          </li>
+        </ul>
+      </div>
+      <div v-if="piiConcepts.length" class="okf-step-validate__pii-cols">
         <ul class="okf-step-validate__pii-list">
           <li v-for="c in piiConcepts" :key="c.concept_id">
             <button
@@ -241,6 +304,12 @@
               :class="{ 'okf-step-validate__pii-row--active': selectedPiiConcept === c.concept_id }"
               @click="selectedPiiConcept = c.concept_id"
             >
+              <!-- A concept whose scan ERRORED is a different kind of problem
+                   from one that FOUND something, and the curator must be able
+                   to tell them apart in the list itself. -->
+              <DsStatusTag v-if="c.pii_state === 'error'" variant="error" small>
+                {{ translate('okf.validation.piiStateError', 'Scan error') }}
+              </DsStatusTag>
               {{ c.title || c.concept_id }}
             </button>
           </li>
@@ -253,6 +322,7 @@
             :revision="piiRevision"
             :read-only="!!frozenAt"
             @applied="onPiiApplied"
+            @rescanned="onPiiRescanned"
           />
         </div>
       </div>
@@ -275,11 +345,17 @@ import DsHealthRing from '../../ds/HealthRing.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import DsButton from '../../ds/Button.vue';
 import DsStatusTag from '../../ds/StatusTag.vue';
+import DsSpinner from '../../ds/Spinner.vue';
 import OkfPiiOccurrences from '../editor/PiiOccurrences.vue';
 import translateMixin from '../../../mixins/translateMixin';
 
 // #1039 near-duplicate preview: how much of each member's body to render.
 const PREVIEW_CHARS = 1500;
+
+// The repo-wide concept rescan is DETACHED server-side (one Presidio
+// round-trip per concept), so the panel polls. Same cadence as the topic-link
+// run: fast enough that the bar moves, slow enough not to hammer the API.
+const PII_RESCAN_POLL_MS = 3000;
 
 // Per-type explanation tips (#1039): what the check looks at and why it
 // matters for RAG accuracy — one sentence a steward can act on.
@@ -298,7 +374,7 @@ const TYPE_TIPS = {
 
 export default {
   name: 'OkfStepValidate',
-  components: { DsHealthRing, DsInfoTip, DsButton, DsStatusTag, OkfPiiOccurrences },
+  components: { DsHealthRing, DsInfoTip, DsButton, DsStatusTag, DsSpinner, OkfPiiOccurrences },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   emits: ['gate'],
@@ -310,6 +386,20 @@ export default {
       piiConcepts: [],
       selectedPiiConcept: '',
       piiRevision: 0,
+      // REPO-WIDE PII RE-SCAN (2026-10-12): the action that clears a concept
+      // whose scan errored. Per-occurrence actions cannot reach that state
+      // (an 'error' has no occurrences to subtract and is not waivable by
+      // acknowledgement), so without this the block is permanent.
+      piiRescanBusy: false,
+      piiRescanNote: '',
+      piiRescanError: '',
+      piiRescanTally: null,
+      piiRescanKey: null,
+      // STALE-ANSWER GUARD: a tally describes THIS repo at THIS moment. If a
+      // refresh (or a concept re-scan) supersedes it, rendering the older
+      // numbers would misreport the gate. Same idiom as HeadTestDialog's
+      // suiteEpoch / queryEpoch.
+      piiRescanEpoch: 0,
       loading: false,
       loadError: null,
       // action states
@@ -420,6 +510,20 @@ export default {
         .replace('{clean}', clean)
         .replace('{warnings}', warnings)
         .replace('{blockers}', blockers);
+    },
+    // The error rows from the last repo-wide re-scan — the concepts that are
+    // STILL refusing the hand-off after it. Server-side pii_scan_error rides
+    // along so the curator sees WHY, not just that it failed again.
+    piiRescanErrors() {
+      const results =
+        this.piiRescanTally && Array.isArray(this.piiRescanTally.results) ? this.piiRescanTally.results : [];
+      return results
+        .filter((r) => r && (r.pii_state === 'error' || r.skipped))
+        .map((r) => ({
+          concept_id: r.concept_id,
+          reason: r.error || r.skipped || null,
+          title: this.conceptTitle(r.concept_id)
+        }));
     }
   },
   mounted() {
@@ -427,6 +531,9 @@ export default {
   },
   beforeUnmount() {
     this._stopTopicLinkPolling();
+    // A detached poll must not outlive the panel — nobody is watching it.
+    this.piiRescanEpoch += 1;
+    this._stopPiiRescanPolling();
   },
   methods: {
     conceptTitle(cid) {
@@ -469,7 +576,11 @@ export default {
       // #1038: the PII vocabulary is 'clean' | 'hit' | 'unknown' — the panel
       // filtered 'flagged', a value that never occurs, so flagged pages were
       // invisible in Step 7.
-      this.piiConcepts = rows.filter((row) => row.pii_state === 'hit');
+      // 2026-10-12: 'error' joins the list. A concept whose scan ERRORED is
+      // the one blocking publish, and it was invisible here — the list held
+      // only 'hit' rows, so the page the gate refuses had no entry to select
+      // and no way to be reached.
+      this.piiConcepts = rows.filter((row) => row.pii_state === 'hit' || row.pii_state === 'error');
       if (this.piiConcepts.length) {
         if (!this.selectedPiiConcept || !this.piiConcepts.some((c) => c.concept_id === this.selectedPiiConcept)) {
           this.selectedPiiConcept = this.piiConcepts[0].concept_id;
@@ -596,6 +707,163 @@ export default {
     onPiiApplied() {
       // An action already re-scanned server-side — bump the panel revision
       // and refresh; a resolved concept leaves the flagged list.
+      this.piiRevision += 1;
+      this.refresh();
+    },
+    // ── REPO-WIDE PII RE-SCAN (2026-10-12) ──────────────────────────────────
+    // The action that unblocks publish when a concept's scan ERRORED. The
+    // per-occurrence panel cannot reach that state (an 'error' has no
+    // occurrences to redact and is not waivable by acknowledgement), so the
+    // only cure is a real scan over the whole repository.
+    //
+    // ASYNC (202 + poll): one Presidio round-trip per concept cannot finish
+    // inside a gateway timeout, so the server arms the run and returns a
+    // scan_key. We poll until a TERMINAL state — 'done' or 'failed'. A poll
+    // that stopped on 'running' would leave the curator staring at a
+    // permanently spinning button, which is the same class of dead end this
+    // whole change exists to remove.
+    async onRescanAllPii() {
+      if (this.piiRescanBusy) return;
+      const epoch = ++this.piiRescanEpoch;
+      const repoId = this.repoId;
+      this.piiRescanBusy = true;
+      this.piiRescanNote = '';
+      this.piiRescanError = '';
+      this.piiRescanTally = null;
+      const res = await this.$store.dispatch('okf/startRepoPiiScan', { repoId });
+      // STALE-ANSWER GUARD: the repo changed (or the step was torn down) while
+      // the arm request was in flight.
+      if (epoch !== this.piiRescanEpoch || repoId !== this.repoId) return;
+      if (!res || !res.ok) {
+        this.piiRescanBusy = false;
+        this.piiRescanError = this.piiRescanErrorMessage(res);
+        return;
+      }
+      const scanKey = res.result && res.result.scan_key;
+      if (!scanKey) {
+        // A 200/202 with no scan_key is not a run we can follow — say so
+        // rather than showing an enabled button that will never finish.
+        this.piiRescanBusy = false;
+        this.piiRescanError = this.translate(
+          'okf.validation.piiRescanNoKey',
+          'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.'
+        );
+        return;
+      }
+      this.piiRescanKey = scanKey;
+      this._pollPiiRescan(epoch, repoId, scanKey);
+    },
+    _stopPiiRescanPolling() {
+      if (this._piiRescanTimer) {
+        clearTimeout(this._piiRescanTimer);
+        this._piiRescanTimer = null;
+      }
+    },
+    async _pollPiiRescan(epoch, repoId, scanKey) {
+      const res = await this.$store.dispatch('okf/getRepoPiiScan', { repoId, scanKey });
+      if (epoch !== this.piiRescanEpoch || repoId !== this.repoId) return;
+      if (!res || !res.ok) {
+        this.piiRescanBusy = false;
+        this.piiRescanError = this.piiRescanErrorMessage(res);
+        return;
+      }
+      const run = res.result || {};
+      if (run.status === 'running') {
+        const p = run.progress || {};
+        const done = Number(p.done || 0);
+        const total = Number(p.total || 0);
+        this.piiRescanNote = total
+          ? this.translate('okf.validation.piiRescanProgress', 'Re-scanning… {done} of {total} pages')
+              .replace('{done}', String(done))
+              .replace('{total}', String(total))
+          : this.translate('okf.validation.piiRescanProgressIdle', 'Re-scanning… reading the repository');
+        this._piiRescanTimer = setTimeout(() => this._pollPiiRescan(epoch, repoId, scanKey), PII_RESCAN_POLL_MS);
+        return;
+      }
+      // Terminal from here: 'failed' is as final as 'done' (the server reaps
+      // orphaned runs), so neither may leave the button spinning.
+      this.piiRescanBusy = false;
+      this._piiRescanTimer = null;
+      if (run.status === 'failed') {
+        const err = run.error || {};
+        this.piiRescanError =
+          err.message ||
+          this.translate(
+            'okf.validation.piiRescanFailed',
+            'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.'
+          );
+        // A failed run may still carry a partial tally — showing it is more
+        // honest than hiding the concepts it did reach.
+        if (run.tally) this.piiRescanTally = this.normalisePiiTally(run.tally);
+        return;
+      }
+      this.piiRescanTally = this.normalisePiiTally(run);
+      // Re-read the concept list: a concept that just came back clean must
+      // leave the flagged list, and the gate's own view must be reflected.
+      await this.refresh();
+      if (epoch !== this.piiRescanEpoch) return;
+      const t = this.piiRescanTally;
+      this.piiRescanNote =
+        t.error || t.missing
+          ? this.translate(
+              'okf.validation.piiRescanPartial',
+              'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.'
+            )
+              .replace('{n}', String(t.scanned))
+              .replace('{e}', String(t.error + t.missing))
+          : this.translate('okf.validation.piiRescanDone', 'Re-scanned {n} page(s).').replace('{n}', String(t.scanned));
+    },
+    // The run document's tally, with every count coerced to a number — a
+    // missing counter must render 0, never "undefined".
+    normalisePiiTally(run) {
+      const results = Array.isArray(run.results) ? run.results : [];
+      const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+      return {
+        scanned: num(run.scanned),
+        clean: num(run.clean),
+        hit: num(run.hit),
+        error: num(run.error),
+        missing: num(run.missing),
+        results
+      };
+    },
+    // Why a repo-wide re-scan did not run. Never swallowed — a 404 here means
+    // this server build has no re-scan route, which is exactly the silent
+    // no-op the curator is being spared.
+    piiRescanErrorMessage(res) {
+      const status = res && res.status;
+      const serverMessage = res && res.error;
+      const code = res && res.code;
+      const explain = (c) => (code && code !== c ? ` (${code})` : '');
+      if (status === 404) {
+        return (
+          serverMessage ||
+          this.translate(
+            'okf.validation.piiRescanMissing',
+            'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.'
+          ) + explain('NOT_FOUND')
+        );
+      }
+      if (status === 409) {
+        return (
+          serverMessage ||
+          this.translate(
+            'okf.validation.piiRescanFrozen',
+            'Re-scan refused: the repository is being published (409). Nothing was changed.'
+          ) + explain('REPO_DRAINING')
+        );
+      }
+      return (
+        serverMessage ||
+        this.translate(
+          'okf.validation.piiRescanFailed',
+          'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.'
+        )
+      );
+    },
+    // A single concept finished a PERSISTING re-scan — its verdict is now
+    // written, so the concept list (and the gate's view of it) is stale.
+    onPiiRescanned() {
       this.piiRevision += 1;
       this.refresh();
     },
@@ -926,6 +1194,68 @@ export default {
   margin: 0;
   font-size: var(--text-sm);
   font-weight: 600;
+}
+/* Repo-wide PII re-scan (2026-10-12): the action that clears a concept whose
+   scan ERRORED. Sits above the per-concept list — it applies to the whole
+   repository, so it reads as its own block rather than a control on one row. */
+.okf-step-validate__pii-rescan {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px dashed var(--border);
+  width: 100%;
+}
+.okf-step-validate__pii-rescan-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.okf-step-validate__pii-rescan-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+.okf-step-validate__pii-tally {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+}
+.okf-step-validate__pii-tally-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+}
+.okf-step-validate__pii-tally-parts {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  color: var(--muted);
+}
+.okf-step-validate__pii-tally-part--error {
+  color: var(--danger);
+  font-weight: 600;
+}
+.okf-step-validate__pii-tally-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.okf-step-validate__pii-tally-detail {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+/* An errored concept is a different kind of problem from a flagged one —
+   the row is a selection button, so the tag rides inline with its title. */
+.okf-step-validate__pii-row .ds-status-tag {
+  margin-right: var(--space-xs);
 }
 .okf-step-validate__pii-cols {
   display: grid;

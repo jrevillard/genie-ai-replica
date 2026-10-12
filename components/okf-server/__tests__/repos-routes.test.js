@@ -1668,3 +1668,75 @@ describe('studio draft routes (Story 10.5)', () => {
     expect(draftService.saveDraft).not.toHaveBeenCalled();
   });
 });
+
+// ─── Repo-wide CONCEPT PII rescan: POST {scope:'concepts'} + its poll ───────
+// The unblock for a concept stuck in pii_state='error'. Route-level proof
+// that the ASYNC 202+poll contract is actually reachable over HTTP (before
+// this, /pii-scan had ZERO frontend callers).
+
+describe('POST /api/okf/repos/:repo_id/pii-scan {"scope":"concepts"} + poll', () => {
+  const piiService = require('../services/pii-service');
+
+  test('202 + {scan_key, status:"running"} — the async rescan is reachable', async () => {
+    authScoped(['okf:t1:r1:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'r1', rag_drain_active: false });
+    piiService.beginRepoConceptScan.mockResolvedValue({ scan_key: 'p1757-abc123', done: Promise.resolve({}) });
+    const res = await request(createApp())
+      .post('/api/okf/repos/r1/pii-scan')
+      .set('Authorization', TOKEN)
+      .send({ scope: 'concepts' });
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ repo_id: 'r1', scan_key: 'p1757-abc123', status: 'running' });
+  });
+
+  test('409 PII_SCAN_IN_FLIGHT carries the adoptable scan_key in details', async () => {
+    authScoped(['okf:t1:r1:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'r1' });
+    piiService.beginRepoConceptScan.mockRejectedValue(
+      Object.assign(new Error('busy'), {
+        code: 'PII_SCAN_IN_FLIGHT',
+        status: 409,
+        details: { scan_key: 'p999-ffffff' }
+      })
+    );
+    const res = await request(createApp())
+      .post('/api/okf/repos/r1/pii-scan')
+      .set('Authorization', TOKEN)
+      .send({ scope: 'concepts' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('PII_SCAN_IN_FLIGHT');
+    expect(res.body.details.scan_key).toBe('p999-ffffff');
+  });
+
+  test('the poll GET returns the running envelope, then the completed tally', async () => {
+    authScoped(['okf:t1:r1:read']);
+    repoService.getById.mockResolvedValue({ repo_id: 'r1' });
+    piiService.getRepoConceptScan.mockResolvedValue({
+      repo_id: 'r1',
+      scan_key: 'p1',
+      status: 'complete',
+      scanned: 141,
+      clean: 139,
+      hit: 1,
+      error: 1,
+      results: [{ concept_id: '50-years-of-solar-system-exploration-tagged-sec19', pii_state: 'clean' }]
+    });
+    const res = await request(createApp()).get('/api/okf/repos/r1/pii-scan/p1').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body.scanned).toBe(141);
+    expect(res.body.results[0].pii_state).toBe('clean');
+  });
+
+  test('a zero-scan run fails PII_SCAN_NOTHING_SCANNED and never attests "complete"', async () => {
+    authScoped(['okf:t1:r1:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'r1' });
+    piiService.discoverRepoFiles.mockResolvedValue([]); // examined nothing
+    const res = await request(createApp())
+      .post('/api/okf/repos/r1/pii-scan')
+      .set('Authorization', TOKEN)
+      .send({ discover: true });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('PII_SCAN_NOTHING_SCANNED');
+    expect(piiService.markRepoPiiScanned).not.toHaveBeenCalled();
+  });
+});

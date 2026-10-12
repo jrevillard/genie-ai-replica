@@ -3,37 +3,63 @@
 {{- if eq .Values.clusterProfile "prod" -}}
 {{- $instances = 2 -}}
 {{- end -}}
-apiVersion: keycloak.org/v1alpha1
+{{- $ns := .Values.namespace -}}
+{{- $dbHost := printf "%s-rw.%s.svc.cluster.local" (.Values.data.keycloak.cnpgServiceName | default "keycloak-db") $ns -}}
+apiVersion: k8s.keycloak.org/v2beta1
 kind: Keycloak
 metadata:
   name: keycloak
-  namespace: {{ .Values.namespace }}
+  namespace: {{ $ns }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 4 }}
-    # Selected by the realm CR's `instanceSelector.matchLabels` (see
-    # keycloak-realm-import.yaml). v1alpha1 binds the realm to a
-    # Keycloak instance by label selector rather than the older
-    # `spec.keycloakCRName` reference.
-    app: keycloak
     genieai.io/data-tier: identity
 spec:
   instances: {{ $instances }}
-  # v1alpha1 only exposes the external-DB flag — host/database/user/password
-  # come from a Secret named `<keycloak-cr-name>-db-secret` (here:
-  # `keycloak-db-secret`) in this namespace, with the fixed keys
-  # POSTGRES_HOST / POSTGRES_DATABASE / POSTGRES_USER / POSTGRES_PASSWORD.
-  # The chart does not materialize this Secret — operators wire it from
-  # their secret backend of choice (SealedSecret, External Secrets
-  # Operator, kubeval, manual apply, SOPS-decrypted Secret, etc.) so
-  # the chart stays agnostic to the secret mechanism.
-  externalDatabase:
-    enabled: true
-  # Operator-managed Ingress/Route is OFF: TLS + the public hostname
-  # are bound at the edge (Envoy Gateway) which fronts the Keycloak
-  # Service. Letting the operator create an Ingress would shadow that.
-  # v1alpha1 has no `spec.http` block — the HTTP endpoint inside the
-  # pod is unconditionally served; the v2alpha1 `http.httpEnabled` field
-  # was removed by the upstream operator migration.
-  externalAccess:
+  # CNPG hosts the Postgres database; the secret holds both `username` and
+  # `password` keys (CNPG bootstrap requirement). The chart does NOT
+  # materialize the secret — operators wire it from their secret backend.
+  db:
+    vendor: {{ .Values.data.keycloak.db.vendor | default "postgres" }}
+    host: {{ $dbHost }}
+    port: {{ .Values.data.keycloak.db.port | default 5432 }}
+    database: {{ .Values.data.keycloak.db.database | default "keycloak" }}
+    usernameSecret:
+      name: {{ .Values.data.keycloak.db.secretName }}
+      key: username
+    passwordSecret:
+      name: {{ .Values.data.keycloak.db.secretName }}
+      key: password
+  # TLS terminates at the edge (Envoy Gateway); the pod serves plain HTTP
+  # internally. Letting the operator create an Ingress would shadow that.
+  http:
+    httpEnabled: {{ .Values.data.keycloak.http.httpEnabled | default true }}
+  hostname:
+    # Strict mode off: the public hostname is the Edge Gateway's, resolved
+    # from request headers (proxy.headers: xforwarded below). Keycloak 26
+    # refuses to start without either an explicit hostname or strict: false.
+    strict: {{ .Values.data.keycloak.hostname.strict | default false }}
+  ingress:
     enabled: false
+  # Trust X-Forwarded-* from Envoy. KC_PROXY=edge was removed in KC 24+;
+  # spec.proxy.headers is the only path. Misconfiguration manifests as
+  # `Invalid parameter: redirect_uri` loops on login.
+  proxy:
+    headers: {{ .Values.data.keycloak.proxy.headers | default "xforwarded" }}
+  # KC 26 prod start mode (--optimized). Custom images already augmented
+  # for prod should leave this unset; default images get the optimized path.
+  startOptimized: {{ .Values.data.keycloak.startOptimized | default true }}
+  # Image-bump = single-pod recreate (DB migrations need exclusive access).
+  # Chart defaults to instances: 1; prod instances: 2 with manual drain on
+  # operator image bumps.
+  update:
+    strategy: {{ .Values.data.keycloak.update.strategy | default "RecreateOnImageChange" }}
+  # KC 26 default probe timing is fine (10min startup grace). Memory request
+  # is the real knob: lower it and the pod OOMs before becoming ready.
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1700Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
 {{- end -}}

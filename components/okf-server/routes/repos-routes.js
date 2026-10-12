@@ -124,11 +124,15 @@ router.post(
   ctrl.probeTestSuiteQuery
 );
 // Story 1-8c — batch advice for a suite run's failing negatives.
+// 1-8g-y: the POST now answers 202 + poll (the work fans out over the shared
+// remote GPU node and outran the gateway). The poll below is read scope,
+// matching the runs listing and the load-one-run path.
 router.post(
   '/:repo_id/routing-testsuite/:suite_key/explain',
   requireRepoScope('repo_id', 'admin'),
   ctrl.explainTestSuiteFailures
 );
+router.get('/:repo_id/routing-testsuite/:suite_key/explain/:run_key', requireRepoScope('repo_id', 'read'), ctrl.getExplainFailures);
 // Story 1-8d — the COMPREHENSIVE advisor: aggregates recent runs (all
 // classes), simulates tag-set changes against the gate, recommends the
 // globally-optimal add/remove set under a zero-positive-harm constraint.

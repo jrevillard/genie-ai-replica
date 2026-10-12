@@ -141,7 +141,8 @@ This is strictly better than the compose path, which approximates the same thing
 
 | Job env | Source |
 |---|---|
-| `KEYCLOAK_URL` | `http://<release>-keycloak.<release-ns>.svc:8080`, derived from release name and namespace, not configurable |
+| `KEYCLOAK_URL` | `http://keycloak-service.{{ .Values.namespace }}.svc.cluster.local:8080` — the Service name is `<Keycloak CR metadata.name> + "-service"` (upstream `Constants.KEYCLOAK_SERVICE_SUFFIX`), and the CR name is hardcoded `keycloak`, so the Service is `keycloak-service`. The Helm release name is **not** part of it. Same value already used by `templates/services/backend.yaml:6` and `documentRepository.yaml:17`. |
+| `KC_HTTP_RELATIVE_PATH` | `""` — see D9; the realm's own URLs carry no path prefix |
 | `KEYCLOAK_USER` | `secretKeyRef` on `data.keycloak.bootstrapAdmin.userSecret`, key `username` |
 | `KEYCLOAK_PASSWORD` | `secretKeyRef` on the same Secret, key `password` |
 | `KEYCLOAK_AVAILABILITYCHECK_ENABLED` / `_TIMEOUT` | literals `true` / `300s` |
@@ -164,18 +165,55 @@ With the realm import gone, its `change-me-*` `fail()` loop (currently `keycloak
 
 `data.keycloak.clientSecrets.*` keeps its `change-me-*` defaults; only its role changes — from literal values rendered into a CR to the values operators pass in the override, which the template wires as `valueFrom.secretKeyRef` targets for the realm's `$(env:VAR)` placeholders. No client secret is ever rendered as a literal.
 
-Two values cleanups in the same edit: `data.keycloak.bootstrapAdmin.user.username` and `data.keycloak.bootstrapAdmin.user.password` (currently `""` defaults at `values.yaml:170-173`) are removed — only `bootstrapAdmin.userSecret` survives D3 — and `data.keycloak.convergence.envSecrets` is added with an explicit `[]` default, so a base install renders rather than failing on an absent key.
+Two values cleanups in the same edit: `data.keycloak.bootstrapAdmin.user.username` and `data.keycloak.bootstrapAdmin.user.password` (currently `""` defaults at `values.yaml:174-177`) are removed — only `bootstrapAdmin.userSecret` survives D3 — and `data.keycloak.convergence.envSecrets` is added with an explicit `[]` default, so a base install renders rather than failing on an absent key.
 
-### D7 — Correct the ArgoCD example's false claims
+### D7 — Close the `/auth` relative-path gap (defect found reviewing rev 3)
+
+This is not a convergence concern but a defect already present in MR !520's templates, surfaced while verifying the Job's `KEYCLOAK_URL`.
+
+`templates/services/backend.yaml:6` and `documentRepository.yaml:17` both set `KEYCLOAK_URL` to `http://keycloak-service.<ns>.svc.cluster.local:8080/auth`, but **nothing in the chart configures Keycloak to serve under `/auth`** — no `KC_HTTP_RELATIVE_PATH`, no `--http-relative-path`, no `additionalOptions` entry. In the Swarm path the prefix comes from NGINX routing `/auth/*`; on Kubernetes there is no such layer, so Keycloak serves at `/` while both services dial `/auth`, and every authenticated request 404s.
+
+**Decision**: the chart owns the prefix. Add to the `Keycloak` CR:
+
+```yaml
+spec:
+  additionalOptions:
+    - name: http-relative-path
+      value: /auth
+```
+
+This keeps the two existing service templates correct rather than editing them, and it is the option that matches what the in-cluster consumers already expect. It also means the convergence Job's `KEYCLOAK_URL` and the realm's own redirect URIs must carry `/auth` — which is why `KC_HTTP_RELATIVE_PATH` is wired as an empty-valued placeholder above rather than omitted, so the operator is told explicitly that kcc connects at the root.
+
+### D8 — Document the `clientSecrets` → `envSecrets` mapping
+
+D6 keeps `clientSecrets.*` operator-supplied, which means operators hand-write at least five `envSecrets` rows and can mismatch them. The spec does not generate them — that is deliberate, since the chart stays secret-backend agnostic — but it ships the mapping as worked examples in `values.yaml` comments so the mirroring is mechanical rather than inferred:
+
+| `data.keycloak.clientSecrets.*` | realm placeholder | typical `envSecrets` row |
+|---|---|---|
+| `proxyClient` | `$(env:KC_PROXY_CLIENT_SECRET)` | `{envVar: KC_PROXY_CLIENT_SECRET, secretName: <op>, secretKey: proxy-client}` |
+| `dataprep` | `$(env:KC_DATAPREP_CLIENT_SECRET)` | `{envVar: KC_DATAPREP_CLIENT_SECRET, secretName: <op>, secretKey: dataprep}` |
+| `grafana` | `$(env:KC_GRAFANA_CLIENT_SECRET)` | `{envVar: KC_GRAFANA_CLIENT_SECRET, secretName: <op>, secretKey: grafana}` |
+
+### D9 — Extend the CI path lists to the whole job chain
+
+Rev 3 added `charts/genieai-umbrella/files/**/*` only to `build:keycloak-config`. The same `rules:changes:paths` block also appears on `scan:keycloak-config` (`.gitlab-ci.yml:1950-1957`) and `promote:keycloak-config` (`:1967-1975`). Today they fire whenever the build fires, because they `needs:` it — but a future maintainer who drops that `needs:` silently loses the trigger. All three lists get the new path.
+
+### D10 — Correct the ArgoCD example's false claims
 
 `charts/genieai-umbrella/examples/argocd-application.yaml` currently states that pre-upgrade Helm hooks are NOT executed by ArgoCD and, in the next paragraph, that ArgoCD "never executes Helm lifecycle hooks" — the file contradicts itself, both statements are false, and it references a SealedSecret drift hook that this branch deleted. It is also wrong about the two pre-upgrade drift Jobs that do exist in the chart (`templates/hooks/pre-install-dependency-check.yaml` and `templates/hooks/pre-upgrade-clusterprofile-detect.yaml`). Rewritten to state the verified mapping (`PreInstall`/`PreUpgrade` → `PreSync`, `PostInstall`/`PostUpgrade` → `PostSync`), the run-always semantics with no change-gating, and that those two drift Jobs do run under ArgoCD.
+
+### D11 — CHANGELOG
+
+One bullet per logical change, operator-facing, branch result vs `main`, marked `(breaking)` where applicable, Keep-a-Changelog 1.1.0 structure. No commit-by-commit narrative.
+
+## Files
 
 ## Files
 
 | File | Action |
 |---|---|
 | `charts/genieai-umbrella/files/genie-realm.yaml` | **new** — canonical realm file, moved from `configs/keycloak/genie-realm.yaml` verbatim |
-| `charts/genieai-umbrella/templates/data/keycloak-instance.yaml` | add `bootstrapAdmin.user.secret` |
+| `charts/genieai-umbrella/templates/data/keycloak-instance.yaml` | add `bootstrapAdmin.user.secret` **and** `additionalOptions: [{name: http-relative-path, value: /auth}]` (D7) |
 | `charts/genieai-umbrella/templates/data/keycloak-realm-import.yaml` | **deleted** — kcc owns the realm; its `change-me-*` guard moves to the Job template |
 | `charts/genieai-umbrella/templates/data/keycloak-convergence-job.yaml` | **new** — the kcc post-upgrade hook Job, carrying the `change-me-*` guard and the `$(env:VAR)` completeness assertion |
 | `charts/genieai-umbrella/values.yaml` | add `bootstrapAdmin.userSecret`, `convergence.{enabled,backoffLimit,envSecrets: []}`; **remove** `bootstrapAdmin.user.{username,password}`; document `clientSecrets.*`'s new role |
@@ -185,7 +223,10 @@ Two values cleanups in the same edit: `data.keycloak.bootstrapAdmin.user.usernam
 | `configs/keycloak/genie-realm.yaml` | **deleted** — moved into the chart |
 | `configs/keycloak/Dockerfile.config-cli` | both `COPY` sources re-pathed to the repo-root context |
 | `docker-compose.yaml` | `keycloak-config.build.context` → `.`, `dockerfile` → `configs/keycloak/Dockerfile.config-cli` |
-| `.gitlab-ci.yml` | `build:keycloak-config` `CONTEXT` → `"."`; `rules:changes:paths` gains `charts/genieai-umbrella/files/**/*` |
+| `.gitlab-ci.yml` | `build:keycloak-config` `CONTEXT` → `"."`; `rules:changes:paths` on **all three** `keycloak-config` jobs (`build`, `scan:keycloak-config` `:1950`, `promote:keycloak-config` `:1967`) gains `charts/genieai-umbrella/files/**/*` |
+| `deploy/ansible/README.md:730` | doc reference to the moved `configs/keycloak/genie-realm.yaml` path |
+| `docs/superpowers/plans/2026-10-08-genie-ai-helm-charts-data-layer.md:1073` | same stale path in a plan's comment |
+| `charts/genieai-umbrella/values.yaml:96,116` | prose comments naming `KeycloakRealmImport`, orphaned by the D1 deletion |
 | `CHANGELOG.md` | bullets |
 
 This MR touches the Swarm compose path and the CI build definitions as well as the chart. That is the cost of a single canonical realm file, and it is preferable to two copies that drift. The `.gitlab-ci.yml` change is the one to review most carefully: a missed `paths` entry silently disables image rebuilds rather than failing.
@@ -218,5 +259,6 @@ This MR touches the Swarm compose path and the CI build definitions as well as t
 5. `helm template ... | grep -c "kind: KeycloakRealmImport"` → `0`
 6. **Guard still trips** — a render with `change-me-*` client secrets and `failOnPlaceholderSecrets=true` fails; with `false` it renders and the Job carries `secretKeyRef`, not literals.
 7. **Compose build** — `docker compose build keycloak-config` succeeds from the repo-root context and the built image contains `/config/genie-realm.yaml` byte-identical to `charts/genieai-umbrella/files/genie-realm.yaml`.
-8. **CI trigger** — a commit touching only `charts/genieai-umbrella/files/genie-realm.yaml` produces a `build:keycloak-config` job. Without the `rules:changes:paths` addition this job is silently skipped, so it is checked explicitly rather than assumed.
-9. First laptop run measures the real convergence duration. If it exceeds 900s, the HelmRelease `spec.upgrade.timeout` is raised to the measured value plus headroom and the value recorded in this spec; if it exceeds the operator's own reconcile budget, that is an escalation, not a timeout to keep raising.
+8. **CI trigger** — a commit touching only `charts/genieai-umbrella/files/genie-realm.yaml` produces `build:keycloak-config`, `scan:keycloak-config` and `promote:keycloak-config` jobs. Without the `rules:changes:paths` additions these are silently skipped, so all three are checked explicitly rather than assumed.
+9. **Service reachability** — `kubectl get svc keycloak-service -n <ns>` exists, and `curl` against `http://keycloak-service.<ns>.svc.cluster.local:8080/auth/realms/genie` returns a realm response (this is the D7 relative-path fix, and the same value the two service templates dial).
+10. First laptop run measures the real convergence duration. If it exceeds 900s, the HelmRelease `spec.upgrade.timeout` is raised to the measured value plus headroom and the value recorded in this spec; if it exceeds the operator's own reconcile budget, that is an escalation, not a timeout to keep raising.

@@ -161,7 +161,7 @@ dependencyGraph:
 
 secrets:
   sealedSecrets:
-    enabled: true                      # default; alternative secrets backends plug in here (ESO / SecretProviderClass)
+    enabled: false                     # pre-upgrade hook validates SealedSecret decryptability; set true only when actually using SealedSecrets
   eso:
     enabled: false                     # plug-point; ESO controller installs separately
   secretProviderClass:

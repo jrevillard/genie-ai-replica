@@ -1747,16 +1747,41 @@ async function getTestSuiteRun(req, res, next) {
 /**
  * Story 1-8c — POST /api/okf/repos/:repo_id/routing-testsuite/:suite_key/explain.
  * BATCH advice for the latest run of the suite: every failing negative in
- * one pass, ONE LLM call, consolidated suggested forbidden tags. Admin-scoped.
+ * one pass, consolidated suggested forbidden tags. Admin-scoped.
+ *
+ * 1-8g-y: now ASYNC — 202 + poll, like the run endpoint. Explain fans out
+ * over the shared remote GPU node (one embed per failing negative in
+ * guardSuggestions, plus the LLM pass), so the synchronous version outran
+ * the gateway: the curator saw a spinner, no local GPU activity (the work
+ * is not local), and then a 504 — with the advice never reaching the UI.
+ * The placeholder doc carries status:'running'; the poll endpoint answers
+ * running / failed / the finished advice.
  */
 async function explainTestSuiteFailures(req, res, next) {
   try {
     const headSuiteService = require('../services/head-suite-service');
-    const result = await headSuiteService.explainSuiteFailures(req.params.repo_id, req.params.suite_key, {
+    const { run_key, done } = await headSuiteService.beginExplainFailures(req.params.repo_id, req.params.suite_key, {
       authz: authzForService(req),
       actor: actorFrom(req)
     });
-    res.status(200).json(result);
+    done.catch(() => {}); // the service logs + records the failure doc
+    res.status(202).json({ run_key, status: 'running' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 1-8g-y — GET /repos/:repo_id/routing-testsuite/:suite_key/explain/:run_key.
+ * The async explain's poll: {status:'running'} keep waiting, {status:'failed',
+ * error}, or the finished advice in payload. Read scope (same as the runs
+ * listing and the load-one-run path).
+ */
+async function getExplainFailures(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const doc = await headSuiteService.getExplainFailures(req.params.repo_id, req.params.suite_key, req.params.run_key);
+    res.status(200).json(doc);
   } catch (err) {
     next(err);
   }
@@ -1806,6 +1831,7 @@ module.exports = {
   probeTestSuiteQuery,
   runTestSuite,
   explainTestSuiteFailures,
+  getExplainFailures,
   listTestSuiteRuns,
   piiScan,
   importRepoConcepts,

@@ -124,7 +124,14 @@ jest.mock('../../middlewares/fileUpload', () => ({
       });
     }
     next();
-  })
+  }),
+  // Mounted in fileRoutes.js between the multer middleware and validateFiles
+  // (2026-10-12). Express throws at router-registration time if a layer is not
+  // a function, so every suite that replaces this whole module must provide it.
+  // Pass-through: these suites inject no multer errors, so nothing should reach
+  // the global handler via this path. (The real wiring is covered by
+  // upload-multer-error.test.js, which does NOT mock this module.)
+  handleMulterError: jest.fn((err, req, res, next) => next(err))
 }));
 
 const request = require('supertest');

@@ -1628,7 +1628,7 @@ describe('empty states distinguish "ran and found nothing" from "not loaded"', (
     expect(w.vm.explanation).toBeNull();
     expect(w.vm.explanationLoaded).toBe(false);
   });
-// ── STALE-ANSWER GUARDS ────────────────────────────────────────────────────
+  // ── STALE-ANSWER GUARDS ────────────────────────────────────────────────────
   //
   // Removing the shared `busy` claim fixed the silent drops but removed the
   // serialisation it provided as a side effect, so a subject switch (a suite
@@ -1646,9 +1646,12 @@ describe('empty states distinguish "ran and found nothing" from "not loaded"', (
 
     // The dispatch never resolves on its own: we switch suites, THEN resolve.
     let release;
-    dispatch.mockImplementationOnce(() => new Promise((resolve) => {
-      release = () => resolve({ ok: true, result: { suggested_tags: ['TAG-FOR-SUITE-A'] } });
-    }));
+    dispatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, result: { suggested_tags: ['TAG-FOR-SUITE-A'] } });
+        })
+    );
 
     const inflight = w.vm.onExplainFailures();
     // The curator switches to suite B before the explain comes back. This is
@@ -1672,9 +1675,12 @@ describe('empty states distinguish "ran and found nothing" from "not loaded"', (
     w.vm.suite = { suite_key: 's-A', payload: { positive: [], negative: [] } };
 
     let release;
-    dispatch.mockImplementationOnce(() => new Promise((resolve) => {
-      release = () => resolve({ ok: true, result: { suggested_tags: ['TAG-FOR-SUITE-A'] } });
-    }));
+    dispatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, result: { suggested_tags: ['TAG-FOR-SUITE-A'] } });
+        })
+    );
 
     const inflight = w.vm.onExplainFailures();
     w.vm.suite = { suite_key: 's-B', payload: { positive: [], negative: [] } };
@@ -1690,9 +1696,12 @@ describe('empty states distinguish "ran and found nothing" from "not loaded"', (
     w.vm.suite = { suite_key: 's-A', payload: { positive: [], negative: [] } };
 
     let release;
-    dispatch.mockImplementationOnce(() => new Promise((resolve) => {
-      release = () => resolve({ ok: true, result: { add_eval: [], remove_eval: [] } });
-    }));
+    dispatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, result: { add_eval: [], remove_eval: [] } });
+        })
+    );
 
     const inflight = w.vm.onRecommend();
     w.vm.suite = { suite_key: 's-B', payload: { positive: [], negative: [] } };
@@ -1712,9 +1721,12 @@ describe('empty states distinguish "ran and found nothing" from "not loaded"', (
     w.vm.query = 'first query';
 
     let release;
-    dispatch.mockImplementationOnce(() => new Promise((resolve) => {
-      release = () => resolve({ ok: true, result: { suggestion: { tag: 'stale-tag' } } });
-    }));
+    dispatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, result: { suggestion: { tag: 'stale-tag' } } });
+        })
+    );
 
     const inflight = w.vm.onExplainClaim();
     w.vm.query = 'a completely different question';
@@ -1734,9 +1746,12 @@ describe('empty states distinguish "ran and found nothing" from "not loaded"', (
     w.vm.query = 'same query';
 
     let release;
-    dispatch.mockImplementationOnce(() => new Promise((resolve) => {
-      release = () => resolve({ ok: true, result: { suggestion: { tag: 'stale-tag' } } });
-    }));
+    dispatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, result: { suggestion: { tag: 'stale-tag' } } });
+        })
+    );
 
     const inflight = w.vm.onExplainClaim();
     w.vm.queryEpoch += 1; // a re-run, query text untouched

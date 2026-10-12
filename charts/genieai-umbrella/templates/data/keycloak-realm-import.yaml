@@ -29,8 +29,8 @@
 {{- fail (printf "data.keycloak.clientSecrets.%s is empty or a placeholder (change-me-*); the realm import ALWAYS requires real client secrets, regardless of data.keycloak.failOnPlaceholderSecrets" $k) -}}
 {{- end -}}
 {{- end -}}
-apiVersion: keycloak.org/v1alpha1
-kind: KeycloakRealm
+apiVersion: k8s.keycloak.org/v2beta1
+kind: KeycloakRealmImport
 metadata:
   name: genieai-realm
   namespace: {{ .Values.namespace }}
@@ -38,13 +38,11 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 4 }}
     genieai.io/data-tier: identity
 spec:
-  # v1alpha1 binds the realm to a Keycloak instance by label selector
-  # (the older `keycloakCRName` reference was removed by the upstream
-  # operator migration). The `app: keycloak` label is set on the Keycloak
-  # CR in keycloak-instance.yaml.
-  instanceSelector:
-    matchLabels:
-      app: keycloak
+  # v2beta1 binds the realm to a Keycloak instance by name in the same
+  # namespace (the older `instanceSelector.matchLabels` was removed by the
+  # upstream operator migration; v2beta1 also accepts `keycloakCRName`).
+  # The `name: keycloak` here must match the Keycloak CR's metadata.name.
+  keycloakCRName: keycloak
   realm:
     # realm name MUST match the in-cluster consumers' KC_REALM /
     # KEYCLOAK_REALM value (genie).

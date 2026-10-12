@@ -53,6 +53,12 @@ const IMMUTABLE_FIELDS = ['graph_name', 'repo_id', 'domain'];
 // here so a direct PATCH /api/okf/repos/:id with a `frontmatter` key
 // is also accepted (back-stop for the operator migration script).
 const UPDATABLE_FIELDS = ['name', 'source', 'acl', 'retention', 'studio_step', 'frontmatter'];
+// How long a frontmatter save will WAIT for the routing head before
+// releasing the HTTP response. The head is a derived artifact and the TEI
+// embed behind it is a network call to the shared remote GPU node, so the
+// save must never be hostage to another tenant's load. See the bounded
+// rebuild in update().
+const HEAD_REBUILD_BUDGET_MS = 5000;
 // Story 1-8d — frontmatter_history bound (revert support for the Lab).
 const FRONTMATTER_HISTORY_LIMIT = 10;
 
@@ -711,34 +717,50 @@ async function update(repo_id, patch, actor) {
     // Two more repos were frozen the same way (www-gov-uk-full-crawl, NCD
     // Information), so this is systemic, not an Alphabet quirk.
     //
-    // Awaited so no caller ever observes a stale head. A rebuild failure does
-    // NOT roll the save back: the frontmatter is already durable and losing a
-    // curator's tag edit over an embedding blip is strictly worse than a stale
-    // head. It logs at error, and the Lab's existing stale badge
-    // (frontmatter.updated_at vs head.computed_at) surfaces the gap.
+    // BOUNDED, NOT BLOCKING. Awaiting this outright — the first cut of this
+    // fix — made every tag save hostage to the shared remote GPU node: TEI
+    // embed is a network call with a 30s axios timeout and three retries, so
+    // a slow embedding endpoint pushed the PATCH past the gateway's read
+    // timeout and the curator got a 504 for a write that had actually
+    // succeeded. Live 2026-10-12: PATCH /api/okf/repos/:id returned
+    // 504 Gateway Time-out while the frontmatter persisted correctly.
+    //
+    // So the rebuild gets HEAD_REBUILD_BUDGET_MS and then the response goes
+    // regardless. buildVectorizedHead writes the head in ONE update at the
+    // very end, so an overrun means "not written yet", never a half-written
+    // head — the late write still lands. A failure never rolls the save back
+    // (the frontmatter is already durable, and losing a curator's tag edit
+    // over an embedding blip is strictly worse than a stale head); it logs at
+    // error, and the Lab's existing stale badge (frontmatter.updated_at vs
+    // head.computed_at) is the designed detector.
     //
     // Lazy require: head-test-service requires this module, so a top-level
     // import here would be a cycle. Same pattern as graph-lifecycle below.
     if (Object.prototype.hasOwnProperty.call(setFields, 'frontmatter')) {
-      try {
-        const frontmatterService = require('./frontmatter-service');
-        await frontmatterService.buildVectorizedHead(repo_id, setFields.frontmatter, {
-          actor: (actor && actor.sub) || 'system',
-          version: existing.version
+      const frontmatterService = require('./frontmatter-service');
+      const headActor = (actor && actor.sub) || 'system';
+      const rebuild = frontmatterService
+        .buildVectorizedHead(repo_id, setFields.frontmatter, { actor: headActor, version: existing.version })
+        .then((head) => {
+          logger.info('OKF repo updated: head rebuilt from the new frontmatter', {
+            repo_id,
+            dim: head && head.dim
+          });
+        })
+        .catch((headErr) => {
+          logger.error('OKF repo updated: HEAD REBUILD FAILED — the gate is now stale', {
+            repo_id,
+            error: headErr && headErr.message,
+            code: (headErr && headErr.code) || null
+          });
         });
-        logger.info('OKF repo updated: head rebuilt from the new frontmatter', {
-          repo_id,
-          forbidden: Array.isArray(setFields.frontmatter.forbidden)
-            ? setFields.frontmatter.forbidden.length
-            : null
-        });
-      } catch (headErr) {
-        logger.error('OKF repo updated: HEAD REBUILD FAILED — the gate is now stale', {
-          repo_id,
-          error: headErr && headErr.message,
-          code: (headErr && headErr.code) || null
-        });
-      }
+      await Promise.race([
+        rebuild,
+        new Promise((resolve) => {
+          const timer = setTimeout(resolve, HEAD_REBUILD_BUDGET_MS);
+          if (timer.unref) timer.unref();
+        })
+      ]);
     }
 
     // BORN-RIGHT RENAME (David, 2026-09-02): the graph name derives from the

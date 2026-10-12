@@ -17,11 +17,6 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get"]
-  # SealedSecrets: the pre-upgrade drift hook lists the release's
-  # SealedSecrets, then gets each one's Synced condition.
-  - apiGroups: ["bitnami.com"]
-    resources: ["sealedsecrets"]
-    verbs: ["get", "list"]
   # Events for the clusterprofile-detect hook's Event create
   - apiGroups: [""]
     resources: ["events"]

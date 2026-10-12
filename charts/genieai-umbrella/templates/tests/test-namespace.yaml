@@ -91,10 +91,12 @@ spec:
             exit 1
           fi
           echo "PASS"
-{{- /* Gated on SealedSecrets AND at least one data tier rendering them —
-       the test asserts the tier-specific Secrets exist, so a release with
-       secrets (or all data tiers) disabled has nothing to check. */ -}}
-{{- if and .Values.secrets.sealedSecrets.enabled (or .Values.data.arangodb.enabled (or .Values.data.keycloak.enabled .Values.data.postgres.enabled)) }}
+{{- /* Gated on at least one data tier rendering against a required
+       Secret. The test asserts the operator-provided Secret exists in
+       the namespace — the chart does not materialize the Secret itself
+       (operator brings it via their secret backend of choice), so a
+       release with all data tiers disabled has nothing to check. */ -}}
+{{- if or .Values.data.arangodb.enabled (or .Values.data.keycloak.enabled .Values.data.postgres.enabled) }}
 ---
 apiVersion: v1
 kind: Pod
@@ -156,12 +158,10 @@ spec:
         - |
           set -eu
           ns="{{ .Values.namespace }}"
-          echo "test Pod checking SealedSecret materialization"
-          # SealedSecret → Secret is eventually consistent: the controller
-          # unseals asynchronously after the SealedSecret is applied. A
-          # still-encrypted sentinel NEVER materializes (controller marks
-          # the SealedSecret Synced=False, reason ErrorDecrypt) and runs out
-          # of retries below. Poll each expected Secret up to 30 × 2s.
+          echo "test Pod checking required Secrets in namespace"
+          # The chart does not render any Secret — operators bring each
+          # one by their preferred secret backend. Poll for materialization
+          # up to 30 × 2s (operator-side propagation can be async).
           check_secret() {
             name="$1"
             i=0
@@ -173,7 +173,7 @@ spec:
               i=$((i+1))
               sleep 2
             done
-            echo "FAIL: K8s Secret never materialized: $name (SealedSecret sentinel not re-sealed, or controller down)"
+            echo "FAIL: K8s Secret never materialized: $name (operator must provide via their secret backend)"
             return 1
           }
           failed=0
@@ -182,12 +182,13 @@ spec:
           check_secret arango-root-secret || failed=1
           {{- end }}
           {{- if or .Values.data.keycloak.enabled .Values.data.postgres.enabled }}
-          # keycloak-db-credentials is rendered by the Postgres tier (the
-          # Keycloak CR consumes it); either tier enabled means it must exist.
+          # keycloak-db-credentials is the SharedSecret between the CNPG
+          # Cluster (postgres tier) and the Keycloak CR; either tier enabled
+          # means the operator must provide it.
           check_secret keycloak-db-credentials || failed=1
           {{- end }}
           if [ "$failed" -ne 0 ]; then
-            echo "FAIL: expected K8s Secrets did not materialize in 60s"
+            echo "FAIL: required K8s Secrets did not materialize in 60s"
             exit 1
           fi
           echo "PASS"

@@ -21,11 +21,10 @@
 {{- if and .Values.namespace (ne .Values.namespace .Release.Namespace) -}}
 {{- fail (printf "values 'namespace' (%s) must equal the release namespace (%s) — set namespace: %s in your values-override, OR install with -n %s" .Values.namespace .Release.Namespace .Release.Namespace .Release.Namespace) -}}
 {{- end -}}
-{{- /* Each data tier's secrets template is gated on its own backend
-       (sealed-secrets CRs only render when secrets.sealedSecrets.enabled
-       is true; alternative backends wire their Secrets from outside
-       the chart). The chart does not force a particular secret
-       mechanism. */ -}}
+{{- /* Each data tier declares the Secret names it needs in its
+       `secrets:` list (e.g. arango-root-secret, keycloak-db-credentials).
+       The chart does not materialize these Secrets — operators bring them
+       in the target namespace via their preferred secret backend. */ -}}
 apiVersion: v1
 kind: Namespace
 metadata:

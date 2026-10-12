@@ -18,6 +18,19 @@ const ctrl = require('../controllers/repository-controller');
 router.get('/', ctrl.listRepos);
 router.get('/:repo_id', ctrl.getRepo);
 
+// Story 10.5 — the wizard's resumable curation draft. ALL THREE verbs live
+// under `/:repo_id/draft`; the retired `/:repo_id/studio_drafts` path shape is
+// never registered (the endpoint was never deployed, so no client depends on
+// it — an alias would be dead code). Express `/:repo_id` matches exactly one
+// segment, so it can never swallow this two-segment path; the only other
+// parametrised two-segment routes (`/routing-testsuite/:suite_key`,
+// `/concepts/:concept_id`) have literal prefixes that cannot collide.
+// GET inherits the router-wide read gate + the controller's default-deny
+// authz (same posture as GET /:repo_id itself); the mutations are admin-scoped.
+router.get('/:repo_id/draft', ctrl.getStudioDraft);
+router.put('/:repo_id/draft', requireRepoScope('repo_id', 'admin'), ctrl.putStudioDraft);
+router.delete('/:repo_id/draft', requireRepoScope('repo_id', 'admin'), ctrl.deleteStudioDraft);
+
 // Mutations.
 router.post('/', requireRole('tools-admin'), ctrl.createRepo);
 // Server-side crawl→OKF conversion (David, 2026-09-02): 202 + background

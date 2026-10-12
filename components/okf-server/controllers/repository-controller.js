@@ -1502,6 +1502,64 @@ async function revertFrontmatter(req, res, next) {
 }
 
 /**
+ * Story 10.5 — GET /api/okf/repos/:repo_id/draft.
+ * The wizard's resumable curation state. Read scope (inherited from the
+ * okf-routes router gate). `draft:null` means "repo exists, no draft yet" —
+ * NEVER a 404, so the resume UI can tell that apart from a missing endpoint
+ * (whose 404 it already maps to NOT_READY).
+ */
+async function getStudioDraft(req, res, next) {
+  try {
+    const studioDraftService = require('../services/studio-draft-service');
+    const result = await studioDraftService.getDraft(req.params.repo_id, {
+      authz: authzForService(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 10.5 — PUT /api/okf/repos/:repo_id/draft.
+ * Upserts the flat wire draft (the store passes its whole draft object
+ * through unchanged). Admin-scoped. Deliberately does NOT touch
+ * okf_repositories.studio_step — that pointer keeps exactly one writer (the
+ * audited, lifecycle-guarded PATCH /:repo_id), so this route never doubles the
+ * audit rows directive G4 removed from the wizard.
+ */
+async function putStudioDraft(req, res, next) {
+  try {
+    const studioDraftService = require('../services/studio-draft-service');
+    const result = await studioDraftService.saveDraft(req.params.repo_id, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 10.5 — DELETE /api/okf/repos/:repo_id/draft.
+ * Idempotent 200 (`deleted:false` when there was nothing to remove) so the
+ * frontend's `catch -> {ok:true}` stays correct. Admin-scoped.
+ */
+async function deleteStudioDraft(req, res, next) {
+  try {
+    const studioDraftService = require('../services/studio-draft-service');
+    const result = await studioDraftService.clearDraft(req.params.repo_id, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Story 1-8c — POST /api/okf/repos/:repo_id/routing-explain.
  * Explains one query's gate outcome; when it (wrongly) CLAIMS, proposes
  * forbidden tags that would exclude it. Admin-scoped — may burn one LLM
@@ -1734,6 +1792,9 @@ module.exports = {
   routingExplain,
   frontmatterHistory,
   revertFrontmatter,
+  getStudioDraft,
+  putStudioDraft,
+  deleteStudioDraft,
   recommendTagSet,
   generateTestSuite,
   addTestSuiteQueries,

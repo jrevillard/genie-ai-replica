@@ -346,7 +346,7 @@ export default {
     onExpertChange(mode) {
       this.$store.dispatch('okf/setExpertMode', mode === 'expert');
     },
-    onResume(repoId) {
+    async onResume(repoId) {
       // Story #978: a repo card click opens the Editor shell — Wizard | Editor
       // sub-tabs, Editor default (UX design AC5). The wizard sub-tab mounts
       // the existing 10-step flow; a repo without a stored draft gets a
@@ -356,6 +356,15 @@ export default {
       // shell mounts — the child editor fetches on mount, before the
       // store's openEditor reset runs.
       this.$store.commit('okf/setSelectedConcept', null);
+      // STORY 10.5 — hydrate the persisted draft BEFORE reading it. Without
+      // this, `drafts` only ever lived in the Vuex store: a browser refresh
+      // lost the wizard's curation view-state and the wizard reopened on the
+      // permissive fallback below (studio_step 9) instead of the step the
+      // steward actually left off at. Cache-first inside the action, so an
+      // in-session resume costs no round-trip; it never throws, and a null
+      // draft (no draft yet, or the repo is gone) falls through to the same
+      // permissive shape as before.
+      await this.$store.dispatch('okf/fetchDraft', { repoId }).catch(() => null);
       const draft = this.$store.getters['okf/activeDraft'](repoId);
       this.activeRepoId = repoId;
       this.activeSourceFileId = null;

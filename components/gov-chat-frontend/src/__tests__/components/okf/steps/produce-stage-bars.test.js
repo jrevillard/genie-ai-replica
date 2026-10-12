@@ -170,7 +170,10 @@ describe('OkfStepProduce — per-stage bars follow the live repo', () => {
   });
 
   test('the crawled leg counts PAGES, not documents', async () => {
-    w = await mountProduce({ repo_id: 'r1', input: { crawl_seeds: [{ url: 'https://example.org', file_name: 'seed' }] } });
+    w = await mountProduce({
+      repo_id: 'r1',
+      input: { crawl_seeds: [{ url: 'https://example.org', file_name: 'seed' }] }
+    });
     w.vm.liveRepo = {
       repo_id: 'r1',
       conversion: { status: 'running', stage: 'downloading', pages_done: 12, pages_total: 120 },

@@ -11,7 +11,13 @@
 namespace: genieai
 
 global:
-  imageRegistry: ""
+  # Default registry that prefixes every service image.repository
+  # (e.g. `genie-ai-backend` → `registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-backend:main`).
+  # Set to your container registry when adopting the chart on a
+  # different setup; empty = kubelet resolves the bare name against
+  # Docker Hub, which the genie-ai-* service images are NOT published
+  # to, so an empty default leaves `helm install` with 404s.
+  imageRegistry: "registry.opensource.unicc.org/un/itu/genie-ai"
   imagePullSecrets: []
   # Registry for Helm hook Jobs and test pods that pull public Docker
   # Hub images (alpine, python, curlimages/curl). Separate from
@@ -109,9 +115,11 @@ data:
     # Confidential-client secrets rendered into the realm import — these
     # values feed the KeycloakRealmImport CR directly (it cannot read
     # Kubernetes Secrets; operators supply the real values at install time
-    # via values override, never committed). The SealedSecrets carrying
-    # the same values for the backend/dataprep/grafana consumers arrive
-    # with their service tiers.
+    # via values override, never committed). The same values are
+    # expected to be present in the operator-provided Secrets (named
+    # `keycloak-proxy-client-secret`, etc.) for the service tiers that
+    # consume them via envFrom — the chart does not render those Secrets
+    # itself.
     clientSecrets:
       proxyClient: change-me-proxy-client
       dataprep: change-me-dataprep-client
@@ -159,14 +167,6 @@ dependencyGraph:
     keycloak:
       - postgres
 
-secrets:
-  sealedSecrets:
-    enabled: false                     # pre-upgrade hook validates SealedSecret decryptability; set true only when actually using SealedSecrets
-  eso:
-    enabled: false                     # plug-point; ESO controller installs separately
-  secretProviderClass:
-    enabled: false                     # plug-point; SecretProviderClass resources managed externally
-
 # Stateless application tier. Each entry drives a per-service Deployment
 # rendered by the corresponding template under templates/services/.
 #
@@ -202,10 +202,11 @@ services:
       - name: huggingface-hub-token
       - name: email-password
       - name: translation-cache-password
-      # ARANGO_PASSWORD for the data-tier ArangoDB. The same SealedSecret
-      # rendered by the data tier is consumed by document-repository via
-      # secretKeyRef; backend reads it via envFrom here so its ArangoDB
-      # driver authenticates with the operator-managed root account.
+      # ARANGO_PASSWORD for the data-tier ArangoDB. The Secret
+      # `arango-root-secret` is operator-provided; the chart does not
+      # materialize it. Backend reads it via envFrom here so its
+      # ArangoDB driver authenticates with the operator-managed root
+      # account.
       - name: arango-root-secret
     pvc: null
     probes:

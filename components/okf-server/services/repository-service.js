@@ -22,6 +22,7 @@ const auditService = require('./audit-service');
 const conformanceService = require('./conformance-service');
 const piiService = require('./pii-service');
 const { retractRepoGraph } = require('./graph-retract-service');
+const backingFileService = require('./backing-file-service');
 const { workingGraphName } = require('./graph-lifecycle-service');
 
 const COLLECTION = 'okf_repositories';
@@ -855,6 +856,31 @@ async function remove(repo_id, actor) {
     const graceHours = parseInt(process.env.OKF_DELETE_GRACE_HOURS || '168', 10);
     const ts = nowIso();
     const delete_after = DateTime.now().plus({ hours: graceHours }).toUTC().toISO();
+
+    // HARD-DELETE THE BACKING FILES FIRST (David, 2026-10-12). Order matters:
+    // this MUST run before retractRepoGraph below, because that sweep removes
+    // the files DOCS with a raw Arango REMOVE (`FOR f IN files FILTER
+    // f.repo_id == repo_id`) — once the docs are gone, this service has no
+    // file_id left to hand document-repository, and the upload BYTES stay
+    // orphaned in the storage dir forever (no FK, no reclamation path).
+    //
+    // Going through doc-repo's DELETE route is what actually unlinks the bytes
+    // and purges the crawl/ingestion log rows. It also fixes a coverage hole:
+    // that sweep filters files.repo_id, but SOURCE documents are stamped
+    // files.okf_repo_id — so deleting a document-built repo orphaned every
+    // upload it was built from. backingFileService covers both stamps.
+    //
+    // Files still backing ANOTHER live repository are skipped (never deleted),
+    // and a file whose "still in use" check errors is kept — failing closed on
+    // a data-loss check. Best-effort: the registry entry is what must go.
+    try {
+      await backingFileService.hardDelete(repo_id, { actor });
+    } catch (backingErr) {
+      logger.warn('Backing file hard-delete failed (non-fatal)', {
+        repo_id,
+        error: backingErr && backingErr.message
+      });
+    }
 
     // Cascade retract FIRST — retractRepoGraph reads the registry doc for the
     // graph_name, so the registry entry must still exist while it runs. It drops

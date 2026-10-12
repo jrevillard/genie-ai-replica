@@ -1412,6 +1412,58 @@ function scanRunDoc(db, scanKey) {
  *
  * @returns {Promise<{repo_id, scanned, clean, hit, error, missing, results, gate}>}
  */
+/** A sidecar worker respawn is TRANSIENT: uvicorn restarts the child and the
+ * next request lands on a live one. How long to wait between tries, and how many.
+ * The pause must outlast the observed respawn (~10-20s), not the whole budget. */
+const CONCEPT_RETRY_ATTEMPTS = 3; // 1 initial + 3 retries = 4 scanConcept calls
+// Read at CALL time, not module load: the test suite sets this to ~0 in
+// beforeEach, which cannot retroactively change a module-level const.
+// Tunable by operators on a slow/underpowered host that needs a longer pause to
+// outlast a worker respawn.
+const conceptRetryPauseMs = () => Number(process.env.PII_CONCEPT_RETRY_PAUSE_MS) || 8000;
+
+/**
+ * Scan one concept, riding out a sidecar worker respawn.
+ *
+ * WHY THIS IS NOT IN pii-client (2026-10-13): scanConcept is correctly
+ * fail-closed — a transport failure yields pii_state 'error' and the publish gate
+ * blocks on it. That contract is right and its own suite pins that a persistently
+ * DOWN sidecar fails FAST (a 140-concept scan must not stall for minutes per
+ * concept). Widening the shared client breaks that.
+ *
+ * But during a BULK scan the failure is usually a worker dying mid-request, not a
+ * down sidecar. uvicorn respawns it within seconds. Recording a permanent error
+ * for that is precisely what made one blip block a repository indefinitely — the
+ * original bug this whole change exists to clear. So the retry lives HERE, where
+ * we know the sidecar was demonstrably up moments ago, and leaves the shared
+ * client's fail-fast contract untouched.
+ */
+async function scanRepoConceptWithRetry(repo_id, concept_id, meta) {
+  let row = await scanConcept(repo_id, concept_id, meta.frontmatter || {}, meta.body || '');
+  for (let attempt = 1; attempt <= CONCEPT_RETRY_ATTEMPTS && row.pii_state === 'error'; attempt += 1) {
+    logger.warn('PII concept rescan: scan errored, retrying past a likely worker respawn', {
+      repo_id,
+      concept_id,
+      attempt,
+      reason: row.error || row.pii_scan_error || null
+    });
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, conceptRetryPauseMs() * attempt);
+      if (timer.unref) timer.unref();
+    });
+    row = await scanConcept(repo_id, concept_id, meta.frontmatter || {}, meta.body || '');
+  }
+  if (row.pii_state === 'error') {
+    logger.error('PII concept rescan: still errored after retries', {
+      repo_id,
+      concept_id,
+      attempts: CONCEPT_RETRY_ATTEMPTS,
+      reason: row.error || row.pii_scan_error || null
+    });
+  }
+  return row;
+}
+
 async function scanRepoConcepts(repo_id, opts = {}) {
   return withSpan('okf.pii.scanRepoConcepts', async (span) => {
     span.setAttribute('okf.repo_id', repo_id);
@@ -1445,7 +1497,7 @@ async function scanRepoConcepts(repo_id, opts = {}) {
           logger.warn('PII concept rescan: meta row missing', { repo_id, concept_id });
           row = { concept_id, pii_state: null, skipped: 'CONCEPT_NOT_FOUND' };
         } else {
-          row = await scanConcept(repo_id, concept_id, meta.frontmatter || {}, meta.body || '');
+          row = await scanRepoConceptWithRetry(repo_id, concept_id, meta);
         }
       } catch (err) {
         // scanConcept itself only throws on a persistence failure. Record it

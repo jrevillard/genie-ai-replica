@@ -8,9 +8,20 @@ jest.mock('../shared-lib/db-connection-service', () => {
   return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
 });
 
+// update() rebuilds the routing head from the frontmatter it just wrote
+// (David, 2026-10-12 — the head-never-rebuilds bug that froze the Lab at
+// 80%). The real buildVectorizedHead embeds every tag through the remote
+// TEI endpoint, which has no business in a unit test: unstubbed it hangs
+// the suite on a 30s axios timeout. buildVectorizedHead's own behaviour
+// is covered in frontmatter-service.test.js; here we only need the seam.
+jest.mock('../services/frontmatter-service', () => ({
+  buildVectorizedHead: jest.fn(() => Promise.resolve({ dim: 1024, per_field: {}, computed_at: 'now' }))
+}));
+
 const dbService = require('../shared-lib/db-connection-service');
 const db = dbService.__mockDb;
 const repoService = require('../services/repository-service');
+const frontmatterService = require('../services/frontmatter-service');
 const { RepoError } = repoService;
 
 const ACTOR = { sub: 'steward-1', name: 'Steward', source_ip: '127.0.0.1' };
@@ -156,6 +167,63 @@ describe('repository-service', () => {
       expect(again.frontmatter.updated_at).not.toBe('2000-01-01T00:00:00.000Z');
     });
 
+    test('rebuilds the routing head from the frontmatter it just wrote (2026-10-12)', async () => {
+      // The head is the gate vector the retriever scores against. It used to
+      // be written ONLY by the explicit rebuild endpoint and by publish, so a
+      // tag saved from the Lab never moved it: on the Alphabet repo the head
+      // was recomputed once across four saves and three Lab runs then scored
+      // bit-identically against an unchanged gate.
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      frontmatterService.buildVectorizedHead.mockClear();
+
+      await repoService.update(
+        created.repo_id,
+        { frontmatter: { topic: ['x'], entity: [], scope: '', forbidden: ['y'], summary: '', keyword: [] } },
+        ACTOR
+      );
+      expect(frontmatterService.buildVectorizedHead).toHaveBeenCalledTimes(1);
+      const [rid, shape] = frontmatterService.buildVectorizedHead.mock.calls[0];
+      expect(rid).toBe(created.repo_id);
+      // The DEDUPED, server-stamped shape — not the raw client payload.
+      expect(shape.forbidden).toEqual(['y']);
+      expect(shape.updated_at).toEqual(expect.any(String));
+
+      // Every subsequent save rebuilds again — the whole point is that the
+      // head tracks the tag set rather than freezing at the first write.
+      await repoService.update(
+        created.repo_id,
+        { frontmatter: { topic: ['x'], entity: [], scope: '', forbidden: ['y', 'z'], summary: '', keyword: [] } },
+        ACTOR
+      );
+      expect(frontmatterService.buildVectorizedHead).toHaveBeenCalledTimes(2);
+      expect(frontmatterService.buildVectorizedHead.mock.calls[1][1].forbidden).toEqual(['y', 'z']);
+    });
+
+    test('does NOT rebuild the head when the write carries no frontmatter', async () => {
+      // A rename must not spend a TEI round-trip on an unchanged tag set.
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      frontmatterService.buildVectorizedHead.mockClear();
+      await repoService.update(created.repo_id, { studio_step: 4 }, ACTOR);
+      expect(frontmatterService.buildVectorizedHead).not.toHaveBeenCalled();
+    });
+
+    test('a head rebuild failure does not roll back the saved frontmatter', async () => {
+      // The frontmatter is already durable at that point. Losing a curator's
+      // tag edit because the shared embedding node blipped would be strictly
+      // worse than a stale head — the Lab's stale badge surfaces the gap.
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      frontmatterService.buildVectorizedHead.mockRejectedValueOnce(
+        Object.assign(new Error('stream has been aborted'), { code: 'ERR_STREAM_PREMATURE_CLOSE' })
+      );
+      const updated = await repoService.update(
+        created.repo_id,
+        { frontmatter: { topic: ['kept'], entity: [], scope: '', forbidden: [], summary: '', keyword: [] } },
+        ACTOR
+      );
+      expect(updated.frontmatter.topic).toEqual(['kept']);
+      expect(updated.frontmatter_history).toHaveLength(1);
+    });
+
     test('409 when attempting to change graph_name (immutable)', async () => {
       const created = await repoService.create(validCreateInput(), ACTOR);
       await expect(repoService.update(created.repo_id, { graph_name: 'OKF_other' }, ACTOR)).rejects.toMatchObject({
@@ -248,6 +316,19 @@ describe('repository-service', () => {
         code: 'REPO_NOT_FOUND',
         status: 404
       });
+    });
+
+    test('Story 10.5: cascades the wizard curation draft (orphan cascade)', async () => {
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      const col = db.collection('okf_studio_drafts');
+      await col.save({ _key: created.repo_id, repo_id: created.repo_id, studio_state: { name: 'WIP' } });
+      await repoService.remove(created.repo_id, ACTOR);
+      expect(db._stores.okf_studio_drafts[created.repo_id]).toBeUndefined();
+    });
+
+    test('Story 10.5: a repo with no draft still deletes (cascade is non-fatal + quiet)', async () => {
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      await expect(repoService.remove(created.repo_id, ACTOR)).resolves.toMatchObject({ status: 'deleted' });
     });
 
     test('writes an audit row on delete', async () => {

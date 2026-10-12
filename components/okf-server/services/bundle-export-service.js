@@ -158,18 +158,36 @@ async function exportBundle(repo, actor) {
       );
     }
 
-    // The concepts are already indexed (mint gate) — the bundle is born at
-    // 'Ingested' (see header). Best-effort: the artifact exists either way.
+    // The concepts are indexed (mint gate), but "indexed" is NOT "this repo is
+    // drained" — the bundle badge used to say 'Ingested' unconditionally, so
+    // a published-but-never-ingested repo showed every version as ingested
+    // (David, 2026-10-12: "Right now there is no bali data ingested at all.
+    // Having multiple versions of this file displaying in the document
+    // repository as ingested should never happen.").
+    //
+    // So the badge is earned, not assumed: 'Ingested' only when the repo
+    // already carries ingested_at; otherwise 'Pending', which the settle flip
+    // (lifecycle-service -> backingFileService.markIngested) upgrades the
+    // moment the drain actually completes.
+    const drained = Boolean(repo.ingested_at);
+    const bundleStatus = drained ? 'Ingested' : 'Pending';
     const storedAt = new Date().toISOString();
     if (fileId) {
       try {
         await authedAxios.patch(
           `${config.documentRepository.url}/api/files/${encodeURIComponent(fileId)}/status`,
-          { dataprep: { status: 'Ingested' } },
+          { dataprep: { status: bundleStatus } },
           { timeout: 10000 }
         );
+        logger.info('Bundle status set at export', {
+          repo_id: repoId,
+          file_id: fileId,
+          bundle_version: bundleVersion,
+          status: bundleStatus,
+          repo_drained: drained
+        });
       } catch {
-        logger.warn('Bundle status set to Ingested failed (non-fatal)', { repo_id: repoId, file_id: fileId });
+        logger.warn('Bundle status set failed (non-fatal)', { repo_id: repoId, file_id: fileId });
       }
       // WS3: link this bundle to the version manifest (Versions menu shows
       // it as a download link per row). Best-effort — the bundle itself

@@ -189,7 +189,7 @@ services:
   backend:
     enabled: true
     replicas: 1
-    image: { repository: registry.example.org/genie-ai-backend, tag: "1.0.0" }
+    image: { repository: genie-ai-backend, tag: "main" }
     port: 3000
     resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
     env: []
@@ -218,7 +218,7 @@ services:
   frontend:
     enabled: true
     replicas: 1
-    image: { repository: registry.example.org/genie-ai-frontend, tag: "1.0.0" }
+    image: { repository: genie-ai-frontend, tag: "main" }
     port: 8090
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
     env: []
@@ -233,7 +233,7 @@ services:
   documentRepository:
     enabled: true
     replicas: 1
-    image: { repository: registry.example.org/genie-ai-document-repository, tag: "1.0.0" }
+    image: { repository: genie-ai-document-repository, tag: "main" }
     port: 3001
     # ClamAV service discovery. Defaults assume the in-cluster
     # Service rendered by charts/genieai-umbrella/templates/services/clamav.yaml;
@@ -268,7 +268,7 @@ services:
     # The stock image's baked nginx config proxies /api to the Kong gateway,
     # which is no longer deployed. The edge tier mounts a ConfigMap over
     # the upstream template so this image can serve the SPA + backend proxy.
-    image: { repository: registry.example.org/genie-ai-nginx, tag: "1.0.0" }
+    image: { repository: genie-ai-nginx, tag: "main" }
     port: 8080
     resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
     env: []

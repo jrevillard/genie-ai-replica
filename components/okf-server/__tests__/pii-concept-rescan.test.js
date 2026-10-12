@@ -89,8 +89,16 @@ describe('repo-wide CONCEPT PII rescan (the pii_state=error unblock)', () => {
   beforeEach(() => {
     mockDb._reset();
     jest.clearAllMocks();
+    // Cases that produce an ERRORED concept now ride out a sidecar worker
+    // respawn with real pauses (3 tries x 8/16/24s). Collapse the pause so the
+    // suite asserts the behaviour rather than the wall clock.
+    process.env.PII_CONCEPT_RETRY_PAUSE_MS = '1';
     // The repo doc must exist — markRepoPiiScanned updates it.
     mockDb._stores.okf_repositories = { repoA: { _key: 'repoA', repo_id: 'repoA', pii_scan_status: 'pending' } };
+  });
+
+  afterEach(() => {
+    delete process.env.PII_CONCEPT_RETRY_PAUSE_MS;
   });
 
   describe('listRepoConceptIds (enumeration)', () => {
@@ -187,6 +195,53 @@ describe('repo-wide CONCEPT PII rescan (the pii_state=error unblock)', () => {
       await piiService.scanRepoConcepts('repoA');
       expect(mockDb._stores.okf_repositories.repoA.pii_scan_status).toBe('complete');
     });
+
+    // ── THE REGRESSION (2026-10-13): a worker respawn must not brick a repo ──
+    //
+    // The sidecar's uvicorn worker crashes mid-request under sustained scan
+    // load (observed: 5 deaths during one 140-concept run). scanConcept
+    // correctly fails closed on the reset connection — but recording a
+    // PERMANENT pii_state='error' for a failure that heals ~10s later is
+    // exactly what made one blip block a repository indefinitely, with no
+    // re-scan able to clear it.
+    it('a concept whose scan fails ONCE then succeeds is NOT left in error', async () => {
+      seedConcepts('repoA', ['c1']);
+      programEnumeration(['c1']);
+      mockSidecarPost.mockRejectedValueOnce({ code: 'ECONNRESET', message: 'socket hang up' });
+      mockSidecarPost.mockResolvedValue(sidecarRegions());
+
+      const out = await piiService.scanRepoConcepts('repoA');
+
+      expect(mockDb._stores.okf_concepts_meta.c1.pii_state).toBe('clean');
+      expect(out.error).toBe(0);
+      // It really did retry rather than getting lucky on the first call.
+      expect(mockSidecarPost.mock.calls.length).toBeGreaterThanOrEqual(2);
+      // And the repo is attestable, so the publish gate can pass.
+      expect(mockDb._stores.okf_repositories.repoA.pii_scan_status).toBe('complete');
+    });
+
+    it('still ends fail-closed when the sidecar is genuinely down, and bounded', async () => {
+      seedConcepts('repoA', ['c1']);
+      programEnumeration(['c1']);
+      mockSidecarPost.mockRejectedValue({ code: 'ECONNREFUSED', message: 'connect ECONNREFUSED' });
+
+      let caught = null;
+      try {
+        await piiService.scanRepoConcepts('repoA');
+      } catch (e) {
+        caught = e;
+      }
+      // FAIL-CLOSED must survive the resilience work: a permanently-down sidecar
+      // is an error, never a silent 'clean' — and the run refuses to attest.
+      expect(mockDb._stores.okf_concepts_meta.c1.pii_state).toBe('error');
+      expect(caught.code).toBe('PII_SCAN_NOTHING_SCANNED');
+      expect(mockDb._stores.okf_repositories.repoA.pii_scan_status).toBe('pending');
+      // Bounded, never unbounded. The bounds COMPOUND deliberately: the
+      // client's own 3 fast attempts die inside a worker respawn, while the
+      // scan worker's slower tries (8/16/24s) outlast it. Worst case is
+      // 4 scanConcept calls x 3 client attempts = 12, and only on failure.
+      expect(mockSidecarPost.mock.calls.length).toBeLessThanOrEqual(12);
+    }, 20000);
   });
 
   describe('NO FALSE ATTESTATION (defect 3d)', () => {
@@ -224,7 +279,10 @@ describe('repo-wide CONCEPT PII rescan (the pii_state=error unblock)', () => {
       // The response says why.
       expect(caught.message).toMatch(/examined no concepts/);
       expect(caught.details.error).toBe(2);
-    });
+      // Both concepts are errored, and each now rides out the worker-respawn
+      // retry (4 scanConcept calls x 3 client attempts = 24 sidecar calls for
+      // what used to be 2), so the default 5s budget is too tight.
+    }, 20000);
   });
 
   describe('ASYNC 202 + poll lifecycle', () => {

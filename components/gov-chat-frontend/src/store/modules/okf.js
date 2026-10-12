@@ -11,16 +11,20 @@
  *   ui                   { expertMode } — global Basic/Expert toggle (persisted to localStorage)
  *
  * NOT_READY semantics:
- *   Where a backend endpoint is missing (10.5 server aggregation, 7.2 producer,
- *   4.2b formatter, 3.9 retract), the relevant action returns
+ *   Where a backend endpoint is missing (7.2 producer, 4.2b formatter,
+ *   3.9 retract), the relevant action returns
  *   { ok: false, code: 'NOT_READY', message: '<i18n key>' }. The UI surfaces
  *   this as a translated toast — never as a hard error.
+ *   Studio drafts are the exception since Story 10.5: the endpoint is live,
+ *   so NOT_READY only surfaces against an older backend, and it is silent.
  */
 
 const initialState = () => ({
   drafts: {},
-  // WIZARD IDEMPOTENCY R-D (David, 2026-09-04): flips true after the studio
-  // drafts endpoint 404s once — the session never re-calls it (no spam).
+  // Flips true when the studio-drafts endpoint proves genuinely ABSENT on
+  // this server (NOT_READY from getDraft/saveDraft) — the session then stops
+  // writing it (no spam). Story 10.5 shipped the route, so this only arms
+  // against an older backend, never against an empty draft.
   draftsUnavailable: false,
   reposById: {},
   // Lifecycle lanes (David, 2026-08-28): five columns — In progress /
@@ -141,8 +145,9 @@ const mutations = {
     delete next[repoId];
     state.drafts = next;
   },
-  // WIZARD IDEMPOTENCY R-D: set after the drafts endpoint's first 404 —
-  // the session stops calling it (Story 10.5 will reset it on reload).
+  // Set only when the drafts endpoint proves genuinely missing (NOT_READY):
+  // the session stops writing it, so a route that does not exist is not
+  // hammered once per step change.
   setDraftsUnavailable(state) {
     state.draftsUnavailable = true;
   },
@@ -244,6 +249,8 @@ const actions = {
   /**
    * Load (or return-cached) draft for a repo. NO-OP if a cached draft exists —
    * avoids server round-trip when resuming in-process.
+   *
+   * PURE CACHE LOOKUP: the server-backed hydration lives in `fetchDraft`.
    */
   loadDraft({ state }, { repoId, force = false } = {}) {
     if (!repoId) return null;
@@ -252,9 +259,60 @@ const actions = {
   },
 
   /**
-   * Save a draft (upsert). Returns { ok, code? }. NOT_READY until the
-   * okf_studio_drafts collection/server route is live — call still updates
-   * in-memory state so the wizard remains usable during the gap.
+   * STORY 10.5 — hydrate the draft from the SERVER (this is what makes the
+   * wizard survive a browser refresh: before it, `drafts` lived only in the
+   * Vuex store and a refresh reopened the wizard at a fallback step with none
+   * of the curation view-state).
+   *
+   * Cache-first, exactly like loadDraft: a draft already in `state.drafts` is
+   * returned without a round-trip, so an in-session resume costs nothing.
+   * `force: true` bypasses the cache (a re-read from disk).
+   *
+   * Outcomes (all non-throwing — the caller is UI code):
+   *   { ok: true, draft, cached }  a draft is now in the store,
+   *   { ok: true, draft: null }    the repo exists but has no draft yet, or
+   *                                the repo is gone (REPO_NOT_FOUND resolves to
+   *                                null in studioService) — NOT an error,
+   *   { ok: false, code: 'NOT_READY' } the endpoint is missing on this server
+   *                                (an older backend); flags the session so
+   *                                later saves do not hammer it.
+   *
+   * draftsUnavailable is set ONLY on a genuine NOT_READY — never on a
+   * null draft, which is the normal first-open case.
+   */
+  async fetchDraft({ commit, state }, { repoId, force = false } = {}) {
+    if (!repoId) return { ok: false, code: 'VALIDATION_ERROR', message: 'repoId required' };
+    if (!force && state.drafts[repoId]) {
+      return { ok: true, draft: state.drafts[repoId], cached: true };
+    }
+    try {
+      const draft = await studioService.getDraft(repoId);
+      if (!draft) return { ok: true, draft: null };
+      // The wire draft is FLAT — commit it verbatim. A server that echoes a
+      // stale/other repo_id would corrupt the map key, so trust the id we asked for.
+      commit('setDraft', { repoId, draft: { ...draft, repo_id: repoId } });
+      return { ok: true, draft };
+    } catch (err) {
+      if (err && err.code === 'NOT_READY') {
+        // The endpoint does not exist on this server. Flag the session so
+        // saveDraft stops re-hammering it; the wizard keeps working off the
+        // in-memory draft exactly as it did before Story 10.5.
+        commit('setDraftsUnavailable');
+        return { ok: false, code: 'NOT_READY', message: 'okf.studio.draft.notReady' };
+      }
+      return { ok: false, code: (err && err.code) || 'DRAFT_FETCH_FAILED', message: err && err.message };
+    }
+  },
+
+  /**
+   * Save a draft (upsert). Returns { ok, code? }.
+   *
+   * Story 10.5: the server endpoint is LIVE (`PUT /okf/repos/:id/draft`), so
+   * every call now reaches the okf_studio_drafts collection. The R-D
+   * session short-circuit is gone — with a real endpoint it only suppressed
+   * legitimate writes after one transient failure. The in-memory draft is
+   * still committed FIRST (Vuex-first), so the wizard renders regardless of
+   * the network outcome.
    */
   async saveDraft({ commit, state }, { repoId, draft }) {
     if (!repoId || !draft) {
@@ -262,7 +320,7 @@ const actions = {
     }
     // WIZARD IDEMPOTENCY R-C (David, 2026-09-04): a published/ingested repo
     // has nothing to draft — the server write is SKIPPED entirely (it would
-    // 404/409-spam); the in-memory draft still updates so the wizard keeps
+    // 409-spam); the in-memory draft still updates so the wizard keeps
     // rendering the resume state.
     const repo = state.reposById[repoId];
     if (repo && (repo.ingested_at || repo.lifecycle_state === 'publish')) {
@@ -270,21 +328,25 @@ const actions = {
       return { ok: true, skipped: 'frozen' };
     }
     commit('setDraft', { repoId, draft: { ...draft, updated_at: Date.now() } });
-    // WIZARD IDEMPOTENCY R-D: the drafts endpoint (Story 10.5) is not live
-    // yet. After the first 404 it stays unavailable for the session — every
-    // further call short-circuits silently instead of re-hammering it.
-    if (state.draftsUnavailable) {
-      return { ok: false, code: 'NOT_READY', silent: true };
-    }
     try {
-      // POST /api/okf/studio_drafts/:repo_id — server collection is to-be-built (10.5).
-      // Until then the call returns 404; we treat as NOT_READY but keep the in-memory
-      // draft so the wizard works locally.
-      await studioService.saveDraft(repoId, draft);
-      return { ok: true };
-    } catch {
-      commit('setDraftsUnavailable');
-      return { ok: false, code: 'NOT_READY', message: 'okf.studio.draft.notReady' };
+      // PUT /okf/repos/:repo_id/draft — the flat wire draft is passed through
+      // unchanged; the service strips its reserved keys (repo_id,
+      // studio_step, created_at, updated_at, schema_version) and stamps its
+      // own timestamps.
+      const saved = await studioService.saveDraft(repoId, draft);
+      return { ok: true, saved: saved || null };
+    } catch (err) {
+      if (err && err.code === 'NOT_READY') {
+        // Only reachable against a server WITHOUT the endpoint — flag it so
+        // the session stops re-hammering a route that does not exist.
+        commit('setDraftsUnavailable');
+        return { ok: false, code: 'NOT_READY', message: 'okf.studio.draft.notReady' };
+      }
+      return {
+        ok: false,
+        code: (err && err.data && err.data.error) || 'DRAFT_SAVE_FAILED',
+        message: err && err.message
+      };
     }
   },
 

@@ -694,6 +694,53 @@ async function update(repo_id, patch, actor) {
       throw err;
     }
 
+    // THE HEAD MUST TRACK THE FRONTMATTER (David, 2026-10-12: "the test still
+    // sits at 80%... it is not suggesting any further improvements").
+    //
+    // The head is the gate vector the retriever scores queries against, and
+    // buildVectorizedHead is its only writer besides the explicit rebuild
+    // endpoint and publish. update() wrote the frontmatter and never told it,
+    // so the head stayed frozen while the tag set grew underneath it. Live
+    // proof on the Alphabet repo: four saves at 04:15/04:17/04:17/04:19, the
+    // head recomputed ONCE at 04:15:37 and never again, and three Lab runs
+    // then scored bit-identically (avg_margin equal to 17 decimal places)
+    // against an unchanged gate while the forbidden list grew 5->6->7->8. The
+    // advisor reported "no safe tag lever" because it had nothing new to
+    // simulate — it was reasoning over a stale corpus, not failing to help.
+    //
+    // Two more repos were frozen the same way (www-gov-uk-full-crawl, NCD
+    // Information), so this is systemic, not an Alphabet quirk.
+    //
+    // Awaited so no caller ever observes a stale head. A rebuild failure does
+    // NOT roll the save back: the frontmatter is already durable and losing a
+    // curator's tag edit over an embedding blip is strictly worse than a stale
+    // head. It logs at error, and the Lab's existing stale badge
+    // (frontmatter.updated_at vs head.computed_at) surfaces the gap.
+    //
+    // Lazy require: head-test-service requires this module, so a top-level
+    // import here would be a cycle. Same pattern as graph-lifecycle below.
+    if (Object.prototype.hasOwnProperty.call(setFields, 'frontmatter')) {
+      try {
+        const frontmatterService = require('./frontmatter-service');
+        await frontmatterService.buildVectorizedHead(repo_id, setFields.frontmatter, {
+          actor: (actor && actor.sub) || 'system',
+          version: existing.version
+        });
+        logger.info('OKF repo updated: head rebuilt from the new frontmatter', {
+          repo_id,
+          forbidden: Array.isArray(setFields.frontmatter.forbidden)
+            ? setFields.frontmatter.forbidden.length
+            : null
+        });
+      } catch (headErr) {
+        logger.error('OKF repo updated: HEAD REBUILD FAILED — the gate is now stale', {
+          repo_id,
+          error: headErr && headErr.message,
+          code: (headErr && headErr.code) || null
+        });
+      }
+    }
+
     // BORN-RIGHT RENAME (David, 2026-09-02): the graph name derives from the
     // repo NAME — a rename must move the graph (same versions, new slug), or
     // the next drain would create a differently-named graph and orphan the
@@ -795,6 +842,29 @@ async function remove(repo_id, actor) {
       await retractRepoGraph(repo_id);
     } catch (err) {
       logger.warn('Graph retract failed (non-fatal)', { repo_id, error: err.message });
+    }
+
+    // Story 10.5 — ORPHAN CASCADE for the wizard's resumable curation draft.
+    // Best-effort and placed AFTER the graph retract (the draft must not
+    // outlive its repo). A draft that does outlive one is dead weight, never a
+    // correctness problem, and must NEVER fail a DELETE — hence the same
+    // try/catch + logger.warn shape as the retract above. Deliberately a raw
+    // collection handle, not a studio-draft-service require: this file is
+    // imported BY that service (its 404 pre-gate), and requiring back would
+    // be a require cycle. The sweep's orphan pass is the safety net if this
+    // ever misses. (remove() only runs for a non-ingested repo — an ingested
+    // one 409s above — so a serving repo is never draft-cascaded.)
+    try {
+      await db.collection('okf_studio_drafts').remove(repo_id);
+    } catch (err) {
+      // "No draft stored" is the overwhelmingly common case (most repos are
+      // never opened in the wizard) and is NOT a cascade failure — keep it at
+      // debug so a warn here always means something went genuinely wrong.
+      if (ARANGO_NOT_FOUND(err)) {
+        logger.debug('Studio draft cascade: no draft stored (nothing to remove)', { repo_id });
+      } else {
+        logger.warn('Studio draft cascade failed (non-fatal)', { repo_id, error: err.message });
+      }
     }
 
     // Then remove the registry entry entirely — the delete service cleans

@@ -415,6 +415,107 @@ const repoOkfService = {
       { timeout: 120000 }
     );
     return res && res.data ? res.data : { ok: false };
+  },
+
+  /**
+   * PII RE-SCAN — THE PERSISTING PER-CONCEPT SCAN (2026-10-12).
+   *
+   * WHY THIS EXISTS. `inspectPii` is documented server-side as "Nothing
+   * persisted" — it refreshes the DISPLAYED occurrences and leaves pii_state
+   * exactly as it was. The panel's Re-scan button used to call it with
+   * {rescan:true}, so pressing Re-scan on a concept whose scan had ERRORED
+   * looked like it worked and changed nothing: the publish gate kept reading
+   * the stale 'error'.
+   *
+   * This is the `concepts[]` mode of POST /:repo_id/pii-scan — the server runs
+   * the real `piiService.scanConcept` per input and writes pii_state onto the
+   * meta row. It is the SAME route and the SAME service the repo-wide rescan
+   * uses, just scoped to one concept and answered synchronously, so the panel
+   * needs no second endpoint.
+   *
+   * The caller must supply `frontmatter` and `body` (fetch the concept with
+   * `getConcept`): the server scans the content it is given, so sending an
+   * empty body would scan nothing and write a meaningless verdict.
+   *
+   * Body:  { concepts: [{ concept_id, frontmatter, body }] }
+   * 200:    { repo_id, scanned, results: [{ concept_id, pii_state,
+   *           pii_hits_summary }], gate, version? }
+   * Errors: 400 { error:'PII_SCAN_NOTHING_SCANNED', message } (empty concepts[])
+   *         404 { error, message }  403 (repo scope)
+   *         409 (assertWritable drain freeze — the scan overwrites pii_state)
+   *
+   * FAIL-CLOSED: a sidecar transport failure is NOT an HTTP error — the server
+   * records pii_state 'error' and still answers 200. The caller must read
+   * results[].pii_state and render 'error' as blocking, never as success.
+   */
+  async scanConceptPii(repoId, conceptId, opts = {}) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/pii-scan`,
+      {
+        concepts: [
+          {
+            concept_id: conceptId,
+            frontmatter: opts.frontmatter || {},
+            body: typeof opts.body === 'string' ? opts.body : ''
+          }
+        ]
+      },
+      { timeout: 120000, silent: true }
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  /**
+   * PII RE-SCAN — ARM THE REPOSITORY-WIDE CONCEPT RESCAN (2026-10-12).
+   *
+   * `POST /:repo_id/pii-scan {"scope":"concepts"}` is the ONLY server mode that
+   * reaches the rows the publish gate reads: it enumerates okf_concepts_meta
+   * and runs the persisting scanConcept on each. The sibling modes
+   * ({file_ids}/{discover:true}) scan the `files` documents and write
+   * pii_state keyed by file_id — a different subject entirely, so a perfect
+   * file scan leaves every concept row untouched.
+   *
+   * It is ASYNC: the server answers 202 and keeps working (141 concepts x one
+   * sidecar round-trip cannot finish inside a gateway timeout). Poll with
+   * `getRepoPiiScan` below — the same 202+poll idiom as the head suite run.
+   *
+   * 202:    { repo_id, scan_key, status: 'running' }
+   * Errors: 400 { error:'PII_SCAN_*', message, details? }  404 { error, message }
+   *         403 (repo scope)  409 (assertWritable drain freeze)
+   *         422 { details } (body validation)
+   */
+  async startRepoPiiScan(repoId) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/pii-scan`,
+      { scope: 'concepts' },
+      { timeout: 120000, silent: true }
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  /**
+   * PII RE-SCAN — POLL an armed repository-wide concept rescan.
+   *
+   * `GET /:repo_id/pii-scan/:scan_key` (read scope, like every other poll).
+   * The response is the run document:
+   *   running → { repo_id, scan_key, status:'running', progress:{phase, done, total} }
+   *   failed  → { ..., status:'failed', error:{code, message}, tally? }
+   *   done    → { ..., scanned, clean, hit, error, missing,
+   *               results:[{ concept_id, pii_state, pii_hits_summary,
+   *                           skipped? }], gate }
+   *
+   * A 'failed' run is TERMINAL (the server reaps orphaned 'running' docs on a
+   * restart), so a poll must stop on it — never spin.
+   *
+   * Errors: 404 { error:'PII_SCAN_NOT_FOUND', message }
+   */
+  async getRepoPiiScan(repoId, scanKey) {
+    const res = await httpService.get(
+      `/okf/repos/${encodeURIComponent(repoId)}/pii-scan/${encodeURIComponent(scanKey)}`,
+      {},
+      { silent: true }
+    );
+    return res && res.data ? res.data : null;
   }
 };
 

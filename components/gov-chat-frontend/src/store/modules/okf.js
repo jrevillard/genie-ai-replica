@@ -971,6 +971,63 @@ const actions = {
     }
   },
 
+  // ─── PII RE-SCAN (2026-10-12) ────────────────────────────────────────────────
+  // The PERSISTING scan paths. pii-inspect ("Nothing persisted") is still
+  // what the panel OPENS with — it is cheap and cache-backed — but the
+  // curator's Re-scan button must write, or a concept stuck on pii_state
+  // 'error' can never be cleared and the publish gate stays blocked forever.
+  // The error envelope is preserved (status + server message) because the UI
+  // has to say WHY a re-scan failed — a 404 here means "this server build has
+  // no re-scan route", which is the exact silent no-op this replaces.
+
+  /** Re-scan ONE concept and persist the verdict onto its meta row. */
+  async rescanConceptPii(_ctx, { repoId, conceptId } = {}) {
+    if (!repoId || !conceptId) return { ok: false, code: 'VALIDATION_ERROR', error: 'repoId + conceptId required' };
+    try {
+      const result = await repoOkfService.scanConceptPii(repoId, conceptId, { rescan: true });
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RESCAN_FAILED',
+        status: err && err.status,
+        error: err && err.message
+      };
+    }
+  },
+
+  /** ARM the repository-wide concept rescan (async — 202 + poll). */
+  async startRepoPiiScan(_ctx, { repoId } = {}) {
+    if (!repoId) return { ok: false, code: 'VALIDATION_ERROR', error: 'repoId required' };
+    try {
+      const result = await repoOkfService.startRepoPiiScan(repoId);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RESCAN_FAILED',
+        status: err && err.status,
+        error: err && err.message
+      };
+    }
+  },
+
+  /** POLL an armed concept rescan: {status:'running'|'failed'|'done', ...}. */
+  async getRepoPiiScan(_ctx, { repoId, scanKey } = {}) {
+    if (!repoId || !scanKey) return { ok: false, code: 'VALIDATION_ERROR', error: 'repoId + scanKey required' };
+    try {
+      const result = await repoOkfService.getRepoPiiScan(repoId, scanKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RESCAN_FAILED',
+        status: err && err.status,
+        error: err && err.message
+      };
+    }
+  },
+
   // ─── Story 1-8 (2026-10-08): Head Tester / Routing Lab ─────────────────────
   // All wrap headTestService and return {ok, code?, message?, result?} —
   // the dialog renders err.data.error/message (server envelope) like

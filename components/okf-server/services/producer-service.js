@@ -27,6 +27,10 @@ const { ingestRepoConcepts } = require('./ingest-service');
 const { withSpan } = require('../shared-lib/tracing');
 const crawlConversion = require('./crawl-conversion-service');
 const { convertXlsx, slugify } = require('./converters/xlsxSheetConverter');
+// FR-42 for CSV (David 2026-10-12): the SAME dictionary + row-group shape as
+// xlsx, plus LLM topics summarised from the dictionary columns. Async (one
+// remote LLM call per file), so convertDocument awaits its result.
+const { convertCsv } = require('./converters/csvSheetConverter');
 // Story 1-8g-p: whole-corpus topic-link authoring. Lazy-required inside the
 // runner (house style — the service pulls in the LLM client) but the predicate
 // is read at module scope for the early-out below.
@@ -220,6 +224,14 @@ async function convertDocument(buffer, ext, meta) {
   }
   if (ext === '.xlsx') {
     return convertXlsx(buffer, meta); // FR-42: dictionary + row-groups, own links
+  }
+  if (ext === '.csv') {
+    // FR-42: a CSV is ONE sheet — dictionary + row-groups, plus topics
+    // summarised from the dictionary columns (csvSheetConverter). Without
+    // this branch a CSV would fall through to the raw-text fallback below and
+    // land as ONE comma-dense prose blob — content in the repo, but with no
+    // table structure and nothing a row-level question could retrieve.
+    return convertCsv(buffer, meta);
   }
   // .md / .txt and every text/* fallback
   return { text: buffer.toString('utf8') };
@@ -490,13 +502,17 @@ async function runDocumentsConversion(job) {
         const buf = await downloadToBuffer(file_id, cap);
         const ext = (String(meta.file_name).match(/(\.[a-z0-9]+)\s*$/i) || [])[1];
         const lower = (ext || '').toLowerCase();
-        if (!['.pdf', '.docx', '.xlsx', '.md', '.html', '.htm', '.txt'].includes(lower)) {
+        if (!['.pdf', '.docx', '.xlsx', '.csv', '.md', '.html', '.htm', '.txt'].includes(lower)) {
           throw Object.assign(new Error(`unsupported document format "${lower || meta.file_name}"`), {
             code: 'DOC_FORMAT_UNSUPPORTED'
           });
         }
         const converted = await convertDocument(buf, lower, meta);
-        if (lower === '.xlsx') {
+        // BOTH tabular converters return {concepts, sheets} (an ARRAY of drafts)
+        // while every other converter returns {text}. A .csv sibling of .xlsx MUST be
+        // listed here too, or its concepts are silently dropped and the file
+        // reports "imported" with nothing in the repo.
+        if (lower === '.xlsx' || lower === '.csv') {
           allDrafts.push(...converted.concepts);
           perFile.push({ file_id, file_name: meta.file_name, status: 'imported', concepts: converted.concepts.length });
         } else {

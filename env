@@ -1199,6 +1199,9 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Default: off unless exactly '1'. Compose: yes. Ansible: yes.
 # OKF_XLSX_ROWS_PER_CONCEPT=200
 #   Default: 200 (clamped 10..500). Compose: no.
+# OKF_CSV_ROWS_PER_CONCEPT=200
+#   Default: 200 (clamped 10..500) — CSV row-group size, per FR-42 dictionary
+#   + row-group import. Compose: no.
 
 # --- okf-server: LLM curation engine (D-B, DP-8: okf-server owns the client) ---
 # VLLM_ENDPOINT=https://GPU_HOST:444/llm

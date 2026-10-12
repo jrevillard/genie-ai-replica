@@ -22,10 +22,10 @@ spec:
   # come from a Secret named `<keycloak-cr-name>-db-secret` (here:
   # `keycloak-db-secret`) in this namespace, with the fixed keys
   # POSTGRES_HOST / POSTGRES_DATABASE / POSTGRES_USER / POSTGRES_PASSWORD.
-  # The chart's pre-existing `keycloak-db-credentials` Secret must be
-  # mirrored under that name (e.g. an additional SealedSecret or a
-  # template that re-exports the same data) before the operator can
-  # provision the StatefulSet.
+  # The chart does not materialize this Secret — operators wire it from
+  # their secret backend of choice (SealedSecret, External Secrets
+  # Operator, kubeval, manual apply, SOPS-decrypted Secret, etc.) so
+  # the chart stays agnostic to the secret mechanism.
   externalDatabase:
     enabled: true
   # Operator-managed Ingress/Route is OFF: TLS + the public hostname

@@ -3,12 +3,59 @@
 Single-install Helm chart for GENIE.AI. Renders the entire 28-service stack
 with one `helm install`.
 
+## Quickstart
+
+The chart defaults to the GENIE.AI GitLab Container Registry image layout,
+so a baseline install pulls the right service images without extra flags.
+Operator overrides only what's different on the target cluster.
+
+```bash
+# 1. Verify the 4 cluster operators are installed (one-time per cluster).
+#    See "Cluster prerequisites" below for the install commands.
+kubectl get crd | grep -E 'keycloak|sealedsecret|cluster\.arangodb|cnpg'
+
+# 2. Render + install the chart. The chart creates the `genieai`
+#    namespace; pass --create-namespace so helm propagates it before
+#    any pre-install hooks (which create ServiceAccounts inside the
+#    namespace) run.
+helm install genieai charts/genieai-umbrella/ \
+  --create-namespace --namespace genieai
+```
+
+To override the image registry (e.g. mirror in air-gapped setup), or the
+per-service image tag/policy (e.g. laptop-build workflow with local
+minikube images):
+
+```bash
+helm install genieai charts/genieai-umbrella/ \
+  --create-namespace --namespace genieai \
+  --set global.imageRegistry=my-registry.example.com/myproject \
+  --set services.backend.image.repository=genie-ai-backend \
+  --set services.backend.image.tag=dev \
+  --set services.backend.image.pullPolicy=Never
+```
+
+Override paths (in order of precedence):
+- Per-service: `services.<svc>.image.{repository,tag,pullPolicy}`
+- Global default: `global.imageRegistry` (default `registry.opensource.unicc.org/un/itu/genie-ai`)
+- Chart defaults: hardcoded `genie-ai-<svc>:main` per service
+
+Secret backend: the chart does not materialize the underlying Secret for
+any of the data-tier or stateless-tier credentials it references. Each
+service deployment declares the Secret names it consumes via `envFrom`
+(plain `secrets: [{name: <secret-name>}]` lists in `services.<svc>.secrets`
+and `data.<tier>.secrets`); operators bring the Secret into the target
+namespace by whatever mechanism they use cluster-wide (SealedSecret, SOPS,
+External Secrets Operator, kubeval, manual `kubectl apply`, HashiCorp
+Vault Agent, etc.). The chart does not endorse or require any particular
+mechanism.
+
 ## Status
 
 | Layer | Status |
 |---|---|
 | Foundation (namespace, ArgoCD example, chart-testing baseline) | ✅ Shipped |
-| Data layer (CNPG, kube-arangodb, sealed-secrets CRs; operators = bootstrap prerequisites) | ✅ Shipped |
+| Data layer (CNPG, kube-arangodb, keycloak; operators = bootstrap prerequisites) | ✅ Shipped |
 | Service tier (stateless app: backend + frontend + document-repository + nginx + clamav) | ✅ Shipped |
 | Observability (vmoperator VMSingle/Cluster + OTel operator + serviceMonitors) | ⏳ Planned |
 | AI/ML (vLLM + TEI + OPEA microservices + GPU operator) | ⏳ Planned |
@@ -64,7 +111,6 @@ hook needs must itself be a lower-weight hook):
 4. `-20` — dep-graph ConfigMap (dependency-graph.json + enabled.json)
 5. `-10` — cluster-profile drift detection (pre-upgrade only; emits a Warning Event on namespace-label/render mismatch)
 6. `-5`  — dependency graph validation (services/data require their deps)
-7. `0` on pre-upgrade only — SealedSecret drift validation (status.conditions[type=Synced].status=False sweep)
 
 ## Tests
 
@@ -74,13 +120,13 @@ helm test <release> -n genieai
 ```
 
 The two helm-test pods (`<release>-genieai-umbrella-test-namespace`,
-`<release>-genieai-umbrella-test-data-deps`) and the clusterprofile-detect /
-sealed-secret-validate hook Jobs all need `kubectl` (and the drift validator
-also needs `jq`). The chart no longer pins an image that ships those binaries
-preinstalled (the `registry.k8s.io/kubectl` image is distroless and the
-`bitnami/kubectl` version tags were purged); instead each Pod runs an init
-container that downloads the static binaries into a shared `tools` emptyDir
-and the main container (alpine) picks them up via the PATH env.
+`<release>-genieai-umbrella-test-data-deps`) and the clusterprofile-detect
+hook Job all need `kubectl`. The chart no longer pins an image that ships
+those binaries preinstalled (the `registry.k8s.io/kubectl` image is
+distroless and the `bitnami/kubectl` version tags were purged); instead
+each Pod runs an init container that downloads the static binaries into a
+shared `tools` emptyDir and the main container (alpine) picks them up via
+the PATH env.
 
 ### Air-gapped deployments
 
@@ -94,17 +140,14 @@ fall back to upstream when the mirror is unreachable.
 
 ## Secrets backend
 
-Default secrets backend `sealedSecrets` (controller = cluster bootstrap
-prerequisite; see above). Key rotation is operator-initiated: restart the
-controller with a fresh key, re-fetch its public cert, re-encrypt every
-committed SealedSecret against it, then deploy — the pre-upgrade drift hook
-fails upgrades while any SealedSecret reports Synced=False (ErrorDecrypt).
-
-Operator convention (no chart value): record which cluster key sealed the
-committed blobs in `deploy/environments/<env>/secrets/*.yaml` next to those
-blobs — e.g. the certificate fingerprint from `kubeseal --fetch-cert` in a
-comment or the environment's README. The chart reads no fingerprint value;
-runtime enforcement is the drift hook above.
+The chart is **agnostic to the secret mechanism**. Service deployments
+declare the Secret names they consume via `envFrom`
+(`secrets: [{name: <secret-name>}]` lists under each `services.<svc>.secrets`
+and `data.<tier>.secrets` block); operators materialize the Secret in
+the target namespace by whatever mechanism they use cluster-wide
+(SealedSecret, SOPS-decrypted Secret, External Secrets Operator,
+HashiCorp Vault Agent, kubeval, manual `kubectl apply`, etc.). The
+chart does not endorse, require, or assume any particular mechanism.
 
 ## Stateless service tier
 
@@ -122,19 +165,6 @@ NetworkPolicies). Each service reads its config from the `services.<name>` key i
 
 Each rendered service ships a Deployment, a Service, a default-deny NetworkPolicy,
 and (where applicable) envFrom secret references + a PDB.
-
-### Sealed Secrets in this tier
-
-`templates/secrets/stateless-tier-secrets.yaml` renders four SealedSecrets that the backend
-consumes via envFrom:
-
-- `email-password`
-- `keycloak-client-secret`
-- `huggingface-hub-token`
-- `translation-cache-password`
-
-Each resource ships with a `PLACEHOLDER+` sentinel value; the CI conftest gates a
-real commit on those sentinels being absent.
 
 ### PodDisruptionBudget
 

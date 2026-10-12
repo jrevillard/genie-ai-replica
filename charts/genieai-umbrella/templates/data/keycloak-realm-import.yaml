@@ -29,8 +29,8 @@
 {{- fail (printf "data.keycloak.clientSecrets.%s is empty or a placeholder (change-me-*); the realm import ALWAYS requires real client secrets, regardless of data.keycloak.failOnPlaceholderSecrets" $k) -}}
 {{- end -}}
 {{- end -}}
-apiVersion: k8s.keycloak.org/v2alpha1
-kind: KeycloakRealmImport
+apiVersion: keycloak.org/v1alpha1
+kind: KeycloakRealm
 metadata:
   name: genieai-realm
   namespace: {{ .Values.namespace }}
@@ -38,8 +38,13 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 4 }}
     genieai.io/data-tier: identity
 spec:
-  # References the Keycloak CR above; import runs once the instance is Ready.
-  keycloakCRName: keycloak
+  # v1alpha1 binds the realm to a Keycloak instance by label selector
+  # (the older `keycloakCRName` reference was removed by the upstream
+  # operator migration). The `app: keycloak` label is set on the Keycloak
+  # CR in keycloak-instance.yaml.
+  instanceSelector:
+    matchLabels:
+      app: keycloak
   realm:
     # realm name MUST match the in-cluster consumers' KC_REALM /
     # KEYCLOAK_REALM value (genie).
@@ -49,10 +54,10 @@ spec:
     # rootUrl/redirectUris/webOrigins below uses $origin. A second
     # derivation site drifts and breaks that client's login with
     # invalid_redirect_uri while render gates stay green.
-    # KeycloakRealmImport is import-once: the operator ignores later
+    # KeycloakRealm is import-once: the operator ignores later
     # spec.realm changes, so redirect URIs do NOT follow a
-    # post-install ingress.host change (re-import or manual client
-    # edit required).
+    # post-install ingress.host change (re-import by recreating the
+    # KeycloakRealm CR or manual client edit required).
     {{- $origin := printf "https://%s" (.Values.ingress.host | default "genieai.local") }}
     # TLS terminates at the edge (Envoy Gateway); the Keycloak pod serves
     # plain HTTP inside the cluster. `external` (the Keycloak default)

@@ -37,6 +37,13 @@ spec:
     parameters:
       max_connections: "200"
       shared_buffers: "256MB"
+  # CNPG publishes 3 Services for this Cluster:
+  #   keycloak-db       (RW, points at the current primary; default JDBC target)
+  #   keycloak-db-rw    (RW, explicit; the Keycloak CR's spec.db.host uses this name)
+  #   keycloak-db-ro    (RO, replicas; for read-heavy reporting)
+  # The Keycloak v2beta1 CR's spec.db.host is `<cluster-name>-rw.<ns>.svc.cluster.local`
+  # (see keycloak-instance.yaml). Operators changing this Cluster's `metadata.name`
+  # MUST also update `data.keycloak.cnpgServiceName` in values.yaml to match.
   bootstrap:
     initdb:
       database: keycloak

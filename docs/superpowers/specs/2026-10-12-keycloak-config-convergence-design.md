@@ -171,7 +171,18 @@ This MR touches the Swarm compose path as well as the chart — that is the cost
 
 ## Out of scope (explicit)
 
-- **The GENIE Keycloak theme.** Compose bakes `configs/keycloak/themes/` into a custom image (`FROM quay.io/keycloak/keycloak:26.7` + `COPY themes/`). The chart uses the stock operator image, so `loginTheme: genie` resolves to nothing and falls back to the default — no branding, no 14 locale message bundles. Closing this needs a GENIE-built Keycloak image in the 16-image CI list plus `spec.image` on the Keycloak CR. Separate plan.
+- **The GENIE Keycloak theme.** Owned by issue **!998 "Refactor theme to runtime-loaded config (no rebuild for color changes)"** (opened 2026-09-16, labels `architecture` / `deployment` / `tech-debt`). That issue is transverse — it covers the frontend palette *and* the Keycloak theme CSS, and its proposed solution is mount-only / no rebuild. **Do not open a duplicate ticket**; the K8s side is a follow-on to !998, not a separate workstream.
+
+  The consequence for this spec is the only remaining functional gap against the compose path: `configs/keycloak/themes/` is baked into a custom image (`FROM quay.io/keycloak/keycloak:26.7` + `COPY themes/`), so on K8s the stock operator image has no `genie` theme and `loginTheme: genie` falls back to the default — no branding, no 14 locale message bundles.
+
+  Two candidate routes exist for K8s, and the choice belongs to !998, not here:
+
+  | | Mechanism | Cost |
+  |---|---|---|
+  | **A** | a ConfigMap carrying the whole theme (`template.ftl`, CSS, the 14 `messages_*.properties`, base64 `logo.png`) mounted at `/opt/keycloak/themes/genie/` through `spec.unsupported.podTemplate` | mount-only, no 17th image, no `kc.sh build --optimized`; but `spec.unsupported.podTemplate` is documented "use at your own risk, we reserve the possibility to remove/change the way any field gets merged in future releases without notice" |
+  | **B** | a GENIE-built Keycloak image referenced by `spec.image` | adds a 17th image to the CI build list and requires the `--optimized` augmentation step; stable API, more moving parts |
+
+  !998's mount-only direction favours A, and A carries the same "field explicitly unsupported" risk that led this spec to reject the `KeycloakOIDCClient` CRDs. **Implement the K8s theme only after !998 settles A-vs-B**, or the Swarm and Kubernetes paths will diverge.
 - **Terraform provider keycloak.** The research produced no surviving claim about its 2026 state; nothing may be asserted about it.
 - **ArgoCD as a delivery target.** The deploy-repo uses Flux. The example is corrected for accuracy, not exercised.
 - **kcc image tag maintenance.** The `-26` suffix encodes the Keycloak major version. Documented, not automated.

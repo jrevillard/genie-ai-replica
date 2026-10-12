@@ -49,6 +49,46 @@ class VersionError extends Error {
 }
 
 const { isArangoNotFound } = require('./arango-errors');
+const { createHash } = require('node:crypto');
+
+/**
+ * Fingerprint a concept set for publish idempotency: one sha256 over the
+ * SORTED `concept_id:content_hash` pairs. Order-independent (the sampler does
+ * not return rows in a stable order) and derived from the STORED canonical
+ * content_hash, never a recomputed body hash — so it moves only when the
+ * publishable content actually moves.
+ */
+function fingerprintOf(concepts) {
+  const parts = (concepts || [])
+    .map((c) => `${c.concept_id}:${c.content_hash || ''}`)
+    .sort();
+  return createHash('sha256').update(parts.join('\n')).digest('hex');
+}
+
+/** The fingerprint of the concepts as they stand RIGHT NOW (live meta rows). */
+async function currentFingerprint(repoId) {
+  const db = await dbService.getConnection();
+  const concepts = (
+    await db.query(
+      `FOR m IN ${META} FILTER m.repo_id == @repo_id
+         RETURN { concept_id: m.concept_id, content_hash: m.content_hash }`,
+      { repo_id: repoId }
+    )
+  ).all();
+  return fingerprintOf(concepts);
+}
+
+/** The fingerprint recorded on the repo's CURRENT version, or null. */
+async function fingerprintOfCurrentVersion(repoId) {
+  const db = await dbService.getConnection();
+  try {
+    const v = await db.collection(VERSIONS).document(repoId);
+    return (v && v.content_fingerprint) || null;
+  } catch (err) {
+    if (!isArangoNotFound(err)) throw err;
+    return null; // never versioned yet — nothing to compare against
+  }
+}
 const isUniqueViolation = (err) =>
   err && (err.errorNum === 1210 || err.errorNum === 1185 || err.code === 409 || err.statusCode === 409);
 const isNotFound = (err) => isArangoNotFound(err); // structural ONLY — never message-regex (outages must not mask as 404)
@@ -320,6 +360,11 @@ async function mintVersion(repo_id, opts = {}, actor) {
         repo_id,
         bundle_version: nextVersion,
         okf_tag: okfTag,
+        // Content fingerprint of the concepts this version snapshotted. Lets
+        // the publish path refuse a no-op republish: live 2026-10-12 a steward
+        // clicking Publish three times minted v18/v19/v20 in eight seconds,
+        // each requeuing Bali's 1001 meta rows for a full re-drain.
+        content_fingerprint: fingerprintOf(concepts),
         trigger,
         source_ref: typeof opts.source_ref === 'string' ? opts.source_ref.slice(0, 500) : null,
         curator: opts.curator || (actor && actor.sub) || null,
@@ -549,6 +594,10 @@ module.exports = {
   getVersion,
   linkBundleToVersion,
   updateVersionIngestStatus,
+  // publish idempotency (2026-10-12)
+  fingerprintOf,
+  currentFingerprint,
+  fingerprintOfCurrentVersion,
   VersionError,
   TRIGGERS
 };

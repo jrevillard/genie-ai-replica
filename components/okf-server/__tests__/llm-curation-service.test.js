@@ -38,18 +38,38 @@ function metaRow(over = {}) {
   };
 }
 
-function makeDb(rows, updates) {
+function makeDb(rows, updates, opts = {}) {
   return {
     query: jest.fn(async (q) => ({
       all: async () => {
         if (q.includes('serviceCategories')) return AREAS;
         if (q.includes('FROM-CONCEPTS')) return rows;
-        if (q.includes('FOR s IN services')) return AREA_LABELS;
+        if (q.includes('FOR s IN services')) return opts.areaLabels === null ? [] : AREA_LABELS;
+        // The terminal reconcile: ONE authoritative count of labelled
+        // curatable concepts. `labelledCount` overrides it (another writer /
+        // a stale in-memory count); otherwise it is computed from the rows,
+        // which `update` mutates exactly like a real write would.
+        if (q.includes('COLLECT WITH COUNT INTO labelled')) {
+          const n =
+            opts.labelledCount != null
+              ? opts.labelledCount
+              : rows.filter((r) => !r.is_index && Array.isArray(r.labels) && r.labels.length > 0).length;
+          return [{ labelled: n }];
+        }
         if (q.includes('okf_concepts_meta')) return rows;
         return [];
       }
     })),
-    collection: jest.fn(() => ({ update: jest.fn(async (k, patch) => updates.push({ k, patch })) }))
+    // The write is applied to the row itself — a real ArangoDB update mutates
+    // the document and the terminal reconcile reads it back. Without this the
+    // count query could only ever see the PRE-pass state.
+    collection: jest.fn(() => ({
+      update: jest.fn(async (k, patch) => {
+        const row = rows.find((r) => r._key === k);
+        if (row) Object.assign(row, patch);
+        updates.push({ k, patch });
+      })
+    }))
   };
 }
 
@@ -84,7 +104,9 @@ describe('curateRepoConcepts (#980)', () => {
     mockDb = makeDb(rows, updates);
     const stats = await service.curateRepoConcepts(REPO, { classification: 'heuristics' });
     expect(axios.post).not.toHaveBeenCalled();
-    expect(stats).toMatchObject({ method: 'heuristics', total: 2, curated: 2, labeled: 1, described: 0 });
+    // curated counts concepts that CARRY LABELS, not concepts the pass walked
+    // past: the unmatched row is still an honest gap (curated 1 of total 2).
+    expect(stats).toMatchObject({ method: 'heuristics', total: 2, curated: 1, labeled: 1, described: 0 });
     const kwUpdate = updates.find((u) => JSON.stringify(u.patch).includes('keyword-match'));
     expect(kwUpdate).toBeTruthy(); // the decision's origin is persisted (D-G)
     expect(updates).toHaveLength(1); // the unmatched row is left honestly unlabeled
@@ -105,7 +127,7 @@ describe('curateRepoConcepts (#980)', () => {
     });
     expect(stats).toMatchObject({
       method: 'llm',
-      total: 2,
+      total: 1, // the structural index row is NOT part of the denominator
       curated: 1,
       labeled: 1,
       described: 1,
@@ -157,7 +179,8 @@ describe('curateRepoConcepts (#980)', () => {
     axios.post.mockRejectedValue(new Error('connection refused'));
     const stats = await service.curateRepoConcepts(REPO, { classification: 'llm' });
     expect(stats.fallbacks).toBe(1);
-    expect(stats.curated).toBe(1);
+    // The concept was TOUCHED but stays unlabelled — the bar must not count it.
+    expect(stats.curated).toBe(0);
     expect(updates[0].patch.curation.resolved_by).toBe('llm-error');
     expect(updates[0].patch.labels).toBeUndefined();
   });
@@ -176,6 +199,159 @@ describe('curateRepoConcepts (#980)', () => {
     expect(stats.method).toBe('hybrid');
     expect(stats.fallbacks).toBe(1);
     expect(stats.labeled).toBe(1);
+  });
+});
+
+// ── THE CURATION BAR COUNTERS ─────────────────────────────────────────────
+// The Studio "Curating" bar reads repo.curation, so the numerator and the
+// denominator MUST describe the same population. Live 2026-10-12: a repo of
+// 141 concepts (19 of them pre-labelled by the FR-42 tabular import path) froze
+// at "61 of 141" because `curated` counted what THIS pass labelled while
+// `total` counted what EXISTS — and the never-curated index row made the
+// terminal state unreachable by construction. Every test below fails if the
+// counter contract is reverted.
+describe('progress counters: one population, reachable terminal state', () => {
+  const indexRow = () => metaRow({ concept_id: 'index', is_index: true, type: 'index' });
+
+  test('concepts that already carry labels are counted from the FIRST tick', async () => {
+    const rows = [
+      metaRow({ concept_id: 'a', labels: ['Culture'] }), // tabular import / prior pass
+      metaRow({ concept_id: 'b' })
+    ];
+    mockDb = makeDb(rows, []);
+    const progress = [];
+    await service.curateRepoConcepts(REPO, { classification: 'heuristics', onProgress: (p) => progress.push(p) });
+    expect(progress.length).toBeGreaterThan(0);
+    // The baseline tick is emitted BEFORE any work lands — the curator's very
+    // first sighting of the bar already includes the pre-labelled concept.
+    expect(progress[0]).toMatchObject({ total: 2, curated: 1, done: 1, pre_labelled: 1 });
+    expect(progress[0].curated).not.toBe(0);
+  });
+
+  test('a repo whose concepts are ALL pre-labelled reports its full count, not 0', async () => {
+    const rows = [
+      metaRow({ concept_id: 'a', labels: ['Culture'] }),
+      metaRow({ concept_id: 'b', labels: ['History'] }),
+      indexRow()
+    ];
+    mockDb = makeDb(rows, []);
+    const progress = [];
+    const stats = await service.curateRepoConcepts(REPO, {
+      classification: 'heuristics',
+      onProgress: (p) => progress.push(p)
+    });
+    const last = progress[progress.length - 1];
+    expect(last).toMatchObject({ total: 2, curated: 2, final: true });
+    expect(last.curated).toBe(last.total); // the bar reads COMPLETE, not untouched
+    expect(stats).toMatchObject({ total: 2, curated: 2 });
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  test('the index row is excluded from total, so a completed pass satisfies curated === total', async () => {
+    // Heuristics: the only curatable concept matches a KH L2 keyword.
+    const rows = [metaRow({ concept_id: 'pol', title: 'Political Reform' }), indexRow()];
+    mockDb = makeDb(rows, []);
+    const progress = [];
+    await service.curateRepoConcepts(REPO, { classification: 'heuristics', onProgress: (p) => progress.push(p) });
+    const last = progress[progress.length - 1];
+    expect(last.total).toBe(1); // was 2 with the index row in the denominator
+    expect(last.curated).toBe(1);
+    expect(last.curated).toBe(last.total); // reachable, not merely closer
+
+    // llm mode over the same shape — two labelled concepts plus the index root.
+    const rows2 = [metaRow({ concept_id: 'x' }), metaRow({ concept_id: 'y' }), indexRow()];
+    mockDb = makeDb(rows2, []);
+    llmReply({ type: 'entity', label: 'Culture', summary: 's' });
+    const progress2 = [];
+    await service.curateRepoConcepts(REPO, { classification: 'llm', lanes: 1, onProgress: (p) => progress2.push(p) });
+    const last2 = progress2[progress2.length - 1];
+    expect(last2.total).toBe(2);
+    expect(last2.curated).toBe(2);
+    expect(last2.curated).toBe(last2.total);
+  });
+
+  test('the final tick equals an authoritative DATABASE count of labelled concepts', async () => {
+    // Six curatable concepts; the database says four carry labels (another
+    // writer, a retry, a partially applied pass). The terminal tick must report
+    // the database's number, not the pass's own tally.
+    const rows = Array.from({ length: 6 }, (_, i) => metaRow({ concept_id: 'c' + i }));
+    mockDb = makeDb(rows, [], { labelledCount: 4 });
+    const progress = [];
+    await service.curateRepoConcepts(REPO, { classification: 'heuristics', onProgress: (p) => progress.push(p) });
+    const last = progress[progress.length - 1];
+    expect(last.final).toBe(true);
+    expect(last.curated).toBe(4);
+    expect(Math.max(...progress.map((p) => p.curated))).toBe(4); // nothing ever exceeded it
+  });
+
+  test('the terminal count can never exceed the denominator it divides by', async () => {
+    const rows = [metaRow({ concept_id: 'a' }), metaRow({ concept_id: 'b' })];
+    mockDb = makeDb(rows, [], { labelledCount: 99 }); // rows added mid-pass
+    const progress = [];
+    await service.curateRepoConcepts(REPO, { classification: 'heuristics', onProgress: (p) => progress.push(p) });
+    const last = progress[progress.length - 1];
+    expect(last.curated).toBe(2);
+    expect(last.curated).toBeLessThanOrEqual(last.total);
+  });
+
+  test('the number never decreases across ticks', async () => {
+    const rows = [
+      metaRow({ concept_id: 'a' }),
+      metaRow({ concept_id: 'b', labels: ['Culture'] }), // pre-labelled
+      metaRow({ concept_id: 'c' }),
+      metaRow({ concept_id: 'd' })
+    ];
+    mockDb = makeDb(rows, []);
+    // Deterministic order (lanes 1) and a verdict mix: a label, no_label, a
+    // label, then an unparseable response. Only labels LAND count.
+    axios.post
+      .mockResolvedValueOnce({
+        data: { choices: [{ message: { content: JSON.stringify({ label: 'History', summary: 's' }) } }] }
+      })
+      .mockResolvedValueOnce({
+        data: { choices: [{ message: { content: JSON.stringify({ label: 'no_label', summary: 's' }) } }] }
+      })
+      .mockResolvedValueOnce({
+        data: { choices: [{ message: { content: JSON.stringify({ label: 'Culture', summary: 's' }) } }] }
+      })
+      .mockResolvedValue({ data: { choices: [{ message: { content: 'not json' } }] } });
+    const progress = [];
+    const stats = await service.curateRepoConcepts(REPO, {
+      classification: 'llm',
+      lanes: 1,
+      onProgress: (p) => progress.push(p)
+    });
+    const series = progress.map((p) => p.curated);
+    for (let i = 1; i < series.length; i += 1) {
+      expect(series[i]).toBeGreaterThanOrEqual(series[i - 1]);
+    }
+    // 1 pre-labelled + 2 labels landed on previously unlabelled concepts; the
+    // pre-labelled concept's own re-verdict and the unparseable one add
+    // nothing, because neither produced a NEW label for an unlabelled concept.
+    expect(series[0]).toBe(1);
+    expect(stats.curated).toBe(3);
+    expect(stats.total).toBe(4);
+  });
+
+  test('the early-return paths report the honest count, as a TERMINAL tick', async () => {
+    // (a) Subject Area with no KH L2 labels -> heuristics skips the work, but
+    //     the repo's pre-labelled concepts still count.
+    const rows = [metaRow({ concept_id: 'a', labels: ['Culture'] }), metaRow({ concept_id: 'b' })];
+    mockDb = makeDb(rows, [], { areaLabels: null });
+    const progress = [];
+    const stats = await service.curateRepoConcepts(REPO, {
+      classification: 'heuristics',
+      onProgress: (p) => progress.push(p)
+    });
+    const last = progress[progress.length - 1];
+    expect(last).toMatchObject({ total: 2, curated: 1, final: true });
+    expect(stats.curated).toBe(1);
+
+    // (b) No parsed rows at all -> a real terminal state, not a stalled pass.
+    mockDb = makeDb([], []);
+    const progress2 = [];
+    await service.curateRepoConcepts(REPO, { classification: 'heuristics', onProgress: (p) => progress2.push(p) });
+    expect(progress2[progress2.length - 1]).toMatchObject({ total: 0, curated: 0, final: true });
   });
 });
 

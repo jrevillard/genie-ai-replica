@@ -3,3 +3,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# PII corpus: REAL personal data, never committed (David's cases).
+# The synthetic template corpus/cases.example.json stays tracked on purpose.
+corpus/cases.local.json

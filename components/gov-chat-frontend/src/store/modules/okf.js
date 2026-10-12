@@ -1160,10 +1160,46 @@ const actions = {
   /** Story 1-8c — BATCH advice for the latest run of a suite: every
    * failing negative, ONE LLM call, consolidated suggested forbidden
    * tags (the anti-treadmill: one review per run). */
+  /**
+   * Story 1-8c — batch advice for a suite run's failing negatives.
+   * Async since 1-8g-y: the POST is 202 + poll (see headTestService), because
+   * the work fans out over the shared remote GPU node and outran the gateway.
+   * Polling lives here rather than in the component so the dialog's existing
+   * spinner and error handling stay untouched.
+   */
   async headSuiteExplainFailures(_ctx, { repoId, suiteKey } = {}) {
     try {
-      const result = await headTestService.explainSuiteFailures(repoId, suiteKey);
-      return { ok: true, result };
+      const started = await headTestService.explainSuiteFailures(repoId, suiteKey);
+      // Tolerate a synchronous server that answers 200 with the advice inline
+      // (no run_key), so the frontend is not coupled to deploy order.
+      if (!started || !started.run_key) return { ok: true, result: started };
+      const POLL_MS = 2000;
+      // A ceiling, so a wedged job surfaces as a readable error instead of an
+      // endless spinner. The doc keeps its state server-side regardless — this
+      // only stops the client waiting forever.
+      const DEADLINE_MS = 15 * 60 * 1000;
+      const deadline = Date.now() + DEADLINE_MS;
+      for (;;) {
+        if (Date.now() > deadline) {
+          return {
+            ok: false,
+            code: 'EXPLAIN_TIMEOUT',
+            message:
+              'The explain is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
+          };
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        const doc = await headTestService.getExplainFailures(repoId, suiteKey, started.run_key);
+        if (!doc || doc.status === 'running') continue;
+        if (doc.status === 'failed') {
+          return {
+            ok: false,
+            code: (doc.error && doc.error.code) || 'EXPLAIN_FAILED',
+            message: (doc.error && doc.error.message) || 'Explain failed'
+          };
+        }
+        return { ok: true, result: doc.payload };
+      }
     } catch (err) {
       return {
         ok: false,

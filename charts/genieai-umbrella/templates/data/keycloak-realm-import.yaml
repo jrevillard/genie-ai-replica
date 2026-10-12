@@ -1,3 +1,10 @@
+{{- /*
+KeycloakRealmImport is create-only: the operator silently ignores later
+`spec.realm` changes on re-apply (status stays Done=True, HasErrors=False).
+Re-import requires `kubectl delete keycloakrealmimport -n <ns> <name>` + re-apply.
+Not GitOps-friendly for the realm body; consider keycloak-config-cli or
+the Terraform provider for ongoing reconciliation.
+*/ -}}
 {{- if and .Values.data.keycloak.enabled .Values.data.keycloak.realmImport -}}
 {{- if and .Values.data.keycloak.verifyEmail (or (not (hasKey .Values.data.keycloak "smtp")) (not (eq (kindOf .Values.data.keycloak.smtp) "map")) (not (hasKey .Values.data.keycloak.smtp "host"))) -}}
 {{- fail "data.keycloak.verifyEmail=true requires data.keycloak.smtp to be a map containing a 'host' key (smtp may be null OR a map missing 'host' OR a non-map value)" -}}

@@ -68,7 +68,16 @@ function fingerprintOf(concepts) {
 /** The fingerprint of the concepts as they stand RIGHT NOW (live meta rows). */
 async function currentFingerprint(repoId) {
   const db = await dbService.getConnection();
-  const concepts = (
+  // `.all()` is AWAITED, and that matters: db.query() resolves to a Cursor and
+  // Cursor.all() resolves to the array. Without the inner await `concepts` is
+  // a Promise and fingerprintOf hits "concepts.map is not a function".
+  //
+  // This shipped broken for every publish (2026-10-12, live: repo
+  // 73b0351c, "TypeError: (concepts || []).map is not a function" at
+  // fingerprintOf) and no unit test caught it, because arango-mock returns
+  // .all() as a plain array while the real driver returns a Promise. The mock
+  // is fixed to mirror the driver, so this cannot hide again.
+  const concepts = await (
     await db.query(
       `FOR m IN ${META} FILTER m.repo_id == @repo_id
          RETURN { concept_id: m.concept_id, content_hash: m.content_hash }`,

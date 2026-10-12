@@ -75,7 +75,7 @@ reconcilers). The chart renders only the custom resources they manage.
 | CloudNativePG | ≥1.30 | `helm install cnpg cloudnative-pg --repo https://cloudnative-pg.github.io/charts` |
 | kube-arangodb | 1.4.x | `helm install arango kube-arangodb --repo https://arangodb.github.io/kube-arangodb` |
 | sealed-secrets | ≥0.40 | `helm install sealed-secrets sealed-secrets --repo https://bitnami.github.io/sealed-secrets` |
-| keycloak-operator | 26.x | OLM subscription or the static YAML from keycloak.org (its advertised Helm repo serves no index) |
+| keycloak-operator | 26.8.0 | `kubectl apply -k 'github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=26.8.0'` (the official Kustomize install of the Quarkus-based modern operator; 4 CRDs in `k8s.keycloak.org`). Alternatives: [OLM](https://www.keycloak.org/operator/installation#_installing_by_using_the_operator_lifecycle_manager) with `installPlanApproval: Manual` (recommended per official docs — auto-upgrade causes unintended Keycloak version bumps), or [Helm](https://www.keycloak.org/operator/installation#_installing_by_using_helm) `oci://quay.io/keycloak/keycloak-operator-helm` (experimental, cluster-wide). |
 
 Later tiers add: GPU operator, cert-manager, envoy-gateway — same model.
 

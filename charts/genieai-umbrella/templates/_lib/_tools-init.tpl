@@ -10,7 +10,7 @@ URLs at a single internal mirror.
 */}}
 {{- define "genieai-umbrella.toolsInitContainer" -}}
 - name: tools
-  image: {{ .Values.global.imageRegistry | default "docker.io" }}/curlimages/curl:8.10.1
+  image: {{ .Values.global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1
   imagePullPolicy: IfNotPresent
   securityContext:
     allowPrivilegeEscalation: false

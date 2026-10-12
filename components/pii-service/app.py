@@ -102,6 +102,24 @@ analyzer: AnalyzerEngine | None = None
 _analyzer_lock = threading.Lock()  # guard the lazy singleton (code-review #12)
 anonymizer = AnonymizerEngine()
 
+# spaCy/thinc is NOT thread-safe. `scan` is a SYNC def, so FastAPI runs it in
+# the anyio threadpool — with PII_WEB_CONCURRENCY>1 each worker process can have
+# several scan() calls in flight at once, all driving the SAME module-global
+# analyzer through native BLAS/tensor code. That crashes the worker process:
+#
+#     INFO:     Child process [2459] died
+#     INFO:     Started server process [4655]
+#
+# observed roughly every 30-60s during a bulk repo scan. The crash resets the
+# in-flight connection, the okf-server client sees ECONNRESET, and the concept is
+# written off as permanently failed.
+#
+# Serializing analyze() WITHIN a process is the correct fix: it removes the native
+# race outright while keeping the cross-process parallelism that PII_WEB_CONCURRENCY
+# exists to provide. The analyzer stays a per-process singleton, so each worker
+# still holds its own model copy.
+_analyze_lock = threading.Lock()
+
 
 def get_analyzer() -> AnalyzerEngine:
     """Lazy singleton so /health answers before the (slow) first model load.
@@ -190,13 +208,16 @@ def scan(req: ScanRequest):
     entities = req.entities if req.entities is not None else DEFAULT_ENTITIES + list(NATIONAL_ID_PATTERNS.keys())
     out: list[ScanResult] = []
     for item in req.texts:
-        # Raw text is never logged (NFR-P2) — only lengths/counts.
-        results = engine.analyze(
-            text=item.text, language=item.language, entities=entities, score_threshold=req.threshold
-        )
-        entity_types = {r.entity_type for r in results}
-        operators = {e: OperatorConfig("replace", params={"new_value": f"[PII:{e}]"}) for e in entity_types}
-        anon = anonymizer.anonymize(text=item.text, analyzer_results=results, operators=operators)
+        # Serialized per process — see _analyze_lock. Without this the worker
+        # dies under concurrent load and every in-flight scan fails closed.
+        with _analyze_lock:
+            # Raw text is never logged (NFR-P2) — only lengths/counts.
+            results = engine.analyze(
+                text=item.text, language=item.language, entities=entities, score_threshold=req.threshold
+            )
+            entity_types = {r.entity_type for r in results}
+            operators = {e: OperatorConfig("replace", params={"new_value": f"[PII:{e}]"}) for e in entity_types}
+            anon = anonymizer.anonymize(text=item.text, analyzer_results=results, operators=operators)
         counts: dict[str, int] = {}
         for r in results:
             counts[r.entity_type] = counts.get(r.entity_type, 0) + 1

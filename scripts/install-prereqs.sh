@@ -6,7 +6,7 @@
 #        (no KUBECONFIG = kubectl's current context)
 #
 # Operators installed:
-#   - keycloak-operator 26.0.0   (namespace keycloak-system)
+#   - keycloak-operator 26.8.0   (namespace keycloak-system; Kustomize install of the official modern Quarkus-based operator; 4 CRDs in k8s.keycloak.org group)
 #   - cloudnative-pg 0.22.0      (namespace cnpg-system)
 #   - kube-arangodb 1.4.5        (namespace arango-system)
 #   - sealed-secrets 0.40.0      (namespace sealed-secrets)
@@ -20,7 +20,7 @@
 
 set -euo pipefail
 
-KC_OPERATOR_VERSION="${KC_OPERATOR_VERSION:-26.0.0}"
+KC_OPERATOR_VERSION="${KC_OPERATOR_VERSION:-26.8.0}"
 CNPG_VERSION="${CNPG_VERSION:-0.22.0}"
 ARANGO_OPERATOR_VERSION="${ARANGO_OPERATOR_VERSION:-1.4.5}"
 SEALED_SECRETS_VERSION="${SEALED_SECRETS_VERSION:-0.40.0}"
@@ -67,19 +67,19 @@ ensure_namespace() {
 install_keycloak_operator() {
   local ns="keycloak-system"
   if kubectl get namespace "${ns}" >/dev/null 2>&1 && \
-     kubectl get deployment keycloak-operator-controller-manager -n "${ns}" >/dev/null 2>&1; then
+     kubectl get deployment keycloak-operator -n "${ns}" >/dev/null 2>&1; then
     log "keycloak-operator ${KC_OPERATOR_VERSION}: already present, skip"
     return 0
   fi
   ensure_namespace "${ns}"
-  # keycloak-operator publishes no Helm repo index; consume the upstream
-  # operator.yaml manifest directly (versioned by the release branch tag).
-  log "keycloak-operator ${KC_OPERATOR_VERSION}: install via raw manifest"
-  curl -fsSL -o /tmp/keycloak-operator.yaml \
-    "https://raw.githubusercontent.com/keycloak/keycloak-operator/release/${KC_OPERATOR_VERSION}/deploy/operator.yaml"
-  kubectl apply -n "${ns}" -f /tmp/keycloak-operator.yaml
-  rm -f /tmp/keycloak-operator.yaml
-  wait_deploy_ready "${ns}" "keycloak-operator-controller-manager"
+  # Official modern Keycloak 26+ operator (Quarkus-based, v2beta1 CRDs).
+  # Installed via Kustomize from keycloak/k8s-resources — NOT the archived
+  # keycloak/keycloak-operator (which is WildFly-era, v1alpha1, archived
+  # 2022-11-16). kustomize injects the namespace and rewires RoleBindings
+  # (apply -f per-file breaks RBAC + misses 2 of the 4 CRDs).
+  log "keycloak-operator ${KC_OPERATOR_VERSION}: install via Kustomize (ref=26.8.0+ of keycloak-k8s-resources)"
+  kubectl apply -k "github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=${KC_OPERATOR_VERSION}"
+  wait_deploy_ready "${ns}" "keycloak-operator"
 }
 
 install_cloudnative_pg() {

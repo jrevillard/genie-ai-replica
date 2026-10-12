@@ -91,6 +91,12 @@ if (require.main === module) {
       require('./services/studio-draft-service')
         .sweepStaleDrafts()
         .catch((err) => logger.error('Studio draft boot sweep failed (non-fatal)', { error: err.message }));
+      // Same self-heal for async repo-wide PII concept rescans: the in-memory
+      // scan lock dies with the process, so every 'running' placeholder after
+      // a restart is an orphan whose poll would otherwise spin forever.
+      require('./services/pii-service')
+        .sweepInterruptedScans()
+        .catch((err) => logger.error('PII scan boot sweep failed (non-fatal)', { error: err.message }));
     });
 }
 

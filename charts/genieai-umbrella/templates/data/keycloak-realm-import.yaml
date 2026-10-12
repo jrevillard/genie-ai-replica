@@ -235,8 +235,8 @@ spec:
         # KeycloakRealmImport cannot read Kubernetes Secrets — the secret
         # is supplied at install time via the operator's values override
         # (`data.keycloak.clientSecrets.proxyClient`) and MUST equal the
-        # value sealed in the `keycloak-proxy-client-secret` SealedSecret
-        # the backend consumes.
+        # value in the `keycloak-proxy-client-secret` Secret the backend
+        # consumes (operator-provided via their secret backend).
         secret: {{ dig "proxyClient" "" $cs | quote }}
         # Client-level realm-management scopes — propagate to the
         # auto-created service-account-<clientId> user at first grant
@@ -255,8 +255,10 @@ spec:
         standardFlowEnabled: false
         directAccessGrantsEnabled: false
         serviceAccountsEnabled: true
-        # Same rule as proxyClient: must equal the `kc-dataprep-client-secret`
-        # SealedSecret value (`data.keycloak.clientSecrets.dataprep`).
+        # Same rule as proxyClient: must equal the value in the
+        # `kc-dataprep-client-secret` Secret (operator-provided via
+        # their secret backend). The rendered value comes from
+        # `data.keycloak.clientSecrets.dataprep`.
         secret: {{ dig "dataprep" "" $cs | quote }}
         # Client-level realm role — propagates to the auto-created
         # service-account-<clientId> user at first grant.

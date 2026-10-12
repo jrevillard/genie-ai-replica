@@ -41,7 +41,7 @@ spec:
   containers:
     - name: test
       # SA = the hook-owned dep-check SA (read-only ClusterRole on namespaces).
-      image: "{{ .Values.global.imageRegistry | default "docker.io" }}/library/alpine:3.20"
+      image: "{{ .Values.global.toolingImageRegistry | default "docker.io" }}/alpine:3.20"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false
@@ -132,7 +132,7 @@ spec:
     - name: t
       # SA = the hook-owned dep-check SA (persists between hook fires via
       # before-hook-creation).
-      image: "{{ .Values.global.imageRegistry | default "docker.io" }}/library/alpine:3.20"
+      image: "{{ .Values.global.toolingImageRegistry | default "docker.io" }}/alpine:3.20"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false

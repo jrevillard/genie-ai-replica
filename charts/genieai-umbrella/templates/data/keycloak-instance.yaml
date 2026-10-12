@@ -3,38 +3,37 @@
 {{- if eq .Values.clusterProfile "prod" -}}
 {{- $instances = 2 -}}
 {{- end -}}
-apiVersion: k8s.keycloak.org/v2alpha1
+apiVersion: keycloak.org/v1alpha1
 kind: Keycloak
 metadata:
   name: keycloak
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 4 }}
+    # Selected by the realm CR's `instanceSelector.matchLabels` (see
+    # keycloak-realm-import.yaml). v1alpha1 binds the realm to a
+    # Keycloak instance by label selector rather than the older
+    # `spec.keycloakCRName` reference.
+    app: keycloak
     genieai.io/data-tier: identity
 spec:
   instances: {{ $instances }}
-  db:
-    # CNPG primary Service is <cluster>-rw (keycloak-db-rw), port 5432
-    vendor: postgres
-    host: keycloak-db-rw
-    database: keycloak
-    usernameSecret:
-      name: keycloak-db-credentials
-      key: username
-    passwordSecret:
-      name: keycloak-db-credentials
-      key: password
-  # The operator starts Keycloak without a reverse proxy; hostname + TLS are
-  # bound at the edge (Envoy Gateway) via `hostname` v2 fields once
-  # the ingress host is known. Dev default keeps localhost URLs working.
-  http:
-    httpEnabled: true
-  # Keycloak 26 serves at / by default; the /auth prefix must be pinned to
-  # match the in-cluster consumer URLs (backend OIDC, chatqna, dataprep).
-  # Specified as a CLI option because httpRelativePath under spec.http is
-  # not in the keycloak-operator >=25 CRD schema — the API server silently
-  # prunes it there.
-  additionalOptions:
-    - name: http-relative-path
-      value: /auth
+  # v1alpha1 only exposes the external-DB flag — host/database/user/password
+  # come from a Secret named `<keycloak-cr-name>-db-secret` (here:
+  # `keycloak-db-secret`) in this namespace, with the fixed keys
+  # POSTGRES_HOST / POSTGRES_DATABASE / POSTGRES_USER / POSTGRES_PASSWORD.
+  # The chart's pre-existing `keycloak-db-credentials` Secret must be
+  # mirrored under that name (e.g. an additional SealedSecret or a
+  # template that re-exports the same data) before the operator can
+  # provision the StatefulSet.
+  externalDatabase:
+    enabled: true
+  # Operator-managed Ingress/Route is OFF: TLS + the public hostname
+  # are bound at the edge (Envoy Gateway) which fronts the Keycloak
+  # Service. Letting the operator create an Ingress would shadow that.
+  # v1alpha1 has no `spec.http` block — the HTTP endpoint inside the
+  # pod is unconditionally served; the v2alpha1 `http.httpEnabled` field
+  # was removed by the upstream operator migration.
+  externalAccess:
+    enabled: false
 {{- end -}}

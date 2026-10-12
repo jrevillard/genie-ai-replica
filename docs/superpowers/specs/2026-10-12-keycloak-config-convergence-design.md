@@ -141,8 +141,7 @@ This is strictly better than the compose path, which approximates the same thing
 
 | Job env | Source |
 |---|---|
-| `KEYCLOAK_URL` | `http://keycloak-service.{{ .Values.namespace }}.svc.cluster.local:8080` — the Service name is `<Keycloak CR metadata.name> + "-service"` (upstream `Constants.KEYCLOAK_SERVICE_SUFFIX`), and the CR name is hardcoded `keycloak`, so the Service is `keycloak-service`. The Helm release name is **not** part of it. Same value already used by `templates/services/backend.yaml:6` and `documentRepository.yaml:17`. |
-| `KC_HTTP_RELATIVE_PATH` | `""` — see D9; the realm's own URLs carry no path prefix |
+| `KEYCLOAK_URL` | `http://keycloak-service.{{ .Values.namespace }}.svc.cluster.local:8080/auth` — the `/auth` suffix is required by D7. the Service name is `<Keycloak CR metadata.name> + "-service"` (upstream `Constants.KEYCLOAK_SERVICE_SUFFIX`), and the CR name is hardcoded `keycloak`, so the Service is `keycloak-service`. The Helm release name is **not** part of it. Same value already used by `templates/services/backend.yaml:6` and `documentRepository.yaml:17`. |
 | `KEYCLOAK_USER` | `secretKeyRef` on `data.keycloak.bootstrapAdmin.userSecret`, key `username` |
 | `KEYCLOAK_PASSWORD` | `secretKeyRef` on the same Secret, key `password` |
 | `KEYCLOAK_AVAILABILITYCHECK_ENABLED` / `_TIMEOUT` | literals `true` / `300s` |
@@ -165,7 +164,9 @@ With the realm import gone, its `change-me-*` `fail()` loop (currently `keycloak
 
 `data.keycloak.clientSecrets.*` keeps its `change-me-*` defaults; only its role changes — from literal values rendered into a CR to the values operators pass in the override, which the template wires as `valueFrom.secretKeyRef` targets for the realm's `$(env:VAR)` placeholders. No client secret is ever rendered as a literal.
 
-Two values cleanups in the same edit: `data.keycloak.bootstrapAdmin.user.username` and `data.keycloak.bootstrapAdmin.user.password` (currently `""` defaults at `values.yaml:174-177`) are removed — only `bootstrapAdmin.userSecret` survives D3 — and `data.keycloak.convergence.envSecrets` is added with an explicit `[]` default, so a base install renders rather than failing on an absent key.
+Two values cleanups in the same edit: `data.keycloak.bootstrapAdmin.user.username` and `data.keycloak.bootstrapAdmin.user.password` (currently `""` defaults at `values.yaml:170-173`) are removed — only `bootstrapAdmin.userSecret` survives D3 — and `data.keycloak.convergence.envSecrets` is added with an explicit `[]` default, so a base install renders rather than failing on an absent key.
+
+`data.keycloak.failOnPlaceholderSecrets` **keeps its `true` default, deliberately.** With it, a default `helm install` that ships `change-me-*` client secrets fails at render time in the Job template rather than producing a cluster whose OIDC clients carry secrets no consumer holds. Operators opt to `false` only where the placeholder is genuinely acceptable.
 
 ### D7 — Close the `/auth` relative-path gap (defect found reviewing rev 3)
 
@@ -182,7 +183,7 @@ spec:
       value: /auth
 ```
 
-This keeps the two existing service templates correct rather than editing them, and it is the option that matches what the in-cluster consumers already expect. It also means the convergence Job's `KEYCLOAK_URL` and the realm's own redirect URIs must carry `/auth` — which is why `KC_HTTP_RELATIVE_PATH` is wired as an empty-valued placeholder above rather than omitted, so the operator is told explicitly that kcc connects at the root.
+This keeps the two existing service templates correct rather than editing them, and it is the option that matches what the in-cluster consumers already expect. It also means the convergence Job's `KEYCLOAK_URL` (D5) and the realm's own redirect URIs must carry `/auth` — keycloak-config-cli's URL format is `scheme://host:port/web-context`, so a Job pointed at the bare `:8080` would hit `/realms/master/protocol/openid-connect/token` on the wrong context, get a 404, and surface as the same 401 the D3 caveat describes.
 
 ### D8 — Document the `clientSecrets` → `envSecrets` mapping
 
@@ -194,9 +195,18 @@ D6 keeps `clientSecrets.*` operator-supplied, which means operators hand-write a
 | `dataprep` | `$(env:KC_DATAPREP_CLIENT_SECRET)` | `{envVar: KC_DATAPREP_CLIENT_SECRET, secretName: <op>, secretKey: dataprep}` |
 | `grafana` | `$(env:KC_GRAFANA_CLIENT_SECRET)` | `{envVar: KC_GRAFANA_CLIENT_SECRET, secretName: <op>, secretKey: grafana}` |
 
+Those three are the client secrets. The realm file carries **two further secret placeholders** that also need `envSecrets` rows and are not derived from `clientSecrets.*`:
+
+| realm placeholder | typical `envSecrets` row |
+|---|---|
+| `$(env:GENIE_ADMIN_PASSWORD)` | `{envVar: GENIE_ADMIN_PASSWORD, secretName: <op>, secretKey: password}` |
+| `$(env:EMAIL_PASSWORD)` | `{envVar: EMAIL_PASSWORD, secretName: <op>, secretKey: password}` |
+
+The remaining placeholders in the file (`KC_REALM`, `KC_CLIENT_ID`, `KC_PUBLIC_ORIGIN`, `KEYCLOAK_*` behaviour flags, `KC_MOBILE_*`, `EMAIL_HOST`/`PORT`/`FROM`/`USER`, `EMAIL_SMTP_*`) are non-secret deployment values wired as plain `env` from `.Values`. `$(env:KEYCLOAK_PASSWORD_POLICY)` and `$(env:KEYCLOAK_RESET_PASSWORD)` are configuration, not secrets, despite the substring.
+
 ### D9 — Extend the CI path lists to the whole job chain
 
-Rev 3 added `charts/genieai-umbrella/files/**/*` only to `build:keycloak-config`. The same `rules:changes:paths` block also appears on `scan:keycloak-config` (`.gitlab-ci.yml:1950-1957`) and `promote:keycloak-config` (`:1967-1975`). Today they fire whenever the build fires, because they `needs:` it — but a future maintainer who drops that `needs:` silently loses the trigger. All three lists get the new path.
+Rev 3 added `charts/genieai-umbrella/files/**/*` only to `build:keycloak-config`. The same `rules:changes:paths` block also appears on `scan:keycloak-config` (`.gitlab-ci.yml:1942-1958`) and `promote:keycloak-config` (`:1967-1983`). Today they fire whenever the build fires, because they `needs:` it — but a future maintainer who drops that `needs:` silently loses the trigger. All three lists get the new path.
 
 ### D10 — Correct the ArgoCD example's false claims
 
@@ -208,7 +218,6 @@ One bullet per logical change, operator-facing, branch result vs `main`, marked 
 
 ## Files
 
-## Files
 
 | File | Action |
 |---|---|

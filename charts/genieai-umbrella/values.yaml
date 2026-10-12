@@ -163,6 +163,14 @@ data:
     # access). Chart's instances=1 by default; prod bumps to 2 + manual drain.
     update:
       strategy: RecreateOnImageChange
+    # Deterministic bootstrap admin. Default empty = the operator generates
+    # a one-time admin in `<cr-name>-initial-admin` Secret; override here
+    # for a stable admin username/password (per spec D6; temp Secret remains
+    # the default until overridden).
+    bootstrapAdmin:
+      user:
+        username: ""
+        password: ""
 
 # service ↔ data dependency graph (used by pre-install hook).
 # Read by the dependency-check hook Job; values are intentionally declarative

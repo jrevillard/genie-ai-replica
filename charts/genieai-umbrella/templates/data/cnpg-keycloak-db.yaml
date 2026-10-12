@@ -42,8 +42,9 @@ spec:
       database: keycloak
       owner: keycloak
       # CNPG expects this Secret to carry BOTH `username` and `password`
-      # keys (username-only fails validation). The keycloak-db-credentials
-      # SealedSecret emitted by this chart carries both.
+      # keys (username-only fails validation). The `keycloak-db-credentials`
+      # Secret is operator-provided via their secret backend; the chart
+      # does not materialize it.
       secret:
         name: keycloak-db-credentials
   serviceAccountTemplate:

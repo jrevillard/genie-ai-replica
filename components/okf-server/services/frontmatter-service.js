@@ -162,7 +162,43 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function withVllmRetry(fn, ctx) {
+// Which upstream failures are worth another attempt? TEI_EMBED_HOST and
+// VLLM_ENDPOINT both point at the SHARED remote GPU node
+// (ai.assembly.govstack.global), so a dropped connection is routine
+// rather than exceptional — it is the exact failure this wrapper is for.
+//
+// A prematurely-closed response stream was MISSING from this list until
+// 2026-10-12. axios surfaces a mid-response upstream disconnect as
+// ERR_STREAM_PREMATURE_CLOSE ("stream has been aborted"), which matches
+// neither the status codes nor the socket codes below, so the wrapper
+// fell through to `throw err` on the FIRST abort. Live proof: "Explain
+// failures" on the Alphabet repo died twice in a row with
+// `AxiosError: stream has been aborted` at frontmatter-service.js
+// withTeiRetry — zero retries — while the head-embed endpoint kept
+// resetting under the shared node's load.
+const RETRIABLE_UPSTREAM_CODES = new Set([
+  'ECONNABORTED', // our own axios timeout
+  'ECONNREFUSED',
+  'ECONNRESET', // peer reset the socket
+  'EPIPE',
+  'ETIMEDOUT',
+  'ERR_STREAM_PREMATURE_CLOSE' // axios: upstream closed mid-response
+]);
+const RETRIABLE_UPSTREAM_STATUS = new Set([502, 503, 504]);
+
+function isRetriableUpstreamError(err) {
+  if (!err) return false;
+  const status = err.response && err.response.status;
+  if (status && RETRIABLE_UPSTREAM_STATUS.has(status)) return true;
+  if (err.code && RETRIABLE_UPSTREAM_CODES.has(err.code)) return true;
+  // Some aborts reach us as a bare Error carrying neither a code nor a
+  // response — match the message so a known-transient blip is never
+  // mistaken for a permanent failure.
+  const msg = typeof err.message === 'string' ? err.message : '';
+  return /stream has been aborted|socket hang up|premature close|ECONNRESET/i.test(msg);
+}
+
+async function withUpstreamRetry(label, fn, ctx) {
   const base = 1000;
   const max = 8000;
   let lastErr;
@@ -171,19 +207,13 @@ async function withVllmRetry(fn, ctx) {
       return await fn();
     } catch (err) {
       lastErr = err;
-      const status = err && err.response && err.response.status;
-      const retriable =
-        status === 502 ||
-        status === 503 ||
-        status === 504 ||
-        err.code === 'ECONNABORTED' ||
-        err.code === 'ECONNREFUSED';
-      if (!retriable || attempt === 2) break;
+      if (!isRetriableUpstreamError(err) || attempt === 2) break;
       const delay = Math.min(max, base * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
-      logger.warn('frontmatter.vllm.retry', {
+      logger.warn(`frontmatter.${label}.retry`, {
         ...ctx,
         attempt: attempt + 1,
-        status,
+        status: (err.response && err.response.status) || null,
+        code: err.code || null,
         delay_ms: delay,
         err: err.message
       });
@@ -193,19 +223,8 @@ async function withVllmRetry(fn, ctx) {
   throw lastErr;
 }
 
-async function withTeiRetry(fn, ctx) {
-  try {
-    return await fn();
-  } catch (err) {
-    const status = err && err.response && err.response.status;
-    const retriable =
-      status === 502 || status === 503 || status === 504 || err.code === 'ECONNABORTED' || err.code === 'ECONNREFUSED';
-    if (!retriable) throw err;
-    logger.warn('frontmatter.tei.retry', { ...ctx, status, err: err.message });
-    await sleep(500);
-    return await fn();
-  }
-}
+const withVllmRetry = (fn, ctx) => withUpstreamRetry('vllm', fn, ctx);
+const withTeiRetry = (fn, ctx) => withUpstreamRetry('tei', fn, ctx);
 
 // ---------- LLM call (vLLM OpenAI surface, via axios — Node has no openai SDK) ----------
 

@@ -14,6 +14,9 @@ jest.mock('../shared-lib/db-connection-service', () => ({ getConnection: jest.fn
 // Crawl→OKF conversion job is mocked wholesale (the 202 trigger is the
 // HTTP-layer concern; the job itself is unit-tested in crawl-conversion-service.test.js).
 jest.mock('../services/crawl-conversion-service');
+// Story 10.5 — the wizard draft handlers are a thin HTTP pass-through;
+// the service itself is unit-tested in studio-draft-service.test.js.
+jest.mock('../services/studio-draft-service');
 // Auto-mock (no factory) so all exports become jest.fn() and tests can stub.
 jest.mock('../services/concept-meta-service');
 jest.mock('../services/llm-curation-service');
@@ -1490,5 +1493,178 @@ describe('POST / born-right ACL slug — server authority (coordinator ruling, 2
     expect(res.status).toBe(201);
     const passed = repoService.create.mock.calls[0][0];
     expect(passed.acl.required_scopes).toEqual(['okf:t:general:admin']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 10.5 — the wizard's resumable curation draft. All three verbs live
+// under /:repo_id/draft; the retired /:repo_id/studio_drafts shape must never
+// exist (the endpoint was never deployed, so an alias would be dead code).
+// ---------------------------------------------------------------------------
+describe('studio draft routes (Story 10.5)', () => {
+  const draftService = require('../services/studio-draft-service');
+
+  const body = { repo_id: 'r1', studio_step: 3, name: 'WIP', domain: 'agri' };
+
+  beforeEach(() => jest.clearAllMocks());
+
+  describe('GET /api/okf/repos/:repo_id/draft', () => {
+    test('200 with the flat wire draft', async () => {
+      authScoped(['okf:t1:r1:read']);
+      draftService.getDraft.mockResolvedValue({ repo_id: 'r1', draft: body });
+      const res = await request(createApp()).get('/api/okf/repos/r1/draft').set('Authorization', TOKEN);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ repo_id: 'r1', draft: body });
+      expect(draftService.getDraft).toHaveBeenCalledTimes(1);
+    });
+
+    test('200 with draft null for a repo with no draft yet — NEVER a 404', async () => {
+      authScoped(['okf:t1:r1:read']);
+      draftService.getDraft.mockResolvedValue({ repo_id: 'r1', draft: null });
+      const res = await request(createApp()).get('/api/okf/repos/r1/draft').set('Authorization', TOKEN);
+      expect(res.status).toBe(200);
+      expect(res.body.draft).toBeNull();
+    });
+
+    test('404 REPO_NOT_FOUND when the repo is gone or foreign (no distinct code)', async () => {
+      authScoped(['okf:t1:r1:read']);
+      draftService.getDraft.mockRejectedValue(
+        Object.assign(new Error('Repository r9 not found'), { code: 'REPO_NOT_FOUND', status: 404 })
+      );
+      const res = await request(createApp()).get('/api/okf/repos/r9/draft').set('Authorization', TOKEN);
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('REPO_NOT_FOUND');
+    });
+
+    test('403 FORBIDDEN_SCOPE without any okf scope (router-wide read gate)', async () => {
+      keycloakAuthService.verifyToken.mockResolvedValue({
+        sub: 'steward-1',
+        preferred_username: 'steward',
+        okf_scopes: [],
+        realm_access: { roles: ['user'] }
+      });
+      const res = await request(createApp()).get('/api/okf/repos/r1/draft').set('Authorization', TOKEN);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+      expect(draftService.getDraft).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('PUT /api/okf/repos/:repo_id/draft', () => {
+    test('200 with created:true on the first write', async () => {
+      authScoped(['okf:t1:r1:admin']);
+      draftService.saveDraft.mockResolvedValue({ repo_id: 'r1', draft: body, created: true });
+      const res = await request(createApp()).put('/api/okf/repos/r1/draft').set('Authorization', TOKEN).send(body);
+      expect(res.status).toBe(200);
+      expect(res.body.created).toBe(true);
+    });
+
+    test('passes the flat body through unchanged and stamps the actor', async () => {
+      authScoped(['okf:t1:r1:admin']);
+      draftService.saveDraft.mockResolvedValue({ repo_id: 'r1', draft: body, created: true });
+      await request(createApp()).put('/api/okf/repos/r1/draft').set('Authorization', TOKEN).send(body);
+      const [repoId, passed, opts] = draftService.saveDraft.mock.calls[0];
+      expect(repoId).toBe('r1');
+      expect(passed).toEqual(body); // no reshaping at the HTTP layer
+      expect(opts.actor.sub).toBe('steward-1');
+    });
+
+    test('403 FORBIDDEN_SCOPE for a read-only scope (mutations are admin-scoped)', async () => {
+      authScoped(['okf:t1:r1:read']);
+      const res = await request(createApp()).put('/api/okf/repos/r1/draft').set('Authorization', TOKEN).send(body);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+      expect(draftService.saveDraft).not.toHaveBeenCalled();
+    });
+
+    test('400 VALIDATION_ERROR names the offending field', async () => {
+      authScoped(['okf:t1:r1:admin']);
+      draftService.saveDraft.mockRejectedValue(
+        Object.assign(new Error('studio_step must be an integer between 0 and 9, or null (received string)'), {
+          code: 'VALIDATION_ERROR',
+          status: 400
+        })
+      );
+      const res = await request(createApp())
+        .put('/api/okf/repos/r1/draft')
+        .set('Authorization', TOKEN)
+        .send({ studio_step: 'three' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+      expect(res.body.message).toMatch(/studio_step/);
+    });
+
+    test('400 DRAFT_TOO_LARGE surfaces as a distinct code', async () => {
+      authScoped(['okf:t1:r1:admin']);
+      draftService.saveDraft.mockRejectedValue(
+        Object.assign(new Error('studio_state is over the draft limit'), { code: 'DRAFT_TOO_LARGE', status: 400 })
+      );
+      const res = await request(createApp())
+        .put('/api/okf/repos/r1/draft')
+        .set('Authorization', TOKEN)
+        .send({ blob: 'x'.repeat(999999) });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('DRAFT_TOO_LARGE');
+    });
+
+    test('409 DRAFT_CONFLICT carries the current doc in details', async () => {
+      authScoped(['okf:t1:r1:admin']);
+      draftService.saveDraft.mockRejectedValue(
+        Object.assign(new Error('draft was modified by another steward'), {
+          code: 'DRAFT_CONFLICT',
+          status: 409,
+          details: { repo_id: 'r1', draft: { studio_step: 1 } }
+        })
+      );
+      const res = await request(createApp())
+        .put('/api/okf/repos/r1/draft')
+        .set('Authorization', TOKEN)
+        .send({ studio_step: 9, expected_rev: 'stale' });
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('DRAFT_CONFLICT');
+      expect(res.body.details.draft.studio_step).toBe(1);
+    });
+
+    test('500 hides the internal message', async () => {
+      authScoped(['okf:t1:r1:admin']);
+      draftService.saveDraft.mockRejectedValue(new Error('db socket hang up'));
+      const res = await request(createApp()).put('/api/okf/repos/r1/draft').set('Authorization', TOKEN).send(body);
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe('Internal server error');
+      expect(JSON.stringify(res.body)).not.toMatch(/socket hang up/);
+    });
+  });
+
+  describe('DELETE /api/okf/repos/:repo_id/draft', () => {
+    test('200 deleted:true when a draft was removed', async () => {
+      authScoped(['okf:t1:r1:admin']);
+      draftService.clearDraft.mockResolvedValue({ repo_id: 'r1', deleted: true });
+      const res = await request(createApp()).delete('/api/okf/repos/r1/draft').set('Authorization', TOKEN);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ repo_id: 'r1', deleted: true });
+    });
+
+    test('200 deleted:false when there was nothing to remove (idempotent)', async () => {
+      authScoped(['okf:t1:r1:admin']);
+      draftService.clearDraft.mockResolvedValue({ repo_id: 'r1', deleted: false });
+      const res = await request(createApp()).delete('/api/okf/repos/r1/draft').set('Authorization', TOKEN);
+      expect(res.status).toBe(200);
+      expect(res.body.deleted).toBe(false);
+    });
+
+    test('403 FORBIDDEN_SCOPE for a read-only scope', async () => {
+      authScoped(['okf:t1:r1:read']);
+      const res = await request(createApp()).delete('/api/okf/repos/r1/draft').set('Authorization', TOKEN);
+      expect(res.status).toBe(403);
+      expect(draftService.clearDraft).not.toHaveBeenCalled();
+    });
+  });
+
+  test('the retired /:repo_id/studio_drafts path is NOT registered', async () => {
+    authScoped(['okf:t1:r1:admin']);
+    await request(createApp()).get('/api/okf/repos/r1/studio_drafts').set('Authorization', TOKEN);
+    await request(createApp()).put('/api/okf/repos/r1/studio_drafts').set('Authorization', TOKEN).send(body);
+    expect(draftService.getDraft).not.toHaveBeenCalled();
+    expect(draftService.saveDraft).not.toHaveBeenCalled();
   });
 });

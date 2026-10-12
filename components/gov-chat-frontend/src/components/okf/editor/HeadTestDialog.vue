@@ -359,7 +359,7 @@
           <span class="okf-headtest__teach-title">
             {{ translate('okf.headTest.suites.revertTitle', 'Revert tags') }}
           </span>
-          <DsSpinner v-if="busy === 'history'" size="sm" class="okf-headtest__busy">
+          <DsSpinner v-if="historyLoading" size="sm" class="okf-headtest__busy">
             {{ translate('okf.headTest.suites.revertBusy', 'Loading save history…') }}
           </DsSpinner>
           <template v-else>
@@ -1077,7 +1077,7 @@
           <span class="okf-headtest__teach-title">
             {{ translate('okf.headTest.suites.revertTitle', 'Revert tags') }}
           </span>
-          <DsSpinner v-if="busy === 'history'" size="sm" class="okf-headtest__busy">
+          <DsSpinner v-if="historyLoading" size="sm" class="okf-headtest__busy">
             {{ translate('okf.headTest.suites.revertBusy', 'Loading save history…') }}
           </DsSpinner>
           <template v-else>
@@ -1356,6 +1356,10 @@ export default {
       tripwire: null,
       lastRunSuiteKey: null,
       fmHistory: [],
+      // Its OWN flag, not the shared `busy` slot — see loadFrontmatterHistory.
+      // The two Revert-panel spinners bind to this so the panel can show
+      // "loading" without borrowing busy and blocking every other control.
+      historyLoading: false,
       revertHighlight: false,
       reverted: false
     };
@@ -2089,11 +2093,20 @@ export default {
      * panel (cheap read; editor sessions only — the panel is hidden in
      * the wizard). */
     async loadFrontmatterHistory() {
-      if (this.busy !== null) return;
-      this.busy = 'history';
+      // Deliberately does NOT claim the shared `busy` slot. It did until
+      // 2026-10-12, and that silent `return` WAS the Revert-panel bug: a tag
+      // chip click sets busy='save-tag', so any history fetch issued while
+      // one was in flight was dropped — no queue, no retry, no error — and
+      // the panel then rendered a confident "No frontmatter saves recorded
+      // yet" for a request that never ran. The data was always there (four
+      // snapshots on the Alphabet repo's doc). showRevertPanel's retry hit
+      // the same guard, so the empty state was permanent for the session.
+      // This is a cheap idempotent read: a duplicate is harmless, a silent
+      // drop is not.
       this.error = '';
+      this.historyLoading = true;
       const res = await this.$store.dispatch('okf/frontmatterHistory', { repoId: this.repo.repo_id });
-      this.busy = null;
+      this.historyLoading = false;
       if (!res.ok) {
         this.error = res.message || this.translate('okf.headTest.error.history', 'Could not load the save history');
         return;

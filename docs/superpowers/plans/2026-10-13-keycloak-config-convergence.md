@@ -318,7 +318,23 @@ In the same file, insert after the `update:` block:
 
 - [ ] **Step 4: Drop the now-orphaned `realmImport` toggle**
 
-In the same file, remove the `realmImport: true` line **and the comment above it** ("Gates the Keycloak + KeycloakRealmImport CRs"). No template reads either once Task 5 deletes `keycloak-realm-import.yaml`, and leaving them invites an operator to believe they control something.
+In the same file, remove the `realmImport: true` line.
+
+The comment above it spans two lines and must be edited, not deleted wholesale — the second line still documents `enabled: true`, which keeps gating the `Keycloak` CR after Task 5 deletes the realm import. Replace:
+
+```
+    # Gates the Keycloak + KeycloakRealmImport CRs. The operator
+    # itself is a cluster bootstrap prerequisite — NOT a chart dependency.
+```
+
+with:
+
+```
+    # Gates the Keycloak CR. The operator itself is a cluster
+    # bootstrap prerequisite — NOT a chart dependency.
+```
+
+`realmImport` had no template reader once `keycloak-realm-import.yaml` is deleted in Task 5, and leaving the toggle would invite an operator to believe it controls something.
 
 - [ ] **Step 5: Confirm the values surface parses and the orphans are gone**
 
@@ -515,10 +531,12 @@ being set would fail this assertion on every default render.
 {{- $known = append $known $e.envVar -}}
 {{- end -}}
 {{- $realmFile := .Files.Get "files/genie-realm.yaml" -}}
+{{- if .Values.data.keycloak.failOnPlaceholderSecrets -}}
 {{- range $p := (regexFindAll "\\$\\(env:[A-Z_][A-Z0-9_]*\\)" $realmFile -1) -}}
 {{- $n := trimPrefix "$(env:" (trimSuffix ")" $p) -}}
 {{- if not (has $n $known) -}}
-{{- fail (printf "files/genie-realm.yaml references $(env:%s) but this Job exports no such variable; add it to the Job env or to data.keycloak.convergence.envSecrets, or kcc fails at runtime with an opaque parse error" $n) -}}
+{{- fail (printf "files/genie-realm.yaml references $(env:%s) but this Job exports no such variable; add it to the Job env or to data.keycloak.convergence.envSecrets, or kcc fails at runtime with an opaque parse error. Set data.keycloak.failOnPlaceholderSecrets=false to accept unresolved placeholders — kcc will then create clients with empty secrets" $n) -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 apiVersion: batch/v1
@@ -675,9 +693,36 @@ spec:
 {{- end -}}
 ```
 
-- [ ] **Step 2: Render and inspect the Job**
+- [ ] **Step 2: Render the strict path and inspect the Job**
 
-Run the Task 4 Step 2 command. Then:
+The completeness assertion is gated on `failOnPlaceholderSecrets`, so a render that omits the `envSecrets` rows exercises the *lenient* path. Prove the strict path first — `failOnPlaceholderSecrets` defaults to true, and the five secret placeholders need their rows:
+
+```bash
+helm template test charts/genieai-umbrella/ -n genieai \
+  --set data.keycloak.clientSecrets.proxyClient=t \
+  --set data.keycloak.clientSecrets.dataprep=t \
+  --set data.keycloak.clientSecrets.grafana=t \
+  --set 'data.keycloak.convergence.envSecrets[0].envVar=KC_PROXY_CLIENT_SECRET' \
+  --set 'data.keycloak.convergence.envSecrets[0].secretName=s' \
+  --set 'data.keycloak.convergence.envSecrets[0].secretKey=k' \
+  --set 'data.keycloak.convergence.envSecrets[1].envVar=KC_DATAPREP_CLIENT_SECRET' \
+  --set 'data.keycloak.convergence.envSecrets[1].secretName=s' \
+  --set 'data.keycloak.convergence.envSecrets[1].secretKey=k' \
+  --set 'data.keycloak.convergence.envSecrets[2].envVar=KC_GRAFANA_CLIENT_SECRET' \
+  --set 'data.keycloak.convergence.envSecrets[2].secretName=s' \
+  --set 'data.keycloak.convergence.envSecrets[2].secretKey=k' \
+  --set 'data.keycloak.convergence.envSecrets[3].envVar=GENIE_ADMIN_PASSWORD' \
+  --set 'data.keycloak.convergence.envSecrets[3].secretName=s' \
+  --set 'data.keycloak.convergence.envSecrets[3].secretKey=k' \
+  --set 'data.keycloak.convergence.envSecrets[4].envVar=EMAIL_PASSWORD' \
+  --set 'data.keycloak.convergence.envSecrets[4].secretName=s' \
+  --set 'data.keycloak.convergence.envSecrets[4].secretKey=k' \
+  --output-dir /tmp/kc-t5
+```
+
+Expected: exit 0. This is also what `chart:lint` must be able to do — see Step 10.
+
+Then inspect the rendered Job:
 
 ```bash
 yq -P 'select(.kind=="Job" and (.metadata.name | test("convergence"))) |
@@ -691,11 +736,10 @@ Expected: hooks `post-install,post-upgrade,post-rollback`; `KEYCLOAK_URL` ending
 
 - [ ] **Step 3: Prove the placeholder assertion fires**
 
-Render with the four client-secret rows but **omit** `GENIE_ADMIN_PASSWORD`:
+Same as Step 2 — strict path, real client secrets, five rows — but **omit** the `GENIE_ADMIN_PASSWORD` row. Do **not** pass `failOnPlaceholderSecrets=false`: that flag gates the assertion off, so the test would silently prove nothing.
 
 ```bash
 helm template test charts/genieai-umbrella/ -n genieai \
-  --set data.keycloak.failOnPlaceholderSecrets=false \
   --set data.keycloak.clientSecrets.proxyClient=t \
   --set data.keycloak.clientSecrets.dataprep=t \
   --set data.keycloak.clientSecrets.grafana=t \
@@ -713,7 +757,7 @@ helm template test charts/genieai-umbrella/ -n genieai \
   --set 'data.keycloak.convergence.envSecrets[3].secretKey=k' 2>&1 | tail -3
 ```
 
-Expected: an error naming `GENIE_ADMIN_PASSWORD`. **If it renders silently, the assertion is broken — fix it before committing.**
+Expected: an error naming `GENIE_ADMIN_PASSWORD` and stating the Job exports no such variable. **If it renders silently, the assertion is broken — fix it before committing.**
 
 - [ ] **Step 4: Prove no client secret is ever a literal**
 
@@ -732,7 +776,7 @@ Run:
 helm template test charts/genieai-umbrella/ -n genieai 2>&1 | tail -3
 ```
 
-Expected: an error naming `data.keycloak.clientSecrets.proxyClient` and mentioning `change-me-*`. Then re-run with `--set data.keycloak.failOnPlaceholderSecrets=false` and confirm it renders — the guard is gated, not removed.
+Expected: an error naming `data.keycloak.clientSecrets.proxyClient` and mentioning `change-me-*`. Then re-run with `--set data.keycloak.failOnPlaceholderSecrets=false` and confirm it renders **without** the `envSecrets` rows — that render is the lenient path, and it is what `chart:lint` does today. The `change-me-*` guard and the completeness assertion are both gated on this one flag.
 
 - [ ] **Step 6: Delete the realm import template**
 
@@ -753,12 +797,23 @@ In `charts/genieai-umbrella/templates/rbac/dep-check-rbac.yaml`, remove `keycloa
       verbs: ["get", "list"]
 ```
 
-Also update the comment above that block — it currently says the dep-check Job verifies the `Keycloak` + `KeycloakRealmImport` CRs. Replace the first two lines with:
+Replace the whole four-line comment above that block — leaving its trailing clause behind reads as a sentence fragment:
 
-```yaml
-    # Keycloak 26 official operator (k8s.keycloak.org/v2beta1) ships 4 CRDs.
-    # This chart renders `Keycloak` only; the realm is converged by
-    # keycloak-config-cli, not by the operator's create-only import CR.
+```
+  # Keycloak 26 official operator (k8s.keycloak.org/v2beta1) ships 4 CRDs.
+  # The dep-check Job verifies the Keycloak + KeycloakRealmImport CRs are
+  # present after install; the OIDC/SAML client CRDs are not rendered by
+  # this chart but are listed for completeness (operators may add them).
+```
+
+with:
+
+```
+  # Keycloak 26 official operator (k8s.keycloak.org/v2beta1) ships 4 CRDs.
+  # This chart renders `Keycloak` only; the realm is converged by
+  # keycloak-config-cli, not by the operator's create-only import CR.
+  # The OIDC/SAML client CRDs are listed for completeness (operators may
+  # add them).
 ```
 
 - [ ] **Step 8: Confirm nothing still references the deleted kind**
@@ -770,7 +825,22 @@ grep -rn 'KeycloakRealmImport\|keycloak-realm-import\|keycloakrealmimports' char
 
 Expected: only hits that are explicitly historical (a plan document's prose) or the corrected comment from Step 6. Any live template or doc reference must be updated in this task.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 9: Confirm `chart:lint`'s existing render still succeeds**
+
+`chart:lint` (`.gitlab-ci.yml:2553`) renders with `--set data.keycloak.failOnPlaceholderSecrets=false` and no `envSecrets` rows. That combination must keep working, or CI breaks:
+
+```bash
+helm template test charts/genieai-umbrella/ -n genieai \
+  --set data.keycloak.failOnPlaceholderSecrets=false \
+  --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy' \
+  --set 'data.keycloak.clientSecrets.dataprep=lint-dummy' \
+  --set 'data.keycloak.clientSecrets.grafana=lint-dummy' \
+  > /tmp/kc-lint.yaml && echo "LINT_PATH_OK"
+```
+
+Expected: `LINT_PATH_OK`. If it fails, the assertion is not gated as Step 1 specifies.
+
+- [ ] **Step 10: Commit**
 
 ```bash
 git add charts/genieai-umbrella/templates/data/keycloak-convergence-job.yaml \
@@ -1060,7 +1130,7 @@ helm lint charts/genieai-umbrella/ --strict 2>&1 | tail -2
 
 Expected: `0 chart(s) failed`.
 
-- [ ] **Step 2: Confirm no `KeycloakRealmImport` survives**
+- [ ] **Step 2: Render the lenient path and confirm no `KeycloakRealmImport` survives**
 
 ```bash
 helm template test charts/genieai-umbrella/ -n genieai \
@@ -1072,7 +1142,34 @@ helm template test charts/genieai-umbrella/ -n genieai \
 grep -rc 'KeycloakRealmImport' /tmp/kc-final | grep -v ':0$' || echo "OK: no KeycloakRealmImport"
 ```
 
-Expected: `OK: no KeycloakRealmImport`.
+Expected: `OK: no KeycloakRealmImport`. This is `chart:lint`'s exact render, so it doubles as the CI-path check.
+
+- [ ] **Step 2b: Render the strict path too**
+
+```bash
+helm template test charts/genieai-umbrella/ -n genieai \
+  --set data.keycloak.clientSecrets.proxyClient=t \
+  --set data.keycloak.clientSecrets.dataprep=t \
+  --set data.keycloak.clientSecrets.grafana=t \
+  --set 'data.keycloak.convergence.envSecrets[0].envVar=KC_PROXY_CLIENT_SECRET' \
+  --set 'data.keycloak.convergence.envSecrets[0].secretName=s' \
+  --set 'data.keycloak.convergence.envSecrets[0].secretKey=k' \
+  --set 'data.keycloak.convergence.envSecrets[1].envVar=KC_DATAPREP_CLIENT_SECRET' \
+  --set 'data.keycloak.convergence.envSecrets[1].secretName=s' \
+  --set 'data.keycloak.convergence.envSecrets[1].secretKey=k' \
+  --set 'data.keycloak.convergence.envSecrets[2].envVar=KC_GRAFANA_CLIENT_SECRET' \
+  --set 'data.keycloak.convergence.envSecrets[2].secretName=s' \
+  --set 'data.keycloak.convergence.envSecrets[2].secretKey=k' \
+  --set 'data.keycloak.convergence.envSecrets[3].envVar=GENIE_ADMIN_PASSWORD' \
+  --set 'data.keycloak.convergence.envSecrets[3].secretName=s' \
+  --set 'data.keycloak.convergence.envSecrets[3].secretKey=k' \
+  --set 'data.keycloak.convergence.envSecrets[4].envVar=EMAIL_PASSWORD' \
+  --set 'data.keycloak.convergence.envSecrets[4].secretName=s' \
+  --set 'data.keycloak.convergence.envSecrets[4].secretKey=k' \
+  >/dev/null && echo "STRICT_PATH_OK"
+```
+
+Expected: `STRICT_PATH_OK`. A default install that fails here means the assertion is not gated as Task 5 Step 1 specifies.
 
 - [ ] **Step 3: Confirm the realm Secret carries no literal secret**
 
@@ -1101,7 +1198,24 @@ grep -c 'configs/keycloak/\*\*/\*' .gitlab-ci.yml
 
 Expected: `REALM_COPIES_IDENTICAL`, and a non-zero count for the `chart:lint` trigger path.
 
-- [ ] **Step 6: Review the branch commit list**
+- [ ] **Step 6: Record what this gate does not cover**
+
+Items 9 (in-cluster `/auth/realms/genie` reachability) and 10 (real convergence duration) need a live cluster and are verified on the first laptop run, not here. Write them down as pending rather than leaving them implied:
+
+```bash
+cat >> docs/superpowers/plans/2026-10-13-keycloak-config-convergence.md <<'EOF'
+
+## Post-merge verification (requires a cluster)
+
+- [ ] `kubectl get svc keycloak-service -n genieai` exists
+- [ ] `curl -s http://keycloak-service.genieai.svc.cluster.local:8080/auth/realms/genie` returns a realm body
+- [ ] record the measured convergence duration against the 900s HelmRelease timeout
+EOF
+```
+
+Expected: the section is appended so the gaps are tracked rather than assumed.
+
+- [ ] **Step 7: Review the branch commit list**
 
 ```bash
 git log --oneline <merge-base-with-main>..HEAD

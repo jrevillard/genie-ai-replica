@@ -87,11 +87,12 @@ Consequences of duplicating instead:
 **Drift is the cost, and it is guarded, not accepted.** A `diff` assertion in the `chart:lint` CI job fails the MR when the two copies diverge, and that job's `rules:changes` is extended so it also fires when only `configs/keycloak/**/*` changes — which by itself it would not. Without that second part, an edit to the compose copy alone would skip the check entirely.
 
 Per-env variation reaches the file through two distinct channels, matching what compose already does:
-
-| Channel | Carries | Mechanism |
-|---|---|---|
 | non-secret deployment values | `ingress.host`, locale, password policy, theme, mobile client id, realm name | plain `env` on the Job, from `.Values` |
 | secrets | client secrets, SMTP password, DB password | `secretKeyRef` on the Job, from `data.keycloak.convergence.envSecrets` |
+
+**The SMTP channel has an inherited failure.** `genie-realm.yaml:18-26` references all nine `EMAIL_*` placeholders unconditionally — the `smtpServer` block is not gated on whether SMTP is configured. `env:76` and `env:81` ship `EMAIL_HOST=` and `EMAIL_FROM=` empty by default, and `deploy/ansible/README.md:730` records that Keycloak rejects the realm import when `EMAIL_FROM` is empty. So a default install already fails this way on the compose path today.
+
+The Job therefore emits the seven non-secret `EMAIL_*` variables unconditionally (empty when `smtp: null`), preserving that behaviour rather than changing it. The render-time assertion must also list them unconditionally — gating either the env block or the assertion on `smtp` being set would fail every default render. Fixing the underlying unconditional-`smtpServer` shape is a separate change to the realm file, and the project rule against editing it casually applies.
 
 ### D3 — Bootstrap admin on the `Keycloak` CR
 
@@ -224,11 +225,13 @@ One bullet per logical change, operator-facing, branch result vs `main`, marked 
 | `charts/genieai-umbrella/templates/data/keycloak-instance.yaml` | add `bootstrapAdmin.user.secret` **and** `additionalOptions: [{name: http-relative-path, value: /auth}]` (D7) |
 | `charts/genieai-umbrella/templates/data/keycloak-realm-import.yaml` | **deleted** — kcc owns the realm; its `change-me-*` guard moves to the Job template |
 | `charts/genieai-umbrella/templates/data/keycloak-convergence-job.yaml` | **new** — the kcc post-upgrade hook Job, carrying the `change-me-*` guard and the `$(env:VAR)` completeness assertion |
-| `charts/genieai-umbrella/values.yaml` | add `bootstrapAdmin.userSecret`, `convergence.{enabled,backoffLimit,envSecrets: []}`; **remove** `bootstrapAdmin.user.{username,password}`; document `clientSecrets.*`'s new role |
+| `charts/genieai-umbrella/values.yaml` | add `bootstrapAdmin.userSecret`, `convergence.{enabled,backoffLimit,envSecrets: []}`, and the realm-naming keys the Job exports (`realm`, `webClientId`, `grafanaClientId`, `adminUsername`, `defaultLocale`, `theme`); **remove** `bootstrapAdmin.user.{username,password}` and `realmImport`; document `clientSecrets.*`'s new role |
 | `charts/genieai-umbrella/templates/rbac/dep-check-rbac.yaml` | drop `keycloakrealmimports` from the RBAC list (no longer rendered) |
 | `charts/genieai-umbrella/examples/argocd-application.yaml` | correct the false hook claims |
 | `charts/genieai-umbrella/README.md` | document the single-owner model and the convergence Job |
-| `.gitlab-ci.yml` | `chart:lint` gains a `diff` drift assertion, and its `rules:changes:paths` gains `configs/keycloak/**/*` so the check fires when the compose copy changes || `charts/genieai-umbrella/values.yaml:96,116` | prose comments naming `KeycloakRealmImport`, orphaned by the D1 deletion |
+| `charts/genieai-umbrella/templates/data/keycloak-realm-secret.yaml` | **new** — the realm body rendered from `.Files.Get` into a Secret, mounted by the convergence Job at `/config` |
+| `charts/genieai-umbrella/values.yaml` (comments) | prose above `realmImport` naming `KeycloakRealmImport`, orphaned by the D1 deletion |
+| `.gitlab-ci.yml` | `chart:lint` gains a `diff` drift assertion, and its `rules:changes:paths` gains `configs/keycloak/**/*` so the check fires when the compose copy changes |
 | `CHANGELOG.md` | bullets |
 
 The MR does not touch the Swarm compose path or the keycloak-config image build at all — duplicating the realm file instead of moving it is what keeps the blast radius to the chart plus one CI assertion.

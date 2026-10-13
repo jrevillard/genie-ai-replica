@@ -3053,6 +3053,11 @@ chart:lint:
     - apk add --no-cache curl bash
     - helm dependency update charts/genieai-umbrella
   script:
+    # The realm file is duplicated: this copy is for the chart's
+    # convergence Job, configs/keycloak/genie-realm.yaml is COPYed into
+    # the compose image. They must stay byte-identical or the two
+    # delivery paths deploy different realms.
+    - diff charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml
     - helm lint charts/genieai-umbrella --strict
     - >-
       helm template test charts/genieai-umbrella -n genieai
@@ -3071,6 +3076,7 @@ chart:lint:
       changes:
         - charts/**/*
         - scripts/**/*
+        - configs/keycloak/**/*
         - .gitlab-ci.yml
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: on_success
@@ -3078,6 +3084,7 @@ chart:lint:
       changes:
         - charts/**/*
         - scripts/**/*
+        - configs/keycloak/**/*
         - .gitlab-ci.yml
 
 # Helm chart end-to-end — kind cluster inside DinD, install 4 cluster
@@ -3144,12 +3151,14 @@ chart:install:
       changes:
         - charts/**/*
         - scripts/**/*
+        - configs/keycloak/**/*
         - .gitlab-ci.yml
       when: on_success
     - if: '$CI_COMMIT_BRANCH == "feat/k8s-migration"'
       changes:
         - charts/**/*
         - scripts/**/*
+        - configs/keycloak/**/*
         - .gitlab-ci.yml
       when: on_success
 

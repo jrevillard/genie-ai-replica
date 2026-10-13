@@ -1169,6 +1169,18 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Default: 10000. Used by: okf-server. Compose: no.
 # PII_RETRIES=2
 #   Default: 2. Used by: okf-server. Compose: no.
+# PII_CONCEPT_RETRY_PAUSE_MS=8000
+#   Default: 8000. Pause between retries when a concept's PII scan comes back
+#   'error' during a bulk repo rescan (retries at 8s/16s/24s). Must outlast a
+#   sidecar worker respawn — one was observed taking ~10-20s, and recording a
+#   permanent error for it is what once blocked a repository indefinitely.
+#   Used by: okf-server. Compose: no. Ansible: yes (pii_concept_retry_pause_ms).
+# PII_WEB_CONCURRENCY=2
+#   Default: 2 in the sidecar image. Worker PROCESSES, not threads (GIL-bound
+#   NER). Each holds its own ~390MB spaCy copy, so this is the sidecar's memory
+#   knob — raise it only on a host with headroom. Set it to match
+#   OKF_IMPORT_CONCURRENCY when tuning import throughput together.
+#   Compose: yes. Ansible: yes (pii_web_concurrency).
 
 # --- okf-server: lifecycle + bundle ---
 # OKF_DELETE_GRACE_HOURS=168

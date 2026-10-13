@@ -3057,7 +3057,7 @@ chart:lint:
     # convergence Job, configs/keycloak/genie-realm.yaml is COPYed into
     # the compose image. They must stay byte-identical or the two
     # delivery paths deploy different realms.
-    - diff charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml
+    - cmp -s charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml || { echo "realm file drift between the chart copy and the compose copy - update both"; exit 1; }
     - helm lint charts/genieai-umbrella --strict
     - >-
       helm template test charts/genieai-umbrella -n genieai

@@ -89,7 +89,7 @@ In `.gitlab-ci.yml`, in the `chart:lint` job's `script:`, add as the first step:
     # convergence Job, configs/keycloak/genie-realm.yaml is COPYed into
     # the compose image. They must stay byte-identical or the two
     # delivery paths deploy different realms.
-    - diff charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml
+    - cmp -s charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml || { echo "realm file drift between the chart copy and the compose copy - update both"; exit 1; }
 ```
 
 - [ ] **Step 3: Make `chart:lint` fire when only the compose copy changes**
@@ -108,12 +108,12 @@ In the same job, `rules:changes:paths` currently lists `charts/**/*`, `scripts/*
 
 ```bash
 printf '\n# drift\n' >> charts/genieai-umbrella/files/genie-realm.yaml
-diff charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml; echo "exit=$?"
+cmp -s charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml; echo "exit=$?"
 git checkout -- charts/genieai-umbrella/files/genie-realm.yaml 2>/dev/null || \
   cp configs/keycloak/genie-realm.yaml charts/genieai-umbrella/files/genie-realm.yaml
 ```
 
-Expected: `diff` prints the added line and `exit=1`. Then confirm the file is restored: `cmp` prints nothing.
+Expected: `exit=1` (no output — `cmp -s` is silent by design; the CI form adds the `echo` message). Then confirm the file is restored with `cmp -s a b; echo "exit=$?"` → `exit=0`.
 
 - [ ] **Step 5: Confirm the compose path is untouched**
 
@@ -137,7 +137,7 @@ both COPY lines in Dockerfile.config-cli, and with them docker-compose,
 the CI job context, three path lists and the doc references — the file
 is duplicated and the duplication is asserted.
 
-chart:lint diffs the two copies and its change-trigger list gains
+chart:lint byte-compares the two copies and its change-trigger list gains
 configs/keycloak/**/*, so an edit to the compose copy alone cannot skip
 the assertion. Without that second part the drift ships silently."
 ```

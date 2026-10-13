@@ -1,7 +1,13 @@
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, parsePositiveInt } = require('../shared-lib');
 const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');
+
+// Escape LIKE wildcards so a user-supplied search term matches literally;
+// ArangoDB LIKE treats % and _ as wildcards unless backslash-escaped.
+function escapeLikePattern(value) {
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
 class AdminDashboardService {
   constructor() {
     this.db = null;
@@ -906,24 +912,26 @@ class AdminDashboardService {
     try {
       const { term = '', field = 'all', limit = 20, offset = 0 } = options;
 
-      // MR !343 round-2: clamp numeric query params safely.
-      // parseInt('0', 10) is falsy → `|| 20` silently rewrote a caller
-      // asking for `limit=0` into 20 rows. Use the same code-clamp
-      // pattern as `logs-service.js` so 0 / negative / non-finite inputs
-      // do not fall through to the default.
-      const parsedLimitRaw = Number.isFinite(Number(limit)) ? parseInt(limit, 10) : 20;
-      const parsedLimit = Math.max(0, Math.min(parsedLimitRaw, 1000));
-      const parsedOffsetRaw = Number.isFinite(Number(offset)) ? parseInt(offset, 10) : 0;
-      const parsedOffset = Math.max(0, parsedOffsetRaw);
+      // Raw req.query strings reach this service verbatim (admin-routes
+      // does no coercion); parseInt alone turns '' or 'abc' into NaN,
+      // which serializes to a null LIMIT bind var Arango rejects.
+      // parsePositiveInt keeps limit=0 meaningful (a caller asking for
+      // zero rows) while defaulting garbage input to 20.
+      const parsedLimit = parsePositiveInt(limit, 20, { min: 0, max: 1000 });
+      const parsedOffset = parsePositiveInt(offset, 0, { min: 0 });
 
-      let countQuery, usersQuery, queryParams;
+      // Filter vars bind to both queries; Arango (error 1552) rejects
+      // bind vars the query text does not declare, and the count query
+      // has no LIMIT clause — so pagination vars join only the users
+      // query below.
+      const filterParams = {};
+      let filterCondition = '';
 
       if (term) {
-        queryParams = { limit: parsedLimit, offset: parsedOffset };
-        let filterCondition;
+        const likeTerm = `%${escapeLikePattern(term.toLowerCase())}%`;
         switch (field) {
           case 'name':
-            queryParams.term = `%${term.toLowerCase()}%`;
+            filterParams.term = likeTerm;
             filterCondition = `
               LOWER(u.loginName) LIKE @term
               OR LOWER(u.name) LIKE @term
@@ -931,20 +939,20 @@ class AdminDashboardService {
             `;
             break;
           case 'email':
-            queryParams.term = `%${term.toLowerCase()}%`;
+            filterParams.term = likeTerm;
             filterCondition = `LOWER(u.email) LIKE @term`;
             break;
           case 'exactEmail':
-            queryParams.exactTerm = term.toLowerCase();
+            filterParams.exactTerm = term.toLowerCase();
             filterCondition = `LOWER(u.email) == @exactTerm`;
             break;
           case 'role':
-            queryParams.term = `%${term.toLowerCase()}%`;
+            filterParams.term = likeTerm;
             filterCondition = `HAS(u, "roles") AND LENGTH(FOR r IN u.roles FILTER LOWER(r) LIKE @term RETURN 1) > 0`;
             break;
           case 'all':
           default:
-            queryParams.term = `%${term.toLowerCase()}%`;
+            filterParams.term = likeTerm;
             filterCondition = `
               LOWER(u.loginName) LIKE @term
               OR LOWER(u.email) LIKE @term
@@ -954,74 +962,50 @@ class AdminDashboardService {
             `;
             break;
         }
-
-        countQuery = `
-          RETURN LENGTH(
-            FOR u IN users
-              FILTER u.deleted != true
-              FILTER ${filterCondition}
-              RETURN 1
-          )
-        `;
-
-        // MR !343 round-2: bindVars for LIMIT (AQL injection sink — `LIMIT
-        // ${parsedOffset}, ${parsedLimit}` was a template literal; parseInt
-        // consumes only the leading digit prefix, so multi-statement
-        // payloads like `limit=10;FOR u IN users REMOVE u IN users;//`
-        // reached ArangoDB and executed).
-        usersQuery = `
-          FOR u IN users
-            FILTER u.deleted != true
-            FILTER ${filterCondition}
-            SORT u.updatedAt DESC
-            LIMIT @offset, @limit
-            RETURN {
-              _key: u._key,
-              loginName: u.loginName,
-              email: u.email,
-              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
-              roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : []),
-              sub: HAS(u, "sub") ? u.sub : null,
-              createdAt: u.createdAt,
-              updatedAt: u.updatedAt
-            }
-        `;
-      } else {
-        queryParams = { limit: parsedLimit, offset: parsedOffset };
-        countQuery = `
-          RETURN LENGTH(
-            FOR u IN users
-              FILTER u.deleted != true
-              RETURN 1
-          )
-        `;
-        usersQuery = `
-          FOR u IN users
-            FILTER u.deleted != true
-            SORT u.updatedAt DESC
-            LIMIT @offset, @limit
-            RETURN {
-              _key: u._key,
-              loginName: u.loginName,
-              email: u.email,
-              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
-              roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : []),
-              sub: HAS(u, "sub") ? u.sub : null,
-              createdAt: u.createdAt,
-              updatedAt: u.updatedAt
-            }
-        `;
       }
 
-      // ArangoDB rejects bind vars the query text does not declare (error
-      // 1552). The count query declares only the filter vars — strip the
-      // pagination vars before running it.
-      const countParams = { ...queryParams };
-      delete countParams.limit;
-      delete countParams.offset;
+      // LIMIT values stay bind vars — interpolating them into the query
+      // text is an AQL injection sink (parseInt consumes only a leading
+      // digit prefix, so `limit=10;FOR u IN users REMOVE u IN users;//`
+      // would execute as AQL).
+      const optionalFilter = filterCondition ? `FILTER ${filterCondition}` : '';
+      const countQuery = `
+        RETURN LENGTH(
+          FOR u IN users
+            FILTER u.deleted != true
+            ${optionalFilter}
+            RETURN 1
+        )
+      `;
+      const usersQuery = `
+        FOR u IN users
+          FILTER u.deleted != true
+          ${optionalFilter}
+          SORT u.updatedAt DESC
+          LIMIT @offset, @limit
+          RETURN {
+            _key: u._key,
+            loginName: u.loginName,
+            email: u.email,
+            fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
+            roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : []),
+            sub: HAS(u, "sub") ? u.sub : null,
+            createdAt: u.createdAt,
+            updatedAt: u.updatedAt
+          }
+      `;
 
-      const countCursor = await this.db.query(countQuery, countParams);
-      const usersCursor = await this.db.query(usersQuery, queryParams);
+      // Sequential on purpose: an admin delete racing the search would
+      // see count and users hit different Arango snapshots under
+      // Promise.all, leaving result.total to disagree with
+      // result.users.length. Admin endpoints are low-traffic; consistency
+      // beats one saved round-trip here.
+      const countCursor = await this.db.query(countQuery, filterParams);
+      const usersCursor = await this.db.query(usersQuery, {
+        ...filterParams,
+        limit: parsedLimit,
+        offset: parsedOffset
+      });
 
       const totalCount = await countCursor.next();
       const users = await usersCursor.all();
@@ -1031,8 +1015,8 @@ class AdminDashboardService {
       return {
         users,
         total: totalCount,
-        limit: parseInt(limit),
-        offset: parseInt(offset)
+        limit: parsedLimit,
+        offset: parsedOffset
       };
     } catch (error) {
       logger.error(`Error in searchUsers: ${error.message}`, { stack: error.stack });

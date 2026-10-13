@@ -924,8 +924,8 @@ module.exports = (adminService, logsService) => {
    *         name: field
    *         schema:
    *           type: string
-   *           enum: [all, name, email, role]
-   *         description: Field to search (all, name, email, role)
+   *           enum: [all, name, email, role, exactEmail]
+   *         description: Field to search (all, name, email, role, exactEmail — matches the full email literally)
    *       - in: query
    *         name: limit
    *         schema:

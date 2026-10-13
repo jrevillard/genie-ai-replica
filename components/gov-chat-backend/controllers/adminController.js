@@ -1,7 +1,6 @@
 const AdminDashboardService = require('../services/admin-dashboard-service');
 const LogsService = require('../services/logs-service');
 const { logger } = require('../shared-lib');
-const { parsePositiveInt } = require('../shared-lib');
 
 const adminController = {
   async getSystemHealth(req, res) {
@@ -231,33 +230,6 @@ const adminController = {
       res.status(500).json({
         success: false,
         message: 'Failed to run diagnostics',
-        error: error.message
-      });
-    }
-  },
-
-  async searchUsers(req, res) {
-    try {
-      const adminDashboardService = new AdminDashboardService();
-      await adminDashboardService.init();
-      logger.info('Controller: Searching users');
-      const options = {
-        term: req.query.term || '',
-        field: req.query.field || 'all',
-        limit: parsePositiveInt(req.query.limit, 20, { min: 1, max: 100 }),
-        offset: parsePositiveInt(req.query.offset, 0, { min: 0 })
-      };
-      logger.debug(`User search options: ${JSON.stringify(options)}`);
-      const searchResults = await adminDashboardService.searchUsers(options);
-      res.json({
-        success: true,
-        data: searchResults
-      });
-    } catch (error) {
-      logger.error(`Error searching users: ${error.message}`, { stack: error.stack });
-      res.status(500).json({
-        success: false,
-        message: 'Failed to search users',
         error: error.message
       });
     }

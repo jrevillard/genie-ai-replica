@@ -22,7 +22,6 @@ jest.mock('../../services/admin-dashboard-service', () => {
     getUserStats: jest.fn().mockResolvedValue({ total: 100, active: 50 }),
     getSecurityMetrics: jest.fn().mockResolvedValue({ incidents: 0, threats: 0 }),
     runDiagnostics: jest.fn().mockResolvedValue({ checks: 'passed' }),
-    searchUsers: jest.fn().mockResolvedValue({ users: [], total: 0 }),
     getLogs: jest.fn().mockResolvedValue({ total: 100, logs: [] })
   }));
 });
@@ -354,47 +353,6 @@ describe('adminController', () => {
         }));
 
         await adminController.runDiagnostics(req, res);
-
-        expect(res.status).toHaveBeenCalledWith(500);
-      });
-    });
-
-    describe('searchUsers', () => {
-      it('should search users with default parameters', async () => {
-        await adminController.searchUsers(req, res);
-
-        expect(res.json).toHaveBeenCalledWith(
-          expect.objectContaining({
-            success: true,
-            data: expect.objectContaining({
-              users: [],
-              total: 0
-            })
-          })
-        );
-      });
-
-      it('should use custom query parameters', async () => {
-        req.query = { term: 'john', field: 'username', limit: 10, offset: 5 };
-        await adminController.searchUsers(req, res);
-
-        expect(res.json).toHaveBeenCalled();
-      });
-
-      it('should handle invalid limit/offset gracefully', async () => {
-        req.query = { limit: 'invalid', offset: 'NaN' };
-        await adminController.searchUsers(req, res);
-
-        expect(res.json).toHaveBeenCalled();
-      });
-
-      it('should return 500 on error', async () => {
-        const AdminDashboardService = require('../../services/admin-dashboard-service');
-        AdminDashboardService.mockImplementationOnce(() => ({
-          init: jest.fn().mockRejectedValue(new Error('Search failed'))
-        }));
-
-        await adminController.searchUsers(req, res);
 
         expect(res.status).toHaveBeenCalledWith(500);
       });

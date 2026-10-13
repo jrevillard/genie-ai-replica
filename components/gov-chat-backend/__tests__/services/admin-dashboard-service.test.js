@@ -311,6 +311,35 @@ describe('AdminDashboardService', () => {
       adminDashboardService.db = null;
       await expect(adminDashboardService.searchUsers()).rejects.toThrow('Database not initialized');
     });
+
+    // ArangoDB (error 1552) rejects bind vars the query text does not
+    // declare. The count query shares the filter bind vars but has no
+    // LIMIT clause, so handing it limit/offset fails the whole search.
+    function strictArangoQuery(query, bindVars = {}) {
+      const declared = new Set(Array.from(query.matchAll(/@([A-Za-z_][A-Za-z0-9_]*)/g), (m) => m[1]));
+      for (const key of Object.keys(bindVars)) {
+        if (!declared.has(key)) {
+          const err = new Error(`bind parameter '${key}' was not declared in the query`);
+          err.errorNum = 1552;
+          return Promise.reject(err);
+        }
+      }
+      return Promise.resolve(createMockCursor([1]));
+    }
+
+    it('count query must not receive undeclared bind vars (no term)', async () => {
+      mockDb.query.mockImplementation(strictArangoQuery);
+
+      const result = await adminDashboardService.searchUsers({ term: '', field: 'all', limit: 20, offset: 0 });
+      expect(result.total).toBe(1);
+    });
+
+    it('count query must not receive undeclared bind vars (with term)', async () => {
+      mockDb.query.mockImplementation(strictArangoQuery);
+
+      const result = await adminDashboardService.searchUsers({ term: 'admin', field: 'all', limit: 20, offset: 0 });
+      expect(result.total).toBe(1);
+    });
   });
 
   describe('getLogs', () => {

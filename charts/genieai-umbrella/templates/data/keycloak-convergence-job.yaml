@@ -125,7 +125,11 @@ spec:
         - name: keycloak-config-cli
           # The -26 suffix encodes the Keycloak major version. A Keycloak
           # major bump needs a matching kcc tag bump.
-          image: "{{ .Values.global.imageRegistry | default "" }}/adorsys/keycloak-config-cli:6.5.0-26"
+          # Conditional registry prefix, like every other image in the
+          # chart: an air-gapped deployment that clears global.imageRegistry
+          # must fall back to the bare repository, not to a leading-slash
+          # reference the kubelet rejects.
+          image: {{ if .Values.global.imageRegistry }}{{ .Values.global.imageRegistry }}/{{ end }}adorsys/keycloak-config-cli:6.5.0-26
           {{- with .Values.global.imagePullSecrets }}
           imagePullSecrets: {{ toYaml . | nindent 12 }}
           {{- end }}

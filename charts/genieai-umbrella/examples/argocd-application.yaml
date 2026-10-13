@@ -16,20 +16,29 @@
 #     `kubectl apply -f` an AppProject manifest granting the repo + destinations
 #   - the target cluster is the current kubectl context
 #
-# LIMITATION (Helm hooks under ArgoCD): ArgoCD maps the chart's
-# pre-install/post-install hooks onto its own PreSync/PostSync phases, but
-# pre-upgrade hooks are NOT executed by ArgoCD. The chart's two pre-upgrade
-# drift hooks (SealedSecret validation and cluster-profile detection) do
-# not run under ArgoCD — that validation must happen in CI or manually
-# before each GitOps sync.
+# HELM HOOKS UNDER ARGOCD: ArgoCD does run them. It maps the helm.sh/hook
+# types `pre-install` and `pre-upgrade` to its PreSync phase, and
+# `post-install` and `post-upgrade` to PostSync. So all three of this
+# chart's hooks DO run under ArgoCD: the pre-upgrade drift Jobs
+# (dependency check, cluster-profile detect) as PreSync, and the realm
+# convergence Job as PostSync.
 #
-# LIMITATION (destructive prune): ArgoCD applies rendered manifests directly
-# and never executes Helm lifecycle hooks — including any pre-delete
-# confirmation gate the chart may define. An ArgoCD prune deletes the
-# Namespace and every PVC inside it with no gate. Destructive-sync protection
-# for GitOps-delivered instances must come from an ArgoCD-native mechanism
-# (finalizers, preSync hooks, or disabling automated prune on this
-# Application); the Helm-hook gate only protects plain `helm uninstall`.
+# Two consequences worth stating plainly:
+#   - They re-run on every sync, not only when what they watch changed.
+#     ArgoCD has no change-gating for hooks, so the convergence Job
+#     reconciles the realm on every ArgoCD sync, not only on a release
+#     that changed it.
+#   - `post-rollback` is not in ArgoCD's hook map. ArgoCD has no
+#     distinct rollback phase; a "rollback" is a resync to a prior SHA,
+#     which re-fires PostSync. Convergence still happens there.
+#
+# LIMITATION (destructive prune): ArgoCD deletes rendered resources
+# directly when pruning. An automated prune of this Application removes
+# the Namespace and every PVC inside it with no confirmation gate,
+# because Helm lifecycle hooks do not run on prune. Protect
+# GitOps-delivered instances with an ArgoCD-native mechanism
+# (sync-options disabling automated prune, or finalizers), not with a
+# Helm hook — a Helm hook only protects `helm uninstall`.
 #
 # Per-env overlays under deploy/environments/<env>/ land with the
 # environment-tier work — until then this example installs the umbrella

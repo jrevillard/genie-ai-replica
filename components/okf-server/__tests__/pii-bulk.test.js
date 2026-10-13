@@ -82,7 +82,10 @@ describe('pii repo bulk action', () => {
       expect(doc.pii_state).toBe('clean');
       expect(doc.pii_hits_summary).toEqual({});
       expect(doc.pii_resolutions[doc.pii_resolutions.length - 1]).toMatchObject({
-        action: 'accept_repo',
+        // Was 'accept_repo', which subtractAccepted never matched — the bulk
+        // Accept could not suppress anything and the curator's decision did not
+        // survive a rescan. Now the durable whole-concept marker.
+        action: 'accept_all_findings',
         hits_summary: expect.any(Object)
       });
     }
@@ -92,6 +95,117 @@ describe('pii repo bulk action', () => {
     // The review doubles as the completed scan for the publish gate.
     expect(mockDb._stores.okf_repositories.repoA.pii_scan_status).toBe('complete');
     expect(auditService.writeAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'repo.pii_bulk_accept' }));
+  });
+
+  // ── BULK ACCEPT DURABILITY (David, 2026-10-13) ────────────────────────────
+  //
+  // "The Accept All should just bulk accept everything the same way the
+  //  individual accepts work." The per-item path suppressed correctly; the bulk
+  // path wrote 'accept_repo', which subtractAccepted never matched, so every
+  // finding came back on the next scan and the curator's decision was lost.
+  describe('bulk accept is durable', () => {
+    const OCC = [
+      { where: 'body', type: 'PERSON', start: 0, end: 5, score: 0.85 },
+      { where: 'body', type: 'EMAIL_ADDRESS', start: 10, end: 30, score: 1 }
+    ];
+
+    test('a whole-concept accept suppresses EVERY finding on the next scan', () => {
+      // Direct unit on the suppression rule — the durability contract.
+      const accepted = [{ action: 'accept_all_findings', type: null, where: null, before: null }];
+      expect(piiService.subtractAccepted(OCC, accepted)).toEqual([]);
+    });
+
+    test('per-item accept still suppresses ONLY the matching finding', () => {
+      // The per-item path must be untouched by the bulk change.
+      const accepted = [{ action: 'accept', where: 'body', type: 'PERSON', before: 'MARIA' }];
+      const out = piiService.subtractAccepted(
+        [
+          { where: 'body', type: 'PERSON', excerpt: { hit: 'MARIA' } },
+          { where: 'body', type: 'EMAIL_ADDRESS', excerpt: { hit: 'a@b.org' } }
+        ],
+        accepted
+      );
+      expect(out).toHaveLength(1);
+      expect(out[0].type).toBe('EMAIL_ADDRESS');
+    });
+
+    test('the LEGACY accept_repo action stays inert — no retroactive masking', () => {
+      // CRITICAL SAFETY PROPERTY. 321 accept_repo records already exist on live
+      // repositories. If the legacy name became durable, every finding those
+      // curators accepted under the broken semantics would vanish silently —
+      // masking content they never agreed to suppress.
+      const legacy = [{ action: 'accept_repo', type: null, where: null, before: null }];
+      const occs = [{ where: 'body', type: 'PERSON', excerpt: { hit: 'MARIA' } }];
+      expect(piiService.subtractAccepted(occs, legacy)).toHaveLength(1);
+    });
+
+    test('no accepted resolutions at all leaves every finding outstanding', () => {
+      expect(piiService.subtractAccepted(OCC, [])).toHaveLength(2);
+    });
+  });
+
+  // ── THE CALL-PATH TEST (adversarial review 2026-10-13) ───────────────────
+  //
+  // The test above is a UNIT on subtractAccepted and it stayed GREEN while the
+  // feature was dead: both real call sites pre-filtered the ledger to
+  // action === 'accept' before calling it, so the whole-concept marker was
+  // discarded and the suppression branch was unreachable. Two independent
+  // verifiers found this. A unit test cannot catch a bug in the wiring that
+  // feeds it, so this one goes through inspectConcept — the function a curator
+  // actually hits — with persisted findings and a persisted ledger.
+  //
+  // FALSIFICATION: restore `.filter((r) => r && r.action === 'accept')` at both
+  // call sites and this test FAILS (2 occurrences come back instead of 0).
+  describe('bulk accept survives the REAL call path (not just the unit)', () => {
+    const FRONTMATTER = { title: 'c1' };
+    const BODY = 'Contact MARIA at maria@example.org';
+    const OCCURRENCES = [
+      { where: 'body', type: 'PERSON', start: 8, end: 13, score: 0.85 },
+      { where: 'body', type: 'EMAIL_ADDRESS', start: 17, end: 35, score: 1 }
+    ];
+
+    async function seedWithLedger(resolutions) {
+      await seedRepo();
+      const fmText = Object.values(FRONTMATTER).join('\n');
+      await mockDb.collection('okf_concepts_meta').save({
+        _key: 'c1',
+        repo_id: 'repoA',
+        concept_id: 'c1',
+        frontmatter: FRONTMATTER,
+        body: BODY,
+        pii_state: 'hit',
+        pii_hits_summary: { PERSON: 1, EMAIL_ADDRESS: 1 },
+        // Cached findings + a matching signature take inspectConcept down its
+        // CACHE-HIT path — no sidecar call, so this isolates the suppression
+        // wiring rather than the HTTP client.
+        pii_findings: {
+          content_sig: piiService.findingsSignature(fmText, BODY),
+          occurrences: OCCURRENCES,
+          counts_by_type: { PERSON: 1, EMAIL_ADDRESS: 1 }
+        },
+        pii_resolutions: resolutions
+      });
+    }
+
+    test('a whole-concept marker leaves ZERO outstanding findings', async () => {
+      await seedWithLedger([{ action: 'accept_all_findings', type: null, where: null, before: null }]);
+      const out = await piiService.inspectConcept('repoA', 'c1', FRONTMATTER, BODY);
+      expect(out.occurrences).toEqual([]);
+    });
+
+    test('the legacy accept_repo marker still leaves every finding outstanding', async () => {
+      // Same path, inert marker — proves the test is sensitive to WHICH action
+      // is in the ledger, not merely to a non-empty ledger.
+      await seedWithLedger([{ action: 'accept_repo', type: null, where: null, before: null }]);
+      const out = await piiService.inspectConcept('repoA', 'c1', FRONTMATTER, BODY);
+      expect(out.occurrences).toHaveLength(2);
+    });
+
+    test('no ledger leaves every finding outstanding', async () => {
+      await seedWithLedger([]);
+      const out = await piiService.inspectConcept('repoA', 'c1', FRONTMATTER, BODY);
+      expect(out.occurrences).toHaveLength(2);
+    });
   });
 
   test('redact replaces every flagged body with the notice; remove empties them', async () => {

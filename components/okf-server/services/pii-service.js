@@ -212,7 +212,7 @@ async function scanConcept(repo_id, concept_id, frontmatter = {}, body = '') {
       // PII REMEDIATION (David, 2026-09-09): per-item Accept decisions
       // suppress their occurrence — redact/replace/remove change the text so
       // the re-scan drops them naturally; only 'accept' needs the subtraction.
-      const accepted = (await listResolutions(repo_id, concept_id)).filter((r) => r && r.action === 'accept');
+      const accepted = (await listResolutions(repo_id, concept_id)).filter(isSuppressingAccept);
       const unresolved = subtractAccepted(insp.occurrences, accepted);
       const summary = countByType(unresolved);
       const state = unresolved.length > 0 ? 'hit' : 'clean';
@@ -282,7 +282,7 @@ async function inspectConcept(repo_id, concept_id, frontmatter = {}, body = '', 
               }
             };
           });
-          const accepted = (await listResolutions(repo_id, concept_id)).filter((r) => r && r.action === 'accept');
+          const accepted = (await listResolutions(repo_id, concept_id)).filter(isSuppressingAccept);
           const unresolved = subtractAccepted(withExcerpts, accepted);
           recordOp('inspect', 'cache');
           span.setAttribute('okf.pii_cached', true);
@@ -380,8 +380,44 @@ function countByType(occurrences) {
 
 /** Occurrences whose (where, type, text) matches an Accept resolution are
  * suppressed — they are reviewed, not outstanding. */
+/** Durable whole-concept acceptance marker (David 2026-10-13: Accept All should
+ *  bulk accept everything the same way the individual accepts work).
+ *  ONE record per concept, not one per finding: the concept that motivated this
+ *  stores 8,273 findings and RESOLUTION_CAP is 200, so a per-finding ledger
+ *  would slice away 8,073 AND fail to suppress the rest.
+ *  Deliberately a NEW name, not legacy accept_repo: existing accept_repo records
+ *  stay INERT so this cannot retroactively mask findings a curator accepted under
+ *  the old broken semantics. They must re-accept. */
+const ACCEPT_ALL_FINDINGS = 'accept_all_findings';
+
+/** Which ledger actions SUPPRESS an outstanding finding.
+ *
+ *  'accept' — the per-item accept: suppresses exactly the (where, type, text)
+ *             triple it names.
+ *  ACCEPT_ALL_FINDINGS — suppresses every current finding on the concept.
+ *  'accept_repo' is DELIBERATELY ABSENT. It is inert by design (see above), so
+ *  a legacy record cannot retroactively mask findings.
+ *
+ *  WHY THIS SET EXISTS (adversarial review 2026-10-13): both call sites used to
+ *  pre-filter with `r.action === 'accept'` and hand THAT list to
+ *  subtractAccepted — so ACCEPT_ALL_FINDINGS was discarded before line 399
+ *  could ever test for it, and the whole-concept branch was unreachable dead
+ *  code. Two independent verifiers found this. The test that appeared to cover
+ *  it passed only because it called subtractAccepted directly, bypassing the
+ *  very filter that breaks it. */
+const SUPPRESSING_ACCEPT_ACTIONS = new Set(['accept', ACCEPT_ALL_FINDINGS]);
+
+function isSuppressingAccept(resolution) {
+  return !!resolution && SUPPRESSING_ACCEPT_ACTIONS.has(resolution.action);
+}
+
 function subtractAccepted(occurrences, accepted) {
   if (!accepted || accepted.length === 0) return occurrences || [];
+  // Whole-concept acceptance covers EVERY current finding, so nothing is left
+  // outstanding. The ledger entry stays either way, so the panel keeps rendering
+  // accepted items GREEN: suppression drops them from the OUTSTANDING count and
+  // never hides the record of the decision.
+  if (accepted.some((a) => a && a.action === ACCEPT_ALL_FINDINGS)) return [];
   const keys = new Set(accepted.map((a) => [a.where, a.type, a.before].join(' ')));
   return (occurrences || []).filter((o) => !keys.has([o.where, o.type, o.excerpt && o.excerpt.hit].join(' ')));
 }
@@ -945,14 +981,18 @@ async function repoBulkAction(repo_id, payload, actor) {
     for (const doc of flagged) {
       const prevSummary = doc.pii_hits_summary && typeof doc.pii_hits_summary === 'object' ? doc.pii_hits_summary : {};
       if (action === 'accept') {
-        // Text stays; the decision suppresses every outstanding hit.
+        // Text stays; the decision suppresses every outstanding hit — DURABLY.
+        // Writes the whole-concept marker rather than one resolution per finding
+        // (see ACCEPT_ALL_FINDINGS: 8,273 findings on one concept here, against a
+        // 200-per-concept cap). The ledger entry stays either way, so the panel
+        // still renders the accepted items GREEN.
         await appendResolution(db, doc._key, doc.pii_resolutions, {
           id: newResolutionId(),
-          action: 'accept_repo',
+          action: ACCEPT_ALL_FINDINGS,
           type: null,
           where: null,
           before: null,
-          after: 'accepted (whole repository)',
+          after: 'accepted (all findings on this concept)',
           hits_summary: prevSummary,
           at: now,
           actor: by
@@ -1750,6 +1790,7 @@ module.exports = {
   redactWholeFile,
   listResolutions,
   subtractAccepted,
+  findingsSignature,
   upsertPiiState,
   assertPiiClean,
   markRepoPiiScanned,

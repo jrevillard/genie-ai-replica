@@ -782,6 +782,12 @@ services:
       # uvicorn worker processes (GIL-bound NER needs processes, not threads;
       # raise on many-core deployments)
       - PII_WEB_CONCURRENCY=${PII_WEB_CONCURRENCY:-2}
+      # Max chars per analyze() call. Bounds how long ONE scan holds the GIL,
+      # which is what starves uvicorn's supervisor into SIGKILLing the worker
+      # (measured 2026-10-13: an 850 KB page killed the worker 8/8 times).
+      # Sized so a region stays under the supervisor's 5 s liveness ping;
+      # lower it on a slower host, raise it only if a region is provably <5 s.
+      - PII_REGION_MAX_CHARS=${PII_REGION_MAX_CHARS:-50000}
     build:
       context: components/pii-service/
       dockerfile: Dockerfile

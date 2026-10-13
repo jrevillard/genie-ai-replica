@@ -1745,6 +1745,146 @@ class TestRetractFile:
         assert result["details"]["deleted_chunks"] == 2
         assert result["details"]["deleted_edges"] == 1
 
+    # -----------------------------------------------------------------
+    # Zero-chunk outcome is LEADING, not trailing (2026-10-13 incident)
+    #
+    # The curator read the bundle Ingestion Log, saw "Starting retraction
+    # analysis..." as the first line of a perfectly normal ingest, and
+    # concluded his data was being deleted. Nothing was deleted: the
+    # defensive pre-POST sweep found 0 chunks and moved on. These tests pin
+    # the log SHAPE so the alarming intent-first line cannot come back.
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def _empty_chunk_cursor():
+        """A cursor yielding no chunks.
+
+        Models the WORLD: the ArangoDB driver returns a cursor that is
+        iterable, so a plain list-backed iterator is a faithful stand-in for
+        the zero-row result set (a bare MagicMock would iterate as empty too,
+        but would also silently satisfy any access pattern).
+        """
+        return MagicMock(__iter__=MagicMock(return_value=iter([])))
+
+    @pytest.mark.asyncio
+    async def test_zero_chunks_log_leads_with_reassuring_outcome(self):
+        """The zero-chunk path must NOT emit an alarming intent-first line.
+
+        Non-vacuous: reverting the production fix (restoring the unconditional
+        "Starting retraction analysis..." line) fails this test.
+        """
+        dp = create_dataprep()
+        dp.db.aql.execute = MagicMock(return_value=self._empty_chunk_cursor())
+
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as mock_log,
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+        ):
+            result = await dp.retract_file("file-zero", "GRAPH")
+
+        messages = [call.args[3] for call in mock_log.await_args_list]
+        assert messages, "the zero-chunk path must still log its outcome (audit trail)"
+
+        # ROUTING, not just wording. _write_ingestion_log(self, file_id, level,
+        # stage, message) — args[0] is the concept the row is filed UNDER.
+        # The message assertions below CANNOT catch a mis-routed log: the
+        # message interpolates the same local variable, so `assert "file-zero"
+        # in messages[0]` is tautological and stays green even when the call is
+        # filed under a different file_id. Proven by mutation: substituting a
+        # different routing key left every other assertion passing. (Adversarial
+        # review, 2026-10-13.)
+        for logged_call in mock_log.await_args_list:
+            assert logged_call.args[0] == "file-zero", (
+                f"ingestion-log row filed under the wrong concept: {logged_call.args[0]!r}"
+            )
+
+        # The defect itself: an intent line that reads as "deletion starting"
+        # must not appear at all when nothing is being deleted.
+        for msg in messages:
+            assert "Starting retraction analysis" not in msg, (
+                f"zero-chunk path emitted an alarming intent-first line: {msg!r}"
+            )
+
+        # The outcome must be explicitly reassuring — a curator reading the
+        # FIRST line alone must conclude "nothing happened", not "data is gone".
+        first_line = messages[0].lower()
+        assert "nothing to retract" in first_line, f"first log line is not reassuring: {messages[0]!r}"
+        assert "no data was removed" in first_line, f"first log line lacks the no-deletion assurance: {messages[0]!r}"
+
+        # Auditability is preserved: the find evidence (count, collection,
+        # file_id) is still in the log, so the orphan-cleanup guard stays
+        # reviewable after the fact.
+        assert "0 chunks" in messages[0]
+        assert "GRAPH_SOURCE" in messages[0]
+        assert "file-zero" in messages[0]
+
+        # Behaviour is unchanged: still a no-op retraction.
+        assert result["status"] == 200
+        assert result["message"] == "No chunks found."
+        assert result["details"]["deleted_chunks"] == 0
+
+    @pytest.mark.asyncio
+    async def test_zero_chunks_still_runs_the_analysis(self):
+        """The find MUST run even when nothing is found — it is the orphan guard.
+
+        Guards against a "fix" that silences the noise by skipping the query:
+        that would silently disable stale-chunk cleanup for every ingest.
+        """
+        dp = create_dataprep()
+        dp.db.aql.execute = MagicMock(return_value=self._empty_chunk_cursor())
+
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+        ):
+            await dp.retract_file("file-zero", "GRAPH")
+
+        # The chunk-find query executed against the SOURCE collection, bound
+        # to this file_id.
+        dp.db.aql.execute.assert_called_once()
+        query = dp.db.aql.execute.call_args.args[0]
+        bind_vars = dp.db.aql.execute.call_args.kwargs["bind_vars"]
+        assert "@@col_source" in query
+        assert bind_vars["@col_source"] == "GRAPH_SOURCE"
+        assert bind_vars["file_id"] == "file-zero"
+
+        # ...and exactly one query: no deletion AQL was issued.
+        assert dp.db.aql.execute.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_nonzero_chunks_still_announces_retraction(self):
+        """The reassuring-zero case must not have silenced the real retraction.
+
+        When chunks DO exist, the intent line must still be emitted (post-find,
+        pre-delete) so a genuine cascade delete is never invisible.
+        """
+        dp = create_dataprep()
+
+        chunk_cursor = MagicMock(__iter__=MagicMock(return_value=iter([{"key": "c1", "id": "SOURCE/c1"}])))
+        edge_cursor = MagicMock(__iter__=MagicMock(return_value=iter([])))
+        del_chunk_cursor = MagicMock(__iter__=MagicMock(return_value=iter(["SOURCE/c1"])))
+        del_links_cursor = MagicMock(__iter__=MagicMock(return_value=iter([])))
+        orphan_cursor = MagicMock(__iter__=MagicMock(return_value=iter([])))
+
+        dp.db.aql.execute = MagicMock(
+            side_effect=[chunk_cursor, edge_cursor, del_chunk_cursor, del_links_cursor, orphan_cursor]
+        )
+
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as mock_log,
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+        ):
+            result = await dp.retract_file("file-real", "GRAPH")
+
+        messages = [call.args[3] for call in mock_log.await_args_list]
+        announcement = [m for m in messages if "Starting retraction analysis" in m]
+        assert len(announcement) == 1, f"a real retraction must be announced: {messages!r}"
+        # The announcement carries its own evidence, so it can never read as a
+        # false alarm on its own.
+        assert "1 chunk(s)" in announcement[0]
+        assert "file-real" in announcement[0]
+        assert result["details"]["deleted_chunks"] == 1
+
     @pytest.mark.asyncio
     async def test_no_chunks_returns_early(self):
         """No chunks found -> early return with 'No chunks found.' message."""

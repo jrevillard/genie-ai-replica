@@ -55,8 +55,8 @@ observability:
 # data layer values
 
 # Declared alongside the templates that dereference them:
-# the data-tier PVCs read `pluggable.storageClassName`, the realm-import
-# redirect URLs read `ingress.host`. Helm nil-pointer-evaluates
+# the data-tier PVCs read `pluggable.storageClassName`, the convergence
+# Job derives KC_PUBLIC_ORIGIN from `ingress.host`. Helm nil-pointer-evaluates
 # a missing parent map even under `with`/`default` guards — the keys must
 # exist in values.yaml before any template reads them.
 # Per-environment overrides elaborate both blocks; do not duplicate them here.
@@ -264,9 +264,11 @@ services:
     env: []
     secrets:
       # KEYCLOAK_PROXY_CLIENT_SECRET for the genie-proxy-client service
-      # account (the realm's admin-API proxy). Must equal
-      # data.keycloak.clientSecrets.proxyClient rendered into the realm
-      # CR (the realm import cannot read K8s Secrets).
+      # account (the realm's admin-API proxy). The value reaches the
+      # convergence Job through `convergence.envSecrets` — point
+      # `envSecrets[].secretName` at this Secret and the chart never reads
+      # it. The matching `data.keycloak.clientSecrets.proxyClient` is what
+      # the render-time placeholder guard checks, not what is sent.
       - name: keycloak-proxy-client-secret
       - name: huggingface-hub-token
       - name: email-password

@@ -135,3 +135,10 @@ overrides:
     added_in: v1.5
     last_validated: v1.5
     test: tests/test_core.py::TestMCPFuncType
+  - override: build-patches.unstructured_html_pi_patch
+    disposition: still-needed
+    owner: genie-ai
+    justification: "XML processing instructions crash unstructured 0.18.32 partition_html (upstream issue #4358): parser.py:929 builds the package's only etree.HTMLParser(remove_comments=True) and the ElementNamespaceClassLookup at :933 maps custom classes for _Element subclasses only, so a PI node falls through to a class with no is_phrasing. Measured 2026-10-13 on the local stack - two concepts (438 and 231890 chars) from a PDF that teaches XML prologs silently never reached RAG. Upstream added remove_pis=True to that constructor in 0.27.8; the pin is 0.18.32 and the upgrade spans 9 minor releases across a 374-package --require-hashes lock, so we apply the single constructor argument. Patching the construction site (not the three traversal sites at :423/:628/:750) makes the module correct by construction; the patcher aborts the BUILD if the line is absent, so it can never silently ship a crashing image."
+    added_in: v1.5
+    last_validated: v1.5
+    test: tests/test_unstructured_pi_patch.py

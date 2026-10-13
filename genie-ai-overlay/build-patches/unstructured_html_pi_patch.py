@@ -72,13 +72,26 @@ import site
 import sys
 from pathlib import Path
 
-# The exact line upstream rewrote. Anchored so a cosmetic upstream reflow is
-# NOT silently accepted as "already patched" — that is case 3, the loud failure.
-UNPATCHED_LINE = "    html_parser = etree.HTMLParser(remove_comments=True)"
-PATCHED_LINE = "    html_parser = etree.HTMLParser(remove_comments=True, remove_pis=True)"
+# The exact line upstream rewrote, matched on CONTENT with the indentation
+# captured and reapplied.
+#
+# WHY NOT A LITERAL WITH HARDCODED INDENT: verified against the installed file
+# in the running dataprep image (2026-10-13), line 929 sits at COLUMN 0 —
+#     html_parser = etree.HTMLParser(remove_comments=True)
+# A literal carrying 4 spaces of assumed indent would never match, the guard
+# would fire, and the IMAGE BUILD WOULD FAIL. Matching on content while
+# preserving the file's own indentation is both correct and reflow-tolerant.
+UNPATCHED_RE = re.compile(
+    r"^(?P<indent>[ \t]*)html_parser = etree\.HTMLParser\(remove_comments=True\)(?P<eol>[ \t\r]*)$",
+    re.MULTILINE,
+)
+PATCHED_RE = re.compile(
+    r"^(?P<indent>[ \t]*)html_parser = etree\.HTMLParser\(remove_comments=True, remove_pis=True\)(?P<eol>[ \t\r]*)$",
+    re.MULTILINE,
+)
 
 # Any construction line at all, used to decide between case 2 and case 3.
-ANY_CONSTRUCTION = re.compile(r"^\s*html_parser\s*=\s*etree\.HTMLParser\(", re.MULTILINE)
+ANY_CONSTRUCTION = re.compile(r"^[ \t]*html_parser\s*=\s*etree\.HTMLParser\(", re.MULTILINE)
 
 
 def parser_path() -> Path:
@@ -100,27 +113,56 @@ def installed_version() -> str:
         return "unknown"
 
 
+def _read(path: Path) -> str:
+    """Read WITHOUT newline translation.
+
+    ``open()`` defaults to newline=None, which translates CRLF on read and
+    rewrites LF as os.linesep on write. On Windows that silently converted all
+    1018 lines of the real parser.py to CRLF during a dry run, making a
+    one-line patch look like a whole-file rewrite. newline="" passes line
+    endings through untouched, so the patch is byte-identical apart from the
+    constructor — on any host.
+    """
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return handle.read()
+
+
+def _write(path: Path, text: str) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        handle.write(text)
+
+
 def apply_patch(path: Path) -> str:
     """Patch, verify idempotently, or fail loudly. Returns a short outcome label."""
     if not path.is_file():
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: {path} does not exist")
 
-    original = path.read_text(encoding="utf-8")
+    original = _read(path)
 
-    if UNPATCHED_LINE in original:
-        if original.count(UNPATCHED_LINE) != 1:
+    matches = list(UNPATCHED_RE.finditer(original))
+    if matches:
+        if len(matches) != 1:
             raise SystemExit(
                 f"ASSERT-ON-PATCH GUARD FAILED: expected exactly one unpatched constructor in {path}, "
-                f"found {original.count(UNPATCHED_LINE)}"
+                f"found {len(matches)}"
             )
-        patched = original.replace(UNPATCHED_LINE, PATCHED_LINE, 1)
+        # Re-emit the matched indent AND the matched line ending: dropping the
+        # trailing CR would silently rewrite a CRLF file's line terminator.
+        patched = UNPATCHED_RE.sub(
+            lambda m: (
+                f"{m.group('indent')}html_parser = "
+                f"etree.HTMLParser(remove_comments=True, remove_pis=True){m.group('eol')}"
+            ),
+            original,
+            count=1,
+        )
         # Compile the edited source BEFORE writing it, so a botched edit can
         # never reach disk.
         compile(patched, str(path), "exec")
-        path.write_text(patched, encoding="utf-8")
+        _write(path, patched)
         # Re-read: the file on disk is the artefact that ships, so verify THAT.
-        post = path.read_text(encoding="utf-8")
-        if PATCHED_LINE not in post or UNPATCHED_LINE in post:
+        post = _read(path)
+        if not PATCHED_RE.search(post) or UNPATCHED_RE.search(post):
             raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: post-write verification failed for {path}")
         return "patched"
 
@@ -130,7 +172,7 @@ def apply_patch(path: Path) -> str:
     raise SystemExit(
         f"ASSERT-ON-PATCH GUARD FAILED: upstream restructured partition/html/parser.py in "
         f"unstructured {installed_version()}. Expected either\n"
-        f"  {UNPATCHED_LINE.strip()}\n"
+        f"  html_parser = etree.HTMLParser(remove_comments=True)\n"
         f"or a constructor already carrying remove_pis. Found neither — re-derive the patch "
         f"for {installed_version()} and update genie-ai-overlay/OVERRIDES.yaml."
     )

@@ -88,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`/api/admin/users/search` returns 500 on every call.** `searchUsers()` passed `limit` and `offset` bind vars to the count query, which declares no `LIMIT` clause. ArangoDB rejects undeclared bind parameters (`errorNum 1552`), so every admin user-list request failed with HTTP 500 after the LIMIT-injection hardening landed. The count query now receives only the filter bind vars it declares. (#541)
 - **Trace correlation across services we control.** Logs from backend, document-repository, and every OPEA overlay service now carry `trace_id` / `span_id` end-to-end, so clicking a log row opens the originating trace in VictoriaTraces. (#343)
 - **Python `uvicorn.access` logs correlated with traces.** uvicorn HTTP access logs from OPEA services now include `trace_id` / `span_id` (previously they were plain text and uncorrelatable). (#343)
 - **Log loss under burst ingest.** The docker fluentd driver buffer was saturated at 1 MB during ingest peaks and dropped records before they reached the collector. Bumped to 8 MB / 5 retries / 2 s backoff in the `x-logging` compose anchor. (#343)

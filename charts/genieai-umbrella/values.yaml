@@ -126,14 +126,13 @@ data:
     supportedLocales: []
     # Access-token TTL in seconds (compose parity).
     accessTokenLifespan: 300
-    # Confidential-client secrets rendered into the realm import — these
-    # values feed the KeycloakRealmImport CR directly (it cannot read
-    # Kubernetes Secrets; operators supply the real values at install time
-    # via values override, never committed). The same values are
-    # expected to be present in the operator-provided Secrets (named
-    # `keycloak-proxy-client-secret`, etc.) for the service tiers that
-    # consume them via envFrom — the chart does not render those Secrets
-    # itself.
+    # Confidential-client secrets. These values are read ONLY by the
+    # render-time guard below: the chart renders no secret, and kcc
+    # receives the real values through `convergence.envSecrets` rows that
+    # reference operator-provided Secrets via `valueFrom.secretKeyRef`.
+    # Keeping them here is what lets the render fail loudly when a client
+    # secret is still a placeholder, instead of creating an OIDC client
+    # whose secret no consumer in the cluster holds.
     clientSecrets:
       proxyClient: change-me-proxy-client
       dataprep: change-me-dataprep-client
@@ -178,9 +177,9 @@ data:
     update:
       strategy: RecreateOnImageChange
     # ── Realm convergence (keycloak-config-cli) ──
-    # The realm is created and then converged on every release by a
-    # Helm post-upgrade hook Job; the operator's KeycloakRealmImport
-    # CR is create-only and cannot be used for this.
+    # The realm is created and then converged on every release by a Helm
+    # post-install/post-upgrade/post-rollback hook Job. This chart renders
+    # no realm-import CR — keycloak-config-cli is the realm's only owner.
     convergence:
       enabled: true
       # kcc waits for Keycloak itself via KEYCLOAK_AVAILABILITYCHECK_*,

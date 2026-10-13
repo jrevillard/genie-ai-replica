@@ -44,7 +44,7 @@ Helm never invokes Docker, so the chart's copy and the image's copy have no runt
 
 | File | Responsibility after this plan |
 |---|---|
-| `charts/genieai-umbrella/files/genie-realm.yaml` | **canonical** realm body, moved verbatim from `configs/keycloak/`, consumed by both the chart and compose |
+| `charts/genieai-umbrella/files/genie-realm.yaml` | byte-identical copy of `configs/keycloak/genie-realm.yaml`, mounted by the convergence Job |
 | `charts/genieai-umbrella/templates/data/keycloak-instance.yaml` | `Keycloak` v2beta1 CR: infra + `bootstrapAdmin.user.secret` + `http-relative-path` |
 | `charts/genieai-umbrella/templates/data/keycloak-convergence-job.yaml` | **new** — kcc post-upgrade hook Job, carrying the `change-me-*` guard and the `$(env:VAR)` completeness assertion |
 | `charts/genieai-umbrella/templates/data/keycloak-realm-secret.yaml` | **new** — the realm file rendered into a Secret from `.Files.Get` |
@@ -318,7 +318,7 @@ In the same file, insert after the `update:` block:
 
 - [ ] **Step 4: Drop the now-orphaned `realmImport` toggle**
 
-In the same file, remove the `realmImport: true` line. No template reads it once Task 5 deletes `keycloak-realm-import.yaml`, and leaving it invites an operator to believe it controls something.
+In the same file, remove the `realmImport: true` line **and the comment above it** ("Gates the Keycloak + KeycloakRealmImport CRs"). No template reads either once Task 5 deletes `keycloak-realm-import.yaml`, and leaving them invites an operator to believe they control something.
 
 - [ ] **Step 5: Confirm the values surface parses and the orphans are gone**
 
@@ -385,11 +385,12 @@ from that env block without failing anything.
 {{- if not $realmFile -}}
 {{- fail "files/genie-realm.yaml is missing from the chart; the convergence Job has nothing to apply" -}}
 {{- end -}}
+{{- $ns := .Values.namespace -}}
 apiVersion: v1
 kind: Secret
 metadata:
-  name: {{ include "genieai-common.fullname" . }}-keycloak-realm
-  namespace: {{ .Values.namespace }}
+  name: {{ printf "%s-keycloak-realm" (include "genieai-common.fullname" .) }}
+  namespace: {{ $ns }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 4 }}
     genieai.io/data-tier: identity
@@ -502,11 +503,14 @@ would be exactly the failure this assertion exists to catch.
 {{- $known = append $known "KEYCLOAK_LOGIN_WITH_EMAIL" "KEYCLOAK_DUPLICATE_EMAILS" "KEYCLOAK_BRUTE_FORCE" -}}
 {{- $known = append $known "KEYCLOAK_PASSWORD_POLICY" "KEYCLOAK_THEME" -}}
 {{- $known = append $known "KEYCLOAK_I18N_ENABLED" "KEYCLOAK_LOCALE" "KEYCLOAK_SUPPORTED_LOCALES" "KEYCLOAK_ACCESS_TOKEN_LIFESPAN" -}}
-{{- $known = append $known "KEYCLOAK_AVAILABILITYCHECK_ENABLED" "KEYCLOAK_AVAILABILITYCHECK_TIMEOUT" -}}
-{{- $known = append $known "IMPORT_PATH" "IMPORT_FILES" "IMPORT_VARSUBSTITUTION_ENABLED" "IMPORT_CACHE_ENABLED" -}}
-{{- if .Values.data.keycloak.smtp -}}
+{{- /*
+SMTP placeholders are listed unconditionally: the realm file's
+smtpServer block is unconditional too (genie-realm.yaml:18-26), so a
+default install with smtp:null must still resolve them — to empty
+strings, exactly as the compose path does today. Gating them on smtp
+being set would fail this assertion on every default render.
+*/ -}}
 {{- $known = append $known "EMAIL_FROM" "EMAIL_HOST" "EMAIL_PORT" "EMAIL_SECURE" "EMAIL_SMTP_STARTTLS" "EMAIL_SMTP_AUTH" "EMAIL_USER" -}}
-{{- end -}}
 {{- range $e := (.Values.data.keycloak.convergence.envSecrets | default list) -}}
 {{- $known = append $known $e.envVar -}}
 {{- end -}}
@@ -607,22 +611,27 @@ spec:
               value: {{ .Values.data.keycloak.adminUsername | quote }}
             - name: GENIE_ADMIN_EMAIL
               value: {{ .Values.data.keycloak.adminEmail | default "genie-admin@genieai.local" | quote }}
-            {{- with .Values.data.keycloak.smtp }}
+            # The realm file's smtpServer block is unconditional, so
+            # these are emitted even with smtp:null — empty, which is
+            # what the compose path already sends. Keycloak rejects an
+            # smtpServer whose from is empty (deploy/ansible/README.md),
+            # so a default install needs SMTP configured; that failure is
+            # inherited from the compose path, not introduced here.
+            {{- $smtp := .Values.data.keycloak.smtp | default dict -}}
             - name: EMAIL_FROM
-              value: {{ .from | quote }}
+              value: {{ $smtp.from | default "" | quote }}
             - name: EMAIL_HOST
-              value: {{ .host | quote }}
+              value: {{ $smtp.host | default "" | quote }}
             - name: EMAIL_PORT
-              value: {{ .port | default 587 | int | quote }}
+              value: {{ $smtp.port | default 587 | int | quote }}
             - name: EMAIL_SECURE
-              value: {{ eq (.ssl | toString) "true" | quote }}
+              value: {{ eq ($smtp.ssl | default false | toString) "true" | quote }}
             - name: EMAIL_SMTP_STARTTLS
-              value: {{ eq (.starttls | toString) "true" | quote }}
+              value: {{ eq ($smtp.starttls | default false | toString) "true" | quote }}
             - name: EMAIL_SMTP_AUTH
-              value: {{ eq (.auth | toString) "true" | quote }}
+              value: {{ eq ($smtp.auth | default false | toString) "true" | quote }}
             - name: EMAIL_USER
-              value: {{ .user | quote }}
-            {{- end }}
+              value: {{ $smtp.user | default "" | quote }}
             - name: KEYCLOAK_REGISTRATION_ENABLED
               value: {{ eq ((.Values.data.keycloak.registrationAllowed | default false) | toString) "true" | quote }}
             - name: KEYCLOAK_VERIFY_EMAIL
@@ -1107,14 +1116,15 @@ Expected: one commit per task, in order, with no fixup noise.
 | Spec decision | Task |
 |---|---|
 | D1 — kcc is sole owner of the realm | Task 5 (Job + realm import deletion) |
-| D2 — realm file shipped verbatim, single canonical copy | Task 1 (move + build chain) |
+| D2 — realm file duplicated into the chart, never re-rendered | Task 1 (copy + drift guard) |
 | D3 — `bootstrapAdmin.user.secret`; `bootstrapAdmin.service` not set | Task 2 (CR), Task 3 (values) |
 | D4 — inline Helm post-upgrade hook Job, availability check, run-always | Task 5 |
-| D5 — secret wiring; `$(env:VAR)` completeness assertion | Task 4 (assertion), Task 5 (wiring) |
+| D5 — secret wiring | Task 5 |
+| D5 — `$(env:VAR)` completeness assertion | Task 5 Step 1 (lives beside the env it validates) |
 | D6 — `clientSecrets.*` repurposed, guard relocated, `failOnPlaceholderSecrets` stays `true` | Task 3 (values), Task 5 (guard) |
 | D7 — `http-relative-path: /auth` on the Keycloak CR | Task 2 |
 | D8 — `clientSecrets` → `envSecrets` mapping documented | Task 3 (comments), Task 8 (worked rows) |
-| D9 — CI path lists on all three `keycloak-config` jobs | Task 1 Step 5 |
+| D9 — drift guard: `diff` assertion + `configs/keycloak/**/*` trigger | Task 1 Steps 2-3 |
 | D10 — ArgoCD example corrected | Task 6 |
 | D11 — CHANGELOG | Task 7 |
 

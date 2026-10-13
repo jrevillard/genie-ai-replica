@@ -3151,14 +3151,12 @@ chart:install:
       changes:
         - charts/**/*
         - scripts/**/*
-        - configs/keycloak/**/*
         - .gitlab-ci.yml
       when: on_success
     - if: '$CI_COMMIT_BRANCH == "feat/k8s-migration"'
       changes:
         - charts/**/*
         - scripts/**/*
-        - configs/keycloak/**/*
         - .gitlab-ci.yml
       when: on_success
 

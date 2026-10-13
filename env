@@ -1214,6 +1214,16 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   knob — raise it only on a host with headroom. Set it to match
 #   OKF_IMPORT_CONCURRENCY when tuning import throughput together.
 #   Compose: yes. Ansible: yes (pii_web_concurrency).
+# PII_REGION_MAX_CHARS=50000
+#   Default: 50000 in the sidecar. Max chars per analyze() call. A single long
+#   scan holds the GIL inside native spaCy/thinc code, which starves uvicorn's
+#   own supervisor: it SIGKILLs a worker that fails its 5 s liveness ping and
+#   respawns it. Measured 2026-10-13 — an 850 KB page killed the worker 8/8
+#   before this knob existed and 0/10 after; the same page was split into 18
+#   regions. LOWER it on a slower host: a region must stay under ~5 s, which
+#   is what stops the supervisor kill. Raise it only when a region measures
+#   below that. Smaller regions cost a little throughput, never recall.
+#   Used by: pii-service. Compose: yes. Ansible: yes (pii_region_max_chars).
 
 # --- okf-server: lifecycle + bundle ---
 # OKF_DELETE_GRACE_HOURS=168

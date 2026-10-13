@@ -496,6 +496,7 @@ describe('Configuration Validation Suite', () => {
     // emits them with the code's own default", not "compose agrees".
     const PII_CODE_DEFAULTS = {
       PII_WEB_CONCURRENCY: '2',
+      PII_REGION_MAX_CHARS: '50000',
       PII_CONCEPT_RETRY_PAUSE_MS: '8000',
       PII_SERVICE_URL: 'http://pii-service:8000',
       PII_TIMEOUT_MS: '10000',
@@ -519,6 +520,22 @@ describe('Configuration Validation Suite', () => {
       // deployment on a smaller host needs to be able to LOWER it.
       expect(ansibleVars.PII_WEB_CONCURRENCY).toBeDefined();
       expect(ansibleVars.PII_WEB_CONCURRENCY.defaultIsJinja).toBe(false);
+    });
+
+    test('PII_REGION_MAX_CHARS is tunable per environment (not pinned)', () => {
+      // This is the knob that stops uvicorn's supervisor SIGKILLing a worker
+      // mid-scan (measured 2026-10-13: 850 KB page killed the worker 8/8).
+      // A slower cloud host MUST be able to lower it, so it cannot be pinned.
+      expect(ansibleVars.PII_REGION_MAX_CHARS).toBeDefined();
+      expect(ansibleVars.PII_REGION_MAX_CHARS.defaultIsJinja).toBe(false);
+    });
+
+    test('PII_REGION_MAX_CHARS is piped into the compose pii-service service', () => {
+      // Without the compose pipe the ansible .env value would be inert in
+      // compose mode: app.py reads it, but the container never receives it.
+      const v = composeVars.find((x) => x.name === 'PII_REGION_MAX_CHARS');
+      expect(v).toBeDefined();
+      expect(v.default).toBe('50000');
     });
   });
 

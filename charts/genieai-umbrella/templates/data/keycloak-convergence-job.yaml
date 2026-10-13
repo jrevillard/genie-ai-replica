@@ -100,9 +100,14 @@ metadata:
   annotations:
     # Helm 3 scans templates/ recursively; the subdirectory name is
     # irrelevant, the annotations are what matter.
+    # post-rollback is inert under ArgoCD, which translates these to
+    # PostSync and has no distinct rollback phase — its "rollback" is a
+    # resync to a prior SHA, which re-fires post-upgrade. Convergence
+    # still happens there; do not expect a rollback-specific run.
     "helm.sh/hook": post-install,post-upgrade,post-rollback
     "helm.sh/hook-weight": "10"
-    # hook-succeeded leaves no completed Job behind;
+    # hook-succeeded deletes only a Job that SUCCEEDED — a failed one
+    # survives for debugging, which is the point of running it as a hook;
     # before-hook-creation replaces a stale one on the next release.
     "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
 spec:
@@ -134,6 +139,10 @@ spec:
             # additionalOptions http-relative-path=/auth, and kcc's URL
             # format is scheme://host:port/web-context. Without it the
             # token call 404s on the wrong context and surfaces as 401.
+            # The host is the operator's own Service, not one this chart
+            # creates: the Keycloak CR is named `keycloak` and the operator
+            # appends a hardcoded "-service" suffix. Renaming the CR
+            # breaks this URL with no render-time symptom.
             - name: KEYCLOAK_URL
               value: {{ printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns | quote }}
             - name: KEYCLOAK_USER

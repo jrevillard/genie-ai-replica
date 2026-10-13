@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Keycloak realm configuration now converges through keycloak-config-cli.** A Helm `post-install,post-upgrade,post-rollback` hook Job applies the realm definition instead of the operator's `KeycloakRealmImport` custom resource. The import CR is create-only: a changed realm definition was ignored while the CR still reported success, so a GitOps pipeline stayed green against a realm that had drifted. Realm changes now take effect on the next release. Operators with an existing install must let the Job create the realm — the previous import CR is removed from the chart. (breaking)
+- **Keycloak upgrades now require two Secrets to exist first, and the realm file still requires SMTP.** The convergence Job authenticates with `keycloak-admin-credentials` (`username`, `password`), which the chart never creates; bring it with your cluster-wide secret backend or the release fails. Separately, the realm's `smtpServer` block is unconditional, so with `smtp: null` the `EMAIL_FROM` substitution is empty and Keycloak rejects the realm — the same failure the Docker Swarm path has today. Set `data.keycloak.smtp` before upgrading.
 
 ### Fixed
 

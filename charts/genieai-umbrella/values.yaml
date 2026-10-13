@@ -133,6 +133,8 @@ data:
     # Keeping them here is what lets the render fail loudly when a client
     # secret is still a placeholder, instead of creating an OIDC client
     # whose secret no consumer in the cluster holds.
+    # These values are NOT what reaches Keycloak. Setting them satisfies
+    # the guard below; the actual secrets are the `envSecrets` rows.
     clientSecrets:
       proxyClient: change-me-proxy-client
       dataprep: change-me-dataprep-client
@@ -140,7 +142,8 @@ data:
     # Fail the render when any clientSecrets value is still a change-me
     # placeholder. Default is TRUE so a default install with
     # `change-me-*` client secrets now FAILS the render; opt back to
-    # false only in dev/kind where the placeholder is acceptable.
+    # false where the placeholder is acceptable — that is CI's
+    # `chart:lint` render (it supplies no envSecrets rows) and dev/kind.
     failOnPlaceholderSecrets: true
     # SMTP for email verification — leave null to disable (no smtpServer
     # block renders); set all fields in the environment override when used.

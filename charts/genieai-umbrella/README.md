@@ -103,8 +103,30 @@ Two Secrets must exist in `genieai` before the release succeeds:
 | `keycloak-admin-credentials` | `username`, `password` | `Keycloak` CR `bootstrapAdmin.user.secret`; the Job's `KEYCLOAK_USER` / `KEYCLOAK_PASSWORD` |
 | `keycloak-db-credentials` | `username`, `password` | the CNPG cluster and the `Keycloak` CR `spec.db` |
 
-Neither is materialized by the chart — bring them with whatever secret
-backend you use cluster-wide.
+The convergence Job additionally needs one Secret row per secret-backed
+`$(env:VAR)` in the realm file. Five, and no more:
+
+| Realm placeholder | Declare as |
+|---|---|
+| `KC_PROXY_CLIENT_SECRET` | `envSecrets[]: {envVar: KC_PROXY_CLIENT_SECRET, secretName: <your Secret>, secretKey: proxyClient}` |
+| `KC_DATAPREP_CLIENT_SECRET` | `{envVar: KC_DATAPREP_CLIENT_SECRET, secretName: <your Secret>, secretKey: dataprep}` |
+| `KC_GRAFANA_CLIENT_SECRET` | `{envVar: KC_GRAFANA_CLIENT_SECRET, secretName: <your Secret>, secretKey: grafana}` |
+| `GENIE_ADMIN_PASSWORD` | `{envVar: GENIE_ADMIN_PASSWORD, secretName: <admin Secret>, secretKey: password}` |
+| `EMAIL_PASSWORD` | `{envVar: EMAIL_PASSWORD, secretName: <mail Secret>, secretKey: password}` |
+
+The Secret name is yours to choose — the chart only reads `secretName`
+and `secretKey` and never the value. A missing row fails the render
+naming the placeholder; a row whose Secret does not exist fails the Job
+pod with `CreateContainerConfigError`.
+
+No Secret here is materialized by the chart — bring them with whatever
+secret backend you use cluster-wide.
+
+Setting `convergence.enabled: false` (the default in both dev-repo
+overlays) renders neither the Job nor the realm Secret. The `Keycloak`
+CR still renders, so the chart installs and serves an identity tier with
+**no realm**: `genie-admin` cannot log in and no client exists. Treat it
+as a smoke path, not a working install.
 
 The hook fires on every release. Because every realm parameter reaches
 the import through a values-derived `env` or an `envSecrets` row, a

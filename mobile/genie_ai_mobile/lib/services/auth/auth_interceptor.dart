@@ -37,7 +37,11 @@ class AuthInterceptor extends http.BaseClient {
 
     final response = await _inner.send(request);
 
-    if (response.statusCode == 401 && token != null) {
+    // Any 401 gets a recovery attempt, including one received with no token in
+    // hand. Requiring `token != null` here (the previous behaviour) meant that
+    // once the session had been cleared, every request returned a bare 401 with
+    // no attempt to re-authenticate — the dead end behind DW-325.
+    if (response.statusCode == 401) {
       final newToken = await _refreshMutex();
       if (newToken == null) {
         // Distinguish "the session is over" from "we could not refresh right
@@ -79,7 +83,10 @@ class AuthInterceptor extends http.BaseClient {
           message: 'Retry also returned 401 — session expired',
           source: 'AuthInterceptor.send',
         );
-        throw AuthException('Session expired after refresh');
+        throw AuthException(
+          'Session expired after refresh',
+          code: AuthException.sessionExpired,
+        );
       }
       return retryResponse;
     }

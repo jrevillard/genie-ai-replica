@@ -51,6 +51,12 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
   StreamSubscription<bool>? _connectivitySubscription;
   Timer? _debounceTimer;
 
+  /// Refreshes shortly before the access token expires so the ordinary case
+  /// never reaches a 401 at all. Realm `genie` issues 5-minute tokens
+  /// (`accessTokenLifespan=300`), so without this a foregrounded app 401s every
+  /// few minutes and depends entirely on reactive recovery.
+  Timer? _proactiveRefreshTimer;
+
   @override
   AuthState build() {
     _tokenStorage = ref.watch(tokenStorageProvider);
@@ -66,6 +72,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
       _tokenRefresher.removeListener(_onRefreshOutcome);
       _connectivitySubscription?.cancel();
       _debounceTimer?.cancel();
+      _proactiveRefreshTimer?.cancel();
     });
     _tokenRefresher.addListener(_onRefreshOutcome);
 
@@ -133,6 +140,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
     if (expiration != null && expiration.isAfter(DateTime.now())) {
       final idToken = await _tokenStorage.getIdToken();
       final userId = extractSub(idToken);
+      _scheduleProactiveRefresh(expiration);
       _installApiServiceRefreshHook();
       await _pushTokenToApiService();
       if (!ref.mounted) return;
@@ -233,6 +241,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
       if (!ref.mounted) return;
 
       _lastFailedOperation = _FailedOperation.none;
+      _scheduleProactiveRefresh(expiration);
       _authLogger.logAuthEvent(
         message: 'Authorization successful',
         source: 'AuthNotifier.authorize',
@@ -349,6 +358,33 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
     };
   }
 
+  /// Schedules a refresh at ~80% of the token's remaining lifetime.
+  ///
+  /// The lead is clamped to [15s, 120s] so a short-lived token still refreshes
+  /// promptly and a long-lived one does not fire absurdly early.
+  void _scheduleProactiveRefresh(DateTime expiration) {
+    _proactiveRefreshTimer?.cancel();
+    final remaining = expiration.difference(DateTime.now());
+    if (remaining.isNegative) return;
+
+    var leadSeconds = (remaining.inSeconds * 0.2).round();
+    if (leadSeconds < 15) leadSeconds = 15;
+    if (leadSeconds > 120) leadSeconds = 120;
+
+    final delay = remaining - Duration(seconds: leadSeconds);
+    if (delay.isNegative) return;
+
+    _proactiveRefreshTimer = Timer(delay, () {
+      if (!ref.mounted) return;
+      if (state.status != AuthStatus.authenticated) return;
+      _authLogger.logAuthEvent(
+        message: 'Proactive token refresh (expires in ${leadSeconds}s)',
+        source: 'AuthNotifier._scheduleProactiveRefresh',
+      );
+      refreshToken();
+    });
+  }
+
   Future<void> refreshToken() async {
     // #2019: concurrent callers share the in-flight refresh inside
     // TokenRefresher — the same single flight the interceptor-driven path
@@ -405,6 +441,9 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
   }
 
   Future<void> logout() async {
+    // Stop the proactive timer first: a refresh firing mid-logout would race
+    // the token wipe and could re-establish a session the user just ended.
+    _proactiveRefreshTimer?.cancel();
     _authLogger.logAuthEvent(
       message: 'Logout initiated',
       source: 'AuthNotifier.logout',

@@ -14,6 +14,17 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 4 }}
     genieai.io/data-tier: identity
 spec:
+  # The convergence Job authenticates with these credentials, so they
+  # must exist before it runs — otherwise its first token call returns
+  # 401 and the release fails. The Secret is operator-provided; the
+  # chart references it by name and never reads its contents.
+  #
+  # Upstream caveat: if a master realm already exists on the cluster,
+  # the operator ignores this stanza entirely. The symptom is a 401 on
+  # the Job's first authenticated call — not a clearer message.
+  bootstrapAdmin:
+    user:
+      secret: {{ .Values.data.keycloak.bootstrapAdmin.userSecret | default "keycloak-admin-credentials" }}
   instances: {{ $instances }}
   # CNPG hosts the Postgres database; the secret holds both `username` and
   # `password` keys (CNPG bootstrap requirement). The chart does NOT
@@ -62,4 +73,11 @@ spec:
     limits:
       cpu: 2
       memory: 2Gi
+  # templates/services/backend.yaml and documentRepository.yaml both dial
+  # `.../keycloak-service:8080/auth`. Nothing else configures that prefix
+  # on Kubernetes — in the Swarm path NGINX routes /auth/* — so without
+  # this option Keycloak serves at / and every authenticated request 404s.
+  additionalOptions:
+    - name: http-relative-path
+      value: /auth
 {{- end -}}

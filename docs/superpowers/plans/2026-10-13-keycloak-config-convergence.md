@@ -519,9 +519,14 @@ resolve from this Job's env or from an envSecrets row. An unsatisfied
 placeholder is invisible to Helm and surfaces only as a kcc parse
 error at Job runtime, far from its cause.
 
-$known is assembled from the SAME values that emit the env block below,
-so it cannot drift from it. A hand-maintained list in another template
-would be exactly the failure this assertion exists to catch.
+$known is written out by hand, in parallel with the env block below —
+it is NOT derived from it. Adding a variable to one list does not add it
+to the other. The drift this guards against fails LOUDLY: helm names the
+unsatisfied placeholder and the render aborts, so the cost of a stale
+list is a false alarm during review, never a silent miss. The kcc
+internals — the two availability-check settings and the four IMPORT_*
+variables — are deliberately absent, because no realm placeholder may
+name them.
 */ -}}
 {{- $known := list "KEYCLOAK_URL" "KEYCLOAK_USER" "KEYCLOAK_PASSWORD" -}}
 {{- $known = append $known "KC_REALM" "KC_CLIENT_ID" "KC_PUBLIC_ORIGIN" -}}
@@ -737,11 +742,21 @@ Expected: exit 0. This is also what `chart:lint` must be able to do — see Step
 Then inspect the rendered Job:
 
 ```bash
-yq -P 'select(.kind=="Job" and (.metadata.name | test("convergence"))) |
-  {"hooks": .metadata.annotations, "backoff": .spec.backoffLimit,
-   "env": [.spec.template.spec.containers[0].env[] | select(.name | test("KEYCLOAK_URL|AVAILABILITY"))],
-   "secretBacked": [.spec.template.spec.containers[0].env[] | select(.name | test("PROXY_CLIENT_SECRET|ADMIN_PASSWORD"))]}'
-  /tmp/kc-t4/genieai-umbrella/templates/data/keycloak-convergence-job.yaml
+python3 - <<'PY'
+import yaml
+d = yaml.safe_load(open("/tmp/kc-t5/genieai-umbrella/templates/data/keycloak-convergence-job.yaml"))
+c = d["spec"]["template"]["spec"]["containers"][0]
+env = {e["name"]: e for e in c["env"]}
+print("hooks  :", d["metadata"]["annotations"]["helm.sh/hook"])
+print("weight :", d["metadata"]["annotations"]["helm.sh/hook-weight"])
+print("delete :", d["metadata"]["annotations"]["helm.sh/hook-delete-policy"])
+print("backoff:", d["spec"]["backoffLimit"])
+print("url    :", env["KEYCLOAK_URL"]["value"])
+print("avail  :", env["KEYCLOAK_AVAILABILITYCHECK_ENABLED"]["value"],
+                  env["KEYCLOAK_AVAILABILITYCHECK_TIMEOUT"]["value"])
+for n in ("KC_PROXY_CLIENT_SECRET", "GENIE_ADMIN_PASSWORD"):
+    print(f"{n:24}:", env[n])
+PY
 ```
 
 Expected: hooks `post-install,post-upgrade,post-rollback`; `KEYCLOAK_URL` ending in `:8080/auth`; availability check `true` / `300s`; the secret-backed entries present with `valueFrom.secretKeyRef` and **no `value:` field**.
@@ -775,17 +790,41 @@ Expected: an error naming `GENIE_ADMIN_PASSWORD` and stating the Job exports no 
 
 Run:
 
+`grep -c 'value:.*change-me'` cannot fail here and is not a regression test: the Job never emits a
+literal for any secret, so the pattern is absent by construction and the check would pass even if
+the secret env rows were deleted outright. Assert the property that actually matters instead —
+every secret-backed entry carries `valueFrom.secretKeyRef` and no `value` key at all:
+
 ```bash
-grep -c 'value:.*change-me' /tmp/kc-t4/genieai-umbrella/templates/data/keycloak-convergence-job.yaml
+python3 - <<'PY'
+import sys, yaml
+d = yaml.safe_load(open("/tmp/kc-t5/genieai-umbrella/templates/data/keycloak-convergence-job.yaml"))
+env = d["spec"]["template"]["spec"]["containers"][0]["env"]
+secrets = ("KC_PROXY_CLIENT_SECRET", "KC_DATAPREP_CLIENT_SECRET",
+           "KC_GRAFANA_CLIENT_SECRET", "GENIE_ADMIN_PASSWORD", "EMAIL_PASSWORD")
+bad = []
+for n in secrets:
+    e = next((x for x in env if x["name"] == n), None)
+    if e is None:
+        bad.append(f"{n}: ABSENT")
+    elif "value" in e:
+        bad.append(f"{n}: carries a literal value")
+    elif "secretKeyRef" not in e.get("valueFrom", {}):
+        bad.append(f"{n}: no secretKeyRef")
+print("LITERAL_SECRETS:", bad or "none")
+sys.exit(1 if bad else 0)
+PY
 ```
 
-Expected: `0`. This is the regression test for the literal-secrets defect.
+Expected: `LITERAL_SECRETS: none`, exit 0. A non-zero exit is the literal-secrets defect this task
+is meant to close — report it rather than working around it.
 
 - [ ] **Step 5: Prove the placeholder guard still trips**
 
 Run:
 ```bash
-helm template test charts/genieai-umbrella/ -n genieai 2>&1 | tail -3
+helm template test charts/genieai-umbrella/ -n genieai > /tmp/kc-t5-guard.log 2>&1
+echo "exit=$?"; tail -3 /tmp/kc-t5-guard.log
 ```
 
 Expected: an error naming `data.keycloak.clientSecrets.proxyClient` and mentioning `change-me-*`. Then re-run with `--set data.keycloak.failOnPlaceholderSecrets=false` and confirm it renders **without** the `envSecrets` rows — that render is the lenient path, and it is what `chart:lint` does today. The `change-me-*` guard and the completeness assertion are both gated on this one flag.
@@ -894,12 +933,21 @@ consumer in the cluster holds, and nothing else would catch that."
 In `charts/genieai-umbrella/examples/argocd-application.yaml`, replace the block that begins `# LIMITATION (Helm hooks under ArgoCD):` and the one that begins `# LIMITATION (destructive prune):` with:
 
 ```yaml
-# HELM HOOKS UNDER ARGOCD: ArgoCD does run them. `helm.sh/hook:
-# pre-install` and `post-upgrade` are translated to its own
-# PreSync / PostSync phases, so this chart's pre-upgrade drift Jobs
-# (dependency check, cluster-profile detect) DO run under ArgoCD.
-# They re-run on every sync, not only when what they watch changed —
-# ArgoCD has no change-gating for hooks, and says so in its docs.
+# HELM HOOKS UNDER ARGOCD: ArgoCD does run them. It maps the helm.sh/hook
+# types `pre-install` and `pre-upgrade` to its PreSync phase, and
+# `post-install` and `post-upgrade` to PostSync. So all three of this
+# chart's hooks DO run under ArgoCD: the pre-upgrade drift Jobs
+# (dependency check, cluster-profile detect) as PreSync, and the realm
+# convergence Job as PostSync.
+#
+# Two consequences worth stating plainly:
+#   - They re-run on every sync, not only when what they watch changed.
+#     ArgoCD has no change-gating for hooks, so the convergence Job
+#     reconciles the realm on every ArgoCD sync, not only on a release
+#     that changed it.
+#   - `post-rollback` is not in ArgoCD's hook map. ArgoCD has no
+#     distinct rollback phase; a "rollback" is a resync to a prior SHA,
+#     which re-fires PostSync. Convergence still happens there.
 #
 # LIMITATION (destructive prune): ArgoCD deletes rendered resources
 # directly when pruning. An automated prune of this Application removes
@@ -992,7 +1040,23 @@ least `900s`.
 
 - [ ] **Step 2: Add the CHANGELOG bullets**
 
-In `CHANGELOG.md`, under `## [Unreleased]`, add these three bullets (create the section if absent):
+Under `## [Unreleased]`, the branch already carries two Keycloak chart bullets that this plan
+contradicts. Adding alongside them would ship release notes that contradict themselves, so this step
+consolidates rather than appends.
+
+**First delete these two existing bullets from `## [Unreleased]` (they are the branch's, added before
+this plan; the chart no longer matches either description):**
+
+- The one beginning `**Keycloak 26 official operator via Kustomize**` — it tells operators the chart
+  renders `KeycloakRealmImport` and that re-import requires
+  `kubectl delete keycloakrealmimport` + re-apply. That CR is deleted by this change; the new
+  bullet below replaces it.
+- The one beginning `**K8s chart: Keycloak + KeycloakRealm templates use the keycloak-operator
+  v1alpha1 API**` — it names `keycloak.org/v1alpha1` and `kind: KeycloakRealm`, which the bullet
+  above it already contradicts, and it defers the `/auth` path-prefix fix to "a downstream concern
+  tracked separately". This change ships that fix, so deferring it is now false.
+
+**Then add these three bullets** (create the sections if absent):
 
 ```markdown
 ### Changed
@@ -1008,11 +1072,24 @@ In `CHANGELOG.md`, under `## [Unreleased]`, add these three bullets (create the 
 - [ ] **Step 3: Confirm no banned CHANGELOG patterns**
 
 Run:
+Stage first — a grep over `git diff --cached` before staging inspects an empty diff and passes
+vacuously:
+
 ```bash
+git add CHANGELOG.md
 git diff --cached CHANGELOG.md | grep -iE 'T7|laptop|hardening|coherent surface|wave [0-9]|now defaults to|rewritten for|previous templates used'
+echo "banned_hits=$?"
 ```
 
-Expected: no output. Any hit means the entry narrates the branch instead of describing the release.
+Expected: no output and `banned_hits=1`. A grep exit of 0 means the entry narrates the branch instead
+of describing the release. Then confirm the staged diff is non-empty, so the check above was not
+vacuous:
+
+```bash
+git diff --cached --numstat CHANGELOG.md
+```
+
+Expected: a non-zero added/deleted count.
 
 - [ ] **Step 4: Commit**
 
@@ -1025,63 +1102,54 @@ git commit -m "docs(charts): document the single-owner realm model and the requi
 
 ### Task 8: Align the deploy-repo overlays
 
-This task lands in a **different repository** and gets its own MR. Run it from the deploy-repo worktree.
+This task lands in a **different repository** and gets its own MR. Run it from
+`/home/jerome/git_projects/ITU/genie-ai-deploy` — the clean primary clone of genie-ai-deploy on
+branch `feat/deploy-repo`. Do NOT use
+`/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/k8s-migration-deploy-repo`: that directory
+holds a standalone genie-ai-deploy clone 44 commits behind origin AND genie-ai's whole source tree as
+untracked files, and is simultaneously registered as a genie-ai worktree.
 
-**Files (in `/home/jerome/git_projects/ITU/genie-ai-deploy`):**
-- Modify: `overlays/jrevillard-laptop/dev/helmrelease.yaml`
-- Modify: `overlays/jrevillard-laptop/dev/values.yaml`
+**Files (both overlays exist):**
 - Modify: `overlays/minikube/dev/helmrelease.yaml`
 - Modify: `overlays/minikube/dev/values.yaml`
-- Modify: `overlays/jrevillard-laptop/dev/gitrepository-chart.yaml` (chart SHA bump)
+- Modify: `overlays/minikube/dev/gitrepository-chart.yaml`
+- Modify: `overlays/jrevillard-laptop/dev/helmrelease.yaml`
+- Modify: `overlays/jrevillard-laptop/dev/values.yaml`
+- Modify: `overlays/jrevillard-laptop/dev/gitrepository-chart.yaml`
 
-**Interfaces:**
-- Consumes: `data.keycloak.convergence.envSecrets` from Task 3
-- Produces: overlays whose chart pin points at this branch's HEAD
+**Chart SHA to pin (use verbatim; it is `feat/k8s-migration` HEAD, already pushed):**
+`e03b6ba4585c1977f45ff7e9b480a350cb66a973`
 
-- [ ] **Step 1: Raise the HelmRelease timeout in both overlays**
+Current pins: minikube `8b80696f3e6564a3080ab4bde9e035444d0436d9`, laptop
+`a923902a84b73501086e47aa6e8cd42e298c3777`. Both stale.
 
-In each overlay's `helmrelease.yaml`, under `spec.upgrade`, ensure:
+**The state both overlays are in today, verified against `origin/feat/deploy-repo`:**
 
-```yaml
-  upgrade:
-    # Bounds the kcc convergence hook: worst case is
-    # (backoffLimit + 1) x (availability check + import). Never measured
-    # yet — revise after the first laptop run.
-    timeout: 900s
-```
+- Neither overlay declares a `convergence` block, so the chart default applies:
+  `convergence.enabled: true` with `envSecrets: []`.
+- minikube sets no client secrets, so its render dies on the client-secret `change-me-*` guard.
+- laptop sets dummy non-placeholder `clientSecrets` in its values ConfigMap AND sets
+  `failOnPlaceholderSecrets: false` inline in its HelmRelease, so its render survives — but the
+  convergence Job would then start with no `envSecrets` rows and no
+  `keycloak-admin-credentials` Secret in the namespace. The pod cannot resolve
+  `KEYCLOAK_USER`/`KEYCLOAK_PASSWORD` and fails with `CreateContainerConfigError`, which fails the
+  HelmRelease upgrade. Bumping the laptop pin alone breaks the laptop cluster.
 
-- [ ] **Step 2: Add the five `envSecrets` rows to the laptop overlay**
+**Neither cluster has the Secrets a functional identity install needs.** The laptop overlay has
+exactly one Secret, `genieai-laptop-secrets`, fed through `valuesFrom`; minikube has
+`genieai-dev-secrets`. Neither carries `keycloak-admin-credentials` or any client-secret Secret.
+Creating them means generating real credentials and SOPS-encrypting them, which is operator work
+outside this task.
 
-In `overlays/jrevillard-laptop/dev/values.yaml`, under `data.keycloak`, add alongside the existing `clientSecrets` block:
+So both overlays get `convergence.enabled: false`, with the wiring to flip it back documented in
+place. This is forced, not a preference: the alternatives are an upgrade that cannot succeed, or
+inventing secrets that do not exist.
 
-```yaml
-    # Secret-backed realm parameters. The Secret names below are
-    # operator-provided; the chart wires valueFrom.secretKeyRef and
-    # never renders the values. Replace the placeholder names with the
-    # Secrets your cluster actually has.
-    convergence:
-      envSecrets:
-        - { envVar: KC_PROXY_CLIENT_SECRET, secretName: genieai-client-secrets, secretKey: proxyClient }
-        - { envVar: KC_DATAPREP_CLIENT_SECRET, secretName: genieai-client-secrets, secretKey: dataprep }
-        - { envVar: KC_GRAFANA_CLIENT_SECRET, secretName: genieai-client-secrets, secretKey: grafana }
-        - { envVar: GENIE_ADMIN_PASSWORD, secretName: genieai-admin, secretKey: password }
-        - { envVar: EMAIL_PASSWORD, secretName: genieai-mail, secretKey: password }
-```
+- [ ] **Step 1: Bump the chart pin in both overlays**
 
-- [ ] **Step 3: Leave the minikube overlay's convergence block absent**
-
-`overlays/minikube/dev/values.yaml` sets no client secrets today, so the chart's `failOnPlaceholderSecrets` will fail its render. Set:
-
-```yaml
-    convergence:
-      envSecrets: []
-```
-
-and document in the file that the minikube overlay is a render-only smoke path, not a functional install.
-
-- [ ] **Step 4: Bump the chart pin in both overlays**
-
-In each overlay's `gitrepository-chart.yaml`, set `spec.ref.commit` to the HEAD of the chart branch, and update the comment to describe the current content rather than a wave history:
+In each overlay's `gitrepository-chart.yaml`, set `spec.ref.commit` to
+`e03b6ba4585c1977f45ff7e9b480a350cb66a973` and replace the comment above it with one that describes
+the current content rather than the sequence of chart fixes that got us here:
 
 ```yaml
   ref:
@@ -1089,43 +1157,120 @@ In each overlay's `gitrepository-chart.yaml`, set `spec.ref.commit` to the HEAD 
     # v2beta1 migration and the keycloak-config-cli convergence layer.
     # Bump manually after each push to that branch. To refresh:
     #   git ls-remote https://opensource.unicc.org/un/itu/genie-ai.git refs/heads/feat/k8s-migration
-    commit: "<40-char SHA of the chart branch HEAD>"
+    commit: e03b6ba4585c1977f45ff7e9b480a350cb66a973
 ```
 
-- [ ] **Step 5: Run the deploy-repo lint**
+Keep the surrounding lines (`specRef: true`, the `No secretRef` note) untouched.
 
-Run:
+- [ ] **Step 2: Disable convergence in both overlays**
+
+The values files are Kubernetes ConfigMaps whose `data.values.yaml` key holds YAML indented by 4
+spaces. Match that indentation. Under the existing top-level `data:` key, alongside `keycloak:`,
+add `convergence:` — the chart reads `.Values.data.keycloak.convergence.enabled`, so the block nests
+under `keycloak`, not beside it.
+
+`overlays/minikube/dev/values.yaml`:
+
+```yaml
+    data:
+      keycloak:
+        convergence:
+          # Install smoke path, not a functional identity install. This
+          # cluster has no keycloak-admin-credentials Secret and no
+          # client-secret Secrets, so the convergence Job cannot
+          # authenticate and the realm cannot be created. The Keycloak CR
+          # itself still renders.
+          enabled: false
+```
+
+`overlays/jrevillard-laptop/dev/values.yaml`: same block, same nesting, with a comment that also
+covers the dummy client secrets sitting beside it:
+
+```yaml
+        # This cluster has no keycloak-admin-credentials Secret and no
+        # client-secret Secrets, so the convergence Job cannot authenticate.
+        # The dummy clientSecrets below exist to satisfy the render-time
+        # placeholder guard; they are not real credentials.
+        convergence:
+          enabled: false
+```
+
+To turn the convergence layer back on in either overlay, materialise
+`keycloak-admin-credentials` (keys `username`, `password`) and the five client/admin/mail secrets,
+then declare `convergence.envSecrets` rows mapping each realm placeholder to a `secretKeyRef` and
+set `enabled: true`. Until then the realm is not created on either dev cluster.
+
+- [ ] **Step 3: Drop the stale realm-import reference in the laptop values**
+
+`overlays/jrevillard-laptop/dev/values.yaml` documents its dummy client secrets with "The chart's
+keycloak-realm-import template refuses to render with empty values or `change-me-*` placeholders".
+That template was deleted by this branch. Rewrite the comment to name the render-time placeholder
+guard in the convergence Job template, which is what actually refuses to render now.
+
+- [ ] **Step 4: Raise the HelmRelease upgrade timeout in both overlays**
+
+Neither overlay sets `spec.upgrade.timeout`. Add it under `upgrade:` (sibling of `cleanupOnFail`):
+
+```yaml
+  upgrade:
+    # Bounds the kcc convergence hook: worst case is
+    # (backoffLimit + 1) x (availability check + import). Never measured
+    # yet — revise after the first functional identity install.
+    timeout: 900s
+```
+
+- [ ] **Step 5: Prove both overlays render**
+
+```bash
+cd /home/jerome/git_projects/ITU/genie-ai-deploy
+for o in minikube jrevillard-laptop; do
+  python3 -c "import yaml,sys; open('/tmp/$o-values.yaml','w').write(yaml.safe_load(open('overlays/$o/dev/values.yaml'))['data']['values.yaml'])"
+done
+cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/k8s-migration
+for o in minikube jrevillard-laptop; do
+  rm -rf /tmp/kc-t8-$o
+  helm template test charts/genieai-umbrella/ -n genieai -f /tmp/$o-values.yaml --output-dir /tmp/kc-t8-$o > /dev/null 2>&1
+  echo "$o render_exit=$?"
+  ls /tmp/kc-t8-$o/genieai-umbrella/templates/data/ | grep -c convergence || true
+done
+```
+
+Expected: both `render_exit=0`, and the `grep -c` prints `0` for each — with convergence disabled
+neither the Job nor the realm Secret should render. A non-zero exit means the overlay still cannot
+install; fix it before committing.
+
+- [ ] **Step 6: Run the deploy-repo lint**
+
 ```bash
 cd /home/jerome/git_projects/ITU/genie-ai-deploy && ./scripts/ci-lint.sh 2>&1 | tail -10
 ```
 
-Expected: exit 0.
+Expected: exit 0. It passes on `origin/feat/deploy-repo` today, so any failure here is yours.
 
-- [ ] **Step 6: Commit and open the MR**
+- [ ] **Step 7: Commit (do NOT push)**
 
 ```bash
 cd /home/jerome/git_projects/ITU/genie-ai-deploy
 git add overlays/
-git commit -m "feat(deploy): align overlays with the kcc convergence layer
+git commit -m "feat(deploy): align both overlays with the kcc convergence layer
 
-Raises the HelmRelease upgrade timeout to 900s, which bounds the
-convergence hook: worst case is (backoffLimit + 1) x (availability
-check + import), and the import duration has never been measured.
+Bumps the chart pin in both overlays to feat/k8s-migration HEAD, which
+replaces the create-only KeycloakRealmImport with a keycloak-config-cli
+hook Job.
 
-Adds the five envSecrets rows the realm's placeholders need — the
-chart asserts at render time that every \$(env:VAR) in the realm file
-is reachable, so an overlay missing one fails to render rather than
-failing at Job runtime.
+Disables the convergence layer on both dev clusters. Neither has a
+keycloak-admin-credentials Secret nor client-secret Secrets, so the Job
+could not authenticate: with the Job enabled the laptop overlay's
+HelmRelease upgrade would fail with CreateContainerConfigError, and the
+minikube overlay would not render at all. The wiring to flip it back is
+documented in each values file.
 
-Bumps the chart pin in both overlays."
-git push origin feat/deploy-repo
+Raises the HelmRelease upgrade timeout to 900s so the hook is bounded
+once it is enabled: worst case is (backoffLimit + 1) x (availability
+check + import), and the import duration has never been measured."
 ```
 
-Then open the MR with `glab` and launch the CI monitor:
-
-```bash
-nohup /tmp/ci-monitor.sh <pipeline_id> 60 >/tmp/ci-monitor-deploy-convergence.log 2>&1 &
-```
+Commit only. The controller pushes and opens the MR after reviewing.
 
 ---
 
@@ -1178,18 +1323,41 @@ helm template test charts/genieai-umbrella/ -n genieai \
   --set 'data.keycloak.convergence.envSecrets[4].envVar=EMAIL_PASSWORD' \
   --set 'data.keycloak.convergence.envSecrets[4].secretName=s' \
   --set 'data.keycloak.convergence.envSecrets[4].secretKey=k' \
-  >/dev/null && echo "STRICT_PATH_OK"
+  --output-dir /tmp/kc-final-strict >/dev/null && echo "STRICT_PATH_OK"
 ```
 
 Expected: `STRICT_PATH_OK`. A default install that fails here means the assertion is not gated as Task 5 Step 1 specifies.
 
-- [ ] **Step 3: Confirm the realm Secret carries no literal secret**
+- [ ] **Step 3: Confirm no secret reaches the rendered manifests as a literal**
+
+`grep change-me` over the realm Secret cannot fail: the realm file contains zero occurrences of
+`change-me` (its placeholders are all `$(env:VAR)`), so that check proves nothing. Assert the property
+that matters instead — in the STRICT render, where all five `envSecrets` rows are present, every
+secret-backed env entry must carry `valueFrom.secretKeyRef` and no `value` key at all.
 
 ```bash
-grep -oE 'change-me[A-Za-z0-9_-]*' /tmp/kc-final/genieai-umbrella/templates/data/keycloak-realm-secret.yaml | sort -u
+python3 - <<'PY'
+import sys, yaml
+d = yaml.safe_load(open("/tmp/kc-final-strict/genieai-umbrella/templates/data/keycloak-convergence-job.yaml"))
+env = d["spec"]["template"]["spec"]["containers"][0]["env"]
+secrets = ("KC_PROXY_CLIENT_SECRET", "KC_DATAPREP_CLIENT_SECRET", "KC_GRAFANA_CLIENT_SECRET",
+           "GENIE_ADMIN_PASSWORD", "EMAIL_PASSWORD")
+bad = []
+for n in secrets:
+    e = next((x for x in env if x["name"] == n), None)
+    if e is None:
+        bad.append(f"{n}: ABSENT")
+    elif "value" in e:
+        bad.append(f"{n}: carries a literal value")
+    elif "secretKeyRef" not in e.get("valueFrom", {}):
+        bad.append(f"{n}: no secretKeyRef")
+print("LITERAL_SECRETS:", bad or "none")
+sys.exit(1 if bad else 0)
+PY
 ```
 
-Expected: no output.
+Expected: `LITERAL_SECRETS: none`, exit 0. A non-zero exit is the literal-secrets defect this branch
+exists to close.
 
 - [ ] **Step 4: Confirm the compose path still resolves**
 
@@ -1230,10 +1398,13 @@ Expected: the section is appended so the gaps are tracked rather than assumed.
 - [ ] **Step 7: Review the branch commit list**
 
 ```bash
-git log --oneline <merge-base-with-main>..HEAD
+git log --oneline b327b8ab0c4a89e5228184475d7f56aece6c081c..HEAD
 ```
 
-Expected: one commit per task, in order, with no fixup noise.
+Expected: each task's work present, in order, with follow-up commits where a review finding forced
+one. Fixup commits are not noise here — Task 1 alone has three, and every one of them is a real
+correction (the `diff`→`cmp -s` guard, the count correction, the `chart:install` scope trim). What
+would be a defect is a commit that reverts earlier work or lands a partial task.
 
 ---
 
@@ -1250,7 +1421,7 @@ Expected: one commit per task, in order, with no fixup noise.
 | D6 — `clientSecrets.*` repurposed, guard relocated, `failOnPlaceholderSecrets` stays `true` | Task 3 (values), Task 5 (guard) |
 | D7 — `http-relative-path: /auth` on the Keycloak CR | Task 2 |
 | D8 — `clientSecrets` → `envSecrets` mapping documented | Task 3 (comments), Task 8 (worked rows) |
-| D9 — drift guard: `diff` assertion + `configs/keycloak/**/*` trigger | Task 1 Steps 2-3 |
+| D9 — drift guard: `cmp -s` assertion + `configs/keycloak/**/*` trigger, `chart:lint` only | Task 1 Steps 2-3 |
 | D10 — ArgoCD example corrected | Task 6 |
 | D11 — CHANGELOG | Task 7 |
 

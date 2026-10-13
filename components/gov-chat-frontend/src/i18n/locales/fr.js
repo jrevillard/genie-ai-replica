@@ -1703,6 +1703,29 @@ export default {
       viewToggle: 'Vue éditeur',
       paneLabel: "Volet d'affichage",
       saveFailed: "Échec de l'enregistrement — réessayer",
+      piiRescan: {
+        label: 'Données personnelles',
+        button: 'Réanalyser toutes les pages',
+        working: 'Réanalyse de toutes les pages…',
+        progress: 'Réanalyse… {done} sur {total} pages',
+        progressIdle: 'Réanalyse… lecture du référentiel',
+        done: '{n} page(s) réanalysée(s).',
+        partial:
+          '{n} page(s) réanalysée(s). {e} ont encore échoué — leur verdict de scan n’a pas changé, la publication reste bloquée pour elles.',
+        noKey:
+          'Le serveur a accepté la réanalyse mais n’a renvoyé aucun identifiant d’exécution : sa progression ne peut pas être suivie. Rien n’a été signalé.',
+        missing:
+          'La réanalyse n’est pas disponible sur ce serveur (404). Rien n’a été modifié — les pages dont le scan a échoué bloquent toujours la publication.',
+        frozen: 'Réanalyse refusée : le référentiel est en cours de publication (409). Rien n’a été modifié.',
+        failed:
+          'Échec de la réanalyse. Rien n’a été modifié — les pages dont le scan a échoué bloquent toujours la publication.',
+        scanned: '{n} page(s) réanalysée(s)',
+        clean: 'propres',
+        hit: 'signalées',
+        error: 'erreur de scan',
+        vanished: 'disparues',
+        stillBlocking: 'Bloquent toujours'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1953,6 +1976,33 @@ export default {
       repoTagsHint:
         'Les tags de niveau dépôt ({summary}) appartiennent au dépôt, pas à ce concept — gérez-les dans le panneau Tags du rail droit.'
     },
+    piiReview: {
+      title: 'Vérification des données personnelles',
+      checking: 'Vérification…',
+      checkingBody: 'Lecture de l’état des données personnelles de chaque page…',
+      unreadableTitle: 'État inconnu',
+      unreadableBody:
+        'L’état des données personnelles de ce référentiel n’a pas pu être lu. La présence de données est INCONNUE — ce n’est pas un résultat propre.',
+      unscanned: 'Non analysé',
+      unscannedBody:
+        'Aucune analyse des données personnelles complète ne couvre ce référentiel ({n} page(s) jamais analysées). Rien n’est connu comme étant exempt de données personnelles — la publication n’est pas bloquée par des détections, mais aucun scan ne fonde ce verdict.',
+      errorTitle: 'Échec du scan',
+      errorBody:
+        '{n} page(s) n’ont pas pu être analysées. Leur contenu n’a PAS été lu correctement : la présence de données personnelles est INCONNUE — ces pages ne sont pas propres et bloquent la publication.',
+      unreviewed: 'Signalées, non examinées',
+      unreviewedBody:
+        'Le scanner a trouvé des données personnelles possibles sur {n} page(s) et personne ne les a examinées. La publication est autorisée, mais rien sur ces pages n’a été revu.',
+      reviewed: 'Signalées, examinées',
+      reviewedBody: '{n} page(s) portent des données personnelles signalées qu’un steward a reconnues ({by} le {at}).',
+      cleanVerdict: 'Analysé — rien trouvé',
+      cleanBody: 'Chaque page a été analysée et aucune donnée personnelle n’a été trouvée.',
+      staleAck:
+        'Une reconnaissance antérieure avait enregistré {a} page(s) signalée(s) le {at} ; {n} le sont maintenant, elle ne les couvre donc pas.',
+      bannerTitle: 'Personne n’a examiné ces détections.',
+      bannerBody:
+        'La publication reste autorisée et aucun mécanisme ne vous en empêchera — mais les pages signalées entrent dans le référentiel publié telles quelles. Ouvrez chacune et décidez avant de publier.',
+      unknownActor: 'inconnu'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2040,9 +2090,9 @@ export default {
       step3:
         "Nous lisons vos sources et suggérons des sujets. Les sujets sont regroupés sous les libellés de catégories que vous choisissez. Le producteur est prudent — il préfère suggérer un nombre restreint de sujets bien formulés plutôt qu'une profusion de sujets approximatifs.",
       step4:
-        "Les libellés constituent les axes catégoriels de votre ontologie — quelle sorte d'entité ce sujet représente-t-il ? Choisissez entre 3 et 7 libellés qui couvrent les axes principaux ; le producteur les utilise comme armature pour la hiérarchie des sujets.",
+        "Les libellés constituent les axes catégoriels de votre ontologie — quelle sorte d'entité ce sujet représente-t-il ? Ils sont attribués automatiquement depuis la Hiérarchie de connaissances, limités au Domaine thématique de ce dépôt.",
       step5:
-        "C'est le cœur du travail. Chaque sujet est une petite unité de connaissance citable. Les sujets reçoivent un titre, une description et héritent des libellés que vous avez choisis. Votre rôle consiste à rendre l'ensemble irréprochable : renommez les titres vagues, fusionnez les doublons évidents, supprimez ceux que vous ne pouvez pas étayer par une source.",
+        "C'est le cœur du travail. Chaque sujet est une petite unité de connaissance citable. Les sujets reçoivent un titre, une description et les libellés de leur Hiérarchie de connaissances. Votre rôle consiste à rendre l'ensemble irréprochable : renommez les titres vagues, fusionnez les doublons évidents, supprimez ceux que vous ne pouvez pas étayer par une source.",
       step6:
         'Nous effectuons des contrôles de conformité : chaque sujet a-t-il un titre ? Les étiquettes sont-elles valides ? Les attributions de sources sont-elles intactes ? Les problèmes bloquants doivent être corrigés avant de remettre le référentiel ; les avertissements peuvent être acceptés.',
       step7:
@@ -2275,11 +2325,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Choisir les libellés',
-        hint: 'Les libellés constituent les axes catégoriels de votre ontologie — quelle est la nature de ces sujets ? Choisissez-en 3 à 7.',
-        add: '+ Ajouter un libellé',
-        addConfirm: 'Ajouter',
-        placeholder: 'par ex. Permis',
+        title: 'Libellés — automatisés',
+        hint: 'Les libellés sont attribués automatiquement depuis la Hiérarchie de connaissances — limités au Domaine thématique de ce dépôt.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',

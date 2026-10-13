@@ -186,6 +186,16 @@
       @action="onPublishAction"
     >
       <p>{{ publishBodyText }}</p>
+      <!-- WHAT THE SCAN ACTUALLY SAYS (2026-10-13). Rendered BEFORE the
+           confirm, not only after the gate refuses: the incident was a
+           publish that SUCCEEDED carrying 107 flagged pages while the
+           acknowledgement record read 0. -->
+      <OkfPiiReviewSummary
+        v-if="publishAsk"
+        :repo="publishAsk"
+        :repo-id="publishAsk.repo_id"
+        class="okf-dashboard__pii-review"
+      />
       <p v-if="publishError" class="okf-dashboard__dialog-error">{{ publishError }}</p>
       <!-- Spinner while the lifecycle publish request is in flight (bundle
         export + zip transfer to doc-repo can take a while on large repos) —
@@ -341,6 +351,7 @@ import OkfHeadTestDialog from './editor/HeadTestDialog.vue';
 import OkfLogsDialog from './editor/LogsDialog.vue';
 import OkfRenameRepoDialog from './editor/RenameRepoDialog.vue';
 import OkfBuildProgressCard from './editor/BuildProgressCard.vue';
+import OkfPiiReviewSummary from './editor/PiiReviewSummary.vue';
 import okfRepoOps from '../../services/okfRepoOps';
 
 const LANES = [
@@ -377,7 +388,8 @@ export default {
     OkfHeadTestDialog,
     OkfLogsDialog,
     OkfRenameRepoDialog,
-    OkfBuildProgressCard
+    OkfBuildProgressCard,
+    OkfPiiReviewSummary
   },
   mixins: [translateMixin],
   emits: ['new', 'resume'],
@@ -964,6 +976,11 @@ export default {
   margin: 0 0 var(--space-xs);
   font-size: var(--text-sm);
   color: var(--muted);
+}
+/* The publish-time PII verdict sits directly under the publish body, above
+   every error/note so it cannot be pushed out of view by them. */
+.okf-dashboard__pii-review {
+  margin-bottom: var(--space-sm);
 }
 .okf-dashboard__dialog-error {
   color: var(--danger);

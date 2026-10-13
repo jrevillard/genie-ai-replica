@@ -1990,6 +1990,28 @@ export default {
         graph: 'Graph'
       },
       pickConcept: 'Select a concept from the list to start editing.',
+      piiRescan: {
+        label: 'Personal data',
+        button: 'Re-scan all pages',
+        working: 'Re-scanning every page…',
+        progress: 'Re-scanning… {done} of {total} pages',
+        progressIdle: 'Re-scanning… reading the repository',
+        done: 'Re-scanned {n} page(s).',
+        partial:
+          'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+        noKey:
+          'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+        missing:
+          'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+        frozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+        failed: 'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        vanished: 'vanished',
+        stillBlocking: 'Still blocking'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -2250,6 +2272,33 @@ export default {
       repoTagsHint:
         'Repository-level tags ({summary}) live on the repo, not this concept — manage them in the Tags panel in the right rail.'
     },
+    piiReview: {
+      title: 'Personal data check',
+      checking: 'Checking…',
+      checkingBody: 'Reading the personal-data state of every page…',
+      unreadableTitle: 'State unknown',
+      unreadableBody:
+        'The personal-data state of this repository could not be read. Whether anything was found is UNKNOWN — this is not a clean result.',
+      unscanned: 'Not scanned',
+      unscannedBody:
+        'No completed personal-data scan covers this repository ({n} page(s) never scanned). Nothing is known to be free of personal data — publishing is not blocked by findings, but there is no scan behind this verdict.',
+      errorTitle: 'Scan failed',
+      errorBody:
+        '{n} page(s) could not be scanned. Their content was NOT read successfully, so whether they contain personal data is UNKNOWN — they are not clean, and they block publishing.',
+      unreviewed: 'Flagged, not reviewed',
+      unreviewedBody:
+        'The scanner found possible personal data on {n} page(s) and no one has looked at them. Publishing is allowed, but nothing on those pages has been reviewed.',
+      reviewed: 'Flagged, reviewed',
+      reviewedBody: '{n} page(s) carry flagged personal data that a steward acknowledged ({by} on {at}).',
+      cleanVerdict: 'Scanned — nothing found',
+      cleanBody: 'Every page was scanned and no personal data was found.',
+      staleAck:
+        'A previous acknowledgement recorded {a} flagged page(s) on {at}; {n} are flagged now, so it does not cover them.',
+      bannerTitle: 'Nobody has reviewed these findings.',
+      bannerBody:
+        'Publishing is still allowed and no gate will stop you — but the flagged pages go into the published repository exactly as they are. Open each one and decide before you publish.',
+      unknownActor: 'unknown'
+    },
     glossary: {
       pickSource:
         'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
@@ -2336,9 +2385,9 @@ export default {
       step3:
         'We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.',
       step4:
-        'Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.',
+        'Labels are the categorical axes of your ontology — what kind of thing is this topic? They are assigned automatically from the Knowledge Hierarchy, bounded to this repository’s Subject Area.',
       step5:
-        'This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.',
+        'This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and receive their Knowledge-Hierarchy labels. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.',
       step6:
         'We run conformance checks: does every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before you hand the repository off; warnings can be acknowledged.',
       step7:
@@ -2569,11 +2618,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Pick the labels',
-        hint: 'Labels are the categorical axes of your ontology — what kinds of things are these topics? Choose 3-7.',
-        add: '+ Add label',
-        addConfirm: 'Add',
-        placeholder: 'e.g. Permits',
+        title: 'Labels — automated',
+        hint: 'Labels are assigned automatically from the Knowledge Hierarchy — bounded to this repository’s Subject Area.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',

@@ -293,4 +293,45 @@ describe('OkfPiiOccurrences — Re-scan PERSISTS (2026-10-12)', () => {
     expect(w.vm.piiState).toBe('error');
     expect(w.find('.okf-pii__state-error').exists()).toBe(true);
   });
+
+  // ── 6. LEDGER DISPLAY: bulk actions must read like their per-item siblings ─
+  //
+  // David, 2026-10-13: "it MUST not change the display semantics... all flagged
+  // PII will display green" and "Redact and Remove MUST work the same way in
+  // bulk".
+  //
+  // Three actions the server writes had NO entry in the label/colour maps, so
+  // the ledger fell through to `r.action || ''` and rendered the raw action
+  // STRING in a NEUTRAL pill: a bulk accept looked unprocessed, and a bulk
+  // REMOVE — which destroys the body — looked like nothing happened.
+  it.each([
+    ['accept_all_findings', 'Accepted', 'success'],
+    ['accept_repo', 'Accepted', 'success'],
+    ['accept', 'Accepted', 'success'],
+    ['remove_file', 'Removed', 'danger'],
+    ['remove', 'Removed', 'danger'],
+    ['redact_file', 'File redacted', 'neutral'],
+    ['replace', 'Replaced', 'info']
+  ])('renders %s as "%s" in the %s pill', (action, label, variant) => {
+    const w = mountPanel();
+    const r = { action, type: null, where: null, before: null, after: 'x', at: '2026-10-13T10:00:00Z' };
+    // NEVER the raw action string, and never a neutral pill for a destructive action.
+    expect(w.vm.resolvedLabel(r)).toBe(label);
+    expect(w.vm.resolvedLabel(r)).not.toBe(action);
+    expect(w.vm.resolvedVariant(r)).toBe(variant);
+  });
+
+  it('a bulk accept renders the "kept in the text" outcome, not a blank diff', async () => {
+    // Bulk accept leaves the body intact, so the diff must read the same as a
+    // per-item accept rather than falling into the removed/empty branch.
+    const w = mountPanel();
+    await settle(w);
+    await w.setData({
+      resolutions: [
+        { action: 'accept_all_findings', before: null, after: 'accepted (all findings on this concept)', at: '2026-10-13T10:00:00Z' }
+      ]
+    });
+    expect(w.text()).toContain('kept in the text');
+    expect(w.text()).toContain('Accepted');
+  });
 });

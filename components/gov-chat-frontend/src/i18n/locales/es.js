@@ -1699,6 +1699,29 @@ export default {
       viewToggle: 'Vista de editor',
       paneLabel: 'Panel de vista',
       saveFailed: 'Error al guardar — reintentar',
+      piiRescan: {
+        label: 'Datos personales',
+        button: 'Reexaminar todas las páginas',
+        working: 'Reexaminando todas las páginas…',
+        progress: 'Reexaminando… {done} de {total} páginas',
+        progressIdle: 'Reexaminando… leyendo el repositorio',
+        done: '{n} página(s) reexaminada(s).',
+        partial:
+          '{n} página(s) reexaminada(s). {e} siguen fallando: su veredicto de escaneo no cambió, por lo que la publicación sigue bloqueada para ellas.',
+        noKey:
+          'El servidor aceptó el reescaneo pero no devolvió ningún identificador de ejecución, así que su progreso no puede seguirse. No se informó nada.',
+        missing:
+          'El reescaneo no está disponible en este servidor (404). No se cambió nada: las páginas cuyo escaneo falló siguen bloqueando la publicación.',
+        frozen: 'Reescaneo rechazado: el repositorio se está publicando (409). No se cambió nada.',
+        failed:
+          'El reescaneo falló. No se cambió nada: las páginas cuyo escaneo falló siguen bloqueando la publicación.',
+        scanned: '{n} página(s) reexaminada(s)',
+        clean: 'limpias',
+        hit: 'marcadas',
+        error: 'error de escaneo',
+        vanished: 'desaparecidas',
+        stillBlocking: 'Siguen bloqueando'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1948,6 +1971,33 @@ export default {
       repoTagsHint:
         'Las etiquetas a nivel de repositorio ({summary}) viven en el repositorio, no en este concepto — gestiónelas en el panel de etiquetas del raíl derecho.'
     },
+    piiReview: {
+      title: 'Comprobación de datos personales',
+      checking: 'Comprobando…',
+      checkingBody: 'Leyendo el estado de datos personales de cada página…',
+      unreadableTitle: 'Estado desconocido',
+      unreadableBody:
+        'No se pudo leer el estado de datos personales de este repositorio. Si se encontró algo se DESCONOCE: este no es un resultado limpio.',
+      unscanned: 'Sin escanear',
+      unscannedBody:
+        'Ningún escaneo completo de datos personales cubre este repositorio ({n} página(s) nunca escaneadas). No se sabe que estén libres de datos personales: la publicación no está bloqueada por hallazgos, pero no hay escaneo detrás de este veredicto.',
+      errorTitle: 'Escaneo fallido',
+      errorBody:
+        '{n} página(s) no pudieron escanearse. Su contenido NO se leyó correctamente, así que si contienen datos personales se DESCONOCE: no están limpias y bloquean la publicación.',
+      unreviewed: 'Marcadas, sin revisar',
+      unreviewedBody:
+        'El escáner encontró posibles datos personales en {n} página(s) y nadie los ha revisado. La publicación está permitida, pero nada en esas páginas ha sido revisado.',
+      reviewed: 'Marcadas, revisadas',
+      reviewedBody: '{n} página(s) contienen datos personales marcados que un custodio reconoció ({by} el {at}).',
+      cleanVerdict: 'Escaneado: no se encontró nada',
+      cleanBody: 'Todas las páginas se escanearon y no se encontraron datos personales.',
+      staleAck:
+        'Un reconocimiento anterior registró {a} página(s) marcada(s) el {at}; ahora hay {n}, así que no las cubre.',
+      bannerTitle: 'Nadie ha revisado estos hallazgos.',
+      bannerBody:
+        'La publicación sigue permitida y ninguna comprobación se lo impedirá, pero las páginas marcadas entrarán en el repositorio publicado tal cual. Abra cada una y decida antes de publicar.',
+      unknownActor: 'desconocido'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2035,9 +2085,9 @@ export default {
       step3:
         'Estamos analizando sus fuentes y proponiendo temas. Los temas se agrupan bajo las etiquetas de categoría que elija. El productor es conservador — prefiere sugerir un menor número de temas bien formulados antes que muchos imprecisos.',
       step4:
-        'Las etiquetas son los ejes categóricos de su ontología — ¿qué clase de entidad es este tema? Elija de 3 a 7 etiquetas que capturen los ejes principales; el productor las utiliza como estructura para la jerarquía de temas.',
+        'Las etiquetas son los ejes categóricos de su ontología — ¿qué clase de entidad es este tema? Se asignan automáticamente desde la Jerarquía de conocimiento, limitadas al Área Temática de este repositorio.',
       step5:
-        'Este es el núcleo del trabajo. Cada tema es una unidad pequeña y citable de conocimiento. Los temas reciben un título, una descripción y heredan las etiquetas seleccionadas. Su función es hacerlo riguroso: renombre títulos vagos, fusione duplicados cercanos y descarte los que no pueda respaldar con una fuente.',
+        'Este es el núcleo del trabajo. Cada tema es una unidad pequeña y citable de conocimiento. Los temas reciben un título, una descripción y reciben las etiquetas de la Jerarquía de conocimiento. Su función es hacerlo riguroso: renombre títulos vagos, fusione duplicados cercanos y descarte los que no pueda respaldar con una fuente.',
       step6:
         'Ejecutamos comprobaciones de conformidad: ¿cada tema tiene título? ¿Las etiquetas son válidas? ¿Las atribuciones de fuente están intactas? Los problemas bloqueantes deben corregirse antes de entregar el repositorio; las advertencias se pueden reconocer.',
       step7:
@@ -2270,11 +2320,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Seleccionar las etiquetas',
-        hint: 'Las etiquetas son los ejes categóricos de su ontología — ¿qué clases de entidades son estos temas? Elija de 3 a 7.',
-        add: '+ Añadir etiqueta',
-        addConfirm: 'Añadir',
-        placeholder: 'ej. Permisos',
+        title: 'Etiquetas — automatizadas',
+        hint: 'Las etiquetas se asignan automáticamente desde la Jerarquía de conocimiento — limitadas al Área Temática de este repositorio.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',

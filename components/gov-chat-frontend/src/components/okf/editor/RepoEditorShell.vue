@@ -187,6 +187,11 @@
       @action="onPublishAction"
     >
       <p>{{ publishBodyText }}</p>
+      <!-- WHAT THE SCAN ACTUALLY SAYS (2026-10-13). Shown BEFORE the steward
+           clicks Publish, not only after the gate refuses: a publish that
+           succeeds while the curator believes they reviewed something is the
+           incident this closes (107 flagged pages, acknowledgement read 0). -->
+      <OkfPiiReviewSummary :repo="repo" :repo-id="repoId" class="okf-shell__pii-review" />
       <p v-if="publishError" class="okf-shell__error">{{ publishError }}</p>
       <div v-if="piiBlocked" class="okf-shell__pii">
         <!-- CORRECTION PATH (David, 2026-09-09: "where do I go from here?"):
@@ -255,6 +260,7 @@ import OkfRepoEditor from './RepoEditor.vue';
 import OkfVersionsDialog from './VersionsDialog.vue';
 import OkfHeadTestDialog from './HeadTestDialog.vue';
 import OkfLogsDialog from './LogsDialog.vue';
+import OkfPiiReviewSummary from './PiiReviewSummary.vue';
 import BuildProgressCard from './BuildProgressCard.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
 
@@ -289,6 +295,7 @@ export default {
     OkfVersionsDialog,
     OkfHeadTestDialog,
     OkfLogsDialog,
+    OkfPiiReviewSummary,
     BuildProgressCard
   },
   mixins: [translateMixin],
@@ -659,6 +666,9 @@ export default {
 }
 .okf-shell__pii {
   margin-top: var(--space-sm);
+}
+.okf-shell__pii-review {
+  margin-bottom: var(--space-sm);
 }
 .okf-shell__pii-note {
   margin: 0 0 var(--space-xs);

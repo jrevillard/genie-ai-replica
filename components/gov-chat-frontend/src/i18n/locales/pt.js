@@ -1699,6 +1699,29 @@ export default {
       viewToggle: 'Exibição do editor',
       paneLabel: 'Painel de exibição',
       saveFailed: 'Falha ao salvar — tente novamente',
+      piiRescan: {
+        label: 'Dados pessoais',
+        button: 'Reexaminar todas as páginas',
+        working: 'Reexaminando todas as páginas…',
+        progress: 'Reexaminando… {done} de {total} páginas',
+        progressIdle: 'Reexaminando… a ler o repositório',
+        done: '{n} página(s) reexaminada(s).',
+        partial:
+          '{n} página(s) reexaminada(s). {e} continuam a falhar — o seu veredicto de análise não mudou, pelo que a publicação continua bloqueada para elas.',
+        noKey:
+          'O servidor aceitou a reexaminação mas não devolveu qualquer identificador de execução, pelo que o seu progresso não pode ser seguido. Nada foi reportado.',
+        missing:
+          'A reexaminação não está disponível neste servidor (404). Nada foi alterado — as páginas cuja análise falhou continuam a bloquear a publicação.',
+        frozen: 'Reexaminação recusada: o repositório está a ser publicado (409). Nada foi alterado.',
+        failed:
+          'A reexaminação falhou. Nada foi alterado — as páginas cuja análise falhou continuam a bloquear a publicação.',
+        scanned: '{n} página(s) reexaminada(s)',
+        clean: 'limpas',
+        hit: 'assinaladas',
+        error: 'erro de análise',
+        vanished: 'desaparecidas',
+        stillBlocking: 'Continuam a bloquear'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1947,6 +1970,33 @@ export default {
       repoTagsHint:
         'Etiquetas ao nível do repositório ({summary}) pertencem ao repositório, não a este conceito — gerencie-as no painel de etiquetas na barra direita.'
     },
+    piiReview: {
+      title: 'Verificação de dados pessoais',
+      checking: 'A verificar…',
+      checkingBody: 'A ler o estado de dados pessoais de cada página…',
+      unreadableTitle: 'Estado desconhecido',
+      unreadableBody:
+        'Não foi possível ler o estado dos dados pessoais deste repositório. Se algo foi encontrado é DESCONHECIDO — isto não é um resultado limpo.',
+      unscanned: 'Não analisado',
+      unscannedBody:
+        'Nenhuma análise completa de dados pessoais cobre este repositório ({n} página(s) nunca analisadas). Nada se sabe estar livre de dados pessoais — a publicação não está bloqueada por deteções, mas não há análise por trás deste veredicto.',
+      errorTitle: 'Análise falhada',
+      errorBody:
+        '{n} página(s) não puderam ser analisadas. O seu conteúdo NÃO foi lido com sucesso, pelo que saber se contêm dados pessoais é DESCONHECIDO — não estão limpas e bloqueiam a publicação.',
+      unreviewed: 'Assinaladas, não revistas',
+      unreviewedBody:
+        'O analisador encontrou possíveis dados pessoais em {n} página(s) e ninguém os analisou. A publicação é permitida, mas nada nessas páginas foi analisado.',
+      reviewed: 'Assinaladas, revistas',
+      reviewedBody: '{n} página(s) contêm dados pessoais assinalados que um gestor reconheceu ({by} em {at}).',
+      cleanVerdict: 'Analisado — nada encontrado',
+      cleanBody: 'Todas as páginas foram analisadas e não foram encontrados dados pessoais.',
+      staleAck:
+        'Um reconhecimento anterior registou {a} página(s) assinalada(s) em {at}; agora há {n}, pelo que não as cobre.',
+      bannerTitle: 'Ninguém analisou estas deteções.',
+      bannerBody:
+        'A publicação continua permitida e nenhuma verificação o impedirá — mas as páginas assinaladas entram no repositório publicado exatamente como estão. Abra cada uma e decida antes de publicar.',
+      unknownActor: 'desconhecido'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2034,9 +2084,9 @@ export default {
       step3:
         'Estamos lendo suas fontes e propondo tópicos. Os tópicos se agrupam sob os rótulos de categoria que você escolher. O produtor é conservador — prefere sugerir menos tópicos bem estruturados do que muitos tópicos com ruído.',
       step4:
-        'Os rótulos são os eixos categóricos da sua ontologia — que tipo de entidade é este tópico? Escolha de 3 a 7 rótulos que capturem os eixos principais; o produtor os utiliza como base estrutural para a hierarquia de tópicos.',
+        'Os rótulos são os eixos categóricos da sua ontologia — que tipo de entidade é este tópico? São atribuídos automaticamente pela Hierarquia de Conhecimento, limitados à Área Temática deste repositório.',
       step5:
-        'Este é o núcleo do trabalho. Cada tópico é uma unidade pequena e citável de conhecimento. Os tópicos recebem um título, uma descrição e herdam os rótulos escolhidos. Seu papel é torná-lo consistente: renomeie títulos vagos, mescle duplicatas próximas e descarte aqueles que não puder respaldar com uma fonte.',
+        'Este é o núcleo do trabalho. Cada tópico é uma unidade pequena e citável de conhecimento. Os tópicos recebem um título, uma descrição e recebem os rótulos da Hierarquia de Conhecimento. Seu papel é torná-lo consistente: renomeie títulos vagos, mescle duplicatas próximas e descarte aqueles que não puder respaldar com uma fonte.',
       step6:
         'Executamos verificações de conformidade: cada tópico tem um título? Os rótulos são válidos? As atribuições de fonte estão intactas? Os problemas bloqueantes devem ser corrigidos antes de entregar o repositório; avisos podem ser reconhecidos.',
       step7:
@@ -2269,11 +2319,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Escolher os rótulos',
-        hint: 'Os rótulos são os eixos categóricos da sua ontologia — que tipo de entidade são esses tópicos? Escolha de 3 a 7.',
-        add: '+ Adicionar rótulo',
-        addConfirm: 'Adicionar',
-        placeholder: 'ex.: Licenças',
+        title: 'Rótulos — automatizados',
+        hint: 'Os rótulos são atribuídos automaticamente pela Hierarquia de Conhecimento — limitados à Área Temática deste repositório.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',

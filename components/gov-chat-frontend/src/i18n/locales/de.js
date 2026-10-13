@@ -1701,6 +1701,29 @@ export default {
       viewToggle: 'Editor-Ansicht',
       paneLabel: 'Ansichtsbereich',
       saveFailed: 'Speichern fehlgeschlagen — wiederholen',
+      piiRescan: {
+        label: 'Personenbezogene Daten',
+        button: 'Alle Seiten erneut scannen',
+        working: 'Alle Seiten werden erneut gescannt…',
+        progress: 'Erneuter Scan… {done} von {total} Seiten',
+        progressIdle: 'Erneuter Scan… Repository wird gelesen',
+        done: '{n} Seite(n) erneut gescannt.',
+        partial:
+          '{n} Seite(n) erneut gescannt. {e} sind weiterhin fehlgeschlagen — ihr Scan-Ergebnis hat sich nicht geändert, die Veröffentlichung bleibt für sie gesperrt.',
+        noKey:
+          'Der Server hat den erneuten Scan angenommen, aber keine Lauf-ID zurückgegeben, daher kann sein Fortschritt nicht verfolgt werden. Es wurde nichts gemeldet.',
+        missing:
+          'Der erneute Scan ist auf diesem Server nicht verfügbar (404). Es wurde nichts geändert — die Seiten mit fehlgeschlagenem Scan sperren weiterhin die Veröffentlichung.',
+        frozen: 'Erneuter Scan abgelehnt: das Repository wird veröffentlicht (409). Es wurde nichts geändert.',
+        failed:
+          'Der erneute Scan ist fehlgeschlagen. Es wurde nichts geändert — die Seiten mit fehlgeschlagenem Scan sperren weiterhin die Veröffentlichung.',
+        scanned: '{n} Seite(n) erneut gescannt',
+        clean: 'sauber',
+        hit: 'markiert',
+        error: 'Scan-Fehler',
+        vanished: 'verschwunden',
+        stillBlocking: 'Sperrt weiterhin'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1952,6 +1975,34 @@ export default {
       repoTagsHint:
         'Tags auf Repository-Ebene ({summary}) gehören zum Repository, nicht zu diesem Konzept — verwalten Sie sie im Tags-Panel in der rechten Leiste.'
     },
+    piiReview: {
+      title: 'Prüfung personenbezogener Daten',
+      checking: 'Wird geprüft…',
+      checkingBody: 'Der Status der personenbezogenen Daten jeder Seite wird gelesen…',
+      unreadableTitle: 'Status unbekannt',
+      unreadableBody:
+        'Der Status der personenbezogenen Daten dieses Repositories konnte nicht gelesen werden. Ob etwas gefunden wurde, ist UNBEKANNT — das ist kein sauberes Ergebnis.',
+      unscanned: 'Nicht gescannt',
+      unscannedBody:
+        'Kein vollständiger Scan personenbezogener Daten deckt dieses Repository ab ({n} Seite(n) nie gescannt). Es ist nichts als frei von personenbezogenen Daten bekannt — die Veröffentlichung wird nicht durch Treffer blockiert, aber hinter diesem Urteil steht kein Scan.',
+      errorTitle: 'Scan fehlgeschlagen',
+      errorBody:
+        '{n} Seite(n) konnten nicht gescannt werden. Ihr Inhalt wurde NICHT erfolgreich gelesen, ob sie personenbezogene Daten enthalten, ist UNBEKANNT — sie sind nicht sauber und sperren die Veröffentlichung.',
+      unreviewed: 'Markiert, nicht geprüft',
+      unreviewedBody:
+        'Der Scanner hat auf {n} Seite(n) mögliche personenbezogene Daten gefunden und niemand hat sie geprüft. Die Veröffentlichung ist erlaubt, aber auf diesen Seiten wurde nichts geprüft.',
+      reviewed: 'Markiert, geprüft',
+      reviewedBody:
+        '{n} Seite(n) enthalten markierte personenbezogene Daten, die eine Stewardin oder ein Steward anerkannt hat ({by} am {at}).',
+      cleanVerdict: 'Gescannt — nichts gefunden',
+      cleanBody: 'Jede Seite wurde gescannt und es wurden keine personenbezogenen Daten gefunden.',
+      staleAck:
+        'Eine frühere Anerkennung verzeichnete am {at} {a} markierte Seite(n); jetzt sind {n} markiert, sie deckt sie daher nicht ab.',
+      bannerTitle: 'Niemand hat diese Funde geprüft.',
+      bannerBody:
+        'Die Veröffentlichung bleibt erlaubt und keine Prüfung stoppt Sie — die markierten Seiten gelangen jedoch unverändert in das veröffentlichte Repository. Öffnen Sie jede und entscheiden Sie vor der Veröffentlichung.',
+      unknownActor: 'unbekannt'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2039,9 +2090,9 @@ export default {
       step3:
         'Wir lesen Ihre Quellen und schlagen Themen vor. Themen gruppieren sich unter den von Ihnen gewählten Kategorielabels. Der Producer agiert konservativ — er schlägt lieber weniger, präzise geformte Themen vor als viele irrelevante.',
       step4:
-        'Labels sind die kategorialen Achsen Ihrer Ontologie — um welche Art von Gegenstand handelt es sich bei diesem Thema? Wählen Sie 3–7 Labels aus, die die Hauptachsen abbilden; der Producer nutzt sie als Grundgerüst für die Themenhierarchie.',
+        'Labels sind die kategorialen Achsen Ihrer Ontologie — um welche Art von Gegenstand handelt es sich bei diesem Thema? Sie werden automatisch aus der Wissenshierarchie vergeben, begrenzt auf das Themengebiet dieses Repositoriums.',
       step5:
-        'Dies ist der Kern der Arbeit. Jedes Thema ist eine kleine, zitierfähige Wissenseinheit. Themen erhalten einen Titel, eine Beschreibung und erben die gewählten Labels. Ihre Aufgabe ist es, sie fundiert zu gestalten: unklare Titel umbenennen, Fast-Duplikate zusammenführen, unbelegte Themen entfernen.',
+        'Dies ist der Kern der Arbeit. Jedes Thema ist eine kleine, zitierfähige Wissenseinheit. Themen erhalten einen Titel, eine Beschreibung und erhalten die Labels aus der Wissenshierarchie. Ihre Aufgabe ist es, sie fundiert zu gestalten: unklare Titel umbenennen, Fast-Duplikate zusammenführen, unbelegte Themen entfernen.',
       step6:
         'Wir führen Konformitätsprüfungen durch: Hat jedes Thema einen Titel? Sind die Labels gültig? Sind die Quellenangaben intakt? Blockierende Probleme müssen behoben sein, bevor Sie das Repository übergeben; Warnungen können bestätigt werden.',
       step7:
@@ -2274,11 +2325,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Labels auswählen',
-        hint: 'Labels sind die kategorialen Achsen Ihrer Ontologie — um welche Art von Gegenstand handelt es sich bei diesen Themen? Wählen Sie 3–7.',
-        add: '+ Label hinzufügen',
-        addConfirm: 'Hinzufügen',
-        placeholder: 'z. B. Genehmigungen',
+        title: 'Labels — automatisiert',
+        hint: 'Labels werden automatisch aus der Wissenshierarchie vergeben — begrenzt auf das Themengebiet dieses Repositoriums.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',

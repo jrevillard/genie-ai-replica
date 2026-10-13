@@ -481,6 +481,45 @@ describe('Configuration Validation Suite', () => {
       expect(ansibleVars.TEI_EMBED_HOST).toBeDefined();
       expect(ansibleVars.TEI_EMBED_HOST.defaultIsJinja).toBe(true); // derived from gpu_node_host
     });
+
+    // --- PII parity (David 2026-10-13) ---------------------------------------
+    //
+    // The Ansible .env carried NO PII_* vars at all, so a cloud deployment ran
+    // the sidecar at the image default while the local .env overrode it, and
+    // okf-server had no way to tune the rescan retry pace. PII_CONCEPT_RETRY_
+    // PAUSE_MS in particular must be overridable: its default has to outlast a
+    // sidecar worker respawn, and recording a PERMANENT 'error' for a respawn
+    // is what blocked a repository indefinitely on 2026-10-12.
+    //
+    // These are CODE defaults (PII_SERVICE_URL/PII_TIMEOUT_MS/PII_RETRIES are
+    // not in the compose okf-server block), so parity here means "ansible
+    // emits them with the code's own default", not "compose agrees".
+    const PII_CODE_DEFAULTS = {
+      PII_WEB_CONCURRENCY: '2',
+      PII_CONCEPT_RETRY_PAUSE_MS: '8000',
+      PII_SERVICE_URL: 'http://pii-service:8000',
+      PII_TIMEOUT_MS: '10000',
+      PII_RETRIES: '2'
+    };
+
+    test('ansible env.j2 emits every PII var the cloud deployment needs', () => {
+      const missing = Object.keys(PII_CODE_DEFAULTS).filter((v) => !ansibleVars[v]);
+      expect(missing).toEqual([]);
+    });
+
+    test('ansible PII defaults match the values the code itself defaults to', () => {
+      const mismatches = Object.entries(PII_CODE_DEFAULTS)
+        .filter(([v, expected]) => ansibleVars[v] && ansibleVars[v].default !== expected)
+        .map(([v, expected]) => v + ': ansible=' + ansibleVars[v].default + ' code=' + expected);
+      expect(mismatches).toEqual([]);
+    });
+
+    test('PII_WEB_CONCURRENCY is tunable per environment (not pinned)', () => {
+      // It is a memory knob: each worker holds its own ~390MB spaCy copy. A
+      // deployment on a smaller host needs to be able to LOWER it.
+      expect(ansibleVars.PII_WEB_CONCURRENCY).toBeDefined();
+      expect(ansibleVars.PII_WEB_CONCURRENCY.defaultIsJinja).toBe(false);
+    });
   });
 
   // --- Story 1-8b: retriever routing-head knobs (graph affinity + the

@@ -1013,7 +1013,14 @@ class AdminDashboardService {
         `;
       }
 
-      const countCursor = await this.db.query(countQuery, queryParams);
+      // ArangoDB rejects bind vars the query text does not declare (error
+      // 1552). The count query declares only the filter vars — strip the
+      // pagination vars before running it.
+      const countParams = { ...queryParams };
+      delete countParams.limit;
+      delete countParams.offset;
+
+      const countCursor = await this.db.query(countQuery, countParams);
       const usersCursor = await this.db.query(usersQuery, queryParams);
 
       const totalCount = await countCursor.next();

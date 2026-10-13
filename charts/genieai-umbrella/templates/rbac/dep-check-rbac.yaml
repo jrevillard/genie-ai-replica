@@ -22,13 +22,13 @@ rules:
     resources: ["events"]
     verbs: ["create"]
   # Keycloak 26 official operator (k8s.keycloak.org/v2beta1) ships 4 CRDs.
-  # The dep-check Job verifies the Keycloak + KeycloakRealmImport CRs are
-  # present after install; the OIDC/SAML client CRDs are not rendered by
-  # this chart but are listed for completeness (operators may add them).
+  # This chart renders `Keycloak` only; the realm is converged by
+  # keycloak-config-cli, not by the operator's create-only import CR.
+  # The OIDC/SAML client CRDs are listed for completeness (operators may
+  # add them).
   - apiGroups: ["k8s.keycloak.org"]
     resources:
       - keycloaks
-      - keycloakrealmimports
       - keycloakoidcclients
       - keycloaksamlclients
     verbs: ["get", "list"]

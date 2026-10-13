@@ -1,0 +1,243 @@
+{{- if and .Values.data.keycloak.enabled .Values.data.keycloak.convergence.enabled -}}
+{{- /*
+keycloak-config-cli owns the realm. The operator's KeycloakRealmImport
+CR was removed: it is create-only (the operator hardcodes --override=false
+and implements no Updater), so a changed spec.realm is silently ignored
+while the CR still reports Done=True/HasErrors=False.
+
+Run-always is correct here because every realm parameter reaches the
+import through an env or envSecrets row, both of which are values — so
+a parameter change moves the values digest and fires this hook.
+*/ -}}
+{{- $ns := .Values.namespace -}}
+{{- $secretName := .Values.data.keycloak.bootstrapAdmin.userSecret | default "keycloak-admin-credentials" -}}
+{{- $realmSecret := printf "%s-keycloak-realm" (include "genieai-common.fullname" .) -}}
+{{- /*
+Placeholder guard, relocated from the deleted realm import. A change-me-*
+client secret produces a client whose secret no consumer in the cluster
+holds — a silent auth failure, and with no realm import nothing else
+would catch it.
+*/ -}}
+{{- if .Values.data.keycloak.failOnPlaceholderSecrets -}}
+{{- $cs := .Values.data.keycloak.clientSecrets | default dict -}}
+{{- range $k := list "proxyClient" "dataprep" "grafana" -}}
+{{- $v := dig $k "" $cs -}}
+{{- if or (not $v) (eq $v "") (hasPrefix "change-me" $v) -}}
+{{- fail (printf "data.keycloak.clientSecrets.%s is empty or a placeholder (change-me-*); the convergence Job wires it into the realm, and a placeholder produces an OIDC client whose secret no consumer holds. Set data.keycloak.failOnPlaceholderSecrets=false only where the placeholder is acceptable" $k) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- /*
+Placeholder completeness. Every `$(env:VAR)` in the realm file must
+resolve from this Job's env or from an envSecrets row. An unsatisfied
+placeholder is invisible to Helm and surfaces only as a kcc parse
+error at Job runtime, far from its cause.
+
+$known is written out by hand, in parallel with the env block below —
+it is NOT derived from it. Adding a variable to one list does not add it
+to the other. The drift this guards against fails LOUDLY: helm names the
+unsatisfied placeholder and the render aborts, so the cost of a stale
+list is a false alarm during review, never a silent miss. The kcc
+internals — the two availability-check settings and the four IMPORT_*
+variables — are deliberately absent, because no realm placeholder may
+name them.
+*/ -}}
+{{- $known := list "KEYCLOAK_URL" "KEYCLOAK_USER" "KEYCLOAK_PASSWORD" -}}
+{{- $known = append $known "KC_REALM" -}}
+{{- $known = append $known "KC_CLIENT_ID" -}}
+{{- $known = append $known "KC_PUBLIC_ORIGIN" -}}
+{{- $known = append $known "KC_MOBILE_CLIENT_ID" -}}
+{{- $known = append $known "KC_MOBILE_REDIRECT_SCHEME" -}}
+{{- $known = append $known "KC_GRAFANA_CLIENT_ID" -}}
+{{- $known = append $known "GENIE_ADMIN_USERNAME" -}}
+{{- $known = append $known "GENIE_ADMIN_EMAIL" -}}
+{{- $known = append $known "KEYCLOAK_REGISTRATION_ENABLED" -}}
+{{- $known = append $known "KEYCLOAK_VERIFY_EMAIL" -}}
+{{- $known = append $known "KEYCLOAK_RESET_PASSWORD" -}}
+{{- $known = append $known "KEYCLOAK_LOGIN_WITH_EMAIL" -}}
+{{- $known = append $known "KEYCLOAK_DUPLICATE_EMAILS" -}}
+{{- $known = append $known "KEYCLOAK_BRUTE_FORCE" -}}
+{{- $known = append $known "KEYCLOAK_PASSWORD_POLICY" -}}
+{{- $known = append $known "KEYCLOAK_THEME" -}}
+{{- $known = append $known "KEYCLOAK_I18N_ENABLED" -}}
+{{- $known = append $known "KEYCLOAK_LOCALE" -}}
+{{- $known = append $known "KEYCLOAK_SUPPORTED_LOCALES" -}}
+{{- $known = append $known "KEYCLOAK_ACCESS_TOKEN_LIFESPAN" -}}
+{{- /*
+SMTP placeholders are listed unconditionally: the realm file's
+smtpServer block is unconditional too (genie-realm.yaml:18-26), so a
+default install with smtp:null must still resolve them — to empty
+strings, exactly as the compose path does today. Gating them on smtp
+being set would fail this assertion on every default render.
+*/ -}}
+{{- $known = append $known "EMAIL_FROM" -}}
+{{- $known = append $known "EMAIL_HOST" -}}
+{{- $known = append $known "EMAIL_PORT" -}}
+{{- $known = append $known "EMAIL_SECURE" -}}
+{{- $known = append $known "EMAIL_SMTP_STARTTLS" -}}
+{{- $known = append $known "EMAIL_SMTP_AUTH" -}}
+{{- $known = append $known "EMAIL_USER" -}}
+{{- range $e := (.Values.data.keycloak.convergence.envSecrets | default list) -}}
+{{- $known = append $known $e.envVar -}}
+{{- end -}}
+{{- $realmFile := .Files.Get "files/genie-realm.yaml" -}}
+{{- if .Values.data.keycloak.failOnPlaceholderSecrets -}}
+{{- range $p := (regexFindAll "\\$\\(env:[A-Z_][A-Z0-9_]*\\)" $realmFile -1) -}}
+{{- $n := trimPrefix "$(env:" (trimSuffix ")" $p) -}}
+{{- if not (has $n $known) -}}
+{{- fail (printf "files/genie-realm.yaml references $(env:%s) but this Job exports no such variable; add it to the Job env or to data.keycloak.convergence.envSecrets, or kcc fails at runtime with an opaque parse error. Set data.keycloak.failOnPlaceholderSecrets=false to accept unresolved placeholders — kcc will then create clients with empty secrets" $n) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-keycloak-convergence
+  namespace: {{ $ns }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 4 }}
+    genieai.io/data-tier: identity
+  annotations:
+    # Helm 3 scans templates/ recursively; the subdirectory name is
+    # irrelevant, the annotations are what matter.
+    "helm.sh/hook": post-install,post-upgrade,post-rollback
+    "helm.sh/hook-weight": "10"
+    # hook-succeeded leaves no completed Job behind;
+    # before-hook-creation replaces a stale one on the next release.
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  backoffLimit: {{ .Values.data.keycloak.convergence.backoffLimit | default 2 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      containers:
+        - name: keycloak-config-cli
+          # The -26 suffix encodes the Keycloak major version. A Keycloak
+          # major bump needs a matching kcc tag bump.
+          image: "{{ .Values.global.imageRegistry | default "" }}/adorsys/keycloak-config-cli:6.5.0-26"
+          {{- with .Values.global.imagePullSecrets }}
+          imagePullSecrets: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            # /auth is required: the Keycloak CR sets
+            # additionalOptions http-relative-path=/auth, and kcc's URL
+            # format is scheme://host:port/web-context. Without it the
+            # token call 404s on the wrong context and surfaces as 401.
+            - name: KEYCLOAK_URL
+              value: {{ printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns | quote }}
+            - name: KEYCLOAK_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName | quote }}
+                  key: username
+            - name: KEYCLOAK_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName | quote }}
+                  key: password
+            # Keycloak takes ~70s to report Ready on a cold start. kcc's
+            # availability check owns that wait, so backoffLimit above
+            # covers real failures rather than startup.
+            - name: KEYCLOAK_AVAILABILITYCHECK_ENABLED
+              value: "true"
+            - name: KEYCLOAK_AVAILABILITYCHECK_TIMEOUT
+              value: "300s"
+            - name: IMPORT_PATH
+              value: /config/
+            - name: IMPORT_FILES
+              value: /config/genie-realm.yaml
+            - name: IMPORT_VARSUBSTITUTION_ENABLED
+              value: "true"
+            - name: IMPORT_CACHE_ENABLED
+              value: "true"
+            # Non-secret realm parameters, resolved from the realm file's
+            # $(env:VAR) placeholders. Values only — no Secret here.
+            - name: KC_REALM
+              value: {{ .Values.data.keycloak.realm | quote }}
+            - name: KC_CLIENT_ID
+              value: {{ .Values.data.keycloak.webClientId | quote }}
+            - name: KC_PUBLIC_ORIGIN
+              value: {{ printf "https://%s" (.Values.ingress.host | default "genieai.local") | quote }}
+            - name: KC_MOBILE_CLIENT_ID
+              value: {{ .Values.data.keycloak.mobileClientId | default "genie-mobile" | quote }}
+            - name: KC_MOBILE_REDIRECT_SCHEME
+              value: {{ .Values.data.keycloak.mobileRedirectScheme | default "genieai" | quote }}
+            - name: KC_GRAFANA_CLIENT_ID
+              value: {{ .Values.data.keycloak.grafanaClientId | quote }}
+            - name: GENIE_ADMIN_USERNAME
+              value: {{ .Values.data.keycloak.adminUsername | quote }}
+            - name: GENIE_ADMIN_EMAIL
+              value: {{ .Values.data.keycloak.adminEmail | default "genie-admin@genieai.local" | quote }}
+            # The realm file's smtpServer block is unconditional, so
+            # these are emitted even with smtp:null — empty, which is
+            # what the compose path already sends. Keycloak rejects an
+            # smtpServer whose from is empty (deploy/ansible/README.md),
+            # so a default install needs SMTP configured; that failure is
+            # inherited from the compose path, not introduced here.
+            {{- $smtp := .Values.data.keycloak.smtp | default dict -}}
+            - name: EMAIL_FROM
+              value: {{ $smtp.from | default "" | quote }}
+            - name: EMAIL_HOST
+              value: {{ $smtp.host | default "" | quote }}
+            - name: EMAIL_PORT
+              value: {{ $smtp.port | default 587 | int | quote }}
+            - name: EMAIL_SECURE
+              value: {{ eq ($smtp.ssl | default false | toString) "true" | quote }}
+            - name: EMAIL_SMTP_STARTTLS
+              value: {{ eq ($smtp.starttls | default false | toString) "true" | quote }}
+            - name: EMAIL_SMTP_AUTH
+              value: {{ eq ($smtp.auth | default false | toString) "true" | quote }}
+            - name: EMAIL_USER
+              value: {{ $smtp.user | default "" | quote }}
+            - name: KEYCLOAK_REGISTRATION_ENABLED
+              value: {{ eq ((.Values.data.keycloak.registrationAllowed | default false) | toString) "true" | quote }}
+            - name: KEYCLOAK_VERIFY_EMAIL
+              value: {{ eq ((.Values.data.keycloak.verifyEmail | default false) | toString) "true" | quote }}
+            - name: KEYCLOAK_RESET_PASSWORD
+              value: {{ eq ((.Values.data.keycloak.resetPasswordAllowed | default false) | toString) "true" | quote }}
+            - name: KEYCLOAK_LOGIN_WITH_EMAIL
+              value: {{ eq ((.Values.data.keycloak.loginWithEmailAllowed | default true) | toString) "true" | quote }}
+            - name: KEYCLOAK_DUPLICATE_EMAILS
+              value: {{ eq ((.Values.data.keycloak.duplicateEmailsAllowed | default false) | toString) "true" | quote }}
+            - name: KEYCLOAK_BRUTE_FORCE
+              value: {{ eq ((.Values.data.keycloak.bruteForceProtected | default true) | toString) "true" | quote }}
+            - name: KEYCLOAK_PASSWORD_POLICY
+              value: {{ .Values.data.keycloak.passwordPolicy | default "" | quote }}
+            - name: KEYCLOAK_THEME
+              value: {{ .Values.data.keycloak.theme | default "keycloak" | quote }}
+            - name: KEYCLOAK_I18N_ENABLED
+              value: {{ eq ((.Values.data.keycloak.internationalizationEnabled | default true) | toString) "true" | quote }}
+            - name: KEYCLOAK_LOCALE
+              value: {{ .Values.data.keycloak.defaultLocale | quote }}
+            - name: KEYCLOAK_SUPPORTED_LOCALES
+              value: {{ .Values.data.keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans") | join "," | quote }}
+            - name: KEYCLOAK_ACCESS_TOKEN_LIFESPAN
+              value: {{ .Values.data.keycloak.accessTokenLifespan | default 300 | quote }}
+            # Secret-backed parameters, one row per operator-declared entry.
+            {{- range $e := (.Values.data.keycloak.convergence.envSecrets | default list) }}
+            - name: {{ $e.envVar }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $e.secretName | quote }}
+                  key: {{ $e.secretKey | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: realm
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: realm
+          secret:
+            secretName: {{ $realmSecret | quote }}
+{{- end -}}

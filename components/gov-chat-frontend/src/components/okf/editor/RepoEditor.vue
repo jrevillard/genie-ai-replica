@@ -163,6 +163,23 @@
         @close="headTestOpen = false"
         @changed="onHeadTestChanged"
       />
+      <!-- REPO-WIDE PII RE-SCAN, IN THE EDITOR (2026-10-13). The re-scan used
+           to live on the Validate step only, so a curator with a concept
+           stuck on a scan ERROR — the one pii_state that blocks the hand-off
+           and that no per-occurrence action can clear — had to leave the
+           editor to fix it. Same store actions as the Validate step; no new
+           endpoint. Sits under the concept list's PII affordances so it
+           reads as part of that surface, and is always mounted (not gated on
+           the selected concept) because the RUN is repository-scoped. -->
+      <div v-if="repoId" class="okf-re__pii-rescan">
+        <span class="okf-re__pii-rescan-label">{{ translate('okf.editor.piiRescan.label', 'Personal data') }}</span>
+        <OkfPiiRepoRescan
+          :repo-id="repoId"
+          :concept-id="selectedId || ''"
+          :read-only="readOnly"
+          @rescanned="onRepoPiiRescanned"
+        />
+      </div>
       <template v-if="selectedRow">
         <h4 class="okf-re__meta-title">{{ translate('okf.editor.meta.label', 'Concept metadata') }}</h4>
 
@@ -375,6 +392,7 @@ import DsDialog from '../../ds/Dialog.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
 import OkfAutocorrectPanel from './AutocorrectPanel.vue';
 import OkfHeadTestDialog from './HeadTestDialog.vue';
+import OkfPiiRepoRescan from './PiiRepoRescan.vue';
 
 const TYPE_OPTIONS = ['topic', 'entity', 'process', 'event', 'source'].map((t) => ({ value: t, label: t }));
 
@@ -396,7 +414,8 @@ export default {
     OkfRepoGraphView,
     FrontmatterPanel,
     OkfAutocorrectPanel,
-    OkfHeadTestDialog
+    OkfHeadTestDialog,
+    OkfPiiRepoRescan
   },
   mixins: [translateMixin],
   props: {
@@ -675,6 +694,14 @@ export default {
     // Story 1-8: a head rebuild inside the Routing Lab rewrites the repo
     // doc — refresh the cached repo so the badge + gates re-evaluate.
     onHeadTestChanged() {
+      this.$store.dispatch('okf/fetchRepos');
+    },
+    // A repo-wide PII re-scan finished server-side. The concept rows now
+    // carry fresh verdicts (the control already re-read the list), and the
+    // repository's own scan marker / acknowledgement may have moved with
+    // them — refresh both so the rail and the publish banner stop showing
+    // the pre-scan truth.
+    onRepoPiiRescanned() {
       this.$store.dispatch('okf/fetchRepos');
     },
     // Public entry point for the wizard's Curate step. The wizard
@@ -1188,6 +1215,25 @@ export default {
 .okf-re__head-badge-btn:hover {
   border-color: var(--accent);
   color: var(--fg);
+}
+/* Repo-wide PII re-scan (2026-10-13): a repository-scoped control in the
+   right rail, so it reads as a property of the repo rather than of whichever
+   concept happens to be open. */
+.okf-re__pii-rescan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px dashed var(--border);
+  width: 100%;
+}
+.okf-re__pii-rescan-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 .okf-re__head-dot {
   width: 8px;

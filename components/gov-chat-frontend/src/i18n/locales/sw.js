@@ -1687,6 +1687,29 @@ export default {
       viewToggle: 'Mwonekano wa mhariri',
       paneLabel: 'Kidirisha cha mwonekano',
       saveFailed: 'Uhifadhi umeshindwa — jaribu tena',
+      piiRescan: {
+        label: 'Data za binafsi',
+        button: 'Changanua upya kurasa zote',
+        working: 'Inachanganua upya kurasa zote…',
+        progress: 'Inachanganua upya… {done} kati ya {total} kurasa',
+        progressIdle: 'Inachanganua upya… kusoma kumbukumbu',
+        done: 'Kurasa {n} zimechanganuliwa upya.',
+        partial:
+          'Kurasa {n} zimechanganuliwa upya. {e} bado zimeshindwa — hukumu yao ya kuchanganua haijabadilika, hivyo kuchapisha kumabado kuzuiwa kwa hizo.',
+        noKey:
+          'Seva ulikubali ukchanganuzi upya lakini haukurudisha kitambulisho cha kifasi, hivyo maendeleo yake hayaweza kufuatiliwa. Hakuna kilichoripotiwa.',
+        missing:
+          'Ukchanganuzi upya hapatikani kwenye seva hii (404). Hakuna kilichobadilishwa — kurasa zilizoshindwa kuchanganua bado zinalizuia kuchapisha.',
+        frozen: 'Ukchanganuzi upya umekataliwa: kumbukumbu inachapishwa (409). Hakuna kilichobadilishwa.',
+        failed:
+          'Ukchanganuzi upya umeshindwa. Hakuna kilichobadilishwa — kurasa zilizoshindwa kuchanganua bado zinalizuia kuchapisha.',
+        scanned: 'Kurasa {n} zimechanganuliwa upya',
+        clean: 'safi',
+        hit: 'zimewekwa alama',
+        error: 'hitilafu ya kuchanganua',
+        vanished: 'zimefutika',
+        stillBlocking: 'Bado zinalizuia'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1936,6 +1959,33 @@ export default {
       repoTagsHint:
         'Lebe za kiwango cha hazina ({summary}) ni za hazina, si la dhana hii — dhibiti kutoka kipanele cha lebe kwenye reli ya kulia.'
     },
+    piiReview: {
+      title: 'Ukaguzi wa data za binafsi',
+      checking: 'Inakagua…',
+      checkingBody: 'Inasoma hali ya data za binafsi kwa kila ukurasa…',
+      unreadableTitle: 'Hali haijulikani',
+      unreadableBody:
+        'Hali ya data za binafsi ya kumbukumbu hii haikuweza kusomwa. Kama kuna kilichopatikana hakijulikani — hii si matokeo safi.',
+      unscanned: 'Haikuchanganuliwa',
+      unscannedBody:
+        'Hakuna ukchanganuzi kamili wa data za binafsi unaoshiriki kumbukumbu hii ({n} kurasa hazikuchanganuliwa kamwe). Hakuna kinachojulikana kuwa hakina data za binafsi — kuchapisha hakuzuiwi na matokeo, lakini hakuna ukchanganuzi nyuma ya hukumu hii.',
+      errorTitle: 'Ukchanganuzi umeshindwa',
+      errorBody:
+        'Kurasa {n} hazikuweza kuchanganuliwa. Maudhui yao haikusomwa kwa kutaratibu, kwa hivyo kama yana data za binafsi hakijulikani — hayako safi na yanazuia kuchapisha.',
+      unreviewed: 'Zimewekwa alama, hazijagaguliwa',
+      unreviewedBody:
+        'Kichanganuzi kilipata data za binafsi zinazowezekana kwenye kurasa {n} na hakuna aliyeyagagua. Kuchapisha kuruhusiwa, lakini hakuna kilichokaguliwa kwenye kurasa hizo.',
+      reviewed: 'Zimewekwa alama, zimegaguliwa',
+      reviewedBody: 'Kurasa {n} zina data za binafsi zilizowekwa alama ambazo msimamizi alikubali ({by} tarehe {at}).',
+      cleanVerdict: 'Imechanganuliwa — hakuna kilichopatikana',
+      cleanBody: 'Kila ukurasa umechanganuliwa na hakuna data za binafsi zilizopatikana.',
+      staleAck:
+        'Ukubali wa awali uliandika kurasa {a} zilizowekwa alama tarehe {at}; sasa kuna {n}, kwa hivyo hauzirekebisha hizo.',
+      bannerTitle: 'Hakuna aliyeyagagua matokeo haya.',
+      bannerBody:
+        'Kuchapisha bado kunaruhusiwa na hakuna kitu kitakachozuia — lakini kurasa zilizowekwa alama zitaingia kwenye kumbukumbu inayochapishwa hasa kama zilivyo. Fungua kila moja na uamue kabla ya kuchapisha.',
+      unknownActor: 'haijulikani'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2022,9 +2072,9 @@ export default {
       step3:
         'Tunasoma vyanzo vyako na kupendekeza mada. Mada hujikusanya chini ya lebo za makundi unazochagua. Mzalishaji ni makini — anapendelea kupendekeza mada chache zilizoundwa vizuri badala ya mada nyingi zisizo na mpangilio.',
       step4:
-        'Lebo ndizo misingi mikuu ya muundo wako — mada hii ni kitu cha namna gani? Chagua lebo 3 hadi 7 zinazoshikilia misingi mikuu; mzalishaji huzitumia kama nguzo za kuongoza muundo wa mada.',
+        'Lebo ndizo misingi mikuu ya muundo wako — mada hii ni kitu cha namna gani? Lebo hutambuliwa kiotomatiki kutoka kwa Hierarchia ya Maarifa, zimezuwa kwenye Eneo la Mada la hifadhi hii.',
       step5:
-        'Huu ndio msingi wa kazi yote. Kila mada ni kipande kidogo cha maarifa kinachoweza kutajwa. Mada hupata kichwa, maelezo, na kurithi lebo ulizochagua. Jukumu lako ni kuifanya iwe thabiti: badilisha vichwa visivyo wazi, unganisha vile vinavyokaribia kufanana, na ondoa vile usivyoweza kuvithibitisha kwa chanzo.',
+        'Huu ndio msingi wa kazi yote. Kila mada ni kipande kidogo cha maarifa kinachoweza kutajwa. Mada hupata kichwa, maelezo, na hupata lebo za Hierarchia ya Maarifa. Jukumu lako ni kuifanya iwe thabiti: badilisha vichwa visivyo wazi, unganisha vile vinavyokaribia kufanana, na ondoa vile usivyoweza kuvithibitisha kwa chanzo.',
       step6:
         'Tunaendesha ukaguzi wa uwiano: kila mada ina kichwa? Lebo ni sahihi? Sifa za vyanzo ziko salama? Matatizo ya kuzuia lazima yarekebishwe kabla ya kuhamisha hifadhi; maonyo yanaweza kuthibitishwa.',
       step7:
@@ -2256,11 +2306,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Chagua lebo',
-        hint: 'Lebo ndizo misingi mikuu ya muundo wako — mada hizi ni vitu vya namna gani? Chagua 3 hadi 7.',
-        add: '+ Ongeza lebo',
-        addConfirm: 'Ongeza',
-        placeholder: 'mf. Vibali',
+        title: 'Lebo — za moja kwa moja',
+        hint: 'Lebo hutambuliwa kiotomatiki kutoka kwa Hierarchia ya Maarifa — zimezuwa kwenye Eneo la Mada la hifadhi hii.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',

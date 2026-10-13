@@ -188,7 +188,7 @@
           </div>
           <div v-if="r.action !== 'redact_file'" class="okf-pii__diff">
             <del class="okf-pii__before">{{ r.before }}</del>
-            <template v-if="r.action === 'accept'">
+            <template v-if="r.action === 'accept' || r.action === 'accept_all_findings' || r.action === 'accept_repo'">
               <span class="okf-pii__arrow">→</span>
               <ins class="okf-pii__after">{{ translate('okf.pii.resolved.kept', 'kept in the text') }}</ins>
             </template>
@@ -608,7 +608,19 @@ export default {
         replace: this.translate('okf.pii.resolved.replaced', 'Replaced'),
         remove: this.translate('okf.pii.resolved.removed', 'Removed'),
         accept: this.translate('okf.pii.resolved.accepted', 'Accepted'),
-        redact_file: this.translate('okf.pii.resolved.fileRedacted', 'File redacted')
+        redact_file: this.translate('okf.pii.resolved.fileRedacted', 'File redacted'),
+        // Whole-concept Remove (per-concept "Remove body" AND repo-wide Remove
+        // both write remove_file). It was unmapped, so the ledger rendered the
+        // raw action string in a NEUTRAL pill — a destructive action displayed
+        // as if nothing happened. Removed is red, same as its per-item sibling.
+        remove_file: this.translate('okf.pii.resolved.removed', 'Removed'),
+        // Whole-concept acceptance (David 2026-10-13: Accept All should bulk
+        // accept everything the same way individual accepts work). It MUST render
+        // identically to a per-item Accept — green, "Accepted". accept_repo is the
+        // legacy action and renders the same so the existing ledger reads
+        // correctly rather than showing a raw action string in a neutral pill.
+        accept_all_findings: this.translate('okf.pii.resolved.accepted', 'Accepted'),
+        accept_repo: this.translate('okf.pii.resolved.accepted', 'Accepted')
       };
       return map[r && r.action] || (r && r.action) || '';
     },
@@ -621,7 +633,13 @@ export default {
         redact_file: 'neutral',
         replace: 'info',
         remove: 'danger',
-        accept: 'success'
+        remove_file: 'danger',
+        accept: 'success',
+        // Accepted == green, per-item OR repo-wide. A bulk accept is still an
+        // acceptance: showing it as neutral would read as "unprocessed", which
+        // is exactly backwards.
+        accept_all_findings: 'success',
+        accept_repo: 'success'
       };
       return map[r && r.action] || 'neutral';
     },

@@ -1382,18 +1382,26 @@ Expected: `REALM_COPIES_IDENTICAL`, and a non-zero count for the `chart:lint` tr
 
 Items 9 (in-cluster `/auth/realms/genie` reachability) and 10 (real convergence duration) need a live cluster and are verified on the first laptop run, not here. Write them down as pending rather than leaving them implied:
 
-```bash
-cat >> docs/superpowers/plans/2026-10-13-keycloak-config-convergence.md <<'EOF'
+The block below must land as a real markdown section, appended after the Spec coverage table — not
+inside a fenced code block, or it renders as code and tracks nothing. Append it verbatim:
 
+```markdown
 ## Post-merge verification (requires a cluster)
 
 - [ ] `kubectl get svc keycloak-service -n genieai` exists
 - [ ] `curl -s http://keycloak-service.genieai.svc.cluster.local:8080/auth/realms/genie` returns a realm body
+- [ ] materialise `keycloak-admin-credentials` (keys `username`, `password`) plus the client/admin/mail secrets, then set `convergence.enabled: true` on the target overlay with `envSecrets` rows — both dev overlays ship it disabled, so until this is done NO cluster creates a realm
 - [ ] record the measured convergence duration against the 900s HelmRelease timeout
-EOF
 ```
 
-Expected: the section is appended so the gaps are tracked rather than assumed.
+Expected: the section is the file's last top-level heading, i.e.
+
+```bash
+grep '^## ' docs/superpowers/plans/2026-10-13-keycloak-config-convergence.md | tail -1
+```
+
+prints `## Post-merge verification (requires a cluster)`. Do NOT assert on a count of that heading —
+this Step's own fenced example contains one too, so the count is 2 whether or not the append worked.
 
 - [ ] **Step 7: Review the branch commit list**
 
@@ -1420,9 +1428,15 @@ would be a defect is a commit that reverts earlier work or lands a partial task.
 | D5 — `$(env:VAR)` completeness assertion | Task 5 Step 1 (lives beside the env it validates) |
 | D6 — `clientSecrets.*` repurposed, guard relocated, `failOnPlaceholderSecrets` stays `true` | Task 3 (values), Task 5 (guard) |
 | D7 — `http-relative-path: /auth` on the Keycloak CR | Task 2 |
-| D8 — `clientSecrets` → `envSecrets` mapping documented | Task 3 (comments), Task 8 (worked rows) |
+| D8 — `clientSecrets` → `envSecrets` mapping documented | Task 3 (comments + worked mapping); Task 8 documents the flip-back wiring on both dev overlays |
 | D9 — drift guard: `cmp -s` assertion + `configs/keycloak/**/*` trigger, `chart:lint` only | Task 1 Steps 2-3 |
 | D10 — ArgoCD example corrected | Task 6 |
 | D11 — CHANGELOG | Task 7 |
 
 Validation items 1-8 of the spec are covered by Task 9 Steps 1-5. Spec validation item 9 (the 900s timeout) is covered by Task 8 Step 1 and is measured on the first laptop run, which is outside this plan.
+## Post-merge verification (requires a cluster)
+
+- [ ] `kubectl get svc keycloak-service -n genieai` exists
+- [ ] `curl -s http://keycloak-service.genieai.svc.cluster.local:8080/auth/realms/genie` returns a realm body
+- [ ] materialise `keycloak-admin-credentials` (keys `username`, `password`) plus the client/admin/mail secrets, then set `convergence.enabled: true` on the target overlay with `envSecrets` rows — both dev overlays ship it disabled, so until this is done NO cluster creates a realm
+- [ ] record the measured convergence duration against the 900s HelmRelease timeout

@@ -34,13 +34,19 @@ def _load_module():
 
 mod = _load_module()
 
-UNPATCHED = "    html_parser = etree.HTMLParser(remove_comments=True)\n"
-PATCHED = "    html_parser = etree.HTMLParser(remove_comments=True, remove_pis=True)\n"
+UNPATCHED = "html_parser = etree.HTMLParser(remove_comments=True)\n"
+PATCHED = "html_parser = etree.HTMLParser(remove_comments=True, remove_pis=True)\n"
+INDENTED_UNPATCHED = "    html_parser = etree.HTMLParser(remove_comments=True)\n"
 
 # A minimal but SYNTACTICALLY VALID stand-in for the real parser module: the
 # patcher compile()s its output, so a fragment would not exercise the guard.
+# The constructor sits at COLUMN 0 exactly as it does in the installed
+# unstructured 0.18.32 — verified with `cat -A` on parser.py:929 inside the
+# running dataprep image. A fixture that ASSUMED an indent would have let the
+# patcher pass its own tests and then failed the image build on first contact
+# with the real file.
 FAKE_PARSER = (
-    "from lxml import etree\n\nclass Flow:\n    pass\n\ndef build():\n" + UNPATCHED + "    return html_parser\n"
+    "from lxml import etree\n\nclass Flow:\n    pass\n\n" + UNPATCHED + "def build():\n    return html_parser\n"
 )
 
 
@@ -56,7 +62,10 @@ def has_patched_constructor(body: str) -> bool:
 @pytest.fixture
 def unpatched_file(tmp_path):
     p = tmp_path / "parser.py"
-    p.write_text(FAKE_PARSER, encoding="utf-8")
+    # newline="" so the fixture is LF regardless of host OS — a Windows default
+    # of CRLF here made six tests fail while the suite summary said otherwise.
+    with p.open("w", encoding="utf-8", newline="") as handle:
+        handle.write(FAKE_PARSER)
     return p
 
 
@@ -65,6 +74,64 @@ def test_patches_the_unpatched_constructor(unpatched_file):
     body = unpatched_file.read_text(encoding="utf-8")
     assert has_patched_constructor(body), "remove_pis=True must be on the constructor line"
     assert UNPATCHED not in body
+
+
+def test_patch_preserves_line_endings(tmp_path):
+    """A one-line patch must not rewrite the file's line endings.
+
+    Regression: the first implementation used read_text/write_text, whose
+    newline=None translates LF to os.linesep on write. A dry run on Windows
+    turned all 1018 lines of the real parser.py into CRLF, so a single-argument
+    change looked like a whole-file rewrite. The image builds on Linux, so CI
+    would never have caught it — only a host-agnostic test does.
+    """
+    p = tmp_path / "parser.py"
+    original = FAKE_PARSER.replace("\n", "\r\n").encode("utf-8")
+    p.write_bytes(original)
+    assert mod.apply_patch(p) == "patched"
+    raw = p.read_bytes()
+    assert b"\r\n" in raw, "fixture should be CRLF"
+    assert b", remove_pis=True)" in raw, "the patch must have been applied"
+    # Undo exactly the patch and demand the ORIGINAL BYTES back. Anything else —
+    # a re-indent, a rewritten line ending — shows up as a mismatch here.
+    assert raw.replace(b", remove_pis=True)", b")") == original
+    # And a pure-LF file must stay pure-LF.
+    q = tmp_path / "lf.py"
+    with q.open("w", encoding="utf-8", newline="") as handle:
+        handle.write(FAKE_PARSER)
+    mod.apply_patch(q)
+    assert b"\r\n" not in q.read_bytes(), "LF input must not be rewritten to CRLF"
+
+
+def test_patches_an_indented_constructor_preserving_indent(tmp_path):
+    """Indentation must be captured and reapplied, not assumed.
+
+    The installed file happens to sit at column 0; an upstream reflow into a
+    function body must still patch, and must not lose its indent.
+    """
+    p = tmp_path / "parser.py"
+    p.write_text(
+        "from lxml import etree\n\n\ndef build():\n" + INDENTED_UNPATCHED + "    return html_parser\n",
+        encoding="utf-8",
+    )
+    assert mod.apply_patch(p) == "patched"
+    body = p.read_text(encoding="utf-8")
+    assert "    html_parser = etree.HTMLParser(remove_comments=True, remove_pis=True)" in body
+    compile(body, str(p), "exec")
+
+
+def test_rejects_two_indented_constructors(tmp_path):
+    p = tmp_path / "parser.py"
+    p.write_text(
+        "from lxml import etree\n\n\ndef a():\n"
+        + INDENTED_UNPATCHED
+        + "    return 1\n\n\ndef b():\n"
+        + INDENTED_UNPATCHED
+        + "    return 2\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
 
 
 def test_rejects_duplicate_constructor_lines(tmp_path):

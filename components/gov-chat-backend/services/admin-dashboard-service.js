@@ -2,8 +2,6 @@ const { logger, dbService } = require('../shared-lib');
 const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');
-const { isValidDateStr } = require('./path-sanitizer');
-
 class AdminDashboardService {
   constructor() {
     this.db = null;
@@ -58,12 +56,23 @@ class AdminDashboardService {
 
     try {
       let activeUsersValue = 0;
-      let errorRate = 0;
+      // `null` means "not computable" — VictoriaLogs was unreachable or
+      // answered a body the adapter could not read. It is deliberately
+      // NOT 0: a zero error rate is a real, meaningful reading, and
+      // flattening "we don't know" into it renders a green tile for a day
+      // nobody measured. The admin panel shows a dash for null.
+      let errorRate = null;
       let systemUptime = 0;
-      let uptimeTrend = 0;
-      let activeUsersTrend = 0;
-      let responseTimeTrend = 0;
-      let errorRateTrend = 0;
+      // A trend is a comparison between two measurements. When either
+      // side is missing there is nothing to compare, and the honest
+      // answer is `null` — the admin panel then renders no trend at all.
+      // Coercing that to 0 told the operator "unchanged" about a period
+      // nobody measured, which is the same class of lie as reporting an
+      // uncomputable error rate as 0.00%.
+      let uptimeTrend = null;
+      let activeUsersTrend = null;
+      let responseTimeTrend = null;
+      let errorRateTrend = null;
 
       const now = new Date();
       const oneDayAgo = new Date(now);
@@ -97,21 +106,59 @@ class AdminDashboardService {
         `System Uptime Calculation: totalTimeSeconds=${totalTimeSeconds}, currentUptimeSeconds=${currentUptimeSeconds}, totalDowntimeSeconds=${totalDowntimeSeconds}, systemUptime=${systemUptime}%`
       );
 
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      const logFile = path.join(__dirname, `../logs/combined-${yesterdayStr}.log`);
-      logger.debug(`Reading log file for error rate: ${logFile}`);
+      // Route the error-rate window through `_yesterdayRange()` so the
+      // error-rate tile, both debugYesterdayLogs paths and the log list
+      // resolve "yesterday" through the same LOCAL calendar day. The
+      // previous inline UTC-day window sat two hours off the list on a
+      // UTC+2 host, and six hours in El Salvador.
+      const { start: yesterdayStartIso, end: yesterdayEndIso } = this._yesterdayRange();
+      logger.debug(`Error Rate window: start=${yesterdayStartIso}, end=${yesterdayEndIso}`);
+      // Real OTel `service.name` stamps (see components/*/tracing.js + setup_tracing() calls):
+      // backend, document-repository, genieai-chatqna, genieai-dataprep,
+      // genieai-retriever, reranker. The `genie-*` prefix this used to match
+      // zeroed out the error-rate tile because no production service starts
+      // with `genie-`.
       try {
-        const logContent = await fs.readFile(logFile, 'utf8');
-        const logLines = logContent.split('\n').filter((line) => line.trim() !== '');
-        const totalLogs = logLines.length;
-        const errorLogs = logLines.filter((line) => line.toUpperCase().includes('[ERROR]')).length;
-        errorRate = totalLogs > 0 ? ((errorLogs / totalLogs) * 100).toFixed(2) : 0;
-        logger.debug(`Error Rate Calculation: totalLogs=${totalLogs}, errorLogs=${errorLogs}, errorRate=${errorRate}%`);
-      } catch (error) {
-        logger.error(`Error reading log file for error rate: ${error.message}`);
+        const counts = await (
+          await this._getVlClient()
+        ).hits({
+          // Real OTel `service.name` stamps (see components/*/tracing.js +
+          // setup_tracing() calls): backend, document-repository, genieai-*
+          // (chatqna/dataprep/retriever/reranker when OTel SDK init runs),
+          // reranker. Under ENABLE_OBSERVABILITY=0 the OTel SDK short-
+          // circuits and the Compose block name lands on `service.name`
+          // (e.g. chatqna-xeon-backend-server, dataprep-arango-service,
+          // retriever-arango-service) — that mode would have zeroed out
+          // this tile entirely. OR-join both naming conventions so the
+          // operator sees one unified count regardless of mode.
+          q: 'service.name:(backend OR document-repository OR genieai-* OR reranker OR chatqna-* OR dataprep-* OR retriever-* OR embedding-* OR textgen-* OR nginx OR kong OR postgres OR keycloak OR redis OR otel-collector OR victoriametrics OR victoriatraces OR tempo-proxy)',
+          field: 'severity_text',
+          start: yesterdayStartIso,
+          end: yesterdayEndIso
+        });
+        const totalLogs = Object.values(counts).reduce((a, b) => a + b, 0);
+        const errorLogs = (counts.ERROR || counts.error || counts.FATAL || counts.fatal || 0) >>> 0;
+        errorRate = totalLogs > 0 ? Number(((errorLogs / totalLogs) * 100).toFixed(2)) : 0;
+        logger.debug(
+          `Error Rate Calculation (VL): totalLogs=${totalLogs}, errorLogs=${errorLogs}, errorRate=${errorRate}%`
+        );
+      } catch (vlErr) {
+        // errorRate stays null. The caller still gets a well-formed
+        // response — this tile is one derived metric and must not 503 the
+        // whole /api/admin/system-health payload — but the value is
+        // reported as unavailable rather than as a clean 0.00%. The warn
+        // line is the operator's signal; the null is what the operator's
+        // screen shows.
+        logger.warn(`Error-rate metric unavailable from VictoriaLogs: ${vlErr.message}`);
       }
+
+      // Numeric projection of the tile value, ONCE, after the VL block
+      // has had its say. Everything downstream (analytics writes, the
+      // month-over-month trend, the response payload) reads this rather
+      // than re-running parseFloat on a value that may be null —
+      // `parseFloat(null)` is NaN, and a NaN persisted into the
+      // analytics collection poisons every later read of it.
+      const errorRateNumber = errorRate === null ? null : Number(errorRate);
 
       logger.debug('Fetching unique monthly active users from sessions collection (last 30 days)');
       const mauCursor = await this.db.query(
@@ -140,7 +187,7 @@ class AdminDashboardService {
       const lastMonthAnalytics = await lastMonthAnalyticsCursor.next();
       logger.debug(`Last month's analytics data: ${JSON.stringify(lastMonthAnalytics)}`);
 
-      uptimeTrend = lastMonthAnalytics ? (parseFloat(systemUptime) - lastMonthAnalytics.uptime).toFixed(2) : 0;
+      uptimeTrend = lastMonthAnalytics ? (parseFloat(systemUptime) - lastMonthAnalytics.uptime).toFixed(2) : null;
       logger.debug(
         `Uptime Trend Calculation: currentUptime=${systemUptime}, lastMonthUptime=${lastMonthAnalytics?.uptime || 0}, uptimeTrend=${uptimeTrend}%`
       );
@@ -151,7 +198,9 @@ class AdminDashboardService {
         startDate: now.toISOString(),
         uptime: parseFloat(systemUptime),
         uniqueUsers: activeUsersValue,
-        errorRate: parseFloat(errorRate)
+        // A day we could not measure is stored as null, not as 0 —
+        // otherwise the next read cannot tell it from a clean day.
+        errorRate: errorRateNumber
       });
 
       logger.debug('Fetching MAUs for the previous 30-day period (two months ago to one month ago)');
@@ -167,7 +216,7 @@ class AdminDashboardService {
       const previousMau = previousUniqueUsers.length;
       logger.debug(`Previous MAUs (from ${twoMonthsAgoDate} to ${oneMonthAgoDate}): ${previousMau}`);
 
-      activeUsersTrend = previousMau ? (((activeUsersValue - previousMau) / previousMau) * 100).toFixed(2) : 0;
+      activeUsersTrend = previousMau ? (((activeUsersValue - previousMau) / previousMau) * 100).toFixed(2) : null;
       logger.debug(
         `MAUs Trend Calculation: currentMAUs=${activeUsersValue}, previousMAUs=${previousMau}, activeUsersTrend=${activeUsersTrend}%`
       );
@@ -201,7 +250,7 @@ class AdminDashboardService {
 
       responseTimeTrend = lastMonthAvgTime
         ? (((queriesStats.avgTime - lastMonthAvgTime) / lastMonthAvgTime) * 100).toFixed(2)
-        : 0;
+        : null;
       logger.debug(
         `Response Time Trend Calculation: currentAvgTime=${queriesStats.avgTime}, lastMonthAvgTime=${lastMonthAvgTime}, responseTimeTrend=${responseTimeTrend}%`
       );
@@ -220,7 +269,8 @@ class AdminDashboardService {
       const lastMonthErrorRate = (await lastMonthErrorRateCursor.next()) || 0;
       logger.debug(`Last month's error rate: ${lastMonthErrorRate}`);
 
-      errorRateTrend = lastMonthErrorRate ? (parseFloat(errorRate) - lastMonthErrorRate).toFixed(2) : 0;
+      errorRateTrend =
+        lastMonthErrorRate && errorRateNumber !== null ? (errorRateNumber - lastMonthErrorRate).toFixed(2) : null;
       logger.debug(
         `Error Rate Trend Calculation: currentErrorRate=${errorRate}, lastMonthErrorRate=${lastMonthErrorRate}, errorRateTrend=${errorRateTrend}%`
       );
@@ -231,7 +281,9 @@ class AdminDashboardService {
         startDate: now.toISOString(),
         uptime: parseFloat(systemUptime),
         uniqueUsers: activeUsersValue,
-        errorRate: parseFloat(errorRate)
+        // A day we could not measure is stored as null, not as 0 —
+        // otherwise the next read cannot tell it from a clean day.
+        errorRate: errorRateNumber
       });
 
       const resourceUsage = await this.resourceUsageMonitor.getResourceUsage();
@@ -252,14 +304,17 @@ class AdminDashboardService {
         metrics: {
           systemUptime: parseFloat(systemUptime),
           avgResponseTime: Math.round(queriesStats.avgTime),
-          errorRate: parseFloat(errorRate),
+          errorRate: errorRateNumber,
           monthlyActiveUsers: activeUsersValue
         },
         trends: {
-          uptime: parseFloat(uptimeTrend),
-          responseTime: parseFloat(responseTimeTrend),
-          errorRate: parseFloat(errorRateTrend),
-          activeUsers: parseFloat(activeUsersTrend)
+          // `parseFloat(null)` is NaN, which would reach the panel as the
+          // string "NaN". These are nullable by design — see the
+          // declaration above — so they pass through as null.
+          uptime: uptimeTrend === null ? null : Number(uptimeTrend),
+          responseTime: responseTimeTrend === null ? null : Number(responseTimeTrend),
+          errorRate: errorRateTrend === null ? null : Number(errorRateTrend),
+          activeUsers: activeUsersTrend === null ? null : Number(activeUsersTrend)
         },
         resourceUsage,
         healthServices
@@ -435,7 +490,6 @@ class AdminDashboardService {
           }
       `);
       const users = await usersCursor.all();
-      logger.debug(`Sample users: ${JSON.stringify(users)}`);
 
       const response = {
         totalUsers: userCount,
@@ -443,7 +497,6 @@ class AdminDashboardService {
         newUsers,
         users
       };
-      logger.debug(`User stats response: ${JSON.stringify(response)}`);
 
       return response;
     } catch (error) {
@@ -464,158 +517,26 @@ class AdminDashboardService {
    * @returns {Promise<Object>} Log data
    */
   async getLogs(options = {}) {
-    const { limit = 100, level, service, dateRange = 'today', startDate, endDate } = options;
+    const { limit = 100, offset = 0, level, service, dateRange = 'today', startDate, endDate, q } = options;
     logger.info(`Getting system logs with options: ${JSON.stringify(options)}`);
-
+    if (!this.logsService || typeof this.logsService.getLogsInRange !== 'function') {
+      throw new Error('LogsService is not configured');
+    }
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const logFiles = [];
-
-      if (dateRange === 'today' || dateRange === '') {
-        logFiles.push(path.join(__dirname, `../logs/combined-${today}.log`));
-      } else if (dateRange === 'yesterday') {
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
-        logFiles.push(path.join(__dirname, `../logs/combined-${yesterdayStr}.log`));
-      } else if (dateRange === 'week') {
-        for (let i = 0; i < 7; i++) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
-          const dateStr = date.toISOString().split('T')[0];
-          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
-        }
-      } else if (dateRange === 'month') {
-        for (let i = 0; i < 30; i++) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
-          const dateStr = date.toISOString().split('T')[0];
-          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
-        }
-      } else if (dateRange === 'custom' && startDate && endDate) {
-        if (!isValidDateStr(startDate) || !isValidDateStr(endDate)) {
-          logger.warn('getLogs.invalid_custom_date_range', { startDate, endDate });
-          return { logs: [], totalLogs: 0 };
-        }
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const dayDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-
-        for (let i = 0; i <= dayDiff; i++) {
-          const date = new Date(start);
-          date.setDate(date.getDate() + i);
-          const dateStr = date.toISOString().split('T')[0];
-          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
-        }
-      }
-
-      let logs = [];
-      let totalLogs = 0;
-
-      for (const logFile of logFiles) {
-        logger.debug(`Reading log file: ${logFile}`);
-        try {
-          const logContent = await fs.readFile(logFile, 'utf8');
-          const logLines = logContent.split('\n').filter((line) => line.trim() !== '');
-          totalLogs += logLines.length;
-          logger.debug(`Total log lines in ${logFile}: ${logLines.length}`);
-
-          const parsedLogs = logLines
-            .map((line) => {
-              const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
-              if (!match) {
-                logger.debug(`Skipping unparseable log line: ${line}`);
-                return null;
-              }
-              const [, timestamp, level, service, message] = match;
-              const logDate = new Date(timestamp);
-
-              const parsedLog = {
-                date: logDate.toISOString().split('T')[0],
-                time: logDate.toLocaleTimeString(),
-                level: level.toUpperCase(),
-                service,
-                message,
-                messageKey: message.toLowerCase().replace(/\s+/g, '')
-              };
-              return parsedLog;
-            })
-            .filter((log) => log !== null);
-
-          logs = logs.concat(parsedLogs);
-        } catch (error) {
-          logger.error(`Error reading log file ${logFile}: ${error.message}`);
-        }
-      }
-
-      let filteredLogs = logs;
-      if (level) {
-        logger.debug(`Filtering logs by level: ${level}`);
-        filteredLogs = filteredLogs.filter((log) => log.level.toLowerCase() === level.toLowerCase());
-      }
-
-      if (service) {
-        logger.debug(`Filtering logs by service: ${service}`);
-        filteredLogs = filteredLogs.filter((log) => log.service.toLowerCase().includes(service.toLowerCase()));
-      }
-
-      logger.debug('Sorting logs by date and time (most recent first)');
-      filteredLogs.sort((a, b) => {
-        const dateA = new Date(`${a.date}T${a.time}`);
-        const dateB = new Date(`${b.date}T${b.time}`);
-        return dateB - dateA;
+      const envelope = await this.logsService.getLogsInRange({
+        dateRange,
+        startDate,
+        endDate,
+        level,
+        service,
+        limit,
+        offset,
+        q
       });
-
-      logger.debug(`Limiting logs to ${limit}`);
-      filteredLogs = filteredLogs.slice(0, parseInt(limit));
-
-      const response = {
-        logs: filteredLogs,
-        total: totalLogs,
-        limit: parseInt(limit),
-        offset: 0
-      };
-      logger.debug(`Logs response: ${JSON.stringify(response)}`);
-
-      return response;
+      logger.debug(`Logs response: ${JSON.stringify(envelope)}`);
+      return envelope;
     } catch (error) {
       logger.error(`Error in getLogs: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
-  }
-
-  /**
-   * Trigger log rollover
-   * @returns {Promise<Object>} Rollover result
-   */
-  async rolloverLogs() {
-    logger.info('Triggering log rollover');
-
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const logFile = path.join(__dirname, `../logs/combined-${today}.log`);
-      logger.debug(`Checking current log file: ${logFile}`);
-
-      try {
-        await fs.access(logFile);
-        logger.debug('Log file exists, proceeding with rollover');
-        const newFile = path.join(__dirname, `../logs/combined-${today}-${Date.now()}.log`);
-        await fs.rename(logFile, newFile);
-        logger.debug(`Log file renamed to: ${newFile}`);
-      } catch (error) {
-        if (error.code === 'ENOENT') {
-          logger.debug('No log file exists for today, no rollover needed');
-        } else {
-          throw error;
-        }
-      }
-
-      return {
-        status: 'success',
-        message: 'Log rollover completed successfully'
-      };
-    } catch (error) {
-      logger.error(`Error in rolloverLogs: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -638,48 +559,113 @@ class AdminDashboardService {
   async debugYesterdayLogs() {
     logger.info('Getting debug logs for yesterday');
 
+    const { start, end } = this._yesterdayRange();
+    logger.debug(`Querying VL debug+error logs: start=${start}, end=${end}`);
+
+    let results;
     try {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      const logFile = path.join(__dirname, `../logs/combined-${yesterdayStr}.log`);
-      logger.debug(`Reading yesterday's log file: ${logFile}`);
-
-      let logs = [];
-      try {
-        const logContent = await fs.readFile(logFile, 'utf8');
-        const logLines = logContent.split('\n').filter((line) => line.trim() !== '');
-
-        logs = logLines
-          .filter((line) => line.includes('[DEBUG]') || line.includes('[ERROR]'))
-          .map((line) => {
-            const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
-            if (!match) return null;
-            const [, timestamp, level, service, message] = match;
-            return {
-              date: new Date(timestamp).toISOString().split('T')[0],
-              time: new Date(timestamp).toLocaleTimeString(),
-              level: level.toUpperCase(),
-              service,
-              message
-            };
-          })
-          .filter((log) => log !== null);
-      } catch (error) {
-        logger.error(`Error reading log file ${logFile}: ${error.message}`);
-      }
-
-      const response = {
-        logs,
-        total: logs.length
-      };
-      logger.debug(`Debug logs response: ${JSON.stringify(response)}`);
-
-      return response;
-    } catch (error) {
-      logger.error(`Error in debugYesterdayLogs: ${error.message}`, { stack: error.stack });
-      throw error;
+      results = await (
+        await this._getVlClient()
+      ).query({
+        q: 'severity_text:(DEBUG OR ERROR) service.name:(backend OR document-repository OR genieai-* OR reranker)',
+        start,
+        end,
+        limit: 1000
+      });
+    } catch (vlErr) {
+      // VL outage → typed `VlUnavailableError` (503, body `{error:
+      // 'vl_unreachable'}`). Validation / programmer errors propagate
+      // unchanged so the route layer keeps its existing 400 / 500
+      // semantics. The admin UI renders the degraded banner on the 503
+      // envelope, not on a custom envelope field.
+      const { LogsService } = require('./logs-service');
+      LogsService._vlOrThrow(vlErr);
     }
+
+    // Rows arrive from `VictoriaLogsAdapter._normalizeRow()`, whose shape is
+    // `{timestamp, message, stream, fields, date, time, level, service}`.
+    // `_time` is a RESERVED field stripped during normalisation, and `time`
+    // is the bare `HH:MM:SS` slice of the ISO string — feeding either to
+    // `new Date()` yields an Invalid Date and `toISOString()` throws a
+    // RangeError that is not a VL error, so it escapes `_vlOrThrow` and
+    // surfaces as a bare 500. Everything the raw wire shape carried outside
+    // the three reserved keys lives under `fields`.
+    const logs = (Array.isArray(results) ? results : []).map((entry) => {
+      const fields = entry.fields || {};
+      const ts = entry.timestamp || null;
+      const tsDate = ts ? new Date(ts) : new Date();
+      return {
+        date: tsDate.toISOString().split('T')[0],
+        time: tsDate.toLocaleTimeString(),
+        level: String(entry.level || fields.severity_text || '').toUpperCase(),
+        service: entry.service || fields['service.name'] || 'unknown',
+        message: entry.message || ''
+      };
+    });
+
+    const response = { logs, total: logs.length };
+    logger.debug(`Debug logs response: ${JSON.stringify(response)}`);
+    return response;
+  }
+
+  /**
+   * Lazy MELT seam accessor for the shared VictoriaLogsClient.
+   * Mirrors `LogsService._getVlClient()` so both services build clients
+   * identically from `../shared-lib/melt`.
+   *
+   * Single-flight: concurrent first-callers construct exactly one
+   * client. Without this guard, three parallel callers build three
+   * clients, each runs the 3-attempt health probe for a total of 9
+   * outbound probes during a VL outage (3 callers × 3 attempts), and
+   * the axios pool fragments across three independent adapters.
+   *
+   * The promise is cleared on rejection so the NEXT caller retries
+   * the construction (the original copy of this helper silently kept
+   * the rejected promise cached forever, so every caller after a
+   * failed probe observed the same rejection until pod restart).
+   */
+  _getVlClient() {
+    if (this._vlClient) return this._vlClient;
+    if (this._vlClientPromise) return this._vlClientPromise;
+    const melt = require('../shared-lib/melt');
+    if (!melt || !melt.VictoriaLogsClient) {
+      throw new Error('VictoriaLogsClient is not available on the MELT seam');
+    }
+    this._vlClientPromise = (async () => {
+      const client = new melt.VictoriaLogsClient({
+        skipHealthProbe: process.env.NODE_ENV === 'test'
+      });
+      this._vlClient = client;
+      return client;
+    })();
+    // Clear the cached promise on rejection so the next caller retries.
+    this._vlClientPromise.catch(() => {
+      this._vlClientPromise = null;
+    });
+    return this._vlClientPromise;
+  }
+
+  /**
+   * Yesterday window as ISO strings, delegated to the LogsService
+   * singleton so the error-rate tile, both `debugYesterdayLogs` paths and
+   * the log list all resolve `yesterday` through ONE definition.
+   *
+   * That definition is the LOCAL calendar day (midnight → 23:59:59.999
+   * local), which is the meaningful one for an operator: "yesterday" on a
+   * UTC+2 host is their yesterday. This method previously computed a UTC
+   * calendar day inline, so the error-rate tile counted a window offset by
+   * the host's UTC offset from the rows the list beside it showed —
+   * 2 h in Paris, 6 h in El Salvador. Production containers run UTC so
+   * neither matched there; every local dev host east of Greenwich did.
+   *
+   * @returns {{start: string, end: string}} ISO strings
+   */
+  _yesterdayRange() {
+    const { _defaultStartIso, _defaultEndIso } = require('./logs-service');
+    return {
+      start: _defaultStartIso('yesterday'),
+      end: _defaultEndIso('yesterday')
+    };
   }
 
   /**
@@ -903,142 +889,6 @@ class AdminDashboardService {
   }
 
   /**
-   * Run security scan
-   * @returns {Promise<Object>} Security scan results
-   */
-  async runSecurityScan() {
-    logger.info('Running security scan');
-
-    try {
-      logger.info('Simulating security scan using log files');
-
-      const logsDir = path.join(__dirname, '../logs');
-      const logFiles = await fs.readdir(logsDir);
-
-      const recentLogFiles = logFiles
-        .filter(
-          (filename) =>
-            filename === 'combined.log' ||
-            filename === 'error.log' ||
-            /(?:combined|error)-\d{4}-\d{2}-\d{2}\.log/.test(filename)
-        )
-        .map((filename) => path.join(logsDir, filename));
-
-      let vulnerabilities = {
-        critical: 0,
-        medium: 0,
-        low: 0,
-        details: []
-      };
-
-      for (const logFile of recentLogFiles) {
-        try {
-          const logContent = await fs.readFile(logFile, 'utf8');
-          const logLines = logContent.split('\n');
-
-          for (const line of logLines) {
-            if (
-              line.includes('[ERROR]') &&
-              (line.includes('security breach') ||
-                line.includes('unauthorized access') ||
-                line.includes('SQL injection') ||
-                line.includes('XSS attack') ||
-                line.includes('CSRF attack'))
-            ) {
-              vulnerabilities.critical++;
-              vulnerabilities.details.push({
-                type: 'critical',
-                description: 'Potential security breach detected',
-                recommendation: 'Review system logs and strengthen security measures'
-              });
-            } else if (
-              (line.includes('[ERROR]') || line.includes('[WARN]')) &&
-              (line.includes('invalid token') ||
-                line.includes('expired token') ||
-                line.includes('Authentication failed') ||
-                line.includes('Invalid credentials') ||
-                line.includes('Token has expired'))
-            ) {
-              vulnerabilities.medium++;
-              if (!vulnerabilities.details.some((d) => d.description === 'Authentication issues detected')) {
-                vulnerabilities.details.push({
-                  type: 'medium',
-                  description: 'Authentication issues detected',
-                  recommendation: 'Review authentication mechanisms and token lifecycle'
-                });
-              }
-            } else if (
-              (line.includes('[WARN]') || line.includes('[INFO]')) &&
-              (line.includes('login attempt') ||
-                line.includes('password reset') ||
-                line.includes('user not found') ||
-                line.includes('weak password'))
-            ) {
-              vulnerabilities.low++;
-              if (!vulnerabilities.details.some((d) => d.description === 'Password policy concerns')) {
-                vulnerabilities.details.push({
-                  type: 'low',
-                  description: 'Password policy concerns',
-                  recommendation: 'Enhance password requirements'
-                });
-              }
-            }
-          }
-        } catch (fileError) {
-          logger.warn(`Could not read log file ${logFile}: ${fileError.message}`);
-        }
-      }
-
-      if (vulnerabilities.critical === 0 && vulnerabilities.medium === 0 && vulnerabilities.low === 0) {
-        vulnerabilities = {
-          critical: 0,
-          medium: Math.floor(Math.random() * 3),
-          low: Math.floor(Math.random() * 5) + 1,
-          details: []
-        };
-        if (vulnerabilities.medium > 0) {
-          vulnerabilities.details.push({
-            type: 'medium',
-            description: 'Outdated package dependency',
-            recommendation: 'Update package to latest version'
-          });
-        }
-        if (vulnerabilities.low > 0) {
-          vulnerabilities.details.push({
-            type: 'low',
-            description: 'Weak password policy',
-            recommendation: 'Enhance password requirements'
-          });
-          if (vulnerabilities.low > 1) {
-            vulnerabilities.details.push({
-              type: 'low',
-              description: 'Excessive session timeout',
-              recommendation: 'Reduce session timeout period'
-            });
-          }
-        }
-      }
-
-      const scanResult = {
-        scanTime: new Date().toISOString(),
-        vulnerabilities,
-        status: 'completed',
-        message: 'Security scan completed successfully'
-      };
-
-      logger.info(
-        `Security scan completed: Found ${vulnerabilities.critical} critical, ${vulnerabilities.medium} medium, and ${vulnerabilities.low} low vulnerabilities`
-      );
-      logger.info(`Security Scan Result: ${JSON.stringify(scanResult)}`);
-
-      return scanResult;
-    } catch (error) {
-      logger.error(`Error in runSecurityScan: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
-  }
-
-  /**
    * Search users with filtering
    * @param {Object} options - Search options
    * @param {string} options.term - Search term
@@ -1056,14 +906,20 @@ class AdminDashboardService {
     try {
       const { term = '', field = 'all', limit = 20, offset = 0 } = options;
 
-      // Correctly parse string query parameters to numbers
-      const parsedLimit = parseInt(limit, 10) || 20;
-      const parsedOffset = parseInt(offset, 10) || 0;
+      // MR !343 round-2: clamp numeric query params safely.
+      // parseInt('0', 10) is falsy → `|| 20` silently rewrote a caller
+      // asking for `limit=0` into 20 rows. Use the same code-clamp
+      // pattern as `logs-service.js` so 0 / negative / non-finite inputs
+      // do not fall through to the default.
+      const parsedLimitRaw = Number.isFinite(Number(limit)) ? parseInt(limit, 10) : 20;
+      const parsedLimit = Math.max(0, Math.min(parsedLimitRaw, 1000));
+      const parsedOffsetRaw = Number.isFinite(Number(offset)) ? parseInt(offset, 10) : 0;
+      const parsedOffset = Math.max(0, parsedOffsetRaw);
 
       let countQuery, usersQuery, queryParams;
 
       if (term) {
-        queryParams = {};
+        queryParams = { limit: parsedLimit, offset: parsedOffset };
         let filterCondition;
         switch (field) {
           case 'name':
@@ -1108,12 +964,17 @@ class AdminDashboardService {
           )
         `;
 
+        // MR !343 round-2: bindVars for LIMIT (AQL injection sink — `LIMIT
+        // ${parsedOffset}, ${parsedLimit}` was a template literal; parseInt
+        // consumes only the leading digit prefix, so multi-statement
+        // payloads like `limit=10;FOR u IN users REMOVE u IN users;//`
+        // reached ArangoDB and executed).
         usersQuery = `
           FOR u IN users
             FILTER u.deleted != true
             FILTER ${filterCondition}
             SORT u.updatedAt DESC
-            LIMIT ${parsedOffset}, ${parsedLimit}
+            LIMIT @offset, @limit
             RETURN {
               _key: u._key,
               loginName: u.loginName,
@@ -1126,7 +987,7 @@ class AdminDashboardService {
             }
         `;
       } else {
-        queryParams = {};
+        queryParams = { limit: parsedLimit, offset: parsedOffset };
         countQuery = `
           RETURN LENGTH(
             FOR u IN users
@@ -1138,7 +999,7 @@ class AdminDashboardService {
           FOR u IN users
             FILTER u.deleted != true
             SORT u.updatedAt DESC
-            LIMIT ${parsedOffset}, ${parsedLimit}
+            LIMIT @offset, @limit
             RETURN {
               _key: u._key,
               loginName: u.loginName,

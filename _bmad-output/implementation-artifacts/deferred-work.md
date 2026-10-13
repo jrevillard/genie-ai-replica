@@ -2,6 +2,37 @@
 
 Items deferred during code reviews. Revisit when the related component is next modified.
 
+## Resolved in MR !383 (prd-fix-shared-lib, 2026-09-18)
+
+Findings from the 2026-09-16 SPEC code-review catalog closed by this branch:
+
+| # | Finding | Resolution |
+|---|---|---|
+| CAP-6 | Rollback switches not tested (5 vars) | All 5 env vars removed entirely (5a3925be4). The test `logs-no-vl-transport.test.js` regression guard for `LOG_TO_VICTORIALOGS` also removed (30c12202f). |
+| HIGH | `OTEL_SERVICE_NAME/NAMESPACE` not set for kong, nginx, postgres, redis, keycloak | Both env vars removed from `docker-compose.yaml`; `service.namespace` hard-coded to `genie-core` (backend, doc-repo) / `genieai` (OPEA) and `service.name` hard-coded per-service (45463e8e5). |
+| HIGH | `3 env vars not in env-vars.md catalog: OTEL_LOGS_ENABLED, OTEL_SERVICE_NAME, OTEL_SERVICE_NAMESPACE` | All 3 removed from runtime. Catalog no longer needs them. |
+| MEDIUM | `booleanEnv('LOG_TO_VICTORIALOGS', true)` flips default silently | Env var removed entirely — moot. |
+| MEDIUM | `OTel Collector log-pipeline transforms added with zero behavioral test` | The `stamp_service_name_from_container` chain is now covered by integration tests (per the 2026-09-17 follow-up that ran 19 fixture payloads); the other 2 transforms remain untested (carry-forward in this DW). |
+| LOW (rejected) | `background_span` docstring references nonexistent `genieai_logging.py` | Doc corrected in 808347ac5 — "Public tracing API" section documents the real surface; old docstring references cleaned up. Verify on next OTel overlay pass. |
+| LOW (rejected) | `LOG_LEVEL` env hijacked to set OTel `LoggingHandler` level | No OTel `LoggingHandler` is wired in `tracing.py` (only `OTLPSpanExporter` + MeterProvider). The hijack concern is moot — there's nothing for `LOG_LEVEL` to hijack. Documented in OBSERVABILITY.md + DEBUGGING-TRACING.md. |
+
+### New work captured (post-merge follow-ups)
+
+- **uvicorn.access trace_id propagation** (closed in !383, was a known gap before this MR — captured here retroactively for the record).
+- **OTel identity hard-coding** (closed in !383 — was loose, now strict; per ops decision 2026-09-18).
+
+### Items in the review catalog that REMAIN OPEN
+
+These were re-classified as legitimate work, not bugs; they stay in the catalog as-is:
+- `alerting-provisioning.test.js` count drift (5 groups / 6 rules vs 4 / 5 asserted).
+- `tracing-background.js` SCOPE_VERSION wrong path.
+- DB connection service `setInterval` UnhandledPromiseRejection.
+- `RedactingSpanProcessor.on_start` swallows ALL exceptions via `contextlib.suppress(Exception)`.
+- `victorialogs-client.js` prototype pollution vector.
+- OTel collector transforms (`stamp_log_metadata_from_msg`, `normalize_log_body`) still untested.
+- `_normalizeRows` STRING branch + `hits()` adapter zero direct tests.
+- DW-412: Grafana 12.4 `victoriametrics-logs-datasource` plugin `fieldValues` broken.
+
 ### DW-1: embedding/textgen wrapper images still pin OPEA 1.3 base images.
 origin: spec-deferred 8b6f4b550347
 location: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:4
@@ -1972,3 +2003,845 @@ location: _bmad-output/implementation-artifacts/spec-3-4-confirm-the-targeted-up
 severity: low
 reason: All verification commands specify only "expected" success outcomes. No failure handling documented.
 status: open
+
+## Deferred from: code review of 1-1-docker-compose-vl-collector-profiles-core.md (2026-09-03)
+
+- **DW-X1: Resource-cost impact of always-on VL + OTel Collector** — quantify baseline memory/CPU + `vlogs-data` persistent volume impact via Ansible runbook validation. Pre-existing — outside story scope.
+- **DW-X2: `site/content/en/docs/observability/` docstring alignment** — if it still says VL is opt-in, align in a dedicated docs MR.
+- **DW-X3: CI `config:validate` job under `ENABLE_OBSERVABILITY=0`** — confirm collector-config-file deployment + new structural tests pass when CI runs without the observability profile.
+
+### DW-325: document-repository component must mirror these OTel deps at the same versions to avoid shared/lib peer-dep UNMET failures.
+origin: spec-deferred e3d227e7a624
+location: components/document-repository/package.json
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: medium
+reason: Spec notes §"Coordinate with Epic 3 Story 3-1" explicitly defers this to Story 3-1 (ready-for-dev). Until 3-1 lands, any consumer of shared/lib that doesn't ship its own @opentelemetry/api-logs will fail npm install with an unmet peer.
+status: open
+
+### DW-326: The thin Winston→VL transport wrapper in shared/lib that consumes @opentelemetry/api-logs does not exist yet in this branch; later epic-2 stories (2-4, 2-5) wire it.
+origin: spec-deferred 5cc4dd4e18d5
+location: components/shared/lib/victorialogs-transport.js
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: medium
+reason: spec §files / Acceptance cites "shared/lib/victorialogs-transport.js needs only this" but no such file exists. Adding the dep ahead of the wrapper is correct (so peer-dep consumers land coherently), but the wrapper itself is deferred.
+status: open
+
+### DW-327: @opentelemetry/exporter-trace-otlp-http remains at ^0.218.0 in backend while sdk-node was bumped to ^0.221.0; this duplicates the OTel core tree.
+origin: spec-deferred 44f4791c3015
+location: components/gov-chat-backend/package.json:71
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: Backend package.json deps: `@opentelemetry/exporter-trace-otlp-http@^0.218.0` and `@opentelemetry/sdk-node@^0.221.0`. Spec instruction is explicit ("BUMP sdk-node"), no instruction to bump exporter-trace-otlp-http. After npm install both versions resolved cleanly (no UNMET PEER DEPENDENCY warnings), so the duplication is tolerable. Whether to align remains a separate decision.
+status: open
+
+### DW-328: Jest moduleNameMapper in gov-chat-backend does not add @opentelemetry/api-logs / sdk-logs / exporter-logs-otlp-http entries that will be needed once victorialogs-transport.js lands and tests import
+origin: spec-deferred a25f714b233e
+location: components/gov-chat-backend/package.json:jest.moduleNameMapper
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: `moduleNameMapper` maps only `@opentelemetry/api` today. Future stories that import the new packages in __tests__ will need mapping entries; not required for this dep-only story.
+status: open
+
+### DW-329: components/shared/lib/package.json has no `name` or `version` field; peerDependencies on an unnamed package is a weaker signal in npm 7+.
+origin: spec-deferred 779f3e29cb8b
+location: components/shared/lib/package.json
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: Pre-existing issue, not introduced by this diff. Independent of this story.
+status: open
+
+### DW-330: logger.js (shared/lib) currently only imports @opentelemetry/api (trace API); the migration to import @opentelemetry/api-logs via logs.getLogger(...) is deferred to later stories.
+origin: spec-deferred 9b51b05d87ea
+location: components/shared/lib/logger.js
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: Spec explicitly leaves consumer wiring to follow-up stories (2-4, 2-5, 2-6). logger.js unchanged in this diff.
+status: open
+
+### DW-331: CHANGELOG.md entry under [Unreleased] for the OTel minor-line bump + 3 new deps is missing; per `.claude/rules/RELEASE.md` this belongs in the release-process bookkeeping, not on this story.
+origin: spec-deferred a73261ea8bd1
+location: CHANGELOG.md
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: Story scope is dep wiring only. Changelog update is conventionally done at the release-cut step, not the story step.
+status: open
+
+### DW-332: `auto-instrumentations-node@^0.76.0` nests its own `@opentelemetry/api-logs@0.218.0` under `instrumentation-bunyan`; the hoisted backend tree ships 0.221.0, so two api-logs versions co-exist on the
+origin: spec-deferred 334779e1ffcf
+location: components/gov-chat-backend/package.json:auto-instrumentations-node
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: medium
+reason: `npm ls` in components/gov-chat-backend shows `auto-instrumentations-node@0.76.0` resolving api-logs@0.218.0 in its nested tree. Spec did not request bumping auto-instrumentations; if any bunyan hook emits via the nested 0.218 API while the SDK the app imports is 0.221.0, the runtime API surface differs from what the new SDK expects. Whether any code path imports the nested version is unanalyzed.
+status: open
+
+### DW-333: Production `NodeSDK` init (`components/gov-chat-backend/tracing.js:120`) is gated on `ENABLE_OBSERVABILITY=1` and has no test that loads the real `sdk-node@0.221.0` constructor option shape; CI mocks
+origin: spec-deferred db7bb1aabe1a
+location: components/gov-chat-backend/__tests__/tracing-non-test.test.js
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: medium
+reason: `__tests__/tracing-non-test.test.js` `jest.mock`s `@opentelemetry/sdk-node` (lines 8-56); assertions on `sdk` non-null + `mockStart` called are satisfied by the mock factory's `jest.fn().mockImplementation(...)`. No repo test imports the real installed `sdk-node@0.221.0`. If 0.221.0 changed the NodeSDK constructor option shape, production init would throw at startup while CI stays green.
+status: open
+
+### DW-334: Story frontmatter `depends_on: []` but correctness depends on Story 3-1 (doc-repo OTel mirror) landing before document-repository installs shared/lib; the dependency graph encoded in spec frontmatter
+origin: spec-deferred 8f9274348e59
+location: _bmad-output/implementation-artifacts/stories/2-1-add-otel-logs-deps-to-shared-lib-and-backend.md (frontmatter depends_on)
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: The first existing defer entry already routes doc-repo mirroring to Story 3-1. If 3-1 does not land before shared/lib is consumed by doc-repo (e.g. during a doc-repo-only install), `npm install` in doc-repo trips UNMET PEER DEPENDENCY for `@opentelemetry/api-logs` because shared/lib declares `peerDependencies` on it. `depends_on: []` is therefore dishonest about the sequencing contract.
+status: open
+
+### DW-335: Spec `## Verification` block does not record `npm run lint` / `npm run format:check` evidence; the work was review-ready without the local CI-equivalent checks being listed in the story.
+origin: spec-deferred af9e228662fc
+location: _bmad-output/implementation-artifacts/stories/2-1-add-otel-logs-deps-to-shared-lib-and-backend.md (## Verification)
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: Spec ACs are three shell assertions (two `npm ls`, one `json.load`). No record of running `npm run lint` or `npm run format:check` from project root — the project's CLAUDE.md mandates these before CI. Whether they were run is not provable from the spec; whether the bumped package.json files pass lint/format cannot be answered from this story alone.
+status: open
+
+### DW-336: Producer-side PII redaction on OTel LogRecord body is required by AD-4 / CAP-1 / C-5; the VL transport writes `body = info.message` with no redaction at this call site.
+origin: spec-deferred 83697657250f
+location: components/shared/lib/victorialogs-transport.js + Story 2.6 (components/gov-chat-backend/tracing.js)
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: high
+reason: logger.js does not register a `PIIRedactingLogRecordProcessor` against `body`; only the backend `tracing.js` span-attribute processor exists. `logger.info(`Login failed for ${email}`)` would emit the email into VL.
+status: resolved 2026-09-28 in MR !343 (premise removed: the OTel LogRecord pipeline was dropped in c4ba2f41b; log bodies never reach an in-process processor and are redacted collector-side)
+
+### DW-337: `log_record_dropped_total{reason="observability_disabled"}` counter at the AND-gate suppression point is missing.
+origin: spec-deferred a0e9016f313e
+location: components/shared/lib/logger.js:27-30 (gate) + components/gov-chat-backend/metrics.js (Story 2.12)
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: medium
+reason: phases.md P1a acceptance requires the counter to be visible when `LOG_TO_VICTORIALOGS=1 && ENABLE_OBSERVABILITY=0` suppresses emission; the gate in `vlTransport()` returns `[]` without any metric increment.
+status: resolved 2026-09-18 in MR !383
+resolution: env var `LOG_TO_VICTORIALOGS` removed entirely (5a3925be4 + 30c12202f). The 4-cell truth table scenario is moot — there is no env-level opt-out for VL emission. ENABLE_OBSERVABILITY is the only gate, and it controls the in-app SDK init (not per-record transport emission).
+
+### DW-338: Downstream consumers that grep `[ERROR]`/`[WARN]`/`[INFO]`/`[DEBUG]` substrings in the new JSON file output will silently misclassify every record — error rate reads 0, security-scan vulnerability
+origin: spec-deferred 6aa98497813f
+location: components/gov-chat-backend/services/admin-dashboard-service.js + components/gov-chat-frontend/src/__tests__/components/LogSearchDialog.test.js
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: high
+reason: admin-dashboard-service.js:109 (errorLogs filter), :654 (`runSecurityScan` level gates), :941/955/971 (security-scan vulnerability classification); LogSearchDialog.test.js:893-927 printf regex. Existing tests use hand-crafted printf fixtures so the breakage is invisible to CI.
+status: open
+
+### DW-339: Pre-init records are dropped before `logs.setGlobalLoggerProvider(...)` wires the OTel `LoggerProvider`; a 100-record ring buffer flush is required by AD-1.
+origin: spec-deferred 33edbb487eaf
+location: components/shared/lib/victorialogs-transport.js (Story 2.4 + components/shared/lib/__tests__/victorialogs-transport.test.js Story 2.10)
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: medium
+reason: VictoriaLogsTransport calls `logs.getLogger(name).emit(...)` without a ring buffer; records emitted during backend startup before `tracing.js` initialises the provider are silently lost.
+status: open
+
+### DW-340: Console transport's `json: false` paired with the new upstream `format.json()` pipeline emits JSON objects to stdout; operator visual log-tailing may break or double-encode depending on winston
+origin: spec-deferred f896ffa44c44
+location: components/shared/lib/logger.js:42-47
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: low
+reason: loggerConfig.transports[0] sets `json: false, colorize: true`; with `format.combine(..., json())` upstream, the formatter already stringifies and Console's option no longer has the printf-style payload it was tuned for.
+status: open
+
+### DW-341: `service.name` is read from `process.env.SERVICE_NAME` rather than hardcoded per-component; ARCHITECTURE-SPINE.md AD-2 mandates `genie-backend` for backend and `genie-document-repository` for
+origin: spec-deferred 7f7d8af3d94d
+location: components/shared/lib/logger.js:21, 28 + components/shared/lib/victorialogs-transport.js:49
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: medium
+reason: `traceFormat()` (logger.js:21) and `vlTransport()` (logger.js:28) both read `process.env.SERVICE_NAME || 'genie-backend'`; the constructor `service` option to `VictoriaLogsTransport` is dead code because `traceFormat` always populates `info.service` first.
+status: open
+
+### DW-342: Positive test coverage of the new `vlTransport()` AND-gate and the `reconfigureLogger` env-var re-evaluation path is absent.
+origin: spec-deferred 4585eca46c9c
+location: components/shared/lib/__tests__/victorialogs-transport.test.js (Story 2.10) + components/gov-chat-backend/__tests__/logger-vl-integration.test.js (Story 2.11)
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: medium
+reason: logger-functions.test.js exercises `reconfigureLogger` only with both env vars unset, so the `[]` short-circuit path is the only branch tested; an inverted `||` or a renamed env var would silently disable the VL pipeline in production with no CI signal.
+status: open
+
+### DW-343: No regression test covers the production `loggerConfig.format` end-to-end (asserts JSON keys against the live logger, not a self-built pipeline).
+origin: spec-deferred 46cd42521873
+location: components/shared/lib/logger.js:73 (production format chain)
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: medium
+reason: `logger-otel-trace.test.js` and `logger-functions.test.js` both build their own `format.combine(...)` pipelines; reverting `logger.js:73` to `logFormat` (printf) would leave every existing test green.
+status: open
+
+### DW-344: No test exercises the 4-cell truth table of `LOG_TO_VICTORIALOGS` × `ENABLE_OBSERVABILITY` for the VL gate.
+origin: spec-deferred c129a5fb6f60
+location: components/shared/lib/logger.js:27 (gate), 60-62 (transport push)
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: medium
+reason: `victoriaLogsEnabled()` flips a transport list membership that no test asserts. An accidental `&&`→`||` flip at `logger.js:27` ships silently.
+status: resolved 2026-09-18 in MR !383
+resolution: `LOG_TO_VICTORIALOGS` env var removed entirely (5a3925be4 + 30c12202f). The 4-cell truth table collapses to 2 cells (VL on / VL off) with `ENABLE_OBSERVABILITY` as the only input. The `victorialogs-transport.js` file itself was removed (per `logs-no-vl-transport.test.js` regression guard). No `victoriaLogsEnabled()` function remains in the codebase.
+
+### DW-345: `redactLogRecordBody` is exported but not yet called by any production code path. Story 2.6 (`PIIRedactingLogRecordProcessor`) is the named wiring point and is `ready-for-dev` in `sprint-status.yaml`;
+origin: spec-deferred c8464133ecad
+location: components/gov-chat-backend/tracing-pii.js:36 (definition site)
+source_spec: `2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes.md`
+severity: medium
+reason: Repo-wide symbol search for `redactLogRecordBody` outside `__tests__/` and `node_modules/` returns only the definition in `components/gov-chat-backend/tracing-pii.js`. The test file's preamble documents the contract ("surface used by `PIIRedactingLogRecordProcessor` shipped in Story 2.6") but the wiring itself is out of scope here. Independently confirmed by `deferred-work.md` line 2075 (log-body processor not registered).
+status: resolved 2026-09-28 in MR !343 (the OTel logs pipeline was dropped in c4ba2f41b; body redaction is collector-side)
+
+### DW-346: Cookie/refreshToken strings pass through the body walker verbatim because `cookie` is not in `SENSITIVE_KEY_PATTERNS`. The current test (`deeply-nested body` case) documents this as a known gap.
+origin: spec-deferred 3833eaf1d76f
+location: components/gov-chat-backend/__tests__/pii-body-scrubbing.test.js (deeply-nested PII case)
+source_spec: `2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes.md`
+severity: medium
+reason: `components/gov-chat-backend/__tests__/pii-body-scrubbing.test.js` — `Given a deeply-nested body with PII at multiple depths` assertion expects `cookie: 'session=abc123; refreshToken=def456'` to survive unchanged, with a comment marking it as a documented gap for the future secret-extender work.
+status: resolved 2026-09-28 in MR !343 (premise removed: the OTel LogRecord pipeline was dropped in c4ba2f41b; log bodies never reach an in-process processor and are redacted collector-side)
+
+### DW-347: AD-4 vs AD-8 collision (backend vs document-repository PII processor registration) was raised in the architecture adversarial review and is not addressed by Story 2.9. The current change is
+origin: spec-deferred 8ba57ca01d21
+location: components/document-repository/ (no change here)
+source_spec: `2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes.md`
+severity: medium
+reason: `_bmad-output/architecture/architecture-genieai-2026-08-31/reviews/review-adversarial.md` warns that `PIIRedactingLogRecordProcessor` may be opted out of in `document-repository`. Story 2.9 covers only the backend surface; the doc-repo side needs a parallel story or a follow-up.
+status: open
+
+### DW-348: PII regex / sensitive-key set is defined locally in `components/gov-chat-backend/tracing-pii.js` rather than hoisted to `shared/lib` for reuse by document-repository. Pre-existing, surfaced during
+origin: spec-deferred 52bdb98cdfa2
+location: components/gov-chat-backend/tracing-pii.js:5 (SENSITIVE_KEY_PATTERNS definition)
+source_spec: `2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes.md`
+severity: low
+reason: `components/gov-chat-backend/tracing-pii.js` exports `SENSITIVE_KEY_PATTERNS` from the backend module only. Adversarial review flagged "single source of truth for PII regex" as a missing guarantee; addressing it is a cross-component refactor, not in this story's scope.
+status: open
+
+### DW-349: `_bmad-output/specs/spec-admin-logs-victorialogs-migration/phases.md` still references the old filename `p-l-lig-pii-scrubbing.test.js`. Planning-doc drift, no runtime impact.
+origin: spec-deferred e09ea269d6c1
+location: _bmad-output/specs/spec-admin-logs-victorialogs-migration/phases.md
+source_spec: `2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes.md`
+severity: low
+reason: Grep over `phases.md` for `p-l-lig-pii-scrubbing` returns a hit that no longer corresponds to a real file in the tree.
+status: open
+
+### DW-350: Negative-path coverage for non-string `level` values other than `undefined` (number, boolean, object). The current `treats a non-string level as info` test covers only `undefined`. The transport's
+origin: spec-deferred 41be2a442549
+location: components/gov-chat-backend/__tests__/victorialogs-transport.test.js:160
+source_spec: `2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.md`
+severity: medium
+reason: Reviewer (edge-case-hunter) flagged the gap; covered types today: only `undefined`. Out of scope for the "(severity + trace_id flow)" story title — left for a future hardening story.
+status: open
+
+### DW-351: Constructor robustness — `new VictoriaLogsTransport()` with no opts at all. The story's `makeTransport` helper passes `enabled: true`, so the no-opts branch is never exercised.
+origin: spec-deferred 408d61d01f0a
+location: components/gov-chat-backend/__tests__/victorialogs-transport.test.js
+source_spec: `2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.md`
+severity: medium
+reason: Reviewer (edge-case-hunter) flagged it. The transport's `enabled` default-on logic is tested, but only with `{}` and `{enabled: undefined}` — a literal `undefined` opts arg is unverified.
+status: open
+
+### DW-352: `info.timestamp` as a raw `Date` instance. The body/timestamp describe covers numeric-ms and ISO-8601-string inputs but not `new Date(...)`, which Winston commonly emits.
+origin: spec-deferred 7bc335ce5494
+location: components/gov-chat-backend/__tests__/victorialogs-transport.test.js
+source_spec: `2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.md`
+severity: medium
+reason: Reviewer (edge-case-hunter) flagged it. Untested path could emit an invalid nanosecond value (`NaN * 1e6`) if the transport doesn't coerce via `.getTime()`.
+status: open
+
+### DW-353: CAP-1 swallow does not cover a *rejected Promise* from `emit()` (async failure mode). Today the test uses synchronous `mockImplementation` that throws; an async rejection from a real OTLP exporter
+origin: spec-deferred bc4b0595149d
+location: components/gov-chat-backend/__tests__/victorialogs-transport.test.js
+source_spec: `2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.md`
+severity: medium
+reason: Reviewer (edge-case-hunter) flagged it. CAP-1 (project-wide invariant) currently covers only synchronous throws; async path is implicit.
+status: open
+
+### DW-354: Story narrative says the test file was "moved from shared/lib/__tests__/" — it was actually created from scratch (the sibling directory never existed). Reviewers cross-checking lineage could be
+origin: spec-deferred 1abcf1ac0c88
+location: _bmad-output/implementation-artifacts/stories/2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.md:9
+source_spec: `2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.md`
+severity: low
+reason: Reviewer (blind-hunter) flagged it. Cosmetic doc fix on the story frontmatter `files:` field.
+status: open
+
+### DW-355: No Grafana dashboard panel or alert rule provisioned for `log_record_dropped_total` in `configs/grafana/provisioning/`; the metric ships without an operator-facing surface.
+origin: spec-deferred ecb2086ddb6b
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: medium
+reason: The metric name is referenced only in code; no dashboard JSON or alert YAML in `configs/grafana/provisioning/dashboards/` or `configs/grafana/provisioning/alerting/` declares `log_record_dropped_total`. Spec did not require this; a follow-up dashboards/alerting story should land at least one panel and one alert (e.g. rate > 0 for `otlp_unreachable` for 5m).
+status: resolved 2026-09-28 in MR !343 (log_record_dropped_total counter removed)
+
+### DW-356: Counter payload lacks triage context (dropped log level, queue depth, otlp endpoint); cardinality constraint makes adding labels safe but the metric is too thin to act on in Prometheus without joining
+origin: spec-deferred 5f39e52c9063
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: low
+reason: Every `.add(1, { reason })` call passes only the bounded reason label; no `level`, `endpoint`, or `queue_depth` attribute is included. Spec did not require extra labels; reviewer flagged this as a follow-up.
+status: resolved 2026-09-28 in MR !343 (log_record_dropped_total counter removed)
+
+### DW-357: `observability_disabled` counter increments on every Winston log emit when observability is OFF, putting OTel counter overhead on the very environment where ops will be looking for the metric;
+origin: spec-deferred 6a82c793b4e5
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: low
+reason: `shared/lib/logger.js` `traceFormat()` calls `_droppedCounter.add(1, ...)` on every no-span log emit when `process.env.ENABLE_OBSERVABILITY !== '1'`. Steady nonzero counter at any non-trivial log volume.
+status: resolved 2026-09-28 in MR !343 (log_record_dropped_total counter removed)
+
+### DW-358: `OBSERVABILITY_DISABLED` latch evaluated once at module load; if a sibling module requires `shared/lib/logger.js` before `process.env.ENABLE_OBSERVABILITY` is finalized in a test fixture, the latch
+origin: spec-deferred e192d1e12b19
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: low
+reason: Same pattern exists in `components/gov-chat-backend/tracing.js` for the `NODE_ENV`/`ENABLE_OBSERVABILITY` test-mode guard; the existing pre-existing pattern is being followed. Future refactor could re-read env per emit.
+status: resolved 2026-09-28 in MR !343 (log_record_dropped_total counter removed)
+
+### DW-359: `mobile/`, CLI scripts, or dev tooling that require `shared/lib/logger.js` without the OTel SDK initialized will read the OTel global at require time.
+origin: spec-deferred 56e7eda6340f
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: low
+reason: `shared/lib/logger.js` now calls `otelMetrics.getMeter(...)` at module load (guarded by PATCH 2 IIFE try/catch since this run — the guard absorbs the throw and falls through to a no-op stub, but downstream code may still observe different behavior). Mobile consumers of shared/lib logger should be smoke-tested.
+status: resolved 2026-09-28 in MR !343 (log_record_dropped_total counter removed)
+
+### DW-360: No integration-style assertion that Prometheus can scrape `log_record_dropped_total`; unit tests prove `.add()` is called but not that the series appears in scrape output.
+origin: spec-deferred a3e150b8b5e9
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: low
+reason: No `@opentelemetry/exporter-prometheus` contract test renders the registry and checks for the series. A future contract-test story should add it.
+status: resolved 2026-09-28 in MR !343 (log_record_dropped_total counter removed)
+
+### DW-361: Runtime increment tests for the `observability_disabled` (logger.js) and `queue_full` (victorialogs-transport.js) call-sites fell back to static source-pattern checks; jest.mock does NOT intercept
+origin: spec-deferred 7b9011c9c5ff
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: medium
+reason: The same module-mocking limitation also breaks 7 PRE-EXISTING tests in `logger-otel-trace.test.js` (verified against base commit 3f8adc95c). The runtime path is therefore exercised manually against a real OTel SDK stack (not in this story's verification scope). A follow-up that restructures shared/lib tests under a backend rootDir, or moves the relevant tests alongside the modules they exercise, would unlock real runtime coverage.
+status: resolved 2026-09-28 in MR !343 (log_record_dropped_total counter removed)
+
+### DW-362: components/document-repository/package.json does not declare @opentelemetry/resources or @opentelemetry/semantic-conventions — sdk-logs@0.221.0 carries them as direct deps, so npm hoists them, but a
+origin: spec-deferred 4eb09bf5d658
+location: components/document-repository/src/tracing.js (Story 3.2)
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: curl https://registry.npmjs.org/@opentelemetry/sdk-logs/0.221.0 reports `dependencies: [@opentelemetry/core, @opentelemetry/api-logs, @opentelemetry/resources, @opentelemetry/semantic-conventions]`. Hoisting is fine; Resource attachment is the next story's concern.
+status: open
+
+### DW-363: No @opentelemetry/instrumentation-winston (or equivalent bridge) declared — adding the OTel logs SDK does not capture winston records until a transport/bridge is wired.
+origin: spec-deferred f766bcfad691
+location: components/document-repository/src/tracing.js (Story 3.2)
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: winston-format-json alone produces JSON strings on winston's `info` stream; it does not call OTel LoggerProvider.emit. Story 3.2 (tracing.js logs-only path) wires the actual provider + transport.
+status: open
+
+### DW-364: components/document-repository/package-lock.json is not regenerated alongside the manifest bump; CI's lockfile-freshness job (verify:dataprep-lock pattern) may flag staleness.
+origin: spec-deferred 19fe8da36839
+location: components/document-repository/package-lock.json
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: Diff shows manifest edits only; no package-lock.json update. The Story 2-1 review pass added a similar `npm install` + lockfile-commit step on a follow-up review; this story mirrors that pattern but stops at the manifest level.
+status: open
+
+### DW-365: No logger initialization file (tracing.js) accompanies the dep additions; the packages are declared but unused until Story 3.2 lands.
+origin: spec-deferred 69977b2ec3d1
+location: components/document-repository/src/tracing.js (Story 3.2)
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: Spec scope is dep-only mirroring of Story 2-1; the actual `tracing.js` file for document-repository is created in Story 3.2 (`Depends on: [3.1, Epic 2]`).
+status: open
+
+### DW-366: OTEL_EXPORTER_OTLP_ENDPOINT and OTEL_EXPORTER_OTLP_LOGS_ENDPOINT env wiring for document-repository is not updated; once tracing.js initialises the provider, env-var propagation depends on
+origin: spec-deferred d345f9b9c25e
+location: docker-compose.yaml, env (component env-var surface)
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: Spec scope is package.json only; env-var wiring is captured separately.
+status: open
+
+### DW-367: No Jest test asserts the new OTel log packages resolve or that winston-format-json produces the expected JSON shape from document-repository's logger.
+origin: spec-deferred 520b1441f962
+location: components/document-repository/__tests__/ (Story 3.2 follow-up)
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: Verification is json-load + dep-list inspection only. Logger-instantiation tests are deferred to Story 3.2 (and analog of 2-11 for the backend).
+status: open
+
+### DW-368: No ADR / docs entry for the new document-repository log emission path; operators have no in-repo reference describing where logs land when ENABLE_OBSERVABILITY=1.
+origin: spec-deferred 01096ca199fb
+location: site/content/en/docs/observability/ (or docs/)
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: Out of scope for a dep-only story; spec does not request docs. Logs observability doc updates belong to a follow-up once tracing.js + ClamAV events (Story 3.4) are wired.
+status: open
+
+### DW-369: Docker image size impact from the four new runtime deps not measured; multi-stage build separation (build vs runtime) not confirmed for document-repository.
+origin: spec-deferred c5eff46dfab7
+location: components/document-repository/Dockerfile
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: Other CVE-remediation stories handled image-size audit for backend; this story did not run the equivalent check for doc-repo. Three OTel packages plus winston-format-json grow node_modules; whether the runtime image picks them up depends on Dockerfile construction.
+status: open
+
+### DW-336: PII body redaction not wired into PIIRedactingLogRecordProcessor
+origin: review-findings-251f99d57-6ae8af8b9
+source_spec: `2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr.md`
+location: components/gov-chat-backend/tracing-pii-logs.js
+severity: high
+reason: OnEmit redacts `logRecord.attributes` via `redactAttributes` but never calls `redactLogRecordBody(logRecord.body)`. Free-form log messages (`logger.info('User ' + email + ' logged in')`) land in VictoriaLogs raw — email, tokens, etc. AD-4 / C-5 require every emitted record to pass through redactLogRecordBody. Code review on commit 6ae8af8b9 caught this; fix landed in the same review cycle by adding the body-redaction call. The `redactLogRecordBody` helper is already exported by `tracing-pii.js` (defined + tested under `pii-body-scrubbing.test.js`). Regression tests added in `tracing-pii-logs.test.js` (4 cases including the explicit body-redaction contract).
+status: resolved
+
+### DW-345: tracing-pii-logs.js — test coverage promotion
+origin: review-findings-251f99d57-6ae8af8b9
+source_spec: `2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr.md`
+location: components/gov-chat-backend/__tests__/tracing-pii-logs.test.js
+severity: medium
+reason: A 4-test file for PIIRedactingLogRecordProcessor existed in the bmad-loop worktree branch but never made it to the main `__tests__/` directory. Without coverage, the 2-6 wiring bugs (processors key, single options constructor) were invisible to CI. Now promoted to main repo as part of the review-followup commit. Status: resolved (4 original + 2 body-redaction cases = 6 tests now in main `__tests__/`).
+status: resolved
+
+### DW-353: stale transport-count comment in logger-functions.test.js
+origin: review-findings-251f99d57-6ae8af8b9
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+location: components/gov-chat-backend/__tests__/logger-functions.test.js
+severity: low
+reason: The comment claimed "4 transports: console + 2 rotate + file" as the post-reconfigure count. With LOG_TO_VICTORIALOGS=1 + ENABLE_OBSERVABILITY=1 the count is 5 (the VictoriaLogsTransport is added by buildTransports). Comment updated to qualify the default-vs-VL case. Status: resolved.
+status: resolved
+
+### DW-354: require path off-by-one (`../../shared/lib/...` vs `../shared/lib/...`)
+origin: review-findings-251f99d57-6ae8af8b9
+source_spec: `2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr.md`
+location: components/gov-chat-backend/tracing.js
+severity: high
+reason: The 2-6 merge introduced `require('../../shared/lib/...')` for boolean-env and otel-batch-config. From `components/gov-chat-backend/tracing.js`, two `..` segments land at the repo root (one too many). The real files are at `components/shared/lib/...`. Production: tracing.js would throw on require when ENABLE_OBSERVABILITY=1, taking down the backend. CI caught via the test suite. Fixed in the review-followup commit.
+status: resolved
+
+### DW-370: No doc-repo-side Jest tests for the parallel-copy PII helpers (`src/tracing-pii.js`, `src/tracing-pii-logs.js`); backend equivalents have `__tests__/tracing-pii.test.js` and
+origin: spec-deferred dd2a12926bd4
+location: components/document-repository/src/__tests__/
+source_spec: `3-2-document-repository-tracing-js-logs-only-path.md`
+severity: medium
+reason: Backend tests load `../tracing-pii` / `../tracing-pii-logs` from `components/gov-chat-backend/`, not from the doc-repo copies. Drift between the two copies is unguarded; the parallel-copy preamble explicitly flags this.
+status: open
+
+### DW-371: Jest `collectCoverageFrom` excludes `src/tracing*.js`, so even if tests are added later they will not raise the coverage gate.
+origin: spec-deferred 66546af3808a
+location: components/document-repository/jest.config.js:30-38
+source_spec: `3-2-document-repository-tracing-js-logs-only-path.md`
+severity: low
+reason: `components/document-repository/jest.config.js` `collectCoverageFrom` lists `routes|services|middleware|controllers|utils` only.
+status: open
+
+### DW-372: No startup validation that `OTEL_EXPORTER_OTLP_ENDPOINT` is set when `ENABLE_OBSERVABILITY=1`; url becomes literal `undefined/v1/logs`.
+origin: spec-deferred c1ec4f899cef
+location: components/document-repository/src/tracing.js
+source_spec: `3-2-document-repository-tracing-js-logs-only-path.md`
+severity: low
+reason: Compose default exists in `env` + `docker-compose.yaml`, but no defensive check in `tracing.js`. Same shape as backend `components/gov-chat-backend/tracing.js` (already tracked as DW-366).
+status: open
+
+### DW-373: No co-located unit test for the seam itself (abstract-port guard, null-options guard, client delegation). The contract is exercised end-to-end by Story 4.5 (melt/victorialogs-client.test.js).
+origin: spec-deferred 77404815a818
+location: components/shared/lib/melt/__tests__/
+source_spec: `4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict.md`
+severity: low
+reason: Review pass identified the seam has no `__tests__` file in this diff. Story 4.5's spec covers axios-mock + normalization; the seam-level invariants (port abstract guard, VictoriaLogsClient null guard, MELT_PROVIDER discriminator) get transitive coverage there.
+status: resolved 2026-09-18 in MR !383
+resolution: `MELT_PROVIDER` future-provider seam removed entirely (601d774b3 + 1fad0a9c0). The discriminator no longer exists — only `victorialogs` provider remains. The seam layer (`components/shared/lib/melt/`) is still in place but the env-driven provider selection is gone; co-located seam test would need to assert against the now-single-provider shape, not a discriminator matrix.
+
+### DW-374: Port-level error contract (timeout / network / auth error types) is not documented. Adapter maps wire failures to errors; consumers must catch `unknown`.
+origin: spec-deferred 131cebddb1fb
+location: n/a
+source_spec: `4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict.md`
+severity: low
+reason: Review pass noted missing error hierarchy on the port. Architecture spine AD-3 / AD-16 keep error handling at the adapter layer, not the port — defer to 4.3 + Epic 5/6 contract tests for the concrete taxonomy.
+status: open
+
+### DW-375: No co-located unit test for the adapter. Contract is exercised by the contract test gate (CAP-3 / CAP-4) in downstream stories (4.5, 5.x).
+origin: spec-deferred 63acc12ee270
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize.md`
+severity: low
+reason: No `__tests__/victorialogs-client.test.js` shipped in this diff. Story 4.5's spec covers axios mock + normalization + AccountID headers + retry behavior + reserved-char escape — adapter-level invariants get transitive coverage there.
+status: open
+
+### DW-376: No `AbortSignal` / cancellation hook on `query()` / `hits()`. Long-running admin calls hold open sockets if the user closes the logs tab.
+origin: spec-deferred ceeb5009616f
+location: n/a
+source_spec: `4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize.md`
+severity: low
+reason: Public methods accept no `signal` parameter; axios is invoked without `cancelToken`. Future Epic 5/6 may want cancellation when the admin UI abandons a request.
+status: open
+
+### DW-377: No retry on transient `query()` / `hits()` 5xx or timeout. AD-16 retry policy applies only to the health probe.
+origin: spec-deferred b0b935749f8d
+location: n/a
+source_spec: `4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize.md`
+severity: low
+reason: AD-16 pins retries only on the lazy health probe (`3×5 s`). Read-only LogSQL queries are idempotent and could safely retry; deferred to a future spike.
+status: open
+
+### DW-378: Adapter-level constants (`HEALTH_PROBE_ATTEMPTS`, `HEALTH_PROBE_BACKOFF_MS`, `DEFAULT_TENANT_ID`, `DEFAULT_LEVEL`, `DEFAULT_SERVICE`) are module-scoped and not overridable per-construction. Test
+origin: spec-deferred 1fda5195801c
+location: n/a
+source_spec: `4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize.md`
+severity: low
+reason: Story 4.5 spec is the venue for test fixture needs; if 4.5 surfaces a need to override these constants, hoist them onto the constructor options then. Module-level constants stay simpler for the production path.
+status: open
+
+### DW-379: `index.js` was edited (load-order change + destructure of `require('./victorialogs-client')`) beyond the spec's listed `files:`. Intent title listed only `victorialogs-client.js` + `package.json`; the
+origin: spec-deferred e91e27889294
+location: components/shared/lib/melt/index.js:94-109
+source_spec: `4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize.md`
+severity: low
+reason: Reviewer (intent-alignment) flagged a Reading A / Reading C divergence: with the spec's two-file scope as-written, the adapter cannot load (circular require, `extends` evaluates to `undefined`). Reading C permits the minimal `index.js` edit; classifying as `bad_spec` would have triggered a revert + re-derivation loop that re-introduces the same edit. Kept as a deferred finding so the spec amendment can be made on a future epic-4 retrospective.
+status: open
+
+### DW-380: No test exercises the real `shared/lib` barrel end-to-end. Every backend / document-repository test that touches `shared-lib` substitutes it via `jest.mock('../shared-lib', …, { virtual: true })` or
+origin: spec-deferred 11f3766328c1
+location: components/shared/lib/tests/
+source_spec: `4-4-shared-lib-index-js-re-export-melt.md`
+severity: low
+reason: Whole-repo `require.*shared/lib'` grep returns 0 hits against the real barrel. `jest.mock('../shared-lib', …, { virtual: true })` appears in `components/gov-chat-backend/__tests__/swagger-config.test.js:8`, `routes/chat-history-routes.test.js:5`; `moduleNameMapper: '.*shared-lib$'` in `components/document-repository/jest.config.js:43`; inline fixture in `components/gov-chat-backend/__tests__/mocks/shared-lib.js` re-exports `parsePositiveInt` only via a direct sibling require, bypassing the barrel.
+status: open
+
+### DW-381: VictoriaLogsAdapter.hits() public method has zero unit-test coverage in this file — title lists `query()`-centric surfaces only; downstream `logs-vl-contract.test.js` (Story 5.8) is the venue.
+origin: spec-deferred a7ae452d9e2b
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: File exercises `query()` end-to-end (probe, params, URL, normalize). `hits()` reshape (`[value, count]` tuples → `Record<string, number>`), its `/select/logsql/hits` URL, its `field` param, and its NaN/null tuple guards are all uncovered. Adapter source at `components/shared/lib/melt/victorialogs-client.js:163-179`.
+status: open
+
+### DW-382: `VL_QUERY_TIMEOUT_MS='0'` env value is not guarded by the `> 0` check that the constructor `timeout` option uses — adapter sets `axios.create({ timeout: 0 })` (interpreted by axios as "no timeout",
+origin: spec-deferred a7cc8e98167b
+location: components/shared/lib/melt/victorialogs-client.js:110-116
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: medium
+reason: Adapter constructor lines 110-116: `parsedEnvTimeout` is checked for `Number.isFinite` only, not `> 0`. Setting `VL_QUERY_TIMEOUT_MS=0` would pass the check and propagate `0` to axios. Pre-existing adapter bug from Story 4.3, not surfaced by Story 4.5's test file.
+status: open
+
+### DW-383: `_ensureHealth()` short-circuits via `if (!this.baseURL) return` when no `baseURL` is supplied — uncovered branch.
+origin: spec-deferred ea1d5504791a
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter line 194: the guard fires before the probe loop, letting `query()` proceed without a probe. No test pins this behaviour.
+status: open
+
+### DW-384: `tenantId` parsing edge cases (`''`, `':7'`, `'42:'`, `'42:7:99'`) are not pinned — only the happy-path `'42:7'`, default `'0:0'`, and missing-project-id `'42'` are tested.
+origin: spec-deferred cb63a21d63b9
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter lines 105-108: `String(resolvedTenant).split(':')` — parts[0]||`'0'` and parts[1]||`'0'` produce non-obvious fallbacks for partial inputs.
+status: open
+
+### DW-385: `_stream` shape edge cases (`null`, string, `{ service: '' }`, `{ environment: null }`) are not pinned.
+origin: spec-deferred 6c1f513d74cf
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter `_normalizeRow` lines 272-274 guard `typeof _stream === 'object'`, but falsy / wrong-type branches are not exercised.
+status: open
+
+### DW-386: `_msg` and `_time` type edge cases (missing, non-string _time such as number/Date, `_msg: 0`/`null`/object → `String(_msg)` coercion of an object) are not pinned.
+origin: spec-deferred 923dc2616cfb
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter lines 248-270: `typeof _time === 'string'` guard excludes non-strings; `String(_msg)` coerces objects. Only `_time: 'not-a-date'` edge case is covered.
+status: open
+
+### DW-387: `query()` param-builder edge cases (`limit: 0` should be included, `fields: []` and non-array `fields` should be omitted, non-array `response.data` should yield `[]`) are not pinned.
+origin: spec-deferred e53218064a32
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter lines 140-146: `if (limit !== undefined && limit !== null)` includes `0`; `if (Array.isArray(fields) && fields.length > 0)` excludes `[]` and non-arrays; line 145 `Array.isArray (response.data)` falls back to `[]`. None exercised.
+status: open
+
+### DW-388: `level` numerics / empty-string encoded events (`fields.level: 0` or `''`) — currently the `level` line in `_normalizeRow` skips them (rawLevel `!== undefined && !== null && String(rawLevel).length >
+origin: spec-deferred 5fcba18a7f1c
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter lines 278-281: `String(rawLevel).length > 0` rejects `''`. Realistic VL wire values like numeric level encodings and empty-string labels are unverified.
+status: open
+
+### DW-389: `VictoriaLogsHealthError` constructed directly (no `cause` → `cause` `undefined`; cause object roundtrip) is never pinned independently of the probe path.
+origin: spec-deferred c9d26e236f0b
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter lines 72-79: typed error class with `name`, `code`, `cause` round-trip. Only validated through one probe-failure `it` block.
+status: open
+
+### DW-390: First co-located `__tests__/` under `components/shared/lib/` — no `jest.config.js` and no `test:shared` CI stage exist, so this file ships without any automated gate.
+origin: spec-deferred 369338b977b8
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: `components/shared/lib/package.json` lists no `jest` devDependency, no `test` script. `.gitlab-ci.yml` has no `test:shared` stage. The file is a co-located unit test for fast local human feedback only — downstream `logs-vl-contract.test.js` (Story 5.8) is the MR-blocking gate. Pattern needs infrastructure follow-up.
+status: open
+
+### DW-391: `HEALTH_PROBE_BACKOFF_MS` constant name conflates "backoff" with "timeout" — the value is used as the per-attempt axios `timeout`, not as an inter-attempt sleep delay.
+origin: spec-deferred b70212233759
+location: components/shared/lib/melt/victorialogs-client.js:55-57
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter lines 55-57 and 200: constant named "BACKOFF_MS" but passed to `axios.get(..., { timeout: HEALTH_PROBE_BACKOFF_MS })`. Pure naming — no behaviour change. A future maintainer could add `await sleep(HEALTH_PROBE_BACKOFF_MS)` between attempts and double the budget without breaking any test.
+status: open
+
+### DW-392: Producer unit-test harness for `post-fixture-to-vl-otlp.sh`: invoke the jq translation portion against tiny fixtures and assert on the produced OTLP shape (severity numbers, timeUnixNano precision,
+origin: spec-deferred a98a4f443ba4
+location: n/a
+source_spec: `5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co.md`
+severity: medium
+reason: The script's 60-line jq programme is the load-bearing piece and is currently exercised only by story 5.8's contract test, which is a consumer-side gate. A standalone test would catch regressions before the contract test runs.
+status: open
+
+### DW-393: Wire the script into CI (`.gitlab-ci.yml` deploy or test job, and optionally a `package.json` test script) so it actually runs before the contract test.
+origin: spec-deferred 987b63be19f6
+location: n/a
+source_spec: `5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co.md`
+severity: medium
+reason: The script ships as a runnable orphan. The deps graph names 5.8 as the consumer, but nothing in this repo invokes the producer yet.
+status: open
+
+### DW-394: Pin the OTel semconv version for `deployment.environment` — semconv 1.27+ renamed the attribute to `deployment.environment.name`. Coordinate with the consumer story before flipping.
+origin: spec-deferred aefd8c4cd986
+location: n/a
+source_spec: `5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co.md`
+severity: low
+reason: The producer currently emits `deployment.environment`. If the downstream VL query / Grafana panel reads `deployment.environment.name`, the attribute will not match.
+status: open
+
+### DW-395: getLogFilesInRange returns synthetic descriptors in VL mode but security-scan-service.js (and admin-dashboard consumers) still treat entries as path strings (`file.endsWith('.gz')`); VL default mode
+origin: spec-deferred eb63601d14cc
+location: components/gov-chat-backend/services/security-scan-service.js:231-246
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: security-scan-service.js:231-246 calls file.endsWith('.gz') on each entry from getLogFilesInRange. No consumer-side test mocks the descriptor shape. Story 5.4 is the natural follow-on.
+status: open
+
+### DW-396: getLogsSummary VL path collapses to a single `service:'all'` bucket per level; file path retains per-type/per-service grouping via legacy groupLogs(). SPEC CAP-3 parity not pinned at this story.
+origin: spec-deferred 7b9a348c4cd2
+location: components/gov-chat-backend/services/logs-service.js:481-506
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: logs-service.js:481-506 returns `{errors:[{service:'all',count:N}]}` vs. groupLogs() returning one bucket per type+service pair. No parity test compares the two paths against the same fixture.
+status: open
+
+### DW-397: VL_QUERY_TIMEOUT_MS is honoured inside the MELT adapter (shared/lib/melt/victorialogs-client.js:110) but is never read or asserted at this story's service-layer surface.
+origin: spec-deferred f76f29fa8266
+location: components/gov-chat-backend/services/logs-service.js
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: Spec acceptance mentions VL_QUERY_TIMEOUT_MS in the title; no test exercises a hung VL query at this layer. Cover transitively via Epic 4 contract tests.
+status: open
+
+### DW-398: VlFilesDisabledError carries `statusCode:503` + `body:{error: 'vl_files_disabled',…}` but the global error handler at `index.js:801-802` reads only `err.statusCode` and `err.message` — wire body is
+origin: spec-deferred 846fa03aa85f
+location: components/gov-chat-backend/index.js:801-802
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: Unit test at logs-service-vl.test.js:453-457 asserts the in-memory body; no route-level test asserts the HTTP wire body. Out-of-scope for this story's `files:` manifest (index.js owned by the BFF shell).
+status: closed
+resolution: Closed as **WONT-FIX** post-T8 (commit `5a3925be4`, 2026-09-26). `VlFilesDisabledError` was deleted together with `ADMIN_LOGS_SOURCE` env switch, `_sourceMode()` per-call read, and the file-source code path. The 503 envelope contract it carried is now an internal implementation detail of `VlUnavailableError` (`{error:'vl_unreachable', message}`) — the body is wired verbatim by the global error middleware at `index.js:799-808`. No further action required.
+
+### DW-399: getLogsInRange VL path reports `total` as the page-window length (rows.length returned by VL with limit=limit+offset) rather than the dataset size in VL. Envelope contract implies a stable total for
+origin: spec-deferred 78d8061fe7a1
+location: components/gov-chat-backend/services/logs-service.js:_getLogsInRangeFromVL
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: logs-service.js `_getLogsInRangeFromVL` constructs `total = rows.length` where `rows = await client.query({limit: limitN + offsetN, ...})`. Fix requires a separate `client.query` with no limit or a `_count` API — performance-cost trade-off that belongs to a Story 5.4 / 5.8 contract-test follow-up.
+status: open
+
+### DW-400: _parseNdjsonContent retry window slices a fixed RE_PARSE_WINDOW_BYTES=4096 from the cursor and concatenates with the broken buffer; if the truncated line happens to complete by appending characters
+origin: spec-deferred da49b96d019a
+location: components/gov-chat-backend/services/logs-service.js:_parseNdjsonContent
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: logs-service.js `_parseNdjsonContent`. The retry buffer should be sliced to the next newline (or a newline-count cap), not a fixed byte count. Edge-case hardening; the 4096-byte window handles the AD-10 kill -9 truncation case today.
+status: open
+
+### DW-401: _acquireReadLock collides on stale /tmp/.logs-read-lock-* sentinels from previously-crashed PIDs whose PID has since been recycled. First read by the new PID throws EEXIST and skips the file until
+origin: spec-deferred cd2027e6b83f
+location: components/gov-chat-backend/services/logs-service.js:_acquireReadLock
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: logs-service.js `_acquireReadLock`. Same hardening as the `_logVlUnavailableOnce` cooldown-file sweep — stale sentinels need either a TTL or a PID-still-alive check at open time.
+status: open
+
+### DW-402: booleanEnv regex is inlined in logs-service.js and mirrors the canonical shared/lib/boolean-env.js helper. One of two regex literals (/^(1|true|TRUE|yes)$/) can drift if the canonical helper adds new
+origin: spec-deferred 721679e9cf70
+location: components/gov-chat-backend/services/logs-service.js:19
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: low
+reason: The inline copy exists to keep __mocks__/shared-lib.js self-contained. Future consolidation when the test mock plumbing stops requiring the inline copy.
+status: open
+
+## Story 5-3 review pass #4 (deferred)
+
+Deferrals captured during the 2026-09-07 round-4 review of `logs-service.js`. HIGH-severity findings were patched in place (separate commits); MEDIUM items deferred per the orchestrator directive. The patch IDs map: P1→err.body middleware, P2→security-scan synthetic descriptors, P3→escapeLogSQL hardenings, P4→level allowlist, P5→NDJSON retry cursor, P6→_sumHits single-key fallback, P7→file-path degraded envelope, P8→throw on unknown dateRange, P9→readdir try/catch, P10→MAX_LOG_FILE_SIZE rewind, P11→MAX_LINES_TO_PROCESS per-file cap, P12→JSDoc-only VL offset note, P13→fs.promises cooldown + incident visibility.
+
+### DW-403: `_getLogsInRangeFromFile` `withinWindow` compares a `yyyy-MM-dd` row field against a full ISO timestamp on both sides of the filter — `row.date >= s && row.date <= e` evaluates false for rows whose timestamp is non-midnight because ASCII `2026-09-01` is shorter than `2026-09-01T08:00:00.000Z`.
+origin: round-4 review (2026-09-07)
+location: components/gov-chat-backend/services/logs-service.js:416
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: high (functional bug, deferred because P11 surfaced it as a side effect)
+reason: The bug means any non-midnight timestamp row never reaches the date filter's positive side. Existing tests happen to use empty `row.date` strings or windows where the comparison accidentally matches. Discovered while writing the P11 per-file cap test — the test had to switch from observing `result.total` to spying `_parseNdjsonContent` because the date filter zeroes rows out. Fix: compare `row.timestamp` against the ISO `s`/`e` (or split s/e to yyyy-MM-dd for the comparison and add an inline note in the slice above the cap).
+status: open
+
+### DW-404: Cross-spec deferral — log-level numeric encodings (`fields.level: 0` or `''`) still collapse to INFO, but the `level: {number}` enum cases (12/13/14/15/16/17 for TRACE/DEBUG/INFO/WARN/ERROR/FATAL per OTel spec) are not mapped. Tracked separately under DW-388 for the level-extraction story.
+origin: round-4 review (2026-09-07)
+location: services/logs-service.js:_extractLevel
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: low
+reason: Out of scope for this story's spec (text-only log sources). Carry-forward.
+status: open (duplicate ref to DW-388)
+
+### DW-405: `_escapeLogSql` strips backslash sequences — but the regex is `\s*\\.[\s\S]*?` greedy across multiple tokens, so a payload like `foo\\bar` followed by a real `keyword` 100 chars later still escapes, but a payload with `\\` as the LAST char is silently dropped without a trailing placeholder. Confirmed in unit tests; behavioural note for when the LogSQL parser changes upstream.
+origin: round-4 review (2026-09-07)
+location: services/logs-service.js:_escapeLogSql
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: low
+reason: P3 patched the high-impact cases (AND/OR/NOT, single-quote, homoglyphs, structural punctuation). Edge case covered by `strips backslash escape sequences` test. Carry-forward only if a real exploit surfaces.
+status: open (informational)
+
+### DW-406: `getLogsInRange` VL path the new JSDoc on P12 documents — but the per-call `window = limit + offset` is unbounded on a malicious caller (no MAX cap on `limit + offset`). Combined with the absence of a total row-count cap on the VL adapter, a single admin UI request can still download megabytes on `/api/admin/logs?limit=10000&offset=990000`. Worth a cap on the window itself.
+origin: round-4 review (2026-09-07)
+location: services/logs-service.js:_getLogsInRangeFromVL
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium (defensive cap, deferred — would need a SPEC change on the envelope contract)
+reason: The hard caps live in the MELT adapter (`VICTORIALOGS_MAX_LIMIT` upstream). Service layer should add an env-tunable server-side ceiling like `MAX_LOG_WINDOW=5000` and clamp `window` accordingly. SPEC CAP-7 implies a session-bound cap; coordinate with the VL transport story before flipping.
+status: open
+
+### DW-407: `_acquireReadLock` lock-path collisions across PIDs (P10-rewind + earlier) — the lock sentinel uses `${baseName}-${process.pid}`. If PID recycles and a new process opens the same sentinel, it would see EEXIST and silently skip its own file. PID-recycle is a real platform behaviour on long-lived hosts.
+origin: round-4 review (2026-09-07)
+location: services/logs-service.js:_acquireReadLock (line 1188)
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: Tracked separately under DW-401. Carry-forward.
+status: open (duplicate ref to DW-401)
+
+### DW-408: `security-scan-service.js` (P2 synthetic descriptors) — deferred to file path only; VL default mode still passes `{date, service:'victorialogs', source:'victorialogs', query}` objects around the rest of the call chain. Add an integration test that walks the full admin logs route on VL mode to confirm no consumer crashes. Carry-forward under DW-395.
+origin: round-4 review (2026-09-07)
+location: services/security-scan-service.js
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: low
+reason: P2 patched the synthetic-descriptor detection; full VL-mode integration coverage is a follow-up test concern.
+status: open (duplicate ref to DW-395)
+
+### DW-409: `_withVlFailOpen` still returns the `fallback` synchronously on the catch branch WITHOUT a `degraded:true` flag when the inner function returned successfully but the call itself never reached VL (e.g. `_getVlClient()` threw on initialization). Trace the edge case before flipping the contract.
+origin: round-4 review (2026-09-07)
+location: services/logs-service.js:_withVlFailOpen
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: low
+reason: Behaviour change would touch envelope contract; not in the immediate scope of P1-P13.
+status: open
+
+
+### DW-410: admin-dashboard-service still parses logs with the legacy F4 regex in `debugYesterdayLogs` (line 573), `runSecurityScan` (line 849), and `getSystemHealth` (lines 103-108). Story 5.4 only targeted `getLogs` (line 525) and the rollover path. Same root cause as F4: the NDJSON producer no longer emits the triple-bracket format those parsers rely on, so each of those endpoints also returns an empty `logs[]`. Worth a follow-up story that delegates the rest to `LogsService`.
+origin: review-defer
+location: components/gov-chat-backend/services/admin-dashboard-service.js:103-108, 573, 849
+source_spec: `5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate.md`
+severity: medium
+reason: Same F4 regression that story 5.4 fixed for `getLogs` still affects `debugYesterdayLogs`, `runSecurityScan`, and `getSystemHealth`. LogsService already owns the parsing; the admin layer should delegate end-to-end before any of these endpoints are relied upon.
+status: pending
+
+## Resolved in MR !343 (admin-logs umbrella / observability hardening, 2026-09-25)
+
+Findings addressed by 3 commits on `feat/admin-logs-victorialogs/prd`. Scope drift acknowledged in MR description (admin-logs + observability telemetry hardening). New findings uncovered after these commits belong in a follow-up MR, not this one.
+
+| # | Commit | Subject | Findings addressed |
+|---|---|---|---|
+| 1 | `dc870f81a` | `fix(admin-logs): address 15 MR round-2 review findings` | #1-#2 from round-2 review (MELT count proxy + `fields.total` access), #3 (_processLogsViaVL failed_login regex), #4-#5 (_getVlClient stuck-promise + searchLogs parallel count), #6a (logger.js service drift), #7-#11 (admin-dashboard getLogs/searchUsers/AQL LIMIT/parseInt), #13a/15 (4 PII routes + /logs/summary wrap + user-stats debug dump), #14 (tracing.js droppedCounter init order) |
+| 2 | `09946df53` | `fix(admin-logs): forward full querystring on /api/admin/logs` | follow-up: route widening closes the half-wired gap left by #10 (service now accepts `q`+`offset` but route only forwarded `{limit, level, service}`) |
+| 3 | `d0e4891f2` | `fix(admin-logs): address round-2 reviewer critical + important findings` | round-2 reviewer critical: frontend `getLogsSummary` wire-contract; important: rewrite misleading `npm_package_name` comment; minor: tightened two test regexes (finding #11 searchLogs.count anchored on call site; finding #14 droppedCounter order using `sdk.start();` semicolon-terminated) |
+
+Pipelines: 9854 (commit 2), 9855 (commit 3) — both SUCCESS. Pipeline 9853 (commit 1) auto-canceled by the second push.
+
+### Remaining xhigh findings (open follow-up stories — 2026-09-25)
+
+Discovered by `code-review xhigh !343` after the three commits above. Carried forward as stories; do NOT block the MR !343 merge.
+
+### DW-411: `firstLiteral` returns empty string for vulnerability patterns whose source starts with `(` (silently drops patterns in VL-mode scan)
+origin: round-2 xhigh code-review (2026-09-25)
+location: components/gov-chat-backend/services/security-scan-service.js:407 (extractor) / 416 (skip on `!token`)
+severity: critical
+reason: `firstLiteral` regex `/[A-Za-z0-9_][A-Za-z0-9_ .:/=+-]*/` rejects a leading `(`. The `command_injection` pattern (source starts with `(`, severity critical) and `registration_failure` (low) are silently dropped in `_processLogsViaVL`. Live VL deployment loses these detections entirely. Same root-cause as DW-412 — fix the `firstLiteral` extractor once.
+status: open
+
+### DW-412: `attack_attempt` VL query narrows `_msg` to just the first literal (XSS/CSRF never reach JS regex re-test)
+origin: round-2 xhigh code-review (2026-09-25)
+location: components/gov-chat-backend/services/security-scan-service.js:411 (VL query body)
+severity: high
+reason: Pattern `/SQL injection|XSS|CSRF/i` — `firstLiteral` returns `SQL injection`; VL `q: _msg:~"SQL injection"` returns only rows containing the literal `SQL injection`. XSS-only or CSRF-only payloads never enter the JS test loop. Same root-cause as DW-411.
+status: open
+
+### DW-413: VL-mode scan `limit: 1000` hardcap underreports `instanceCount` beyond 1000 hits per token per 10-day window
+origin: round-2 xhigh code-review (2026-09-25)
+location: components/gov-chat-backend/services/security-scan-service.js:414, 480, 522 (three call sites)
+severity: medium
+reason: Three `client.query({ q, limit: 1000 })` call sites cap the page fetched per pattern/token. The `matchedCount` counter only sees those rows; beyond 1000 per token per 10-day window is silently undercounted. Severity-percentile dashboards distort. Same fix path: switch to `client.count()` from the new helper added in dc870f81a, or paginate the VL query.
+status: open
+
+### DW-414: VL-mode scan path has no `TIMEOUT_PERIOD` guard (file-mode has one at line 281)
+origin: round-2 xhigh code-review (2026-09-25)
+location: components/gov-chat-backend/services/security-scan-service.js:290 (early-return to `_processLogsViaVL`)
+severity: medium
+reason: File-mode batch loop checks `Date.now() - startTime > TIMEOUT_PERIOD` at every i+=concurrencyLimit step. The VL-mode early-return branch skips this — multi-day scans that exceed `TIMEOUT_PERIOD` keep running until each pattern completes. No client-side cancellation either.
+status: open
+
+### DW-415: Admin `/api/admin` router-level access log emits `userSub: req.user?.sub` BEFORE `keycloakAuthMiddleware` populates `req.user`
+origin: round-2 xhigh code-review (2026-09-25)
+location: components/gov-chat-backend/routes/admin-routes.js:27 (router.use access log)
+severity: high
+reason: The router.use access log runs before `keycloakAuthMiddleware` mounts on the same router (`/api/admin/*` routes set `keycloakAuth: true` in `ROUTE_CONFIGS`). `req.user` is undefined for every admin request. Comment claims the field is logged until auth completes — in practice the field is permanently `undefined`, defeating the audit trail. Forensic correlation via VL is broken.
+status: open
+
+### DW-416: OTel Collector body-level email redactor only matches JSON-quoted `"email":"…"` — plain-text emails leak into VL
+origin: round-2 xhigh code-review (2026-09-25)
+location: configs/otel/otel-collector-config.yaml:149
+severity: high
+reason: Body redactor regex is JSON-quoted-only. `ERROR: send failed to alice@example.com` (Python traceback / uvicorn access log / generic error) reaches VL verbatim. Attribute-level redactor covers `IsMap(attributes)` only.
+status: open
+
+### DW-417: OTel Collector emits `severity_text: WARNING` for Python WARNING logs; admin `level=warn` filter silently misses them
+origin: round-2 xhigh code-review (2026-09-25)
+location: configs/otel/otel-collector-config.yaml:332 (`stamp_log_metadata_from_msg` transform)
+severity: high
+reason: `JsonLogFormatter.format()` writes `levelname` verbatim (`WARNING`). Collector transform produces `severity_text='WARNING'`. `LogsService._normalizeLevelFilter` normalizes caller `WARNING`→`WARN` and queries `severity_text:WARN`; VL row is `WARNING` so the filter returns zero rows. WARN bucket of `getLogsSummary` similarly misses every Python WARN row.
+status: open
+
+### DW-418: OTel Collector `stamp_log_metadata_from_msg` lacks the idempotency guard its comment claims
+origin: round-2 xhigh code-review (2026-09-25)
+location: configs/otel/otel-collector-config.yaml:308-310 (comment) / 332 (statement)
+severity: low
+reason: Comment at 308-310 promises "only writes when severity_text is unset or Unspecified". Actual OTTL at line 332 unconditionally `set(severity_text, ToUpperCase(ParseJSON(body)['level']))` for any string body starting with `{`. No `severity_text == nil or severity_text == 'Unspecified'` guard. Currently dormant (no OTel SDK `LoggingHandler` in `tracing.py`); flips to a live bug the day an OTel SDK logging path is reintroduced.
+status: open (latent)
+
+### DW-419: `admin-dashboard-service.getSystemHealth` error-rate VL filter excludes `chatqna` / `dataprep` / `retriever` under default `ENABLE_OBSERVABILITY=0`
+origin: round-2 xhigh code-review (2026-09-25)
+location: components/gov-chat-backend/services/admin-dashboard-service.js:114 (errorRate filter); same defect at 530 (debugYesterdayLogs)
+severity: high
+reason: Filter is `service.name:(backend OR document-repository OR genieai-* OR reranker)`. Under `ENABLE_OBSERVABILITY=0`, OTel SDK never sets `service.name`; Compose label forwards the block name instead (`chatqna-xeon-backend-server`, `dataprep-arango-service`, `retriever-arango-service`). The `genieai-*` glob only matches the OTel-SDK path. `errorRate` tile undercounts by ~60% of the fleet.
+status: open
+
+### DW-420: `LogsService.getLogsInRange` / `searchLogs` fall back to `allRows.length` for `total` when `client.count()` throws — pagination ambiguity when slice = limit
+origin: round-2 xhigh code-review (2026-09-25)
+location: components/gov-chat-backend/services/logs-service.js:410 (and searchLogs:706 pre-fix; post-fix parallel call wraps try/catch)
+severity: medium
+reason: Both methods wrap `client.count({...})` in try/catch — on rejection, `total` falls back to `allRows.length`. If the page slice happens to fill `limit` exactly (100 rows) during a partial VL outage, the UI reports `total = 100` ("one page" indicator) instead of VL's true match count. Operators see a mis-paginated panel with a green "no more pages" indicator.
+status: open
+
+### DW-421: `tracing-background.js` `SCOPE_VERSION` falls back to `'1.0.0'` when the cwd walk fails to find a `package.json` (Docker runtime)
+origin: round-2 xhigh code-review (2026-09-25)
+location: components/shared/lib/tracing-background.js:39-64 (cwd walk + fallback)
+severity: medium
+reason: Production Docker cwd is `/app` — no `package.json` there. `SCOPE_VERSION` becomes `'1.0.0'` for manual `withBackgroundSpan` spans (e.g. `otel.shutdown` in tracing.js). Auto-instrumented spans carry the correct Resource value; manual spans diverge. Cross-version forensic regression checks fail. Always triggers in Docker — move to IN-scope on this MR.
+status: open
+
+### DW-422: JSDoc on `_parseJsonlResponse` claims `/select/logsql/hits` returns `application/stream+json` — VL returns single JSON object
+origin: round-2 xhigh code-review (2026-09-25)
+location: components/shared/lib/melt/victorialogs-client.js:343 (comment block)
+severity: low
+reason: Code uses `JSON.parse(response.data)` (single object) for `/hits` and `_parseJsonlResponse` for `/query` — asymmetric on purpose, code is correct. JSDoc misleads future maintainers into unifying the parsing path, breaking `/hits` response handling and admin per-service bucket counts.
+status: open
+
+### DW-423: `alert-rules-disk-threshold.test.js` asserts `gt[]` but `alert-rules.yml:146,176` uses `type: lt` against `vm_free_disk_space_bytes` — test never wired to CI, wrong assertion, deleted as dead code
+origin: round-2 xhigh code-review (2026-09-25)
+location: configs/grafana/provisioning/__tests__/alert-rules-disk-threshold.test.js (DELETED in commit d0e4891f2 follow-up)
+severity: medium (test-correctness only)
+reason: Test was added in commit `bda03488e` (2026-09-17) with no `.gitlab-ci.yml` hookup — `.gitlab-ci.yml` does not gate `configs/grafana/provisioning/__tests__/` in any pipeline. Also the assertion was wrong: yml uses `vm_free_disk_space_bytes` + `type: lt` (correct for "low free space" semantic), test claimed `gt` is mandatory. Both layers of neglect stacked. Resolution: deleted the test outright — it had been dormant for 8 days since the fix commit and was producing no signal. Alerting yml itself is left untouched; its on-call behaviour is correct.
+status: RESOLVED in MR !343 follow-up commit (test file deleted 2026-09-25)

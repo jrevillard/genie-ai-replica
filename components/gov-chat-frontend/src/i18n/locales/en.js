@@ -233,7 +233,7 @@ export default {
     contentManagement: 'CONTENT MANAGEMENT',
     knowledgeHierarchy: 'Knowledge Hierarchy',
     documentManagement: 'Document Management',
-    noLogsFound: 'No logs found for today',
+    noErrorsOrWarnings: 'No errors or warnings today',
     invalidLogsResponse: 'Invalid logs summary response structure',
     logsSummaryError: 'Failed to load logs summary',
     buttons: {
@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Database Size',
     totalTables: 'Total Tables',
     logManagement: 'Log Management',
-    rolloverLogs: 'Rollover Logs',
     searchLogs: 'Search Logs',
     logTime: 'Time',
     logLevel: 'Level',
@@ -324,10 +323,6 @@ export default {
         error: 'Error during database optimization',
         loading: 'Optimizing database...'
       },
-      rolloverLogs: {
-        success: 'Log rollover completed successfully',
-        loading: 'Rolling over logs...'
-      },
       searchLogs: {
         success: 'Log search completed',
         loading: 'Searching logs...'
@@ -375,7 +370,6 @@ export default {
       warningLogs: 'Warning Logs',
       noErrorLogs: 'No error logs recorded today.',
       noWarningLogs: 'No warning logs recorded today.',
-      infoLogsNote: 'Info logs are not shown in the summary. Use the search function to view all log types.',
       searchResults: 'Latest Search Results',
       entriesFound: 'entries found',
       viewAllResults: 'View All Results',
@@ -387,11 +381,14 @@ export default {
         authFailed: 'Authentication failure',
         lowDiskSpace: 'Disk space below threshold',
         slowQuery: 'Slow query performance',
-        rateLimit: 'Rate limit approaching'
+        rateLimit: 'Rate limit approaching',
+        invalidToken: 'Invalid token',
+        fileNotFound: 'File not found'
       },
       logSearch: {
         noResultsFound: 'No logs matched your search criteria',
-        resultsFound: 'Found {count} log entries'
+        resultsFound: 'Found {count} log entries',
+        degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {
@@ -424,6 +421,10 @@ export default {
       envFileRecommendation:
         'Ensure environment files are not accessible from web directories and server configurations properly block access to sensitive files.',
       gitRepoRecommendation: 'Make sure .git directories are properly secured and not accessible from the web.',
+      logPatternMatches: 'Log Pattern Matches',
+      patternMatchNote:
+        'Terms found in log text. The scan reports the substring, not a verified attack — read the line.',
+      patternMatchSummaryNote: '(substring found in log text, not a verified attack)',
       noVulnerabilitiesFound: 'No Vulnerabilities Found',
       systemSecure: 'Your system appears to be secure. Continue monitoring regularly.',
       loadingScan: 'Loading scan results...',
@@ -511,6 +512,16 @@ export default {
       confirmIngestSelected: 'Are you sure you want to ingest {count} selected file(s)?',
       ingestQueuedSuccess: '{count} file(s) have been queued for ingestion.',
       ingestQueuedError: 'An error occurred during the batch ingestion process.',
+      ingestPartialFailure: '{successCount} of {count} ingested. Failed: {detail}',
+      ingestAllFailed: 'All {count} file(s) failed: {detail}',
+      retractSelected: 'Retract Selected',
+      confirmRetractTitle: 'Confirm Batch Retraction',
+      confirmRetractSelected: 'Are you sure you want to retract {count} selected file(s)?',
+      retract: 'Retract',
+      retractQueuedSuccess: '{count} file(s) have been queued for retraction.',
+      retractQueuedError: 'An error occurred during the batch retraction process.',
+      retractPartialFailure: '{successCount} of {count} retracted. Failed: {detail}',
+      retractAllFailed: 'All {count} file(s) failed: {detail}',
       uploadSuccessMultiple: '{count} file(s) uploaded successfully.',
       linkSubmitSuccess: 'Successfully crawled and saved "{fileName}".',
       actionSuccess: 'Action "{action}" on file {fileId} was successful.',

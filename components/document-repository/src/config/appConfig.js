@@ -99,8 +99,7 @@ const config = {
 
   // Logging configuration
   logging: {
-    level: process.env.LOG_LEVEL || 'info',
-    file: process.env.LOG_FILE || 'app.log'
+    level: process.env.LOG_LEVEL || 'info'
   }
 };
 

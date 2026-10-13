@@ -160,7 +160,7 @@
             "type": "prometheus",
             "uid": "${DS_VICTORIAMETRICS}"
           },
-          "expr": "sum(rate(http_server_duration_milliseconds_count[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_request_duration_seconds_count[5m])) by (service_name)\nor\nsum(rate(http_server_duration_milliseconds_count[5m])) by (service_name)",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -199,7 +199,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "ms",
+            "axisLabel": "s",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "bars",
@@ -258,7 +258,7 @@
             "type": "prometheus",
             "uid": "${DS_VICTORIAMETRICS}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_milliseconds_bucket{service_name=~\"$service\"}[5m])) by (le, service_name))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[5m])) by (le, service_name))",
           "legendFormat": "p95 {{service_name}}",
           "refId": "A"
         }
@@ -325,7 +325,7 @@
           "type": "prometheus",
           "uid": "${DS_VICTORIAMETRICS}"
         },
-        "definition": "label_values(http_server_duration_milliseconds_count, service_name)",
+        "definition": "label_values({__name__=~\"http_server_(request_)?duration_(milliseconds|seconds)_count\"}, service_name)",
         "hide": 0,
         "includeAll": true,
         "label": "Service",
@@ -333,7 +333,7 @@
         "name": "service",
         "options": [],
         "query": {
-          "query": "label_values(http_server_duration_milliseconds_count, service_name)",
+          "query": "label_values({__name__=~\"http_server_(request_)?duration_(milliseconds|seconds)_count\"}, service_name)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,

@@ -14,7 +14,7 @@ weight: 1
       for the public sector — multilingual, DPG-compliant, deployable on your infrastructure.
     </p>
     <div class="g-cta-row">
-      <a class="btn btn-primary g-cta" href="/docs/core/project-overview/">Get started</a>
+      <a class="btn btn-primary g-cta" href="/docs/get-started/">Get started</a>
       <a class="btn btn-outline g-cta" href="https://opensource.unicc.org/un/itu/genie-ai">Access on GitLab</a>
     </div>
   </div>

@@ -1,9 +1,30 @@
 const NodeClam = require('clamscan');
 const { Readable } = require('stream');
+const { execFileSync } = require('child_process');
 
 const appConfig = require('../config/appConfig');
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
+
+// Cached ClamAV signature version, stamped on every scan event.
+// Query `clamdscan --version` once at module load and cache the trimmed
+// stdout. The daemon is co-located in the doc-repo container so the call
+// is cheap, but emitting one process spawn per file scan would still
+// dominate scan latency for sub-millisecond scans. ENOENT / spawn
+// failures / empty output all fall back to 'unknown' so a missing daemon
+// during boot never breaks the upload path.
+const clamavSignatureVersion = (() => {
+  try {
+    const raw = execFileSync('clamdscan', ['--version'], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 5000
+    });
+    const out = raw && raw.length ? raw.toString().trim() : '';
+    return out || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+})();
 
 class SecurityService {
   constructor() {
@@ -106,6 +127,84 @@ class SecurityService {
       return await this.clamscan.scanStream(this._convertToStream(buffer));
     } catch (error) {
       throw new Error(`Buffer scan failed: ${error.message}`, { cause: error });
+    }
+  }
+
+  /**
+   * Scans a buffer for viruses and emits the ClamAV observability events.
+   *
+   * Emits exactly one terminal event per call: `clamav.scan.complete` on
+   * success, `clamav.scan.timeout` when the underlying scanner rejects
+   * with an ETIMEDOUT-class error, or `clamav.scan.failed` for any
+   * other failure. The `clamav.scan.start` event is emitted before the
+   * scan begins so latency can be measured end-to-end.
+   *
+   * Emitted `clamav_result` values form a 4-value enum
+   * (`OK` / `FOUND` / `ERROR` / `TIMEOUT`) — deliberately wider than the
+   * clean/infected/error triple, because a timeout and a scan error are
+   * different operational signals and a Grafana timeout-rate alert cannot
+   * distinguish them if both report `error`.
+   *
+   * @param {string} fileId - Opaque file ID for correlation with admin dashboard
+   * @param {Buffer} buffer - File buffer to scan
+   * @returns {Promise<Object>} Scan result with `{isInfected, viruses}` shape
+   */
+  async scanFile(fileId, buffer) {
+    // Buffer guard — null/undefined buffer previously read .length
+    // outside the try and threw TypeError that bypassed both the
+    // start and failed events — the latency marker would then be
+    // unmatched by any terminal event. Defensive type check keeps the
+    // pairing intact.
+    const fileSizeBytes = buffer && typeof buffer.length === 'number' ? buffer.length : 0;
+
+    // No `clamav_result` / `clamav_duration_ms` on start: outcome is unknown
+    // at this point. Stamping `OK` would double-count clean scans and skew
+    // VL aggregations (the same defect as logging `ERROR` before the scan
+    // runs). The start event is a latency marker only.
+    logger.info('clamav.scan.start', {
+      file_id: fileId,
+      file_size_bytes: fileSizeBytes,
+      clamav_signature_version: clamavSignatureVersion
+    });
+
+    const startedAt = Date.now();
+    try {
+      const result = await this.scanBuffer(buffer);
+      const durationMs = Math.max(0, Date.now() - startedAt);
+      logger.info('clamav.scan.complete', {
+        file_id: fileId,
+        file_size_bytes: fileSizeBytes,
+        clamav_signature_version: clamavSignatureVersion,
+        clamav_duration_ms: durationMs,
+        clamav_result: result && result.isInfected ? 'FOUND' : 'OK'
+      });
+      return result;
+    } catch (error) {
+      const message = (error && error.message) || '';
+      const isTimeout = Boolean(
+        error &&
+        (error.code === 'ETIMEDOUT' ||
+          (error.cause && error.cause.code === 'ETIMEDOUT') ||
+          /timed\s*out|ETIMEDOUT/i.test(message))
+      );
+      const durationMs = Math.max(0, Date.now() - startedAt);
+      const fields = {
+        file_id: fileId,
+        file_size_bytes: fileSizeBytes,
+        clamav_signature_version: clamavSignatureVersion,
+        clamav_duration_ms: durationMs,
+        clamav_result: isTimeout ? 'TIMEOUT' : 'ERROR'
+      };
+      // Failure paths use warn/error so Grafana alert rules (error-rate,
+      // timeout-rate) can fire. info-level silent failures would never
+      // trigger an alert and would defeat the latency-drift /
+      // silent-failure surface the event exists to provide.
+      if (isTimeout) {
+        logger.warn('clamav.scan.timeout', fields);
+      } else {
+        logger.error('clamav.scan.failed', fields);
+      }
+      throw error;
     }
   }
 }

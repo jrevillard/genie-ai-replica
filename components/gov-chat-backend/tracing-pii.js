@@ -32,4 +32,9 @@ function redactAttributes(attributes) {
   return redacted;
 }
 
-module.exports = { redactValue, isSensitiveKey, redactAttributes, SENSITIVE_KEY_PATTERNS };
+module.exports = {
+  redactValue,
+  isSensitiveKey,
+  redactAttributes,
+  SENSITIVE_KEY_PATTERNS
+};

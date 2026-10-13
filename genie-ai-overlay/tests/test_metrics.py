@@ -159,60 +159,8 @@ class TestExports:
         assert chatqna.metrics.chat_rag_duration_seconds is mock_histogram
 
 
-# ---------------------------------------------------------------------------
-# PII enforcement — _sanitize_attributes helper
-# ---------------------------------------------------------------------------
-
-
-class TestPIIEnforcement:
-    """Tests that PII keys are stripped from metric attributes."""
-
-    def test_sanitize_strips_pii_keys(self, _mock_tracing_meter):
-        _mock_tracing_meter.get_meter.return_value = MagicMock()
-
-        import importlib
-
-        import chatqna.metrics
-
-        importlib.reload(chatqna.metrics)
-
-        attrs = {
-            "response_type": "streaming",
-            "user_query": "secret question",
-            "llm_response": "secret answer",
-            "session_id": "abc123",
-            "conversation_id": "xyz789",
-            "error": "true",
-        }
-        result = chatqna.metrics.sanitize_attributes(attrs)
-        assert result == {"response_type": "streaming", "error": "true"}
-
-    def test_pii_keys_include_expected_fields(self, _mock_tracing_meter):
-        _mock_tracing_meter.get_meter.return_value = MagicMock()
-
-        import importlib
-
-        import chatqna.metrics
-
-        importlib.reload(chatqna.metrics)
-
-        # _PII_KEYS is re-exported from tracing module via chatqna.metrics
-        importlib.reload(chatqna.metrics)
-        pii = chatqna.metrics._PII_KEYS
-        assert "user_query" in pii
-        assert "llm_response" in pii
-        assert "session_id" in pii
-        assert "conversation_id" in pii
-
-    def test_sanitize_returns_new_dict(self, _mock_tracing_meter):
-        _mock_tracing_meter.get_meter.return_value = MagicMock()
-
-        import importlib
-
-        import chatqna.metrics
-
-        importlib.reload(chatqna.metrics)
-
-        attrs = {"response_type": "sync"}
-        result = chatqna.metrics.sanitize_attributes(attrs)
-        assert result is not attrs
+# NOTE: TestPIIEnforcement consolidated into tests/test_service_metrics.py
+# TestCrossServicePIIEnforcement — the cross-service version is the canonical
+# keeper (real `tracing.sanitize_attributes` import + parametrized across all
+# services). The chatqna.metrics wrapper version was a duplicate. See
+# test-audit campaign MR for context.

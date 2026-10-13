@@ -13,30 +13,69 @@ const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of file
 
 /**
  * Sanitize a filename for use in Content-Disposition headers.
- * Strips CRLF characters to prevent header injection and applies
- * RFC 5987 encoding for non-ASCII characters.
+ * Strips header-breaking characters from BOTH the disposition token and the
+ * filename, and applies RFC 5987 encoding for non-ASCII characters.
+ * @param {string} disposition - typically 'attachment' or 'inline'
  * @param {string} filename
  * @returns {string} Sanitized header value (e.g. `attachment; filename="..."; filename*=UTF-8''...`)
  */
 function buildContentDisposition(disposition, filename) {
-  // Strip CRLF to prevent header injection
-  const sanitized = filename.replace(/[\r\n]/g, '');
+  // Strip characters that break the Content-Disposition header or allow
+  // header/value injection. Empirically verified that Node's setHeader
+  // rejects ALL C0 controls (0x00-0x1F) AND DEL (0x7F) with ERR_INVALID_CHAR
+  // — see the !494 follow-up tests. 0x80-0xFF are accepted (latin1 range).
+  //   0x00-0x1F + 0x7F — forbidden in HTTP header values (Node ERR_INVALID_CHAR)
+  //   "               — would close the quoted-string prematurely, masking
+  //                     the trailing filename and leaking subsequent chars
+  // Also strip from the disposition token itself: callers today hardcode
+  // 'attachment'/'inline', but the function is module-exported and may
+  // eventually receive user-controlled input — defense in depth.
+  const safeDisposition = String(disposition || 'attachment').replace(/[\x00-\x1F\x7F"]/g, ''); // eslint-disable-line no-control-regex
+  // Null/undefined filenames are coerced to '' so callers don't get a
+  // TypeError on a malformed ArangoDB document (file.file_name missing).
+  const safe = filename == null ? '' : String(filename).replace(/[\x00-\x1F\x7F"]/g, ''); // eslint-disable-line no-control-regex
 
-  // Check for non-ASCII characters without using control characters in regex
-  const hasNonAscii = sanitized.split('').some((char) => char.charCodeAt(0) > 127);
+  // Check for non-ASCII characters via a single regex test (cheaper than
+  // split+some walk on the hot path).
+  const hasNonAscii = /[^\x00-\x7F]/.test(safe); // eslint-disable-line no-control-regex
   if (hasNonAscii) {
-    const encoded = encodeURIComponent(sanitized).replace(/['()]/g, escape);
-    return `${disposition}; filename="${sanitized}"; filename*=UTF-8''${encoded}`;
+    const encoded = encodeURIComponent(safe).replace(/['()]/g, escape);
+    return `${safeDisposition}; filename="${safe}"; filename*=UTF-8''${encoded}`;
   }
-  return `${disposition}; filename="${sanitized}"`;
+  return `${safeDisposition}; filename="${safe}"`;
 }
 
 // Maximum items allowed in batch fileIds operations
 const MAX_BATCH_SIZE = 50;
 
-// Schema for batch fileIds validation
+// Schema for batch fileIds validation.
+// Reject purely numeric strings up-front: semantic file_ids are timestamped
+// (e.g. `1774623200119_e9887fa8`) while ArangoDB _keys are bare integers.
+// A frontend regression that re-sends _key would otherwise silently hit
+// "not found" instead of triggering a 400 with a diagnostic.
+//
+// chunkOverlap cap (1000) matches LangChain's RecursiveCharacterTextSplitter
+// default chunk_size — values beyond chunk_size collapse the splitter to a
+// single degenerate chunk and silently break ingestion without an error.
+const fileIdPattern = /^\d+$/;
 const batchFileIdsSchema = Joi.object({
-  fileIds: Joi.array().items(Joi.string().min(1)).min(1).max(MAX_BATCH_SIZE).required()
+  fileIds: Joi.array()
+    .items(Joi.string().min(1).pattern(fileIdPattern, { invert: true }))
+    .min(1)
+    .max(MAX_BATCH_SIZE)
+    .required(),
+  // Optional per-request overlap; consumed only by ingestMultipleFiles.
+  // `.allow(null)` preserves the legacy "null means env fallback" contract;
+  // `.max(...)` caps DoS via LangChain splitter collapse (see comment above).
+  chunkOverlap: Joi.number().integer().min(0).max(1000).allow(null).optional()
+});
+
+// Per-request overlap for the single-file ingest route. Same Joi contract
+// as the batch schema so both endpoints honor string coercion ("200" -> 200)
+// and reject floats/negatives identically — without a schema, ingestFile
+// would bypass the validator and silently drop string overlap values.
+const singleIngestSchema = Joi.object({
+  chunkOverlap: Joi.number().integer().min(0).max(1000).allow(null).optional()
 });
 
 // Schema for file upload validation
@@ -972,7 +1011,7 @@ class FileController {
 
   // --- Helper for ingesting a single file ---
 
-  async _ingestFileById(fileId) {
+  async _ingestFileById(fileId, chunkOverlap) {
     const { file, base64String } = await this._getFileBase64(fileId);
     // Case-insensitive: dataprep persists the status capitalized ('Ingested'), not lowercase
     if (file.dataprep && (file.dataprep.status || '').toLowerCase() === 'ingested') {
@@ -986,7 +1025,9 @@ class FileController {
       fileType: file.file_type,
       fileLabels: file.labels,
       storagePath: file.storage_path,
-      fileBase64: base64String
+      fileBase64: base64String,
+      // Optional per-request override; dataprep falls back to env DATAPREP_CHUNK_OVERLAP when omitted.
+      chunkOverlap: Number.isInteger(chunkOverlap) ? chunkOverlap : undefined
     });
     if (response.data.success) {
       await metadataService.updateMetadata(fileId, {
@@ -1007,7 +1048,11 @@ class FileController {
   async ingestFile(req, res) {
     try {
       const { fileId } = req.params;
-      const result = await this._ingestFileById(fileId);
+      // Same Joi contract as the batch endpoint — string "200" coerces to 200,
+      // floats/negatives rejected, missing field accepted as undefined.
+      const { value: singleBody } = singleIngestSchema.validate(req.body || {});
+      const chunkOverlap = Number.isInteger(singleBody.chunkOverlap) ? singleBody.chunkOverlap : undefined;
+      const result = await this._ingestFileById(fileId, chunkOverlap);
       if (result.success) {
         return res.json({ success: true, message: 'File ingested successfully' });
       } else {
@@ -1037,20 +1082,30 @@ class FileController {
       if (error) {
         return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
-      const { fileIds } = value;
+      const { fileIds, chunkOverlap: validatedOverlap } = value;
+      // Use the Joi-validated value rather than req.body: Joi has already
+      // coerced strings ("200" → 200) and rejected floats/negatives/strings-
+      // that-cannot-coerce. Reading from req.body bypassed that contract.
+      const batchOverlap = Number.isInteger(validatedOverlap) ? validatedOverlap : undefined;
       const results = [];
       for (const fileId of fileIds) {
         try {
-          const result = await this._ingestFileById(fileId);
+          const result = await this._ingestFileById(fileId, batchOverlap);
           results.push({ fileId, ...result });
         } catch (error) {
           results.push({ fileId, success: false, error: error.message });
         }
       }
-      res.json({ success: true, results });
+      const successCount = results.filter((r) => r.success).length;
+      return res.status(207).json({
+        success: successCount > 0,
+        successCount,
+        failureCount: results.length - successCount,
+        results
+      });
     } catch (error) {
       logger.error('Ingest multiple files error:', error);
-      res.status(500).json({ success: false, error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
     }
   }
 
@@ -1120,10 +1175,16 @@ class FileController {
           results.push({ fileId, success: false, error: error.message });
         }
       }
-      res.json({ success: true, results });
+      const successCount = results.filter((r) => r.success).length;
+      return res.status(207).json({
+        success: successCount > 0,
+        successCount,
+        failureCount: results.length - successCount,
+        results
+      });
     } catch (error) {
       logger.error('Retract multiple files error:', error);
-      res.status(500).json({ success: false, error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
     }
   }
 
@@ -1379,3 +1440,10 @@ class FileController {
 }
 
 module.exports = new FileController();
+// Re-export module-scoped helpers so test suites can import the canonical
+// implementations instead of re-declaring them inline (test-coupling junk).
+// Backwards-compatible: the default export remains the FileController instance.
+module.exports.buildContentDisposition = buildContentDisposition;
+module.exports.batchFileIdsSchema = batchFileIdsSchema;
+module.exports.singleIngestSchema = singleIngestSchema;
+module.exports.MAX_BATCH_SIZE = MAX_BATCH_SIZE;

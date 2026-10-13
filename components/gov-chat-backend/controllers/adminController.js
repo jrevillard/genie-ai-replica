@@ -1,7 +1,7 @@
 const AdminDashboardService = require('../services/admin-dashboard-service');
 const LogsService = require('../services/logs-service');
-const { logger, triggerLogRollover } = require('../shared-lib');
-const { parsePositiveInt } = require('../shared-lib/validation-utils');
+const { logger } = require('../shared-lib');
+const { parsePositiveInt } = require('../shared-lib');
 
 const adminController = {
   async getSystemHealth(req, res) {
@@ -111,7 +111,12 @@ const adminController = {
 
   async getLogsSummary(req, res) {
     try {
-      const logsService = new LogsService();
+      // Use the module-level singleton (the exported `module.exports =
+      // logsService` at services/logs-service.js:989 IS the singleton)
+      // instead of `new LogsService()` — the per-request instance
+      // bypasses the singleton's `setVictoriaLogsClient(client)` seam
+      // and any future setter behaviour (auth headers, mock injection).
+      const logsService = LogsService;
       await logsService.init();
       logger.info('Controller: Fetching logs summary');
       const options = req.query;
@@ -132,7 +137,7 @@ const adminController = {
 
   async searchLogs(req, res) {
     try {
-      const logsService = new LogsService();
+      const logsService = LogsService;
       await logsService.init();
       logger.info('Controller: Searching logs');
       const result = await logsService.searchLogs(req.query);
@@ -149,7 +154,7 @@ const adminController = {
 
   async debugYesterdayLogs(req, res) {
     try {
-      const logsService = new LogsService();
+      const logsService = LogsService;
       await logsService.init();
       logger.info('Controller: Debugging yesterday logs');
       const result = await logsService.debugYesterdayLogs();
@@ -162,25 +167,6 @@ const adminController = {
       res.status(500).json({
         success: false,
         message: 'Failed to debug yesterday logs',
-        error: error.message
-      });
-    }
-  },
-
-  async rolloverLogs(req, res) {
-    try {
-      logger.info('Controller: Triggering log rollover');
-      triggerLogRollover();
-      res.json({
-        success: true,
-        message: 'Logs rolled over successfully',
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      logger.error(`Error rolling over logs: ${error.message}`, { stack: error.stack });
-      res.status(500).json({
-        success: false,
-        message: 'Failed to rollover logs',
         error: error.message
       });
     }
@@ -221,27 +207,6 @@ const adminController = {
       res.status(500).json({
         success: false,
         message: 'Failed to fetch security metrics',
-        error: error.message
-      });
-    }
-  },
-
-  async runSecurityScan(req, res) {
-    try {
-      const adminDashboardService = new AdminDashboardService();
-      await adminDashboardService.init();
-      logger.info('Controller: Running security scan');
-      const scanResults = await adminDashboardService.runSecurityScan();
-      res.json({
-        success: true,
-        message: 'Security scan completed',
-        data: scanResults
-      });
-    } catch (error) {
-      logger.error(`Error running security scan: ${error.message}`, { stack: error.stack });
-      res.status(500).json({
-        success: false,
-        message: 'Failed to run security scan',
         error: error.message
       });
     }

@@ -17,6 +17,16 @@ from jose import JWSError, jwt
 
 logger = logging.getLogger("GENIE.AI_CHATQNA")
 
+
+class JwksUnavailableError(Exception):
+    """
+    Keycloak JWKS endpoint is unreachable and no cached keys are
+    available. Distinct from a bad-token 401 so the route layer can
+    surface IdP outages as 503 Service Unavailable rather than masking
+    them as client 401s.
+    """
+
+
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KC_REALM = os.getenv("KC_REALM", "genie")
 KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
@@ -78,7 +88,12 @@ async def _fetch_jwks():
                 logger.warning(f"JWKS refresh failed, using cached keys: {e}")
                 return _jwks_keys
             logger.error(f"JWKS fetch failed and no cached keys: {e}")
-            return None
+            # Re-raise as a typed exception so the route layer can
+            # distinguish IdP-outage (503) from invalid-token (401).
+            # The previous None-return made both cases surface as the
+            # same 'Token validation failed' 401, masking Keycloak
+            # outages from operator dashboards.
+            raise JwksUnavailableError(str(e)) from e
 
 
 def _find_key(keys, kid):
@@ -146,6 +161,14 @@ async def validate_token(token: str) -> dict | None:
     except JWSError as e:
         logger.warning(f"Token signature verification failed: {e}")
         return None
+    except JwksUnavailableError:
+        # Re-raise typed IdP-outage so the route layer's 503 handler
+        # can distinguish Keycloak unreachable (503) from invalid
+        # token (401). Bare `except Exception` here previously
+        # converted it to a 401 — masking outages from operator
+        # dashboards (see SPEC admin-logs CAP-5 + the parallel VL
+        # `VlUnavailableError` contract).
+        raise
     except Exception as e:
         logger.error(f"Token validation error: {e}")
         return None

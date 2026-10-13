@@ -5,9 +5,18 @@
 import os
 import time
 
+from fastapi import HTTPException
 from opentelemetry.trace import Status, StatusCode
 
-from tracing import get_meter, get_tracer, sanitize_attributes, setup_trace_logging, setup_tracing
+from tracing import (
+    get_meter,
+    get_tracer,
+    install_uvicorn_access_logging,
+    sanitize_attributes,
+    setup_json_logging,
+    setup_trace_logging,
+    setup_tracing,
+)
 
 setup_tracing("genieai-reranker")
 
@@ -37,11 +46,16 @@ from comps import (
 from comps.cores.proto.api_protocol import ChatCompletionRequest, RerankingRequest, RerankingResponse
 from comps.cores.proto.docarray import LLMParamsDoc, LVMVideoDoc, RerankedDoc, SearchedDoc, SearchedMultimodalDoc
 from comps.cores.telemetry.opea_telemetry import opea_telemetry
-from comps.rerankings.src.integrations.genieai_tei_reranker import GenieTEIReranking  # noqa: F401
+from comps.rerankings.src.integrations.genieai_tei_reranker import (  # noqa: F401
+    GenieTEIReranking,
+    RerankerInputTooLongError,
+)
 from pydantic import Field
 
 logger = CustomLogger("opea_reranking_microservice")
 setup_trace_logging("opea_reranking_microservice")
+setup_json_logging("opea_reranking_microservice")
+install_uvicorn_access_logging()
 logflag = os.getenv("LOGFLAG", False)
 
 
@@ -107,6 +121,23 @@ async def reranking(
             _rerank_requests.add(1, _rerank_attrs)
             _rerank_duration.record(_rerank_latency, _rerank_attrs)
             return reranking_response
+
+        except RerankerInputTooLongError as e:
+            # Translate the typed wrapper exception into an HTTP 422 with a
+            # recognisable error_type so chatqna's orchestrator can catch it
+            # and return an abstention. We do not increment the generic
+            # rag.rerank.requests{error=true} — the wrapper-side
+            # rag.rerank.input_too_long counter already covers this case.
+            span.record_exception(e)
+            span.set_status(Status(StatusCode.ERROR, str(e)))
+            logger.warning(f"Reranker input too long (microservice): {e}")
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": str(e),
+                    "error_type": "RerankerInputTooLong",
+                },
+            ) from e
 
         except Exception as e:
             # Record error metric

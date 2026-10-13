@@ -10,12 +10,35 @@ The Collector receives telemetry from instrumented application services and expo
 
 ```
 Application Services (OTel SDK)
-  → OTLP HTTP (:4318) → Collector → probabilistic_sampler → batch → VictoriaTraces (:10428)
-                                           → batch → prometheusremotewrite → VictoriaMetrics (:8428)
+  → OTLP HTTP (:4318) → Collector
+    ├─ [traces]  probabilistic_sampler → transform/kong_span_names → batch → otlp_http/victoriatraces → VictoriaTraces (:10428)
+    └─ [metrics] batch → prometheusremotewrite → VictoriaMetrics (:8428)
 
 Docker Container Logs (fluentd logging driver)
-  → fluent_forward (:24224) → Collector → otlp/http → VictoriaLogs (:9428)
+  → fluent_forward (:24224) → Collector
+    └─ [logs]    transform/pii_redact → transform/extract_envelope_trace_context
+                 → transform/stamp_service_name_from_container → transform/stamp_log_metadata_from_msg
+                 → transform/normalize_log_body → batch → otlp_http → VictoriaLogs (:9428)
 ```
+
+### Logs Pipeline Detail
+
+The logs pipeline runs **six transforms** before batch, in this fixed order. Each is idempotent and `error_mode: ignore` (except `pii_redact` which is `propagate` — see comment in `otel-collector-config.yaml`). Skipping a transform breaks the downstream ones.
+
+1. **`transform/pii_redact`** — Strips password / token / email / JWT / API key / Bearer values from string-bodied Winston envelopes and from `attributes` Maps. Runs FIRST so every downstream transform only sees redacted data.
+2. **`transform/extract_envelope_trace_context`** — Lifts `trace_id` / `span_id` from the Winston/OPEA JSON envelope (via `ExtractPatterns`) into OTel LogRecord attributes. Runs BEFORE `stamp_log_metadata_from_msg` (which replaces `body` with the inner `.message` field, erasing the envelope keys).
+3. **`transform/stamp_service_name_from_container`** — Reads the `com.docker.compose.service` label forwarded by the fluentd driver's `labels:` option and writes it to `resource.attributes["service.name"]`. Falls back to `fluent.tag` regex parsing for label-less records (older Compose v1.x, edge cases). Idempotent: only sets when `service.name` is empty.
+4. **`transform/stamp_log_metadata_from_msg`** — Stamps `severity_text` + `severity_number` (canonical OTel form) by parsing the Winston JSON envelope or the uvicorn `INFO:` access-log prefix; then rewrites `body` to the inner `.message` field so VictoriaLogs `_msg` carries the human-readable line instead of the raw envelope.
+5. **`transform/normalize_log_body`** — Parses Morgan (`HTTP_REQUEST: METHOD PATH STATUS TIME ms`) and uvicorn (`INFO: IP:PORT - "METHOD PATH" STATUS`) plain-text access logs into `http.method` / `http.path` / `http.status_code` attributes and rewrites `body` to a compact `"METHOD PATH STATUS"` form. Also strips the `[YYYY-MM-DD HH:MM:SS]` prefix from Kong / migration / keycloak-config startup logs (VL already indexes `_time`).
+6. **`batch`** — Buffers into 1024-row batches (5s timeout, 2048 max) before export to VictoriaLogs.
+
+### Traces Pipeline Detail
+
+`probabilistic_sampler` (controlled by `OTEL_TRACES_SAMPLER_RATE`) → `transform/kong_span_names` (rewrites Kong's hardcoded `"kong"` span name to `"METHOD /path"` using `http.method` + `http.route` attributes) → `batch` → `otlp_http/victoriatraces`.
+
+### Metrics Pipeline Detail
+
+`batch` → `prometheusremotewrite` (single hop — no transforms needed).
 
 ### Trace Storage
 
@@ -59,8 +82,24 @@ Docker sends container stdout/stderr to the Collector's `fluent_forward` receive
 - **fluent_forward** (`:24224`) — Receives container logs from Docker's fluentd logging driver. Tags include service name via `genie.{{.Name}}` template.
 
 ### Processors
-- **Batch** — Buffers telemetry before export (5s timeout, 1024 batch size)
-- **probabilistic_sampler** — Controls trace sampling rate via `OTEL_TRACES_SAMPLER_RATE` env var (default: 100.0 = 100%)
+
+**Batch**
+- Buffers telemetry before export (5s timeout, 1024 batch size, 2048 max)
+
+**probabilistic_sampler**
+- Controls trace sampling rate via `OTEL_TRACES_SAMPLER_RATE` env var (default: 100.0 = 100%)
+
+**Logs pipeline transforms** (six, run in order — see *Logs Pipeline Detail* above):
+
+- **`transform/pii_redact`** — Strips password / token / email / JWT / API key / Bearer values from Winston JSON envelopes and from `attributes` Maps. `error_mode: propagate` so a regression surfaces immediately.
+- **`transform/extract_envelope_trace_context`** — Lifts `trace_id` / `span_id` from the Winston/OPEA JSON envelope into OTel LogRecord attributes via `ExtractPatterns` + named capture groups.
+- **`transform/stamp_service_name_from_container`** — Writes the `com.docker.compose.service` label (forwarded by the fluentd driver's `labels:` option) onto `resource.attributes["service.name"]`, with a `fluent.tag` regex fallback for label-less records.
+- **`transform/stamp_log_metadata_from_msg`** — Parses Winston JSON / uvicorn `INFO:` access logs and stamps `severity_text` + `severity_number` (canonical OTel form); replaces `body` with the inner `.message` field so VictoriaLogs `_msg` is the human-readable line.
+- **`transform/normalize_log_body`** — Parses Morgan / uvicorn plain-text access logs into `http.method` / `http.path` / `http.status_code` attributes; rewrites `body` to compact `"METHOD PATH STATUS"`. Strips the `[YYYY-MM-DD HH:MM:SS]` prefix from Kong / migration / keycloak-config startup logs.
+
+**Traces pipeline transform**:
+
+- **`transform/kong_span_names`** — Rewrites Kong's hardcoded `"kong"` span name to `"METHOD /path"` using `http.method` + `http.route` attributes (with a `http.url` regex fallback).
 
 ### Exporters
 - **prometheusremotewrite** — Exports Prometheus-compatible metrics to VictoriaMetrics at `http://victoriametrics:8428/api/v1/write`
@@ -75,8 +114,8 @@ Docker sends container stdout/stderr to the Collector's `fluent_forward` receive
 | Pipeline | Flow |
 |----------|------|
 | metrics | otlp → batch → prometheusremotewrite |
-| traces | otlp → probabilistic_sampler → batch → victoriatraces |
-| logs | fluent_forward → batch → otlp/http |
+| traces | otlp → probabilistic_sampler → transform/kong_span_names → batch → victoriatraces |
+| logs | fluent_forward → transform/pii_redact → transform/extract_envelope_trace_context → transform/stamp_service_name_from_container → transform/stamp_log_metadata_from_msg → transform/normalize_log_body → batch → otlp_http |
 
 ## Sampling Configuration
 

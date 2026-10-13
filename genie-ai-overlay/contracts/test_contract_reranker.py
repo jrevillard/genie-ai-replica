@@ -178,4 +178,49 @@ def test_reranker_component_loader_uses_expected_name(comps):
         )
 
 
+def test_real_wrapper_raises_reranker_input_too_long_on_tei_422(comps, monkeypatch):
+    """Real GenieTEIReranking (vendored at build) must convert TEI 422
+    Validation into RerankerInputTooLongError with telemetry side-effects.
+
+    Runs INSIDE the built reranker image (contracts/, real comps) so any
+    divergence between the local file and the OPEA path-resolution
+    contract (sys.path, site-packages layout) is caught here.
+    """
+    from comps.rerankings.src.integrations.genieai_tei_reranker import (
+        GenieTEIReranking,
+        RerankerInputTooLongError,
+    )
+
+    reranker = GenieTEIReranking.__new__(GenieTEIReranking)
+    reranker.base_url = "http://mock-tei:80"
+
+    # Build a real SearchedDoc-shaped input.
+    import asyncio
+    from types import SimpleNamespace
+
+    import aiohttp
+    import pytest
+
+    async def _run():
+        mock_doc = SimpleNamespace(text="x" * 50000)
+        mock_input = SimpleNamespace(
+            initial_query="what is X?",
+            input="what is X?",
+            retrieved_docs=[mock_doc],
+        )
+
+        tei_422 = {
+            "error": "Input validation error: `inputs` must have less than 1024 tokens. Given: 19505",
+            "error_type": "Validation",
+        }
+        session = _harness.FakeAiohttpSession(responses={"/rerank": (tei_422, 422)})
+        monkeypatch.setattr(aiohttp, "ClientSession", lambda *a, **k: session)
+
+        with pytest.raises(RerankerInputTooLongError) as exc_info:
+            await reranker.invoke(mock_input)
+        assert "Given: 19505" in str(exc_info.value)
+
+    asyncio.run(_run())
+
+
 # Trigger contract jobs

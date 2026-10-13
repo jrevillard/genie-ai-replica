@@ -55,30 +55,24 @@
               <DsSelect
                 id="logService"
                 v-model="searchParams.service"
-                :placeholder="translate('admin.logSearch.allServices', 'All Services')"
+                :disabled="servicesLoading && availableServices.length === 0"
               >
-                <option value="API Gateway">
-                  {{ translate('admin.services.apiGateway', 'API Gateway') }}
+                <option value="">
+                  {{ translate('admin.logSearch.allServices', 'All Services') }}
                 </option>
-                <option value="Auth Service">
-                  {{ translate('admin.services.authService', 'Auth Service') }}
-                </option>
-                <option value="Data Service">
-                  {{ translate('admin.services.dataService', 'Data Service') }}
-                </option>
-                <option value="Storage">
-                  {{ translate('admin.services.storage', 'Storage') }}
-                </option>
-                <option value="Cache">
-                  {{ translate('admin.services.cache', 'Cache') }}
-                </option>
-                <option value="Database">
-                  {{ translate('admin.services.database', 'Database') }}
-                </option>
-                <option value="External API">
-                  {{ translate('admin.services.externalApi', 'External API') }}
+                <option v-for="svc in availableServices" :key="svc.name" :value="svc.name">
+                  {{ svc.name }} ({{ svc.count }})
                 </option>
               </DsSelect>
+              <!-- Service-name dropdown is populated from /api/admin/logs/summary
+                   (the `services` array, which queries VL `hits` with
+                   `field=service.name` for every distinct service that emitted
+                   a log in the requested window). Each option uses the EXACT
+                   OTel resource attribute value, so the phrase match
+                   `service.name:"<exact>"` on the backend hits. Sorted by
+                   log volume (most active first). Refresh on dialog mount;
+                   if VL is unreachable the dropdown stays empty and the
+                   default "All Services" option remains selected. -->
             </div>
           </div>
 
@@ -119,7 +113,7 @@
                   stroke-linejoin="round"
                   class="spin-icon"
                 >
-                  <path d="M21 12a9 0 1 1-6.219-8.56"></path>
+                  <path d="M21 12a9 9 1 1 1-6.219-8.56"></path>
                 </svg>
                 <svg
                   v-else
@@ -163,6 +157,9 @@
 
         <!-- Search results -->
         <div v-if="hasSearched" class="search-results" data-test-id="search-results">
+          <div v-if="banner" class="degraded-banner" role="status" data-test-id="degraded-banner">
+            {{ banner }}
+          </div>
           <div class="results-header">
             <h3>
               {{ translate('admin.logSearch.results', 'Search Results') }}
@@ -185,7 +182,23 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(log, index) in searchResults" :key="index">
+                <!-- Keyed on row content, not position. `:key="index"` would
+                     let Vue reuse a DOM node when a new search returns a
+                     different set, carrying per-row state (selection, focus,
+                     highlight) onto an unrelated log entry. The trailing
+                     index keeps genuinely-duplicate rows distinct.
+
+                     Note this is belt-and-braces today: `performSearch` bumps
+                     `tableKey` on the parent `<table>`, so the whole table is
+                     already remounted between searches. Keep both — the
+                     parent key exists for the dynamic message column
+                     (`ensureMessageColumnExists`), which is not a row-level
+                     concern, and this one keeps the rows correct
+                     independently of it. -->
+                <tr
+                  v-for="(log, index) in searchResults"
+                  :key="`${log.date}-${log.time}-${log.service}-${log.message}-${index}`"
+                >
                   <td>{{ log.date || 'N/A' }}</td>
                   <td>{{ log.time }}</td>
                   <td>
@@ -261,12 +274,62 @@ export default {
       isSearching: false,
       searchResults: [],
       tableKey: 0,
-      searchError: null
+      searchError: null,
+      lastResponseDegraded: false,
+      // Populated from /api/admin/logs/summary on mount.
+      availableServices: [],
+      servicesLoading: false
     };
   },
-  mounted() {},
-  updated() {},
+  computed: {
+    banner() {
+      if (!this.hasSearched || !this.lastResponseDegraded) return null;
+      return this.translate(
+        'admin.logSearch.degraded',
+        'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
+      );
+    }
+  },
+  mounted() {
+    this.loadServices();
+  },
   methods: {
+    /**
+     * Populate the service dropdown with every distinct service.name
+     * value that emitted a log in the last 24h. Failure (VL outage,
+     * 401 after token expiry, network) leaves the dropdown empty and
+     * the placeholder text "All Services" remains selected — searches
+     * still work, they just don't get a service filter from the UI.
+     */
+    async loadServices() {
+      this.servicesLoading = true;
+      try {
+        const today = this.formatDate(new Date());
+        // `getLogsSummary` returns the full axios response envelope
+        // (`{ data, status, headers, ... }`), not just `.data` — the
+        // wire contract for `/admin/*` endpoints (AdminDashboard.vue
+        // reads `response.data.errors` etc.). The `services` array
+        // lives on `.data.services` after axios unwrapping.
+        const summary = await adminDashboardService.getLogsSummary({
+          date: today,
+          level: ''
+        });
+        const services = Array.isArray(summary?.data?.services) ? summary.data.services : [];
+        this.availableServices = services
+          .filter((s) => s && s.name)
+          .map((s) => ({ name: s.name, count: s.count || 0 }))
+          .sort((a, b) => b.count - a.count);
+      } catch (err) {
+        // VL outage / 401 / network — fall back to an empty dropdown.
+        // Console-only logging: the dropdown stays usable (manual
+        // typing still works); operators see the degraded banner from
+        // the rest of the page if VL is truly down.
+        console.warn('[LogSearchDialog] failed to load service list:', err?.message || err);
+        this.availableServices = [];
+      } finally {
+        this.servicesLoading = false;
+      }
+    },
     translate(key, fallback = '') {
       if (!this.$i18n) return fallback;
       try {
@@ -334,7 +397,16 @@ export default {
         }
         const response = await adminDashboardService.searchLogs(searchParams);
         let logs = [];
+        this.lastResponseDegraded = false;
         if (response && response.data) {
+          // T8 contract: VL outage surfaces as HTTP 503 + body
+          // `{error: 'vl_unreachable', message}` — the legacy
+          // `response.data.degraded` boolean envelope is gone. The
+          // axios interceptor lets the 503 propagate as a rejected
+          // promise (handled by the catch block below), but a soft
+          // 503 from a non-default error path can still arrive here
+          // — surface the degraded banner in both cases.
+          this.lastResponseDegraded = response.status === 503 || response.data?.error === 'vl_unreachable';
           logs = response.data.logs || response.data.data?.logs || [];
           if (this.searchParams.level && logs.length > 0) {
             if (this.searchParams.level === 'WARN') {
@@ -362,6 +434,7 @@ export default {
         console.error('Error searching logs:', error);
         this.searchError = error.message || 'An error occurred while searching logs';
         this.searchResults = [];
+        this.lastResponseDegraded = false;
         this.$emit('search-completed', []);
       } finally {
         this.isSearching = false;
@@ -379,6 +452,7 @@ export default {
       this.hasSearched = false;
       this.searchResults = [];
       this.searchError = null;
+      this.lastResponseDegraded = false;
     },
     exportLogs() {
       if (!this.searchResults.length) return;
@@ -552,6 +626,15 @@ export default {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+
+.degraded-banner {
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--warning-bg);
+  color: var(--warning);
+  font-size: var(--text-base);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
 }
 
 .results-header {

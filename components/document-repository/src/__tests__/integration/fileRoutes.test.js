@@ -754,10 +754,51 @@ describe('File Routes Integration', () => {
         .post('/api/files/ingest')
         .send({ fileIds: ['file-1', 'file-2'] });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(207);
       expect(res.body.success).toBe(true);
+      expect(res.body.successCount).toBe(2);
+      expect(res.body.failureCount).toBe(0);
       expect(res.body.results).toHaveLength(2);
       expect(axios.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects purely numeric fileIds (would indicate a frontend _key regression) with 400', async () => {
+      const res = await request(app)
+        .post('/api/files/ingest')
+        .send({ fileIds: ['39933124', '39933120'] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/validation/i);
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('returns 207 with mixed per-file outcomes through real HTTP stack', async () => {
+      const mockFile1 = { ...mockFileRecord, file_id: '1774623200119_e9887fa8' };
+
+      metadataService.getMetadataById.mockImplementation((fileId) => {
+        if (fileId === '1774623200119_e9887fa8') return Promise.resolve(mockFile1);
+        // second file: not found
+        return Promise.resolve(null);
+      });
+      readFile.mockResolvedValue(Buffer.from('test file content'));
+      access.mockResolvedValue();
+      axios.post.mockResolvedValue({ data: { success: true, chunk_count: 5 } });
+      metadataService.updateMetadata.mockResolvedValue({
+        ...mockFile1,
+        dataprep: { status: 'Ingesting' }
+      });
+
+      const res = await request(app)
+        .post('/api/files/ingest')
+        .send({ fileIds: ['1774623200119_e9887fa8', '1774620171830_9589f57b'] });
+
+      expect(res.status).toBe(207);
+      expect(res.body.successCount).toBe(1);
+      expect(res.body.failureCount).toBe(1);
+      expect(res.body.results[0]).toMatchObject({ fileId: '1774623200119_e9887fa8', success: true });
+      expect(res.body.results[1].fileId).toBe('1774620171830_9589f57b');
+      expect(res.body.results[1].success).toBe(false);
+      expect(res.body.results[1].error).toMatch(/not found/i);
     });
   });
 

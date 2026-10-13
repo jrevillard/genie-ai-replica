@@ -77,7 +77,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(http_requests_total{service_name=\"genie-backend\"}[5m])) by (http_route)",
+          "expr": "sum(increase(http_requests_total{service_name=\"backend\"}[5m])) by (http_route)",
           "legendFormat": "{{http_route}}",
           "refId": "A"
         }
@@ -141,17 +141,17 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum(rate(http_request_duration_seconds_bucket{service_name=\"genie-backend\"}[5m])) by (le, http_route))",
+          "expr": "histogram_quantile(0.5, sum(rate(http_request_duration_seconds_bucket{service_name=\"backend\"}[5m])) by (le, http_route))",
           "legendFormat": "P50",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service_name=\"genie-backend\"}[5m])) by (le, http_route))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service_name=\"backend\"}[5m])) by (le, http_route))",
           "legendFormat": "P95",
           "refId": "C"
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service_name=\"genie-backend\"}[5m])) by (le, http_route))",
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service_name=\"backend\"}[5m])) by (le, http_route))",
           "legendFormat": "P99",
           "refId": "D"
         }
@@ -410,7 +410,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(http_requests_total{http_status_code=~\"5..\"}[5m])) / sum(increase(http_requests_total[5m])) * 100",
+          "expr": "sum(increase(http_requests_total{http_response_status_code=~\"5..\"}[5m])) / sum(increase(http_requests_total[5m])) * 100",
           "legendFormat": "Backend 5xx Rate",
           "refId": "K"
         },

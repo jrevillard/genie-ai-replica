@@ -233,7 +233,7 @@ export default {
     contentManagement: 'GERENCIAMENTO DE CONTEÚDO',
     knowledgeHierarchy: 'Hierarquia de Conhecimento',
     documentManagement: 'Gerenciamento de Documentos',
-    noLogsFound: 'Nenhum log encontrado para hoje',
+    noErrorsOrWarnings: 'Nenhum erro ou aviso hoje',
     invalidLogsResponse: 'Estrutura de resposta do resumo de logs inválida',
     logsSummaryError: 'Falha ao carregar o resumo de logs',
     buttons: {
@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Tamanho do Banco de Dados',
     totalTables: 'Total de Tabelas',
     logManagement: 'Gerenciamento de Logs',
-    rolloverLogs: 'Rolar Logs',
     searchLogs: 'Buscar Logs',
     logTime: 'Tempo',
     logLevel: 'Nível',
@@ -325,10 +324,6 @@ export default {
         error: 'Erro durante a otimização do banco de dados',
         loading: 'Otimizando banco de dados...'
       },
-      rolloverLogs: {
-        success: 'Rolagem de logs concluída com sucesso',
-        loading: 'Rolando logs...'
-      },
       searchLogs: {
         success: 'Busca de logs concluída',
         loading: 'Buscando logs...'
@@ -376,8 +371,6 @@ export default {
       warningLogs: 'Logs de Aviso',
       noErrorLogs: 'Nenhum log de erro registrado hoje.',
       noWarningLogs: 'Nenhum log de aviso registrado hoje.',
-      infoLogsNote:
-        'Logs de informação não são mostrados no resumo. Use a função de busca para visualizar todos os tipos de log.',
       searchResults: 'Últimos Resultados de Busca',
       entriesFound: 'entradas encontradas',
       viewAllResults: 'Ver Todos os Resultados',
@@ -389,11 +382,15 @@ export default {
         authFailed: 'Falha na autenticação',
         lowDiskSpace: 'Espaço em disco abaixo do limite',
         slowQuery: 'Desempenho de consulta lento',
-        rateLimit: 'Limite de taxa se aproximando'
+        rateLimit: 'Limite de taxa se aproximando',
+        invalidToken: 'Token inválido',
+        fileNotFound: 'Arquivo não encontrado'
       },
       logSearch: {
         noResultsFound: 'Nenhum log corresponde aos seus critérios de busca',
-        resultsFound: 'Encontradas {count} entradas de log'
+        resultsFound: 'Encontradas {count} entradas de log',
+        degraded:
+          'Mostrando resultados parciais devido a uma interrupção do VictoriaLogs. Algumas entradas de registro recentes podem estar faltando.'
       }
     },
     security: {
@@ -427,6 +424,10 @@ export default {
         'Garanta que arquivos de ambiente não sejam acessíveis de diretórios web e configurações de servidor bloqueiem adequadamente o acesso a arquivos sensíveis.',
       gitRepoRecommendation:
         'Certifique-se de que diretórios .git estejam adequadamente seguros e não acessíveis da web.',
+      logPatternMatches: 'Padrões de log encontrados',
+      patternMatchNote:
+        'Termos encontrados no texto dos logs. A verificação reporta a substring, não um ataque confirmado — leia a linha.',
+      patternMatchSummaryNote: '(substring encontrada no texto dos logs, não um ataque confirmado)',
       noVulnerabilitiesFound: 'Nenhuma Vulnerabilidade Encontrada',
       systemSecure: 'Seu sistema parece seguro. Continue monitorando regularmente.',
       loadingScan: 'Carregando resultados da varredura...',
@@ -516,6 +517,16 @@ export default {
       confirmIngestSelected: 'Tem certeza de que deseja ingerir {count} arquivo(s) selecionado(s)?',
       ingestQueuedSuccess: '{count} arquivo(s) foram enfileirados para ingestão.',
       ingestQueuedError: 'Ocorreu um erro durante o processo de ingestão em lote.',
+      ingestPartialFailure: '{successCount} de {count} arquivo(s) ingerido(s). Falharam: {detail}',
+      ingestAllFailed: 'Todos os {count} arquivo(s) falharam: {detail}',
+      retractSelected: 'Retirar Selecionados',
+      confirmRetractTitle: 'Confirmar Retirada em Lote',
+      confirmRetractSelected: 'Tem certeza de que deseja retirar {count} arquivo(s) selecionado(s)?',
+      retract: 'Retirar',
+      retractQueuedSuccess: '{count} arquivo(s) foram enfileirados para retirada.',
+      retractQueuedError: 'Ocorreu um erro durante o processo de retirada em lote.',
+      retractPartialFailure: '{successCount} de {count} arquivo(s) retirado(s). Falharam: {detail}',
+      retractAllFailed: 'Todos os {count} arquivo(s) falharam: {detail}',
       uploadSuccessMultiple: '{count} arquivo(s) carregados com sucesso.',
       linkSubmitSuccess: 'Rastreado e salvo "{fileName}" com sucesso.',
       actionSuccess: 'Ação "{action}" no arquivo {fileId} foi bem-sucedida.',

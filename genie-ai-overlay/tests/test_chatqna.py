@@ -2,6 +2,7 @@
 
 import ast
 import copy
+import json
 from datetime import date
 from enum import Enum
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -24,6 +25,7 @@ from chatqna.genieai_chatqna import (
     align_inputs,
     align_outputs,
 )
+from core import embedding_query_prefix as core_query_prefix
 
 
 # ---------------------------------------------------------------------------
@@ -396,11 +398,108 @@ class TestAlignInputs:
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             llm_params = {}
             inputs = {"text": "Hello", "other": "value"}
-            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            # Non-BGE embedding model → no prefix; raw query passes through.
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "text-embedding-3-small"),
+            ):
                 result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
             assert "input" in result
             assert result["input"] == "Hello"
             assert "text" not in result
+
+        def test_default_bge_model_applies_prefix(self):
+            """Issue #1035: default TEI_EMBED_MODEL is BAAI/bge-large-en-v1.5 →
+            query is prefixed before the embedding microservice call."""
+
+            expected = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "Hello"}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == expected + "Hello"
+
+        def test_bge_prefix_applied_to_query_single(self):
+            """Issue #1035: BGE-large-en-v1.5 requires query instruction prefix at the
+            embedding microservice call site (one prefix per query, not per passage)."""
+
+            expected = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "What are drought-resistant bean varieties?"}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"),
+            ):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == expected + "What are drought-resistant bean varieties?"
+
+        def test_bge_prefix_applied_to_query_batch(self):
+            """History-blend path: both query and history strings receive the prefix
+            before the batched TEI call (BGE asymmetry must hold for both vectors)."""
+
+            expected = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "elaborate on this", "_blend_history_text": "prior turn", "_blend_alpha": 0.5}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"),
+            ):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == [
+                expected + "elaborate on this",
+                expected + "prior turn",
+            ]
+
+        def test_instructor_prefix_applied_to_query(self):
+            """Generalized: hkunlp/instructor uses task-specific prefix."""
+
+            expected = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["hkunlp/instructor"]
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "legal question"}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "hkunlp/instructor-base"),
+            ):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == expected + "legal question"
+
+        def test_no_prefix_model_passes_raw_text(self):
+            """Models without an instruction entry (BGE-m3, mxbai) → raw text."""
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "plain query"}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "BAAI/bge-m3"),
+            ):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == "plain query"
+
+        def test_user_override_via_user_query_instructions(self):
+            """Deployer-supplied EMBEDDING_QUERY_INSTRUCTIONS overrides built-in."""
+
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "hi"}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "my-org/bge-finetune"),
+                patch.object(
+                    core_query_prefix, "_USER_QUERY_INSTRUCTIONS", (("my-org/bge-finetune", "Custom prefix: "),)
+                ),
+            ):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == "Custom prefix: hi"
 
     # --- RETRIEVER ---
     class TestRetrieverInput:
@@ -428,7 +527,11 @@ class TestAlignInputs:
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             llm_params = {}
             inputs = {"text": "elaborate on this", "_blend_history_text": "prior turn", "_blend_alpha": 0.5}
-            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            # Non-BGE model → no prefix; raw strings pass through.
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "text-embedding-3-small"),
+            ):
                 result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
             # Batched input: [query, history]
             assert result["input"] == ["elaborate on this", "prior turn"]
@@ -441,7 +544,10 @@ class TestAlignInputs:
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             llm_params = {}
             inputs = {"text": "standalone query"}
-            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "text-embedding-3-small"),
+            ):
                 result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
             assert result["input"] == "standalone query"
             assert "_blend_alpha" not in result
@@ -452,7 +558,10 @@ class TestAlignInputs:
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             llm_params = {}
             inputs = {"text": "query", "_blend_history_text": "", "_blend_alpha": 0.5}
-            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.TEI_EMBED_MODEL", "text-embedding-3-small"),
+            ):
                 result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
             assert result["input"] == "query"
             assert "_blend_alpha" not in result
@@ -709,7 +818,9 @@ class TestAlignOutputs:
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
-            inputs = {"input": "Hello"}
+            # _original_query is stashed by align_inputs(EMBEDDING); align_outputs
+            # raises if missing (issue #1035 BM25-leak fix).
+            inputs = {"input": "Hello", "_original_query": "Hello"}
             llm_params = {}
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
                 result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
@@ -726,7 +837,12 @@ class TestAlignOutputs:
                     {"index": 1, "embedding": [0.0, 1.0]},
                 ]
             }
-            inputs = {"input": ["query", "history"], "_blend_alpha": 0.5}
+            # _original_query mirrors what align_inputs(EMBEDDING) stashes.
+            inputs = {
+                "input": ["query", "history"],
+                "_original_query": "query",
+                "_blend_alpha": 0.5,
+            }
             llm_params = {}
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
                 result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
@@ -741,11 +857,74 @@ class TestAlignOutputs:
             self_mock = MagicMock()
             self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
             data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
-            inputs = {"input": "standalone query"}
+            inputs = {"input": "standalone query", "_original_query": "standalone query"}
             llm_params = {}
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
                 result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
             assert result["embedding"] == [0.1, 0.2, 0.3]
+
+        def test_raises_when_original_query_missing(self):
+            """Issue #1035: align_outputs MUST receive _original_query from
+            align_inputs(EMBEDDING) — the no-fallback contract prevents the
+            BM25-leak regression from re-emerging via a hand-crafted inputs
+            dict that bypassed align_inputs."""
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
+            inputs = {"input": "prefixed text"}  # no _original_query
+            llm_params = {}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                pytest.raises(ValueError, match="_original_query"),
+            ):
+                align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
+
+        def test_single_path_echoes_original_query_not_prefixed(self):
+            """Issue #1035 (BM25-leak fix): align_inputs may have prepended the
+            model-specific query instruction to inputs["input"]. align_outputs
+            must echo the stashed raw text so the retriever's BM25 leg
+            (TOKENS(@query, ...)) tokenizes the user's actual query rather
+            than the instruction tokens."""
+
+            prefix = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
+            inputs = {
+                "input": prefix + "drought-resistant beans",
+                "_original_query": "drought-resistant beans",
+            }
+            llm_params = {}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
+            assert result["text"] == "drought-resistant beans"
+            assert result["embedding"] == [0.1, 0.2, 0.3]
+
+        def test_batch_path_echoes_original_query_not_prefixed(self):
+            """BM25-leak fix for the batched (history-blend) path: the
+            retriever's BM25 leg receives the isolated raw query string, not
+            the list (which would 422) and not the prefixed first element."""
+
+            prefix = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            data = {
+                "data": [
+                    {"index": 0, "embedding": [1.0, 0.0]},
+                    {"index": 1, "embedding": [0.0, 1.0]},
+                ]
+            }
+            inputs = {
+                "input": [prefix + "elaborate", prefix + "prior turn"],
+                "_original_query": "elaborate",
+                "_blend_alpha": 0.5,
+            }
+            llm_params = {}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
+            assert result["text"] == "elaborate"
+            # alpha=0.5 → midpoint (dense channel still works as before)
+            assert result["embedding"] == [0.5, 0.5]
 
     # --- RETRIEVER ---
     class TestRetrieverOutput:
@@ -2907,3 +3086,184 @@ class TestAbstentionDefault:
             assert chosen == sentinel
         finally:
             mod.CHATQNA_ABSTENTION_INSTRUCTIONS = original
+
+
+# ===========================================================================
+# Test reranker input-too-long abstention (422 body through align_outputs)
+# ===========================================================================
+# The 422 body the reranker microservice returns for oversized input. OPEA
+# v1.5's ServiceOrchestrator.execute() does NOT check HTTP status (no
+# raise_for_status), so this dict reaches align_outputs as the reranker
+# node's "successful" output — the detection must live there.
+RERANK_422_BODY = {
+    "detail": {
+        "error_type": chatqna_module._RERANKER_INPUT_TOO_LONG_TYPE,
+        "error": "TEI rejected input: Given: 19505 tokens, max-client-input-length 8192",
+    }
+}
+
+
+def test_align_outputs_raises_on_reranker_422_body():
+    """align_outputs(RERANK) must raise _RerankerInputTooLongError when the
+    node output is the reranker's 422 error body — schedule() never sees an
+    exception from the orchestrator, so this is the only production
+    detection point."""
+    self_mock = MagicMock()
+    self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+    with (
+        patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+        pytest.raises(chatqna_module._RerankerInputTooLongError, match="TEI rejected input"),
+    ):
+        align_outputs(self_mock, RERANK_422_BODY, "rerank_node", {}, MagicMock(), {})
+
+
+def test_align_outputs_passes_through_normal_rerank_output():
+    """The detection must not fire on normal reranker output dicts (no
+    'detail' key) — regression guard against an over-broad check."""
+    self_mock = MagicMock()
+    self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+    data = {"reranked_docs": [{"text": "doc1", "score": 0.95}]}
+    inputs = {"initial_query": "test", "retrieved_docs": [{"id": "d1", "text": "doc1"}]}
+    with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+        result = align_outputs(self_mock, data, "rerank_node", inputs, MagicMock(), {})
+    assert len(result["retrieved_docs"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_reranker_input_too_long_returns_abstention():
+    """When schedule() raises the typed marker (align_outputs detected the
+    reranker node's 422 body — see the align_outputs tests above), chatqna
+    must return an abstention response (HTTP 200, abstained=True), NOT
+    propagate the error as a 500 to the user."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def _raise_marker(*_args, **_kwargs):
+        raise chatqna_module._RerankerInputTooLongError("TEI rejected input")
+
+    svc.megaservice.schedule = _raise_marker
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=False),
+    ):
+        payload = await svc.handle_request(req)
+
+    assert payload["metadata"]["abstained"] is True
+    assert payload["metadata"]["abstention_reason"] == "reranker_input_too_long"
+    assert payload["metadata"]["is_grounded"] is False
+    assert payload["metadata"]["source_documents"] == []
+    assert payload["metadata"]["confidence_score"] == 0.0
+    assert payload["metadata"]["retrieval_confidence_score"] == 0.0
+    assert "exceed the reranker's input limit" in payload["response"]
+
+
+@pytest.mark.asyncio
+async def test_reranker_input_too_long_stream_returns_sse():
+    """stream=True abstention must use the same SSE envelope as a normal
+    streamed answer: one content event, the metadata event, then [DONE]."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def _raise_marker(*_args, **_kwargs):
+        raise chatqna_module._RerankerInputTooLongError("TEI rejected input")
+
+    svc.megaservice.schedule = _raise_marker
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    from fastapi.responses import StreamingResponse
+
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=True),
+    ):
+        resp = await svc.handle_request(req)
+
+    assert isinstance(resp, StreamingResponse)
+    events = [chunk.decode("utf-8") if isinstance(chunk, bytes) else str(chunk) async for chunk in resp.body_iterator]
+    assert any("exceed the reranker's input limit" in e for e in events)
+    metadata_events = [json.loads(e[len("data: ") :]) for e in events if e.startswith("data: {")]
+    assert metadata_events[0]["abstained"] is True
+    assert metadata_events[0]["abstention_reason"] == "reranker_input_too_long"
+    assert events[-1].strip() == "data: [DONE]"
+
+
+def _fake_parms(**_kwargs):
+    """Stand-in for the Genieai*Parms classes in handle_request tests.
+
+    Under the comps mock, subclassing a MagicMock yields a mock whose
+    side_effect allows exactly ONE call per class definition — a second
+    handle_request() in the same interpreter would raise StopIteration.
+    """
+    from types import SimpleNamespace
+
+    return SimpleNamespace(search_type="hybrid")
+
+
+def _patched_chat_request(**attrs):
+    """Patch ChatCompletionRequest.model_validate to a controllable mock.
+
+    Under the comps mock the parsed request is a bare MagicMock, so the
+    boolean/None fields handle_request branches on (``stream``, ``context``,
+    ``language``) are truthy Mocks — configure them explicitly per test.
+    """
+    defaults = {
+        "stream": False,
+        "context": None,
+        "language": None,
+        "messages": [{"role": "user", "content": "what is X?"}],
+    }
+    defaults.update(attrs)
+    return patch.object(chatqna_module.ChatCompletionRequest, "model_validate", return_value=MagicMock(**defaults))
+
+
+@pytest.mark.asyncio
+async def test_reranker_input_too_long_defensive_chain_walk():
+    """Defensive backup path: if a future OPEA version DOES raise on HTTP
+    4xx and wraps the reranker's HTTPException, the chain walk in
+    handle_request still maps the marker onto the abstention handler."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    # Simulate the orchestrator wrapping the reranker's HTTPException in
+    # an arbitrary exception whose message carries the recognisable marker.
+    class _WrappedOrchestratorError(Exception):
+        pass
+
+    async def _raise_wrapped(*_args, **_kwargs):
+        raise _WrappedOrchestratorError(
+            "downstream service returned HTTP 422: "
+            '{"error": "TEI rejected input: Given: 19505", "error_type": "RerankerInputTooLong"}'
+        )
+
+    svc.megaservice.schedule = _raise_wrapped
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=False),
+    ):
+        payload = await svc.handle_request(req)
+
+    assert payload["metadata"]["abstained"] is True
+    assert payload["metadata"]["abstention_reason"] == "reranker_input_too_long"
+    assert "exceed the reranker's input limit" in payload["response"]

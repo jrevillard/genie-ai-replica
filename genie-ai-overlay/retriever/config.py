@@ -235,9 +235,24 @@ HYBRID_BM25_ANALYZER = os.getenv("RETRIEVER_HYBRID_BM25_ANALYZER", "text_en")
 SUMMARIZER_ENABLED = os.getenv("RETRIEVER_SUMMARIZER_ENABLED", "false").lower() == "true"
 
 # Embedding configuration
-TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5")
 TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT")
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN", "")
+
+# Query-instruction prefix logic (TEI_EMBED_MODEL constant, built-in table,
+# EMBEDDING_QUERY_INSTRUCTIONS env parsing, get_query_instruction) lives in
+# ``genie-ai-overlay/core/embedding_query_prefix.py`` so chatqna can import
+# it without pulling the retriever source tree (the retriever image's runtime
+# deps — langchain_arangodb, langchain_huggingface, etc. — are not part of
+# chatqna's image, and the retriever source isn't shipped in chatqna's image
+# either). Re-exported here for backward compatibility with tests and any
+# retriever-internal callers that haven't been migrated.
+from core.embedding_query_prefix import (  # noqa: F401  re-exported for backward compat
+    _BUILTIN_QUERY_INSTRUCTIONS,
+    _USER_QUERY_INSTRUCTIONS,
+    TEI_EMBED_MODEL,
+    _parse_query_instructions,
+    get_query_instruction,
+)
 
 # VLLM configuration
 VLLM_API_KEY = os.getenv("VLLM_API_KEY", "EMPTY")

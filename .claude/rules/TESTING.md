@@ -12,6 +12,36 @@
 | E2E | Playwright | `playwright.config.js` | `tests/e2e/` |
 | Config Validation | Jest | `tests/config-validator/jest.config.js` | `tests/config-validator/` |
 
+## Local install prerequisites
+
+Tests load production modules via Node resolution. Some components require
+their shared-library sibling's `node_modules` to be installed first so the
+resolver can walk up into it. Skip this and several suites fail at load time
+with `Cannot find module '<dep>' from '../shared/lib/...'` — a confusing
+failure that looks like a code regression.
+
+Always replicate the CI install order before running tests locally:
+
+```bash
+# Backend (gov-chat-backend) — CI does shared/lib FIRST, then backend
+cd components/shared/lib && npm ci
+cd ../gov-chat-backend && npm ci
+
+# Frontend (gov-chat-frontend)
+cd components/gov-chat-frontend && npm ci
+
+# Document repository
+cd components/document-repository && npm ci
+
+# OPEA overlay (Python venv recommended — uv per project convention)
+cd genie-ai-overlay && uv venv .venv && source .venv/bin/activate && uv pip install -e .[test]
+
+# Mobile
+cd mobile/genie_ai_mobile && flutter pub get
+```
+
+CI does the same sequencing (`.gitlab-ci.yml` test jobs). Match it locally.
+
 ## Running Tests
 
 ```bash
@@ -42,6 +72,50 @@ cd tests/config-validator && npm test                     # Environment variable
 # Mobile (from mobile directory)
 cd mobile/genie_ai_mobile && flutter test                 # Flutter unit tests
 ```
+
+## Manual Gates (no CI job — run these yourself)
+
+The repo has no pipeline job that can exercise these paths, so they are
+**not** covered by `npm test` / `pytest` / lint. Treat them as required
+before you claim a change is safe.
+
+### PII redactor smoke test
+
+```bash
+./tests/otel-collector/run-pii-smoke.sh
+```
+
+Brings up VictoriaLogs + a collector on the **unmodified production
+config**, pushes a PII envelope through OTLP/HTTP, and asserts the row
+comes back redacted. Takes ~30 s. No CI job exists for it.
+
+**Run it whenever you touch:**
+
+- `configs/otel/otel-collector-config.yaml` (any transform, not just `pii_redact`)
+- `configs/otel/pii-key-list.md`
+- the shape of log bodies arriving at the collector
+  (`stamp_log_metadata_from_msg`, the fluentd driver config)
+
+Two failure modes it catches that nothing else does:
+
+1. **OTTL parse error** → the collector exits 1 and the entire log
+   pipeline dies. Caught in seconds by the config gate at the top of the
+   runner. Note the two-unescape trap: the regexes are double-escaped
+   (`\\s`, `\\.`) because YAML single-quoted scalars are literal **and**
+   OTTL's own string literal then unescapes them. Single-escaping looks
+   correct and is catastrophic.
+2. **Redaction that silently stopped matching** → PII reaches
+   VictoriaLogs unredacted while the collector reports healthy.
+
+Why it is a shell script and not Jest: it must start containers, inject a
+curl sidecar into the collector's netns (the collector image is
+distroless — no shell inside), `docker exec` into VictoriaLogs, and
+discover the compose project at runtime.
+
+> History: this test sat unwired and its assertions queried
+> `_msg:REDACTED`, which excludes exactly the unredacted rows it was
+> meant to catch. It passed against a completely broken redactor. It now
+> reads the row back by a unique marker instead.
 
 ## CI Pipeline
 

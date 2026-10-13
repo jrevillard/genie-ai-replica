@@ -1,61 +1,6 @@
 const { request } = require('./auth');
 
 /**
- * Create a new Keycloak realm with a client.
- * @param {string} adminToken - Keycloak admin access token
- * @param {string} realmName - Name of the realm to create
- * @param {string} clientId - Client ID to create in the realm
- * @returns {Promise<{realmId: string}>} Created realm ID
- */
-async function createRealm(adminToken, realmName, clientId) {
-  // Create realm
-  const realmRes = await request('POST', '/auth/admin/realms', {
-    headers: { Authorization: `Bearer ${adminToken}` },
-    body: {
-      realm: realmName,
-      enabled: true,
-      sslRequired: 'none',
-      roles: {
-        realm: [
-          { name: 'GENIE.AI_USER', description: 'Standard user role' },
-          { name: 'GENIE.AI_ADMIN', description: 'Admin role' },
-        ],
-      },
-    },
-  });
-
-  if (realmRes.status !== 201) {
-    throw new Error(`Failed to create realm ${realmName}: ${realmRes.status} ${JSON.stringify(realmRes.data)}`);
-  }
-
-  // Get realm UUID
-  const realmInfo = await request('GET', `/auth/admin/realms/${realmName}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-  const realmId = realmInfo.data.id;
-
-  // Create client
-  const clientRes = await request('POST', `/auth/admin/realms/${realmName}/clients`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-    body: {
-      clientId,
-      enabled: true,
-      publicClient: true,
-      directAccessGrantsEnabled: true,
-      standardFlowEnabled: true,
-      redirectUris: ['https://localhost/*'],
-      webOrigins: ['https://localhost'],
-    },
-  });
-
-  if (clientRes.status !== 201) {
-    throw new Error(`Failed to create client ${clientId}: ${clientRes.status}`);
-  }
-
-  return { realmId };
-}
-
-/**
  * Create a user in a Keycloak realm.
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
@@ -123,24 +68,6 @@ async function createUser(adminToken, realm, userData) {
 }
 
 /**
- * Get the internal UUID of a Keycloak client.
- * @param {string} adminToken - Keycloak admin access token
- * @param {string} realm - Realm name
- * @param {string} clientId - Client ID to look up
- * @returns {Promise<string>} Client UUID
- */
-async function getClientId(adminToken, realm, clientId) {
-  const res = await request('GET', `/auth/admin/realms/${realm}/clients?clientId=${clientId}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-
-  if (res.status !== 200 || !res.data || res.data.length === 0) {
-    throw new Error(`Client ${clientId} not found in realm ${realm}`);
-  }
-  return res.data[0].id;
-}
-
-/**
  * Rotate realm signing keys: generate a new RSA key and demote the old one.
  * Uses the Keycloak 26 components API (no /keys POST endpoint exists).
  * @param {string} adminToken - Keycloak admin access token
@@ -203,22 +130,6 @@ async function rotateRealmKeys(adminToken, realm) {
 }
 
 /**
- * Delete a Keycloak realm.
- * @param {string} adminToken - Keycloak admin access token
- * @param {string} realmName - Name of the realm to delete
- * @returns {Promise<void>}
- */
-async function deleteRealm(adminToken, realmName) {
-  const res = await request('DELETE', `/auth/admin/realms/${realmName}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-
-  if (res.status !== 204 && res.status !== 404) {
-    throw new Error(`Failed to delete realm ${realmName}: ${res.status} ${JSON.stringify(res.data)}`);
-  }
-}
-
-/**
  * Update realm settings (partial update).
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
@@ -234,25 +145,6 @@ async function updateRealmSettings(adminToken, realm, settings) {
   if (res.status !== 204) {
     throw new Error(`Failed to update realm settings: ${res.status} ${JSON.stringify(res.data)}`);
   }
-}
-
-/**
- * Get realm key provider components.
- * @param {string} adminToken - Keycloak admin access token
- * @param {string} realm - Realm name
- * @returns {Promise<object[]>} List of key provider components
- */
-async function getRealmKeys(adminToken, realm) {
-  const res = await request(
-    'GET',
-    `/auth/admin/realms/${realm}/components?type=org.keycloak.keys.KeyProvider`,
-    { headers: { Authorization: `Bearer ${adminToken}` } },
-  );
-
-  if (res.status !== 200) {
-    throw new Error(`Failed to get realm keys: ${res.status}`);
-  }
-  return res.data || [];
 }
 
 /**
@@ -273,12 +165,8 @@ async function deleteUser(adminToken, realm, userId) {
 }
 
 module.exports = {
-  createRealm,
   createUser,
-  getClientId,
   rotateRealmKeys,
-  deleteRealm,
   updateRealmSettings,
-  getRealmKeys,
   deleteUser,
 };

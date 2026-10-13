@@ -19,7 +19,12 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.model_cache import get_model_id
-from tracing import setup_trace_logging
+from tracing import (
+    background_span,
+    install_uvicorn_access_logging,
+    setup_json_logging,
+    setup_trace_logging,
+)
 
 from .config import (
     ARANGO_DB,
@@ -63,6 +68,7 @@ from .config import (
     VLLM_TEMPERATURE,
     VLLM_TIMEOUT,
     VLLM_TOP_P,
+    get_query_instruction,
 )
 
 
@@ -77,11 +83,111 @@ class GenieEmbedDoc(EmbedDoc):
 
 logger = CustomLogger("genieai_retriever_arangodb")
 setup_trace_logging("genieai_retriever_arangodb")
+setup_json_logging("genieai_retriever_arangodb")
+install_uvicorn_access_logging()
 logflag = os.getenv("LOGFLAG", False)
 
+# ARANGO_TEXT_FIELD is the column the retriever reads on every query path
+# (BM25 via the ArangoSearch view, dense via the langchain-arangodb vector
+# store, and traversal AQL). Deliberately hardcoded (no env override) so
+# ingest and read paths cannot drift. It is **NOT** a paraphrase or summary
+# of the original chunk. What it contains depends on the
+# CONTEXTUAL_RETRIEVAL_ENABLED flag at ingest:
+#
+#   * `CONTEXTUAL_RETRIEVAL_ENABLED=true` (default since v1.5, MR !199):
+#     dataprep populates `text` with `original_chunk + LLM-generated
+#     document-context prefix` (Anthropic-style). The verbatim
+#     un-contextualized chunk is preserved separately under
+#     `metadata.chunk_text` for display/debug and is never read back at
+#     query time. Reading the contextualized field is required so dense
+#     and lexical channels index against a consistent vector-space.
+#
+#   * `CONTEXTUAL_RETRIEVAL_ENABLED=false`: `text` is just the verbatim
+#     chunk (no prefix); the `metadata.chunk_text` field is **not written**
+#     (dataprep only writes it when the flag is on).
+#
+# In both modes the retriever's read column is `text`. Reranker strategy
+# (adaptive, slice, threshold, slice_threshold, knee_threshold) operates
+# on the retrieved documents and is independent of which field the
+# retriever reads.
 ARANGO_TEXT_FIELD = "text"
 ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
+
+
+class QueryInstructionEmbeddingsWrapper:
+    """Prefixes queries with a model-specific instruction; passages untouched.
+
+    Covers any contrastive / instruction-tuned embedding model whose model
+    card specifies an asymmetric query/passage instruction (BAAI/bge en+zh,
+    intfloat/e5, hkunlp/instructor, nomic-ai/nomic-embed, …). Passages
+    (``embed_documents``) pass through verbatim so dataprep ingestion via
+    the shared TEI service stays prefix-free.
+
+    Apply at the caller (retriever, chatqna) rather than at the TEI service
+    layer, because the same TEI is used for ingest (passages) and retrieval
+    (queries) — a service-level prefix would invert the asymmetry.
+    """
+
+    __slots__ = ("base", "instruction")
+
+    def __init__(self, base, instruction: str):
+        self.base = base
+        self.instruction = instruction
+
+    def embed_query(self, text: str):
+        return self.base.embed_query(self.instruction + text)
+
+    def embed_documents(self, texts):
+        return self.base.embed_documents(texts)
+
+    async def aembed_query(self, text: str):
+        # Langchain-arangodb currently uses sync embed_query, but a future
+        # upgrade could call async. Apply the prefix unconditionally so the
+        # contract holds across sync/async paths.
+        a = getattr(self.base, "aembed_query", None)
+        if callable(a):
+            result = a(self.instruction + text)
+            if hasattr(result, "__await__"):
+                return await result
+            return result
+        # Base has no async impl — fall back to sync.
+        return self.embed_query(text)
+
+    async def aembed_documents(self, texts):
+        a = getattr(self.base, "aembed_documents", None)
+        if callable(a):
+            result = a(texts)
+            if hasattr(result, "__await__"):
+                return await result
+            return result
+        return self.embed_documents(texts)
+
+    def __getattr__(self, name):
+        # Delegate attribute access (e.g. .model_name, .dimension) to the
+        # underlying embeddings so adapters that introspect still work.
+        #
+        # Guard against the unset-base recursion footgun: `__slots__` makes
+        # `self.base` raise AttributeError when the slot is empty (e.g. a
+        # subclass forgot `super().__init__(base, instruction)`). Reading
+        # `self.base` here would re-enter `__getattr__("base")` and recurse
+        # to `RecursionError`. `object.__getattribute__` bypasses our
+        # `__getattr__` and lets us detect the missing slot cleanly.
+        try:
+            base = object.__getattribute__(self, "base")
+        except AttributeError as e:
+            raise AttributeError(
+                "QueryInstructionEmbeddingsWrapper.base is unset; cannot "
+                f"resolve {name!r}. A subclass likely forgot to call "
+                "super().__init__(base, instruction)."
+            ) from e
+        try:
+            return getattr(base, name)
+        except AttributeError as e:
+            raise AttributeError(
+                f"QueryInstructionEmbeddingsWrapper has no attribute {name!r} "
+                f"(wrapped base type {type(base).__name__} also lacks it)"
+            ) from e
 
 
 def _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
@@ -205,30 +311,33 @@ class GenieaiArangoRetriever(OpeaComponent):
         see core/model_cache.py) instead of using the config default VLLM_MODEL_ID.
         Falls back to the config default on any probe failure.
         """
-        if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
-            if logflag:
-                logger.debug("OpenAI API Key is set. Verifying its validity...")
-
-            openai.api_key = OPENAI_API_KEY
-
-            try:
-                openai.models.list()
+        with background_span("retriever.initialize_llm"):
+            if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
                 if logflag:
-                    logger.debug("OpenAI API Key is valid.")
-                self.llm = ChatOpenAI(
-                    temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=OPENAI_CHAT_MAX_TOKENS
-                )
-                self._llm_model_id = OPENAI_CHAT_MODEL
-            except openai.error.AuthenticationError:
-                logger.error("OpenAI API Key is invalid.")
-            except Exception as e:
-                logger.error(f"An error occurred while verifying the API Key: {e}")
+                    logger.debug("OpenAI API Key is set. Verifying its validity...")
 
-        elif VLLM_ENDPOINT:
-            self._llm_model_id = self._resolve_vllm_model_id()
-            self.llm = self._create_vllm_client(self._llm_model_id)
-        else:
-            raise HTTPException(status_code=400, detail="No LLM environment variables are set, cannot generate graphs.")
+                openai.api_key = OPENAI_API_KEY
+
+                try:
+                    openai.models.list()
+                    if logflag:
+                        logger.debug("OpenAI API Key is valid.")
+                    self.llm = ChatOpenAI(
+                        temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=OPENAI_CHAT_MAX_TOKENS
+                    )
+                    self._llm_model_id = OPENAI_CHAT_MODEL
+                except openai.error.AuthenticationError:
+                    logger.error("OpenAI API Key is invalid.")
+                except Exception as e:
+                    logger.error(f"An error occurred while verifying the API Key: {e}")
+
+            elif VLLM_ENDPOINT:
+                self._llm_model_id = self._resolve_vllm_model_id()
+                self.llm = self._create_vllm_client(self._llm_model_id)
+            else:
+                raise HTTPException(
+                    status_code=400, detail="No LLM environment variables are set, cannot generate graphs."
+                )
 
     def _resolve_vllm_model_id(self) -> str:
         """Return the vLLM model ID for summarization.
@@ -274,24 +383,25 @@ class GenieaiArangoRetriever(OpeaComponent):
 
     def _initialize_client(self):
         """Initialize the ArangoDB connection."""
-        self.client = ArangoClient(hosts=ARANGO_URL)
-        sys_db = self.client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+        with background_span("retriever.initialize_client"):
+            self.client = ArangoClient(hosts=ARANGO_URL)
+            sys_db = self.client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
 
-        if not sys_db.has_database(ARANGO_DB):
-            sys_db.create_database(ARANGO_DB)
+            if not sys_db.has_database(ARANGO_DB):
+                sys_db.create_database(ARANGO_DB)
 
-        self.db = self.client.db(name=ARANGO_DB, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
-        if logflag:
-            logger.debug(f"Connected to ArangoDB {self.db.version()}.")
+            self.db = self.client.db(name=ARANGO_DB, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+            if logflag:
+                logger.debug(f"Connected to ArangoDB {self.db.version()}.")
 
-        # Ensure the BM25 ArangoSearch view for the default graph (Contextual
-        # Retrieval Part B). Mirrors the has_database/create_database idiom;
-        # other graph_names are ensured lazily in _bm25_search on first use.
-        if HYBRID_RETRIEVAL_ENABLED:
-            try:
-                self._ensure_bm25_view(ARANGO_GRAPH_NAME)
-            except Exception as e:
-                logger.error(f"Could not ensure default BM25 view for graph '{ARANGO_GRAPH_NAME}': {e}")
+            # Ensure the BM25 ArangoSearch view for the default graph (Contextual
+            # Retrieval Part B). Mirrors the has_database/create_database idiom;
+            # other graph_names are ensured lazily in _bm25_search on first use.
+            if HYBRID_RETRIEVAL_ENABLED:
+                try:
+                    self._ensure_bm25_view(ARANGO_GRAPH_NAME)
+                except Exception as e:
+                    logger.error(f"Could not ensure default BM25 view for graph '{ARANGO_GRAPH_NAME}': {e}")
 
     def _ensure_bm25_view(self, graph_name: str) -> None:
         """Idempotently create the ArangoSearch BM25 view over <graph_name>_SOURCE.text.
@@ -394,16 +504,17 @@ class GenieaiArangoRetriever(OpeaComponent):
 
     def check_health(self) -> bool:
         """Checks the health of the retriever service."""
-        if logflag:
-            logger.debug("[ check health ] start to check health of ArangoDB")
-        try:
-            version = self.db.version()
+        with background_span("retriever.check_health"):
             if logflag:
-                logger.debug(f"[ check health ] Successfully connected to ArangoDB {version}!")
-            return True
-        except Exception as e:
-            logger.error(f"[ check health ] Failed to connect to ArangoDB: {e}")
-            return False
+                logger.debug("[ check health ] start to check health of ArangoDB")
+            try:
+                version = self.db.version()
+                if logflag:
+                    logger.debug(f"[ check health ] Successfully connected to ArangoDB {version}!")
+                return True
+            except Exception as e:
+                logger.error(f"[ check health ] Failed to connect to ArangoDB: {e}")
+                return False
 
     def fetch_neighborhoods(
         self,
@@ -906,6 +1017,9 @@ class GenieaiArangoRetriever(OpeaComponent):
                 return []
 
             if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
+                # OpenAI embeddings are not contrastive / instruction-tuned —
+                # get_query_instruction(OPENAI_EMBED_MODEL) returns None for
+                # any OpenAI model id, so the wrapper is never installed here.
                 embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=dimension)
             elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
                 embeddings = HuggingFaceEndpointEmbeddings(
@@ -913,8 +1027,35 @@ class GenieaiArangoRetriever(OpeaComponent):
                     task="feature-extraction",
                     huggingfacehub_api_token=HF_TOKEN,
                 )
+                # Issue #1035 (generalized): contrastive / instruction-tuned
+                # embedding models expect a query-side prefix at inference
+                # (per their model card) to preserve the query/passage
+                # asymmetry. Apply at the caller (here + chatqna) rather than
+                # at the shared TEI service so dataprep ingestion (passages)
+                # stays prefix-free.
+                _query_instruction = get_query_instruction(TEI_EMBED_MODEL)
+                if _query_instruction:
+                    embeddings = QueryInstructionEmbeddingsWrapper(embeddings, _query_instruction)
             else:
                 embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
+                # Issue #1035: HuggingFaceBgeEmbeddings already prepends its
+                # own query_instruction (default: "Represent this question
+                # for searching relevant passages: ") inside embed_query().
+                # Clear it so the wrapper's instruction is the sole prefix
+                # applied — otherwise the local-fallback path double-prefixes.
+                # Duck-type via attribute presence (conftest replaces the
+                # langchain class with a MagicMock instance, so isinstance
+                # checks are unreliable in tests).
+                _query_instruction = get_query_instruction(TEI_EMBED_MODEL)
+                if _query_instruction:
+                    # Order matters: clear the langchain default BEFORE
+                    # wrapping. Reordering these two lines hits the
+                    # QueryInstructionEmbeddingsWrapper.__slots__ guard
+                    # (wrapper has only `base` and `instruction`; setting
+                    # `query_instruction` post-wrap raises AttributeError).
+                    if hasattr(embeddings, "query_instruction"):
+                        embeddings.query_instruction = ""
+                    embeddings = QueryInstructionEmbeddingsWrapper(embeddings, _query_instruction)
 
             try:
                 vector_db = ArangoVector(

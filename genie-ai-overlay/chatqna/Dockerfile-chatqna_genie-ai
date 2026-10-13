@@ -92,6 +92,7 @@ COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
 
 # Copy shared label-contract encoder (chatqna encode → retriever decode)
 COPY genie-ai-overlay/core/label_contract.py /app/core/label_contract.py
+COPY genie-ai-overlay/core/embedding_query_prefix.py /app/core/embedding_query_prefix.py
 
 # --- FIX: Copy the original api_protocol.py to /app to make it importable as top-level 'api_protocol' ---
 # This path '/home/user/comps/...' will now be correct

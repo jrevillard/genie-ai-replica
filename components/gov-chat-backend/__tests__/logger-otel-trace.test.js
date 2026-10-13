@@ -2,6 +2,12 @@
 const mockGetSpan = jest.fn();
 const mockContextActive = jest.fn();
 
+// Sentinel "no active span" IDs that traceFormat emits when the OTel API has
+// no current span. Centralised here so a future format-length change is a
+// single edit; logger-functions.test.js uses the same constants.
+const ZERO_TRACE_ID = '00000000000000000000000000000000';
+const ZERO_SPAN_ID = '0000000000000000';
+
 jest.mock('@opentelemetry/api', () => ({
   trace: {
     getSpan: mockGetSpan
@@ -59,8 +65,8 @@ describe('logger OTel trace correlation', () => {
       testLogger.info('test message');
 
       expect(entries).toHaveLength(1);
-      expect(entries[0].trace_id).toBe('00000000000000000000000000000000');
-      expect(entries[0].span_id).toBe('0000000000000000');
+      expect(entries[0].trace_id).toBeUndefined();
+      expect(entries[0].span_id).toBeUndefined();
     });
 
     it('returns zeroed IDs when span context has all-zero trace flags (not sampled)', () => {
@@ -80,8 +86,8 @@ describe('logger OTel trace correlation', () => {
       testLogger.info('test message');
 
       expect(entries).toHaveLength(1);
-      expect(entries[0].trace_id).toBe('00000000000000000000000000000000');
-      expect(entries[0].span_id).toBe('0000000000000000');
+      expect(entries[0].trace_id).toBe(ZERO_TRACE_ID);
+      expect(entries[0].span_id).toBe(ZERO_SPAN_ID);
     });
   });
 
@@ -208,6 +214,7 @@ describe('logger OTel trace correlation', () => {
       expect(entries).toHaveLength(2);
       expect(entries[0].trace_id).toBe('11111111111111111111111111111111');
       expect(entries[0].span_id).toBe('1111111111111111');
+      expect(entries[0].trace_id).not.toBe(entries[1].trace_id);
       expect(entries[1].trace_id).toBe('22222222222222222222222222222222');
       expect(entries[1].span_id).toBe('2222222222222222');
     });
@@ -233,8 +240,8 @@ describe('logger OTel trace correlation', () => {
       expect(entries).toHaveLength(2);
       expect(entries[0].trace_id).toBe('4bf92f3577b34da6a3ce929d0e0e4736');
       expect(entries[0].span_id).toBe('00f067aa0ba902b7');
-      expect(entries[1].trace_id).toBe('00000000000000000000000000000000');
-      expect(entries[1].span_id).toBe('0000000000000000');
+      expect(entries[1].trace_id).toBeUndefined();
+      expect(entries[1].span_id).toBeUndefined();
     });
 
     it('handles debug level log entries', () => {
@@ -247,8 +254,8 @@ describe('logger OTel trace correlation', () => {
       testLogger.debug('debug message');
 
       expect(entries).toHaveLength(1);
-      expect(entries[0].trace_id).toBe('00000000000000000000000000000000');
-      expect(entries[0].span_id).toBe('0000000000000000');
+      expect(entries[0].trace_id).toBeUndefined();
+      expect(entries[0].span_id).toBeUndefined();
       expect(entries[0].level).toBe('debug');
     });
   });
@@ -349,6 +356,128 @@ describe('logger OTel trace correlation', () => {
       expect(entry.trace_id).not.toContain('user123');
       expect(entry.trace_id).not.toContain('sensitive');
       expect(entry.span_id).not.toContain('user123');
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // JSON-key trace correlation: trace_id and span_id must be TOP-LEVEL
+  // fields on the log record (the JSON object), with values matching the
+  // active trace context. They MUST NOT be printf-template substrings
+  // (e.g. `trace_id="%s"`) inside a JSON-encoded string.
+  // -------------------------------------------------------------------
+  describe('JSON-key trace correlation', () => {
+    it('trace_id and span_id are top-level JSON keys when a span is active', () => {
+      const fakeTraceId = '4bf92f3577b34da6a3ce929d0e0e4736';
+      const fakeSpanId = '00f067aa0ba902b7';
+      mockGetSpan.mockReturnValue({
+        spanContext: () => ({
+          traceId: fakeTraceId,
+          spanId: fakeSpanId,
+          traceFlags: 1
+        })
+      });
+
+      const { testLogger, entries } = createCapturingLogger(
+        format.combine(format.timestamp(), traceFormat, format.json())
+      );
+      testLogger.info('json key test');
+
+      expect(entries).toHaveLength(1);
+      const entry = entries[0];
+      const keys = Object.keys(entry);
+      // Top-level JSON keys (not nested, not printf substrings).
+      expect(keys).toContain('trace_id');
+      expect(keys).toContain('span_id');
+      // Property access confirms structured JSON values.
+      expect(entry.trace_id).toBe(fakeTraceId);
+      expect(entry.span_id).toBe(fakeSpanId);
+      expect(typeof entry.trace_id).toBe('string');
+      expect(typeof entry.span_id).toBe('string');
+      // Placeholder / undefined rejections.
+      expect(entry.trace_id).not.toBe('%s');
+      expect(entry.span_id).not.toBe('%s');
+      expect(entry.trace_id).not.toBeUndefined();
+      expect(entry.span_id).not.toBeUndefined();
+      expect(entry.trace_id).not.toBeNull();
+      expect(entry.span_id).not.toBeNull();
+      // Zeroed placeholder is reserved for the no-active-span branch only.
+      expect(entry.trace_id).not.toBe(ZERO_TRACE_ID);
+      expect(entry.span_id).not.toBe(ZERO_SPAN_ID);
+    });
+
+    it('raw log output is valid JSON (not a printf template string)', () => {
+      const fakeTraceId = '4bf92f3577b34da6a3ce929d0e0e4736';
+      const fakeSpanId = '00f067aa0ba902b7';
+      mockGetSpan.mockReturnValue({
+        spanContext: () => ({
+          traceId: fakeTraceId,
+          spanId: fakeSpanId,
+          traceFlags: 1
+        })
+      });
+
+      // Capture the raw chunk (no JSON.parse) so we can assert on the wire
+      // format itself.
+      const rawChunks = [];
+      const passThrough = new PassThrough();
+      passThrough.on('data', (chunk) => rawChunks.push(chunk.toString()));
+      const testLogger = createLogger({
+        level: 'debug',
+        format: format.combine(format.timestamp(), traceFormat, format.json()),
+        transports: [new transports.Stream({ stream: passThrough })],
+        exitOnError: false
+      });
+      testLogger.info('raw format check');
+
+      expect(rawChunks).toHaveLength(1);
+      const raw = rawChunks[0];
+      // Output must be parseable JSON — confirms structured (not printf).
+      expect(() => JSON.parse(raw.trim())).not.toThrow();
+      // No printf template substrings leaked into the rendered JSON line.
+      expect(raw).not.toMatch(/trace_id=%s/);
+      expect(raw).not.toMatch(/span_id=%s/);
+      expect(raw).not.toMatch(/trace_id="/);
+      // The expected keys appear as JSON keys (with quoted values).
+      expect(raw).toMatch(/"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"/);
+      expect(raw).toMatch(/"span_id":"00f067aa0ba902b7"/);
+    });
+
+    it('values match the active trace context, not a placeholder or stale snapshot', () => {
+      // Two different active spans on sequential log calls — each entry must
+      // reflect ITS active span's IDs (no caching of the first span's values).
+      const spanA = {
+        spanContext: () => ({
+          traceId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          spanId: 'aaaaaaaaaaaaaaaa',
+          traceFlags: 1
+        })
+      };
+      const spanB = {
+        spanContext: () => ({
+          traceId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          spanId: 'bbbbbbbbbbbbbbbb',
+          traceFlags: 1
+        })
+      };
+
+      const { testLogger, entries } = createCapturingLogger(
+        format.combine(format.timestamp(), traceFormat, format.json())
+      );
+
+      mockGetSpan.mockReturnValue(spanA);
+      testLogger.info('under span A');
+
+      mockGetSpan.mockReturnValue(spanB);
+      testLogger.info('under span B');
+
+      expect(entries).toHaveLength(2);
+      // First entry: trace_id/span_id from span A (not placeholder, not B).
+      expect(entries[0].trace_id).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+      expect(entries[0].span_id).toBe('aaaaaaaaaaaaaaaa');
+      expect(entries[0].trace_id).not.toBe(entries[1].trace_id);
+      // Second entry: trace_id/span_id from span B.
+      expect(entries[1].trace_id).toBe('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
+      expect(entries[1].span_id).toBe('bbbbbbbbbbbbbbbb');
     });
   });
 });

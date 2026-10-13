@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
-const { parsePositiveInt } = require('../shared-lib/validation-utils');
+const { parsePositiveInt } = require('../shared-lib');
 
 module.exports = (chatHistoryService) => {
   // Helper function to extract user ID from the JWT-authenticated request
@@ -19,7 +19,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/conversations:
+   * "/api/chat/conversations":
    *   get:
    *     summary: Get user conversations
    *     description: Retrieves all conversations for the authenticated user with pagination and filtering options
@@ -105,7 +105,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/conversations/{conversationId}:
+   * "/api/chat/conversations/{conversationId}":
    *   get:
    *     summary: Get conversation details
    *     description: Retrieves a specific conversation including its messages
@@ -148,7 +148,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/conversations:
+   * "/api/chat/conversations":
    *   post:
    *     summary: Create a new conversation
    *     description: Creates a new chat conversation
@@ -235,7 +235,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/conversations/{conversationId}:
+   * "/api/chat/conversations/{conversationId}":
    *   patch:
    *     summary: Update conversation
    *     description: Updates conversation properties like title, starred status, etc.
@@ -311,7 +311,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/conversations/{conversationId}:
+   * "/api/chat/conversations/{conversationId}":
    *   delete:
    *     summary: Delete conversation
    *     description: Deletes a conversation and all associated messages
@@ -365,7 +365,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/conversations/{conversationId}/messages:
+   * "/api/chat/conversations/{conversationId}/messages":
    *   get:
    *     summary: Get conversation messages
    *     description: Retrieves messages for a specific conversation with pagination
@@ -430,7 +430,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/conversations/{conversationId}/messages:
+   * "/api/chat/conversations/{conversationId}/messages":
    *   post:
    *     summary: Add message to conversation
    *     description: Adds a new message to a conversation
@@ -488,15 +488,9 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      logger.info(
-        `Raw request body for conversation ${conversationId}:`,
-        req.body ? JSON.stringify(req.body, null, 2) : 'No body'
-      );
-
       const { content, sender, queryId, metadata } = req.body || {};
 
       logger.info(`Adding ${sender || 'unknown'} message to conversation ${conversationId}`);
-      logger.info('Parsed request body:', { content, sender, queryId, metadata });
 
       if (!req.body) {
         logger.warn('Request body is missing');
@@ -549,7 +543,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/conversations/{conversationId}/messages/read:
+   * "/api/chat/conversations/{conversationId}/messages/read":
    *   post:
    *     summary: Mark messages as read
    *     description: Marks all or specific messages in a conversation as read
@@ -601,7 +595,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/query/{queryId}/messages:
+   * "/api/chat/query/{queryId}/messages":
    *   get:
    *     summary: Get messages for a query
    *     description: Retrieves all messages related to a specific query
@@ -660,7 +654,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/messages/{messageId}/query:
+   * "/api/chat/messages/{messageId}/query":
    *   get:
    *     summary: Get originating query for a message
    *     description: Retrieves the query that led to a specific message
@@ -705,7 +699,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/query/{queryId}/conversation:
+   * "/api/chat/query/{queryId}/conversation":
    *   post:
    *     summary: Create conversation from query
    *     description: Creates a new conversation based on an existing query
@@ -782,7 +776,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/search:
+   * "/api/chat/search":
    *   get:
    *     summary: Search conversations
    *     description: Searches for conversations containing specific text
@@ -846,7 +840,7 @@ module.exports = (chatHistoryService) => {
         return res.status(400).json({ message: 'Search term cannot be empty' });
       }
 
-      logger.info(`Searching conversations for user ${userId} with term "${searchTerm}"`);
+      logger.info(`Searching conversations for user ${userId} (term length=${String(searchTerm).length})`);
 
       const options = { limit, offset, includeArchived, userKey };
       const results = await chatHistoryService.searchConversations(userId, searchTerm, options);
@@ -860,7 +854,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/recent:
+   * "/api/chat/recent":
    *   get:
    *     summary: Get recent conversations
    *     description: Retrieves recent conversations for the user
@@ -908,7 +902,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/stats:
+   * "/api/chat/stats":
    *   get:
    *     summary: Get conversation statistics
    *     description: Retrieves statistics about the user's conversations
@@ -947,7 +941,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/folders:
+   * "/api/chat/folders":
    *   get:
    *     summary: Get user folders
    *     description: Retrieves all folders for the authenticated user
@@ -1009,7 +1003,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/folders:
+   * "/api/chat/folders":
    *   post:
    *     summary: Create a new folder
    *     description: Creates a new folder for organizing conversations
@@ -1115,7 +1109,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/folders/search:
+   * "/api/chat/folders/search":
    *   get:
    *     summary: Search folders
    *     description: Searches for folders by name or description
@@ -1165,7 +1159,7 @@ module.exports = (chatHistoryService) => {
         return res.status(400).json({ message: 'Search term cannot be empty' });
       }
 
-      logger.info(`Searching folders for user ${userId} with term "${searchTerm}"`);
+      logger.info(`Searching folders for user ${userId} (term length=${String(searchTerm).length})`);
 
       const options = { includeArchived, userKey };
       const results = await chatHistoryService.searchFolders(userId, searchTerm, options);
@@ -1179,7 +1173,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/folders/reorder:
+   * "/api/chat/folders/reorder":
    *   post:
    *     summary: Reorder folders
    *     description: Updates the order of folders at the same level
@@ -1251,7 +1245,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/folders/{folderId}:
+   * "/api/chat/folders/{folderId}":
    *   get:
    *     summary: Get folder details
    *     description: Retrieves a specific folder including its conversations
@@ -1294,7 +1288,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/folders/{folderId}:
+   * "/api/chat/folders/{folderId}":
    *   patch:
    *     summary: Update folder
    *     description: Updates folder properties
@@ -1390,7 +1384,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/folders/{folderId}:
+   * "/api/chat/folders/{folderId}":
    *   delete:
    *     summary: Delete folder
    *     description: Deletes a folder and optionally its contents
@@ -1449,7 +1443,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/folders/{folderId}/path:
+   * "/api/chat/folders/{folderId}/path":
    *   get:
    *     summary: Get folder path
    *     description: Retrieves the folder path (breadcrumbs)
@@ -1486,7 +1480,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/folders/{folderId}/conversations/{conversationId}:
+   * "/api/chat/folders/{folderId}/conversations/{conversationId}":
    *   post:
    *     summary: Add conversation to folder
    *     description: Adds a conversation to a folder
@@ -1544,7 +1538,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/folders/{folderId}/conversations/{conversationId}:
+   * "/api/chat/folders/{folderId}/conversations/{conversationId}":
    *   delete:
    *     summary: Remove conversation from folder
    *     description: Removes a conversation from a folder
@@ -1602,7 +1596,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/conversations/{conversationId}/folder:
+   * "/api/chat/conversations/{conversationId}/folder":
    *   get:
    *     summary: Get conversation's folder
    *     description: Finds which folder a conversation belongs to
@@ -1650,7 +1644,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /api/chat/conversations/{conversationId}/move:
+   * "/api/chat/conversations/{conversationId}/move":
    *   post:
    *     summary: Move conversation
    *     description: Moves a conversation from one folder to another

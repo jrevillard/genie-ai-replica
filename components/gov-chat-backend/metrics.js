@@ -16,4 +16,6 @@ function getMeter() {
   return metrics.getMeter(SERVICE_NAME, SERVICE_VERSION);
 }
 
-module.exports = { getMeter };
+module.exports = {
+  getMeter
+};

@@ -97,19 +97,6 @@ const adminDashboardService = {
   },
 
   /**
-   * Trigger log rotation
-   * @returns {Promise} Operation result
-   */
-  async rolloverLogs() {
-    try {
-      return await httpService.post('admin/logs/rollover');
-    } catch (error) {
-      console.error('Error rolling over logs:', error);
-      throw error;
-    }
-  },
-
-  /**
    * Run system diagnostics
    * @returns {Promise} Diagnostics results
    */
@@ -154,11 +141,35 @@ const adminDashboardService = {
    */
   async getLogsSummary(options = {}) {
     try {
+      // Return the full axios response. AdminDashboard.vue `loadLogsSummary`
+      // reads `response.data.errors` / `response.data.warnings` — the canonical
+      // wire contract for /admin/* endpoints. Extracting `.data` here was
+      // mismatched with the backend wire (pre-MR !343 round-2) and stayed
+      // mismatched with the new raw wire (post-fix finding #6b).
       const response = await httpService.get('/admin/logs/summary', { params: options });
-      return response.data;
+      return response;
     } catch (error) {
       console.error('[AdminDashboardService] Error fetching logs summary:', error.message, error.stack);
-      return { data: { errors: [], warnings: [], date: options.date || new Date().toISOString().split('T')[0] } };
+      // Fallback envelope matches the SUCCESS axios response shape so
+      // callers can read `summary.data.{errors,warnings,services,date,
+      // degraded}` uniformly — a previous shape dropped `services`, and on
+      // error the admin filter dropdown rendered empty while the success
+      // path populated it. The real error is deferred to the toast
+      // (httpService.handleResponseError already fires
+      // notificationService.error); the synthetic envelope keeps the
+      // dashboard tile well-formed during a VL outage.
+      //
+      // No `infos` key: the summary stopped returning one when INFO was
+      // dropped from the roll-up, and nothing reads it.
+      return {
+        data: {
+          errors: [],
+          warnings: [],
+          services: [],
+          date: options.date || new Date().toISOString().split('T')[0],
+          degraded: true
+        }
+      };
     }
   },
 

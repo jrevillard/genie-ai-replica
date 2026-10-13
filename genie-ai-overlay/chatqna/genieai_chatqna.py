@@ -19,8 +19,15 @@ from metrics import (
     sanitize_attributes,
 )
 
+from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.model_cache import get_model_id
-from tracing import get_tracer, setup_trace_logging, setup_tracing
+from tracing import (
+    get_tracer,
+    install_uvicorn_access_logging,
+    setup_json_logging,
+    setup_trace_logging,
+    setup_tracing,
+)
 
 setup_tracing("genieai-chatqna")
 
@@ -39,18 +46,40 @@ from comps.cores.proto.genieai_api_protocol import (
 )
 from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
-from keycloak_token_validator import validate_token
+from keycloak_token_validator import JwksUnavailableError, validate_token
 from langdetect import detect
 from transformers import AutoTokenizer
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
 setup_trace_logging("GENIE.AI_CHATQNA")
+setup_json_logging("GENIE.AI_CHATQNA")
+install_uvicorn_access_logging()
 
 # Tracer for pipeline-node-level spans emitted from align_outputs (e.g. the
 # reranker-selection identity span used by the retrieval-quality eval harness).
 # The orchestrate handler keeps its own scope-local tracer; this one serves the
 # service-merge path where both candidate and selected chunk ids are known.
 align_tracer = get_tracer("chatqna.align_outputs")
+
+
+class _RerankerInputTooLongError(Exception):
+    """Local marker raised in align_outputs (RERANK branch) of this service.
+
+    The reranker microservice translates the typed wrapper exception into a
+    422 HTTPException. OPEA v1.5's ServiceOrchestrator.execute() does not
+    check HTTP status (no raise_for_status), so the 422 body flows into
+    align_outputs as the reranker node's output dict; the detection there
+    raises this class, which propagates out of schedule() and is caught by
+    the abstention handler in handle_request. A secondary, defensive chain
+    walk in handle_request also maps any wrapped marker-bearing exception
+    onto this class.
+    """
+
+
+# Protocol marker carried in the reranker microservice's 422 body
+# (detail.error_type) and in wrapped exception messages. Both detection
+# points (align_outputs body check + the defensive chain walk) key on it.
+_RERANKER_INPUT_TOO_LONG_TYPE = "RerankerInputTooLong"
 
 
 def _emit_reranker_selection_span(candidate_chunk_keys, selected_chunk_keys, selected_scores):
@@ -903,8 +932,55 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # = single-input path (unchanged baseline behavior).
         _blend_history_text = inputs.pop("_blend_history_text", "")
         _blend_alpha = inputs.pop("_blend_alpha", None)
+        # Issue #1035 (generalized): contrastive / instruction-tuned embedding
+        # models require a query-side prefix at inference (per their model
+        # card) to preserve the query/passage asymmetry. Apply only to queries
+        # (and history strings, which act as queries for blending); passages
+        # are encoded without the prefix by dataprep ingestion via the same
+        # shared TEI service.
+        #
+        # Mirror the retriever's branch selection: when OpenAI embeddings are
+        # active (OPENAI_API_KEY + OPENAI_EMBED_MODEL + OPENAI_EMBED_ENABLED),
+        # the active embedding model is OPENAI_EMBED_MODEL — which has no
+        # contrastive instruction entry. Without this gate, a deployment with
+        # both OpenAI enabled AND TEI_EMBED_MODEL=BAAI/... would prefix the
+        # query in chatqna (BAAI instruction → TEI microservice) while the
+        # retriever's OpenAI branch encodes raw — silent dense-channel
+        # mismatch on the embedding vector space.
+        #
+        # The retriever's BM25/hybrid leg (`_bm25_search` → TOKENS(@query, ...))
+        # must NOT receive the prefix — its English analyzer would tokenize
+        # the prefix tokens and dilute the real query terms. Stash the
+        # original query in a side-channel so align_outputs(EMBEDDING) can
+        # echo the RAW text to the retriever.
+        # Issue #1035 (generalized): contrastive / instruction-tuned embedding
+        # models require a query-side prefix at inference (per their model
+        # card) to preserve the query/passage asymmetry. Apply only to queries
+        # (and history strings, which act as queries for blending); passages
+        # are encoded without the prefix by dataprep ingestion via the same
+        # shared TEI service.
+        #
+        # The prefix decision is gated on `TEI_EMBED_MODEL` because chatqna
+        # always encodes via the embedding microservice (TEI in the default
+        # OPEA service graph) — the OpenAI branch in the retriever only kicks
+        # in when the retriever itself encodes (the `embedding is None`
+        # fallback). Even with OpenAI embeddings enabled deployer-side, the
+        # chatqna → TEI path is unaffected unless the deployer rewires the
+        # service graph away from the OPEA TEI wrapper.
+        #
+        # The retriever's BM25/hybrid leg (`_bm25_search` → TOKENS(@query, ...))
+        # must NOT receive the prefix — its English analyzer would tokenize
+        # the prefix tokens and dilute the real query terms. Stash the
+        # original query in a side-channel so align_outputs(EMBEDDING) can
+        # echo the RAW text to the retriever.
+        _query_instruction = get_query_instruction(TEI_EMBED_MODEL)
+        _original_query = inputs["text"]
+        inputs["_original_query"] = _original_query
         if _blend_history_text:
-            inputs["input"] = [inputs["text"], _blend_history_text]
+            _texts = [_original_query, _blend_history_text]
+            if _query_instruction:
+                _texts = [_query_instruction + t for t in _texts]
+            inputs["input"] = _texts
             # Stash alpha for align_outputs to use when blending the batch
             # response. `_blend_alpha` does leak into the embedding service HTTP
             # body (harmless — TEI ignores unknown JSON keys) but never reaches
@@ -913,7 +989,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             # that boundary, not by any underscore-prefix convention.
             inputs["_blend_alpha"] = _blend_alpha
         else:
-            inputs["input"] = inputs["text"]
+            inputs["input"] = _query_instruction + _original_query if _query_instruction else _original_query
         del inputs["text"]
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
@@ -1110,11 +1186,38 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             # BM25/hybrid leg needs the isolated QUERY string (it cannot use a
             # list — would 422 on pydantic text:str or feed garbage to BM25).
             # Only the dense leg consumes the blended embedding above.
-            input_val = inputs["input"]
-            query_text = input_val[0] if isinstance(input_val, list) else input_val
+            #
+            # Issue #1035: align_inputs may have prepended the query
+            # instruction to the first element. The retriever's BM25 path
+            # tokenizes the raw query (TOKENS(@query, ...)) and the prefix
+            # would dilute TF/IDF — so use the stashed raw text instead.
+            # Raise if the stash is missing (no fallback to the prefixed
+            # text — that would silently re-introduce the BM25 leak).
+            # Pop after use so the side-channel does not leak into the
+            # downstream service-graph dict (TEI / retriever / reranker
+            # all parse `inputs` and may reject unknown keys).
+            if "_original_query" not in inputs:
+                raise ValueError(
+                    "align_outputs(EMBEDDING) requires _original_query in inputs; "
+                    "align_inputs(EMBEDDING) must run first to stash the raw text."
+                )
+            query_text = inputs.pop("_original_query")
             next_data = {"text": query_text, "embedding": blended}
         else:
-            next_data = {"text": inputs["input"], "embedding": query_embedding}
+            # Single-query path: align_inputs may have prepended the model
+            # query instruction to inputs["input"]. Echo the raw text
+            # (stashed by align_inputs as `_original_query`) so the
+            # retriever's BM25 leg tokenizes the user's actual query
+            # instead of the prefix. Raise if the stash is missing — no
+            # fallback to the prefixed text (silent BM25-leak regression).
+            # Pop after use so the side-channel does not leak downstream
+            # (see batch path comment).
+            if "_original_query" not in inputs:
+                raise ValueError(
+                    "align_outputs(EMBEDDING) requires _original_query in inputs; "
+                    "align_inputs(EMBEDDING) must run first to stash the raw text."
+                )
+            next_data = {"text": inputs.pop("_original_query"), "embedding": query_embedding}
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:
@@ -1264,6 +1367,17 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         next_data["retrieved_docs"] = retrieved_docs
 
     elif self.services[cur_node].service_type == ServiceType.RERANK:
+        # OPEA v1.5's ServiceOrchestrator.execute() does not check HTTP status
+        # (no raise_for_status), so the reranker's 422 body arrives here as the
+        # node's "successful" output dict. Detect the typed error body and
+        # re-raise as the local marker so handle_request dispatches the
+        # reranker-input-too-long abstention instead of treating it as data.
+        if (
+            isinstance(data, dict)
+            and isinstance(data.get("detail"), dict)
+            and data["detail"].get("error_type") == _RERANKER_INPUT_TOO_LONG_TYPE
+        ):
+            raise _RerankerInputTooLongError(f"downstream service returned: {data['detail'].get('error', 'unknown')}")
         if logflag:
             logger.info(f"\n[ DEBUG ] MICROSERVICE RERANK OUTPUT: {data}")
 
@@ -2212,8 +2326,15 @@ class ChatQnAService:
             raise HTTPException(status_code=401, detail="Authorization header must use the Bearer scheme.")
         token_str = token_str.strip()
 
-        # Validate token signature via Keycloak JWKS.
-        claims = await validate_token(token_str)
+        # Validate token signature via Keycloak JWKS. Distinguish
+        # IdP-outage (JwksUnavailableError → 503) from invalid-token
+        # (None → 401) — previously both surfaced as identical 401s,
+        # masking Keycloak availability problems from operator dashboards.
+        try:
+            claims = await validate_token(token_str)
+        except JwksUnavailableError as exc:
+            logger.error(f"Keycloak JWKS unavailable: {exc}")
+            raise HTTPException(status_code=503, detail="Authentication provider unavailable") from exc
         if claims is None:
             logger.warning("Incoming Bearer token failed JWKS validation — rejecting request")
             raise HTTPException(status_code=401, detail="Token validation failed")
@@ -2472,27 +2593,60 @@ class ChatQnAService:
             span.set_attribute("rag.model_id", _get_llm_model())
 
             _rag_start = time.time()
-            try:
-                result_dict, runtime_graph = await self.megaservice.schedule(
-                    initial_inputs={
-                        "text": last_translated_message_content,
-                        # Carried through to the embedding node so it can batch
-                        # [query, history] in ONE TEI call. Empty when blending
-                        # is disabled (flag off / first turn). Non-EmbedDoc field
-                        # is stripped before the retriever HTTP call by OPEA.
-                        "_blend_history_text": history_text,
-                        "_blend_alpha": MULTI_TURN_BLEND_ALPHA,
-                    },
-                    llm_parameters=parameters,
-                    genie_params={
-                        "retriever_parameters": retriever_parameters,
-                        "reranker_parameters": reranker_parameters,
-                        "full_chat_history_string": translated_history_string,
-                        "retrieval_context": retrieval_context,
-                        "original_language": original_language,
-                        "user_details": user_details,
-                    },
+
+            def _chat_attrs(abstained: str, error: str) -> dict:
+                """Metric attribute set shared by the success / abstention / error paths."""
+                return sanitize_attributes(
+                    {
+                        "response_type": "streaming" if chat_request.stream else "sync",
+                        "abstained": abstained,
+                        "error": error,
+                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
+                    }
                 )
+
+            try:
+                try:
+                    result_dict, runtime_graph = await self.megaservice.schedule(
+                        initial_inputs={
+                            "text": last_translated_message_content,
+                            # Carried through to the embedding node so it can batch
+                            # [query, history] in ONE TEI call. Empty when blending
+                            # is disabled (flag off / first turn). Non-EmbedDoc field
+                            # is stripped before the retriever HTTP call by OPEA.
+                            "_blend_history_text": history_text,
+                            "_blend_alpha": MULTI_TURN_BLEND_ALPHA,
+                        },
+                        llm_parameters=parameters,
+                        genie_params={
+                            "retriever_parameters": retriever_parameters,
+                            "reranker_parameters": reranker_parameters,
+                            "full_chat_history_string": translated_history_string,
+                            "retrieval_context": retrieval_context,
+                            "original_language": original_language,
+                            "user_details": user_details,
+                        },
+                    )
+                except _RerankerInputTooLongError:
+                    # Already typed by align_outputs — skip the chain walk.
+                    raise
+                except Exception as _e:
+                    # Walk the exception chain looking for the reranker input-too-long
+                    # marker. OPEA's ServiceOrchestrator wraps the underlying
+                    # HTTPException(422) with its own exception type; the marker is
+                    # preserved in the message chain (HTTPException.detail is
+                    # JSON-stringified into the wrapper message). TEI's error string
+                    # says "must have less than N tokens" — only the protocol marker
+                    # is a reliable match.
+                    _chain: list = []
+                    _cur = _e
+                    while _cur is not None and len(_chain) < 10:
+                        _chain.append(str(_cur))
+                        _cur = _cur.__cause__ or _cur.__context__
+                    _joined = " | ".join(_chain)
+                    if _RERANKER_INPUT_TOO_LONG_TYPE in _joined:
+                        raise _RerankerInputTooLongError(_joined) from _e
+                    raise
                 _rag_duration = time.time() - _rag_start
 
                 # Count the chunks fed to the LLM. (Was always 0: node outputs
@@ -2501,31 +2655,72 @@ class ChatQnAService:
                 span.set_attribute("rag.chunk_count", _count_final_chunks(result_dict))
 
                 # Record custom application metrics
-                response_type = "streaming" if chat_request.stream else "sync"
-                _metric_attrs = sanitize_attributes(
-                    {
-                        "response_type": response_type,
-                        "abstained": "false",
-                        "error": "false",
-                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
-                    }
-                )
+                _metric_attrs = _chat_attrs("false", "false")
                 chat_requests_total.add(1, _metric_attrs)
                 chat_rag_duration_seconds.record(_rag_duration, _metric_attrs)
+
+            except _RerankerInputTooLongError as e:
+                from opentelemetry.trace import StatusCode
+
+                # Graceful abstention. The caller (frontend / mobile) sent a
+                # valid request; the internal pipeline self-protected because
+                # dataprep produced input too long for the reranker's strict
+                # input cap. HTTP 200 + abstained=True mirrors the existing
+                # "no confident answer" behaviour — operators get the same UX
+                # as a low-confidence reranker outcome, but with a distinct
+                # abstention_reason so dashboards can attribute it.
+                span.set_status(
+                    StatusCode.ERROR,
+                    "Reranker input too long — abstaining",
+                )
+                span.set_attribute("abstained.reason", "reranker_input_too_long")
+                logger.warning(f"Abstaining: reranker input too long. {e}")
+
+                chat_requests_total.add(1, _chat_attrs("true", "false"))
+
+                # The reranker never returned a selection (schedule raised
+                # before result_dict was bound), so emit an empty selection
+                # span — the eval harness keys on rag.selected_chunk_keys and
+                # must see the abstention as "nothing selected", not a missing
+                # span.
+                _emit_reranker_selection_span(candidate_chunk_keys=[], selected_chunk_keys=[], selected_scores=[])
+
+                # Route the English abstention text through the same
+                # strip-before-translate finalizer as normal LLM answers so
+                # non-English users get the abstention in their language.
+                abstention_text = (
+                    "I cannot reliably answer this query because the "
+                    "retrieved documents exceed the reranker's input "
+                    "limit. This indicates a data ingestion issue."
+                )
+                final_text, _ = await self._finalize_llm_response(abstention_text, original_language)
+                metadata = {
+                    "source_documents": [],
+                    "retrieval_confidence_score": 0.0,
+                    "confidence_score": 0.0,
+                    "is_grounded": False,
+                    "abstained": True,
+                    "abstention_reason": "reranker_input_too_long",
+                }
+
+                if chat_request.stream:
+                    # Streaming callers get the same SSE envelope as a normal
+                    # answer: one content event, the metadata event, then [DONE].
+                    async def _abstention_stream():
+                        yield f"data: {final_text.encode('utf-8')!r}\n\n"
+                        yield "data: " + json.dumps({"type": "metadata", **metadata}) + "\n\n"
+                        yield "data: [DONE]\n\n"
+
+                    return StreamingResponse(_abstention_stream(), media_type="text/event-stream")
+
+                return {"response": final_text, "metadata": metadata}
 
             except Exception as e:
                 from opentelemetry.trace import StatusCode
 
                 # Record error metric
                 _err_duration = time.time() - _rag_start
-                _err_attrs = sanitize_attributes(
-                    {
-                        "response_type": "streaming" if chat_request.stream else "sync",
-                        "abstained": "false",
-                        "error": "true",
-                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
-                    }
-                )
+                _err_attrs = _chat_attrs("false", "true")
                 chat_requests_total.add(1, _err_attrs)
                 chat_rag_duration_seconds.record(_err_duration, _err_attrs)
 

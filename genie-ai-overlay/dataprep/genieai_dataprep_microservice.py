@@ -17,7 +17,15 @@ import time
 
 from opentelemetry.trace import Status, StatusCode
 
-from tracing import get_meter, get_tracer, sanitize_attributes, setup_trace_logging, setup_tracing
+from tracing import (
+    get_meter,
+    get_tracer,
+    install_uvicorn_access_logging,
+    sanitize_attributes,
+    setup_json_logging,
+    setup_trace_logging,
+    setup_tracing,
+)
 
 setup_tracing("genieai-dataprep")
 
@@ -60,6 +68,8 @@ from genieai_dataprep_loader import GenieDataprepLoader
 
 logger = CustomLogger("genie_dataprep_microservice")
 setup_trace_logging("genie_dataprep_microservice")
+setup_json_logging("genie_dataprep_microservice")
+install_uvicorn_access_logging()
 logflag = os.getenv("LOGFLAG", False)
 upload_folder = "./uploaded_files/"
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
@@ -114,6 +124,8 @@ class DocRepoIngestPayload(BaseModel):
     fileType: str
     fileLabels: list[str] | None = None
     storagePath: str | None = None
+    # Per-request chunk_overlap override; falls back to env var DATAPREP_CHUNK_OVERLAP when None.
+    chunkOverlap: int | None = None
 
 
 class DocRepoRetractPayload(BaseModel):
@@ -171,7 +183,15 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         # --- FIX: Dynamic Chunking Configuration ---
         # Determine chunk size based on file extension
         CHUNK_SIZE = get_chunk_size_for_file(payload.fileName)
-        CHUNK_OVERLAP = int(os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
+        # Per-request chunkOverlap wins over env; env wins over hardcoded default.
+        CHUNK_OVERLAP = payload.chunkOverlap
+        if CHUNK_OVERLAP is None:
+            CHUNK_OVERLAP = int(os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
+        # Reject negatives: RecursiveCharacterTextSplitter treats them as >=chunk_size
+        # (no splitting happens). Caller-side Joi already constrains the batch path;
+        # this is a defense-in-depth guard for the single-ingest endpoint.
+        if CHUNK_OVERLAP < 0:
+            raise ValueError(f"chunkOverlap must be >= 0, got {CHUNK_OVERLAP}")
 
         try:
             # Decode and temporarily save file

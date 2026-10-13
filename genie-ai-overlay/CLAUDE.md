@@ -51,7 +51,27 @@ pytest tests/test_tracing_with_span.py  # OTel span validation
 
 **Shared fixtures**: `tests/conftest.py` — mocks for `comps` library (vendored at build time; the `docarray` collision is handled by the `docarray_alias_shim`), ArangoDB, model endpoints.
 
-**Tracing**: OTel SDK initialized in `tracing.py`. Use `@tracing.trace_span(name)` decorator. See `.claude/rules/OBSERVABILITY.md`.
+**Tracing**: OTel SDK initialized in `tracing.py`. Use the `tracing.with_span(name, ...)` context manager (NOT a `@trace_span` decorator — no such decorator exists; see "Public tracing API" below). See `.claude/rules/OBSERVABILITY.md`.
+
+## Public tracing API (`genie-ai-overlay/tracing.py`)
+
+**Span helpers**
+- `with_span(name, tracer_name=__name__, attributes=None)` (line 762) — context manager that opens a span with `tracer.start_span`, attaches `attributes`, and sets `ERROR` + records exceptions on any exception. Does NOT make the span active (logs emitted inside do not inherit its `trace_id`).
+- `background_span(name, tracer_name=__name__, attributes=None)` (line 784) — context manager that opens AND activates a span via `tracer.start_as_current_span`. Use for periodic tasks (health checks, log rollovers, cache eviction), module-load init bursts, and post-request background tasks so emitted logs inherit the active span's `trace_id` / `span_id`.
+- `get_tracer(name=__name__)` (line 754) — returns a tracer from the globally configured provider; safe before `setup_tracing()` (returns no-op).
+- `setup_tracing(service_name)` (line 567) — initializes TracerProvider + MeterProvider with OTLP HTTP exporter; auto-instruments FastAPI; no-op when `ENABLE_OBSERVABILITY != "1"`.
+
+**Log envelope + trace-context wiring (single-channel log path: python-logging → stdout → fluentd → OTel collector → VictoriaLogs)**
+- `setup_trace_logging(logger_name)` (line 220) — adds a `TraceContextFilter` to the named Python logger (idempotent) so every record gets `trace_id` / `span_id` / `service` stamped when an OTel span is active; also re-enables propagation for `comps.CustomLogger` so records reach fluentd.
+- `setup_json_logging(logger_name)` (line 299) — replaces the named logger's handler formatter with `JsonLogFormatter` (idempotent). Call AFTER `setup_trace_logging()` so `trace_id` / `span_id` are populated before the JSON envelope is built.
+- `silence_uvicorn_access_log()` (line 322) — empties `uvicorn.access`'s handlers list so uvicorn's own plain-text access log emit is silenced (no dictConfig wipe issue — call BEFORE uvicorn's `Server.run()` mutates the dictConfig).
+- `install_uvicorn_access_log_middleware()` (line 502) — monkey-patches `comps.cores.mega.http_service.HttpService.app` so every OPEA service that uses `HttpService` gets the ASGI access-log middleware (`AccessLogASGIMiddleware`) injected. Auto-installed in most service entry points.
+- `install_uvicorn_access_logging()` (line 547) — one-line entry point that collapses the previous 4-step wiring (`setup_trace_logging("uvicorn.access")` → `silence_uvicorn_access_log()` → `setup_json_logging("uvicorn.access")` → `install_uvicorn_access_log_middleware()`). Idempotent. Prefer this over the per-step calls.
+
+**Classes**
+- `TraceContextFilter(service_name=...)` (line 190) — `logging.Filter` subclass that stamps `trace_id` (32-hex), `span_id` (16-hex, zeroed when no span), and `service` on every `LogRecord`.
+- `JsonLogFormatter` (line 258) — `logging.Formatter` subclass emitting a stable JSON envelope (`timestamp`, `level`, `logger`, `message`, `trace_id`, `span_id`, `service`; plus `method` / `path` / `status_code` / `duration_ms` for access-log records). The OTel collector's `transform/extract_envelope_trace_context` reads this envelope to stamp `attributes["trace_id"]` / `attributes["span_id"]`.
+- `AccessLogASGIMiddleware` (line 374) — raw ASGI middleware installed by `install_uvicorn_access_log_middleware()`. Emits one JSON access-log record per HTTP request via `uvicorn.access` logger with `extra={method, path, status_code, duration_ms}`. Raw ASGI (not Starlette `BaseHTTPMiddleware`) so streaming responses are not buffered. uvicorn's own plain-text emit is silenced via `silence_uvicorn_access_log()` so this middleware is the sole access-log source.
 
 ## Override Audit & Site-Startup Hooks
 

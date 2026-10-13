@@ -110,17 +110,6 @@ describe('traceparent propagation on outbound HTTP calls', () => {
     expect(tracingSource).toContain('getNodeAutoInstrumentations');
   });
 
-  it('backend uses axios for OPEA service calls', () => {
-    const fs = require('fs');
-    const path = require('path');
-
-    const opeaWorkerPath = path.join(__dirname, '..', 'services', 'opea-worker.js');
-    const source = fs.readFileSync(opeaWorkerPath, 'utf8');
-
-    expect(source).toContain('require(');
-    expect(source).toContain('axios');
-  });
-
   it('traceparent format enables Grafana to correlate traces to logs', () => {
     const traceId = '4bf92f3577b34da6a3ce929d0e0e4736';
     const spanId = '00f067aa0ba902b7';

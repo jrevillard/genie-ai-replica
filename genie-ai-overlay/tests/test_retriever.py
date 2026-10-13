@@ -12,12 +12,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from core import embedding_query_prefix as core_query_prefix
 from retriever.genieai_retriever_arangodb import (
     ARANGO_GRAPH_NAME,
     GenieaiArangoRetriever,
-    _chunk_passes_label_filter,
-    _normalize_chunk_id,
-    rrf_fuse,
+    QueryInstructionEmbeddingsWrapper,
 )
 
 # NOTE: conftest.py mocks the langchain stack (langchain_core/community/...) via
@@ -659,101 +658,12 @@ def _mk_result(key, score=0.0):
     return {"doc": _FakeDoc(id=key), "score": score}
 
 
-class TestRrfFuse:
-    """Unit tests for the pure rrf_fuse fusion function."""
-
-    def test_doc_in_both_channels_gets_both_contributions(self):
-        fused = rrf_fuse([_mk_result("a")], [_mk_result("a")], k=60, dense_weight=1.0, lexical_weight=1.0)
-        a_score = next(r["score"] for r in fused if r["doc"].id == "a")
-        assert a_score == pytest.approx(1 / 61 + 1 / 61)
-
-    def test_doc_in_one_channel_gets_single_contribution(self):
-        fused = rrf_fuse([_mk_result("a")], [], k=60, dense_weight=1.0, lexical_weight=1.0)
-        assert fused[0]["score"] == pytest.approx(1 / 61)
-
-    def test_doc_in_both_ranks_above_doc_in_one(self):
-        # "a" is rank-1 in BOTH channels; "b" is rank-1 in dense only.
-        fused = rrf_fuse([_mk_result("a"), _mk_result("b")], [_mk_result("a")], k=60)
-        scores = {r["doc"].id: r["score"] for r in fused}
-        assert scores["a"] > scores["b"]
-
-    def test_lexical_only_doc_surfaces(self):
-        fused = rrf_fuse([_mk_result("a")], [_mk_result("b")], k=60)
-        assert {r["doc"].id for r in fused} == {"a", "b"}
-
-    def test_returns_sorted_descending(self):
-        fused = rrf_fuse([_mk_result("a"), _mk_result("b")], [_mk_result("a"), _mk_result("b")], k=60)
-        scores = [r["score"] for r in fused]
-        assert scores == sorted(scores, reverse=True)
-
-    def test_weights_applied(self):
-        fused = rrf_fuse([_mk_result("a")], [_mk_result("a")], k=60, dense_weight=2.0, lexical_weight=0.5)
-        assert fused[0]["score"] == pytest.approx(2.0 / 61 + 0.5 / 61)
-
-    def test_does_not_mutate_inputs(self):
-        dense = [_mk_result("a")]
-        bm25 = [_mk_result("a")]
-        dense_copy = list(dense)
-        rrf_fuse(dense, bm25, k=60)
-        assert dense == dense_copy
-
-    def test_dense_empty_bm25_rescues(self):
-        # The signature case for a lexical channel: dense finds nothing, BM25 does.
-        fused = rrf_fuse([], [_mk_result("a"), _mk_result("b")], k=60)
-        assert {r["doc"].id for r in fused} == {"a", "b"}
-        assert fused[0]["score"] == pytest.approx(1 / 61)  # "a" rank-1 BM25
-
-    def test_both_empty_returns_empty(self):
-        assert rrf_fuse([], [], k=60) == []
-
-    def test_dedup_within_channel_keeps_best_rank(self):
-        # A duplicate id in one channel must not double-count (best rank wins).
-        fused = rrf_fuse([_mk_result("a"), _mk_result("a")], [], k=60)
-        assert len(fused) == 1
-        assert fused[0]["score"] == pytest.approx(1 / 61)  # rank-1 only
-
-    def test_unkeyed_doc_not_dropped_or_mismerged(self):
-        none_doc = _FakeDoc(id=None)
-        fused = rrf_fuse([{"doc": none_doc, "score": 0.0}], [_mk_result("a")], k=60)
-        assert len(fused) == 2  # the unkeyed doc is kept standalone, "a" separate
-
-
-class TestNormalizeChunkId:
-    """Tests for the chunk-id normalization used by RRF cross-channel matching."""
-
-    def test_bare_key_passthrough(self):
-        assert _normalize_chunk_id(_FakeDoc(id="chunk_42")) == "chunk_42"
-
-    def test_collection_slash_key_stripped(self):
-        assert _normalize_chunk_id(_FakeDoc(id="GRAPH_SOURCE/chunk_42")) == "chunk_42"
-
-    def test_none_returns_none(self):
-        assert _normalize_chunk_id(_FakeDoc(id=None)) is None
-
-    def test_missing_id_attr_returns_none(self):
-        assert _normalize_chunk_id(_FakeDoc()) is None
-
-
-class TestChunkPassesLabelFilter:
-    """Unit tests for the Python label-filter helper (mirrors dense AQL)."""
-
-    def test_no_labels_passes(self):
-        assert _chunk_passes_label_filter(["Health"], [], "OR") is True
-
-    def test_or_strategy_any_match(self):
-        assert _chunk_passes_label_filter(["Health"], ["Health", "Education"], "OR") is True
-
-    def test_or_strategy_no_match(self):
-        assert _chunk_passes_label_filter(["Agriculture"], ["Health"], "OR") is False
-
-    def test_and_strategy_all_present(self):
-        assert _chunk_passes_label_filter(["Health", "Education"], ["Health", "Education"], "AND") is True
-
-    def test_and_strategy_missing_one(self):
-        assert _chunk_passes_label_filter(["Health"], ["Health", "Education"], "AND") is False
-
-    def test_null_chunk_labels_filtered(self):
-        assert _chunk_passes_label_filter(None, ["Health"], "OR") is False
+# NOTE: TestRrfFuse + TestNormalizeChunkId + TestChunkPassesLabelFilter
+# consolidated into contracts/test_contract_retriever_fusion.py and
+# contracts/test_contract_label_filter.py. The contracts/ suite runs
+# against the real vendored retriever module (per .claude/rules/TESTING.md
+# "OPEA contract suite"), making the mocked tests/ versions duplicated proof.
+# See test-audit campaign MR for context.
 
 
 # ---------------------------------------------------------------------------
@@ -959,3 +869,225 @@ class TestHybridInvoke:
         ):
             await retriever.invoke(create_mock_input(search_start="node"))
         bm25.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test: Query instruction wrapper (issue #1035, generalized)
+# ---------------------------------------------------------------------------
+
+
+class TestQueryInstructionWrapper:
+    """Verify that queries are prefixed with the model-specific instruction at
+    the retriever's embed_query call site (per the relevant model card), while
+    embed_documents / passage paths stay untouched. The same wrapper covers
+    BAAI/bge (en+zh), intfloat/e5, hkunlp/instructor, nomic-ai/nomic-embed,
+    and any deployer-supplied finetune via EMBEDDING_QUERY_INSTRUCTIONS.
+    """
+
+    def test_wrapper_prefixes_query_only(self):
+        """QueryInstructionEmbeddingsWrapper.embed_query prepends instruction;
+        embed_documents does not. Both sync and async paths are covered."""
+        base = MagicMock()
+        base.embed_query.return_value = [0.0]
+        base.embed_documents.return_value = [[0.0]]
+        base.aembed_query = AsyncMock(return_value=[0.0])
+        base.aembed_documents = AsyncMock(return_value=[[0.0]])
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        wrapper.embed_query("hello")
+        base.embed_query.assert_called_once_with("PFX hello")
+
+        wrapper.embed_documents(["a", "b"])
+        base.embed_documents.assert_called_once_with(["a", "b"])
+
+    @pytest.mark.asyncio
+    async def test_wrapper_async_prefixes_query(self):
+        """aembed_query applies the instruction; aembed_documents passes through."""
+        base = MagicMock()
+        base.aembed_query = AsyncMock(return_value=[0.0])
+        base.aembed_documents = AsyncMock(return_value=[[0.0]])
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        await wrapper.aembed_query("hello")
+        base.aembed_query.assert_awaited_once_with("PFX hello")
+
+        await wrapper.aembed_documents(["a", "b"])
+        base.aembed_documents.assert_awaited_once_with(["a", "b"])
+
+    @pytest.mark.asyncio
+    async def test_wrapper_async_falls_back_when_base_has_no_async(self):
+        """Custom embeddings classes that omit aembed_query / aembed_documents
+        must fall back to the sync impl (getattr-guard, not AttributeError)."""
+        # A bare object without aembed_query / aembed_documents attributes.
+        base = MagicMock(spec=["embed_query", "embed_documents"])
+        base.embed_query = MagicMock(return_value=[0.0])
+        base.embed_documents = MagicMock(return_value=[[0.0]])
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        # Must NOT raise AttributeError
+        assert await wrapper.aembed_query("hello") == [0.0]
+        assert await wrapper.aembed_documents(["a"]) == [[0.0]]
+        base.embed_query.assert_called_once_with("PFX hello")
+        base.embed_documents.assert_called_once_with(["a"])
+
+    def test_wrapper_delegates_attributes_via_getattr(self):
+        """The wrapper's design promise: arbitrary attribute access on the
+        wrapper delegates to the underlying embeddings so adapters that
+        introspect (e.g. ``wrapper.model_name``, ``wrapper.dimension``) keep
+        working. Lock the contract."""
+        base = MagicMock()
+        base.model_name = "BAAI/bge-large-en-v1.5"
+        base.dimension = 1024
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        assert wrapper.model_name == "BAAI/bge-large-en-v1.5"
+        assert wrapper.dimension == 1024
+
+    def test_wrapper_getattr_raises_clear_when_base_slot_unset(self):
+        """A subclass that forgets ``super().__init__(base, instruction)``
+        would otherwise trigger infinite recursion on any attribute access
+        (the `__getattr__` re-enters itself when reading `self.base`).
+        The guard converts that into a single clear AttributeError."""
+        # Bypass __init__ to leave `base` unset on the __slots__ descriptor.
+        wrapper = QueryInstructionEmbeddingsWrapper.__new__(QueryInstructionEmbeddingsWrapper)
+
+        with pytest.raises(AttributeError, match="base is unset"):
+            wrapper.model_name  # noqa: B018
+
+    def test_wrapper_getattr_chains_attribute_error_from_base(self):
+        """If the wrapped embeddings class lacks an attribute, the error
+        message must point at the base type — not at the wrapper — so the
+        operator's debugging isn't misdirected."""
+        base = object()  # bare object, no model_name / dimension / etc.
+        wrapper = QueryInstructionEmbeddingsWrapper(base, "PFX ")
+
+        with pytest.raises(AttributeError, match="also lacks it"):
+            wrapper.model_name  # noqa: B018
+
+    @pytest.mark.asyncio
+    async def test_invoke_prefixes_query_for_bge_model(self, invoke_env):
+        """Issue #1035: BGE-large-en-v1.5 (default) gets the BAAI prefix."""
+
+        expected = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+        with patch("retriever.genieai_retriever_arangodb.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"):
+            await invoke_env["retriever"].invoke(create_mock_input(query="test query"))
+        invoke_env["embeddings"].embed_query.assert_called_once_with(expected + "test query")
+
+    @pytest.mark.asyncio
+    async def test_invoke_skips_prefix_for_non_contrastive_model(self, invoke_env):
+        """OpenAI / mxbai / BGE-m3 / sentence-transformers must NOT receive a prefix."""
+        with patch("retriever.genieai_retriever_arangodb.TEI_EMBED_MODEL", "text-embedding-3-small"):
+            await invoke_env["retriever"].invoke(create_mock_input(query="test query"))
+        invoke_env["embeddings"].embed_query.assert_called_once_with("test query")
+
+    @pytest.mark.asyncio
+    async def test_invoke_openai_branch_unchanged(self, invoke_env):
+        """OpenAI embeddings path (OPENAI_API_KEY set) is untouched by the wrapper."""
+        with (
+            patch("retriever.genieai_retriever_arangodb.OPENAI_API_KEY", "sk-test"),
+            patch("retriever.genieai_retriever_arangodb.OPENAI_EMBED_MODEL", "text-embedding-3-small"),
+            patch("retriever.genieai_retriever_arangodb.OPENAI_EMBED_ENABLED", True),
+            patch("retriever.genieai_retriever_arangodb.OpenAIEmbeddings") as openai_emb,
+        ):
+            openai_emb.return_value.embed_query.return_value = [0.0]
+            await invoke_env["retriever"].invoke(create_mock_input(query="test query"))
+        openai_emb.return_value.embed_query.assert_called_once_with("test query")
+
+    @pytest.mark.asyncio
+    async def test_local_bge_branch_clears_default_query_instruction(self, invoke_env):
+        """HuggingFaceBgeEmbeddings already prepends its own query_instruction
+        inside embed_query(). The retriever must clear it so the wrapper's
+        instruction is the sole prefix applied — otherwise the local fallback
+        path double-prefixes.
+        """
+
+        expected = dict(core_query_prefix._BUILTIN_QUERY_INSTRUCTIONS)["BAAI/bge-large-en-v1.5"]
+        with (
+            patch("retriever.genieai_retriever_arangodb.TEI_EMBEDDING_ENDPOINT", ""),
+            patch("retriever.genieai_retriever_arangodb.HF_TOKEN", ""),
+            patch("retriever.genieai_retriever_arangodb.TEI_EMBED_MODEL", "BAAI/bge-large-en-v1.5"),
+            patch("retriever.genieai_retriever_arangodb.HuggingFaceBgeEmbeddings") as bge_cls,
+        ):
+            bge_cls.return_value.embed_query.return_value = [0.0]
+            await invoke_env["retriever"].invoke(create_mock_input(query="bean varieties"))
+        # Retriever must set query_instruction to "" so langchain doesn't
+        # double-prefix on top of the wrapper's BAAI instruction.
+        bge_instance = bge_cls.return_value
+        assert bge_instance.query_instruction == ""
+        # Behavioral assertion: the wrapper's prefix is the only one applied
+        # to the encoded text. Without this, a regression that clears the
+        # langchain default but then fails to install the wrapper would
+        # still pass the state-only check above.
+        bge_instance.embed_query.assert_called_once_with(expected + "bean varieties")
+
+
+class TestGetQueryInstruction:
+    """core_query_prefix.get_query_instruction(model_id) returns the right prefix for built-in
+    known models, applies user overrides (EMBEDDING_QUERY_INSTRUCTIONS env var),
+    and returns None for models with no entry (so callers skip the wrapper).
+    """
+
+    @pytest.mark.parametrize(
+        "model_id,expected",
+        [
+            ("BAAI/bge-large-en-v1.5", "Represent this sentence for searching relevant passages: "),
+            ("BAAI/bge-base-en-v1.5", "Represent this sentence for searching relevant passages: "),
+            ("BAAI/bge-small-en-v1.5", "Represent this sentence for searching relevant passages: "),
+            ("BAAI/bge-large-zh-v1.5", "为这个句子生成表示以用于检索相关文章："),
+            ("hkunlp/instructor-base", "Represent the query for retrieving evidence documents: "),
+            ("nomic-ai/nomic-embed-text-v1.5", "search_query: "),
+            # case-insensitive substring match
+            ("baai/bge-large-en-v1.5", "Represent this sentence for searching relevant passages: "),
+        ],
+    )
+    def test_builtin_models_return_their_instruction(self, model_id, expected):
+
+        assert core_query_prefix.get_query_instruction(model_id) == expected
+
+    @pytest.mark.parametrize(
+        "model_id",
+        [
+            "BAAI/bge-m3",  # no instruction
+            "mxbai-embed-large-v1",
+            "text-embedding-3-small",  # OpenAI
+            "sentence-transformers/all-MiniLM-L6-v2",
+            "",
+            None,
+        ],
+    )
+    def test_unknown_models_return_none(self, model_id):
+
+        assert core_query_prefix.get_query_instruction(model_id) is None
+
+    def test_user_override_wins_over_builtin(self):
+        """EMBEDDING_QUERY_INSTRUCTIONS env var: new model + override existing."""
+
+        new_overrides = (
+            ("my-org/bge-finetune", "Custom prefix: "),
+            ("BAAI/bge-large-zh-v1.5", "自定义中文前缀："),
+        )
+        with patch.object(core_query_prefix, "_USER_QUERY_INSTRUCTIONS", new_overrides):
+            assert core_query_prefix.get_query_instruction("my-org/bge-finetune") == "Custom prefix: "
+            assert core_query_prefix.get_query_instruction("BAAI/bge-large-zh-v1.5") == "自定义中文前缀："
+            # Built-in English BGE still works
+            assert (
+                core_query_prefix.get_query_instruction("BAAI/bge-large-en-v1.5")
+                == "Represent this sentence for searching relevant passages: "
+            )
+            # Unknown still None
+            assert core_query_prefix.get_query_instruction("BAAI/bge-m3") is None
+
+    def test_malformed_env_value_is_skipped(self):
+        """Garbage entries (no `=`, empty key, empty value) are silently dropped."""
+
+        # _parse_query_instructions drop rule: no `=`, empty k, empty v.
+        with patch.object(
+            core_query_prefix,
+            "_USER_QUERY_INSTRUCTIONS",
+            core_query_prefix._parse_query_instructions(
+                "=orphan-value,no-equals-sign,key=,=value-only,valid=ok-prefix"
+            ),
+        ):
+            assert core_query_prefix.get_query_instruction("valid") == "ok-prefix"
+            # nothing else got registered from the malformed entries
+            assert core_query_prefix.get_query_instruction("orphan-value") is None

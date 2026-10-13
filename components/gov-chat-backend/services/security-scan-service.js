@@ -4,54 +4,17 @@ const { logger } = require('../shared-lib');
 const { DateTime } = require('luxon');
 const axios = require('axios');
 const config = require('../config');
-const { exec } = require('child_process');
-const util = require('util');
-const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
-const execPromise = util.promisify(exec);
-const TIMEOUT_PERIOD = 200000;
+const { LogsService } = require('./logs-service');
 const DAYS_TO_PROCESS = 10;
 
+// Bare-phrase patterns: reported as pattern matches, not as severities.
+// Their regex is a word or two that ordinary operational prose contains,
+// so a hit reports that the substring was present, not that anything was
+// attempted. Everything else in `vulnerabilityPatterns` pins attack
+// syntax or a specific operational event.
+const PATTERN_MATCH_TYPES = new Set(['token_issue', 'attack_attempt', 'unauthorized_access']);
+
 const securityScanService = {
-  async isGzipValid(file) {
-    try {
-      await execPromise(`gunzip -t "${file}"`);
-      return true;
-    } catch (err) {
-      logger.warn(`Gzip validation failed for ${file}: ${err.message}`);
-      return false;
-    }
-  },
-
-  async getDescriptorCount() {
-    try {
-      const { stdout } = await execPromise(`lsof -p ${process.pid} | wc -l`);
-      return parseInt(stdout.trim(), 10);
-    } catch (err) {
-      logger.warn(`Error getting descriptor count: ${err.message}`);
-      return 0;
-    }
-  },
-
-  async closeWinstonTransports() {
-    try {
-      for (const transport of logger.transports) {
-        if (transport.close) {
-          await new Promise((resolve) => transport.close(resolve));
-        }
-      }
-    } catch (err) {
-      logger.warn(`Error closing Winston transports: ${err.message}`);
-    }
-  },
-
-  async reopenWinstonTransports() {
-    try {
-      // Re-initialization logic for winston transports if needed
-    } catch (err) {
-      logger.warn(`Error reopening Winston transports: ${err.message}`);
-    }
-  },
-
   async checkCachedResults() {
     try {
       const scanResultsFile = '/app/data/security/last-scan-results.json';
@@ -75,7 +38,8 @@ const securityScanService = {
       logger.info('Running security scan');
       if (!logsService) throw new Error('LogsService is required for security scan');
 
-      const { vulnerabilities, failedLogins, suspiciousActivities } = await this.processLogsInParallel(logsService);
+      const { vulnerabilities, patternMatches, failedLogins, suspiciousActivities, skipped, reason } =
+        await this.processLogsInParallel(logsService);
 
       const scanResult = {
         scanTime: new Date().toISOString(),
@@ -86,10 +50,14 @@ const securityScanService = {
           details: [...vulnerabilities.critical, ...vulnerabilities.medium, ...vulnerabilities.low]
         },
         vulnerabilityDetails: vulnerabilities,
+        patternMatches,
+        patternMatchCount: patternMatches.length,
         failedLoginDetails: failedLogins,
         suspiciousDetails: suspiciousActivities,
-        status: 'completed',
-        message: 'Security scan completed successfully'
+        status: skipped ? 'skipped' : 'completed',
+        message: skipped ? `Security scan skipped: ${reason}` : 'Security scan completed successfully',
+        skipped: skipped === true,
+        reason: reason || null
       };
 
       await this.saveScanResults(scanResult);
@@ -101,13 +69,32 @@ const securityScanService = {
     }
   },
 
-  // OPTIMIZED: Centralized log processing function reads each file only ONCE.
+  // VL-only security scan — runs the full VL LogSQL scan and
+  // returns the categorised vulnerability buckets. File-mode +
+  // ADMIN_LOGS_SOURCE=file were dropped in T8.
+  //
+  // A finding means "this substring was present in a log line", not
+  // "an attack happened". Patterns split in two:
+  //
+  //   - signatures — the regex pins attack syntax or a specific
+  //     operational event: `sleep \d+`, `__import__('subprocess')`,
+  //     `Blocked access to sensitive path: …`, `404 Not Found: GET
+  //     /api/api/…`. Ordinary traffic does not contain them, so a hit
+  //     is worth a severity.
+  //   - bare phrases — the regex is a word or two that operational
+  //     prose contains. "invalid token" is what an expired tab emits,
+  //     "not authorized" is what a revoked session emits, and
+  //     Grafana logs `var="GF_SECURITY_CSRF_TRUSTED_ORIGINS=…"` at
+  //     startup (logfmt, not the Winston JSON envelope, so the
+  //     unwrap below never applies to it). These are reported as
+  //     pattern matches with the real log line, and carry no severity.
+  //
+  // The split is by what the regex can distinguish, not by how alarming
+  // the phrase sounds. A context gate that separates "the word appeared
+  // in prose" from "this is an attack" would need per-pattern rules and
+  // would miss uncanonical attacks; the sample line is shown instead so
+  // the operator makes that call.
   async processLogsInParallel(logsService) {
-    const startTime = Date.now();
-    const today = DateTime.now();
-    const startDate = today.minus({ days: DAYS_TO_PROCESS }).toFormat('yyyy-MM-dd');
-    const endDate = today.toFormat('yyyy-MM-dd');
-
     const vulnerabilityPatterns = [
       {
         type: 'token_issue',
@@ -227,89 +214,31 @@ const securityScanService = {
     const suspiciousPatterns = [/SQL injection|XSS|CSRF|brute force|command injection|threat detection|ip blocked/i];
 
     try {
-      console.log(`Starting unified log scan for period ${startDate} to ${endDate}`);
-      const allLogFiles = await logsService.getLogFilesInRange(startDate, endDate, true);
-      const validLogFiles = (
-        await Promise.all(
-          allLogFiles.map(async (file) => {
-            if (file.endsWith('.gz') && !(await this.isGzipValid(file))) return null;
-            if (!file.match(/(combined|error)-\d{4}-\d{2}-\d{2}\.log(\.gz|\.\d+\.gz)?$/)) return null;
-            return file;
-          })
-        )
-      )
-        .filter(Boolean)
-        .sort((a, b) => {
-          const aDate = a.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
-          const bDate = b.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
-          return bDate.localeCompare(aDate);
-        });
-
-      console.log(`Found ${validLogFiles.length} valid log files to scan.`);
-      const concurrencyLimit = require('os').cpus().length;
-      let totalLinesProcessed = 0;
-      let totalLinesSkipped = 0;
-      const finalIssueMap = new Map();
-      let failedLogins = [];
-      let suspiciousActivities = [];
-
-      for (let i = 0; i < validLogFiles.length; i += concurrencyLimit) {
-        if (Date.now() - startTime > TIMEOUT_PERIOD) {
-          logger.warn('Approaching timeout limit, stopping scan');
-          break;
-        }
-        const batch = validLogFiles.slice(i, i + concurrencyLimit);
-        const batchPromises = batch.map((file) =>
-          this.processFile(file, startTime, { vulnerabilityPatterns, suspiciousPatterns }).catch((err) => {
-            logger.error(`Error processing file ${file} in worker: ${err.message}`);
-            return {
-              vulnerabilities: { critical: [], medium: [], low: [] },
-              failedLogins: [],
-              suspiciousActivities: [],
-              linesProcessed: 0,
-              linesSkipped: 0
-            };
-          })
-        );
-
-        const results = await Promise.all(batchPromises);
-
-        for (const result of results) {
-          totalLinesProcessed += result.linesProcessed;
-          totalLinesSkipped += result.linesSkipped;
-          failedLogins.push(...result.failedLogins);
-          suspiciousActivities.push(...result.suspiciousActivities);
-          for (const severity of ['critical', 'medium', 'low']) {
-            for (const vuln of result.vulnerabilities[severity]) {
-              const aggregationKey = `${vuln.type}_${vuln.service}_${vuln.matchedTerm}`;
-              if (finalIssueMap.has(aggregationKey)) {
-                const existingIssue = finalIssueMap.get(aggregationKey);
-                existingIssue.instanceCount += vuln.instanceCount;
-                if (vuln.lastSeen > existingIssue.lastSeen) existingIssue.lastSeen = vuln.lastSeen;
-              } else {
-                finalIssueMap.set(aggregationKey, { ...vuln });
-              }
-            }
-          }
-        }
-        console.debug(`Batch processed. Total lines so far: ${totalLinesProcessed}`);
-      }
-
-      console.log(
-        `Total lines processed: ${totalLinesProcessed}, Total lines skipped: ${totalLinesSkipped}, time elapsed: ${(Date.now() - startTime) / 1000}s`
+      logger.info(
+        'Security scan running in VL mode (synthetic descriptors): running LogSQL-based regex scan via logsService.'
       );
-      const vulnerabilities = { critical: [], medium: [], low: [] };
-      for (const issue of finalIssueMap.values()) {
-        if (vulnerabilities[issue.severity]) {
-          vulnerabilities[issue.severity].push(issue);
+      return await this._processLogsViaVL(logsService, {
+        vulnerabilityPatterns,
+        suspiciousPatterns
+      });
+    } catch (error) {
+      // Re-throw typed VL-outage errors verbatim so the route layer's
+      // 503 + `{error:'vl_unreachable', message}` contract holds
+      // (mirrors `LogsService._vlOrThrow` — security-scan reads VL
+      // through `logsService._getVlClient()` so the same connection-
+      // class classification applies). Any other error is a real
+      // program bug and propagates as 500.
+      if (error && error.statusCode && error.body) throw error;
+      if (LogsService && typeof LogsService._vlOrThrow === 'function') {
+        try {
+          LogsService._vlOrThrow(error);
+        } catch (classified) {
+          logger.error(`Error in processLogsInParallel (vl-outage): ${classified.message}`, {
+            stack: classified.stack
+          });
+          throw classified;
         }
       }
-
-      failedLogins = this.removeDuplicateLogEntries(failedLogins);
-      suspiciousActivities = this.removeDuplicateLogEntries(suspiciousActivities);
-
-      return { vulnerabilities, failedLogins, suspiciousActivities };
-    } catch (error) {
       logger.error(`Error in processLogsInParallel: ${error.message}`, { stack: error.stack });
       throw error;
     }
@@ -322,6 +251,271 @@ const securityScanService = {
     if (cached) return cached.vulnerabilityDetails;
     const results = await this.runSecurityScan(logsService);
     return results.vulnerabilityDetails;
+  },
+
+  /**
+   * VL-mode scan — runs LogSQL substring queries against the scan
+   * window via `logsService._getVlClient()`.
+   *
+   * For each vulnerability pattern, extract the first literal token
+   * (regex source up to the first metachar) and run a LogsQL
+   * `_msg:~"token"` substring query against the scan window. The
+   * full regex is then re-applied to each returned row in JS so
+   * regex precision is preserved — VL only acts as the fetch layer.
+   *
+   * @param {Object} logsService
+   * @param {{vulnerabilityPatterns: Array, suspiciousPatterns: Array}} opts
+   * @returns {Promise<Object>}
+   */
+  async _processLogsViaVL(logsService, { vulnerabilityPatterns, suspiciousPatterns }) {
+    const today = DateTime.now();
+    const startIso = today.minus({ days: DAYS_TO_PROCESS }).toISO();
+    const endIso = today.toISO();
+    const client = logsService._getVlClient ? await logsService._getVlClient() : null;
+    if (!client) {
+      logger.warn('_processLogsViaVL: logsService has no _getVlClient — returning empty result.');
+      return {
+        vulnerabilities: { critical: [], medium: [], low: [] },
+        patternMatches: [],
+        failedLogins: [],
+        suspiciousActivities: [],
+        skipped: true,
+        reason: 'vl_mode_no_client'
+      };
+    }
+
+    // Extract ALL literal tokens from a regex source string. VL substring
+    // queries need a literal token (no metachars), so we read every
+    // alphanumeric run separated by regex metachars and OR them in the
+    // `_msg` clause. Capturing only the first literal missed the other
+    // alternatives (e.g. `/SQL injection|XSS|CSRF/i` only scanned for
+    // `SQL injection`, silently undercounting XSS and CSRF matches).
+    //
+    // Known limit: a 3-character floor discards the regex structure. A
+    // tight pattern is widened into a loose one before it reaches VL —
+    // `/IP Blocked/i` is fetched as `_msg:~"Blocked"`, and the
+    // `/404 Not Found: (GET|POST|PUT|DELETE)/` pattern as an OR over
+    // `_msg:~"GET" | "POST" | "PUT" | "DELETE"`, which on a web server
+    // returns a thousand unrelated lines. The re-test below keeps the
+    // result precise; the fetch is what over-collects. Narrowing this
+    // means either hand-written LogSQL per pattern or a longer literal
+    // floor, both of which change what each severity bucket counts and
+    // are a product decision, not a refactor.
+    const extractLiterals = (regex) => {
+      const src = regex && regex.source ? regex.source : String(regex || '');
+      const seen = new Set();
+      for (const m of src.matchAll(/[A-Za-z0-9_][A-Za-z0-9_ .:/=+-]{2,}/g)) {
+        const t = m[0].trim();
+        if (t.length >= 3) seen.add(t);
+      }
+      return [...seen];
+    };
+
+    // Name the alternative that fired, so a hit on one branch of an
+    // alternation is not reported under another branch. `regex` is
+    // reused across rows, so it is cloned before `exec` to keep it
+    // stateless (a `lastIndex` left behind by a global flag would skip
+    // matches on the next row).
+    const firstMatchOf = (regex, text) => {
+      if (typeof text !== 'string' || text === '') return null;
+      const m = new RegExp(regex.source, regex.flags.replace(/[gy]/g, '')).exec(text);
+      return m ? m[0] : null;
+    };
+
+    const vulnerabilities = { critical: [], medium: [], low: [] };
+    const suspiciousActivities = [];
+    const failedLogins = [];
+    const finalIssueMap = new Map();
+    const patternMatches = new Map();
+
+    // Yield to the event loop between pattern queries so health probes
+    // (/api/health) and OTel SDK exporter flushes are not starved by a
+    // 1-3s scan over 14 patterns. Mirrors the file-mode batch yield.
+    const yieldEventLoop = () => new Promise((resolve) => setImmediate(resolve));
+
+    for (const pattern of vulnerabilityPatterns) {
+      await yieldEventLoop();
+      const literals = extractLiterals(pattern.regex);
+      if (literals.length === 0) continue;
+      // OR-join the literals: `_msg:~"a" OR _msg:~"b" ...` — VL applies
+      // each substring filter independently and unions results.
+      const msgClause = literals.map((t) => `_msg:~"${t.replace(/"/g, '\\"')}"`).join(' OR ');
+      let rows;
+      try {
+        rows = await client.query({
+          q: msgClause,
+          start: startIso,
+          end: endIso,
+          limit: 1000
+        });
+      } catch (err) {
+        // A VL outage must abort the scan, not shrink its coverage.
+        // Swallowing it here meant all 14 patterns could fail, the
+        // result set stayed empty, and the caller still reported
+        // `status: 'completed'` — a clean bill of health produced by a
+        // backend that never answered a single query. Re-throw so the
+        // wrapper classifies it as a VlUnavailableError and the route
+        // answers 503.
+        if (LogsService && typeof LogsService._isVlUnavailable === 'function' && LogsService._isVlUnavailable(err)) {
+          logger.error('VL unavailable during security scan — aborting rather than reporting a partial result');
+          throw err;
+        }
+        logger.warn(`VL scan query failed for pattern ${pattern.type}: ${err.message}`);
+        continue;
+      }
+      if (!Array.isArray(rows) || rows.length === 0) continue;
+
+      let matchedCount = 0;
+      let lastSeen = '';
+      let sample = null;
+      for (const row of rows) {
+        // VL `_msg` for Node services is the raw Winston JSON envelope
+        // (e.g. `{"level":"info","message":"…"}`). Pull `.message` out
+        // before testing the regex so the pattern runs on the same
+        // string the file-path scan used.
+        const raw = row.message || row._msg || '';
+        let text = raw;
+        if (typeof raw === 'string' && raw.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed.message === 'string') text = parsed.message;
+          } catch {
+            // Not valid JSON — keep raw as text.
+          }
+        }
+        if (pattern.regex.test(text)) {
+          matchedCount += 1;
+          const ts = row._time || row.timestamp || '';
+          if (sample === null) {
+            sample = {
+              text,
+              timestamp: ts,
+              service: row.service || row['service.name'] || pattern.service
+            };
+          }
+          if (typeof ts === 'string' && ts > lastSeen) lastSeen = ts;
+          // Failed-login detection: collect the matching row as a side
+          // effect of the main loop (instead of re-running a separate
+          // VL query + 1000-row scan — see original lines 513-551).
+          if (pattern.type === 'failed_login') {
+            failedLogins.push({
+              timestamp: ts || new Date().toISOString(),
+              level: (row.level || pattern.severity || '').toString().toUpperCase(),
+              type: pattern.type,
+              severity: pattern.severity,
+              service: row.service || row['service.name'] || pattern.service,
+              message: text
+            });
+          }
+        }
+      }
+
+      if (matchedCount > 0) {
+        // `matchedTerm` names the alternative that actually fired on
+        // the rows we kept, not the longest literal in the alternation.
+        // Sorting by length reported "SQL injection" for every hit of
+        // `/SQL injection|XSS|CSRF/i` — the count was real, the label
+        // beside it was not, and an operator who went looking for SQL
+        // injection found none and concluded the panel was noise.
+        const matchedTerm = firstMatchOf(pattern.regex, sample && sample.text) || literals[0];
+        const key = `${pattern.type}_${pattern.service}_${matchedTerm}`;
+
+        if (PATTERN_MATCH_TYPES.has(pattern.type)) {
+          patternMatches.set(key, {
+            type: pattern.type,
+            pattern: matchedTerm,
+            occurrences: matchedCount,
+            sample: sample ? sample.text : '',
+            sampleTimestamp: sample ? sample.timestamp : lastSeen,
+            service: sample ? sample.service : pattern.service,
+            lastSeen: lastSeen || new Date().toISOString()
+          });
+          continue;
+        }
+
+        finalIssueMap.set(key, {
+          type: pattern.type,
+          severity: pattern.severity,
+          matchedTerm,
+          instanceCount: matchedCount,
+          lastSeen: lastSeen || new Date().toISOString(),
+          timestamp: lastSeen || new Date().toISOString(),
+          description: pattern.description,
+          recommendation: pattern.recommendation,
+          service: pattern.service
+        });
+      }
+    }
+
+    for (const issue of finalIssueMap.values()) {
+      if (vulnerabilities[issue.severity]) {
+        vulnerabilities[issue.severity].push(issue);
+      }
+    }
+
+    // Suspicious patterns share the same VL path (regex over free-text).
+    // Same extractLiterals + re-test approach.
+    for (const re of suspiciousPatterns || []) {
+      await yieldEventLoop();
+      const literals = extractLiterals(re);
+      if (literals.length === 0) continue;
+      const msgClause = literals.map((t) => `_msg:~"${t.replace(/"/g, '\\"')}"`).join(' OR ');
+      let rows;
+      try {
+        rows = await client.query({
+          q: msgClause,
+          start: startIso,
+          end: endIso,
+          limit: 1000
+        });
+      } catch (err) {
+        // Same rule as the vulnerability loop: a VL outage aborts the
+        // scan rather than returning a partial result dressed up as a
+        // completed one.
+        if (LogsService && typeof LogsService._isVlUnavailable === 'function' && LogsService._isVlUnavailable(err)) {
+          logger.error('VL unavailable during security scan — aborting rather than reporting a partial result');
+          throw err;
+        }
+        logger.warn(`VL scan query failed for suspicious term: ${err.message}`);
+        continue;
+      }
+      if (!Array.isArray(rows)) continue;
+      for (const row of rows) {
+        const raw = row.message || row._msg || '';
+        let text = raw;
+        if (typeof raw === 'string' && raw.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed.message === 'string') text = parsed.message;
+          } catch {
+            // keep raw as text
+          }
+        }
+        if (re.test(text)) {
+          suspiciousActivities.push({
+            timestamp: row._time || row.timestamp || new Date().toISOString(),
+            pattern: firstMatchOf(re, text) || literals[0],
+            service: row.service || row['service.name'] || 'unknown',
+            sample: text.length > 200 ? `${text.slice(0, 200)}…` : text
+          });
+        }
+      }
+    }
+
+    return {
+      vulnerabilities,
+      patternMatches: [...patternMatches.values()].sort((a, b) => b.occurrences - a.occurrences),
+      failedLogins: this.removeDuplicateLogEntries(failedLogins),
+      suspiciousActivities: this.removeDuplicateLogEntries(suspiciousActivities),
+      // Explicit `skipped: false, reason: null` — the runSecurityScan
+      // destructure (`{ skipped, reason } = ...`) would otherwise
+      // fall through to `skipped ? 'skipped' : 'completed'` =
+      // 'completed' for both "clean scan" AND "zero data scanned",
+      // making the operator toast silently green in the second case.
+      // The previous shape omitted these fields.
+      skipped: false,
+      reason: null
+    };
   },
   async checkFailedLogins(logsService) {
     logger.info('Legacy checkFailedLogins called. Checking cache or running full scan.');
@@ -353,81 +547,6 @@ const securityScanService = {
     return deduplicated;
   },
 
-  parseLogLine(line, file, lineNumber, invalidLogStream) {
-    function extractUrl(message) {
-      const urlMatch = message.match(/https?:\/\/[^\s]+|(GET|POST|PUT|DELETE)\s+([^\s]+)/i);
-      return urlMatch ? urlMatch[2] || urlMatch[0] : 'N/A';
-    }
-    const standardMatch = line.match(
-      /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[(\w+)\]\s+([^\s]+(?:\s+[^\s]+)*)\s+(.+)$/
-    );
-    if (standardMatch) {
-      const [, date, time, level, service, message] = standardMatch;
-      const timestamp = DateTime.fromFormat(`${date} ${time}`, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
-      if (!timestamp.isValid) {
-        if (invalidLogStream)
-          invalidLogStream.write(
-            `[${DateTime.now().toISO()}] Invalid timestamp in ${file} at line ${lineNumber}: ${line}\n`
-          );
-        return null;
-      }
-      return { timestamp: timestamp.toISO(), level, service, message, url: extractUrl(message) };
-    }
-    try {
-      const jsonLog = JSON.parse(line);
-      if (jsonLog.timestamp && jsonLog.level && jsonLog.message) {
-        const timestamp = DateTime.fromISO(jsonLog.timestamp, { zone: 'utc' });
-        if (!timestamp.isValid) {
-          if (invalidLogStream)
-            invalidLogStream.write(
-              `[${DateTime.now().toISO()}] Invalid JSON timestamp in ${file} at line ${lineNumber}: ${line}\n`
-            );
-          return null;
-        }
-        return {
-          timestamp: timestamp.toISO(),
-          level: jsonLog.level.toUpperCase(),
-          service: jsonLog.service || 'unknown',
-          message: jsonLog.message,
-          url: jsonLog.url || extractUrl(jsonLog.message)
-        };
-      }
-    } catch {
-      // Ignore parsing errors for non-standard log formats
-    }
-    const fallbackMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+(.+)$/);
-    if (fallbackMatch) {
-      const [, datetime, message] = fallbackMatch;
-      const timestamp = DateTime.fromFormat(datetime, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
-      if (!timestamp.isValid) {
-        if (invalidLogStream)
-          invalidLogStream.write(
-            `[${DateTime.now().toISO()}] Invalid fallback timestamp in ${file} at line ${lineNumber}: ${line}\n`
-          );
-        return null;
-      }
-      return { timestamp: timestamp.toISO(), level: 'UNKNOWN', service: 'unknown', message, url: extractUrl(message) };
-    }
-    if (invalidLogStream)
-      invalidLogStream.write(
-        `[${DateTime.now().toISO()}] Unrecognized log format in ${file} at line ${lineNumber}: ${line}\n`
-      );
-    return null;
-  },
-
-  async processFile(file, startTime, patterns) {
-    return new Promise((resolve, reject) => {
-      const worker = new Worker(__filename, {
-        workerData: { file, startTime, patterns }
-      });
-      worker.on('message', resolve);
-      worker.on('error', reject);
-      worker.on('exit', (code) => {
-        if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
-      });
-    });
-  },
-
   async getLastScanDetails() {
     try {
       console.log('Fetching last scan details');
@@ -436,6 +555,8 @@ const securityScanService = {
         lastScan: 'Never',
         vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
         vulnerabilityDetails: { critical: [], medium: [], low: [] },
+        patternMatches: [],
+        patternMatchCount: 0,
         failedLoginDetails: [],
         suspiciousDetails: []
       };
@@ -1011,117 +1132,5 @@ const securityScanService = {
     }
   }
 };
-
-// --- WORKER THREAD LOGIC ---
-if (!isMainThread) {
-  const { file, startTime, patterns } = workerData;
-  const fs = require('fs');
-  const readline = require('readline');
-  const zlib = require('zlib');
-
-  const parseLogLine = securityScanService.parseLogLine;
-
-  const results = {
-    vulnerabilities: { critical: [], medium: [], low: [] },
-    failedLogins: [],
-    suspiciousActivities: [],
-    linesProcessed: 0,
-    linesSkipped: 0
-  };
-  const issueMap = new Map();
-  const invalidLogStream = null;
-
-  try {
-    // This stream is for debugging parsing issues, and can be created if needed
-  } catch (err) {
-    console.error(`Error creating invalid log stream for ${file}: ${err.message}`);
-  }
-
-  const processLine = (line, lineNumber) => {
-    if (Date.now() - startTime > TIMEOUT_PERIOD) return false;
-    results.linesProcessed++;
-    const parsedLog = parseLogLine(line, file, lineNumber, invalidLogStream);
-    if (!parsedLog) {
-      results.linesSkipped++;
-      return true;
-    }
-
-    const { timestamp, message, url, level } = parsedLog;
-
-    if (
-      /Initiating security scan|Starting comprehensive security scan|Parsed \d+ total log entries|Security scan completed/i.test(
-        message
-      )
-    ) {
-      results.linesSkipped++;
-      return true;
-    }
-
-    patterns.vulnerabilityPatterns.forEach((pattern) => {
-      const match = message.match(pattern.regex);
-      if (match) {
-        const matchedTerm = match[1] || match[0];
-        const aggregationKey = `${pattern.type}_${pattern.service}_${matchedTerm}`;
-
-        if (!issueMap.has(aggregationKey)) {
-          const newVuln = {
-            type: pattern.type,
-            severity: pattern.severity,
-            description: pattern.description,
-            recommendation: pattern.recommendation,
-            matchedTerm,
-            timestamp,
-            service: pattern.service,
-            url,
-            firstSeen: timestamp,
-            lastSeen: timestamp,
-            instanceCount: 1
-          };
-          issueMap.set(aggregationKey, newVuln);
-          results.vulnerabilities[pattern.severity].push(newVuln);
-        } else {
-          const issue = issueMap.get(aggregationKey);
-          issue.instanceCount++;
-          issue.lastSeen = timestamp;
-        }
-      }
-    });
-
-    if (/Invalid credentials|failed login/i.test(message)) {
-      results.failedLogins.push({ timestamp, level, message });
-    }
-
-    if (patterns.suspiciousPatterns.some((pattern) => pattern.test(message))) {
-      results.suspiciousActivities.push({ timestamp, level, message });
-    }
-
-    return true;
-  };
-
-  const stream = fs.createReadStream(file);
-  const rl = readline.createInterface({
-    input: file.endsWith('.gz') ? stream.pipe(zlib.createGunzip()) : stream,
-    crlfDelay: Infinity
-  });
-
-  let lineNumber = 0;
-  rl.on('line', (line) => {
-    lineNumber++;
-    if (!processLine(line, lineNumber)) {
-      rl.close();
-    }
-  });
-
-  rl.on('close', () => {
-    parentPort.postMessage(results);
-    if (invalidLogStream) invalidLogStream.end();
-  });
-
-  rl.on('error', (err) => {
-    console.error(`Error reading ${file} in worker: ${err.message}`);
-    parentPort.postMessage(results);
-    if (invalidLogStream) invalidLogStream.end();
-  });
-}
 
 module.exports = securityScanService;

@@ -108,7 +108,7 @@
             "type": "prometheus",
             "uid": "${DS_VICTORIAMETRICS}"
           },
-          "expr": "sum(rate(http_server_duration_milliseconds_sum{service_name=~\"genie-backend|genieai-chatqna|genieai-retriever|genieai-reranker\"}[5m])) by (service_name)\n/\nsum(rate(http_server_duration_milliseconds_count{service_name=~\"genie-backend|genieai-chatqna|genieai-retriever|genieai-reranker\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_request_duration_seconds_sum{service_name=~\"$pipeline\"}[5m])) by (service_name) or sum(rate(http_server_duration_milliseconds_sum{service_name=~\"$pipeline\"}[5m])) by (service_name)\n/\nsum(rate(http_server_request_duration_seconds_count{service_name=~\"$pipeline\"}[5m])) by (service_name) or sum(rate(http_server_duration_milliseconds_count{service_name=~\"$pipeline\"}[5m])) by (service_name)",
           "legendFormat": "{{service_name}}",
           "refId": "A"
         }
@@ -202,7 +202,7 @@
             "type": "prometheus",
             "uid": "${DS_VICTORIAMETRICS}"
           },
-          "expr": "sum(rate(http_server_duration_milliseconds_sum{service_name=\"genie-backend\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_request_duration_seconds_sum{service_name=~\"$pipeline\"}[5m])) by (service_name) or sum(rate(http_server_duration_milliseconds_sum{service_name=~\"$pipeline\"}[5m])) by (service_name)",
           "legendFormat": "Backend",
           "refId": "A"
         },
@@ -211,7 +211,7 @@
             "type": "prometheus",
             "uid": "${DS_VICTORIAMETRICS}"
           },
-          "expr": "sum(rate(http_server_duration_milliseconds_sum{service_name=\"genieai-chatqna\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_request_duration_seconds_sum{service_name=~\"$pipeline\"}[5m])) by (service_name) or sum(rate(http_server_duration_milliseconds_sum{service_name=~\"$pipeline\"}[5m])) by (service_name)",
           "legendFormat": "ChatQnA",
           "hide": false,
           "refId": "B"
@@ -221,7 +221,7 @@
             "type": "prometheus",
             "uid": "${DS_VICTORIAMETRICS}"
           },
-          "expr": "sum(rate(http_server_duration_milliseconds_sum{service_name=\"genieai-retriever\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_request_duration_seconds_sum{service_name=~\"$pipeline\"}[5m])) by (service_name) or sum(rate(http_server_duration_milliseconds_sum{service_name=~\"$pipeline\"}[5m])) by (service_name)",
           "legendFormat": "Retriever",
           "hide": false,
           "refId": "C"
@@ -231,7 +231,7 @@
             "type": "prometheus",
             "uid": "${DS_VICTORIAMETRICS}"
           },
-          "expr": "sum(rate(http_server_duration_milliseconds_sum{service_name=\"genieai-reranker\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_request_duration_seconds_sum{service_name=~\"$pipeline\"}[5m])) by (service_name) or sum(rate(http_server_duration_milliseconds_sum{service_name=~\"$pipeline\"}[5m])) by (service_name)",
           "legendFormat": "Reranker",
           "hide": false,
           "refId": "D"
@@ -241,7 +241,7 @@
             "type": "prometheus",
             "uid": "${DS_VICTORIAMETRICS}"
           },
-          "expr": "sum(rate(http_server_duration_milliseconds_sum{service_name=\"genieai-dataprep\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_request_duration_seconds_sum{service_name=~\"$pipeline\"}[5m])) by (service_name) or sum(rate(http_server_duration_milliseconds_sum{service_name=~\"$pipeline\"}[5m])) by (service_name)",
           "legendFormat": "Dataprep",
           "hide": false,
           "refId": "E"
@@ -336,7 +336,7 @@
             "type": "prometheus",
             "uid": "${DS_VICTORIAMETRICS}"
           },
-          "expr": "sum(rate(http_server_duration_milliseconds_count{service_name=~\"genie-backend|genieai-chatqna|genieai-retriever|genieai-reranker|genieai-dataprep\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=~\"$pipeline\"}[5m])) by (service_name) or sum(rate(http_server_duration_milliseconds_count{service_name=~\"$pipeline\"}[5m])) by (service_name)",
           "legendFormat": "{{service_name}}",
           "refId": "A"
         }
@@ -417,7 +417,7 @@
             "type": "prometheus",
             "uid": "${DS_VICTORIAMETRICS}"
           },
-          "expr": "sum by (http_status_code) (increase(http_server_duration_milliseconds_count{service_name=~\"genie-backend|genieai-chatqna|genieai-retriever|genieai-reranker|genieai-dataprep\"}[5m]))",
+          "expr": "sum by (http_response_status_code) (increase(http_server_request_duration_seconds_count{service_name=~\"$pipeline\"}[5m]) or increase(http_server_duration_milliseconds_count{service_name=~\"$pipeline\"}[5m]))",
           "legendFormat": "{{http_status_code}}",
           "refId": "A"
         }
@@ -453,6 +453,34 @@
         "regex": "",
         "skipUrlSync": false,
         "type": "datasource"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "allValue": "backend|chatqna-xeon-backend-server|dataprep-arango-service|retriever-arango-service|reranker|genie-backend|genieai-chatqna|genieai-dataprep|genieai-retriever|genieai-reranker",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_VICTORIAMETRICS}"
+        },
+        "definition": "label_values((http_server_request_duration_seconds_count or http_server_duration_milliseconds_count), service_name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Pipeline service",
+        "multi": true,
+        "name": "pipeline",
+        "options": [],
+        "query": {
+          "query": "label_values((http_server_request_duration_seconds_count or http_server_duration_milliseconds_count), service_name)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
       }
     ]
   },

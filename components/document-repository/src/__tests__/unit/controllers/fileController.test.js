@@ -293,4 +293,180 @@ describe('fileController', () => {
       expect(fileService.deleteIngestionLogs).toHaveBeenCalledWith('f1');
     });
   });
+
+  describe('ingestMultipleFiles (batch HTTP handler)', () => {
+    let req, res;
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      req = { body: { fileIds: ['f1', 'f2'] } };
+      res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn().mockReturnThis()
+      };
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('returns 207 with per-file results when all files ingest successfully', async () => {
+      jest.spyOn(fileController, '_ingestFileById').mockResolvedValue({ success: true });
+
+      await fileController.ingestMultipleFiles(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(207);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          successCount: 2,
+          failureCount: 0,
+          results: expect.arrayContaining([
+            { fileId: 'f1', success: true },
+            { fileId: 'f2', success: true }
+          ])
+        })
+      );
+    });
+
+    it('returns 207 with all failures when no file is found', async () => {
+      jest
+        .spyOn(fileController, '_ingestFileById')
+        .mockRejectedValue(Object.assign(new Error('File metadata not found in database'), { status: 404 }));
+
+      await fileController.ingestMultipleFiles(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(207);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          successCount: 0,
+          failureCount: 2,
+          results: expect.arrayContaining([
+            { fileId: 'f1', success: false, error: expect.stringMatching(/not found/i) },
+            { fileId: 'f2', success: false, error: expect.stringMatching(/not found/i) }
+          ])
+        })
+      );
+    });
+
+    it('returns 207 with mixed per-file outcomes', async () => {
+      jest.spyOn(fileController, '_ingestFileById').mockImplementation(async (id) => {
+        if (id === 'f1') return { success: true };
+        return { success: false, error: 'File has already been ingested' };
+      });
+
+      await fileController.ingestMultipleFiles(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(207);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          successCount: 1,
+          failureCount: 1,
+          results: [
+            { fileId: 'f1', success: true },
+            { fileId: 'f2', success: false, error: expect.stringMatching(/already been ingested/i) }
+          ]
+        })
+      );
+    });
+
+    it('returns 400 when request body fails Joi validation', async () => {
+      req.body = { fileIds: [] }; // empty array fails min(1)
+      const spy = jest.spyOn(fileController, '_ingestFileById');
+
+      await fileController.ingestMultipleFiles(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Validation error' }));
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('retractMultipleFiles (batch HTTP handler)', () => {
+    let req, res;
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      req = { body: { fileIds: ['f1', 'f2'] } };
+      res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn().mockReturnThis()
+      };
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('returns 207 with per-file results when all files retract successfully', async () => {
+      jest.spyOn(fileController, '_retractFileById').mockResolvedValue({ success: true });
+
+      await fileController.retractMultipleFiles(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(207);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          successCount: 2,
+          failureCount: 0,
+          results: expect.arrayContaining([
+            { fileId: 'f1', success: true },
+            { fileId: 'f2', success: true }
+          ])
+        })
+      );
+    });
+
+    it('returns 207 with all failures when no file is found', async () => {
+      jest
+        .spyOn(fileController, '_retractFileById')
+        .mockRejectedValue(Object.assign(new Error('File metadata not found in database'), { status: 404 }));
+
+      await fileController.retractMultipleFiles(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(207);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          successCount: 0,
+          failureCount: 2
+        })
+      );
+    });
+
+    it('returns 207 with mixed per-file outcomes (e.g. already retracted)', async () => {
+      jest.spyOn(fileController, '_retractFileById').mockImplementation(async (id) => {
+        if (id === 'f1') return { success: true };
+        return { success: false, error: 'File has already been retracted' };
+      });
+
+      await fileController.retractMultipleFiles(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(207);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          successCount: 1,
+          failureCount: 1,
+          results: [
+            { fileId: 'f1', success: true },
+            { fileId: 'f2', success: false, error: expect.stringMatching(/already been retracted/i) }
+          ]
+        })
+      );
+    });
+
+    it('returns 400 when request body fails Joi validation', async () => {
+      req.body = { fileIds: [] };
+      const spy = jest.spyOn(fileController, '_retractFileById');
+
+      await fileController.retractMultipleFiles(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Validation error' }));
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
 });

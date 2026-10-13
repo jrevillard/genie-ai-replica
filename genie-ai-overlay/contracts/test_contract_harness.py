@@ -159,16 +159,33 @@ def test_fake_session_post_returns_fake_response():
     import asyncio
 
     session = _harness.FakeAiohttpSession()
-    resp = asyncio.run(session.post("http://fake/v1/chat/completions", json={}))
+    # post() is sync like real aiohttp; the response is both awaitable and
+    # an async context manager.
+    resp = asyncio.run(_await_post(session, "http://fake/v1/chat/completions", json={}))
     assert resp.status == 200
     assert asyncio.run(resp.json()) == {}
 
 
-def test_fake_session_records_calls():
+async def _await_post(session, url, **kwargs):
+    return await session.post(url, **kwargs)
+
+
+def test_fake_session_post_supports_async_with():
     import asyncio
 
     session = _harness.FakeAiohttpSession()
-    asyncio.run(session.post("http://fake/v1/retrieval", json={"input": "x"}))
+
+    async def _run():
+        async with session.post("http://fake/v1/rerank", json={}) as resp:
+            return resp
+
+    resp = asyncio.run(_run())
+    assert resp.status == 200
+
+
+def test_fake_session_records_calls():
+    session = _harness.FakeAiohttpSession()
+    session.post("http://fake/v1/retrieval", json={"input": "x"})
     assert session.calls and "retrieval" in session.calls[0][0]
 
 
@@ -176,8 +193,14 @@ def test_fake_session_returns_matched_payload():
     import asyncio
 
     session = _harness.FakeAiohttpSession({"/v1/retrieval": {"docs": ["a"]}})
-    resp = asyncio.run(session.post("http://fake/v1/retrieval", json={}))
+    resp = session.post("http://fake/v1/retrieval", json={})
     assert asyncio.run(resp.json()) == {"docs": ["a"]}
+
+
+def test_fake_session_configurable_status():
+    session = _harness.FakeAiohttpSession({"/rerank": ({"error_type": "Validation"}, 422)})
+    resp = session.post("http://fake/rerank", json={})
+    assert resp.status == 422
 
 
 def test_genie_kwargs_invariant():

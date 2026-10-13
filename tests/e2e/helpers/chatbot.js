@@ -131,17 +131,6 @@ async function saveChat(page, title) {
   await confirmButton.click();
 }
 
-/**
- * Dismiss the quick-help overlay if present.
- */
-async function dismissQuickHelp(page) {
-  const overlay = page.locator('.quick-help-item').first();
-  if (await overlay.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
-  }
-}
-
 module.exports = {
   loginViaUI,
   navigateToChatbot,
@@ -150,7 +139,6 @@ module.exports = {
   getMessages,
   getLastBotMessage,
   saveChat,
-  dismissQuickHelp,
   TEST_USER,
   BASE_URL,
 };

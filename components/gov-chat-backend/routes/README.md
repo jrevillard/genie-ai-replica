@@ -30,30 +30,26 @@ This document provides an overview of the API routes available in the GENIE.AI b
       - [Key Parameters](#key-parameters-4)
       - [Services Called](#services-called-4)
       - [Security](#security-4)
-    - [Logger Routes](#logger-routes)
+    - [Query Routes](#query-routes)
       - [Key Parameters](#key-parameters-5)
       - [Services Called](#services-called-5)
       - [Security](#security-5)
-    - [Query Routes](#query-routes)
+    - [Service Category Routes](#service-category-routes)
       - [Key Parameters](#key-parameters-6)
       - [Services Called](#services-called-6)
       - [Security](#security-6)
-    - [Service Category Routes](#service-category-routes)
+    - [Service Routes](#service-routes)
       - [Key Parameters](#key-parameters-7)
       - [Services Called](#services-called-7)
       - [Security](#security-7)
-    - [Service Routes](#service-routes)
-      - [Key Parameters](#key-parameters-8)
-      - [Services Called](#services-called-8)
-      - [Security](#security-8)
     - [User Routes](#user-routes)
+      - [Key Parameters](#key-parameters-9)
+      - [Services Called](#services-called-9)
+      - [Security](#security-9)
+    - [Weather Routes](#weather-routes)
       - [Key Parameters](#key-parameters-10)
       - [Services Called](#services-called-10)
       - [Security](#security-10)
-    - [Weather Routes](#weather-routes)
-      - [Key Parameters](#key-parameters-11)
-      - [Services Called](#services-called-11)
-      - [Security](#security-11)
   - [Error Handling](#error-handling)
   - [Testing](#testing)
     - [Using Swagger UI](#using-swagger-ui)
@@ -68,7 +64,6 @@ GENIE.AI is a RAG framework that integrates retrieval and generation capabilitie
 - **Authentication Routes**: Handle user authentication, registration, and password management.
 - **Chat History Routes**: Manage user conversations, messages, and folder organization.
 - **Database Operations Routes**: Perform database maintenance tasks like backups and optimization.
-- **Logger Routes**: Configure and manage logging settings.
 - **Query Routes**: Handle user queries and their integration with conversations.
 - **Service Category Routes**: Manage service categories and their hierarchies.
 - **Service Routes**: Provide access to service information.
@@ -92,8 +87,7 @@ graph TD
     D --> G[Auth Routes]
     D --> H[Chat History Routes]
     D --> I[Database Ops Routes]
-    D --> J[Logger Routes]
-    D --> K[Query Routes]
+    D --> J[Query Routes]
     D --> L[Service Category Routes]
     D --> M[Service Routes]
     D --> N[User Routes]
@@ -106,8 +100,7 @@ graph TD
     G -->|Calls| U[Auth Service]
     H -->|Calls| V[Chat History Service]
     I -->|Calls| W[Database Service]
-    J -->|Calls| X[Logger Service]
-    K -->|Calls| Y[Query Service]
+    J -->|Calls| X[Query Service]
     L -->|Calls| Z[Service Category Service]
     M -->|Calls| Z[Service Category Service]
     N -->|Calls| AB[User Service]
@@ -121,7 +114,6 @@ graph TD
     V -->|Accesses| AE
     W -->|Accesses| AE
     X -->|Accesses| AE
-    Y -->|Accesses| AE
     Z -->|Accesses| AE
     AB -->|Accesses| AE
     AD -->|Accesses| AE
@@ -159,7 +151,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 | GET | `/system-health` | Retrieve system health metrics |
 | GET | `/database/stats` | Get database statistics |
 | GET | `/logs` | Retrieve system logs with filtering |
-| POST | `/logs/rollover` | Trigger log rotation |
 | GET | `/user-stats` | Get user statistics |
 | GET | `/security-metrics` | Retrieve security metrics |
 | POST | `/security-scan` | Run a security scan |
@@ -302,28 +293,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 #### Security
 - All routes require JWT authentication (`authMiddleware.authenticate`).
 - Typically restricted to admin users (assumed to be enforced in the route or service layer).
-
-### Logger Routes
-
-**Base Path**: `/api/logger`
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/configure` | Reconfigure logger settings |
-| POST | `/rollover` | Trigger log rotation |
-
-#### Key Parameters
-- `level`: Logging level (error, warn, info, debug).
-- `errorMaxSize`, `combinedMaxSize`: Maximum log file sizes.
-- `errorMaxFiles`, `combinedMaxFiles`: Maximum days to keep log files.
-- `zippedArchive`: Whether to compress rotated logs.
-
-#### Services Called
-- **Logger Service**: Uses `reconfigureLogger` and `triggerLogRollover` functions to manage logging configuration.
-
-#### Security
-- Both routes require JWT authentication (`authMiddleware.authenticate`).
-- Both routes require admin privileges (`authMiddleware.isAdmin`).
 
 ### Query Routes
 

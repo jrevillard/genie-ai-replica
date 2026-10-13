@@ -3,6 +3,10 @@ title: "Architecture"
 description: "System architecture: C4 context and container views, the RAG pipeline flow, database schema, and API structure."
 weight: 1
 section: "architecture"
+mode: reference
+persona: developer
+owner: docs-stewards
+last_reviewed: 2026-09-29
 ---
 
 # Architecture Overview
@@ -73,12 +77,13 @@ graph TB
 
     subgraph Data Layer
         ADB[(ArangoDB<br/>Documents / Graph / Vector)]
-        REDIS[(Redis<br/>Cache)]
+        REDIS[(Redis<br/>(translation-service only))]
         PG[(PostgreSQL<br/>Kong + Keycloak)]
     end
 
     subgraph AI Layer
         CHATQNA[ChatQnA]
+        EMB[Embedding wrapper<br/>:6000]
         RETRIEVER[Retriever]
         RERANKER[Reranker]
         VLLM[vLLM<br/>LLM Inference]
@@ -104,6 +109,8 @@ graph TB
     DR --> CLAMAV
     BE --> REDIS
     BE --> CHATQNA
+    CHATQNA -->|POST /v1/embeddings| EMB
+    EMB --> TEI
     CHATQNA --> RETRIEVER
     CHATQNA --> RERANKER
     RETRIEVER --> ADB
@@ -113,7 +120,7 @@ graph TB
     DATAPREP -->|client_credentials| KC
     DATAPREP --> BE
     DATAPREP --> ADB
-    DATAPREP --> DR
+    DR --> DATAPREP
 ```
 
 ### Layer Descriptions
@@ -244,13 +251,13 @@ The OPEA overlay (`genie-ai-overlay/`) ships a **contract test suite** that vali
 
 **Red-green validation principle:** Every contract test asserts an **observable shape the upgrade actually changes** — kwargs forwarding, docarray shim pin, chunk shape, AQL filter clause, streaming metadata fields. A green-on-green test (asserting something that passes regardless of the upgrade) is a quality failure. The suite was proven green on v1.3 and red on a bare v1.5 bump without overlay re-graft.
 
-For operational details (invocation commands, suite maintenance), see the [Contract Tests README](../../../genie-ai-overlay/contracts/README.md).
+For operational details (invocation commands, suite maintenance), see the [Contract Tests README](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/genie-ai-overlay/contracts/README.md) in the repo.
 
 ---
 
 ## 5. Observability Architecture
 
-> For operational observability — dashboards, alerting, configuration, and tracing — see the [Observability]({{< relref "/docs/observability" >}}) section. This section covers the architecture-level design.
+> For operational observability — dashboards, alerting, configuration, and tracing — see the [Observability]({{< relref "/docs/observe" >}}) section. This section covers the architecture-level design.
 
 ### 5.1 Distributed Tracing Flow
 
@@ -262,6 +269,8 @@ sequenceDiagram
     participant K as Kong
     participant BE as Backend
     participant ChatQnA as OPEA ChatQnA
+    participant Emb as Embedding wrapper
+    participant TEI as TEI
     participant Ret as Retriever
     participant ADB as ArangoDB
     participant LLM as vLLM
@@ -279,16 +288,32 @@ sequenceDiagram
     BE->>ChatQnA: Bearer token + traceparent
     ChatQnA->>ChatQnA: Create child span (chatqna.process)
     ChatQnA->>Collector: Export span
-    
+
+    ChatQnA->>Emb: POST /v1/embeddings (traceparent)
+    Emb->>Emb: Create child span (embedding.wrapper)
+    Emb->>TEI: Forward (Hugging Face Inference API)
+    TEI->>TEI: Create child span (tei.embedding)
+    TEI->>Collector: Export span
+    TEI-->>Emb: Embedding vector
+    Emb-->>ChatQnA: Embedding vector
+
     ChatQnA->>Ret: Query + traceparent
     Ret->>Ret: Create child span (retriever.search)
     Ret->>ADB: Vector + graph search
     Ret->>Collector: Export span
-    
+    Ret-->>ChatQnA: Ranked chunks
+
     ChatQnA->>LLM: Generate + traceparent
     LLM->>LLM: Create child span (llm.inference)
     LLM->>Collector: Export span
-    
+    LLM-->>ChatQnA: Generated text
+
+    ChatQnA-->>BE: Final response
+    BE-->>K: Reverse proxy
+    K-->>N: Proxy
+    N-->>FE: HTTPS
+    FE-->>User: Render response
+
     Collector->>VM: Store trace
     Collector->>Collector: Self-telemetry span
 ```
@@ -418,7 +443,7 @@ sequenceDiagram
     BE->>KC: JWKS public key (cached)
     BE->>BE: Validate JWT signature + claims
     BE->>ADB: JIT provisioning (UPSERT by iss#sub)
-    BE->>Vue: API response
+    BE-->>Vue: API response
 ```
 
 Keycloak serves as the sole identity authority. If an external IdP is configured, Keycloak brokers the authentication. On each authenticated API request, the backend validates the JWT and ensures the user exists in ArangoDB via just-in-time provisioning.
@@ -516,6 +541,8 @@ sequenceDiagram
     participant K as Kong
     participant BE as Backend
     participant ChatQnA as OPEA ChatQnA
+    participant Emb as Embedding wrapper
+    participant TEI as TEI
     participant Ret as Retriever
     participant ADB as ArangoDB
     participant LLM as vLLM
@@ -528,19 +555,21 @@ sequenceDiagram
     BE->>ChatQnA: Bearer token
     ChatQnA->>ChatQnA: Validate JWT (JWKS)
     ChatQnA->>BE: GET /api/me/context (user profile for AI enrichment)
-    BE->>ChatQnA: User context (name, role, emailVerified)
-    ChatQnA->>TEI: Generate embedding
-    TEI->>ChatQnA: Embedding vector
+    BE-->>ChatQnA: User context (name, role, emailVerified)
+    ChatQnA->>Emb: POST /v1/embeddings
+    Emb->>TEI: Forward (Hugging Face Inference API)
+    TEI-->>Emb: Embedding vector
+    Emb-->>ChatQnA: Embedding vector
     ChatQnA->>Ret: Query with embedding
     Ret->>ADB: Vector + graph search
-    ADB->>Ret: Ranked chunks
-    Ret->>ChatQnA: Retrieved documents
+    ADB-->>Ret: Ranked chunks
+    Ret-->>ChatQnA: Retrieved documents
     ChatQnA->>ChatQnA: Rerank results
     ChatQnA->>LLM: Context + prompt
-    LLM->>ChatQnA: Generated response
-    ChatQnA->>BE: RAG response
-    BE->>FE: API response
-    FE->>User: Display answer
+    LLM-->>ChatQnA: Generated response
+    ChatQnA-->>BE: RAG response
+    BE-->>FE: API response
+    FE-->>User: Display answer
 ```
 
 The RAG pipeline flows through the API gateway, backend, and OPEA services. The Bearer token is forwarded to ChatQnA, which performs independent JWKS validation. ChatQnA also fetches user context from the backend via `GET /api/me/context` to enrich AI prompts with user profile data.
@@ -555,6 +584,7 @@ sequenceDiagram
     participant FE as Vue Frontend
     participant BE as Backend
     participant ChatQnA as OPEA ChatQnA
+    participant Emb as Embedding wrapper
     participant TEI as TEI Embedding
     participant Ret as Retriever
     participant ADB as ArangoDB
@@ -563,40 +593,42 @@ sequenceDiagram
     participant Collector as OTel Collector
 
     User->>FE: Send query
-    FE->>BE: POST /api/chat
+    FE->>BE: POST /api/queries/stream
     
     BE->>BE: [SPAN: backend.request]
     BE->>Collector: Export span (OTLP)
     
-    BE->>ChatQnA: POST /chat (with traceparent)
+    BE->>ChatQnA: POST /v1/chatqna (with traceparent)
     ChatQnA->>ChatQnA: [SPAN: chatqna.process]
     ChatQnA->>Collector: Export span
     
-    ChatQnA->>TEI: Generate embedding (traceparent)
+    ChatQnA->>Emb: POST /v1/embeddings (traceparent)
+    Emb->>Emb: [SPAN: embedding.wrapper]
+    Emb->>TEI: Forward (Hugging Face Inference API)
     TEI->>TEI: [SPAN: tei.embedding]
     TEI->>Collector: Export span
-    TEI->>ChatQnA: Vector
+    TEI-->>ChatQnA: Vector
     
     ChatQnA->>Ret: Query (traceparent)
     Ret->>Ret: [SPAN: retriever.search]
     Ret->>ADB: Vector + graph search
     ADB->>ADB: [SPAN: arangodb.query]
     Ret->>Collector: Export span
-    Ret->>ChatQnA: Chunks
+    Ret-->>ChatQnA: Chunks
     
     ChatQnA->>Rerank: Rerank (traceparent)
     Rerank->>Rerank: [SPAN: reranker.score]
     Rerank->>Collector: Export span
-    Rerank->>ChatQnA: Ranked chunks
+    Rerank-->>ChatQnA: Ranked chunks
     
     ChatQnA->>LLM: Generate (traceparent)
     LLM->>LLM: [SPAN: llm.inference]
     LLM->>Collector: Export span
-    LLM->>ChatQnA: Response
+    LLM-->>ChatQnA: Response
     
-    ChatQnA->>BE: RAG response
-    BE->>FE: API response
-    FE->>User: Display answer
+    ChatQnA-->>BE: RAG response
+    BE-->>FE: API response
+    FE-->>User: Display answer
 ```
 
 **Key spans emitted:**
@@ -696,9 +728,9 @@ sequenceDiagram
     K->>DR: POST /api/files/upload (Bearer token)
     DR->>DR: Validate file type + size
     DR->>CLAM: Scan for viruses
-    CLAM->>DR: Clean / Infected
+    CLAM-->>DR: Clean / Infected
     DR->>DR: Store file + metadata
-    DR->>FE: 201 Created (file_id)
+    DR-->>FE: 201 Created (file_id)
 ```
 
 Users upload documents through the frontend to the Document Repository service. Files are validated (type, size), scanned by ClamAV, and stored with metadata. Upload requires an authenticated user with admin role.
@@ -729,20 +761,21 @@ sequenceDiagram
     DP->>DP: Chunk document (dynamic size per file type)
 
     DP->>BE: GET /api/service-categories/categories
-    BE->>DP: Label hierarchy
+    BE-->>DP: Label hierarchy
     DP->>DP: Label chunks (LLM / embedding / BM25)
     DP->>ADB: Store chunks + entities + graph edges
     DP->>ADB: Generate and store vector embeddings
 
     DP->>DR: Update ingestion status + chunk count
-    DP->>FE: Ingestion complete
+    DR-->>Admin: 200 OK (Ingestion started in background)
+    Note over Admin,FE: Frontend polls DR /api/files/{fileId}/ingestion-log for status
 ```
 
 Dataprep uses a dedicated Keycloak client with the `client_credentials` grant type. This service account is separate from user tokens and has permissions scoped to document ingestion operations. The ingestion pipeline extracts content, chunks it, labels each chunk against the service taxonomy, constructs a knowledge graph (entities + relationships), generates vector embeddings, and stores everything in ArangoDB.
 
-> **Contextual Retrieval (optional).** `CONTEXTUAL_RETRIEVAL_ENABLED=true` (default); the dataprep generates an LLM document-context prefix per chunk (after chunking, before embedding) so chunks carry the document's subject. `CONTEXTUAL_STRATEGY` selects `per_chunk` (one call/chunk, tailored; default) or `doc_level` (one call/document, shared). `CONTEXTUAL_LABEL_RAW=true` (default) decouples: label the **raw** chunk, use the context only for the **embedding** — keeps label precision while propagating the subject via the vector. Default on (`true`); set `false` to disable. See the [Data Labelling Strategy]({{< relref "/docs/rag/data-labeling" >}}) doc (§7).
+> **Contextual Retrieval (optional).** `CONTEXTUAL_RETRIEVAL_ENABLED=true` (default); the dataprep generates an LLM document-context prefix per chunk (after chunking, before embedding) so chunks carry the document's subject. `CONTEXTUAL_STRATEGY` selects `per_chunk` (one call/chunk, tailored; default) or `doc_level` (one call/document, shared). `CONTEXTUAL_LABEL_RAW=true` (default) decouples: label the **raw** chunk, use the context only for the **embedding** — keeps label precision while propagating the subject via the vector. Default on (`true`); set `false` to disable. See the [Data Labelling Strategy]({{< relref "/docs/rag-pipeline/data-labeling" >}}) doc (§7).
 
-> **Multi-Turn Retrieval (optional, off by default).** `MULTI_TURN_BLEND_ENABLED=false` (default). A **query-time** companion to Contextual Retrieval: blends the embedded current query with an embedding of the previous N turns (`V = α·EQ + (1-α)·EH`, default `α=0.7`, `N=1`) at the retriever's dense leg, so pronoun-heavy follow-ups ("can you elaborate on this?") retrieve the prior turn's subject. Implemented as a single batched TEI call through the existing embedding node (no side-channel embedding). Under the default dense-only config the blended vector controls all retrieval; when hybrid retrieval is explicitly enabled (opt-in), only the dense leg is blended. See [Multi-Turn Retrieval]({{< relref "/docs/rag/multi-turn-retrieval" >}}).
+> **Multi-Turn Retrieval (optional, off by default).** `MULTI_TURN_BLEND_ENABLED=false` (default). A **query-time** companion to Contextual Retrieval: blends the embedded current query with an embedding of the previous N turns (`V = α·EQ + (1-α)·EH`, default `α=0.7`, `N=1`) at the retriever's dense leg, so pronoun-heavy follow-ups ("can you elaborate on this?") retrieve the prior turn's subject. Implemented as a single batched TEI call through the existing embedding node (no side-channel embedding). Under the default dense-only config the blended vector controls all retrieval; when hybrid retrieval is explicitly enabled (opt-in), only the dense leg is blended. See [Multi-Turn Retrieval]({{< relref "/docs/rag-pipeline/multi-turn-retrieval" >}}).
 
 ### 10.3 Document Retraction
 
@@ -790,7 +823,7 @@ Unauthenticated requests to protected routes receive a 401 response. The backend
 
 On each authenticated request, the backend checks whether the user exists in ArangoDB. If not, it creates the user record using a composite key formed from the JWT issuer and subject (`iss#sub`). If the user already exists, the backend updates the user's metadata (name, email, roles) to stay in sync with Keycloak.
 
-This ensures ArangoDB always reflects the current state from the identity provider. For detailed user management procedures, see the [Keycloak Admin Guide](/docs/configuration/keycloak-admin-guide/).
+This ensures ArangoDB always reflects the current state from the identity provider. For detailed user management procedures, see the [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/).
 
 ### 12.2 User Disable and Delete Propagation
 
@@ -842,7 +875,7 @@ sequenceDiagram
 
 Keycloak acts as a broker between GENIE.AI and external identity providers. The external IdP authenticates the user, Keycloak maps the external identity to a local user, and issues a GENIE.AI-signed JWT. The frontend and backend only interact with Keycloak -- they are unaware of which external IdP was used.
 
-For configuration details, see the [External IdP Integration Guide](/docs/configuration/external-idp-integration-guide/).
+For configuration details, see the [External IdP Integration Guide](/docs/configure/external-idp-integration-guide/).
 
 ---
 
@@ -860,15 +893,16 @@ Request path: `Browser -> NGINX (TLS) -> Kong (CORS, rate limit) -> Backend (JWT
 
 Keycloak runs behind the NGINX → Kong proxy chain with the `/auth` path prefix. The following headers are used to tell Keycloak its public URL:
 
-```
-Client → NGINX → Kong → Keycloak
-            │         │       │
-            │    X-Forwarded-Prefix: /auth
-            │    (strip_path removes /auth)
-            │         │
-     X-Forwarded-Proto: https
-     X-Forwarded-Host: <NGINX_PUBLIC_DOMAIN>
-     X-Forwarded-Port: <NGINX_HTTPS_PORT>
+```mermaid
+flowchart LR
+    C[Client]
+    N[NGINX]
+    K[Kong<br/>strip_path removes /auth]
+    KC[Keycloak]
+
+    C -- HTTPS --> N
+    N -- X-Forwarded-Proto: https<br/>X-Forwarded-Host: NGINX_PUBLIC_DOMAIN<br/>X-Forwarded-Port: NGINX_HTTPS_PORT --> K
+    K -- X-Forwarded-Prefix: /auth --> KC
 ```
 
 | Header | Set by | Value | Purpose |
@@ -906,13 +940,13 @@ This approach (docs option 1: X-Forwarded-Prefix) avoids hardcoding a full URL i
 
 ## 16. Further Reading
 
-- [RAG Pipeline]({{< relref "/docs/rag" >}}) -- Retrieval-augmented generation: embedding, hybrid retrieval, reranking, generation, translation
-- [Observability]({{< relref "/docs/observability" >}}) -- Metrics, logs, traces, dashboards, alerting
+- [RAG Pipeline]({{< relref "/docs/rag-pipeline" >}}) -- Retrieval-augmented generation: embedding, hybrid retrieval, reranking, generation, translation
+- [Observability]({{< relref "/docs/observe" >}}) -- Metrics, logs, traces, dashboards, alerting
 
-- [Keycloak Admin Guide](/docs/configuration/keycloak-admin-guide/) -- Realm configuration, user management, client setup
-- [Docker Compose Setup](/docs/deployment/docker-compose-setup/) -- Local development deployment with Docker Compose
-- [Docker Swarm Setup](/docs/deployment/docker-swarm-setup/) -- Production deployment with Docker Swarm and Ansible
-- [Ansible Deployment](../deploy/ansible/README.md) -- Automated Docker Swarm deployment with per-environment secrets
-- [OTel Collector Integration](../configs/otel/README.md) -- Observability stack configuration (OTel Collector, VictoriaMetrics, VictoriaLogs, VictoriaTraces, Grafana)
-- [External IdP Integration Guide](/docs/configuration/external-idp-integration-guide/) -- Connecting Google, Microsoft, and SAML identity providers
-- [E2E Tests](e2e-tests/README.md) -- End-to-end test procedures for authentication and session lifecycle
+- [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/) -- Realm configuration, user management, client setup
+- [Docker Compose Setup](/docs/deploy/docker-compose-setup/) -- Local development deployment with Docker Compose
+- [Docker Swarm Setup](/docs/deploy/docker-swarm-setup/) -- Production deployment with Docker Swarm and Ansible
+- [Ansible Deployment](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/deploy/ansible/README.md) -- Automated Docker Swarm deployment with per-environment secrets (see `deploy/ansible/README.md` in the repo)
+- [OTel Collector Integration](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/configs/otel/README.md) -- Observability stack configuration (OTel Collector, VictoriaMetrics, VictoriaLogs, VictoriaTraces, Grafana) (see `configs/otel/README.md` in the repo)
+- [External IdP Integration Guide](/docs/configure/external-idp-integration-guide/) -- Connecting Google, Microsoft, and SAML identity providers
+- [E2E Tests](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/docs/e2e-tests/README.md) -- End-to-end test procedures for authentication and session lifecycle (see `docs/e2e-tests/README.md` in the repo)

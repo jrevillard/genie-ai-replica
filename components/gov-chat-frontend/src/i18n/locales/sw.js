@@ -233,7 +233,7 @@ export default {
     contentManagement: 'USIMAMIZI WA MAUDHUI',
     knowledgeHierarchy: 'Uongozi wa Maarifa',
     documentManagement: 'Usimamizi wa Nyaraka',
-    noLogsFound: 'Hakuna kumbukumbu zilizopatikana leo',
+    noErrorsOrWarnings: 'Hakuna makosa au tahadhari leo',
     invalidLogsResponse: 'Muundo batili wa muhtasari wa kumbukumbu',
     logsSummaryError: 'Imeshindwa kupakia muhtasari wa kumbukumbu',
     buttons: {
@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Ukubwa wa Hifadhidata',
     totalTables: 'Jumla ya Jedwali',
     logManagement: 'Usimamizi wa Kumbukumbu',
-    rolloverLogs: 'Badilisha Kumbukumbu',
     searchLogs: 'Tafuta Kumbukumbu',
     logTime: 'Wakati',
     logLevel: 'Kiwango',
@@ -325,10 +324,6 @@ export default {
         error: 'Hitilafu wakati wa kuboresha hifadhidata',
         loading: 'Inaboresha hifadhidata...'
       },
-      rolloverLogs: {
-        success: 'Upitishaji wa kumbukumbu umekamilika',
-        loading: 'Inapitisha kumbukumbu...'
-      },
       searchLogs: {
         success: 'Utafutaji wa kumbukumbu umekamilika',
         loading: 'Inatafuta kumbukumbu...'
@@ -376,8 +371,6 @@ export default {
       warningLogs: 'Kumbukumbu za Tahadhari',
       noErrorLogs: 'Hakuna kumbukumbu za hitilafu zilizorekodiwa leo.',
       noWarningLogs: 'Hakuna kumbukumbu za tahadhari zilizorekodiwa leo.',
-      infoLogsNote:
-        'Kumbukumbu za habari hazionyeshwi kwenye muhtasari. Tumia kazi ya utafutaji kuona aina zote za kumbukumbu.',
       searchResults: 'Matokeo ya Utafutaji ya Hivi Karibuni',
       entriesFound: 'viingizo vimepatikana',
       viewAllResults: 'Ona Matokeo Yote',
@@ -389,11 +382,14 @@ export default {
         authFailed: 'Uthibitishaji umeshindwa',
         lowDiskSpace: 'Nafasi ya diski chini ya kiwango',
         slowQuery: 'Utendaji wa polepole wa hoja',
-        rateLimit: 'Kikomo cha kiwango kinakaribia'
+        rateLimit: 'Kikomo cha kiwango kinakaribia',
+        invalidToken: 'Tokeni batili',
+        fileNotFound: 'Faili haipatikani'
       },
       logSearch: {
         noResultsFound: 'Hakuna kumbukumbu zinazofanana na vigezo vyako vya utafutaji',
-        resultsFound: 'Imepatikana {count} viingizo vya kumbukumbu'
+        resultsFound: 'Imepatikana {count} viingizo vya kumbukumbu',
+        degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {
@@ -426,6 +422,10 @@ export default {
       envFileRecommendation:
         'Hakikisha faili za mazingira hazipatikani kutoka kwa saraka za wavuti na usanidi wa seva unazuia ipasavyo ufikiaji wa faili nyeti.',
       gitRepoRecommendation: 'Hakikisha saraka za .git zimelindwa ipasavyo na hazipatikani kutoka kwa wavuti.',
+      logPatternMatches: 'Mifano ya logi iliyopatikana',
+      patternMatchNote:
+        'Masharti yaliyopatikana katika maandishi ya log. Ukaguzi unaripoti substring, si shambulizi iliyothibitishwa — soma mstari huo.',
+      patternMatchSummaryNote: '(substring iliyopatikana katika maandishi ya log, si shambulizi iliyothibitishwa)',
       noVulnerabilitiesFound: 'Hakuna Udhaifu Uliopatikana',
       systemSecure: 'Mfumo wako unaonekana kuwa salama. Endelea kufuatilia mara kwa mara.',
       loadingScan: 'Inapakia matokeo ya ukaguzi...',
@@ -513,6 +513,16 @@ export default {
       confirmIngestSelected: 'Una uhakika unataka kuingiza faili {count} zilizochaguliwa?',
       ingestQueuedSuccess: 'Faili {count} zimewekwa kwenye foleni ya kuingizwa.',
       ingestQueuedError: 'Hitilafu imetokea wakati wa mchakato wa uingizaji wa kundi.',
+      ingestPartialFailure: '{successCount} kati ya {count} faili zimechakatwa. Zimeshindwa: {detail}',
+      ingestAllFailed: 'Faili {count} zote zimeshindwa: {detail}',
+      retractSelected: 'Ondoa Zilizochaguliwa',
+      confirmRetractTitle: 'Thibitisha Kuondoa kwa Kundi',
+      confirmRetractSelected: 'Una uhakika unataka kuondoa faili {count} zilizochaguliwa?',
+      retract: 'Ondoa',
+      retractQueuedSuccess: 'Faili {count} zimewekwa kwenye foleni ya kuondolewa.',
+      retractQueuedError: 'Hitilafu imetokea wakati wa mchakato wa kuondoa kwa kundi.',
+      retractPartialFailure: '{successCount} kati ya {count} faili zimeondolewa. Zimeshindwa: {detail}',
+      retractAllFailed: 'Faili {count} zote zimeshindwa: {detail}',
       uploadSuccessMultiple: 'Faili {count} zimepakiwa kwa mafanikio.',
       linkSubmitSuccess: 'Imefanikiwa kutambaa na kuhifadhi "{fileName}".',
       actionSuccess: 'Kitendo "{action}" kwenye faili {fileId} kimefanikiwa.',

@@ -18,53 +18,24 @@ test.describe('Document Upload', () => {
     await deleteAllTestDocuments('test-document');
   });
 
-  test('upload a .txt file and verify it appears in the document table', async ({ page }) => {
-    await uploadFile(page, path.join(FIXTURES_DIR, 'test-document.txt'));
+  for (const ext of ['txt', 'md', 'pdf']) {
+    test(`upload a .${ext} file and verify it appears in the document table`, async ({ page }) => {
+      const fileName = `test-document.${ext}`;
+      await uploadFile(page, path.join(FIXTURES_DIR, fileName));
 
-    const row = await waitForDocumentInTable(page, 'test-document.txt');
-    await expect(row).toBeVisible();
+      const row = await waitForDocumentInTable(page, fileName);
+      await expect(row).toBeVisible();
 
-    const fileName = await row.locator('td.cell-main').innerText();
-    expect(fileName.trim()).toContain('test-document.txt');
+      const cellText = await row.locator('td.cell-main').innerText();
+      expect(cellText.trim()).toContain(fileName);
 
-    const statusTag = row.locator('DsStatusTag, .status-tag, [class*="status"]');
-    const statusText = (await statusTag.isVisible())
-      ? (await statusTag.innerText()).trim()
-      : '';
-    expect(statusText.toLowerCase()).toContain('pending');
-  });
-
-  test('upload a .md file and verify it appears in the document table', async ({ page }) => {
-    await uploadFile(page, path.join(FIXTURES_DIR, 'test-document.md'));
-
-    const row = await waitForDocumentInTable(page, 'test-document.md');
-    await expect(row).toBeVisible();
-
-    const fileName = await row.locator('td.cell-main').innerText();
-    expect(fileName.trim()).toContain('test-document.md');
-
-    const statusTag = row.locator('DsStatusTag, .status-tag, [class*="status"]');
-    const statusText = (await statusTag.isVisible())
-      ? (await statusTag.innerText()).trim()
-      : '';
-    expect(statusText.toLowerCase()).toContain('pending');
-  });
-
-  test('upload a .pdf file and verify it appears in the document table', async ({ page }) => {
-    await uploadFile(page, path.join(FIXTURES_DIR, 'test-document.pdf'));
-
-    const row = await waitForDocumentInTable(page, 'test-document.pdf');
-    await expect(row).toBeVisible();
-
-    const fileName = await row.locator('td.cell-main').innerText();
-    expect(fileName.trim()).toContain('test-document.pdf');
-
-    const statusTag = row.locator('DsStatusTag, .status-tag, [class*="status"]');
-    const statusText = (await statusTag.isVisible())
-      ? (await statusTag.innerText()).trim()
-      : '';
-    expect(statusText.toLowerCase()).toContain('pending');
-  });
+      const statusTag = row.locator('DsStatusTag, .status-tag, [class*="status"]');
+      const statusText = (await statusTag.isVisible())
+        ? (await statusTag.innerText()).trim()
+        : '';
+      expect(statusText.toLowerCase()).toContain('pending');
+    });
+  }
 
   test('reject .exe file and display error message', async ({ page }) => {
     const uploadBtn = page.locator('.filter-bar').getByText('Upload Files');

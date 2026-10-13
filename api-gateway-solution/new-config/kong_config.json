@@ -78,7 +78,7 @@
     {
       "name": "api-fallback",
       "id": "f2146b63-2c99-491d-b999-274cd629912f",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api"],
       "strip_path": false,
       "preserve_host": true,
@@ -99,7 +99,7 @@
     {
       "name": "auth-route",
       "id": "7602e7f1-e312-44ed-a38c-8e82679c2c50",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/auth"],
       "strip_path": false,
       "preserve_host": true,
@@ -120,7 +120,7 @@
     {
       "name": "auth-refresh-route",
       "id": "898b5b34-0d52-4cae-b4f4-c42655a55952",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/auth/refresh-token"],
       "strip_path": false,
       "preserve_host": true,
@@ -141,7 +141,7 @@
     {
       "name": "auth-login-route",
       "id": "a19f9d61-ed62-4185-a826-9f3e07547498",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/auth/login"],
       "strip_path": false,
       "preserve_host": true,
@@ -162,7 +162,7 @@
     {
       "name": "user-route",
       "id": "752ee750-73d9-4cbe-8a65-37fa07ea7531",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/me"],
       "strip_path": false,
       "preserve_host": true,
@@ -183,7 +183,7 @@
     {
       "name": "query-route",
       "id": "66937bee-3067-400c-b0e8-d7a0b8d22e08",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/queries"],
       "strip_path": false,
       "preserve_host": true,
@@ -204,7 +204,7 @@
     {
       "name": "query-stream-route",
       "id": "b1c2d3e4-f5a6-4b78-9c0d-1e2f3a4b5c6d",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/queries/stream"],
       "strip_path": false,
       "preserve_host": true,
@@ -225,7 +225,7 @@
     {
       "name": "service-route",
       "id": "d23b9c0d-f610-4935-a405-1f5af97c1a66",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/services"],
       "strip_path": false,
       "preserve_host": true,
@@ -246,7 +246,7 @@
     {
       "name": "service-category-route",
       "id": "dd49c426-668a-4b40-bf52-6a7cbb75741f",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/service-categories"],
       "strip_path": false,
       "preserve_host": true,
@@ -267,7 +267,7 @@
     {
       "name": "database-operations-route",
       "id": "5d65894d-43df-4846-8d0e-d311d1ff073d",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/database"],
       "strip_path": false,
       "preserve_host": true,
@@ -288,29 +288,8 @@
     {
       "name": "analytics-route",
       "id": "c62e46b7-da5e-475b-83ce-a8b95df08325",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/analytics"],
-      "strip_path": false,
-      "preserve_host": true,
-      "regex_priority": 0,
-      "path_handling": "v0",
-      "request_buffering": true,
-      "response_buffering": true,
-      "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
-      "methods": null,
-      "hosts": null,
-      "headers": null,
-      "snis": null,
-      "sources": null,
-      "destinations": null,
-      "tags": null
-    },
-    {
-      "name": "logger-route",
-      "id": "9db8116a-c8ec-4fe0-82aa-043ec1f1b636",
-      "service": {"name": "express-api"},
-      "paths": ["/api/logger"],
       "strip_path": false,
       "preserve_host": true,
       "regex_priority": 0,
@@ -330,7 +309,7 @@
     {
       "name": "security-route",
       "id": "4e807fb3-4f67-4151-86f8-63582cb51820",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/security"],
       "strip_path": false,
       "preserve_host": true,
@@ -351,7 +330,7 @@
     {
       "name": "admin-route",
       "id": "35eb882b-1b68-4a30-872a-9f322d21a034",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/admin"],
       "strip_path": false,
       "preserve_host": true,
@@ -372,7 +351,7 @@
     {
       "name": "chat-history-route",
       "id": "d32c41a5-5d79-4ec6-a033-68a8a3f61adf",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/chat"],
       "strip_path": false,
       "preserve_host": true,
@@ -412,14 +391,7 @@
               "Authorization",
               "X-Requested-With"
             ],
-            "methods": [
-              "GET",
-              "POST",
-              "PUT",
-              "PATCH",
-              "DELETE",
-              "OPTIONS"
-            ],
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "origins": ["*"]
           }
         },
@@ -459,7 +431,7 @@
     {
       "name": "folder-main-route",
       "id": "a3c0222c-150a-4cd5-98e8-6ee3f5f3a3b7",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/chat/folders"],
       "strip_path": false,
       "preserve_host": true,
@@ -480,7 +452,7 @@
     {
       "name": "folder-search-route",
       "id": "18bce79e-0626-4ece-86b7-77695f34adf6",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/chat/folders/search"],
       "strip_path": false,
       "preserve_host": true,
@@ -501,7 +473,7 @@
     {
       "name": "folder-shared-route",
       "id": "68f7a4f9-673e-45e6-858b-989f72539cc5",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/chat/folders/shared"],
       "strip_path": false,
       "preserve_host": true,
@@ -522,7 +494,7 @@
     {
       "name": "folder-reorder-route",
       "id": "4ea1f274-2400-4d03-9fae-fbf31972621d",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/chat/folders/reorder"],
       "strip_path": false,
       "preserve_host": true,
@@ -543,7 +515,7 @@
     {
       "name": "folder-detail-route",
       "id": "8e30fbdb-0c65-41b9-942d-feb3f9396596",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/chat/folders/(?!shared$|search$|reorder$).*"],
       "strip_path": false,
       "preserve_host": true,
@@ -564,7 +536,7 @@
     {
       "name": "conversation-move-route",
       "id": "775bba9e-e8b4-4141-a532-462ed094410e",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/chat/conversations/.*/move"],
       "strip_path": false,
       "preserve_host": true,
@@ -585,7 +557,7 @@
     {
       "name": "conversation-folder-route",
       "id": "f6bf67f8-f115-4dda-9da9-259d550ba309",
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "paths": ["/api/chat/conversations/.*/folder"],
       "strip_path": false,
       "preserve_host": true,
@@ -606,7 +578,7 @@
     {
       "name": "keycloak-route",
       "id": "a1b2c3d4-e5f6-4a78-9b0c-1d2e3f4a5b6c",
-      "service": {"name": "keycloak"},
+      "service": { "name": "keycloak" },
       "paths": ["/auth"],
       "strip_path": true,
       "_comment": "strip_path: true removes /auth prefix before forwarding to Keycloak root. request-transformer plugin adds X-Forwarded-Prefix: /auth so Keycloak includes /auth in discovery URLs (docs option 1).",
@@ -639,7 +611,7 @@
     {
       "name": "files-route",
       "id": "f0e1d2c3-b4a5-4e6f-8d7c-9b8a7f6e5d4c",
-      "service": {"name": "document-repository"},
+      "service": { "name": "document-repository" },
       "paths": ["/api/files", "/api/files/"],
       "strip_path": false,
       "preserve_host": true,
@@ -660,7 +632,7 @@
     {
       "name": "labels-route",
       "id": "a9b8c7d6-e5f4-4a3b-9c8d-7e6f5d4c3b2a",
-      "service": {"name": "document-repository"},
+      "service": { "name": "document-repository" },
       "paths": ["/api/labels", "/api/labels/"],
       "strip_path": false,
       "preserve_host": true,
@@ -681,7 +653,7 @@
     {
       "name": "grafana-route",
       "id": "d8e9f0a1-b2c3-4d4e-8f5a-6b7c8d9e0f1a",
-      "service": {"name": "grafana"},
+      "service": { "name": "grafana" },
       "paths": ["/grafana"],
       "strip_path": false,
       "preserve_host": true,
@@ -722,7 +694,7 @@
       "name": "request-transformer",
       "id": "0b261d22-dc08-4917-a055-1a766a35948a",
       "enabled": true,
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "config": {
         "rename": {
           "querystring": [],
@@ -757,7 +729,7 @@
       "name": "rate-limiting",
       "id": "13e146bb-0dff-4bfa-a9ca-95b8189ffb03",
       "enabled": true,
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "config": {
         "minute": 1000,
         "hour": 10000,
@@ -779,7 +751,7 @@
       "name": "cors",
       "id": "2ea9bc50-0b87-4c47-a834-d0e1576b61e9",
       "enabled": false,
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "config": {
         "preflight_continue": false,
         "credentials": true,
@@ -798,14 +770,7 @@
           "Authorization",
           "X-Requested-With"
         ],
-        "methods": [
-          "GET",
-          "POST",
-          "PUT",
-          "PATCH",
-          "DELETE",
-          "OPTIONS"
-        ],
+        "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         "origins": ["*"]
       }
     },
@@ -813,7 +778,7 @@
       "name": "file-log",
       "id": "54117e7d-fb6e-49a8-bb93-472d76ed392e",
       "enabled": true,
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "config": {
         "custom_fields_by_lua": null,
         "reopen": true,
@@ -824,7 +789,7 @@
       "name": "response-transformer",
       "id": "aa355c64-6061-452d-9cf7-ab8ae8a54600",
       "enabled": false,
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "config": {
         "rename": {
           "json": [],
@@ -842,10 +807,7 @@
         "add": {
           "json_types": [],
           "json": [],
-          "headers": [
-            "X-Powered-By: Kong",
-            "X-Kong-Proxy-Latency: ${latency}"
-          ]
+          "headers": ["X-Powered-By: Kong", "X-Kong-Proxy-Latency: ${latency}"]
         },
         "replace": {
           "json_types": [],
@@ -858,7 +820,7 @@
       "name": "request-termination",
       "id": "ee709c44-60aa-48aa-b091-ca7feaf7230c",
       "enabled": false,
-      "service": {"name": "express-api"},
+      "service": { "name": "express-api" },
       "config": {
         "body": null,
         "trigger": null,
@@ -902,8 +864,7 @@
         "passive": {
           "healthy": {
             "http_statuses": [
-              200, 201, 202, 203, 204, 205, 206, 207, 208, 226,
-              300, 301, 302, 303, 304, 305, 306, 307, 308
+              200, 201, 202, 203, 204, 205, 206, 207, 208, 226, 300, 301, 302, 303, 304, 305, 306, 307, 308
             ],
             "successes": 0
           },
@@ -924,7 +885,7 @@
       "id": "7feebc25-b694-408b-a60f-f93493549f71",
       "target": "backend:3000",
       "weight": 100,
-      "upstream": {"id": "e52e5e95-ddf6-4089-8a70-34b9b38934fc"}
+      "upstream": { "id": "e52e5e95-ddf6-4089-8a70-34b9b38934fc" }
     }
   ]
 }

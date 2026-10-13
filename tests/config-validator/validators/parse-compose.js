@@ -262,4 +262,116 @@ function parseGitlabCiImages(filePath) {
   return results;
 }
 
-module.exports = { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages, parseGitlabCiImages };
+module.exports = { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages, parseGitlabCiImages, parseComposeServiceContracts };
+
+/**
+ * Extract per-service structural contracts (profiles + deploy.replicas) from
+ * docker-compose.yaml.
+ *
+ * Used by config-validator tests to assert always-on invariants — e.g. that
+ * the admin-logs substrate (VL + OTel Collector + otel-collector-init) has
+ * no `profiles: [observability]` and that `victorialogs.deploy.replicas` is
+ * the literal `1` rather than `${ENABLE_OBSERVABILITY:-0}`.
+ *
+ * Pure line-scan over the raw file (compose has ${} substitutions, so js-yaml
+ * is unsafe here — same caveat as parseComposeEnvVars).
+ *
+ * Returns:
+ *   [{ service, profiles: string[], replicas: string|null, replicasLine: number|null }]
+ *
+ * - `profiles`: list of profile names declared on the service. Empty if no
+ *   `profiles:` key (means default profile = always-on in compose mode).
+ * - `replicas`: raw replicas value (may contain `${VAR:-default}`).
+ * - `replicasLine`: 1-indexed line number of the `replicas:` line, for error
+ *   messages.
+ *
+ * @param {string} filePath - Path to a docker-compose.yaml file
+ * @returns {Array<{ service: string, profiles: string[], replicas: string|null, replicasLine: number|null }>}
+ */
+function parseComposeServiceContracts(filePath) {
+  let content;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    throw new Error(`Failed to read docker-compose file: ${filePath}`, { cause: err });
+  }
+
+  const lines = content.split('\n');
+  const contracts = [];
+  let currentService = null;
+  let inServices = false;
+  let currentProfiles = null;
+  let currentReplicas = null;
+  let currentReplicasLine = null;
+
+  const flush = () => {
+    if (currentService) {
+      contracts.push({
+        service: currentService,
+        profiles: currentProfiles || [],
+        replicas: currentReplicas,
+        replicasLine: currentReplicasLine
+      });
+    }
+    currentProfiles = null;
+    currentReplicas = null;
+    currentReplicasLine = null;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('#') || trimmed === '') continue;
+
+    // Detect top-level `services:` block
+    if (line.match(/^services:\s*$/)) {
+      flush();
+      inServices = true;
+      currentService = null;
+      continue;
+    }
+    // Detect any other top-level block (networks, volumes, configs, secrets, etc.)
+    if (line.match(/^[a-z][\w-]*:\s*$/) && !line.startsWith(' ')) {
+      flush();
+      inServices = trimmed === 'services:';
+      continue;
+    }
+
+    if (!inServices) continue;
+
+    // Service definition: 2-space indent + name
+    const serviceMatch = line.match(/^ {2}([\w-]+):\s*$/);
+    if (serviceMatch) {
+      flush();
+      currentService = serviceMatch[1];
+      continue;
+    }
+
+    // profiles: [name1, name2] or profiles: name1
+    const profilesMatch = trimmed.match(/^profiles:\s*\[([^\]]*)\]\s*$/) ||
+      trimmed.match(/^profiles:\s*\[?\s*([^\]]+?)\s*\]?\s*$/);
+    if (profilesMatch && currentService) {
+      const raw = profilesMatch[1];
+      currentProfiles = raw
+        .split(',')
+        .map((p) => p.trim().replace(/^['"]|['"]$/g, ''))
+        .filter(Boolean);
+      continue;
+    }
+
+    // deploy.replicas: — 6-space indent (4 for `deploy:`, 6 for `replicas:`)
+    const replicasMatch = trimmed.match(/^replicas:\s*(.+)$/);
+    if (replicasMatch && currentService) {
+      // Only treat as deploy.replicas if we're inside a `deploy:` block (indented ≥ 6 spaces)
+      const indentMatch = line.match(/^( +)replicas:/);
+      if (indentMatch && indentMatch[1].length >= 6) {
+        currentReplicas = replicasMatch[1].trim().replace(/\s+#.*$/, '').trim();
+        currentReplicasLine = i + 1;
+      }
+    }
+  }
+
+  flush();
+  return contracts;
+}

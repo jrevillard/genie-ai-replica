@@ -4,7 +4,15 @@
 import os
 import time
 
-from tracing import get_meter, get_tracer, sanitize_attributes, setup_trace_logging, setup_tracing
+from tracing import (
+    get_meter,
+    get_tracer,
+    install_uvicorn_access_logging,
+    sanitize_attributes,
+    setup_json_logging,
+    setup_trace_logging,
+    setup_tracing,
+)
 
 setup_tracing("genieai-retriever")
 
@@ -61,6 +69,8 @@ from comps.retrievers.src.integrations.genieai_retriever_arangodb import Genieai
 
 logger = CustomLogger("genieai_retriever_microservice")
 setup_trace_logging("genieai_retriever_microservice")
+setup_json_logging("genieai_retriever_microservice")
+install_uvicorn_access_logging()
 logflag = os.getenv("LOGFLAG", False)
 
 

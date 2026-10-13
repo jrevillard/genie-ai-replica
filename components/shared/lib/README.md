@@ -55,16 +55,15 @@ A configurable Winston-based logger with support for console output, daily rotat
 
 - **Features**:
   - Logs to console with colorization.
-  - Daily rotated error and combined logs (e.g., `logs/error-YYYY-MM-DD.log`).
-  - Static combined log file with size limits.
-  - Configurable log levels, max sizes, and retention periods.
-  - Functions for reconfiguration, manual log rollover, cleanup, and flushing.
+  - Configurable log level.
+
+  Shipping to VictoriaLogs is NOT a winston transport. Container stdout
+  goes through the Docker fluentd driver to the OTel Collector, which
+  forwards to VictoriaLogs. Adding an in-process transport here would
+  duplicate every line.
 
 - **Exported Functions**:
-  - `reconfigureLogger(newConfig)`: Updates logger configuration (e.g., log level, file sizes).
-  - `triggerLogRollover()`: Manually rotates log files.
-  - `cleanupCombinedLog()`: Removes the large combined log file.
-  - `flushLogs()`: Flushes all pending logs.
+  - `reconfigureLogger(newConfig)`: Updates logger configuration (e.g., log level).
 
 - **Usage Example**:
   ```javascript
@@ -94,7 +93,6 @@ A singleton service for managing long-lived connections to ArangoDB, with automa
   - `getDetailedConnectionInfo(name)`: Returns connection details.
   - `getHealthSummary()`: Returns overall connection health stats.
   - `onConnectionRecovery(name, callback)`: Registers a callback for recovery events.
-  - `cleanupConnection(name)`: Cleans up resources for a connection.
 
 - **Usage Example**:
   ```javascript
@@ -109,7 +107,7 @@ A singleton service for managing long-lived connections to ArangoDB, with automa
 Middleware to set security-related HTTP headers in responses.
 
 - **Features**:
-  - Sets Content-Security-Policy (CSP), Access-Control-Allow-* headers, X-Content-Type-Options, X-Frame-Options, etc.
+  - Sets Content-Security-Policy (CSP), Access-Control-Allow-\* headers, X-Content-Type-Options, X-Frame-Options, etc.
   - Configurable CORS origin via `CORS_ORIGIN` environment variable.
   - Logs secure requests with details (method, URL, headers, etc.).
 

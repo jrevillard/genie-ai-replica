@@ -34,7 +34,7 @@ const OPEA_SERVICE_VARS = {
     'RETRIEVER_HYBRID_RETRIEVAL_ENABLED',
     'RETRIEVER_ARANGO_DISTANCE_STRATEGY'
   ],
-  dataprep: ['CONTENT_EXTRACTION_METHOD', 'DOCLING_DEVICE', 'DATAPREP_CHUNK_SIZE_PDF', 'LABELING_STRATEGY', 'CONTEXTUAL_RETRIEVAL_ENABLED', 'CONTEXTUAL_STRATEGY', 'CONTEXTUAL_LABEL_RAW'],
+  dataprep: ['CONTENT_EXTRACTION_METHOD', 'DOCLING_DEVICE', 'DATAPREP_CHUNK_SIZE_PDF', 'DATAPREP_CHUNK_OVERLAP', 'LABELING_STRATEGY', 'CONTEXTUAL_RETRIEVAL_ENABLED', 'CONTEXTUAL_STRATEGY', 'CONTEXTUAL_LABEL_RAW'],
   chatqna: ['CHATQNA_TYPE', 'CHATQNA_SYSTEM_PROMPT', 'CHATQNA_ENFORCE_ABSTENTION'],
   translation: ['VLLM_TRANSLATION_SERVICE_PORT', 'TRANSLATION_CACHE']
 };
@@ -46,8 +46,8 @@ const OPEA_VAR_NAMES = new Set(Object.values(OPEA_SERVICE_VARS).flat());
  * Validate feature flag interdependencies.
  *
  * @param {{ variables: Array<{ name: string, value: string }> }} envParsed - Parsed env template
- * @param {Array<{ name: string }>} composeVars - Parsed compose variables
- * @returns {{ errors: string[], warnings: string[] }}
+ * @param {Array<{ name: string, default: string|null, hasDefault: boolean }>} composeVars - Parsed compose variables
+ * @returns {{ errors: string[], warnings: string[], opeaServiceVars: Object, opeaVarNames: Set<string>, gpuOnlyVars: Set<string> }}
  */
 function validateFeatureFlags(envParsed, composeVars) {
   const errors = [];
@@ -89,4 +89,8 @@ function validateFeatureFlags(envParsed, composeVars) {
   };
 }
 
-module.exports = { validateFeatureFlags, OPEA_SERVICE_VARS, OPEA_VAR_NAMES };
+module.exports = {
+  validateFeatureFlags,
+  OPEA_SERVICE_VARS,
+  OPEA_VAR_NAMES
+};

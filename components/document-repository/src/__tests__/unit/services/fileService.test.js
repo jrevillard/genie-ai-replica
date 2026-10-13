@@ -48,7 +48,8 @@ jest.mock('../../../utils/fileUtils', () => ({
 
 // Mock securityService
 jest.mock('../../../services/securityService', () => ({
-  scanBuffer: jest.fn()
+  scanBuffer: jest.fn(),
+  scanFile: jest.fn()
 }));
 
 // Mock metadataService
@@ -173,7 +174,7 @@ describe('fileService', () => {
         langdetect.detectOne.mockReturnValue('en');
         fileUtils.generateUniqueFileId.mockReturnValue('file-test123');
         fileUtils.ensureDirectoryExists.mockResolvedValue();
-        securityService.scanBuffer.mockResolvedValue({ isInfected: true, viruses: ['EICAR'] });
+        securityService.scanFile.mockResolvedValue({ isInfected: true, viruses: ['EICAR'] });
 
         await expect(fileService.uploadFile(mockFileData, { labels: [] })).rejects.toThrow('virus');
 
@@ -214,12 +215,12 @@ describe('fileService', () => {
         fs.stat.mockResolvedValue({ birthtime: new Date('2025-01-01') });
         pdf.mockResolvedValue({ text: 'This is an English document for testing language detection' });
         langdetect.detectOne.mockReturnValue('en');
-        securityService.scanBuffer.mockResolvedValue({ isInfected: false, viruses: [] });
+        securityService.scanFile.mockResolvedValue({ isInfected: false, viruses: [] });
         metadataService.addMetadata.mockResolvedValue({});
 
         const result = await fileService.uploadFile(mockFileData, { labels: [], author: 'Test' });
 
-        expect(securityService.scanBuffer).toHaveBeenCalled();
+        expect(securityService.scanFile).toHaveBeenCalled();
         expect(result.file_name).toBe('test.pdf');
         expect(result.dataprep.status).toBe('Pending');
       } finally {

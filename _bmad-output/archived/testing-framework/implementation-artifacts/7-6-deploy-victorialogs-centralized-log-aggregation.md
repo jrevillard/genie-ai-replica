@@ -538,3 +538,18 @@ Claude Opus 4.7 (glm-5-turbo)
 - [x] [Review][Defer] Dashboard _stream_ shows genie. prefix (UX) [configs/grafana/provisioning/dashboards/service-logs.json] — deferred, cosmetic; filter works but dropdown shows genie.backend instead of backend
 - [x] [Review][Defer] ENABLE_OBSERVABILITY type not enforceable in YAML [env] — deferred, documented in env file (MUST be 0 or 1)
 - [x] [Review][Defer] Structured JSON logging migration — deferred to dedicated story. Analysis: requires rewriting logs-service.js (3 regex parsers), updating LogSearchDialog.test.js, logger-functions.test.js, AdminDashboard.vue parseLogMessage(). Full impact documented in deferred-work.md.
+
+---
+
+## CLOSURE NOTE (2026-08-31)
+
+Story 7-6's deferred work entry `[Review][Defer] Structured JSON logging migration — deferred to dedicated story` is **CLOSED** by the `admin-logs-victorialogs-migration` spec/spine:
+
+- Spec: `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` — CAP-2 (Winston format is JSON, not printf)
+- Spine: `_bmad-output/architecture/architecture-genie-ai-2026-08-31/ARCHITECTURE-SPINE.md` — AD-9 (JSON log format rule)
+- Phases: P1a — `components/shared/lib/logger.js` replaces `traceFormat` printf with `winston.format.combine(timestamp(), errors({stack:true}), json())`; `trace_id`/`span_id` become JSON keys, not printf substrings
+- F4 bug at `admin-dashboard-service.js:525` (triple-bracket regex) is fixed in P2 by deleting the regex and parsing JSON via `JSON.parse(line)` in the file-fallback path
+
+**AC3 ("Existing log format preserved") is overridden** by this migration. The original constraint existed only because admin endpoints parsed printf via regex; with consumers querying VL directly via SQL, the printf constraint dissolves. `LogSearchDialog.vue`'s "Story 7.6 — log format preservation after VictoriaLogs deployment" describe block (`components/gov-chat-frontend/src/__tests__/components/LogSearchDialog.test.js:885-948`) is rewritten in P2 to assert JSON-shape parsing instead of regex matching.
+
+No deferred-work migration in `deferred-work.md` for this specific item — the original DW entry from Story 7-6's code review (2026-05-29) is now resolved by the work above. Closure tracked by `_bmad-output/specs/spec-admin-logs-victorialogs-migration/.memlog.md` (33 entries) and `_bmad-output/architecture/architecture-genie-ai-2026-08-31/.memlog.md` (37 entries).

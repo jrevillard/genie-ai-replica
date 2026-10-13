@@ -65,27 +65,6 @@ afterAll(() => {
 const { createApp } = require('../../index');
 const request = require('supertest');
 
-// --- Copy of formatTimestamps for direct unit testing ---
-// Not exported from index.js, so we replicate the logic here.
-function formatTimestamps(obj) {
-  if (Array.isArray(obj)) {
-    return obj.map((item) => formatTimestamps(item));
-  }
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
-  }
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      if (typeof obj[key] === 'number' && /^\d{10}$/.test(obj[key].toString())) {
-        obj[key] = new Date(obj[key] * 1000).toISOString();
-      } else if (typeof obj[key] === 'object') {
-        obj[key] = formatTimestamps(obj[key]);
-      }
-    }
-  }
-  return obj;
-}
-
 describe('security middleware', () => {
   let app;
 
@@ -130,48 +109,6 @@ describe('security middleware', () => {
       // Sensitive path blocker returns { message: 'Not Found' } with 404.
       // If we get anything else, the path was not blocked by the sensitive middleware.
       expect(res.body.message).not.toBe('Not Found');
-    });
-  });
-
-  // ---- formatTimestamps (copied function) ----
-  describe('formatTimestamps', () => {
-    it('should convert 10-digit Unix timestamps to ISO strings', () => {
-      const input = { created: 1700000000 };
-      const result = formatTimestamps(input);
-      expect(result.created).toBe(new Date(1700000000 * 1000).toISOString());
-    });
-
-    it('should handle arrays recursively', () => {
-      const input = [{ ts: 1700000000 }, { ts: 1700000001 }];
-      const result = formatTimestamps(input);
-      expect(result[0].ts).toBe(new Date(1700000000 * 1000).toISOString());
-      expect(result[1].ts).toBe(new Date(1700000001 * 1000).toISOString());
-    });
-
-    it('should handle nested objects', () => {
-      const input = { outer: { inner: 1700000000 } };
-      const result = formatTimestamps(input);
-      expect(result.outer.inner).toBe(new Date(1700000000 * 1000).toISOString());
-    });
-
-    it('should NOT convert non-10-digit numbers', () => {
-      const input = { count: 42, bigTs: 1700000000000, shortTs: 123456789 };
-      const result = formatTimestamps(input);
-      expect(result.count).toBe(42);
-      expect(result.bigTs).toBe(1700000000000);
-      expect(result.shortTs).toBe(123456789);
-    });
-
-    it('should return null and primitives unchanged', () => {
-      expect(formatTimestamps(null)).toBeNull();
-      expect(formatTimestamps('hello')).toBe('hello');
-      expect(formatTimestamps(42)).toBe(42);
-    });
-
-    it('should return empty object unchanged', () => {
-      const input = {};
-      const result = formatTimestamps(input);
-      expect(result).toEqual({});
     });
   });
 

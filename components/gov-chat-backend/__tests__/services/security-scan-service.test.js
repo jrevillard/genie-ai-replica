@@ -36,7 +36,8 @@ jest.mock('luxon', () => ({
       toISO: jest.fn().mockReturnValue('2026-05-26T10:00:00.000Z'),
       toFormat: jest.fn().mockReturnValue('2026-05-26'),
       minus: jest.fn().mockReturnValue({
-        toFormat: jest.fn().mockReturnValue('2026-05-16')
+        toFormat: jest.fn().mockReturnValue('2026-05-16'),
+        toISO: jest.fn().mockReturnValue('2026-05-16T10:00:00.000Z')
       }),
       diff: jest.fn().mockReturnValue({ hours: 0.5 })
     }),
@@ -576,43 +577,6 @@ describe('SecurityScanService', () => {
     });
   });
 
-  describe('parseLogLine', () => {
-    it('should parse standard log format', () => {
-      const result = securityScanService.parseLogLine(
-        '2026-05-26 10:00:00 [INFO] AuthService User logged in',
-        'test.log',
-        1,
-        null
-      );
-      expect(result).toBeDefined();
-      expect(result.level).toBe('INFO');
-      expect(result.service).toContain('AuthService');
-    });
-
-    it('should parse JSON log format', () => {
-      const jsonLog = JSON.stringify({
-        timestamp: '2026-05-26T10:00:00.000Z',
-        level: 'ERROR',
-        message: 'Connection failed',
-        service: 'database'
-      });
-      const result = securityScanService.parseLogLine(jsonLog, 'test.log', 1, null);
-      expect(result).toBeDefined();
-      expect(result.level).toBe('ERROR');
-    });
-
-    it('should parse fallback format', () => {
-      const result = securityScanService.parseLogLine('2026-05-26 10:00:00 Something happened', 'test.log', 1, null);
-      expect(result).toBeDefined();
-      expect(result.level).toBe('UNKNOWN');
-    });
-
-    it('should return null for unrecognizable lines', () => {
-      const result = securityScanService.parseLogLine('random text without format', 'test.log', 1, null);
-      expect(result).toBeNull();
-    });
-  });
-
   describe('checkLogsForIssues', () => {
     it('should return cached results when available', async () => {
       const cachedData = {
@@ -636,8 +600,15 @@ describe('SecurityScanService', () => {
     });
 
     it('should run full scan and return results', async () => {
+      // processLogsInParallel jumps straight to _processLogsViaVL
+      // (file-mode + ADMIN_LOGS_SOURCE=file were dropped in T8) —
+      // mock the VL client path so the scan completes without
+      // attempting a real VL connection.
       const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue([])
+        _getVlClient: jest.fn().mockResolvedValue({
+          query: jest.fn().mockResolvedValue([]),
+          hits: jest.fn().mockResolvedValue({})
+        })
       };
       const result = await securityScanService.runSecurityScan(mockLogsService);
       expect(result.status).toBe('completed');
@@ -645,31 +616,92 @@ describe('SecurityScanService', () => {
       expect(result.vulnerabilities).toBeDefined();
       expect(result.failedLoginDetails).toEqual([]);
       expect(result.suspiciousDetails).toEqual([]);
-      expect(mockLogsService.getLogFilesInRange).toHaveBeenCalled();
     });
 
     it('should save scan results after completion', async () => {
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue([])
-      };
+      const mockLogsService = {};
       await securityScanService.runSecurityScan(mockLogsService);
       expect(mockFs.mkdir).toHaveBeenCalled();
       expect(mockFs.writeFile).toHaveBeenCalled();
     });
 
     it('should propagate errors from processLogsInParallel', async () => {
+      // The per-pattern query catch swallows PER-PATTERN errors so one
+      // bad pattern doesn't kill the whole scan — exercise the throw
+      // path via _getVlClient failure (which is outside the per-pattern
+      // try).
       const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockRejectedValue(new Error('Log service down'))
+        _getVlClient: jest.fn().mockRejectedValue(new Error('Log service down'))
       };
       await expect(securityScanService.runSecurityScan(mockLogsService)).rejects.toThrow('Log service down');
+    });
+
+    it('aborts the scan on a mid-scan VL outage instead of reporting a partial result', async () => {
+      // The client resolves, then every query fails: VL went away after
+      // the health probe. Swallowing this produced an empty finding set
+      // and `skipped: false`, which the caller renders as
+      // `status: 'completed'` — a clean scan that queried nothing.
+      const { VlUnavailableError } = require('../../services/logs-service');
+      const outage = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
+      const mockLogsService = {
+        _getVlClient: jest.fn().mockResolvedValue({ query: jest.fn().mockRejectedValue(outage) })
+      };
+
+      await expect(securityScanService.runSecurityScan(mockLogsService)).rejects.toBeInstanceOf(VlUnavailableError);
+      await expect(securityScanService.runSecurityScan(mockLogsService)).rejects.toMatchObject({
+        statusCode: 503,
+        body: expect.objectContaining({ error: 'vl_unreachable' })
+      });
+    });
+
+    it('aborts on a 5xx from VL mid-scan', async () => {
+      const { VlUnavailableError } = require('../../services/logs-service');
+      const upstream = Object.assign(new Error('upstream failure'), { response: { status: 502 } });
+      const mockLogsService = {
+        _getVlClient: jest.fn().mockResolvedValue({ query: jest.fn().mockRejectedValue(upstream) })
+      };
+
+      await expect(securityScanService.runSecurityScan(mockLogsService)).rejects.toBeInstanceOf(VlUnavailableError);
+    });
+
+    it('still tolerates a single non-VL query failure and completes', async () => {
+      // A malformed pattern or a one-off adapter hiccup must not abort
+      // the whole scan — only a VL outage is fatal.
+      const mockQuery = jest.fn().mockRejectedValue(new Error('unsupported LogSQL construct'));
+      const mockLogsService = {
+        _getVlClient: jest.fn().mockResolvedValue({ query: mockQuery })
+      };
+
+      const result = await securityScanService.runSecurityScan(mockLogsService);
+      expect(result.status).toBe('completed');
+      expect(result.vulnerabilities.critical).toBe(0);
+    });
+
+    it('should wrap _getVlClient ECONNREFUSED in VlUnavailableError (503 contract)', async () => {
+      // Round-5 F3: processLogsInParallel now pipes the raw client
+      // error through LogsService._vlOrThrow so the typed 503 +
+      // {error:'vl_unreachable', message} envelope reaches admin-routes.js
+      // (the inline catch at admin-routes.js:272 reads err.statusCode +
+      // err.body verbatim). Without this conversion, VL outage would
+      // surface as 500 generic — defeating the F4 typed-error contract.
+      const { VlUnavailableError } = require('../../services/logs-service');
+      const err = Object.assign(new Error('connect ECONNREFUSED'), {
+        code: 'ECONNREFUSED'
+      });
+      const mockLogsService = {
+        _getVlClient: jest.fn().mockRejectedValue(err)
+      };
+      await expect(securityScanService.runSecurityScan(mockLogsService)).rejects.toBeInstanceOf(VlUnavailableError);
+      await expect(securityScanService.runSecurityScan(mockLogsService)).rejects.toMatchObject({
+        statusCode: 503,
+        body: expect.objectContaining({ error: 'vl_unreachable' })
+      });
     });
   });
 
   describe('processLogsInParallel', () => {
     it('should return empty results when no log files found', async () => {
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue([])
-      };
+      const mockLogsService = {};
       const result = await securityScanService.processLogsInParallel(mockLogsService);
       expect(result.vulnerabilities.critical).toEqual([]);
       expect(result.vulnerabilities.medium).toEqual([]);
@@ -678,83 +710,142 @@ describe('SecurityScanService', () => {
       expect(result.suspiciousActivities).toEqual([]);
     });
 
-    it('should process valid log files and return results', async () => {
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log'])
-      };
-      // Spy on processFile to avoid the Worker path
-      const processFileSpy = jest.spyOn(securityScanService, 'processFile').mockResolvedValue({
-        vulnerabilities: {
-          critical: [
-            {
-              type: 'attack_attempt',
-              severity: 'critical',
-              service: 'http',
-              matchedTerm: 'SQL injection',
-              instanceCount: 1
-            }
-          ],
-          medium: [],
-          low: []
-        },
-        failedLogins: [{ timestamp: '2026-05-26T10:00:00Z', message: 'Invalid credentials', level: 'ERROR' }],
-        suspiciousActivities: [],
-        linesProcessed: 100,
-        linesSkipped: 5
-      });
+    it('returns explicit skipped signal when descriptors are synthetic (VL mode)', async () => {
+      // Mock with no _getVlClient → adapter falls through to the
+      // 'vl_mode_no_client' branch (the LogSQL scan needs a client).
+      const mockLogsService = {};
 
       const result = await securityScanService.processLogsInParallel(mockLogsService);
-      expect(result.vulnerabilities.critical).toHaveLength(1);
-      expect(result.failedLogins).toHaveLength(1);
-      expect(processFileSpy).toHaveBeenCalledTimes(1);
-      processFileSpy.mockRestore();
-    });
-
-    it('should filter invalid gzip files', async () => {
-      securityScanService.isGzipValid = jest.fn().mockResolvedValue(false);
-
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log.gz'])
-      };
-
-      const result = await securityScanService.processLogsInParallel(mockLogsService);
-      expect(securityScanService.isGzipValid).toHaveBeenCalledWith('/var/log/combined-2026-05-26.log.gz');
-      // File should be filtered out since gzip is invalid
+      expect(result.skipped).toBe(true);
+      expect(result.reason).toBe('vl_mode_no_client');
       expect(result.vulnerabilities.critical).toEqual([]);
+      expect(result.vulnerabilities.medium).toEqual([]);
+      expect(result.vulnerabilities.low).toEqual([]);
+      expect(result.failedLogins).toEqual([]);
+      expect(result.suspiciousActivities).toEqual([]);
+
+      const scanResult = await securityScanService.runSecurityScan(mockLogsService);
+      expect(scanResult.skipped).toBe(true);
+      expect(scanResult.reason).toBe('vl_mode_no_client');
+      expect(scanResult.status).toBe('skipped');
+      expect(scanResult.message).toMatch(/vl_mode_no_client/);
     });
 
-    it('should handle processFile errors gracefully', async () => {
+    it('runs LogSQL-based scan when descriptors are synthetic and VL client is available', async () => {
+      const mockQuery = jest
+        .fn()
+        .mockResolvedValue([{ _time: '2026-05-26T10:00:00Z', _msg: '{"message":"SQL injection attempt blocked"}' }]);
       const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log'])
+        _getVlClient: jest.fn().mockResolvedValue({ query: mockQuery })
       };
-      securityScanService.processFile = jest.fn().mockRejectedValue(new Error('File read error'));
 
       const result = await securityScanService.processLogsInParallel(mockLogsService);
-      // Error should be caught, returning empty results for that file
-      expect(result.vulnerabilities.critical).toEqual([]);
+      // The LogSQL scan must surface the row, not skip it silently.
+      // "SQL injection" is a bare phrase, so it lands in pattern
+      // matches rather than the critical bucket — the scan envelope
+      // always reports `skipped: false` because the scan ACTUALLY ran
+      // (vs. the no-client early-return path).
+      expect(result.skipped).toBe(false);
+      expect(result.reason).toBeNull();
+      expect(result.patternMatches.length).toBeGreaterThanOrEqual(1);
+      expect(result.patternMatches.some((m) => m.pattern === 'SQL injection')).toBe(true);
+      expect(mockQuery).toHaveBeenCalled();
     });
 
-    it('should deduplicate failedLogins and suspiciousActivities', async () => {
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log'])
-      };
-      securityScanService.processFile = jest.fn().mockResolvedValue({
-        vulnerabilities: { critical: [], medium: [], low: [] },
-        failedLogins: [
-          { timestamp: '2026-05-26T10:00:00Z', message: 'Failed login', level: 'ERROR' },
-          { timestamp: '2026-05-26T10:00:00Z', message: 'Failed login', level: 'ERROR' }
-        ],
-        suspiciousActivities: [
-          { timestamp: '2026-05-26T10:00:00Z', message: 'SQL injection', level: 'ERROR' },
-          { timestamp: '2026-05-26T10:00:00Z', message: 'SQL injection', level: 'ERROR' }
-        ],
-        linesProcessed: 50,
-        linesSkipped: 0
+    // Tests for the file-mode path (processFile + fs paths + isGzipValid)
+    // were removed — the file-mode code path is dead in production
+    // (T8 contract: VL is the only source). See security-scan-service.js
+    // for the simplification.
+  });
+
+  describe('bare-phrase patterns are reported as pattern matches, not severities', () => {
+    // Real line, verbatim from `docker logs prd-grafana-1`:
+    //   logger=settings t=2026-09-25T08:13:01.983348506Z level=info
+    //   msg="Config overridden from Environment variable"
+    //   var="GF_SECURITY_CSRF_TRUSTED_ORIGINS=https://localhost:8443"
+    // Grafana logs in logfmt, so the Winston-JSON envelope unwrap does
+    // not apply and the config-variable name reaches the regex verbatim.
+    const GRAFANA_CSRF_LINE =
+      'logger=settings t=2026-09-25T08:13:01.983348506Z level=info ' +
+      'msg="Config overridden from Environment variable" ' +
+      'var="GF_SECURITY_CSRF_TRUSTED_ORIGINS=https://localhost:8443"';
+
+    const scanWith = async (message) => {
+      const mockQuery = jest
+        .fn()
+        .mockResolvedValue([{ _time: '2026-09-25T08:13:01.983348506Z', _msg: message, service: 'grafana' }]);
+      return securityScanService.processLogsInParallel({
+        _getVlClient: jest.fn().mockResolvedValue({ query: mockQuery })
       });
+    };
 
-      const result = await securityScanService.processLogsInParallel(mockLogsService);
-      expect(result.failedLogins).toHaveLength(1); // deduplicated
-      expect(result.suspiciousActivities).toHaveLength(1); // deduplicated
+    it('keeps a Grafana config line out of the critical bucket', async () => {
+      const result = await scanWith(GRAFANA_CSRF_LINE);
+      expect(result.vulnerabilities.critical).toEqual([]);
+      expect(result.vulnerabilities.medium).toEqual([]);
+      expect(result.vulnerabilities.low).toEqual([]);
+    });
+
+    it('reports it as a pattern match carrying the term and the real line', async () => {
+      const result = await scanWith(GRAFANA_CSRF_LINE);
+      expect(result.patternMatches).toHaveLength(1);
+      const match = result.patternMatches[0];
+      expect(match.type).toBe('attack_attempt');
+      expect(match.pattern).toBe('CSRF');
+      expect(match.occurrences).toBe(1);
+      expect(match.sample).toBe(GRAFANA_CSRF_LINE);
+      expect(match.service).toBe('grafana');
+    });
+
+    it('names the term that matched, not the longest alternative', async () => {
+      const result = await scanWith('Possible XSS attempt in query parameter');
+      expect(result.patternMatches[0].pattern).toBe('XSS');
+    });
+
+    it('names SQL injection when SQL injection is what matched', async () => {
+      const result = await scanWith('SQL injection attempt blocked');
+      expect(result.patternMatches[0].pattern).toBe('SQL injection');
+    });
+
+    it('keeps an expired-session "invalid token" out of the critical bucket', async () => {
+      // Same bare-phrase class as CSRF: an ordinary auth error, not an
+      // attack. It was severity `critical`.
+      const result = await scanWith('Request failed: invalid token');
+      expect(result.vulnerabilities.critical).toEqual([]);
+      const match = result.patternMatches.find((m) => m.type === 'token_issue');
+      expect(match).toBeDefined();
+      expect(match.pattern).toBe('invalid token');
+    });
+
+    it('keeps "not authorized" out of the medium bucket', async () => {
+      const result = await scanWith('user not authorized for this resource');
+      expect(result.vulnerabilities.medium).toEqual([]);
+      expect(result.patternMatches.some((m) => m.type === 'unauthorized_access')).toBe(true);
+    });
+
+    it('still gives a real attack signature a severity', async () => {
+      // Command injection is not a bare phrase: the regex pins attack
+      // syntax, so a hit keeps its critical bucket.
+      const result = await scanWith("execSync('sleep 5')");
+      const crit = result.vulnerabilities.critical.find((v) => v.type === 'command_injection');
+      expect(crit).toBeDefined();
+      expect(crit.severity).toBe('critical');
+    });
+
+    it('still gives a blocked sensitive-file access its severity', async () => {
+      const result = await scanWith('Blocked access to sensitive path: /api/.env');
+      const med = result.vulnerabilities.medium.find((v) => v.type === 'sensitive_file_access');
+      expect(med).toBeDefined();
+    });
+
+    it('labels the suspicious-activity entry with the term that matched, not the longest alternative', async () => {
+      // The suspicious regex is one alternation over seven attack
+      // families; every entry used to report the longest of the seven,
+      // so an IP-blocked line was filed as "command injection". The
+      // reported term keeps the casing of the log line it came from.
+      const result = await scanWith('IP blocked for repeated failures');
+      const entry = result.suspiciousActivities.find((a) => a.pattern === 'IP blocked');
+      expect(entry).toBeDefined();
     });
   });
 

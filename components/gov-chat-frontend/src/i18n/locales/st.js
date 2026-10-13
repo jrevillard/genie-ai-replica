@@ -231,7 +231,7 @@ export default {
     contentManagement: 'TSAMAISO YA MOKOTLA',
     knowledgeHierarchy: 'Tharollo ya Tsebo',
     documentManagement: 'Tsamaiso ya Ditokomane',
-    noLogsFound: 'Ha ho na lilog tse fumanweng bakeng sa kajeno',
+    noErrorsOrWarnings: 'Ha ho na liphoso kapa litemoho kajeno.',
     invalidLogsResponse: 'Sebopeho sa karabelo ya kakaretso ya log ha se utlwahale',
     logsSummaryError: 'Ho hlolehile ho kenya kakaretso ya lilog',
     buttons: {
@@ -265,7 +265,6 @@ export default {
     databaseSize: 'Boholo ba Datha (Database)',
     totalTables: 'Ditafole kaofela',
     logManagement: 'Tsamaiso ya Lilog',
-    rolloverLogs: 'Fetisa Lilog (Rollover)',
     searchLogs: 'Batla Lilog',
     logTime: 'Nako',
     logLevel: 'Boemo',
@@ -322,10 +321,6 @@ export default {
         error: 'Phoso nakong ya ho ntlafatsa database',
         loading: 'E ntlafatsa database...'
       },
-      rolloverLogs: {
-        success: 'Phetoho ya log e phethetswe ka katleho',
-        loading: 'E fetisa lilog...'
-      },
       searchLogs: {
         success: 'Patlo ya log e phethetswe',
         loading: 'E batla lilog...'
@@ -373,8 +368,6 @@ export default {
       warningLogs: 'Lilog tsa Temoso',
       noErrorLogs: 'Ha ho na lilog tsa diphoso tse rekotilweng kajeno.',
       noWarningLogs: 'Ha ho na lilog tsa temoso tse rekotilweng kajeno.',
-      infoLogsNote:
-        'Lilog tsa tlhahiso-leseding ha di bontshwe tlhahisoleseding e khutsufatsang. Sebedisa patlo ho bona mefuta yohle ya log.',
       searchResults: 'Diphetho tsa Morao-rao tsa Patlo',
       entriesFound: 'dikeno di fumanwe',
       viewAllResults: 'Bona Diphetho Tsohle',
@@ -386,11 +379,14 @@ export default {
         authFailed: 'Netefatso ya botho e hlolehile',
         lowDiskSpace: 'Sebaka se tlase sa disk',
         slowQuery: 'Tshebetso e fokolang ya dipotso',
-        rateLimit: 'Moedi wa lebelo o ntse o atamela'
+        rateLimit: 'Moedi wa lebelo o ntse o atamela',
+        invalidToken: 'Toke e fosahetse',
+        fileNotFound: 'Faele ha e yo'
       },
       logSearch: {
         noResultsFound: 'Ha ho na lilog tse tshoanang le patlo ya hao',
-        resultsFound: 'Ho fumanwe dikeno tsa log tse {count}'
+        resultsFound: 'Ho fumanwe dikeno tsa log tse {count}',
+        degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {
@@ -424,6 +420,10 @@ export default {
         'Etsa bonnete ba hore difaele tsa environment ha di kgone ho fihlellwa webong mme di bolokehile ho seva.',
       gitRepoRecommendation:
         'Etsa bonnete ba hore direkthori tsa .git di sireleditswe mme ha di kgone ho fihlellwa webong.',
+      logPatternMatches: 'Liho tsa log bo bona',
+      patternMatchNote:
+        'Mantso a a fumatseng mo mongwatsi oa log. Scan e tlisa karolo e itseng, ha e na le tlhokomelo e e netweng — bala kae.',
+      patternMatchSummaryNote: '(karolo e fumatseng mo mongwatsi oa log, ha e na le tlhokomelo e e netweng)',
       noVulnerabilitiesFound: 'Ha ho Mabala a Fokolang a Fumanweng',
       systemSecure: 'Sistimi ya hao e bonahala e sireletsehile. Tswela pele ho beha leihlo nako le nako.',
       loadingScan: 'E kenya diphetho tsa tekolo...',
@@ -508,6 +508,16 @@ export default {
       confirmIngestSelected: 'Na o na le bonnete ba hore o batla ho kenya difaele tse {count} tse kgethilweng?',
       ingestQueuedSuccess: 'Difaele tse {count} di hlophisitswe molemong wa ho kenngwa.',
       ingestQueuedError: 'Ho bile le phoso nakong ya tshebetso ya ho kenya sehlopha.',
+      ingestPartialFailure: '{count} ho tsoa {successCount} li kentswe. Li hlolehile: {detail}',
+      ingestAllFailed: 'Difaele tsohle tse {count} li hlolehile: {detail}',
+      retractSelected: 'Hulela ho Kgethilweng',
+      confirmRetractTitle: 'Netefatsa ho Hulela ha Sehlopha',
+      confirmRetractSelected: 'Na o na le bonnete ba hore o batla ho hulela difaele tse {count} tse kgethilweng?',
+      retract: 'Hulela Morao',
+      retractQueuedSuccess: 'Difaele tse {count} di hlophisitswe molemong wa ho hulelwa.',
+      retractQueuedError: 'Ho bile le phoso nakong ya tshebetso ya ho hulela sehlopha.',
+      retractPartialFailure: '{count} ho tsoa {successCount} li huletswe. Li hlolehile: {detail}',
+      retractAllFailed: 'Difaele tsohle tse {count} li hlolehile: {detail}',
       uploadSuccessMultiple: 'Difaele tse {count} di kentswe ka katleho.',
       linkSubmitSuccess: 'E fetile le ho boloka "{fileName}" ka katleho.',
       actionSuccess: 'Keto ya "{action}" faeleng ya {fileId} e bile le katleho.',

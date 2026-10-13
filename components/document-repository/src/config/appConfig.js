@@ -43,10 +43,12 @@ const config = {
       'text/markdown', // markdown files .md, .markdown
       'text/plain', // text files .txt (also sent by some browsers for .md)
       'text/html', // html files .html
+      'text/csv', // comma/semicolon/tab-separated values .csv
+      'application/csv', // non-standard CSV type some Windows exports send
       'application/zip', // browsers sometimes report .docx/.xlsx as zip
       'application/x-zip-compressed' // Windows browsers sometimes report Office files as this
     ],
-    allowedExtensions: ['.pdf', '.docx', '.xlsx', '.md', '.html', '.txt'],
+    allowedExtensions: ['.pdf', '.docx', '.xlsx', '.csv', '.md', '.html', '.txt'],
     requiredIngestionLanguage: process.env.DOCUMENT_INGESTION_LANGUAGE || 'en' // Added per spec
   },
 

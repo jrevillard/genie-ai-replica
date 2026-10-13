@@ -481,3 +481,49 @@ describe('versionService.list/get (4.5 diff/list backing)', () => {
     await expect(versionService.getVersion(REPO, 9)).rejects.toMatchObject({ code: 'VERSION_NOT_FOUND', status: 404 });
   });
 });
+
+// The PUBLISH_NO_CHANGES guard (added 2026-10-12) shipped with a missing
+// `await` on Cursor.all() and broke EVERY publish with
+// "TypeError: (concepts || []).map is not a function" — while the whole suite
+// stayed green, because lifecycle-service.test.js mocks currentFingerprint
+// wholesale and never runs the real one. These tests run the real thing
+// against the driver-shaped mock (whose .all() is async, like the real
+// driver) so that gap cannot reopen.
+describe('currentFingerprint — the publish idempotency guard (regression)', () => {
+  test('awaits Cursor.all() and returns a sha256 hex, not a Promise', async () => {
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [
+        { concept_id: 'b', content_hash: 'h2' },
+        { concept_id: 'a', content_hash: 'h1' }
+      ]
+    });
+    const fp = await versionService.currentFingerprint(REPO);
+    expect(typeof fp).toBe('string');
+    expect(fp).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test('order-independent: the same rows in a different order hash identically', async () => {
+    const rows = [
+      { concept_id: 'a', content_hash: 'h1' },
+      { concept_id: 'b', content_hash: 'h2' }
+    ];
+    mockDb.query.mockResolvedValueOnce({ all: async () => rows.slice() });
+    const first = await versionService.currentFingerprint(REPO);
+    mockDb.query.mockResolvedValueOnce({ all: async () => rows.slice().reverse() });
+    const second = await versionService.currentFingerprint(REPO);
+    expect(first).toBe(second);
+  });
+
+  test('a moved content_hash changes the fingerprint', async () => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => [{ concept_id: 'a', content_hash: 'h1' }] });
+    const before = await versionService.currentFingerprint(REPO);
+    mockDb.query.mockResolvedValueOnce({ all: async () => [{ concept_id: 'a', content_hash: 'h2' }] });
+    const after = await versionService.currentFingerprint(REPO);
+    expect(before).not.toBe(after);
+  });
+
+  test('an empty repo yields the sha256 of an empty string, not a throw', async () => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+    await expect(versionService.currentFingerprint(REPO)).resolves.toMatch(/^[0-9a-f]{64}$/);
+  });
+});

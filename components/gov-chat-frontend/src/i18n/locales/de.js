@@ -1701,6 +1701,29 @@ export default {
       viewToggle: 'Editor-Ansicht',
       paneLabel: 'Ansichtsbereich',
       saveFailed: 'Speichern fehlgeschlagen — wiederholen',
+      piiRescan: {
+        label: 'Personenbezogene Daten',
+        button: 'Alle Seiten erneut scannen',
+        working: 'Alle Seiten werden erneut gescannt…',
+        progress: 'Erneuter Scan… {done} von {total} Seiten',
+        progressIdle: 'Erneuter Scan… Repository wird gelesen',
+        done: '{n} Seite(n) erneut gescannt.',
+        partial:
+          '{n} Seite(n) erneut gescannt. {e} sind weiterhin fehlgeschlagen — ihr Scan-Ergebnis hat sich nicht geändert, die Veröffentlichung bleibt für sie gesperrt.',
+        noKey:
+          'Der Server hat den erneuten Scan angenommen, aber keine Lauf-ID zurückgegeben, daher kann sein Fortschritt nicht verfolgt werden. Es wurde nichts gemeldet.',
+        missing:
+          'Der erneute Scan ist auf diesem Server nicht verfügbar (404). Es wurde nichts geändert — die Seiten mit fehlgeschlagenem Scan sperren weiterhin die Veröffentlichung.',
+        frozen: 'Erneuter Scan abgelehnt: das Repository wird veröffentlicht (409). Es wurde nichts geändert.',
+        failed:
+          'Der erneute Scan ist fehlgeschlagen. Es wurde nichts geändert — die Seiten mit fehlgeschlagenem Scan sperren weiterhin die Veröffentlichung.',
+        scanned: '{n} Seite(n) erneut gescannt',
+        clean: 'sauber',
+        hit: 'markiert',
+        error: 'Scan-Fehler',
+        vanished: 'verschwunden',
+        stillBlocking: 'Sperrt weiterhin'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1952,6 +1975,34 @@ export default {
       repoTagsHint:
         'Tags auf Repository-Ebene ({summary}) gehören zum Repository, nicht zu diesem Konzept — verwalten Sie sie im Tags-Panel in der rechten Leiste.'
     },
+    piiReview: {
+      title: 'Prüfung personenbezogener Daten',
+      checking: 'Wird geprüft…',
+      checkingBody: 'Der Status der personenbezogenen Daten jeder Seite wird gelesen…',
+      unreadableTitle: 'Status unbekannt',
+      unreadableBody:
+        'Der Status der personenbezogenen Daten dieses Repositories konnte nicht gelesen werden. Ob etwas gefunden wurde, ist UNBEKANNT — das ist kein sauberes Ergebnis.',
+      unscanned: 'Nicht gescannt',
+      unscannedBody:
+        'Kein vollständiger Scan personenbezogener Daten deckt dieses Repository ab ({n} Seite(n) nie gescannt). Es ist nichts als frei von personenbezogenen Daten bekannt — die Veröffentlichung wird nicht durch Treffer blockiert, aber hinter diesem Urteil steht kein Scan.',
+      errorTitle: 'Scan fehlgeschlagen',
+      errorBody:
+        '{n} Seite(n) konnten nicht gescannt werden. Ihr Inhalt wurde NICHT erfolgreich gelesen, ob sie personenbezogene Daten enthalten, ist UNBEKANNT — sie sind nicht sauber und sperren die Veröffentlichung.',
+      unreviewed: 'Markiert, nicht geprüft',
+      unreviewedBody:
+        'Der Scanner hat auf {n} Seite(n) mögliche personenbezogene Daten gefunden und niemand hat sie geprüft. Die Veröffentlichung ist erlaubt, aber auf diesen Seiten wurde nichts geprüft.',
+      reviewed: 'Markiert, geprüft',
+      reviewedBody:
+        '{n} Seite(n) enthalten markierte personenbezogene Daten, die eine Stewardin oder ein Steward anerkannt hat ({by} am {at}).',
+      cleanVerdict: 'Gescannt — nichts gefunden',
+      cleanBody: 'Jede Seite wurde gescannt und es wurden keine personenbezogenen Daten gefunden.',
+      staleAck:
+        'Eine frühere Anerkennung verzeichnete am {at} {a} markierte Seite(n); jetzt sind {n} markiert, sie deckt sie daher nicht ab.',
+      bannerTitle: 'Niemand hat diese Funde geprüft.',
+      bannerBody:
+        'Die Veröffentlichung bleibt erlaubt und keine Prüfung stoppt Sie — die markierten Seiten gelangen jedoch unverändert in das veröffentlichte Repository. Öffnen Sie jede und entscheiden Sie vor der Veröffentlichung.',
+      unknownActor: 'unbekannt'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2039,9 +2090,9 @@ export default {
       step3:
         'Wir lesen Ihre Quellen und schlagen Themen vor. Themen gruppieren sich unter den von Ihnen gewählten Kategorielabels. Der Producer agiert konservativ — er schlägt lieber weniger, präzise geformte Themen vor als viele irrelevante.',
       step4:
-        'Labels sind die kategorialen Achsen Ihrer Ontologie — um welche Art von Gegenstand handelt es sich bei diesem Thema? Wählen Sie 3–7 Labels aus, die die Hauptachsen abbilden; der Producer nutzt sie als Grundgerüst für die Themenhierarchie.',
+        'Labels sind die kategorialen Achsen Ihrer Ontologie — um welche Art von Gegenstand handelt es sich bei diesem Thema? Sie werden automatisch aus der Wissenshierarchie vergeben, begrenzt auf das Themengebiet dieses Repositoriums.',
       step5:
-        'Dies ist der Kern der Arbeit. Jedes Thema ist eine kleine, zitierfähige Wissenseinheit. Themen erhalten einen Titel, eine Beschreibung und erben die gewählten Labels. Ihre Aufgabe ist es, sie fundiert zu gestalten: unklare Titel umbenennen, Fast-Duplikate zusammenführen, unbelegte Themen entfernen.',
+        'Dies ist der Kern der Arbeit. Jedes Thema ist eine kleine, zitierfähige Wissenseinheit. Themen erhalten einen Titel, eine Beschreibung und erhalten die Labels aus der Wissenshierarchie. Ihre Aufgabe ist es, sie fundiert zu gestalten: unklare Titel umbenennen, Fast-Duplikate zusammenführen, unbelegte Themen entfernen.',
       step6:
         'Wir führen Konformitätsprüfungen durch: Hat jedes Thema einen Titel? Sind die Labels gültig? Sind die Quellenangaben intakt? Blockierende Probleme müssen behoben sein, bevor Sie das Repository übergeben; Warnungen können bestätigt werden.',
       step7:
@@ -2251,6 +2302,20 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2260,11 +2325,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Labels auswählen',
-        hint: 'Labels sind die kategorialen Achsen Ihrer Ontologie — um welche Art von Gegenstand handelt es sich bei diesen Themen? Wählen Sie 3–7.',
-        add: '+ Label hinzufügen',
-        addConfirm: 'Hinzufügen',
-        placeholder: 'z. B. Genehmigungen',
+        title: 'Labels — automatisiert',
+        hint: 'Labels werden automatisch aus der Wissenshierarchie vergeben — begrenzt auf das Themengebiet dieses Repositoriums.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
@@ -2530,12 +2592,42 @@ export default {
           'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
         index_failed:
           'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
       }
     },
     pii: {
       panel: 'Markierte Entitäten',
       nFlagged: '{n} gefunden',
       rescan: 'Neu scannen',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
       scanning: 'Scannen…',
       clean: 'Keine markierten Entitäten — dieses concept ist unbedenklich.',
       how: 'Behebung: Entfernen oder umformulieren (z. B. in die Funktion statt des Namens ändern), dann speichern — der erneute Scan aktualisiert diese Liste.',
@@ -2759,6 +2851,14 @@ export default {
         floor:
           'Die Abfrage hat keinen Bezug zum Thema dieses Repositorys (Wert unter der Domain-Untergrenze) — keine Tag-Änderung behebt das; die Unterdrückung ist korrekt.',
         rejected: 'Vom Guardrail abgelehnt — ein verbotenes Tag darf nicht zum eigenen Thema des Repositorys passen.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
       },
       suites: {
         generate: 'Generate test suite',

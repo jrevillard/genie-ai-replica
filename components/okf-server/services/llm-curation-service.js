@@ -153,7 +153,38 @@ async function runPool(items, lanes, worker) {
 
 /**
  * Import-time curation pass over every parsed concept of a repo.
- * @returns {Promise<{method, total, curated, labeled, described, typed, fallbacks}>}
+ *
+ * THE COUNTER CONTRACT (server ⇄ UI). `repo.curation` (patched by
+ * ingest-service.runImportCuration from these payloads) draws the Studio
+ * "Curating" bar, so numerator and denominator MUST describe the SAME
+ * population:
+ *   total   = the CURATABLE population — every parsed, non-rejected row EXCEPT
+ *             the structural index root, which no work set ever curates. The
+ *             index row used to sit in the denominator while being filtered
+ *             out of the work, so `curated === total` was unreachable BY
+ *             CONSTRUCTION (see the throttle workaround in ingest-service.js,
+ *             live: "done=996 of 998", 2026-09-09).
+ *   curated = how many concepts CARRY LABELS right now — seeded from ground
+ *             truth BEFORE the pass, then incremented once per concept this
+ *             pass actually persists a label for. It answers the curator's
+ *             only question ("how many of my concepts are labelled?"), not
+ *             "how many did this pass touch?" — concepts labelled by ANY
+ *             route count: the FR-42 tabular import path (labels assigned at
+ *             CREATION time, commit 419c01885), a prior pass, an earlier
+ *             import, the LLM, or a keyword match.
+ *   done    = an ALIAS of `curated`, kept because the UI reads
+ *             `curation.done || curation.curated`; the pass-local work-item
+ *             count that used to live under `done` shadowed the honest
+ *             number on every llm/hybrid tick.
+ * Pass-local quality counters (labeled / described / typed / fallbacks) keep
+ * their meaning: "of the concepts THIS pass touched, how many got X".
+ *
+ * Properties this shape guarantees: one population on both sides; a reachable
+ * terminal state; monotonic growth within a pass (the terminal write takes the
+ * database count with Math.max, so a concurrent writer can only raise it); no
+ * per-tick corpus scan (the seed is free — the rows are already loaded — and
+ * the single authoritative query runs at the FINAL tick only).
+ * @returns {Promise<{method, total, curated, pre_labelled, labeled, described, typed, fallbacks}>}
  * Caller wires onProgress into the repo progress payload (BuildProgressCard).
  */
 /** Deterministic keyword labeler (David's heuristics ruling, 2026-09-08):
@@ -212,9 +243,40 @@ function keywordLabelFor(meta, areaLabels) {
   return bestHits > 0 ? best : null;
 }
 
+/** Does this concept row already carry at least one label? The one predicate
+ * that decides both the work set and the seed count — a concept that answers
+ * true is ALREADY labelled, by whichever route got it there. */
+function hasLabels(meta) {
+  return Array.isArray(meta.labels) && meta.labels.length > 0;
+}
+
+/** ONE authoritative count of labelled CURATABLE concepts for a repo, computed
+ * in the database (COLLECT WITH COUNT — no documents crossing the wire). Runs
+ * once per pass, at the terminal write: the mid-pass numbers are seeded and
+ * incremented from ground truth already in hand, so no tick needs a re-scan. */
+const LABELLED_COUNT_AQL =
+  'FOR m IN okf_concepts_meta FILTER m.repo_id == @r AND m.index_status != "rejected" ' +
+  'FILTER !m.is_index && IS_ARRAY(m.labels) && LENGTH(m.labels) > 0 ' +
+  'COLLECT WITH COUNT INTO labelled RETURN labelled';
+
+async function countLabelledConcepts(db, repoId) {
+  const res = await (await db.query(LABELLED_COUNT_AQL, { r: repoId })).all();
+  const n = Array.isArray(res) && res[0] && res[0].labelled != null ? Number(res[0].labelled) : 0;
+  return Number.isFinite(n) ? n : 0;
+}
+
 async function curateRepoConcepts(repo, { classification, lanes, onProgress } = {}) {
   const mode = classification === 'llm' || classification === 'hybrid' ? classification : 'heuristics';
-  const stats = { method: mode, total: 0, curated: 0, labeled: 0, described: 0, typed: 0, fallbacks: 0 };
+  const stats = {
+    method: mode,
+    total: 0,
+    curated: 0,
+    pre_labelled: 0,
+    labeled: 0,
+    described: 0,
+    typed: 0,
+    fallbacks: 0
+  };
   const db = await dbService.getConnection('default');
   const rows = await (
     await db.query(
@@ -222,7 +284,42 @@ async function curateRepoConcepts(repo, { classification, lanes, onProgress } = 
       { r: repo.repo_id }
     )
   ).all();
-  stats.total = rows.length;
+  // Denominator = the curatable population (the index root is excluded — see
+  // the counter contract above). Numerator = seeded from ground truth, so the
+  // FIRST tick already answers "how many of my concepts are labelled?" instead
+  // of "how many has this pass got to?" — free, the rows are already loaded.
+  const curatable = rows.filter((m) => !m.is_index);
+  stats.total = curatable.length;
+  stats.pre_labelled = curatable.filter(hasLabels).length;
+  stats.curated = stats.pre_labelled;
+
+  /** One progress tick. `done` rides along as an alias of `curated` (see the
+   * counter contract) so no consumer can read a pass-local count. */
+  const emit = (extra) => {
+    if (onProgress) onProgress({ ...stats, done: stats.curated, ...extra });
+  };
+
+  /** The TERMINAL write: reconcile the counter against the database once, then
+   * emit unthrottled (`final: true` is what ingest-service's throttle lets
+   * through). Math.max keeps the sequence monotonic — a concurrent writer, a
+   * retry or a partial apply can only lift the number, never walk it back —
+   * and the Math.min keeps it inside the population the bar divides by. */
+  const finish = async () => {
+    try {
+      const labelled = await countLabelledConcepts(db, repo.repo_id);
+      stats.curated = Math.max(stats.curated, Math.min(stats.total, labelled));
+    } catch (e) {
+      logger.warn(
+        'OKF curation: final labelled reconcile failed — reporting the pass count ' +
+          '(repo=' +
+          repo.repo_id +
+          '): ' +
+          e.message
+      );
+    }
+    emit({ final: true });
+  };
+
   const area = await resolveAreaContext(repo.domain);
   const areaLabels = area ? area.labels : [];
   const areaOk = Boolean(area) && areaLabels.length > 0;
@@ -237,13 +334,21 @@ async function curateRepoConcepts(repo, { classification, lanes, onProgress } = 
           'OKF heuristics labeling: no KH L2 labels for the Subject Area — skipped (repo=' + repo.repo_id + ')'
         );
       }
-      if (onProgress) onProgress({ ...stats });
+      // An early return is a TERMINAL state, not a stalled pass: it emits
+      // `final` (an untagged write was throttled away as "still running") and
+      // it reports the seeded count, so a repo whose concepts were ALL labelled
+      // by the tabular import path or a prior pass shows its real total instead
+      // of a misleading 0.
+      await finish();
       return stats;
     }
-    const work = rows.filter((m) => !m.is_index && !(Array.isArray(m.labels) && m.labels.length > 0));
+    // Authorial / pre-existing labels are never overwritten by a keyword match,
+    // so those rows are out of the work set — they are already IN the numerator
+    // via the seed, which is exactly why the two must share the same predicate.
+    const work = curatable.filter((m) => !hasLabels(m));
+    emit(); // baseline tick: the curator sees the starting position immediately
     await runPool(work, parseInt(process.env.OKF_CURATION_LANES, 10) || lanes || DEFAULT_LANES, async (meta) => {
       const label = keywordLabelFor(meta, areaLabels);
-      stats.curated += 1;
       if (label) {
         try {
           await applyDecision(
@@ -254,23 +359,30 @@ async function curateRepoConcepts(repo, { classification, lanes, onProgress } = 
             mode
           );
           stats.labeled += 1;
+          // Only a PERSISTED label joins the numerator. A concept the keyword
+          // matcher could not place stays an honest gap — a concept with no
+          // label must never be counted as labelled.
+          stats.curated += 1;
         } catch (e) {
           logger.warn('OKF heuristics labeling: apply failed for ' + meta.concept_id + ': ' + e.message);
         }
       }
+      emit();
     });
     logger.info(
       'OKF heuristics labeling complete: total=' +
         stats.total +
         ' labeled=' +
         stats.labeled +
+        ' pre_labelled=' +
+        stats.pre_labelled +
         ' (repo=' +
         repo.repo_id +
         ' area=' +
         (area ? area.nameEN : 'none') +
         ')'
     );
-    if (onProgress) onProgress({ ...stats, final: true }); // bypasses the caller's throttle
+    await finish(); // bypasses the caller's throttle
     return stats;
   }
   if (!areaOk) {
@@ -284,10 +396,16 @@ async function curateRepoConcepts(repo, { classification, lanes, onProgress } = 
     );
   }
 
-  const work = rows.filter((m) => !m.is_index);
+  // llm/hybrid label EVERY curatable concept (an authorial label is re-verified
+  // against the taxonomy, not preserved) — so the work set is the whole
+  // denominator. Concepts that arrive already labelled are still in it, but
+  // they are already in the numerator via the seed, which is why the
+  // increment below only fires for a concept that gains a label.
+  const work = curatable;
   const laneCount = parseInt(process.env.OKF_CURATION_LANES, 10) || lanes || DEFAULT_LANES;
-  let done = 0;
   const passT0 = Date.now();
+
+  emit(); // baseline tick: the curator sees the starting position immediately
 
   await withSpan('okf.llm.curation', async (span) => {
     span.setAttribute('okf.repo_id', repo.repo_id);
@@ -295,9 +413,14 @@ async function curateRepoConcepts(repo, { classification, lanes, onProgress } = 
     span.setAttribute('okf.curation.concepts', work.length);
     span.setAttribute('okf.curation.lanes', laneCount);
     span.setAttribute('okf.curation.area', area ? area.nameEN : 'none');
+    span.setAttribute('okf.curation.pre_labelled', stats.pre_labelled);
 
     await runPool(work, laneCount, async (meta) => {
       const t0 = Date.now();
+      // Snapshot BEFORE the decision: a pre-labelled concept stays counted even
+      // if this pass's verdict carries no label (applyDecision never clears
+      // labels — a no_label verdict leaves the authorial label in place).
+      const hadLabels = hasLabels(meta);
       const decision = await curateOne(meta, { mode, areaLabels, areaOk });
       if (debugEnabled()) {
         logger.info(
@@ -316,19 +439,24 @@ async function curateRepoConcepts(repo, { classification, lanes, onProgress } = 
             'ms'
         );
       }
+      let applied = true;
       try {
         await applyDecision(db, repo, meta, decision, mode);
       } catch (e) {
+        applied = false;
         logger.warn('OKF curation: apply failed for ' + meta.concept_id + ': ' + e.message);
         decision.resolved_by = 'apply-error';
       }
-      stats.curated += 1;
+      // The numerator gains a concept only when a label actually LANDED on it.
+      // A no_label verdict, an LLM error or a failed apply leaves the concept
+      // unlabelled, and counting it would make the bar claim work that is not
+      // there. `fallbacks` already surfaces the degraded concepts.
+      if (!hadLabels && decision.label && applied) stats.curated += 1;
       if (decision.label) stats.labeled += 1;
       if (decision.summary) stats.described += 1;
       if (decision.typeApplied) stats.typed += 1;
       if (decision.resolved_by === 'llm-error' || decision.resolved_by === 'llm-unparseable') stats.fallbacks += 1;
-      done += 1;
-      if (onProgress) onProgress({ ...stats, done });
+      emit();
     });
   });
 
@@ -339,8 +467,13 @@ async function curateRepoConcepts(repo, { classification, lanes, onProgress } = 
       (Date.now() - passT0) +
       'ms total=' +
       stats.total +
-      ' labeled=' +
+      ' labelled=' +
+      stats.curated +
+      ' (this pass labeled=' +
       stats.labeled +
+      ' pre_labelled=' +
+      stats.pre_labelled +
+      ')' +
       ' described=' +
       stats.described +
       ' typed=' +
@@ -353,7 +486,7 @@ async function curateRepoConcepts(repo, { classification, lanes, onProgress } = 
       (area ? area.nameEN : 'none') +
       ')'
   );
-  if (onProgress) onProgress({ ...stats, final: true }); // bypasses the caller's throttle
+  await finish(); // bypasses the caller's throttle
   return stats;
 }
 

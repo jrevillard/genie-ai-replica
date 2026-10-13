@@ -1687,6 +1687,29 @@ export default {
       viewToggle: 'Mwonekano wa mhariri',
       paneLabel: 'Kidirisha cha mwonekano',
       saveFailed: 'Uhifadhi umeshindwa — jaribu tena',
+      piiRescan: {
+        label: 'Data za binafsi',
+        button: 'Changanua upya kurasa zote',
+        working: 'Inachanganua upya kurasa zote…',
+        progress: 'Inachanganua upya… {done} kati ya {total} kurasa',
+        progressIdle: 'Inachanganua upya… kusoma kumbukumbu',
+        done: 'Kurasa {n} zimechanganuliwa upya.',
+        partial:
+          'Kurasa {n} zimechanganuliwa upya. {e} bado zimeshindwa — hukumu yao ya kuchanganua haijabadilika, hivyo kuchapisha kumabado kuzuiwa kwa hizo.',
+        noKey:
+          'Seva ulikubali ukchanganuzi upya lakini haukurudisha kitambulisho cha kifasi, hivyo maendeleo yake hayaweza kufuatiliwa. Hakuna kilichoripotiwa.',
+        missing:
+          'Ukchanganuzi upya hapatikani kwenye seva hii (404). Hakuna kilichobadilishwa — kurasa zilizoshindwa kuchanganua bado zinalizuia kuchapisha.',
+        frozen: 'Ukchanganuzi upya umekataliwa: kumbukumbu inachapishwa (409). Hakuna kilichobadilishwa.',
+        failed:
+          'Ukchanganuzi upya umeshindwa. Hakuna kilichobadilishwa — kurasa zilizoshindwa kuchanganua bado zinalizuia kuchapisha.',
+        scanned: 'Kurasa {n} zimechanganuliwa upya',
+        clean: 'safi',
+        hit: 'zimewekwa alama',
+        error: 'hitilafu ya kuchanganua',
+        vanished: 'zimefutika',
+        stillBlocking: 'Bado zinalizuia'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1936,6 +1959,33 @@ export default {
       repoTagsHint:
         'Lebe za kiwango cha hazina ({summary}) ni za hazina, si la dhana hii — dhibiti kutoka kipanele cha lebe kwenye reli ya kulia.'
     },
+    piiReview: {
+      title: 'Ukaguzi wa data za binafsi',
+      checking: 'Inakagua…',
+      checkingBody: 'Inasoma hali ya data za binafsi kwa kila ukurasa…',
+      unreadableTitle: 'Hali haijulikani',
+      unreadableBody:
+        'Hali ya data za binafsi ya kumbukumbu hii haikuweza kusomwa. Kama kuna kilichopatikana hakijulikani — hii si matokeo safi.',
+      unscanned: 'Haikuchanganuliwa',
+      unscannedBody:
+        'Hakuna ukchanganuzi kamili wa data za binafsi unaoshiriki kumbukumbu hii ({n} kurasa hazikuchanganuliwa kamwe). Hakuna kinachojulikana kuwa hakina data za binafsi — kuchapisha hakuzuiwi na matokeo, lakini hakuna ukchanganuzi nyuma ya hukumu hii.',
+      errorTitle: 'Ukchanganuzi umeshindwa',
+      errorBody:
+        'Kurasa {n} hazikuweza kuchanganuliwa. Maudhui yao haikusomwa kwa kutaratibu, kwa hivyo kama yana data za binafsi hakijulikani — hayako safi na yanazuia kuchapisha.',
+      unreviewed: 'Zimewekwa alama, hazijagaguliwa',
+      unreviewedBody:
+        'Kichanganuzi kilipata data za binafsi zinazowezekana kwenye kurasa {n} na hakuna aliyeyagagua. Kuchapisha kuruhusiwa, lakini hakuna kilichokaguliwa kwenye kurasa hizo.',
+      reviewed: 'Zimewekwa alama, zimegaguliwa',
+      reviewedBody: 'Kurasa {n} zina data za binafsi zilizowekwa alama ambazo msimamizi alikubali ({by} tarehe {at}).',
+      cleanVerdict: 'Imechanganuliwa — hakuna kilichopatikana',
+      cleanBody: 'Kila ukurasa umechanganuliwa na hakuna data za binafsi zilizopatikana.',
+      staleAck:
+        'Ukubali wa awali uliandika kurasa {a} zilizowekwa alama tarehe {at}; sasa kuna {n}, kwa hivyo hauzirekebisha hizo.',
+      bannerTitle: 'Hakuna aliyeyagagua matokeo haya.',
+      bannerBody:
+        'Kuchapisha bado kunaruhusiwa na hakuna kitu kitakachozuia — lakini kurasa zilizowekwa alama zitaingia kwenye kumbukumbu inayochapishwa hasa kama zilivyo. Fungua kila moja na uamue kabla ya kuchapisha.',
+      unknownActor: 'haijulikani'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2022,9 +2072,9 @@ export default {
       step3:
         'Tunasoma vyanzo vyako na kupendekeza mada. Mada hujikusanya chini ya lebo za makundi unazochagua. Mzalishaji ni makini — anapendelea kupendekeza mada chache zilizoundwa vizuri badala ya mada nyingi zisizo na mpangilio.',
       step4:
-        'Lebo ndizo misingi mikuu ya muundo wako — mada hii ni kitu cha namna gani? Chagua lebo 3 hadi 7 zinazoshikilia misingi mikuu; mzalishaji huzitumia kama nguzo za kuongoza muundo wa mada.',
+        'Lebo ndizo misingi mikuu ya muundo wako — mada hii ni kitu cha namna gani? Lebo hutambuliwa kiotomatiki kutoka kwa Hierarchia ya Maarifa, zimezuwa kwenye Eneo la Mada la hifadhi hii.',
       step5:
-        'Huu ndio msingi wa kazi yote. Kila mada ni kipande kidogo cha maarifa kinachoweza kutajwa. Mada hupata kichwa, maelezo, na kurithi lebo ulizochagua. Jukumu lako ni kuifanya iwe thabiti: badilisha vichwa visivyo wazi, unganisha vile vinavyokaribia kufanana, na ondoa vile usivyoweza kuvithibitisha kwa chanzo.',
+        'Huu ndio msingi wa kazi yote. Kila mada ni kipande kidogo cha maarifa kinachoweza kutajwa. Mada hupata kichwa, maelezo, na hupata lebo za Hierarchia ya Maarifa. Jukumu lako ni kuifanya iwe thabiti: badilisha vichwa visivyo wazi, unganisha vile vinavyokaribia kufanana, na ondoa vile usivyoweza kuvithibitisha kwa chanzo.',
       step6:
         'Tunaendesha ukaguzi wa uwiano: kila mada ina kichwa? Lebo ni sahihi? Sifa za vyanzo ziko salama? Matatizo ya kuzuia lazima yarekebishwe kabla ya kuhamisha hifadhi; maonyo yanaweza kuthibitishwa.',
       step7:
@@ -2233,6 +2283,20 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2242,11 +2306,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Chagua lebo',
-        hint: 'Lebo ndizo misingi mikuu ya muundo wako — mada hizi ni vitu vya namna gani? Chagua 3 hadi 7.',
-        add: '+ Ongeza lebo',
-        addConfirm: 'Ongeza',
-        placeholder: 'mf. Vibali',
+        title: 'Lebo — za moja kwa moja',
+        hint: 'Lebo hutambuliwa kiotomatiki kutoka kwa Hierarchia ya Maarifa — zimezuwa kwenye Eneo la Mada la hifadhi hii.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
@@ -2512,12 +2573,42 @@ export default {
           'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
         index_failed:
           'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
       }
     },
     pii: {
       panel: 'Vitambulisho vilivyowekewa alama',
       nFlagged: '{n} zimepatikana',
       rescan: 'Changanua tena',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
       scanning: 'Inachanganua…',
       clean: 'Hakuna vipengele vilivyotiwa alama — concept hii ni safi.',
       how: 'Suluhisho: ondoa au badilisha maneno (mfano kutumia jukumu badala ya jina), kisha hifadhi — uchanganuzi upya utasasisha orodha hii.',
@@ -2738,6 +2829,14 @@ export default {
         floor:
           'Hoja hii haihusiani na mada ya repository hii (alama iko chini ya kiwango cha chini cha domain) — kubadilisha lebo hakurekebishi hili; hii ni uzuiaji sahihi.',
         rejected: 'Imezuiwa na ulinzi — lebo iliyozuiwa haipaswi kulingana na mada ya hifadhi hii yenyewe.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
       },
       suites: {
         generate: 'Generate test suite',

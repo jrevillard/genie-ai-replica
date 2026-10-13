@@ -18,6 +18,19 @@ const ctrl = require('../controllers/repository-controller');
 router.get('/', ctrl.listRepos);
 router.get('/:repo_id', ctrl.getRepo);
 
+// Story 10.5 — the wizard's resumable curation draft. ALL THREE verbs live
+// under `/:repo_id/draft`; the retired `/:repo_id/studio_drafts` path shape is
+// never registered (the endpoint was never deployed, so no client depends on
+// it — an alias would be dead code). Express `/:repo_id` matches exactly one
+// segment, so it can never swallow this two-segment path; the only other
+// parametrised two-segment routes (`/routing-testsuite/:suite_key`,
+// `/concepts/:concept_id`) have literal prefixes that cannot collide.
+// GET inherits the router-wide read gate + the controller's default-deny
+// authz (same posture as GET /:repo_id itself); the mutations are admin-scoped.
+router.get('/:repo_id/draft', ctrl.getStudioDraft);
+router.put('/:repo_id/draft', requireRepoScope('repo_id', 'admin'), ctrl.putStudioDraft);
+router.delete('/:repo_id/draft', requireRepoScope('repo_id', 'admin'), ctrl.deleteStudioDraft);
+
 // Mutations.
 router.post('/', requireRole('tools-admin'), ctrl.createRepo);
 // Server-side crawl→OKF conversion (David, 2026-09-02): 202 + background
@@ -32,8 +45,17 @@ router.post('/convert-from-documents', requireRole('tools-admin'), ctrl.convertF
 router.patch('/:repo_id', requireRepoScope('repo_id', 'admin'), ctrl.updateRepo);
 router.delete('/:repo_id', requireRepoScope('repo_id', 'admin'), ctrl.deleteRepo);
 
-// PII scan (Story 2.8 — ADR-okf-004 rev): explicit concepts OR file discovery.
+// PII scan (Story 2.8 — ADR-okf-004 rev): explicit concepts OR file discovery
+// OR {"scope":"concepts"} — the ASYNC repo-wide CONCEPT rescan (202 + poll).
+// That mode walks the okf_concepts_meta rows the publish gate actually reads,
+// which is what clears a concept stuck in pii_state 'error'; the file modes
+// scan `files` docs and can never reach a concept row.
 router.post('/:repo_id/pii-scan', requireRepoScope('repo_id', 'admin'), ctrl.piiScan);
+// The rescan's poll: {status:'running', progress} / {status:'failed', error} /
+// the completed tally. Read scope (same as the suite-run poll). Declared right
+// below the POST; the literal 'pii-scan' segment can never collide with a
+// sibling :param route because pii-scan is not a path parameter anywhere.
+router.get('/:repo_id/pii-scan/:scan_key', requireRepoScope('repo_id', 'read'), ctrl.getPiiConceptScan);
 
 // REPO BULK PII ACTION (David, 2026-09-12): Redact / Remove / Accept applied
 // to EVERY flagged concept in one steward decision (Files-view header).
@@ -111,11 +133,15 @@ router.post(
   ctrl.probeTestSuiteQuery
 );
 // Story 1-8c — batch advice for a suite run's failing negatives.
+// 1-8g-y: the POST now answers 202 + poll (the work fans out over the shared
+// remote GPU node and outran the gateway). The poll below is read scope,
+// matching the runs listing and the load-one-run path.
 router.post(
   '/:repo_id/routing-testsuite/:suite_key/explain',
   requireRepoScope('repo_id', 'admin'),
   ctrl.explainTestSuiteFailures
 );
+router.get('/:repo_id/routing-testsuite/:suite_key/explain/:run_key', requireRepoScope('repo_id', 'read'), ctrl.getExplainFailures);
 // Story 1-8d — the COMPREHENSIVE advisor: aggregates recent runs (all
 // classes), simulates tag-set changes against the gate, recommends the
 // globally-optimal add/remove set under a zero-positive-harm constraint.

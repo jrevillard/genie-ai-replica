@@ -1680,6 +1680,27 @@ export default {
       viewToggle: 'มุมมองบรรณาธิการ',
       paneLabel: 'บานหน้าต่างมุมมอง',
       saveFailed: 'การบันทึกล้มเหลว — ลองใหม่',
+      piiRescan: {
+        label: 'ข้อมูลส่วนบุคคล',
+        button: 'สแกนหน้าทั้งหมดอีกครั้ง',
+        working: 'กำลังสแกนหน้าทั้งหมดอีกครั้ง…',
+        progress: 'สแกนใหม่… {done} จาก {total} หน้า',
+        progressIdle: 'สแกนใหม่… กำลังอ่านที่เก็บข้อมูล',
+        done: 'สแกนใหม่แล้ว {n} หน้า',
+        partial:
+          'สแกนใหม่แล้ว {n} หน้า {e} หน้ายังล้มเหลว — ผลการสแกนไม่เปลี่ยนแปลง การเผยแพร่จึงยังถูกปิดกั้นสำหรับหน้าเหล่านั้น',
+        noKey: 'เซิร์ฟเวอร์รับการสแกนใหม่แล้วแต่ไม่คืนรหัสการทำงาน จึงติดตามความคืบหน้าไม่ได้ ไม่มีการรายงานผลใด ๆ',
+        missing:
+          'เซิร์ฟเวอร์นี้ไม่รองรับการสแกนใหม่ (404) ไม่มีสิ่งใดเปลี่ยนแปลง — หน้าที่สแกนล้มเหลวยังคงปิดกั้นการเผยแพร่',
+        frozen: 'ปฏิเสธการสแกนใหม่: ที่เก็บข้อมูลกำลังเผยแพร่ (409) ไม่มีสิ่งใดเปลี่ยนแปลง',
+        failed: 'การสแกนใหม่ล้มเหลว ไม่มีสิ่งใดเปลี่ยนแปลง — หน้าที่สแกนล้มเหลวยังคงปิดกั้นการเผยแพร่',
+        scanned: 'สแกนใหม่แล้ว {n} หน้า',
+        clean: 'สะอาด',
+        hit: 'ถูกระบุ',
+        error: 'สแกนผิดพลาด',
+        vanished: 'หายไป',
+        stillBlocking: 'ยังคงปิดกั้น'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1926,6 +1947,32 @@ export default {
       perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
       repoTagsHint: 'แท็กระดับรีปอซิทอรี ({summary}) เป็นของรีปอ — ไม่ใช่ของคอนเซปต์นี้ จัดการที่แผงแท็กในแถบด้านขวา'
     },
+    piiReview: {
+      title: 'การตรวจสอบข้อมูลส่วนบุคคล',
+      checking: 'กำลังตรวจสอบ…',
+      checkingBody: 'กำลังอ่านสถานะข้อมูลส่วนบุคคลของทุกหน้า…',
+      unreadableTitle: 'สถานะไม่ทราบ',
+      unreadableBody:
+        'ไม่สามารถอ่านสถานะข้อมูลส่วนบุคคลของที่เก็บข้อมูลนี้ได้ ว่าพบสิ่งใดหรือไม่นั้นไม่ทราบ — นี่ไม่ใช่ผลลัพธ์ที่สะอาด',
+      unscanned: 'ยังไม่ได้สแกน',
+      unscannedBody:
+        'ไม่มีการสแกนข้อมูลส่วนบุคคลแบบสมบูรณ์ครอบคลุมที่เก็บข้อมูลนี้ ({n} หน้าที่ไม่เคยถูกสแกน) ไม่มีสิ่งใดที่รู้ว่าปราศจากข้อมูลส่วนบุคคล — การเผยแพร่ไม่ได้ถูกปิดกั้นเพราะรายการที่พบ แต่ไม่มีการสแกนรองรับคำตัดสินนี้',
+      errorTitle: 'สแกนล้มเหลว',
+      errorBody:
+        '{n} หน้าไม่สามารถสแกนได้ เนื้อหาของหน้าเหล่านั้นไม่ได้ถูกอ่านอย่างสำเร็จ จึงไม่ทราบว่ามีข้อมูลส่วนบุคคลหรือไม่ — หน้าเหล่านั้นไม่สะอาดและปิดกั้นการเผยแพร่',
+      unreviewed: 'ถูกระบุ ยังไม่ได้ตรวจทาน',
+      unreviewedBody:
+        'ตัวสแกนพบข้อมูลส่วนบุคคลที่เป็นไปได้ใน {n} หน้า และยังไม่มีใครตรวจทาน การเผยแพร่ยังอนุญาต แต่ไม่มีสิ่งใดบนหน้าเหล่านั้นที่ผ่านการตรวจทาน',
+      reviewed: 'ถูกระบุ ตรวจทานแล้ว',
+      reviewedBody: '{n} หน้ามีข้อมูลส่วนบุคคลที่ถูกระบุซึ่งผู้ดูแลระบบได้รับทราบแล้ว ({by} เมื่อ {at})',
+      cleanVerdict: 'สแกนแล้ว — ไม่พบสิ่งใด',
+      cleanBody: 'ทุกหน้าได้รับการสแกนและไม่พบข้อมูลส่วนบุคคล',
+      staleAck: 'การรับรองก่อนหน้านี้บันทึกหน้าที่ถูกระบุ {a} หน้าเมื่อ {at} ขณะนี้มี {n} หน้าถูกระบุ จึงไม่ครอบคลุม',
+      bannerTitle: 'ไม่มีใครตรวจทานผลการค้นพบเหล่านี้',
+      bannerBody:
+        'การเผยแพร่ยังคงอนุญาตและไม่มีด่านใดหยุดคุณได้ — แต่หน้าที่ถูกระบุจะเข้าไปอยู่ในที่เก็บข้อมูลที่เผยแพร่ตามที่เป็นอยู่ โปรดเปิดทีละหน้าและตัดสินใจก่อนเผยแพร่',
+      unknownActor: 'ไม่ทราบ'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2012,9 +2059,9 @@ export default {
       step3:
         'เรากำลังอ่านแหล่งที่มาของคุณและเสนอหัวข้อ หัวข้อจะจัดกลุ่มภายใต้ป้ายกำกับหมวดหมู่ที่คุณเลือก โมดูลตัวสร้างจะทำงานอย่างระมัดระวัง — โดยเน้นเสนอหัวข้อที่มีคุณภาพและชัดเจนในจำนวนที่น้อยกว่า แทนที่จะเสนอหัวข้อจำนวนมากที่ซ้ำซ้อน',
       step4:
-        'ป้ายกำกับคือแกนตามหมวดหมู่ของภววิทยาของคุณ — หัวข้อนี้เป็นสิ่งประเภทใด? เลือก 3-7 ป้ายกำกับที่ครอบคลุมแกนหลัก โดยโมดูลตัวสร้างจะใช้สิ่งเหล่านี้เป็นโครงร่างสำหรับลำดับชั้นของหัวข้อ',
+        'ป้ายกำกับคือแกนตามหมวดหมู่ของภววิทยาของคุณ — หัวข้อนี้เป็นสิ่งประเภทใด? ป้ายกำกับได้รับการกำหนดโดยอัตโนมัติจากลำดับชั้นความรู้ และจำกัดอยู่ในหัวข้อของที่เก็บข้อมูลนี้',
       step5:
-        'นี่คือหัวใจสำคัญของงาน แต่ละหัวข้อคือหน่วยความรู้ขนาดเล็กที่สามารถอ้างอิงได้ หัวข้อจะได้รับชื่อ คำอธิบาย และสืบทอดป้ายกำกับที่คุณเลือก งานของคุณคือทำให้ข้อมูลมีความน่าเชื่อถือ: เปลี่ยนชื่อที่ไม่ชัดเจน รวมรายการที่ซ้ำกัน และตัดรายการที่ไม่มีแหล่งที่มารองรับออก',
+        'นี่คือหัวใจสำคัญของงาน แต่ละหัวข้อคือหน่วยความรู้ขนาดเล็กที่สามารถอ้างอิงได้ หัวข้อจะได้รับชื่อ คำอธิบาย และได้รับป้ายกำกับจากลำดับชั้นความรู้ งานของคุณคือทำให้ข้อมูลมีความน่าเชื่อถือ: เปลี่ยนชื่อที่ไม่ชัดเจน รวมรายการที่ซ้ำกัน และตัดรายการที่ไม่มีแหล่งที่มารองรับออก',
       step6:
         'เราตรวจสอบความสอดคล้อง: ทุกหัวข้อมีชื่อหรือไม่ ป้ายกำกับถูกต้องหรือไม่ การระบุแหล่งที่มาครบถ้วนหรือไม่ ปัญหาที่บล็อกต้องแก้ไขก่อนส่งมอบคลัง คำเตือนสามารถยอมรับได้',
       step7:
@@ -2223,6 +2270,20 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2232,11 +2293,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'เลือกป้ายกำกับ',
-        hint: 'ป้ายกำกับคือแกนตามหมวดหมู่ของภววิทยาของคุณ — หัวข้อเหล่านี้จัดเป็นสิ่งประเภทใด? เลือก 3-7 รายการ',
-        add: '+ เพิ่มป้ายกำกับ',
-        addConfirm: 'เพิ่ม',
-        placeholder: 'เช่น ใบอนุญาต',
+        title: 'ป้ายกำกับ — อัตโนมัติ',
+        hint: 'ป้ายกำกับได้รับการกำหนดโดยอัตโนมัติจากลำดับชั้นความรู้ และจำกัดอยู่ในหัวข้อของที่เก็บข้อมูลนี้',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
@@ -2499,12 +2557,42 @@ export default {
           'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
         index_failed:
           'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
       }
     },
     pii: {
       panel: 'เอนทิตีที่ถูกแจ้งเตือน',
       nFlagged: 'พบ {n} รายการ',
       rescan: 'สแกนอีกครั้ง',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
       scanning: 'กำลังสแกน…',
       clean: 'ไม่มีเอนทิตีที่ถูกตั้งค่าสถานะ — concept นี้ปลอดภัย',
       how: 'วิธีแก้: ลบออกหรือใช้คำอื่น (เช่น ใช้ตำแหน่งแทนชื่อ) จากนั้นบันทึก — การสแกนใหม่จะอัปเดตรายการนี้',
@@ -2725,6 +2813,14 @@ export default {
         floor:
           'คำค้นนี้ไม่เกี่ยวข้องกับหัวข้อของคลังข้อมูลนี้ (คะแนนต่ำกว่าคะแนนขั้นต่ำของโดเมน) — การเปลี่ยนแท็กจะไม่ช่วยแก้ไข นี่คือการกดที่ถูกต้อง',
         rejected: 'ถูกปฏิเสธโดยระบบป้องกัน — แท็กต้องห้ามต้องไม่ตรงกับหัวข้อของคลังข้อมูลนี้เอง'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
       },
       suites: {
         generate: 'Generate test suite',

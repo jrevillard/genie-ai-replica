@@ -76,9 +76,9 @@ function seedDb({ concepts = CONCEPT_ROWS } = {}) {
   });
 }
 
-function vllmResponse(content) {
+function vllmResponse(content, finishReason = 'stop') {
   return {
-    data: { choices: [{ message: { content }, finish_reason: 'stop' }], usage: { total_tokens: 42 } }
+    data: { choices: [{ message: { content }, finish_reason: finishReason }], usage: { total_tokens: 42 } }
   };
 }
 
@@ -167,6 +167,68 @@ describe('frontmatterService.suggestTags — forbidden suggestion contract', () 
     seedDb();
     axios.post.mockResolvedValue(vllmResponse('not json at all'));
     await expect(svc.suggestTags(REPO_ID)).rejects.toMatchObject({ code: 'LLM_PARSE', status: 502 });
+  });
+
+  // 2026-10-11 live incident (repo da894635, 586 concepts): granite looped on
+  // "centa-cpc" inside the entity array, spent all 1000 max_tokens and was cut
+  // off mid-string — finish_reason "length", no closing brace. The 8 complete
+  // topics were discarded with the malformed tail and the curator got a bare
+  // "LLM returned unparseable JSON" 502. A cut-off run must degrade to the
+  // values it did finish, never lose them.
+  test('a run cut off at the token cap is salvaged, not 502-ed (centa-cpc incident)', async () => {
+    seedDb();
+    const truncated =
+      '{"topic": ["maize", "beans", "tomato", "disease control", "pest control", ' +
+      '"fertilization", "field trials", "agronomic characteristics"],' +
+      ' "entity": ["centa chaparrastique", "centa-cpc", "centa-cpc", "centa-c';
+    axios.post.mockResolvedValue(vllmResponse(truncated, 'length'));
+    const out = await svc.suggestTags(REPO_ID);
+    expect(out.topic).toEqual([
+      'maize',
+      'beans',
+      'tomato',
+      'disease-control',
+      'pest-control',
+      'fertilization',
+      'field-trials',
+      'agronomic-characteristics'
+    ]);
+    // the salvaged entities still pass through the existing dedup
+    expect(out.entity).toEqual(['centa-chaparrastique', 'centa-cpc']);
+  });
+
+  test('the partial trailing value is DROPPED, never guessed at', async () => {
+    seedDb();
+    axios.post.mockResolvedValue(
+      vllmResponse('{"topic": ["maize", "beans"], "summary": "Covers maize and bea', 'length')
+    );
+    const out = await svc.suggestTags(REPO_ID);
+    expect(out.topic).toEqual(['maize', 'beans']);
+    expect(out.summary).toBeNull(); // half-written sentence is not a sentence
+  });
+
+  test('repair only engages on finish_reason length — a clean stop stays clean', async () => {
+    seedDb();
+    // Same truncated bytes, but the model claims it stopped on its own: that
+    // is a genuine parse failure and must still surface as LLM_PARSE.
+    axios.post.mockResolvedValue(vllmResponse('{"topic": ["maize", "beans'));
+    await expect(svc.suggestTags(REPO_ID)).rejects.toMatchObject({ code: 'LLM_PARSE', status: 502 });
+  });
+
+  test('the prompt forbids duplicate values (the loop that caused the incident)', async () => {
+    seedDb();
+    axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['a', 'b', 'c'] })));
+    await svc.suggestTags(REPO_ID);
+    const prompt = axios.post.mock.calls[0][1].messages[0].content;
+    expect(prompt).toMatch(/EACH VALUE EXACTLY ONCE/);
+    expect(prompt).toMatch(/HARD\s+STOP/);
+  });
+
+  test('the token budget leaves headroom above the documented array ranges', async () => {
+    seedDb();
+    axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['a', 'b', 'c'] })));
+    await svc.suggestTags(REPO_ID);
+    expect(axios.post.mock.calls[0][1].max_tokens).toBe(1500);
   });
 
   test('dedups repeated LLM values (the 2026-10-09 mental-health x5 incident)', async () => {

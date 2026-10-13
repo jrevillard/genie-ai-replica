@@ -432,6 +432,74 @@ describe('producer-service — startDocumentsConversion + run', () => {
     expect(repoDoc.conversion.status).toBe('done');
   });
 
+  it('imports a .csv as FR-42 dictionary + row-groups (NOT the raw-text fallback)', async () => {
+    // The dispatch has THREE csv-relevant seams ~290 lines apart: the
+    // convertDocument branch, the hard-coded allowlist that throws
+    // DOC_FORMAT_UNSUPPORTED BEFORE dispatch, and the {concepts} result
+    // routing. Miss any one and a CSV either loud-rejects or lands as one
+    // comma-dense prose blob — both look "handled" in a code read.
+    const csv = 'Region,Amount,Note\nNorth,100,"a, b"\nSouth,200,"say ""hi"""\n';
+    const buf = Buffer.from(csv, 'utf8');
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) return Promise.resolve({ data: Readable.from([buf]) });
+      return Promise.resolve({
+        data: { file: { file_id: 'fc', file_name: 'market.csv', file_type: 'text/csv', size: buf.length } }
+      });
+    });
+    await mockDb
+      .collection('okf_repositories')
+      .save({ _key: RID, repo_id: RID, name: 'Imported', domain: 'general' });
+    await producer.startDocumentsConversion({
+      repo_id: RID,
+      file_ids: ['fc'],
+      requested_name: 'Imported',
+      classification: 'heuristics',
+      actor: { sub: 'steward' }
+    });
+    await producer.live.get(RID);
+
+    const allConcepts = ingestRepoConcepts.mock.calls.flatMap((c) => c[1].concepts);
+    const dict = allConcepts.find((c) => c.path === 'market-dictionary.md');
+    const rows = allConcepts.find((c) => c.path === 'market-rows.md');
+    expect(dict).toBeTruthy();
+    expect(rows).toBeTruthy();
+    expect(dict.frontmatter.type).toBe('data-dictionary');
+    expect(rows.frontmatter.links[0].to_concept_id).toBe('market-dictionary');
+    // Quoted delimiter survived into the markdown table.
+    expect(rows.body).toContain('a, b');
+    expect(rows.body).toContain('say "hi"');
+    // NOT the fallback: a fallback blob would be ONE concept named market.md.
+    expect(allConcepts.some((c) => c.path === 'market.md')).toBe(false);
+  });
+
+  it('loud-rejects an unreadable .csv per-file without aborting the batch', async () => {
+    // Binary content: SheetJS would otherwise "parse" it into a garbage
+    // one-column table and report an empty import.
+    const junk = Buffer.from([0, 1, 2, 0, 255, 254, 0, 0]);
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) return Promise.resolve({ data: Readable.from([junk]) });
+      return Promise.resolve({
+        data: { file: { file_id: 'fc', file_name: 'broken.csv', file_type: 'text/csv', size: junk.length } }
+      });
+    });
+    await mockDb
+      .collection('okf_repositories')
+      .save({ _key: RID, repo_id: RID, name: 'Imported', domain: 'general' });
+    await producer.startDocumentsConversion({
+      repo_id: RID,
+      file_ids: ['fc'],
+      requested_name: 'Imported',
+      classification: 'heuristics',
+      actor: { sub: 'steward' }
+    });
+    await producer.live.get(RID);
+    const repoDoc = await mockDb.collection('okf_repositories').document(RID);
+    const perFile = repoDoc.conversion.per_file;
+    expect(perFile[0]).toMatchObject({ status: 'failed', code: 'CSV_UNREADABLE' });
+  });
+
   it('imports the corpus: per-file drafts, cross-links, index LAST, one curation pass, done record', async () => {
     mockDocs({ f1: 'alpha.md', f2: 'beta.md' });
     await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Imported', domain: 'general' });

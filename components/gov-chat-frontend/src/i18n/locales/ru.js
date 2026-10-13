@@ -1693,6 +1693,29 @@ export default {
       viewToggle: 'Вид редактора',
       paneLabel: 'Панель просмотра',
       saveFailed: 'Ошибка сохранения — повторите попытку',
+      piiRescan: {
+        label: 'Персональные данные',
+        button: 'Пересканировать все страницы',
+        working: 'Пересканирование всех страниц…',
+        progress: 'Пересканирование… {done} из {total} страниц',
+        progressIdle: 'Пересканирование… чтение репозитория',
+        done: 'Пересканировано страниц: {n}.',
+        partial:
+          'Пересканировано страниц: {n}. {e} по-прежнему не удалось — их вердикт не изменился, публикация для них остаётся заблокированной.',
+        noKey:
+          'Сервер принял пересканирование, но не вернул идентификатор запуска, поэтому его ход нельзя отследить. Ничего не сообщено.',
+        missing:
+          'Пересканирование недоступно на этом сервере (404). Ничего не изменено — страницы с неудачным сканом по-прежнему блокируют публикацию.',
+        frozen: 'Пересканирование отклонено: репозиторий публикуется (409). Ничего не изменено.',
+        failed:
+          'Пересканирование не удалось. Ничего не изменено — страницы с неудачным сканом по-прежнему блокируют публикацию.',
+        scanned: 'Пересканировано страниц: {n}',
+        clean: 'чистые',
+        hit: 'помечены',
+        error: 'ошибка скана',
+        vanished: 'исчезли',
+        stillBlocking: 'По-прежнему блокируют'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1942,6 +1965,33 @@ export default {
       repoTagsHint:
         'Теги уровня репозитория ({summary}) живут в репозитории, а не в этом концепте — управляйте ими в панели тегов правой панели.'
     },
+    piiReview: {
+      title: 'Проверка персональных данных',
+      checking: 'Проверка…',
+      checkingBody: 'Чтение состояния персональных данных на каждой странице…',
+      unreadableTitle: 'Состояние неизвестно',
+      unreadableBody:
+        'Не удалось прочитать состояние персональных данных этого репозитория. Обнаружено ли что-то — НЕИЗВЕСТНО; это не чистый результат.',
+      unscanned: 'Не просканировано',
+      unscannedBody:
+        'Полное сканирование персональных данных не покрывает этот репозиторий ({n} страниц никогда не сканировалось). Ничто не известно как свободное от персональных данных — публикация не блокируется находками, но за этим вердиктом нет скана.',
+      errorTitle: 'Скан не удался',
+      errorBody:
+        '{n} страниц не удалось просканировать. Их содержимое НЕ было прочитано успешно, поэтому наличие персональных данных НЕИЗВЕСТНО — эти страницы не чистые и блокируют публикацию.',
+      unreviewed: 'Помечены, не проверены',
+      unreviewedBody:
+        'Сканер нашёл возможные персональные данные на {n} страницах, и никто их не проверял. Публикация разрешена, но на этих страницах ничего не проверено.',
+      reviewed: 'Помечены, проверены',
+      reviewedBody: '{n} страниц содержат помеченные персональные данные, подтверждённые куратором ({by}, {at}).',
+      cleanVerdict: 'Просканировано — ничего не найдено',
+      cleanBody: 'Каждая страница просканирована, персональные данные не найдены.',
+      staleAck:
+        'Предыдущее подтверждение зафиксировало {a} помеченных страниц {at}; сейчас помечено {n}, поэтому оно их не покрывает.',
+      bannerTitle: 'Никто не проверил эти находки.',
+      bannerBody:
+        'Публикация по-прежнему разрешена, и ничто её не остановит, но помеченные страницы попадут в опубликованный репозиторий ровно такими. Откройте каждую и решите до публикации.',
+      unknownActor: 'неизвестно'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2029,9 +2079,9 @@ export default {
       step3:
         'Мы считываем ваши источники и предлагаем темы. Темы группируются по выбранным вами категориям меток. Модуль генерации работает консервативно: он предпочитает сформировать меньше четких тем, чем множество зашумленных.',
       step4:
-        'Метки — это категориальные оси вашей онтологии: к какому типу сущностей относится данная тема? Выберите от 3 до 7 меток, отражающих основные оси; модуль генерации использует их как каркас для иерархии тем.',
+        'Метки — это категориальные оси вашей онтологии: к какому типу сущностей относится данная тема? Метки назначаются автоматически из Иерархии знаний, ограничены тематической областью этого репозитория.',
       step5:
-        'Это ключевой этап работы. Каждая тема — это небольшая цитируемая единица знаний. Темы получают название, описание и наследуют выбранные метки. Ваша задача — обеспечить точность: переименовать неясные заголовки, объединить дубликаты и исключить темы, не подтвержденные источниками.',
+        'Это ключевой этап работы. Каждая тема — это небольшая цитируемая единица знаний. Темы получают название, описание и получают метки из Иерархии знаний. Ваша задача — обеспечить точность: переименовать неясные заголовки, объединить дубликаты и исключить темы, не подтвержденные источниками.',
       step6:
         'Мы выполняем проверки соответствия: у каждой темы есть заголовок? Метки корректны? Атрибуция источников не нарушена? Блокирующие проблемы должны быть устранены до передачи репозитория; предупреждения можно принять.',
       step7:
@@ -2241,6 +2291,20 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2250,11 +2314,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Выбор меток',
-        hint: 'Метки — это категориальные оси вашей онтологии: к какому типу относятся эти темы? Выберите от 3 до 7.',
-        add: '+ Добавить метку',
-        addConfirm: 'Добавить',
-        placeholder: 'например, Разрешения',
+        title: 'Метки — автоматически',
+        hint: 'Метки назначаются автоматически из Иерархии знаний — ограничены тематической областью этого репозитория.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
@@ -2520,12 +2581,42 @@ export default {
           'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
         index_failed:
           'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
       }
     },
     pii: {
       panel: 'Отмеченные сущности',
       nFlagged: 'Найдено {n}',
       rescan: 'Пересканировать',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
       scanning: 'Сканирование…',
       clean: 'Отмеченных объектов нет — этот concept чист.',
       how: 'Решение: удалите или измените текст (например, укажите должность вместо имени), затем сохраните — повторное сканирование обновит этот список.',
@@ -2749,6 +2840,14 @@ export default {
           'Запрос не связан с тематикой этого репозитория (оценка ниже нижнего порога домена) — изменение тегов этого не исправит; это корректное подавление.',
         rejected:
           'Отклонено защитным фильтром — запрещённый тег не должен совпадать с собственной темой этого репозитория.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
       },
       suites: {
         generate: 'Generate test suite',

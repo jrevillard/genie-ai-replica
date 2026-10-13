@@ -1681,6 +1681,26 @@ export default {
       viewToggle: 'عرض المحرر',
       paneLabel: 'جزء العرض',
       saveFailed: 'فشل الحفظ — أعد المحاولة',
+      piiRescan: {
+        label: 'بيانات شخصية',
+        button: 'إعادة فحص كل الصفحات',
+        working: 'جارٍ إعادة فحص كل الصفحات…',
+        progress: 'إعادة الفحص… {done} من {total} صفحة',
+        progressIdle: 'إعادة الفحص… جارٍ قراءة المستودع',
+        done: 'تمت إعادة فحص {n} صفحة.',
+        partial: 'تمت إعادة فحص {n} صفحة. ما زالت {e} فاشلة — لم يتغير حكم الفحص الخاص بها، لذا يظل النشر محظورًا لها.',
+        noKey: 'قبل الخادم إعادة الفحص لكنه لم يُعِد معرّف تشغيل، لذا لا يمكن متابعة تقدّمه. لم يتم الإبلاغ عن أي شيء.',
+        missing:
+          'إعادة الفحص غير متاحة على هذا الخادم (404). لم يتغير أي شيء — الصفحات التي فشل فحصها ما زالت تحظر النشر.',
+        frozen: 'رُفضت إعادة الفحص: المستودع قيد النشر (409). لم يتغير أي شيء.',
+        failed: 'فشلت إعادة الفحص. لم يتغير أي شيء — الصفحات التي فشل فحصها ما زالت تحظر النشر.',
+        scanned: 'تمت إعادة فحص {n} صفحة',
+        clean: 'نظيفة',
+        hit: 'موسومة',
+        error: 'خطأ في الفحص',
+        vanished: 'اختفت',
+        stillBlocking: 'ما زالت تحظر'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1928,6 +1948,32 @@ export default {
       repoTagsHint:
         'الوسوم على مستوى المستودع ({summary}) تخص المستودع وليس هذا المفهوم — أدرها من لوحة الوسوم في الشريط الأيمن.'
     },
+    piiReview: {
+      title: 'فحص البيانات الشخصية',
+      checking: 'جارٍ الفحص…',
+      checkingBody: 'جارٍ قراءة حالة البيانات الشخصية لكل صفحة…',
+      unreadableTitle: 'الحالة غير معروفة',
+      unreadableBody:
+        'تعذّرت قراءة حالة البيانات الشخصية لهذا المستودع. هل تم العثور على أي شيء غير معروف — وليست هذه نتيجة نظيفة.',
+      unscanned: 'لم يُفحص',
+      unscannedBody:
+        'لا يغطي أي فحص كامل للبيانات الشخصية هذا المستودع ({n} صفحة لم تُفحص قط). لا يُعرف أنها خالية من البيانات الشخصية — النشر ليس محظورًا بسبب نتائج، لكن لا يوجد فحص خلف هذا الحكم.',
+      errorTitle: 'فشل الفحص',
+      errorBody:
+        'تعذّر فحص {n} صفحة. لم تُقرأ محتوياتها بنجاح، لذا ما إذا كانت تحتوي على بيانات شخصية غير معروف — فهي ليست نظيفة وتحظر النشر.',
+      unreviewed: 'موسومة، لم تتم مراجعتها',
+      unreviewedBody:
+        'وجد الفاحص بيانات شخصية محتملة في {n} صفحة ولم يراجعها أحد. النشر مسموح، لكن لم تتم مراجعة أي شيء في تلك الصفحات.',
+      reviewed: 'موسومة، تمت مراجعتها',
+      reviewedBody: 'تحمل {n} صفحة بيانات شخصية موسومة أكّدها أحد المشرفين ({by} في {at}).',
+      cleanVerdict: 'تم الفحص — لا يوجد شيء',
+      cleanBody: 'تم فحص كل صفحة ولم يُعثر على بيانات شخصية.',
+      staleAck: 'سجّل تأكيد سابق {a} صفحة موسومة في {at}؛ و{n} موسومة الآن، لذا لا يشملها.',
+      bannerTitle: 'لم يراجع أحد هذه النتائج.',
+      bannerBody:
+        'النشر مسموح ولا توجد بوابة تمنعك، لكن الصفحات الموسومة ستدخل المستودع المنشور كما هي تمامًا. افتح كل صفحة وقرّر قبل النشر.',
+      unknownActor: 'غير معروف'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2012,9 +2058,9 @@ export default {
       step3:
         'نحن نقرأ مصادرك ونقترح الموضوعات. تتجمع الموضوعات تحت تسميات الفئات التي تختارها. المنشئ متحفظ — يفضل اقتراح موضوعات أقل وأكثر دقة بدلاً من العديد من الموضوعات المشوشة.',
       step4:
-        'التسميات هي المحاور الفئوية للأنطولوجيا الخاصة بك — ما نوع هذا الموضوع؟ اختر من 3 إلى 7 تسميات تلتقط المحاور الرئيسية؛ يستخدمها المنشئ كهياكل داعمة للتسلسل الهرمي للموضوعات.',
+        'التسميات هي المحاور الفئوية للأنطولوجيا الخاصة بك — ما نوع هذا الموضوع؟ تُحدَّد تلقائيًا من تسلسل المعرفة، وتقتصر على المجال الموضوعي لهذا المستودع.',
       step5:
-        'هذا هو جوهر العمل. كل موضوع هو وحدة معرفية صغيرة وقابلة للاستشهاد. تحصل الموضوعات على عنوان ووصف وترث التسميات التي اخترتها. مهمتك هي جعلها دقيقة وموثوقة: أعد تسمية العناوين الغامضة، وادمج العناصر شبه المتطابقة، واستبعد ما لا يمكنك دعمه بمصدر.',
+        'هذا هو جوهر العمل. كل موضوع هو وحدة معرفية صغيرة وقابلة للاستشهاد. تحصل الموضوعات على عنوان ووصف وتتلقى التسميات من تسلسل المعرفة. مهمتك هي جعلها دقيقة وموثوقة: أعد تسمية العناوين الغامضة، وادمج العناصر شبه المتطابقة، واستبعد ما لا يمكنك دعمه بمصدر.',
       step6:
         'نجري فحوصات المطابقة: هل لكل موضوع عنوان؟ هل التسميات صالحة؟ هل نسب المصادر سليمة؟ يجب إصلاح المشكلات المعيقة قبل تسليم المستودع؛ ويمكن الإقرار بالتحذيرات.',
       step7:
@@ -2222,6 +2268,20 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2231,11 +2291,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'اختر التسميات',
-        hint: 'التسميات هي المحاور الفئوية للأنطولوجيا الخاصة بك — ما هي أنواع هذه الموضوعات؟ اختر من 3 إلى 7.',
-        add: '+ إضافة تسمية',
-        addConfirm: 'إضافة',
-        placeholder: 'مثال: التصاريح',
+        title: 'التسميات — تلقائي',
+        hint: 'تُحدَّد التسميات تلقائيًا من تسلسل المعرفة، وتقتصر على المجال الموضوعي لهذا المستودع.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
@@ -2495,12 +2552,42 @@ export default {
           'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
         index_failed:
           'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
       }
     },
     pii: {
       panel: 'الكيانات المميزة بنجمة',
       nFlagged: 'تم العثور على {n}',
       rescan: 'إعادة المسح',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
       scanning: 'جارٍ المسح…',
       clean: 'لا توجد كيانات مميزة — هذا الـ concept سليم.',
       how: 'الإصلاح: قم بإزالته أو إعادة صياغته (مثلًا للإشارة إلى الدور بدلًا من الاسم)، ثم احفظ — إعادة المسح تحدّث هذه القائمة.',
@@ -2722,6 +2809,14 @@ export default {
         floor:
           'الاستعلام لا علاقة له بموضوع هذا المستودع (النتيجة أقل من الحد الأدنى للمجال) — لا يعالج تغيير الوسوم هذه المشكلة؛ هذا استبعاد صحيح.',
         rejected: 'تم رفضه بواسطة الحاجز الآلي — يجب ألا يطابق الوسم المحظور موضوع هذا المستودع نفسه.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
       },
       suites: {
         generate: 'Generate test suite',

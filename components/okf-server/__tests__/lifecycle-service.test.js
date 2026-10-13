@@ -54,7 +54,12 @@ jest.mock('../services/frontmatter-service', () => ({
   }
 }));
 jest.mock('../services/version-service', () => ({
-  mintVersion: jest.fn().mockResolvedValue({ bundle_version: 1, okf_tag: 'okf:v1' })
+  mintVersion: jest.fn().mockResolvedValue({ bundle_version: 1, okf_tag: 'okf:v1' }),
+  // Publish idempotency (2026-10-12). Default: no prior version has recorded
+  // a fingerprint, so the first publish always proceeds. Tests that exercise
+  // PUBLISH_NO_CHANGES override currentFingerprint/fingerprintOfCurrentVersion.
+  currentFingerprint: jest.fn().mockResolvedValue('live-fp'),
+  fingerprintOfCurrentVersion: jest.fn().mockResolvedValue(null)
 }));
 jest.mock('../services/bundle-export-service', () => ({
   slugFor: (name) =>
@@ -75,7 +80,7 @@ jest.mock('../services/bundle-export-service', () => ({
 
 const mockDb = require('../shared-lib/db-connection-service').__mockDb;
 const lifecycleService = require('../services/lifecycle-service');
-const { mintVersion } = require('../services/version-service');
+const { mintVersion, currentFingerprint, fingerprintOfCurrentVersion } = require('../services/version-service');
 const { exportBundle } = require('../services/bundle-export-service');
 const repoService = require('../services/repository-service');
 const { writeAudit } = require('../services/audit-service');
@@ -390,6 +395,50 @@ describe('publish — mint + bundle export + serving cleared', () => {
     });
     expect(exportBundle).not.toHaveBeenCalled();
     expect(mockDb._stores.okf_repositories[REPO].lifecycle_state).toBe('approve'); // unchanged
+  });
+
+  // Publish idempotency (live 2026-10-12): three clicks in eight seconds
+  // minted v18/v19/v20 on Bali, each requeuing all 1001 meta rows for a
+  // full re-drain while an ingest was running.
+  test('a republish with UNCHANGED content is refused (PUBLISH_NO_CHANGES)', async () => {
+    seedRepo({ lifecycle_state: 'approve', version: 18 });
+    currentFingerprint.mockResolvedValueOnce('same-fp');
+    fingerprintOfCurrentVersion.mockResolvedValueOnce('same-fp');
+    await expect(lifecycleService.transition(REPO, 'publish', {})).rejects.toMatchObject({
+      code: 'PUBLISH_NO_CHANGES',
+      status: 409
+    });
+    expect(mintVersion).not.toHaveBeenCalled();
+    expect(exportBundle).not.toHaveBeenCalled();
+  });
+
+  test('changed content republishes normally', async () => {
+    seedRepo({ lifecycle_state: 'approve', version: 18 });
+    currentFingerprint.mockResolvedValueOnce('new-fp');
+    fingerprintOfCurrentVersion.mockResolvedValueOnce('old-fp');
+    mockDb.query.mockResolvedValueOnce({ all: async () => [3] });
+    exportBundle.mockResolvedValueOnce({
+      file_id: 'file-bundle-1',
+      file_name: 'demo.zip',
+      bundle_version: 19
+    });
+    const res = await lifecycleService.transition(REPO, 'publish', {});
+    expect(res.ok).toBe(true);
+    expect(mintVersion).toHaveBeenCalled();
+  });
+
+  test('the FIRST publish proceeds — no prior fingerprint to compare', async () => {
+    seedRepo({ lifecycle_state: 'approve', version: 0 });
+    fingerprintOfCurrentVersion.mockResolvedValueOnce(null);
+    mockDb.query.mockResolvedValueOnce({ all: async () => [3] });
+    exportBundle.mockResolvedValueOnce({
+      file_id: 'file-bundle-1',
+      file_name: 'demo.zip',
+      bundle_version: 1
+    });
+    const res = await lifecycleService.transition(REPO, 'publish', {});
+    expect(res.ok).toBe(true);
+    expect(mintVersion).toHaveBeenCalled();
   });
 
   test('bundle export failure fails the publish and leaves the state untouched', async () => {

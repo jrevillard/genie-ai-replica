@@ -20,19 +20,38 @@
     </p>
 
     <template v-if="needsProduction">
-      <div class="okf-step__progress">
-        <DsProgress
-          :value="progressPct"
-          :indeterminate="status === 'running' && progressPct === 0"
-          :show-label="true"
-          :label="progressLabel"
-        />
-      </div>
+      <!-- PER-STAGE PROGRESS (David, 2026-10-11: "we need progress bars with
+           each of the stages being depicted in Step 4"; and "the 3 stages are
+           1) Files, 2) Concepts, 3) Curating"). The single aggregate bar keyed
+           on FILES hit 100% the moment conversion ended while two more stages
+           ran for minutes — so Step 4 looked stuck with a full bar. One row
+           per stage, each with its OWN count, the active one highlighted. -->
+      <ol class="okf-step__stages">
+        <li
+          v-for="s in stageList"
+          :key="s.key"
+          class="okf-step__stage"
+          :class="{ 'okf-step__stage--active': s.active, 'okf-step__stage--done': s.done }"
+        >
+          <div class="okf-step__stage-head">
+            <span class="okf-step__stage-name">{{ s.label }}</span>
+            <span class="okf-step__stage-count">{{ s.count }}</span>
+          </div>
+          <DsProgress
+            :value="s.pct"
+            :max="100"
+            :indeterminate="s.indeterminate"
+            :variant="s.variant"
+            size="xs"
+            :aria-label="s.label"
+          />
+        </li>
+      </ol>
       <p v-if="status === 'running'" class="okf-step__note">
         {{
           translate(
             'okf.steps.produce.running',
-            'Converting… you can watch progress here; nothing is committed until you review in Curate.'
+            'Working through each stage below; nothing is committed until you review in Curate.'
           )
         }}
       </p>
@@ -84,6 +103,16 @@ import DsProgress from '../../ds/Progress.vue';
 import repoOkfService from '../../../services/repoOkfService';
 import translateMixin from '../../../mixins/translateMixin';
 
+/**
+ * A counter is USABLE only if it is a finite, non-negative number. `undefined`,
+ * `null`, NaN and negatives all read as "the server has not reported this",
+ * which must never become a confident 0 in a count string. Returns null so
+ * callers can use `??` to walk the precedence chain explicitly.
+ */
+function readCount(v) {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
+}
+
 export default {
   name: 'OkfStepProduce',
   components: { DsButton, DsProgress },
@@ -100,10 +129,130 @@ export default {
       // T3 (D2/D3): multi-crawl conversion queue + per-source accounting.
       sourceQueue: [],
       sourceLog: [],
-      conceptCount: 0
+      conceptCount: 0,
+      // MUST be declared here, not just assigned on the instance (David,
+      // 2026-10-11: "the files bar is not moving" — live, step 4 frozen on
+      // "Waiting" while the server ran 50/50 files, 913/913 concepts and
+      // curation climbing 259→282→314 of 587).
+      // In Vue 3 only properties returned from data() are REACTIVE: a bare
+      // `this.liveRepo = repo` in the poll tick creates a plain instance
+      // field, so the stageList computed had no reactive dependency and kept
+      // its FIRST evaluation (liveRepo undefined => every row "Waiting")
+      // for the whole run. The bars never moved, and the empty catch in
+      // poll()'s tick hid the fact that the fetch was working fine.
+      // Names carry NO underscore: Vue reserves `_`/`$`-prefixed keys, so a
+      // declared `_liveRepo` is flagged by vue/no-reserved-keys and is not
+      // reachable as `this._liveRepo` the way a normal data key is.
+      liveRepo: null,
+      lastConv: null
     };
   },
   computed: {
+    /**
+     * ONE ROW PER STAGE, each with its own bar and its own real count
+     * (David, 2026-10-11: "we need progress bars with each of the stages being
+     * depicted in Step 4" — "1) Files, 2) Concepts, 3) Curating").
+     *
+     * The stage a leg is in comes from the server (`conversion.stage`), never
+     * from guesswork, so the highlighted row is the leg actually running.
+     * The cross-link row appears only when that stage runs: it is real work
+     * that takes minutes, and folding it into "Curating" is what made Step 4
+     * look frozen.
+     */
+    stageList() {
+      const conv = (this.liveRepo && this.liveRepo.conversion) || this.lastConv || {};
+      const repo = this.liveRepo || {};
+      const stage = conv.stage || conv.status || '';
+      const running = this.status === 'running';
+      // The CONVERSION is the outermost terminal signal: once the whole job
+      // reports done, every row below it is finished whatever its own counters
+      // say. A finished stage must never render as an incomplete bar.
+      const convFinished = this.status === 'done' || conv.status === 'done';
+      const curation = repo.curation || {};
+      const link = conv.link_progress || {};
+
+      // FILES — documents converted (the crawl leg counts pages instead).
+      // Raw values are passed through, NOT pre-collapsed with `|| 0`: a
+      // missing counter must stay "unknown" so the row can say so.
+      const filesDoneStage = ['cross-linking', 'classifying', 'curating', 'linking-topics'].includes(stage);
+
+      // CROSS-LINK — the whole-corpus authoring pass (Story 1-8g-p).
+      const linkTotal = readCount(link.batches_total);
+
+      const rows = [
+        this.buildStageRow({
+          key: 'files',
+          label: this.translate('okf.steps.produce.stage.files', 'Files'),
+          done: conv.files_done,
+          doneFallback: conv.pages_done,
+          total: conv.files_total,
+          totalFallback: conv.pages_total,
+          // No per-stage finished flag exists for conversion counters; the
+          // conversion's own status is the only terminal signal they carry.
+          finished: convFinished,
+          running: running && !filesDoneStage,
+          countKey: 'okf.steps.produce.stage.filesCount',
+          countFallback: '{done} of {total} documents'
+        }),
+        this.buildStageRow({
+          key: 'concepts',
+          label: this.translate('okf.steps.produce.stage.concepts', 'Concepts'),
+          done: conv.concepts_done,
+          total: conv.concepts_total,
+          finished: convFinished,
+          running: running && (stage === 'classifying' || stage === 'cross-linking'),
+          countKey: 'okf.steps.produce.stage.conceptsCount',
+          countFallback: '{done} of {total} topics',
+          // A concepts pass with no total yet still reports real progress.
+          emptyDoneText: conv.concepts_done
+            ? this.translate('okf.steps.produce.stage.conceptsSoFar', '{n} topics so far').replace(
+                '{n}',
+                String(readCount(conv.concepts_done) ?? 0)
+              )
+            : null
+        }),
+        this.buildStageRow({
+          key: 'curating',
+          label: this.translate('okf.steps.produce.stage.curating', 'Curating'),
+          // `done` is the field the server's counter contract pins as an ALIAS
+          // of `curated` precisely so no consumer can read a pass-local count.
+          // Read it PREFERENTIALLY and fall back to `curated`, so the UI is
+          // right against the fixed server and still sane against an older one
+          // (the frontend can be served from a stale cached bundle).
+          done: curation.done,
+          doneFallback: curation.curated,
+          total: curation.total,
+          // The curation pass carries its OWN terminal flag (`final: true` on
+          // the terminal write) — that is a finished stage even while the
+          // surrounding conversion is still running (cross-linking follows).
+          finished: convFinished || curation.final === true,
+          running: running && (stage === 'curating' || stage === 'classifying'),
+          countKey: 'okf.steps.produce.stage.curatingCount',
+          countFallback: '{done} of {total} concepts labelled'
+        })
+      ];
+
+      if (stage === 'linking-topics' || (linkTotal !== null && linkTotal > 0)) {
+        rows.push(
+          this.buildStageRow({
+            key: 'crosslink',
+            label: this.translate('okf.steps.produce.stage.crosslink', 'Cross-linking topics'),
+            done: link.batches_done,
+            total: link.batches_total,
+            // Same per-pass `final` convention as curation (topic-link-authoring-service).
+            finished: convFinished || link.final === true,
+            running: running && stage === 'linking-topics',
+            countKey: 'okf.steps.produce.stage.linkCount',
+            countFallback: '{done} of {total} batches · {w} links written',
+            // The link count carries a third number (links written) the
+            // generic {done}/{total} template does not have.
+            extra: { '{w}': String(readCount(link.written) ?? 0) }
+          })
+        );
+      }
+
+      return rows;
+    },
     needsProduction() {
       // T3 (D6): production is DATA-driven, not variant-driven — whatever
       // sources were picked in Input (in ANY variant) convert here.
@@ -218,6 +367,113 @@ export default {
     if (this._legWaitTimer) clearTimeout(this._legWaitTimer);
   },
   methods: {
+    /**
+     * ONE stage row, resolved from the data the server actually gave us.
+     *
+     * The old inline version of this was `pctOf(curated, total)` for the bar and
+     * `curated >= total` for the terminal test — which froze forever on a
+     * finished pass, because the two counters described different populations
+     * (the numerator counted what THIS pass labelled, the denominator counted
+     * every concept that existed, pre-labelled ones and the index row included).
+     * The terminal state was unreachable BY CONSTRUCTION. Three rules fix it:
+     *
+     *  1. The BAR answers "is this stage still working?" — so a stage the server
+     *     marked finished renders COMPLETE at 100% even when its counters are
+     *     stale, throttled or half-written. The COUNT TEXT carries the precise
+     *     measurement ("61 of 141"), so nothing is hidden by rounding the bar
+     *     up: the curator sees both facts, and never a 44% bar on a finished job.
+     *  2. Counters that DISAGREE (the numerator exceeds the population it is a
+     *     fraction of) get NO confident percentage. The row degrades to the
+     *     indeterminate warning bar, because the next click is a publish
+     *     decision made on the strength of this bar.
+     *  3. Non-numeric / negative / NaN payloads never become a confident 0 —
+     *     `readCount` rejects them and the row falls back to its empty state.
+     *
+     * `running` is the caller's "this is the leg currently running" signal;
+     * combined with `finished` it drives the highlight so a row cannot keep
+     * animating after the stage ended.
+     */
+    buildStageRow({
+      key,
+      label,
+      done,
+      doneFallback,
+      total,
+      totalFallback,
+      finished,
+      running,
+      countKey,
+      countFallback,
+      emptyDoneText,
+      extra
+    }) {
+      // Nullability is PRESERVED on purpose. Collapsing an unreadable counter
+      // to 0 here would render "0 of 141 concepts labelled" — a confident zero
+      // on a number the server never actually reported. `null` means "unknown",
+      // and unknown is rendered differently from zero.
+      const dRaw = readCount(done) ?? readCount(doneFallback);
+      const t = readCount(total) ?? readCount(totalFallback) ?? 0;
+      const hasTotal = t > 0;
+      const d = dRaw ?? 0;
+      // GARBAGE vs ABSENT are different states and must not share a rendering.
+      // ABSENT (both fields undefined/null) is the ordinary start-of-pass tick:
+      // the server knows the population and has counted nothing yet — "0 of
+      // 141" is a true statement there. GARBAGE (a value that is PRESENT but not
+      // a usable count — NaN, a negative, a string) means the payload is
+      // corrupt, and rendering it as a confident 0 would be a lie.
+      const garbageNumerator =
+        (done !== undefined && done !== null && readCount(done) === null) ||
+        (doneFallback !== undefined &&
+          doneFallback !== null &&
+          readCount(doneFallback) === null &&
+          readCount(done) === null);
+      // DISAGREEMENT: a numerator cannot exceed the population it is a fraction
+      // of (d > t — at least one number is wrong), and a corrupt numerator is
+      // not zero progress. Neither may become a percentage the curator is about
+      // to publish on.
+      const mismatched = hasTotal && (d > t || garbageNumerator);
+      // Reachable terminal state: the server's own signal, or genuine
+      // saturation (d === t). A mismatched row can never reach it — `d >= t` is
+      // trivially true for an out-of-range numerator, which is exactly the case
+      // that must NOT be read as "finished".
+      const saturated = hasTotal && !mismatched && d >= t;
+      const isDone = !!finished || saturated;
+
+      let count;
+      if (mismatched) {
+        // Neither number can be trusted, so no ratio is printed. The row says
+        // so plainly instead of rendering a confident count off a corrupt
+        // payload — the curator's next click is a publish decision.
+        count = this.translate('okf.steps.produce.stage.unavailable', 'Count unavailable');
+      } else if (!hasTotal) {
+        count =
+          emptyDoneText ||
+          this.translate(
+            isDone ? 'okf.steps.produce.stage.complete' : 'okf.steps.produce.stage.waiting',
+            isDone ? 'Complete' : 'Waiting'
+          );
+      } else {
+        let tpl = this.translate(countKey, countFallback).replace('{done}', String(d)).replace('{total}', String(t));
+        for (const [ph, val] of Object.entries(extra || {})) tpl = tpl.replace(ph, val);
+        count = tpl;
+      }
+
+      return {
+        key,
+        label,
+        // A finished stage reads 100% even with no total to divide by — that is
+        // the whole point of the fix. A mismatched row shows no percentage.
+        pct: isDone ? 100 : mismatched || !hasTotal ? 0 : Math.min(100, Math.round((d / t) * 100)),
+        count,
+        // Never highlight a row we cannot honestly measure, and never highlight
+        // a finished one — an animating row after the stage ended is the frozen
+        // bar in its other costume.
+        active: !isDone && !mismatched && !!running,
+        done: isDone,
+        indeterminate: mismatched || (!isDone && !!running && !hasTotal),
+        variant: mismatched ? 'warning' : isDone ? 'success' : 'accent'
+      };
+    },
     repoConversionStatus() {
       const repo = this.draft && this.draft.repo_id ? this.$store.getters['okf/repoById'](this.draft.repo_id) : null;
       const conv = repo && repo.conversion;
@@ -427,7 +683,7 @@ export default {
       // B1 (audit): prefer the server's ingest summary (created/updated) over
       // the raw count delta — "updated" IS the exact-slug auto-merge count,
       // and the summary excludes the index concept the delta over-counts.
-      const summary = this._lastConv && this._lastConv.summary;
+      const summary = this.lastConv && this.lastConv.summary;
       const count = await this.fetchConceptCount();
       const delta = Math.max(0, count - (this._lastCount || 0));
       this.conceptCount = count;
@@ -496,7 +752,8 @@ export default {
         try {
           const repo = await repoOkfService.get(repoId);
           const conv = repo && repo.conversion;
-          this._lastConv = conv; // B1: the done-branch accounting reads the summary
+          this.lastConv = conv; // B1: the done-branch accounting reads the summary
+          this.liveRepo = repo; // per-stage bars read curation + link_progress off the live doc
           const st = conv ? conv.status : null;
           if (st === 'done') {
             clearInterval(this.pollTimer);
@@ -586,6 +843,49 @@ export default {
 }
 .okf-step__progress {
   width: 100%;
+}
+/* Per-stage progress (Story: Step 4 depicts each stage). One row per stage so
+   the steward can see WHICH stage is running and how far it has got — the
+   single aggregate bar sat at 100% while later stages were still working. */
+.okf-step__stages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.okf-step__stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
+}
+.okf-step__stage-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.okf-step__stage-name {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.okf-step__stage-count {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+/* The running leg is the only one that reads as active — everything else is
+   recessive, so a glance answers "where is it?" without reading numbers. */
+.okf-step__stage--active .okf-step__stage-name,
+.okf-step__stage--active .okf-step__stage-count {
+  color: var(--fg);
+  font-weight: var(--font-weight-semibold);
+}
+.okf-step__stage--done .okf-step__stage-name {
+  color: var(--fg);
 }
 .okf-step__note {
   margin: 0;

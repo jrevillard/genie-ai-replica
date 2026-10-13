@@ -53,6 +53,7 @@ const versionService = require('./version-service');
 const bundleExportService = require('./bundle-export-service');
 const graphLifecycle = require('./graph-lifecycle-service');
 const graphRetract = require('./graph-retract-service');
+const backingFileService = require('./backing-file-service');
 const conceptMetaService = require('./concept-meta-service');
 
 const REPOS = 'okf_repositories';
@@ -317,6 +318,19 @@ async function _settleIngest(db, repo, actor) {
       settle_claimed_at: null, // THE FLIP RELEASES THE LEASE (its normal exit)
       updated_at: ts
     });
+    // The drain is DONE — this is the only honest moment to grant a bundle
+    // its 'Ingested' badge. Export writes 'Pending' unless the repo was
+    // already drained, so without this flip a genuinely ingested repo would
+    // stay 'Pending' forever (David, 2026-10-12). Best-effort, non-fatal: the
+    // flags above are the durable fact, the doc-repo badge is cosmetic.
+    try {
+      await backingFileService.markIngested(repo.repo_id, { actor });
+    } catch (badgeErr) {
+      logger.warn('[OKF-SETTLE] bundle Ingested flip failed (non-fatal)', {
+        repo_id: repo.repo_id,
+        err: badgeErr && badgeErr.message
+      });
+    }
   } catch (e) {
     // REVIEW FIX #13: promoteGraph succeeded but the flags flip threw — the
     // lease must not outlive this attempt (a retry within the window would
@@ -535,6 +549,33 @@ async function transition(repoId, action, actor, opts = {}) {
         throw new LifecycleError(
           'REPO_READ_ONLY',
           'repository is serving (ingested) — retract it before publishing a new version',
+          409
+        );
+      }
+      // PUBLISH IDEMPOTENCY (live 2026-10-12: Bali minted v18/v19/v20 in
+      // eight seconds from three clicks, each requeuing all 1001 meta rows
+      // for a full re-drain, while an ingest was running). Nothing changed
+      // between those clicks, so the extra versions were pure churn: a new
+      // bundle, a new graph name, a whole corpus re-drained.
+      //
+      // Compare the concepts as they stand NOW against the fingerprint the
+      // current version recorded. Equal means "this exact content is already
+      // published as v{N}" — refuse with a 409 naming that version instead of
+      // minting an identical one. Bypassed when the repo has never published
+      // (no fingerprint to compare) so the FIRST publish always proceeds.
+      const [liveFingerprint, currentFingerprint] = await Promise.all([
+        versionService.currentFingerprint(repoId),
+        versionService.fingerprintOfCurrentVersion(repoId)
+      ]);
+      if (currentFingerprint && currentFingerprint === liveFingerprint) {
+        logger.info('[OKF-PUBLISH] step=noop (content unchanged)', {
+          repo_id: repoId,
+          version: repo.version
+        });
+        throw new LifecycleError(
+          'PUBLISH_NO_CHANGES',
+          `nothing has changed since version ${repo.version} — edit or annotate a concept first, ` +
+            'or retract and publish again to force a new version',
           409
         );
       }
@@ -1026,34 +1067,33 @@ async function transition(repoId, action, actor, opts = {}) {
       },
       updated_at: nowIso()
     });
-    // MARK BUNDLE ZIP AS RETRACTED (2026-09-25, David's directive): when the
-    // repo goes out of service, the bundle zip in doc-repo MUST be marked
-    // Retracted too — otherwise it stays at dataprep.status='Ingested' and
-    // remains queryable / downloadable / re-importable. Best-effort, non-fatal:
-    // the retract already succeeded; a doc-repo hiccup never undoes that.
+    // MARK EVERY BACKING FILE AS RETRACTED (2026-09-25, David's directive —
+    // generalised 2026-10-12): when the repo goes out of service, the files it
+    // owns in doc-repo MUST be marked Retracted too — otherwise they stay at
+    // dataprep.status='Ingested' and remain queryable / downloadable /
+    // re-importable for a repository that serves nothing.
+    //
+    // This used to mark EXACTLY ONE bundle: it fetched `is_bundle=true&limit=1`
+    // and patched items[0]. But supersedeOldBundles was removed by the WS3
+    // directive (bundles live forever — one zip per publish version), so a repo
+    // with N published versions has N zips and retract left N-1 badged
+    // 'Ingested'. Live-caught on Bali-wikipedia-LLM: v17/v18/v19/v20 zips all
+    // existed while ingested_at was null, and only v17 — the zip that existed
+    // at retract time — carried 'Retracted'. The admin list then showed three
+    // INGESTED entries for a repository with nothing ingested.
+    //
+    // Retract marks rather than deletes: a RETRACTED repo is the EDIT state and
+    // its only exit is submit -> review (lifecycle-service.js:75), so the hard
+    // delete belongs to the delete cascade (repository-service.remove ->
+    // backingFileService.hardDelete), not here.
+    //
+    // Best-effort and non-fatal, as before: the retract itself has already
+    // succeeded (graph dropped, state flipped) and a doc-repo hiccup must never
+    // undo that.
     try {
-      const { authedAxios } = require('./service-token');
-      const docRepoConfig = require('../config');
-      const resp = await authedAxios.get(
-        `${docRepoConfig.documentRepository.url}/api/files?repo_id=${encodeURIComponent(repoId)}&is_bundle=true&limit=1`,
-        { timeout: 5000 }
-      );
-      const rd = resp && resp.data;
-      const items = Array.isArray(rd) ? rd : (rd && (rd.data || rd.items || rd.files)) || [];
-      const bundle = items[0];
-      if (bundle && bundle.file_id) {
-        await authedAxios.patch(
-          `${docRepoConfig.documentRepository.url}/api/files/${encodeURIComponent(bundle.file_id)}/status`,
-          { dataprep: { status: 'Retracted', retract_date: nowIso() } },
-          { timeout: 10000 }
-        );
-        logger.info('[OKF-LIFECYCLE] bundle zip marked Retracted', {
-          repo_id: repoId,
-          file_id: bundle.file_id
-        });
-      }
+      await backingFileService.retractBackingFiles(repoId, { actor, reason: 'repository retracted' });
     } catch (bundleErr) {
-      logger.warn('[OKF-LIFECYCLE] bundle-mark-Retracted failed (non-fatal)', {
+      logger.warn('[OKF-LIFECYCLE] backing-file mark-Retracted failed (non-fatal)', {
         repo_id: repoId,
         err: bundleErr && bundleErr.message
       });

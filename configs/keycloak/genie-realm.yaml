@@ -29,6 +29,21 @@ defaultLocale: $(env:KEYCLOAK_LOCALE)
 supportedLocales: $(env:KEYCLOAK_SUPPORTED_LOCALES)
 accessTokenLifespan: $(env:KEYCLOAK_ACCESS_TOKEN_LIFESPAN)
 
+# --- Audit trail (David 2026-10-11: "enable Keycloak admin events") -----------
+# All three flags were left at Keycloak's default (false), so NOTHING was ever
+# stored in event_entity / admin_event_entity. The 2026-10-09 silent
+# genie-admin deletion and the 2026-10-11 mid-wizard logout were both
+# unprovable for exactly that reason — and the gap is TOTAL, not admin-only:
+# the realm stored zero login events too. The "refresh token errors" visible in
+# `docker logs` are Keycloak server-log WARN lines, not stored events, and that
+# log rotates away within minutes, so it is not an audit trail.
+# Hardcoded true, NOT $(env:...) — this is a compliance control that must not be
+# silently disabled by a missing env var (same reasoning as sslRequired below).
+eventsEnabled: true            # login/token events (LOGIN, LOGIN_ERROR, REFRESH_TOKEN_ERROR)
+adminEventsEnabled: true       # admin REST ops — the only proof of a deliberate LOGOUT / session revocation
+adminEventsDetailsEnabled: true # records WHAT changed, not merely that something did
+eventsExpiration: 7776000      # 90 days in seconds; absent = unbounded event-table growth
+
 # Realm roles (must be defined before users that reference them)
 roles:
   realm:

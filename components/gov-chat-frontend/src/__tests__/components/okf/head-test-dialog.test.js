@@ -1367,3 +1367,411 @@ it('1-8g-t: suite deletion requires the confirm dialog — cancel keeps, confirm
   expect(w.vm.busy).toBeNull();
   expect(w.vm.deleteConfirm).toBeNull();
 });
+
+/* ---------------------------------------------------------------------------
+ * CONTENDED-STATE REGRESSION (2026-10-12).
+ *
+ * Commit 091a182b7 fixed ONE read — loadFrontmatterHistory — but shipped
+ * WITHOUT a test, so the class recurred. These are the tests that class
+ * needed.
+ *
+ * The smell this closes: the file previously had 11 `expect(w.vm.busy)
+ * .toBeNull()` assertions and ZERO assignments to `w.vm.busy`. Every
+ * existing test asserted the slot was RELEASED and none ever occupied it,
+ * so nothing could have detected a guard that silently drops a request.
+ * Every test below therefore ASSIGNS the slot with an unrelated token and
+ * asserts the read still dispatched.
+ *
+ * `busy` is one shared string. A read that claimed it was dropped whenever
+ * ANY other control held it — no queue, no retry, no error — and the pane
+ * then rendered a confident empty state for a request that never ran.
+ * ---------------------------------------------------------------------- */
+
+describe('contended shared-busy slot: reads still dispatch', () => {
+  // An UNRELATED token, deliberately not the read's own. The bug was that a
+  // tag save ('save-tag') could swallow a history fetch; any token reproduces
+  // it, and using a different one proves the read is not merely self-gating.
+  const CONTEND = 'run';
+
+  it('onExplainClaim dispatches even while another control holds busy', async () => {
+    const w = mountDialog({ initialTab: 'test' });
+    await w.vm.$nextTick();
+    w.vm.query = 'hiv and communicable disease prevention';
+    // Occupy the shared slot the way a suite run would.
+    w.vm.busy = CONTEND;
+    expect(w.vm.busy).not.toBeNull(); // the precondition is REAL, not decorative
+    dispatch.mockResolvedValueOnce({
+      ok: true,
+      result: { suggestion: { tags: ['communicable-disease'], source: 'llm', reason: 'r' } }
+    });
+    await w.vm.onExplainClaim();
+    expect(dispatch).toHaveBeenCalledWith('okf/headRoutingExplain', {
+      repoId: 'r-1',
+      query: 'hiv and communicable disease prevention'
+    });
+    expect(w.vm.explanation.suggestion.tags).toEqual(['communicable-disease']);
+    // The read must NOT have cleared the other control's token.
+    expect(w.vm.busy).toBe(CONTEND);
+    // And it uses its own flag, not the shared slot.
+    expect(w.vm.explainLoading).toBe(false);
+  });
+
+  it('onRecommend dispatches even while another control holds busy', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.busy = CONTEND;
+    dispatch.mockResolvedValueOnce({ ok: true, result: { changes: { add: [], remove: [] } } });
+    await w.vm.onRecommend();
+    expect(dispatch).toHaveBeenCalledWith('okf/headRecommend', { repoId: 'r-1' });
+    expect(w.vm.advisor).toEqual({ changes: { add: [], remove: [] } });
+    expect(w.vm.busy).toBe(CONTEND);
+    expect(w.vm.advisorLoading).toBe(false);
+  });
+
+  it('onExplainFailures dispatches even while another control holds busy', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    w.vm.busy = CONTEND;
+    dispatch.mockResolvedValueOnce({ ok: true, result: { suggested_tags: ['x'], failing_count: 1 } });
+    await w.vm.onExplainFailures();
+    expect(dispatch).toHaveBeenCalledWith('okf/headSuiteExplainFailures', {
+      repoId: 'r-1',
+      suiteKey: 's1'
+    });
+    expect(w.vm.batchAdvice.suggested_tags).toEqual(['x']);
+    expect(w.vm.busy).toBe(CONTEND);
+    expect(w.vm.explainFailuresLoading).toBe(false);
+  });
+
+  it('onLoadSuite dispatches even while another control holds busy (no stale suite)', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    // A previously loaded suite — the exact stale view this defect produced.
+    w.vm.suite = { suite_key: 's-old', payload: { positive: [{ query: 'old' }], negative: [] } };
+    w.vm.busy = CONTEND;
+    dispatch.mockResolvedValueOnce({
+      ok: true,
+      result: { suite_key: 's-new', payload: { positive: [], negative: [] } }
+    });
+    await w.vm.onLoadSuite('s-new');
+    expect(dispatch).toHaveBeenCalledWith('okf/headSuiteGet', { repoId: 'r-1', suiteKey: 's-new' });
+    // The NEW suite replaced the old one — a drop would have left s-old.
+    expect(w.vm.suite.suite_key).toBe('s-new');
+    expect(w.vm.busy).toBe(CONTEND);
+    expect(w.vm.suiteLoading).toBe(false);
+  });
+
+  it('loadFrontmatterHistory dispatches even while another control holds busy (091a182b7)', async () => {
+    // The originally-fixed read, pinned so the fix cannot silently regress.
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.busy = CONTEND;
+    dispatch.mockResolvedValueOnce({ ok: true, entries: [{ saved_at: '2026-10-12T00:00:00Z' }] });
+    await w.vm.loadFrontmatterHistory();
+    expect(dispatch).toHaveBeenCalledWith('okf/frontmatterHistory', { repoId: 'r-1' });
+    expect(w.vm.fmHistory).toHaveLength(1);
+    expect(w.vm.busy).toBe(CONTEND);
+    expect(w.vm.historyLoading).toBe(false);
+  });
+
+  it('WRITE guards are NOT relaxed: a save still refuses to double-fire', async () => {
+    // The counter-test. Removing read guards must not have weakened the
+    // double-submit protection on a mutation — that protection is real.
+    const w = mountDialog({ initialTab: 'test' });
+    await w.vm.$nextTick();
+    w.vm.busy = CONTEND;
+    dispatch.mockClear();
+    await w.vm.onTeachTag('communicable-disease');
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(w.vm.taughtTags).toEqual([]);
+    await w.vm.onRemoveTag('mental-health');
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('read preconditions still hold: no query means no explain dispatch', async () => {
+    // The guards I removed were the BUSY half only. The genuine no-op
+    // preconditions must survive — an explain needs a query.
+    const w = mountDialog({ initialTab: 'test' });
+    await w.vm.$nextTick();
+    w.vm.query = '   ';
+    dispatch.mockClear();
+    await w.vm.onExplainClaim();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('read preconditions still hold: no suite means no batch explain dispatch', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = null;
+    dispatch.mockClear();
+    await w.vm.onExplainFailures();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('each read button disables ITSELF while its own read is in flight', async () => {
+    // Dropping the shared-slot claim must not drop the SELF-guard: without it
+    // the button would stay clickable through its own run and a double-click
+    // would fire two explains. The flag replaces exactly what the busy claim
+    // used to protect, without re-blocking on unrelated work.
+    const w = mountDialog({ initialTab: 'test' });
+    await w.vm.$nextTick();
+    w.vm.query = 'hiv and communicable disease prevention';
+    // The panel only renders when the head CLAIMS the query (claimTeachable).
+    dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'claim' }));
+    await w.vm.onRunTest();
+    await w.vm.$nextTick();
+    const btn = () => w.findAll('button').find((b) => b.text().includes('Explain & suggest'));
+    expect(btn()).toBeTruthy();
+    expect(btn().attributes('disabled')).toBeUndefined();
+
+    // Hold the read open: the flag is set, the shared slot is NOT.
+    let release;
+    dispatch.mockImplementationOnce(() => new Promise((r) => (release = r)));
+    const pending = w.vm.onExplainClaim();
+    await w.vm.$nextTick();
+    expect(w.vm.explainLoading).toBe(true);
+    expect(w.vm.busy).toBeNull();
+    expect(btn().attributes('disabled')).toBeDefined();
+
+    release({ ok: true, result: { suggestion: { tags: ['x'], source: 'llm', reason: 'r' } } });
+    await pending;
+    await w.vm.$nextTick();
+    expect(w.vm.explainLoading).toBe(false);
+    expect(btn().attributes('disabled')).toBeUndefined();
+  });
+});
+
+describe('empty states distinguish "ran and found nothing" from "not loaded"', () => {
+  it('a completed explain with no suggestion says so, instead of a bare button', async () => {
+    const w = mountDialog({ initialTab: 'test' });
+    await w.vm.$nextTick();
+    w.vm.query = 'hiv and communicable disease prevention';
+    dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'claim' }));
+    await w.vm.onRunTest();
+    // The model ran and proposed nothing at all.
+    dispatch.mockResolvedValueOnce({ ok: true, result: { suggestion: null } });
+    await w.vm.onExplainClaim();
+    await w.vm.$nextTick();
+    expect(w.vm.explanationLoaded).toBe(true);
+    const html = w.html();
+    expect(html).toContain('The explain ran and proposed no forbidden tags');
+  });
+
+  it('a FAILED explain does NOT claim it ran (the error is the honest signal)', async () => {
+    const w = mountDialog({ initialTab: 'test' });
+    await w.vm.$nextTick();
+    w.vm.query = 'hiv and communicable disease prevention';
+    dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'claim' }));
+    await w.vm.onRunTest();
+    dispatch.mockResolvedValueOnce({ ok: false, message: 'explain blew up' });
+    await w.vm.onExplainClaim();
+    await w.vm.$nextTick();
+    // A failure is visible as an error and must NOT assert a completed run —
+    // that would be a second confident-wrong-answer shape.
+    expect(w.vm.explanationLoaded).toBe(false);
+    expect(w.vm.error).toBe('explain blew up');
+  });
+
+  it('a completed advisor with no recommendation says so', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    // The advisor block renders inside the v-if="suite" pane (pre-existing
+    // structure), so the empty-state line needs a loaded suite to be in the
+    // tree at all — same precondition as its button.
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    dispatch.mockResolvedValueOnce({ ok: true, result: null });
+    await w.vm.onRecommend();
+    await w.vm.$nextTick();
+    expect(w.vm.advisorLoaded).toBe(true);
+    expect(w.html()).toContain('The advisor ran and recommended no tag changes');
+  });
+
+  it('a completed batch explain with no advice says so', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    dispatch.mockResolvedValueOnce({ ok: true, result: null });
+    await w.vm.onExplainFailures();
+    await w.vm.$nextTick();
+    expect(w.vm.batchAdviceLoaded).toBe(true);
+    expect(w.html()).toContain('The explain ran and returned no advice');
+  });
+
+  it('the markers reset when the suite changes (advice belongs to its suite)', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    dispatch.mockResolvedValueOnce({ ok: true, result: { suggested_tags: ['x'] } });
+    await w.vm.onExplainFailures();
+    expect(w.vm.batchAdviceLoaded).toBe(true);
+    dispatch.mockResolvedValueOnce({ ok: true, result: { suite_key: 's2', payload: { positive: [], negative: [] } } });
+    await w.vm.onLoadSuite('s2');
+    // The new suite must not inherit the old suite's "already explained" line.
+    expect(w.vm.batchAdviceLoaded).toBe(false);
+    expect(w.vm.advisorLoaded).toBe(false);
+  });
+
+  it('re-running the test invalidates the previous explanation and its marker', async () => {
+    const w = mountDialog({ initialTab: 'test' });
+    await w.vm.$nextTick();
+    w.vm.query = 'hiv and communicable disease prevention';
+    dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'claim' }));
+    await w.vm.onRunTest();
+    dispatch.mockResolvedValueOnce({ ok: true, result: { suggestion: { tags: ['x'], source: 'llm', reason: 'r' } } });
+    await w.vm.onExplainClaim();
+    expect(w.vm.explanationLoaded).toBe(true);
+    // A different query makes the spent advice stale — the marker must go too,
+    // or the new query would render "the explain ran and proposed nothing".
+    dispatch.mockResolvedValueOnce(routingResultV2({ claim: 'floor' }));
+    await w.vm.onRunTest();
+    expect(w.vm.explanation).toBeNull();
+    expect(w.vm.explanationLoaded).toBe(false);
+  });
+  // ── STALE-ANSWER GUARDS ────────────────────────────────────────────────────
+  //
+  // Removing the shared `busy` claim fixed the silent drops but removed the
+  // serialisation it provided as a side effect, so a subject switch (a suite
+  // load, a re-test) landing mid-read left the OLD answer rendered under the
+  // NEW subject. These pin the epoch guards that replaced it.
+  //
+  // This is not cosmetic. The batchAdvice block renders DsTag chips wired to
+  // onTeachTag / onRemoveTag — the genuine two-write frontmatter mutations — so
+  // stale advice is one click from persisting the wrong suite's tags.
+
+  it('discards a batch explain whose suite was switched while it was in flight', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's-A', payload: { positive: [], negative: [] } };
+
+    // The dispatch never resolves on its own: we switch suites, THEN resolve.
+    let release;
+    dispatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, result: { suggested_tags: ['TAG-FOR-SUITE-A'] } });
+        })
+    );
+
+    const inflight = w.vm.onExplainFailures();
+    // The curator switches to suite B before the explain comes back. This is
+    // exactly what the shared `busy` claim used to prevent.
+    w.vm.suite = { suite_key: 's-B', payload: { positive: [], negative: [] } };
+    w.vm.suiteEpoch += 1;
+    release();
+    await inflight;
+
+    // Suite A's advice must NOT be rendered under suite B's rows.
+    expect(w.vm.batchAdvice).toBeNull();
+    expect(w.vm.batchAdviceLoaded).toBe(false);
+  });
+
+  it('discards a batch explain when this.suite is swapped without bumping the epoch', async () => {
+    // Belt and braces: the epoch is the primary guard, but the suite_key
+    // comparison must hold on its own so a future caller that forgets to bump
+    // the epoch still cannot render cross-suite advice.
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's-A', payload: { positive: [], negative: [] } };
+
+    let release;
+    dispatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, result: { suggested_tags: ['TAG-FOR-SUITE-A'] } });
+        })
+    );
+
+    const inflight = w.vm.onExplainFailures();
+    w.vm.suite = { suite_key: 's-B', payload: { positive: [], negative: [] } };
+    release(); // no epoch bump at all
+    await inflight;
+
+    expect(w.vm.batchAdvice).toBeNull();
+  });
+
+  it('discards advisor advice whose suite was switched while it was in flight', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's-A', payload: { positive: [], negative: [] } };
+
+    let release;
+    dispatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, result: { add_eval: [], remove_eval: [] } });
+        })
+    );
+
+    const inflight = w.vm.onRecommend();
+    w.vm.suite = { suite_key: 's-B', payload: { positive: [], negative: [] } };
+    w.vm.suiteEpoch += 1;
+    release();
+    await inflight;
+
+    // The advisor's Add/Remove chips feed onAdvisorApply, which writes the
+    // repository's forbidden set — stale advice is a data mutation away.
+    expect(w.vm.advisor).toBeNull();
+    expect(w.vm.advisorLoaded).toBe(false);
+  });
+
+  it('discards an explanation whose query changed while it was in flight', async () => {
+    const w = mountDialog({});
+    await w.vm.$nextTick();
+    w.vm.query = 'first query';
+
+    let release;
+    dispatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, result: { suggestion: { tag: 'stale-tag' } } });
+        })
+    );
+
+    const inflight = w.vm.onExplainClaim();
+    w.vm.query = 'a completely different question';
+    release();
+    await inflight;
+
+    // A stale suggestion chip is wired to onTeachTag — a two-write mutation.
+    expect(w.vm.explanation).toBeNull();
+    expect(w.vm.explanationLoaded).toBe(false);
+  });
+
+  it('discards an explanation after a re-test even when the query text is unchanged', async () => {
+    // The epoch covers a re-run that does not alter the query string; the
+    // string comparison alone would let this stale answer through.
+    const w = mountDialog({});
+    await w.vm.$nextTick();
+    w.vm.query = 'same query';
+
+    let release;
+    dispatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, result: { suggestion: { tag: 'stale-tag' } } });
+        })
+    );
+
+    const inflight = w.vm.onExplainClaim();
+    w.vm.queryEpoch += 1; // a re-run, query text untouched
+    release();
+    await inflight;
+
+    expect(w.vm.explanation).toBeNull();
+  });
+
+  it('still applies a batch explain when the suite did NOT change', async () => {
+    // The guard must not break the happy path — a completed explain with the
+    // same suite still renders its advice and sets its "it ran" marker.
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's-A', payload: { positive: [], negative: [] } };
+    dispatch.mockResolvedValueOnce({ ok: true, result: { suggested_tags: ['keep-me'] } });
+
+    await w.vm.onExplainFailures();
+
+    expect(w.vm.batchAdvice.suggested_tags).toEqual(['keep-me']);
+    expect(w.vm.batchAdviceLoaded).toBe(true);
+  });
+});

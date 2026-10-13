@@ -87,7 +87,7 @@ describe('bundleFileName — the visible repo+version link', () => {
 });
 
 describe('exportBundle — store + live-forever contract (WS3, David, 2026-09-25)', () => {
-  test('stores the zip (is_bundle + bundle_version), patches Ingested, returns the link', async () => {
+  test('stores the zip (is_bundle + bundle_version), gates the Ingested badge, returns the link', async () => {
     seedMeta('index', { is_index: true, frontmatter: { type: 'index', title: 'Index' } });
     seedMeta('alpha');
     programMeta([
@@ -123,7 +123,44 @@ describe('exportBundle — store + live-forever contract (WS3, David, 2026-09-25
       }),
       expect.anything()
     );
-    // The zip is born Ingested: the mint gate already guaranteed indexed content.
+    // The badge is EARNED, not assumed (David, 2026-10-12). This repo has no
+    // ingested_at — it was published but never drained — so the zip is 'Pending'
+    // until the settle flip upgrades it. Previously this was an unconditional
+    // 'Ingested', which is how a repo with no ingested data at all came to show
+    // every one of its versions as ingested.
+    expect(authedAxios.patch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/files/file-new-1/status'),
+      { dataprep: { status: 'Pending' } },
+      expect.anything()
+    );
+  });
+
+  test('a repo that IS already drained exports its zip as Ingested', async () => {
+    // The other half of the gate: a re-publish of a drained repo keeps the
+    // badge it genuinely earned.
+    seedMeta('index', { is_index: true, frontmatter: { type: 'index', title: 'Index' } });
+    seedMeta('alpha');
+    programMeta([
+      { concept_id: 'alpha', title: 'T alpha', frontmatter: { type: 'topic' }, body: '# alpha' },
+      {
+        concept_id: 'index',
+        title: 'Index',
+        frontmatter: { type: 'index', title: 'Index' },
+        body: '# index',
+        is_index: true
+      }
+    ]);
+    const drainedRepo = {
+      repo_id: REPO,
+      name: 'Demo Repo',
+      version: 2,
+      graph_name: `OKF_${REPO}`,
+      ingested_at: new Date().toISOString(),
+      ingested_version: 1
+    };
+
+    await bundleExportService.exportBundle(drainedRepo, { sub: 'steward-1' });
+
     expect(authedAxios.patch).toHaveBeenCalledWith(
       expect.stringContaining('/api/files/file-new-1/status'),
       { dataprep: { status: 'Ingested' } },

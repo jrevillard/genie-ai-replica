@@ -70,9 +70,15 @@ async function findPiiDoc(col, repo_id, concept_id) {
  * doc when absent (Story 2.9.2 formalizes first-class fields). The unique
  * (repo_id, concept_id) index is the race guard: a unique violation on the
  * concurrent-create path retries as an update.
+ *
+ * NOTE ON FIELD FILTERING: there is none. `patch` is spread verbatim into the
+ * create path and passed straight to `col.update` on the update path, so any
+ * field a caller names (`pii_state`, `pii_hits_summary`, `pii_scanned_at`,
+ * `pii_scan_error`, …) is persisted as given. `pii_scan_error` (added by the
+ * fail-reason fix below) therefore needs no whitelist widening here.
  * @param {string} repo_id
  * @param {string} concept_id
- * @param {object} patch {pii_state, pii_hits_summary?, pii_scanned_at}
+ * @param {object} patch {pii_state, pii_hits_summary?, pii_scanned_at, pii_scan_error?}
  */
 
 async function upsertPiiState(repo_id, concept_id, patch) {
@@ -103,7 +109,9 @@ async function upsertPiiState(repo_id, concept_id, patch) {
 
 /**
  * Scan one concept (frontmatter values + body) via the sidecar; persist state.
- * @returns {Promise<{repo_id, concept_id, pii_state, pii_hits_summary, redacted_text?}>}
+ * On a fail-closed scan the persisted row also carries `pii_scan_error`
+ * ({error_class, message, at}) so the block is diagnosable from the data.
+ * @returns {Promise<{repo_id, concept_id, pii_state, pii_hits_summary, pii_scan_error?, redacted_text?}>}
  */
 /** Recursively flatten frontmatter values (strings/numbers/arrays/objects)
  * into scan text, so PII nested inside objects/arrays is NOT silently missed
@@ -121,37 +129,102 @@ function flattenFrontmatter(value, depth = 0, out = []) {
   return out;
 }
 
+// ─── Fail-reason persistence (the reason a fail-closed scan FAILED) ───────────
+//
+// Before this, scanConcept logged `insp.error` and persisted ONLY the state —
+// every 'error' row read back pii_scan_error: null, so a repo blocked with
+// "1 concept(s) with PII scan errors (fail-closed): <id>" was undiagnosable
+// from the data: nobody could tell a dead sidecar from a malformed response,
+// and could not tell whether a re-scan would now succeed (the original failure
+// was a TRANSIENT transport blip during a 141-concept import burst).
+//
+// NFR-P2 (raw PII NEVER persisted): a reason carries the transport FAILURE
+// description — an error class (ECONNREFUSED, HTTP_503, TIMEOUT, UNKNOWN) and
+// a bounded message — never any flagged VALUE from the scanned content. The
+// content itself is not in scope here: insp.error is produced by pii-client's
+// errorClass(), which deliberately maps a failure to a class token.
+
+const SCAN_ERROR_MESSAGE_CAP = 200;
+
+/** One-line, length-capped, control-char-free form of a failure string. */
+function sanitizeScanErrorText(value) {
+  const s = String(value === null || value === undefined ? '' : value)
+    .replace(/\s+/g, ' ')
+    .trim();
+  return s ? s.slice(0, SCAN_ERROR_MESSAGE_CAP) : null;
+}
+
+/**
+ * The persisted `pii_scan_error` value for a fail-closed scan: what failed
+ * (class), why (message), and when. `null` on a successful scan CLEARS a stale
+ * reason — a recovered concept must never keep advertising an old failure.
+ * @param {string|Error} errOrClass  the sidecar error class, or a thrown Error
+ * @param {string} [detail]          an optional more specific message
+ */
+function buildScanError(errOrClass, detail) {
+  const raw = errOrClass instanceof Error ? errOrClass : null;
+  const errorClass = sanitizeScanErrorText(raw ? raw.code || raw.name : errOrClass) || 'UNKNOWN';
+  const message =
+    sanitizeScanErrorText(detail) ||
+    sanitizeScanErrorText(raw ? raw.message : null) ||
+    `PII scan failed (${errorClass})`;
+  return { error_class: errorClass, message, at: new Date().toISOString() };
+}
+
 async function scanConcept(repo_id, concept_id, frontmatter = {}, body = '') {
   return withSpan('okf.pii.scan', async (span) => {
     span.setAttribute('okf.repo_id', repo_id);
     span.setAttribute('okf.concept_id', concept_id);
     // ONE scan implementation (region-split, editor-aligned offsets) serves
     // both the state writer and the occurrence inspector.
-    const insp = await inspectConcept(repo_id, concept_id, frontmatter, body);
+    let insp;
+    try {
+      insp = await inspectConcept(repo_id, concept_id, frontmatter, body);
+    } catch (err) {
+      // inspectConcept is fail-CLOSED by contract (pii-client never throws for
+      // a transport failure — it returns state:'error'), but anything that DOES
+      // escape it must land as 'error' WITH a reason rather than propagate to
+      // the caller, which would record 'error' with no pii_state write at all
+      // (ingest-service's catch) — leaving the row on 'unknown', which the
+      // publish gate does NOT block. The Error is carried whole (not just its
+      // code) so buildScanError can persist both class and message.
+      insp = { state: 'error', error: err, occurrences: [] };
+    }
     let result;
     if (insp.state === 'error') {
       // FAIL-CLOSED: transport failure → pii_state='error' (blocks publish).
-      result = { repo_id, concept_id, pii_state: 'error', pii_hits_summary: null };
+      const failure = buildScanError(insp.error);
+      result = { repo_id, concept_id, pii_state: 'error', pii_hits_summary: null, pii_scan_error: failure };
       await upsertPiiState(repo_id, concept_id, {
         pii_state: 'error',
         pii_hits_summary: null,
-        pii_scanned_at: new Date().toISOString()
+        pii_scanned_at: failure.at,
+        pii_scan_error: failure
       });
       recordOp('scan', 'error');
-      logger.warn('PII scan errored (fail-closed)', { repo_id, concept_id, error: insp.error });
+      logger.warn('PII scan errored (fail-closed)', {
+        repo_id,
+        concept_id,
+        error: failure.error_class,
+        pii_scan_error: failure.message
+      });
     } else {
       // PII REMEDIATION (David, 2026-09-09): per-item Accept decisions
       // suppress their occurrence — redact/replace/remove change the text so
       // the re-scan drops them naturally; only 'accept' needs the subtraction.
-      const accepted = (await listResolutions(repo_id, concept_id)).filter((r) => r && r.action === 'accept');
+      const accepted = (await listResolutions(repo_id, concept_id)).filter(isSuppressingAccept);
       const unresolved = subtractAccepted(insp.occurrences, accepted);
       const summary = countByType(unresolved);
       const state = unresolved.length > 0 ? 'hit' : 'clean';
+      const at = new Date().toISOString();
       result = { repo_id, concept_id, pii_state: state, pii_hits_summary: summary, occurrences: unresolved };
       await upsertPiiState(repo_id, concept_id, {
         pii_state: state,
         pii_hits_summary: summary, // unresolved counts only — NFR-P2
-        pii_scanned_at: new Date().toISOString()
+        pii_scanned_at: at,
+        // CLEAR a stale reason: this scan reached a verdict, so any reason left
+        // by an earlier failure is now misleading.
+        pii_scan_error: null
       });
       recordOp('scan', state);
     }
@@ -209,7 +282,7 @@ async function inspectConcept(repo_id, concept_id, frontmatter = {}, body = '', 
               }
             };
           });
-          const accepted = (await listResolutions(repo_id, concept_id)).filter((r) => r && r.action === 'accept');
+          const accepted = (await listResolutions(repo_id, concept_id)).filter(isSuppressingAccept);
           const unresolved = subtractAccepted(withExcerpts, accepted);
           recordOp('inspect', 'cache');
           span.setAttribute('okf.pii_cached', true);
@@ -307,8 +380,44 @@ function countByType(occurrences) {
 
 /** Occurrences whose (where, type, text) matches an Accept resolution are
  * suppressed — they are reviewed, not outstanding. */
+/** Durable whole-concept acceptance marker (David 2026-10-13: Accept All should
+ *  bulk accept everything the same way the individual accepts work).
+ *  ONE record per concept, not one per finding: the concept that motivated this
+ *  stores 8,273 findings and RESOLUTION_CAP is 200, so a per-finding ledger
+ *  would slice away 8,073 AND fail to suppress the rest.
+ *  Deliberately a NEW name, not legacy accept_repo: existing accept_repo records
+ *  stay INERT so this cannot retroactively mask findings a curator accepted under
+ *  the old broken semantics. They must re-accept. */
+const ACCEPT_ALL_FINDINGS = 'accept_all_findings';
+
+/** Which ledger actions SUPPRESS an outstanding finding.
+ *
+ *  'accept' — the per-item accept: suppresses exactly the (where, type, text)
+ *             triple it names.
+ *  ACCEPT_ALL_FINDINGS — suppresses every current finding on the concept.
+ *  'accept_repo' is DELIBERATELY ABSENT. It is inert by design (see above), so
+ *  a legacy record cannot retroactively mask findings.
+ *
+ *  WHY THIS SET EXISTS (adversarial review 2026-10-13): both call sites used to
+ *  pre-filter with `r.action === 'accept'` and hand THAT list to
+ *  subtractAccepted — so ACCEPT_ALL_FINDINGS was discarded before line 399
+ *  could ever test for it, and the whole-concept branch was unreachable dead
+ *  code. Two independent verifiers found this. The test that appeared to cover
+ *  it passed only because it called subtractAccepted directly, bypassing the
+ *  very filter that breaks it. */
+const SUPPRESSING_ACCEPT_ACTIONS = new Set(['accept', ACCEPT_ALL_FINDINGS]);
+
+function isSuppressingAccept(resolution) {
+  return !!resolution && SUPPRESSING_ACCEPT_ACTIONS.has(resolution.action);
+}
+
 function subtractAccepted(occurrences, accepted) {
   if (!accepted || accepted.length === 0) return occurrences || [];
+  // Whole-concept acceptance covers EVERY current finding, so nothing is left
+  // outstanding. The ledger entry stays either way, so the panel keeps rendering
+  // accepted items GREEN: suppression drops them from the OUTSTANDING count and
+  // never hides the record of the decision.
+  if (accepted.some((a) => a && a.action === ACCEPT_ALL_FINDINGS)) return [];
   const keys = new Set(accepted.map((a) => [a.where, a.type, a.before].join(' ')));
   return (occurrences || []).filter((o) => !keys.has([o.where, o.type, o.excerpt && o.excerpt.hit].join(' ')));
 }
@@ -571,7 +680,8 @@ async function deriveStateAfterResolution(repo_id, concept_id, doc, resolution, 
   await upsertPiiState(repo_id, concept_id, {
     pii_state: piiState,
     pii_hits_summary: nextSummary,
-    pii_scanned_at: new Date().toISOString()
+    pii_scanned_at: new Date().toISOString(),
+    pii_scan_error: null // no longer an error state — a stale reason would mislead
   });
   recordOp('remediate', resolution.action);
   return { pii_state: piiState, counts_by_type: nextSummary };
@@ -628,7 +738,8 @@ async function acceptPii(repo_id, concept_id, selection, actor) {
     await upsertPiiState(repo_id, concept_id, {
       pii_state: piiState,
       pii_hits_summary: nextSummary,
-      pii_scanned_at: new Date().toISOString()
+      pii_scanned_at: new Date().toISOString(),
+      pii_scan_error: null // no longer an error state — a stale reason would mislead
     });
     recordOp('remediate', 'concept.pii_accept');
     logger.info('PII acceptance recorded (scan-free)', {
@@ -761,7 +872,8 @@ async function fileActionPii(repo_id, concept_id, payload, actor) {
       await upsertPiiState(repo_id, concept_id, {
         pii_state: piiState,
         pii_hits_summary: remaining,
-        pii_scanned_at: new Date().toISOString()
+        pii_scanned_at: new Date().toISOString(),
+        pii_scan_error: null // no longer an error state — a stale reason would mislead
       });
       recordOp('remediate', 'concept.pii_accept_file');
       await auditService
@@ -798,7 +910,8 @@ async function fileActionPii(repo_id, concept_id, payload, actor) {
     await upsertPiiState(repo_id, concept_id, {
       pii_state: piiState,
       pii_hits_summary: remaining,
-      pii_scanned_at: new Date().toISOString()
+      pii_scanned_at: new Date().toISOString(),
+      pii_scan_error: null // no longer an error state — a stale reason would mislead
     });
     recordOp('remediate', 'concept.pii_file_action');
     await auditService
@@ -868,14 +981,18 @@ async function repoBulkAction(repo_id, payload, actor) {
     for (const doc of flagged) {
       const prevSummary = doc.pii_hits_summary && typeof doc.pii_hits_summary === 'object' ? doc.pii_hits_summary : {};
       if (action === 'accept') {
-        // Text stays; the decision suppresses every outstanding hit.
+        // Text stays; the decision suppresses every outstanding hit — DURABLY.
+        // Writes the whole-concept marker rather than one resolution per finding
+        // (see ACCEPT_ALL_FINDINGS: 8,273 findings on one concept here, against a
+        // 200-per-concept cap). The ledger entry stays either way, so the panel
+        // still renders the accepted items GREEN.
         await appendResolution(db, doc._key, doc.pii_resolutions, {
           id: newResolutionId(),
-          action: 'accept_repo',
+          action: ACCEPT_ALL_FINDINGS,
           type: null,
           where: null,
           before: null,
-          after: 'accepted (whole repository)',
+          after: 'accepted (all findings on this concept)',
           hits_summary: prevSummary,
           at: now,
           actor: by
@@ -901,7 +1018,8 @@ async function repoBulkAction(repo_id, payload, actor) {
       await upsertPiiState(repo_id, doc.concept_id, {
         pii_state: 'clean',
         pii_hits_summary: {},
-        pii_scanned_at: now
+        pii_scanned_at: now,
+        pii_scan_error: null // no longer an error state — a stale reason would mislead
       });
       affected++;
     }
@@ -1171,20 +1289,51 @@ async function getRepoDocumentReferences(repo_id) {
 const SCANNABLE_FILE_TYPES = ['text/markdown', 'text/plain', 'text/html', 'text/x-markdown'];
 
 /**
- * Discover the repo's uploaded plain-text files (by repo_id — the field doc-repo stamps) and return
- * them as scan inputs. Binary/zips are skipped with a clear rejection — a
- * bundle zip is unzipped in Story 2.9.5, not scanned as raw bytes.
+ * Discover the repo's uploaded plain-text files and return them as scan inputs.
+ * Binary/zips are skipped with a clear rejection — a bundle zip is unzipped in
+ * Story 2.9.5, not scanned as raw bytes.
+ *
+ * TWO STAMPS, UNIONED (bug fix — discovery matched ZERO rows in production):
+ * source documents are stamped `okf_repo_id` by producer-service.stampSources,
+ * while bundle artifacts carry `repo_id` from bundle-export-service. A repo
+ * built from uploads (the import path) has ONLY `okf_repo_id` — filtering on
+ * `repo_id` alone silently discovered nothing, so the scan examined nothing and
+ * the caller still stamped the repo "PII scanned / complete". Same union as
+ * backing-file-service.listBackingFiles, which already knows this.
+ *
+ * Two single-field equality queries rather than one `||` filter: ArangoDB can
+ * only use a persistent index for a filter it can decompose, and `a || b` over
+ * two different attributes forces a collection scan. This runs per publish
+ * against a collection that grows with every upload, so the split matters
+ * (the okf_repo_id index is ensured in db/collections.js EXTERNAL_INDEXES).
+ * A row carrying BOTH stamps is deduplicated by file_id and scanned once.
+ *
  * @returns {Promise<Array<{concept_id, frontmatter, body, file_id, file_type}>>}
  */
 async function discoverRepoFiles(repo_id) {
   const db = await getDb();
-  const cursor = await db.query(aql`
-    FOR f IN ${db.collection(FILES)}
-      FILTER f.repo_id == ${repo_id}
-      SORT f.uploaded_date DESC
-      RETURN KEEP(f, ['file_id', 'file_name', 'file_type'])
-  `);
-  const files = await cursor.all();
+  const stamps = ['okf_repo_id', 'repo_id'];
+  const byFileId = new Map();
+  for (const stamp of stamps) {
+    // `stamp` is a module-local constant (never request input), so inlining it
+    // into the AQL text is safe; the repo_id VALUE stays a bound parameter.
+    const cursor = await db.query(
+      `FOR f IN ${FILES} FILTER f.${stamp} == @repo_id SORT f.uploaded_date DESC
+         RETURN KEEP(f, ['file_id', 'file_name', 'file_type', 'uploaded_date'])`,
+      { repo_id }
+    );
+    for (const f of await cursor.all()) {
+      if (f && f.file_id && !byFileId.has(f.file_id)) byFileId.set(f.file_id, f);
+    }
+  }
+  // Newest first (FR-3 recordIngestVersion takes sourceFileIds[0] as "the
+  // latest file"). ISO-8601 sorts lexicographically; a missing date sorts last.
+  const files = [...byFileId.values()].sort((x, y) => {
+    const a = String(x.uploaded_date || '');
+    const b = String(y.uploaded_date || '');
+    if (a === b) return 0;
+    return a < b ? 1 : -1;
+  });
   const out = [];
   for (const f of files) {
     if (!SCANNABLE_FILE_TYPES.includes(f.file_type)) {
@@ -1225,7 +1374,413 @@ async function fetchFileBytes(fileId) {
   return Buffer.from(b64, 'base64');
 }
 
+// ─── Repo-wide CONCEPT rescan (async 202 + poll) ────────────────────────────
+//
+// THE UNBLOCK for a concept stuck in pii_state='error'. The publish gate
+// (version-service) reads pii_state on the okf_concepts_meta ROWS, so a
+// rescan must walk those rows — enumerating concepts and calling the REAL
+// persisting scanConcept on each. The file-oriented `discoverRepoFiles` path
+// can never reach them: its subjects are `files` docs stamped with repo_id,
+// and it skips every binary type (pdf/xlsx/csv/docx).
+//
+// SCALE: 141 concepts x one sidecar round-trip each cannot finish inside a
+// gateway timeout on a synchronous 200, so this follows the codebase's
+// existing async idiom verbatim (head-suite beginRunSuite/getRunSuite):
+// mint a key -> placeholder doc with status 'running' -> detached worker ->
+// poll endpoint. The in-flight guard carries the key in err.details so a
+// client can ADOPT the running scan instead of dead-ending on the 409.
+//
+// SEQUENTIAL on purpose: the original failure this fixes WAS a sidecar
+// transport failure under a 140-concept burst. scanConcept is fail-closed, so
+// fanning out would trade a timeout for a fresh wave of 'error' rows.
+
+const PII_SCAN_RUNS_COLLECTION = 'okf_pii_scan_runs';
+let _scanRunsEnsured = false;
+
+/** Lazily create the run collection + its indexes (mirrors head-suite's
+ * ensureCollection; the boot path in db/collections.js creates it too). */
+async function ensureScanRunsCollection(db) {
+  if (_scanRunsEnsured) return;
+  const existing = new Set((await db.listCollections()).map((c) => c.name));
+  if (!existing.has(PII_SCAN_RUNS_COLLECTION)) {
+    await db.createCollection(PII_SCAN_RUNS_COLLECTION);
+    logger.info('pii.scan_runs_collection_created', { name: PII_SCAN_RUNS_COLLECTION });
+  }
+  const col = db.collection(PII_SCAN_RUNS_COLLECTION);
+  const idx = (await col.indexes()).map((i) => i.fields.join(','));
+  if (!idx.includes('repo_id')) {
+    await col.ensureIndex({ type: 'persistent', fields: ['repo_id'] });
+  }
+  if (!idx.includes('created_at')) {
+    await col.ensureIndex({ type: 'persistent', fields: ['created_at'] });
+  }
+  _scanRunsEnsured = true;
+}
+
+/**
+ * Every concept_id belonging to a repo (the exact subject set the publish
+ * gate reads). Sorted so a run's tally is deterministic.
+ * @returns {Promise<string[]>}
+ */
+async function listRepoConceptIds(repo_id) {
+  if (!repo_id) return [];
+  const db = await getDb();
+  const rows = await (
+    await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @rid SORT m.concept_id RETURN m.concept_id', {
+      rid: repo_id
+    })
+  ).all();
+  // Tolerate both the projection (bare strings) and a full-doc return.
+  return rows.map((r) => (r && typeof r === 'object' ? r.concept_id : r)).filter((c) => typeof c === 'string');
+}
+
+function scanRunDoc(db, scanKey) {
+  return db.collection(PII_SCAN_RUNS_COLLECTION).document(scanKey);
+}
+
+/**
+ * The worker: enumerate the repo's concepts, load each one's stored
+ * frontmatter + body, and run the REAL persisting scan on it.
+ *
+ * FAIL-CLOSED, unchanged: a concept whose sidecar call fails comes back
+ * pii_state 'error' and stays blocking. An 'error' is NEVER waivable here.
+ *
+ * ZERO-SCAN IS NOT A PASS: when nothing was actually scanned the repo is
+ * NOT stamped pii_scan_status='complete' (the false attestation that let a
+ * repo whose scan examined no concept claim compliance). Instead the run
+ * fails with PII_SCAN_NOTHING_SCANNED so the caller is told the truth.
+ *
+ * @returns {Promise<{repo_id, scanned, clean, hit, error, missing, results, gate}>}
+ */
+/** A sidecar worker respawn is TRANSIENT: uvicorn restarts the child and the
+ * next request lands on a live one. How long to wait between tries, and how many.
+ * The pause must outlast the observed respawn (~10-20s), not the whole budget. */
+const CONCEPT_RETRY_ATTEMPTS = 3; // 1 initial + 3 retries = 4 scanConcept calls
+// Read at CALL time, not module load: the test suite sets this to ~0 in
+// beforeEach, which cannot retroactively change a module-level const.
+// Tunable by operators on a slow/underpowered host that needs a longer pause to
+// outlast a worker respawn.
+const conceptRetryPauseMs = () => Number(process.env.PII_CONCEPT_RETRY_PAUSE_MS) || 8000;
+
+/**
+ * Scan one concept, riding out a sidecar worker respawn.
+ *
+ * WHY THIS IS NOT IN pii-client (2026-10-13): scanConcept is correctly
+ * fail-closed — a transport failure yields pii_state 'error' and the publish gate
+ * blocks on it. That contract is right and its own suite pins that a persistently
+ * DOWN sidecar fails FAST (a 140-concept scan must not stall for minutes per
+ * concept). Widening the shared client breaks that.
+ *
+ * But during a BULK scan the failure is usually a worker dying mid-request, not a
+ * down sidecar. uvicorn respawns it within seconds. Recording a permanent error
+ * for that is precisely what made one blip block a repository indefinitely — the
+ * original bug this whole change exists to clear. So the retry lives HERE, where
+ * we know the sidecar was demonstrably up moments ago, and leaves the shared
+ * client's fail-fast contract untouched.
+ */
+async function scanRepoConceptWithRetry(repo_id, concept_id, meta) {
+  let row = await scanConcept(repo_id, concept_id, meta.frontmatter || {}, meta.body || '');
+  for (let attempt = 1; attempt <= CONCEPT_RETRY_ATTEMPTS && row.pii_state === 'error'; attempt += 1) {
+    logger.warn('PII concept rescan: scan errored, retrying past a likely worker respawn', {
+      repo_id,
+      concept_id,
+      attempt,
+      reason: row.error || row.pii_scan_error || null
+    });
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, conceptRetryPauseMs() * attempt);
+      if (timer.unref) timer.unref();
+    });
+    row = await scanConcept(repo_id, concept_id, meta.frontmatter || {}, meta.body || '');
+  }
+  if (row.pii_state === 'error') {
+    logger.error('PII concept rescan: still errored after retries', {
+      repo_id,
+      concept_id,
+      attempts: CONCEPT_RETRY_ATTEMPTS,
+      reason: row.error || row.pii_scan_error || null
+    });
+  }
+  return row;
+}
+
+async function scanRepoConcepts(repo_id, opts = {}) {
+  return withSpan('okf.pii.scanRepoConcepts', async (span) => {
+    span.setAttribute('okf.repo_id', repo_id);
+    const conceptIds = await listRepoConceptIds(repo_id);
+    const total = conceptIds.length;
+    logger.info('PII concept rescan started', { repo_id, scan_key: opts.scanKey || null, concepts: total });
+
+    // Progress rides the placeholder doc so the poll renders a REAL bar
+    // (throttled — 141 writes would hammer the DB).
+    const PROGRESS_WRITE_MIN_MS = 2000;
+    let lastProgressWrite = 0;
+    const report = async (done) => {
+      if (!opts.reportProgress) return;
+      const now = Date.now();
+      if (now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
+      lastProgressWrite = now;
+      await opts.reportProgress({ phase: 'scanning', done, total }).catch((e) => {
+        logger.warn('pii.concept_rescan.progress_write_failed', { repo_id, error: e.message });
+      });
+    };
+
+    const results = [];
+    let done = 0;
+    for (const concept_id of conceptIds) {
+      let row;
+      try {
+        const meta = await conceptMetaService.getConceptMeta(repo_id, concept_id);
+        if (!meta) {
+          // The row vanished between enumeration and load — nothing to scan,
+          // and nothing to write. Counted honestly, never as a clean pass.
+          logger.warn('PII concept rescan: meta row missing', { repo_id, concept_id });
+          row = { concept_id, pii_state: null, skipped: 'CONCEPT_NOT_FOUND' };
+        } else {
+          row = await scanRepoConceptWithRetry(repo_id, concept_id, meta);
+        }
+      } catch (err) {
+        // scanConcept itself only throws on a persistence failure. Record it
+        // as an errored concept and keep going — one bad row must not
+        // abandon the other 140.
+        logger.error('PII concept rescan: concept threw', { repo_id, concept_id, error: err.message });
+        row = { concept_id, pii_state: 'error', error: err.code || err.message };
+      }
+      results.push({
+        concept_id: row.concept_id,
+        pii_state: row.pii_state,
+        pii_hits_summary: row.pii_hits_summary || null,
+        // Carried so the tally can count vanished rows honestly (never as a
+        // clean pass) — and so the client can see WHICH concept was skipped.
+        ...(row.skipped ? { skipped: row.skipped } : {})
+      });
+      done++;
+      await report(done);
+    }
+
+    const scanned = results.filter((r) => r.pii_state === 'clean' || r.pii_state === 'hit').length;
+    const tally = {
+      repo_id,
+      scanned,
+      clean: results.filter((r) => r.pii_state === 'clean').length,
+      hit: results.filter((r) => r.pii_state === 'hit').length,
+      error: results.filter((r) => r.pii_state === 'error').length,
+      missing: results.filter((r) => r.skipped === 'CONCEPT_NOT_FOUND').length,
+      results
+    };
+
+    if (scanned === 0) {
+      const err = new Error(
+        `PII rescan examined no concepts for repo ${repo_id} (${total} enumerated, ` +
+          `${tally.error} errored, ${tally.missing} missing) — the repository was NOT marked PII-scanned`
+      );
+      err.code = 'PII_SCAN_NOTHING_SCANNED';
+      err.status = 400;
+      err.details = tally;
+      throw err;
+    }
+
+    // Only a scan that actually examined concepts may attest compliance.
+    await markRepoPiiScanned(repo_id);
+    tally.gate = await assertPiiClean(repo_id);
+    span.setAttribute('okf.pii_scanned', scanned);
+    span.setAttribute('okf.pii_error', tally.error);
+    recordOp('scanRepoConcepts', tally.error > 0 ? 'error' : 'ok');
+    logger.info('PII concept rescan finished', {
+      repo_id,
+      scan_key: opts.scanKey || null,
+      scanned,
+      clean: tally.clean,
+      hit: tally.hit,
+      error: tally.error,
+      missing: tally.missing
+    });
+    return tally;
+  });
+}
+
+// repo_id -> scan_key. Per-process, exactly like head-suite's RUN_IN_FLIGHT.
+const conceptScanInFlight = new Map();
+
+/**
+ * ASYNC entry point (202 + poll). Mint the run key, persist the 'running'
+ * placeholder, detach the worker, hand the caller the key.
+ * @returns {Promise<{scan_key: string, done: Promise}>}
+ */
+async function beginRepoConceptScan(repo_id, opts = {}) {
+  const db = await getDb();
+  await ensureScanRunsCollection(db);
+  const inflight = conceptScanInFlight.get(repo_id);
+  if (inflight) {
+    const err = new Error('a concept PII rescan is already running for this repository');
+    err.code = 'PII_SCAN_IN_FLIGHT';
+    err.status = 409;
+    // The error-handler serializes `details` for client errors — the client
+    // needs the key to ADOPT the in-flight scan (resume polling).
+    err.details = { scan_key: inflight };
+    throw err;
+  }
+  const scanKey = `p${Date.now()}-${nodeCrypto.randomUUID().slice(0, 6)}`;
+  conceptScanInFlight.set(repo_id, scanKey);
+  const placeholder = {
+    _key: scanKey,
+    repo_id,
+    kind: 'concept_scan',
+    status: 'running',
+    created_at: new Date().toISOString(),
+    created_by: (opts.actor && opts.actor.sub) || 'system',
+    progress: { phase: 'starting', done: 0, total: 0 }
+  };
+  try {
+    await db.collection(PII_SCAN_RUNS_COLLECTION).save(placeholder);
+  } catch (e) {
+    // The lock is set BEFORE this awaited save — leaking it would wedge the
+    // repo behind a permanent PII_SCAN_IN_FLIGHT with no doc behind the key.
+    conceptScanInFlight.delete(repo_id);
+    throw e;
+  }
+  logger.info('PII concept rescan queued', { repo_id, scan_key: scanKey, actor: placeholder.created_by });
+
+  // Progress reports land in the placeholder doc (throttled, never fatal).
+  const PROGRESS_WRITE_MIN_MS = 2000;
+  let lastProgressWrite = 0;
+  const reportProgress = async (progress) => {
+    const now = Date.now();
+    if (now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
+    lastProgressWrite = now;
+    await db
+      .collection(PII_SCAN_RUNS_COLLECTION)
+      .update(scanKey, { progress, updated_at: new Date().toISOString() })
+      .catch((e) => {
+        logger.warn('pii.concept_rescan.progress_write_failed', { repo_id, scan_key: scanKey, error: e.message });
+      });
+  };
+
+  const done = scanRepoConcepts(repo_id, { ...opts, scanKey, reportProgress })
+    .then(async (tally) => {
+      const doc = {
+        ...placeholder,
+        ...tally,
+        status: 'complete',
+        progress: { phase: 'complete', done: tally.scanned + tally.missing, total: tally.results.length },
+        completed_at: new Date().toISOString()
+      };
+      await db.collection(PII_SCAN_RUNS_COLLECTION).replace(scanKey, doc);
+      return doc;
+    })
+    .catch(async (e) => {
+      // The placeholder MUST reach a terminal state or the poll spins on
+      // 'running' forever. Keep the mint time (created_at is the scan's
+      // identity) and never leak a numeric driver code (the Arango driver
+      // sets e.code=409 on write conflicts, which would mask PII_SCAN_
+      // NOTHING_SCANNED).
+      const code = typeof e.code === 'string' && e.code ? e.code : 'PII_SCAN_FAILED';
+      const failDoc = {
+        ...placeholder,
+        status: 'failed',
+        error: { code, message: e.message },
+        ...(e.details ? { tally: e.details } : {}),
+        completed_at: new Date().toISOString()
+      };
+      await db
+        .collection(PII_SCAN_RUNS_COLLECTION)
+        .replace(scanKey, failDoc)
+        .catch((dbErr) => {
+          logger.error('pii.concept_rescan.fail_persist_failed', {
+            repo_id,
+            scan_key: scanKey,
+            error: dbErr.message
+          });
+        });
+      throw e;
+    })
+    .finally(() => conceptScanInFlight.delete(repo_id));
+  done.catch((e) => logger.error('pii.concept_rescan.async_failed', { repo_id, scan_key: scanKey, error: e.message }));
+  return { scan_key: scanKey, done };
+}
+
+/**
+ * The poll. {status:'running'} keep waiting, {status:'failed', error}, or
+ * the completed tally.
+ */
+async function getRepoConceptScan(repo_id, scan_key) {
+  const db = await getDb();
+  await ensureScanRunsCollection(db);
+  if (conceptScanInFlight.get(repo_id) === scan_key) {
+    // The live envelope carries the persisted progress so the UI's bar moves;
+    // the doc may briefly predate the first report.
+    const live = await scanRunDoc(db, scan_key).catch(() => null);
+    return {
+      repo_id,
+      scan_key,
+      status: 'running',
+      progress: (live && live.progress) || { phase: 'starting', done: 0, total: 0 }
+    };
+  }
+  let doc;
+  try {
+    doc = await scanRunDoc(db, scan_key);
+  } catch {
+    const err = new Error(`PII concept scan ${scan_key} not found`);
+    err.code = 'PII_SCAN_NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
+  if (doc.repo_id !== repo_id) {
+    const err = new Error(`PII concept scan ${scan_key} not found for repo ${repo_id}`);
+    err.code = 'PII_SCAN_NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
+  if (doc.status === 'running') {
+    // A 'running' DOC with no live lock is an orphan — the worker died
+    // without its terminal write. Reap lazily so the poll TERMINATES with
+    // the truth instead of spinning forever on a ghost.
+    const failDoc = {
+      ...doc,
+      status: 'failed',
+      error: {
+        code: 'PII_SCAN_INTERRUPTED',
+        message: 'the rescan was interrupted (worker died or the server restarted) — start a new one'
+      }
+    };
+    await db
+      .collection(PII_SCAN_RUNS_COLLECTION)
+      .replace(doc._key, failDoc)
+      .catch(() => {});
+    return { repo_id, scan_key, status: 'failed', error: failDoc.error };
+  }
+  return doc;
+}
+
+/**
+ * Boot-time self-heal (mirrors head-suite.sweepInterruptedRuns): the
+ * in-memory lock dies with the process, so every 'running' doc after a
+ * restart is an orphan. Dead scans become honest failures.
+ */
+async function sweepInterruptedScans() {
+  const db = await getDb();
+  await ensureScanRunsCollection(db);
+  const swept = await (
+    await db.query(
+      `FOR d IN ${PII_SCAN_RUNS_COLLECTION} FILTER d.status == 'running' UPDATE d WITH ` +
+        `{ status: 'failed', error: { code: 'PII_SCAN_INTERRUPTED', ` +
+        `message: 'the server restarted while this rescan was executing — start a new one' }, ` +
+        `completed_at: DATE_ISO8601(DATE_NOW()) } IN ${PII_SCAN_RUNS_COLLECTION} RETURN 1`
+    )
+  ).all();
+  if (swept.length > 0) {
+    logger.warn('pii.concept_rescan.boot_sweep', { swept: swept.length });
+  }
+  return swept.length;
+}
+
 module.exports = {
+  listRepoConceptIds,
+  scanRepoConcepts,
+  beginRepoConceptScan,
+  getRepoConceptScan,
+  sweepInterruptedScans,
   scanConcept,
   inspectConcept,
   remediatePii,
@@ -1235,6 +1790,7 @@ module.exports = {
   redactWholeFile,
   listResolutions,
   subtractAccepted,
+  findingsSignature,
   upsertPiiState,
   assertPiiClean,
   markRepoPiiScanned,

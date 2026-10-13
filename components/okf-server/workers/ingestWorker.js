@@ -475,7 +475,22 @@ async function _refreshRagIngestion(db, repoId) {
     // finalizes the rag_ingestion record), then the record is augmented with
     // the FAILED concept ids so the state is honest AND recoverable — the
     // designed loop (retract → ingest) requeues everything for a full re-drain.
-    const repo = await db.collection('okf_repositories').document(repoId);
+    // A repo deleted (or never created) mid-drain must NOT throw: the drain has
+    // nothing left to settle, and an unhandled 404 here surfaced to the caller
+    // as a 500 (live 2026-10-12, Bali under a publish storm: three publishes in
+    // 8s each requeuing 1001 meta rows, and the version switch removed docs the
+    // drain was still resolving). Same guard shape as edge-service
+    // graphNameForRepo and concept-meta-service patchConceptMeta.
+    let repo = null;
+    try {
+      repo = await db.collection('okf_repositories').document(repoId);
+    } catch (err) {
+      if (!(err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404))) throw err;
+      logger.warn('ingest drain: repo doc vanished mid-drain; nothing to settle', {
+        repo_id: repoId
+      });
+      return;
+    }
     if (!repo || !repo.rag_drain_active) return; // disarmed / already settled
     const lifecycleService = require('../services/lifecycle-service');
     await lifecycleService._settleIngest(db, repo, { sub: 'okf-worker' });

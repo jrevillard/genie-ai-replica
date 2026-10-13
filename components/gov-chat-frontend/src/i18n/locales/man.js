@@ -1678,6 +1678,25 @@ export default {
       viewToggle: 'Safelaa juube',
       paneLabel: 'Juube-dulaa',
       saveFailed: 'Kōjparok ear l̦apier — bar kajjieon̦',
+      piiRescan: {
+        label: '个人信息',
+        button: '重新扫描所有页面',
+        working: '正在重新扫描所有页面…',
+        progress: '重新扫描…共 {total} 页中的 {done} 页',
+        progressIdle: '重新扫描…正在读取存储库',
+        done: '已重新扫描 {n} 页。',
+        partial: '已重新扫描 {n} 页。仍有 {e} 页失败 — 它们的扫描结论没有变化，因此这些页面仍会阻止发布。',
+        noKey: '服务器接受了重新扫描，但未返回运行 ID，因此无法跟踪其进度。没有报告任何结果。',
+        missing: '此服务器不支持重新扫描（404）。没有任何更改 — 扫描失败的页面仍在阻止发布。',
+        frozen: '重新扫描被拒绝：存储库正在发布（409）。没有任何更改。',
+        failed: '重新扫描失败。没有任何更改 — 扫描失败的页面仍在阻止发布。',
+        scanned: '已重新扫描 {n} 页',
+        clean: '无发现',
+        hit: '已标记',
+        error: '扫描错误',
+        vanished: '已消失',
+        stillBlocking: '仍在阻止'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1924,6 +1943,30 @@ export default {
       repoTagsHint:
         'Repository-level tags ({summary}) live on the repo, not this concept — manage them in the Tags panel in the right rail.'
     },
+    piiReview: {
+      title: '个人信息检查',
+      checking: '检查中…',
+      checkingBody: '正在读取每个页面的个人信息状态…',
+      unreadableTitle: '状态未知',
+      unreadableBody: '无法读取此存储库的个人信息状态。是否发现了任何内容属未知 — 这不是干净的结果。',
+      unscanned: '未扫描',
+      unscannedBody:
+        '没有完整的个人信息扫描覆盖此存储库（有 {n} 页从未扫描）。没有任何内容被确认不含个人信息 — 发布不是被命中阻止的，但此结论背后没有扫描。',
+      errorTitle: '扫描失败',
+      errorBody: '{n} 页无法扫描。它们的文本未被成功读取，因此是否包含个人信息属未知 — 它们并不干净，并且会阻止发布。',
+      unreviewed: '已标记，未复核',
+      unreviewedBody:
+        '扫描器在 {n} 页发现了可能的个人信息，且无人查看。发布仍被允许，但这些页面上没有任何内容经过复核。',
+      reviewed: '已标记，已复核',
+      reviewedBody: '{n} 页带有已标记的个人信息，已由策展人确认（{by}，{at}）。',
+      cleanVerdict: '已扫描 — 未发现',
+      cleanBody: '每个页面都已扫描，未发现个人信息。',
+      staleAck: '先前的确认于 {at} 标记了 {a} 页；现在有 {n} 页被标记，因此它并不涵盖它们。',
+      bannerTitle: '没有人复核过这些命中。',
+      bannerBody:
+        '发布仍然被允许，也没有任何关卡会阻止你 — 但被标记的页面将原样进入已发布的存储库。请逐个打开并在发布前做出决定。',
+      unknownActor: '未知'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2008,9 +2051,9 @@ export default {
       step3:
         'Kōmij riiti jikin ko am im kōpooj un ko. Un ko rej koba ippān doon ilo kakōl̦l̦e ko kwoj kāāleti. Ri-kōm̦m̦an eo ej lale em̦m̦an — ej kāālet bwe en dik un ko reim̦m̦an jān an el̦ap ak bōtata.',
       step4:
-        'Kakōl̦l̦e ko rej aolep kain laajrak ko am — ta kain men in un in? Kāālet 3-7 kakōl̦l̦e ko me rej bōk aolep melele; ri-kōm̦m̦an eo ej kōjerbali ñan ejaak an un ko.',
+        'Kakōl̦l̦e ko rej aolep kain laajrak ko am — ta kain men in un in? Guraayd ainn dy chòrree yn laa er y Réim Réy, fo myr Çá subject er y rívs shoh.',
       step5:
-        'Eñin ej aolepen jerbal eo. Kajojo un ej juon m̦ōttan dik in jel̦āl̦o̦kjen̦ me kwomaron̦ kōjerbale. Un ko rej bōk āt, melele, im kakōl̦l̦e ko kwoar kāāleti. Jerbal eo am ej bwe en alikkar: ukōt āt ko rejjab alikkar, kobaik men ko reāinwōt doon, jol̦o̦k men ko ejjel̦o̦k jikin aer itok jān e.',
+        'Eñin ej aolepen jerbal eo. Kajojo un ej juon m̦ōttan dik in jel̦āl̦o̦kjen̦ me kwomaron̦ kōjerbale. Un ko rej bōk āt, melele, im laa Labels ayn y Réim Réy. Jerbal eo am ej bwe en alikkar: ukōt āt ko rejjab alikkar, kobaik men ko reāinwōt doon, jol̦o̦k men ko ejjel̦o̦k jikin aer itok jān e.',
       step6:
         'We run conformance checks: does every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before you hand the repository off; warnings can be acknowledged.',
       step7:
@@ -2219,6 +2262,20 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2228,11 +2285,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Kāālet kakōl̦l̦e ko',
-        hint: 'Kakōl̦l̦e ko rej aolep kain laajrak ko am — ta kain men in un kein? Kāālet 3-7.',
-        add: '+ Kobaiki kakōl̦l̦e',
-        addConfirm: 'Kobaiki',
-        placeholder: 'āinwōt Peba in kōmāl̦im',
+        title: 'Labels — automateet',
+        hint: 'Gur Labels ainn dy chòrree yn laa er y Réim Réy — fo myr Çá subject er y rívs shoh.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
@@ -2495,12 +2549,42 @@ export default {
           'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
         index_failed:
           'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
       }
     },
     pii: {
       panel: 'Men ko ewōr kakōl̦l̦e ie',
       nFlagged: '{n} soto',
       rescan: 'Scan kuta',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
       scanning: 'Scan…',
       clean: 'Flagged entities amatta yaode — concept asi clear oire.',
       how: 'Fix: remove nattraga reword tou (e.g. name gi mahutta role), aduga save tou — re-scan na list asi update touba ngamgani.',
@@ -2721,6 +2805,14 @@ export default {
         floor:
           'Kajjitōk in ejab naan ko ilo repo in (score eo ej jab elōn floor eo) — tag ko enaj jab kōm̦m̦an melele; kōnka ej suppress eo em̦ōj.',
         rejected: 'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
       },
       suites: {
         generate: 'Generate test suite',

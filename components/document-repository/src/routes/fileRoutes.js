@@ -1,7 +1,7 @@
 const express = require('express');
 const fileController = require('../controllers/fileController');
 const appConfig = require('../config/appConfig');
-const { uploadSingle, uploadMultiple, validateFiles } = require('../middlewares/fileUpload');
+const { uploadSingle, uploadMultiple, validateFiles, handleMulterError } = require('../middlewares/fileUpload');
 const { authenticateToken, authorizeRole } = require('../middlewares/keycloak-auth-middleware');
 
 const router = express.Router();
@@ -48,7 +48,26 @@ router.use(authenticateToken);
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/upload', authorizeRole(['Admin']), uploadSingle, validateFiles, fileController.uploadFile);
+// handleMulterError sits immediately after the multer middleware (and before
+// validateFiles) because that is where Express reaches it: when fileFilter
+// calls cb(new Error(...)), multer forwards the error with next(err), and the
+// router then skips every remaining 3-arg layer in this stack until it hits a
+// 4-arg error handler. Without it the error ran past this route entirely and
+// landed in app.js's global errorHandler, which has no branch for it → a
+// client-side "csv is not allowed" (a 400 by design; see the allowlist in
+// config/appConfig.js and the [NOT PLANNED] csv/json rows in the OKF
+// import-scope gap analysis) was answered 500 Internal Server Error with the
+// reason discarded. Production evidence 2026-10-12: POST /api/files/upload
+// with a .csv → 500. Note there was no "Handling custom file filter error"
+// warn line in the log — proof this handler was never reached.
+router.post(
+  '/upload',
+  authorizeRole(['Admin']),
+  uploadSingle,
+  handleMulterError,
+  validateFiles,
+  fileController.uploadFile
+);
 
 /**
  * @swagger
@@ -91,7 +110,17 @@ router.post('/upload', authorizeRole(['Admin']), uploadSingle, validateFiles, fi
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, validateFiles, fileController.uploadMultipleFiles);
+// Same reasoning as /upload above: uploadMultiple's fileFilter rejection has
+// to be caught by a 4-arg handler inside this route's own middleware stack,
+// or it becomes a 500 from the global handler.
+router.post(
+  '/uploads',
+  authorizeRole(['Admin']),
+  uploadMultiple,
+  handleMulterError,
+  validateFiles,
+  fileController.uploadMultipleFiles
+);
 
 /**
  * @swagger

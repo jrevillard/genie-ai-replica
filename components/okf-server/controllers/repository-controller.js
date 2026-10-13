@@ -633,17 +633,25 @@ async function deleteRepo(req, res, next) {
 }
 
 /**
- * Story 2.8 — PII scan. Two modes (AC 9):
+ * Story 2.8 — PII scan. Four modes (AC 9):
  *  - {concepts: [{concept_id, frontmatter, body}]} — explicit (2.9.1/7.2 call
  *    the service directly in production; the endpoint exists for steward use).
  *  - {file_ids: [...]} or {discover: true} — scan the repo's uploaded
  *    plain-.md files (found via the okf_repo_id stamp from Story 2.5).
+ *  - {scope: 'concepts'} — REPO-WIDE CONCEPT RESCAN: enumerate every
+ *    concept_id of the repo from okf_concepts_meta and run the real
+ *    persisting scanConcept on each. This is the mode the publish gate's
+ *    subjects need (the gate reads pii_state on the concept ROWS, not on
+ *    source files), and it is what clears a concept stuck in pii_state
+ *    'error'. It is ASYNC — 202 + poll, because 141 concepts x one sidecar
+ *    round-trip each cannot finish inside a gateway timeout. Poll with
+ *    GET /:repo_id/pii-scan/:scan_key.
  * On success with file input, records the FR-3 ingest version.
  */
 async function piiScan(req, res, next) {
   try {
     const { repo_id } = req.params;
-    const { concepts, file_ids, discover } = req.body || {};
+    const { concepts, file_ids, discover, scope } = req.body || {};
 
     // Repo-existence + authorization gate (mirrors every other mutating route) —
     // fail BEFORE writing any meta docs (code-review fix #7). A repo outside
@@ -654,6 +662,29 @@ async function piiScan(req, res, next) {
     // and would flag/unflag content under a version being indexed. Frozen
     // with everything else (the panel's read-only inspect stays available).
     assertWritable(repoDoc);
+
+    // Repo-wide concept rescan: ASYNC (202 + poll). The 202+poll idiom is the
+    // codebase's established one for long jobs (head-suite beginRunSuite) —
+    // NOT a new shape. The drain freeze above applies here too: this mode
+    // overwrites pii_state on EVERY concept row.
+    if (scope === 'concepts') {
+      const { scan_key, done } = await piiService.beginRepoConceptScan(repo_id, { actor: actorFrom(req) });
+      done.catch(() => {}); // the service logs + records the failure doc
+      auditService
+        .writeAudit({
+          action: 'repo.pii_concept_scan',
+          actor: actorFrom(req).sub,
+          actor_name: actorFrom(req).name,
+          repo_id,
+          source_ip: req.ip,
+          description: `PII repo-wide concept rescan queued — ${scan_key}`,
+          details: { scan_key }
+        })
+        .catch(() => {
+          /* best-effort */
+        });
+      return res.status(202).json({ repo_id, scan_key, status: 'running' });
+    }
 
     let inputs = [];
     let sourceFileIds = [];
@@ -666,7 +697,7 @@ async function piiScan(req, res, next) {
       inputs = await piiService.discoverRepoFiles(repo_id);
       sourceFileIds = inputs.map((c) => c.file_id);
     } else {
-      throw new ValidationError(['body must contain concepts[], file_ids[], or discover:true']);
+      throw new ValidationError(['body must contain concepts[], file_ids[], discover:true, or scope:"concepts"']);
     }
 
     const results = [];
@@ -681,6 +712,21 @@ async function piiScan(req, res, next) {
         file_id: sourceFileIds[0],
         curator: { sub: actorFrom(req).sub, name: actorFrom(req).name } // no source_ip
       });
+    }
+
+    // NO FALSE ATTESTATION: a scan that examined NOTHING must not stamp the
+    // repo "PII scanned / complete". Discovery legitimately finds zero rows
+    // (sources stamped with okf_repo_id rather than repo_id, or all-binary
+    // sources), and the old unconditional stamp turned that into a
+    // compliance claim for content nobody looked at. Fail loudly instead.
+    if (results.length === 0) {
+      const err = new Error(
+        `PII scan examined no content for repo ${repo_id} — the repository was NOT marked PII-scanned. ` +
+          'Use {scope:"concepts"} to rescan the concepts the publish gate actually reads.'
+      );
+      err.code = 'PII_SCAN_NOTHING_SCANNED';
+      err.status = 400;
+      throw err;
     }
 
     // Mark the repo PII-scanned (unscanned content blocks publish — gate #3).
@@ -716,6 +762,26 @@ async function piiScan(req, res, next) {
       gate,
       ...(version ? { version } : {})
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/okf/repos/:repo_id/pii-scan/:scan_key — the poll for the ASYNC
+ * repo-wide concept rescan (POST /:repo_id/pii-scan {"scope":"concepts"}).
+ * Read scope, mirroring the suite-run poll: {status:'running', progress}
+ * keep waiting, {status:'failed', error} is terminal, otherwise the full
+ * tally {scanned, clean, hit, error, missing, results[], gate}.
+ */
+async function getPiiConceptScan(req, res, next) {
+  try {
+    const { repo_id, scan_key } = req.params;
+    // Anti-enumeration: a repo outside the caller's scopes 404s identically
+    // to a missing one, exactly like every other read on this router.
+    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const doc = await piiService.getRepoConceptScan(repo_id, scan_key);
+    res.status(200).json(doc);
   } catch (err) {
     next(err);
   }
@@ -1502,6 +1568,64 @@ async function revertFrontmatter(req, res, next) {
 }
 
 /**
+ * Story 10.5 — GET /api/okf/repos/:repo_id/draft.
+ * The wizard's resumable curation state. Read scope (inherited from the
+ * okf-routes router gate). `draft:null` means "repo exists, no draft yet" —
+ * NEVER a 404, so the resume UI can tell that apart from a missing endpoint
+ * (whose 404 it already maps to NOT_READY).
+ */
+async function getStudioDraft(req, res, next) {
+  try {
+    const studioDraftService = require('../services/studio-draft-service');
+    const result = await studioDraftService.getDraft(req.params.repo_id, {
+      authz: authzForService(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 10.5 — PUT /api/okf/repos/:repo_id/draft.
+ * Upserts the flat wire draft (the store passes its whole draft object
+ * through unchanged). Admin-scoped. Deliberately does NOT touch
+ * okf_repositories.studio_step — that pointer keeps exactly one writer (the
+ * audited, lifecycle-guarded PATCH /:repo_id), so this route never doubles the
+ * audit rows directive G4 removed from the wizard.
+ */
+async function putStudioDraft(req, res, next) {
+  try {
+    const studioDraftService = require('../services/studio-draft-service');
+    const result = await studioDraftService.saveDraft(req.params.repo_id, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 10.5 — DELETE /api/okf/repos/:repo_id/draft.
+ * Idempotent 200 (`deleted:false` when there was nothing to remove) so the
+ * frontend's `catch -> {ok:true}` stays correct. Admin-scoped.
+ */
+async function deleteStudioDraft(req, res, next) {
+  try {
+    const studioDraftService = require('../services/studio-draft-service');
+    const result = await studioDraftService.clearDraft(req.params.repo_id, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Story 1-8c — POST /api/okf/repos/:repo_id/routing-explain.
  * Explains one query's gate outcome; when it (wrongly) CLAIMS, proposes
  * forbidden tags that would exclude it. Admin-scoped — may burn one LLM
@@ -1689,16 +1813,41 @@ async function getTestSuiteRun(req, res, next) {
 /**
  * Story 1-8c — POST /api/okf/repos/:repo_id/routing-testsuite/:suite_key/explain.
  * BATCH advice for the latest run of the suite: every failing negative in
- * one pass, ONE LLM call, consolidated suggested forbidden tags. Admin-scoped.
+ * one pass, consolidated suggested forbidden tags. Admin-scoped.
+ *
+ * 1-8g-y: now ASYNC — 202 + poll, like the run endpoint. Explain fans out
+ * over the shared remote GPU node (one embed per failing negative in
+ * guardSuggestions, plus the LLM pass), so the synchronous version outran
+ * the gateway: the curator saw a spinner, no local GPU activity (the work
+ * is not local), and then a 504 — with the advice never reaching the UI.
+ * The placeholder doc carries status:'running'; the poll endpoint answers
+ * running / failed / the finished advice.
  */
 async function explainTestSuiteFailures(req, res, next) {
   try {
     const headSuiteService = require('../services/head-suite-service');
-    const result = await headSuiteService.explainSuiteFailures(req.params.repo_id, req.params.suite_key, {
+    const { run_key, done } = await headSuiteService.beginExplainFailures(req.params.repo_id, req.params.suite_key, {
       authz: authzForService(req),
       actor: actorFrom(req)
     });
-    res.status(200).json(result);
+    done.catch(() => {}); // the service logs + records the failure doc
+    res.status(202).json({ run_key, status: 'running' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * 1-8g-y — GET /repos/:repo_id/routing-testsuite/:suite_key/explain/:run_key.
+ * The async explain's poll: {status:'running'} keep waiting, {status:'failed',
+ * error}, or the finished advice in payload. Read scope (same as the runs
+ * listing and the load-one-run path).
+ */
+async function getExplainFailures(req, res, next) {
+  try {
+    const headSuiteService = require('../services/head-suite-service');
+    const doc = await headSuiteService.getExplainFailures(req.params.repo_id, req.params.suite_key, req.params.run_key);
+    res.status(200).json(doc);
   } catch (err) {
     next(err);
   }
@@ -1734,6 +1883,9 @@ module.exports = {
   routingExplain,
   frontmatterHistory,
   revertFrontmatter,
+  getStudioDraft,
+  putStudioDraft,
+  deleteStudioDraft,
   recommendTagSet,
   generateTestSuite,
   addTestSuiteQueries,
@@ -1745,8 +1897,10 @@ module.exports = {
   probeTestSuiteQuery,
   runTestSuite,
   explainTestSuiteFailures,
+  getExplainFailures,
   listTestSuiteRuns,
   piiScan,
+  getPiiConceptScan,
   importRepoConcepts,
   retiredIngestRoute,
   getRepoValidation,

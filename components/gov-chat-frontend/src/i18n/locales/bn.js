@@ -1688,6 +1688,29 @@ export default {
       viewToggle: 'এডিটর ভিউ',
       paneLabel: 'প্যান ভিউ',
       saveFailed: 'সংরক্ষণ ব্যর্থ হয়েছে — আবার চেষ্টা করুন',
+      piiRescan: {
+        label: 'ব্যক্তিগত তথ্য',
+        button: 'সব পৃষ্ঠা পুনরায় স্ক্যান করুন',
+        working: 'সব পৃষ্ঠা পুনরায় স্ক্যান হচ্ছে…',
+        progress: 'পুনরায় স্ক্যান… {total}টির মধ্যে {done}টি পৃষ্ঠা',
+        progressIdle: 'পুনরায় স্ক্যান… রিপোজিটরি পড়া হচ্ছে',
+        done: '{n}টি পৃষ্ঠা পুনরায় স্ক্যান করা হয়েছে।',
+        partial:
+          '{n}টি পৃষ্ঠা পুনরায় স্ক্যান করা হয়েছে। {e}টি এখনও ব্যর্থ — তাদের স্ক্যান রায় বদলায়নি, তাই তাদের জন্য প্রকাশ এখনও বন্ধ।',
+        noKey:
+          'সার্ভার পুনরায় স্ক্যান গ্রহণ করেছে কিন্তু কোনো রান আইডি ফেরত দেয়নি, তাই তার অগ্রগতি অনুসরণ করা যায় না। কিছুই জানানো হয়নি।',
+        missing:
+          'এই সার্ভারে পুনরায় স্ক্যান উপলব্ধ নয় (404)। কিছুই বদলায়নি — যেসব পৃষ্ঠার স্ক্যান ব্যর্থ হয়েছিল তারা এখনও প্রকাশ বন্ধ রাখে।',
+        frozen: 'পুনরায় স্ক্যান প্রত্যাখ্যান: রিপোজিটরি প্রকাশ করা হচ্ছে (409)। কিছুই বদলায়নি।',
+        failed:
+          'পুনরায় স্ক্যান ব্যর্থ। কিছুই বদলায়নি — যেসব পৃষ্ঠার স্ক্যান ব্যর্থ হয়েছিল তারা এখনও প্রকাশ বন্ধ রাখে।',
+        scanned: '{n}টি পৃষ্ঠা পুনরায় স্ক্যান করা হয়েছে',
+        clean: 'পরিষ্কার',
+        hit: 'চিহ্নিত',
+        error: 'স্ক্যান ত্রুটি',
+        vanished: 'অদৃশ্য হয়েছে',
+        stillBlocking: 'এখনও বন্ধ রাখছে'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1936,6 +1959,33 @@ export default {
       repoTagsHint:
         'রিপোজিটরি-স্তরের ট্যাগ ({summary}) রিপোজিটরির, এই কনসেপ্টের নয় — ডানদিকের রেলের ট্যাগ প্যানেলে পরিচালনা করুন।'
     },
+    piiReview: {
+      title: 'ব্যক্তিগত তথ্য যাচাই',
+      checking: 'যাচাই করা হচ্ছে…',
+      checkingBody: 'প্রতিটি পৃষ্ঠার ব্যক্তিগত তথ্যের অবস্থা পড়া হচ্ছে…',
+      unreadableTitle: 'অবস্থা অজানা',
+      unreadableBody:
+        'এই রিপোজিটরির ব্যক্তিগত তথ্যের অবস্থা পড়া যায়নি। কিছু পাওয়া গেছে কি না তা অজানা — এটি পরিষ্কার ফলাফল নয়।',
+      unscanned: 'স্ক্যান করা হয়নি',
+      unscannedBody:
+        'এই রিপোজিটরিকে কোনো সম্পূর্ণ ব্যক্তিগত তথ্য স্ক্যান আওতায় আসেনি ({n}টি পৃষ্ঠা কখনও স্ক্যান হয়নি)। ব্যক্তিগত তথ্যমুক্ত বলে কিছুই জানা নেই — প্রকাশ কোনো পাওয়া ফলাফলে আটকে নয়, তবে এই রায়ের পেছনে কোনো স্ক্যান নেই।',
+      errorTitle: 'স্ক্যান ব্যর্থ',
+      errorBody:
+        '{n}টি পৃষ্ঠা স্ক্যান করা যায়নি। তাদের বিষয়বস্তু সফলভাবে পড়া হয়নি, তাই সেগুলোতে ব্যক্তিগত তথ্য আছে কি না তা অজানা — সেগুলো পরিষ্কার নয় এবং প্রকাশ বন্ধ রাখে।',
+      unreviewed: 'চিহ্নিত, পর্যালোচনা করা হয়নি',
+      unreviewedBody:
+        'স্ক্যানার {n}টি পৃষ্ঠায় সম্ভাব্য ব্যক্তিগত তথ্য পেয়েছে এবং কেউ সেগুলো দেখেননি। প্রকাশের অনুমতি আছে, তবে সেই পৃষ্ঠাগুলোর কিছুই পর্যালোচনা করা হয়নি।',
+      reviewed: 'চিহ্নিত, পর্যালোচিত',
+      reviewedBody: '{n}টি পৃষ্ঠায় চিহ্নিত ব্যক্তিগত তথ্য রয়েছে যা একজন তত্ত্বাবধানকারী স্বীকার করেছেন ({by}, {at})।',
+      cleanVerdict: 'স্ক্যান করা হয়েছে — কিছু পাওয়া যায়নি',
+      cleanBody: 'প্রতিটি পৃষ্ঠা স্ক্যান করা হয়েছে এবং কোনো ব্যক্তিগত তথ্য পাওয়া যায়নি।',
+      staleAck:
+        'পূর্ববর্তী স্বীকৃতিতে {at} তারিখে {a}টি চিহ্নিত পৃষ্ঠা লেখা হয়েছিল; এখন {n}টি চিহ্নিত, তাই এটি সেগুলোকে আওতায় আনে না।',
+      bannerTitle: 'কেউ এই ফলাফলগুলো পর্যালোচনা করেননি।',
+      bannerBody:
+        'প্রকাশ এখনও অনুমোদিত এবং কোনো বাধা আপনাকে থামাবে না — তবে চিহ্নিত পৃষ্ঠাগুলো হুবহু তেমনিই প্রকাশিত রিপোজিটরিতে প্রবেশ করবে। প্রতিটি খুলে দেখুন এবং প্রকাশের আগে সিদ্ধান্ত নিন।',
+      unknownActor: 'অজানা'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2021,9 +2071,9 @@ export default {
       step3:
         'আমরা আপনার উৎসগুলি পড়ছি এবং বিষয় প্রস্তাব করছি। আপনার বেছে নেওয়া বিভাগ লেবেলের অধীনে বিষয়গুলি ক্লাস্টার হয়। প্রযোজক রক্ষণশীল — এটি অনেক কোলাহলপূর্ণ বিষয়ের চেয়ে কম, সুগঠিত বিষয় প্রস্তাব করতে পছন্দ করে।',
       step4:
-        'লেবেল হলো আপনার তত্ত্বের শ্রেণিবদ্ধ অক্ষ — এই বিষয়টি কী ধরনের জিনিস? ৩-৭টি লেবেল বেছে নিন যা মূল অক্ষগুলিকে ধরে রাখে; প্রযোজক তাদের বিষয় শ্রেণিবিন্যাসের কাঠামো হিসেবে ব্যবহার করে।',
+        'লেবেল হলো আপনার তত্ত্বের শ্রেণিবদ্ধ অক্ষ — এই বিষয়টি কী ধরনের জিনিস? জ্ঞান-শ্রেণিবদ্ধতা থেকে স্বয়ংক্রিয়ভাবে নির্ধারিত হয় এবং এই রিপোজিটরির বিষয়ক্ষেত্রের মধ্যে সীমাবদ্ধ।',
       step5:
-        'এটি কাজের মূল অংশ। প্রতিটি বিষয় জ্ঞানের একটি ছোট, উদ্ধৃতিযোগ্য একক। বিষয়গুলি একটি শিরোনাম, একটি বিবরণ পায় এবং আপনার বেছে নেওয়া লেবেলগুলি গ্রহণ করে। আপনার কাজ হলো এটিকে নির্ভরযোগ্য করা: অস্পষ্ট শিরোনামের নাম পরিবর্তন করুন, সদৃশগুলি একত্রিত করুন, উৎসহীন বিষয়গুলি বাদ দিন।',
+        'এটি কাজের মূল অংশ। প্রতিটি বিষয় জ্ঞানের একটি ছোট, উদ্ধৃতিযোগ্য একক। বিষয়গুলি একটি শিরোনাম, একটি বিবরণ পায় এবং জ্ঞান-শ্রেণিবদ্ধতা থেকে লেবেল পায়। আপনার কাজ হলো এটিকে নির্ভরযোগ্য করা: অস্পষ্ট শিরোনামের নাম পরিবর্তন করুন, সদৃশগুলি একত্রিত করুন, উৎসহীন বিষয়গুলি বাদ দিন।',
       step6:
         'আমরা সঙ্গতি পরীক্ষা চালাই: প্রতিটি বিষয়ের কি শিরোনাম আছে? লেবেলগুলি কি বৈধ? উৎস কৃতিত্বগুলি কি অক্ষত? ভান্ডার হস্তান্তরের আগে বাধাদানকারী সমস্যাগুলি ঠিক করতে হবে; সতর্কতাগুলি স্বীকার করা যেতে পারে।',
       step7:
@@ -2232,6 +2282,20 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2241,11 +2305,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'লেবেল বেছে নিন',
-        hint: 'লেবেল হলো আপনার তত্ত্বের শ্রেণিবদ্ধ অক্ষ — এই বিষয়গুলি কী ধরনের জিনিস? ৩-৭টি বেছে নিন।',
-        add: '+ লেবেল যোগ করুন',
-        addConfirm: 'যোগ করুন',
-        placeholder: 'উদাঃ পারমিট',
+        title: 'লেবেল — স্বয়ংক্রিয়',
+        hint: 'লেবেলগুলো জ্ঞান-শ্রেণিবদ্ধতা থেকে স্বয়ংক্রিয়ভাবে নির্ধারিত হয় এবং এই রিপোজিটরির বিষয়ক্ষেত্রের মধ্যে সীমাবদ্ধ।',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
@@ -2510,12 +2571,42 @@ export default {
           'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
         index_failed:
           'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
       }
     },
     pii: {
       panel: 'চিহ্নিত সত্ত্বা',
       nFlagged: '{n} টি পাওয়া গেছে',
       rescan: 'পুনরায় স্ক্যান করুন',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
       scanning: 'স্ক্যান করা হচ্ছে…',
       clean: 'কোনো চিহ্নিত সত্তা নেই — এই concept পরিষ্কার।',
       how: 'সমাধান: মুছে ফেলুন বা পরিবর্তন করুন (যেমন নামের পরিবর্তে ভূমিকা লিখুন), তারপর সেভ করুন — পুনরায় স্ক্যান এই তালিকা আপডেট করবে।',
@@ -2738,6 +2829,14 @@ export default {
         floor:
           'কোয়েরিটি এই রিপোজিটরির বিষয়বস্তুর সাথে সম্পর্কিত নয় (স্কোর ডোমেনের ন্যূনতম সীমার নিচে) — ট্যাগ পরিবর্তনে এটি ঠিক হয় না; এটি সঠিক বর্জন।',
         rejected: 'গার্ডরেল দ্বারা বাতিল — একটি নিষিদ্ধ ট্যাগ এই রিপোজিটরির নিজস্ব বিষয়ের সাথে মিলতে পারে না।'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
       },
       suites: {
         generate: 'Generate test suite',

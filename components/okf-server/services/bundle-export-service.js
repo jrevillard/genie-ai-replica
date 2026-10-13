@@ -8,17 +8,34 @@
 // bundles reach doc-repo via ingest-service [4g]; editor-built repos had NO
 // artifact at all — this service closes that gap at publish time.
 //
-// Supersede policy: exactly ONE live bundle per repo (the ingest worker's
-// getBundleFileId cache + the bundle state machine both assume a single
-// bundle). Publishing version N deletes the superseded (older) zips and
-// stores the new one; version HISTORY lives in the okf_versions ledger
-// (INSERT-only), not in doc-repo files.
+// Supersede policy: LIVE FOREVER (WS3, David, 2026-09-25). There is exactly
+// ONE bundle PER PUBLISH VERSION and none are ever superseded — publishing
+// version N appends <repo>-v<N>.zip and leaves every earlier zip in place.
+// The superseded-bundle DELETE that this file used to perform is gone
+// (supersedeOldBundles removed; see the note at exportBundle and the
+// "live-forever contract" suite in __tests__/bundle-export-service.test.js,
+// which asserts no DELETE is issued against prior bundle docs).
 //
-// Status note: an exported bundle is born at dataprep.status='Ingested' —
-// justified, not a bypass of the "never born Ingested" directive: the mint
-// publish gate (version-service) already guarantees every concept is indexed,
-// so the bundle's content IS in the graph at export time. The crawler intake
-// path keeps its Pending → Ingesting → Ingested progression.
+// CONSEQUENCE: a repo at v20 has TWENTY zips in the document repository.
+// Anything that reasons about "the repo's bundle" must scope by
+// bundle_version, never by "the latest one" or by a bare limit — a bare
+// limit=1 against this collection silently picks ONE of twenty.
+//
+// The remove() cascade deletes a repo's bundles on RETRACT (see
+// backing-file-service.retractBackingFiles), so the accumulation is bounded
+// by repo lifetime, not unbounded. Backfill of pre-WS3 zips is NOT required:
+// the live-forever policy has held since 2026-09-25.
+//
+// Status note: a bundle's 'Ingested' badge is EARNED, not assumed. Export
+// writes 'Pending' unless the repo already carries ingested_at; the settle
+// flip (lifecycle-service -> backingFileService.markIngested, at the moment
+// ingested_at is set) upgrades it once the drain actually completes. The
+// previous unconditional 'Ingested' was wrong: the mint gate proves concepts
+// are INDEXED, which is not the same as the repo being DRAINED — Bali-
+// wikipedia-LLM sat at lifecycle_state=publish with ingested_at=null while
+// all twenty of its zips displayed as ingested. Do not reintroduce the
+// shortcut. The crawler intake path keeps its own Pending → Ingesting →
+// Ingested progression.
 
 const AdmZip = require('adm-zip');
 const matter = require('gray-matter');
@@ -158,18 +175,36 @@ async function exportBundle(repo, actor) {
       );
     }
 
-    // The concepts are already indexed (mint gate) — the bundle is born at
-    // 'Ingested' (see header). Best-effort: the artifact exists either way.
+    // The concepts are indexed (mint gate), but "indexed" is NOT "this repo is
+    // drained" — the bundle badge used to say 'Ingested' unconditionally, so
+    // a published-but-never-ingested repo showed every version as ingested
+    // (David, 2026-10-12: "Right now there is no bali data ingested at all.
+    // Having multiple versions of this file displaying in the document
+    // repository as ingested should never happen.").
+    //
+    // So the badge is earned, not assumed: 'Ingested' only when the repo
+    // already carries ingested_at; otherwise 'Pending', which the settle flip
+    // (lifecycle-service -> backingFileService.markIngested) upgrades the
+    // moment the drain actually completes.
+    const drained = Boolean(repo.ingested_at);
+    const bundleStatus = drained ? 'Ingested' : 'Pending';
     const storedAt = new Date().toISOString();
     if (fileId) {
       try {
         await authedAxios.patch(
           `${config.documentRepository.url}/api/files/${encodeURIComponent(fileId)}/status`,
-          { dataprep: { status: 'Ingested' } },
+          { dataprep: { status: bundleStatus } },
           { timeout: 10000 }
         );
+        logger.info('Bundle status set at export', {
+          repo_id: repoId,
+          file_id: fileId,
+          bundle_version: bundleVersion,
+          status: bundleStatus,
+          repo_drained: drained
+        });
       } catch {
-        logger.warn('Bundle status set to Ingested failed (non-fatal)', { repo_id: repoId, file_id: fileId });
+        logger.warn('Bundle status set failed (non-fatal)', { repo_id: repoId, file_id: fileId });
       }
       // WS3: link this bundle to the version manifest (Versions menu shows
       // it as a download link per row). Best-effort — the bundle itself

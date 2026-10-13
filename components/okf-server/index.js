@@ -83,6 +83,20 @@ if (require.main === module) {
       require('./services/head-suite-service')
         .sweepInterruptedRuns()
         .catch((err) => logger.error('Head-suite run boot sweep failed (non-fatal)', { error: err.message }));
+      // Story 10.5: same shape for the Studio wizard's resumable curation draft —
+      // TTL-reap drafts idle past OKF_STUDIO_DRAFT_TTL_DAYS and any whose repo
+      // is gone (incl. repos deleted before the cascade shipped). Boot-only
+      // would never reap in a quiet studio, so saveDraft also triggers this
+      // through the same throttled entry point.
+      require('./services/studio-draft-service')
+        .sweepStaleDrafts()
+        .catch((err) => logger.error('Studio draft boot sweep failed (non-fatal)', { error: err.message }));
+      // Same self-heal for async repo-wide PII concept rescans: the in-memory
+      // scan lock dies with the process, so every 'running' placeholder after
+      // a restart is an orphan whose poll would otherwise spin forever.
+      require('./services/pii-service')
+        .sweepInterruptedScans()
+        .catch((err) => logger.error('PII scan boot sweep failed (non-fatal)', { error: err.message }));
     });
 }
 

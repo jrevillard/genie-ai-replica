@@ -1662,6 +1662,20 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     }
 
     const all = [...suite.payload.positive.map((q) => ({ ...q })), ...suite.payload.negative.map((q) => ({ ...q }))];
+    // 1-8g-x (David: "the UI should show a progress bar for the run"): the
+    // worker reports {phase, done, total} through opts.reportProgress — the
+    // async caller (beginRunSuite) throttles it into the placeholder doc so
+    // the poll renders a REAL bar, not a fake animation. Phase-boundary
+    // reports are awaited; per-item reports are fire-and-forget.
+    const report = async (progress) => {
+      if (!opts.reportProgress) return;
+      try {
+        await opts.reportProgress(progress);
+      } catch (e) {
+        logger.warn('head-suite.run.progress_report_failed', { suite_key: suiteKey, error: e.message });
+      }
+    };
+    await report({ phase: 'routing', done: 0, total: all.length });
     // 1-8g-v: the head legs run 4-WAY concurrent (the probe pool's pattern)
     // — a 200-row suite took ~40-60s SERIAL just for the head legs (live:
     // Indonesia History 100+100 blew the gateway's 60s on its own); the
@@ -1669,6 +1683,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     const results = new Array(all.length);
     const RUN_CONCURRENCY = 4;
     const runQueue = all.map((q, i) => ({ q, i }));
+    let headDone = 0;
     const runWorker = async () => {
       for (;;) {
         const item = runQueue.shift();
@@ -1719,6 +1734,10 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             error: e.message
           };
         }
+        headDone += 1;
+        if (opts.reportProgress) {
+          opts.reportProgress({ phase: 'routing', done: headDone, total: all.length }).catch(() => {});
+        }
       }
     };
     await Promise.all(Array.from({ length: Math.min(RUN_CONCURRENCY, runQueue.length) }, runWorker));
@@ -1734,6 +1753,8 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       const t0 = Date.now();
       const PROBE_CONCURRENCY = 4;
       const queue = all.slice();
+      const probeTotal = new Set(all.map((q) => q.query)).size;
+      await report({ phase: 'corpus', done: 0, total: probeTotal });
       const probeMap = new Map();
       const worker = async () => {
         for (;;) {
@@ -1741,6 +1762,9 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           if (!q) return;
           if (probeMap.has(q.query)) continue; // same text can sit in both arrays
           probeMap.set(q.query, await probeQueryLight(db, graphName, q.query));
+          if (opts.reportProgress) {
+            opts.reportProgress({ phase: 'corpus', done: probeMap.size, total: probeTotal }).catch(() => {});
+          }
         }
       };
       await Promise.all(Array.from({ length: Math.min(PROBE_CONCURRENCY, queue.length) }, worker));
@@ -1911,7 +1935,23 @@ async function beginRunSuite(repoId, suiteKey, opts = {}) {
     positives: Array.isArray(suite.payload && suite.payload.positive) ? suite.payload.positive.length : 0,
     negatives: Array.isArray(suite.payload && suite.payload.negative) ? suite.payload.negative.length : 0
   });
-  const done = runSuite(repoId, suiteKey, { ...opts, runKey, startedAt: placeholder.created_at })
+  // 1-8g-x: the worker's progress reports land in the placeholder doc
+  // (throttled — a 200-probe run would otherwise hammer the DB) so the
+  // poll can render a real bar. Write failures never fail the run.
+  const PROGRESS_WRITE_MIN_MS = 2000;
+  let lastProgressWrite = 0;
+  const reportProgress = async (progress) => {
+    const now = Date.now();
+    if (now - lastProgressWrite < PROGRESS_WRITE_MIN_MS) return;
+    lastProgressWrite = now;
+    await db
+      .collection(HEAD_TEST_RUNS_COLLECTION)
+      .update(runKey, { progress, updated_at: new Date().toISOString() })
+      .catch((e) => {
+        logger.warn('head-suite.run.progress_write_failed', { run_key: runKey, error: e.message });
+      });
+  };
+  const done = runSuite(repoId, suiteKey, { ...opts, runKey, startedAt: placeholder.created_at, reportProgress })
     .then((runDoc) => runDoc)
     .catch(async (e) => {
       // Replace the placeholder with the honest terminal failure. 1-8g-w:
@@ -1956,7 +1996,11 @@ async function getRunSuite(repoId, suiteKey, runKey) {
   const db = await dbService.getConnection();
   await ensureCollection(db);
   if (suiteRunRunning(suiteKey, runKey)) {
-    return { run_key: runKey, suite_key: suiteKey, status: 'running' };
+    // 1-8g-x: the live envelope carries the persisted progress ({phase,
+    // done, total}) so the UI's bar moves; the doc may briefly predate the
+    // first report (ms window between lock-set and placeholder-save).
+    const live = await loadSuiteDoc(db, repoId, runKey).catch(() => null);
+    return { run_key: runKey, suite_key: suiteKey, status: 'running', progress: (live && live.progress) || null };
   }
   const doc = await loadSuiteDoc(db, repoId, runKey); // same collection
   if (doc.repo_id !== repoId || doc.suite_key !== suiteKey) {
@@ -2124,6 +2168,162 @@ async function listRuns(repoId, payload = {}) {
  * makes ONE LLM call proposing a consolidated set of new forbidden tags
  * covering all failing subjects. Per-query notes explain each failure.
  */
+// In-flight explains, keyed by suite. Separate from suiteRunInFlight: a run
+// and an explain may legitimately overlap (you can explain the previous run
+// while the next one executes), but two explains of the same suite would
+// double-charge the shared embedding node for identical work.
+const explainInFlight = new Map();
+
+/**
+ * 1-8g-y — ASYNC Explain failures (202 + poll), mirroring beginRunSuite.
+ *
+ * Explain fans out over the SHARED REMOTE GPU node (ai.assembly.govstack
+ * global): one embed per failing negative inside guardSuggestions, plus an
+ * LLM pass. That is minutes of remote work behind a synchronous POST, so the
+ * gateway timed it out while the job kept running — the curator saw a spinner,
+ * no local GPU activity (the work is not local), and then a 504 with no
+ * result. The run endpoint solved exactly this with 202 + poll; explain needs
+ * the same shape.
+ *
+ * The suite AND a prior run are validated synchronously so the common
+ * mistakes stay instant 404s rather than becoming a 202 that fails later.
+ */
+async function beginExplainFailures(repoId, suiteKey, opts = {}) {
+  const db = await dbService.getConnection();
+  await ensureCollection(db);
+  const suite = await loadSuiteDoc(db, repoId, suiteKey);
+  if (suite.repo_id !== repoId) {
+    const err = new Error(`suite ${suiteKey} not found for repo ${repoId}`);
+    err.code = 'SUITE_NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
+  const runs = await (
+    await db.query(
+      'FOR r IN okf_head_test_runs FILTER r.repo_id == @k && r.suite_key == @s && r.kind == "run" ' +
+        'SORT r.created_at DESC LIMIT 1 RETURN r._key',
+      { k: repoId, s: suiteKey }
+    )
+  ).all();
+  if (!runs.length) {
+    const err = new Error(`no run found for suite ${suiteKey} — run the suite first`);
+    err.code = 'RUN_NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
+  const inflight = explainInFlight.get(suiteKey);
+  if (inflight) {
+    const err = new Error('an explain is already running for this suite');
+    err.code = 'EXPLAIN_IN_FLIGHT';
+    err.status = 409;
+    // Same shape as RUN_IN_FLIGHT: the client adopts the in-flight job and
+    // keeps polling instead of dead-ending on the error.
+    err.details = { run_key: inflight };
+    throw err;
+  }
+  const runKey = `x${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
+  explainInFlight.set(suiteKey, runKey);
+  const placeholder = {
+    _key: runKey,
+    repo_id: repoId,
+    kind: 'explain',
+    status: 'running',
+    suite_key: suiteKey,
+    created_at: new Date().toISOString(),
+    created_by: (opts.actor && opts.actor.user_id) || 'system',
+    payload: {}
+  };
+  try {
+    await db.collection(HEAD_TEST_RUNS_COLLECTION).save(placeholder);
+  } catch (e) {
+    // The lock is set BEFORE this awaited save; leaking it would wedge the
+    // suite behind a permanent EXPLAIN_IN_FLIGHT with no doc behind the key.
+    explainInFlight.delete(suiteKey);
+    throw e;
+  }
+  logger.info('head-suite.explain_started', { repo_id: repoId, suite_key: suiteKey, run_key: runKey });
+  const done = explainSuiteFailures(repoId, suiteKey, { ...opts, runKey })
+    .catch(async (e) => {
+      // The placeholder must reach a terminal state or the poll hangs on
+      // 'running' forever. Keep the mint time (it is the job's identity) and
+      // never leak a numeric driver code — the Arango driver sets e.code=409
+      // on write conflicts, which would mask the real error (same trap as
+      // beginRunSuite).
+      const code = typeof e.code === 'string' && e.code ? e.code : 'EXPLAIN_FAILED';
+      await db
+        .collection(HEAD_TEST_RUNS_COLLECTION)
+        .update(runKey, {
+          status: 'failed',
+          error: { code, message: e.message },
+          updated_at: new Date().toISOString()
+        })
+        .catch((dbErr) => {
+          logger.error('head-suite.explain.fail_persist_failed', {
+            repo_id: repoId,
+            suite_key: suiteKey,
+            run_key: runKey,
+            error: dbErr.message
+          });
+        });
+      throw e;
+    })
+    .finally(() => explainInFlight.delete(suiteKey));
+  done.catch((e) =>
+    logger.error('head-suite.explain.async_failed', {
+      repo_id: repoId,
+      suite_key: suiteKey,
+      run_key: runKey,
+      error: e.message
+    })
+  );
+  return { run_key: runKey, done };
+}
+
+/**
+ * 1-8g-y — the async explain's poll. `{status:'running'}` keep waiting,
+ * `{status:'failed', error}`, or the finished advice in `payload`.
+ */
+async function getExplainFailures(repoId, suiteKey, runKey) {
+  const db = await dbService.getConnection();
+  await ensureCollection(db);
+  if (explainInFlight.get(suiteKey) === runKey) {
+    // The live envelope comes from the Map, not the doc, so the very first
+    // poll after the 202 cannot read a placeholder that has not landed yet.
+    return { run_key: runKey, kind: 'explain', status: 'running', payload: {} };
+  }
+  let doc;
+  try {
+    doc = await db.collection(HEAD_TEST_RUNS_COLLECTION).document(runKey);
+  } catch (err) {
+    // Same not-found discriminator the rest of the codebase uses — the
+    // driver surfaces 404 as errorNum 1202/1204 depending on the path.
+    const code = err && (err.errorNum || err.statusCode || err.code);
+    if (code === 404 || code === 1202 || code === 1204) {
+      const e = new Error(`explain run ${runKey} not found`);
+      e.code = 'RUN_NOT_FOUND';
+      e.status = 404;
+      throw e;
+    }
+    throw err;
+  }
+  if (doc.repo_id !== repoId || doc.suite_key !== suiteKey) {
+    // Anti-enumeration: a key from another repo is "not found", not 403.
+    const e = new Error(`explain run ${runKey} not found`);
+    e.code = 'RUN_NOT_FOUND';
+    e.status = 404;
+    throw e;
+  }
+  return {
+    run_key: doc._key,
+    kind: 'explain',
+    status: doc.status || 'done',
+    payload: doc.payload || {},
+    error: doc.error || null,
+    created_at: doc.created_at,
+    updated_at: doc.updated_at
+  };
+}
+
 async function explainSuiteFailures(repoId, suiteKey, opts = {}) {
   return withSpan('okf.headsuite.explain_failures', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
@@ -2177,8 +2377,45 @@ async function explainSuiteFailures(repoId, suiteKey, opts = {}) {
       source: 'none',
       note: ''
     };
+    // Terminal write for the advice doc, in ONE place, so every exit below
+    // persists. In the async path (opts.runKey set) this UPDATES the
+    // placeholder minted by beginExplainFailures; otherwise it saves a fresh
+    // doc exactly as before.
+    //
+    // It has to be a helper rather than a block at the bottom: the
+    // "nothing to explain" branch returns early, and it used to return
+    // straight past the persist — which under the async path would leave the
+    // placeholder 'running' forever and the client polling a job that had
+    // already finished.
+    const finalize = async (status, error) => {
+      const terminal = { status, updated_at: new Date().toISOString(), payload: out };
+      if (error) terminal.error = error;
+      try {
+        if (opts.runKey) {
+          await db.collection(HEAD_TEST_RUNS_COLLECTION).update(opts.runKey, terminal);
+        } else {
+          await db.collection(HEAD_TEST_RUNS_COLLECTION).save({
+            _key: `x${Date.now()}-${crypto.randomUUID().slice(0, 6)}`,
+            repo_id: repoId,
+            kind: 'explain',
+            suite_key: suiteKey,
+            run_key: out.run_key,
+            created_at: new Date().toISOString(),
+            created_by: (opts.actor && opts.actor.user_id) || 'system',
+            ...terminal
+          });
+        }
+      } catch (e) {
+        logger.warn('head-suite.explain.persist_failed', { repo_id: repoId, error: e.message });
+      }
+    };
     if (!failing.length && !positiveKills.length) {
       out.note = 'no failures in the latest run — nothing to explain';
+      // Only the ASYNC path needs a terminal write here — a caller that
+      // invoked this directly already has `out` in hand and the long-standing
+      // contract is that an empty result persists nothing. A placeholder with
+      // no terminal write, by contrast, would poll 'running' forever.
+      if (opts.runKey) await finalize('done');
       return out;
     }
     let suggestionTags = [];
@@ -2248,20 +2485,7 @@ subject tags over query-specific ones. Respond with ONLY a JSON object:
           : `To improve the positive pass rate: remove or narrow ${removalTags.join(', ') || 'the vetoing forbidden tags'} — they suppress in-scope queries.`;
     }
     // Story 1-8d — persist the advice so cycles are auditable.
-    try {
-      await db.collection(HEAD_TEST_RUNS_COLLECTION).save({
-        _key: `x${Date.now()}-${crypto.randomUUID().slice(0, 6)}`,
-        repo_id: repoId,
-        kind: 'explain',
-        suite_key: suiteKey,
-        run_key: out.run_key,
-        created_at: new Date().toISOString(),
-        created_by: (opts.actor && opts.actor.user_id) || 'system',
-        payload: out
-      });
-    } catch (e) {
-      logger.warn('head-suite.explain.persist_failed', { repo_id: repoId, error: e.message });
-    }
+    await finalize('done');
     span.setAttribute('okf.headsuite.failing', failing.length);
     span.setAttribute('okf.headsuite.positive_kills', positiveKills.length);
     span.setAttribute('okf.headsuite.suggested', out.suggested_tags.length);
@@ -2727,6 +2951,8 @@ module.exports = {
   probeQueryLight,
   listRuns,
   explainSuiteFailures,
+  beginExplainFailures,
+  getExplainFailures,
   recommendTagSet,
   // test surface
   _internals: {

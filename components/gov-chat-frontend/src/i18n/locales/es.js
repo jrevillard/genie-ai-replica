@@ -1699,6 +1699,29 @@ export default {
       viewToggle: 'Vista de editor',
       paneLabel: 'Panel de vista',
       saveFailed: 'Error al guardar — reintentar',
+      piiRescan: {
+        label: 'Datos personales',
+        button: 'Reexaminar todas las páginas',
+        working: 'Reexaminando todas las páginas…',
+        progress: 'Reexaminando… {done} de {total} páginas',
+        progressIdle: 'Reexaminando… leyendo el repositorio',
+        done: '{n} página(s) reexaminada(s).',
+        partial:
+          '{n} página(s) reexaminada(s). {e} siguen fallando: su veredicto de escaneo no cambió, por lo que la publicación sigue bloqueada para ellas.',
+        noKey:
+          'El servidor aceptó el reescaneo pero no devolvió ningún identificador de ejecución, así que su progreso no puede seguirse. No se informó nada.',
+        missing:
+          'El reescaneo no está disponible en este servidor (404). No se cambió nada: las páginas cuyo escaneo falló siguen bloqueando la publicación.',
+        frozen: 'Reescaneo rechazado: el repositorio se está publicando (409). No se cambió nada.',
+        failed:
+          'El reescaneo falló. No se cambió nada: las páginas cuyo escaneo falló siguen bloqueando la publicación.',
+        scanned: '{n} página(s) reexaminada(s)',
+        clean: 'limpias',
+        hit: 'marcadas',
+        error: 'error de escaneo',
+        vanished: 'desaparecidas',
+        stillBlocking: 'Siguen bloqueando'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1948,6 +1971,33 @@ export default {
       repoTagsHint:
         'Las etiquetas a nivel de repositorio ({summary}) viven en el repositorio, no en este concepto — gestiónelas en el panel de etiquetas del raíl derecho.'
     },
+    piiReview: {
+      title: 'Comprobación de datos personales',
+      checking: 'Comprobando…',
+      checkingBody: 'Leyendo el estado de datos personales de cada página…',
+      unreadableTitle: 'Estado desconocido',
+      unreadableBody:
+        'No se pudo leer el estado de datos personales de este repositorio. Si se encontró algo se DESCONOCE: este no es un resultado limpio.',
+      unscanned: 'Sin escanear',
+      unscannedBody:
+        'Ningún escaneo completo de datos personales cubre este repositorio ({n} página(s) nunca escaneadas). No se sabe que estén libres de datos personales: la publicación no está bloqueada por hallazgos, pero no hay escaneo detrás de este veredicto.',
+      errorTitle: 'Escaneo fallido',
+      errorBody:
+        '{n} página(s) no pudieron escanearse. Su contenido NO se leyó correctamente, así que si contienen datos personales se DESCONOCE: no están limpias y bloquean la publicación.',
+      unreviewed: 'Marcadas, sin revisar',
+      unreviewedBody:
+        'El escáner encontró posibles datos personales en {n} página(s) y nadie los ha revisado. La publicación está permitida, pero nada en esas páginas ha sido revisado.',
+      reviewed: 'Marcadas, revisadas',
+      reviewedBody: '{n} página(s) contienen datos personales marcados que un custodio reconoció ({by} el {at}).',
+      cleanVerdict: 'Escaneado: no se encontró nada',
+      cleanBody: 'Todas las páginas se escanearon y no se encontraron datos personales.',
+      staleAck:
+        'Un reconocimiento anterior registró {a} página(s) marcada(s) el {at}; ahora hay {n}, así que no las cubre.',
+      bannerTitle: 'Nadie ha revisado estos hallazgos.',
+      bannerBody:
+        'La publicación sigue permitida y ninguna comprobación se lo impedirá, pero las páginas marcadas entrarán en el repositorio publicado tal cual. Abra cada una y decida antes de publicar.',
+      unknownActor: 'desconocido'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2035,9 +2085,9 @@ export default {
       step3:
         'Estamos analizando sus fuentes y proponiendo temas. Los temas se agrupan bajo las etiquetas de categoría que elija. El productor es conservador — prefiere sugerir un menor número de temas bien formulados antes que muchos imprecisos.',
       step4:
-        'Las etiquetas son los ejes categóricos de su ontología — ¿qué clase de entidad es este tema? Elija de 3 a 7 etiquetas que capturen los ejes principales; el productor las utiliza como estructura para la jerarquía de temas.',
+        'Las etiquetas son los ejes categóricos de su ontología — ¿qué clase de entidad es este tema? Se asignan automáticamente desde la Jerarquía de conocimiento, limitadas al Área Temática de este repositorio.',
       step5:
-        'Este es el núcleo del trabajo. Cada tema es una unidad pequeña y citable de conocimiento. Los temas reciben un título, una descripción y heredan las etiquetas seleccionadas. Su función es hacerlo riguroso: renombre títulos vagos, fusione duplicados cercanos y descarte los que no pueda respaldar con una fuente.',
+        'Este es el núcleo del trabajo. Cada tema es una unidad pequeña y citable de conocimiento. Los temas reciben un título, una descripción y reciben las etiquetas de la Jerarquía de conocimiento. Su función es hacerlo riguroso: renombre títulos vagos, fusione duplicados cercanos y descarte los que no pueda respaldar con una fuente.',
       step6:
         'Ejecutamos comprobaciones de conformidad: ¿cada tema tiene título? ¿Las etiquetas son válidas? ¿Las atribuciones de fuente están intactas? Los problemas bloqueantes deben corregirse antes de entregar el repositorio; las advertencias se pueden reconocer.',
       step7:
@@ -2247,6 +2297,20 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2256,11 +2320,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Seleccionar las etiquetas',
-        hint: 'Las etiquetas son los ejes categóricos de su ontología — ¿qué clases de entidades son estos temas? Elija de 3 a 7.',
-        add: '+ Añadir etiqueta',
-        addConfirm: 'Añadir',
-        placeholder: 'ej. Permisos',
+        title: 'Etiquetas — automatizadas',
+        hint: 'Las etiquetas se asignan automáticamente desde la Jerarquía de conocimiento — limitadas al Área Temática de este repositorio.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
@@ -2526,12 +2587,42 @@ export default {
           'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
         index_failed:
           'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
       }
     },
     pii: {
       panel: 'Entidades marcadas',
       nFlagged: '{n} encontradas',
       rescan: 'Volver a escanear',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
       scanning: 'Escaneando…',
       clean: 'Sin entidades marcadas — este concept está limpio.',
       how: 'Solución: elimínelo o cámbielo (p. ej., por el cargo en lugar del nombre), luego guarde — el nuevo escaneo actualiza esta lista.',
@@ -2758,6 +2849,14 @@ export default {
           'La consulta no guarda relación con la temática de este repositorio (puntuación por debajo del piso mínimo del dominio) — ningún cambio de etiquetas lo corrige; es un descarte correcto.',
         rejected:
           'Descartado por el guardián — una etiqueta prohibida no debe coincidir con el propio tema de este repositorio.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
       },
       suites: {
         generate: 'Generate test suite',

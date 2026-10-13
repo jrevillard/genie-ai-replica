@@ -10,7 +10,9 @@ jest.mock('../services/pii-service', () => ({
   discoverRepoFiles: jest.fn(),
   recordIngestVersion: jest.fn(),
   markRepoPiiScanned: jest.fn(),
-  assertPiiClean: jest.fn()
+  assertPiiClean: jest.fn(),
+  beginRepoConceptScan: jest.fn(),
+  getRepoConceptScan: jest.fn()
 }));
 jest.mock('../shared-lib/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
@@ -94,5 +96,91 @@ describe('piiScan controller (code-review #15)', () => {
     expect(caught.status).toBe(409);
     expect(piiService.scanConcept).not.toHaveBeenCalled();
     expect(piiService.markRepoPiiScanned).not.toHaveBeenCalled();
+  });
+
+  // ─── {scope:'concepts'} — the ASYNC repo-wide concept rescan ──────────────
+  it('scope:concepts answers 202 + scan_key and does NOT scan synchronously', async () => {
+    repoService.getById.mockResolvedValue({ repo_id: 'r1' });
+    piiService.beginRepoConceptScan.mockResolvedValue({ scan_key: 'p123-abcdef', done: Promise.resolve({}) });
+    const r = res();
+    await ctrl.piiScan(req({ scope: 'concepts' }, { repo_id: 'r1' }), r, () => {});
+    expect(piiService.beginRepoConceptScan).toHaveBeenCalledWith('r1', { actor: expect.any(Object) });
+    expect(r.__out.statusCode).toBe(202);
+    expect(r.__out.body).toEqual({ repo_id: 'r1', scan_key: 'p123-abcdef', status: 'running' });
+    // The synchronous scan loop must NOT run for this mode.
+    expect(piiService.scanConcept).not.toHaveBeenCalled();
+  });
+
+  it('scope:concepts is DRAIN-FROZEN too (it overwrites pii_state on EVERY row)', async () => {
+    repoService.getById.mockResolvedValue({ repo_id: 'r1', rag_drain_active: true });
+    const r = res();
+    let caught = null;
+    await ctrl.piiScan(req({ scope: 'concepts' }, { repo_id: 'r1' }), r, (e) => {
+      caught = e;
+    });
+    expect(caught.code).toBe('DRAIN_IN_PROGRESS');
+    expect(piiService.beginRepoConceptScan).not.toHaveBeenCalled();
+  });
+
+  it('scope:concepts surfaces an in-flight 409 with the adoptable scan_key', async () => {
+    repoService.getById.mockResolvedValue({ repo_id: 'r1' });
+    piiService.beginRepoConceptScan.mockRejectedValue(
+      Object.assign(new Error('busy'), {
+        code: 'PII_SCAN_IN_FLIGHT',
+        status: 409,
+        details: { scan_key: 'p999-aaaaaa' }
+      })
+    );
+    const r = res();
+    let caught = null;
+    await ctrl.piiScan(req({ scope: 'concepts' }, { repo_id: 'r1' }), r, (e) => {
+      caught = e;
+    });
+    expect(caught.code).toBe('PII_SCAN_IN_FLIGHT');
+    expect(caught.status).toBe(409);
+    expect(caught.details.scan_key).toBe('p999-aaaaaa');
+    expect(r.__out.statusCode).toBe(200); // nothing written
+  });
+
+  it('the poll endpoint returns the running/complete envelope', async () => {
+    repoService.getById.mockResolvedValue({ repo_id: 'r1' });
+    piiService.getRepoConceptScan.mockResolvedValue({
+      repo_id: 'r1',
+      scan_key: 'p1',
+      status: 'running',
+      progress: { phase: 'scanning', done: 3, total: 141 }
+    });
+    const r = res();
+    await ctrl.getPiiConceptScan({ params: { repo_id: 'r1', scan_key: 'p1' } }, r, () => {});
+    expect(piiService.getRepoConceptScan).toHaveBeenCalledWith('r1', 'p1');
+    expect(r.__out.statusCode).toBe(200);
+    expect(r.__out.body.progress).toEqual({ phase: 'scanning', done: 3, total: 141 });
+  });
+
+  it('the poll endpoint 404s a repo outside the caller scopes (anti-enumeration)', async () => {
+    repoService.getById.mockRejectedValue(Object.assign(new Error('nf'), { status: 404 }));
+    const r = res();
+    let caught = null;
+    await ctrl.getPiiConceptScan({ params: { repo_id: 'foreign', scan_key: 'p1' } }, r, (e) => {
+      caught = e;
+    });
+    expect(caught.status).toBe(404);
+    expect(piiService.getRepoConceptScan).not.toHaveBeenCalled();
+  });
+
+  // ─── NO FALSE ATTESTATION (defect 3d) ─────────────────────────────────────
+  it('a discovery that examined NOTHING does NOT stamp the repo PII-scanned', async () => {
+    repoService.getById.mockResolvedValue({ repo_id: 'r1' });
+    piiService.discoverRepoFiles.mockResolvedValue([]); // zero scannable files
+    const r = res();
+    let caught = null;
+    await ctrl.piiScan(req({ discover: true }, { repo_id: 'r1' }), r, (e) => {
+      caught = e;
+    });
+    expect(piiService.markRepoPiiScanned).not.toHaveBeenCalled();
+    expect(caught.code).toBe('PII_SCAN_NOTHING_SCANNED');
+    expect(caught.status).toBe(400);
+    expect(caught.message).toMatch(/was NOT marked PII-scanned/);
+    expect(r.__out.statusCode).toBe(200); // nothing written
   });
 });

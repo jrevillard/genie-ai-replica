@@ -16,12 +16,16 @@
 #     `kubectl apply -f` an AppProject manifest granting the repo + destinations
 #   - the target cluster is the current kubectl context
 #
-# HELM HOOKS UNDER ARGOCD: ArgoCD does run them. It maps the helm.sh/hook
-# types `pre-install` and `pre-upgrade` to its PreSync phase, and
-# `post-install` and `post-upgrade` to PostSync. So all three of this
-# chart's hooks DO run under ArgoCD: the pre-upgrade drift Jobs
-# (dependency check, cluster-profile detect) as PreSync, and the realm
-# convergence Job as PostSync.
+# HELM HOOKS UNDER ARGOCD: ArgoCD runs the sync-phase ones. It maps the
+# helm.sh/hook types `pre-install` and `pre-upgrade` to its PreSync phase,
+# and `post-install` and `post-upgrade` to PostSync. So this chart's
+# dependency-check resources and cluster-profile-detect Job run as
+# PreSync, and the realm convergence Job runs as PostSync.
+#
+# NOT covered — the chart's `helm.sh/hook: test` resources (the namespace
+# and stateless-reachability tests). ArgoCD has no phase for them and
+# does not run `helm test` on sync; execute them with `argocd app exec`
+# or a plain `helm test` against the namespace.
 #
 # Two consequences worth stating plainly:
 #   - They re-run on every sync, not only when what they watch changed.

@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **`$(env:VAR)` in the realm file is load-bearing — never change it to `${env:VAR}`.** Project rule from `_bmad-output/project-context.md`, written after a code-review commit (`f1eae7c`) made exactly that change and broke the import with `Cannot create realm '${env:KC_REALM}': HTTP 400 Bad Request`. The prefix/suffix are configurable via `IMPORT_VARSUBSTITUTION_PREFIX` / `_SUFFIX`, and `IMPORT_VARSUBSTITUTION_ENABLED=true` must stay set on the Job. This is why Task 1 uses `git mv` and touches no line of the file.
+- **`$(env:VAR)` in the realm file is load-bearing — never change it to `${env:VAR}`.** Project rule from `_bmad-output/project-context.md`, written after a code-review commit (`f1eae7c`) made exactly that change and broke the import with `Cannot create realm '${env:KC_REALM}': HTTP 400 Bad Request`. The prefix/suffix are configurable via `IMPORT_VARSUBSTITUTION_PREFIX` / `_SUFFIX`, and `IMPORT_VARSUBSTITUTION_ENABLED=true` must stay set on the Job. This is why Task 1 copies the file byte-for-byte and touches no line of it, in either location.
 - **Service name is `keycloak-service`, not `<release>-keycloak`.** Upstream `Constants.KEYCLOAK_SERVICE_SUFFIX = "-service"` (verified at tag 26.8.0); the CR's `metadata.name` is hardcoded `keycloak`. Port is `8080` (`Constants.KEYCLOAK_HTTP_PORT`).
 - **Every Keycloak URL in the chart carries `/auth`**, because D7 sets `additionalOptions: [{name: http-relative-path, value: /auth}]`. `templates/services/backend.yaml:6` and `documentRepository.yaml:17` already do.
 - **`additionalOptions` is a `List<ValueOrSecret>`** with fields `name`, `value`, `secret` (verified in `KeycloakSpec.java` at 26.8.0). The flag key is `http-relative-path`.
@@ -25,17 +25,18 @@
 - **kcc image tag is `adorsys/keycloak-config-cli:6.5.0-26`.** The `-26` suffix encodes the Keycloak major version; a Keycloak major bump requires a matching tag bump.
 - Do NOT modify `deploy/ansible/group_vars/**` (feature-branch vars.yml is forbidden). Pass values through `values-override.yaml` files instead.
 
-### Installation impact of the file move
+### Installation impact of the file copy
 
-The move changes **build-time wiring only**. Runtime behaviour is identical on both delivery paths:
+The copy changes **nothing** outside the chart. The compose and Swarm paths never read the chart's copy:
 
 | Path | What changes | What does not |
 |---|---|---|
-| `docker compose build` (dev) | `build.context` → `.`, `dockerfile` → full path | The image is byte-identical: the file still lands at `/config/genie-realm.yaml` in the image, so `IMPORT_FILES=/config/genie-realm.yaml` is unchanged. No runtime change. |
-| Ansible / Swarm (prod) | Nothing. Ansible never reads the repo path — it pulls `genie-ai-keycloak-config` from the registry (`deploy/ansible/tasks/deploy-shared-facts.yml:33` lists it as an image to pull). CI rebuilds that image with the new context. | The playbook is not touched. No vars.yml change. |
-| Docs | `deploy/ansible/README.md:730` references the old path and is updated. | — |
+| `docker compose build` (dev) | Nothing. `Dockerfile.config-cli` still COPYs `configs/keycloak/genie-realm.yaml` from the unchanged `configs/keycloak/` build context. | The image is bit-for-bit what it was. `IMPORT_FILES=/config/genie-realm.yaml` is unchanged. |
+| Ansible / Swarm (prod) | Nothing. Ansible pulls `genie-ai-keycloak-config` from the registry (`deploy/ansible/tasks/deploy-shared-facts.yml:33` lists it as an image); it never reads the repo path. | The playbook is not touched. No vars.yml change. No re-deploy needed for this task. |
+| Docs | Nothing. `deploy/ansible/README.md:730` still points at `configs/keycloak/genie-realm.yaml`, which still exists. | — |
 
-`.dockerignore` does not exclude `charts/`, so the moved file is present in a repo-root build context. If a future `.dockerignore` change ever excludes `charts/`, the `COPY` in `Dockerfile.config-cli` breaks with a build error — not a runtime one.
+Helm never invokes Docker, so the chart's copy and the image's copy have no runtime coupling — which is exactly why duplicating them is safe here and why the equivalence has to be asserted instead of structural.
+
 
 ---
 
@@ -49,162 +50,97 @@ The move changes **build-time wiring only**. Runtime behaviour is identical on b
 | `charts/genieai-umbrella/templates/data/keycloak-realm-secret.yaml` | **new** — the realm file rendered into a Secret from `.Files.Get` |
 | `charts/genieai-umbrella/templates/data/keycloak-realm-import.yaml` | **deleted** — kcc owns the realm |
 | `charts/genieai-umbrella/values.yaml` | convergence surface + D8 mapping comments; `bootstrapAdmin.user.{username,password}` removed |
-| `configs/keycloak/Dockerfile.config-cli` | `COPY` sources re-pathed to the repo-root context |
-| `docker-compose.yaml` | `keycloak-config.build.context` → `.` |
-| `.gitlab-ci.yml` | `build:keycloak-config` `CONTEXT` → `"."`; all three `keycloak-config` jobs' `rules:changes:paths` gain the chart path |
+| `.gitlab-ci.yml` | `chart:lint` gains the drift `diff` assertion and a `configs/keycloak/**/*` change trigger |
 
 ---
 
-### Task 1: Move the realm file into the chart and re-point every build
-
-Nothing else in this plan works until `files/genie-realm.yaml` exists, so this lands first. It touches the Swarm and CI build definitions, which is why it is its own reviewable unit.
+### Task 1: Copy the realm file into the chart and guard the duplication
 
 **Files:**
 - Create: `charts/genieai-umbrella/files/genie-realm.yaml`
-- Delete: `configs/keycloak/genie-realm.yaml`
-- Modify: `configs/keycloak/Dockerfile.config-cli:18-19`
-- Modify: `docker-compose.yaml` (`keycloak-config.build`)
-- Modify: `.gitlab-ci.yml` (`build:keycloak-config`, `scan:keycloak-config`, `promote:keycloak-config`)
+- Modify: `.gitlab-ci.yml` (`chart:lint`)
 
 **Interfaces:**
-- Consumes: nothing
+- Consumes: `configs/keycloak/genie-realm.yaml` (the existing compose copy, unchanged)
 - Produces: `charts/genieai-umbrella/files/genie-realm.yaml` — read by Tasks 4 and 5 via `.Files.Get "files/genie-realm.yaml"`
 
-- [ ] **Step 1: Move the file with `git mv` so history follows it**
+The realm file is **copied, not moved**. Moving it would force the Docker build context from `configs/keycloak/` to the repo root — Docker rejects a `COPY` outside the context, and *both* `COPY` lines in `Dockerfile.config-cli` are relative to that context, so both break. That cascade would touch the Dockerfile, `docker-compose.yaml`, the CI `CONTEXT`, and the path lists on three `keycloak-config` jobs, and would invalidate doc references. Duplication costs less than that blast radius, and a CI assertion makes the drift loud instead of silent.
+
+Nothing in this task touches the Swarm or compose path.
+
+- [ ] **Step 1: Copy the file byte-for-byte**
 
 ```bash
 cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/k8s-migration
 mkdir -p charts/genieai-umbrella/files
-git mv configs/keycloak/genie-realm.yaml charts/genieai-umbrella/files/genie-realm.yaml
+cp configs/keycloak/genie-realm.yaml charts/genieai-umbrella/files/genie-realm.yaml
+cmp configs/keycloak/genie-realm.yaml charts/genieai-umbrella/files/genie-realm.yaml \
+  && echo "IDENTICAL"
 ```
 
-- [ ] **Step 2: Re-path the Dockerfile `COPY` sources**
+Expected: `IDENTICAL`. Never edit the copy — the `$(env:VAR)` syntax is load-bearing (see Global Constraints).
 
-In `configs/keycloak/Dockerfile.config-cli`, replace lines 18-19 with:
+- [ ] **Step 2: Add the drift assertion to `chart:lint`**
 
-```dockerfile
-COPY charts/genieai-umbrella/files/genie-realm.yaml /config/genie-realm.yaml
-COPY --chmod=755 configs/keycloak/config-and-sleep.sh /usr/local/bin/config-and-sleep.sh
-```
-
-Both paths are now relative to the repo root, because the build context changes in Steps 3 and 4. Docker rejects a `COPY` source outside the build context, so Steps 3 and 4 are mandatory, not optional.
-
-- [ ] **Step 3: Point the compose build at the repo root**
-
-In `docker-compose.yaml`, in the `keycloak-config` service's `build:` block, replace:
+In `.gitlab-ci.yml`, in the `chart:lint` job's `script:`, add as the first step:
 
 ```yaml
-    build:
-      context: configs/keycloak/
-      dockerfile: Dockerfile.config-cli
+    # The realm file is duplicated: this copy is for the chart's
+    # convergence Job, configs/keycloak/genie-realm.yaml is COPYed into
+    # the compose image. They must stay byte-identical or the two
+    # delivery paths deploy different realms.
+    - diff charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml
 ```
 
-with:
+- [ ] **Step 3: Make `chart:lint` fire when only the compose copy changes**
+
+In the same job, `rules:changes:paths` currently lists `charts/**/*`, `scripts/**/*`, `.gitlab-ci.yml`. Add `configs/keycloak/**/*` to **both** path lists (the MR-event one and the branch one) so an edit to the compose copy alone cannot skip the assertion above.
 
 ```yaml
-    build:
-      context: .
-      dockerfile: configs/keycloak/Dockerfile.config-cli
+      paths:
+        - charts/**/*
+        - scripts/**/*
+        - configs/keycloak/**/*
+        - .gitlab-ci.yml
 ```
 
-- [ ] **Step 4: Point the CI build at the repo root**
-
-In `.gitlab-ci.yml`, in `build:keycloak-config`, replace:
-
-```yaml
-  variables:
-    IMAGE_NAME: "genie-ai-keycloak-config"
-    CONTEXT: "configs/keycloak/"
-    DOCKERFILE: "configs/keycloak/Dockerfile.config-cli"
-```
-
-with:
-
-```yaml
-  variables:
-    IMAGE_NAME: "genie-ai-keycloak-config"
-    CONTEXT: "."
-    DOCKERFILE: "configs/keycloak/Dockerfile.config-cli"
-```
-
-- [ ] **Step 5: Extend the change-trigger path on all three `keycloak-config` jobs**
-
-In `.gitlab-ci.yml`, each of `build:keycloak-config`, `scan:keycloak-config` and `promote:keycloak-config` has a `rules:changes:paths:` list containing `"configs/keycloak/**/*"`. In **each** of the three, replace:
-
-```yaml
-      paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
-```
-
-with:
-
-```yaml
-      paths: ["configs/keycloak/**/*", "charts/genieai-umbrella/files/**/*", ".gitlab-ci.yml"]
-```
-
-Verify you changed all three:
+- [ ] **Step 4: Prove the assertion fires on drift**
 
 ```bash
-grep -c 'charts/genieai-umbrella/files/\*\*/\*' .gitlab-ci.yml
+printf '\n# drift\n' >> charts/genieai-umbrella/files/genie-realm.yaml
+diff charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml; echo "exit=$?"
+git checkout -- charts/genieai-umbrella/files/genie-realm.yaml 2>/dev/null || \
+  cp configs/keycloak/genie-realm.yaml charts/genieai-umbrella/files/genie-realm.yaml
 ```
 
-Expected: `3`.
+Expected: `diff` prints the added line and `exit=1`. Then confirm the file is restored: `cmp` prints nothing.
 
-- [ ] **Step 6: Confirm `.dockerignore` still transmits `charts/`**
-
-A repo-root build context is only useful if the moved file is not excluded. Run:
+- [ ] **Step 5: Confirm the compose path is untouched**
 
 ```bash
-grep -nE '^charts/|^\*\*?/charts/' .dockerignore && echo "DANGER: charts/ is excluded" || echo "OK: charts/ is in the build context"
+git status --porcelain | grep -E 'configs/keycloak|docker-compose|Dockerfile' || echo "UNTOUCHED"
+docker compose config >/dev/null && echo "COMPOSE_OK"
 ```
 
-Expected: `OK: charts/ is in the build context`. If it ever reports DANGER, the `COPY` in Step 2 fails at build time.
+Expected: `UNTOUCHED` and `COMPOSE_OK`.
 
-- [ ] **Step 7: Build the image and prove the file landed inside it**
-
-Run:
-```bash
-docker compose build keycloak-config 2>&1 | tail -5
-```
-
-Expected: build succeeds (exit 0).
-
-- [ ] **Step 8: Verify the realm file is byte-identical inside the image**
-
-Run:
-```bash
-docker compose run --rm --no-deps --entrypoint sh keycloak-config -c \
-  'md5sum /config/genie-realm.yaml' 2>&1 | tail -2
-md5sum charts/genieai-umbrella/files/genie-realm.yaml
-```
-
-Expected: the two hashes are identical. A mismatch means a stale layer — run `docker compose build --no-cache keycloak-config` and re-check.
-
-- [ ] **Step 9: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add charts/genieai-umbrella/files/genie-realm.yaml \
-        configs/keycloak/Dockerfile.config-cli \
-        docker-compose.yaml \
-        .gitlab-ci.yml
-git commit -m "refactor(keycloak): canonical realm file lives in the chart
+git add charts/genieai-umbrella/files/genie-realm.yaml .gitlab-ci.yml
+git commit -m "feat(charts): copy the realm file for the convergence Job, guard the drift
 
-The realm body is now one file consumed by both delivery paths: the
-chart's convergence Job and the compose keycloak-config image. Two
-copies would drift.
+The chart needs the realm body at render time; the compose image already
+COPYs configs/keycloak/genie-realm.yaml. Rather than move the file and
+force the Docker build context to the repo root — which would break
+both COPY lines in Dockerfile.config-cli, and with them docker-compose,
+the CI job context, three path lists and the doc references — the file
+is duplicated and the duplication is asserted.
 
-configs/keycloak/ was the Docker build context for both docker-compose
-and the CI job, and Docker rejects COPY sources outside the context, so
-all three references move together: the Dockerfile COPY paths, the
-compose build context, and the CI CONTEXT.
-
-The CI change-trigger path is extended on all three keycloak-config
-jobs (build, scan, promote), not just build. They currently fire
-because they needs: the build, but a maintainer who drops that needs:
-would silently lose the trigger — the one failure mode here that fails
-to fail."
+chart:lint diffs the two copies and its change-trigger list gains
+configs/keycloak/**/*, so an edit to the compose copy alone cannot skip
+the assertion. Without that second part the drift ships silently."
 ```
-
----
 
 ### Task 2: Keycloak CR — bootstrap admin and the `/auth` relative path
 
@@ -1146,13 +1082,15 @@ docker compose build keycloak-config >/dev/null 2>&1 && echo "BUILD_OK"
 
 Expected: both lines.
 
-- [ ] **Step 5: Confirm the CI trigger covers a chart-file-only change**
+- [ ] **Step 5: Confirm the duplication guard is intact**
 
 ```bash
-grep -A4 'rules:' .gitlab-ci.yml | grep -c 'charts/genieai-umbrella/files/\*\*/\*'
+cmp charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml \
+  && echo "REALM_COPIES_IDENTICAL"
+grep -c 'configs/keycloak/\*\*/\*' .gitlab-ci.yml
 ```
 
-Expected: `3`.
+Expected: `REALM_COPIES_IDENTICAL`, and a non-zero count for the `chart:lint` trigger path.
 
 - [ ] **Step 6: Review the branch commit list**
 

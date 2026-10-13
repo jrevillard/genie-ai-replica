@@ -4,7 +4,7 @@
 
 **Goal:** Replace the create-only `KeycloakRealmImport` with keycloak-config-cli as the sole owner of the Keycloak realm, closing four defects: non-updatable clients, literal secrets in a CR, `genie-admin` with no credentials, and a leaked import Job/Pod.
 
-**Architecture:** The `Keycloak` CR (v2beta1) owns infrastructure and carries `bootstrapAdmin.user.secret` plus `http-relative-path: /auth`. The realm body is a chart file (`files/genie-realm.yaml`) already parameterised by 31 distinct `$(env:VAR)` placeholders (39 occurrences) — the chart does not re-render it, it only wires the environment those placeholders resolve from. A Helm `post-upgrade` hook Job runs keycloak-config-cli against the Admin REST API, so the realm is created on first install and converged on every later release.
+**Architecture:** The `Keycloak` CR (v2beta1) owns infrastructure and carries `bootstrapAdmin.user.secret` plus `http-relative-path: /auth`. The realm body is a chart file (`files/genie-realm.yaml`) already parameterised by 32 distinct `$(env:VAR)` placeholders (40 occurrences) — the chart does not re-render it, it only wires the environment those placeholders resolve from. A Helm `post-upgrade` hook Job runs keycloak-config-cli against the Admin REST API, so the realm is created on first install and converged on every later release.
 
 **Tech Stack:** Helm 4.x chart API v2, Sprig (`.Files.Get`, `regexFindAll`, `dig`), Keycloak 26 operator (`k8s.keycloak.org/v2beta1`), `adorsys/keycloak-config-cli:6.5.0-26`, Docker, GitLab CI.
 
@@ -386,7 +386,7 @@ Create `charts/genieai-umbrella/templates/data/keycloak-realm-secret.yaml`:
 {{- if and .Values.data.keycloak.enabled .Values.data.keycloak.convergence.enabled -}}
 {{- /*
 The realm body is a chart file, not rendered from values: it already
-carries 31 distinct `$(env:VAR)` placeholders (39 occurrences) covering every per-deployment
+carries 32 distinct `$(env:VAR)` placeholders (40 occurrences) covering every per-deployment
 value, so templating it here would mean re-inventing a realm-authoring
 engine to reproduce a file that is already parameterised.
 
@@ -455,7 +455,7 @@ git add charts/genieai-umbrella/templates/data/keycloak-realm-secret.yaml
 git commit -m "feat(charts): render the realm file into a Secret for the Job to mount
 
 The realm body is a chart file, not rendered from values. It already
-carries 31 distinct \$(env:VAR) placeholders (39 occurrences) covering every per-deployment value,
+carries 32 distinct \$(env:VAR) placeholders (40 occurrences) covering every per-deployment value,
 so templating it would re-invent a realm-authoring engine to reproduce
 a file that is already parameterised.
 

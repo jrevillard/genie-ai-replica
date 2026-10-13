@@ -93,12 +93,26 @@ data:
     storageSize: 50Gi
     agentsStorageSize: 2Gi             # cluster-mode Agency volume — config state (MBs), not document data
   keycloak:
-    # Gates the Keycloak + KeycloakRealmImport CRs. The operator
-    # itself is a cluster bootstrap prerequisite — NOT a chart dependency.
+    # Gates the Keycloak CR. The operator itself is a cluster
+    # bootstrap prerequisite — NOT a chart dependency.
     enabled: true
     instances: 1                      # 2 on prod via clusterProfile
-    realmImport: true
     adminEmail: genie-admin@genieai.local
+    # Realm and client identifiers the convergence Job exports for the
+    # realm file's $(env:VAR) placeholders. These must match the
+    # clientIds consumers use; changing one after install does not
+    # rename the client in Keycloak.
+    realm: genie
+    webClientId: genie-app
+    grafanaClientId: grafana
+    adminUsername: genie-admin
+    defaultLocale: en
+    # Login/account/admin/email theme name, exported as KEYCLOAK_THEME.
+    # The `genie` theme ships in the image on the Docker Swarm path; on
+    # Kubernetes the operator's stock image has no such theme and
+    # Keycloak falls back to its default. See issue !998 for the
+    # mount-only branding work.
+    theme: genie
     # Gates the new-user email-verification flow; requires smtp to be set
     # when true (Keycloak rejects verification emails without a server).
     verifyEmail: false
@@ -163,14 +177,33 @@ data:
     # access). Chart's instances=1 by default; prod bumps to 2 + manual drain.
     update:
       strategy: RecreateOnImageChange
-    # Deterministic bootstrap admin. Default empty = the operator generates
-    # a one-time admin in `<cr-name>-initial-admin` Secret; override here
-    # to pin a stable username/password (the temp Secret remains the default
-    # until overridden).
+    # ── Realm convergence (keycloak-config-cli) ──
+    # The realm is created and then converged on every release by a
+    # Helm post-upgrade hook Job; the operator's KeycloakRealmImport
+    # CR is create-only and cannot be used for this.
+    convergence:
+      enabled: true
+      # kcc waits for Keycloak itself via KEYCLOAK_AVAILABILITYCHECK_*,
+      # so retries here cover genuine failures, not startup.
+      backoffLimit: 2
+      # Secret-backed realm parameters. One row per `$(env:VAR)` in
+      # files/genie-realm.yaml whose value is a secret. The chart wires
+      # `valueFrom.secretKeyRef`; it never renders the value.
+      #
+      # The five the realm actually needs — worked mapping:
+      #   clientSecrets.proxyClient -> KC_PROXY_CLIENT_SECRET
+      #   clientSecrets.dataprep    -> KC_DATAPREP_CLIENT_SECRET
+      #   clientSecrets.grafana     -> KC_GRAFANA_CLIENT_SECRET
+      #   (admin)                   -> GENIE_ADMIN_PASSWORD
+      #   (mail)                    -> EMAIL_PASSWORD
+      envSecrets: []
+    # Name of the operator-provided Secret holding `username` +
+    # `password` for the master-realm administrator the Keycloak
+    # operator creates. The convergence Job authenticates with it.
+    # The chart references the Secret by name; it never reads it.
+    # Upstream ignores this stanza when a master realm already exists.
     bootstrapAdmin:
-      user:
-        username: ""
-        password: ""
+      userSecret: keycloak-admin-credentials
 
 # service ↔ data dependency graph (used by pre-install hook).
 # Read by the dependency-check hook Job; values are intentionally declarative

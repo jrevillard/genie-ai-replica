@@ -79,6 +79,39 @@ reconcilers). The chart renders only the custom resources they manage.
 
 Later tiers add: GPU operator, cert-manager, envoy-gateway — same model.
 
+## Keycloak configuration
+
+The realm has exactly one owner: `keycloak-config-cli`, run as a Helm
+`post-install,post-upgrade,post-rollback` hook Job. The operator's
+`KeycloakRealmImport` CR is create-only — a changed `spec.realm` is
+ignored while the CR still reports `Done=True`, which leaves a GitOps
+pipeline green against a realm that has drifted.
+
+The realm body is `files/genie-realm.yaml`, a chart file parameterised
+by `$(env:VAR)` placeholders. The chart does not re-render it; it wires
+the environment those placeholders resolve from:
+
+| Parameter class | Wiring |
+|---|---|
+| Deployment values (realm name, `ingress.host`, locale, password policy, mobile client id) | plain `env` on the Job, from chart values |
+| Secrets (client secrets, admin password, SMTP password) | `valueFrom.secretKeyRef`, declared in `data.keycloak.convergence.envSecrets` |
+
+Two Secrets must exist in `genieai` before the release succeeds:
+
+| Secret | Keys | Consumed by |
+|---|---|---|
+| `keycloak-admin-credentials` | `username`, `password` | `Keycloak` CR `bootstrapAdmin.user.secret`; the Job's `KEYCLOAK_USER` / `KEYCLOAK_PASSWORD` |
+| `keycloak-db-credentials` | `username`, `password` | the CNPG cluster and the `Keycloak` CR `spec.db` |
+
+Neither is materialized by the chart — bring them with whatever secret
+backend you use cluster-wide.
+
+The hook fires on every release. Because every realm parameter reaches
+the import through a values-derived `env` or an `envSecrets` row, a
+parameter change moves the values digest and triggers the release.
+The HelmRelease `spec.upgrade.timeout` bounds the Job; set it to at
+least `900s`.
+
 ## Per-environment overlay
 
 Apply per-env config via `deploy/environments/<env>/values-override.yaml`. See

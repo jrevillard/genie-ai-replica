@@ -143,11 +143,35 @@ def test_offsets_are_absolute_across_regions(recording_client, monkeypatch):
     r = client.post("/v1/pii/scan", json={"texts": [{"id": "big", "text": text}]})
     hits = r.json()["results"][0]["hits"]
     assert len(hits) > 1, "expected one hit per region"
-    for h in hits:
-        assert 0 <= h["start"] <= h["end"] <= len(text)
-        # Each hit covers the first 5 chars of its own region, so the text at
-        # that absolute offset must belong to a region START.
-        assert h["end"] - h["start"] == 5
+
+    regions = split_regions(text)
+    starts = [h["start"] for h in hits]
+
+    # THE FALSIFYING ASSERTION. Without the offset translation every region
+    # reports its own local (0, 5), so all starts collapse onto a single value
+    # and this fails.
+    #
+    # The PREVIOUS version of this test asserted only
+    #     0 <= h["start"] <= h["end"] <= len(text)   and   end - start == 5
+    # which a region-local (0, 5) ALSO satisfies — it stayed green with the
+    # fix reverted, so the property the split exists to guarantee had no
+    # effective coverage at all. (Adversarial review, 2026-10-13.)
+    assert len(set(starts)) == len(starts), (
+        "region-local offsets: every hit collapsed onto the same start"
+    )
+    assert starts == sorted(starts), "hits must be returned in document order"
+
+    # Each hit must sit at its region's ABSOLUTE offset — pinned against the
+    # real region boundaries, not a range that a wrong offset also satisfies.
+    assert starts == [off for off, _ in regions]
+
+    # And the span must index the original text: the fake analyzer reports the
+    # first min(5, len) chars of each region, so slicing the ORIGINAL at the
+    # returned offsets must reproduce exactly what the analyzer saw.
+    for h, (off, chunk) in zip(hits, regions):
+        width = min(5, len(chunk))
+        assert h["end"] - h["start"] == width
+        assert text[h["start"]:h["end"]] == chunk[:width]
 
 
 def test_redaction_spans_regions_joined(recording_client):

@@ -12,6 +12,7 @@
 
 ## Global Constraints
 
+- **`$(env:VAR)` in the realm file is load-bearing — never change it to `${env:VAR}`.** Project rule from `_bmad-output/project-context.md`, written after a code-review commit (`f1eae7c`) made exactly that change and broke the import with `Cannot create realm '${env:KC_REALM}': HTTP 400 Bad Request`. The prefix/suffix are configurable via `IMPORT_VARSUBSTITUTION_PREFIX` / `_SUFFIX`, and `IMPORT_VARSUBSTITUTION_ENABLED=true` must stay set on the Job. This is why Task 1 uses `git mv` and touches no line of the file.
 - **Service name is `keycloak-service`, not `<release>-keycloak`.** Upstream `Constants.KEYCLOAK_SERVICE_SUFFIX = "-service"` (verified at tag 26.8.0); the CR's `metadata.name` is hardcoded `keycloak`. Port is `8080` (`Constants.KEYCLOAK_HTTP_PORT`).
 - **Every Keycloak URL in the chart carries `/auth`**, because D7 sets `additionalOptions: [{name: http-relative-path, value: /auth}]`. `templates/services/backend.yaml:6` and `documentRepository.yaml:17` already do.
 - **`additionalOptions` is a `List<ValueOrSecret>`** with fields `name`, `value`, `secret` (verified in `KeycloakSpec.java` at 26.8.0). The flag key is `http-relative-path`.
@@ -23,6 +24,18 @@
 - **CHANGELOG is the branch result vs `main`**, operator-facing, present tense, Keep-a-Changelog 1.1.0, `(breaking)` where applicable. Never a commit-by-commit narrative.
 - **kcc image tag is `adorsys/keycloak-config-cli:6.5.0-26`.** The `-26` suffix encodes the Keycloak major version; a Keycloak major bump requires a matching tag bump.
 - Do NOT modify `deploy/ansible/group_vars/**` (feature-branch vars.yml is forbidden). Pass values through `values-override.yaml` files instead.
+
+### Installation impact of the file move
+
+The move changes **build-time wiring only**. Runtime behaviour is identical on both delivery paths:
+
+| Path | What changes | What does not |
+|---|---|---|
+| `docker compose build` (dev) | `build.context` → `.`, `dockerfile` → full path | The image is byte-identical: the file still lands at `/config/genie-realm.yaml` in the image, so `IMPORT_FILES=/config/genie-realm.yaml` is unchanged. No runtime change. |
+| Ansible / Swarm (prod) | Nothing. Ansible never reads the repo path — it pulls `genie-ai-keycloak-config` from the registry (`deploy/ansible/tasks/deploy-shared-facts.yml:33` lists it as an image to pull). CI rebuilds that image with the new context. | The playbook is not touched. No vars.yml change. |
+| Docs | `deploy/ansible/README.md:730` references the old path and is updated. | — |
+
+`.dockerignore` does not exclude `charts/`, so the moved file is present in a repo-root build context. If a future `.dockerignore` change ever excludes `charts/`, the `COPY` in `Dockerfile.config-cli` breaks with a build error — not a runtime one.
 
 ---
 
@@ -136,7 +149,17 @@ grep -c 'charts/genieai-umbrella/files/\*\*/\*' .gitlab-ci.yml
 
 Expected: `3`.
 
-- [ ] **Step 6: Build the image and prove the file landed inside it**
+- [ ] **Step 6: Confirm `.dockerignore` still transmits `charts/`**
+
+A repo-root build context is only useful if the moved file is not excluded. Run:
+
+```bash
+grep -nE '^charts/|^\*\*?/charts/' .dockerignore && echo "DANGER: charts/ is excluded" || echo "OK: charts/ is in the build context"
+```
+
+Expected: `OK: charts/ is in the build context`. If it ever reports DANGER, the `COPY` in Step 2 fails at build time.
+
+- [ ] **Step 7: Build the image and prove the file landed inside it**
 
 Run:
 ```bash
@@ -145,7 +168,7 @@ docker compose build keycloak-config 2>&1 | tail -5
 
 Expected: build succeeds (exit 0).
 
-- [ ] **Step 7: Verify the realm file is byte-identical inside the image**
+- [ ] **Step 8: Verify the realm file is byte-identical inside the image**
 
 Run:
 ```bash
@@ -156,7 +179,7 @@ md5sum charts/genieai-umbrella/files/genie-realm.yaml
 
 Expected: the two hashes are identical. A mismatch means a stale layer — run `docker compose build --no-cache keycloak-config` and re-check.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add charts/genieai-umbrella/files/genie-realm.yaml \

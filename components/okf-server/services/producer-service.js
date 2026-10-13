@@ -27,6 +27,10 @@ const { ingestRepoConcepts } = require('./ingest-service');
 const { withSpan } = require('../shared-lib/tracing');
 const crawlConversion = require('./crawl-conversion-service');
 const { convertXlsx, slugify } = require('./converters/xlsxSheetConverter');
+// FR-42 for CSV (David 2026-10-12): the SAME dictionary + row-group shape as
+// xlsx, plus LLM topics summarised from the dictionary columns. Async (one
+// remote LLM call per file), so convertDocument awaits its result.
+const { convertCsv } = require('./converters/csvSheetConverter');
 // Story 1-8g-p: whole-corpus topic-link authoring. Lazy-required inside the
 // runner (house style — the service pulls in the LLM client) but the predicate
 // is read at module scope for the early-out below.
@@ -220,6 +224,14 @@ async function convertDocument(buffer, ext, meta) {
   }
   if (ext === '.xlsx') {
     return convertXlsx(buffer, meta); // FR-42: dictionary + row-groups, own links
+  }
+  if (ext === '.csv') {
+    // FR-42: a CSV is ONE sheet — dictionary + row-groups, plus topics
+    // summarised from the dictionary columns (csvSheetConverter). Without
+    // this branch a CSV would fall through to the raw-text fallback below and
+    // land as ONE comma-dense prose blob — content in the repo, but with no
+    // table structure and nothing a row-level question could retrieve.
+    return convertCsv(buffer, meta);
   }
   // .md / .txt and every text/* fallback
   return { text: buffer.toString('utf8') };
@@ -490,13 +502,17 @@ async function runDocumentsConversion(job) {
         const buf = await downloadToBuffer(file_id, cap);
         const ext = (String(meta.file_name).match(/(\.[a-z0-9]+)\s*$/i) || [])[1];
         const lower = (ext || '').toLowerCase();
-        if (!['.pdf', '.docx', '.xlsx', '.md', '.html', '.htm', '.txt'].includes(lower)) {
+        if (!['.pdf', '.docx', '.xlsx', '.csv', '.md', '.html', '.htm', '.txt'].includes(lower)) {
           throw Object.assign(new Error(`unsupported document format "${lower || meta.file_name}"`), {
             code: 'DOC_FORMAT_UNSUPPORTED'
           });
         }
         const converted = await convertDocument(buf, lower, meta);
-        if (lower === '.xlsx') {
+        // BOTH tabular converters return {concepts, sheets} (an ARRAY of drafts)
+        // while every other converter returns {text}. A .csv sibling of .xlsx MUST be
+        // listed here too, or its concepts are silently dropped and the file
+        // reports "imported" with nothing in the repo.
+        if (lower === '.xlsx' || lower === '.csv') {
           allDrafts.push(...converted.concepts);
           perFile.push({ file_id, file_name: meta.file_name, status: 'imported', concepts: converted.concepts.length });
         } else {
@@ -546,7 +562,17 @@ async function runDocumentsConversion(job) {
     const linkCount = resolveCrossFileLinks(allDrafts);
 
     // Batched ingest (crawl-parity sizes).
-    await patchConversion(repo_id, { status: 'classifying', stage: 'classifying' });
+    // CONCEPTS TOTAL published up front (David, 2026-10-11: "we need progress
+    // bars with each of the stages being depicted in Step 4"). allDrafts is
+    // complete by now — the file loop above drafted every topic — so the
+    // denominator is known and the bar is a REAL count, not a guess. Without it
+    // the concepts stage had no bar at all and Step 4 sat at 100% on files
+    // while the topics were still being written.
+    await patchConversion(repo_id, {
+      status: 'classifying',
+      stage: 'classifying',
+      concepts_total: allDrafts.length
+    });
     const BATCH = 200;
     let batches = 0;
     for (let i = 0; i < allDrafts.length; i += BATCH) {
@@ -615,7 +641,45 @@ async function runDocumentsConversion(job) {
       try {
         const cDb = await getDb();
         const cRepo = await cDb.collection(COLLECTION).document(repo_id);
-        topicLinks = await authorRepoTopicLinks(cRepo, { actor });
+        // Per-batch progress so Step 4 can draw a REAL bar for this stage
+        // (David, 2026-10-11: "we need progress bars with each of the stages
+        // being depicted in Step 4"). Without it the stage is a flat panel for
+        // ~3 minutes with no indication anything is happening — the exact
+        // complaint. Throttled to one write per 2s; the final call passes
+        // through unthrottled so the terminal counters are never lost.
+        let lastLinkWrite = 0;
+        // Progress writes are SERIALISED through one chain and the chain is
+        // awaited before the run returns. Fired detached, an intermediate
+        // write could land AFTER the terminal one, so the last value the UI
+        // ever saw was a stale partial counter rather than the final state.
+        let linkWrites = Promise.resolve();
+        const writeLinkProgress = (p) => {
+          linkWrites = linkWrites
+            .then(() =>
+              patchConversion(repo_id, {
+                link_progress: {
+                  phase: p.phase || null,
+                  batches_done: p.batches_done || 0,
+                  batches_total: p.batches_total || 0,
+                  written: p.written || 0
+                }
+              })
+            )
+            .catch((e) =>
+              logger.warn('OKF topic-link progress write failed: ' + e.message, { repo_id })
+            );
+          return linkWrites;
+        };
+        topicLinks = await authorRepoTopicLinks(cRepo, {
+          actor,
+          onProgress: (p) => {
+            const now = Date.now();
+            if (!p.final && now - lastLinkWrite < 2000) return;
+            lastLinkWrite = now;
+            writeLinkProgress(p);
+          }
+        });
+        await linkWrites; // the terminal counters are durable before the run moves on
         logger.info(
           `Documents topic-link authoring: ${topicLinks.written} link(s) across ${topicLinks.concepts_linked}/${topicLinks.total} concept(s) in ${topicLinks.elapsed_ms}ms`
         );

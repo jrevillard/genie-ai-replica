@@ -2309,10 +2309,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         Retracts a file and performs a clean graph cascade deletion in explicit steps.
         Order: Identify -> Delete Chunks -> Delete Edges -> Delete Orphans
-        """
-        logger.info(f"Retracting file {file_id} from {graph_name} with cascading graph cleanup.")
-        await self._write_ingestion_log(file_id, "INFO", "Retract", "Starting retraction analysis...")
 
+        LOG DISCIPLINE (2026-10-13) — outcome first, intent second.
+        This runs on EVERY ingest: okf-server's ingestWorker always retracts the
+        concept before POSTing it (defensive stale-chunk sweep — dataprep
+        appends, never replaces). The overwhelmingly common outcome is therefore
+        "found 0, removed nothing", which is the reassuring case. The previous
+        shape emitted the alarming "Starting retraction analysis..." line FIRST
+        and unconditionally, then the outcome on the second line: a curator
+        scanning the bundle's Ingestion Log tab read the intent line, concluded
+        his data was being deleted, and stopped reading. Behaviour is unchanged
+        — the find still always runs (it is the orphan-cleanup guard) and the
+        chunk count is still logged either way, so the cleanup stays auditable.
+        Only the wording and its position moved.
+        """
         col_source = f"{graph_name}_SOURCE"
         col_entity = f"{graph_name}_ENTITY"
         col_has_source = f"{graph_name}_HAS_SOURCE"
@@ -2337,14 +2347,44 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             chunk_ids_list = [c["id"] for c in chunk_objects]
             chunk_keys_list = [c["key"] for c in chunk_objects]
 
-            log_msg = f"Analysis: Found {len(chunk_objects)} chunks in {col_source} matching file_id {file_id}."
-            logger.info(log_msg)
-            await self._write_ingestion_log(file_id, "INFO", "Retract", log_msg)
-
             if not chunk_objects:
-                logger.warning(f"No chunks found for {file_id}. Aborting graph retraction.")
+                # Nothing stale was found, so nothing is removed. State ONLY
+                # what this function can actually observe — the count and the
+                # fact that no data was deleted.
+                #
+                # retract_file has THREE callers: the pre-POST defensive sweep
+                # in okf-server's ingestWorker (the common case, nothing stale),
+                # and the CancelledError / generic-Exception rollbacks inside
+                # dataprep itself. The earlier wording asserted "This is the
+                # normal pre-ingest cleanup check" and "no retraction is in
+                # progress" — false on both rollback paths, where this call IS
+                # the retraction and the failure is exactly what a curator is
+                # reading the log to find. Caller intent is not knowable from
+                # here, so the message claims nothing about it. (Adversarial
+                # review, 2026-10-13.)
+                #
+                # The chunk count stays in the message so the orphan-cleanup
+                # guard remains auditable.
+                log_msg = (
+                    f"Analysis complete: found 0 chunks in {col_source} matching file_id {file_id}. "
+                    f"Nothing to retract — no data was removed."
+                )
+                logger.info(log_msg)
+                await self._write_ingestion_log(file_id, "INFO", "Retract", log_msg)
                 await self._update_doc_status(file_id, "Retracted")
                 return {"status": 200, "message": "No chunks found.", "details": {"deleted_chunks": 0}}
+
+            # There IS something to retract — now, and only now, announce the
+            # retraction. Announcing here (post-find, pre-delete) keeps the
+            # intent line honest: it is always immediately followed by a real
+            # deletion, so "Starting retraction" can never be a false alarm.
+            logger.info(f"Retracting file {file_id} from {graph_name} with cascading graph cleanup.")
+            log_msg = (
+                f"Starting retraction analysis: found {len(chunk_objects)} chunk(s) in "
+                f"{col_source} matching file_id {file_id} — proceeding with cascade cleanup."
+            )
+            logger.info(log_msg)
+            await self._write_ingestion_log(file_id, "INFO", "Retract", log_msg)
 
             # ----------------------------------------------------------
             # STEP 2: Identify Edges & Orphans (Before Deleting Chunks)

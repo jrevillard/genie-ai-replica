@@ -255,10 +255,16 @@
               }}
             </p>
             <div class="okf-headtest__pane-actions">
-              <DsButton variant="secondary" small :disabled="busy !== null" @click="onExplainClaim">
+              <!-- `busy !== null` plus this read's OWN flag: the method no longer claims
+                   the shared slot, so without the flag the button would stay
+                   clickable through its own run and a double-click would fire
+                   two explains. The flag replaces exactly the self-guard the
+                   busy claim used to provide — it still does not block on
+                   UNRELATED work. -->
+              <DsButton variant="secondary" small :disabled="busy !== null || explainLoading" @click="onExplainClaim">
                 {{ translate('okf.headTest.teach.explain', 'Explain & suggest') }}
               </DsButton>
-              <DsSpinner v-if="busy === 'explain'" size="sm" class="okf-headtest__busy">
+              <DsSpinner v-if="explainLoading" size="sm" class="okf-headtest__busy">
                 {{ translate('okf.headTest.teach.explainBusy', 'Explaining — the model is proposing forbidden tags…') }}
               </DsSpinner>
             </div>
@@ -333,6 +339,21 @@
                 </div>
               </template>
             </template>
+            <!-- The explain RAN and returned no `suggestion` payload at all.
+                 Before this line the pane fell through to the bare
+                 "Explain & suggest" button — visually identical to "you
+                 never clicked it". This is the honest "the model had
+                 nothing to propose" answer, and it only renders after a
+                 completed call (explanationLoaded), never after a dropped
+                 or failed one (a failure sets `error` instead). -->
+            <p v-else-if="explanationLoaded" class="okf-headtest__teach-text okf-headtest__empty" role="status">
+              {{
+                translate(
+                  'okf.headTest.teach.explainNone',
+                  'The explain ran and proposed no forbidden tags for this query.'
+                )
+              }}
+            </p>
           </div>
           <p v-if="lastResult.verdict && lastResult.verdict.provenance" class="okf-headtest__provenance">
             {{ translate('okf.headTest.test.provenance', 'Routing provenance') }}:
@@ -359,7 +380,7 @@
           <span class="okf-headtest__teach-title">
             {{ translate('okf.headTest.suites.revertTitle', 'Revert tags') }}
           </span>
-          <DsSpinner v-if="busy === 'history'" size="sm" class="okf-headtest__busy">
+          <DsSpinner v-if="historyLoading" size="sm" class="okf-headtest__busy">
             {{ translate('okf.headTest.suites.revertBusy', 'Loading save history…') }}
           </DsSpinner>
           <template v-else>
@@ -746,10 +767,15 @@
                tags suppress the repo's own subject). Hidden in the wizard
                (readOnly — the fix writes tags). -->
           <div v-if="!readOnly && hasExplainableFailures" class="okf-headtest__pane-actions">
-            <DsButton variant="secondary" small :disabled="busy !== null" @click="onExplainFailures">
+            <DsButton
+              variant="secondary"
+              small
+              :disabled="busy !== null || explainFailuresLoading"
+              @click="onExplainFailures"
+            >
               {{ translate('okf.headTest.suites.explainFailures', 'Explain failures') }}
             </DsButton>
-            <DsSpinner v-if="busy === 'explain-failures'" size="sm" class="okf-headtest__busy">
+            <DsSpinner v-if="explainFailuresLoading" size="sm" class="okf-headtest__busy">
               {{
                 translate(
                   'okf.headTest.suites.explainBusy',
@@ -762,10 +788,10 @@
                recent runs, simulated against the gate before anything is
                recommended. Independent of the per-run batch advice. -->
           <div v-if="!readOnly" class="okf-headtest__pane-actions">
-            <DsButton variant="secondary" small :disabled="busy !== null" @click="onRecommend">
+            <DsButton variant="secondary" small :disabled="busy !== null || advisorLoading" @click="onRecommend">
               {{ translate('okf.headTest.advisor.run', 'Advisor: recommend tag changes') }}
             </DsButton>
-            <DsSpinner v-if="busy === 'advisor'" size="sm" class="okf-headtest__busy">
+            <DsSpinner v-if="advisorLoading" size="sm" class="okf-headtest__busy">
               {{ translate('okf.headTest.advisor.busy', 'Simulating tag changes across recent runs…') }}
             </DsSpinner>
           </div>
@@ -910,6 +936,18 @@
               </DsButton>
             </div>
           </div>
+          <!-- The advisor RAN and returned nothing (advisorLoaded, set only
+               after a completed dispatch). Previously the v-if="advisor" block
+               simply did not render, so a dropped run and an empty answer were
+               the same inert button. -->
+          <p v-else-if="advisorLoaded" class="okf-headtest__teach-text okf-headtest__empty" role="status">
+            {{
+              translate(
+                'okf.headTest.advisor.none',
+                'The advisor ran and recommended no tag changes for the recent runs.'
+              )
+            }}
+          </p>
           <div v-if="batchAdvice" class="okf-headtest__suggestion">
             <span class="okf-headtest__teach-title">{{ batchTitleText }}</span>
             <p v-if="batchAdvice.note" class="okf-headtest__teach-text">{{ batchAdvice.note }}</p>
@@ -1045,6 +1083,18 @@
               }}
             </p>
           </div>
+          <!-- The batch explain RAN and came back with no payload. Without
+               this line the whole v-if="batchAdvice" block — the
+               positive-failure warning AND the failing-query list, the two
+               things the curator most needs — was indistinguishable from a
+               request that never left the browser. batchAdviceLoaded is set
+               only after a completed dispatch, so this cannot claim a run
+               that was dropped or failed. -->
+          <p v-else-if="batchAdviceLoaded" class="okf-headtest__teach-text okf-headtest__empty" role="status">
+            {{
+              translate('okf.headTest.suites.batchEmpty', 'The explain ran and returned no advice for this suite run.')
+            }}
+          </p>
         </div>
 
         <div class="okf-headtest__add-query">
@@ -1077,7 +1127,7 @@
           <span class="okf-headtest__teach-title">
             {{ translate('okf.headTest.suites.revertTitle', 'Revert tags') }}
           </span>
-          <DsSpinner v-if="busy === 'history'" size="sm" class="okf-headtest__busy">
+          <DsSpinner v-if="historyLoading" size="sm" class="okf-headtest__busy">
             {{ translate('okf.headTest.suites.revertBusy', 'Loading save history…') }}
           </DsSpinner>
           <template v-else>
@@ -1172,6 +1222,14 @@
           <h4 class="okf-headtest__pane-title">
             {{ translate('okf.headTest.suites.savedTitle', 'Saved suites') }}
           </h4>
+          <!-- The load indicator sits HERE, outside the v-if="suite" pane on
+               purpose: a first-ever load has no suite to render into, so a
+               spinner inside that pane would never appear. It is also what
+               distinguishes "still loading" from "loaded, and this suite
+               genuinely has no runs" — the two used to look identical. -->
+          <DsSpinner v-if="suiteLoading" size="sm" class="okf-headtest__busy">
+            {{ translate('okf.headTest.suites.loading', 'Loading the suite…') }}
+          </DsSpinner>
           <table class="okf-headtest__scores">
             <thead>
               <tr>
@@ -1207,7 +1265,7 @@
                   <DsButton
                     variant="secondary"
                     small
-                    :disabled="busy !== null || (suite && suite.suite_key === s._key)"
+                    :disabled="busy !== null || suiteLoading || (suite && suite.suite_key === s._key)"
                     @click="onLoadSuite(s._key)"
                   >
                     {{ translate('okf.headTest.suites.load', 'Load') }}
@@ -1356,6 +1414,50 @@ export default {
       tripwire: null,
       lastRunSuiteKey: null,
       fmHistory: [],
+      // STALE-ANSWER GUARD. Bumped whenever the SUBJECT of an in-flight read
+      // changes: `suiteEpoch` by anything that swaps this.suite, `queryEpoch`
+      // by anything that re-runs or rewrites this.query. A read captures the
+      // epoch it was dispatched under and DISCARDS its result if the epoch
+      // moved while it was in flight.
+      //
+      // Why this exists (2026-10-12): the shared `busy` slot used to
+      // serialise reads against each other as a side effect of also blocking
+      // them. Removing that claim fixed the silent drops but removed the
+      // serialisation too, so a suite load landing mid-explain left suite A's
+      // advice rendered under suite B's rows — and that block carries DsTag
+      // chips wired to onTeachTag / onRemoveTag, the genuine two-write
+      // frontmatter mutations. One click from persisting the wrong suite's
+      // tags. See onExplainFailures.
+      suiteEpoch: 0,
+      queryEpoch: 0,
+      // Its OWN flag, not the shared `busy` slot — see loadFrontmatterHistory.
+      // The two Revert-panel spinners bind to this so the panel can show
+      // "loading" without borrowing busy and blocking every other control.
+      historyLoading: false,
+      // The READ-class controls follow the same rule (see onExplainClaim):
+      // `busy` is one shared string, so a read that claims it is dropped
+      // silently whenever ANY other control holds the slot. Each read keeps
+      // its own boolean here purely to drive its own spinner — it never
+      // gates a dispatch. Writes keep claiming `busy`; double-submit
+      // protection is real for those and must stay.
+      explainLoading: false,
+      advisorLoading: false,
+      explainFailuresLoading: false,
+      // The suite Load had NO spinner at all before this (busy==='suite-load'
+      // had no template binding), so a dropped or in-flight load was invisible
+      // and the pane kept rendering the PREVIOUS suite's rows.
+      suiteLoading: false,
+      // "The read RAN" markers. `explanation` / `advisor` / `batchAdvice` are
+      // all null until a call SUCCEEDS and returns a payload, and each of
+      // them gates its whole advice block with v-if. So "the model ran and
+      // proposed nothing" rendered exactly like "nobody ever asked" — the
+      // confident-wrong-answer shape that made the dropped fetch so costly.
+      // These are set only after a successful dispatch, so the template can
+      // say "ran, nothing proposed" without claiming that for a read that
+      // never happened or failed (a failure sets `error` instead).
+      explanationLoaded: false,
+      advisorLoaded: false,
+      batchAdviceLoaded: false,
       revertHighlight: false,
       reverted: false
     };
@@ -1903,6 +2005,11 @@ export default {
           this.taughtTags = [];
           this.explanation = null;
           this.batchAdvice = null;
+          // Per-open state: nothing has been asked of the NEW repo yet, so the
+          // "the explain ran" markers must not survive the reopen either.
+          this.explanationLoaded = false;
+          this.batchAdviceLoaded = false;
+          this.advisorLoaded = false;
           // 1-8d: cycle state is per-open too (the tripwire describes the
           // session's last same-suite comparison; history is cheap).
           this.removedTags = [];
@@ -1962,11 +2069,17 @@ export default {
       this.$emit('changed', { head: res.result });
     },
     async onRunTest() {
+      // STALE-ANSWER GUARD: this changes the SUBJECT every in-flight queryEpoch read
+      // is about, so their late answers must be discarded on return.
+      this.queryEpoch += 1;
       if (!this.query.trim()) return;
       this.busy = 'test';
       this.error = '';
       this.lastResult = null;
       this.explanation = null; // 1-8c: advice belongs to the previous result
+      // Same reasoning for the "the explain RAN" marker: a re-test makes the
+      // previous explanation stale, so the new query has NOT been explained.
+      this.explanationLoaded = false;
       const res = await this.$store.dispatch('okf/headRoutingTest', {
         repoId: this.repo.repo_id,
         query: this.query.trim()
@@ -1981,19 +2094,48 @@ export default {
     /** 1-8c: claim-side advice (Story 1-8c routing-explain) — when the
      * head claims a query it should suppress, propose forbidden tags. */
     async onExplainClaim() {
-      if (!this.query.trim() || this.busy !== null) return;
-      this.busy = 'explain';
+      // `!this.query.trim()` is a REAL precondition — there is nothing to
+      // explain without a query — and it stays.
+      if (!this.query.trim()) return;
+      // Deliberately does NOT claim the shared `busy` slot. It did until
+      // 2026-10-12, and that silent `return` was the Revert-panel bug
+      // (091a182b7): `busy` is ONE string every control claims, so an explain
+      // issued while a tag save was in flight was dropped — no queue, no
+      // retry, no error. The template then rendered the plain "Explain &
+      // suggest" button with no suggestion block, indistinguishable from
+      // "never clicked". routing-explain writes nothing; it is a pure
+      // advice fetch, so a duplicate is harmless and a silent drop is not.
+      // The template's :disabled on the button is the double-submit guard.
       this.error = '';
+      this.explainLoading = true;
+      // STALE-ANSWER GUARD — see `queryEpoch` in data(). This explain is about
+      // ONE query. If the curator edits the query or re-runs the test while it
+      // is in flight, the answer describes a question no longer on screen, and
+      // its suggestion chip is wired to onTeachTag — a two-write frontmatter
+      // mutation. Capture the query itself AND the epoch: the string covers
+      // typing, the epoch covers a re-run that does not alter the text.
+      const epoch = this.queryEpoch;
+      const queryAtDispatch = this.query.trim();
       const res = await this.$store.dispatch('okf/headRoutingExplain', {
         repoId: this.repo.repo_id,
-        query: this.query.trim()
+        query: queryAtDispatch
       });
-      this.busy = null;
+      this.explainLoading = false;
+      if (epoch !== this.queryEpoch || this.query.trim() !== queryAtDispatch) {
+        this.explanation = null;
+        this.explanationLoaded = false;
+        return;
+      }
       if (!res.ok) {
         this.error = res.message || this.translate('okf.headTest.error.explain', 'Explain failed');
         return;
       }
       this.explanation = res.result;
+      // The explain RAN and completed — even if it came back with no
+      // `suggestion` at all. That is a real answer ("nothing to add"), and
+      // the template now says so rather than showing the bare button as if
+      // nobody had ever asked.
+      this.explanationLoaded = true;
     },
     /** 1-8c: the frontmatter shape the Lab's tag writes go through — the
      * doc-field shape (same as FrontmatterPanel), with extraForbidden
@@ -2089,11 +2231,20 @@ export default {
      * panel (cheap read; editor sessions only — the panel is hidden in
      * the wizard). */
     async loadFrontmatterHistory() {
-      if (this.busy !== null) return;
-      this.busy = 'history';
+      // Deliberately does NOT claim the shared `busy` slot. It did until
+      // 2026-10-12, and that silent `return` WAS the Revert-panel bug: a tag
+      // chip click sets busy='save-tag', so any history fetch issued while
+      // one was in flight was dropped — no queue, no retry, no error — and
+      // the panel then rendered a confident "No frontmatter saves recorded
+      // yet" for a request that never ran. The data was always there (four
+      // snapshots on the Alphabet repo's doc). showRevertPanel's retry hit
+      // the same guard, so the empty state was permanent for the session.
+      // This is a cheap idempotent read: a duplicate is harmless, a silent
+      // drop is not.
       this.error = '';
+      this.historyLoading = true;
       const res = await this.$store.dispatch('okf/frontmatterHistory', { repoId: this.repo.repo_id });
-      this.busy = null;
+      this.historyLoading = false;
       if (!res.ok) {
         this.error = res.message || this.translate('okf.headTest.error.history', 'Could not load the save history');
         return;
@@ -2176,11 +2327,28 @@ export default {
      * under the zero-positive-harm constraint. Pure advice — nothing is
      * written until the curator clicks a chip or Apply. */
     async onRecommend() {
-      if (this.busy !== null) return;
-      this.busy = 'advisor';
+      // No busy guard — see onExplainClaim. The docblock below already
+      // declares this PURE ADVICE ("nothing is written until the curator
+      // clicks a chip or Apply"), so it is a read by its own contract.
+      // Claiming the shared slot meant an advisor run requested while any
+      // other control held `busy` was dropped with no feedback, and the
+      // whole v-if="advisor" block (scorecard, verdict chips, Apply) simply
+      // never appeared.
       this.error = '';
+      this.advisorLoading = true;
+      // STALE-ANSWER GUARD — see `suiteEpoch` in data(). The advisor's whole
+      // value depends on WHICH suite is loaded, and its Add/Remove chips feed
+      // onAdvisorApply, which writes the repository's forbidden set. Advice
+      // computed against a suite the curator has since left is worse than none.
+      const epoch = this.suiteEpoch;
+      const suiteKey = this.suite ? this.suite.suite_key : null;
       const res = await this.$store.dispatch('okf/headRecommend', { repoId: this.repo.repo_id });
-      this.busy = null;
+      this.advisorLoading = false;
+      if (epoch !== this.suiteEpoch || (this.suite && this.suite.suite_key !== suiteKey)) {
+        this.advisor = null;
+        this.advisorLoaded = false;
+        return;
+      }
       if (!res.ok) {
         this.error = res.message || this.translate('okf.headTest.error.advisor', 'Advisor failed');
         return;
@@ -2188,6 +2356,8 @@ export default {
       this.advisor = res.result;
       this.advisorExtraRemove = [];
       this.advisorNarrowPairs = [];
+      // The advisor RAN to completion (see onExplainClaim's explanationLoaded).
+      this.advisorLoaded = true;
     },
     /** 1-8g-c: the blocked-removal chips toggle into the Apply set; the
      * narrow chips toggle a remove+add PAIR. Both are curator-confirmed —
@@ -2309,6 +2479,9 @@ export default {
         failLabel: this.failLabelOf(r)
       }));
       this.batchAdvice = null;
+      // A fresh run makes the previous batch explain stale, so it has not been
+      // run for THIS run either.
+      this.batchAdviceLoaded = false;
       this.refreshRuns();
     },
     /** 1-8c: the fix loop's last leg — rebuild the head from the just-
@@ -2338,6 +2511,9 @@ export default {
       this.explanation = null; // the old advice is spent — re-explain if it still claims
     },
     async onGenerateSuite() {
+      // STALE-ANSWER GUARD: this changes the SUBJECT every in-flight suiteEpoch read
+      // is about, so their late answers must be discarded on return.
+      this.suiteEpoch += 1;
       this.busy = 'generate';
       this.error = '';
       // 1-8c: per-class counts ride along; undefined lets the server
@@ -2396,6 +2572,8 @@ export default {
       this.lastRunSummary = null;
       this.lastRunSummaryRows = [];
       this.batchAdvice = null;
+      // A regenerated suite is a new benchmark — the explain has not run on it.
+      this.batchAdviceLoaded = false;
       // 1-8d: regeneration creates a NEW benchmark identity — no tripwire
       // carry-over, and the baseline key follows the new suite.
       this.tripwire = null;
@@ -2546,19 +2724,44 @@ export default {
     /** 1-8c: batch advice for the latest run of the current suite — every
      * failing negative, ONE LLM call (the anti-treadmill affordance). */
     async onExplainFailures() {
-      if (!this.suite || this.busy !== null) return;
-      this.busy = 'explain-failures';
+      // `!this.suite` stays — without a suite there is no suite_key to send.
+      // The busy guard does NOT: the batch explain computes advice and writes
+      // nothing to the repository. Claiming the shared slot meant a request
+      // made while another control held `busy` was dropped silently, and
+      // v-if="batchAdvice" — which also carries the positive-failure warning
+      // and the failing-query list — never rendered, with no error to show
+      // for it. See onExplainClaim.
+      if (!this.suite) return;
       this.error = '';
+      this.explainFailuresLoading = true;
+      // STALE-ANSWER GUARD — see `suiteEpoch` in data(). Dropping the shared
+      // `busy` claim removed the only thing that serialized this read against
+      // a suite switch, so an explain dispatched for suite A could land after
+      // suite B was loaded and render A's advice under B's rows. Those chips
+      // are wired to two-write frontmatter mutations, so a stale answer is not
+      // cosmetic: it is one click from persisting the wrong suite's tags.
+      const epoch = this.suiteEpoch;
+      const suiteKey = this.suite.suite_key;
       const res = await this.$store.dispatch('okf/headSuiteExplainFailures', {
         repoId: this.repo.repo_id,
-        suiteKey: this.suite.suite_key
+        suiteKey
       });
-      this.busy = null;
+      this.explainFailuresLoading = false;
+      if (epoch !== this.suiteEpoch || !this.suite || this.suite.suite_key !== suiteKey) {
+        // The suite moved while this was in flight. Discard rather than render:
+        // the answer belongs to a suite the curator is no longer looking at.
+        this.batchAdvice = null;
+        this.batchAdviceLoaded = false;
+        return;
+      }
       if (!res.ok) {
         this.error = res.message || this.translate('okf.headTest.error.explain', 'Explain failed');
         return;
       }
       this.batchAdvice = res.result;
+      // The batch explain RAN to completion (see onExplainClaim's
+      // explanationLoaded) — an empty payload is a real "nothing to explain".
+      this.batchAdviceLoaded = true;
     },
     /** 1-8c: batch fix loop — rebuild the head from the just-saved tags,
      * then re-run the SAME suite against the fresh head. */
@@ -2758,11 +2961,20 @@ export default {
     /** 1-8f: load a saved suite back into the Lab — its rows become the
      * editable current suite (flip kinds, remove rows, re-run). */
     async onLoadSuite(suiteKey) {
-      if (this.busy !== null) return;
-      this.busy = 'suite-load';
+      // STALE-ANSWER GUARD: this changes the SUBJECT every in-flight suiteEpoch read
+      // is about, so their late answers must be discarded on return.
+      this.suiteEpoch += 1;
+      // No busy guard — see onExplainClaim. This is a plain GET that
+      // REPLACES this.suite wholesale, so dropping it was the worst case of
+      // the four: the pane kept rendering the PREVIOUSLY loaded suite's rows
+      // (and the Outcome/Corpus columns stayed as dashes because the
+      // loadLatestRunForSuite below never ran), which is indistinguishable
+      // from "this suite has no runs yet". It also had no spinner at all —
+      // busy==='suite-load' had no template binding anywhere.
       this.error = '';
+      this.suiteLoading = true;
       const res = await this.$store.dispatch('okf/headSuiteGet', { repoId: this.repo.repo_id, suiteKey });
-      this.busy = null;
+      this.suiteLoading = false;
       if (!res || !res.ok || !res.result) {
         this.error = (res && res.message) || this.translate('okf.headTest.error.suiteLoad', 'Could not load the suite');
         return;
@@ -2773,6 +2985,11 @@ export default {
       this.batchAdvice = null;
       this.tripwire = null;
       this.advisor = null;
+      // The advice belongs to the suite we just left — so does the evidence
+      // that it was ever computed for THIS suite. Without these two the new
+      // suite would inherit the previous one's "the advisor already ran" line.
+      this.batchAdviceLoaded = false;
+      this.advisorLoaded = false;
       this.advisorExtraRemove = [];
       this.advisorNarrowPairs = [];
       this.lastRunSuiteKey = this.suite ? this.suite.suite_key : null;

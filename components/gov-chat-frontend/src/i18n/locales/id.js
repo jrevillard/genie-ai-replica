@@ -1693,6 +1693,29 @@ export default {
       viewToggle: 'Tampilan editor',
       paneLabel: 'Panel tampilan',
       saveFailed: 'Penyimpanan gagal — coba lagi',
+      piiRescan: {
+        label: 'Data pribadi',
+        button: 'Pindai ulang semua halaman',
+        working: 'Memindai ulang semua halaman…',
+        progress: 'Memindai ulang… {done} dari {total} halaman',
+        progressIdle: 'Memindai ulang… membaca repositori',
+        done: '{n} halaman dipindai ulang.',
+        partial:
+          '{n} halaman dipindai ulang. {e} masih gagal — vonis pindainya tidak berubah, jadi penerbitan tetap diblokir untuk halaman tersebut.',
+        noKey:
+          'Server menerima pemindaian ulang tetapi tidak mengembalikan id proses, sehingga kemajuannya tidak dapat dilacak. Tidak ada yang dilaporkan.',
+        missing:
+          'Pemindaian ulang tidak tersedia di server ini (404). Tidak ada yang diubah — halaman yang pindainya gagal tetap memblokir penerbitan.',
+        frozen: 'Pemindaian ulang ditolak: repositori sedang diterbitkan (409). Tidak ada yang diubah.',
+        failed:
+          'Pemindaian ulang gagal. Tidak ada yang diubah — halaman yang pindainya gagal tetap memblokir penerbitan.',
+        scanned: '{n} halaman dipindai ulang',
+        clean: 'bersih',
+        hit: 'ditandai',
+        error: 'galat pindaian',
+        vanished: 'hilang',
+        stillBlocking: 'Masih memblokir'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1941,6 +1964,33 @@ export default {
       repoTagsHint:
         'Tag tingkat repositori ({summary}) milik repositori, bukan konsep ini — kelola di panel Tag di rail kanan.'
     },
+    piiReview: {
+      title: 'Semakan data pribadi',
+      checking: 'Menyemak…',
+      checkingBody: 'Membaca keadaan data pribadi bagi setiap halaman…',
+      unreadableTitle: 'Keadaan tidak diketahui',
+      unreadableBody:
+        'Keadaan data pribadi repositori ini tidak dapat dibaca. Sama ada sesuatu dijumpai atau tidak adalah TIDAK DIKETAHUI — ini bukan keputusan yang bersih.',
+      unscanned: 'Belum dipindai',
+      unscannedBody:
+        'Tiada pindaian data pribadi yang lengkap meliputi repositori ini ({n} halaman tidak pernah dipindai). Tiada apa-apa yang diketahui bebas daripada data pribadi — penerbitan tidak disekat oleh penemuan, tetapi tiada pindaian di sebalik keputusan ini.',
+      errorTitle: 'Pindaian gagal',
+      errorBody:
+        '{n} halaman tidak dapat dipindai. Kandungnya TIDAK berjaya dibaca, jadi sama ada ia mengandungi data pribadi adalah TIDAK DIKETAHUI — ia bukan bersih dan menyekat penerbitan.',
+      unreviewed: 'Ditandai, belum disemak',
+      unreviewedBody:
+        'Pengimbas menemui kemungkinan data pribadi pada {n} halaman dan tiada siapa menyemaknya. Penerbitan dibenarkan, tetapi tiada apa-apa pada halaman tersebut telah disemak.',
+      reviewed: 'Ditandai, telah disemak',
+      reviewedBody: '{n} halaman membawa data pribadi yang ditandai dan disahkan oleh penyelia ({by} pada {at}).',
+      cleanVerdict: 'Dipindai — tiada apa-apa ditemui',
+      cleanBody: 'Setiap halaman telah dipindai dan tiada data pribadi ditemui.',
+      staleAck:
+        'Pengesahan terdahulu mencatatkan {a} halaman ditanda pada {at}; kini {n} ditanda, jadi ia tidak meliputinya.',
+      bannerTitle: 'Tiada siapa menyemak penemuan ini.',
+      bannerBody:
+        'Penerbitan masih dibenarkan dan tiada pemeriksaan akan menghalangnya — tetapi halaman yang ditanda akan masuk ke repositori yang diterbitkan tepat seperti adanya. Buka setiap satu dan putuskan sebelum menerbitkan.',
+      unknownActor: 'tidak diketahui'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2027,9 +2077,9 @@ export default {
       step3:
         'Kami sedang membaca sumber Anda dan mengusulkan topik. Topik dikelompokkan di bawah label kategori yang Anda pilih. Produser bersifat konservatif — ia lebih suka menyarankan topik yang lebih sedikit tetapi terstruktur rapi daripada banyak topik yang membingungkan.',
       step4:
-        'Label adalah sumbu kategoris dari ontologi Anda — entitas macam apakah topik ini? Pilih 3-7 label yang mencakup sumbu utama; produser menggunakannya sebagai kerangka kerja untuk hierarki topik.',
+        'Label adalah sumbu kategoris dari ontologi Anda — entitas macam apakah topik ini? Label ditetapkan secara otomatis dari Hirarki Pengetahuan, dibatasi pada Area Subjek repositori ini.',
       step5:
-        'Ini adalah inti pekerjaan. Setiap topik adalah unit pengetahuan kecil yang dapat dikutip. Topik mendapatkan judul, deskripsi, dan mewarisi label yang Anda pilih. Tugas Anda adalah membuatnya teruji dan dapat dipertanggungjawabkan: ganti nama judul yang samar, gabungkan yang hampir duplikat, hapus yang tidak dapat didukung dengan sumber.',
+        'Ini adalah inti pekerjaan. Setiap topik adalah unit pengetahuan kecil yang dapat dikutip. Topik mendapatkan judul, deskripsi, dan menerima label dari Hirarki Pengetahuan. Tugas Anda adalah membuatnya teruji dan dapat dipertanggungjawabkan: ganti nama judul yang samar, gabungkan yang hampir duplikat, hapus yang tidak dapat didukung dengan sumber.',
       step6:
         'Kami menjalankan pemeriksaan kesesuaian: apakah setiap topik punya judul? Apakah label valid? Apakah atribusi sumber utuh? Masalah yang menghentikan harus diperbaiki sebelum menyerahkan repositori; peringatan dapat diakui.',
       step7:
@@ -2238,6 +2288,20 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2247,11 +2311,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Pilih label',
-        hint: 'Label adalah sumbu kategoris dari ontologi Anda — entitas macam apakah topik-topik ini? Pilih 3-7.',
-        add: '+ Tambah label',
-        addConfirm: 'Tambah',
-        placeholder: 'mis. Izin',
+        title: 'Label — otomatis',
+        hint: 'Label ditetapkan secara otomatis dari Hirarki Pengetahuan — dibatasi pada Area Subjek repositori ini.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
@@ -2516,12 +2577,42 @@ export default {
           'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
         index_failed:
           'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
       }
     },
     pii: {
       panel: 'Entitas yang ditandai',
       nFlagged: 'Ditemukan {n}',
       rescan: 'Pindai ulang',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
       scanning: 'Memindai…',
       clean: 'Tidak ada entitas yang ditandai — concept ini aman.',
       how: 'Perbaikan: hapus atau tulis ulang (misal gunakan perannya alih-alih nama), lalu simpan — pemindaian ulang akan memperbarui daftar ini.',

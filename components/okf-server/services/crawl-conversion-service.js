@@ -76,7 +76,31 @@ const DEFAULT_MAX_CRAWL_SOURCE_MB = 10240;
 /** Max conversions running at once (heavy jobs). */
 const MAX_CONCURRENT = Math.max(1, parseInt(process.env.OKF_MAX_CONCURRENT_CONVERSIONS || '2', 10) || 2);
 
-const ACTIVE_STATES = ['queued', 'downloading', 'splitting', 'adding'];
+/**
+ * TERMINAL conversion states — a conversion in ANY OTHER state is, by definition,
+ * stranded after a restart, because the in-process runner that would advance it
+ * died with the process.
+ *
+ * TERMINAL-BASED ON PURPOSE (2026-10-12). This sweep used to enumerate the ACTIVE
+ * states — ['queued', 'downloading', 'splitting', 'adding'] — and the DOCUMENT
+ * import path writes four more that were never added to it: 'converting',
+ * 'cross-linking', 'classifying' and 'linking-topics'
+ * (producer-service.js:434,561,572,620,640). An okf-server restart during any of
+ * those left the repository non-terminal FOREVER: this sweep is the only thing
+ * that resolves an interrupted conversion, and it did not match. The monthly
+ * image rebuild guarantees the trigger, so this was a scheduled occurrence, not
+ * an edge case.
+ *
+ * Enumerating ACTIVE states means the list must be edited every time a writer
+ * adds one, and NOTHING enforces that — which is exactly how four were missed.
+ * Enumerating TERMINAL states means a new intermediate status is swept the day it
+ * is written, with no edit here at all.
+ *
+ * The invariant is enforced from the writers' side by
+ * __tests__/conversion-terminal-states.test.js, which reads every writer's source
+ * and asserts the two sets stay disjoint and complete.
+ */
+const TERMINAL_STATES = ['done', 'failed'];
 
 /** repo_id → live runner promise (in-process registry). */
 const live = new Map();
@@ -105,14 +129,16 @@ async function sweepInterruptedOnce() {
     await db.query(
       `
       FOR r IN ${COLLECTION}
-        FILTER r.conversion != null && r.conversion.status IN @active
+        FILTER r.conversion != null
+          && r.conversion.status != null
+          && r.conversion.status NOT IN @terminal
         UPDATE r WITH { conversion: MERGE(r.conversion, {
           status: 'failed',
           error: 'interrupted by server restart — start the conversion again',
           finished_at: DATE_ISO8601(DATE_NOW())
         })} IN ${COLLECTION}
     `,
-      { active: ACTIVE_STATES }
+      { terminal: TERMINAL_STATES }
     );
   } catch (err) {
     logger.warn('Conversion sweep failed (non-fatal)', { error: err.message });
@@ -876,6 +902,7 @@ module.exports = {
   maxSourceBytesFromEnv,
   MODE_A_SOURCE_LIMIT_BYTES,
   sweepInterruptedOnce, // (c) run at SERVER BOOT (index.js), not lazily on the first conversion
+  TERMINAL_STATES, // exported so the writer-coverage test can assert the invariant
   deriveTitleFromUrl,
   deriveTitleFromBody,
   cleanTitle, // title ruling tests (David 2026-09-06)

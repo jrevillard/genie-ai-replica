@@ -23,7 +23,11 @@ const COLLECTIONS = [
   'okf_bundle_manifest',
   // Story 1.7 (ADR-okf-039 D3): runtime governance config. Tiny keyed docs
   // (_key='retrieval' today) — never per-repo, so no indexes beyond _key.
-  'okf_system_config'
+  'okf_system_config',
+  // Async repo-wide PII concept rescans (202 + poll, pii-service
+  // beginRepoConceptScan). One placeholder doc per run; the doc's status
+  // ('running' | 'complete' | 'failed') IS the poll's answer.
+  'okf_pii_scan_runs'
 ];
 
 const INDEXES = {
@@ -58,7 +62,13 @@ const INDEXES = {
   okf_sources: [{ type: 'persistent', fields: ['repo_id'], unique: true }],
   // Story B+C: discovery scans every manifest — index the domain for the
   // domain-filtered fan-out path.
-  okf_bundle_manifest: [{ type: 'persistent', fields: ['domain'] }]
+  okf_bundle_manifest: [{ type: 'persistent', fields: ['domain'] }],
+  // PII rescan runs: the poll reads by _key (the scan_key); these two serve
+  // the per-repo history listing and the boot sweep over interrupted runs.
+  okf_pii_scan_runs: [
+    { type: 'persistent', fields: ['repo_id'] },
+    { type: 'persistent', fields: ['created_at'] }
+  ]
 };
 
 // EXTERNAL collections (David, 2026-09-09: "create the required indexes and
@@ -67,7 +77,13 @@ const INDEXES = {
 // paths (the mint Pending-zip gate and the ingest worker filter by repo_id
 // on every poll); without the index those full-scan the files collection.
 const EXTERNAL_INDEXES = {
-  files: [{ type: 'persistent', fields: ['repo_id'] }]
+  // okf_repo_id: the stamp producer-service writes on SOURCE documents. PII
+  // discovery unions it with repo_id (services/pii-service.js discoverRepoFiles)
+  // — without this index that leg of the union full-scans `files`.
+  files: [
+    { type: 'persistent', fields: ['repo_id'] },
+    { type: 'persistent', fields: ['okf_repo_id'] }
+  ]
 };
 
 // Shared DB connection — cache the RESOLVED proxy (not the promise). On failure

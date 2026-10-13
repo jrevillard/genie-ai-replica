@@ -1699,6 +1699,29 @@ export default {
       viewToggle: 'Pono ea mohophotsi',
       paneLabel: 'Sefate se bontšang',
       saveFailed: 'Ho boloka ho hlolehile — leka hape',
+      piiRescan: {
+        label: 'Lintso tsa motho',
+        button: 'H scanu hape-khele',
+        working: 'Ho hana scansa mehele…',
+        progress: 'Ho hana scansa… {done} ea {total}',
+        progressIdle: 'Ho hana scansa… ho bala polokalo',
+        done: 'Li scanu {n} leqha.',
+        partial:
+          'Li scanu {n} leqha. {e} hae sa ka/on ea scan — ha bane ua fetofetsoa, kahooa ba sa lokisa the publishing.',
+        noKey:
+          'Server e ame hana scansa empa hae ho efa identifier ea run, kahooa hore progress ha ka lumelela. Ha ho na letho le tlhalosang.',
+        missing:
+          'Re-scan ha ea letho server ena (404). Ha ho na letho le fetohang — lipa tse scan tse tla thibela publishing.',
+        frozen: 'Re-scan e ame hana kena: polokalo e ntse a publish (409). Ha ho na letho le fetohang.',
+        failed:
+          'Re-scan e tla thibela. Ha ho na letho le fetohang — lipa tse scan tse tla thibela tse ntse a block publishing.',
+        scanned: 'Li scanu {n} leqha',
+        clean: 'hliama',
+        hit: 'tse ngotsoe',
+        error: 'scan e thibela',
+        vanished: 'tse iphithileng',
+        stillBlocking: 'Tse ntse a thibela'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1949,6 +1972,32 @@ export default {
       repoTagsHint:
         'Malaete a boemo ba repo ({summary}) ke a repo, eseng sa sehlooho sena — laola tsona paneleng ya malaete ka ho le letona.'
     },
+    piiReview: {
+      title: 'Kontrollo ea lintso tsa motho',
+      checking: 'Ho kontrolla…',
+      checkingBody: 'Ho bala boemo ba lintso tsa motho kaofela lipa…',
+      unreadableTitle: 'Boemo bo sa tsebise',
+      unreadableBody:
+        'Ha ho bale boemo ba lintso tsa motho ba polokalo ena. Hore na ho na letho le fumeng ke haeba tsebisoa — ha ena se sephetho eseng se hliama.',
+      unscanned: 'Ha ea sa scanwa',
+      unscannedBody:
+        'Ha ho na scan ea lintso tsa motho e felileng e koahoa polokalo ena ({n} ha a ka scanwa). Ha ho letho le tsebisitsoeng hore le molemo — publishing ha e thibetse ka litso, empa ho na le scan boemong.',
+      errorTitle: 'Scan e thibetse',
+      errorBody:
+        '{n} ha a ka scanwa. Litokom tsa tsona ha li a baleha, kahooa hore na li na le lintso tsa motho ke haeba tsebisoa — ha li hliama empa li thibela publishing.',
+      unreviewed: 'Tse ngotsoe, eseng sa lekola',
+      unreviewedBody:
+        'Scanner o fumane lintso tse kgonehang tsa motho ka {n} leqha mme ha ho motho ea a lekolang. Publishing lumelletsoa, empa ha ho letho lekaleiloeng.',
+      reviewed: 'Tse ngotsoe, lekolehilwe',
+      reviewedBody: '{n} leqha li na le lintso tsa motho tse ngotsoeng tse tsebisitsoeng ke mphetihe ({by} ka {at}).',
+      cleanVerdict: 'Ea scanwa — ha ho letho',
+      cleanBody: 'Kopanong ea scanwa mme ha ho na letho la lintso tsa motho.',
+      staleAck: 'Tsebiso ea pele e ne e ngotsoa {a} ka {at}; hokale {n} a ngotsoe, kahooa ha e akare.',
+      bannerTitle: 'Ha ho motho ea lekolang lintso tseo.',
+      bannerBody:
+        'Publishing e lumelletsoa mme ho na le seriti se e thibetsang, empa lipa tse ngotsoe tse tla fihlela polokalo e publishuwa ka mokala. Bula e ngoe e ngoe mme o nke ka moreme.',
+      unknownActor: 'ha ea tsebise'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -2035,9 +2084,9 @@ export default {
       step3:
         "Re bala mehloli ea hau le ho sisinya lihlooho. Lihlooho li bokellana tlas'a lileibole tsa lihlopha tseo u li khethang. Moetsi o hlokolosi — o khetha ho sisinya lihlooho tse fokolang, tse entsoeng hantle ho e-na le tse ngata tse nang le lerata.",
       step4:
-        'Lileibole ke likarolo tse arolang tsa thuto ea sebopeho sa tsebo ea hau — na taba ee ke mofuta ofe oa ntho? Khetha lileibole tse 3-7 tse tšoarang likarolo tse kholo; moetsi o li sebelisa e le meaho ea thulaganyo ea lihlooho.',
+        'Lileibole ke likarolo tse arolang tsa thuto ea sebopeho sa tsebo ea hau — na taba ee ke mofuta ofe oa ntho? Li bo etsoa feela ho Hierarchy ea Tlhahabolelo, li fihlisitse ho Setsa sa Sephe sa polokotlo ena.',
       step5:
-        "Ena ke pelo ea mosebetsi. Sehlooho ka seng ke karolo e nyane ea tsebo e ka qotsoang. Lihlooho li fumana sehlooho, tlhaloso, 'me li nka lileibole tseo u li khethileng. Mosebetsi oa hau ke ho etsa hore e be e tšepahalang: reha bocha lihlooho tse sa hlakang, kopanya tse batlang li tšoana, tlosa tseo u ke keng ua li tšehetsa ka mohloli.",
+        'Ena ke pelo ea mosebetsi. Sehlooho ka seng ke karolo e nyane ea tsebo e ka qotsoang. Lihlooho li fumana sehlooho, tlhaloso, li fumana leebole ho Hierarchy ea Tlhahabolelo. Mosebetsi oa hau ke ho etsa hore e be e tšepahalang: reha bocha lihlooho tse sa hlakang, kopanya tse batlang li tšoana, tlosa tseo u ke keng ua li tšehetsa ka mohloli.',
       step6:
         'Re etsa liteko tsa tumellano: na eohle ea lihlooho e na le sehlooho? Na matlhao a utloahala? Na tlaso ea mehloli e tsotehile? Mathata a thibelang a lokisoe pele u fana ka polokelo; lithoahallo li ka amoheloa.',
       step7:
@@ -2247,6 +2296,20 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2256,11 +2319,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: 'Khetha lileibole',
-        hint: 'Lileibole ke likarolo tse arolang tsa thuto ea sebopeho sa tsebo ea hau — lihlooho tsee ke mefuta efe ea lintho? Khetha tse 3-7.',
-        add: '+ Eketsa leibole',
-        addConfirm: 'Eketsa',
-        placeholder: 'mohlala: Litumello',
+        title: 'Leballo — li qetelloa ka bo bona',
+        hint: 'Leballo li bo etsoa feela ho Hierarchy ea Tlhahabolelo — li fihlisitse ho Setsa sa Sephe sa polokotlo ena.',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
@@ -2526,12 +2586,42 @@ export default {
           'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
         index_failed:
           'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
       }
     },
     pii: {
       panel: 'Mekhatlo e tšoailoeng',
       nFlagged: '{n} e fumanoeng',
       rescan: 'Scan hape',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
       scanning: 'Scanning…',
       clean: 'No flagged entities — concept ena e hloekile.',
       how: 'Lokisa: tlosa kapa fetola mantsoe (mohlala, the role ho e-na le lebitso), ebe u-save — the re-scan e tlisa sena nakong.',

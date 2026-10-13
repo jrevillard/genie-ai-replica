@@ -139,9 +139,25 @@ const headTestService = {
    * failing negative in one pass, ONE LLM call. Returns {suite_key,
    * run_key, failing_count, failing_queries[], suggested_tags[], source,
    * note}. */
+  /**
+   * Story 1-8c, async since 1-8g-y: POST answers 202 `{run_key, status:'running'}`
+   * and the work continues server-side. It fans out over the shared remote GPU
+   * node (one embed per failing negative in guardSuggestions, plus the LLM
+   * pass), which outran the gateway — the curator saw a spinner, no local GPU
+   * activity, then a 504 with the advice never arriving. Poll with
+   * getExplainFailures() until status leaves 'running'.
+   */
   async explainSuiteFailures(repoId, suiteKey) {
     const res = await httpService.post(
       `/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}/explain`
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  /** The async explain's poll: {status:'running'} | {status:'failed', error} | payload. */
+  async getExplainFailures(repoId, suiteKey, runKey) {
+    const res = await httpService.get(
+      `/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}/explain/${encodeURIComponent(runKey)}`
     );
     return res && res.data ? res.data : null;
   },

@@ -8,26 +8,62 @@
   the green RESOLVED list (before → after) while unprocessed findings stay
   orange. Every action's result is emitted to the editor ('applied') so the
   text pane reflects the fix immediately. Nothing to hunt for manually.
+
+  RE-SCAN IS A WRITE (2026-10-12). It used to POST pii-inspect {rescan:true},
+  a route the server documents "Nothing persisted": the panel refreshed while
+  pii_state stayed byte-identical, so a concept stuck on pii_state 'error' —
+  the one state the publish gate refuses, and the one no per-occurrence
+  action can reach — looked re-scanned and stayed blocked forever. The button
+  now calls the PERSISTING scan and reports whatever verdict came back,
+  INCLUDING 'error', which is rendered as its own blocking state rather than
+  as "no findings". Opening the panel still uses the cheap, cache-backed
+  pii-inspect; only the explicit Re-scan writes.
 -->
 <template>
   <section class="okf-pii" role="region" :aria-label="translate('okf.pii.panel', 'Flagged entities')">
     <header class="okf-pii__head">
       <span class="okf-pii__title">{{ translate('okf.pii.panel', 'Flagged entities') }}</span>
-      <DsPill :variant="ok ? (occurrences.length ? 'warning' : 'success') : 'danger'">
+      <DsPill :variant="stateVariant">
         {{
-          ok
-            ? occurrences.length
-              ? translate('okf.pii.nFlagged', '{n} found').replace('{n}', String(total))
-              : translate('okf.pii.allClear', 'Clear')
-            : translate('okf.pii.scanError', 'Scan unavailable')
+          piiState === 'error'
+            ? translate('okf.pii.stateError', 'Scan failed')
+            : !ok
+              ? translate('okf.pii.scanError', 'Scan unavailable')
+              : occurrences.length
+                ? translate('okf.pii.nFlagged', '{n} found').replace('{n}', String(total))
+                : translate('okf.pii.allClear', 'Clear')
         }}
       </DsPill>
-      <DsButton small variant="secondary" :disabled="loading || busy !== null" @click="load(true)">
+      <!-- RE-SCAN IS A WRITE (2026-10-12). It used to call pii-inspect with
+           {rescan:true}, which the server documents "Nothing persisted": the
+           panel refreshed and pii_state never moved, so a concept stuck on
+           'error' looked re-scanned and stayed blocked. This is the
+           PERSISTING scan (piiService.scanConcept) — the only thing that can
+           clear an 'error' verdict. -->
+      <DsButton small variant="secondary" :disabled="loading || busy !== null || readOnly" @click="rescan">
+        <DsSpinner v-if="rescanning" size="sm" />
         {{ translate('okf.pii.rescan', 'Re-scan') }}
       </DsButton>
     </header>
 
     <p v-if="error" class="okf-pii__error">{{ error }}</p>
+
+    <!-- PII_STATE 'error' IS NOT "NO FINDINGS" (2026-10-12): a failed scan and
+         a clean scan are opposite verdicts and the publish gate treats them
+         differently. Rendering them the same way is what made the failure
+         un-actionable — the panel looked green over a concept that was
+         blocking the hand-off. -->
+    <p v-if="piiState === 'error'" class="okf-pii__state-error">
+      <strong>{{ translate('okf.pii.errorTitle', 'This page is blocking the hand-off.') }}</strong>
+      {{
+        translate(
+          'okf.pii.errorBody',
+          'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.'
+        )
+      }}
+      <span v-if="scanError" class="okf-pii__state-error-detail">{{ scanError }}</span>
+    </p>
+
     <!-- SCAN PROGRESS (David, 2026-09-13): a moving bar (not just a spinner)
          while the live Presidio scan runs — visible feedback that something
          is happening during the wait. -->
@@ -41,7 +77,7 @@
         :aria-label="translate('okf.pii.scanning', 'Scanning…')"
       />
     </div>
-    <p v-else-if="!ok" class="okf-pii__empty">
+    <p v-else-if="!ok && piiState !== 'error'" class="okf-pii__empty">
       {{
         translate(
           'okf.publish.piiScanError',
@@ -49,7 +85,7 @@
         )
       }}
     </p>
-    <p v-else-if="occurrences.length === 0 && resolutions.length === 0" class="okf-pii__empty">
+    <p v-else-if="occurrences.length === 0 && resolutions.length === 0 && piiState !== 'error'" class="okf-pii__empty">
       {{ translate('okf.pii.clean', 'No flagged entities — this concept is clear.') }}
     </p>
 
@@ -152,7 +188,7 @@
           </div>
           <div v-if="r.action !== 'redact_file'" class="okf-pii__diff">
             <del class="okf-pii__before">{{ r.before }}</del>
-            <template v-if="r.action === 'accept'">
+            <template v-if="r.action === 'accept' || r.action === 'accept_all_findings' || r.action === 'accept_repo'">
               <span class="okf-pii__arrow">→</span>
               <ins class="okf-pii__after">{{ translate('okf.pii.resolved.kept', 'kept in the text') }}</ins>
             </template>
@@ -203,7 +239,7 @@ export default {
     // therefore cost ZERO Presidio work on revisit.
     initialState: { type: Object, default: null }
   },
-  emits: ['scanned', 'applied', 'locate'],
+  emits: ['scanned', 'rescanned', 'applied', 'locate'],
   data() {
     return {
       loading: false,
@@ -214,12 +250,32 @@ export default {
       replacing: null,
       replacementText: '',
       error: '',
-      confirmFileAction: null
+      confirmFileAction: null,
+      // PERSISTED VERDICT (2026-10-12): 'clean' | 'hit' | 'error' | null.
+      // Distinct from `ok`, which only says "the request succeeded". An
+      // 'error' verdict is the publish BLOCKER and has its own rendering —
+      // collapsing it into "no findings" is what made it un-actionable.
+      piiState: null,
+      // WHY the scan failed (server's pii_scan_error). Null when the scan
+      // itself never ran.
+      scanError: null,
+      rescanning: false,
+      // STALE-ANSWER GUARD — see `rescan()`. A PII verdict belongs to ONE
+      // concept; if the curator selects another page while a scan is in
+      // flight, the answer describes a page no longer on screen. Bumped on
+      // every scan dispatch AND on every concept change.
+      scanEpoch: 0
     };
   },
   computed: {
     total() {
       return this.occurrences.length;
+    },
+    // A failed scan is the loudest state; an unreadable request second;
+    // findings next; clear last.
+    stateVariant() {
+      if (this.piiState === 'error' || !this.ok) return 'danger';
+      return this.occurrences.length ? 'warning' : 'success';
     }
   },
   watch: {
@@ -227,6 +283,9 @@ export default {
       this.adoptOrLoad();
     },
     conceptId() {
+      // Invalidate any scan still in flight for the PREVIOUS concept before
+      // loading the new one, so its verdict can never land here.
+      this.scanEpoch += 1;
       this.adoptOrLoad();
     }
   },
@@ -244,6 +303,11 @@ export default {
         this.loading = false;
         this.occurrences = Array.isArray(init.occurrences) ? init.occurrences : [];
         this.resolutions = Array.isArray(init.resolutions) ? init.resolutions : [];
+        // The pre-warmed state is the PERSISTED verdict — render it as such.
+        // An 'error' here is the blocking case; without this the panel adopts
+        // a clean-looking list over a concept the gate is refusing.
+        this.piiState = init.state === 'error' ? 'error' : init.state || (this.occurrences.length ? 'hit' : 'clean');
+        this.scanError = null;
         return;
       }
       this.load();
@@ -254,29 +318,170 @@ export default {
       if (!payload) return;
       if (Array.isArray(payload.occurrences)) this.occurrences = payload.occurrences;
       if (Array.isArray(payload.resolutions)) this.resolutions = payload.resolutions;
+      if (payload.pii_state) {
+        this.piiState = payload.pii_state;
+        this.scanError = payload.pii_scan_error || null;
+      }
     },
-    // force (David, 2026-09-13): the Re-scan button passes force=true — the
-    // server bypasses its findings cache and runs a live Presidio scan.
-    async load(force) {
+    // OPEN (the panel's first read): pii-inspect — cheap, cache-backed, and
+    // correctly persists NOTHING. It reports the CURRENT state so the panel
+    // can render an 'error' verdict honestly, but it cannot clear one.
+    async load() {
+      const epoch = ++this.scanEpoch;
+      const conceptId = this.conceptId;
       this.loading = true;
       this.error = '';
       try {
-        const out = await repoOkfService.inspectPii(this.repoId, this.conceptId, { rescan: Boolean(force) });
-        this.ok = Boolean(out.ok);
-        this.occurrences = Array.isArray(out.occurrences) ? out.occurrences : [];
-        this.resolutions = Array.isArray(out.resolutions) ? out.resolutions : [];
-        this.$emit('scanned', {
-          state: out.state,
-          total: this.total,
-          occurrences: this.occurrences,
-          resolutions: this.resolutions
-        });
+        const out = await repoOkfService.inspectPii(this.repoId, conceptId, { rescan: false });
+        // STALE-ANSWER GUARD: the curator may have moved to another concept
+        // while this request was in flight.
+        if (epoch !== this.scanEpoch || conceptId !== this.conceptId) return;
+        this.applyInspect(out);
       } catch {
+        if (epoch !== this.scanEpoch || conceptId !== this.conceptId) return;
         this.ok = false;
         this.occurrences = [];
       } finally {
-        this.loading = false;
+        if (epoch === this.scanEpoch) this.loading = false;
       }
+    },
+    /**
+     * RE-SCAN — A WRITE (2026-10-12).
+     *
+     * This used to be `load(true)`, i.e. inspectPii({rescan:true}), which the
+     * server documents "Nothing persisted": the DISPLAY refreshed while
+     * pii_state stayed byte-identical, so a concept stuck on 'error' looked
+     * re-scanned and stayed blocked. It now calls the PERSISTING scan
+     * (piiService.scanConcept server-side), which is the ONLY path that can
+     * move a concept off 'error'.
+     *
+     * Fail-LOUD: a missing route (404 on a stale build), a drain freeze
+     * (409) or a transport failure all render a VISIBLE message. A silent
+     * no-op here is precisely the bug this replaces.
+     */
+    async rescan() {
+      if (this.rescanning || this.busy !== null) return;
+      const epoch = ++this.scanEpoch;
+      const conceptId = this.conceptId;
+      this.rescanning = true;
+      this.error = '';
+      try {
+        // The server scans the content it is HANDED, so the concept has to be
+        // fetched first — sending an empty body would scan nothing and write a
+        // verdict that means nothing.
+        const concept = await repoOkfService.getConcept(this.repoId, conceptId);
+        if (epoch !== this.scanEpoch || conceptId !== this.conceptId) return;
+        if (!concept) throw { status: 404, data: { message: `Concept '${conceptId}' could not be loaded` } };
+        // THE WRITE: POST /pii-scan {concepts:[…]} → the server runs the real
+        // scanConcept and upserts pii_state onto this concept's meta row.
+        const out = await repoOkfService.scanConceptPii(this.repoId, conceptId, {
+          frontmatter: concept.frontmatter || {},
+          body: concept.body || ''
+        });
+        if (epoch !== this.scanEpoch || conceptId !== this.conceptId) return;
+        this.applyPersisted(out, conceptId);
+        // pii-scan answers with the VERDICT, not the findings list, so re-read
+        // the occurrences for display. That read is cache-backed and cheap —
+        // and it is the read-only route, used for what it is good at.
+        const fresh = await repoOkfService.inspectPii(this.repoId, conceptId, { rescan: false });
+        if (epoch !== this.scanEpoch || conceptId !== this.conceptId) return;
+        if (Array.isArray(fresh && fresh.occurrences)) this.occurrences = fresh.occurrences;
+        if (Array.isArray(fresh && fresh.resolutions)) this.resolutions = fresh.resolutions;
+        this.$emit('rescanned', {
+          concept_id: conceptId,
+          pii_state: this.piiState,
+          pii_scan_error: this.scanError,
+          total: this.total
+        });
+      } catch (e) {
+        if (epoch !== this.scanEpoch || conceptId !== this.conceptId) return;
+        this.ok = false;
+        this.occurrences = [];
+        this.error = this.rescanErrorMessage(e);
+      } finally {
+        if (epoch === this.scanEpoch) this.rescanning = false;
+      }
+    },
+    // Render a NON-persisting inspect payload.
+    applyInspect(out) {
+      const state = (out && out.state) || null;
+      // An inspect that failed its own transport reports ok:false/state
+      // 'error'; render that as the persisted 'error' verdict rather than
+      // pretending the concept is clean.
+      this.ok = Boolean(out && out.ok);
+      if (state === 'error') {
+        this.piiState = 'error';
+        this.scanError = (out && (out.pii_scan_error || out.error)) || null;
+      } else if (state) {
+        this.piiState = state;
+        this.scanError = null;
+      }
+      this.occurrences = Array.isArray(out && out.occurrences) ? out.occurrences : [];
+      this.resolutions = Array.isArray(out && out.resolutions) ? out.resolutions : [];
+      this.$emit('scanned', {
+        state: state || this.piiState,
+        total: this.total,
+        occurrences: this.occurrences,
+        resolutions: this.resolutions
+      });
+    },
+    // Render a PERSISTING scan payload — POST /pii-scan {concepts:[…]}, which
+    // answers {scanned, results:[{concept_id, pii_state, pii_hits_summary}]}.
+    // pii_state here IS what the publish gate now reads: the write already
+    // landed. Occurrences are NOT in this payload (a follow-up inspect
+    // supplies them), so the existing list is left alone here.
+    applyPersisted(out, conceptId) {
+      const results = Array.isArray(out && out.results) ? out.results : [];
+      const row = results.find((r) => r && r.concept_id === conceptId) || results[0] || null;
+      const state = (row && row.pii_state) || null;
+      // A FAILED scan is not an HTTP failure: the server records pii_state
+      // 'error' and still answers 200. Treating that as success is exactly how
+      // a blocking verdict gets rendered as a clean page.
+      this.ok = state !== 'error';
+      this.piiState = state;
+      this.scanError = state === 'error' ? (row && (row.error || row.pii_scan_error)) || null : null;
+      this.$emit('scanned', {
+        state: state,
+        total: this.total,
+        occurrences: this.occurrences,
+        resolutions: this.resolutions
+      });
+    },
+    // Why a re-scan could not run. Never swallowed — the curator pressed a
+    // button that does not work and must be told which way it failed.
+    rescanErrorMessage(e) {
+      const status = e && (e.status || (e.response && e.response.status));
+      const serverMessage = e && e.data && e.data.message;
+      // The server's error CODE rides along when it sends no prose — a bare
+      // "REPO_DRAINING" is more use to whoever has to act than silence.
+      const serverCode = e && e.data && e.data.error;
+      const explain = (code) => (serverCode && serverCode !== code ? ` (${serverCode})` : '');
+      if (status === 404) {
+        return (
+          serverMessage ||
+          this.translate(
+            'okf.pii.rescanMissing',
+            'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.'
+          ) + explain('NOT_FOUND')
+        );
+      }
+      if (status === 409) {
+        return (
+          serverMessage ||
+          this.translate(
+            'okf.pii.rescanFrozen',
+            'Re-scan refused: the repository is being published (409). Nothing was changed.'
+          ) + explain('REPO_DRAINING')
+        );
+      }
+      return (
+        serverMessage ||
+        (e && e.message) ||
+        this.translate(
+          'okf.pii.rescanFailed',
+          'Re-scan failed. Nothing was changed — the page is still blocking publishing.'
+        )
+      );
     },
     async apply(action, o, replacement) {
       if (this.busy !== null) return;
@@ -403,7 +608,19 @@ export default {
         replace: this.translate('okf.pii.resolved.replaced', 'Replaced'),
         remove: this.translate('okf.pii.resolved.removed', 'Removed'),
         accept: this.translate('okf.pii.resolved.accepted', 'Accepted'),
-        redact_file: this.translate('okf.pii.resolved.fileRedacted', 'File redacted')
+        redact_file: this.translate('okf.pii.resolved.fileRedacted', 'File redacted'),
+        // Whole-concept Remove (per-concept "Remove body" AND repo-wide Remove
+        // both write remove_file). It was unmapped, so the ledger rendered the
+        // raw action string in a NEUTRAL pill — a destructive action displayed
+        // as if nothing happened. Removed is red, same as its per-item sibling.
+        remove_file: this.translate('okf.pii.resolved.removed', 'Removed'),
+        // Whole-concept acceptance (David 2026-10-13: Accept All should bulk
+        // accept everything the same way individual accepts work). It MUST render
+        // identically to a per-item Accept — green, "Accepted". accept_repo is the
+        // legacy action and renders the same so the existing ledger reads
+        // correctly rather than showing a raw action string in a neutral pill.
+        accept_all_findings: this.translate('okf.pii.resolved.accepted', 'Accepted'),
+        accept_repo: this.translate('okf.pii.resolved.accepted', 'Accepted')
       };
       return map[r && r.action] || (r && r.action) || '';
     },
@@ -416,7 +633,13 @@ export default {
         redact_file: 'neutral',
         replace: 'info',
         remove: 'danger',
-        accept: 'success'
+        remove_file: 'danger',
+        accept: 'success',
+        // Accepted == green, per-item OR repo-wide. A bulk accept is still an
+        // acceptance: showing it as neutral would read as "unprocessed", which
+        // is exactly backwards.
+        accept_all_findings: 'success',
+        accept_repo: 'success'
       };
       return map[r && r.action] || 'neutral';
     },
@@ -458,6 +681,28 @@ export default {
   margin: 0;
   font-size: var(--text-sm);
   color: var(--danger, #b91c1c);
+}
+/* PERSISTED 'error' VERDICT (2026-10-12): a failed scan is not a clean scan.
+   It gets its own block, in the danger tone, above the findings — the gate is
+   refusing THIS concept and the curator has to know before they read a list. */
+.okf-pii__state-error {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.okf-pii__state-error-detail {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs);
+  color: var(--danger);
+  overflow-wrap: anywhere;
 }
 .okf-pii__empty {
   color: var(--text-muted, inherit);

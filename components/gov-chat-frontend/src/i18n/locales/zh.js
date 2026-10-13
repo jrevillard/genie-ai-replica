@@ -1663,6 +1663,25 @@ export default {
       viewToggle: '编辑器视图',
       paneLabel: '视图窗格',
       saveFailed: '保存失败 — 请重试',
+      piiRescan: {
+        label: '个人数据',
+        button: '重新扫描所有页面',
+        working: '正在重新扫描所有页面…',
+        progress: '正在重新扫描…第 {done} 页，共 {total} 页',
+        progressIdle: '正在重新扫描…正在读取存储库',
+        done: '已重新扫描 {n} 个页面。',
+        partial: '已重新扫描 {n} 个页面。仍有 {e} 个失败——它们的扫描结论没有变化，因此这些页面仍会阻止发布。',
+        noKey: '服务器接受了重新扫描，但未返回运行 ID，因此无法跟踪进度。没有任何结果被报告。',
+        missing: '此服务器不支持重新扫描（404）。没有任何更改——扫描失败的页面仍在阻止发布。',
+        frozen: '重新扫描被拒绝：存储库正在发布（409）。没有任何更改。',
+        failed: '重新扫描失败。没有任何更改——扫描失败的页面仍在阻止发布。',
+        scanned: '已重新扫描 {n} 个页面',
+        clean: '无发现',
+        hit: '已标记',
+        error: '扫描错误',
+        vanished: '已消失',
+        stillBlocking: '仍在阻止'
+      },
       piiBulk: {
         done_accept:
           'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
@@ -1908,6 +1927,31 @@ export default {
       perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
       repoTagsHint: '仓库级标签（{summary}）属于仓库而非此概念——请在右侧栏的标签面板中管理。'
     },
+    piiReview: {
+      title: '个人数据检查',
+      checking: '检查中…',
+      checkingBody: '正在读取每个页面的个人数据状态…',
+      unreadableTitle: '状态未知',
+      unreadableBody: '无法读取此存储库的个人数据状态。是否发现了任何内容属未知——这不是干净的结果。',
+      unscanned: '未扫描',
+      unscannedBody:
+        '没有完整的个人数据扫描覆盖此存储库（有 {n} 个页面从未扫描）。没有任何内容被确认不含个人数据——发布不是被命中阻止的，但此结论背后没有扫描。',
+      errorTitle: '扫描失败',
+      errorBody:
+        '{n} 个页面无法扫描。它们的文本未被成功读取，因此是否包含个人数据属未知——它们并不干净，并且会阻止发布。',
+      unreviewed: '已标记，未复核',
+      unreviewedBody:
+        '扫描器在 {n} 个页面发现了可能的个人数据，且无人查看。发布仍被允许，但这些页面上没有任何内容经过复核。',
+      reviewed: '已标记，已复核',
+      reviewedBody: '{n} 个页面带有已标记的个人数据，已由策展人确认（{by}，{at}）。',
+      cleanVerdict: '已扫描——未发现',
+      cleanBody: '每个页面都已扫描，未发现个人数据。',
+      staleAck: '先前的确认记录于 {at} 标记了 {a} 个页面；现在有 {n} 个被标记，因此它并不涵盖它们。',
+      bannerTitle: '没有人复核过这些命中。',
+      bannerBody:
+        '发布仍然被允许，也没有任何关卡会阻止你——但被标记的页面将原样进入已发布的存储库。请逐个打开并在发布前做出决定。',
+      unknownActor: '未知'
+    },
     glossary: {
       addConcept:
         'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
@@ -1987,9 +2031,9 @@ export default {
       step3:
         '我们正在读取您的来源并提议主题。主题将归聚在您挑选的分类标签之下。生产模块秉持审慎原则 — 宁可推荐少量规整的主题，也不引入大量杂乱内容。',
       step4:
-        '标签是您本体架构的分类维度 — 该主题属于何种实体性质？请挑选 3 至 7 个能概括主轴的标签；生产模块将以此作为主题层级结构的骨架。',
+        '标签是您本体架构的分类维度 — 该主题属于何种实体性质？ 标签自动从知识层级分配，并限定在本仓库的主题领域内。',
       step5:
-        '这是工作的核心所在。每个主题都是一个细粒度、可被引用的知识单元。主题拥有标题、描述并继承您所选的标签。您的职责是确保其严谨可靠：更正含糊的标题、合并近似重复项、剔除缺乏来源佐证的内容。',
+        '这是工作的核心所在。每个主题都是一个细粒度、可被引用的知识单元。主题拥有标题、描述并获得来自知识层级的标签。您的职责是确保其严谨可靠：更正含糊的标题、合并近似重复项、剔除缺乏来源佐证的内容。',
       step6:
         '我们运行合规性检查：每个主题都有标题吗？标签有效吗？来源归属完整吗？阻塞性问题必须在移交知识库之前修复；警告可以确认。',
       step7:
@@ -2197,6 +2241,20 @@ export default {
         dupContent:
           'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
         inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
         filesNote: '{done} of {total} documents converted',
         pagesNote: '{done} of {total} pages converted',
         pagesSoFar: '{n} pages converted so far',
@@ -2206,11 +2264,8 @@ export default {
         legWait: 'Waiting for the previous conversion to release…'
       },
       label: {
-        title: '挑选标签',
-        hint: '标签是您本体架构的分类维度 — 这些主题属于哪些性质类别？请挑选 3 至 7 个。',
-        add: '+ 添加标签',
-        addConfirm: '添加',
-        placeholder: '例如：许可审批',
+        title: '标签 — 自动生成',
+        hint: '标签自动从知识层级分配——并限定在本仓库的主题领域内。',
         loading: 'Reading labels…',
         preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
         unlabeled: 'no labels yet',
@@ -2470,12 +2525,42 @@ export default {
           'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
         index_failed:
           'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
       }
     },
     pii: {
       panel: '标记的实体',
       nFlagged: '找到 {n} 个',
       rescan: '重新扫描',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
       scanning: '扫描中…',
       clean: '没有标记的实体 — 此 concept 正常。',
       how: '修复：移除或重新表述（例如将名字改为职位），然后保存 — 重新扫描会更新此列表。',

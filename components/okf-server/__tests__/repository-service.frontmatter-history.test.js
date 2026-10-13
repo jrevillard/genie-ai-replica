@@ -10,6 +10,14 @@
 jest.mock('../shared-lib/logger', () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
 }));
+// revertFrontmatter routes back through update(), which now rebuilds the
+// routing head from the restored frontmatter (David, 2026-10-12). The real
+// buildVectorizedHead embeds every tag through the remote TEI endpoint, so
+// unstubbed the revert test hangs on a 30s axios timeout. This suite is
+// about the history snapshot, not the head — stub the seam.
+jest.mock('../services/frontmatter-service', () => ({
+  buildVectorizedHead: jest.fn(() => Promise.resolve({ dim: 1024, per_field: {}, computed_at: 'now' }))
+}));
 jest.mock('../shared-lib/tracing', () => ({
   withSpan: jest.fn(async (name, fn) => fn({ setAttribute: jest.fn() }))
 }));

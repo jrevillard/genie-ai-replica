@@ -22,6 +22,7 @@ const auditService = require('./audit-service');
 const conformanceService = require('./conformance-service');
 const piiService = require('./pii-service');
 const { retractRepoGraph } = require('./graph-retract-service');
+const backingFileService = require('./backing-file-service');
 const { workingGraphName } = require('./graph-lifecycle-service');
 
 const COLLECTION = 'okf_repositories';
@@ -53,6 +54,12 @@ const IMMUTABLE_FIELDS = ['graph_name', 'repo_id', 'domain'];
 // here so a direct PATCH /api/okf/repos/:id with a `frontmatter` key
 // is also accepted (back-stop for the operator migration script).
 const UPDATABLE_FIELDS = ['name', 'source', 'acl', 'retention', 'studio_step', 'frontmatter'];
+// How long a frontmatter save will WAIT for the routing head before
+// releasing the HTTP response. The head is a derived artifact and the TEI
+// embed behind it is a network call to the shared remote GPU node, so the
+// save must never be hostage to another tenant's load. See the bounded
+// rebuild in update().
+const HEAD_REBUILD_BUDGET_MS = 5000;
 // Story 1-8d — frontmatter_history bound (revert support for the Lab).
 const FRONTMATTER_HISTORY_LIMIT = 10;
 
@@ -694,6 +701,69 @@ async function update(repo_id, patch, actor) {
       throw err;
     }
 
+    // THE HEAD MUST TRACK THE FRONTMATTER (David, 2026-10-12: "the test still
+    // sits at 80%... it is not suggesting any further improvements").
+    //
+    // The head is the gate vector the retriever scores queries against, and
+    // buildVectorizedHead is its only writer besides the explicit rebuild
+    // endpoint and publish. update() wrote the frontmatter and never told it,
+    // so the head stayed frozen while the tag set grew underneath it. Live
+    // proof on the Alphabet repo: four saves at 04:15/04:17/04:17/04:19, the
+    // head recomputed ONCE at 04:15:37 and never again, and three Lab runs
+    // then scored bit-identically (avg_margin equal to 17 decimal places)
+    // against an unchanged gate while the forbidden list grew 5->6->7->8. The
+    // advisor reported "no safe tag lever" because it had nothing new to
+    // simulate — it was reasoning over a stale corpus, not failing to help.
+    //
+    // Two more repos were frozen the same way (www-gov-uk-full-crawl, NCD
+    // Information), so this is systemic, not an Alphabet quirk.
+    //
+    // BOUNDED, NOT BLOCKING. Awaiting this outright — the first cut of this
+    // fix — made every tag save hostage to the shared remote GPU node: TEI
+    // embed is a network call with a 30s axios timeout and three retries, so
+    // a slow embedding endpoint pushed the PATCH past the gateway's read
+    // timeout and the curator got a 504 for a write that had actually
+    // succeeded. Live 2026-10-12: PATCH /api/okf/repos/:id returned
+    // 504 Gateway Time-out while the frontmatter persisted correctly.
+    //
+    // So the rebuild gets HEAD_REBUILD_BUDGET_MS and then the response goes
+    // regardless. buildVectorizedHead writes the head in ONE update at the
+    // very end, so an overrun means "not written yet", never a half-written
+    // head — the late write still lands. A failure never rolls the save back
+    // (the frontmatter is already durable, and losing a curator's tag edit
+    // over an embedding blip is strictly worse than a stale head); it logs at
+    // error, and the Lab's existing stale badge (frontmatter.updated_at vs
+    // head.computed_at) is the designed detector.
+    //
+    // Lazy require: head-test-service requires this module, so a top-level
+    // import here would be a cycle. Same pattern as graph-lifecycle below.
+    if (Object.prototype.hasOwnProperty.call(setFields, 'frontmatter')) {
+      const frontmatterService = require('./frontmatter-service');
+      const headActor = (actor && actor.sub) || 'system';
+      const rebuild = frontmatterService
+        .buildVectorizedHead(repo_id, setFields.frontmatter, { actor: headActor, version: existing.version })
+        .then((head) => {
+          logger.info('OKF repo updated: head rebuilt from the new frontmatter', {
+            repo_id,
+            dim: head && head.dim
+          });
+        })
+        .catch((headErr) => {
+          logger.error('OKF repo updated: HEAD REBUILD FAILED — the gate is now stale', {
+            repo_id,
+            error: headErr && headErr.message,
+            code: (headErr && headErr.code) || null
+          });
+        });
+      await Promise.race([
+        rebuild,
+        new Promise((resolve) => {
+          const timer = setTimeout(resolve, HEAD_REBUILD_BUDGET_MS);
+          if (timer.unref) timer.unref();
+        })
+      ]);
+    }
+
     // BORN-RIGHT RENAME (David, 2026-09-02): the graph name derives from the
     // repo NAME — a rename must move the graph (same versions, new slug), or
     // the next drain would create a differently-named graph and orphan the
@@ -787,6 +857,31 @@ async function remove(repo_id, actor) {
     const ts = nowIso();
     const delete_after = DateTime.now().plus({ hours: graceHours }).toUTC().toISO();
 
+    // HARD-DELETE THE BACKING FILES FIRST (David, 2026-10-12). Order matters:
+    // this MUST run before retractRepoGraph below, because that sweep removes
+    // the files DOCS with a raw Arango REMOVE (`FOR f IN files FILTER
+    // f.repo_id == repo_id`) — once the docs are gone, this service has no
+    // file_id left to hand document-repository, and the upload BYTES stay
+    // orphaned in the storage dir forever (no FK, no reclamation path).
+    //
+    // Going through doc-repo's DELETE route is what actually unlinks the bytes
+    // and purges the crawl/ingestion log rows. It also fixes a coverage hole:
+    // that sweep filters files.repo_id, but SOURCE documents are stamped
+    // files.okf_repo_id — so deleting a document-built repo orphaned every
+    // upload it was built from. backingFileService covers both stamps.
+    //
+    // Files still backing ANOTHER live repository are skipped (never deleted),
+    // and a file whose "still in use" check errors is kept — failing closed on
+    // a data-loss check. Best-effort: the registry entry is what must go.
+    try {
+      await backingFileService.hardDelete(repo_id, { actor });
+    } catch (backingErr) {
+      logger.warn('Backing file hard-delete failed (non-fatal)', {
+        repo_id,
+        error: backingErr && backingErr.message
+      });
+    }
+
     // Cascade retract FIRST — retractRepoGraph reads the registry doc for the
     // graph_name, so the registry entry must still exist while it runs. It drops
     // the per-repo graph (definition + 4 collections) + the repo's meta rows +
@@ -795,6 +890,29 @@ async function remove(repo_id, actor) {
       await retractRepoGraph(repo_id);
     } catch (err) {
       logger.warn('Graph retract failed (non-fatal)', { repo_id, error: err.message });
+    }
+
+    // Story 10.5 — ORPHAN CASCADE for the wizard's resumable curation draft.
+    // Best-effort and placed AFTER the graph retract (the draft must not
+    // outlive its repo). A draft that does outlive one is dead weight, never a
+    // correctness problem, and must NEVER fail a DELETE — hence the same
+    // try/catch + logger.warn shape as the retract above. Deliberately a raw
+    // collection handle, not a studio-draft-service require: this file is
+    // imported BY that service (its 404 pre-gate), and requiring back would
+    // be a require cycle. The sweep's orphan pass is the safety net if this
+    // ever misses. (remove() only runs for a non-ingested repo — an ingested
+    // one 409s above — so a serving repo is never draft-cascaded.)
+    try {
+      await db.collection('okf_studio_drafts').remove(repo_id);
+    } catch (err) {
+      // "No draft stored" is the overwhelmingly common case (most repos are
+      // never opened in the wizard) and is NOT a cascade failure — keep it at
+      // debug so a warn here always means something went genuinely wrong.
+      if (ARANGO_NOT_FOUND(err)) {
+        logger.debug('Studio draft cascade: no draft stored (nothing to remove)', { repo_id });
+      } else {
+        logger.warn('Studio draft cascade failed (non-fatal)', { repo_id, error: err.message });
+      }
     }
 
     // Then remove the registry entry entirely — the delete service cleans

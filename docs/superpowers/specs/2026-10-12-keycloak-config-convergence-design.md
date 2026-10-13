@@ -84,7 +84,7 @@ Consequences of duplicating instead:
 - The compose image keeps COPYing `configs/keycloak/genie-realm.yaml`, so the Docker Swarm path is bit-for-bit unchanged.
 - The chart reads its own copy at render time; Helm never invokes Docker, so there is no coupling between the two.
 
-**Drift is the cost, and it is guarded, not accepted.** A `diff` assertion in the `chart:lint` CI job fails the MR when the two copies diverge, and that job's `rules:changes` is extended so it also fires when only `configs/keycloak/**/*` changes — which by itself it would not. Without that second part, an edit to the compose copy alone would skip the check entirely.
+**Drift is the cost, and it is guarded, not accepted.** A `cmp -s` assertion in the `chart:lint` CI job fails the MR when the two copies diverge, and that job's `rules:changes` is extended so it also fires when only `configs/keycloak/**/*` changes — which by itself it would not. Without that second part, an edit to the compose copy alone would skip the check entirely.
 
 Per-env variation reaches the file through two distinct channels, matching what compose already does:
 | non-secret deployment values | `ingress.host`, locale, password policy, theme, mobile client id, realm name | plain `env` on the Job, from `.Values` |
@@ -204,7 +204,7 @@ The remaining placeholders in the file (`KC_REALM`, `KC_CLIENT_ID`, `KC_PUBLIC_O
 
 ### D9 — Guard the duplication with a CI drift assertion
 
-The two copies of the realm file are only equivalent by convention, so the convention is enforced. `chart:lint` (`.gitlab-ci.yml:2553`) gains a `diff charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml` step, and its `rules:changes:paths` gains `configs/keycloak/**/*` so the job fires when only the compose copy changes — without that, an edit to `configs/keycloak/genie-realm.yaml` alone would skip the job and the drift would ship.
+The two copies of the realm file are only equivalent by convention, so the convention is enforced. `chart:lint` (`.gitlab-ci.yml:2553`) gains a `cmp -s charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml` step (bare `diff` is rejected: it is a shell function in developer worktrees that forwards to `git diff` and exits 0 on a content difference, so the guard would pass locally while failing in CI — `cmp -s` has identical exit-code semantics with no alias shadowing, and `-s` is accepted by both busybox and coreutils), and its `rules:changes:paths` gains `configs/keycloak/**/*` so the job fires when only the compose copy changes — without that, an edit to `configs/keycloak/genie-realm.yaml` alone would skip the job and the drift would ship.
 
 This is the substitution for the CI path-list edits a single-copy design required: those jobs still watch only `configs/keycloak/**/*`, which remains correct, because the image they build never reads the chart's copy.
 
@@ -264,6 +264,6 @@ The MR does not touch the Swarm compose path or the keycloak-config image build 
 5. `helm template ... | grep -c "kind: KeycloakRealmImport"` → `0`
 6. **Guard still trips** — a render with `change-me-*` client secrets and `failOnPlaceholderSecrets=true` fails; with `false` it renders and the Job carries `secretKeyRef`, not literals.
 7. **Compose build** — `docker compose build keycloak-config` succeeds from the repo-root context and the built image contains `/config/genie-realm.yaml` byte-identical to `charts/genieai-umbrella/files/genie-realm.yaml`.
-8. **Drift guard** — a commit touching only `configs/keycloak/genie-realm.yaml` produces a `chart:lint` job, and that job fails if the two copies differ. `chart:lint` already triggers on `charts/**/*`; only the `configs/keycloak/**/*` addition is new, and without it an edit to the compose copy alone would skip the check. Verified by introducing a one-line difference in the chart copy and confirming the job's `diff` step exits non-zero.
+8. **Drift guard** — a commit touching only `configs/keycloak/genie-realm.yaml` produces a `chart:lint` job, and that job fails if the two copies differ. `chart:lint` already triggers on `charts/**/*`; only the `configs/keycloak/**/*` addition is new, and without it an edit to the compose copy alone would skip the check. Verified by introducing a one-line difference in the chart copy and confirming the job's `cmp -s` step exits non-zero.
 9. **Service reachability** — on a cluster, `kubectl get svc keycloak-service -n <ns>` exists and `curl http://keycloak-service.<ns>.svc.cluster.local:8080/auth/realms/genie` returns a realm response (the D7 relative-path fix, and the value the two service templates dial).
 10. **Convergence duration** — the first laptop run measures it. Not automatable here: it needs a live cluster. If it exceeds 900s, the HelmRelease `spec.upgrade.timeout` is raised to the measured value plus headroom and the value recorded in this spec; if it exceeds the operator's own reconcile budget, that is an escalation, not a timeout to keep raising.

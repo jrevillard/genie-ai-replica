@@ -142,3 +142,71 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: arango-operator-crd-access
+
+# Cluster-wide ClusterRole + ClusterRoleBinding for the bootstrap
+# kube-arangodb operator. The in-namespace Role+RoleBinding above
+# is necessary but NOT sufficient: the operator's informers are
+# configured at startup from the SA's existing cluster-wide
+# permissions, and the legacy-scope ClusterRole the chart ships
+# (the one the operator uses to watch CRD *definitions*) does NOT
+# include `database.arangodb.com` resources. Without cluster-wide
+# cluster-scoped instance access, the operator's deployment
+# controller never starts an informer for ArangoDeployment CRs,
+# regardless of per-namespace Role grants.
+#
+# The fix: render a ClusterRole + ClusterRoleBinding here that
+# grants the operator SA `get/list/watch/create/update/patch/delete`
+# on the ArangoDeployment-family CRs cluster-wide. The legacy
+# scope's "limited cluster access" design restricts this; we
+# deliberately expand it because the umbrella chart manages
+# ArangoDeployment in a namespace the operator was started
+# before, so the informer's startup RBAC miss is permanent
+# without an explicit cluster-scoped grant.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: arango-operator-crd-access-{{ .Release.Name }}
+  labels:
+    {{- include "genieai-common.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["database.arangodb.com"]
+    resources:
+      - arangodeployments
+      - arangodeployments/scale
+      - arangodeployments/status
+      - arangomembers
+      - arangomembers/status
+      - arangotasks
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["database.arangodb.com"]
+    resources: ["arangodeployments/finalizers"]
+    verbs: ["update"]
+  # The operator also manages per-member core resources
+  # (Secrets for JWT, ConfigMaps for cluster config, Services
+  # for headless + client endpoints, StatefulSets for the
+  # member pods). Legacy scope gives these cluster-wide
+  # (the existing `arango-kube-arangodb-operator-arango-system-rbac-deployment`
+  # ClusterRole), but with `namespaced: true` the per-namespace
+  # binding is required too. Re-declare them here so the
+  # in-namespace Role+RoleBinding already covers them.
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps", "serviceaccounts", "services", "endpoints"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: arango-operator-crd-access-{{ .Release.Name }}
+  labels:
+    {{- include "genieai-common.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: arango-kube-arangodb-operator
+    namespace: arango-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: arango-operator-crd-access-{{ .Release.Name }}

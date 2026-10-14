@@ -44,6 +44,10 @@ spec:
     metadata:
       labels:
         {{- include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" $ctx.Values "component" $component) | nindent 8 }}
+      {{- with $svc.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       # Pod-level securityContext: seccompProfile is mandatory
       # (PSA restricted admission rejects pods without it). The

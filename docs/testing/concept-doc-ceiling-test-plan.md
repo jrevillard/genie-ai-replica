@@ -281,13 +281,25 @@ delete that draft (`DELETE /api/okf/repos/:repo_id`, admin-scoped,
 `FOR d IN ingestion_log FILTER d.message LIKE "%truncated%" RETURN d.message`.
 A hit means a document reached ingest **over** 250 000 chars, i.e. a defect.
 
-### 9.4 Do not skip step 10
+### 9.4 Set the tags in Curate — the wizard gates publish before the server does
 
-The publish frontmatter gate runs at `lifecycle-service.js:748-760`, which is
-**after** `mintVersion` (`:669`) and after the bundle export. A publish without
-frontmatter returns `409 FRONTMATTER_REQUIRED` but has **already burned a version
-number** and written a bundle. Set the frontmatter at step 8, in the wizard, not
-by retrying the publish.
+The frontmatter panel is mounted at the **top of the Curate step**
+(`steps/Curate.vue:39` → `FrontmatterPanel.vue`). Click **Refresh suggestions** to
+have the LLM draft topic + forbidden chips from the corpus, or type your own, then
+**Save tags**. The panel's own hint states the rule: *"Publish requires ≥3 topic +
+≥1 forbidden."*
+
+The Finish/Publish step re-checks the same rule client-side
+(`steps/Publish.vue:209` → `isFrontmatterPublishReady`, which counts frontmatter
+**rows**: `topic >= 3 && forbidden >= 1`) and shows *"Frontmatter tags approved"*
+only once satisfied — so following the wizard stops you **before** the publish
+request is ever sent.
+
+That client gate matters because the **server-side** gate runs late: at
+`lifecycle-service.js:748-760`, which is *after* `mintVersion` (`:669`) and after
+the bundle export. A publish that reaches the server without frontmatter returns
+`409 FRONTMATTER_REQUIRED` but has **already burned a version number** and written
+a bundle. The wizard prevents this; a direct API call does not.
 
 ### 9.5 Stop conditions
 

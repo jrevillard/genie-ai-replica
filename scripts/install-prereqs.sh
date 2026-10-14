@@ -80,6 +80,39 @@ install_keycloak_operator() {
   log "keycloak-operator ${KC_OPERATOR_VERSION}: install via Kustomize (ref=26.8.0+ of keycloak-k8s-resources)"
   kubectl apply -k "github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=${KC_OPERATOR_VERSION}"
   wait_deploy_ready "${ns}" "keycloak-operator"
+  # The upstream kustomize ships namespaced RoleBindings only, so the
+  # operator reconciles Keycloak CRs in its own namespace and ignores
+  # every application namespace. GENIE.AI renders Keycloak CRs next to
+  # the app (e.g. ns genieai), so promote the four per-controller
+  # ClusterRoles to ClusterRoleBindings and blank the per-controller
+  # namespace envs. Empty string is the JOSDK "watch all namespaces"
+  # value — the literal "JOSDK_WATCH_ALL" is NOT (the operator treats
+  # it as a namespace name and reconciles nothing, silently).
+  local sa_ns
+  sa_ns=$(kubectl get deploy keycloak-operator -o jsonpath='{.metadata.namespace}')
+  for role in keycloakcontroller keycloakrealmimportcontroller \
+              keycloakoidcclientcontroller keycloaksamlclientcontroller; do
+    kubectl apply -f - <<EOF
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ${role}-clusterrole-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ${role}-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: keycloak-operator
+    namespace: ${sa_ns}
+EOF
+  done
+  kubectl -n "${sa_ns}" set env deploy/keycloak-operator \
+    QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKCONTROLLER_NAMESPACES= \
+    QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKREALMIMPORTCONTROLLER_NAMESPACES= \
+    QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKSAMLCLIENTCONTROLLER_NAMESPACES= \
+    QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKOIDCCLIENTCONTROLLER_NAMESPACES=
+  wait_deploy_ready "${sa_ns}" "keycloak-operator"
 }
 
 install_cloudnative_pg() {

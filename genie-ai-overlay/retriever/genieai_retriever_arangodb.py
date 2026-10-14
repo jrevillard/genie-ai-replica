@@ -1,9 +1,11 @@
 # Copyright (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import suppress
 from typing import Any
 
 import openai
@@ -238,6 +240,16 @@ def _normalize_chunk_id(doc) -> str | None:
         return None
     cid = str(cid)
     return cid.rsplit("/", 1)[-1]  # COLLECTION/_key -> _key
+
+
+def _overflow_doc_ids_json(doc_ids: list[str]) -> str:
+    """JSON-encode overflow doc ids for OTel span-attribute storage.
+
+    OTel attribute values are strings/numbers/booleans/string-arrays-of-uniform-type;
+    nested arrays-of-strings are not preserved consistently across exporters.
+    Stable JSON-string form works on every exporter VictoriaTraces uses.
+    """
+    return json.dumps(doc_ids, ensure_ascii=False)
 
 
 def rrf_fuse(dense, bm25, k=HYBRID_RRF_K, dense_weight=HYBRID_DENSE_WEIGHT, lexical_weight=HYBRID_LEXICAL_WEIGHT):
@@ -1292,14 +1304,60 @@ class GenieaiArangoRetriever(OpeaComponent):
             ################################
 
             if enable_summarizer:
+                # Track overflow attribution across the per-chunk loop so a
+                # single ingest with N overflows surfaces N+ids, not a single
+                # boolean. Operators triage via VictoriaTraces; count + ids let
+                # them pick the right docs to re-ingest with chunk-size overrides.
+                overflow_count = 0
+                overflow_doc_ids: list[str] = []
                 for r in search_res:
                     prompt = self.generate_summarization_prompt(query, r["doc"].page_content)
-                    res = self._get_llm().invoke(prompt)
-                    summarized_text = res.content
+                    try:
+                        res = self._get_llm().invoke(prompt)
+                        summarized_text = res.content
+                    except Exception as _e_sum:
+                        # Fail-loud on vLLM context overflow: skip summarization
+                        # rather than bubble a 500 to the chatqna orchestrator.
+                        # Shared classifier lives in dataprep (aggregates str(),
+                        # openai body dict, httpx response body, aiohttp message).
+                        # "string too long" was removed (over-broad — fires on
+                        # tool_calls[id] oversize, not just context overflow).
+                        from dataprep.genieai_dataprep_arangodb import _is_vllm_input_overflow
 
+                        if _is_vllm_input_overflow(_e_sum):
+                            logger.warning(
+                                f"Summarizer skipped: vLLM context overflow for {r['doc'].id!r}: "
+                                f"{type(_e_sum).__name__}: {str(_e_sum)[:200]}"
+                            )
+                            overflow_count += 1
+                            # The chunk identity contract: prefer `metadata["chunk_key"]`
+                            # which the code at L~1387 ensures is populated for EVERY
+                            # doc (dense + BM25 channels). Falls back to `doc.id`
+                            # (langchain raw id which may be a UUID), then to a
+                            # stable "unknown" sentinel — never `str(None)` which
+                            # would surface as the literal string "None" in the
+                            # OTel attribute and mislead operator triage.
+                            _chunk_key = (
+                                (r["doc"].metadata.get("chunk_key") if r["doc"].metadata else None)
+                                or getattr(r["doc"], "id", None)
+                                or "unknown"
+                            )
+                            overflow_doc_ids.append(str(_chunk_key))
+                            continue
+                        raise
                     logger.info(f"Summarized {r['doc'].id}")
 
                     r["doc"].page_content = summarized_text
+                # Emit cumulative attribution ONCE per ingest (cheap; one OTel
+                # attribute write per ingest instead of N per overflow).
+                if overflow_count:
+                    with suppress(Exception):
+                        span.set_attribute("retriever.summarizer.input_too_long", True)
+                        span.set_attribute("retriever.summarizer.overflow_count", overflow_count)
+                        span.set_attribute(
+                            "retriever.summarizer.overflow_doc_ids",
+                            _overflow_doc_ids_json(overflow_doc_ids),
+                        )
 
             ##################################################################
             # Attach Chunk Embeddings (for adaptive reranking)                #

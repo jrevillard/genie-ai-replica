@@ -994,7 +994,7 @@ services:
     profiles: [gpu-models]
     restart: unless-stopped
     image: ${TEI_EMBEDDING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5} --auto-truncate"
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5} --auto-truncate $(printf '%s' \"${TEI_EMBEDDING_AUTO_TRUNCATE:-false}\" | tr '[:upper:]' '[:lower:]') --max-batch-tokens ${TEI_EMBEDDING_MAX_BATCH_TOKENS:-8192}"
     # Internal only
     # ports:
     #   - "${TEI_EMBEDDING_PORT:-7000}:80"
@@ -1004,6 +1004,7 @@ services:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - RUST_BACKTRACE=${RUST_BACKTRACE:-}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - TEI_EMBEDDING_AUTO_TRUNCATE=${TEI_EMBEDDING_AUTO_TRUNCATE:-false}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 10s
@@ -1073,7 +1074,7 @@ services:
     profiles: [gpu-models]
     restart: unless-stopped
     image: ${TEI_RERANKING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3} --max-batch-tokens ${TEI_RERANKING_MAX_BATCH_TOKENS:-8192} --max-concurrent-requests ${TEI_RERANKING_MAX_CONCURRENT_REQUESTS:-32} --auto-truncate ${TEI_RERANKING_AUTO_TRUNCATE:-false}"
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3} --max-batch-tokens ${TEI_RERANKING_MAX_BATCH_TOKENS:-8192} --max-concurrent-requests ${TEI_RERANKING_MAX_CONCURRENT_REQUESTS:-32} --auto-truncate $(printf '%s' \"${TEI_RERANKING_AUTO_TRUNCATE:-false}\" | tr '[:upper:]' '[:lower:]')"
     # Internal only
     # ports:
     #   - "7100:80"

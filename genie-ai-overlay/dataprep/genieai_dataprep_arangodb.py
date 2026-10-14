@@ -7,6 +7,7 @@ import fcntl  # Added for file locking
 import json
 import os
 import re
+from contextlib import suppress
 from typing import Any
 
 import aiohttp
@@ -15,6 +16,7 @@ from opentelemetry import propagate
 from core.model_cache import get_model_id
 from tracing import (
     background_span,
+    get_meter,
     get_tracer,
     install_uvicorn_access_logging,
     setup_json_logging,
@@ -23,6 +25,114 @@ from tracing import (
 )
 
 tracer = get_tracer(__name__)
+
+
+# --- vLLM context-overflow fail-loud contract ---
+# Mirrors the reranker fix (RerankerInputTooLongError, genieai_tei_reranker.py:39): when
+# vLLM rejects a request because the prompt exceeds the model's max_model_len, the call site
+# must raise a typed exception instead of silently swallowing the error and falling back
+# to the raw chunk. Counter + OTel span attribute surface this to operators.
+class DataprepInputTooLongError(RuntimeError):
+    """Raised when a vLLM labeling or context-generation call exceeds the model's context window.
+
+    vLLM returns BadRequestError("This model's maximum context length is N tokens...
+    Please reduce the length...") when the prompt + reserved output exceeds the
+    configured max_model_len. This typed exception lets the async-fire-and-forget
+    ingest task record the failure through `_write_ingestion_log` (admin UI surface
+    per .claude/rules/DEBUGGING-TRACING.md §6.1) rather than silently ingesting a
+    degraded chunk.
+    """
+
+
+# Markers in vLLM/OpenAI error messages that indicate context-overflow. Classified by
+# string-substring rather than SDK exception type to avoid lock-in on a specific
+# `openai` SDK version (test envs + minimal docker images may not ship the SDK).
+#
+# "string too long" was REMOVED (reviewer note): it also fires for non-overflow
+# errors like `messages[2].tool_calls[0].id: string too long` and oversized
+# `tools[0].function.description` (>1 MB). The remaining 5 markers cover the
+# canonical vLLM granite-4.1-8b context-overflow message body.
+_VLLM_CONTEXT_OVERFLOW_MARKERS = (
+    "context length",
+    "context_length_exceeded",
+    "maximum context length",
+    "reduce the length",
+    "context window",
+)
+
+
+def _overflow_message_from_exc(exc: BaseException) -> str:
+    """Aggregate every string-shaped field of an exception into one lowercased haystack.
+
+    Production SDKs put the vLLM error body in different places depending on the
+    transport:
+      - openai.BadRequestError (>=3.x): body is on `exc.body['error']['message']`
+        (dict) or on `exc.response.text` (string); `str(exc)` is ONLY the status
+        code phrase (`"Error code: 400"`) — body NOT included.
+      - httpx.HTTPStatusError: body is on `exc.response.text`; `str(exc)` is
+        `'Client error '400 Bad Request' for url '...'` — no body.
+      - aiohttp.ClientResponseError: body is on `exc.message`.
+      - bare Exception/ValueError (test mocks + legacy code): the marker phrase
+        lives in `str(exc)`.
+
+    Union ALL of these so the classifier matches the LIVE shape, not just the
+    shape that happens to be used in unit tests.
+    """
+    parts: list[str] = []
+    with suppress(Exception):
+        parts.append(str(exc) or "")
+    try:
+        body = getattr(exc, "body", None)
+        if isinstance(body, dict):
+            err = body.get("error") if isinstance(body, dict) else None
+            if isinstance(err, dict):
+                msg = err.get("message") or err.get("detail") or ""
+                if msg:
+                    parts.append(str(msg))
+        elif isinstance(body, str):
+            parts.append(body)
+    except Exception:
+        pass
+    try:
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            text = getattr(resp, "text", None)
+            if text:
+                parts.append(str(text))
+    except Exception:
+        pass
+    try:
+        msg = getattr(exc, "message", None)
+        if msg and isinstance(msg, str):
+            parts.append(msg)
+    except Exception:
+        pass
+    return " ".join(parts).lower()
+
+
+def _is_vllm_input_overflow(exc: BaseException) -> bool:
+    """True if `exc` represents a vLLM context-length rejection; False otherwise.
+
+    Generous matcher: any text-shaped surface of the exception (str(), openai
+    body dict, httpx response body, aiohttp message) containing one of the
+    well-known vLLM/OpenAI context-overflow markers classifies as overflow.
+    Generic `Exception` injections in tests still work because the test
+    message contains the marker verbatim.
+    """
+    haystack = _overflow_message_from_exc(exc)
+    if not haystack:
+        return False
+    return any(marker in haystack for marker in _VLLM_CONTEXT_OVERFLOW_MARKERS)
+
+
+_dataprep_input_too_long_total = get_meter().create_counter(
+    "rag.dataprep.input_too_long",
+    description=(
+        "Dataprep vLLM calls rejected because the prompt exceeded the model's "
+        "max_model_len. Incremented instead of the generic error counter; surfaces "
+        "silent-truncation regressions before they cascade into user-visible failure."
+    ),
+)
 
 # Import exceptions for robust error handling
 # Import Parent Class
@@ -1026,6 +1136,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     )
                 except Exception as e:
                     err = f"{type(e).__name__}: {str(e)[:200]}"
+                    if _is_vllm_input_overflow(e):
+                        _dataprep_input_too_long_total.add(1, {"dataprep.call_site": "context_batch"})
+                        with suppress(Exception):
+                            span.set_attribute("dataprep.input_too_long", True)
+                        await self._write_ingestion_log(
+                            file_id,
+                            "ERROR",
+                            "Contextualization",
+                            f"Batch context vLLM context overflow ({err}). Aborting.",
+                        )
+                        raise DataprepInputTooLongError(f"vLLM context overflow at context_batch: {err}") from e
                     logger.warning(f"Batch context failed {[i for i, _ in batch]}: {err}; falling back to per-chunk.")
                     await self._write_ingestion_log(
                         file_id,
@@ -1105,6 +1226,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     )
                 except Exception as e:
                     err = f"{type(e).__name__}: {str(e)[:200]}"
+                    if _is_vllm_input_overflow(e):
+                        _dataprep_input_too_long_total.add(1, {"dataprep.call_site": "context_doc"})
+                        with suppress(Exception):
+                            span.set_attribute("dataprep.input_too_long", True)
+                        await self._write_ingestion_log(
+                            file_id,
+                            "ERROR",
+                            "Contextualization",
+                            f"Doc-level context vLLM context overflow ({err}). Aborting.",
+                        )
+                        raise DataprepInputTooLongError(f"vLLM context overflow at context_doc: {err}") from e
                     logger.warning(f"Doc-level context attempt {attempt}/3 failed: {err}")
                     await self._write_ingestion_log(
                         file_id,
@@ -1166,6 +1298,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     )
                 except Exception as e:
                     err = f"{type(e).__name__}: {str(e)[:200]}"
+                    if _is_vllm_input_overflow(e):
+                        _dataprep_input_too_long_total.add(1, {"dataprep.call_site": "context_single"})
+                        with suppress(Exception):
+                            span.set_attribute("dataprep.input_too_long", True)
+                        await self._write_ingestion_log(
+                            file_id,
+                            "ERROR",
+                            "Contextualization",
+                            f"Chunk {index}: context vLLM context overflow ({err}). Aborting.",
+                        )
+                        raise DataprepInputTooLongError(f"vLLM context overflow at context_single: {err}") from e
                     logger.warning(f"Chunk {index}: context attempt {attempt}/3 failed: {err}")
                     await self._write_ingestion_log(
                         file_id,
@@ -1200,6 +1343,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     "Labeling",
                     f"Batch labeling parse failure for chunks {[i for i, _ in batch]}; falling back to per-chunk.",
                 )
+            except DataprepInputTooLongError:
+                # Fail-loud: batch prompt is structurally too long; retrying with
+                # the same oversized prompt in the per-chunk fallback would either
+                # (a) succeed only if the per-chunk prompt is small enough (rare)
+                # or (b) call vLLM with the same identical oversized text and fail
+                # again — wasting a batch call + 0..N per-chunk calls. Skip the
+                # batch-level retry path entirely; the per-chunk call sites will
+                # raise the same typed exception cleanly when they hit the cap.
+                raise
             except Exception as e:
                 err = f"{type(e).__name__}: {str(e)[:200]}"
                 batch_indices = [i for i, _ in batch]
@@ -1209,7 +1361,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     "Labeling",
                     f"Batch labeling call failed for chunks {batch_indices} ({err}); falling back to per-chunk.",
                 )
-        # Per-chunk path (default, and batch fallback).
+        # Per-chunk path (default, and batch fallback for transient/non-overflow errors).
         out: dict[int, list[str]] = {}
         for i, text in batch:
             out[i] = await self._llm_call_single(client, model, system_prompt, i, text, file_id, file_labels)
@@ -1260,6 +1412,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     )
                 except Exception as e:
                     err = f"{type(e).__name__}: {str(e)[:200]}"
+                    # Fail-loud on vLLM context overflow: the prompt is structurally too
+                    # long; retrying with the identical oversized prompt would yield the
+                    # same 400. Raise the typed exception so the ingest task records the
+                    # failure via _write_ingestion_log (admin /api/admin/ingestion-log
+                    # channel) instead of silently ingesting a degraded chunk.
+                    if _is_vllm_input_overflow(e):
+                        _dataprep_input_too_long_total.add(1, {"dataprep.call_site": "llm_call_single"})
+                        with suppress(Exception):
+                            span.set_attribute("dataprep.input_too_long", True)
+                        await self._write_ingestion_log(
+                            file_id,
+                            "ERROR",
+                            "Labeling",
+                            f"Chunk {index}: vLLM context overflow ({err}). "
+                            f"Prompt exceeds model max_model_len; aborting this chunk.",
+                        )
+                        raise DataprepInputTooLongError(f"vLLM context overflow on chunk {index}: {err}") from e
                     logger.warning(f"Chunk {index}: LLM label attempt {attempt}/3 failed: {err}")
                     await self._write_ingestion_log(
                         file_id,
@@ -1340,6 +1509,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 return suggestions
             except Exception as e:
                 err = f"{type(e).__name__}: {str(e)[:200]}"
+                if _is_vllm_input_overflow(e):
+                    _dataprep_input_too_long_total.add(1, {"dataprep.call_site": "llm_call_batch"})
+                    with suppress(Exception):
+                        span.set_attribute("dataprep.input_too_long", True)
+                    await self._write_ingestion_log(
+                        file_id,
+                        "ERROR",
+                        "Labeling",
+                        f"Batch labeling vLLM context overflow ({err}). Aborting.",
+                    )
+                    raise DataprepInputTooLongError(f"vLLM context overflow at llm_call_batch: {err}") from e
                 await self._write_ingestion_log(
                     file_id,
                     "WARN",

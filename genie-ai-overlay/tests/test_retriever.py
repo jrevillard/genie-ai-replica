@@ -393,6 +393,50 @@ class TestInvoke:
         invoke_env["retriever"].fetch_neighborhoods.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_summarizer_context_overflow_skips_chunk(self, invoke_env):
+        """Summarizer path on vLLM context overflow: skip the chunk (keep original page_content)
+        instead of bubbling a 500 to chatqna. Fail-loud mirrors the reranker+dataprep pattern.
+
+        Drives `svc.invoke(...)` so the production summarise-loop is exercised
+        end-to-end (not a copy-paste replay of the loop). The mock makes the
+        LLM raise a vLLM-style context-length error so the per-chunk exception
+        branch must fire.
+        """
+        svc = invoke_env["retriever"]
+
+        # The mocked LLM raises context overflow for every invocation.
+        with patch.object(svc, "_get_llm") as get_llm_mock:
+            get_llm_mock.return_value.invoke.side_effect = Exception(
+                "BadRequestError context_length_exceeded — please reduce the length of the input"
+            )
+            # Provide two chunks so we cross both the loop iteration AND the
+            # post-loop "set span attribute once per ingest" emit. Production
+            # builds search_res via ArangoVector.asimilarity_search_with_relevance_scores.
+            original = [
+                {"doc": MagicMock(page_content="chunk A original", id="chunkA", metadata={})},
+                {"doc": MagicMock(page_content="chunk B original", id="chunkB", metadata={})},
+            ]
+            mock_vdb = invoke_env["vector_db"]
+            with (
+                patch.object(
+                    mock_vdb,
+                    "asimilarity_search_with_relevance_scores",
+                    new=AsyncMock(return_value=[(d["doc"], 0.9) for d in original]),
+                ),
+                patch.object(svc, "generate_summarization_prompt", side_effect=lambda q, t: f"SUMMARIZE:{t}"),
+            ):
+                input_mock = create_mock_input(
+                    query="what is health",
+                    enable_summarizer=True,
+                )
+                result = await svc.invoke(input_mock)
+            # Both chunks kept their original page_content (skip-on-overflow).
+            assert result[0]["doc"].page_content == "chunk A original"
+            assert result[1]["doc"].page_content == "chunk B original"
+            # The per-chunk mock was invoked for both chunks (loop not short-circuited).
+            assert get_llm_mock.return_value.invoke.call_count == 2
+
+    @pytest.mark.asyncio
     async def test_label_filter_or_strategy(self, invoke_env):
         input_mock = create_mock_input(
             context={"categoryLabels": "health", "serviceLabels": ["education"]},

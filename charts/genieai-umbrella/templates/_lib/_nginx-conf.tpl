@@ -23,6 +23,10 @@ server {
   location = /healthz { return 200 'ok'; add_header Content-Type text/plain; }
   location /api/      { proxy_pass http://genieai_backend; }
   location /api-docs/ { proxy_pass http://genieai_backend; }
+  # Document-repository API paths (Kong parity: files-route + labels-route,
+  # strip_path=false). Longest-prefix wins over /api/, no path rewrite.
+  location /api/files { proxy_pass http://genieai_docrepo; }
+  location /api/labels { proxy_pass http://genieai_docrepo; }
   location /uploads/  { proxy_pass http://genieai_docrepo; }
   # Keycloak OIDC endpoints, same-origin with the SPA (the frontend's
   # oidcConfig falls back to ${origin}/auth). proxy_pass carries no

@@ -263,6 +263,13 @@ services:
     replicas: 1
     image: { repository: genie-ai-backend, tag: "main" }
     port: 3000
+    # Image USER is `node` (uid 1000). PSA `restricted` requires
+    # runAsNonRoot: true and the namespace PSA accepts non-root UIDs.
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      allowPrivilegeEscalation: false
+      capabilities: { drop: ["ALL"] }
     resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
     env: []
     secrets:
@@ -295,6 +302,16 @@ services:
     replicas: 1
     image: { repository: genie-ai-frontend, tag: "main" }
     port: 8090
+    # Image USER is root (uid 0). The entrypoint writes
+    # /app/dist/config.js at startup — that path is owned by root in
+    # the image, so the pod must run as root or the write fails with
+    # EACCES. To make this non-root, the image's entrypoint would
+    # need to chown /app/dist before the write, which is a rebuild.
+    securityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      allowPrivilegeEscalation: false
+      capabilities: { drop: ["ALL"] }
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
     env: []
     secrets: []
@@ -310,6 +327,15 @@ services:
     replicas: 1
     image: { repository: genie-ai-document-repository, tag: "main" }
     port: 3001
+    # The image has no USER directive, so the default would be root.
+    # Pin to uid 1000 (matches backend's node user) so the PVC mounts
+    # at /app/uploads and /app/data (kubelet-created dirs at
+    # root:root 0755) are writable by the application.
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      allowPrivilegeEscalation: false
+      capabilities: { drop: ["ALL"] }
     # ClamAV service discovery. Defaults assume the in-cluster
     # Service rendered by charts/genieai-umbrella/templates/services/clamav.yaml;
     # operators with an external ClamAV (separate namespace, dedicated
@@ -345,6 +371,16 @@ services:
     # the upstream template so this image can serve the SPA + backend proxy.
     image: { repository: genie-ai-nginx, tag: "main" }
     port: 8080
+    # Image USER is root (uid 0). The entrypoint runs
+    # `mkdir -p /etc/nginx/certs` and renders the cert volume at
+    # startup — both paths are owned by root in the image. The
+    # runAsUser 65534 blanket the factory used to set crashed
+    # every reload with `Permission denied`.
+    securityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      allowPrivilegeEscalation: false
+      capabilities: { drop: ["ALL"] }
     resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
     env: []
     secrets: []

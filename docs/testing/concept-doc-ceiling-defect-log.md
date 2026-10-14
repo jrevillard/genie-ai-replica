@@ -103,6 +103,59 @@ are taken from a plain `FOR … RETURN` and tallied in JS.
 
 ---
 
+## BUG-06 — Frontmatter panel styles against a token vocabulary that does not exist
+
+**Status: OPEN** · Severity: high (visual correctness, theme-wide) · Found ~15:45 on tier 0
+
+**Symptom:** in dark mode, opening the frontmatter editor in the studio editor
+sometimes shows light-mode objects.
+
+**Root cause — verified, not inferred.** `src/theme-variables.css` defines **127**
+tokens in the vocabulary `--surface` / `--fg` / `--muted` / `--border` / `--accent`,
+with a dark block plus a `@media (prefers-color-scheme: dark)` block. **Zero
+`--color-*` tokens are defined anywhere in the application.**
+
+Two files nevertheless style themselves against that non-existent vocabulary:
+
+| File | Distinct `--color-*` tokens | Uses |
+|---|---|---|
+| `src/components/okf/FrontmatterPanel.vue` | 10 | 19 |
+| `src/components/okf/editor/ConceptEditor.vue` | — | — |
+
+In `FrontmatterPanel.vue`: `--color-surface-base` ×3, `--color-surface-raised` ×1,
+`--color-text` ×1, `--color-text-muted` ×2, `--color-text-faint` ×4,
+`--color-border` ×2, `--color-border-subtle` ×2, plus `--color-danger`,
+`--color-success`, `--color-text-secondary` (each with a `currentColor` fallback).
+
+**Mechanism.** A `var()` with no fallback and no matching custom property is
+invalid at computed-value time: `background: var(--color-surface-base)` resolves to
+the **initial value** (transparent), so chips render with no surface of their own
+and show whatever is behind them. `color: var(--color-text)` and its siblings
+resolve to **inherited** colour. Neither responds to the theme, so a light-surface
+ancestor paints them light in dark mode.
+
+**Why it is intermittent, not total.** The accent-tinted elements survive because
+`--accent` and `--accent-muted` *do* exist — the fallbacks on
+`border-color: var(--accent, var(--color-border))` and
+`background: var(--accent-muted, var(--color-surface-base))` are never reached. So
+the suggested-forbidden chips render correctly while the plain surface and text
+elements do not. That is exactly the "sometimes light, sometimes not" report.
+
+**Not affected:** `HeadTestDialog.vue` (the Routing Lab) uses the real vocabulary —
+23 token references, zero `--color-*`.
+
+**Fix:** rewrite both files onto the shipped vocabulary —
+`--color-surface-base` → `--surface`, `--color-surface-raised` → a raised surface
+token (or `--surface` plus a border), `--color-text` → `--fg`,
+`--color-text-muted` / `--color-text-faint` → `--muted` / `--muted-soft`,
+`--color-border` / `--color-border-subtle` → `--border` / `--border-light`,
+`--color-danger` / `--color-success` → the corresponding status tokens.
+**Add a lint rule that fails on any `var(--color-*)`** so a third file cannot
+repeat it — the whole class of bug is that an undefined custom property fails
+silently rather than visibly at build time.
+
+---
+
 ## BUG-05 — Step 10 "Handoff" dead-ends with no pointer to the next surface
 
 **Status: OPEN** · Severity: low · Found 15:41 on tier 0

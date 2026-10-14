@@ -321,7 +321,56 @@ artefact does not.
 
 ---
 
-## BUG-10 — Accepting one link suggestion unmounts all the others
+## BUG-11 — The product writes `type: index`, recognises it as valid, then flags it INVALID_TYPE with no remedy · **!1077**
+
+**Status: OPEN** · Severity: high · Found 2026-10-15, wizard step 8 (Auto-correct), live
+
+**Symptom.** `index — INVALID_TYPE: type "index" not in topic|entity|process|event|source`,
+with no way to fix it.
+
+**Root cause — three code paths disagree about whether `index` is a valid type:**
+
+1. `crawl-conversion-service.js:709` **writes** `type: 'index'` on the bundle root.
+2. `concept-meta-service.js:157` **recognises** it as load-bearing:
+   `is_index: fm.type === 'index' || path === 'index.md' || p.concept_id === 'index'`,
+   and `bundle-export-service.js:93` finds the root via `rows.find(r => r.is_index)`.
+3. `concept-meta-service.js:991` **rejects** it:
+   `AUTOCORRECT_TYPE_ENUM = ['topic','entity','process','event','source']` — no `index`
+   — so `:1003-1007` emits `INVALID_TYPE`.
+
+It is **warn-only by design** (`:1000`: *"warn (don't change) if outside enum"*), which
+here makes the flag **unresolvable by construction**. And `grep` for `INVALID_TYPE` across
+`Validate.vue` and the editor components returns nothing — every sibling rule in that
+step has a remedy rendered beside it (*Suggest links*, *Link N pages*, *Redact all*,
+*Delete one member*). This one has no branch.
+
+**Live state — and why it is not self-correcting.** Neither live index page now carries
+`type: index`:
+
+| Repo | `frontmatter.type` | `is_index` | `path` |
+|---|---|---|---|
+| NCD Information | `topic` | true | `index.md` |
+| Alphabet Company Information | `entity` | true | `index.md` |
+
+`is_index` survives only through the **`path === 'index.md'` fallback** at `:157`; the
+type-based branch is doing no work. The type was reassigned to a taxonomy value that does
+not describe the page, and root-page identification silently degraded to a filename
+coincidence. Nothing reports that divergence.
+
+**Direction.** Two paths cannot both be right. Either `index` is a valid type — in which
+case `AUTOCORRECT_TYPE_ENUM` is missing a value the product writes, and adding it removes
+the false positive at source — or the taxonomy genuinely excludes it, in which case
+`crawl-conversion-service.js:709` writes a value it does not accept and the writer should
+change. The OKF spec decides which. Separately, every rule should either offer a remedy or
+be rendered as explicitly advisory: a blocking-looking row with no action leaves the
+curator unable to tell actionable from noise. Add a test asserting the value written at
+`:709` is accepted by the enum at `:991` — the two lists are maintained independently,
+which is how they drifted.
+
+**Related:** !1076 / Story 10.8 (same step, remedy panels that vanish), !979 (`is_index`
+lost on bundle roots typed other than index).
+
+## BUG-10 — Accepting one link suggestion unmounts all the others · **!1075**
 
 **Status: OPEN** · Severity: high (data entry blocked) · Found 2026-10-15, wizard step 7 (Validate), live on the local build · **!1075**
 

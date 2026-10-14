@@ -21,9 +21,14 @@ metadata:
     genieai.io/data-tier: arangodb
 spec:
   mode: Single
-  # Conditional registry prefix: an air-gapped global.imageRegistry mirror
-  # must mirror the docker.io arangodb/arangodb path.
-  image: {{ if .Values.global.imageRegistry }}{{ .Values.global.imageRegistry }}/{{ end }}arangodb/arangodb:3.12.4
+  # Hardcoded `arangodb/arangodb:3.12.4` (no registry prefix) — the
+  # mirror at registry.opensource.unicc.org does not carry this image
+  # (`docker manifest inspect <mirror>/arangodb/arangodb:3.12.4`
+  # returns "no such manifest"). Same pattern as the CNPG template's
+  # hardcoded `ghcr.io/cloudnative-pg/postgresql:16`. The upstream
+  # docker.io path is reachable; we don't pretend the mirror covers
+  # the data tier.
+  image: arangodb/arangodb:3.12.4
   externalAccess:
     type: None
   single:
@@ -69,9 +74,9 @@ metadata:
     genieai.io/data-tier: arangodb
 spec:
   mode: Cluster
-  # Conditional registry prefix: an air-gapped global.imageRegistry mirror
-  # must mirror the docker.io arangodb/arangodb path.
-  image: {{ if .Values.global.imageRegistry }}{{ .Values.global.imageRegistry }}/{{ end }}arangodb/arangodb:3.12.4
+  # Hardcoded `arangodb/arangodb:3.12.4` (no registry prefix) — see
+  # the `Single` branch above for the mirror-coverage rationale.
+  image: arangodb/arangodb:3.12.4
   externalAccess:
     type: None
   agents:

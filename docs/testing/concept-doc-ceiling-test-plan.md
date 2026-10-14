@@ -250,14 +250,43 @@ largest decompressed is **109.4 MB < 128 MiB** (24 MiB spare).
 | 8a | Click **"6. Curate"** in the **left rail** to go back | wizard left rail | unlocked (`locked = i > studio_step`, so every step up to and including the saved one is open); back-nav is non-destructive |
 | 9 | Count the `-part-N` siblings in the concept list | wizard step 6 · Curate | matches the "Concepts out" column in §9.2 |
 | 10 | **Set frontmatter: ≥3 `topic` AND ≥1 `forbidden`** | index.md YAML pane (Curate/Review) | saved **before** you publish — see §9.4 |
-| 11 | Advance **Validate → Auto-correct → Review → Finish** | wizard steps 7–10 | no gate blocks |
-| 12 | *Submit for review* | Review | `draft → review` |
-| 13 | *Approve* | Review | `review → approve` |
-| 14 | *Publish* | Finish | `approve → publish`; a bundle zip is written to doc-repo |
-| 15 | *Ingest* | Finish / repo card | `publish → publish` (drain begins) |
-| 16 | **Wait** for the drain to finish | Activity log | ingest summary appears |
-| 17 | Open the bundle `.zip` → ingestion log | Files → FileDetailsDialog | **zero rows containing "truncated"** |
-| 18 | Record the outcome against this plan | §11 | pass / fail + observed counts |
+| 11 | Advance **Validate → Auto-correct → Review** | wizard steps 7–9 | validation reports 0 issues / 0 blockers |
+| 12 | Reach step 10 **"Finish"** | wizard step 10 | the step is titled **Handoff** and **deliberately dead-ends** — see §9.3b |
+| 13 | Click **"Open the Dashboard"** | step 10 | back to the repo card |
+| 14 | Click the card's **contextual button** — it reads **"Submit for review"** | dashboard card | `draft → review` |
+| 15 | Click the **same button** — now reads **"Approve"** | dashboard card | `review → approve` |
+| 16 | Click the **same button** — now reads **"Publish"** | dashboard card | opens a confirmation dialog |
+| 17 | Click **"Acknowledge and Publish"** in that dialog | confirm dialog | `approve → publish`; bundle zip written to doc-repo |
+| 18 | Click the **same card button** — now reads **"Ingest"** | dashboard card | drain begins; button shows **"Ingesting…"** |
+| 19 | **Wait** for the drain to finish | dashboard card | ingest summary appears |
+| 20 | Open the bundle `.zip` → ingestion log | Files → FileDetailsDialog | **zero rows containing "truncated"** |
+| 21 | Record the outcome against this plan | §11 | pass / fail + observed counts |
+
+### 9.3b Step 10 is a dead end by design — publishing is NOT in the wizard
+
+Measured 2026-10-14 on the live build. `steps/Publish.vue:1-4` carries an explicit
+directive: *"NEVER publishes — 'KEEP PUBLISHING OUT OF THE WIZARD. I MEANT IT.'
+Submit → approve → publish lives ONLY in the dashboard and the editor."*
+
+Step 10 is titled **Handoff**. Its body says *"Publishing never happens here — submit
+it for approval on the dashboard, then approve and publish from the dashboard or the
+editor"*, and its only button is **"Open the Dashboard"** (`:55-57`).
+
+The lifecycle ritual is **one contextual button** on the dashboard repo card, whose
+label follows `contextualAction()` (`StudioDashboard.vue:695-703`) against
+`CONTEXTUAL_LABELS` (`:410-416`):
+
+| Card state | Button reads | Effect |
+|---|---|---|
+| `draft` | **Submit for review** | → `review` |
+| `review` | **Approve** | → `approve` |
+| `approve` | **Publish** | opens the confirm dialog (`onLifecycle`, `:809-814` — it does **not** fire directly) |
+| in dialog | **Acknowledge and Publish** (`:231`) | → `publish`, mints the version |
+| `publish`, not ingested | **Ingest** | drain begins, button becomes "Ingesting…" |
+| `publish`, ingested | **Retract** | → `retracted` |
+
+There are not four buttons to hunt for — it is the same button relabelling itself
+four times, and the confirm dialog in between is the only surprise.
 
 ### 9.3a Where the zip picker is — and where it is NOT
 

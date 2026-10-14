@@ -22,10 +22,6 @@
     (dict "name" "BACKEND_URL" "value" (printf "http://backend.%s.svc.cluster.local:80" $ns))
     (dict "name" "CLAMSCAN_HOST" "value" .Values.services.documentRepository.clamavHost)
     (dict "name" "CLAMSCAN_PORT" "value" (.Values.services.documentRepository.clamavPort | toString))
-    # Enable scanner init. appConfig.js gates the NodeClam init
-    # on `process.env.VIRUS_SCANNING === 'true'`; without this
-    # the cluster `clamav` Service is rendered but never
-    # connected. Override to "false" in a values patch to skip.
     (dict "name" "VIRUS_SCANNING" "value" (.Values.services.documentRepository.virusScanning | default "true" | toString))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}

@@ -318,6 +318,8 @@ Séquencement (chaque étape gate la suivante):
 
 P1.7 devient partiellement obsolète: le proxy `/auth/` n'est plus un bloc nginx mais une HTTPRoute (P2.1). Si le login doit être testé **avant** que la Phase 2 atterrisse, le bloc nginx `/auth/` reste le stopgap documenté; sinon, sauter directement à P2.0-P2.2.
 
+**Portabilité (principe).** Envoy Gateway est NOTRE choix d'implémentation, pas une dépendance du chart. `Gateway` + `HTTPRoute` sont des ressources standard (`gateway.networking.k8s.io/v1`) que tout contrôleur conforme implémente (Kong, Traefik, NGINX Gateway Fabric, Cilium, HAProxy). Ce qui est Envoy-spécifique — `gatewayClassName`, `BackendTrafficPolicy` (rate limit), `GatewayInfrastructure` (ClusterIP sur minikube) — doit rester isolé dans les values/overlay, jamais mélangé aux routes. **Livrable P2.1: `docs/charts/edge-route-contract.md`** — le contrat de routes canonique, exprimé en table implémentation-agnostique: pour chaque route, le path, le service:port cible, la réécriture éventuelle, l'exigence de rate limit, l'exigence TLS — avec en annexe les équivalents Envoy (`BackendTrafficPolicy`) et une note sur leur contrepartie chez les autres implémentations. Un opérateur qui déploie GENIE.AI derrière Traefik reproduit le contrat depuis ce document sans lire nos templates.
+
 ---
 
 ## Vérification

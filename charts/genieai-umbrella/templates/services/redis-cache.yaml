@@ -39,17 +39,24 @@ spec:
             - $(TRANSLATION_CACHE_PASSWORD)
           env:
             # redis-cli consumes REDISCLI_AUTH automatically for the
-            # health probes below.
+            # health probes below. Both `secretKeyRef` entries are
+            # `optional: true` so the pod starts even when the Secret
+            # has not been materialized (e.g. dev installs where the
+            # SealedSecret bundle is not yet rendered). redis then
+            # runs without AUTH — same caveat as the compose path
+            # when the SMTP/secrets are unset.
             - name: REDISCLI_AUTH
               valueFrom:
                 secretKeyRef:
                   name: translation-cache-password
                   key: TRANSLATION_CACHE_PASSWORD
+                  optional: true
             - name: TRANSLATION_CACHE_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: translation-cache-password
                   key: TRANSLATION_CACHE_PASSWORD
+                  optional: true
           ports:
             - name: redis
               containerPort: {{ $svc.port | default 6379 }}

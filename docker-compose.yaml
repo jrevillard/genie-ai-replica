@@ -1445,8 +1445,16 @@ services:
       LABEL_SELECTOR_SYSTEM_PROMPT: ${LABEL_SELECTOR_SYSTEM_PROMPT:-}
       CONTEXTUAL_RETRIEVAL_ENABLED: ${CONTEXTUAL_RETRIEVAL_ENABLED:-true}
       DATAPREP_CONTEXTUAL_MODEL: ${DATAPREP_CONTEXTUAL_MODEL:-}
-      DATAPREP_CONTEXTUAL_DOC_BUDGET: ${DATAPREP_CONTEXTUAL_DOC_BUDGET:-6000}
+      # 0 = derive from VLLM_MAX_MODEL_LEN (see genieai_dataprep_arangodb.py).
+      # The old literal default of 6000 was sized for the T4 profile's
+      # 2048-token window and applied to every deployment, including the
+      # default 65536-token one where it used ~4% of the available window.
+      DATAPREP_CONTEXTUAL_DOC_BUDGET: ${DATAPREP_CONTEXTUAL_DOC_BUDGET:-0}
       DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL: ${DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL:-100000}
+      # Read by dataprep to size the doc-context budget above. Only the vLLM
+      # service's command interpolation used this before, so dataprep could not
+      # derive anything and every profile inherited the fixed literal.
+      VLLM_MAX_MODEL_LEN: ${VLLM_MAX_MODEL_LEN:-65536}
       DATAPREP_CONTEXTUAL_MAX_TOKENS: ${DATAPREP_CONTEXTUAL_MAX_TOKENS:-512}
       CONTEXTUAL_RETRIEVAL_PROMPT: ${CONTEXTUAL_RETRIEVAL_PROMPT:-}
       # Log level threshold for the OTel Python LoggingHandler installed in

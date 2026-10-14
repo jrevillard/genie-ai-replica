@@ -134,14 +134,18 @@ async function listBackingFiles(repoId) {
       continue;
     }
     const known = await (
-      await db.query(`FOR f IN files FILTER f.file_id == @fid LIMIT 1 RETURN {file_id: f.file_id,
-        file_name: f.file_name, is_bundle: f.is_bundle, dataprep: f.dataprep}`, { fid: s.file_id })
+      await db.query(
+        `FOR f IN files FILTER f.file_id == @fid LIMIT 1 RETURN {file_id: f.file_id,
+        file_name: f.file_name, is_bundle: f.is_bundle, dataprep: f.dataprep}`,
+        { fid: s.file_id }
+      )
     ).all();
     if (known[0]) add(known[0], 'source');
-    else logger.info('Backing file: source_documents entry has no files doc (upload already gone)', {
-      repo_id: repoId,
-      file_id: s.file_id
-    });
+    else
+      logger.info('Backing file: source_documents entry has no files doc (upload already gone)', {
+        repo_id: repoId,
+        file_id: s.file_id
+      });
   }
 
   logger.info('Backing files enumerated', {
@@ -294,6 +298,53 @@ async function markRetracted(repoId, opts = {}) {
  * @param {{actor?: object}} [opts]
  * @returns {Promise<{repo_id, deleted: Array, skipped: Array, failed: Array, total: number}>}
  */
+/**
+ * Drop `files.okf_repo_id` when — and only when — it names `repoId`.
+ *
+ * `okf_repo_id` is a single scalar, so a file stamped by two repositories
+ * carries whichever wrote last. A guarded match (`FILTER f.okf_repo_id ==
+ * @repo_id`) rather than a blind UNSET is what keeps the other repository's
+ * claim intact; the surviving repo is still enumerable through its own
+ * `source_documents[]` mirror regardless.
+ *
+ * Best-effort like every other step on the delete path: a stamp that survives
+ * is cosmetic (it points at a repo whose doc is tombstoned), whereas failing the
+ * delete over it would be a data-loss-adjacent surprise.
+ */
+async function clearRepoStamp(repoId, fileId) {
+  const db = await dbService.getConnection('default');
+  try {
+    // arangojs cursors are lazy — the query does not execute until consumed,
+    // so the .all() is load-bearing, not decoration.
+    const updated = await (
+      await db.query(
+        `FOR f IN files FILTER f.file_id == @file_id && f.okf_repo_id == @repo_id
+           UPDATE f WITH { okf_repo_id: null } IN files RETURN LENGTH(f)`,
+        { file_id: fileId, repo_id: repoId }
+      )
+    ).all();
+    if (!updated || updated.length === 0) {
+      // Either the file is already gone or its stamp names a different repo —
+      // both correct outcomes, and both worth distinguishing from a real clear.
+      logger.info('Backing file: no okf_repo_id stamp to clear (absent or names another repo)', {
+        repo_id: repoId,
+        file_id: fileId
+      });
+      return;
+    }
+    logger.info('Backing file: cleared okf_repo_id stamp for deleted repository', {
+      repo_id: repoId,
+      file_id: fileId
+    });
+  } catch (err) {
+    logger.warn('Backing file: clearing okf_repo_id stamp failed (non-fatal)', {
+      repo_id: repoId,
+      file_id: fileId,
+      error: err && err.message
+    });
+  }
+}
+
 async function hardDelete(repoId, opts = {}) {
   return withSpan('okf.backing_files.delete', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
@@ -332,13 +383,23 @@ async function hardDelete(repoId, opts = {}) {
             kept_for_repo: other
           });
         }
+        // The file SURVIVES the repo it was stamped for, so the stamp is now a
+        // dangling reference to a repo that no longer exists. Left in place it
+        // makes the file look "used by" a deleted repository forever, and any
+        // later sweep keyed on okf_repo_id has to special-case tombstones.
+        //
+        // Only clear it when it actually names THIS repo: okf_repo_id is a
+        // single scalar, so a file stamped by two repos carries whichever wrote
+        // last, and clearing that would drop the surviving repo's claim. The
+        // other repo's claim survives regardless via its own
+        // `source_documents[]` mirror, which is path (c) of listBackingFiles.
+        await clearRepoStamp(repoId, f.file_id);
         continue;
       }
       try {
-        await authedAxios.delete(
-          `${config.documentRepository.url}/api/files/${encodeURIComponent(f.file_id)}`,
-          { timeout: 10000 }
-        );
+        await authedAxios.delete(`${config.documentRepository.url}/api/files/${encodeURIComponent(f.file_id)}`, {
+          timeout: 10000
+        });
         deleted.push(f.file_id);
         logger.info('Backing file deleted from document repository', {
           repo_id: repoId,
@@ -464,16 +525,18 @@ async function retractBackingFiles(repoId, opts = {}) {
           repo_id: repoId,
           file_id: f.file_id,
           file_name: f.file_name,
-          reason: other === '__CHECK_FAILED__' ? 'reference check failed — failed closed, kept' : 'another live repo still uses it',
+          reason:
+            other === '__CHECK_FAILED__'
+              ? 'reference check failed — failed closed, kept'
+              : 'another live repo still uses it',
           kept_for_repo: other === '__CHECK_FAILED__' ? null : other
         });
         continue;
       }
       try {
-        await authedAxios.delete(
-          `${config.documentRepository.url}/api/files/${encodeURIComponent(f.file_id)}`,
-          { timeout: 10000 }
-        );
+        await authedAxios.delete(`${config.documentRepository.url}/api/files/${encodeURIComponent(f.file_id)}`, {
+          timeout: 10000
+        });
         deletedBundles.push(f.file_id);
         logger.info('Bundle deleted on retract (regenerated by the next publish)', {
           repo_id: repoId,

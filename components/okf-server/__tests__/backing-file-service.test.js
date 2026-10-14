@@ -66,6 +66,15 @@ function programQueries({ otherRepoFor = {} } = {}) {
   mockDb.query.mockImplementation(async (q, bind) => {
     const text = typeof q === 'string' ? q : q && q.query ? String(q.query) : '';
     const all = (rows) => async () => rows; // cursor.all() takes no arguments
+    // Stamp-clearing UPDATE must be routed BEFORE the enumeration branches: its
+    // FILTER text also contains `f.okf_repo_id == @repo_id`, so without this it
+    // would be swallowed by the enumeration handler below and the test would
+    // "pass" while the production query never ran.
+    if (text.includes('UPDATE f WITH { okf_repo_id: null }')) {
+      const hit = files.filter((f) => f.file_id === bind.file_id && f.okf_repo_id === bind.repo_id);
+      for (const f of hit) f.okf_repo_id = null;
+      return { all: all(hit.map(() => 1)) };
+    }
     // Backing-file enumeration — bundle artifacts (stamped repo_id).
     if (text.includes('f.repo_id == @repo_id')) {
       return { all: all(files.filter((f) => f.repo_id === bind.repo_id && f.okf_repo_id == null)) };
@@ -210,6 +219,40 @@ describe('backing-file-service — multi-repo data-loss guard', () => {
     expect(deletedUrls.some((u) => u.includes('shared'))).toBe(false);
   });
 
+  // David, 2026-10-14: "when a repo is retracted and deleted, the files that
+  // were used to create/import it are still flagged as used by a repo". A kept
+  // file outlives the repo it was stamped for, so the stamp must be dropped —
+  // otherwise every later sweep keyed on okf_repo_id has to special-case it.
+  test('clears okf_repo_id on a SKIPPED file so it stops pointing at a deleted repo', async () => {
+    seedFile({ file_id: 'shared', file_name: 'shared.zip', okf_repo_id: REPO, dataprep: { status: 'Ingested' } });
+    programQueries({ otherRepoFor: { shared: OTHER } });
+    const result = await service.hardDelete(REPO);
+    expect(result.skipped).toEqual(['shared']);
+    expect(files.find((f) => f.file_id === 'shared').okf_repo_id).toBeNull();
+  });
+
+  test('clears okf_repo_id when the live-repo CHECK FAILED and the file was kept', async () => {
+    seedFile({ file_id: 's1', file_name: 'doc.md', okf_repo_id: REPO, dataprep: { status: 'Ingested' } });
+    const real = mockDb.query.getMockImplementation();
+    mockDb.query.mockImplementation(async (q, bind) => {
+      const text = String(q && q.query ? q.query : q);
+      if (text.includes('s.file_id == @file_id')) return { all: async () => [{ repo_id: '__CHECK_FAILED__' }] };
+      return real(q, bind);
+    });
+    const result = await service.hardDelete(REPO);
+    expect(result.skipped).toEqual(['s1']);
+    expect(files.find((f) => f.file_id === 's1').okf_repo_id).toBeNull();
+  });
+
+  test('does NOT clear a stamp that names a DIFFERENT repo (single-scalar field)', async () => {
+    seedFile({ file_id: 's1', file_name: 'doc.md', okf_repo_id: OTHER, dataprep: { status: 'Ingested' } });
+    programQueries({ otherRepoFor: { s1: OTHER } });
+    await service.hardDelete(REPO);
+    // The guarded FILTER must leave it alone — okf_repo_id is one scalar, so an
+    // unguarded UNSET would drop the surviving repository's claim.
+    expect(files.find((f) => f.file_id === 's1').okf_repo_id).toBe(OTHER);
+  });
+
   test('FAILS CLOSED: when the live-repo check errors, the file is kept', async () => {
     seedFile({ file_id: 's1', file_name: 'doc.md', okf_repo_id: REPO, dataprep: { status: 'Ingested' } });
     // Break ONLY the otherLiveRepoUsingFile statement; enumeration must still work.
@@ -236,7 +279,9 @@ describe('backing-file-service — multi-repo data-loss guard', () => {
 
   test('a real delete failure is recorded but never throws (cascade must not fail)', async () => {
     seedFile({ file_id: 'b1', file_name: 'b.zip', repo_id: REPO, is_bundle: true, dataprep: { status: 'Ingested' } });
-    authedAxios.delete.mockRejectedValueOnce(Object.assign(new Error('permission denied'), { response: { status: 403 } }));
+    authedAxios.delete.mockRejectedValueOnce(
+      Object.assign(new Error('permission denied'), { response: { status: 403 } })
+    );
     const result = await service.hardDelete(REPO);
     expect(result.deleted).toEqual([]);
     expect(result.failed).toEqual([expect.objectContaining({ file_id: 'b1' })]);

@@ -1254,6 +1254,43 @@ async function resplitRepo(req, res, next) {
 }
 
 /**
+ * RE-INGEST FAILED CONCEPTS (David, 2026-10-14). Serves BOTH routes:
+ *   POST /:repo_id/reingest-failed                  (all failed concepts)
+ *   POST /:repo_id/concepts/:concept_id/reingest    (one concept)
+ *
+ * Read-only with respect to CONTENT — it requeues meta rows and re-arms the
+ * drain. That is why it must NOT use assertWritable: re-ingest exists for a
+ * SERVING repo, which is exactly the state assertWritable refuses.
+ */
+async function reingestFailed(req, res, next) {
+  try {
+    const { repo_id, concept_id } = req.params;
+    // getById pre-gate first: anti-enumeration 404 for a foreign repo, and the
+    // authz narrowing every other mutating handler does.
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    if (!repoDoc) throw new ValidationError(['repository not found']);
+    // Throws 409 NOT_INGESTED / DRAIN_IN_PROGRESS with actionable messages.
+    lifecycleService.assertReingestable(repoDoc);
+
+    const result = await lifecycleService.reingestFailed(repo_id, { conceptId: concept_id || null }, actorFrom(req));
+
+    // AUDIT is written inside the service for the armed path (it carries the
+    // concept ids the requeue actually touched, which the controller does not
+    // see). Nothing to add here.
+    res.status(200).json({
+      ok: true,
+      repo_id,
+      concept_id: concept_id || null,
+      requeued: result.requeued,
+      concept_ids: result.conceptIds || [],
+      pending: result.pending === undefined ? null : result.pending
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Story #978 — POST /api/okf/repos/:repo_id/autocorrect.
  * Body: { dry_run?: boolean }.
  * Scans all concepts and applies frontmatter-only autocorrect rules. With
@@ -1927,6 +1964,7 @@ module.exports = {
   discoverFromManifests,
   patchConcept,
   resplitRepo,
+reingestFailed,
   autocorrectRepo,
   transitionLifecycle,
   exportRepoZip,

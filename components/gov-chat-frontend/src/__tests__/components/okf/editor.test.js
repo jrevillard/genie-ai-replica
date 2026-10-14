@@ -146,7 +146,7 @@ describe('OkfConceptList', () => {
       concepts: base,
       labelOptions: [{ value: 'Health', label: 'Health' }]
     });
-    const labelBtn = wrapper.find('.okf-cl__action');
+    const labelBtn = wrapper.find('.okf-cl__action--label');
     await labelBtn.trigger('click'); // opens the inline picker
     const select = wrapper.find('.okf-cl__label-edit select');
     expect(select.exists()).toBe(true);

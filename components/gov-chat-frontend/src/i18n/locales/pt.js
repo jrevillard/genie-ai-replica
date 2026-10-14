@@ -1646,7 +1646,10 @@ export default {
         bulkRedact: 'Redigir tudo',
         bulkRemove: 'Remover tudo',
         loadProgress: 'Carregando arquivos {done}/{total}',
-        addSource: '+ From documents'
+        addSource: '+ From documents',
+        reingest: 'Re-ingest this concept',
+        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
+        reingestFailed: 'Re-ingest failed — try again.'
       },
       delete: {
         body: 'Isso remove permanentemente o arquivo, seus blocos indexados e seus vínculos no grafo.',
@@ -1826,6 +1829,15 @@ export default {
         published: 'Nenhum repositório publicado ainda',
         ingested: 'Nada ingerido ainda',
         retracted: 'Nada retraído'
+      },
+      reingest: {
+        failed: 'Re-ingest failed',
+        title: 'Re-ingest failed concepts',
+        confirm: 'Re-ingest failed',
+        counting: 'Checking how many concepts failed…',
+        countFailed: 'Could not read the failed-concept count. Try again.',
+        none: '{name} has no failed concepts — every concept indexed successfully.',
+        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
       }
     },
     build: {

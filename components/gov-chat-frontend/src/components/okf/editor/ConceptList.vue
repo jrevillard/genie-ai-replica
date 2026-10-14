@@ -118,9 +118,22 @@
               >
             </span>
             <span v-if="!readOnly" class="okf-cl__actions" @click.stop>
+              <!-- RE-INGEST (David, 2026-10-14): per-concept retry, offered ONLY
+                on a row that actually failed. The hover failcard is
+                pointer-events:none so it cannot host a button — the actions span
+                is the clickable home. -->
+              <button
+                v-if="node.index_status === 'failed'"
+                type="button"
+                class="okf-cl__action okf-cl__action--reingest"
+                :title="translate('okf.editor.concepts.reingest', 'Re-ingest this concept')"
+                @click.stop="$emit('reingest', node)"
+              >
+                ↻
+              </button>
               <button
                 type="button"
-                class="okf-cl__action"
+                class="okf-cl__action okf-cl__action--label"
                 :title="translate('okf.editor.concepts.addLabel', 'Set label')"
                 @click.stop="toggleLabelEdit(node.concept_id)"
               >
@@ -188,9 +201,19 @@
                   >
                 </span>
                 <span v-if="!readOnly" class="okf-cl__actions" @click.stop>
+                  <!-- Per-concept re-ingest — failed rows only (David, 2026-10-14). -->
+                  <button
+                    v-if="child.index_status === 'failed'"
+                    type="button"
+                    class="okf-cl__action okf-cl__action--reingest"
+                    :title="translate('okf.editor.concepts.reingest', 'Re-ingest this concept')"
+                    @click.stop="$emit('reingest', child)"
+                  >
+                    ↻
+                  </button>
                   <button
                     type="button"
-                    class="okf-cl__action"
+                    class="okf-cl__action okf-cl__action--label"
                     :title="translate('okf.editor.concepts.addLabel', 'Set label')"
                     @click.stop="toggleLabelEdit(child.concept_id)"
                   >
@@ -334,7 +357,7 @@ export default {
     // the wizard's workbench has its own feeder row and omits this).
     showAddSource: { type: Boolean, default: false }
   },
-  emits: ['select', 'resplit', 'add', 'delete', 'label', 'pii-bulk', 'open-source', 'add-source'],
+  emits: ['select', 'resplit', 'add', 'delete', 'label', 'pii-bulk', 'open-source', 'add-source', 'reingest'],
   data() {
     return {
       filter: '',
@@ -705,6 +728,15 @@ export default {
 }
 .okf-cl__action--danger:hover {
   color: var(--danger);
+}
+/* Re-ingest (David, 2026-10-14): a RETRY is neither destructive nor primary —
+   it reads as an accent affordance, distinct from the ✕ delete beside it. */
+.okf-cl__action--reingest {
+  color: var(--accent);
+}
+.okf-cl__action--reingest:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
 .okf-cl__action-glyph {
   font-size: var(--text-sm);

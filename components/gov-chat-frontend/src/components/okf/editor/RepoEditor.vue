@@ -29,6 +29,7 @@
       @delete="onDeleteAsk"
       @label="onTreeLabel"
       @pii-bulk="onPiiBulkAsk"
+      @reingest="onReingestConcept"
     />
     <!-- FLEXIBLE COLUMNS (David, 2026-09-09): drag either splitter to resize;
          double-click resets that pane; arrow keys nudge (a11y). Track order
@@ -460,6 +461,7 @@ export default {
       // the confirm dialog is open; null when closed.
       piiBulkAsk: null,
       piiBulkBusy: false,
+      reingestBusyId: null, // concept_id currently retrying (David, 2026-10-14)
       deleting: false,
       autocorrectOpen: false,
       // LONG-ACTION STRIP (David, 2026-09-12): { label, startedAt } while a
@@ -1045,6 +1047,34 @@ export default {
     },
     onPiiBulkAsk(action) {
       this.piiBulkAsk = action;
+    },
+    // ── Per-concept re-ingest (David, 2026-10-14) ──
+    // No confirm dialog: ONE concept, and the operation is content-preserving —
+    // it requeues that row and re-arms the drain. A modal for a single retry
+    // would be noise. The error surfaces in metaError, which the metadata rail
+    // already renders.
+    async onReingestConcept(row) {
+      const conceptId = row && (row.concept_id || row.id);
+      if (!this.repoId || !conceptId || this.reingestBusyId === conceptId) return;
+      this.reingestBusyId = conceptId;
+      this.metaError = '';
+      try {
+        const res = await this.$store.dispatch('okf/reingestFailed', {
+          repoId: this.repoId,
+          conceptId
+        });
+        if (!res.ok) {
+          this.metaError =
+            res.code === 'DRAIN_IN_PROGRESS'
+              ? this.translate(
+                  'okf.editor.concepts.reingestBusy',
+                  'A RAG ingest is already running for this repository — wait for it to finish, then retry.'
+                )
+              : res.message || this.translate('okf.editor.concepts.reingestFailed', 'Re-ingest failed — try again.');
+        }
+      } finally {
+        this.reingestBusyId = null;
+      }
     },
     async onPiiBulkAction(key) {
       if (key === 'cancel') {

@@ -25,6 +25,7 @@ jest.mock('../services/audit-service', () => ({
 jest.mock('../services/concept-meta-service', () => ({
   countByIndexStatus: jest.fn().mockResolvedValue(0),
   requeueRepoForRedrain: jest.fn().mockResolvedValue(0),
+  requeueFailedForReingest: jest.fn().mockResolvedValue({ requeued: 0, conceptIds: [] }),
   stampRepoGraphName: jest.fn().mockResolvedValue(0)
 }));
 // Story 1.6/1.7 (2026-10-08): the publish path gained the frontmatter
@@ -107,7 +108,130 @@ beforeEach(() => {
   // previous test's countByIndexStatus mock (e.g. parsed=41) cannot leak into
   // the ingest tests and flip them onto the async-drain branch.
   require('../services/concept-meta-service').countByIndexStatus.mockResolvedValue(0);
+  require('../services/concept-meta-service').requeueFailedForReingest.mockResolvedValue({
+    requeued: 0,
+    conceptIds: []
+  });
   mockDb._reset();
+});
+
+// ── RE-INGEST FAILED CONCEPTS (David, 2026-10-14) ──
+// The behaviour under test is the part that is easy to get silently wrong: a
+// requeue that does NOT arm the drain strands the rows invisibly, because the
+// worker's claim query filters on rag_drain_active and only the ingest
+// transition ever sets it.
+describe('reingestFailed (David 2026-10-14)', () => {
+  const cms = () => require('../services/concept-meta-service');
+
+  function seedIngested(extra = {}) {
+    return seedRepo({
+      lifecycle_state: 'publish',
+      version: 3,
+      ingested_version: 3,
+      ingested_at: '2026-10-01T00:00:00.000Z',
+      ingested_graph_name: 'OKF_Demo_v3',
+      rag_drain_active: false,
+      bundle: { file_id: 'f1', bundle_version: 3 },
+      ...extra
+    });
+  }
+
+  test('requeues the failed rows AND arms the drain (the load-bearing pair)', async () => {
+    seedIngested();
+    cms().requeueFailedForReingest.mockResolvedValue({ requeued: 2, conceptIds: ['c1', 'c2'] });
+    cms().countByIndexStatus.mockResolvedValue(2);
+
+    const res = await lifecycleService.reingestFailed(REPO, {}, { sub: 'steward-1' });
+
+    expect(res).toEqual(expect.objectContaining({ ok: true, requeued: 2 }));
+    expect(cms().requeueFailedForReingest).toHaveBeenCalledWith(REPO, { conceptId: null });
+    // THE assertion that matters: armed. Without it the rows are never claimed.
+    const doc = mockDb._stores.okf_repositories[REPO];
+    expect(doc.rag_drain_active).toBe(true);
+    expect(doc.rag_ingestion.status).toBe('draining');
+  });
+
+  test('scopes to one concept when conceptId is passed', async () => {
+    seedIngested();
+    cms().requeueFailedForReingest.mockResolvedValue({ requeued: 1, conceptIds: ['sec99'] });
+    cms().countByIndexStatus.mockResolvedValue(1);
+    const res = await lifecycleService.reingestFailed(REPO, { conceptId: 'sec99' }, {});
+    expect(res.requeued).toBe(1);
+    expect(cms().requeueFailedForReingest).toHaveBeenCalledWith(REPO, { conceptId: 'sec99' });
+  });
+
+  // THE WEDGE: arming with nothing queued pins rag_drain_active true against a
+  // 'completed' record; assertWritable's drain branch then freezes every write
+  // on the repo with no drain in flight to settle it.
+  test('requeued 0 → does NOT arm (a no-op must not become a wedge)', async () => {
+    seedIngested();
+    cms().requeueFailedForReingest.mockResolvedValue({ requeued: 0, conceptIds: [] });
+
+    const res = await lifecycleService.reingestFailed(REPO, {}, {});
+
+    expect(res).toEqual({ ok: true, requeued: 0, conceptIds: [] });
+    const doc = mockDb._stores.okf_repositories[REPO];
+    expect(doc.rag_drain_active).toBe(false);
+  });
+
+  test('refuses before ingestion (409 NOT_INGESTED) — David: only after ingested', async () => {
+    seedRepo({ lifecycle_state: 'publish', ingested_at: null });
+    await expect(lifecycleService.reingestFailed(REPO, {}, {})).rejects.toMatchObject({
+      code: 'NOT_INGESTED',
+      status: 409
+    });
+    expect(cms().requeueFailedForReingest).not.toHaveBeenCalled();
+  });
+
+  test('refuses while a drain is in flight (409 DRAIN_IN_PROGRESS)', async () => {
+    seedIngested({ rag_drain_active: true });
+    await expect(lifecycleService.reingestFailed(REPO, {}, {})).rejects.toMatchObject({
+      code: 'DRAIN_IN_PROGRESS',
+      status: 409
+    });
+    expect(cms().requeueFailedForReingest).not.toHaveBeenCalled();
+  });
+
+  test('assertReingestable accepts a settled ingested repo', () => {
+    expect(() => lifecycleService.assertReingestable({ ingested_at: 'x', rag_drain_active: false })).not.toThrow();
+  });
+
+  test('audits repo.reingest with the count it actually requeued', async () => {
+    seedIngested();
+    cms().requeueFailedForReingest.mockResolvedValue({ requeued: 2, conceptIds: ['c1', 'c2'] });
+    cms().countByIndexStatus.mockResolvedValue(2);
+    await lifecycleService.reingestFailed(REPO, {}, { sub: 'steward-1', name: 'Steward One' });
+    expect(require('../services/audit-service').writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'repo.reingest', repo_id: REPO, actor: 'steward-1' })
+    );
+  });
+
+  test('404s a soft-deleted repo', async () => {
+    seedRepo({ lifecycle_state: 'publish', ingested_at: 'x', deleted_at: '2026-10-02T00:00:00.000Z' });
+    await expect(lifecycleService.reingestFailed(REPO, {}, {})).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+// REGRESSION GUARD on the armRagDrain extraction (2026-10-14): the ingest
+// transition's arming behaviour must be unchanged after the block moved into a
+// shared function.
+describe('armRagDrain extraction — ingest still arms', () => {
+  test('ingest arms rag_drain_active and requeues as before', async () => {
+    const cms2 = require('../services/concept-meta-service');
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 2,
+      ingested_version: null,
+      ingested_at: null,
+      bundle: { file_id: 'f1', bundle_version: 2 }
+    });
+    cms2.countByIndexStatus.mockImplementation(async (_repoId, status) => (status === 'parsed' ? 5 : 0));
+    await lifecycleService.transition(REPO, 'ingest', { sub: 'steward-1' });
+    const doc = mockDb._stores.okf_repositories[REPO];
+    expect(doc.rag_drain_active).toBe(true);
+    expect(doc.rag_ingestion.concepts_total).toBe(5);
+    expect(cms2.stampRepoGraphName).toHaveBeenCalled();
+  });
 });
 
 describe('lifecycle transitions — the machine, exhaustively', () => {
@@ -771,7 +895,7 @@ describe('delete idempotency — a racing double-fire DELETE must not 500 (David
     mockDb
       .collection('okf_repositories')
       .remove.mockRejectedValueOnce(
-        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202, statusCode: 404 })
+        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202, status: 404 })
       );
     await expect(repoService.remove(REPO, { sub: 'steward-1' })).resolves.toMatchObject({
       status: 'deleted',

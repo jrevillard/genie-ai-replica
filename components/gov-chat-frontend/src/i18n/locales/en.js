@@ -1922,6 +1922,10 @@ export default {
         addSource: '+ From documents',
         add: 'Add concept',
         addLabel: 'Set label',
+        // Per-concept re-ingest (David, 2026-10-14) — offered on failed rows only.
+        reingest: 'Re-ingest this concept',
+        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
+        reingestFailed: 'Re-ingest failed — try again.',
         bulkAccept: 'Accept all',
         bulkRedact: 'Redact all',
         bulkRemove: 'Remove all',
@@ -2114,6 +2118,18 @@ export default {
         title: 'Unpublish',
         body: 'This stops serving {name} to RAG agents immediately. The published bundle zip and version history are kept; the repository returns to In Review so you can correct it. Publish again and Ingest to serve it once more.',
         confirm: 'Unpublish'
+      },
+      // RE-INGEST FAILED CONCEPTS (David, 2026-10-14). Shown only on an
+      // INGESTED repo — the recovery path the drain's dead-letter text has
+      // always promised ("recovery = re-ingest").
+      reingest: {
+        failed: 'Re-ingest failed',
+        title: 'Re-ingest failed concepts',
+        confirm: 'Re-ingest failed',
+        counting: 'Checking how many concepts failed…',
+        countFailed: 'Could not read the failed-concept count. Try again.',
+        none: '{name} has no failed concepts — every concept indexed successfully.',
+        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
       },
       lane: {
         draft: 'Import',

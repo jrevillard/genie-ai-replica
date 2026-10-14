@@ -368,15 +368,66 @@ is meaningful.
 
 ---
 
-## 10. Defect log
+## 10. Operator results
+
+### Tier 0 — `alphabet-company-information-llm-v7.zip` — **PASS**
+
+Executed 2026-10-14 on the local build.
+
+| Measure | Expected | Observed | Verdict |
+|---|---|---|---|
+| Concepts imported | 18 | **18** | ✅ |
+| Documents over the 250 000 ceiling | 0 | **0** | ✅ negative control holds |
+| Concepts after split | 18 | **18** (`-part-N` count = 0) | ✅ no spurious splits |
+| Validation | 0 issues / 0 blockers | **0 issues, 0 blockers** | ✅ |
+| Broken links | 0 | **0** | ✅ |
+| PII | — | 17 flagged, bulk-accepted scan-free | ⚠ see BUG-01 |
+| Concepts ingested | 18 | **18 / 18, all outcomes `ingested`** | ✅ |
+| Chunks ingested | — | **114** | ✅ |
+| **Truncation warnings** | **0** | **0** | ✅ |
+| Head suite | — | 85.6 % pass, 139 queries, score `219 → 219`, **20 ungrounded negative fails** | ⚠ see below |
+
+Per-concept ingest durations ranged 15 s (`sources`, 1 chunk) to 182 s
+(`alphabet_inc`, 10 chunks) — roughly 12–18 s per chunk with 2 lanes in flight.
+
+**Graph landed as** `OKF_alphabet-company-information_v1_*`:
+
+| Collection | Docs |
+|---|---|
+| `…_SOURCE` | **114** — exactly the chunk count reported by the worker |
+| `…_ENTITY` | 756 |
+| `…_LINKS_TO` | 999 |
+| `…_HAS_SOURCE` | 970 |
+
+Repo doc reached `lifecycle_state: publish`, `ingested_version: 1`,
+`ingested_at` set.
+
+**Observations carried forward**
+
+1. **The graph collection name does not follow `repo.graph_name`.** The repo doc
+   reserves `graph_name = OKF_<repo_id>` at create, but the drain writes
+   `OKF_<bundle-name>_v<n>_*`. Verified from two independent reads. Harmless here,
+   but any query written against `repo.graph_name` finds an empty collection — a
+   trap for anyone debugging by collection name.
+2. **Head suite: 20 ungrounded negative failures** — negative queries that should
+   not route to this repo were answered by it. Score `219 → 219` means the
+   recommendation produced no gain. Worth watching across tiers 1–4, since it is
+   the observable the head is supposed to improve.
+
+---
+
+## 11. Defect log
 
 | Defect ID | TC | Severity | Description | Status |
 |---|---|---|---|---|
 | — | — | — | None open | — |
 
+See [concept-doc-ceiling-defect-log.md](concept-doc-ceiling-defect-log.md) —
+7 entries (BUG-01 … BUG-07) raised during the live run.
+
 ---
 
-## 11. Sign-off
+## 12. Sign-off
 
 | Role | Name | Date | Verdict |
 |---|---|---|---|

@@ -156,6 +156,75 @@ silently rather than visibly at build time.
 
 ---
 
+## BUG-07 — Saved frontmatter loads correctly but renders invisible (root cause: BUG-06)
+
+**Status: OPEN** · Severity: high · Found ~15:37 on tier 0
+
+**Symptom:** opening the frontmatter editor in the studio editor the first time,
+the frontmatter the operator had already created and saved was **not displayed**.
+The panel looked empty.
+
+**The read path is correct — verified end to end, not assumed.** Each link was
+read and checked:
+
+| Link | File:line | Verdict |
+|---|---|---|
+| Panel watcher | `FrontmatterPanel.vue:229-236` | `watch: { repoId: { immediate: true, handler(id) { if (id) this.loadFrontmatter() } } }` — fires on mount |
+| Loader | `FrontmatterPanel.vue:251-264` | `getFrontmatter(repoId)` → flattens rows into `shape` |
+| Row builder | `frontmatterService.js:44-91` | **approved-agnostic** — emits a row per value in every array; `approved_at` is merely `null`. Emits regardless of `_approved` |
+| Envelope unwrap | `frontmatterService.js:46` | `res.data.data \|\| res.data \|\| res` |
+| Route + handler | `repos-routes.js:19` → `repository-controller.js:279` | `res.status(200).json(repo)` — **no envelope wrapper**, so `res.data` *is* the repo doc and the unwrap resolves correctly |
+| Projection | `repository-service.js:124-131` | `toResponse(doc)` spreads the whole doc and deletes only `_id`/`_rev`/`_key` — **`frontmatter` is passed through intact** |
+
+So the tags were fetched, flattened, and written into `shape`. **The data was
+present. It was rendered and could not be seen.**
+
+**Why it is invisible.** From `FrontmatterPanel.vue`'s style block:
+
+```css
+.okf-fmp              { background: var(--color-surface-raised);   /* undefined */
+                        border: 1px solid var(--color-border-subtle); }
+.okf-fmp__tag         { background: var(--color-surface-base);     /* undefined */
+                        border: 1px solid var(--color-border); }
+.okf-fmp__tag-value   { color: var(--color-text);                  /* undefined */ }
+.okf-fmp__field-name  { color: var(--color-text-muted);            /* undefined */ }
+.okf-fmp__field-count { color: var(--color-text-faint);            /* undefined */ }
+```
+
+None of those custom properties exist anywhere in the application (see BUG-06 —
+the theme defines 127 tokens in the `--surface` / `--fg` / `--muted` / `--border`
+vocabulary, and zero `--color-*`). Per CSS, a `var()` with no fallback and no
+matching custom property is **invalid at computed-value time**: the declaration
+computes to the property's *initial* value, so every `background` above becomes
+**transparent** and every `color` becomes **inherited**. The chips carry no
+surface of their own and take their text colour from whatever ancestor they land
+in — which in a dark shell is dark-on-dark.
+
+**Why the operator concluded the data was missing.** The panel also renders
+`suggestedForbidden` chips with `background: var(--accent-muted, …)` and
+`border-color: var(--accent, …)` — and `--accent` / `--accent-muted` **do**
+exist. So the moment any suggestion is present, that one chip renders visibly and
+correctly, next to invisible saved chips. The visible/invisible mixture reads as
+"the load failed and only suggestions came through", which is precisely the wrong
+diagnosis — it sent the operator to re-run the LLM suggestion (15:37:18) when the
+original tags had loaded correctly all along.
+
+**Confirmed harmless:** `frontmatter_history` holds 4 entries and all four are
+byte-identical (15:30:15, 15:30:31, 15:38:03, 15:39:22) — same 4 topic, same 6
+entity, same 6 forbidden, same scope and summary. Nothing was lost; the operator
+simply could not see what they had saved, and paid a redundant ~45 s vLLM call
+plus two extra head rebuilds trying to make it appear.
+
+**Fix: BUG-06.** Rewriting the two files onto the shipped token vocabulary fixes
+both this and the light-mode-in-dark-mode report, because they are one defect with
+two symptoms. **A regression test is required here specifically** — assert that
+after `loadFrontmatter()` resolves with N saved values, those N chips are
+*visible* (e.g. a computed-style check that `background-color` is not `transparent`
+and `color` is not inherited), not merely present in the DOM. A presence-only
+assertion passes today, which is how this shipped.
+
+---
+
 ## BUG-05 — Step 10 "Handoff" dead-ends with no pointer to the next surface
 
 **Status: OPEN** · Severity: low · Found 15:41 on tier 0

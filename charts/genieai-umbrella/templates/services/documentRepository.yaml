@@ -25,7 +25,7 @@
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}
 {{- $secretEnv := list
-    (dict "name" "ARANGO_PASSWORD" "valueFrom" (dict "secretKeyRef" (dict "name" "arango-root-secret" "key" "password")))
+    (dict "name" "ARANGO_PASSWORD" "valueFrom" (dict "secretKeyRef" (dict "name" "arango-root-secret" "key" "password" "optional" true)))
 -}}
 {{- $_ := set $vals.services.documentRepository "env" (concat $urls $secretEnv) -}}
 {{- $ctx := dict "name" "documentRepository" "component" "documentRepository" "Values" $vals "Chart" .Chart "Release" .Release -}}

@@ -1706,6 +1706,100 @@ class TestTranslationHelpers:
         assert result == "Original text"
 
     @pytest.mark.asyncio
+    async def test_translate_text_chunk_context_overflow_raises_typed(self):
+        """vLLM context overflow on translation raises TranslationInputTooLongError
+        instead of silently returning the English source (multilingual UX issue #829)."""
+        from chatqna.genieai_chatqna import TranslationInputTooLongError
+
+        svc = create_chatqna_service()
+        with (
+            patch(
+                "chatqna.genieai_chatqna.httpx.AsyncClient",
+                side_effect=Exception(
+                    "HTTP 400: BadRequestError - context length exceeded (max 2048 tokens). "
+                    "Please reduce the length of the input."
+                ),
+            ),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            pytest.raises(TranslationInputTooLongError),
+        ):
+            await svc._translate_text_chunk("x" * 10000, "French")
+
+    @pytest.mark.asyncio
+    async def test_translate_text_chunk_classifier_matches_live_httpx_shape(self):
+        """Reviewer Finding 1+2 regression: production exception is `httpx.HTTPStatusError`
+        whose `str()` is JUST the status phrase — the body lives on `.response.text`.
+        The classifier must read the body, not just `str(exc)`. Construct a real
+        `httpx.HTTPStatusError` so this test fails fast if `_overflow_message_from_exc`
+        regresses to a str()-only check.
+        """
+        import json as _json
+
+        import httpx as _httpx
+
+        from chatqna.genieai_chatqna import TranslationInputTooLongError
+
+        svc = create_chatqna_service()
+
+        # Real httpx response body shape — same as granite-4.1-8b vLLM emits.
+        _body = _json.dumps(
+            {
+                "error": {
+                    "message": "This model's maximum context length is 65536 tokens. "
+                    "However, you requested 160 output tokens and your prompt contains "
+                    "at least 65437 input tokens, for a total of at least 65597 tokens. "
+                    "Please reduce the length of the input prompt."
+                }
+            }
+        ).encode()
+
+        # Build a real httpx.HTTPStatusError — `str()` shows ONLY the status phrase,
+        # NOT the body. Body lives on `.response.text`.
+        _req = _httpx.Request("POST", "http://localhost/v1/chat/completions")
+        _resp = _httpx.Response(400, content=_body, request=_req)
+        _exc = _httpx.HTTPStatusError(
+            "Client error '400 Bad Request' for url 'http://localhost/v1/chat/completions'",
+            request=_req,
+            response=_resp,
+        )
+
+        # Sanity: the bug WAS here. str(_exc) does NOT contain "context length".
+        assert "context length" not in str(_exc).lower()
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=_exc),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            pytest.raises(TranslationInputTooLongError),
+        ):
+            await svc._translate_text_chunk("x" * 10000, "French")
+
+    @pytest.mark.asyncio
+    async def test_finalize_llm_response_propagates_translation_overflow(self):
+        """Regression (reviewer note 71785): `_finalize_llm_response`'s outer
+        `except Exception` previously swallowed `TranslationInputTooLongError`,
+        returning the English source text. The narrowed catch must re-raise."""
+        from chatqna.genieai_chatqna import TranslationInputTooLongError
+
+        svc = create_chatqna_service()
+        # Patch _translate_with_chunking (or its callee) to raise the typed
+        # exception. With the swallow in place this returns the original; with
+        # the fix it re-raises.
+        with (
+            patch.object(
+                svc,
+                "_translate_with_chunking",
+                new=AsyncMock(side_effect=TranslationInputTooLongError("overflow")),
+            ),
+            pytest.raises(TranslationInputTooLongError),
+        ):
+            await svc._finalize_llm_response(
+                "original English response body",
+                original_language="es",  # non-EN triggers translation path
+            )
+
+    @pytest.mark.asyncio
     async def test_translate_with_chunking(self):
         svc = create_chatqna_service()
         call_count = 0
@@ -3162,6 +3256,52 @@ async def test_reranker_input_too_long_returns_abstention():
     assert payload["metadata"]["source_documents"] == []
     assert payload["metadata"]["confidence_score"] == 0.0
     assert payload["metadata"]["retrieval_confidence_score"] == 0.0
+    assert "exceed the reranker's input limit" in payload["response"]
+
+
+@pytest.mark.asyncio
+async def test_reranker_input_too_long_abstention_path_translation_overflow_falls_back_to_english():
+    """When the reranker abstention path fires for a non-EN query and the
+    translation service rejects the abstention text for exceeding the
+    model's context window, the user still gets the contract-promised
+    HTTP 200 + abstained=True + abstention_reason=reranker_input_too_long
+    with the English source text and `translation_status="failed"` flagged
+    in metadata.
+    """
+    from chatqna.genieai_chatqna import TranslationInputTooLongError
+
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def _raise_marker(*_args, **_kwargs):
+        raise chatqna_module._RerankerInputTooLongError("TEI rejected input")
+
+    svc.megaservice.schedule = _raise_marker
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "qué es X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        patch.object(
+            svc,
+            "_finalize_llm_response",
+            new=AsyncMock(side_effect=TranslationInputTooLongError("abstention text overflow")),
+        ),
+        _patched_chat_request(stream=False, language="es"),
+    ):
+        payload = await svc.handle_request(req)
+
+    # Contract: HTTP 200 + abstained=True preserved on the abstention path,
+    # and the response is the English source (not a half-translated / English
+    # fallback as before) with translation_status="failed" surfaced.
+    assert payload["metadata"]["abstained"] is True
+    assert payload["metadata"]["abstention_reason"] == "reranker_input_too_long"
+    assert payload["metadata"]["translation_status"] == "failed"
     assert "exceed the reranker's input limit" in payload["response"]
 
 

@@ -76,6 +76,22 @@ class _RerankerInputTooLongError(Exception):
     """
 
 
+class TranslationInputTooLongError(RuntimeError):
+    """Raised when the translation service rejects a chunk for context-length overflow.
+
+    Server-side fail-loud: triggered by HTTP 400 with ``context_length_exceeded``
+    / ``maximum context length`` markers in the response body. The translation
+    path runs synchronously inside handle_request's chat flow (unlike dataprep's
+    async-fire-and-forget ingest). Failure-mode contract: a fail-loud typed
+    exception lets the route layer map this to HTTP 422 so the BFF chat UI
+    surfaces the translation failure instead of silently passing through a
+    half-translated / English fallback that breaks the multilingual UX
+    (issue #829).
+    """
+
+
+# Token-budget markers in vLLM/OpenAI error bodies. Shared with the dataprep
+# fail-loud pattern (dataprep/genieai_dataprep_arangodb.py).
 # Protocol marker carried in the reranker microservice's 422 body
 # (detail.error_type) and in wrapped exception messages. Both detection
 # points (align_outputs body check + the defensive chain walk) key on it.
@@ -1653,6 +1669,13 @@ class ChatQnAService:
                 )
                 if logflag:
                     logger.info("Translation completed successfully")
+            except TranslationInputTooLongError:
+                # Fail-loud: translation overflow is a permanent contract issue
+                # (chunk too long for the configured model window). Fall-through
+                # to returning the original English text would mask the failure
+                # from the route layer, breaking issue #829's multilingual UX.
+                # Re-raise so the route handler can map it to HTTP 422 / 500.
+                raise
             except Exception as e:
                 logger.error(f"Translation failed: {e}, returning original response")
                 final_text_response = llm_response
@@ -2225,6 +2248,10 @@ class ChatQnAService:
         Automatically uses TranslateGemma completions API (with pre-formatted prompt)
         or generic chat completions format based on the configured VLLM_TRANSLATION_MODEL_ID.
 
+        Response-side fail-loud: when the translation service returns a 400
+        with a context-overflow marker, raise ``TranslationInputTooLongError``
+        instead of silently returning the English source text (issue #829).
+
         Args:
             text: Text to translate.
             target_lang: Target language name (e.g. "Sesotho").
@@ -2288,6 +2315,17 @@ class ChatQnAService:
                 else:
                     return response_data["choices"][0]["message"]["content"].strip()
         except Exception as e:
+            # Fail-loud on vLLM context overflow: silently returning the
+            # original English text breaks the multilingual UX (#829). Classify
+            # by the HTTP body / error text and raise TranslationInputTooLongError
+            # so the route layer maps this to a 422 the BFF can surface.
+            from dataprep.genieai_dataprep_arangodb import _is_vllm_input_overflow
+
+            if _is_vllm_input_overflow(e):
+                logger.warning(f"Translation context overflow: {type(e).__name__}: {str(e)[:200]}")
+                raise TranslationInputTooLongError(
+                    f"translation chunk exceeds VLLM_TRANSLATION_MAX_MODEL_LEN: {type(e).__name__}: {str(e)[:200]}"
+                ) from e
             logger.warning(f"Failed to translate chunk, returning original: {type(e).__name__}: {e}")
             return text
 
@@ -2693,7 +2731,18 @@ class ChatQnAService:
                     "retrieved documents exceed the reranker's input "
                     "limit. This indicates a data ingestion issue."
                 )
-                final_text, _ = await self._finalize_llm_response(abstention_text, original_language)
+                # Translation overflow on the abstention path: fall back to
+                # the English source text and flag the failure in metadata so
+                # the contract (HTTP 200 + abstained=True + abstention_reason=
+                # reranker_input_too_long) holds for non-EN users whose
+                # translation service rejects the abstention text.
+                try:
+                    final_text, _ = await self._finalize_llm_response(abstention_text, original_language)
+                    _translation_status = "ok"
+                except TranslationInputTooLongError as e:
+                    logger.warning(f"Translation overflow on abstention path: {type(e).__name__}: {str(e)[:200]}")
+                    final_text = abstention_text
+                    _translation_status = "failed"
                 metadata = {
                     "source_documents": [],
                     "retrieval_confidence_score": 0.0,
@@ -2701,6 +2750,7 @@ class ChatQnAService:
                     "is_grounded": False,
                     "abstained": True,
                     "abstention_reason": "reranker_input_too_long",
+                    "translation_status": _translation_status,
                 }
 
                 if chat_request.stream:
@@ -2753,7 +2803,31 @@ class ChatQnAService:
         # Extracted into _finalize_llm_response so the strip-before-translate ordering
         # (the #1 sentinel/translation collision risk) is unit-testable without the
         # full handle_request megaservice flow.
-        final_text_response, self_confidence = await self._finalize_llm_response(llm_response, original_language)
+        try:
+            final_text_response, self_confidence = await self._finalize_llm_response(llm_response, original_language)
+        except TranslationInputTooLongError as _e_trans_overflow:
+            # The translation service rejected a chunk for exceeding the model's
+            # configured context window (4-12× oversized when DATAPREP_CONTEXTUAL_DOC_BUDGET
+            # is left at its 100k-char default). Fail-loud: surface as HTTP 422 so the BFF
+            # can render a localized error rather than the FastAPI default 500 with
+            # internal exception text. Issue #829 contract.
+            logger.warning(
+                f"Translation overflow at handle_request boundary: "
+                f"{type(_e_trans_overflow).__name__}: {str(_e_trans_overflow)[:200]}"
+            )
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "translation_input_too_long",
+                    "message": (
+                        "The translated reply exceeded the language model's input "
+                        "context window. Please reduce the conversation length or "
+                        "retry with fewer references."
+                    ),
+                    "abstained": True,
+                    "abstention_reason": "translation_input_too_long",
+                },
+            ) from _e_trans_overflow
 
         # Assemble source documents + confidence + grounding flag. Reflects the reranker's
         # verdict; not grounded (is_grounded=False) when the reranker found nothing relevant.

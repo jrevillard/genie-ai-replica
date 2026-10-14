@@ -496,6 +496,47 @@ Three findings that change how the rest of this plan should be read:
 **Tiers 2–4 therefore measure the local soak configuration, not stock behaviour.**
 The shipped default is one concept at a time across all repositories.
 
+### Truncation-warning validity — settled
+
+**Question raised during tier 1:** can the raw-chunk fallback suppress the very
+truncation warning this test looks for, making "0 truncation warnings" a false
+pass?
+
+**Answer: no.** `_doc_context_or_none` (`genieai_dataprep_arangodb.py:1295-1332`)
+runs entirely in this order:
+
+| Step | Line | Network? |
+|---|---|---|
+| `_resolve_doc_budget` | :1310 | **no** — reads env + chunk lengths |
+| `_doc_context_truncation` | :1313 | **no** — pure function |
+| `await _write_ingestion_log(... "Contextualization" ...)` | :1315-1329 | **no** |
+| `_build_doc_context(...)` | :1330 | **no** — string assembly |
+
+**Every step that can emit a truncation warning is local.** The LLM call happens
+*after* this function returns, in `_contextualize_doc_level` (:1337) or the
+batched per-chunk path (:1345). An `APITimeoutError` on the endpoint therefore
+cannot suppress, delay or fake the warning.
+
+**Consequence:** the tier-0 and tier-1 "0 truncation warnings" results stand as
+genuine passes, including during the saturation burst below.
+
+### Saturation burst during tier 1 — recorded, not a defect
+
+At **17:14:26** the remote inference endpoint (`ai.assembly.govstack.global:444`,
+a shared GPU node) became saturated. In a 30-minute window: **6 contextual
+batches started, 20 failed** with `APITimeoutError`, **all 20 at the same
+timestamp** — a single overload burst, not sustained failure.
+
+Impact: those batches fell back to raw chunks (the documented never-block-ingestion
+boundary), so roughly half the contextualization attempted in that window was
+lost. Ingestion still completed with **0 failed concepts**, which is the design
+working rather than the system being healthy.
+
+**Not a product defect** — the endpoint is shared infrastructure and the
+fallback behaved correctly. It does mean tier-1 retrieval quality should be
+re-measured after a re-ingest, and that **timing measurements taken during the burst
+window are not clean** (see the caveat in the parallel-drain section).
+
 ---
 
 ## 11. Defect log

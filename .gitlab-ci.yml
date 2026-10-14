@@ -3038,6 +3038,45 @@ manual:rag-quality:
       junit: genie-ai-overlay/reports/rag-quality.xml
 
 
+# --- Documentation site build check ---
+# The pages job below publishes on main ONLY, so a docs change on a merge
+# request is never built until it lands — and a broken front-matter block,
+# shortcode or relref then fails the PUBLISH rather than the merge, on the
+# default branch, where it is most expensive to notice.
+#
+# This is the same build with no publish step, run on MRs. It exists so nobody
+# has to install Hugo locally to find out whether a markdown edit compiles —
+# which is the only reason this job is worth its runner minutes.
+docs:build:
+  stage: lint
+  image: docker.io/hugomods/hugo:exts
+  variables:
+    GIT_SUBMODULE_STRATEGY: none
+    HUGO_CACHEDIR: "$CI_PROJECT_DIR/.cache/hugo"
+    HUGO_ENVIRONMENT: ci
+  cache:
+    key: hugo-docs
+    paths:
+      - .cache/hugo
+  script:
+    - cd site
+    - hugo mod tidy
+    # No --baseURL override: a relref that cannot resolve fails the build, which
+    # is the whole point of running this before merge rather than after.
+    - hugo --gc --minify --destination "$CI_PROJECT_DIR/.hugo-check"
+    # Prove the build actually produced pages — a silent empty output would
+    # otherwise read as success.
+    - test -f "$CI_PROJECT_DIR/.hugo-check/index.html"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - site/**/*
+        - .gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - site/**/*
+        - .gitlab-ci.yml
+
 # --- Documentation site -> GitLab Pages ---
 # Builds the Hugo + Docsy site in site/ and publishes to GitLab Pages.
 # Docsy is a Hugo Module (needs Go); assets need Node. hugomods/hugo:exts

@@ -1651,9 +1651,9 @@ export default {
         bulkRemove: 'Tout supprimer',
         loadProgress: 'Chargement des fichiers {done}/{total}',
         addSource: '+ From documents',
-        reingest: 'Re-ingest this concept',
-        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
-        reingestFailed: 'Re-ingest failed — try again.'
+        reingest: 'Réingérer ce concept',
+        reingestBusy: 'Une ingestion RAG est déjà en cours pour ce dépôt — attendez la fin, puis réessayez.',
+        reingestFailed: 'Échec de la ré-ingestion — réessayez.'
       },
       delete: {
         body: 'Cette action supprime définitivement le fichier, ses fragments indexés et ses liens dans le graphe.',
@@ -1835,13 +1835,13 @@ export default {
         retracted: 'Rien de retiré'
       },
       reingest: {
-        failed: 'Re-ingest failed',
-        title: 'Re-ingest failed concepts',
-        confirm: 'Re-ingest failed',
-        counting: 'Checking how many concepts failed…',
-        countFailed: 'Could not read the failed-concept count. Try again.',
-        none: '{name} has no failed concepts — every concept indexed successfully.',
-        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+        failed: 'Échec de la ré-ingestion ({n})',
+        title: 'Réingérer les concepts en échec',
+        confirm: 'Réingérer',
+        counting: 'Vérification du nombre de concepts en échec…',
+        countFailed: 'Impossible de lire le nombre de concepts en échec. Réessayez.',
+        none: '{name} n’a aucun concept en échec — tous les concepts ont été indexés avec succès.',
+        body: '{n} concept(s) de {name} n’ont pas pu être indexés et sont absents de RAG. La ré-ingestion ne retente que ceux-ci ; les concepts déjà indexés restent inchangés. Si elle échoue de nouveau, l’erreur s’affichera sur le concept.'
       }
     },
     build: {

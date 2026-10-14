@@ -134,7 +134,12 @@
               would answer 409 DRAIN_IN_PROGRESS anyway, and a dead button that
               looks live is worse than an absent one. -->
             <DsButton v-if="canReingest(r)" variant="ghost" small :disabled="actionBusy" @click.stop="onReingestAsk(r)">
-              {{ translate('okf.dashboard.reingest.failed', 'Re-ingest failed') }}
+              {{
+                translate('okf.dashboard.reingest.failed', 'Re-ingest failed').replace(
+                  '{n}',
+                  String(r.failed_count || 0)
+                )
+              }}
             </DsButton>
             <!-- Story 1-8 (2026-10-08): the Head Tester / Routing Lab. Visible
                  on the Published AND Ingested lanes (both are lifecycle_state
@@ -574,7 +579,20 @@ export default {
   methods: {
     /**
      * Can this repo be re-ingested? (David, 2026-10-14: "the Re-Ingest menu must
-     * only be available after a repo is ingested".)
+     * only be available after a repo is ingested" and "should only appear for
+     * repo's with failed concept ingestions".)
+     *
+     * THREE conditions, all required:
+     *   published  — the same field set contextualAction() uses, so this
+     *                affordance can never disagree with the state machine
+     *   ingested   — nothing can have failed to index before the first ingest
+     *   >0 failed  — a recovery action on a repo with nothing to recover is a
+     *                dead button that looks live
+     *
+     * `failed_count` comes from the list projection (attachFailedCounts), a LIVE
+     * grouped COUNT — not rag_ingestion.failed_concepts, which is a settle-time
+     * snapshot the re-ingest arm wipes to []. `> 0` on undefined is false, so a
+     * count that failed to load hides the button rather than offering a no-op.
      *
      * A METHOD, NOT A COMPUTED — and that is load-bearing. Vue evaluates a
      * computed with NO arguments on first access, so a `computed: { canReingest(r) }`
@@ -585,7 +603,14 @@ export default {
      * reason contextualAction(r)/isDraining(r)/isServing(r) are all methods.
      */
     canReingest(r) {
-      return Boolean(r) && r.lifecycle_state === 'publish' && !!r.ingested_at && !this.isDraining(r);
+      return (
+        Boolean(r) &&
+        r.lifecycle_state === 'publish' &&
+        !!r.ingested_at &&
+        !this.isDraining(r) &&
+        typeof r.failed_count === 'number' &&
+        r.failed_count > 0
+      );
     },
     /** 5s store poll — UNCONDITIONAL while the dashboard is mounted (David,
      * 2026-09-08, standing directive "no clever gates": every frozen-card

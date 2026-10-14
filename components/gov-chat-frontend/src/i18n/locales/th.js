@@ -1628,9 +1628,9 @@ export default {
         bulkRemove: 'ลบทั้งหมด',
         loadProgress: 'กำลังโหลดไฟล์ {done}/{total}',
         addSource: '+ From documents',
-        reingest: 'Re-ingest this concept',
-        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
-        reingestFailed: 'Re-ingest failed — try again.'
+        reingest: 'นำเข้าข้อมูลแนวคิดนี้ใหม่',
+        reingestBusy: 'มีการนำเข้าข้อมูล RAG กำลังทำงานสำหรับที่เก็บข้อมูลนี้อยู่ — โปรดรอให้เสร็จสิ้นแล้วลองใหม่',
+        reingestFailed: 'การนำเข้าข้อมูลใหม่ล้มเหลว — กรุณาลองใหม่'
       },
       delete: {
         body: 'การดำเนินการนี้จะลบไฟล์ ชิ้นส่วนดัชนี และลิงก์กราฟอย่างถาวร',
@@ -1809,13 +1809,13 @@ export default {
         retracted: 'ไม่มีอะไรเพิกถอน'
       },
       reingest: {
-        failed: 'Re-ingest failed',
-        title: 'Re-ingest failed concepts',
-        confirm: 'Re-ingest failed',
-        counting: 'Checking how many concepts failed…',
-        countFailed: 'Could not read the failed-concept count. Try again.',
-        none: '{name} has no failed concepts — every concept indexed successfully.',
-        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+        failed: 'การนำเข้าข้อมูลใหม่ล้มเหลว ({n})',
+        title: 'นำเข้าข้อมูลแนวคิดที่ล้มเหลวอีกครั้ง',
+        confirm: 'นำเข้าข้อมูลใหม่',
+        counting: 'กำลังตรวจสอบว่าแนวคิดกี่รายการล้มเหลว…',
+        countFailed: 'ไม่สามารถอ่านจำนวนแนวคิดที่ล้มเหลวได้ กรุณาลองใหม่',
+        none: '{name} ไม่มีแนวคิดที่ล้มเหลว — ทุกแนวคิดได้รับการทำดัชนีสำเร็จ',
+        body: 'มีแนวคิด {n} รายการของ {name} ที่ทำดัชนีไม่สำเร็จ และไม่ปรากฏใน RAG การนำเข้าข้อมูลใหม่จะลองใหม่เฉพาะรายการเหล่านั้น แนวคิดที่ทำดัชนีแล้วจะไม่ถูกแตะต้อง หากล้มเหลวอีกครั้ง ข้อผิดพลาดจะแสดงบนแนวคิดนั้น'
       }
     },
     build: {

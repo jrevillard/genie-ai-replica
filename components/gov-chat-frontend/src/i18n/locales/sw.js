@@ -1635,9 +1635,9 @@ export default {
         bulkRemove: 'Ondoa zote',
         loadProgress: 'Inapakia faili {done}/{total}',
         addSource: '+ From documents',
-        reingest: 'Re-ingest this concept',
-        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
-        reingestFailed: 'Re-ingest failed — try again.'
+        reingest: 'Ingiza tena dhana hii',
+        reingestBusy: 'Kuna uingizaji wa RAG unaendelea kwa hazina hii — subiri kimali, kisha jaribu tena.',
+        reingestFailed: 'Uingizaji ulishindwa — jaribu tena.'
       },
       delete: {
         body: 'Hii inaondoa kabisa faili, vipande vyake vilivyoorodheshwa na viungo vyake vya grafu.',
@@ -1819,13 +1819,13 @@ export default {
         retracted: 'Hakuna kilichobatilishwa'
       },
       reingest: {
-        failed: 'Re-ingest failed',
-        title: 'Re-ingest failed concepts',
-        confirm: 'Re-ingest failed',
-        counting: 'Checking how many concepts failed…',
-        countFailed: 'Could not read the failed-concept count. Try again.',
-        none: '{name} has no failed concepts — every concept indexed successfully.',
-        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+        failed: 'Uingizaji ulishindwa ({n})',
+        title: 'Ingiza tena dhana zilizoshindwa',
+        confirm: 'Ingiza tena',
+        counting: 'Inakagua ni dhana ngapi zilizoshindwa…',
+        countFailed: 'Imeshindwa kupata idadi ya dhana zilizoshindwa. Jaribu tena.',
+        none: '{name} haina dhana zilizoshindwa — kila dhana imewekwa kwenye katalogi kwa mafanikio.',
+        body: 'Dhana {n} kati ya {name} zimeshindwa kuwekwa kwenye katalogi na hazipo kwenye RAG. Ingiza tena inajaribu hizo peke yake; dhana zilizowekwa kwenye katalogi hazibadilishwi. Ikiwa itashindwa tena, hitilafu itaonyeshwa kwenye dhana hiyo.'
       }
     },
     build: {

@@ -434,6 +434,7 @@ async function list({ domain, authz, cursor, limit } = {}) {
     const items = docs.map(toResponse);
     await attachIndexingPending(items);
     await attachConceptCounts(items);
+    await attachFailedCounts(items);
     const next_cursor =
       items.length === safeLimit && items.length > 0
         ? encodeCursor(items[items.length - 1].created_at, items[items.length - 1].repo_id)
@@ -468,6 +469,38 @@ async function attachIndexingPending(rows) {
     for (const r of rows) r.indexing_pending = byRepo.get(r.repo_id) || 0;
   } catch (err) {
     logger.warn('indexing_pending attach failed (non-fatal)', { error: err.message });
+  }
+}
+
+/**
+ * FAILED-CONCEPT COUNT on every repo row (David, 2026-10-14: "the re-ingest
+ * menu should only appear for repo's with failed concept ingestions").
+ *
+ * Same shape as attachIndexingPending: ONE grouped COUNT for the whole page,
+ * never per-repo, fail-soft. The card needs a LIVE count because
+ * `rag_ingestion.failed_concepts` is a settle-time snapshot that the re-ingest
+ * arm wipes to [] — reading it would hide the button on exactly the repos that
+ * need it.
+ *
+ * Absent/undefined means "unknown", NOT "zero": the UI must not hide the
+ * action on a count that simply failed to load.
+ * @param {object[]} rows repo response rows (mutated in place)
+ */
+async function attachFailedCounts(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  try {
+    const db = await getDb();
+    const counts = await (
+      await db.query(
+        'FOR m IN okf_concepts_meta FILTER m.index_status == @st AND m.repo_id IN @ids ' +
+          'COLLECT repo_id = m.repo_id WITH COUNT INTO n RETURN { repo_id, n }',
+        { st: 'failed', ids: rows.map((r) => r.repo_id) }
+      )
+    ).all();
+    const byRepo = new Map(counts.map((c) => [c.repo_id, c.n]));
+    for (const r of rows) r.failed_count = byRepo.get(r.repo_id) || 0;
+  } catch (err) {
+    logger.warn('failed_count attach failed (non-fatal)', { error: err.message });
   }
 }
 

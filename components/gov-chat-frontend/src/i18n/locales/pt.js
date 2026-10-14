@@ -1647,9 +1647,10 @@ export default {
         bulkRemove: 'Remover tudo',
         loadProgress: 'Carregando arquivos {done}/{total}',
         addSource: '+ From documents',
-        reingest: 'Re-ingest this concept',
-        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
-        reingestFailed: 'Re-ingest failed — try again.'
+        reingest: 'Reingerir este conceito',
+        reingestBusy:
+          'Já está a decorrer uma ingestão RAG para este repositório — aguarde que termine e tente novamente.',
+        reingestFailed: 'A reingestão falhou — tente novamente.'
       },
       delete: {
         body: 'Isso remove permanentemente o arquivo, seus blocos indexados e seus vínculos no grafo.',
@@ -1831,13 +1832,13 @@ export default {
         retracted: 'Nada retraído'
       },
       reingest: {
-        failed: 'Re-ingest failed',
-        title: 'Re-ingest failed concepts',
-        confirm: 'Re-ingest failed',
-        counting: 'Checking how many concepts failed…',
-        countFailed: 'Could not read the failed-concept count. Try again.',
-        none: '{name} has no failed concepts — every concept indexed successfully.',
-        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+        failed: 'Falha na reingestão ({n})',
+        title: 'Reingerir conceitos que falharam',
+        confirm: 'Reingerir',
+        counting: 'A verificar quantos conceitos falharam…',
+        countFailed: 'Não foi possível ler o número de conceitos que falharam. Tente novamente.',
+        none: '{name} não tem conceitos que falharam — todos os conceitos foram indexados com sucesso.',
+        body: '{n} conceito(s) de {name} não foram indexados e estão em falta no RAG. A reingestão tenta novamente apenas esses; os conceitos já indexados ficam intactos. Se falhar outra vez, o erro será mostrado no conceito.'
       }
     },
     build: {

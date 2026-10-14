@@ -1647,9 +1647,9 @@ export default {
         bulkRemove: 'Tlosa tsohle',
         loadProgress: 'Ho jarolla lifaele {done}/{total}',
         addSource: '+ From documents',
-        reingest: 'Re-ingest this concept',
-        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
-        reingestFailed: 'Re-ingest failed — try again.'
+        reingest: 'Kena maikutlo ena',
+        reingestBusy: 'Ho na le Kenya ea RAG e sebetsang polokelong ena — ema e qetile, mme o leka hape.',
+        reingestFailed: 'Ho hlolehile ho kenya — leka hape.'
       },
       delete: {
         body: 'Sena se tlosa faele, likaroloana tsa eona tse indexiloeng le likhokahano tsa eona tsa kerafo ruri.',
@@ -1832,13 +1832,13 @@ export default {
         retracted: 'Ha ho letho le khutlisitsoeng'
       },
       reingest: {
-        failed: 'Re-ingest failed',
-        title: 'Re-ingest failed concepts',
-        confirm: 'Re-ingest failed',
-        counting: 'Checking how many concepts failed…',
-        countFailed: 'Could not read the failed-concept count. Try again.',
-        none: '{name} has no failed concepts — every concept indexed successfully.',
-        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+        failed: 'Ho hlolehile ho kenya ({n})',
+        title: 'Kena maikutlo a hlolehileng',
+        confirm: 'Kena',
+        counting: 'Ho sebetsa hore na maikutlo a ka kae a hlolehile…',
+        countFailed: 'Ha ho kgone ho bala chato ea maikutlo a hlolehileng. Leka hape.',
+        none: '{name} ha e na le maikutlo a hlolehileng — maikutlo ohle a ile a indexwa.',
+        body: '{n} maikutlo a {name} a ile a hlolehela ho indexwa, mme a lahlehile ho RAG. Ho kenya hape ho leka feela eo; maikutlo a indexiloeng ha a se ngutloeng. Ha e hlolehile hape, phoso e tla hlahloa maikutlong.'
       }
     },
     build: {

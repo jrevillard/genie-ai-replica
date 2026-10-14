@@ -407,7 +407,14 @@ async function requeueFailedForReingest(repo_id, opts = {}) {
          updated_at: DATE_ISO8601(DATE_NOW())
        } IN okf_concepts_meta
        RETURN NEW.concept_id`,
-      { rid: repo_id, cid: conceptId }
+      // BIND PARAMS MUST MATCH THE QUERY EXACTLY. ArangoDB rejects ANY bind
+      // value the query does not reference ("bind parameter 'cid' was not
+      // declared in the query") — passing `cid: null` unconditionally made the
+      // REPO-WIDE call 500, because that query never mentions @cid. Caught live
+      // on the first button click, not by a test: the original falsifier only
+      // asserted the AQL string and never the binds, which is the half that was
+      // broken.
+      conceptId ? { rid: repo_id, cid: conceptId } : { rid: repo_id }
     )
   ).all();
   const conceptIds = Array.isArray(rows) ? rows.map((r) => (r && r.concept_id ? r.concept_id : r)).filter(Boolean) : [];

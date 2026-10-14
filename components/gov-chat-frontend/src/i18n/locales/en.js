@@ -2120,10 +2120,10 @@ export default {
         confirm: 'Unpublish'
       },
       // RE-INGEST FAILED CONCEPTS (David, 2026-10-14). Shown only on an
-      // INGESTED repo — the recovery path the drain's dead-letter text has
-      // always promised ("recovery = re-ingest").
+      // INGESTED repo that actually HAS failed concepts — the recovery path the
+      // drain's dead-letter text has always promised ("recovery = re-ingest").
       reingest: {
-        failed: 'Re-ingest failed',
+        failed: 'Re-ingest failed ({n})',
         title: 'Re-ingest failed concepts',
         confirm: 'Re-ingest failed',
         counting: 'Checking how many concepts failed…',

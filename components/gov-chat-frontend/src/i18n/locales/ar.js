@@ -1629,9 +1629,9 @@ export default {
         bulkRemove: 'إزالة الكل',
         loadProgress: 'تحميل الملفات {done}/{total}',
         addSource: '+ From documents',
-        reingest: 'Re-ingest this concept',
-        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
-        reingestFailed: 'Re-ingest failed — try again.'
+        reingest: 'إعادة استيعاب هذا المفهوم',
+        reingestBusy: 'توجد عملية استيعاب RAG قيد التشغيل لهذا المستودع — انتظر حتى تنتهي ثم أعد المحاولة.',
+        reingestFailed: 'فشلت إعادة الاستيعاب — أعد المحاولة.'
       },
       delete: {
         body: 'يؤدي هذا إلى إزالة الملف وأجزائه المفهرسة وروابط الرسم البياني نهائيًا.',
@@ -1809,13 +1809,13 @@ export default {
         retracted: 'لا يوجد شيء مسحوب'
       },
       reingest: {
-        failed: 'Re-ingest failed',
-        title: 'Re-ingest failed concepts',
-        confirm: 'Re-ingest failed',
-        counting: 'Checking how many concepts failed…',
-        countFailed: 'Could not read the failed-concept count. Try again.',
-        none: '{name} has no failed concepts — every concept indexed successfully.',
-        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+        failed: 'فشل الاستيعاب من جديد ({n})',
+        title: 'إعادة استيعاب المفاهيم الفاشلة',
+        confirm: 'إعادة الاستيعاب',
+        counting: 'جارٍ التحقق من عدد المفاهيم الفاشلة…',
+        countFailed: 'تعذّر قراءة عدد المفاهيم الفاشلة. حاول مرة أخرى.',
+        none: 'لا توجد مفاهيم فاشلة في {name} — تمت فهرسة كل المفاهيم بنجاح.',
+        body: 'أخفق {n} مفهوم من {name} في الفهرسة وهو مفقود من RAG. تعيد إعادة الاستيعاب محاولة الفاشل منها فقط؛ أما المفاهيم المفهرسة فتُرك كما هي. وإذا فشلت مرة أخرى فسيظهر الخطأ على المفهوم.'
       }
     },
     build: {

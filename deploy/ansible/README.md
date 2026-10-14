@@ -477,6 +477,32 @@ ansible-playbook -i inventory/itu_rtx_test.ini deploy.yml --tags deploy --vault-
   --extra-vars "git_username=YOUR_USER git_token=YOUR_TOKEN"
 ```
 
+## Image Tags and Per-Service Overrides
+
+By default every service pulls the same registry tag via `genie_ai_global_tag`
+(the branch-name tag is mutable and always points at the branch's latest CI
+build; the `<branch>-<sha>` tag is immutable). To pin only specific images to a
+different tag while the rest keep the global one, pass `image_tag_overrides`:
+
+```bash
+ansible-playbook -i inventory/itu_rtx_test.ini deploy.yml --vault-id itu_rtx_test@prompt \
+  --extra-vars '{"repo_branch":"main","genie_ai_global_tag":"main","image_tag_overrides":{"genie-ai-reranker":"dev-el-salvador"}}'
+```
+
+- **Keys** must be image names from `deploy/ansible/tasks/deploy-shared-facts.yml`
+  (`genieai_images`). The deploy fails with `Validate image_tag_overrides keys
+  against known image names` on a typo'd key or an empty value — the override
+  never silently falls back to the global tag.
+- **Pass `--extra-vars` as a single JSON object.** ansible-core 2.20 silently
+  drops nested dicts in mixed `key=value` CLI strings: the override dict arrives
+  empty, the validation task is skipped, and everything deploys on the global
+  tag. Symptom: `Validate image_tag_overrides keys against known image names`
+  missing from the deploy output.
+- The rendered `.env` gets `GENIE_AI_<NAME>_IMAGE_TAG` per service; CI
+  (`tests/config-validator/`) cross-checks those var names against
+  docker-compose references, so a template/compose drift fails the pipeline
+  instead of silently reverting to the global tag.
+
 ## GPU Configuration
 
 To deploy without GPU/OPEA services, set in `group_vars/<env>/vars.yml`:

@@ -45,10 +45,22 @@ spec:
   http:
     httpEnabled: {{ .Values.data.keycloak.http.httpEnabled | default true }}
   hostname:
-    # Strict mode off: the public hostname is the Edge Gateway's, resolved
-    # from request headers (proxy.headers: xforwarded below). Keycloak 26
-    # refuses to start without either an explicit hostname or strict: false.
+    # Fixed frontend URL (issuer base): tokens carry this issuer on every
+    # request path, so the browser OIDC flow and the backend validation
+    # agree. Full URL including the /auth context path (upstream hostname
+    # v2 accepts scheme://host[:port]/path). When ingress.host is unset,
+    # falls back to strict:false and derives per-request — fine for
+    # throwaway clusters, wrong whenever two clients reach Keycloak
+    # through different hostnames.
     strict: {{ .Values.data.keycloak.hostname.strict | default false }}
+    {{- if .Values.ingress.host }}
+    hostname: {{ printf "%s://%s/auth" (.Values.ingress.scheme | default "https") .Values.ingress.host }}
+    {{- end }}
+    # Backchannel URLs (JWKS, token, userinfo inside the discovery
+    # document) keep deriving from the request host, so in-cluster
+    # consumers get keycloak-service URLs they can resolve while the
+    # issuer stays pinned to the public hostname.
+    backchannelDynamic: true
   ingress:
     enabled: false
   # Trust X-Forwarded-* from Envoy. KC_PROXY=edge was removed in KC 24+;

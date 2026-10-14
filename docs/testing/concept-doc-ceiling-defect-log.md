@@ -278,6 +278,47 @@ code. Verified behaviourally in the live container against PI-bearing HTML:
 sufficient. The scratch copy was a verification artefact and is correctly
 disposable.** The gap was in my explanation, not in the repo.
 
+### Follow-up: the "is it actually load-bearing?" question
+
+One reader raised a fair objection — `partition_html` looked like it had no
+caller in the dataprep pipeline, which would make the patch defensive rather
+than load-bearing. Its adversarial verification came back **REFUTED**, and two
+other readers closed the question:
+
+1. **The unstructured branch is reachable.** When `CONTENT_EXTRACTION_METHOD`
+   is `opea` (not the `docling` default), `document_loader` at
+   `genieai_dataprep_utils.py:214` delegates non-PDF to OPEA v1.5
+   `comps/dataprep/src/utils.py:load_html` → `UnstructuredHTMLLoader` →
+   `unstructured.partition.html`. The patched code is on a live path.
+
+2. **Falsification proves it.** Swapping the constructor back to
+   `remove_comments=True` on the shipped image **reproduces the exact
+   `AttributeError: 'lxml.etree._ProcessingInstruction' object has no attribute
+   'is_phrasing'`**. With `remove_pis=True`, `partition_html`, `partition_md`,
+   and comps `load_md` / `load_html` all succeed on PI-bearing input. The patch
+   is load-bearing, not defensive.
+
+**The scratch copy is byte-identical to the patched file in the shipped image**
+(md5 `6a73dfb66b3622007a07778cdad6715d`) — it is a copy of the patch's *output*,
+which is the strongest available evidence that it carries nothing the managed
+artefact does not.
+
+### Two caveats this investigation surfaced
+
+1. **Crawled HTML never reaches dataprep as HTML.** `crawlWorker.js:132` writes
+   `${fileId}.md` after turndown conversion, so crawled pages take the `.md`
+   branch. The `.html` → docling path is for **direct uploads only**.
+
+2. **The cloud HTML path may differ from the one verified here.** When
+   `DOCLING_ENDPOINT` is set — Ansible emits it whenever `gpu_node_host` is
+   non-empty, i.e. on cloud deployments — `.html` files are delegated to a remote
+   `docling-serve` (`genieai_dataprep_utils.py:127`) rather than the in-process
+   converter. The BeautifulSoup immunity above was verified against in-process
+   **docling 2.45.0 / docling-core 2.44.2**. The remote service's version is not
+   pinned by anything this investigation checked, and the reasoning depends on
+   the HTML backend being BeautifulSoup-based. **Worth confirming against the
+   deployed `docling-serve` before treating the cloud path as equally safe.**
+
 ---
 
 ## BUG-07 — Saved frontmatter loads correctly but renders invisible (root cause: BUG-06)

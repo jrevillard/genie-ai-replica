@@ -10,7 +10,7 @@ product defect) / **WONTFIX**
 
 ## BUG-01 — PII bulk-accept leaves no visible record of what was accepted
 
-**Status: OPEN** · Severity: high (governance) · Found 15:29:35 on tier 0
+**Status: OPEN** · Severity: high (governance) · Found 15:29:35 on tier 0 · **!1065**
 
 `repo.pii_bulk_accept` — *"PII BULK ACCEPT on repository — **17 flagged
 concept(s)** processed (**scan-free**; publish gate satisfiable)"*.
@@ -37,7 +37,7 @@ flag count rather than resetting to zero.
 
 ## BUG-02 — Auto-correct's summary does not say what it changed or where
 
-**Status: OPEN** · Severity: medium · Found 15:30:44 on tier 0
+**Status: OPEN** · Severity: medium · Found 15:30:44 on tier 0 · **!1066**
 
 `repo.autocorrect` — *"Applied frontmatter autocorrect — **17 change(s)** across
 the repository"*.
@@ -60,7 +60,7 @@ a per-concept diff the curator can expand, not just a count.
 
 ## BUG-03 — A bundle-imported repo opens on step 9 (Review), past the only step with mandatory work
 
-**Status: OPEN** · Severity: high (first-run experience) · Found 15:28–15:30 on tier 0
+**Status: OPEN** · Severity: high (first-run experience) · Found 15:28–15:30 on tier 0 · **!1067**
 
 The bundle-import path creates the repo with only `{name, domain}`
 (`StudioTab.vue:467`) and never seeds `studio_step`, so the wizard's landing step
@@ -105,7 +105,7 @@ are taken from a plain `FOR … RETURN` and tallied in JS.
 
 ## BUG-06 — Frontmatter panel styles against a token vocabulary that does not exist
 
-**Status: OPEN** · Severity: high (visual correctness, theme-wide) · Found ~15:45 on tier 0
+**Status: OPEN** · Severity: high (visual correctness, theme-wide) · Found ~15:45 on tier 0 · **!1069**
 
 **Symptom:** in dark mode, opening the frontmatter editor in the studio editor
 sometimes shows light-mode objects.
@@ -158,7 +158,7 @@ silently rather than visibly at build time.
 
 ## BUG-08 — Graph collections are named after the bundle, not `repo.graph_name`
 
-**Status: OPEN** · Severity: medium (debugging trap) · Found on tier 0
+**Status: OPEN** · Severity: medium (debugging trap) · Found on tier 0 · **!1070**
 
 **Symptom.** After a successful ingest, querying the repo's own graph collections
 returns **0 documents**, while the repo doc reads `ingested_version: 1` and
@@ -191,7 +191,7 @@ written, because it is the field any operator or agent will read first.
 
 ## BUG-09 — Head suite: 20 ungrounded negative failures
 
-**Status: OPEN** · Severity: medium (retrieval quality) · Found on tier 0
+**Status: OPEN** · Severity: medium (retrieval quality) · Found on tier 0 · **!1071**
 
 `head-suite.run` on tier 0: **pass_rate 0.856** over **139 queries**, `steals: 0`.
 `head-suite.recommend.done`: score **`219 → 219`** (no gain), `narrow_options: 0`,
@@ -282,7 +282,7 @@ disposable.** The gap was in my explanation, not in the repo.
 
 ## BUG-07 — Saved frontmatter loads correctly but renders invisible (root cause: BUG-06)
 
-**Status: OPEN** · Severity: high · Found ~15:37 on tier 0
+**Status: OPEN — no separate issue; filed as symptom 2 of !1069** · Severity: high · Found ~15:37 on tier 0
 
 **Symptom:** opening the frontmatter editor in the studio editor the first time,
 the frontmatter the operator had already created and saved was **not displayed**.
@@ -351,7 +351,7 @@ assertion passes today, which is how this shipped.
 
 ## BUG-05 — Step 10 "Handoff" dead-ends with no pointer to the next surface
 
-**Status: OPEN** · Severity: low · Found 15:41 on tier 0
+**Status: OPEN** · Severity: low · Found 15:41 on tier 0 · **!1068**
 
 `steps/Publish.vue` is titled **Handoff** and correctly refuses to publish — that
 is a deliberate directive (`Publish.vue:1-4`: *"KEEP PUBLISHING OUT OF THE WIZARD.

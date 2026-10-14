@@ -21,6 +21,7 @@ data:
     upstream genieai_frontend { server frontend:80; }
     upstream genieai_backend  { server backend:80; }
     upstream genieai_docrepo  { server document-repository:80; }
+    upstream genieai_keycloak { server keycloak-service:8080; }
     server {
       listen 8080;
       # Exact-match /healthz beats the catch-all `location /` below, so
@@ -30,6 +31,20 @@ data:
       location /api/      { proxy_pass http://genieai_backend; }
       location /api-docs/ { proxy_pass http://genieai_backend; }
       location /uploads/  { proxy_pass http://genieai_docrepo; }
+      # Keycloak OIDC endpoints, same-origin with the SPA (the frontend's
+      # oidcConfig falls back to ${origin}/auth). proxy_pass carries no
+      # URI part, so the original /auth-prefixed path reaches Keycloak
+      # as-is (its http-relative-path is /auth). Host/X-Forwarded-* are
+      # required: without them Keycloak derives its issuer from the
+      # upstream name (keycloak-service:8080) and every browser
+      # redirect/token call misses.
+      location /auth/ {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://genieai_keycloak;
+      }
       location /          { proxy_pass http://genieai_frontend; }
     }
 {{- end -}}

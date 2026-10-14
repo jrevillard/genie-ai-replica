@@ -1,8 +1,7 @@
 {{- if .Values.services.frontend.enabled -}}
-{{- $ns := .Values.namespace -}}
 {{- $vals := deepCopy .Values -}}
 {{- $urls := list
-    (dict "name" "VUE_APP_API_URL" "value" (printf "http://backend.%s.svc.cluster.local" $ns))
+    (dict "name" "VUE_APP_API_URL" "value" "/api")
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}
 {{- $existing := index $vals.services.frontend "env" | default list -}}

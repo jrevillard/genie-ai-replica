@@ -273,6 +273,14 @@ services:
     # creates the ArangoDB collections; same registry/tag conventions
     # as the service images.
     migrationsImage: { repository: genie-ai-db-migrations, tag: "main" }
+    # Remote translation API (OpenAI-compatible vLLM). endpoint empty:
+    # auto mode probes the in-cluster translation service (gpu-models
+    # tier) and falls back to an in-process CPU model when that tier is
+    # absent — set the endpoint to target a GPU node's translation API
+    # directly (requires a vllm-api-key Secret alongside).
+    translation:
+      endpoint: ""
+      modelId: ""
     port: 3000
     # Image USER is `node` (uid 1000). PSA `restricted` requires
     # runAsNonRoot: true and the namespace PSA accepts non-root UIDs.

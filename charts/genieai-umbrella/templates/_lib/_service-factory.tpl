@@ -77,6 +77,14 @@ spec:
         - name: {{ $objectName }}
           image: {{- if $ctx.Values.global.imageRegistry }} {{ $ctx.Values.global.imageRegistry }}/{{ $svc.image.repository }}{{ else }} {{ $svc.image.repository }}{{ end }}:{{ $svc.image.tag | default "latest" }}
           imagePullPolicy: {{ $ctx.Values.global.imagePullPolicy | default "IfNotPresent" }}
+          {{- with $svc.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $svc.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ $svc.port }}

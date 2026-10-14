@@ -181,7 +181,7 @@ spec:
             - name: KC_CLIENT_ID
               value: {{ .Values.data.keycloak.webClientId | quote }}
             - name: KC_PUBLIC_ORIGIN
-              value: {{ printf "https://%s" (.Values.ingress.host | default "genieai.local") | quote }}
+              value: {{ printf "%s://%s" (.Values.ingress.scheme | default "https") (.Values.ingress.host | default "genieai.local") | quote }}
             - name: KC_MOBILE_CLIENT_ID
               value: {{ .Values.data.keycloak.mobileClientId | default "genie-mobile" | quote }}
             - name: KC_MOBILE_REDIRECT_SCHEME

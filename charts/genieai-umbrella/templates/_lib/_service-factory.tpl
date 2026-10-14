@@ -53,13 +53,18 @@ spec:
       # and frontend, 100 for clamav) and crash-loop on 65534. Each
       # service declares its own user via `securityContext` (container
       # level) in values.yaml.
+      #
+      # `podSecurityContext` (e.g. fsGroup on documentRepository) is
+      # merged into the same `securityContext:` block — emitting two
+      # sibling `securityContext:` keys is invalid YAML and the helm
+      # post-render unmarshaller rejects it with 'mapping key
+      # "securityContext" already defined'.
       securityContext:
         seccompProfile:
           type: RuntimeDefault
-      {{- with $svc.podSecurityContext }}
-      securityContext:
+        {{- with $svc.podSecurityContext }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       {{- with $svc.volumes }}
       volumes:
         {{- toYaml . | nindent 8 }}

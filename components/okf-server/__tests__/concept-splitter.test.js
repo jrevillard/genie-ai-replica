@@ -136,6 +136,49 @@ describe('concept-splitter', () => {
     });
   });
 
+  describe('no part may be blank', () => {
+    // Real trigger: Solar System, `50-years-of-solar-system-exploration-tagged-sec19`,
+    // imported at a ceiling one character below a section boundary. The body opens
+    // on a blank line followed by an H2, so the heading grouping cut the blank run
+    // into its own group — and greedyMerge finalises a group as soon as adding the
+    // NEXT one would overflow, so the blank run was emitted as part 1. The importer
+    // inherits title, topic links and sources into every part (`applyDocumentCeiling`,
+    // ingest-service.js), so part 1 became a real, linkable, one-newline page in the
+    // graph that answered inbound links with an empty body.
+    const body =
+      '\n## Section one\n' +
+      Array.from({ length: 120 }, (_, i) => `line ${i} ${'x'.repeat(50)}`).join('\n') +
+      '\n\n## Section two\n' +
+      Array.from({ length: 120 }, (_, i) => `line ${i} ${'y'.repeat(50)}`).join('\n');
+
+    test('a leading blank line never becomes a part of its own, at any ceiling', () => {
+      // The old splitter produced a blank part at 64 distinct ceilings in this
+      // range, so this sweep is the regression net rather than a single case.
+      for (let ceiling = 200; ceiling <= 2000; ceiling += 1) {
+        const r = splitConceptBody(body, ceiling);
+        if (r.unsplittable) continue;
+        const blank = r.parts.findIndex((part) => part.trim() === '');
+        expect({ ceiling, blank }).toEqual({ ceiling, blank: -1 });
+      }
+    });
+
+    test('the first part carries real content at a ceiling that used to break', () => {
+      for (const ceiling of [246, 304, 362, 420, 478, 536]) {
+        const r = splitConceptBody(body, ceiling);
+        expect(r.unsplittable).toBe(false);
+        expect(r.parts.length).toBeGreaterThan(1);
+        expect(r.parts[0].trim()).not.toBe('');
+        assertLossless(body, r, ceiling);
+      }
+    });
+
+    test('a document that is nothing but blank lines stays a single part', () => {
+      const blanks = '\n\n\n\n';
+      const r = splitConceptBody(blanks, 2);
+      assertLossless(blanks, r, 2);
+    });
+  });
+
   describe('unsplittable', () => {
     test('one line longer than the ceiling with no boundaries is unsplittable, not hard-wrapped', () => {
       const body = 'q'.repeat(500);

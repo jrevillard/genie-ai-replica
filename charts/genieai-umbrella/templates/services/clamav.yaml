@@ -52,6 +52,8 @@ spec:
               mountPath: /tmp
             - name: clamav-data
               mountPath: /var/lib/clamav
+            - name: run-clamav
+              mountPath: /run/clamav
           {{- with $svc.probes.readiness }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}
@@ -70,6 +72,14 @@ spec:
         # a writable mount freshclam cannot stage the .cvd files there.
         - name: clamav-data
           emptyDir: {}
+        # The entrypoint runs `install -o clamav -g clamav /run/clamav`
+        # and `chown` it. /run/clamav is NOT in the image — it's a tmpfs
+        # the entrypoint expects to find. The factory's pod-level
+        # volumeMounts don't reach this custom Deployment, so the
+        # mount has to be declared here.
+        - name: run-clamav
+          emptyDir:
+            medium: Memory
 ---
 apiVersion: v1
 kind: Service

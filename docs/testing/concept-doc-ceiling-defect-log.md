@@ -12,6 +12,11 @@ product defect) / **WONTFIX**
 
 **Status: OPEN** · Severity: high (governance) · Found 15:29:35 on tier 0 · **!1065**
 
+> **Mechanism corrected — see BUG-12.** The text below attributed this to
+> `pii_hit_count` being a post-state counter. It is a **hardcoded literal** in the
+> AQL — structurally always `0`, never computed. `broken_link_count` is dead the
+> same way. Correction posted to !1065.
+
 `repo.pii_bulk_accept` — *"PII BULK ACCEPT on repository — **17 flagged
 concept(s)** processed (**scan-free**; publish gate satisfiable)"*.
 
@@ -320,6 +325,58 @@ artefact does not.
    deployed `docling-serve` before treating the cloud path as equally safe.**
 
 ---
+
+## BUG-12 — `pii_hit_count` and `broken_link_count` are hardcoded literals, not computed · correction to !1065
+
+**Status: OPEN** · Severity: high (governance + observability) · Found 2026-10-15 via sweep
+
+**This corrects BUG-01's stated mechanism.** I filed BUG-01 claiming `pii_hit_count` is
+"a post-state counter". That is directionally right — the surface lies — but the
+mechanism is worse and my explanation was wrong.
+
+`components/okf-server/services/conformance-service.js`, `getRepoMetrics`, `:173-181`:
+
+```js
+RETURN {
+  concept_count: LENGTH(docs),
+  conformance_issue_count: SUM(FOR d IN docs RETURN LENGTH(d.conformance_issues) || 0),
+  stale_concept_count: SUM(FOR d IN docs FILTER d.stale_after != null AND d.stale_after <= ${today} RETURN 1),
+  has_reserved_index: LENGTH(FOR d IN docs FILTER d.concept_id == 'index' RETURN 1) > 0,
+  broken_link_count: 0,     // ← literal
+  pii_hit_count: 0          // ← literal
+}
+```
+
+The fallback object at `:185-191` hardcodes both to `0` as well.
+
+**Correct statement: both metrics are structurally always zero.** Not a post-state
+counter, not a stale value, not a computation that can go wrong — literals that cannot
+be anything else.
+
+**Second casualty: `broken_link_count` is equally dead.** Every `Repo metrics computed`
+line in every service has reported `0` for this entire run, on every repository,
+including ones with unlinked pages. The `orphan` check exists and works in
+`validation-service.js`; this metric never consults it.
+
+**Why it survived review:** the `docs` binding is genuinely computed for the four live
+fields and discarded for the other two, so the query reads as though it aggregates
+everything.
+
+**Fix:** implement the two metrics, or delete them so the absence is visible rather than
+disguised as a healthy zero. Add a test asserting both equal a real count over a fixture
+repo that *has* broken links and PII hits — today such a fixture would still report `0`,
+so the test catches the dead literal immediately.
+
+### Companion finding — two status vocabularies disagree
+
+| File | Enum |
+|---|---|
+| `conformance-service.js:20` | `['draft', 'stable', 'deprecated']` |
+| `concept-meta-service.js:992` | `['active', 'draft', 'retired']` |
+
+`INVALID_STATUS` and `INVALID_STATUS_ENUM` disagree about the same field. **Same
+failure shape as BUG-11** — two lists maintained independently. The OKF spec should
+mandate one and the other should derive from it.
 
 ## BUG-11 — The product writes `type: index`, recognises it as valid, then flags it INVALID_TYPE with no remedy · **!1077**
 

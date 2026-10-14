@@ -19,9 +19,18 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        runAsUser: 100                      # upstream clamav image's clamav account
-        runAsGroup: 100
-        fsGroup: 100                        # /var/lib/clamav writable for freshclam
+        # The image's clamav user is uid/gid 1000 (verified via
+        # `docker run --rm --entrypoint sh clamav/clamav:stable-debian
+        # -c "grep clamav /etc/passwd"`). Earlier revisions used 100
+        # and crashed with "Failed to open log file
+        # /var/log/clamav/freshclam.log: Permission denied" — the
+        # dir is owned 1000:1000 in the image, and the emptyDir
+        # mounts default to root:root 0755 which uid 100 cannot
+        # write. fsGroup 1000 gives the volume GID 1000 so the
+        # process can chown files inside it.
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -49,7 +58,7 @@ spec:
             {{- toYaml $svc.resources | nindent 12 }}
           securityContext:
             runAsNonRoot: true
-            runAsUser: 100
+            runAsUser: 1000
             allowPrivilegeEscalation: false
             # ClamAV's writable paths in the runtime image are tmpfs-mounted
             # (/tmp) or backed by an explicit volume mounted at
@@ -72,6 +81,14 @@ spec:
               mountPath: /var/lib/clamav
             - name: run-clamav
               mountPath: /run/clamav
+            # /var/log/clamav is owned by clamav:clamav in the image,
+            # but with readOnlyRootFilesystem: true the file is on the
+            # read-only rootfs and freshclam cannot write its log
+            # there. An emptyDir mount gives freshclam + clamd a
+            # writable surface for /var/log/clamav/{freshclam,clamd}.log
+            # without giving up readOnlyRootFilesystem.
+            - name: clamav-log
+              mountPath: /var/log/clamav
           {{- with $svc.probes.readiness }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}
@@ -98,6 +115,8 @@ spec:
         - name: run-clamav
           emptyDir:
             medium: Memory
+        - name: clamav-log
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

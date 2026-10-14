@@ -311,7 +311,15 @@ services:
       runAsNonRoot: false
       runAsUser: 0
       allowPrivilegeEscalation: false
-      capabilities: { drop: ["ALL"] }
+      # Drop only the cap that grants raw-socket access. We KEEP
+      # CAP_CHOWN, CAP_FOWNER, CAP_DAC_OVERRIDE, CAP_SETUID,
+      # CAP_SETGID: the entrypoint runs chown at startup, which
+      # needs CAP_CHOWN. Dropping ALL also drops CHOWN and the
+      # chown fails with EPERM even when running as root — every
+      # previous 0.1.x install hit this with the same `Operation
+      # not permitted` chown error in the pod's stderr.
+      capabilities:
+        drop: ["NET_RAW"]
     # The genie-ai-frontend image embeds nginx (it serves the SPA +
     # the rendered config.js). Same writable paths as the standalone
     # nginx image: the entrypoint chowns /var/cache/nginx to uid 101
@@ -404,7 +412,16 @@ services:
       runAsNonRoot: false
       runAsUser: 0
       allowPrivilegeEscalation: false
-      capabilities: { drop: ["ALL"] }
+      # Drop only the cap that grants raw-socket access. We KEEP
+      # CAP_CHOWN, CAP_FOWNER, CAP_DAC_OVERRIDE, CAP_SETUID,
+      # CAP_SETGID: nginx's entrypoint chowns /var/cache/nginx
+      # to uid 101 at startup, which needs CAP_CHOWN. Dropping
+      # ALL also drops CHOWN and the chown fails with EPERM
+      # even when running as root — every previous 0.1.x install
+      # hit this with the same `Operation not permitted` chown
+      # error in the pod's stderr.
+      capabilities:
+        drop: ["NET_RAW"]
     # The genie-ai-nginx entrypoint envsubst-renders default.conf FROM
     # its baked template AT STARTUP; mounting a read-only subPath OVER
     # the rendered file would fail with EROFS. Mount the ConfigMap

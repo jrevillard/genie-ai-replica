@@ -230,7 +230,7 @@ spec:
             - name: KEYCLOAK_BRUTE_FORCE
               value: {{ eq ((.Values.data.keycloak.bruteForceProtected | default true) | toString) "true" | quote }}
             - name: KEYCLOAK_PASSWORD_POLICY
-              value: {{ .Values.data.keycloak.passwordPolicy | default "length(8)" | quote }}
+              value: {{ .Values.data.keycloak.passwordPolicy | default "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)" | quote }}
             - name: KEYCLOAK_THEME
               value: {{ .Values.data.keycloak.theme | default "keycloak" | quote }}
             - name: KEYCLOAK_I18N_ENABLED

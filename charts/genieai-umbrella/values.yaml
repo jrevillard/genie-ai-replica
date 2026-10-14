@@ -336,6 +336,15 @@ services:
       runAsUser: 1000
       allowPrivilegeEscalation: false
       capabilities: { drop: ["ALL"] }
+    # fsGroup: 1000 — without this, the kubelet creates the PVC
+    # mountpoint at /app/uploads as root:root 0755 and uid 1000
+    # cannot write there. fsGroup makes kubelet chown the mount
+    # to 1000:1000 on first attach. The image USER being root
+    # makes the kubelet default 0755 ownership; only fsGroup
+    # overrides it.
+    podSecurityContext:
+      fsGroup: 1000
+      fsGroupChangePolicy: OnRootMismatch
     # ClamAV service discovery. Defaults assume the in-cluster
     # Service rendered by charts/genieai-umbrella/templates/services/clamav.yaml;
     # operators with an external ClamAV (separate namespace, dedicated

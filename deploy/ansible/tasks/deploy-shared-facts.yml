@@ -32,3 +32,18 @@
       - { name: "genie-ai-keycloak" }
       - { name: "genie-ai-keycloak-config" }
       - { name: "genie-ai-tempo-proxy" }
+
+# Fail loud instead of silently falling back to genie_ai_global_tag when an
+# override key is typo'd or a value is empty — env.j2 would just skip it.
+- name: Validate image_tag_overrides keys against known image names
+  when: image_tag_overrides | length > 0
+  ansible.builtin.assert:
+    that:
+      - image_tag_overrides.keys() | list | difference(genieai_images | map(attribute='name') | list) | length == 0
+      - image_tag_overrides | dict2items | map(attribute='value') | select('string') | map('trim') | select('eq', '') | list | length == 0
+      - image_tag_overrides | dict2items | map(attribute='value') | select('string') | list | length == image_tag_overrides | length
+    success_msg: "image_tag_overrides validated: {{ image_tag_overrides }}"
+    fail_msg: >-
+      image_tag_overrides keys must be genieai_images names
+      ({{ genieai_images | map(attribute='name') | join(', ') }})
+      with non-empty string values; got {{ image_tag_overrides }}.

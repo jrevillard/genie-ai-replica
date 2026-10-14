@@ -1,7 +1,15 @@
 const path = require('path');
 const fs = require('fs');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
-const { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages, parseGitlabCiImages, parseComposeServiceContracts } = require('../validators/parse-compose');
+const {
+  parseComposeEnvVars,
+  crossReference,
+  parseComposeImages,
+  parseAnsibleImages,
+  parseGitlabCiImages,
+  parseComposeServiceContracts
+} = require('../validators/parse-compose');
+const { parseEnvTemplateImageVars } = require('../validators/parse-env-template');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
 const {
   validateHardwareProfile,
@@ -25,6 +33,8 @@ const GPU_COMPOSE_FILE = path.join(ROOT, 'docker-compose.gpu.yaml');
 const T4_FILE = path.join(ROOT, 'env.t4');
 const RTX6000_FILE = path.join(ROOT, 'env.rtx6000');
 const ANSIBLE_GROUPVARS_FILE = path.join(ROOT, 'deploy/ansible/group_vars/all.yml');
+const ENV_TEMPLATE_FILE = path.join(ROOT, 'deploy/ansible/templates/env.j2');
+const SHARED_FACTS_FILE = path.join(ROOT, 'deploy/ansible/tasks/deploy-shared-facts.yml');
 
 describe('Configuration Validation Suite', () => {
   let envParsed;
@@ -135,8 +145,7 @@ describe('Configuration Validation Suite', () => {
         expect(secretNames).toContain(expected);
       }
     });
-
-    });
+  });
 
   // --- AC #4: No orphaned or conflicting configurations ---
   describe('AC4: No orphaned or conflicting configurations', () => {
@@ -217,7 +226,11 @@ describe('Configuration Validation Suite', () => {
       gpuExists = fs.existsSync(GPU_COMPOSE_FILE);
       if (gpuExists) {
         gpuComposeVars = parseComposeEnvVars(GPU_COMPOSE_FILE);
-        const gpuSharedVars = new Set([...composeVars.map((v) => v.name), ...GPU_SHARED_COMPOSE_VARS, ...KNOWN_ORPHANS]);
+        const gpuSharedVars = new Set([
+          ...composeVars.map((v) => v.name),
+          ...GPU_SHARED_COMPOSE_VARS,
+          ...KNOWN_ORPHANS
+        ]);
         gpuXRef = crossReferenceGpu(gpuComposeVars, envParsed, gpuSharedVars);
         gpuValidation = validateGpuNode(GPU_COMPOSE_FILE, COMPOSE_FILE);
       }
@@ -380,6 +393,36 @@ describe('Configuration Validation Suite', () => {
       const junitReporter = config.reporters.find((r) => Array.isArray(r) && r[0] === 'jest-junit');
       expect(junitReporter).toBeDefined();
       expect(junitReporter[1].outputName).toBe('jest-config.xml');
+    });
+  });
+
+  // --- env.j2 per-service image vars vs docker-compose references ---
+  // env.j2 (rendered by Ansible) is the only producer of the per-service
+  // GENIE_AI_<NAME>_IMAGE / _IMAGE_TAG values; docker-compose.yaml is their
+  // only consumer. A name mismatch on either side makes compose silently
+  // fall back to GENIE_AI_GLOBAL_TAG — no deploy error, wrong image deployed
+  // (the doubled-prefix bug: per-service overrides were a silent no-op).
+  describe('env template per-service image vars', () => {
+    const derivedVars = parseEnvTemplateImageVars(ENV_TEMPLATE_FILE, SHARED_FACTS_FILE);
+
+    test('every var env.j2 renders is referenced by docker-compose', () => {
+      const composeNames = new Set(composeVars.map((v) => v.name));
+      const unreferenced = derivedVars.flatMap((d) => [d.imageVar, d.tagVar]).filter((name) => !composeNames.has(name));
+      expect(unreferenced).toEqual([]);
+    });
+
+    test('every per-service GENIE_AI_* var compose references is rendered by env.j2', () => {
+      const rendered = new Set(derivedVars.flatMap((d) => [d.imageVar, d.tagVar]));
+      const unrendered = composeVars
+        .map((v) => v.name)
+        .filter(
+          (name) =>
+            name.startsWith('GENIE_AI_') &&
+            name !== 'GENIE_AI_REGISTRY' &&
+            name !== 'GENIE_AI_GLOBAL_TAG' &&
+            !rendered.has(name)
+        );
+      expect(unrendered).toEqual([]);
     });
   });
 });

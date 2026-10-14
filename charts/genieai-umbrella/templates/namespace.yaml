@@ -68,3 +68,77 @@ metadata:
     pod-security.kubernetes.io/audit-version: v1.33
     pod-security.kubernetes.io/warn: baseline
     pod-security.kubernetes.io/warn-version: v1.33
+---
+# ArgoDB operator in-cluster RBAC. The kube-arangodb operator installed
+# by scripts/install-prereqs.sh runs in arango-system with `legacy`
+# scope: cluster-wide for core K8s resources (deployments, services,
+# PVCs, configmaps) but namespace-scoped for the ArangoDeployment
+# custom resource itself. Without an in-namespace RoleBinding the
+# operator's informer NEVER sees the ArangoDeployment rendered by
+# templates/data/arangodb-deployment.yaml and the deployment stays
+# in `Phase: Pending` indefinitely.
+#
+# The bootstrap operator's `legacy` scope grants CRD-definition
+# rights cluster-wide but not the CR instances — that's by design, so
+# the operator can be shared across namespaces without each tenant
+# getting cluster-wide CR-write access. The fix lives in the chart
+# that owns the namespace, not in the bootstrap script: each chart
+# that wants ArangoDeployment reconciled in its namespace declares
+# this Role+RoleBinding.
+#
+# The RoleBinding's subject is the operator's ServiceAccount in
+# arango-system — that SA exists ONLY if the bootstrap ran. On a
+# cluster without kube-arangodb, this binding is harmless (the SA
+# is unknown and the role grants nothing).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: arango-operator-crd-access
+  namespace: {{ $ns }}
+  labels:
+    {{- include "genieai-common.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["database.arangodb.com"]
+    resources:
+      - arangodeployments
+      - arangodeployments/scale
+      - arangodeployments/status
+      - arangomembers
+      - arangomembers/status
+      - arangotasks
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["database.arangodb.com"]
+    resources: ["arangodeployments/finalizers"]
+    verbs: ["update"]
+  # The operator also writes the per-member TLS / JWT plumbing; without
+  # secrets + configmaps the member pod never bootstraps.
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps", "serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # The operator manages the headless services + member StatefulSets
+  # for the ArangoDeployment (and rotates the JWT secret in the
+  # auth path). The cluster-wide deployment CRD from the bootstrap
+  # covers Deployments; the StatefulSet + Service rules are
+  # in-namespace because legacy scope bundles them per-namespace.
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "endpoints"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: arango-operator-crd-access
+  namespace: {{ $ns }}
+  labels:
+    {{- include "genieai-common.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: arango-kube-arangodb-operator
+    namespace: arango-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: arango-operator-crd-access

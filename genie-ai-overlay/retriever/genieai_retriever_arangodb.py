@@ -1322,19 +1322,9 @@ class GenieaiArangoRetriever(OpeaComponent):
                         # openai body dict, httpx response body, aiohttp message).
                         # "string too long" was removed (over-broad — fires on
                         # tool_calls[id] oversize, not just context overflow).
-                        from dataprep.genieai_dataprep_arangodb import _overflow_message_from_exc
+                        from dataprep.genieai_dataprep_arangodb import _is_vllm_input_overflow
 
-                        _msg = _overflow_message_from_exc(_e_sum)
-                        if any(
-                            m in _msg
-                            for m in (
-                                "context length",
-                                "context_length_exceeded",
-                                "maximum context length",
-                                "reduce the length",
-                                "context window",
-                            )
-                        ):
+                        if _is_vllm_input_overflow(_e_sum):
                             logger.warning(
                                 f"Summarizer skipped: vLLM context overflow for {r['doc'].id!r}: "
                                 f"{type(_e_sum).__name__}: {str(_e_sum)[:200]}"

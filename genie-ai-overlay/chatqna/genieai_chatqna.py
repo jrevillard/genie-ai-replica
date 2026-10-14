@@ -92,37 +92,6 @@ class TranslationInputTooLongError(RuntimeError):
 
 # Token-budget markers in vLLM/OpenAI error bodies. Shared with the dataprep
 # fail-loud pattern (dataprep/genieai_dataprep_arangodb.py).
-#
-# "string too long" was REMOVED (reviewer note): it also fires for non-overflow
-# errors like oversized `messages[2].tool_calls[0].id` (>64 chars) and
-# `tools[0].function.description` (>1 MB). The remaining 5 markers cover the
-# canonical vLLM granite-4.1-8b context-overflow message body.
-_TRANSLATE_INPUT_OVERFLOW_MARKERS = (
-    "context length",
-    "context_length_exceeded",
-    "maximum context length",
-    "reduce the length",
-    "context window",
-)
-
-
-def _is_translate_input_overflow(exc: BaseException) -> bool:
-    """True if a translation httpx/openai error is a context-length rejection.
-
-    Aggregates EVERY text-shaped field of the exception (str(), openai body dict,
-    httpx response body, aiohttp message) into one lowercased haystack and checks
-    for marker substrings. Matches the LIVE SDK shape — production httpx responses
-    put the body on `exc.response.text`; openai SDK >=3.x puts it on `exc.body`.
-    Test mocks with bare Exception("...context length exceeded...") still match.
-    """
-    from dataprep.genieai_dataprep_arangodb import _overflow_message_from_exc as _haystack
-
-    body = _haystack(exc)
-    if not body:
-        return False
-    return any(marker in body for marker in _TRANSLATE_INPUT_OVERFLOW_MARKERS)
-
-
 # Protocol marker carried in the reranker microservice's 422 body
 # (detail.error_type) and in wrapped exception messages. Both detection
 # points (align_outputs body check + the defensive chain walk) key on it.
@@ -2350,7 +2319,9 @@ class ChatQnAService:
             # original English text breaks the multilingual UX (#829). Classify
             # by the HTTP body / error text and raise TranslationInputTooLongError
             # so the route layer maps this to a 422 the BFF can surface.
-            if _is_translate_input_overflow(e):
+            from dataprep.genieai_dataprep_arangodb import _is_vllm_input_overflow
+
+            if _is_vllm_input_overflow(e):
                 logger.warning(f"Translation context overflow: {type(e).__name__}: {str(e)[:200]}")
                 raise TranslationInputTooLongError(
                     f"translation chunk exceeds VLLM_TRANSLATION_MAX_MODEL_LEN: {type(e).__name__}: {str(e)[:200]}"
@@ -2768,11 +2739,8 @@ class ChatQnAService:
                 try:
                     final_text, _ = await self._finalize_llm_response(abstention_text, original_language)
                     _translation_status = "ok"
-                except TranslationInputTooLongError as _e_trans_overflow:
-                    logger.warning(
-                        f"Translation overflow on abstention path: "
-                        f"{type(_e_trans_overflow).__name__}: {str(_e_trans_overflow)[:200]}"
-                    )
+                except TranslationInputTooLongError as e:
+                    logger.warning(f"Translation overflow on abstention path: {type(e).__name__}: {str(e)[:200]}")
                     final_text = abstention_text
                     _translation_status = "failed"
                 metadata = {

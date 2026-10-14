@@ -50,12 +50,21 @@ metadata:
     app.kubernetes.io/part-of: genieai
     # Advertise K8s Pod Security Standards at the namespace level so admission
     # controllers refuse pods without required securityContext.
-    pod-security.kubernetes.io/enforce: restricted
+    # `baseline` (not `restricted`) because the chart ships 2 services
+    # (nginx, frontend) whose images have no non-root USER — their
+    # entrypoints write to paths owned by root. `restricted` rejects
+    # `runAsNonRoot: false / runAsUser: 0` and strands those pods in
+    # ImagePullBackOff. `baseline` still blocks the truly dangerous
+    # cases (privileged, host namespaces, root capabilities) and is
+    # the right floor for the dev install. Production deploys
+    # rebuilding the images with a non-root USER can flip back to
+    # `restricted`.
+    pod-security.kubernetes.io/enforce: baseline
     # Pin to a specific version rather than `latest`. Across cluster upgrades
     # `latest` silently changes the policy version and may start rejecting
     # pods that previously scheduled without warning.
     pod-security.kubernetes.io/enforce-version: v1.33
-    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit: baseline
     pod-security.kubernetes.io/audit-version: v1.33
-    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn: baseline
     pod-security.kubernetes.io/warn-version: v1.33

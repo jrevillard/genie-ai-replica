@@ -613,6 +613,68 @@ describe('concept-meta-service.requeueRepoForRedrain (P0 empty-graph fix)', () =
   });
 });
 
+// ── RE-INGEST FAILED CONCEPTS (David, 2026-10-14) ──
+describe('concept-meta-service.requeueFailedForReingest', () => {
+  beforeEach(() => mockDb._reset());
+
+  it('requeues ONLY failed rows and zeroes the reaper stamp', async () => {
+    const querySpy = mockDb.query;
+    querySpy.mockResolvedValueOnce({ all: async () => [{ concept_id: 'c1' }, { concept_id: 'c2' }] });
+    const res = await conceptMeta.requeueFailedForReingest('r1');
+    expect(res.requeued).toBe(2);
+    expect(res.conceptIds).toEqual(['c1', 'c2']);
+    const aqlText = String(querySpy.mock.calls[0][0]);
+    // FAILED ONLY — an indexed row must never churn.
+    expect(aqlText).toContain("m.index_status == 'failed'");
+    // The field requeueRepoForRedrain also clears, because the reaper would
+    // otherwise kill the row again on its next hourly sweep.
+    expect(aqlText).toContain('worker_claimed_at: null');
+    expect(aqlText).toContain('ingest_attempts: 0');
+    expect(aqlText).toContain('reindex_retry: 0');
+    expect(aqlText).toContain('last_error: null');
+    expect(aqlText).toContain('m.repo_id == @rid');
+  });
+
+  it('does NOT clear graph_name (blanking it lets dataprep resurrect a dropped graph)', async () => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => [{ concept_id: 'c1' }] });
+    await conceptMeta.requeueFailedForReingest('r1');
+    const aqlText = String(mockDb.query.mock.calls[0][0]);
+    expect(aqlText).not.toContain('graph_name');
+  });
+
+  it('scopes to ONE concept when conceptId is given', async () => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => [{ concept_id: 'c9' }] });
+    const res = await conceptMeta.requeueFailedForReingest('r1', { conceptId: 'c9' });
+    expect(res.requeued).toBe(1);
+    const aqlText = String(mockDb.query.mock.calls[0][0]);
+    expect(aqlText).toContain('m.concept_id == @cid');
+    expect(mockDb.query.mock.calls[0][1]).toEqual({ rid: 'r1', cid: 'c9' });
+  });
+
+  // FALSIFIER: the repo-wide call must not carry a concept filter at all. A
+  // template that always emitted "FILTER m.concept_id == @cid" would silently
+  // retry ZERO concepts repo-wide — the exact bug class this suite exists for.
+  it('repo-wide call carries NO concept filter', async () => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+    await conceptMeta.requeueFailedForReingest('r1');
+    const aqlText = String(mockDb.query.mock.calls[0][0]);
+    expect(aqlText).not.toContain('@cid');
+    expect(aqlText).not.toContain('concept_id ==');
+  });
+
+  it('returns an empty result for a falsy repo without touching the db', async () => {
+    mockDb._reset();
+    const res = await conceptMeta.requeueFailedForReingest('');
+    expect(res).toEqual({ requeued: 0, conceptIds: [] });
+  });
+
+  it('reports 0 when the cursor came back empty (nothing failed)', async () => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+    const res = await conceptMeta.requeueFailedForReingest('r1');
+    expect(res.requeued).toBe(0);
+  });
+});
+
 // ── AUTHOR-GRAPH LINK DEDUPE (2026-09-08 crawl audit) ──
 describe('dedupeLinksForStorage (2026-09-08 crawl audit)', () => {
   const { dedupeLinksForStorage } = require('../services/concept-meta-service');

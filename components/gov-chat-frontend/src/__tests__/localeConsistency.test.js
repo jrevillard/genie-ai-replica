@@ -131,6 +131,9 @@ describe('Locale consistency', () => {
     'okf.src.uploaded',
     'okf.steps.input.benchCount',
     'okf.steps.input.moreN',
+    // Re-ingest dialog (David, 2026-10-14) — both interpolated with .replace().
+    'okf.dashboard.reingest.body',
+    'okf.dashboard.reingest.none',
     // #1039 batch (2026-10-03): Step-7 keys consumed via .replace()
     'okf.validation.headline.blockers',
     'okf.validation.headline.warnings',

@@ -288,4 +288,16 @@ router.post('/:repo_id/resplit', requireRepoScope('repo_id', 'admin'), ctrl.resp
 // planned changes without applying; dry_run=false applies atomically.
 router.post('/:repo_id/autocorrect', requireRepoScope('repo_id', 'admin'), ctrl.autocorrectRepo);
 
+// RE-INGEST FAILED CONCEPTS (David, 2026-10-14). The recovery path the drain's
+// dead-letter text already promised ("recovery = re-ingest"). Admin-scope.
+// Repos only: 409 NOT_INGESTED before ingestion, 409 DRAIN_IN_PROGRESS while a
+// drain is in flight. Registered AFTER the concepts/:concept_id family so the
+// literal segment is never swallowed by a parametrised sibling.
+router.post('/:repo_id/reingest-failed', requireRepoScope('repo_id', 'admin'), ctrl.reingestFailed);
+router.post(
+  '/:repo_id/concepts/:concept_id/reingest',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.reingestFailed
+);
+
 module.exports = router;

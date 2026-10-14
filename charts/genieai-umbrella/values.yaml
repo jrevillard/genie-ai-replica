@@ -386,9 +386,32 @@ services:
       - name: uploads
         persistentVolumeClaim:
           claimName: document-repository-uploads
+      # The image's entrypoint (/app/clamav-node.sh) starts a local
+      # clamd in the container and waits for it to be reachable via
+      # `clamdscan --version` before launching the Node server. The
+      # Node app actually connects to the cluster clamav Service
+      # (CLAMAV_HOST=clamav / CLAMAV_PORT=3310); the local clamd is
+      # only there to satisfy the entrypoint gate. With
+      # readOnlyRootFilesystem the image's /var/log/clamav (clamav
+      # 100:102) is on the read-only rootfs and freshclam cannot
+      # write its log there. emptyDir mounts give the local
+      # freshclam + clamd a writable surface.
+      - name: clamav-data
+        emptyDir: {}
+      - name: clamav-log
+        emptyDir: {}
+      - name: run-clamav
+        emptyDir:
+          medium: Memory
     volumeMounts:
       - name: uploads
         mountPath: /app/uploads
+      - name: clamav-data
+        mountPath: /var/lib/clamav
+      - name: clamav-log
+        mountPath: /var/log/clamav
+      - name: run-clamav
+        mountPath: /run/clamav
     probes:
       readiness: { httpGet: { path: /health, port: 3001 }, initialDelaySeconds: 10, periodSeconds: 10 }
       liveness:  { tcpSocket: { port: 3001 }, initialDelaySeconds: 30, periodSeconds: 30 }

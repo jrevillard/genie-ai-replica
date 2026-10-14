@@ -45,11 +45,23 @@ spec:
       labels:
         {{- include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" $ctx.Values "component" $component) | nindent 8 }}
     spec:
+      # Pod-level securityContext is intentionally minimal here.
+      # The historical blanket `runAsUser: 65534 / runAsNonRoot: true`
+      # caused every image whose entrypoint writes to its own FS
+      # (nginx → /etc/nginx/certs, frontend → /app/dist/config.js,
+      # clamav → /run/clamav) to crash-loop, because the entrypoint
+      # ran as 65534 and the paths were owned by the image's default
+      # USER (root = 0). Per-service `podSecurityContext` /
+      # `securityContext` overrides in values.yaml set the right
+      # user for each image; the namespace's Pod Security Standards
+      # `restricted` admission then accepts only those services that
+      # actually run non-root (backend, documentRepository).
+      seccompProfile:
+        type: RuntimeDefault
+      {{- with $svc.podSecurityContext }}
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 65534
-        seccompProfile:
-          type: RuntimeDefault
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with $svc.volumes }}
       volumes:
         {{- toYaml . | nindent 8 }}
@@ -70,14 +82,35 @@ spec:
           {{- with $svc.secrets }}
           envFrom:
             {{- range . }}
+            # optional: true — the chart references secrets the
+            # deployment does NOT create (operator-provided contract
+            # for arango-root-secret, translation-cache-password,
+            # etc.). Without optional, a missing Secret produces
+            # CreateContainerConfigError at pod start and the
+            # operator can only fix it by creating the Secret by
+            # hand, defeating the chart-driven install path.
+            # With optional: true, the Secret's keys are exposed
+            # when the Secret exists and silently absent when it
+            # doesn't — the pod runs and the application code
+            # decides what to do with unset env vars.
             - secretRef:
                 name: {{ .name }}
+                optional: true
             {{- end }}
           {{- end }}
           resources:
             {{- toYaml $svc.resources | nindent 12 }}
           securityContext:
-            {{- $scc := $svc.securityContext | default (dict "runAsNonRoot" true "runAsUser" 65534 "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "ALL"))) -}}
+            # Per-service `services.<svc>.securityContext` overrides
+            # entirely. The default below carries only the bits that
+            # are safe regardless of UID: no privilege escalation,
+            # drop all capabilities. UID and runAsNonRoot are
+            # service-specific — nginx/frontend/clamav's entrypoints
+            # write to paths owned by the image's default USER (root
+            # for nginx/frontend, 100 for clamav) and break when
+            # forced to 65534. Each service declares its own
+            # `securityContext` in values.yaml.
+            {{- $scc := $svc.securityContext | default (dict "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "ALL"))) -}}
             {{- toYaml $scc | nindent 12 }}
           {{- with $svc.volumeMounts }}
           volumeMounts:

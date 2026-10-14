@@ -27,6 +27,7 @@ const conformanceService = require('./conformance-service');
 const conceptMetaService = require('./concept-meta-service');
 const piiService = require('./pii-service');
 const repositoryService = require('./repository-service');
+const { splitConceptBody } = require('./concept-splitter');
 const { workingGraphName } = require('./graph-lifecycle-service');
 const auditService = require('./audit-service');
 const { authedAxios } = require('./service-token');
@@ -145,6 +146,82 @@ function uniquifySlug(base, body, seen) {
   }
   seen.add(slug);
   return slug;
+}
+
+/** Maximum characters in a single concept document.
+ *
+ * Contextual Retrieval truncates a document's context to a budget derived from
+ * the serving model's window; a document larger than that budget has its deep
+ * chunks embedded against a description of its start. The ceiling is the same
+ * number, so "over the ceiling" and "will be truncated" are the same condition
+ * — which is why the remedy is to split at import rather than discover the
+ * truncation at query time.
+ *
+ * 250000 reflects a 65536-token window (~4 chars/token minus the prompt, batch
+ * and output reservations). Override per deployment when the served model
+ * differs; okf-server and dataprep must agree, which config-validator checks.
+ */
+function maxConceptDocChars() {
+  const raw = process.env.OKF_MAX_CONCEPT_DOC_CHARS;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 250000;
+}
+
+/** Suffix a split part's path: `foo.md` → `foo-part-2.md`. Part 1 is unsuffixed
+ * so every inbound link keeps resolving to a document that still exists. */
+function partPath(path, index) {
+  if (index === 0) return path;
+  const base = String(path || 'concept').replace(/\.md$/, '');
+  return `${base}-part-${index + 1}.md`;
+}
+
+/**
+ * Split every concept document that exceeds the ceiling, in place, before the
+ * concept cap is checked.
+ *
+ * Ordering matters: this runs BEFORE `TOO_MANY_CONCEPTS` so a large import that
+ * expands past the cap fails loudly and early, rather than silently growing the
+ * corpus. A document that cannot be split without damaging it (measured: one
+ * Wikipedia page carries a single 315k-character section) is rejected with the
+ * section size named, because hard-wrapping mid-sentence would produce a worse
+ * document than the one we refused.
+ *
+ * @param {Array<{concept_id: string|null, path: string, frontmatter: object, body: string}>} rawInputs
+ * @returns {{inputs: Array, splits: Array<{from: string, into: number, chars: number}>}}
+ */
+function applyDocumentCeiling(rawInputs) {
+  const ceiling = maxConceptDocChars();
+  const inputs = [];
+  const splits = [];
+
+  for (const raw of rawInputs) {
+    const body = raw.body || '';
+    if (body.length <= ceiling) {
+      inputs.push(raw);
+      continue;
+    }
+    const result = splitConceptBody(body, ceiling);
+    if (result.unsplittable) {
+      throw new IngestError(
+        'CONCEPT_TOO_LARGE',
+        `concept "${raw.path}" is ${body.length} characters, over the ${ceiling}-character ceiling, ` +
+          `and cannot be split without losing content: ${result.reason}. Shorten the source, or raise ` +
+          `OKF_MAX_CONCEPT_DOC_CHARS if the served model's context window allows a larger document.`,
+        400
+      );
+    }
+    result.parts.forEach((part, i) => {
+      inputs.push({
+        concept_id: i === 0 ? raw.concept_id : null,
+        path: partPath(raw.path, i),
+        frontmatter: raw.frontmatter,
+        body: part
+      });
+    });
+    splits.push({ from: raw.path, into: result.parts.length, chars: body.length });
+  }
+
+  return { inputs, splits };
 }
 
 /** Explicit concepts[] input → parse inputs (path from explicit path, else the
@@ -596,6 +673,20 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
       body: f.body || ''
     }));
   }
+  // Split oversized documents BEFORE the cap check, so an import that expands
+  // past OKF_INGEST_MAX_CONCEPTS fails loudly here instead of silently growing
+  // the corpus. The cap is per import call, not per repo, so this is the only
+  // bound on the expansion.
+  const ceilingResult = applyDocumentCeiling(rawInputs);
+  rawInputs = ceilingResult.inputs;
+  if (ceilingResult.splits.length > 0) {
+    logger.info(
+      `[ingest] split ${ceilingResult.splits.length} oversized concept document(s) against the ` +
+        `${maxConceptDocChars()}-character ceiling: ` +
+        ceilingResult.splits.map((s) => `${s.from} (${s.chars} chars → ${s.into} parts)`).join(', ')
+    );
+  }
+
   if (rawInputs.length > maxConcepts) {
     throw new IngestError(
       'TOO_MANY_CONCEPTS',
@@ -616,6 +707,9 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
     enqueued: 0,
     enqueue_errors: [],
     not_found: notFound,
+    // Documents the ceiling split into N parts at this import — surfaced so a
+    // curator can see the seams rather than discovering N new concepts.
+    split_documents: ceilingResult.splits,
     // D-G (#985): curation decision tallies by resolved_by ('author' guard vs
     // heuristic hits vs fallbacks) — one audit row per import carries them.
     curation_counts: {}
@@ -1209,6 +1303,9 @@ module.exports = {
   deriveAclLabels,
   composeIngestLabels,
   maxConceptsFromEnv,
+  maxConceptDocChars,
+  applyDocumentCeiling,
+  partPath,
   maxZipBytesFromEnv,
   slugify,
   uniquifySlug,

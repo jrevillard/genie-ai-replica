@@ -693,6 +693,14 @@ services:
       - OKF_INGEST_WORKER_INTERVAL_MS=${OKF_INGEST_WORKER_INTERVAL_MS:-15000}
       - OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=${OKF_INGEST_WORKER_SWEEP_INTERVAL_MS:-3600000}
       - OKF_INGEST_CONCURRENCY=${OKF_INGEST_CONCURRENCY:-1}
+      # Max characters in ONE concept document. A document larger than this has
+      # its deep chunks embedded against a description of its start (the
+      # Contextual Retrieval document context is truncated to the same budget),
+      # so imports split such a document rather than storing it degraded.
+      # The default is sized for the 65536-token compose window (~250k chars);
+      # it must track VLLM_MAX_MODEL_LEN, which dataprep derives the matching
+      # budget from. AC8 in tests/config-validator keeps the two in step.
+      - OKF_MAX_CONCEPT_DOC_CHARS=${OKF_MAX_CONCEPT_DOC_CHARS:-250000}
       # Lane cool-down after a dataprep 429 (slot busy): without it a saturated
       # queue hot-loops at ~1 claim/sec (incident 2026-09-28 — 434 rows bouncing
       # while one slot was held for hours during a vLLM outage). Rows never

@@ -557,7 +557,8 @@ describe('Configuration Validation Suite', () => {
 
     test('both guard knobs are piped in the okf-server compose block with an empty default (code default applies)', () => {
       const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
-      const okfBlock = composeText.slice(composeText.indexOf('  okf-server:'), composeText.indexOf('  pii-service:'));
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
       for (const name of Object.keys(GUARD_KNOBS)) {
         expect(okfBlock).toMatch(new RegExp(`- ${name}=\\$\\{${name}:-\\}`));
       }
@@ -590,7 +591,8 @@ describe('Configuration Validation Suite', () => {
   describe('Story 1-8g: OKF corpus-probe rerank endpoint plumbing', () => {
     test('OKF_RERANK_ENDPOINT is piped in the okf-server compose block with an empty default', () => {
       const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
-      const okfBlock = composeText.slice(composeText.indexOf('  okf-server:'), composeText.indexOf('  pii-service:'));
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
       expect(okfBlock).toMatch(/- OKF_RERANK_ENDPOINT=\$\{OKF_RERANK_ENDPOINT:-\}/);
     });
 
@@ -601,7 +603,8 @@ describe('Configuration Validation Suite', () => {
 
     test('OKF_RERANK_TOKEN is piped in the okf-server compose block with an empty default', () => {
       const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
-      const okfBlock = composeText.slice(composeText.indexOf('  okf-server:'), composeText.indexOf('  pii-service:'));
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
       expect(okfBlock).toMatch(/- OKF_RERANK_TOKEN=\$\{OKF_RERANK_TOKEN:-\}/);
     });
 
@@ -694,6 +697,27 @@ describe('Configuration Validation Suite', () => {
       // group_vars/all.yml documented both as false; code and compose say true.
       expect(composeDefaults.CONTEXTUAL_RETRIEVAL_ENABLED).toBe('true');
       expect(composeDefaults.CONTEXTUAL_LABEL_RAW).toBe('true');
+    });
+
+    test('the concept-document ceiling agrees across compose and env.j2', () => {
+      // okf-server splits a concept document above this; dataprep truncates the
+      // document context above the budget derived from VLLM_MAX_MODEL_LEN. If
+      // these two drift apart the corpus silently degrades again — documents get
+      // stored that will be truncated, or split that did not need it.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      const m = okfBlock.match(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-(\d+)\}/);
+      expect(m).not.toBeNull();
+      expect(ansibleVars.OKF_MAX_CONCEPT_DOC_CHARS).toBeDefined();
+      expect(ansibleVars.OKF_MAX_CONCEPT_DOC_CHARS.default).toBe(m[1]);
+    });
+
+    test('the ceiling is sized for the default window, not the historical 6000', () => {
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      const m = okfBlock.match(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-(\d+)\}/);
+      // 6000 was the T4-sized literal that truncated 57% of a real corpus.
+      expect(Number(m[1])).toBeGreaterThan(200000);
     });
   });
 });

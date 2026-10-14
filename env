@@ -312,6 +312,17 @@ HUGGING_FACE_HUB_TOKEN=
 # CONTEXTUAL_LABEL_RAW=true            # decoupled mode (default): label the RAW chunk and use the
 #                                      #   context ONLY for the embedding — keeps label precision
 #                                      #   while propagating the subject via vectors.
+# OKF_MAX_CONCEPT_DOC_CHARS=250000    # okf-server: max characters in ONE concept document. An
+#                                      #   import whose document exceeds this SPLITS it into
+#                                      #   several concepts (losslessly, on heading boundaries)
+#                                      #   rather than storing it degraded — a document past the
+#                                      #   budget has its deep chunks embedded against a
+#                                      #   description of its start. The first part keeps the
+#                                      #   original concept_id so existing links still resolve.
+#                                      #   Must track the document-context budget above, which
+#                                      #   derives from VLLM_MAX_MODEL_LEN. If a document cannot
+#                                      #   be split without losing content, the import is rejected
+#                                      #   with CONCEPT_TOO_LARGE naming the section.
 # VLLM_MAX_MODEL_LEN                   # the serving model's context window. Set by env.t4 (2048),
 #                                      #   env.rtx6000 (4096) or the compose default (65536). This is
 #                                      #   what DATAPREP_CONTEXTUAL_DOC_BUDGET is derived from, so it

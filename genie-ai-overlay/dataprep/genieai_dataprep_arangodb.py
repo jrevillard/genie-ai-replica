@@ -265,9 +265,34 @@ CONTEXTUAL_RETRIEVAL_ENABLED = os.getenv("CONTEXTUAL_RETRIEVAL_ENABLED", "true")
 # Model used for context generation. Empty → reuse VLLM_MODEL_ID (auto-detected
 # on remote GPU nodes). Set to a smaller/cheaper model to cut context-gen cost.
 DATAPREP_CONTEXTUAL_MODEL = os.getenv("DATAPREP_CONTEXTUAL_MODEL", "")
-# Max chars of the joined document chunks fed to the context-generation LLM
-# (bounds the prompt; ~1500 tokens). Filename + file_labels are always included.
-DATAPREP_CONTEXTUAL_DOC_BUDGET = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET", "100000"))
+# Max chars of the joined document chunks fed to the context-generation LLM.
+# Filename + file_labels are always included.
+#
+# This was a fixed literal (100000 in code, 6000 in docker-compose) sized for
+# the T4 profile's 2048-token window and then applied to EVERY deployment —
+# including the default, which runs a 65536-token window where it uses ~4% of
+# what is available. Wrong in both directions at once. It is now DERIVED from
+# the serving model's window (see _resolve_doc_budget), and this variable is
+# only an operator override:
+#
+#   unset / 0 -> derive from VLLM_MAX_MODEL_LEN
+#   > 0       -> explicit operator override
+#   < 0       -> explicitly disable truncation
+#
+# Deriving per install is the fix; a single literal cannot be correct for a T4
+# (2048) and a default install (65536) at the same time.
+DATAPREP_CONTEXTUAL_DOC_BUDGET = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET", "0") or 0)
+# ~4 chars/token for English prose + markdown. Same figure the budget comment
+# above has always used; the clamp in _resolve_doc_budget absorbs the error.
+CHARS_PER_TOKEN = 4
+# Per-item scaffolding in the batched user turn — json.dumps of
+# {"index": i, "text": "..."} adds a key, quotes and escaping on top of the raw
+# chunk text. Measured generously; it only ever shrinks the derived budget.
+JSON_ITEM_OVERHEAD_CHARS = 64
+# When the model window is unknown, assume the SMALLEST profile we support.
+# A budget that only fits on hardware nobody runs fails closed; defaulting to
+# the largest window would silently produce prompts the GPU cannot accept.
+DERIVE_FALLBACK_WINDOW = 2048
 # Doc-context budget for the doc_level strategy (ONE call, so it can afford a
 # much larger window than per_chunk). ~4 chars/token; keep below the model's
 # VLLM_MAX_MODEL_LEN minus prompt/output overhead. Docs larger than this (or the
@@ -1257,7 +1282,66 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "chunks": len(chunks),
         }
 
-    def _build_doc_context(self, chunks: list[str], input, budget: int = DATAPREP_CONTEXTUAL_DOC_BUDGET) -> str:
+    def _resolve_doc_budget(self, chunks: list[str], configured: int) -> tuple[int | None, str]:
+        """Resolve the document-context budget for this document.
+
+        Returns ``(budget_chars, source)``. ``budget_chars is None`` means
+        "do not contextualize this document at all" and the caller must fall
+        back to raw chunks. ``source`` is one of:
+
+            "override"        operator set DATAPREP_CONTEXTUAL_DOC_BUDGET
+            "derived"         computed from VLLM_MAX_MODEL_LEN
+            "disabled"        operator set a negative budget
+            "window-exhausted" the model window cannot fit any context
+
+        The prompt the context LLM receives is the system prompt + the document
+        context + the batch's chunk text, and the response reserves
+        DATAPREP_CONTEXTUAL_MAX_TOKENS. Only the middle term is ours to size,
+        so everything else is subtracted from VLLM_MAX_MODEL_LEN.
+
+        The batch term is measured from the REAL chunks rather than from the
+        DATAPREP_CHUNK_SIZE_* vars: those are resolved per file extension
+        upstream in the microservice, and mirroring that map here would be a
+        second copy to drift — which is how this whole budget went wrong in
+        the first place.
+        """
+        if configured < 0:
+            return None, "disabled"
+        if configured > 0:
+            return configured, "override"
+
+        window = int(os.getenv("VLLM_MAX_MODEL_LEN", "") or DERIVE_FALLBACK_WINDOW)
+        prompt_tokens = -(-len(CONTEXTUAL_RETRIEVAL_PROMPT) // CHARS_PER_TOKEN)
+        largest = sorted((len(c) for c in chunks), reverse=True)[:LABEL_LLM_BATCH_SIZE]
+        # The user turn is json.dumps([{"index": i, "text": t}, ...]) — the raw
+        # chunk text plus per-item JSON scaffolding and escaping. Reserve it
+        # generously: over-reserving only costs a slightly smaller budget,
+        # under-reserving sends a request the model cannot accept.
+        batch_chars = sum(largest) + len(largest) * JSON_ITEM_OVERHEAD_CHARS
+        batch_tokens = -(-batch_chars // CHARS_PER_TOKEN)
+        # The batched per-chunk path reserves ONE CONTEXTUAL_MAX_TOKENS per chunk
+        # in the batch (max_tokens=CONTEXTUAL_MAX_TOKENS * len(batch)) — the
+        # response holds a context per chunk — so this scales with the batch
+        # size, it is not a flat cap. Reserving less would size the budget
+        # against a request the model would never actually complete.
+        output_tokens = CONTEXTUAL_MAX_TOKENS * LABEL_LLM_BATCH_SIZE
+        usable = window - prompt_tokens - batch_tokens - output_tokens
+        if usable <= 0:
+            # NOT "budget 0" — in _build_doc_context a budget of 0 means "do
+            # not truncate", i.e. send the whole document, which is precisely
+            # what would overflow. Skip contextualization for this document.
+            logger.error(
+                f"Contextual Retrieval: VLLM_MAX_MODEL_LEN={window} leaves no room for a document "
+                f"context (system prompt {prompt_tokens} + batch text {batch_tokens} + output "
+                f"{output_tokens} tokens). Using raw chunks for this document; lower "
+                f"DATAPREP_LLM_LABEL_BATCH_SIZE (currently {LABEL_LLM_BATCH_SIZE}) or "
+                f"DATAPREP_CONTEXTUAL_MAX_TOKENS (currently {CONTEXTUAL_MAX_TOKENS}), or raise "
+                f"VLLM_MAX_MODEL_LEN."
+            )
+            return None, "window-exhausted"
+        return usable * CHARS_PER_TOKEN, "derived"
+
+    def _build_doc_context(self, chunks: list[str], input, budget: int = 0) -> str:
         """Build the document-context string fed to the context-generation LLM.
 
         Combines filename, file labels, and a budgeted join of the document's
@@ -1318,8 +1402,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
         total = len(chunks)
 
-        async def _doc_context_with_log(chunks_: list[str], budget: int) -> str:
-            """Build the document context AND surface truncation to the admin log.
+        async def _doc_context_or_none(chunks_: list[str], configured: int, label: str) -> str | None:
+            """Resolve the budget, log any truncation, build the context.
+
+            Returns ``None`` when this document must not be contextualized at
+            all (budget disabled, or the model window cannot fit any context).
+            The caller then falls back to raw chunks, which is the documented
+            never-block-ingestion boundary.
 
             Truncation is a silent quality loss unless it is recorded: the chunk
             embedding and the graph extraction both read the *contextualized*
@@ -1328,6 +1417,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             ``_write_ingestion_log`` is what makes it visible to a curator
             instead of only to whoever greps container logs.
             """
+            budget, source = self._resolve_doc_budget(chunks_, configured)
+            if budget is None:
+                return None
+
             truncation = self._doc_context_truncation(chunks_, budget)
             if truncation is not None:
                 await self._write_ingestion_log(
@@ -1336,8 +1429,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     "Contextualization",
                     (
                         f"Document context truncated to {truncation['kept']} of "
-                        f"{truncation['total']} chars ({truncation['pct']}%) across "
-                        f"{truncation['chunks']} chunks. Deep chunks get a weaker "
+                        f"{truncation['total']} chars ({truncation['pct']}%, budget {label}/{source}) "
+                        f"across {truncation['chunks']} chunks. Deep chunks get a weaker "
                         f"document context, which degrades their embedding and the "
                         f"graph extraction. Raise DATAPREP_CONTEXTUAL_DOC_BUDGET (or "
                         f"VLLM_MAX_MODEL_LEN) if the model window allows, or split the "
@@ -1349,13 +1442,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # doc_level: one LLM call for the whole document → same context on every
         # chunk (uses a larger doc budget — it is a single call; N× cheaper).
         if CONTEXTUAL_STRATEGY == "doc_level":
-            doc_context = await _doc_context_with_log(chunks, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL)
+            doc_context = await _doc_context_or_none(chunks, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL, "doc_level")
+            if doc_context is None:
+                return list(chunks)
             return await self._contextualize_doc_level(client, model, doc_context, chunks, file_id, total)
 
         # per_chunk (default): batched calls so the document context lives once
         # per batch (system prompt), not per chunk; per-chunk fallback on any
         # batch parse failure (Anthropic recipe).
-        doc_context = await _doc_context_with_log(chunks, DATAPREP_CONTEXTUAL_DOC_BUDGET)
+        doc_context = await _doc_context_or_none(chunks, DATAPREP_CONTEXTUAL_DOC_BUDGET, "per_chunk")
+        if doc_context is None:
+            return list(chunks)
         system_prompt = CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_context)
         return await self._contextualize_per_chunk(client, model, system_prompt, chunks, file_id, total)
 

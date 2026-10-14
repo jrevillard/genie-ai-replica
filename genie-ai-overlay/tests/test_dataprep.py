@@ -2350,6 +2350,12 @@ class TestContextualRetrieval:
         """Explicit flags so tests don't depend on module defaults."""
         monkeypatch.setattr(dp_module, "CONTEXTUAL_STRATEGY", "per_chunk")
         monkeypatch.setattr(dp_module, "CONTEXTUAL_LABEL_RAW", False)
+        # The doc-context budget is DERIVED from this. Without it the
+        # derivation fails closed to the smallest profile (2048) and every
+        # contextualization call is skipped — correct in production, useless
+        # for tests that are exercising contextualization itself. Tests that
+        # care about the fallback set their own value.
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
 
     @pytest.mark.asyncio
     async def test_flag_off_returns_chunks_unchanged(self, monkeypatch):
@@ -2423,9 +2429,7 @@ class TestContextualRetrieval:
         # Contextualization writes other log lines on this path (LLM failure
         # fallbacks etc.), so assert on the TRUNCATION line specifically rather
         # than on a total call count.
-        truncations = [
-            c for c in log.await_args_list if len(c.args) > 3 and "truncated" in str(c.args[3]).lower()
-        ]
+        truncations = [c for c in log.await_args_list if len(c.args) > 3 and "truncated" in str(c.args[3]).lower()]
         assert len(truncations) == 1, [c.args for c in log.await_args_list]
         args = truncations[0].args
         assert args[0] == "file1"
@@ -2448,10 +2452,143 @@ class TestContextualRetrieval:
         with patch.object(dp_module, "AsyncOpenAI", return_value=AsyncMock()):
             await dp._apply_contextualization(["short one", "short two"], create_mock_ingest_input(), "file1")
 
-        truncations = [
-            c for c in log.await_args_list if len(c.args) > 3 and "truncated" in str(c.args[3]).lower()
-        ]
+        truncations = [c for c in log.await_args_list if len(c.args) > 3 and "truncated" in str(c.args[3]).lower()]
         assert truncations == []
+
+    # --- the budget is DERIVED from the model window, not hard-coded ----------
+    #
+    # The shipped literal (6000) was sized for the T4 profile's 2048-token
+    # window and applied to every deployment including the default 65536-token
+    # one. These tests pin the three-way contract (unset=derive, >0=override,
+    # <0=disable) and, most importantly, the property that actually matters:
+    # the assembled request fits the window.
+
+    def test_explicit_positive_budget_is_an_override(self, monkeypatch):
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
+        dp = create_dataprep()
+        assert dp._resolve_doc_budget(["abc"], 1234) == (1234, "override")
+
+    def test_negative_budget_disables_contextualization(self, monkeypatch):
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
+        dp = create_dataprep()
+        budget, source = dp._resolve_doc_budget(["abc"], -1)
+        assert budget is None and source == "disabled"
+
+    def test_budget_scales_with_the_model_window(self, monkeypatch):
+        dp = create_dataprep()
+        chunks = ["x" * 500] * 8
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "16384")
+        small, _ = dp._resolve_doc_budget(chunks, 0)
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
+        large, _ = dp._resolve_doc_budget(chunks, 0)
+        assert large > small > 0
+
+    def test_unknown_window_falls_back_to_the_smallest_profile(self, monkeypatch):
+        """Fails closed: defaulting high would size for hardware nobody runs."""
+        monkeypatch.delenv("VLLM_MAX_MODEL_LEN", raising=False)
+        dp = create_dataprep()
+        assert dp._resolve_doc_budget(["x" * 500], 0) == dp._resolve_doc_budget(["x" * 500], 0)
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", str(dp_module.DERIVE_FALLBACK_WINDOW))
+        assert dp._resolve_doc_budget(["x" * 500], 0) == (None, "window-exhausted")
+
+    def test_window_exhausted_returns_none_not_zero(self, monkeypatch):
+        """A 0 budget means 'do not truncate' — the opposite of what we want."""
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "2048")  # T4
+        dp = create_dataprep()
+        budget, source = dp._resolve_doc_budget(["x" * 500] * 8, 0)
+        assert budget is None, "must disable contextualization, not send the whole document"
+        assert source == "window-exhausted"
+
+    def test_assembled_prompt_fits_the_window(self, monkeypatch):
+        """The property that matters, end to end.
+
+        Builds the ACTUAL request the batched per-chunk path sends and checks
+        prompt + completion against VLLM_MAX_MODEL_LEN. This is the assertion
+        that would have caught the original bug: at 6000 on a 2048-token
+        window the request does not fit, and every batch silently falls back to
+        raw chunks.
+        """
+        import json as _json
+
+        dp = create_dataprep()
+        # Deliberately LARGER than every budget under test, so the doc context
+        # actually fills the derived budget. A document smaller than the budget
+        # would never truncate, and the property would hold vacuously.
+        chunks = ["chunk body text. " * 160 for _ in range(200)]  # 2720 chars each, ~500k total
+
+        def _overhead_tokens():
+            """Prompt + completion with ZERO document context — the floor."""
+            largest = sorted((len(c) for c in chunks), reverse=True)[: dp_module.LABEL_LLM_BATCH_SIZE]
+            prompt = -(-len(dp_module.CONTEXTUAL_RETRIEVAL_PROMPT) // dp_module.CHARS_PER_TOKEN)
+            batch_chars = sum(largest) + len(largest) * dp_module.JSON_ITEM_OVERHEAD_CHARS
+            return (
+                prompt + -(-batch_chars // dp_module.CHARS_PER_TOKEN),
+                dp_module.CONTEXTUAL_MAX_TOKENS * dp_module.LABEL_LLM_BATCH_SIZE,
+            )
+
+        for window in (4096, 8192, 16384, 65536):
+            monkeypatch.setenv("VLLM_MAX_MODEL_LEN", str(window))
+            budget, source = dp._resolve_doc_budget(chunks, 0)
+
+            if budget is None:
+                # Refusing is only CORRECT if the request genuinely could not
+                # fit even with no document context at all. A refusal with room
+                # to spare would silently disable the feature.
+                prompt_tokens, completion = _overhead_tokens()
+                assert prompt_tokens + completion >= window, (
+                    f"refused at window={window} but the empty prompt fits in {prompt_tokens + completion} tokens"
+                )
+                continue
+
+            assert source == "derived", f"window {window} produced {source}"
+            assert budget < sum(len(c) for c in chunks), "budget must bind for this test to mean anything"
+
+            doc_ctx = dp._build_doc_context(chunks, create_mock_ingest_input(), budget)
+            system_prompt = dp_module.CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_ctx)
+            batch = chunks[: dp_module.LABEL_LLM_BATCH_SIZE]
+            user_turn = _json.dumps([{"index": i, "text": t} for i, t in enumerate(batch)])
+
+            prompt_chars = len(system_prompt) + len(user_turn)
+            prompt_tokens = -(-prompt_chars // dp_module.CHARS_PER_TOKEN)
+            completion = dp_module.CONTEXTUAL_MAX_TOKENS * len(batch)
+            assert prompt_tokens + completion <= window, (
+                f"window={window} prompt={prompt_tokens} completion={completion} "
+                f"budget={budget} — request would be rejected by vLLM"
+            )
+
+    def test_the_old_fixed_6000_would_not_have_fit(self, monkeypatch):
+        """Why deriving matters — this is the bug, stated as a test.
+
+        The shipped literal (6000 chars) is not merely too small on a default
+        install; on the constrained GPU profiles it is too LARGE, and every
+        contextualization call overflows the window and silently falls back to
+        raw chunks. This pins that fact so the derivation is not "simplified"
+        back to a constant later.
+        """
+        import json as _json
+
+        dp = create_dataprep()
+        chunks = ["chunk body text. " * 160 for _ in range(200)]
+        window = 4096
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", str(window))
+
+        budget, source = dp._resolve_doc_budget(chunks, 6000)  # the old literal
+        assert (budget, source) == (6000, "override")
+
+        doc_ctx = dp._build_doc_context(chunks, create_mock_ingest_input(), budget)
+        system_prompt = dp_module.CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_ctx)
+        batch = chunks[: dp_module.LABEL_LLM_BATCH_SIZE]
+        user_turn = _json.dumps([{"index": i, "text": t} for i, t in enumerate(batch)])
+        prompt_tokens = -(-(len(system_prompt) + len(user_turn)) // dp_module.CHARS_PER_TOKEN)
+        completion = dp_module.CONTEXTUAL_MAX_TOKENS * len(batch)
+
+        assert prompt_tokens + completion > window, (
+            "expected the historical 6000-char budget to overflow this window; "
+            "if it now fits, the overhead model changed and this test is stale"
+        )
+
+        # ...and the derivation refuses rather than sending it.
+        assert dp._resolve_doc_budget(chunks, 0)[0] is None
 
     @pytest.mark.asyncio
     async def test_flag_on_prepends_context(self, monkeypatch):

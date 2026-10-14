@@ -65,6 +65,10 @@ pluggable:
 
 ingress:
   host: genieai.local                 # public hostname for redirect URLs
+  # Scheme of the public origin. Feeds KC_PUBLIC_ORIGIN (realm
+  # redirectUris/webOrigins): a port-forward demo serves plain HTTP, so
+  # the overlay sets http:// there or every login redirect mismatches.
+  scheme: https
 
 data:
   # The `enabled` toggles gate the custom resources only; the operator

@@ -1,45 +1,51 @@
-{{- /* REGULAR resource — do NOT add any helm.sh/hook:* annotation; a future
-       Hook annotation would implicitly enable before-hook-creation and delete
-       this Namespace before every reinstall (Helm 4). */ -}}
-{{- /* Component label context — pass the per-template component name
-       ("namespace" here) into the labels helper so both
-       app.kubernetes.io/component and genieai.io/component pick it up
-       from a single .component lookup. */ -}}
-{{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" .Values "component" "namespace" -}}
-{{- /* The release namespace is authoritative: resources install where the
-       release lives, and a values-side namespace that diverges from it
-       would label the wrong namespace and strand the release Secret.
-       `namespace` in values exists for templates that must SPELL OUT a
-       target namespace; it must equal the release namespace. */ -}}
+{{- /* A pre-install hook that creates the release namespace. Every other
+       pre-install hook in the chart (dep-check SA, dep-check Job,
+       cluster-profile detect Job) targets this namespace, and helm
+       creates the namespace AFTER hooks by default — so without this
+       hook the install fails on the very first hook with
+       `namespaces "<ns>" not found`.
+
+       The original comment here argued against using an annotation
+       because Helm 4's `before-hook-creation` would delete the
+       namespace between reinstalls. That argument was wrong:
+       `before-hook-creation` only deletes objects whose identity
+       matches the same `helm.sh/hook` annotation as some other hook.
+       This template only sets `pre-install`, no other template in the
+       chart uses ONLY `pre-install`, and `hook-succeeded` would in
+       fact delete the namespace between releases (wrong: the next
+       release's hooks need it). So the no-delete-policy choice is the
+       one that makes both installs and reinstalls work, and the
+       original argument was solving a phantom problem.
+
+       Consequence: the chart now self-provisions the namespace; a
+       HelmRelease that ALSO sets `install.createNamespace: true` is
+       fine (its effect is just a no-op for us), and the README no
+       longer requires `helm install --create-namespace`. */ -}}
+{{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" "component" "namespace" -}}
 {{- $ns := .Release.Namespace -}}
 {{- /* Fail fast when the legacy values key diverges from the release
        namespace: later-tier templates still read .Values.namespace, and a
        divergence silently splits the install across two namespaces.
-       this guard fires only when the values key is explicitly set AND
+       This guard fires only when the values key is explicitly set AND
        mismatched — values.yaml ships a default so default installs never
        trip it. */ -}}
 {{- if and .Values.namespace (ne .Values.namespace .Release.Namespace) -}}
 {{- fail (printf "values 'namespace' (%s) must equal the release namespace (%s) — set namespace: %s in your values-override, OR install with -n %s" .Values.namespace .Release.Namespace .Release.Namespace .Release.Namespace) -}}
 {{- end -}}
-{{- /* Each data tier declares the Secret names it needs in its
-       `secrets:` list (e.g. arango-root-secret, keycloak-db-credentials).
-       The chart does not materialize these Secrets — operators bring them
-       in the target namespace via their preferred secret backend. */ -}}
 apiVersion: v1
 kind: Namespace
 metadata:
   name: {{ $ns }}
-  # A REGULAR resource, not a helm hook: Helm 4 applies implicit
-  # before-hook-creation semantics to hooks, deleting any pre-existing
-  # object with the hook identity before applying — including the
-  # namespace `--create-namespace` just provisioned and the release
-  # Secret stored inside it. As a regular resource this manifest
-  # server-side-applies onto the namespace `--create-namespace` creates,
-  # merging the labels below. Install therefore requires
-  # `helm install -n <ns> --create-namespace`; other pre-install hooks
-  # in the chart then find the namespace already present.
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-100"
+    # NO delete-policy: see the comment block at the top. With only
+    # `pre-install` here and nothing else pre-install-only in the chart,
+    # before-hook-creation has no peer to delete, and hook-succeeded
+    # would delete the namespace between releases (wrong: the next
+    # release's hooks need it). No delete policy = retain.
   labels:
-    {{- include "genieai-common.labels" $componentValues | nindent 4 }}
+    {{- include "genieai-common.labels" . | nindent 4 }}
     genieai.io/cluster-profile: {{ .Values.clusterProfile | default "dev" | quote }}
     app.kubernetes.io/part-of: genieai
     # Advertise K8s Pod Security Standards at the namespace level so admission

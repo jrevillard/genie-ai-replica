@@ -15,14 +15,18 @@ point of loss.
 
 | ID | Defect | Commits | CI | Local build |
 |----|--------|---------|----|-------------|
-| pc-1 | XML processing instruction crashes `unstructured` | `03e2bc260`, `2f90ae5de` | not pushed | **not deployed** |
+| pc-1 | XML processing instruction crashes `unstructured` | `03e2bc260`, `2f90ae5de` | !542 #12751/#12758 | **not deployed** — image built, container not yet recreated |
 | pc-2 | One `analyze()` on long text kills the PII worker → fail-closed publish | `f6ac10c8e`, `cc19bbe6a`, `9e434c981` | ✅ 12574/12577/12688 | deployed |
 | pc-3 | PII bulk "Accept all" was dead code | `3b6c17b64` | no pipeline | deployed |
 | pc-4 | Offset-translation test was vacuous | `53b731400` | no pipeline | n/a (test only) |
 | pc-5 | Retraction log asserted caller intent it cannot know | `e96a3f90b` | no pipeline | deployed |
-| pc-6 | Wizard step 5 / publish PII verdict overstated state | `c0169886d` | no pipeline | **not deployed** |
+| pc-6 | Wizard step 5 / publish PII verdict overstated state | `c0169886d` | no pipeline | deployed (see the correction below — I first reported otherwise) |
 | pc-7 | Ansible `.env` carried no PII vars at all | `c22262c89`, `14f2ddfad` | no pipeline | n/a (deploy config) |
-| pc-8 | The pc-1 patcher would have failed the image build | `2f90ae5de` | not pushed | n/a (build patch) |
+| pc-8 | The pc-1 patcher would have failed the image build | `2f90ae5de` | !542 #12751/#12758 | n/a (build patch) |
+
+**PC-1 is the only content-loss defect still undeployed.** Its image is built and
+the patch is proven inside it (see PC-1 below); only the container recreate is
+outstanding.
 
 Five commits on `feat/okf-server` (`3b6c17b64`, `53b731400`, `e96a3f90b`,
 `c0169886d`, `14f2ddfad`) have **no pipeline at all**. The last green on that
@@ -122,9 +126,26 @@ silently no-ops is worse than no patcher.
 without altering anything that already worked. 11 tests (10 pass, 1 skipped
 without lxml/unstructured; it runs inside the image where they are present).
 
-**NOT DEPLOYED.** `remove_pis` grep count in the running dataprep container is
-**0**. `pds4-dph-1-26-0-sec99` / `sec100` will keep failing until dataprep is
-rebuilt.
+**IMAGE BUILT AND PROVEN; CONTAINER NOT YET RECREATED.** Verified in the built
+image `534cb9afabc7`, not inferred from the build's exit code:
+
+```
+line 929:  html_parser = etree.HTMLParser(remove_comments=True, remove_pis=True)
+remove_pis count: 1
+```
+
+Behaviourally, in the image itself — and falsified against the previous one, so
+the patch is demonstrably *what* fixed it:
+
+| Image | `partition_md` on PI-bearing markdown |
+|---|---|
+| new `534cb9afabc7` | 3 elements, 45 chars — partitions cleanly |
+| old `fe8c46c2` | `AttributeError: 'lxml.etree._ProcessingInstruction' object has no attribute 'is_phrasing'` |
+
+The old image reproduces David's reported error **verbatim**.
+
+The running container still uses the old image, so `pds4-dph-1-26-0-sec99` /
+`sec100` keep failing until it is recreated.
 
 **RE-TEST.** Rebuild dataprep → re-ingest `pds4-dph-1-26-0-sec99` and
 `pds4-dph-1-26-0-sec100` → both reach `status=ingested`. **Negative control:** a
@@ -222,9 +243,22 @@ PII review verdict surfaced in review, and rewrites the step-4/step-5 narrative 
 **all 14 locales**. It also deletes three dead i18n keys (`add`, `addConfirm`,
 `placeholder`) that no component read.
 
-**NOT DEPLOYED.** The frontend was never rebuilt after this commit: 0 of its 6 new
-exported identifiers (`PII_CHECKING`, `PII_UNREADABLE`, `PII_UNSCANNED`,
-`PII_ERROR`, `PII_UNREVIEWED`, `PII_REVIEWED`) appear in the served bundle.
+**DEPLOYED — and I first reported the opposite.** An earlier revision of this
+register claimed PC-6 was not deployed, on the evidence that "0 of its 6 new
+exported identifiers appear in the served bundle". That check was wrong. It
+grepped the minified bundle for **exported `const` names** (`PII_CHECKING`,
+`PII_UNREADABLE`, …), which Terser renames and inlines — they will never appear
+in a production bundle regardless of whether the code shipped.
+
+Grepping instead for **i18n key strings**, which survive minification because
+they are literals, shows `piiRescan`, `piiReview`, `unreadableTitle`,
+`progressIdle` and `stillBlocking` all present in the served bundle. And the
+running frontend image was built at **2026-10-13 14:28 UTC**, 2 h 45 m *after*
+`c0169886d` landed (11:43 UTC). PC-6 shipped with the build that followed it.
+
+This is the same grep-the-wrong-thing mistake as the sidecar `died` substring
+false positive, caught the same way: by asking what the instrument actually
+measures before trusting what it reports.
 
 ## pc-7 — The cloud `.env` carried no PII vars at all (FIXED)
 

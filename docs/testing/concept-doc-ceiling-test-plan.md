@@ -537,6 +537,40 @@ fallback behaved correctly. It does mean tier-1 retrieval quality should be
 re-measured after a re-ingest, and that **timing measurements taken during the burst
 window are not clean** (see the caveat in the parallel-drain section).
 
+### Pending observation — El Salvador is published but never ingested
+
+Noted during tier 1, **not filed as an issue** and not blocking anything.
+
+| Repo | lifecycle | `ingested_at` | `ingested_version` | Concepts at `parsed` | Last update |
+|---|---|---|---|---|---|
+| **El Salvador** | **`publish`** | **null** | **null** | **586** | 2026-10-13 |
+| Kenya Government Services | `review` | null | null | 5 | 2026-10-08 |
+
+Kenya is unremarkable — it is in `review`, so it was never published and never
+armed for drain. Its 5 parsed concepts are simply work-in-progress awaiting
+approval.
+
+**El Salvador is the anomaly.** It reached `publish`, which mints a version, but
+`ingested_at` and `ingested_version` are both unset and all 586 concepts sit at
+`parsed` with `rag_drain_active` unset on every row. So the drain was never
+armed, or was armed and cleared.
+
+Two readings, and the evidence does not yet distinguish them:
+
+1. **Workflow gap** — published, and nobody clicked Ingest. Unnoticed for two days.
+2. **Drain disarmed** — Ingest was clicked, the queue armed, then something
+   cleared `rag_drain_active` without the concepts being processed.
+
+Reading 2 would be the "wedged row holds its lane" failure mode named in this
+plan's risk section, and it would be **silent**: the repo looks published and
+healthy while contributing nothing to RAG.
+
+**How to distinguish, when convenient:** read `okf_audit_logs` for
+`repo.rag_drain_armed` on that repo id. An arming row with no matching completion
+points to reading 2; no arming row at all points to reading 1.
+
+Left for the triage session rather than chased mid-run.
+
 ---
 
 ## 11. Defect log

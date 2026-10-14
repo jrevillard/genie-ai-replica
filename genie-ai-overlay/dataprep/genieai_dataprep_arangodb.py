@@ -1235,6 +1235,28 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 logger.info(f"Labeling progress: {n}/{total} chunks finalized")
         return results
 
+    @staticmethod
+    def _doc_context_truncation(chunks: list[str], budget: int) -> dict | None:
+        """Describe a doc-context truncation, or ``None`` when nothing was cut.
+
+        Split out of :meth:`_build_doc_context` for ONE reason: the builder is
+        sync and ``_write_ingestion_log`` is async, so the async caller cannot
+        reach the log from inside the builder. Until now the truncation was
+        ``logger.warning`` only — unlike every other degradation path in this
+        file (client-init failure, the zero-context guard) it never reached the
+        admin Ingestion Log, which is why a corpus-wide truncation went
+        unnoticed. The caller uses this to emit the same facts there.
+        """
+        joined_len = sum(len(c) for c in chunks) + max(0, len(chunks) - 1)
+        if budget <= 0 or joined_len <= budget:
+            return None
+        return {
+            "kept": budget,
+            "total": joined_len,
+            "pct": (budget * 100 // joined_len) if joined_len else 0,
+            "chunks": len(chunks),
+        }
+
     def _build_doc_context(self, chunks: list[str], input, budget: int = DATAPREP_CONTEXTUAL_DOC_BUDGET) -> str:
         """Build the document-context string fed to the context-generation LLM.
 
@@ -1246,20 +1268,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         filename = os.path.basename(getattr(input, "storage_path", "") or getattr(input, "file_path", "") or "")
         file_labels = list(getattr(input, "file_labels", []) or [])
         joined = "\n".join(chunks)
-        truncated = False
-        if budget > 0 and len(joined) > budget:
+        truncation = self._doc_context_truncation(chunks, budget)
+        if truncation is not None:
             joined = joined[:budget] + "...[truncated]"
-            truncated = True
         parts = []
         if filename:
             parts.append(f"Filename: {filename}")
         if file_labels:
             parts.append(f"Document labels: {', '.join(file_labels)}")
         parts.append(f"Document content (may be truncated):\n{joined}")
-        if truncated:
+        if truncation is not None:
             logger.warning(
-                f"Contextual Retrieval: document context truncated to {budget} chars "
-                f"(full doc {len(chunks)} chunks). Deep chunks may get weaker context; "
+                f"Contextual Retrieval: document context truncated to {truncation['kept']} chars "
+                f"({truncation['pct']}% of {truncation['total']} chars, full doc "
+                f"{truncation['chunks']} chunks). Deep chunks may get weaker context; "
                 f"raise the budget (or use Map-Reduce for very large docs)."
             )
         return "\n".join(parts)
@@ -1296,16 +1318,44 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
         total = len(chunks)
 
+        async def _doc_context_with_log(chunks_: list[str], budget: int) -> str:
+            """Build the document context AND surface truncation to the admin log.
+
+            Truncation is a silent quality loss unless it is recorded: the chunk
+            embedding and the graph extraction both read the *contextualized*
+            text, so a truncated context degrades both while nothing fails and
+            ingestion still reports success. Routing it through
+            ``_write_ingestion_log`` is what makes it visible to a curator
+            instead of only to whoever greps container logs.
+            """
+            truncation = self._doc_context_truncation(chunks_, budget)
+            if truncation is not None:
+                await self._write_ingestion_log(
+                    file_id,
+                    "WARN",
+                    "Contextualization",
+                    (
+                        f"Document context truncated to {truncation['kept']} of "
+                        f"{truncation['total']} chars ({truncation['pct']}%) across "
+                        f"{truncation['chunks']} chunks. Deep chunks get a weaker "
+                        f"document context, which degrades their embedding and the "
+                        f"graph extraction. Raise DATAPREP_CONTEXTUAL_DOC_BUDGET (or "
+                        f"VLLM_MAX_MODEL_LEN) if the model window allows, or split the "
+                        f"document during curation."
+                    ),
+                )
+            return self._build_doc_context(chunks_, input, budget)
+
         # doc_level: one LLM call for the whole document → same context on every
         # chunk (uses a larger doc budget — it is a single call; N× cheaper).
         if CONTEXTUAL_STRATEGY == "doc_level":
-            doc_context = self._build_doc_context(chunks, input, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL)
+            doc_context = await _doc_context_with_log(chunks, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL)
             return await self._contextualize_doc_level(client, model, doc_context, chunks, file_id, total)
 
         # per_chunk (default): batched calls so the document context lives once
         # per batch (system prompt), not per chunk; per-chunk fallback on any
         # batch parse failure (Anthropic recipe).
-        doc_context = self._build_doc_context(chunks, input, DATAPREP_CONTEXTUAL_DOC_BUDGET)
+        doc_context = await _doc_context_with_log(chunks, DATAPREP_CONTEXTUAL_DOC_BUDGET)
         system_prompt = CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_context)
         return await self._contextualize_per_chunk(client, model, system_prompt, chunks, file_id, total)
 

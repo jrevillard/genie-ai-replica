@@ -312,6 +312,21 @@ services:
       runAsUser: 0
       allowPrivilegeEscalation: false
       capabilities: { drop: ["ALL"] }
+    # The genie-ai-frontend image embeds nginx (it serves the SPA +
+    # the rendered config.js). Same writable paths as the standalone
+    # nginx image: the entrypoint chowns /var/cache/nginx to uid 101
+    # and writes temp files to /tmp + /var/run. Without these emptyDir
+    # mounts the chown fails with 'Operation not permitted'.
+    volumes:
+      - name: nginx-cache
+        emptyDir: {}
+      - name: nginx-run
+        emptyDir: {}
+    volumeMounts:
+      - name: nginx-cache
+        mountPath: /var/cache/nginx
+      - name: nginx-run
+        mountPath: /var/run
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
     env: []
     secrets: []
@@ -390,6 +405,23 @@ services:
       runAsUser: 0
       allowPrivilegeEscalation: false
       capabilities: { drop: ["ALL"] }
+    # nginx entrypoint chowns /var/cache/nginx/* to uid 101 (the
+    # `nginx` user in the image). With `readOnlyRootFilesystem: true`
+    # in the container securityContext (planned), the chown needs a
+    # writable mount at /var/cache/nginx. /var/run and /tmp need the
+    # same for pid file and temp body. Without these the entrypoint
+    # crash-loops with 'chown "/var/cache/nginx/client_temp", 101:
+    # Operation not permitted'.
+    volumes:
+      - name: nginx-cache
+        emptyDir: {}
+      - name: nginx-run
+        emptyDir: {}
+    volumeMounts:
+      - name: nginx-cache
+        mountPath: /var/cache/nginx
+      - name: nginx-run
+        mountPath: /var/run
     resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
     env: []
     secrets: []
@@ -424,6 +456,19 @@ services:
     # — re-pin to a digest before any production rollout.
     image: { repository: clamav/clamav, tag: "stable-debian" }
     port: 3310
+    # The clamav image's entrypoint runs `install -o clamav -g clamav
+    # /run/clamav` then chowns it. /run/clamav is NOT in the image —
+    # it's a tmpfs the entrypoint expects to find (or, in Docker,
+    # a path the parent process has mounted). Without an emptyDir at
+    # /run/clamav in the PodSpec, the entrypoint fails with
+    # 'cannot change owner and permissions of /run/clamav: No such
+    # file or directory' and the pod crash-loops.
+    volumes:
+      - name: run-clamav
+        emptyDir: {}
+    volumeMounts:
+      - name: run-clamav
+        mountPath: /run/clamav
     # The shared per-service template applies a default non-root
     # securityContext; this service requires a fully-restated block
     # because runAsUser must match the upstream image's clamav account

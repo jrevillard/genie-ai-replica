@@ -25,9 +25,39 @@ point of loss.
 | pc-8 | The pc-1 patcher would have failed the image build | `2f90ae5de` | not pushed | n/a (build patch) |
 
 Five commits on `feat/okf-server` (`3b6c17b64`, `53b731400`, `e96a3f90b`,
-`c0169886d`, `14f2ddfad`) have **no pipeline at all** — the last green on that
-branch is `12688` at `9e434c981`. The branch tip and `origin` agree
-(`14f2ddfad`); the pushes landed while GitLab was returning 504s.
+`c0169886d`, `14f2ddfad`) have **no pipeline at all**. The last green on that
+branch is `12688` at `9e434c981` (2026-10-13 09:39:14 UTC).
+
+**Root cause of the gap is NOT "CI config skips feature branches"** — that was
+the first hypothesis and it is wrong. `.gitlab-ci.yml` deliberately suppresses
+the branch pipeline when an open MR exists (the standard de-dup rule) and
+routes CI to a `merge_request_event` pipeline on `refs/merge-requests/<n>/head`
+instead. That is why every pipeline ever seen for this branch carries
+`ref=refs/merge-requests/278/head, source=merge_request_event` — they belong to
+the permanent Draft MR **!278**, not to the branch.
+
+**Consequence, and this is the architectural risk:** because the branch
+pipeline is suppressed, **MR !278's pipeline is the ONLY CI `feat/okf-server`
+ever gets.** MR !278 is `draft`, `cannot_be_merged`, and
+`has_conflicts: true`. If GitLab ever declines to create an MR pipeline for a
+conflicted or draft MR, the branch goes silently dark — which is exactly the
+failure observed.
+
+The pushes themselves succeeded: the server-side branch head **is**
+`14f2ddfada9c8748df90cfe70f81eaebed850712`. Only the pipeline-creation step is
+missing. Control cases prove the mechanism works before and after the window —
+`main` push 18:36:43 UTC produced #12720, and MR !542 produced #12751 on
+2026-10-14.
+
+Support ticket drafted: `.scratch-pii/gitlab-support-ticket.md` (untracked).
+Four questions for UNICC: instance logs for the window, instance-wide pipeline
+activity, whether a conflicted/draft MR suppresses MR pipeline creation, and
+whether the missed pipelines can be backfilled.
+
+**Interim CI gate for this batch:** MR !542 is a strict superset of
+`feat/okf-server`'s tip (`14f2ddfad` + 3 commits), and its
+`merge_request_event` pipeline builds the **merge result** — so #12751
+transitively tests all five unpipelined commits.
 
 ---
 

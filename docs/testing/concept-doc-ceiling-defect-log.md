@@ -321,6 +321,80 @@ artefact does not.
 
 ---
 
+## BUG-10 — Accepting one link suggestion unmounts all the others
+
+**Status: OPEN** · Severity: high (data entry blocked) · Found 2026-10-15, wizard step 7 (Validate), live on the local build · **!1075**
+
+**Symptom.** *Link suggestions show, and when one link suggestion is accepted,
+they all disappear.* Not cleared — every remaining un-accepted proposal vanishes
+at once, including the one just accepted.
+
+**Root cause — the suggestion list is rendered as a descendant of the very issue
+it remediates.**
+
+`components/gov-chat-frontend/src/components/okf/steps/Validate.vue`, nesting
+from `:86`:
+
+```html
+<div v-if="issue.type === 'orphan' && !frozenAt">              <!-- :86  the orphan issue ROW -->
+  <DsButton @click="onSuggestLinks(issue.concept_id)">Suggest links</DsButton>
+  <div v-if="suggestFor === issue.concept_id && suggestion">   <!-- :95  suggestions live INSIDE the row -->
+    <ul>
+      <li v-for="p in suggestion.proposals" :key="p.to_concept_id">   <!-- :103  every proposal -->
+        <DsButton v-if="p.accepted" variant="ghost" small disabled>Done</DsButton>  <!-- :106 -->
+        <template v-else>
+          <DsButton @click="onAcceptLink(issue.concept_id, p)">Accept</DsButton>    <!-- :111 -->
+```
+
+And `onAcceptLink` (`:615-628`):
+
+```js
+if (res && res.ok) {
+  proposal.accepted = true;
+  this.refresh();   // :627  comment: "the orphan issue clears once the page is linked"
+}
+```
+
+**The sequence:**
+
+1. A page has no links → it appears in the validation report as an `orphan` issue,
+   so the row at `:86` exists.
+2. *Suggest links* renders the proposals — but **inside that row**.
+3. Accepting the **first** proposal gives the page a link, which **cures the
+   orphan condition**.
+4. `refresh()` re-fetches the report, the orphan row is gone, and the
+   suggestions `<div>` at `:95` — being its descendant — **unmounts with it**.
+5. Every remaining proposal is destroyed, not cleared. `proposal.accepted = true`
+   and `p.dismissed = true` write to objects that no longer have a subtree.
+
+**The design intent proves this is a bug, not the behaviour.** `:106` renders a
+**"Done"** button for an accepted proposal — an explicit affordance for the
+accepted row to *stay in the list and show its resolved state*. That button can
+never be seen, because the list is torn down one click earlier. The author built
+the resolved-state view and then destroyed it one interaction earlier.
+
+**Impact.** A page with several link proposals can only ever have **one** accepted
+per *Suggest links* round. The curator must re-invoke *Suggest links* on the page
+for each remaining proposal — but by then the page is no longer orphaned, so the
+orphan row (and therefore the entry point at `:87-94`) **no longer renders at
+all**. The remaining proposals become **unreachable through the UI**, and the only
+way to create those links is the editor.
+
+That is a hard dead-end for the remediation path the step exists to offer: *orphan
+→ suggest links → accept*. It works exactly once.
+
+**Direction.** Hoist the suggestions panel out of the per-issue `v-for` and render
+it once at panel level, keyed on `suggestFor`, so its lifetime is tied to
+`suggestFor` rather than to the orphan row's existence. `proposals` is already
+single-concept (`suggestFor` holds one concept id), so one panel at panel level is
+sufficient and needs no per-issue placement. Accepting a proposal should mark it
+`accepted` and leave the rest visible — which is what `:106` was already written
+to do.
+
+Worth noting the same nesting hazard applies to the neighbouring remedies in this
+step (`wireExisting` at `:176`, `Sources` creation at `:181`), which also sit
+inside their issue rows and also call `refresh()`.
+
 ## BUG-07 — Saved frontmatter loads correctly but renders invisible (root cause: BUG-06)
 
 **Status: OPEN — no separate issue; filed as symptom 2 of !1069** · Severity: high · Found ~15:37 on tier 0

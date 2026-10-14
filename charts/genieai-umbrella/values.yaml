@@ -120,13 +120,13 @@ data:
     # Gates the new-user email-verification flow; requires smtp to be set
     # when true (Keycloak rejects verification emails without a server).
     verifyEmail: false
-    # Realm password policy. Non-empty on purpose: an empty value would
-    # be dropped from the convergence Job's env (K8s omitempty), and kcc
-    # fails the import on the missing variable. `length(8)` is the
-    # compose default recommendation; for a strong policy set the same
-    # value as the Swarm export: `length(12) and upperCase(1) and
-    # lowerCase(1) and digits(1) and specialChars(1)`.
-    passwordPolicy: length(8)
+    # Realm password policy — defaults to the Swarm export value
+    # (public-sector baseline). Non-empty on purpose: an empty value
+    # would be dropped from the convergence Job's env (K8s omitempty),
+    # and kcc fails the import on the missing variable. Any
+    # GENIE_ADMIN_PASSWORD must satisfy the policy or the realm import
+    # rejects the credential.
+    passwordPolicy: length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
     # Login-page locales; empty = default 9-locale list.
     supportedLocales: []
     # Access-token TTL in seconds (compose parity).

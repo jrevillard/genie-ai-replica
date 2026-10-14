@@ -414,6 +414,88 @@ Repo doc reached `lifecycle_state: publish`, `ingested_version: 1`,
    recommendation produced no gain. Worth watching across tiers 1–4, since it is
    the observable the head is supposed to improve.
 
+### Tier 1 — `ncd-information-v6.zip` — **PASS** (split proven on a real document)
+
+Executed 2026-10-14/15 on the local build, **concurrently** with a second drain.
+
+| Measure | Expected | Observed | Verdict |
+|---|---|---|---|
+| Concepts imported | 46 | **46** | ✅ |
+| Documents over the 250 000 ceiling | **1** | **1** | ✅ positive control |
+| Concepts after split | 47 | **47** | ✅ |
+| `clinical-detail-set-1` (part 1, keeps id) | 248 255 chars | **248 255** | ✅ exact |
+| `clinical-detail-set-1-part-2` | 103 958 chars | **103 958** | ✅ exact |
+| Concepts still over the ceiling | 0 | **0** | ✅ |
+| **Losslessness** | `248255 + 103958 = 352213` vs original `352214` | **1 char = the join separator** | ✅ nothing dropped |
+
+**This is the first split on real content.** Tier 0 proved nothing splits when
+nothing should; tier 1 proves exactly one document splits when exactly one
+should, and the other 45 are left alone. Both part sizes matched the
+pre-registered prediction character-for-character, so the splitter is
+deterministic on real input, not just on synthetic fixtures.
+
+| Head suite | Tier 0 (18 concepts) | Tier 1 (47 concepts) |
+|---|---|---|
+| pass_rate | 0.856 | **0.9275 → 0.9348** |
+| ungrounded negatives | 20 | **8** |
+| score | `219 → 219` | `228 → 228` |
+| steals | 0 | **1** |
+
+**8 ungrounded negatives across 47 concepts, against 20 across 18** — roughly
+0.17 per concept versus 1.11. That strongly supports the hypothesis in #1071
+that the tier-0 figure was a small-repo artefact and the metric needs
+normalising by suite size. **Tier 2 (140 concepts) is the data point that would
+settle it.**
+
+### Parallel drain — NCD ‖ Resilient AI Hub
+
+Both drained **simultaneously** against `OKF_INGEST_CONCURRENCY=6` /
+`DATAPREP_INGEST_CONCURRENCY=6` / `OKF_CLAIM_STRATEGY=fair` /
+`OKF_REPO_INGEST_CAP=3`.
+
+| Repo | Result | Failed | 429s | Truncation |
+|---|---|---|---|---|
+| Resilient AI Hub (11) | **11 / 11 complete** | **0** | **0** | **0** |
+| NCD Information (47) | see above | **0** | **0** | **0** |
+
+**Zero failures, zero 429s, zero truncation across both drains.** Resilient AI
+Hub completed *while NCD was still draining*, which is the concrete demonstration
+that per-repo graph isolation does what it should: `unstructured`/`dataprep` write
+to `OKF_<bundle>_v<n>_*` per repository (`genieai_dataprep_microservice.py:343`
+— `payload.graphName or ARANGO_GRAPH_NAME`), whereas the legacy path defaults to
+a single shared `GRAPH` (`:187` names it *"the legacy single-graph behavior"*).
+The shared graph is **why the legacy flock exists**; isolation is what removes
+the need for it.
+
+### Concurrency architecture (verified, not assumed)
+
+| Knob | Shipped default | Local build | Axis | Enforcement |
+|---|---|---|---|---|
+| `OKF_INGEST_CONCURRENCY` | **1** | 6 | per-process | N self-scheduling lanes, `ingestWorker.js:1455` |
+| `OKF_CLAIM_STRATEGY` | **`fifo`** | `fair` | ordering | `fifo` = global oldest-first, **no per-repo notion** |
+| `OKF_REPO_INGEST_CAP` | **0** = unlimited | 3 | per-repo | atomic AQL, `ingestWorker.js:335` |
+| `DATAPREP_INGEST_CONCURRENCY` | **1** | 6 | upstream | flock slot pool, `genieai_dataprep_microservice.py:109` |
+
+Three findings that change how the rest of this plan should be read:
+
+1. **`OKF_REPO_INGEST_CAP` is dead config under the default strategy.** `fifo`
+   has no per-repo notion, so the cap is **never read**. It only takes effect
+   when `OKF_CLAIM_STRATEGY=fair`.
+2. **Only `OKF_INGEST_CONCURRENCY` is plumbed through docker-compose.**
+   `OKF_CLAIM_STRATEGY` and `OKF_REPO_INGEST_CAP` have no env-block entry, so
+   setting them in `.env` does nothing — they need a compose override, exactly
+   as `OKF_INGEST_MAX_CONCEPTS` / `OKF_INGEST_MAX_ZIP_BYTES` do (§9.1).
+3. **Lanes are process-local; the per-repo cap is global.** `okf-server` is
+   pinned to `replicas: 1` (`docker-compose.yaml:775`), so per-process currently
+   equals per-container. At 2 replicas, concurrency becomes
+   `replicas × OKF_INGEST_CONCURRENCY` with **no global cap** — only dataprep's
+   slot pool bounds it, and that pool **429s rather than blocks**
+   (`genieai_dataprep_microservice.py:239-248`), so over-provisioning okf lanes
+   degrades into 429 backoff.
+
+**Tiers 2–4 therefore measure the local soak configuration, not stock behaviour.**
+The shipped default is one concept at a time across all repositories.
+
 ---
 
 ## 11. Defect log

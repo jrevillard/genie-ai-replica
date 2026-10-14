@@ -46,10 +46,45 @@ chunks are (or are not) landing well in the vector space.
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | `true` | Master switch. On by default; set `false` to disable (a no-op beyond skipping context generation). |
 | `CONTEXTUAL_STRATEGY` | `per_chunk` | Strategy selector. Both docker-compose and env-template now default to `per_chunk` (one context per chunk — the Anthropic recipe); `doc_level` is a cheaper opt-in. |
 | `DATAPREP_CONTEXTUAL_MODEL` | _(reuses `VLLM_LLM_MODEL_ID`)_ | Model for context generation. Empty = reuse `VLLM_LLM_MODEL_ID`. Must support guided JSON. |
-| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | `100000` | Max chars of doc text fed to the context LLM when `CONTEXTUAL_STRATEGY=per_chunk`. ~25 000 tokens at ~4 chars/token; ≤0 disables truncation. |
-| `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` | `100000` | Max chars of doc text fed to the context LLM when `CONTEXTUAL_STRATEGY=doc_level`. |
-| `DATAPREP_CONTEXTUAL_MAX_TOKENS` | `512` | Max OUTPUT tokens of generated context (avoids truncation under load; the model writes ~196). |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | `0` (= derived) | Max chars of document text placed in the context LLM's system prompt. `0` derives it from `VLLM_MAX_MODEL_LEN`; set `>0` to pin a value, `<0` to disable contextualization. |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` | `100000` | Max chars of document text when `CONTEXTUAL_STRATEGY=doc_level` (a single call, so it can afford a larger window than `per_chunk`). |
+| `DATAPREP_CONTEXTUAL_MAX_TOKENS` | `512` | Max OUTPUT tokens **per chunk in the batch** (avoids truncation under load; the model writes ~196). A batch of 4 therefore reserves 2048 output tokens. |
 | `CONTEXTUAL_LABEL_RAW` | `true` | Decoupled mode: label the **raw** chunk but embed the **contextualised** chunk. |
+| `VLLM_MAX_MODEL_LEN` | `65536` | The served model's context window. Set by `env.t4` (2048) / `env.rtx6000` (4096). This is what the budget is derived from. |
+
+### The budget is derived, not chosen
+
+`DATAPREP_CONTEXTUAL_DOC_BUDGET=0` means "work it out". The context-generation
+call carries the system prompt + the document context + the batch's chunk text,
+and reserves `DATAPREP_CONTEXTUAL_MAX_TOKENS` for **each** chunk in the batch.
+Everything except the document context is subtracted from
+`VLLM_MAX_MODEL_LEN`, and whatever remains is the budget.
+
+The point of deriving it: GENIE.AI is a framework, not a deployment pinned to one
+model. The document size a curator can work with follows the model you serve.
+
+| `VLLM_MAX_MODEL_LEN` | Derived budget | Documents up to |
+|---|---|---|
+| 2048 (`env.t4`) | none — the output reservation alone exceeds the window | contextualization is skipped, chunks are ingested raw |
+| 4096 (`env.rtx6000`) | ~11 000 chars | ~40 chunks |
+| 65536 (default) | ~250 000 chars | ~500 chunks |
+
+Provision a larger-parameter model and raise the window, and the budget — and
+therefore the largest usable concept document — scales with it. Nothing else needs
+re-tuning. Two caveats: the window costs KV-cache memory roughly linearly (which
+is why `env.t4` is pinned to 2048), and when the window is genuinely too small the
+service falls back to raw chunks rather than failing the ingest.
+
+### If you see "Document context truncated"
+
+A truncation warning in the Ingestion Log means the document is larger than the
+derived budget. Chunks from beyond the budget still ingest, but their context
+describes the *beginning* of the document, which degrades their embedding and the
+graph extraction drawn from them. In order of preference: raise
+`VLLM_MAX_MODEL_LEN` if the GPU has the memory; otherwise split the document
+during curation; only pin `DATAPREP_CONTEXTUAL_DOC_BUDGET` manually when you have
+a reason to, since a budget sized for one GPU overflows a smaller one and the
+rejected calls fall back to raw chunks silently.
 
 ## Strategies
 

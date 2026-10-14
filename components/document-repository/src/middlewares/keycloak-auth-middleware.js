@@ -24,7 +24,8 @@ async function getJWKS() {
     const keycloakUrl = appConfig.security.keycloakUrl;
     const realm = appConfig.security.keycloakRealm;
     const jwksUri = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/certs`;
-    expectedIssuer = `${keycloakUrl}/realms/${realm}`;
+    expectedIssuer =
+      appConfig.security.keycloakExpectedIssuer || `${keycloakUrl}/realms/${realm}`;
     logger.info(`[KEYCLOAK-AUTH] Initializing JWKS from ${jwksUri}`);
     jwks = jose.createRemoteJWKSet(new URL(jwksUri));
   }

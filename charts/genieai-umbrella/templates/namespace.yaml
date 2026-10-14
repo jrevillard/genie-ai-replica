@@ -142,7 +142,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: arango-operator-crd-access
-
+---
 # Cluster-wide ClusterRole + ClusterRoleBinding for the bootstrap
 # kube-arangodb operator. The in-namespace Role+RoleBinding above
 # is necessary but NOT sufficient: the operator's informers are

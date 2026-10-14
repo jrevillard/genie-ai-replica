@@ -19,9 +19,15 @@ spec:
   # Distinct from primaryUpdateStrategy (unsupervised | supervised), which
   # only gates whether the operator needs manual approval for the failover.
   primaryUpdateMethod: switchover
-  # Conditional registry prefix — mirror path convention DROPS ghcr.io: an
-  # air-gapped global.imageRegistry mirror must mirror cloudnative-pg/postgresql.
-  imageName: "{{ if .Values.global.imageRegistry }}{{ .Values.global.imageRegistry }}/{{ end }}cloudnative-pg/postgresql:16"
+  # Hardcoded to ghcr.io/cloudnative-pg/postgresql:16 — never prefixed
+  # by global.imageRegistry. The GitLab registry mirror at
+  # registry.opensource.unicc.org/un/itu/genie-ai does not carry
+  # cloudnative-pg/postgresql, so the conditional prefix
+  # (`<imageRegistry>/cloudnative-pg/postgresql:16`) was producing
+  # `manifest unknown` on every fresh install. Operators air-gapping
+  # the cluster must mirror this specific image into their private
+  # registry AND override the imageName via a values patch.
+  imageName: "ghcr.io/cloudnative-pg/postgresql:16"
   imagePullPolicy: IfNotPresent
   storage:
     size: {{ .Values.data.postgres.storageSize | default "10Gi" }}

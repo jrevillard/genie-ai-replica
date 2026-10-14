@@ -596,6 +596,76 @@ button four times: Submit → Approve → Publish → Ingest"* — costs nothing
 
 ---
 
+## BUG-13 — The splitter can emit a blank part 1, and part 1 is where inbound links land · **!1078**
+
+**Status: FIXED (commit `fce5d356b`, branch `feat/concept-doc-ceiling`)** · Severity: high (linkable empty page in the graph) · Found 2026-10-15, Solar System tier 1, local build · **!1078**
+
+**Symptom.** `50-years-of-solar-system-exploration-tagged-sec19` imported as
+**5** concepts instead of 4. Part 1 is a single newline — and it is the one that
+keeps the original `concept_id`, the title `"Chang'e 5*"`, the topic link to
+`pds4-dph-1-26-0-sec17.md`, and the source.
+
+| part | chars |
+|---|---|
+| `…-tagged-sec19` (part 1) | **1** |
+| `…-part-2` | 249 784 |
+| `…-part-3` | 249 288 |
+| `…-part-4` | 249 557 |
+| `…-part-5` | 56 267 |
+
+**Root cause — two cooperating behaviours in `concept-splitter.js`.**
+
+1. **`boundaries()` opens a group with blank lines.** The body opens on a blank
+   line then an `## ` heading, so the heading grouping emits the blank run
+   `[0,1)` as a group of its own — content-free by construction.
+2. **`greedyMerge()` never reconsiders a finalised group.** It pushes the
+   accumulated range the moment adding the *next* piece would overflow
+   (`concept-splitter.js:94-99`), and never tries to absorb it forward. So when
+   the following section sits **within one character** of the ceiling, the blank
+   run is emitted alone.
+
+The trigger is narrow and ceiling-dependent — which is why it survived review
+and only surfaced on a real 804k document at a tuned ceiling.
+
+**Why it matters beyond cosmetics.** `applyDocumentCeiling`
+(`ingest-service.js:213`) gives `concept_id` to part 1 only; the comment at
+`:170` states the intent — *"Part 1 is unsuffixed so every inbound link keeps
+resolving to a document that still exists."* That guarantee is precisely what
+breaks. The document that still exists is the empty one, so a reader following
+any link to that concept lands on a titled, sourced, linkable page with no body,
+and it is indexed as a near-empty node.
+
+**How the input was pinned down.** The stored parts tile the source body
+*exactly* (`stored.join('') === body`, every part found at the expected byte
+offset) — so the split is lossless and the discrepancy is boundary placement
+only. Two measurement errors had to be cleared first:
+
+- My frontmatter regex `---\r?\n([\s\S]*?)\r?\n---\r?\n?` consumed one `\n` too
+  many, giving an 804 896-char body. The importer's variant gives **804 897**,
+  which matches the stored total exactly. Leading-blank body confirmed:
+  `"\n## Chang'e 5*…"`.
+- The stored parts each end in `\n` while the splitter's parts start with `\n`,
+  so comparing by *length* produced a plausible-looking but wrong alignment.
+  Byte-offset tiling (`indexOf(part, pos)`) was the instrument that actually
+  settled it.
+
+**Fix.** Both changes are at the range level, so the line tiling and the
+losslessness invariant are untouched:
+
+- `boundaries()` no longer opens a group with blank lines — leaving `cut` where
+  it is lets the first real group absorb the blank run.
+- `absorbBlankParts()` enforces the invariant instead of trusting the
+  recursion: any surviving blank range is merged forward, re-split when the
+  union would breach the ceiling. Bounded, so it cannot spin.
+
+**Evidence.** Against the pre-fix splitter, a document of this shape yields a
+blank part at **64 distinct ceilings between 200 and 4000**; after the fix, **0**.
+The real 804 897-char bundle body at ceiling 249 783: **5 parts with a 0-length
+first part → 4 lossless parts, none blank**. okf-server Jest **1192/1192**
+(baseline 1189 + 3 new tests); `verify-local-build.sh` **77 pass / 0 fail**.
+
+---
+
 ## Run log — tier 0 (Alphabet Company Information)
 
 Repo `42b2f2df-880c-4ed5-9208-7b36f05a8029`, domain "Alphabet Company",

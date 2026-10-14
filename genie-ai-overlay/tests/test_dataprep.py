@@ -2077,6 +2077,81 @@ class TestContextualRetrieval:
         assert "Document labels: Healthcare, Public Services" in ctx
         assert "[truncated]" in ctx  # joined content exceeded the 40-char budget
 
+    # --- truncation must be VISIBLE, not just logged to container stdout ------
+    #
+    # A truncated document context silently degrades the chunk embedding AND the
+    # graph extraction (both read the contextualized text) while ingestion still
+    # reports success. For a whole corpus that is invisible: the only trace was
+    # a logger.warning nobody reads. These tests pin that the fact now reaches
+    # the admin Ingestion Log, and — just as important — that it does NOT fire
+    # when the document fits.
+
+    def test_doc_context_truncation_is_none_when_within_budget(self):
+        dp = create_dataprep()
+        assert dp._doc_context_truncation(["abc", "def"], 100) is None
+
+    def test_doc_context_truncation_is_none_when_budget_disables_truncation(self):
+        # <=0 disables truncation (documented contract), so it must never report.
+        dp = create_dataprep()
+        assert dp._doc_context_truncation(["a" * 5000], 0) is None
+        assert dp._doc_context_truncation(["a" * 5000], -1) is None
+
+    def test_doc_context_truncation_reports_kept_total_and_ratio(self):
+        dp = create_dataprep()
+        t = dp._doc_context_truncation(["x" * 900, "y" * 100], 500)
+        assert t is not None
+        assert t["kept"] == 500
+        assert t["total"] == 1001  # 900 + 100 joined by a single "\n"
+        assert t["pct"] == 49
+        assert t["chunks"] == 2
+
+    @pytest.mark.asyncio
+    async def test_truncation_is_written_to_the_ingestion_log(self, monkeypatch):
+        dp = create_dataprep()
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", True)
+        monkeypatch.setattr(dp_module, "DATAPREP_CONTEXTUAL_DOC_BUDGET", 40)
+        monkeypatch.setenv("VLLM_API_KEY", "k")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        log = AsyncMock()
+        dp._write_ingestion_log = log
+        with patch.object(dp_module, "AsyncOpenAI", return_value=AsyncMock()):
+            await dp._apply_contextualization(["aaaaaaaaaa" * 20, "tail"], create_mock_ingest_input(), "file1")
+
+        # Contextualization writes other log lines on this path (LLM failure
+        # fallbacks etc.), so assert on the TRUNCATION line specifically rather
+        # than on a total call count.
+        truncations = [
+            c for c in log.await_args_list if len(c.args) > 3 and "truncated" in str(c.args[3]).lower()
+        ]
+        assert len(truncations) == 1, [c.args for c in log.await_args_list]
+        args = truncations[0].args
+        assert args[0] == "file1"
+        assert args[1] == "WARN"
+        assert args[2] == "Contextualization"
+        assert "40" in args[3]  # names the budget that was applied
+
+    @pytest.mark.asyncio
+    async def test_no_truncation_log_write_when_document_fits(self, monkeypatch):
+        """The negative control: a warning that fires on every document is noise."""
+        dp = create_dataprep()
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", True)
+        monkeypatch.setattr(dp_module, "DATAPREP_CONTEXTUAL_DOC_BUDGET", 100000)
+        monkeypatch.setenv("VLLM_API_KEY", "k")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        log = AsyncMock()
+        dp._write_ingestion_log = log
+        with patch.object(dp_module, "AsyncOpenAI", return_value=AsyncMock()):
+            await dp._apply_contextualization(["short one", "short two"], create_mock_ingest_input(), "file1")
+
+        truncations = [
+            c for c in log.await_args_list if len(c.args) > 3 and "truncated" in str(c.args[3]).lower()
+        ]
+        assert truncations == []
+
     @pytest.mark.asyncio
     async def test_flag_on_prepends_context(self, monkeypatch):
         dp = create_dataprep()

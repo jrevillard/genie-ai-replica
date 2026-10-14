@@ -45,19 +45,17 @@ spec:
       labels:
         {{- include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" $ctx.Values "component" $component) | nindent 8 }}
     spec:
-      # Pod-level securityContext is intentionally minimal here.
-      # The historical blanket `runAsUser: 65534 / runAsNonRoot: true`
-      # caused every image whose entrypoint writes to its own FS
-      # (nginx → /etc/nginx/certs, frontend → /app/dist/config.js,
-      # clamav → /run/clamav) to crash-loop, because the entrypoint
-      # ran as 65534 and the paths were owned by the image's default
-      # USER (root = 0). Per-service `podSecurityContext` /
-      # `securityContext` overrides in values.yaml set the right
-      # user for each image; the namespace's Pod Security Standards
-      # `restricted` admission then accepts only those services that
-      # actually run non-root (backend, documentRepository).
-      seccompProfile:
-        type: RuntimeDefault
+      # Pod-level securityContext: seccompProfile is mandatory
+      # (PSA restricted admission rejects pods without it). The
+      # runAsUser/runAsNonRoot defaults that previously sat here
+      # are removed: nginx/frontend/clamav entrypoints write to
+      # paths owned by the image's default USER (root=0 for nginx
+      # and frontend, 100 for clamav) and crash-loop on 65534. Each
+      # service declares its own user via `securityContext` (container
+      # level) in values.yaml.
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       {{- with $svc.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}

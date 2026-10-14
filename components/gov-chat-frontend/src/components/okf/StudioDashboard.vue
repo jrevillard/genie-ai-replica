@@ -125,6 +125,17 @@
             >
               {{ translate('okf.lifecycle.unpublish', 'Unpublish') }}
             </DsButton>
+            <!-- RE-INGEST FAILED CONCEPTS (David, 2026-10-14). Visible ONLY on an
+              ingested repo — "the Re-Ingest menu must only be available after a
+              repo is ingested". The condition is deliberately the SAME expression
+              that makes contextualAction() return 'retract', so this affordance
+              can never disagree with the state machine beside it.
+              Hidden (not greyed) when a drain is already running: the server
+              would answer 409 DRAIN_IN_PROGRESS anyway, and a dead button that
+              looks live is worse than an absent one. -->
+            <DsButton v-if="canReingest(r)" variant="ghost" small :disabled="actionBusy" @click.stop="onReingestAsk(r)">
+              {{ translate('okf.dashboard.reingest.failed', 'Re-ingest failed') }}
+            </DsButton>
             <!-- Story 1-8 (2026-10-08): the Head Tester / Routing Lab. Visible
                  on the Published AND Ingested lanes (both are lifecycle_state
                  'publish'; ingested_at splits them) — testing the vectorized
@@ -254,6 +265,30 @@
         <strong>{{ unpublishAsk && (unpublishAsk.name || unpublishAsk.repo_id) }}</strong>
       </p>
       <p v-if="unpublishError" class="okf-dashboard__dialog-error">{{ unpublishError }}</p>
+    </DsDialog>
+
+    <!-- Re-ingest confirm (2026-10-14). The live failed count is fetched on
+      OPEN from GET /:repo_id/metrics, NOT read from rag_ingestion.failed_concepts:
+      that field is a settle-time snapshot and is wiped to [] the moment the
+      drain arms, so it would show a stale or zero number. -->
+    <DsDialog
+      :visible="reingestAsk !== null"
+      :title="translate('okf.dashboard.reingest.title', 'Re-ingest failed concepts')"
+      size="sm"
+      :actions="reingestActions"
+      @close="onReingestClose"
+      @action="onReingestAction"
+    >
+      <p v-if="reingestLoading">
+        {{ translate('okf.dashboard.reingest.counting', 'Checking how many concepts failed…') }}
+      </p>
+      <template v-else>
+        <p>
+          {{ reingestBodyText }}
+          <strong>{{ reingestAsk && (reingestAsk.name || reingestAsk.repo_id) }}</strong>
+        </p>
+        <p v-if="reingestError" class="okf-dashboard__dialog-error">{{ reingestError }}</p>
+      </template>
     </DsDialog>
 
     <DsDialog
@@ -410,6 +445,11 @@ export default {
       piiBlocked: false,
       unpublishAsk: null,
       unpublishError: '',
+      // Re-ingest failed (David, 2026-10-14)
+      reingestAsk: null,
+      reingestCount: null, // null = not yet fetched; 0 = nothing failed
+      reingestLoading: false,
+      reingestError: '',
       deleteAsk: null,
       deleteError: '',
       versionsRepo: null,
@@ -481,6 +521,39 @@ export default {
         'okf.dashboard.unpublish.body',
         'This stops serving {name} to RAG agents immediately. The published bundle zip and version history are kept; the repository returns to In Review so you can correct it. Publish again and Ingest to serve it once more.'
       ).replace('{name}', this.unpublishAsk.name || this.unpublishAsk.repo_id);
+    },
+
+    // ── Re-ingest failed (David, 2026-10-14) ──
+    // canReingest(r) is a METHOD, not a computed — see the note in methods.
+    reingestActions() {
+      // Confirm is disabled while the count is loading, and when the live count
+      // is 0 — offering a destructive-looking action that would do nothing is
+      // the exact "dead button that looks live" failure this dialog avoids.
+      const nothingToDo = !this.reingestLoading && this.reingestCount === 0;
+      return [
+        { key: 'cancel', label: this.translate('common.cancel', 'Cancel'), variant: 'secondary' },
+        {
+          key: 'confirm',
+          label: this.translate('okf.dashboard.reingest.confirm', 'Re-ingest failed'),
+          variant: 'primary',
+          disabled: this.reingestLoading || nothingToDo || this.actionBusy
+        }
+      ];
+    },
+    reingestBodyText() {
+      if (!this.reingestAsk) return '';
+      if (this.reingestCount === 0) {
+        return this.translate(
+          'okf.dashboard.reingest.none',
+          '{name} has no failed concepts — every concept indexed successfully.'
+        ).replace('{name}', this.reingestAsk.name || this.reingestAsk.repo_id);
+      }
+      return this.translate(
+        'okf.dashboard.reingest.body',
+        '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+      )
+        .replace('{n}', String(this.reingestCount))
+        .replace('{name}', this.reingestAsk.name || this.reingestAsk.repo_id);
     }
   },
   mounted() {
@@ -499,6 +572,21 @@ export default {
     }
   },
   methods: {
+    /**
+     * Can this repo be re-ingested? (David, 2026-10-14: "the Re-Ingest menu must
+     * only be available after a repo is ingested".)
+     *
+     * A METHOD, NOT A COMPUTED — and that is load-bearing. Vue evaluates a
+     * computed with NO arguments on first access, so a `computed: { canReingest(r) }`
+     * is invoked once with `r === undefined`, returns a boolean, and Vue caches
+     * that boolean as the property value. The template's `canReingest(r)` then
+     * calls a boolean: "TypeError: _ctx.canReingest is not a function", thrown
+     * on EVERY card render. Computeds take no arguments — this is the same
+     * reason contextualAction(r)/isDraining(r)/isServing(r) are all methods.
+     */
+    canReingest(r) {
+      return Boolean(r) && r.lifecycle_state === 'publish' && !!r.ingested_at && !this.isDraining(r);
+    },
     /** 5s store poll — UNCONDITIONAL while the dashboard is mounted (David,
      * 2026-09-08, standing directive "no clever gates": every frozen-card
      * complaint this week traced to gate starvation — a gate keyed on the
@@ -760,6 +848,65 @@ export default {
     onUnpublishAsk(r) {
       this.unpublishError = '';
       this.unpublishAsk = r;
+    },
+    // ── Re-ingest failed (David, 2026-10-14) ──
+    // The count is fetched on OPEN so the dialog states a live number and can
+    // disable itself when there is nothing to do. It comes from
+    // GET /:repo_id/metrics (indexing.failed), which the server computes fresh —
+    // rag_ingestion.failed_concepts is a settle-time snapshot that the arm wipes.
+    async onReingestAsk(r) {
+      this.reingestError = '';
+      this.reingestCount = null;
+      this.reingestLoading = true;
+      this.reingestAsk = r;
+      try {
+        // fetchRepoMetrics returns { ok, metrics } — the payload is nested.
+        const res = await this.$store.dispatch('okf/fetchRepoMetrics', r.repo_id);
+        const payload = res && res.metrics ? res.metrics : null;
+        const failed = payload && payload.indexing ? payload.indexing.failed : null;
+        // A null count must NOT read as 0 — that would disable the button on a
+        // repo that genuinely has failures because one fetch failed.
+        this.reingestCount = typeof failed === 'number' ? failed : null;
+        if (this.reingestCount === null) {
+          this.reingestError = this.translate(
+            'okf.dashboard.reingest.countFailed',
+            'Could not read the failed-concept count. Try again.'
+          );
+        }
+      } catch {
+        this.reingestCount = null;
+        this.reingestError = this.translate(
+          'okf.dashboard.reingest.countFailed',
+          'Could not read the failed-concept count. Try again.'
+        );
+      } finally {
+        this.reingestLoading = false;
+      }
+    },
+    onReingestClose() {
+      // Never close mid-flight: the request completes regardless, and dismissing
+      // it would look like the retry was abandoned.
+      if (this.actionBusy) return;
+      this.reingestAsk = null;
+      this.reingestError = '';
+      this.reingestCount = null;
+    },
+    async onReingestAction(key) {
+      if (key === 'cancel') {
+        this.onReingestClose();
+        return;
+      }
+      if (key !== 'confirm' || !this.reingestAsk || this.reingestCount === 0) return;
+      const repoId = this.reingestAsk.repo_id;
+      this.actionBusy = true;
+      this.reingestError = '';
+      const res = await this.$store.dispatch('okf/reingestFailed', { repoId });
+      this.actionBusy = false;
+      this.reingestAsk = null;
+      this.reingestCount = null;
+      if (!res.ok) {
+        this.actionError = okfRepoOps.friendlyLifecycleError(res.code, res.message);
+      }
     },
     async onUnpublishAction(key) {
       if (key === 'cancel') {

@@ -614,6 +614,38 @@ const actions = {
     }
   },
 
+  /**
+   * RE-INGEST FAILED CONCEPTS (David, 2026-10-14). Omit conceptId for the whole
+   * repo; pass one for a single row.
+   *
+   * Never throws — matches every other action in this module. Refetches the
+   * concept list afterwards so the failed rows repaint out of their error state,
+   * and refetches the repo so the card's ingest state follows the new drain.
+   */
+  async reingestFailed({ commit, dispatch }, { repoId, conceptId, actor } = {}) {
+    if (!repoId) return { ok: false, code: 'VALIDATION_ERROR', message: 'repoId is required' };
+    try {
+      const result = await repoOkfService.reingestFailed(repoId, { conceptId: conceptId || null }, actor || {});
+      if (!result || result.ok !== true) {
+        return {
+          ok: false,
+          code: (result && result.code) || 'REINGEST_FAILED',
+          message: (result && result.message) || 'Re-ingest failed'
+        };
+      }
+      await dispatch('fetchConcepts', repoId);
+      // Refresh the repo doc the way lifecycleTransition does — there is no
+      // fetchRepo action, and a stale card would keep showing the old ingest
+      // state (rag_drain_active flips to true the moment the action arms).
+      const repo = await repoOkfService.get(repoId).catch(() => null);
+      if (repo) commit('upsertRepo', repo);
+      return { ok: true, requeued: result.requeued || 0, conceptIds: result.concept_ids || [] };
+    } catch (err) {
+      commit('setError', err.message || 'reingestFailed failed');
+      return { ok: false, code: 'REINGEST_FAILED', message: err.message };
+    }
+  },
+
   async openEditor({ commit, dispatch }, { repoId } = {}) {
     if (!repoId) return { ok: false, code: 'VALIDATION_ERROR' };
     commit('setEditorRepo', repoId);

@@ -359,6 +359,61 @@ async function requeueRepoForRedrain(repo_id, opts = {}) {
   return rows.length;
 }
 
+/**
+ * RE-INGEST FAILED CONCEPTS (David, 2026-10-14). The recovery path the product
+ * already PROMISES but never built: the drain's dead-letter text says
+ * "recovery = re-ingest" (ingestWorker.js:1237) and "failed concepts stay
+ * recoverable via re-ingest (D4-b)" (:1269), yet nothing could reach it —
+ * retracting the whole repo was the only way, which drops the serving graph and
+ * re-ingests every concept.
+ *
+ * SCOPE: FAILED ONLY. Rows already 'indexed' are healthy and must not churn; the
+ * drain would re-chunk and re-vectorize all of them for nothing. Rows 'rejected'
+ * are excluded by the ingest hard-gate and are terminal by design.
+ *
+ * ingest_attempts: 0 IS LOAD-BEARING, not a tidy-up. The claim stamp increments
+ * it and NOTHING decrements it — not the worker, not a successful index. The
+ * reaper (_reapStuckParsed, ingestWorker.js:1212) dead-letters any 'parsed' row
+ * with ingest_attempts >= OKF_INGEST_WORKER_MAX_CLAIMS (default 8), on an hourly
+ * sweep. Requeue WITHOUT the reset and the rows are killed again within the
+ * hour, which is exactly the failure mode re-ingest is meant to end.
+ *
+ * graph_name is deliberately PRESERVED (as requeueRepoForRedrain does): the
+ * caller stamps it to the versioned serving name via stampRepoGraphName before
+ * arming. Blanking it would let dataprep resurrect a dropped graph.
+ *
+ * @param {string} repo_id
+ * @param {object} [opts]
+ * @param {string} [opts.conceptId] scope to ONE concept (per-concept retry);
+ *   omitted = every failed concept in the repo
+ * @returns {Promise<{requeued: number, conceptIds: string[]}>}
+ */
+async function requeueFailedForReingest(repo_id, opts = {}) {
+  if (!repo_id) return { requeued: 0, conceptIds: [] };
+  const conceptId = opts.conceptId || null;
+  const db = await getDb();
+  const rows = await (
+    await db.query(
+      `FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND m.index_status == 'failed'
+       ${conceptId ? 'FILTER m.concept_id == @cid' : ''}
+       UPDATE m WITH {
+         index_status: 'parsed',
+         worker_claimed_at: null,
+         ingest_attempts: 0,
+         reindex_retry: 0,
+         last_good_index_at: null,
+         last_error: null,
+         next_attempt_after: null,
+         updated_at: DATE_ISO8601(DATE_NOW())
+       } IN okf_concepts_meta
+       RETURN NEW.concept_id`,
+      { rid: repo_id, cid: conceptId }
+    )
+  ).all();
+  const conceptIds = Array.isArray(rows) ? rows.map((r) => (r && r.concept_id ? r.concept_id : r)).filter(Boolean) : [];
+  return { requeued: conceptIds.length, conceptIds };
+}
+
 /** NAME AUTHORITY (David's v9 wedge, 2026-09-08): stamp every meta row's
  * graph_name to the drain's born-right serving name. Stale stamps made the
  * drain write into the OLD version's name — dataprep's ensure-graph then
@@ -1109,6 +1164,7 @@ module.exports = {
   patchConceptMeta,
   patchConceptFields,
   requeueRepoForRedrain,
+  requeueFailedForReingest,
   stampRepoGraphName,
   deleteConceptMeta,
   autocorrectRepo,

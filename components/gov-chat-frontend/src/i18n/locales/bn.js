@@ -1635,7 +1635,10 @@ export default {
         bulkRedact: 'সব রিডাক্ট করুন',
         bulkRemove: 'সব সরান',
         loadProgress: 'ফাইল লোড হচ্ছে {done}/{total}',
-        addSource: '+ From documents'
+        addSource: '+ From documents',
+        reingest: 'Re-ingest this concept',
+        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
+        reingestFailed: 'Re-ingest failed — try again.'
       },
       delete: {
         body: 'এটি ফাইল, এর ইনডেক্স করা অংশ এবং এর গ্রাফ লিঙ্কগুলিকে স্থায়ীভাবে সরিয়ে দেয়।',
@@ -1815,6 +1818,15 @@ export default {
         published: 'এখনও কোনো রিপোজিটরি প্রকাশিত হয়নি',
         ingested: 'এখনও কিছু গ্রহণ করা হয়নি',
         retracted: 'কিছু প্রত্যাহার করা হয়নি'
+      },
+      reingest: {
+        failed: 'Re-ingest failed',
+        title: 'Re-ingest failed concepts',
+        confirm: 'Re-ingest failed',
+        counting: 'Checking how many concepts failed…',
+        countFailed: 'Could not read the failed-concept count. Try again.',
+        none: '{name} has no failed concepts — every concept indexed successfully.',
+        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
       }
     },
     build: {

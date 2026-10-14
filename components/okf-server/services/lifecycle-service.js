@@ -461,6 +461,74 @@ async function _settleIngest(db, repo, actor) {
 }
 
 /**
+ * ARM THE RAG DRAIN — the single implementation of "let the worker start".
+ *
+ * Extracted 2026-10-14 from the `ingest` transition so that re-ingest can reach
+ * the same state. The reason it must be shared, not reimplemented: on a
+ * PUBLISHED repo `rag_drain_active` is false (publish clears it, and only this
+ * function ever sets it true — verified: the ingest transition is the single
+ * writer). The worker's claim query filters on `rag_drain_active == true`, so
+ * a requeue without an arm leaves the rows invisible FOREVER. Two copies of this
+ * block would drift; one is the point.
+ *
+ * @param {object} db arango handle
+ * @param {string} repoId
+ * @param {object} repo the loaded registry doc
+ * @param {object} [actor]
+ * @param {object} [opts]
+ * @param {string} [opts.reason] 'ingest' | 're-ingest' — audit wording only
+ * @returns {Promise<{pending:number, done:number}>} pending drives the caller's
+ *   immediate-settle decision, so it MUST come back.
+ */
+async function armRagDrain(db, repoId, repo, actor, opts = {}) {
+  const reason = opts.reason || 'ingest';
+  const pending = await conceptMetaService.countByIndexStatus(repoId, 'parsed');
+  const done = await conceptMetaService.countByIndexStatus(repoId, 'indexed');
+  // NAME AUTHORITY (David's v9 wedge, 2026-09-08): the drain must write the name
+  // that WILL serve — stale row stamps made dataprep resurrect the dropped v8
+  // graph (ensure-graph re-created it at 08:18:41). Stamp every row to this
+  // drain's serving name right before arming.
+  const drainGraphName = graphLifecycle.versionedGraphName(repo);
+  await conceptMetaService.stampRepoGraphName(repoId, drainGraphName);
+  const ts = nowIso();
+  await db.collection(REPOS).update(repoId, {
+    rag_drain_active: true,
+    // COMPLETE FRESH RECORD (David's card-lies catch, 2026-09-09): ArangoDB
+    // update() DEEP-MERGES nested objects, so any key this write omits leaks
+    // from the previous record — a stale failed_concepts from a prior failed
+    // drain survived into a healthy completed card. Every key is written, every
+    // time. Re-ingest depends on this too: the dialog reads the LIVE count from
+    // /metrics rather than this snapshot, precisely because this wipes it.
+    rag_ingestion: {
+      status: pending > 0 ? 'draining' : 'completed',
+      requested_at: ts,
+      finished_at: pending > 0 ? null : ts,
+      concepts_total: pending + done,
+      concepts_done: done,
+      error: null,
+      failed_concepts: [],
+      // COMPLETE FRESH RECORD (review fix #12): the previous drain's queue
+      // context must not survive the deep-merge into this arm.
+      queue: null
+    },
+    updated_at: ts
+  });
+  await audit('repo.rag_drain_armed', repoId, actor, {
+    ingested_version: repo.version || null,
+    description:
+      (reason === 're-ingest'
+        ? 'Re-ingest started — retrying failed concept(s) of version '
+        : 'Ingest started — RAG ingestion of version ') +
+      (repo.version || '?') +
+      ' (' +
+      pending +
+      ' concept(s) to prepare)'
+  });
+  logger.info('OKF RAG drain armed', { repo_id: repoId, pending, version: repo.version, reason });
+  return { pending, done };
+}
+
+/**
  * Apply ONE lifecycle transition.
  * @param {string} repoId
  * @param {string} action one of ACTIONS
@@ -918,46 +986,7 @@ async function transition(repoId, action, actor, opts = {}) {
       // dataprep-free. The version starts serving when the drain completes
       // (the worker settles via _settleIngest; immediate here when there is
       // nothing left to drain).
-      const pending = await conceptMetaService.countByIndexStatus(repoId, 'parsed');
-      const done = await conceptMetaService.countByIndexStatus(repoId, 'indexed');
-      // NAME AUTHORITY (David's v9 wedge, 2026-09-08): the drain must write
-      // the name that WILL serve — stale row stamps made dataprep resurrect
-      // the dropped v8 graph (ensure-graph re-created it at 08:18:41). Stamp
-      // every row to this drain's serving name right before arming.
-      const drainGraphName = graphLifecycle.versionedGraphName(repo);
-      await conceptMetaService.stampRepoGraphName(repoId, drainGraphName);
-      const ts = nowIso();
-      await db.collection(REPOS).update(repoId, {
-        rag_drain_active: true,
-        // COMPLETE FRESH RECORD (David's card-lies catch, 2026-09-09): ArangoDB
-        // update() DEEP-MERGES nested objects, so any key this write omits
-        // leaks from the previous record — a stale failed_concepts from a
-        // prior failed drain survived into a healthy completed card. Every
-        // key is written, every time.
-        rag_ingestion: {
-          status: pending > 0 ? 'draining' : 'completed',
-          requested_at: ts,
-          finished_at: pending > 0 ? null : ts,
-          concepts_total: pending + done,
-          concepts_done: done,
-          error: null,
-          failed_concepts: [],
-          // COMPLETE FRESH RECORD (review fix #12): the previous drain's
-          // queue context must not survive the deep-merge into this arm.
-          queue: null
-        },
-        updated_at: ts
-      });
-      await audit('repo.rag_drain_armed', repoId, actor, {
-        ingested_version: repo.version || null,
-        description:
-          'Ingest started — RAG ingestion of version ' +
-          (repo.version || '?') +
-          ' (' +
-          pending +
-          ' concept(s) to prepare)'
-      });
-      logger.info('OKF RAG drain armed at ingest', { repo_id: repoId, pending, version: repo.version });
+      const { pending, done } = await armRagDrain(db, repoId, repo, actor, { reason: 'ingest' });
       if (pending === 0) {
         // Everything already drained (re-ingest) — settle immediately.
         const fresh = await loadRepo(db, repoId);
@@ -1116,6 +1145,100 @@ async function transition(repoId, action, actor, opts = {}) {
 }
 
 /**
+ * RE-INGEST guard (David, 2026-10-14: "the Re-Ingest menu must only be
+ * available after a repo is ingested"). Deliberately NOT assertWritable — that
+ * one 409s REPO_READ_ONLY on ingested_at, which is precisely the state this
+ * action exists to serve. The two guards are complements, not alternatives.
+ *
+ * Two refusals, both honest:
+ *  - not ingested → nothing has ever been indexed, so nothing can have failed
+ *  - drain in flight → a second arm would race the running drain
+ * @param {object} repo the registry doc
+ */
+function assertReingestable(repo) {
+  if (!repo || !repo.ingested_at) {
+    throw new LifecycleError(
+      'NOT_INGESTED',
+      'the repository has not been ingested yet — there is nothing to re-ingest',
+      409
+    );
+  }
+  if (repo.rag_drain_active === true) {
+    throw new LifecycleError(
+      'DRAIN_IN_PROGRESS',
+      'a RAG drain is already running for this repository — wait for it to settle',
+      409
+    );
+  }
+}
+
+/**
+ * RE-INGEST FAILED CONCEPTS (David, 2026-10-14). The recovery path the product
+ * already promised and never built.
+ *
+ * WHY NOT JUST CALL transition('ingest'): it short-circuits with `already: true`
+ * when ingested_version === version, which is true for every currently-ingested
+ * repo (verified live: Solar System 1/1, NCD 6/6). It would be a silent no-op.
+ *
+ * WHY IT MUST ALSO ARM: on a published repo rag_drain_active is false (publish
+ * clears it and armRagDrain is the only writer). The worker's claim query filters
+ * on it, so requeue-without-arm strands the rows invisibly.
+ *
+ * WHY NOTHING-TO-DO DOES NOT ARM: arming with zero pending would pin
+ * rag_drain_active true against a 'completed' record, and assertWritable's drain
+ * branch then freezes every write on the repo with no drain in flight to settle
+ * it. Refusing to arm on an empty requeue is the difference between a no-op and
+ * a wedge.
+ *
+ * @param {string} repoId
+ * @param {object} [opts]
+ * @param {string} [opts.conceptId] retry ONE concept; omitted = all failed
+ * @param {object} [actor] { sub, name }
+ */
+async function reingestFailed(repoId, opts = {}, actor = {}) {
+  if (!repoId) return { ok: false, code: 'REPO_ID_REQUIRED', requeued: 0 };
+  const db = await getDb();
+  const repo = await loadRepo(db, repoId);
+  if (!repo || repo.deleted_at) {
+    throw new LifecycleError('NOT_FOUND', 'repository not found', 404);
+  }
+  assertReingestable(repo);
+
+  const { requeued, conceptIds } = await conceptMetaService.requeueFailedForReingest(repoId, {
+    conceptId: opts.conceptId || null
+  });
+
+  if (requeued === 0) {
+    logger.info('OKF re-ingest: nothing failed to retry', {
+      repo_id: repoId,
+      concept_id: opts.conceptId || null
+    });
+    await audit('repo.reingest', repoId, actor, {
+      description: 'Re-ingest requested but no failed concept(s) to retry',
+      details: { requeued: 0, concept_id: opts.conceptId || null }
+    });
+    return { ok: true, requeued: 0, conceptIds: [] };
+  }
+
+  const { pending } = await armRagDrain(db, repoId, repo, actor, { reason: 're-ingest' });
+  await audit('repo.reingest', repoId, actor, {
+    description:
+      'Re-ingest — retried ' +
+      requeued +
+      ' failed concept(s)' +
+      (opts.conceptId ? ' (' + opts.conceptId + ')' : ''),
+    details: { requeued, pending, concept_ids: conceptIds, concept_id: opts.conceptId || null }
+  });
+  logger.info('OKF re-ingest armed', {
+    repo_id: repoId,
+    requeued,
+    pending,
+    concept_id: opts.conceptId || null
+  });
+  return { ok: true, requeued, pending, conceptIds };
+}
+
+/**
  * READ-ONLY guard (David, 2026-08-30): a SERVING repo (ingested_at set) must
  * refuse every content mutation. Call after the getById pre-gate in every
  * mutating handler (concepts, repo update, publish). 409 REPO_READ_ONLY.
@@ -1147,6 +1270,9 @@ module.exports = {
   transition,
   _settleIngest,
   assertWritable,
+  reingestFailed,
+  assertReingestable,
+  armRagDrain,
   buildingBlocker, // unit-tested directly (gate contract)
   sourcesBusyBlocker, // Story 7.7 — unit-tested directly (gate contract)
   TRANSITIONS,

@@ -1740,3 +1740,160 @@ describe('POST /api/okf/repos/:repo_id/pii-scan {"scope":"concepts"} + poll', ()
     expect(piiService.markRepoPiiScanned).not.toHaveBeenCalled();
   });
 });
+
+// ── RE-INGEST FAILED CONCEPTS (David, 2026-10-14) ──
+// lifecycle-service is NOT module-mocked in this file (no other test touches
+// it), so these use spyOn rather than a file-wide jest.mock: surgical, and it
+// cannot perturb the other ~40 suites in here.
+describe('POST /api/okf/repos/:repo_id/reingest-failed', () => {
+  let lifecycleService;
+  let assertSpy;
+  let reingestSpy;
+
+  const INGESTED = {
+    repo_id: 'repoA',
+    lifecycle_state: 'publish',
+    version: 2,
+    ingested_version: 2,
+    ingested_at: '2026-10-01T00:00:00.000Z',
+    rag_drain_active: false
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+    lifecycleService = require('../services/lifecycle-service');
+    assertSpy = jest.spyOn(lifecycleService, 'assertReingestable').mockImplementation(() => {});
+    reingestSpy = jest
+      .spyOn(lifecycleService, 'reingestFailed')
+      .mockResolvedValue({ ok: true, requeued: 2, pending: 2, conceptIds: ['c1', 'c2'] });
+  });
+
+  afterEach(() => {
+    assertSpy.mockRestore();
+    reingestSpy.mockRestore();
+  });
+
+  test('200 admin scope → returns the requeued count and ids', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue(INGESTED);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/reingest-failed')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, repo_id: 'repoA', requeued: 2, concept_ids: ['c1', 'c2'] });
+    expect(reingestSpy).toHaveBeenCalledWith('repoA', { conceptId: null }, expect.objectContaining({ sub: 'steward-1' }));
+  });
+
+  test('200 — zero requeued is a success, not an error', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue(INGESTED);
+    reingestSpy.mockResolvedValue({ ok: true, requeued: 0, conceptIds: [] });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/reingest-failed')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, requeued: 0 });
+  });
+
+  test('409 NOT_INGESTED before ingestion — David: only after a repo is ingested', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ ...INGESTED, ingested_at: null });
+    // Let the REAL guard run so the contract itself is under test.
+    assertSpy.mockRestore();
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/reingest-failed')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(409);
+    expect(reingestSpy).not.toHaveBeenCalled();
+  });
+
+  test('409 DRAIN_IN_PROGRESS while a drain is armed', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ ...INGESTED, rag_drain_active: true });
+    assertSpy.mockRestore();
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/reingest-failed')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(409);
+    expect(reingestSpy).not.toHaveBeenCalled();
+  });
+
+  // The guard is INVERTED vs every other mutating route: re-ingest is the ONE
+  // action that must work on a serving repo, so a blanket REPO_READ_ONLY would
+  // make the feature unreachable.
+  test('an INGESTED repo is NOT refused as read-only', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue(INGESTED);
+    assertSpy.mockRestore();
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/reingest-failed')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+  });
+
+  test('403 with read-scope only — and the service is NEVER reached', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    repoService.getById.mockResolvedValue(INGESTED);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/reingest-failed')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(403);
+    expect(reingestSpy).not.toHaveBeenCalled();
+    expect(assertSpy).not.toHaveBeenCalled();
+  });
+
+  test('404 when getById resolves null (foreign repo, anti-enumeration)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue(null);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/reingest-failed')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(400);
+    expect(reingestSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/okf/repos/:repo_id/concepts/:concept_id/reingest', () => {
+  let assertSpy;
+  let reingestSpy;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+    const lifecycleService = require('../services/lifecycle-service');
+    assertSpy = jest.spyOn(lifecycleService, 'assertReingestable').mockImplementation(() => {});
+    reingestSpy = jest
+      .spyOn(lifecycleService, 'reingestFailed')
+      .mockResolvedValue({ ok: true, requeued: 1, pending: 1, conceptIds: ['sec99'] });
+  });
+
+  afterEach(() => {
+    assertSpy.mockRestore();
+    reingestSpy.mockRestore();
+  });
+
+  test('200 → scopes to the ONE concept in the path', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', lifecycle_state: 'publish', ingested_at: 'x' });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/concepts/pds4-dph-1-26-0-sec99/reingest')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, concept_id: 'pds4-dph-1-26-0-sec99', requeued: 1 });
+    expect(reingestSpy).toHaveBeenCalledWith(
+      'repoA',
+      { conceptId: 'pds4-dph-1-26-0-sec99' },
+      expect.objectContaining({ sub: 'steward-1' })
+    );
+  });
+
+  test('403 with read-scope only', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/concepts/sec99/reingest')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(403);
+    expect(reingestSpy).not.toHaveBeenCalled();
+  });
+});

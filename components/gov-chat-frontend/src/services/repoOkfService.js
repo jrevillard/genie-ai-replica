@@ -418,6 +418,28 @@ const repoOkfService = {
   },
 
   /**
+   * RE-INGEST FAILED CONCEPTS (David, 2026-10-14).
+   *
+   * The recovery path the drain's dead-letter text has always promised
+   * ("recovery = re-ingest") and that never existed — the only way to retry a
+   * failed concept was retracting the whole repo, which drops the serving graph
+   * and re-ingests everything.
+   *
+   * Server-side this requeues ONLY rows at index_status='failed' AND re-arms the
+   * RAG drain (a requeue alone is invisible to the worker on a published repo,
+   * because the drain is disarmed there). Repos-only: 409 NOT_INGESTED before
+   * ingestion, 409 DRAIN_IN_PROGRESS while a drain runs.
+   *
+   * Omit conceptId for the whole repo; pass one for a single row.
+   */
+  async reingestFailed(repoId, { conceptId } = {}, actor = {}) {
+    const base = `/okf/repos/${encodeURIComponent(repoId)}`;
+    const path = conceptId ? `${base}/concepts/${encodeURIComponent(conceptId)}/reingest` : `${base}/reingest-failed`;
+    const res = await httpService.post(path, {}, { headers: { 'x-actor-sub': actor.sub } });
+    return res && res.data ? res.data : { ok: false };
+  },
+
+  /**
    * PII RE-SCAN — THE PERSISTING PER-CONCEPT SCAN (2026-10-12).
    *
    * WHY THIS EXISTS. `inspectPii` is documented server-side as "Nothing

@@ -237,8 +237,13 @@ spec:
               value: {{ eq ((.Values.data.keycloak.internationalizationEnabled | default true) | toString) "true" | quote }}
             - name: KEYCLOAK_LOCALE
               value: {{ .Values.data.keycloak.defaultLocale | quote }}
+            # JSON array literal, not a comma-joined string: the realm
+            # file's supportedLocales is a list field, and kcc's textual
+            # substitution must inject a parseable JSON array (compose
+            # passes the same shape). A CSV here fails the import with
+            # "Cannot construct instance of java.util.HashSet".
             - name: KEYCLOAK_SUPPORTED_LOCALES
-              value: {{ .Values.data.keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans") | join "," | quote }}
+              value: {{ .Values.data.keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans") | toJson | quote }}
             - name: KEYCLOAK_ACCESS_TOKEN_LIFESPAN
               value: {{ .Values.data.keycloak.accessTokenLifespan | default 300 | quote }}
             # Secret-backed parameters, one row per operator-declared entry.

@@ -55,6 +55,13 @@ spec:
             storage: {{ .Values.data.arangodb.storageSize | default "50Gi" }}
   auth:
     jwtSecretName: arango-jwt-secret
+  # Plain HTTP on 8529. The operator enables TLS by default (per-deployment
+  # self-signed CA); every in-cluster consumer (backend, doc-repo, dataprep)
+  # connects with http:// URLs and carries no CA trust store, so TLS would
+  # require distributing the CA secret to each client. `caSecretName: None`
+  # is the operator's documented off-switch (kube-arangodb docs/tls.html).
+  tls:
+    caSecretName: None
   # Root password bootstrap: passwordSecretNames is a map of username to
   # Secret name (kube-arangodb 1.4.5 BootstrapSpec). The referenced Secret
   # must carry basic-auth keys (`username`, `password`); without this wiring
@@ -123,6 +130,9 @@ spec:
       - --experimental-vector-index=true
   auth:
     jwtSecretName: arango-jwt-secret
+  # Plain HTTP — see the `Single` branch for the rationale.
+  tls:
+    caSecretName: None
   bootstrap:
     passwordSecretNames:
       root: arango-root-secret

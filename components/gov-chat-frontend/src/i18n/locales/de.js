@@ -1649,9 +1649,10 @@ export default {
         bulkRemove: 'Alle entfernen',
         loadProgress: 'Dateien werden geladen {done}/{total}',
         addSource: '+ From documents',
-        reingest: 'Re-ingest this concept',
-        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
-        reingestFailed: 'Re-ingest failed — try again.'
+        reingest: 'Dieses Konzept erneut ingestieren',
+        reingestBusy:
+          'Für dieses Repository läuft bereits ein RAG-Ingest — warte auf dessen Abschluss und versuche es dann erneut.',
+        reingestFailed: 'Erneutes Ingest fehlgeschlagen — bitte erneut versuchen.'
       },
       delete: {
         body: 'Dies entfernt die Datei, ihre indexierten Chunks und ihre Graph-Verknüpfungen dauerhaft.',
@@ -1833,13 +1834,13 @@ export default {
         retracted: 'Nichts zurückgezogen'
       },
       reingest: {
-        failed: 'Re-ingest failed',
-        title: 'Re-ingest failed concepts',
-        confirm: 'Re-ingest failed',
-        counting: 'Checking how many concepts failed…',
-        countFailed: 'Could not read the failed-concept count. Try again.',
-        none: '{name} has no failed concepts — every concept indexed successfully.',
-        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+        failed: 'Erneutes Ingest fehlgeschlagen ({n})',
+        title: 'Fehlgeschlagene Konzepte erneut ingestieren',
+        confirm: 'Erneut ingestieren',
+        counting: 'Es wird geprüft, wie viele Konzepte fehlgeschlagen sind…',
+        countFailed: 'Die Anzahl der fehlgeschlagenen Konzepte konnte nicht gelesen werden. Bitte erneut versuchen.',
+        none: '{name} hat keine fehlgeschlagenen Konzepte — jedes Konzept wurde erfolgreich indiziert.',
+        body: '{n} Konzept(e) von {name} konnten nicht indiziert werden und fehlen in RAG. Das erneute Ingest versucht nur diese; indizierte Konzepte bleiben unverändert. Schlägt es erneut fehl, wird der Fehler am Konzept angezeigt.'
       }
     },
     build: {

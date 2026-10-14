@@ -651,15 +651,39 @@ describe('concept-meta-service.requeueFailedForReingest', () => {
     expect(mockDb.query.mock.calls[0][1]).toEqual({ rid: 'r1', cid: 'c9' });
   });
 
-  // FALSIFIER: the repo-wide call must not carry a concept filter at all. A
-  // template that always emitted "FILTER m.concept_id == @cid" would silently
-  // retry ZERO concepts repo-wide — the exact bug class this suite exists for.
-  it('repo-wide call carries NO concept filter', async () => {
+  // FALSIFIER — and the half the first version of this suite MISSED.
+  //
+  // Asserting only the AQL string is not enough. ArangoDB rejects any bind
+  // value the query does not reference, so a query that correctly omits
+  // "@cid" still 500s if the code passes `cid: null` alongside it. That is
+  // exactly what shipped: the string assertion passed, and the repo-wide call
+  // failed live with "bind parameter 'cid' was not declared in the query".
+  // Both halves of the call are now asserted.
+  it('repo-wide call omits BOTH the concept filter AND the cid bind', async () => {
     mockDb.query.mockResolvedValueOnce({ all: async () => [] });
     await conceptMeta.requeueFailedForReingest('r1');
-    const aqlText = String(mockDb.query.mock.calls[0][0]);
-    expect(aqlText).not.toContain('@cid');
-    expect(aqlText).not.toContain('concept_id ==');
+    const [aqlText, binds] = mockDb.query.mock.calls[0];
+    expect(String(aqlText)).not.toContain('@cid');
+    expect(String(aqlText)).not.toContain('concept_id ==');
+    expect(Object.keys(binds)).toEqual(['rid']);
+    expect(binds).not.toHaveProperty('cid');
+  });
+
+  // The inverse: every bind the query DOES reference must be supplied, or the
+  // query fails the other way round ("no value passed for bind parameter").
+  it('every @param in the query has a matching bind value', async () => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+    for (const opts of [{}, { conceptId: 'c7' }]) {
+      mockDb.query.mockReset();
+      mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+      await conceptMeta.requeueFailedForReingest('r1', opts);
+      const [aqlText, binds] = mockDb.query.mock.calls[0];
+      const referenced = [...String(aqlText).matchAll(/@([a-zA-Z_][a-zA-Z0-9_]*)/g)].map((m) => m[1]);
+      expect(new Set(referenced).size).toBeGreaterThan(0);
+      referenced.forEach((name) => expect(binds).toHaveProperty(name));
+      // …and no bind is left dangling.
+      Object.keys(binds).forEach((name) => expect(referenced).toContain(name));
+    }
   });
 
   it('returns an empty result for a falsy repo without touching the db', async () => {

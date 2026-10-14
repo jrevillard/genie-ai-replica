@@ -1611,9 +1611,9 @@ export default {
         bulkRemove: '全部移除',
         loadProgress: '正在加载文件 {done}/{total}',
         addSource: '+ From documents',
-        reingest: 'Re-ingest this concept',
-        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
-        reingestFailed: 'Re-ingest failed — try again.'
+        reingest: '重新摄取此概念',
+        reingestBusy: '该存储库已有 RAG 摄取任务正在运行——请等待其完成后再重试。',
+        reingestFailed: '重新摄取失败——请重试。'
       },
       delete: {
         body: '此操作将永久移除该文件及其已索引分块和图谱链接。',
@@ -1789,13 +1789,13 @@ export default {
         retracted: '未撤回任何内容'
       },
       reingest: {
-        failed: 'Re-ingest failed',
-        title: 'Re-ingest failed concepts',
-        confirm: 'Re-ingest failed',
-        counting: 'Checking how many concepts failed…',
-        countFailed: 'Could not read the failed-concept count. Try again.',
-        none: '{name} has no failed concepts — every concept indexed successfully.',
-        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+        failed: '重新摄取失败 ({n})',
+        title: '重新摄取失败的概念',
+        confirm: '重新摄取',
+        counting: '正在检查有多少个概念失败…',
+        countFailed: '无法读取失败概念的数量。请重试。',
+        none: '{name} 没有失败的概念——所有概念都已成功建立索引。',
+        body: '{name} 中有 {n} 个概念建立索引失败，因此未包含在 RAG 中。重新摄取只会重试这些概念；已建立索引的概念不会受影响。如果再次失败，错误将显示在该概念上。'
       }
     },
     build: {

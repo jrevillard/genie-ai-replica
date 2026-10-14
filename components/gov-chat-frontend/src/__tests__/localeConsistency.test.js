@@ -131,7 +131,9 @@ describe('Locale consistency', () => {
     'okf.src.uploaded',
     'okf.steps.input.benchCount',
     'okf.steps.input.moreN',
-    // Re-ingest dialog (David, 2026-10-14) — both interpolated with .replace().
+    // Re-ingest (David, 2026-10-14) — all three interpolated with .replace().
+    // `failed` is the card label: "Re-ingest failed ({n})".
+    'okf.dashboard.reingest.failed',
     'okf.dashboard.reingest.body',
     'okf.dashboard.reingest.none',
     // #1039 batch (2026-10-03): Step-7 keys consumed via .replace()

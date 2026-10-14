@@ -1626,9 +1626,9 @@ export default {
         bulkRemove: 'Abee kuntu',
         loadProgress: 'Kōdāl̦o̦k fail ko {done}/{total}',
         addSource: '+ From documents',
-        reingest: 'Re-ingest this concept',
-        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
-        reingestFailed: 'Re-ingest failed — try again.'
+        reingest: 'Ingest nyiningo miroolu n’i',
+        reingestBusy: 'Ingest RAG dang baara e kafuolu n’i — sundi a bɔ, n’i la ñining tugung.',
+        reingestFailed: 'Ingest nyiningo ear l̦apier — ñining tugung.'
       },
       delete: {
         body: 'Men in enaj jol̦o̦k fail eo, kōkōm̧bōļ ko em̦ōj laajraki, im kebaake ko an graf indreo.',
@@ -1804,13 +1804,13 @@ export default {
         retracted: 'Hani fengo mang sayi folo'
       },
       reingest: {
-        failed: 'Re-ingest failed',
-        title: 'Re-ingest failed concepts',
-        confirm: 'Re-ingest failed',
-        counting: 'Checking how many concepts failed…',
-        countFailed: 'Could not read the failed-concept count. Try again.',
-        none: '{name} has no failed concepts — every concept indexed successfully.',
-        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+        failed: 'Ingest nyiningo ear l̦apier ({n})',
+        title: 'Ingest nyiningo miroolu dinno l̦apier',
+        confirm: 'Ingest nyiningo',
+        counting: 'A yelema kiden miroolu l̦apier…',
+        countFailed: 'A man sogo kiden miroolu l̦apier. Ñining tugung.',
+        none: '{name} man fennd miroolu l̦apier — miroolu bees nyina a dunta.',
+        body: 'Miroolu {n} labo {name} l̦apier a mara, ko man koo RAG. Ingest nyiningo bai a nyini wooɗɗa fii n’i tirra; miroolu dinno dunta man dɔn. N’i labe a mara bi nyini, filiyata bai yelema fii miroolu.'
       }
     },
     build: {

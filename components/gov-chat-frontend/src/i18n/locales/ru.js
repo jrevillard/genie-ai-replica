@@ -1641,9 +1641,10 @@ export default {
         bulkRemove: 'Удалить всё',
         loadProgress: 'Загрузка файлов: {done}/{total}',
         addSource: '+ From documents',
-        reingest: 'Re-ingest this concept',
-        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
-        reingestFailed: 'Re-ingest failed — try again.'
+        reingest: 'Обработать эту концепцию заново',
+        reingestBusy:
+          'Для этого репозитория уже выполняется обработка RAG — дождитесь её завершения и повторите попытку.',
+        reingestFailed: 'Не удалось повторить обработку — попробуйте ещё раз.'
       },
       delete: {
         body: 'Это действие навсегда удалит файл, его проиндексированные фрагменты и связи в графе.',
@@ -1825,13 +1826,13 @@ export default {
         retracted: 'Ничего не отозвано'
       },
       reingest: {
-        failed: 'Re-ingest failed',
-        title: 'Re-ingest failed concepts',
-        confirm: 'Re-ingest failed',
-        counting: 'Checking how many concepts failed…',
-        countFailed: 'Could not read the failed-concept count. Try again.',
-        none: '{name} has no failed concepts — every concept indexed successfully.',
-        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+        failed: 'Не удалось повторить обработку ({n})',
+        title: 'Повторная обработка неудачных концепций',
+        confirm: 'Обработать заново',
+        counting: 'Проверка количества неудачных концепций…',
+        countFailed: 'Не удалось получить количество неудачных концепций. Повторите попытку.',
+        none: 'В {name} нет неудачных концепций — все концепции успешно проиндексированы.',
+        body: '{n} концепци(й) из {name} не удалось проиндексировать, они отсутствуют в RAG. Повторная обработка затрагивает только их; проиндексированные концепции остаются без изменений. Если она снова завершится ошибкой, ошибка будет показана на самой концепции.'
       }
     },
     build: {

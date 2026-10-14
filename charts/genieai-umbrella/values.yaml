@@ -493,7 +493,16 @@ services:
     # (uid 100).
     securityContext:
       runAsNonRoot: true
-      runAsUser: 100
+      # The image's clamav user is uid/gid 1000 (verified via
+      # `docker run --rm --entrypoint sh clamav/clamav:stable-debian
+      # -c "grep clamav /etc/passwd"`). Earlier revisions used 100
+      # and the entrypoint's `freshclam` failed with "Failed to
+      # open log file /var/log/clamav/freshclam.log: Permission
+      # denied" — /var/log/clamav is owned 1000:1000 in the image
+      # and uid 100 cannot write there. Container-level runAsUser
+      # overrides the pod-level; redeclared here so the values.yaml
+      # block stays the source of truth.
+      runAsUser: 1000
       allowPrivilegeEscalation: false
       # ClamAV's writable paths in the runtime image are tmpfs-mounted
       # (/tmp, /run) or backed by an explicit volume mounted at
@@ -501,7 +510,12 @@ services:
       # read-only root filesystem keeps the on-disk attack surface
       # limited to those mount points.
       readOnlyRootFilesystem: true
-      capabilities: { drop: ["ALL"] }
+      # Drop only NET_RAW: the upstream default drops ALL, which
+      # also drops CHOWN. /init-unprivileged no longer runs the
+      # chown that broke earlier revisions, but keeping CHOWN out
+      # of the drop list is the belt-and-braces move for any
+      # future entrypoint that needs it.
+      capabilities: { drop: ["NET_RAW"] }
     resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { cpu: 1, memory: 1Gi } }
     env: []
     secrets: []

@@ -4,6 +4,7 @@
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import suppress
 from typing import Any
 
 import openai
@@ -1294,9 +1295,35 @@ class GenieaiArangoRetriever(OpeaComponent):
             if enable_summarizer:
                 for r in search_res:
                     prompt = self.generate_summarization_prompt(query, r["doc"].page_content)
-                    res = self._get_llm().invoke(prompt)
-                    summarized_text = res.content
-
+                    try:
+                        res = self._get_llm().invoke(prompt)
+                        summarized_text = res.content
+                    except Exception as _e_sum:
+                        # Fail-loud on vLLM context overflow: skip summarization
+                        # rather than bubble a 500 to the chatqna orchestrator.
+                        # Same marker set as dataprep + chatqna translation; the
+                        # shared "fail-loud" pattern keeps overflow attribution
+                        # consistent across the overlay.
+                        _msg = (str(_e_sum) or "").lower()
+                        if any(
+                            m in _msg
+                            for m in (
+                                "context length",
+                                "context_length_exceeded",
+                                "maximum context length",
+                                "reduce the length",
+                                "context window",
+                                "string too long",
+                            )
+                        ):
+                            logger.warning(
+                                f"Summarizer skipped: vLLM context overflow for {r['doc'].id!r}: "
+                                f"{type(_e_sum).__name__}: {str(_e_sum)[:200]}"
+                            )
+                            with suppress(Exception):
+                                span.set_attribute("retriever.summarizer.input_too_long", True)
+                            continue
+                        raise
                     logger.info(f"Summarized {r['doc'].id}")
 
                     r["doc"].page_content = summarized_text

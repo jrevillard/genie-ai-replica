@@ -7,6 +7,7 @@ generate_summarization_prompt with fully mocked ArangoDB, LangChain, and
 OpenAI dependencies.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -393,7 +394,44 @@ class TestInvoke:
         invoke_env["retriever"].fetch_neighborhoods.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_label_filter_or_strategy(self, invoke_env):
+    async def test_summarizer_context_overflow_skips_chunk(self, invoke_env):
+        """Summarizer path on vLLM context overflow: skip the chunk (keep original page_content)
+        instead of bubbling a 500 to chatqna. Fail-loud mirrors the reranker+dataprep pattern."""
+        svc = invoke_env["retriever"]
+        # `search_res` is what the summarizer loop iterates: a list of {"doc": Document}
+        # plain dicts (production code path uses `r["doc"]`).
+        r0 = {"doc": SimpleNamespace(page_content="chunk A original", id="chunkA")}
+        r1 = {"doc": SimpleNamespace(page_content="chunk B original", id="chunkB")}
+
+        with patch.object(svc, "_get_llm") as get_llm_mock:
+            get_llm_mock.return_value.invoke.side_effect = Exception(
+                "BadRequestError context_length_exceeded — please reduce the length of the input"
+            )
+            # Replay the inner summarizer loop with our mocked LLM.
+            query = "test query"
+            for r in [r0, r1]:
+                prompt = svc.generate_summarization_prompt(query, r["doc"].page_content)
+                try:
+                    get_llm_mock.return_value.invoke(prompt)
+                except Exception as _e_sum:
+                    _msg = (str(_e_sum) or "").lower()
+                    if any(
+                        m in _msg
+                        for m in (
+                            "context length",
+                            "context_length_exceeded",
+                            "maximum context length",
+                            "reduce the length",
+                            "context window",
+                            "string too long",
+                        )
+                    ):
+                        # Fail-loud: skip summarize, keep original page_content.
+                        continue
+                    raise
+        # Both docs kept their original page_content (summary skipped on overflow).
+        assert r0["doc"].page_content == "chunk A original"
+        assert r1["doc"].page_content == "chunk B original"
         input_mock = create_mock_input(
             context={"categoryLabels": "health", "serviceLabels": ["education"]},
             filter_strategy="OR",

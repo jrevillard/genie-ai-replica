@@ -76,6 +76,41 @@ class _RerankerInputTooLongError(Exception):
     """
 
 
+class TranslationInputTooLongError(RuntimeError):
+    """Raised when the translation service rejects a chunk for context-length overflow.
+
+    Server-side fail-loud: triggered by HTTP 400 with ``context_length_exceeded``
+    / ``maximum context length`` markers in the response body. The translation
+    path runs synchronously inside handle_request's chat flow (unlike dataprep's
+    async-fire-and-forget ingest). Failure-mode contract: a fail-loud typed
+    exception lets the route layer map this to HTTP 422 so the BFF chat UI
+    surfaces the translation failure instead of silently passing through a
+    half-translated / English fallback that breaks the multilingual UX
+    (issue #829).
+    """
+
+
+# Token-budget markers in vLLM/OpenAI error bodies. Shared with the dataprep
+# fail-loud pattern (dataprep/genieai_dataprep_arangodb.py).
+_TRANSLATE_INPUT_OVERFLOW_MARKERS = (
+    "context length",
+    "context_length_exceeded",
+    "maximum context length",
+    "reduce the length",
+    "context window",
+    "string too long",
+)
+
+
+def _is_translate_input_overflow(exc: BaseException) -> bool:
+    """True if a translation httpx/openai error is a context-length rejection."""
+    try:
+        msg = (str(exc) or "").lower()
+    except Exception:
+        return False
+    return any(marker in msg for marker in _TRANSLATE_INPUT_OVERFLOW_MARKERS)
+
+
 # Protocol marker carried in the reranker microservice's 422 body
 # (detail.error_type) and in wrapped exception messages. Both detection
 # points (align_outputs body check + the defensive chain walk) key on it.
@@ -2225,6 +2260,10 @@ class ChatQnAService:
         Automatically uses TranslateGemma completions API (with pre-formatted prompt)
         or generic chat completions format based on the configured VLLM_TRANSLATION_MODEL_ID.
 
+        Response-side fail-loud: when the translation service returns a 400
+        with a context-overflow marker, raise ``TranslationInputTooLongError``
+        instead of silently returning the English source text (issue #829).
+
         Args:
             text: Text to translate.
             target_lang: Target language name (e.g. "Sesotho").
@@ -2288,6 +2327,15 @@ class ChatQnAService:
                 else:
                     return response_data["choices"][0]["message"]["content"].strip()
         except Exception as e:
+            # Fail-loud on vLLM context overflow: silently returning the
+            # original English text breaks the multilingual UX (#829). Classify
+            # by the HTTP body / error text and raise TranslationInputTooLongError
+            # so the route layer maps this to a 422 the BFF can surface.
+            if _is_translate_input_overflow(e):
+                logger.warning(f"Translation context overflow: {type(e).__name__}: {str(e)[:200]}")
+                raise TranslationInputTooLongError(
+                    f"translation chunk exceeds VLLM_TRANSLATION_MAX_MODEL_LEN: {type(e).__name__}: {str(e)[:200]}"
+                ) from e
             logger.warning(f"Failed to translate chunk, returning original: {type(e).__name__}: {e}")
             return text
 

@@ -1706,6 +1706,27 @@ class TestTranslationHelpers:
         assert result == "Original text"
 
     @pytest.mark.asyncio
+    async def test_translate_text_chunk_context_overflow_raises_typed(self):
+        """vLLM context overflow on translation raises TranslationInputTooLongError
+        instead of silently returning the English source (multilingual UX issue #829)."""
+        from chatqna.genieai_chatqna import TranslationInputTooLongError
+
+        svc = create_chatqna_service()
+        with (
+            patch(
+                "chatqna.genieai_chatqna.httpx.AsyncClient",
+                side_effect=Exception(
+                    "HTTP 400: BadRequestError - context length exceeded (max 2048 tokens). "
+                    "Please reduce the length of the input."
+                ),
+            ),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            pytest.raises(TranslationInputTooLongError),
+        ):
+            await svc._translate_text_chunk("x" * 10000, "French")
+
+    @pytest.mark.asyncio
     async def test_translate_with_chunking(self):
         svc = create_chatqna_service()
         call_count = 0

@@ -659,4 +659,84 @@ describe('Configuration Validation Suite', () => {
     });
   });
 
+  // --- AC8: Contextual Retrieval knobs agree across compose and ansible -----
+  //
+  // The doc-context budget shipped as a hardcoded 6000 in docker-compose while
+  // the Python default was 100000 and three docs said 100000 — four surfaces,
+  // three answers, and 1,291 of 2,258 concept documents silently truncated
+  // because nobody could tell which one was live. AC7 could not catch it: its
+  // parity scope regex only matched DATAPREP_URL, so the whole contextual
+  // family sat outside the gate, and env.j2's `{% if %}` guards meant the vars
+  // carried no literal default for the comparison to read.
+  //
+  // The budget is now derived from VLLM_MAX_MODEL_LEN, which makes agreement
+  // between these surfaces load-bearing rather than cosmetic.
+  describe('AC8: Contextual Retrieval defaults agree across compose and ansible', () => {
+    const composeLines = fs.readFileSync(COMPOSE_FILE, 'utf8').split(/\r?\n/);
+    const blockStart = composeLines.findIndex((l) => /^  dataprep-arango-service:/.test(l));
+    let blockEnd = blockStart + 1;
+    while (blockEnd < composeLines.length && !/^  [a-z0-9-]+:/.test(composeLines[blockEnd])) blockEnd += 1;
+    const dataprepBlock = composeLines.slice(blockStart, blockEnd).join('\n');
+
+    const composeDefaults = {};
+    for (const m of dataprepBlock.matchAll(/\b([A-Z][A-Z0-9_]+):\s*\$\{\1(?::-([^}]*))?\}/g)) {
+      composeDefaults[m[1]] = m[2] === undefined ? '' : m[2];
+    }
+
+    const ansibleVars = parseAnsibleEnvVars(
+      fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+    );
+
+    const FAMILY = [
+      'DATAPREP_CONTEXTUAL_DOC_BUDGET',
+      'DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL',
+      'DATAPREP_CONTEXTUAL_MAX_TOKENS',
+      'CONTEXTUAL_STRATEGY',
+      'CONTEXTUAL_RETRIEVAL_ENABLED',
+      'CONTEXTUAL_LABEL_RAW',
+    ];
+
+    test('the dataprep compose block parsed (guard — a silent re-scope must not pass)', () => {
+      expect(blockStart).toBeGreaterThan(-1);
+      expect(blockEnd).toBeGreaterThan(blockStart);
+      for (const v of FAMILY) expect(composeDefaults[v]).toBeDefined();
+    });
+
+    test('compose and env.j2 agree on every contextual default', () => {
+      const problems = [];
+      for (const v of FAMILY) {
+        const a = ansibleVars[v];
+        if (!a) {
+          problems.push(`${v}: not emitted by env.j2`);
+          continue;
+        }
+        if (a.count !== 1) problems.push(`${v}: emitted ${a.count}x by env.j2 (last-wins shadowing)`);
+        if (a.default === null) {
+          problems.push(`${v}: env.j2 carries no literal default, so compose silently wins`);
+          continue;
+        }
+        if (a.default !== composeDefaults[v]) problems.push(`${v}: compose=${composeDefaults[v]} ansible=${a.default}`);
+      }
+      expect(problems).toEqual([]);
+    });
+
+    test('the doc-context budget is derived, not a fixed literal', () => {
+      // 0 = derive from VLLM_MAX_MODEL_LEN. A non-zero compose default would
+      // silently reinstate the one-number-for-every-hardware bug, because
+      // compose ALWAYS injects the variable — so "unset" never reaches Python.
+      expect(composeDefaults.DATAPREP_CONTEXTUAL_DOC_BUDGET).toBe('0');
+    });
+
+    test('CONTEXTUAL_STRATEGY defaults to per_chunk on both surfaces', () => {
+      // Two docs claimed a doc_level compose default; compose is per_chunk.
+      expect(composeDefaults.CONTEXTUAL_STRATEGY).toBe('per_chunk');
+      expect(ansibleVars.CONTEXTUAL_STRATEGY.default).toBe('per_chunk');
+    });
+
+    test('Contextual Retrieval and decoupled labelling are ON by default', () => {
+      // group_vars/all.yml documented both as false; code and compose say true.
+      expect(composeDefaults.CONTEXTUAL_RETRIEVAL_ENABLED).toBe('true');
+      expect(composeDefaults.CONTEXTUAL_LABEL_RAW).toBe('true');
+    });
+  });
 });

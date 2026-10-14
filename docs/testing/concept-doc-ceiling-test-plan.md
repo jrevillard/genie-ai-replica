@@ -246,7 +246,8 @@ largest decompressed is **109.4 MB < 128 MiB** (24 MiB spare).
 | 5 | Leave **Concept classification** at **Heuristics (default)** | dialog, field 4 | LLM-assisted / Hybrid exist but are slower — no reason to change it for this test |
 | 6 | Click **Create repository** | dialog, footer | **this click starts the import**; lands on the dashboard with an in-progress card |
 | 7 | **Wait** for the import card to finish | dashboard card | summary shows `created` / `split_documents` |
-| 8 | Open the repo from the dashboard card | dashboard | wizard opens, all steps unlocked, starts at **Curate** |
+| 8 | Open the repo from the dashboard card | dashboard | the wizard opens — **on whatever step the saved `studio_step` points at, empirically step 9 "Review" for a bundle import, NOT Curate** |
+| 8a | Click **"6. Curate"** in the **left rail** to go back | wizard left rail | unlocked (`locked = i > studio_step`, so every step up to and including the saved one is open); back-nav is non-destructive |
 | 9 | Count the `-part-N` siblings in the concept list | wizard step 6 · Curate | matches the "Concepts out" column in §9.2 |
 | 10 | **Set frontmatter: ≥3 `topic` AND ≥1 `forbidden`** | index.md YAML pane (Curate/Review) | saved **before** you publish — see §9.4 |
 | 11 | Advance **Validate → Auto-correct → Review → Finish** | wizard steps 7–10 | no gate blocks |
@@ -281,7 +282,20 @@ delete that draft (`DELETE /api/okf/repos/:repo_id`, admin-scoped,
 `FOR d IN ingestion_log FILTER d.message LIKE "%truncated%" RETURN d.message`.
 A hit means a document reached ingest **over** 250 000 chars, i.e. a defect.
 
-### 9.4 Set the tags in Curate — the wizard gates publish before the server does
+### 9.4 Set the tags in Curate — and why nothing tells you to go there
+
+**This is a product defect, not a documentation gap.** Measured 2026-10-14:
+
+- The bundle-import path creates the repo with only `{name, domain}`
+  (`StudioTab.vue:467`) and never sets `studio_step`, so the wizard's landing step
+  is wherever the default puts it — empirically **step 9 "Review"**, past the work.
+- **Step 9 `Review.vue` carries no frontmatter cue at all.** It shows a concept
+  count and one passing mention of labels ("set per topic in Curate") — nothing
+  about tags.
+- The **only** signal lives on `steps/Publish.vue:97-104`, which is **step 10, the
+  last step**: *"Frontmatter tags not approved — the LLM can draft them in Curate,
+  then approve before publishing."* The user clicks through nine steps, hits a
+  dead end, and is told to navigate backwards four.
 
 The frontmatter panel is mounted at the **top of the Curate step**
 (`steps/Curate.vue:39` → `FrontmatterPanel.vue`). Click **Refresh suggestions** to
@@ -289,15 +303,21 @@ have the LLM draft topic + forbidden chips from the corpus, or type your own, th
 **Save tags**. The panel's own hint states the rule: *"Publish requires ≥3 topic +
 ≥1 forbidden."*
 
-The Finish/Publish step re-checks the same rule client-side
-(`steps/Publish.vue:209` → `isFrontmatterPublishReady`, which counts frontmatter
+**Fix (not yet applied):** seed `studio_step: 5` (Curate) when creating from a
+bundle, exactly as the crawler path already does at `StudioTab.vue:674` and
+`:686`. That lands the user where the mandatory work lives instead of past it, and
+removes the need for a user manual to explain a navigation puzzle the product
+created.
+
+The Finish/Publish step re-checks the rule client-side
+(`steps/Publish.vue:209` → `isFrontmatterPublishReady`, counting frontmatter
 **rows**: `topic >= 3 && forbidden >= 1`) and shows *"Frontmatter tags approved"*
 only once satisfied — so following the wizard stops you **before** the publish
 request is ever sent.
 
 That client gate matters because the **server-side** gate runs late: at
-`lifecycle-service.js:748-760`, which is *after* `mintVersion` (`:669`) and after
-the bundle export. A publish that reaches the server without frontmatter returns
+`lifecycle-service.js:748-760`, *after* `mintVersion` (`:669`) and after the bundle
+export. A publish reaching the server without frontmatter returns
 `409 FRONTMATTER_REQUIRED` but has **already burned a version number** and written
 a bundle. The wizard prevents this; a direct API call does not.
 

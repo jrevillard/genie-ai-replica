@@ -16,6 +16,11 @@
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
     (dict "name" "KC_REALM" "value" "genie")
+    # Tokens carry the public issuer pinned on the Keycloak CR (hostname v2);
+    # JWKS keeps resolving in-cluster through KEYCLOAK_URL. Without the
+    # override the service derives the expected issuer from the in-cluster
+    # URL and rejects every browser token (claim validation failed).
+    (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s://%s/auth/realms/genie" (.Values.ingress.scheme | default "https") (.Values.ingress.host | default "genieai.local")))
     (dict "name" "KC_CLIENT_ID" "value" "dataprep-service-client")
     (dict "name" "ARANGO_URL" "value" (printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns))
     (dict "name" "ARANGO_DB" "value" "_system")

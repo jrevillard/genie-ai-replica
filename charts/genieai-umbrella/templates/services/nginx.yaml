@@ -1,5 +1,7 @@
 {{- if .Values.services.nginx.enabled -}}
-{{- $ctx := dict "name" "nginx" "component" "nginx" "Values" .Values "Chart" .Chart "Release" .Release -}}
+{{- $vals := deepCopy .Values -}}
+{{- $_ := set $vals.services.nginx "podAnnotations" (dict "genieai.io/nginx-conf-checksum" (include "genieai-umbrella.nginxConf" . | printf "%s\n" | sha256sum)) -}}
+{{- $ctx := dict "name" "nginx" "component" "nginx" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---
 apiVersion: v1

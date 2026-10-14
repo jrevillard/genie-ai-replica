@@ -1636,9 +1636,9 @@ export default {
         bulkRemove: 'সব সরান',
         loadProgress: 'ফাইল লোড হচ্ছে {done}/{total}',
         addSource: '+ From documents',
-        reingest: 'Re-ingest this concept',
-        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
-        reingestFailed: 'Re-ingest failed — try again.'
+        reingest: 'এই ধারণাটি পুনরায় ইনজেস্ট করুন',
+        reingestBusy: 'এই রিপোজিটরির জন্য একটি RAG ইনজেস্ট ইতিমধ্যে চলছে — এটি শেষ হতে দিন, তারপর আবার চেষ্টা করুন।',
+        reingestFailed: 'পুনরায় ইনজেস্ট ব্যর্থ হয়েছে — আবার চেষ্টা করুন।'
       },
       delete: {
         body: 'এটি ফাইল, এর ইনডেক্স করা অংশ এবং এর গ্রাফ লিঙ্কগুলিকে স্থায়ীভাবে সরিয়ে দেয়।',
@@ -1820,13 +1820,13 @@ export default {
         retracted: 'কিছু প্রত্যাহার করা হয়নি'
       },
       reingest: {
-        failed: 'Re-ingest failed',
-        title: 'Re-ingest failed concepts',
-        confirm: 'Re-ingest failed',
-        counting: 'Checking how many concepts failed…',
-        countFailed: 'Could not read the failed-concept count. Try again.',
-        none: '{name} has no failed concepts — every concept indexed successfully.',
-        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+        failed: 'পুনরায় ইনজেস্ট ব্যর্থ হয়েছে ({n})',
+        title: 'ব্যর্থ হওয়া ধারণা পুনরায় ইনজেস্ট করুন',
+        confirm: 'পুনরায় ইনজেস্ট করুন',
+        counting: 'কতগুলি ধারণা ব্যর্থ হয়েছে তা যাচাই করা হচ্ছে…',
+        countFailed: 'ব্যর্থ ধারণার সংখ্যা পড়া যায়নি। আবার চেষ্টা করুন।',
+        none: '{name}-এ কোনো ব্যর্থ ধারণা নেই — সব ধারণা সফলভাবে ইনডেক্স হয়েছে।',
+        body: '{name}-এর {n}টি ধারণা ইনডেক্স করা যায়নি এবং RAG-এ নেই। পুনরায় ইনজেস্ট শুধু সেগুলোর জন্য আবার চেষ্টা করে; ইনডেক্স করা ধারণাগুলো অপরিবর্তিত থাকে। আবার ব্যর্থ হলে ধারণাটির উপর ত্রুটিটি দেখানো হবে।'
       }
     },
     build: {

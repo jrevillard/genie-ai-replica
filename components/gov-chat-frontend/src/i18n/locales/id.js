@@ -1641,9 +1641,9 @@ export default {
         bulkRemove: 'Hapus semua',
         loadProgress: 'Memuat berkas {done}/{total}',
         addSource: '+ From documents',
-        reingest: 'Re-ingest this concept',
-        reingestBusy: 'A RAG ingest is already running for this repository — wait for it to finish, then retry.',
-        reingestFailed: 'Re-ingest failed — try again.'
+        reingest: 'Proses ulang konsep ini',
+        reingestBusy: 'Proses ingest RAG sedang berjalan untuk repositori ini — tunggu sampai selesai, lalu coba lagi.',
+        reingestFailed: 'Proses ulang gagal — coba lagi.'
       },
       delete: {
         body: 'Tindakan ini menghapus berkas, potongan yang diindeks, dan tautan grafiknya secara permanen.',
@@ -1825,13 +1825,13 @@ export default {
         retracted: 'Tidak ada yang ditarik'
       },
       reingest: {
-        failed: 'Re-ingest failed',
-        title: 'Re-ingest failed concepts',
-        confirm: 'Re-ingest failed',
-        counting: 'Checking how many concepts failed…',
-        countFailed: 'Could not read the failed-concept count. Try again.',
-        none: '{name} has no failed concepts — every concept indexed successfully.',
-        body: '{n} concept(s) of {name} failed to index and are missing from RAG. Re-ingest retries only those; indexed concepts are left untouched. If it fails again the error will be shown on the concept.'
+        failed: 'Proses ulang gagal ({n})',
+        title: 'Proses ulang konsep yang gagal',
+        confirm: 'Proses ulang',
+        counting: 'Memeriksa berapa banyak konsep yang gagal…',
+        countFailed: 'Tidak dapat membaca jumlah konsep yang gagal. Coba lagi.',
+        none: '{name} tidak memiliki konsep yang gagal — semua konsep berhasil diindeks.',
+        body: '{n} konsep dari {name} gagal diindeks dan tidak ada di RAG. Proses ulang hanya mencoba konsep tersebut; konsep yang sudah terindeks tidak diubah. Jika gagal lagi, kesalahan akan ditampilkan pada konsep.'
       }
     },
     build: {

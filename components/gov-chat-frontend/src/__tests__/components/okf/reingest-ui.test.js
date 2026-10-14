@@ -56,7 +56,8 @@ const INGESTED = {
   name: 'Solar System',
   lifecycle_state: 'publish',
   ingested_at: '2026-10-01T00:00:00.000Z',
-  ingested_version: 1
+  ingested_version: 1,
+  failed_count: 2
 };
 
 function gate(repo, draining = false) {
@@ -98,6 +99,31 @@ describe('Re-ingest menu gating (David 2026-10-14)', () => {
   it('HIDDEN for a null repo (no crash on an empty list)', () => {
     expect(gate(null)).toBe(false);
     expect(gate(undefined)).toBe(false);
+  });
+
+  // David, 2026-10-14: "the re-ingest menu should only appear for repo's with
+  // failed concept ingestions". A recovery action on a repo with nothing to
+  // recover is a dead button that looks live.
+  it('HIDDEN when there are NO failed concepts', () => {
+    expect(gate({ ...INGESTED, failed_count: 0 })).toBe(false);
+  });
+
+  it('HIDDEN when failed_count is missing entirely (list predates the field)', () => {
+    const r = { ...INGESTED };
+    delete r.failed_count;
+    expect(gate(r)).toBe(false);
+  });
+
+  // A non-numeric value means the attach query failed-soft and left the field
+  // undefined. Hiding is the safe direction: the dialog is still reachable from
+  // the concept rail's per-concept retry, so nothing becomes unreachable.
+  it('HIDDEN when failed_count is non-numeric', () => {
+    expect(gate({ ...INGESTED, failed_count: null })).toBe(false);
+    expect(gate({ ...INGESTED, failed_count: '2' })).toBe(false);
+  });
+
+  it('VISIBLE with exactly one failed concept', () => {
+    expect(gate({ ...INGESTED, failed_count: 1 })).toBe(true);
   });
 
   // REGRESSION GUARD for a mistake this batch actually made: declaring

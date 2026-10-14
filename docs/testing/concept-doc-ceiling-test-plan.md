@@ -239,29 +239,49 @@ largest decompressed is **109.4 MB < 128 MiB** (24 MiB spare).
 
 | # | Action | Where | What to check |
 |---|---|---|---|
-| 1 | Open OKF Studio → **Create Repository** | Admin → OKF | create dialog opens |
-| 2 | Pick a **Subject Area** | create dialog | **mandatory** — immutable after creation, blocks the zip |
-| 3 | **Bundle (.zip)** tab → select the file | create dialog | "Bundle staged — click Create Repository" |
-| 4 | Click **Create Repository** | create dialog | lands on the dashboard with an in-progress import card |
-| 5 | **Wait** for the import card to finish | dashboard card | summary shows `created` / `split_documents` |
-| 6 | Open the repo from the dashboard card | dashboard | wizard opens, all steps unlocked, starts at **Curate** |
-| 7 | Count the `-part-N` siblings in the concept list | wizard step 6 · Curate | matches the "Concepts out" column above |
-| 8 | **Set frontmatter: ≥3 `topic` AND ≥1 `forbidden`** | index.md YAML pane (Curate/Review) | saved before you publish — see 10.4 |
-| 9 | Advance **Validate → Auto-correct → Review → Finish** | wizard steps 7–10 | no gate blocks |
-| 10 | *Submit for review* | Review | `draft → review` |
-| 11 | *Approve* | Review | `review → approve` |
-| 12 | *Publish* | Finish | `approve → publish`; a bundle zip is written to doc-repo |
-| 13 | *Ingest* | Finish / repo card | `publish → publish` (drain begins) |
-| 14 | **Wait** for the drain to finish | Activity log | ingest summary appears |
-| 15 | Open the bundle `.zip` → ingestion log | Files → FileDetailsDialog | **zero rows containing "truncated"** |
-| 16 | Record the outcome against this plan | §12 | pass / fail + observed counts |
+| 1 | Admin → **OKF** tab → Studio dashboard → click the **"+ New repository"** button | Studio dashboard | the **"New OKF repository"** dialog opens |
+| 2 | Type the **Repository name** | dialog, field 1 | a duplicate name shows an inline warning — not fatal |
+| 3 | Pick the **Subject area** from the dropdown | dialog, field 2 | **mandatory** — immutable after creation; the Create button stays disabled without it |
+| 4 | Below the divider, under *"Or import an existing zip bundle as a new repository"*, choose the file in the **Bundle (.zip)** picker | dialog, field 3 | *"Staged: &lt;filename&gt;"* appears — **this only stages; nothing has imported yet** |
+| 5 | Leave **Concept classification** at **Heuristics (default)** | dialog, field 4 | LLM-assisted / Hybrid exist but are slower — no reason to change it for this test |
+| 6 | Click **Create repository** | dialog, footer | **this click starts the import**; lands on the dashboard with an in-progress card |
+| 7 | **Wait** for the import card to finish | dashboard card | summary shows `created` / `split_documents` |
+| 8 | Open the repo from the dashboard card | dashboard | wizard opens, all steps unlocked, starts at **Curate** |
+| 9 | Count the `-part-N` siblings in the concept list | wizard step 6 · Curate | matches the "Concepts out" column in §9.2 |
+| 10 | **Set frontmatter: ≥3 `topic` AND ≥1 `forbidden`** | index.md YAML pane (Curate/Review) | saved **before** you publish — see §9.4 |
+| 11 | Advance **Validate → Auto-correct → Review → Finish** | wizard steps 7–10 | no gate blocks |
+| 12 | *Submit for review* | Review | `draft → review` |
+| 13 | *Approve* | Review | `review → approve` |
+| 14 | *Publish* | Finish | `approve → publish`; a bundle zip is written to doc-repo |
+| 15 | *Ingest* | Finish / repo card | `publish → publish` (drain begins) |
+| 16 | **Wait** for the drain to finish | Activity log | ingest summary appears |
+| 17 | Open the bundle `.zip` → ingestion log | Files → FileDetailsDialog | **zero rows containing "truncated"** |
+| 18 | Record the outcome against this plan | §11 | pass / fail + observed counts |
+
+### 9.3a Where the zip picker is — and where it is NOT
+
+The bundle `.zip` picker lives **only** in the *New OKF repository* dialog
+(`components/okf/frontend/src/components/okf/StudioTab.vue`, dialog opens at
+`:39`, file input at `:114`). It is **not** in the wizard.
+
+Wizard step 1 (**Entry**, `steps/Entry.vue`) has no source picker of any kind — it
+only takes the name and domain. Step 3 (**Input**) accepts individual `.md` files
+(`onFsFiles` → `importConcepts`) and doc-repo sources via the source dialog, but
+**no `.zip`**. So there is no way to reach bundle import from inside the wizard:
+creating from a bundle and creating an empty repo both start on the dashboard.
+
+**Consequence:** clicking *Create repository* with only a name and subject area
+creates an **empty draft** containing just the seeded `index.md` skeleton
+(`concept_count: 1`). Nothing is damaged and the import is simply not started —
+delete that draft (`DELETE /api/okf/repos/:repo_id`, admin-scoped,
+`routes/repos-routes.js:46`) and repeat the dialog with the zip staged.
 
 **Step 15 fallback** if the bundle panel shows nothing: query ArangoDB directly
 (`DEBUGGING-TRACING.md` §3) —
 `FOR d IN ingestion_log FILTER d.message LIKE "%truncated%" RETURN d.message`.
 A hit means a document reached ingest **over** 250 000 chars, i.e. a defect.
 
-### 10.4 Do not skip step 8
+### 9.4 Do not skip step 10
 
 The publish frontmatter gate runs at `lifecycle-service.js:748-760`, which is
 **after** `mintVersion` (`:669`) and after the bundle export. A publish without
@@ -269,7 +289,7 @@ frontmatter returns `409 FRONTMATTER_REQUIRED` but has **already burned a versio
 number** and written a bundle. Set the frontmatter at step 8, in the wizard, not
 by retrying the publish.
 
-### 10.5 Stop conditions
+### 9.5 Stop conditions
 
 Stop and do not proceed to the next tier if any of these occur:
 
@@ -279,7 +299,7 @@ Stop and do not proceed to the next tier if any of these occur:
 | Import card split count ≠ the table in 10.2 | the running image is not the one under test — re-run `verify-local-build.sh` |
 | `TOO_MANY_CONCEPTS` / zip-bytes rejection on tier 3 or 4 | the local override did not take — re-run S1 |
 | Any "truncated" row at step 15 | a document survived the split oversized — defect, capture the file_id |
-| Publish 409s | frontmatter missing (10.4), or a concept exceeds the ceiling |
+| Publish 409s | frontmatter missing (§9.4), or a concept exceeds the ceiling |
 
 Tiers 0–2 need no override and pass on stock defaults — **run tier 0 first**. If
 tier 0 does not produce exactly 18 concepts and 0 splits, stop; nothing downstream

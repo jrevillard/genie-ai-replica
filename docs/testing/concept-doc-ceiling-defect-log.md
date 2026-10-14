@@ -156,6 +156,130 @@ silently rather than visibly at build time.
 
 ---
 
+## BUG-08 — Graph collections are named after the bundle, not `repo.graph_name`
+
+**Status: OPEN** · Severity: medium (debugging trap) · Found on tier 0
+
+**Symptom.** After a successful ingest, querying the repo's own graph collections
+returns **0 documents**, while the repo doc reads `ingested_version: 1` and
+`ingested_at` is set. The data is there — under a different name.
+
+**Evidence (two independent reads).** Repo doc reserves
+`graph_name = OKF_<repo_id>` — for this repo `OKF_42b2f2df-880c-4ed5-9208-7b36f05a8029`,
+whose four collections are all **empty**. The drain instead wrote
+`OKF_alphabet-company-information_v1_*`:
+
+| Collection | Docs |
+|---|---|
+| `OKF_alphabet-company-information_v1_SOURCE` | **114** — exactly the chunk count the worker reported |
+| `…_ENTITY` | 756 |
+| `…_LINKS_TO` | 999 |
+| `…_HAS_SOURCE` | 970 |
+
+**Why it matters.** Anyone debugging an ingest by reading `repo.graph_name` and
+querying those collections concludes ingestion silently produced nothing — which
+is exactly the false conclusion this defect invites, and precisely the failure
+mode already seen in the ingestion-crash investigation (concepts that "silently
+never reach RAG").
+
+**Direction to confirm before fixing:** decide which is canonical — the reserved
+`OKF_<repo_id>` or the derived `OKF_<bundle-name>_v<n>` — then make the other
+derive from it. Whichever wins, `repo.graph_name` must equal the name actually
+written, because it is the field any operator or agent will read first.
+
+---
+
+## BUG-09 — Head suite: 20 ungrounded negative failures
+
+**Status: OPEN** · Severity: medium (retrieval quality) · Found on tier 0
+
+`head-suite.run` on tier 0: **pass_rate 0.856** over **139 queries**, `steals: 0`.
+`head-suite.recommend.done`: score **`219 → 219`** (no gain), `narrow_options: 0`,
+`add: []`, `remove: []`, and **`ungrounded_negative_fails: 20`**.
+
+**What that means.** Twenty negative queries — ones that should *not* route to
+this repository — were answered by it. That is the observable the vectorized head
+exists to improve, so it matters more than the headline pass rate: a head that
+answers questions it has no business answering degrades every query in the
+deployment, not just this repo's.
+
+The recommendation engine found nothing to change, which means the current tags
+are a local optimum for this suite — worth confirming against tiers 1–4 before
+concluding the tags themselves are the problem rather than the suite composition.
+
+**Suggested direction:** establish the ungrounded-negative rate per repo across
+the live set (UK crawl, El Salvador, Slaugherhouse all have heads today) before
+acting. If 20 is normal for an 18-concept repo, the metric needs normalising by
+suite size; if it is an outlier, the head is mis-scoped.
+
+---
+
+## RESOLVED-01 — Scratch `pi/parser.py`: is the PC-1 patch managed, and does docling need one?
+
+**Status: RESOLVED — no action** · Raised as a challenge to the scratch-file cleanup
+
+David challenged the claim that `.scratch-pii/pi/parser.py` was disposable,
+because `pi` reads as Presidio and there are live PII issues (!1060, !1061,
+!1063). Five readers fanned out over the managed patch, dataprep's parsing paths,
+the scratch prototype, and the live image; every claim was then adversarially
+re-verified against source.
+
+**My original claim was wrong twice.** I stated the file was docling's
+`_partition_html/parser.py` and that `remove_pis` appeared nowhere outside the
+scratch directory. Both false:
+
+1. `pi/parser.py` carries **12** occurrences of `is_phrasing` / `class Flow` /
+   `class Phrasing` — unstructured's vocabulary, not docling's. It is
+   **`unstructured/partition/html/parser.py`**, the exact file the managed patch
+   targets.
+2. `remove_pis=True` **is** in the live image at line 929. I had grepped docling
+   because I had mis-identified the file first, then built the second conclusion
+   on the first error.
+
+**Is the fix managed? Yes.** `genie-ai-overlay/build-patches/unstructured_html_pi_patch.py`,
+registered in `OVERRIDES.yaml:138-144` as `still-needed` with regression test
+`tests/test_unstructured_pi_patch.py`, applied at build time by
+`Dockerfile-dataprep_genie-ai:142-143` after the site-packages `COPY` at
+`:117-118` — so the edit lands on the tree the later smoke test at `:153` reads.
+It rewrites one line (`UNPATCHED_RE`/`PATCHED_RE` at `:84-91`, substitution at
+`:151-158`) with a `compile()` check and a re-read verification, and is idempotent.
+Upstream fixed this in **unstructured 0.27.8** (issue #4358); we pin **0.18.32**.
+
+**Is it actually applied live? Proven cryptographically, not assumed.** pip's
+`RECORD` hash for `unstructured/partition/html/parser.py` does **not** match the
+on-disk file; reverting *only* the `, remove_pis=True)` insertion reproduces the
+`RECORD` hash byte-for-byte. That proves upstream ships without the flag and our
+patcher added it. Re-running the patcher in-container reports `already-patched`,
+exit 0.
+
+**A stale note was found.** `_bmad-output/implementation-artifacts/defects-publish-cycle-2026-10-13.md:147-148`
+records "The running container still uses the old image" (image `fe8c46c2`). That
+is **contradicted**: the container runs image `sha256:92d3506594a7`, built
+13:11:49Z, with the container created 13:12:18Z — 29 s later. Worth correcting in
+that document.
+
+**Does docling need an equivalent patch? No — and this is proven, not assumed.**
+The concern was legitimate: `.html` **is** on a docling path. `genieai_dataprep_arangodb.py:997`
+lists `.html` in `docling_extensions`, `:999` routes it to `docling_document_loader`
+when `CONTENT_EXTRACTION_METHOD == "docling"` (the shipped value,
+`docker-compose.yaml:1424`), and `appConfig.js:51` accepts `.html` uploads.
+
+But docling's HTML path is **immune by construction**: it parses through
+`BeautifulSoup(raw, "html.parser")` (`docling/backend/html_backend.py:153`), which
+never constructs lxml `_ProcessingInstruction` nodes at all — and `grep -rln
+unstructured docling/` returns empty, so docling does not share the vulnerable
+code. Verified behaviourally in the live container against PI-bearing HTML:
+`BeautifulSoup('<xml?><html><body><p>real content</p>…', 'html.parser')` yields
+`['html','body','p']` with content preserved, and
+`unstructured.partition_html` on the same input partitions cleanly with no
+`AttributeError`.
+
+**Conclusion: the managed patch is correct, minimal, necessary, live, and
+sufficient. The scratch copy was a verification artefact and is correctly
+disposable.** The gap was in my explanation, not in the repo.
+
+---
+
 ## BUG-07 — Saved frontmatter loads correctly but renders invisible (root cause: BUG-06)
 
 **Status: OPEN** · Severity: high · Found ~15:37 on tier 0

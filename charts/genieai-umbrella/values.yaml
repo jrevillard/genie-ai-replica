@@ -173,8 +173,10 @@ data:
     # in KC 24+; spec.proxy.headers is the only path.
     proxy:
       headers: xforwarded
-    # Keycloak 26 prod start mode (--optimized flag).
-    startOptimized: true
+    # Keycloak start mode. The stock quay.io/keycloak image has no
+    # pre-built server: `start --optimized` aborts on first boot
+    # ("use 'kc.sh build' first"). Pre-built custom images set true.
+    startOptimized: false
     # Image-bump requires single-replica mode (DB migrations need exclusive
     # access). Chart's instances=1 by default; prod bumps to 2 + manual drain.
     update:

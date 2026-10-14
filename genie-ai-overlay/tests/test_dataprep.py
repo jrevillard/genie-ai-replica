@@ -985,6 +985,179 @@ class TestLabelWithLlm:
 # ---------------------------------------------------------------------------
 
 
+class TestDataprepInputTooLong:
+    """Tests for the vLLM context-overflow fail-loud contract.
+
+    Mirrors the reranker fix (RerankerInputTooLongError, genieai_tei_reranker.py:39):
+    when vLLM rejects a request because the prompt exceeds the model's
+    max_model_len, the dataprep call site must raise a typed exception
+    instead of silently swallowing the error and falling back to the
+    raw chunk. The classification is string-based (any exception whose
+    message carries a vLLM/OpenAI context-overflow marker is treated as
+    overflow) — no SDK version lock-in.
+    """
+
+    @pytest.mark.asyncio
+    async def test_context_overflow_raises_typed_exception(self, monkeypatch):
+        """vLLM 'context length exceeded' → raise DataprepInputTooLongError, no silent fallback."""
+        from dataprep.genieai_dataprep_arangodb import DataprepInputTooLongError
+
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception(
+                "Error code: 400 - {'message': 'Input prompt (30000 tokens) exceeds "
+                "maximum context length (8192 tokens). Please reduce the length.'}"
+            )
+        )
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            pytest.raises(DataprepInputTooLongError),
+        ):
+            await dp._label_with_llm(["chunk"], ["LabelA"], ["LabelA"], "file1")
+
+    @pytest.mark.asyncio
+    async def test_context_overflow_does_not_retry_three_times(self, monkeypatch):
+        """Overflow fails fast — the 3x retry loop on identical oversized prompt is removed."""
+        from dataprep.genieai_dataprep_arangodb import DataprepInputTooLongError
+
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("BadRequestError: This model's maximum context length is 8192 tokens")
+        )
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            pytest.raises(DataprepInputTooLongError),
+        ):
+            await dp._label_with_llm(["chunk"], ["LabelA"], ["LabelA"], "file1")
+
+        # Fail-loud: exactly ONE attempt, not three.
+        assert mock_client.chat.completions.create.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_context_overflow_writes_to_ingestion_log(self, monkeypatch):
+        """The overflow reason surfaces via _write_ingestion_log (admin /api/admin/ingestion-log channel)."""
+        from dataprep.genieai_dataprep_arangodb import DataprepInputTooLongError
+
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("context_length_exceeded: prompt tokens (25000) > model max (4096)")
+        )
+
+        write_log = AsyncMock()
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", write_log),
+            pytest.raises(DataprepInputTooLongError),
+        ):
+            await dp._label_with_llm(["chunk"], ["LabelA"], ["LabelA"], "file1")
+
+        write_log.assert_awaited_once()
+        first_args = write_log.await_args.args
+        # _write_ingestion_log(self, file_id, level, stage, message) signature
+        assert first_args[0] == "file1"
+        msg = str(first_args[3])
+        assert "context" in msg.lower() or "vllm" in msg.lower()
+
+    @pytest.mark.asyncio
+    async def test_non_overflow_bad_request_preserves_silent_fallback(self, monkeypatch):
+        """Regression guard: only context-length errors escalate — other failures still silently fall back.
+
+        A 400-class error like 'invalid_request_error' (guided-JSON failure, schema mismatch)
+        is NOT overflow; the existing 'raw-chunk fallback' contract for those errors is preserved.
+        """
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception(
+                "BadRequestError: invalid_request_error - guided-json schema mismatch on field 'labels'"
+            )
+        )
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            # File labels in taxonomy → synonym-matching fallback succeeds.
+            result = await dp._label_with_llm(["chunk"], ["FallbackLabel"], ["FallbackLabel"], "file1")
+
+        assert result[0]["labels"] == ["FallbackLabel"]
+
+    @pytest.mark.asyncio
+    async def test_context_single_call_overflow_raises_typed(self, monkeypatch):
+        """_context_single_call: vLLM context overflow raises DataprepInputTooLongError instead of returning ''."""
+        from dataprep.genieai_dataprep_arangodb import DataprepInputTooLongError
+
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("Error code: 400 - context length exceeded (max 4096 tokens)")
+        )
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            pytest.raises(DataprepInputTooLongError),
+        ):
+            await dp._context_single_call(mock_client, "m", "sys", 0, "chunk text", "file1")
+        # Fail-loud: exactly one attempt, not three.
+        assert mock_client.chat.completions.create.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_context_doc_call_overflow_raises_typed(self, monkeypatch):
+        """_context_doc_call: doc-level context overflow raises DataprepInputTooLongError instead of returning ''."""
+        from dataprep.genieai_dataprep_arangodb import DataprepInputTooLongError
+
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("This model's maximum context length is 2048 tokens. Please reduce the length.")
+        )
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            pytest.raises(DataprepInputTooLongError),
+        ):
+            await dp._context_doc_call(mock_client, "m", "sys", "file1")
+        assert mock_client.chat.completions.create.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# TestLabelWithEmbedding
+# ---------------------------------------------------------------------------
+
+
 class TestLabelWithEmbedding:
     """Tests for _label_with_embedding()."""
 

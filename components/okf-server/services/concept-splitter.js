@@ -77,7 +77,18 @@ function splitConceptBody(body, ceiling = DEFAULT_CEILING) {
     let cut = start;
     for (let i = start; i < end; i += 1) {
       if (pred(lines[i])) {
-        if (i > cut) out.push([cut, i]);
+        // The line itself opens the next group; nothing to close off.
+        if (i === cut) continue;
+        // A leading run of blank lines carries no content of its own. Cutting
+        // there hands greedyMerge a content-free piece, and greedyMerge
+        // finalises a piece as soon as adding the NEXT one would overflow — so
+        // when the following group sits within one character of the ceiling,
+        // that blank run is emitted as a part of its own. The caller inherits
+        // the document's title, links and sources into every part, so the
+        // result is a real, linkable, empty page in the graph. Leave `cut`
+        // where it is and let the first real group absorb the blank run.
+        if (cut === start && lines.slice(cut, i).every(IS_BLANK)) continue;
+        out.push([cut, i]);
         cut = i;
       }
     }
@@ -136,7 +147,34 @@ function splitConceptBody(body, ceiling = DEFAULT_CEILING) {
     };
   }
 
-  const result = splitRange(0, lines.length);
+  /**
+   * A part must never be blank unless it is the only part. `boundaries` already
+   * refuses to open a group with blank lines, but greedyMerge can still finalise
+   * a tiny piece ahead of a group that is itself within one character of the
+   * ceiling, so this enforces the invariant rather than trusting the recursion
+   * to have done it: merge the blank range forward, re-splitting the union when
+   * the merge would breach the ceiling.
+   */
+  function absorbBlankParts(ranges) {
+    let guard = 0;
+    while (ranges.length > 1 && guard < 64) {
+      guard += 1;
+      const at = ranges.findIndex(([a, b]) => lines.slice(a, b).join(eol).trim() === '');
+      if (at === -1) return ranges;
+      const union = [ranges[at][0], ranges[at + 1][1]];
+      if (lenOf(union[0], union[1]) <= limit) {
+        ranges.splice(at, 2, union);
+      } else {
+        const sub = splitRange(union[0], union[1]);
+        if (!Array.isArray(sub)) return ranges;
+        ranges.splice(at, 2, ...sub);
+      }
+    }
+    return ranges;
+  }
+
+  let result = splitRange(0, lines.length);
+  if (Array.isArray(result)) result = absorbBlankParts(result);
   if (!Array.isArray(result)) {
     return { parts: [], unsplittable: true, reason: result.reason, ceiling: limit };
   }

@@ -157,3 +157,14 @@ bash.exe.stackdump
 
 # OKF smoke tokens (host-side mint output — never commit)
 okf-smoke-tokens.json
+
+# Agent scratch space (never commit)
+# Throwaway diagnostic scripts, AQL probes, and GitLab draft bodies written
+# while investigating. Regenerable — nothing here is a source of truth.
+.scratch-pii/
+/.claude/dora.json
+/_count_suites.cjs
+/_probe_*.py
+/_q_*.json
+/_suite_backup_*.json
+/_msg-*.txt

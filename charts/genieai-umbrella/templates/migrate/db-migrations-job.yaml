@@ -1,0 +1,60 @@
+{{- if .Values.services.backend.enabled -}}
+{{- /*
+The migrations image (components/gov-chat-backend/Dockerfile.migrations)
+creates the ArangoDB collections the backend's user provisioning writes
+to. Compose gates the backend on service_completed_successfully; the
+hook ordering here is the equivalent — this Job (weight 5) runs before
+the Keycloak convergence Job (weight 10) on install and upgrade, and
+the backend starts unconditionally but fails its first authenticated
+request without the collections, which is what this Job prevents.
+*/ -}}
+{{- $ns := .Values.namespace -}}
+{{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
+{{- $registry := .Values.global.imageRegistry -}}
+{{- $img := .Values.services.backend.migrationsImage | default dict -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-db-migrations
+  namespace: {{ $ns }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade,post-rollback
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      containers:
+        - name: db-migrations
+          image: {{ if $registry }}{{ $registry }}/{{ end }}{{ $img.repository | default "genie-ai-db-migrations" }}:{{ $img.tag | default "main" }}
+          imagePullPolicy: {{ .Values.global.pullPolicy | default "IfNotPresent" }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            # Mirrors the backend's data-tier wiring: same URL, database
+            # and credentials, so the collections land in the database
+            # the backend actually reads.
+            - name: ARANGO_URL
+              value: {{ printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns | quote }}
+            - name: ARANGO_DB
+              value: "_system"
+            - name: ARANGO_USER
+              value: "root"
+            - name: ARANGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: arango-root-secret
+                  key: password
+{{- end -}}

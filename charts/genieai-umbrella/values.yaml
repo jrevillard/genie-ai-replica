@@ -405,41 +405,42 @@ services:
       runAsUser: 0
       allowPrivilegeEscalation: false
       capabilities: { drop: ["ALL"] }
-    # nginx entrypoint chowns /var/cache/nginx/* to uid 101 (the
-    # `nginx` user in the image). With `readOnlyRootFilesystem: true`
-    # in the container securityContext (planned), the chown needs a
-    # writable mount at /var/cache/nginx. /var/run and /tmp need the
-    # same for pid file and temp body. Without these the entrypoint
-    # crash-loops with 'chown "/var/cache/nginx/client_temp", 101:
-    # Operation not permitted'.
+    # The genie-ai-nginx entrypoint envsubst-renders default.conf FROM
+    # its baked template AT STARTUP; mounting a read-only subPath OVER
+    # the rendered file would fail with EROFS. Mount the ConfigMap
+    # over the template PATH so envsubst reads the override and emits
+    # a writable default.conf.
+    #
+    # nginx entrypoint also chowns /var/cache/nginx/* to uid 101
+    # (the `nginx` user in the image) and writes temp files to
+    # /var/run + /tmp. Without these emptyDir mounts the chown
+    # fails with 'Operation not permitted' and the pod crash-loops.
+    #
+    # The single `volumes:` / `volumeMounts:` lists below are
+    # consolidated — the previous chart had them as two separate
+    # keys, and YAML's last-key-wins semantics silently dropped
+    # the emptyDirs.
     volumes:
       - name: nginx-cache
         emptyDir: {}
       - name: nginx-run
         emptyDir: {}
-    volumeMounts:
-      - name: nginx-cache
-        mountPath: /var/cache/nginx
-      - name: nginx-run
-        mountPath: /var/run
-    resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
-    env: []
-    secrets: []
-    pvc: null
-    # The genie-ai-nginx entrypoint envsubst-renders default.conf FROM its
-    # baked template AT STARTUP; mounting a read-only subPath OVER the
-    # rendered file would fail with EROFS. Mount the ConfigMap over the
-    # template PATH so envsubst reads the override and emits a writable
-    # default.conf.
-    volumes:
       - name: conf
         configMap:
           name: nginx-override
           defaultMode: 0o444
     volumeMounts:
+      - name: nginx-cache
+        mountPath: /var/cache/nginx
+      - name: nginx-run
+        mountPath: /var/run
       - name: conf
         mountPath: /etc/nginx/conf.d/default.conf.template
         subPath: default.conf.template
+    resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
+    env: []
+    secrets: []
+    pvc: null
     probes:
       readiness: { httpGet: { path: /healthz, port: 8080 }, initialDelaySeconds: 5, periodSeconds: 10 }
       liveness:  { httpGet: { path: /healthz, port: 8080 }, initialDelaySeconds: 30, periodSeconds: 30 }

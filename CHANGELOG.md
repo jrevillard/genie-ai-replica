@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Conversation/folder partial updates no longer erase unset fields:** the mobile OpenAPI client's generated `toJson()` serialises every optional field, so a request that only meant to set a title also sent `"isArchived": null`. The backend's partial-update filter skipped `undefined` but not `null`, so nulls overwrote stored values — and because the list queries filter on `isArchived == false` (in AQL `null == false` is false), **conversations silently disappeared from the user's own list**. `null` is now treated exactly like an absent field in both the conversation and folder update paths. (!410)
+- **Mobile auth session no longer dead-ends on a transient failure (M25 / DW-325):** a refresh failure caused by a network drop or timeout cleared every token and logged the user out permanently with no path back. `auth_interceptor` now distinguishes an unrecoverable grant rejection (`invalid_grant` / `invalid_token` / `unauthorized_client`) from a transient one, attempts recovery on a 401 even when no token is in hand, and reports the two cases distinctly (`TRANSIENT_FAILURE` vs `SESSION_EXPIRED`) so callers can offer a retry instead of a re-login. In-flight refreshes are awaited rather than short-circuited, which previously sent callers back into a second 401 with an already-expired token. (!427)
+
+### Changed
+
+- **`release/el-salvador` reconciled with the shared code line (!540):** the branch had diverged two ways — the shared line advanced (live-validated retriever `K=32` T13b champion, `dataprep_chunk_size_md` 1400 per !397, fluentd buffering + canonical OTel `service.name` labelling) while the branch still carried the build tested on device. Both sides are now merged, with the mobile tree preserved byte-identically and the newer deploy tuning adopted. Conflict resolutions: `itu_rtx_el_salvador/vars.yml` and `docker-compose.yaml` take the newer side (el-salvador identity — mvp.ai domain, `keycloak_theme: genie-el-salvador`, mobile client/scheme, adaptive reranking — verified intact); backend `winston-transport` dependency added. The merge's silent deletion of `app_auth_test.dart` and `connectivity_checker_test.dart` was reverted. Three items that existed in no branch were ported forward: the conversation null-guard above, the M25 auth recovery above, and the mobile bug backlog/work plan (M28–M33 matrix plus the `backendUrl` `/api` regression record).
+
 ### Added
 
 - **Living Intelligence theme layer on the base theme.** A decorative layer — hero banner, dot mesh, bottom waves and corner network — is applied to the welcome screen and switched per deployment from the runtime config (`theme.visual`). The base theme ships it on; the derived flavours (`huduma`, `naat`, `original`) ship it off. Every artwork path is configurable, so an operator can swap an illustration without rebuilding an image — the change goes in the repository, in the flavour's configuration file, and the next deployment seeds it onto the nodes (see the breaking change under **Changed**).

@@ -2760,7 +2760,21 @@ class ChatQnAService:
                     "retrieved documents exceed the reranker's input "
                     "limit. This indicates a data ingestion issue."
                 )
-                final_text, _ = await self._finalize_llm_response(abstention_text, original_language)
+                # Translation overflow on the abstention path: fall back to
+                # the English source text and flag the failure in metadata so
+                # the contract (HTTP 200 + abstained=True + abstention_reason=
+                # reranker_input_too_long) holds for non-EN users whose
+                # translation service rejects the abstention text.
+                try:
+                    final_text, _ = await self._finalize_llm_response(abstention_text, original_language)
+                    _translation_status = "ok"
+                except TranslationInputTooLongError as _e_trans_overflow:
+                    logger.warning(
+                        f"Translation overflow on abstention path: "
+                        f"{type(_e_trans_overflow).__name__}: {str(_e_trans_overflow)[:200]}"
+                    )
+                    final_text = abstention_text
+                    _translation_status = "failed"
                 metadata = {
                     "source_documents": [],
                     "retrieval_confidence_score": 0.0,
@@ -2768,6 +2782,7 @@ class ChatQnAService:
                     "is_grounded": False,
                     "abstained": True,
                     "abstention_reason": "reranker_input_too_long",
+                    "translation_status": _translation_status,
                 }
 
                 if chat_request.stream:

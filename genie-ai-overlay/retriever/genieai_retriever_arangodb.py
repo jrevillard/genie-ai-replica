@@ -235,16 +235,6 @@ def _normalize_chunk_id(doc) -> str | None:
     against the ``COLLECTION/_key`` form and a missing id so cross-channel fusion
     never mis-merges or silently drops a document.
     """
-
-
-def _normalize_chunk_id(doc) -> str | None:
-    """Normalize a chunk's identity to its bare ArangoDB ``_key``.
-
-    Both the dense channel (langchain-arangodb sets ``Document.id = _key``) and
-    the BM25 channel (``Document(id=_key)``) use the bare key, but this defends
-    against the ``COLLECTION/_key`` form and a missing id so cross-channel fusion
-    never mis-merges or silently drops a document.
-    """
     cid = getattr(doc, "id", None)
     if cid is None:
         return None

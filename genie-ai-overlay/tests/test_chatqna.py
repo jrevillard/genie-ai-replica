@@ -3260,6 +3260,52 @@ async def test_reranker_input_too_long_returns_abstention():
 
 
 @pytest.mark.asyncio
+async def test_reranker_input_too_long_abstention_path_translation_overflow_falls_back_to_english():
+    """When the reranker abstention path fires for a non-EN query and the
+    translation service rejects the abstention text for exceeding the
+    model's context window, the user still gets the contract-promised
+    HTTP 200 + abstained=True + abstention_reason=reranker_input_too_long
+    with the English source text and `translation_status="failed"` flagged
+    in metadata.
+    """
+    from chatqna.genieai_chatqna import TranslationInputTooLongError
+
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def _raise_marker(*_args, **_kwargs):
+        raise chatqna_module._RerankerInputTooLongError("TEI rejected input")
+
+    svc.megaservice.schedule = _raise_marker
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "qué es X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        patch.object(
+            svc,
+            "_finalize_llm_response",
+            new=AsyncMock(side_effect=TranslationInputTooLongError("abstention text overflow")),
+        ),
+        _patched_chat_request(stream=False, language="es"),
+    ):
+        payload = await svc.handle_request(req)
+
+    # Contract: HTTP 200 + abstained=True preserved on the abstention path,
+    # and the response is the English source (not a half-translated / English
+    # fallback as before) with translation_status="failed" surfaced.
+    assert payload["metadata"]["abstained"] is True
+    assert payload["metadata"]["abstention_reason"] == "reranker_input_too_long"
+    assert payload["metadata"]["translation_status"] == "failed"
+    assert "exceed the reranker's input limit" in payload["response"]
+
+
+@pytest.mark.asyncio
 async def test_reranker_input_too_long_stream_returns_sse():
     """stream=True abstention must use the same SSE envelope as a normal
     streamed answer: one content event, the metadata event, then [DONE]."""

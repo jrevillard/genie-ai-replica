@@ -270,7 +270,11 @@ services:
       runAsUser: 1000
       allowPrivilegeEscalation: false
       capabilities: { drop: ["ALL"] }
-    resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
+    # The backend loads the Xenova nllb-200-distilled-600M translation
+    # model in-process (CPU worker) — peak heap ~2.5 Gi during model
+    # load. A 1 Gi limit OOMKills the container mid-initialization
+    # (exit 137, no error line in the log).
+    resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { cpu: 1, memory: 4Gi } }
     env: []
     secrets:
       # KEYCLOAK_PROXY_CLIENT_SECRET for the genie-proxy-client service

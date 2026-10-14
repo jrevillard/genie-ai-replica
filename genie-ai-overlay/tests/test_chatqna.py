@@ -1727,6 +1727,55 @@ class TestTranslationHelpers:
             await svc._translate_text_chunk("x" * 10000, "French")
 
     @pytest.mark.asyncio
+    async def test_translate_text_chunk_classifier_matches_live_httpx_shape(self):
+        """Reviewer Finding 1+2 regression: production exception is `httpx.HTTPStatusError`
+        whose `str()` is JUST the status phrase — the body lives on `.response.text`.
+        The classifier must read the body, not just `str(exc)`. Construct a real
+        `httpx.HTTPStatusError` so this test fails fast if `_overflow_message_from_exc`
+        regresses to a str()-only check.
+        """
+        import json as _json
+
+        import httpx as _httpx
+
+        from chatqna.genieai_chatqna import TranslationInputTooLongError
+
+        svc = create_chatqna_service()
+
+        # Real httpx response body shape — same as granite-4.1-8b vLLM emits.
+        _body = _json.dumps(
+            {
+                "error": {
+                    "message": "This model's maximum context length is 65536 tokens. "
+                    "However, you requested 160 output tokens and your prompt contains "
+                    "at least 65437 input tokens, for a total of at least 65597 tokens. "
+                    "Please reduce the length of the input prompt."
+                }
+            }
+        ).encode()
+
+        # Build a real httpx.HTTPStatusError — `str()` shows ONLY the status phrase,
+        # NOT the body. Body lives on `.response.text`.
+        _req = _httpx.Request("POST", "http://localhost/v1/chat/completions")
+        _resp = _httpx.Response(400, content=_body, request=_req)
+        _exc = _httpx.HTTPStatusError(
+            "Client error '400 Bad Request' for url 'http://localhost/v1/chat/completions'",
+            request=_req,
+            response=_resp,
+        )
+
+        # Sanity: the bug WAS here. str(_exc) does NOT contain "context length".
+        assert "context length" not in str(_exc).lower()
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=_exc),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            pytest.raises(TranslationInputTooLongError),
+        ):
+            await svc._translate_text_chunk("x" * 10000, "French")
+
+    @pytest.mark.asyncio
     async def test_finalize_llm_response_propagates_translation_overflow(self):
         """Regression (reviewer note 71785): `_finalize_llm_response`'s outer
         `except Exception` previously swallowed `TranslationInputTooLongError`,

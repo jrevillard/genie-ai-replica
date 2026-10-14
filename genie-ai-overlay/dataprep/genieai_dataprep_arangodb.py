@@ -47,28 +47,82 @@ class DataprepInputTooLongError(RuntimeError):
 # Markers in vLLM/OpenAI error messages that indicate context-overflow. Classified by
 # string-substring rather than SDK exception type to avoid lock-in on a specific
 # `openai` SDK version (test envs + minimal docker images may not ship the SDK).
+#
+# "string too long" was REMOVED (reviewer note): it also fires for non-overflow
+# errors like `messages[2].tool_calls[0].id: string too long` and oversized
+# `tools[0].function.description` (>1 MB). The remaining 5 markers cover the
+# canonical vLLM granite-4.1-8b context-overflow message body.
 _VLLM_CONTEXT_OVERFLOW_MARKERS = (
     "context length",
     "context_length_exceeded",
     "maximum context length",
     "reduce the length",
     "context window",
-    "string too long",
 )
+
+
+def _overflow_message_from_exc(exc: BaseException) -> str:
+    """Aggregate every string-shaped field of an exception into one lowercased haystack.
+
+    Production SDKs put the vLLM error body in different places depending on the
+    transport:
+      - openai.BadRequestError (>=3.x): body is on `exc.body['error']['message']`
+        (dict) or on `exc.response.text` (string); `str(exc)` is ONLY the status
+        code phrase (`"Error code: 400"`) — body NOT included.
+      - httpx.HTTPStatusError: body is on `exc.response.text`; `str(exc)` is
+        `'Client error '400 Bad Request' for url '...'` — no body.
+      - aiohttp.ClientResponseError: body is on `exc.message`.
+      - bare Exception/ValueError (test mocks + legacy code): the marker phrase
+        lives in `str(exc)`.
+
+    Union ALL of these so the classifier matches the LIVE shape, not just the
+    shape that happens to be used in unit tests.
+    """
+    parts: list[str] = []
+    with suppress(Exception):
+        parts.append(str(exc) or "")
+    try:
+        body = getattr(exc, "body", None)
+        if isinstance(body, dict):
+            err = body.get("error") if isinstance(body, dict) else None
+            if isinstance(err, dict):
+                msg = err.get("message") or err.get("detail") or ""
+                if msg:
+                    parts.append(str(msg))
+        elif isinstance(body, str):
+            parts.append(body)
+    except Exception:
+        pass
+    try:
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            text = getattr(resp, "text", None)
+            if text:
+                parts.append(str(text))
+    except Exception:
+        pass
+    try:
+        msg = getattr(exc, "message", None)
+        if msg and isinstance(msg, str):
+            parts.append(msg)
+    except Exception:
+        pass
+    return " ".join(parts).lower()
 
 
 def _is_vllm_input_overflow(exc: BaseException) -> bool:
     """True if `exc` represents a vLLM context-length rejection; False otherwise.
 
-    Generous matcher: any error message containing one of the well-known vLLM/OpenAI
-    context-overflow markers classifies as overflow. Generic `Exception` injections
-    in tests use the same markers.
+    Generous matcher: any text-shaped surface of the exception (str(), openai
+    body dict, httpx response body, aiohttp message) containing one of the
+    well-known vLLM/OpenAI context-overflow markers classifies as overflow.
+    Generic `Exception` injections in tests still work because the test
+    message contains the marker verbatim.
     """
-    try:
-        msg = (str(exc) or "").lower()
-    except Exception:
+    haystack = _overflow_message_from_exc(exc)
+    if not haystack:
         return False
-    return any(marker in msg for marker in _VLLM_CONTEXT_OVERFLOW_MARKERS)
+    return any(marker in haystack for marker in _VLLM_CONTEXT_OVERFLOW_MARKERS)
 
 
 _dataprep_input_too_long_total = get_meter().create_counter(

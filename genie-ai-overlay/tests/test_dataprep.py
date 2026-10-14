@@ -1138,6 +1138,102 @@ class TestDataprepInputTooLong:
         assert mock_client.chat.completions.create.call_count == 1
 
     @pytest.mark.asyncio
+    async def test_live_openai_badrequest_classifier_matches(self, monkeypatch):
+        """Reviewer Finding 1+2 regression: production exception (openai SDK >=3.x)
+        has `str(exc)` that does NOT include the body — the body lives on `.body`
+        (dict) and `.response.text`. The classifier reads BOTH. We use a duck-typed
+        `__str__` that mimics the live SDK output (`"Error code: 400"` only) so the
+        test exercises the production body-reading path."""
+        import json as _json
+
+        from dataprep.genieai_dataprep_arangodb import (
+            DataprepInputTooLongError,
+            _is_vllm_input_overflow,
+            _overflow_message_from_exc,
+        )
+
+        body_dict = {
+            "error": {
+                "message": (
+                    "This model's maximum context length is 65536 tokens. "
+                    "However, you requested 160 output tokens and your prompt "
+                    "contains at least 65437 input tokens. Please reduce the "
+                    "length of the input prompt."
+                )
+            }
+        }
+        body_str = _json.dumps(body_dict)
+
+        class _LiveShapeBadRequest(Exception):
+            """Duck-types openai.BadRequestError 3.x — str() returns ONLY the
+            status phrase, body is on .body (dict) and .response.text (string)."""
+
+            def __init__(self, body, body_str):
+                super().__init__("Error code: 400")
+                self.body = body
+                self.response = type("Resp", (), {"text": body_str})()
+
+            def __str__(self):
+                return "Error code: 400"
+
+        exc = _LiveShapeBadRequest(body_dict, body_str)
+        # The bug: str(exc) does NOT contain the marker.
+        assert "context length" not in str(exc).lower()
+        # The classifier must read the body and still match.
+        assert "context length" in _overflow_message_from_exc(exc)
+        assert _is_vllm_input_overflow(exc) is True
+
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        # Audit: production path must raise DataprepInputTooLongError when the
+        # catch block sees the same exception shape the unit-level classifier matched.
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=exc)
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            pytest.raises(DataprepInputTooLongError),
+        ):
+            await dp._label_with_llm(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
+
+    @pytest.mark.asyncio
+    async def test_overflow_message_helper_extracts_from_httpx_response_text(self):
+        """Unit-level: helper must read `.response.text` (httpx shape)."""
+
+        class _LiveShapeHTTPStatusError:
+            """Duck-types httpx.HTTPStatusError — str() returns the status phrase ONLY,
+            body lives on .response.text."""
+
+            def __init__(self, body_text):
+                self.response = type("Resp", (), {"text": body_text})()
+
+            def __str__(self):
+                return "Client error '400 Bad Request' for url 'http://x/v1/chat/completions'"
+
+        from dataprep.genieai_dataprep_arangodb import _is_vllm_input_overflow, _overflow_message_from_exc
+
+        exc = _LiveShapeHTTPStatusError(
+            '{"error":{"message":"maximum context length is 4096 tokens. Please reduce the length."}}'
+        )
+        assert "context length" not in str(exc).lower()
+        assert "context length" in _overflow_message_from_exc(exc)
+        assert _is_vllm_input_overflow(exc) is True
+
+    @pytest.mark.asyncio
+    async def test_overflow_message_helper_skips_overbroad_string_too_long(self):
+        """Unit-level: 'string too long' is overbroad per reviewer Finding 5
+        (fires on tool_calls[id] oversize, not just context overflow). It is NOT
+        in the marker set."""
+        from dataprep.genieai_dataprep_arangodb import _is_vllm_input_overflow
+
+        exc = Exception("Invalid 'messages[2].tool_calls[0].id': string too long (max 64 chars).")
+        assert _is_vllm_input_overflow(exc) is False
+
+    @pytest.mark.asyncio
     async def test_context_single_call_overflow_raises_typed(self, monkeypatch):
         """_context_single_call: vLLM context overflow raises DataprepInputTooLongError instead of returning ''."""
         from dataprep.genieai_dataprep_arangodb import DataprepInputTooLongError

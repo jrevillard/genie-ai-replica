@@ -1328,10 +1328,13 @@ class GenieaiArangoRetriever(OpeaComponent):
                     except Exception as _e_sum:
                         # Fail-loud on vLLM context overflow: skip summarization
                         # rather than bubble a 500 to the chatqna orchestrator.
-                        # Same marker set as dataprep + chatqna translation; the
-                        # shared "fail-loud" pattern keeps overflow attribution
-                        # consistent across the overlay.
-                        _msg = (str(_e_sum) or "").lower()
+                        # Shared classifier lives in dataprep (aggregates str(),
+                        # openai body dict, httpx response body, aiohttp message).
+                        # "string too long" was removed (over-broad — fires on
+                        # tool_calls[id] oversize, not just context overflow).
+                        from dataprep.genieai_dataprep_arangodb import _overflow_message_from_exc
+
+                        _msg = _overflow_message_from_exc(_e_sum)
                         if any(
                             m in _msg
                             for m in (
@@ -1340,7 +1343,6 @@ class GenieaiArangoRetriever(OpeaComponent):
                                 "maximum context length",
                                 "reduce the length",
                                 "context window",
-                                "string too long",
                             )
                         ):
                             logger.warning(
@@ -1348,7 +1350,19 @@ class GenieaiArangoRetriever(OpeaComponent):
                                 f"{type(_e_sum).__name__}: {str(_e_sum)[:200]}"
                             )
                             overflow_count += 1
-                            overflow_doc_ids.append(str(r["doc"].id))
+                            # The chunk identity contract: prefer `metadata["chunk_key"]`
+                            # which the code at L~1387 ensures is populated for EVERY
+                            # doc (dense + BM25 channels). Falls back to `doc.id`
+                            # (langchain raw id which may be a UUID), then to a
+                            # stable "unknown" sentinel — never `str(None)` which
+                            # would surface as the literal string "None" in the
+                            # OTel attribute and mislead operator triage.
+                            _chunk_key = (
+                                (r["doc"].metadata.get("chunk_key") if r["doc"].metadata else None)
+                                or getattr(r["doc"], "id", None)
+                                or "unknown"
+                            )
+                            overflow_doc_ids.append(str(_chunk_key))
                             continue
                         raise
                     logger.info(f"Summarized {r['doc'].id}")

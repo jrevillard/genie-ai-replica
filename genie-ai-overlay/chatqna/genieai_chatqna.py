@@ -92,23 +92,35 @@ class TranslationInputTooLongError(RuntimeError):
 
 # Token-budget markers in vLLM/OpenAI error bodies. Shared with the dataprep
 # fail-loud pattern (dataprep/genieai_dataprep_arangodb.py).
+#
+# "string too long" was REMOVED (reviewer note): it also fires for non-overflow
+# errors like oversized `messages[2].tool_calls[0].id` (>64 chars) and
+# `tools[0].function.description` (>1 MB). The remaining 5 markers cover the
+# canonical vLLM granite-4.1-8b context-overflow message body.
 _TRANSLATE_INPUT_OVERFLOW_MARKERS = (
     "context length",
     "context_length_exceeded",
     "maximum context length",
     "reduce the length",
     "context window",
-    "string too long",
 )
 
 
 def _is_translate_input_overflow(exc: BaseException) -> bool:
-    """True if a translation httpx/openai error is a context-length rejection."""
-    try:
-        msg = (str(exc) or "").lower()
-    except Exception:
+    """True if a translation httpx/openai error is a context-length rejection.
+
+    Aggregates EVERY text-shaped field of the exception (str(), openai body dict,
+    httpx response body, aiohttp message) into one lowercased haystack and checks
+    for marker substrings. Matches the LIVE SDK shape — production httpx responses
+    put the body on `exc.response.text`; openai SDK >=3.x puts it on `exc.body`.
+    Test mocks with bare Exception("...context length exceeded...") still match.
+    """
+    from dataprep.genieai_dataprep_arangodb import _overflow_message_from_exc as _haystack
+
+    body = _haystack(exc)
+    if not body:
         return False
-    return any(marker in msg for marker in _TRANSLATE_INPUT_OVERFLOW_MARKERS)
+    return any(marker in body for marker in _TRANSLATE_INPUT_OVERFLOW_MARKERS)
 
 
 # Protocol marker carried in the reranker microservice's 422 body
@@ -2808,7 +2820,31 @@ class ChatQnAService:
         # Extracted into _finalize_llm_response so the strip-before-translate ordering
         # (the #1 sentinel/translation collision risk) is unit-testable without the
         # full handle_request megaservice flow.
-        final_text_response, self_confidence = await self._finalize_llm_response(llm_response, original_language)
+        try:
+            final_text_response, self_confidence = await self._finalize_llm_response(llm_response, original_language)
+        except TranslationInputTooLongError as _e_trans_overflow:
+            # The translation service rejected a chunk for exceeding the model's
+            # configured context window (4-12× oversized when DATAPREP_CONTEXTUAL_DOC_BUDGET
+            # is left at its 100k-char default). Fail-loud: surface as HTTP 422 so the BFF
+            # can render a localized error rather than the FastAPI default 500 with
+            # internal exception text. Issue #829 contract.
+            logger.warning(
+                f"Translation overflow at handle_request boundary: "
+                f"{type(_e_trans_overflow).__name__}: {str(_e_trans_overflow)[:200]}"
+            )
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "translation_input_too_long",
+                    "message": (
+                        "The translated reply exceeded the language model's input "
+                        "context window. Please reduce the conversation length or "
+                        "retry with fewer references."
+                    ),
+                    "abstained": True,
+                    "abstention_reason": "translation_input_too_long",
+                },
+            ) from _e_trans_overflow
 
         # Assemble source documents + confidence + grounding flag. Reflects the reranker's
         # verdict; not grounded (is_grounded=False) when the reranker found nothing relevant.

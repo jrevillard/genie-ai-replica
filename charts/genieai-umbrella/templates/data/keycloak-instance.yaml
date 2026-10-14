@@ -56,9 +56,11 @@ spec:
   # `Invalid parameter: redirect_uri` loops on login.
   proxy:
     headers: {{ .Values.data.keycloak.proxy.headers | default "xforwarded" }}
-  # KC 26 prod start mode (--optimized). Custom images already augmented
-  # for prod should leave this unset; default images get the optimized path.
-  startOptimized: {{ .Values.data.keycloak.startOptimized | default true }}
+  # KC 26 prod start mode (--optimized). The stock quay.io/keycloak image
+  # has no pre-built server: `start --optimized` on first boot refuses
+  # ("Please don't use this flag for the first startup or use kc.sh
+  # build"). Default to false; custom pre-built images override to true.
+  startOptimized: {{ .Values.data.keycloak.startOptimized | default false }}
   # Image-bump = single-pod recreate (DB migrations need exclusive access).
   # Chart defaults to instances: 1; prod instances: 2 with manual drain on
   # operator image bumps.

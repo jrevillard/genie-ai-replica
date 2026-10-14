@@ -1106,6 +1106,38 @@ class TestDataprepInputTooLong:
         assert result[0]["labels"] == ["FallbackLabel"]
 
     @pytest.mark.asyncio
+    async def test_batch_overflow_raises_typed_no_perchunk_fallback(self, monkeypatch):
+        """Regression (reviewer note 71787): the batch overflow path must raise
+        `DataprepInputTooLongError` IMMEDIATELY, not fall back to per-chunk
+        (which would just issue one more identical-sized vLLM call)."""
+        from dataprep.genieai_dataprep_arangodb import DataprepInputTooLongError
+
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("Error code: 400 - context_length_exceeded (max 2048). Please reduce the length.")
+        )
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            pytest.raises(DataprepInputTooLongError),
+        ):
+            # len(batch) > 1 forces the batch path (`_llm_suggest_labels` → `_llm_call_batch`).
+            await dp._label_with_llm(
+                ["chunk A", "chunk B", "chunk C"],
+                ["Healthcare"],
+                ["Healthcare"],
+                "file_batch_overflow",
+            )
+        # Exactly one vLLM call attempted — NO per-chunk fallback for overflow.
+        assert mock_client.chat.completions.create.call_count == 1
+
+    @pytest.mark.asyncio
     async def test_context_single_call_overflow_raises_typed(self, monkeypatch):
         """_context_single_call: vLLM context overflow raises DataprepInputTooLongError instead of returning ''."""
         from dataprep.genieai_dataprep_arangodb import DataprepInputTooLongError

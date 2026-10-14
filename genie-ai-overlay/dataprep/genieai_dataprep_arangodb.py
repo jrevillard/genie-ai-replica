@@ -1289,6 +1289,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     "Labeling",
                     f"Batch labeling parse failure for chunks {[i for i, _ in batch]}; falling back to per-chunk.",
                 )
+            except DataprepInputTooLongError:
+                # Fail-loud: batch prompt is structurally too long; retrying with
+                # the same oversized prompt in the per-chunk fallback would either
+                # (a) succeed only if the per-chunk prompt is small enough (rare)
+                # or (b) call vLLM with the same identical oversized text and fail
+                # again — wasting a batch call + 0..N per-chunk calls. Skip the
+                # batch-level retry path entirely; the per-chunk call sites will
+                # raise the same typed exception cleanly when they hit the cap.
+                raise
             except Exception as e:
                 err = f"{type(e).__name__}: {str(e)[:200]}"
                 batch_indices = [i for i, _ in batch]
@@ -1298,7 +1307,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     "Labeling",
                     f"Batch labeling call failed for chunks {batch_indices} ({err}); falling back to per-chunk.",
                 )
-        # Per-chunk path (default, and batch fallback).
+        # Per-chunk path (default, and batch fallback for transient/non-overflow errors).
         out: dict[int, list[str]] = {}
         for i, text in batch:
             out[i] = await self._llm_call_single(client, model, system_prompt, i, text, file_id, file_labels)

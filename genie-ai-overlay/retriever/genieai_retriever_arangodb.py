@@ -1,6 +1,7 @@
 # Copyright (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -234,11 +235,31 @@ def _normalize_chunk_id(doc) -> str | None:
     against the ``COLLECTION/_key`` form and a missing id so cross-channel fusion
     never mis-merges or silently drops a document.
     """
+
+
+def _normalize_chunk_id(doc) -> str | None:
+    """Normalize a chunk's identity to its bare ArangoDB ``_key``.
+
+    Both the dense channel (langchain-arangodb sets ``Document.id = _key``) and
+    the BM25 channel (``Document(id=_key)``) use the bare key, but this defends
+    against the ``COLLECTION/_key`` form and a missing id so cross-channel fusion
+    never mis-merges or silently drops a document.
+    """
     cid = getattr(doc, "id", None)
     if cid is None:
         return None
     cid = str(cid)
     return cid.rsplit("/", 1)[-1]  # COLLECTION/_key -> _key
+
+
+def _overflow_doc_ids_json(doc_ids: list[str]) -> str:
+    """JSON-encode overflow doc ids for OTel span-attribute storage.
+
+    OTel attribute values are strings/numbers/booleans/string-arrays-of-uniform-type;
+    nested arrays-of-strings are not preserved consistently across exporters.
+    Stable JSON-string form works on every exporter VictoriaTraces uses.
+    """
+    return json.dumps(doc_ids, ensure_ascii=False)
 
 
 def rrf_fuse(dense, bm25, k=HYBRID_RRF_K, dense_weight=HYBRID_DENSE_WEIGHT, lexical_weight=HYBRID_LEXICAL_WEIGHT):
@@ -1293,6 +1314,12 @@ class GenieaiArangoRetriever(OpeaComponent):
             ################################
 
             if enable_summarizer:
+                # Track overflow attribution across the per-chunk loop so a
+                # single ingest with N overflows surfaces N+ids, not a single
+                # boolean. Operators triage via VictoriaTraces; count + ids let
+                # them pick the right docs to re-ingest with chunk-size overrides.
+                overflow_count = 0
+                overflow_doc_ids: list[str] = []
                 for r in search_res:
                     prompt = self.generate_summarization_prompt(query, r["doc"].page_content)
                     try:
@@ -1320,13 +1347,23 @@ class GenieaiArangoRetriever(OpeaComponent):
                                 f"Summarizer skipped: vLLM context overflow for {r['doc'].id!r}: "
                                 f"{type(_e_sum).__name__}: {str(_e_sum)[:200]}"
                             )
-                            with suppress(Exception):
-                                span.set_attribute("retriever.summarizer.input_too_long", True)
+                            overflow_count += 1
+                            overflow_doc_ids.append(str(r["doc"].id))
                             continue
                         raise
                     logger.info(f"Summarized {r['doc'].id}")
 
                     r["doc"].page_content = summarized_text
+                # Emit cumulative attribution ONCE per ingest (cheap; one OTel
+                # attribute write per ingest instead of N per overflow).
+                if overflow_count:
+                    with suppress(Exception):
+                        span.set_attribute("retriever.summarizer.input_too_long", True)
+                        span.set_attribute("retriever.summarizer.overflow_count", overflow_count)
+                        span.set_attribute(
+                            "retriever.summarizer.overflow_doc_ids",
+                            _overflow_doc_ids_json(overflow_doc_ids),
+                        )
 
             ##################################################################
             # Attach Chunk Embeddings (for adaptive reranking)                #

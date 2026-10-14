@@ -1727,6 +1727,30 @@ class TestTranslationHelpers:
             await svc._translate_text_chunk("x" * 10000, "French")
 
     @pytest.mark.asyncio
+    async def test_finalize_llm_response_propagates_translation_overflow(self):
+        """Regression (reviewer note 71785): `_finalize_llm_response`'s outer
+        `except Exception` previously swallowed `TranslationInputTooLongError`,
+        returning the English source text. The narrowed catch must re-raise."""
+        from chatqna.genieai_chatqna import TranslationInputTooLongError
+
+        svc = create_chatqna_service()
+        # Patch _translate_with_chunking (or its callee) to raise the typed
+        # exception. With the swallow in place this returns the original; with
+        # the fix it re-raises.
+        with (
+            patch.object(
+                svc,
+                "_translate_with_chunking",
+                new=AsyncMock(side_effect=TranslationInputTooLongError("overflow")),
+            ),
+            pytest.raises(TranslationInputTooLongError),
+        ):
+            await svc._finalize_llm_response(
+                "original English response body",
+                original_language="es",  # non-EN triggers translation path
+            )
+
+    @pytest.mark.asyncio
     async def test_translate_with_chunking(self):
         svc = create_chatqna_service()
         call_count = 0

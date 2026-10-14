@@ -1688,6 +1688,13 @@ class ChatQnAService:
                 )
                 if logflag:
                     logger.info("Translation completed successfully")
+            except TranslationInputTooLongError:
+                # Fail-loud: translation overflow is a permanent contract issue
+                # (chunk too long for the configured model window). Fall-through
+                # to returning the original English text would mask the failure
+                # from the route layer, breaking issue #829's multilingual UX.
+                # Re-raise so the route handler can map it to HTTP 422 / 500.
+                raise
             except Exception as e:
                 logger.error(f"Translation failed: {e}, returning original response")
                 final_text_response = llm_response

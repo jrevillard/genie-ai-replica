@@ -286,16 +286,36 @@ HUGGING_FACE_HUB_TOKEN=
 # DATAPREP_CONTEXTUAL_MODEL=           # model for context generation; empty = reuse
 #                                      #   VLLM_LLM_MODEL_ID. MUST support guided JSON
 #                                      #   (response_format=json_object) like granite-4.1-8b.
-# DATAPREP_CONTEXTUAL_DOC_BUDGET=100000 # max chars of doc text fed to the context LLM
-# DATAPREP_CONTEXTUAL_MAX_TOKENS=512   # max OUTPUT tokens for the context LLM (doc-level + per-chunk). Model writes ~196 tokens; 200 truncated the JSON under load. 512 = safe margin.
-#                                      #   (~1500 tokens); <=0 disables truncation.
-# CONTEXTUAL_STRATEGY=per_chunk         # per_chunk (default; one call/chunk, section-tailored context)
-#                                      #   every chunk — N× cheaper, still propagates the doc
-#                                      #   subject) | per_chunk (one call/chunk, section-tailored
-#                                      #   context — the Anthropic recipe).
+# DATAPREP_CONTEXTUAL_DOC_BUDGET=0     # 0 = DERIVE from VLLM_MAX_MODEL_LEN (recommended, and the
+#                                      #   default). The context LLM receives: system prompt +
+#                                      #   document context + the batch's chunk text, and reserves
+#                                      #   DATAPREP_CONTEXTUAL_MAX_TOKENS *per chunk in the batch*.
+#                                      #   Everything except the document context is subtracted
+#                                      #   from the window, so the budget is right for your GPU:
+#                                      #   ~250k chars on the default 65536-token window, ~11k on
+#                                      #   env.rtx6000 (4096), none on env.t4 (2048) — see the note
+#                                      #   below. Set an explicit number to pin it; a negative
+#                                      #   value disables contextualization for the document.
+#                                      #   Do NOT copy a number from another deployment: a budget
+#                                      #   sized for a big GPU overflows a small one, and the calls
+#                                      #   are rejected and silently fall back to raw chunks.
+# DATAPREP_CONTEXTUAL_MAX_TOKENS=512   # max OUTPUT tokens per chunk in the batch. Model writes ~196
+#                                      #   tokens; the legacy cap of 200 truncated the JSON under
+#                                      #   concurrent load. 512 = safe margin. This is PER CHUNK, so a
+#                                      #   batch of 4 reserves 2048 output tokens — which is why a
+#                                      #   2048-token window cannot run contextualization at all.
+# CONTEXTUAL_STRATEGY=per_chunk        # per_chunk (default; one call per batch, section-tailored
+#                                      #   context — the Anthropic recipe, highest precision, N calls
+#                                      #   per document) | doc_level (ONE call for the whole
+#                                      #   document, same context on every chunk — N× cheaper, still
+#                                      #   propagates the document subject).
 # CONTEXTUAL_LABEL_RAW=true            # decoupled mode (default): label the RAW chunk and use the
 #                                      #   context ONLY for the embedding — keeps label precision
-#                                      #   while propagating the subject via vectors).
+#                                      #   while propagating the subject via vectors.
+# VLLM_MAX_MODEL_LEN                   # the serving model's context window. Set by env.t4 (2048),
+#                                      #   env.rtx6000 (4096) or the compose default (65536). This is
+#                                      #   what DATAPREP_CONTEXTUAL_DOC_BUDGET is derived from, so it
+#                                      #   is not only a vLLM tuning knob.
 
 # Hybrid Retrieval — BM25 + Reciprocal Rank Fusion (Contextual Retrieval Part B) — ON by default, opt-out via env var.
 # When enabled, the retriever runs a lexical (BM25) channel over <GRAPH>_SOURCE.text

@@ -459,14 +459,15 @@ defaults.
 | `CONTENT_EXTRACTION_METHOD` | enum | no | `docling` (compose) / `opea` (Python code) | `opea` or `docling` (compose wins at runtime; set in `.env` to override) |
 | `LABEL_SELECTOR_SYSTEM_PROMPT` | string | no | (built-in) | LLM labeling rules |
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | bool | no | `true` | Prepend LLM doc-context prefix to each chunk |
-| `CONTEXTUAL_STRATEGY` | enum | no | `doc_level` | `per_chunk` or `doc_level` (compose default `doc_level`; Python code default `per_chunk` — compose wins at runtime; set in `.env` to override) |
+| `CONTEXTUAL_STRATEGY` | enum | no | `per_chunk` | `per_chunk` (one call per batch, section-tailored) or `doc_level` (one call per document, same context on every chunk). Compose and code agree on `per_chunk`; set in `.env` to override |
 | `CONTEXTUAL_RETRIEVAL_PROMPT` | string | no | (built-in) | Per-chunk context prompt (`{document_context}` placeholder) |
 | `MULTI_TURN_BLEND_ENABLED` | bool | no | `false` | Multi-turn vector-space blending |
 | `MULTI_TURN_BLEND_ALPHA` | number | no | `0.7` | Query weight α in `V = α·EQ + (1-α)·EH` |
 | `MULTI_TURN_HISTORY_TURNS` | number | no | `1` | Prior turns blended into history embedding |
-| `DATAPREP_CONTEXTUAL_MODEL` | string | no | (empty) | Model for context generation (empty = `VLLM_LLM_MODEL_ID`); must support guided JSON |
-| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | number | no | `6000` (compose) / `100000` (Python code) | Max chars of doc text fed to context LLM (~1500 tokens); `<=0` disables truncation (sibling `_DOC_LEVEL` variant defaults to `100000`). Compose wins at runtime; set in `.env` to override |
-| `DATAPREP_CONTEXTUAL_MAX_TOKENS` | number | no | `512` | Max output tokens for context-gen LLM (was 200, truncated under load) |
+| `DATAPREP_CONTEXTUAL_MODEL` | string | no | (empty) | Model for context generation (empty = auto-detect the served model); must support guided JSON |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | number | no | `0` (= derived) | Max chars of document text placed in the context LLM's system prompt. `0` derives it from `VLLM_MAX_MODEL_LEN`, so one setting is correct on any GPU; `>0` pins a value, `<0` disables contextualization. Sibling `_DOC_LEVEL` variant defaults to `100000`. **Do not copy this from another deployment** — a budget sized for a large GPU overflows a small one and the calls fall back to raw chunks silently. See [Contextual Retrieval]({{< relref "/docs/rag-pipeline/contextual-retrieval" >}}) |
+| `DATAPREP_CONTEXTUAL_MAX_TOKENS` | number | no | `512` | Max output tokens **per chunk in the batch** for context-gen LLM (was 200, truncated under load). A batch of 4 reserves 4× this. |
+| `VLLM_MAX_MODEL_LEN` | number | no | `65536` (`env.t4` 2048, `env.rtx6000` 4096) | Served model's context window. The budget above is derived from it, and it must reach the dataprep container for that to work. |
 
 #### Retriever
 

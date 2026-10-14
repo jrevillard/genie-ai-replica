@@ -346,20 +346,24 @@ Set in `group_vars/<env>/vars.yml`:
 |----------|---------|-------------|
 | `label_selector_system_prompt` | (built-in) | System prompt for automatic document labeling (optional, has built-in default with `{labels_list}` placeholder) |
 
-### Contextual Retrieval (Optional, default off)
+### Contextual Retrieval (ON by default)
 
-Per-chunk LLM document-context prefix → embedding (+ optionally labeling) so chunks carry the document's subject. See `site/content/en/docs/rag/data-labeling.md` §7 + `_bmad-output/implementation-artifacts/spec-contextual-retrieval.md`.
+Per-chunk LLM document-context prefix → embedding, so chunks carry the document's subject. Labels run on the raw chunk. See `site/content/en/docs/rag-pipeline/contextual-retrieval.md` + `_bmad-output/implementation-artifacts/spec-contextual-retrieval.md`.
+
+Every variable below is emitted by `env.j2` with the value in the "Default" column, so a swarm `.env` states each one explicitly rather than inheriting it. `tests/config-validator` (AC8) fails the build if this table and `docker-compose.yaml` disagree.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `contextual_retrieval_enabled` | `false` | Opt-in: prepend an LLM document-context prefix to each chunk so it carries the document's subject |
-| `contextual_strategy` | `per_chunk` | `per_chunk` (one call/chunk, section-tailored) or `doc_level` (one call/doc, same context on every chunk — N× cheaper) |
-| `contextual_label_raw` | `false` | Decoupled mode: label the RAW chunk, use the context ONLY for the embedding (recommended — keeps label precision) |
-| `dataprep_contextual_model` | (empty) | Model for context generation; empty = reuse `vllm_llm_model_id`; must support guided JSON |
-| `dataprep_contextual_doc_budget` | `100000` | Max chars of doc text fed to the per_chunk context LLM |
+| `contextual_retrieval_enabled` | `true` | Prepend an LLM document-context prefix to each chunk so it carries the document's subject. `false` is a true no-op |
+| `contextual_strategy` | `per_chunk` | `per_chunk` (one call per batch, section-tailored) or `doc_level` (one call per document, same context on every chunk — N× cheaper) |
+| `contextual_label_raw` | `true` | Decoupled mode: label the RAW chunk, use the context ONLY for the embedding (keeps label precision while propagating the subject via the vector) |
+| `dataprep_contextual_model` | (empty) | Model for context generation; empty = auto-detect the served model; must support guided JSON |
+| `dataprep_contextual_doc_budget` | `0` | `0` = **derived** from `vllm_max_model_len`. The context call carries system prompt + document context + batch chunk text and reserves `dataprep_contextual_max_tokens` **per chunk in the batch**; all of that is subtracted from the window and the remainder is the budget. Set `>0` only deliberately — a budget copied from a larger-window deployment overflows this one and the rejected calls fall back to raw chunks silently |
 | `dataprep_contextual_doc_budget_doc_level` | `100000` | Max chars of doc text fed to the doc_level context LLM (one call — can afford a larger window) |
-| `dataprep_contextual_max_tokens` | `512` | Max OUTPUT tokens for the context-generation LLM (doc-level + per-chunk). The legacy cap of 200 truncated the JSON under load; 512 = safe margin (model stops early at ~196). |
+| `dataprep_contextual_max_tokens` | `512` | Max OUTPUT tokens **per chunk in the batch** for the context-generation LLM. The legacy cap of 200 truncated the JSON under load; 512 = safe margin (model stops early at ~196). A batch of 4 reserves 4× this |
 | `contextual_retrieval_prompt` | (built-in) | Prompt for per-chunk context generation (has `{document_context}` placeholder) |
+
+`vllm_max_model_len` (`env.t4` 2048, `env.rtx6000` 4096, compose default 65536) is the window the budget is derived from — it is a vLLM tuning knob *and* an ingestion knob. Note that 2048 is too small to contextualize at all, because the output reservation alone consumes it; that profile ingests raw chunks by design.
 
 ### Keycloak Identity Provider (Required)
 

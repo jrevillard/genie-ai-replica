@@ -188,18 +188,21 @@ This is the one piece of the configuration that has **two contradictory
 defaults** depending on where you look — preserve that nuance when
 configuring:
 
-- **Code default** (`genieai_dataprep_arangodb.py:112`):
+- **Code default** (`genieai_dataprep_arangodb.py`):
   `CONTEXTUAL_STRATEGY = "per_chunk"`.
-- **`env` template comment** (line 224): documents `per_chunk` as the
-  expected default.
-- **docker-compose runtime default** (`docker-compose.yaml:1221`):
-  `CONTEXTUAL_STRATEGY=${CONTEXTUAL_STRATEGY:-per_chunk}`. This is what the
-  **deployed service actually sees** if you do not override the env var.
+- **`env` template comment**: documents `per_chunk` as the expected default.
+- **docker-compose runtime default** (`docker-compose.yaml`):
+  `CONTEXTUAL_STRATEGY=${CONTEXTUAL_STRATEGY:-per_chunk}`.
 
-In practice, a fresh `docker compose up` deploys with `doc_level`; a
-deployer who follows the `env` comments without also reading the compose
-file ends up with `per_chunk`. Choose explicitly and verify with
-[§ Verification](#verification).
+All three agree, and compose is what the deployed service actually sees, so a
+fresh `docker compose up` deploys with **`per_chunk`**. Earlier revisions of this
+page claimed a `doc_level` default; that was wrong. Set it explicitly if you want
+`doc_level`, and verify with [§ Verification](#verification).
+
+`DATAPREP_CONTEXTUAL_DOC_BUDGET` used to have the same problem, and worse: code,
+compose and these docs each named a different number (100000 / 6000 / 100000). It
+is now **derived** from `VLLM_MAX_MODEL_LEN` — see
+[Contextual Retrieval]({{< relref "contextual-retrieval" >}}).
 
 For the developer-side discussion of resilience (the silent-degradation
 guard that fires when the model returns no contexts), model requirements
@@ -254,9 +257,9 @@ same values as commented-out examples.
 | Variable | Default (compose) | Default (code/env template) | Effect |
 |---|---|---|---|
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | `true` | `true` | Master switch. `false` skips context generation entirely (a no-op — chunks are embedded and labelled raw). |
-| `CONTEXTUAL_STRATEGY` | `doc_level` | `per_chunk` | `per_chunk` = N LLM calls/doc, section-tailored context. `doc_level` = 1 call/doc, same context on every chunk. See the [§ Which is the actual default?](#which-is-the-actual-default) caveat. |
-| `DATAPREP_CONTEXTUAL_MODEL` | _(empty)_ | _(empty)_ | Model for context generation. Empty = reuse `VLLM_LLM_MODEL_ID`. Must support guided JSON. |
-| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | `6000` | `100000` | Max chars of doc text fed to the context LLM under `per_chunk` (it is called N times, so the window is small). |
+| `CONTEXTUAL_STRATEGY` | `per_chunk` | `per_chunk` | `per_chunk` = N LLM calls/doc, section-tailored context. `doc_level` = 1 call/doc, same context on every chunk. |
+| `DATAPREP_CONTEXTUAL_MODEL` | _(empty)_ | _(empty)_ | Model for context generation. Empty = auto-detect the served model. Must support guided JSON. |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | `0` | `0` | `0` = derived from `VLLM_MAX_MODEL_LEN` (see [Contextual Retrieval]({{< relref "contextual-retrieval" >}})). `>0` pins a value; `<0` disables contextualization. |
 | `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` | `100000` | `100000` | Max chars of doc text fed to the context LLM under `doc_level` (1 call, larger window). |
 | `DATAPREP_CONTEXTUAL_MAX_TOKENS` | `512` | `512` | Max OUTPUT tokens of generated context. The model writes ~196 tokens; the legacy cap of 200 truncated the JSON under load — `512` gives comfortable margin. |
 | `CONTEXTUAL_LABEL_RAW` | `true` | `true` | Decoupled labelling. `true` (default) = label the raw chunk, embed the contextualised chunk. |

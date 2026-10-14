@@ -269,6 +269,10 @@ services:
     enabled: true
     replicas: 1
     image: { repository: genie-ai-backend, tag: "main" }
+    # One-shot migrations Job (post-install/post-upgrade hook) that
+    # creates the ArangoDB collections; same registry/tag conventions
+    # as the service images.
+    migrationsImage: { repository: genie-ai-db-migrations, tag: "main" }
     port: 3000
     # Image USER is `node` (uid 1000). PSA `restricted` requires
     # runAsNonRoot: true and the namespace PSA accepts non-root UIDs.

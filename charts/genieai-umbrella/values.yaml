@@ -372,7 +372,12 @@ services:
   clamav:
     enabled: true
     replicas: 1
-    image: { repository: clamav/clamav, tag: "1.3" }
+    # Tag: `stable-debian` (matches docker-compose.yaml:714). The chart
+    # used `1.3` historically, but Docker Hub's clamav/clamav 1.x line
+    # only ships `1.4+`; the operator logs `manifest unknown` and the
+    # pod stays in ImagePullBackOff. `stable-debian` is a moving tag
+    # — re-pin to a digest before any production rollout.
+    image: { repository: clamav/clamav, tag: "stable-debian" }
     port: 3310
     # The shared per-service template applies a default non-root
     # securityContext; this service requires a fully-restated block

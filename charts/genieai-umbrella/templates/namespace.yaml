@@ -1,27 +1,7 @@
-{{- /* A pre-install hook that creates the release namespace. Every other
-       pre-install hook in the chart (dep-check SA, dep-check Job,
-       cluster-profile detect Job) targets this namespace, and helm
-       creates the namespace AFTER hooks by default — so without this
-       hook the install fails on the very first hook with
-       `namespaces "<ns>" not found`.
-
-       The original comment here argued against using an annotation
-       because Helm 4's `before-hook-creation` would delete the
-       namespace between reinstalls. That argument was wrong:
-       `before-hook-creation` only deletes objects whose identity
-       matches the same `helm.sh/hook` annotation as some other hook.
-       This template only sets `pre-install`, no other template in the
-       chart uses ONLY `pre-install`, and `hook-succeeded` would in
-       fact delete the namespace between releases (wrong: the next
-       release's hooks need it). So the no-delete-policy choice is the
-       one that makes both installs and reinstalls work, and the
-       original argument was solving a phantom problem.
-
-       Consequence: the chart now self-provisions the namespace; a
-       HelmRelease that ALSO sets `install.createNamespace: true` is
-       fine (its effect is just a no-op for us), and the README no
-       longer requires `helm install --create-namespace`. */ -}}
-{{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" "component" "namespace" -}}
+{{- /* Namespace-scoped RBAC the chart's workloads and the per-environment
+kube-arangodb operator rely on. The namespace itself is owned by the
+deploy-repo Kustomization (namespace-genieai.yaml) — see the note
+below the release-namespace guard. */ -}}
 {{- $ns := .Release.Namespace -}}
 {{- /* Fail fast when the legacy values key diverges from the release
        namespace: later-tier templates still read .Values.namespace, and a
@@ -32,35 +12,15 @@
 {{- if and .Values.namespace (ne .Values.namespace .Release.Namespace) -}}
 {{- fail (printf "values 'namespace' (%s) must equal the release namespace (%s) — set namespace: %s in your values-override, OR install with -n %s" .Values.namespace .Release.Namespace .Release.Namespace .Release.Namespace) -}}
 {{- end -}}
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ $ns }}
-  labels:
-    {{- include "genieai-common.labels" . | nindent 4 }}
-    genieai.io/cluster-profile: {{ .Values.clusterProfile | default "dev" | quote }}
-    app.kubernetes.io/part-of: genieai
-    # Advertise K8s Pod Security Standards at the namespace level so admission
-    # controllers refuse pods without required securityContext.
-    # `baseline` (not `restricted`) because the chart ships 2 services
-    # (nginx, frontend) whose images have no non-root USER — their
-    # entrypoints write to paths owned by root. `restricted` rejects
-    # `runAsNonRoot: false / runAsUser: 0` and strands those pods in
-    # ImagePullBackOff. `baseline` still blocks the truly dangerous
-    # cases (privileged, host namespaces, root capabilities) and is
-    # the right floor for the dev install. Production deploys
-    # rebuilding the images with a non-root USER can flip back to
-    # `restricted`.
-    pod-security.kubernetes.io/enforce: baseline
-    # Pin to a specific version rather than `latest`. Across cluster upgrades
-    # `latest` silently changes the policy version and may start rejecting
-    # pods that previously scheduled without warning.
-    pod-security.kubernetes.io/enforce-version: v1.33
-    pod-security.kubernetes.io/audit: baseline
-    pod-security.kubernetes.io/audit-version: v1.33
-    pod-security.kubernetes.io/warn: baseline
-    pod-security.kubernetes.io/warn-version: v1.33
----
+{{- /* The namespace itself is NOT rendered by the chart. It is owned by
+       the deploy-repo Kustomization (namespace-genieai.yaml), which
+       applies it before the SealedSecrets and HelmReleases that target
+       it. A chart-owned Namespace made every failed install → uninstall
+       remediation DELETE the namespace (helm deletes its regular
+       resources on uninstall), cascading away the SealedSecrets, the
+       per-environment kube-arangodb operator and every PVC, and
+       deadlocking the Kustomization (it cannot apply SealedSecrets into
+       a terminating namespace). */ -}}
 # ArgoDB operator in-cluster RBAC. The kube-arangodb operator installed
 # by scripts/install-prereqs.sh runs in arango-system with `legacy`
 # scope: cluster-wide for core K8s resources (deployments, services,

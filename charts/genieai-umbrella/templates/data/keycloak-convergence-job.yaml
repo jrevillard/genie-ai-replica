@@ -194,19 +194,21 @@ spec:
               value: {{ .Values.data.keycloak.adminUsername | quote }}
             - name: GENIE_ADMIN_EMAIL
               value: {{ .Values.data.keycloak.adminEmail | default "genie-admin@genieai.local" | quote }}
-            # The realm file's smtpServer block is unconditional, so
-            # these are emitted even with smtp:null — empty, which is
-            # what the compose path already sends. Keycloak rejects an
-            # smtpServer whose from is empty (deploy/ansible/README.md),
-            # so a default install needs SMTP configured; that failure is
-            # inherited from the compose path, not introduced here.
-            {{- $smtp := .Values.data.keycloak.smtp | default dict -}}
+            {{- $smtp := .Values.data.keycloak.smtp | default dict }}
+            # The realm file's smtpServer block is unconditional, so the
+            # EMAIL_* vars must resolve on every install — including
+            # smtp:null. Kubernetes drops an EnvVar whose value is the
+            # empty string (omitempty on the API type), and kcc's
+            # substitution then fails the whole import on the missing
+            # variable — so unset fields get non-empty sentinels instead
+            # of the compose path's empty strings. With auth=false the
+            # host/user values are never dialed.
             - name: EMAIL_FROM
-              value: {{ $smtp.from | default "" | quote }}
+              value: {{ $smtp.from | default "no-reply@genieai.local" | quote }}
             - name: EMAIL_HOST
-              value: {{ $smtp.host | default "" | quote }}
+              value: {{ $smtp.host | default "localhost" | quote }}
             - name: EMAIL_PORT
-              value: {{ $smtp.port | default 587 | int | quote }}
+              value: {{ $smtp.port | default 25 | int | quote }}
             - name: EMAIL_SECURE
               value: {{ eq ($smtp.ssl | default false | toString) "true" | quote }}
             - name: EMAIL_SMTP_STARTTLS
@@ -214,7 +216,7 @@ spec:
             - name: EMAIL_SMTP_AUTH
               value: {{ eq ($smtp.auth | default false | toString) "true" | quote }}
             - name: EMAIL_USER
-              value: {{ $smtp.user | default "" | quote }}
+              value: {{ $smtp.user | default "unused" | quote }}
             - name: KEYCLOAK_REGISTRATION_ENABLED
               value: {{ eq ((.Values.data.keycloak.registrationAllowed | default false) | toString) "true" | quote }}
             - name: KEYCLOAK_VERIFY_EMAIL
@@ -228,7 +230,7 @@ spec:
             - name: KEYCLOAK_BRUTE_FORCE
               value: {{ eq ((.Values.data.keycloak.bruteForceProtected | default true) | toString) "true" | quote }}
             - name: KEYCLOAK_PASSWORD_POLICY
-              value: {{ .Values.data.keycloak.passwordPolicy | default "" | quote }}
+              value: {{ .Values.data.keycloak.passwordPolicy | default "length(8)" | quote }}
             - name: KEYCLOAK_THEME
               value: {{ .Values.data.keycloak.theme | default "keycloak" | quote }}
             - name: KEYCLOAK_I18N_ENABLED

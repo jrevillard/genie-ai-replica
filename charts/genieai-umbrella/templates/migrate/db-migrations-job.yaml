@@ -37,7 +37,7 @@ spec:
       containers:
         - name: db-migrations
           image: {{ if $registry }}{{ $registry }}/{{ end }}{{ $img.repository | default "genie-ai-db-migrations" }}:{{ $img.tag | default "main" }}
-          imagePullPolicy: {{ .Values.global.pullPolicy | default "IfNotPresent" }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -47,7 +47,7 @@ spec:
             # and credentials, so the collections land in the database
             # the backend actually reads.
             - name: ARANGO_URL
-              value: {{ printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns | quote }}
+              value: {{ include "genieai-umbrella.arangoURL" . | quote }}
             - name: ARANGO_DB
               value: "_system"
             - name: ARANGO_USER

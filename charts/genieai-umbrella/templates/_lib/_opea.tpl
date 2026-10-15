@@ -68,3 +68,13 @@ Signature: {{ include "genieai-umbrella.opeaSslSkipVerify" . }}
 {{- define "genieai-umbrella.opeaSslSkipVerify" -}}
 {{- if hasPrefix "https://" .Values.opea.gpu.nodeHost -}}1{{- else -}}0{{- end -}}
 {{- end -}}
+
+{{/*
+genieai-umbrella.opeaGpuHostname — the bare host of opea.gpu.nodeHost
+(scheme, port, and path stripped; bracketed IPv6 literals preserved).
+Feeds the GPU_NODE_HOST env the model-id auto-detection gates on.
+Empty nodeHost → empty string (auto-detection stays off).
+*/}}
+{{- define "genieai-umbrella.opeaGpuHostname" -}}
+{{- regexReplaceAll "^([a-z]+://)?(\\[[^\\]]+\\]|[^:/]+).*" (.Values.opea.gpu.nodeHost | default "") "$2" -}}
+{{- end -}}

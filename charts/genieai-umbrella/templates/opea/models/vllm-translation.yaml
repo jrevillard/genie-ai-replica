@@ -1,150 +1,25 @@
 {{/*
-  vLLM translation model. Renders only when both opea.enabled is true
-  and opea.gpu.mode is "in-cluster" — the external mode (the laptop
-  default) keeps the chart pointing the orchestrators at a remote GPU
-  node and emits no model pods at all.
-
-  Compose parity: docker-compose.yaml gpu-models profile, service
-  `vllm-translation-guardrail` (lines ~868-928). The image, command
-  flags, env, volumes and healthcheck mirror the compose service
-  verbatim. The translation model id is exposed through
-  .Values.opea.translation.modelId (default google/gemma-3-4b-it,
-  matching compose). Container/listen port 9031.
-
-  Image is pulled from docker.io unconditionally — same rationale as
-  templates/opea/models/vllm.yaml and the kcc/ArangoDB exception in
-  templates/data/keycloak-convergence-job.yaml.
-
-  Model-cache volume is emptyDir — see templates/opea/models/vllm.yaml
-  for the broader rationale on PVC-as-operator-concern.
+  vLLM translation model (in-cluster GPU mode only). Compose parity:
+  docker-compose.yaml gpu-models profile, service
+  `vllm-translation-guardrail`. Image from docker.io unconditionally
+  (see vllm.yaml). Carries a wait-for-vllm initContainer — compose
+  parity for `depends_on: vllm: condition: service_healthy`, which
+  serializes the two HF model downloads on a single GPU node.
+  Skeleton via genieai-umbrella.modelDeployment.
 */}}
 {{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") -}}
-{{- $ns := .Values.namespace -}}
 {{- $modelId := .Values.opea.translation.modelId -}}
-{{- $res := .Values.opea.models.resources | default (dict "requests" (dict "nvidia.com/gpu" 1) "limits" (dict "nvidia.com/gpu" 1)) -}}
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: vllm-translation
-  namespace: {{ $ns }}
-  labels:
-    app: vllm-translation
-    app.kubernetes.io/name: vllm-translation
-    app.kubernetes.io/component: vllm-translation
-    app.kubernetes.io/part-of: genieai
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: vllm-translation
-  template:
-    metadata:
-      labels:
-        app: vllm-translation
-    spec:
-      nodeSelector:
-        gpu: "true"
-      securityContext:
-        seccompProfile:
-          type: RuntimeDefault
-      {{- with .Values.global.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      initContainers:
-        # Compose parity: `depends_on: vllm: condition: service_healthy`
-        # serializes the two HF model downloads. Without it both vLLM
-        # pods pull concurrently on the single GPU node and can OOM.
-        - name: wait-for-vllm
-          image: curlimages/curl:8.10.1
-          command:
-            - sh
-            - -c
-            - until curl -sf http://vllm.{{ $ns }}.svc.cluster.local:8000/health; do echo waiting for vllm; sleep 5; done
-      containers:
-        - name: vllm-translation
-          image: docker.io/vllm/vllm-openai:v0.10.0
-          imagePullPolicy: IfNotPresent
-          args:
-            - --model
-            - {{ $modelId | quote }}
-            - --gpu_memory_utilization
-            - "0.3"
-            - --served-model-name
-            - {{ $modelId | quote }}
-            - --max_model_len
-            - "2048"
-            - --dtype=auto
-            - --port
-            - "9031"
-            - --no-enable-chunked-prefill
-            - --max-num-seqs
-            - "16"
-            - --chat-template-content-format
-            - openai
-          ports:
-            - name: http
-              containerPort: 9031
-          env:
-            - name: HUGGING_FACE_HUB_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: vllm-api-key
-                  key: HF_TOKEN
-            - name: NVIDIA_VISIBLE_DEVICES
-              value: all
-          resources:
-            {{- toYaml $res | nindent 12 }}
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-          volumeMounts:
-            - name: hf-cache
-              mountPath: /root/.cache/huggingface
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 9031
-            initialDelaySeconds: 60
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 9031
-            initialDelaySeconds: 120
-            periodSeconds: 30
-          startupProbe:
-            httpGet:
-              path: /health
-              port: 9031
-            failureThreshold: 30
-            periodSeconds: 10
-      volumes:
-        {{- if .Values.opea.models.cache.enabled }}
-        # Shared model-weights cache (see templates/opea/models/model-cache-pvc.yaml).
-        # ReadWriteOnce on the single gpu=true node; all four model pods
-        # share the claim.
-        - name: hf-cache
-          persistentVolumeClaim:
-            claimName: genieai-model-cache
-        {{- else }}
-        - name: hf-cache
-          emptyDir: {}
-        {{- end }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: vllm-translation
-  namespace: {{ $ns }}
-  labels:
-    app: vllm-translation
-spec:
-  ports:
-    - name: http
-      port: 9031
-      targetPort: 9031
-  selector:
-    app: vllm-translation
+{{- $initText := printf "      initContainers:\n        # Compose parity: `depends_on: vllm: condition: service_healthy`\n        # serializes the two HF model downloads. Without it both vLLM\n        # pods pull concurrently on the single GPU node and can OOM.\n        - name: wait-for-vllm\n          image: curlimages/curl:8.10.1\n          command:\n            - sh\n            - -c\n            - until curl -sf http://vllm.%s.svc.cluster.local:8000/health; do echo waiting for vllm; sleep 5; done" .Values.namespace -}}
+{{- include "genieai-umbrella.modelDeployment" (dict
+      "root" .
+      "name" "vllm-translation"
+      "image" "docker.io/vllm/vllm-openai:v0.10.0"
+      "port" 9031
+      "mountPath" "/root/.cache/huggingface"
+      "readinessDelay" 60
+      "livenessDelay" 120
+      "startup" (dict "failureThreshold" 30 "periodSeconds" 10)
+      "initText" $initText
+      "argsText" (printf "            - --model\n            - \"%s\"\n            - --gpu_memory_utilization\n            - \"0.3\"\n            - --served-model-name\n            - \"%s\"\n            - --max_model_len\n            - \"2048\"\n            - --dtype=auto\n            - --port\n            - \"9031\"\n            - --no-enable-chunked-prefill\n            - --max-num-seqs\n            - \"16\"\n            - --chat-template-content-format\n            - openai" $modelId $modelId)
+    ) -}}
 {{- end -}}

@@ -27,7 +27,7 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      genieai.io/component: translation
+      {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 6 }}
   template:
     metadata:
       labels:

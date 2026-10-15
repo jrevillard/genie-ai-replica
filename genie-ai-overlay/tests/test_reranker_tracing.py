@@ -151,13 +151,17 @@ class TestRerankingEndpointSpan:
             span.set_attribute.assert_any_call("reranker.strategy", rtc_module.RERANKING_STRATEGY)
 
     def test_both_spans_go_through_the_component_resolver(self):
-        """The two spans must share the resolver, not merely agree today.
+        """The two spans must agree because they share one resolver.
 
-        Sharing a constant was half the fix: the drift-prone part was the
-        resolution expression itself, and a copy in each file would drift again
-        the moment the component changed how it resolves.
+        Asserting the import identity would prove nothing — Python guarantees
+        it. What matters is the behaviour that sharing buys: an unknown or empty
+        name resolves to the SAME value on both sides, which the span-parity
+        tests below assert end-to-end.
         """
-        assert rms_module.resolve_reranking_strategy is rtc_module.resolve_reranking_strategy
+        assert rms_module.resolve_reranking_strategy(None) == rtc_module.resolve_reranking_strategy(None)
+        assert rms_module.resolve_reranking_strategy("adaptive_v2") == rtc_module.resolve_reranking_strategy(
+            "adaptive_v2"
+        )
 
     @pytest.mark.asyncio
     async def test_reranking_records_input_and_output_doc_counts(self, mock_tracer):
@@ -504,11 +508,13 @@ class TestRerankerStrategyNormalisation:
         ms_tracer, ms_span = self._spans()
         comp_tracer, comp_span = self._spans()
         expected = rtc_module.RERANKING_STRATEGY
+        mock_response = MagicMock()
+        mock_response.reranked_docs = [MagicMock()]
 
-        with patch.object(rms_module, "tracer", ms_tracer):
-            mock_response = MagicMock()
-            mock_response.reranked_docs = [MagicMock()]
-            rms_module.loader.invoke = AsyncMock(return_value=mock_response)
+        with (
+            patch.object(rms_module, "tracer", ms_tracer),
+            patch.object(rms_module.loader, "invoke", AsyncMock(return_value=mock_response)),
+        ):
             await rms_module.reranking(self._request(requested))
 
         with (
@@ -529,11 +535,13 @@ class TestRerankerStrategyNormalisation:
         attribute operators query. Normalisation closes it."""
         ms_tracer, ms_span = self._spans()
         hostile = "x" * 100_000
+        mock_response = MagicMock()
+        mock_response.reranked_docs = [MagicMock()]
 
-        with patch.object(rms_module, "tracer", ms_tracer):
-            mock_response = MagicMock()
-            mock_response.reranked_docs = [MagicMock()]
-            rms_module.loader.invoke = AsyncMock(return_value=mock_response)
+        with (
+            patch.object(rms_module, "tracer", ms_tracer),
+            patch.object(rms_module.loader, "invoke", AsyncMock(return_value=mock_response)),
+        ):
             await rms_module.reranking(self._request(hostile))
 
         assert self._strategy(ms_span) in rtc_module.RERANKING_STRATEGIES
@@ -561,6 +569,13 @@ class TestRerankerStrategyNormalisation:
         request.reranking_strategy = strategy
         request.embedding = [0.1, 0.2]
         request.chunk_embeddings = [[0.1, 0.2]]
+        # The component still reads threshold / top_n off a serialised dump. A
+        # bare MagicMock there makes top_n a MagicMock, so decoded_response[:n]
+        # is empty and NO strategy branch runs — the test would pass with every
+        # branch in invoke() deleted.
+        request.model_dump = MagicMock(
+            return_value={"reranking_strategy": strategy, "reranking_threshold": 0.75, "top_n": 3}
+        )
         return request
 
     @staticmethod
@@ -582,3 +597,15 @@ class TestRerankerStrategyNormalisation:
         rtc_module.SearchedDoc = _RealSearchedDoc
         yield
         rtc_module.SearchedDoc = original_sd
+
+
+def test_an_invalid_deployment_default_is_reported_and_falls_back():
+    """RERANKING_STRATEGY is operator config and can hold a typo.
+
+    With an unvalidated default, `adptive` matches no branch, control reaches
+    the catch-all and slice runs — silently, because the only warning naming the
+    bad value lived in that catch-all. The resolver now validates the default
+    too, so the misconfiguration is named at the point it is read.
+    """
+    assert rtc_module.resolve_reranking_strategy(None, default="adptive") == "slice"
+    assert rtc_module.resolve_reranking_strategy("adaptive", default="adptive") == "adaptive"

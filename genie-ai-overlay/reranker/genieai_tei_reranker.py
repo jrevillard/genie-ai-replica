@@ -87,7 +87,7 @@ RERANKING_STRATEGIES = ("slice", "threshold", "slice_threshold", "knee_threshold
 THRESHOLD_STRATEGIES = ("threshold", "slice_threshold")
 
 
-def resolve_reranking_strategy(requested: str | None, default: str = RERANKING_STRATEGY) -> str:
+def resolve_reranking_strategy(requested: str | None, default: str | None = None) -> str:
     """Return the strategy that will actually run, given the request's value.
 
     `reranking_strategy` is a bare ``str | None`` on the request models and
@@ -97,12 +97,24 @@ def resolve_reranking_strategy(requested: str | None, default: str = RERANKING_S
     reports is what the code below it does. Both the component and the
     microservice span call this, which is what keeps the two spans from
     disagreeing.
+
+    Both inputs are validated. `requested` comes off the wire, and `default`
+    comes from RERANKING_STRATEGY, which is operator config and just as capable
+    of a typo — an unvalidated default would match no branch below and fall
+    into the catch-all with nothing logged.
     """
+    resolved_default = default or RERANKING_STRATEGY
+    if resolved_default not in RERANKING_STRATEGIES:
+        logger.warning(f"RERANKING_STRATEGY={resolved_default} is not a known strategy. Falling back to slice.")
+        resolved_default = "slice"
     if requested and requested in RERANKING_STRATEGIES:
         return requested
     if requested:
-        logger.warning(f"Unknown strategy {requested}. Defaulting to {default}.")
-    return default
+        # Truncated: this string is client-controlled and lands in VictoriaLogs.
+        # Unbounded, it is both a log-volume amplifier and a newline-injection
+        # vector into the admin logs view.
+        logger.warning(f"Unknown strategy {requested[:64]!r}. Defaulting to {resolved_default}.")
+    return resolved_default
 
 
 # Adaptive utility-cost selection parameters

@@ -630,6 +630,11 @@ opea:
     # in-cluster mode only — mirrors the gpu-models compose service parity.
     llm:
       modelId: meta-llama/Meta-Llama-3.1-8B-Instruct
+    reranker:
+      # TEI reranker model. Inherits compose default (BAAI/bge-reranker-v2-m3).
+      # The embedding model reads from opea.embedding.modelId; the LLM from
+      # opea.models.llm.modelId; only the reranker model needed a new key.
+      modelId: BAAI/bge-reranker-v2-m3
     resources: {}
 
 # clusterProfile-driven replica overrides. prod runs multiple replicas per

@@ -9,16 +9,19 @@ const translationService = require('../services/translation-service');
 const { extractCommittableUnit } = require('../services/translation/stream-boundary');
 const { parsePositiveInt } = require('../shared-lib');
 
-// Metadata persisted when chatqna never sent a metadata event. One factory, so
-// the disconnect path and the done path cannot drift into storing two different
-// key sets for the same kind of query — a post-hoc AQL on metadata.abstained
-// would otherwise skip every disconnected query.
+// Metadata persisted when chatqna never sent a metadata event (stream error,
+// or the answer ended before the envelope). One factory, so the two call sites
+// cannot drift into storing different key sets for the same kind of query.
+//
+// `abstained` is null here, not false. false would mean "chatqna answered and
+// chose not to abstain" — a clean low-confidence miss. This is "we never got an
+// answer", and a post-hoc AQL counting abstentions has to be able to tell them.
 const emptyStreamMetadata = () => ({
   source_documents: [],
   confidence_score: 0,
   is_grounded: false,
   retrieval_confidence_score: null,
-  abstained: false,
+  abstained: null,
   abstention_reason: null
 });
 
@@ -333,31 +336,17 @@ module.exports = (queryService) => {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: parsed.content })}\n\n`);
             }
           } else if (parsed.type === 'metadata') {
-            // chatqna already computed reranker-grounded source docs + is_grounded; capture
-            // them instead of re-running retrieval on the backend.
-            //
-            // retrieval_confidence_score, abstained and abstention_reason are
-            // diagnostic fields: they exist so a persisted query can be
-            // explained afterwards (QueryInspector, eval). Dropping them here
-            // left the stored metadata with only source_documents /
-            // confidence_score / is_grounded — indistinguishable between two
-            // very different abstentions.
-            capturedMetadata = {
-              source_documents: parsed.source_documents,
-              confidence_score: parsed.confidence_score,
-              is_grounded: parsed.is_grounded,
-              retrieval_confidence_score: parsed.retrieval_confidence_score,
-              abstained: parsed.abstained,
-              abstention_reason: parsed.abstention_reason
-            };
-            // Presence-keyed, carried through as-is (including an explicit null):
-            // chatqna omits the key when LLM_SELF_CONFIDENCE_ENABLED is off and
-            // sets it to null when the feature is on but the sentinel was
-            // malformed. The inspector renders its block on hasOwnProperty and
-            // its "no sentinel" state on a null value, so both must survive.
-            if (Object.prototype.hasOwnProperty.call(parsed, 'self_confidence')) {
-              capturedMetadata.self_confidence = parsed.self_confidence;
-            }
+            // Forward the parser's object whole (minus the event discriminator).
+            // parseChatQnASSELine owns normalisation and defaulting; restating
+            // the field list here meant a diagnostic field chatqna added would
+            // be parsed and then silently dropped at this line — which is how
+            // retrieval_confidence_score and self_confidence were lost.
+            // self_confidence in particular is presence-keyed, and spreading
+            // preserves that: absent when LLM_SELF_CONFIDENCE_ENABLED is off,
+            // null when the feature is on but the sentinel was malformed.
+            const metadata = { ...parsed };
+            delete metadata.type;
+            capturedMetadata = metadata;
           } else if (parsed.type === 'done') {
             doHandleStreamDone();
           } else if (parsed.type === 'error') {
@@ -385,15 +374,18 @@ module.exports = (queryService) => {
         }
       });
 
+      // NOTE: this listener does not fire. express.json() consumes the request body
+      // before the route handler runs, so `req` has already emitted 'close' by
+      // the time the first `await` resolves and this is registered. The
+      // disconnect signal is `res.on('close')`. Tracked separately — nothing in
+      // here runs today, so do not read the metadata handling below as the
+      // client-disconnect path.
       req.on('close', () => {
         cleanupKeepalive();
         if (opeaController && !opeaController.signal.aborted) {
           opeaController.abort();
           logger.info('QueryService.stream_client_disconnected', { queryId });
           if (fullResponseText) {
-            // Keep whatever chatqna already reported: discarding it here threw
-            // away the diagnostic fields even on a stream that got far enough
-            // to receive the metadata event before the client went away.
             queryService
               .finalizeStreamQuery(
                 queryId,

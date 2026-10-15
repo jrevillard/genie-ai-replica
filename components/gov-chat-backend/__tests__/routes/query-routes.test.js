@@ -811,7 +811,9 @@ describe('GET /:queryId', () => {
       // The no-metadata-event fallback keeps the same key set as the captured
       // one, so a stored query does not depend on whether chatqna answered.
       expect(metadata.retrieval_confidence_score).toBeNull();
-      expect(metadata.abstained).toBe(false);
+      // null, not false: no metadata event is not the same as a clean
+      // low-confidence non-abstention.
+      expect(metadata.abstained).toBeNull();
       expect(metadata.abstention_reason).toBeNull();
       expect(metadata).not.toHaveProperty('self_confidence');
     });
@@ -831,7 +833,7 @@ describe('GET /:queryId', () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       mockStream.push('data: {"type":"chunk","content":"answer"}\n\n');
       mockStream.push(
-        'data: {"type":"metadata","source_documents":[],"confidence_score":1,"retrieval_confidence_score":0.26,"self_confidence":100,"is_grounded":true,"abstained":false,"abstention_reason":null}\n\n'
+        'data: {"type":"metadata","source_documents":[],"confidence_score":1,"retrieval_confidence_score":0.26,"self_confidence":0.85,"is_grounded":true,"abstained":false,"abstention_reason":null}\n\n'
       );
       mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
       mockStream.push(null);
@@ -839,7 +841,7 @@ describe('GET /:queryId', () => {
       const response = await responsePromise;
       const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
       expect(metadata.retrieval_confidence_score).toBe(0.26);
-      expect(metadata.self_confidence).toBe(100);
+      expect(metadata.self_confidence).toBe(0.85);
       expect(metadata.abstained).toBe(false);
       expect(metadata.abstention_reason).toBeNull();
 
@@ -852,7 +854,7 @@ describe('GET /:queryId', () => {
         expect.objectContaining({
           confidence_score: 1,
           retrieval_confidence_score: 0.26,
-          self_confidence: 100,
+          self_confidence: 0.85,
           abstained: false,
           abstention_reason: null
         })
@@ -912,6 +914,35 @@ describe('GET /:queryId', () => {
 
       const persisted = queryService.finalizeStreamQuery.mock.calls[0][3];
       expect(persisted).toHaveProperty('self_confidence', null);
+    });
+
+    it('should forward every field chatqna sends, including ones added later', async () => {
+      // The relay forwards the parser's object whole. A hand-written field
+      // list here is how retrieval_confidence_score and self_confidence were
+      // lost: parsed, then dropped one layer down.
+      const mockStream = setupSSEStream();
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"answer"}\n\n');
+      mockStream.push(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0,"is_grounded":false,"abstained":true,"abstention_reason":"reranker_input_too_long","translation_status":"failed"}\n\n'
+      );
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
+      expect(metadata.translation_status).toBe('failed');
+      // The event discriminator is not part of the payload.
+      expect(metadata.type).toBe('metadata');
+
+      const persisted = queryService.finalizeStreamQuery.mock.calls[0][3];
+      expect(persisted.translation_status).toBe('failed');
+      expect(persisted).not.toHaveProperty('type');
     });
 
     it('should forward an abstention reason so it can be told apart from a plain ungrounded answer', async () => {

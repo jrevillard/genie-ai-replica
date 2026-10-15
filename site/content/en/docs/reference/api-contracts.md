@@ -795,7 +795,7 @@ evaluation — a chat client should render `confidence_score` only.
 | `retrieval_confidence_score` | Raw rank-weighted retrieval confidence, always present. `null` when chatqna omits it. |
 | `self_confidence` | LLM self-grade. **Keyed by presence**: absent when `LLM_SELF_CONFIDENCE_ENABLED=0`, `null` when the feature is on but the `[[CONF:…]]` sentinel was missing or malformed. Consumers must test the key, not the value, to tell "disabled" from "no sentinel". |
 | `abstained` | `true` when chatqna withheld a real answer. Defaults to `false`. |
-| `abstention_reason` | Machine-readable cause, e.g. `reranker_input_too_long` or `translation_input_too_long`. Defaults to `null`. |
+| `abstention_reason` | Machine-readable cause. On this event, `reranker_input_too_long` — the reranker refused an oversized input. (`translation_input_too_long` is a different transport: it surfaces as an HTTP 422, not as a metadata event.) Defaults to `null`. |
 
 ### Streaming translation (issue #829)
 

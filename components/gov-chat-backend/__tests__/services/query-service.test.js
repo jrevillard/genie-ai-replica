@@ -469,10 +469,9 @@ describe('QueryService', () => {
         is_grounded: false
       };
       const result = queryService.parseChatQnASSELine(JSON.stringify(meta));
-      // ArangoDB indexes a missing key and a null key differently, and the
-      // persisted metadata shape must not depend on which chatqna path ran —
-      // an ordinary answer vs. an abstention. Normalise here rather than
-      // letting undefined reach the route.
+      // Normalised here rather than letting undefined reach the route: the
+      // streamed relay forwards this object whole, so a missing key would be a
+      // missing key in ArangoDB and in every AQL filter built on it.
       expect(result.abstained).toBe(false);
       expect(result.abstention_reason).toBeNull();
     });

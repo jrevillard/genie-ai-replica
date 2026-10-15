@@ -102,8 +102,8 @@ in the trace explorer.
 
 | Span | Key attributes |
 |---|---|
-| `reranker.rerank` | `reranker.strategy`, `reranker.model_id`, `reranker.input_doc_count`, `reranker.output_doc_count` |
-| `reranker.tei_invoke` (TEI backend only) | `reranker.strategy`, `reranker.top_n`, `reranker.score_threshold`, `reranker.model_id`, `reranker.input_doc_count` + the TEI request/response timing. |
+| `reranker.rerank` | `reranker.strategy`, `reranker.input_doc_count`, `reranker.output_doc_count` |
+| `reranker.tei_invoke` (TEI backend only) | `reranker.strategy`, `reranker.top_n`, `reranker.model_id`, `reranker.input_doc_count` + the TEI request/response timing. `reranker.score_threshold` is emitted only for the `threshold` / `slice_threshold` strategies, which are the only two that apply it. |
 
 > **calibrated scores.** the post-temperature-scaled confidence values the
 > reranker emits (see `RERANKER_SCORE_TEMPERATURE` in the configuration docs).

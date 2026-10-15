@@ -80,6 +80,43 @@ RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 3))
 
+RERANKING_STRATEGIES = ("slice", "threshold", "slice_threshold", "knee_threshold", "adaptive")
+
+# The only two strategies that consult RERANKING_THRESHOLD. slice and
+# knee_threshold cut on count / curve shape; adaptive cuts on marginal value.
+THRESHOLD_STRATEGIES = ("threshold", "slice_threshold")
+
+
+def resolve_reranking_strategy(requested: str | None, default: str | None = None) -> str:
+    """Return the strategy that will actually run, given the request's value.
+
+    `reranking_strategy` is a bare ``str | None`` on the request models and
+    ChatQnA forwards any non-None value verbatim, so the span could record a
+    name that no branch ever executes — and then execute ``slice``. An unknown
+    or empty name resolves to the deployment default here, so what the span
+    reports is what the code below it does. Both the component and the
+    microservice span call this, which is what keeps the two spans from
+    disagreeing.
+
+    Both inputs are validated. `requested` comes off the wire, and `default`
+    comes from RERANKING_STRATEGY, which is operator config and just as capable
+    of a typo — an unvalidated default would match no branch below and fall
+    into the catch-all with nothing logged.
+    """
+    resolved_default = default or RERANKING_STRATEGY
+    if resolved_default not in RERANKING_STRATEGIES:
+        logger.warning(f"RERANKING_STRATEGY={resolved_default} is not a known strategy. Falling back to slice.")
+        resolved_default = "slice"
+    if requested and requested in RERANKING_STRATEGIES:
+        return requested
+    if requested:
+        # Truncated: this string is client-controlled and lands in VictoriaLogs.
+        # Unbounded, it is both a log-volume amplifier and a newline-injection
+        # vector into the admin logs view.
+        logger.warning(f"Unknown strategy {requested[:64]!r}. Defaulting to {resolved_default}.")
+    return resolved_default
+
+
 # Adaptive utility-cost selection parameters
 NOVELTY_SIGMOID_A = float(os.getenv("NOVELTY_SIGMOID_A", 20.0))
 NOVELTY_SIGMOID_B = float(os.getenv("NOVELTY_SIGMOID_B", 0.25))
@@ -258,7 +295,7 @@ class GenieTEIReranking(OpeaTEIReranking):
         logger.info(f"[ DEBUG - VERBOSE ] RERANKER INPUT: {input_dict}")
 
         reranking_results = []
-        reranking_strategy = input_dict.get("reranking_strategy", RERANKING_STRATEGY)
+        reranking_strategy = resolve_reranking_strategy(getattr(input, "reranking_strategy", None))
         reranking_threshold = input_dict.get("reranking_threshold", RERANKING_THRESHOLD)
         reranker_top_n = input_dict.get("top_n", RERANKER_TOP_N)
         input_doc_count = len(input.retrieved_docs) if input.retrieved_docs else 0
@@ -266,7 +303,12 @@ class GenieTEIReranking(OpeaTEIReranking):
         with tracer.start_as_current_span("reranker.tei_invoke") as span:
             span.set_attribute("reranker.strategy", reranking_strategy)
             span.set_attribute("reranker.top_n", reranker_top_n)
-            span.set_attribute("reranker.score_threshold", reranking_threshold)
+            # Only threshold / slice_threshold consult reranking_threshold.
+            # Publishing it unconditionally stamped a gate on spans where none
+            # was applied, so a reader saw a threshold on a slice or adaptive
+            # trace and concluded the reranker had been cut off by it.
+            if reranking_strategy in THRESHOLD_STRATEGIES:
+                span.set_attribute("reranker.score_threshold", reranking_threshold)
             reranker_model_id = os.getenv("RERANKER_MODEL_ID", os.getenv("TEI_RERANKING_ENDPOINT", ""))
             span.set_attribute("reranker.model_id", reranker_model_id)
             span.set_attribute("reranker.input_doc_count", input_doc_count)
@@ -516,7 +558,10 @@ class GenieTEIReranking(OpeaTEIReranking):
                             )
 
                 else:
-                    logger.warning(f"Unknown strategy {reranking_strategy}. Defaulting to slice.")
+                    # Unreachable: resolve_reranking_strategy() guarantees the
+                    # value is one of RERANKING_STRATEGIES, so one branch above
+                    # always runs. Kept as a floor — an empty selection would be
+                    # a silent failure, a slice selection is not.
                     for best_response in decoded_response[:reranker_top_n]:
                         doc = _safe_get_doc(input.retrieved_docs, best_response["index"])
                         if doc is None:

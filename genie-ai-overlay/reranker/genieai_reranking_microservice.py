@@ -49,6 +49,7 @@ from comps.cores.telemetry.opea_telemetry import opea_telemetry
 from comps.rerankings.src.integrations.genieai_tei_reranker import (  # noqa: F401
     GenieTEIReranking,
     RerankerInputTooLongError,
+    resolve_reranking_strategy,
 )
 from pydantic import Field
 
@@ -91,7 +92,17 @@ async def reranking(
     if logflag:
         logger.info(f"Input received: {input}")
 
-    reranking_strategy = os.getenv("RERANKING_STRATEGY", "slice")
+    # The effective strategy is a PER-REQUEST value resolved by the component
+    # (request payload first, RERANKING_STRATEGY as fallback). Reading the env
+    # var alone reported the hardcoded default on every request — the reranker
+    # container does not define RERANKING_STRATEGY at all, so reranker.rerank
+    # contradicted the reranker.tei_invoke span of the same trace. Both spans
+    # call the component's own resolver, so they cannot drift, and an unknown or
+    # empty strategy name reports the branch that actually runs instead of a
+    # name no branch ever executed. Read as an attribute rather than through a
+    # second model_dump() of the whole payload — that deep-copies every doc
+    # text and embedding on the hot path to read one string.
+    reranking_strategy = resolve_reranking_strategy(getattr(input, "reranking_strategy", None))
     input_doc_count = len(input.retrieved_docs) if hasattr(input, "retrieved_docs") and input.retrieved_docs else 0
 
     with tracer.start_as_current_span("reranker.rerank") as span:

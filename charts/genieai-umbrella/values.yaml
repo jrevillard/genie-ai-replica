@@ -55,7 +55,7 @@ clusterProfile: dev
 observability:
   logs:
     enabled: true
-    # VLSingle retention period. Compose §12C parity (30d default).
+    # VLSingle retention period (30d default).
     retentionPeriod: "30d"
     storageSize: 20Gi
   metrics:

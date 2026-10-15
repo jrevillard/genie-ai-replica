@@ -455,6 +455,7 @@ class TestInvoke:
             assert result[1]["doc"].page_content == "chunk B original"
             # The per-chunk mock was invoked for both chunks (loop not short-circuited).
             assert get_llm_mock.return_value.invoke.call_count == 2
+
     async def test_invoke_no_legacy_signal_refuses_legacy_fallback(self, invoke_env):
         """Story 1.1 — the full invoke()-level decode→refusal chain: a
         search_start STRING carrying only the ::no_legacy: segment (okf_only

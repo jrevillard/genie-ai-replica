@@ -305,6 +305,44 @@ Two **separate pairs**, each of which only works when both halves move together:
   deliberately for crawl-scale deployments (10,000+ for a national base); the
   bounds that actually protect the machine are `OKF_MAX_CONCEPT_DOC_CHARS` and the
   lane caps, not this number.
+
+→ Full sizing procedure for the four lane variables (both pairs, the memory
+budget, how to verify what a host actually got): `.claude/rules/CAPACITY-SIZING.md`
+
+##### Sizing the four lane variables for a target host
+
+**These are configuration, not hard-coded behaviour.** Never edit service source
+to change them. Set them in `.env` (Compose) or `group_vars` (Ansible) — nothing
+is rebuilt, but the values are read once at process start, so the affected
+containers must be recreated:
+
+```bash
+docker compose up -d --force-recreate okf-server pii-service dataprep-arango-service
+```
+
+| Cores | RAM | Import pair (`OKF_IMPORT_CONCURRENCY` = `PII_WEB_CONCURRENCY`) | Drain pair (`OKF_INGEST_CONCURRENCY` = `DATAPREP_INGEST_CONCURRENCY`) |
+|---:|---:|---:|---:|
+| 4 | 8 GB | `2` | `2` |
+| 8 | 16 GB | `4` | `4` |
+| 16 | 32 GB | `8` | `8` |
+| 24 | 64 GB | `12` | `12` |
+| 32+ | 64 GB+ | `16` (clamp ceiling) | `16`, then follow the model services |
+
+- **`PII_WEB_CONCURRENCY` is a memory setting first.** Each worker process loads
+  its own model copy — measured **~640 MB/worker** on the current image (2.57 GiB
+  at 4 workers). Budget `workers × 640 MB` against free RAM *before* choosing the
+  value. The spawned workers are `multiprocessing.spawn` children, so they are
+  **not** visible as `uvicorn` in `ps` — count `/proc/*/comm == python3.11`, or
+  you will wrongly conclude the workers did not start.
+- **Verify, do not infer.** After an import, read `OKF import lane capacity` from
+  the okf-server log: it reports `import_concurrency`, `pii_web_concurrency`,
+  `cores` and `paired`. `paired: false` means import lanes exceed the sidecar's
+  workers — the extra lanes are queueing. `pii_web_concurrency: unset` means the
+  two were not applied to the same deployment.
+- **The shipped defaults are a floor, not a recommendation.** 4/4 on 24 cores is
+  ~18 % utilisation (measured). If you are deploying to a host larger than a
+  small VPS, set these deliberately from the table.
+
 - `KEYCLOAK_SUPPORTED_LOCALES` - Keycloak login-page locales (JSON array, e.g. `["en","es"]`; unset = curated default)
 - `STREAMING_TRANSLATION_ENABLED` - Stream the target-language chat translation during generation instead of English-then-flip (issue #829). `1`/`0`; default `0` (current behavior)
 

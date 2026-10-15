@@ -454,8 +454,7 @@ defaults live in `charts/genieai-umbrella/values.yaml`; per-environment
 overrides (clusterProfile, namespace, ingress host, Arango/Postgres
 topology, GPU mode) ship as a `ConfigMap` rendered by Kustomize in
 `genie-ai-deploy/overlays/<env>/dev/`; secrets ship as `SealedSecret`
-resources alongside the overlay. Flux consumes both via `valuesFrom` on
-the `HelmRelease`.
+resources committed in the overlay; the controller materializes them as namespace Secrets the chart's pods mount directly. Only the public values ConfigMap flows through `valuesFrom`.
 
 ## Observability Stack (Optional)
 

@@ -6,9 +6,9 @@
   actually dials. Header-only gate: opea.enabled.
 
   GPU-model Deployments (vllm, tei, tei-reranker, vllm-translation; the
-  in-cluster mode only) get NO policy in this file. They live on GPU
-  nodes and their peer labels are not part of the genieai.io/component
-  convention; tightening them is deferred to the Phase-2 policy pass.
+  in-cluster mode only) get INGRESS-ONLY policies at the bottom of this
+  file: inference endpoints accept traffic solely from the orchestrators
+  that call them. Egress stays open (weights pull, DNS).
 
   External GPU mode (opea.gpu.mode=external AND nodeHost set) widens
   egress to 0.0.0.0/0 on TCP 443 + 444 for the GPU node's TLS ports.
@@ -537,4 +537,113 @@ spec:
         - protocol: TCP
           port: 9031
     {{- end }}
+---
+{{- /* Model-pod ingress policies (in-cluster mode). Without them the GPU
+inference endpoints are reachable from every pod that can route to the
+namespace — free GPU spend for anything compromised in-cluster. Egress
+stays open: model pods pull weights from HF and answer DNS. */ -}}
+{{- if eq .Values.opea.gpu.mode "in-cluster" }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vllm-model
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "vllm") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: vllm
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+        - podSelector:
+            matchLabels:
+              genieai.io/component: retriever
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tei-model
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "tei") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: tei
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: embedding
+        - podSelector:
+            matchLabels:
+              genieai.io/component: retriever
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+      ports:
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tei-reranker-model
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "tei-reranker") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: tei-reranker
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: reranker
+      ports:
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vllm-translation-model
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "vllm-translation") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: vllm-translation
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: translation
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+      ports:
+        - protocol: TCP
+          port: 9031
+{{- end }}
 {{- end -}}

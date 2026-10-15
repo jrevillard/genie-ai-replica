@@ -87,23 +87,35 @@ spec:
             - name: hf-cache
               mountPath: /data
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: 80
             initialDelaySeconds: 30
             periodSeconds: 10
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: 80
             initialDelaySeconds: 60
             periodSeconds: 30
           startupProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: 80
             failureThreshold: 48
             periodSeconds: 6
       volumes:
+        {{- if .Values.opea.models.cache.enabled }}
+        # Shared model-weights cache (see templates/opea/models/model-cache-pvc.yaml).
+        # ReadWriteOnce on the single gpu=true node; all four model pods
+        # share the claim.
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: genieai-model-cache
+        {{- else }}
         - name: hf-cache
           emptyDir: {}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

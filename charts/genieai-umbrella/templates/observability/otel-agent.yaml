@@ -146,6 +146,9 @@ spec:
         timeout: 5s
         send_batch_size: 1024
         send_batch_max_size: 2048
+      # Kubernetes-native addition (no compose counterpart): hard
+      # backpressure ahead of batch so a slow exporter cannot OOM the
+      # collector pod.
       memory_limiter:
         check_interval: 1s
         limit_percentage: 75

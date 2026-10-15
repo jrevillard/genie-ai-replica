@@ -7,10 +7,12 @@
   group that is no longer served by the current CRD. Validation
   deferred to first reconcile — the operator is not installed locally.
 
-  The operator creates the in-cluster Service prefixed with metadata.name
-  ("vtraces") and exposes VictoriaTraces' native OTLP receiver on
-  port 4318 (HTTP) and 4317 (gRPC) — no tempo-proxy needed because
-  VictoriaTraces speaks the Jaeger/Tempo HTTP API natively.
+  The operator creates the in-cluster Service <kind>-<metadata.name>
+  ("vtsingle-vtraces"). VictoriaTraces serves two distinct HTTP
+  surfaces on it: OTLP ingest on 4318 (HTTP) + 4317 (gRPC) — what the
+  collector gateway exports to — and the Jaeger/Tempo query API on
+  10428 — what Grafana's jaeger datasource and the trace UIs read.
+  No tempo-proxy needed: the query API is native.
 */}}
 apiVersion: operator.victoriametrics.com/v1
 kind: VTSingle

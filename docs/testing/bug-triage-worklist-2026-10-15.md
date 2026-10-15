@@ -656,3 +656,94 @@ large repo as meaningful until 20b is fixed. Check the okf-server log for
   `partial: true` and the UI must show it.
 - A 1,113-concept crawl must complete the near-dup scan without truncation, or
   truncate *loudly*.
+
+---
+
+## BUG-21 — whole-corpus cross-linking is under-provisioned and unbounded in time
+
+**New, 2026-10-15, reported live on Bali (1,113 concepts).** Not yet in GitLab —
+creation blocked by the permission classifier. Recorded here.
+
+`POST /:repo_id/topic-links` starts a whole-corpus run
+(`topic-link-authoring-service.js:741`). Unlike the import (BUG-17) this one
+**does** have an in-flight guard — a second run returns 409 `RUN_IN_FLIGHT`
+(`:743-748`) — so the concurrency design here is sound. The problem is capacity
+and predictability.
+
+### 21a — every knob is unset, so every default is the historical one
+
+Measured on the live stack:
+
+| Variable | Live value | Falls back to |
+|---|---|---|
+| `OKF_TOPIC_LINK_LANES` | *(empty)* | **4** concurrent LLM calls (`:69`) |
+| `OKF_TOPIC_LINK_BATCH` | *(empty)* | **8** concepts per call (`:68`) |
+| `OKF_TOPIC_LINK_MAX_PER_CONCEPT` | *(empty)* | 6 (`:70`) |
+| `OKF_TOPIC_LINK_TIMEOUT_MS` | *(empty)* | **60,000 ms** (`:75`) |
+
+This is the same shape as the import problem fixed in !1080, on a different
+service: documented, wired, and left at the single-flight value.
+
+### 21b — the arithmetic, and the worst case
+
+1,113 concepts ÷ 8 per batch = **139 LLM calls**. At 4 concurrent and the
+**measured** per-call latency of 2,769 ms (granite-4.1-8b, 5,588 tokens), the
+floor is **~96 s**.
+
+The ceiling is what makes it unusable: at 4 lanes with a 60 s per-call timeout,
+a run where calls time out takes **139 ÷ 4 × 60 s ≈ 35 minutes**, and nothing in
+the response, the audit row, or the UI distinguishes that from the healthy
+96-second case. There is no progress reporting on the run (compounding BUG-18),
+so a curator cannot tell a 96-second run from a stalled one.
+
+### 21c — raising lanes is NOT the same lever as the import
+
+**The LLM is remote**: `VLLM_ENDPOINT=https://ai.assembly.govstack.global:444/llm`.
+More lanes here means more concurrent load on a **shared external service**, not
+more use of local cores. The sizing rule from `CAPACITY-SIZING.md` ("half your
+cores") does **not** apply and would be wrong here.
+
+Sizing must be against what that endpoint will absorb. Establish that by
+measurement — a probe at increasing concurrency, recording p50/p95 and the
+error rate — before setting `OKF_TOPIC_LINK_LANES`. If the endpoint is
+single-tenant and idle, 8–12 is plausible; if shared, the current 4 may already
+be at the limit and the fix is batching (`OKF_TOPIC_LINK_BATCH` ↑ reduces total
+calls proportionally) rather than lanes.
+
+**Raising the batch size is the cheaper lever here** — it cuts the number of
+calls (and tokens) without adding concurrent load. Trade-off: bigger batches give
+the model less per-concept context, so the fix is a measurement, not a guess.
+
+### 21d — the pre-work is unmeasured
+
+Before any LLM call, the run builds an inverted index over every concept —
+`tokensFor` per doc, then a postings map and IDF weights
+(`topic-link-authoring-service.js:186-212`). On 1,113 crawled documents this is
+CPU-bound, single-threaded, and **not included in the 96 s figure above**. It has
+never been timed. It may be a material share of the perceived wait, and it runs
+on the okf-server event loop — blocking every other request while it runs
+(the same event-loop ceiling noted in !1080).
+
+### Suggested fix, in order
+
+1. **Report progress on the run** — concepts done / total, batches done, LLM
+   calls, failures, elapsed. The run already records `concepts_total` and
+   `batches_total` in its status object; surface them. Without this the
+   96 s-vs-35 min ambiguity is unresolvable from the UI (also BUG-18).
+2. **Measure 21d and 21c separately** before tuning. Log the pre-work phase
+   duration and the LLM phase duration as distinct spans; right now neither is
+   attributable.
+3. **Set the four knobs deliberately** for this deployment once 2 gives a
+   number, and record why in the build's `.env` the way the import pair now is.
+4. Consider **caching candidate pairs** between runs — the inverted index is
+   rebuilt from scratch every time and only changes when the corpus does.
+
+### Verification for whoever picks this up
+
+- A 1,113-concept run reports progress throughout and a visible total elapsed.
+- Time the pre-work phase and the LLM phase separately; assert the pre-work is
+  not the dominant term (it currently cannot even be measured).
+- Sweep `OKF_TOPIC_LINK_LANES` 4 → 8 → 12 against the live endpoint and record
+  p50/p95 and the error rate at each, so the value is chosen from data.
+- A run with a failing endpoint must fail visibly and quickly, not spend 35
+  minutes in per-call timeouts.

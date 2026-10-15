@@ -83,6 +83,34 @@ docker service scale genieai_<service>=<replicas>     # Scale a service
 - Only nginx ports (80, 443) exposed; all other services internal
 - Node labels: `gateway=true`, `gpu=true`, `genieai=true`
 
+### Kubernetes (feature branch)
+
+Helm chart on `feat/k8s-migration`, deployed to laptop minikube via Flux from
+`genie-ai-deploy`. Compose + Ansible remain primary (see above). Per-env
+overlays + SealedSecrets live in the deploy repo.
+
+```bash
+# Chart dev cycle (worktree: feat/k8s-migration)
+helm lint --strict charts/genieai-umbrella                       # local lint
+rtk proxy helm template test charts/genieai-umbrella -n genieai  # NEVER bare `helm template` — rtk hook garbles it
+git commit/push                                                  # triggers CI: chart:lint + chart:install (see .gitlab-ci.yml)
+# In genie-ai-deploy: bump `version:` in overlays/<env>/dev/helmrelease.yaml
+flux reconcile helmrelease genieai -n flux-system                # roll the cluster
+
+# Cluster access (namespace: genieai)
+kubectl -n genieai get pods,svc,hpa,helmrelease
+kubectl -n genieai port-forward svc/nginx 8080:80                 # browser-validate via http://localhost:8080
+
+# Render gate (refactors)
+# Byte-compare `helm template` across `opea.gpu.mode=external|in-cluster` — classify every diff line as intentional or drift.
+```
+
+**Key notes:**
+- Chart at `charts/genieai-umbrella/`, library at `charts/genieai-common/`; see `charts/README.md`
+- Cluster prerequisites: CNPG ≥1.30, kube-arangodb 1.4.x, keycloak-operator 26.x, sealed-secrets ≥0.40 — installed once per cluster, before any release
+- GPU tier is binary (`opea.gpu.mode=external|in-cluster`); ArangoDB mode switch needs `helm uninstall` + `helm install` (no auto-promote)
+- Live state + plan status: `docs/charts/migration-status.md`
+
 ### E2E Tests
 
 Multi-phase procedure in `docs/e2e-tests/`:
@@ -99,6 +127,7 @@ For the full architecture overview with diagrams (C4 context/container, authenti
 
 ### Layer Stack
 
+0. **Deployment Layer**: Helm chart (`charts/genieai-umbrella` + library `charts/genieai-common`) reconciled by Flux v2 from the `genie-ai-deploy` repo — Kubernetes path on feature branch `feat/k8s-migration`, validated on laptop minikube (`overlays/jrevillard-laptop/dev`).
 1. **Client Layer**: Vue 3 web app (`components/gov-chat-frontend`), Flutter mobile (`mobile/genie_ai_mobile`)
 2. **API Gateway**: Kong/NGINX (`api-gateway-solution`)
 3. **Application Layer**: Node.js/Express backend (`components/gov-chat-backend`)
@@ -134,6 +163,8 @@ Each RAG pipeline stage emits OTel spans (when observability enabled), propagate
 | `genie-ai-overlay/reranker/` | Result reranking service |
 | `genie-ai-overlay/core/` | Shared types, protocols, constants |
 | `genie-ai-overlay/tests/` | OPEA pytest suite (retriever, dataprep, reranker, tracing) |
+| `charts/genieai-umbrella/` | Single-install umbrella chart (data layer + services + OPEA tier) |
+| `charts/genieai-common/` | Library chart (templates + helpers) |
 | `api-gateway-solution/` | Kong/NGINX configuration and scripts |
 | `secrets/` | **Secrets** (SSL certificates - NOT committed) |
 | `configs/` | **Configuration** (LLM prompts, OTel collector, Grafana dashboards) |
@@ -165,6 +196,7 @@ When adding a doc, pick one home based on audience. Do not duplicate across both
 | API Gateway | Kong, NGINX |
 | Testing | Jest (Node.js), pytest (Python), Playwright (E2E), flutter_test |
 | Observability | OTel SDK, VictoriaMetrics, VictoriaLogs, VictoriaTraces, Grafana |
+| Kubernetes deployment | Helm 3 + Flux v2 (`charts/genieai-umbrella` + `genie-ai-deploy`, feature branch `feat/k8s-migration`) |
 | CI/CD | GitLab CI (`.gitlab-ci.yml`) |
 
 ## Linting and Formatting
@@ -416,6 +448,14 @@ To change built-in defaults, edit the Python code:
 - All ports: `FRONTEND_PORT`, `BACKEND_PORT`, etc. (defaults in docker-compose.yaml)
 - Database URLs: `ARANGO_URL`, `VLLM_ENDPOINT`, etc. (defaults in docker-compose.yaml)
 - Service configurations: `LOG_LEVEL`, `NODE_ENV`, `TRANSLATION_BACKEND`, etc. (defaults in code)
+
+**Kubernetes equivalent (feature branch `feat/k8s-migration`):** chart
+defaults live in `charts/genieai-umbrella/values.yaml`; per-environment
+overrides (clusterProfile, namespace, ingress host, Arango/Postgres
+topology, GPU mode) ship as a `ConfigMap` rendered by Kustomize in
+`genie-ai-deploy/overlays/<env>/dev/`; secrets ship as `SealedSecret`
+resources alongside the overlay. Flux consumes both via `valuesFrom` on
+the `HelmRelease`.
 
 ## Observability Stack (Optional)
 

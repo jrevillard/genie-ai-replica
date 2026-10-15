@@ -162,3 +162,105 @@ it('an in-session re-resume costs no round-trip (cache-first, pre-10.5 speed pre
   expect(studioService.getDraft).toHaveBeenCalledTimes(1);
   wrapper.unmount();
 });
+
+describe('!1067 — a bundle import lands on Curate, not past it', () => {
+  /**
+   * The bug and the reason the obvious fix does not work:
+   *
+   * The zip branch of onCreateAction sends the steward to the DASHBOARD and
+   * they open the repo LATER via a card click, which runs onResume(). A repo
+   * with no PERSISTED draft gets the permissive fallback `studio_step: 9` at
+   * StudioTab.vue:381 — so the import opened on step 9 "Review", past step 6
+   * "Curate", the only step with a blocking requirement (frontmatter tags, PII
+   * acceptance, cross-links).
+   *
+   * That is also why seeding `activeDraft` would not have fixed it: this
+   * branch navigates away, so only a persisted draft survives to the click.
+   * Hence the assertion below is on `studioService.saveDraft` — the PERSISTED
+   * write — and then the round trip through onResume, which is what the
+   * operator actually experiences.
+   */
+  async function createFromBundle() {
+    const store = buildStore();
+    const wrapper = mountTab(store);
+    await wrapper.vm.$nextTick();
+
+    const realDispatch = store.dispatch.bind(store);
+    store.dispatch = jest.fn((type, payload) => {
+      if (type === 'okf/createRepo') {
+        return Promise.resolve({
+          ok: true,
+          repo: { repo_id: 'r2', name: 'Bundle Co', domain: 'Water Supply', concept_count: 12 }
+        });
+      }
+      if (type === 'okf/fetchRepos') return Promise.resolve({ ok: true });
+      return realDispatch(type, payload);
+    });
+
+    wrapper.vm.stagedZipFile = { name: 'bundle.zip' }; // only truthiness is read
+    wrapper.vm.stagedZipName = 'bundle.zip';
+    wrapper.vm.createName = 'Bundle Co';
+    wrapper.vm.createDomain = 'Water Supply';
+
+    await wrapper.vm.onCreateAction('create');
+    await wrapper.vm.$nextTick();
+    return { store, wrapper };
+  }
+
+  it('persists a draft with studio_step 5 at import time', async () => {
+    const { wrapper } = await createFromBundle();
+    expect(studioService.saveDraft).toHaveBeenCalledWith('r2', expect.objectContaining({ studio_step: 5 }));
+    wrapper.unmount();
+  });
+
+  it('the card click after the import lands on Curate (5), NOT the 9 fallback', async () => {
+    const { store, wrapper } = await createFromBundle();
+
+    // DELIBERATELY NOT STUBBING getDraft HERE. An earlier version of this test
+    // handed onResume a hand-written draft, which made it pass against the
+    // UNFIXED component — it was asserting that resume honours a draft, which
+    // was always true, not that import creates one. onResume reads the cached
+    // draft first (saveDraft commits in-memory before its network write), so
+    // with no server stub the only thing that can put a draft there is the
+    // import path itself. Remove the fix and this lands on the 9 fallback.
+    store.commit('okf/upsertRepo', {
+      repo_id: 'r2',
+      name: 'Bundle Co',
+      domain: 'Water Supply',
+      concept_count: 12
+    });
+    await wrapper.vm.onResume('r2');
+
+    expect(wrapper.vm.activeDraft.studio_step).toBe(5);
+    // Regression guard: the permissive fallback is still 9, so this fails if the
+    // seeding regresses rather than the expected value changing.
+    expect(wrapper.vm.activeDraft.studio_step).not.toBe(9);
+    wrapper.unmount();
+  });
+
+  it('a repo created WITHOUT a bundle still starts at step 1 (unchanged)', async () => {
+    const store = buildStore();
+    const wrapper = mountTab(store);
+    await wrapper.vm.$nextTick();
+
+    const realDispatch = store.dispatch.bind(store);
+    store.dispatch = jest.fn((type, payload) => {
+      if (type === 'okf/createRepo') {
+        return Promise.resolve({ ok: true, repo: { repo_id: 'r3', name: 'Empty', domain: 'D', concept_count: 0 } });
+      }
+      return realDispatch(type, payload);
+    });
+
+    wrapper.vm.stagedZipFile = null;
+    wrapper.vm.createName = 'Empty';
+    wrapper.vm.createDomain = 'D';
+    await wrapper.vm.onCreateAction('create');
+    await wrapper.vm.$nextTick();
+
+    // David, 2026-10-11: "when creating a new repo the wizard must start from
+    // step 1 not step 10". Unrelated to !1067 — pinned so the fix above does not
+    // drag it along.
+    expect(wrapper.vm.activeDraft.studio_step).toBe(0);
+    wrapper.unmount();
+  });
+});

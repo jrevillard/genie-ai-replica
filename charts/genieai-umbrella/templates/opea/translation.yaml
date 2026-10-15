@@ -60,7 +60,7 @@ spec:
             # observability flags (any signal on → SDK initialises)
             # rather than a per-service knob.
             - name: ENABLE_OBSERVABILITY
-              value: {{ ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled) }}
+              value: {{ ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled) | quote }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ include "genieai-umbrella.otlpEndpoint" . }}
           resources:

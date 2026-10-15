@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
+const { findUnwiredDocumented, findDuplicatedDocumented } = require('../validators/unwired-documented');
 const { parseAnsibleEnvVars } = require('../validators/parse-ansible');
 const { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages, parseGitlabCiImages, parseComposeServiceContracts } = require('../validators/parse-compose');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
@@ -69,6 +70,76 @@ describe('Configuration Validation Suite', () => {
     'GENIE_AI_REGISTRY',
     'GENIE_AI_GLOBAL_TAG'
   ]);
+
+  // !1073 — documented OKF_* knobs that are deliberately NOT wired to a
+  // container. Every entry needs a justification that survives review, because
+  // the default answer to "this var is in the allowlist" must be "it shouldn't
+  // be". These two are documented in `env` but read by NOTHING in the
+  // codebase — spec 1-6 assigns OKF_SEARCH_STYLE to the retriever, and the
+  // OPEA overlay never reads it; grep-verified across components/ and
+  // genie-ai-overlay/.
+  //
+  // Wiring them would put a live-looking variable in the container that changes
+  // nothing, which is worse than the honest absence: an operator would believe
+  // the knob works. Un-wired until a reader exists.
+  const UNIMPLEMENTED_OKF_KNOBS = new Set([
+    'OKF_SEARCH_STYLE', // no reader: retriever/config.py does not read it (spec 1-6 unimplemented)
+    'OKF_FRONTMATTER_TAG_BATCH_SIZE' // no reader: suggestTags concurrency is not configurable yet (spec 1-6)
+  ]);
+
+  test('AC9 (!1073): every documented OKF_* knob reaches a container', () => {
+    // The env→compose direction, which nothing asserted. There is no env_file:
+    // in docker-compose.yaml, so a variable absent from a service's
+    // environment: block is unreachable by definition — setting it in .env did
+    // nothing, silently. 28 knobs were in that state.
+    //
+    // Reads the COMMENTED `# NAME=value` channel: `env` documents these knobs
+    // as comments (86 OKF_* lines are commented against 1 active), and the
+    // parser used to skip them entirely, so they could not reach the orphan
+    // gate even in principle.
+    const { unwired, allowlisted } = findUnwiredDocumented(
+      envParsed.documented,
+      composeVars,
+      { allowlist: UNIMPLEMENTED_OKF_KNOBS }
+    );
+
+    expect(
+      unwired.map((u) => `${u.name} (env section: ${u.section})`)
+    ).toEqual([]);
+
+    // The allowlist is not a place to hide things: it is asserted to be EXACTLY
+    // the two documented-unimplemented knobs, so adding a third name fails here
+    // rather than quietly widening the exemption.
+    expect(allowlisted.sort()).toEqual(['OKF_FRONTMATTER_TAG_BATCH_SIZE', 'OKF_SEARCH_STYLE']);
+  });
+
+  test('AC9 parser: documented commented knobs are collected, active ones are not', () => {
+    // The gate above would pass VACUOUSLY if the parser returned nothing here
+    // — that is exactly how 28 knobs accumulated. Pin both ends.
+    expect(Array.isArray(envParsed.documented)).toBe(true);
+    expect(envParsed.documented.length).toBeGreaterThan(200);
+    expect(envParsed.documented.every((d) => d.commentedOut === true)).toBe(true);
+    expect(envParsed.variables.every((v) => v.commentedOut === false)).toBe(true);
+    expect(envParsed.documented.some((d) => d.name === 'OKF_INGEST_MAX_CONCEPTS')).toBe(true);
+  });
+
+  test('AC10 (!1073): a knob documented twice in `env` must document the SAME value', () => {
+    // 22 OKF_* knobs are stated in two sections of `env` (operator-facing block +
+    // deeper reference). They agree today and nothing enforced it — the same
+    // "same fact in two places" shape as BUG-11 (type enum), BUG-12 (hardcoded
+    // counters) and BUG-15 (tag ceilings), all of which drifted.
+    //
+    // Two of the 22 legitimately differ: OKF_INTERNAL_SECRET and
+    // OKF_CONVERSION_DEBUG are documented once as an instruction and once with
+    // a concrete example value. Those are pinned by name rather than waved
+    // through with a blanket allowance.
+    const EXAMPLE_FORMS = new Set(['OKF_INTERNAL_SECRET', 'OKF_CONVERSION_DEBUG']);
+    const conflicting = findDuplicatedDocumented(envParsed.documented, { prefix: /^OKF_/ })
+      .filter((d) => d.values.length > 1 && !EXAMPLE_FORMS.has(d.name))
+      .map((d) => `${d.name}: ${d.values.join(' vs ')}`);
+
+    expect(conflicting).toEqual([]);
+  });
 
   // --- AC #2: All docker-compose env vars are documented in env template ---
   describe('AC2: Docker-compose vars documented in env template', () => {

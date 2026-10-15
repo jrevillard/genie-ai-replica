@@ -5,7 +5,7 @@
 # GitLab sync is driven directly via glab against the OKF epics.md.
 
 generated: 2026-08-11
-last_updated: 2026-10-14 (publish/ingest cycle defects PC-1..PC-8 — see defects-publish-cycle-2026-10-13.md. All 8 fixed. PC-1 (XML PI crash, the cost-of-content defect David reported on Solar System) and PC-6 (wizard step 5 / publish PII verdict) are NOT YET DEPLOYED to the local build; the other six are. FIVE COMMITS ON feat/okf-server HAVE NO PIPELINE (3b6c17b64, 53b731400, e96a3f90b, c0169886d, 14f2ddfad — pushes landed during the GitLab 504 outage; last green is 12688 at 9e434c981). The pc-1/pc-8 branch fix/okf-unstructured-remove-pis is UNPUSHED, so it has no CI at all. Measured 2026-10-14 — okf-server 1137/1138 (1 documented load-flake, green isolated), frontend 1870/1870, OPEA dataprep+patch 139 passed/1 skipped, config-validator 51/51, verify-local-build 63/0. Also refreshed below. Prior cycle — 1-8a merged 2e9be556d; 1-8b gate-v2 COMMITTED f8ead5de0 + VALIDATED live on local build — suite 18/18 pass; 1-8c Lab teaching loop backend COMMITTED c87b5e2dc — frontend loop remaining; 1-8d teaching-loop guardrails backend COMMITTED 130a99e + 2f1cbd763 after the 3-cycle poisoning — frontend loop remaining; 1-8e live-cycle hardening COMMITTED (advisor UI 6b1dbab, TEI chunk 57dcf69, tag-dedup+display dd41684, tagset identity + damping + apply-race f642e65) — advisor CONVERGED live, bouncing root-caused (same-head runs bit-stable; swings = tag-set changes), B margin decision + honest-label benchmark open)
+last_updated: 2026-10-15 (concept-document-ceiling test plan, tiers 0-3. TIER 0 alphabet-v7 PASS · TIER 1 ncd-v6 PASS · TIER 2 solar-system-v1 ran to 144/144 indexed across a host reboot with ZERO duplicate chunks — drain state lives in ArangoDB and survives, and re-ingest is idempotent; observed +2 vs the offline prediction, fully reconciled as 1112 imported + 1 `index` skeleton. TIER 3 bali IMPORT COMPLETE 05:23:56Z — 999 docs -> 1112 imported concepts (+1 `index` skeleton = 1113 rows), 89 split families, last_ingest_summary reports 1113 parsed / 0 errors / 0 rejected / 0 deduped. 0 blank parts (BUG-13 fix holds at volume), 0 over ceiling, 74/89 families byte-exact vs the shipped splitter, 5/89 carry an unexplained 1-char delta — mechanism unknown, NOT filed as a defect. ONE FIX SHIPPED — BUG-13 blank split part 1 (concept-splitter boundaries() opened a group with blank lines; greedyMerge finalised it alone when the next group was within 1 char of the ceiling), commit fce5d356b, okf-server 1192/1192, verify-local-build 77/0, deployed and verified live in the running container across 500 ceilings. 21 issues raised this cycle (!1060-!1081); prioritized fix queue recorded above as bug-triage-2026-10-15, detail in docs/testing/bug-triage-worklist-2026-10-15.md. Prior cycle — publish/ingest cycle defects PC-1..PC-8 — see defects-publish-cycle-2026-10-13.md. All 8 fixed. PC-1 (XML PI crash, the cost-of-content defect David reported on Solar System) and PC-6 (wizard step 5 / publish PII verdict) are NOT YET DEPLOYED to the local build; the other six are. FIVE COMMITS ON feat/okf-server HAVE NO PIPELINE (3b6c17b64, 53b731400, e96a3f90b, c0169886d, 14f2ddfad — pushes landed during the GitLab 504 outage; last green is 12688 at 9e434c981). The pc-1/pc-8 branch fix/okf-unstructured-remove-pis is UNPUSHED, so it has no CI at all. Measured 2026-10-14 — okf-server 1137/1138 (1 documented load-flake, green isolated), frontend 1870/1870, OPEA dataprep+patch 139 passed/1 skipped, config-validator 51/51, verify-local-build 63/0. Also refreshed below. Prior cycle — 1-8a merged 2e9be556d; 1-8b gate-v2 COMMITTED f8ead5de0 + VALIDATED live on local build — suite 18/18 pass; 1-8c Lab teaching loop backend COMMITTED c87b5e2dc — frontend loop remaining; 1-8d teaching-loop guardrails backend COMMITTED 130a99e + 2f1cbd763 after the 3-cycle poisoning — frontend loop remaining; 1-8e live-cycle hardening COMMITTED (advisor UI 6b1dbab, TEI chunk 57dcf69, tag-dedup+display dd41684, tagset identity + damping + apply-race f642e65) — advisor CONVERGED live, bouncing root-caused (same-head runs bit-stable; swings = tag-set changes), B margin decision + honest-label benchmark open)
 project: GENIE.AI OKF Server
 project_key: okf-server
 tracking_system: gitlab
@@ -19,6 +19,44 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 #   for Epic 1 work on THIS branch (work is building here, not on main).
 
 development_status:
+  # === NEXT CAB OFF THE RACK (2026-10-15) ==========================================
+  # Prioritized bug-fix queue from the concept-document-ceiling test plan.
+  # Full triage, rationale and execution order: docs/testing/bug-triage-worklist-2026-10-15.md
+  # Defect detail: docs/testing/concept-doc-ceiling-defect-log.md
+  # Ordered by blast radius x SILENTNESS — a P3 that silently returns wrong data
+  # outranks a P1 that fails loudly. Wave 0 first, always.
+  bug-triage-2026-10-15: ready
+  #   WAVE 0 — silent-wrong results (no error surfaces anywhere):
+  #     !1079 AQL silently returns empty for EVERY hyphenated collection; all OKF graph
+  #          names contain a hyphen, so (await db.query(aql)).result || [] returns []
+  #          and the caller concludes the collection is empty. Highest leverage: fixing
+  #          the shared driver to REJECT on error/errorNum turns this whole class from
+  #          silent-wrong into loud-error. Cost 3 wrong conclusions in one session,
+  #          incl. a near-miss filed as "144 indexed, graph empty" (graph had 3,011 chunks).
+  #     !1070 Graph collections named after the bundle, not repo.graph_name, so the
+  #          NAMED collections read empty after a successful ingest. Diagnosable once !1079 lands.
+  #   WAVE 1 — data entry blocked (loud): !1069 frontmatter invisible in dark mode (data
+  #          intact, operators re-type it) -> !1077 type:index INVALID_TYPE with no remedy
+  #          -> !1075 link suggestions unmount on accept (story 10.8) -> !1067 wizard opens
+  #          on step 9 -> !1060/!1063 PII sidecar worker dies (do NOT start without a repro).
+  #   WAVE 2 — operational: !1073 28 env vars never reach a container (fix BEFORE any
+  #          config knob is trusted) -> !1072 ArangoDB 1202 logged at error on a clean drain
+  #          -> !1071 head suite 20 ungrounded negatives -> !1061 sync mapping -> !1074
+  #          EMAIL_* -> !1064 clamav -> !1062 PC-1/PC-6 deployed-but-unverified.
+  #   WAVE 3 — throughput/capacity (config + documentation together): !1080 import pinned at
+  #          4 concurrent PII scans on a 24-core host (442% of 24 cores; 12 is already
+  #          reachable, clamp is 1..16) and !1081 OKF_INGEST_MAX_CONCEPTS default 200 -> 1000
+  #          (+ OKF_INGEST_MAX_ZIP_BYTES 25 MiB -> 256 MiB; Bali is 91.9 MB decompressed).
+  #   WAVE 4 — polish: !1066, !1068.
+  #   NEEDS A DECISION: !1065 was filed with a WRONG mechanism (BUG-12 proved pii_hit_count
+  #          and broken_link_count are hardcoded literals in the AQL, not a stale counter).
+  #          Close-as-superseded or amend, or whoever picks it up implements the wrong fix.
+  #   OPEN QUESTION, no owner: 5 of 89 Bali split families have a stored part 2 exactly ONE
+  #          character longer than the shipped splitter produces from either extraction
+  #          variant; 74/89 are byte-exact. The --- horizontal-rule hypothesis was TESTED
+  #          and is dead (zero across all 999 files). Do NOT file as a defect until the
+  #          mechanism is known — instrument the body handed to the splitter.
+  # === END NEXT CAB ===============================================================
   epic-1: in-progress        # [RECONCILED 2026-10-07] 1-0, 6-1b, 1-3, 1-6 done; 1-0b unit leg, 1-2 carrier pin, 1-7 ungated legs in-progress; 1-1, 1-4, 1-5 status pending verification (1-1 BFF wire-up likely merged given the spec exists and the base commit is 1.3; needs GitLab MR lookup to confirm). Story 1.6 (frontmatter routing) merged 2026-10-07 12:32 UTC via !513 → commit b4222243b on feat/okf-server.
   1-1-retriever-multigraph-fanout-rrf: review  # [RECONCILED 2026-10-06] retriever-side fan-out scaffolding shipped via 1-0 commit 18b34cd13 (per course-correction bundling); 1-1 spec narrowed to BFF wire-up (the actual e2e gap that unblocks OKF queries). Spec at _bmad-output/implementation-artifacts/spec-1-1-retriever-multigraph-fanout-rrf.md (ready-for-dev 2026-10-06, 4372 tokens — user override of 1600 ceiling). Per course-correction §3 build order 1-1 was supposed to precede 1-2, but the BFF wire-up is the actual missing piece (chatqna forwarder is shipped at chatqna.py:1020, retriever carrier is shipped at retriever.py:927-933, BFF never passes the kwarg). [2026-10-06 build] implemented + reviewed (3-layer review, 9 patch groups fixed, 0 loopbacks) on feat/okf-1-1-bff-wireup; backend 1800/1809 (9 pre-existing local-env), OPEA covering suites 451/451, okf-server 747/747; live .102 validation + deploy pending (Path-2 venue).
   1-2-chatqna-forwards-graph-set: in-progress       # [RECONCILED 2026-10-06] AC1 carrier pin landed (596a11fcd + 60b9355ce — fan-out engages on ≥1 graph); chatqna forwarder per its own file: "Implementation follows Wave R5"; no behavioral change to single-graph path
@@ -178,6 +216,7 @@ development_status:
   10-4-cross-repo-auto-correct-inbox: backlog                # gated by Story 6.1b (authz)
   10-5-studio-service-okf-studio-dashboard: backlog          # multi-repo dashboard + drafts + bulk publish
   10-6-review-publish-lifecycle-ui: backlog                  # Step 8/9 (gated 2.8 PII, 2.9.7 mintVersion)
+  10-8-validate-remedy-panel-lifetime: backlog  # 2026-10-15 ADDED to tracker (was untracked — housekeeping gap closed). Story file _bmad-output/implementation-artifacts/10-8-validate-remedy-panel-lifetime.md; GitLab story !1076. Remediates BUG-10 / !1075: Validate.vue renders suggestions INSIDE the orphan issue row they remediate (:86 row, :95 nested div), so accepting the first proposal cures the orphan, the row unmounts, and every remaining proposal is destroyed. Wave 1 of the bug triage queue.
   epic-10-retrospective: optional
   # B+C+E (2026-08-23, David's directives — the bundle IS a graph + manifest discovery index):
   # B: author-stated frontmatter links mirrored into _LINKS_TO (source='author', vertex-integrity + G22 enforced)

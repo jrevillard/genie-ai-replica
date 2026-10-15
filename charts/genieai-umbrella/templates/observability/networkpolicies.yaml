@@ -33,6 +33,9 @@ spec:
     # filelog agent dials 4318 from the same namespace too.
     - from:
         - podSelector: {}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.namespace }}-obs
       ports:
         - protocol: TCP
           port: 4318
@@ -90,7 +93,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: collector-agent
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Values.namespace }}-obs
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
 spec:

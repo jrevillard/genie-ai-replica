@@ -612,7 +612,16 @@ opea:
   chatqna: {}      # CHATQNA_*, RERANKING_*, MULTI_TURN_*, prompts — defaults in templates
   retriever: {}    # RETRIEVER_* tuning — defaults in templates
   dataprep: {}     # chunking / labeling / contextual retrieval — defaults in templates
-  reranker: {}     # NOVELTY_SIGMOID_*, CONTEXT_DECAY_FACTOR — defaults in templates
+  reranker:
+    # Adaptive-utility tuning knobs read at reranker startup; only used
+    # when RERANKING_STRATEGY=adaptive. Defaults match docker-compose.yaml
+    # lines 1130-1133.
+    noveltySigmoidA: "20.0"
+    noveltySigmoidB: "0.25"
+    contextDecayFactor: "0.0025"
+    minValueThreshold: "-1.0"
+    logLevel: info
+    enableObservability: "0"
   embedding:
     modelId: BAAI/bge-large-en-v1.5
   translation:

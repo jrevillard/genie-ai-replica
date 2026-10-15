@@ -9,11 +9,10 @@
   insertAgent, not via the registry value. Hand-rendered instead of going
   through genieai-umbrella.serviceDeployment because the factory
   unconditionally prefixes the image with .Values.global.imageRegistry.
-  Container port 9031; tcpSocket probe on 9031 (the chart's Service port)
-  is sufficient — the upstream /health check targets container port 8888
-  but a tcpSocket on 9031 confirms the listener is reachable from the
-  kubelet without depending on the upstream HTTP path the chart cannot
-  verify.
+  The image listens on 8888 (its own default; compose never maps the
+  port). The Service exposes 9031 -> 8888 because chatqna dials
+  TRANSLATION_SERVICE_PORT 9031; the tcpSocket probe targets the real
+  listener (8888).
 */}}
 {{- if .Values.opea.enabled -}}
 apiVersion: apps/v1
@@ -52,7 +51,7 @@ spec:
           imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
           ports:
             - name: http
-              containerPort: 9031
+              containerPort: 8888
           env:
             - name: LLM_ENDPOINT
               value: {{ include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") }}
@@ -67,12 +66,12 @@ spec:
               drop: ["NET_RAW"]
           readinessProbe:
             tcpSocket:
-              port: 9031
+              port: 8888
             initialDelaySeconds: 30
             periodSeconds: 15
           livenessProbe:
             tcpSocket:
-              port: 9031
+              port: 8888
             initialDelaySeconds: 60
             periodSeconds: 30
 ---
@@ -87,7 +86,7 @@ spec:
   ports:
     - name: http
       port: 9031
-      targetPort: 9031
+      targetPort: 8888
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 4 }}
 {{- end -}}

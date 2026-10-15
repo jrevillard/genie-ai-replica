@@ -37,13 +37,14 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" $ctx.Values "component" $component) | nindent 4 }}
 spec:
   replicas: {{ $replicas }}
+{{- $selectorLabels := include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" $ctx.Values "component" $component) }}
   selector:
     matchLabels:
-      {{- include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" $ctx.Values "component" $component) | nindent 6 }}
+      {{- $selectorLabels | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "genieai-common.serviceSelector" (dict "Chart" $ctx.Chart "Release" $ctx.Release "Values" $ctx.Values "component" $component) | nindent 8 }}
+        {{- $selectorLabels | nindent 8 }}
       {{- with $svc.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}

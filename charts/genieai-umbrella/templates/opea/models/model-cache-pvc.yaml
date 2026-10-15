@@ -1,0 +1,27 @@
+{{/*
+  Shared model-weights cache for the in-cluster GPU models (vllm,
+  vllm-translation, tei, tei-reranker). Optional — the default is
+  emptyDir per pod (compose parity: fresh HF download on every pod
+  start). Enabling the cache mounts one ReadWriteOnce claim on all
+  four model Deployments; the single-gpu=true node assumption makes
+  RWO sufficient (all model pods co-schedule on that node). Multi-GPU
+  clusters need a ReadWriteMany class or one claim per model.
+*/}}
+{{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") .Values.opea.models.cache.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: genieai-model-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/part-of: genieai
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.opea.models.cache.size | default "100Gi" }}
+  {{- with .Values.opea.models.cache.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+{{- end -}}

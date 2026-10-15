@@ -7,7 +7,7 @@
   Compose parity: docker-compose.yaml gpu-models profile, service `vllm`
   (lines ~785-840). Image, command, env, volumes, healthcheck all mirror
   the compose service verbatim. The model id is the only knob exposed
-  through values (default meta-llama/Meta-Llama-3.1-8B-Instruct).
+  through values (default ibm-granite/granite-4.1-8b).
 
   Image is pulled from docker.io unconditionally. The upstream
   vllm/vllm-openai image is not mirrored in the GitLab Container
@@ -97,23 +97,35 @@ spec:
             - name: hf-cache
               mountPath: /root/.cache/huggingface
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: 8000
             initialDelaySeconds: 30
             periodSeconds: 10
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: 8000
             initialDelaySeconds: 60
             periodSeconds: 30
           startupProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: 8000
             failureThreshold: 30
             periodSeconds: 10
       volumes:
+        {{- if .Values.opea.models.cache.enabled }}
+        # Shared model-weights cache (see templates/opea/models/model-cache-pvc.yaml).
+        # ReadWriteOnce on the single gpu=true node; all four model pods
+        # share the claim.
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: genieai-model-cache
+        {{- else }}
         - name: hf-cache
           emptyDir: {}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

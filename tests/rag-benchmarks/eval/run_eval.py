@@ -273,12 +273,28 @@ def _extract_answer(body: str) -> str:
     except json.JSONDecodeError:
         return body.strip()
     if isinstance(data, dict):
+        # chatqna answers with {"response": <text>, "metadata": {...}}. The
+        # other keys are historical shapes.
+        #
+        # `response` is resolved on PRESENCE, not truthiness: its presence is
+        # the strongest available evidence that the body IS the chatqna
+        # envelope. A present-but-empty value is an empty answer — an abstention
+        # can carry no prose — and must not fall through to the serialised-envelope
+        # dump, which is the shape this resolver used to return by mistake and
+        # which every RAGAS metric then scored instead of the answer.
+        #
+        # Non-string values are not answers. `str()` on a dict would emit a
+        # Python repr — single quotes, wrong key order — straight into the row
+        # that RAGAS then scores, so those fall through to the envelope dump
+        # instead, which is at least valid JSON.
+        if "response" in data and isinstance(data["response"], str):
+            return data["response"]
         for key in ("text", "answer", "generated_text"):
-            if data.get(key):
+            if isinstance(data.get(key), str) and data[key]:
                 return data[key]
         md = data.get("metadata") or {}
         if isinstance(md, dict) and md.get("answer"):
-            return md["answer"]
+            return str(md["answer"])
         return json.dumps(data)
     return str(data)
 

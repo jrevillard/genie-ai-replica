@@ -2486,14 +2486,14 @@ test:rag-benchmarks:
   stage: test
   interruptible: true
   before_script:
-    - pip install --cache-dir .cache/pip pytest
+    - pip install --cache-dir .cache/pip pytest openpyxl
   cache:
     - key: test-rag-benchmarks
       paths:
         - .cache/pip
   script:
     - cd tests/rag-benchmarks/eval
-    - pytest test_chunk_identity.py test_metrics.py test_match_gold_chunks.py test_arango.py test_keycloak.py test_harness.py test_calibrate.py test_run_eval.py -q --junitxml=../../../reports/rag-benchmarks-report.xml
+    - pytest -q --junitxml=../../../reports/rag-benchmarks-report.xml
     - cd ..
     - pytest test_capture_baseline.py -q --junitxml=../../reports/rag-benchmarks-capture-report.xml
   artifacts:

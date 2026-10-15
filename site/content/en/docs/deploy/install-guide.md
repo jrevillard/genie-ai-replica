@@ -414,7 +414,7 @@ defaults.
 | `RERANKER_MODEL_ID` | string | no | `BAAI/bge-reranker-v2-m3` | Reranker model |
 | `RERANKING_STRATEGY` | enum | no | `slice` | `slice` / `threshold` / `slice_threshold` / `knee_threshold` / `adaptive` |
 | `RERANKER_TOP_N` | number | no | `3` | Chunks kept by `slice` strategy |
-| `RERANKING_THRESHOLD` | number | no | `0.75` | Score threshold for `threshold` strategy (compose default `0.75`; Python code default `0.9` — compose wins at runtime; set in `.env` to override) |
+| `RERANKING_THRESHOLD` | number | no | `0.75` | Score threshold for the `threshold` / `slice_threshold` strategies only (`adaptive`, the ChatQnA default, ignores it) (compose default `0.75`; Python code default `0.9` — compose wins at runtime; set in `.env` to override) |
 | `RERANKER_SCORE_CALIBRATION` | enum | no | `none` | Score calibration mode |
 | `RERANKER_SCORE_TEMPERATURE` | number | no | `1.0` | Score temperature for calibration |
 | `LLM_SERVER_HOST_IP` | string | no | `vllm` | vLLM hostname |

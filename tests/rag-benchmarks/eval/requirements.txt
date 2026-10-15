@@ -7,3 +7,5 @@ langchain-community==0.4.2
 langchain-core==1.6.6
 openai==3.3.0
 httpx==0.28.1
+# enrich_xlsx_v2 (workbook enrichment) and its unit tests
+openpyxl==3.1.5

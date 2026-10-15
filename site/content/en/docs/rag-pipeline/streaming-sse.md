@@ -149,7 +149,7 @@ Additional attributes emitted from the reranker microservice span:
 |---|---|
 | `reranker.strategy` | The strategy used for this request (`slice`, `adaptive`, etc.). |
 | `reranker.input_doc_count` / `reranker.output_doc_count` | Candidate and kept chunk counts. |
-| `reranker.score_threshold` | The `RERANKING_THRESHOLD` value applied. |
+| `reranker.score_threshold` | The `RERANKING_THRESHOLD` value applied. Emitted only when the strategy is `threshold` or `slice_threshold` — the only two that consult it. Absent on a `slice` / `knee_threshold` / `adaptive` span. |
 | `rag.adaptive_context_decay_factor` / `rag.adaptive_min_value_threshold` / `rag.adaptive_breakdown` | Emitted on the reranker microservice span when `adaptive` was used. |
 
 The `is_grounded`, `confidence_score`, and `self_confidence` values are

@@ -40,6 +40,7 @@ import argparse
 import json
 import logging
 import math
+import re
 import statistics
 import sys
 from collections.abc import Iterable, Sequence
@@ -169,8 +170,11 @@ COLUMN_DOCS: dict[str, str] = {
         "empty otherwise. Spots rows that bypassed the LLM judge entirely."
     ),
     "answer_first_200": (
-        "First 200 chars of the chatqna response (envelope unwrapped: "
-        'parses the {"response": "..."} JSON and decodes literal \\uXXXX escapes).'
+        "First 200 chars of the chatqna response. Legacy reports stored the "
+        'whole {"response": "..."} envelope in this field; those are unwrapped. '
+        "A JSON-shaped answer (e.g. {\"resultado\": 42}) is NOT an envelope and "
+        "passes through verbatim — re-enriched workbooks show prose where older "
+        "ones showed envelopes."
     ),
     "abstained": (
         "yes / no — yes if the response matches an abstention pattern "
@@ -375,23 +379,51 @@ def _is_unresolved(g_row: dict[str, Any]) -> bool:
 
 
 def _extract_response(answer: Any) -> str:
-    """Unwrap the chatqna JSON envelope ``{"response": "..."}`` and decode
-    literal ``\\uXXXX`` escapes the v5 G2 run exposed on the Spanish
-    abstention path. Non-string or non-JSON inputs pass through verbatim.
+    """Unwrap a legacy chatqna JSON envelope ``{"response": "..."}``.
+
+    Reports written before the eval harness learned the ``response`` key store
+    the whole envelope in the answer field; those still need unwrapping, along
+    with the literal ``\\uXXXX`` escapes that double-encoding left on the
+    Spanish abstention path.
+
+    Everything else passes through verbatim. In particular a real answer that
+    happens to be valid JSON (``{"resultado": 42}``) is not an envelope: it has
+    no ``response`` / ``answer`` key, so unwrapping it would erase the answer
+    and the row would then count as answered rather than abstained.
     """
     if not answer or not isinstance(answer, str):
-        return answer or ""
+        return "" if not answer else str(answer)
     try:
         env = json.loads(answer)
     except (TypeError, ValueError):
         return answer
-    inner = env.get("response", env.get("answer", "")) if isinstance(env, dict) else str(env)
-    if isinstance(inner, str) and "\\u" in inner:
-        try:
-            inner = inner.encode("utf-8").decode("unicode_escape")
-        except (UnicodeDecodeError, UnicodeEncodeError):
-            pass
-    return inner or ""
+    if isinstance(env, str):
+        # A JSON string is an answer, not an envelope: unquote it so `"hola"`
+        # reads as hola and `""` reads as empty rather than as a two-character
+        # string that is_abstention() treats as a real answer.
+        return env
+    if not isinstance(env, dict):
+        # A bare number, boolean, null or array is not an envelope either. Pass
+        # the raw JSON through: str(env) would render null as "None" and true as
+        # "True", turning a null response into a substantive-looking answer.
+        return answer
+    if "response" not in env and "answer" not in env:
+        return answer
+    inner = env.get("response", env.get("answer", ""))
+    if not isinstance(inner, str):
+        return str(inner) if inner is not None else ""
+    # Decode the \uXXXX escape RUNS, not the whole string. A blanket
+    # unicode_escape round-trip reinterprets bytes as latin-1 and turns every
+    # already-decoded character into mojibake (ñ → Ã±); gating that on
+    # isascii() instead skips the mixed case, where literal escapes sit next to
+    # real mojibake, and abstention detection silently stops matching.
+    if "\\u" in inner:
+        inner = re.sub(
+            r"\\u([0-9a-fA-F]{4})",
+            lambda m: chr(int(m.group(1), 16)),
+            inner,
+        )
+    return inner
 
 
 def is_abstention(answer: str) -> tuple[bool, str]:
@@ -399,6 +431,10 @@ def is_abstention(answer: str) -> tuple[bool, str]:
     are returned in their source order.
     """
     if not answer:
+        return False, ""
+    if not isinstance(answer, str):
+        # Stored tuples rows are not validated: one row carrying a non-string
+        # answer would otherwise raise here and abort the whole workbook.
         return False, ""
     lo = answer.lower()
     for pattern in ABSTENT_PATTERNS:

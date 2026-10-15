@@ -139,13 +139,17 @@ wired.
   reranker `RERANKING_THRESHOLD` may be filtering everything. These are set
   in `.env` and require a service restart. To diagnose: raise each threshold
   by 0.1 and re-query; if results reappear, the thresholds were too tight.
+  Check `RERANKING_STRATEGY` first, though: `RERANKING_THRESHOLD` is read only
+  by the `threshold` and `slice_threshold` strategies. The chatqna default is
+  `adaptive`, which ignores it entirely — raising it there changes nothing.
   Defaults are documented at
-  `docker-compose.yaml:1290,1384,1394` (retrieval `0.2`, reranker `0.75`) and
+  the `RETRIEVER_ARANGO_SCORE_THRESHOLD` / `RERANKING_THRESHOLD` entries in `docker-compose.yaml` (retrieval `0.2`, reranker `0.75`) and
   in [Configuration &rarr; Environment
   variables]({{< relref "/docs/reference/env-vars" >}}).
 
   > **Code vs. compose defaults.** The chatqna Python module
-  > (`genie-ai-overlay/chatqna/genieai_chatqna.py:207,217`) declares its own
+  > (`genie-ai-overlay/chatqna/genieai_chatqna.py` — its `RETRIEVER_SCORE_THRESHOLD`
+  > and `RERANKING_THRESHOLD` constants) declares its own
   > Python-side fallbacks (`0.1`, `0.9`) that apply only when the env var is
   > unset. Compose always overrides these (`0.2`, `0.75`) when the service is
   > deployed with the standard environment block — tune `.env`, not the code.
@@ -305,7 +309,7 @@ flowchart TD
     C --> E{Which stage is<br/>red or slow?}
     E -- embedding --> F[Check vLLM / TEI health<br/>docker service ls &#124; grep vllm]
     E -- retriever --> G[ArangoDB connectivity<br/>+ RETRIEVER_ARANGO_SCORE_THRESHOLD]
-    E -- reranker --> H[RERANKING_THRESHOLD<br/>+ reranker service health]
+    E -- reranker --> H["RERANKING_THRESHOLD<br/>(threshold strategies only)<br/>+ reranker service health"]
     E -- llm --> I[vLLM OOM / context length<br/>+ response_format=json_object]
     F --> J[Service Logs dashboard<br/>filter service.name=<svc>]
     G --> J

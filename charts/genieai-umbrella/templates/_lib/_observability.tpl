@@ -24,3 +24,93 @@
 {{- $port := .Values.observability.collectorPort | default 4318 -}}
 {{- printf "http://%s-collector.%s.svc.cluster.local:%d" $cr .Values.namespace (int $port) -}}
 {{- end -}}
+
+{{- /*
+  Shared log transform processors — included by BOTH collector
+  pipelines (filelog agent and OTLP gateway) so every log source gets
+  the same treatment:
+
+  - transform/pii_redact: cross-cutting string-value redaction
+    (passwords, bearer tokens, API keys, JWTs, emails) ported
+    VERBATIM from configs/otel/otel-collector-config.yaml. The
+    double-escape trap (\\s, \\. inside YAML single-quoted scalars)
+    is preserved as-is — tests/otel-collector/run-pii-smoke.sh
+    validates this copy before it ships. The in-process
+    PIIRedactionProcessor (backend + document-repository tracing.js)
+    remains the structured-log coverage; this collector regex is the
+    defence for everything that reaches the pipeline as a string.
+  - transform/extract_envelope_trace_context: lift trace/span ids
+    embedded in log bodies into native trace context fields.
+  - transform/stamp_log_metadata_from_msg: derive severity and a
+    clean message from JSON or level-prefixed bodies.
+  - transform/normalize_log_body: backend HTTP_REQUEST/INFO line
+    parsing into structured http.* attributes.
+  - transform/strip_python_log_prefix: drop CRITICAL/INFO/... prefixes
+    from Python service lines.
+
+  Returns YAML at zero indent; callers nindent to their processors
+  map (6 spaces).
+*/}}
+{{- define "genieai-umbrella.otelLogTransformProcessors" -}}
+transform/pii_redact:
+  error_mode: ignore
+  log_statements:
+    - context: log
+      statements:
+        - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential(?:_id|s|)|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+        - 'replace_pattern(body, "(?i)bearer\\s+[a-z0-9\\-_]{20,}", "bearer [REDACTED_BEARER]") where IsString(body)'
+        - 'replace_pattern(body, "sk-[a-z0-9]{20,}", "[REDACTED_APIKEY]") where IsString(body)'
+        - 'replace_pattern(body, "eyJ[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+", "[REDACTED_JWT]") where IsString(body)'
+    - context: log
+      statements:
+        - 'replace_all_patterns(attributes, "value", "(?i)(?<p>(?:^|[^A-Za-z0-9]))(?<t>eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]+|sk-[A-Za-z0-9]{16,}|pk-[A-Za-z0-9]{16,}|gho_[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}|[A-Za-z0-9_=-]{40,})(?<s>(?:$|[^A-Za-z0-9]))", "${p}[REDACTED]${s}") where IsMap(attributes)'
+transform/extract_envelope_trace_context:
+  error_mode: ignore
+  log_statements:
+    - context: log
+      statements:
+        - 'set(trace_id, ExtractPatterns(body, "trace_id[\": ]+(?P<tid>[0-9a-f]{32})")["tid"]) where IsString(body) and IsMatch(body, "trace_id[\": ]+[0-9a-f]{32}")'
+        - 'set(span_id, ExtractPatterns(body, "span_id[\": ]+(?P<sid>[0-9a-f]{16})")["sid"]) where IsString(body) and IsMatch(body, "span_id[\": ]+[0-9a-f]{16}")'
+transform/stamp_log_metadata_from_msg:
+  error_mode: ignore
+  log_statements:
+    - context: log
+      statements:
+        - 'set(severity_text, ToUpperCase(ParseJSON(body)["level"])) where IsString(body) and Substring(body, 0, 1) == "{"'
+        - 'set(severity_text, ToUpperCase(ExtractPatterns(body, "(?i)^(?P<sev>info|warn|warning|error|debug|fatal|trace)[: ]")["sev"])) where IsString(body) and IsMatch(body, "(?i)^(info|warn|warning|error|debug|fatal|trace)[: ]")'
+        - 'set(severity_text, ToUpperCase(body["level"])) where IsMap(body) and IsString(body["level"])'
+        - 'set(body, ParseJSON(body)["message"]) where IsString(body) and Substring(body, 0, 1) == "{" and IsString(ParseJSON(body)["message"])'
+        - 'set(body, body["message"]) where IsMap(body) and IsString(body["message"])'
+        - 'set(severity_number, 9) where severity_text == "INFO"'
+        - 'set(severity_number, 13) where severity_text == "WARN"'
+        - 'set(severity_number, 13) where severity_text == "WARNING"'
+        - 'set(severity_number, 17) where severity_text == "ERROR"'
+        - 'set(severity_number, 5) where severity_text == "DEBUG"'
+        - 'set(severity_number, 21) where severity_text == "FATAL"'
+        - 'set(severity_number, 1) where severity_text == "TRACE"'
+transform/normalize_log_body:
+  error_mode: ignore
+  log_statements:
+    - context: log
+      statements:
+        - 'set(severity_text, "INFO") where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+        - 'set(severity_number, 9) where severity_text == "INFO" and severity_number == 0'
+        - 'set(attributes["http.method"], ExtractPatterns(body, "^HTTP_REQUEST: (?P<m>[A-Z]+) ")["m"]) where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+        - 'set(attributes["http.path"], ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ (?P<p>[^ ?]+)")["p"]) where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+        - 'set(attributes["http.status_code"], ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ [^ ]+( [?] [^ ]*)? (?P<s>[0-9]+) ")["s"]) where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+        - 'set(attributes["http.response_time_ms"], ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ [^ ]+( [?] [^ ]*)? [0-9]+ (?P<ms>[0-9.]+) ms")["ms"]) where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+        - 'set(attributes["http.user_agent"], ExtractPatterns(body, "Headers:[ ](?:-|[^ ]+)[ ](?P<ua>.+)$")["ua"]) where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+        - 'set(body, Concat([ExtractPatterns(body, "^HTTP_REQUEST: (?P<m>[A-Z]+) ")["m"], " ", ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ (?P<p>[^ ?]+)")["p"], " ", ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ [^ ]+( [?] [^ ]*)? (?P<s>[0-9]+) ")["s"], " ", ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ [^ ]+( [?] [^ ]*)? [0-9]+ (?P<ms>[0-9.]+) ms")["ms"], " ms"], "")) where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+        - 'set(attributes["http.client_ip"], ExtractPatterns(body, "(?P<ip>[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+):[0-9]+")["ip"]) where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+        - 'set(attributes["http.method"], ExtractPatterns(body, "\" (?P<m>[A-Z]+) (?P<p>[^ ?\"]+)")["m"]) where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+        - 'set(attributes["http.path"], ExtractPatterns(body, "\" (?P<m>[A-Z]+) (?P<p>[^ ?\"]+)")["p"]) where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+        - 'set(attributes["http.status_code"], ExtractPatterns(body, "\" (?P<s>[0-9]{3}) ")["s"]) where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+        - 'set(body, Concat([ExtractPatterns(body, "\" (?P<m>[A-Z]+) ")["m"], " ", ExtractPatterns(body, "\" (?P<m>[A-Z]+) (?P<p>[^ ?\"]+)")["p"], " ", ExtractPatterns(body, "\" (?P<s>[0-9]{3}) ")["s"]], "")) where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+        - 'set(body, ExtractPatterns(body, "^\\[[^]]+\\][ ](?P<m>.+)$")["m"]) where IsString(body) and IsMatch(body, "^\\[[0-9]{4}-[0-9]{2}-[0-9]{2}[ ][0-9]{2}:[0-9]{2}:[0-9]{2}\\][ ]")'
+transform/strip_python_log_prefix:
+  error_mode: ignore
+  log_statements:
+    - context: log
+      statements:
+        - 'set(body, ExtractPatterns(body, "^(CRITICAL|ERROR|WARNING|INFO|DEBUG|TRACE)[: ]+(?P<m>.*)$")["m"]) where IsString(body) and IsMatch(body, "^(CRITICAL|ERROR|WARNING|INFO|DEBUG|TRACE)[: ]+")'
+{{- end -}}

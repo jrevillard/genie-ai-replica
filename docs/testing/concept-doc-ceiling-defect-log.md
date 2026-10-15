@@ -666,6 +666,63 @@ first part → 4 lossless parts, none blank**. okf-server Jest **1192/1192**
 
 ---
 
+## BUG-14 — AQL silently returns empty for every hyphenated collection · **!1079**
+
+**Status: OPEN (no live data-path defect found; latent)** · Severity: high (silent-wrong, not loud-fail) · Found 2026-10-15, while investigating the Solar System drain after a host reboot · **!1079**
+
+**Mechanism.** Every OKF graph collection name contains a hyphen, because it is
+derived from the bundle slug (`OKF_solar-system_v1_SOURCE`,
+`OKF_www-gov-uk-full-crawl_v3_SOURCE`, …). AQL parses `-` as subtraction:
+
+```aql
+FOR d IN OKF_solar-system_v1_SOURCE LIMIT 1 RETURN d._key
+-- {"error":true,"errorNum":1203,"errorMessage":"collection or view not found: OKF_solar"}
+
+FOR d IN `OKF_solar-system_v1_SOURCE` LIMIT 1 RETURN d._key   -- works, backticks required
+```
+
+The response carries **no `result` field at all**, so any caller written as
+`(await db.query(aql)).result || []` receives `[]` — indistinguishable from a
+legitimately empty collection. `GRAPH_SOURCE` has no hyphen, which is why the
+legacy single-graph path never tripped this.
+
+**Blast radius.** No live defect. `ingest-service.js:1236-1267` uses
+`db.collection()` (a driver handle, never parsed as AQL);
+`head-suite-service.js:1414,1502` already backtick-quote; the retriever uses
+ArangoSearch view APIs. This is a landmine for the next AQL written against a
+graph collection — and the hyphen is *guaranteed* for any multi-word bundle
+name, so the broken form is the one a developer writes by default.
+
+**What it cost, and the near-miss.** Three wrong conclusions in a row:
+
+1. `COLLECT AGGREGATE n = LENGTH(d)` returned `undefined` for every hyphenated
+   collection but a number for `GRAPH_SOURCE` — read as *"the Solar System graph
+   is empty"*.
+2. REST `/_api/collection` was checked as a cross-check — **3,011 documents**.
+   The graph was never empty.
+3. A follow-up `FOR d IN … RETURN d` came back empty for the *same reason*,
+   reinforcing conclusion (1).
+
+This was about to be filed as *"144 concepts marked `indexed`, repo reports
+Serving with 144 topics ingested, graph is empty — silent false-success"*. That
+would have been a fabricated outage, and the only reason it was caught is that
+the expected chunk count was implausibly low.
+
+**Fix direction.** A quoting helper (`aqlCollection(name)` → backticked, with
+backticks stripped from the name) so the correct form is the easy one. But the
+higher-value fix is **failing loud on cursor errors**: the shared DB layer should
+reject when the response carries `error`/`errorNum`, which converts this whole
+class of "AQL returned nothing" from silent-wrong to a clear error.
+
+**Instrument note.** Three separate times in this investigation a malformed
+query produced a plausible-looking number or an empty set that was read as
+fact. The recurring trap: `COLLECT` keys built with `a || ""` or `a + "#" + b`
+degenerate to `null` in AQL, so the group key silently collapses. Use the
+multi-key form — `COLLECT cid = d.concept_id, ci = d.chunk_index WITH COUNT INTO c`
+— and prefer the REST `/_api/collection/<name>/count` endpoint for counts.
+
+---
+
 ## Run log — tier 0 (Alphabet Company Information)
 
 Repo `42b2f2df-880c-4ed5-9208-7b36f05a8029`, domain "Alphabet Company",

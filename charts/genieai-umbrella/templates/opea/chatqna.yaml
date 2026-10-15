@@ -26,9 +26,12 @@
   (`${VLLM_API_KEY:-}`); omitted because the Python default already
   handles the unset case.
 
-  KEYCLOAK_INTERNAL_URL carries the in-cluster JWKS base — the code
-  default names the compose service (`http://keycloak:8080`), which does
-  not resolve on Kubernetes; the issuer check itself uses KEYCLOAK_URL.
+  KEYCLOAK_URL is the PUBLIC origin (the pinned issuer on the Keycloak
+  CR) — the validator compares it against the token's iss claim, which
+  carries the public issuer. KEYCLOAK_INTERNAL_URL is the in-cluster
+  JWKS base (its code default names the compose service, unresolvable
+  here). The public/in-cluster split mirrors the backend's translation
+  wiring and Keycloak's hostname v2 backchannelDynamic.
   DOC_REPO_URL/BACKEND_SERVICE_URL/KEYCLOAK_URL mirror the compose URLs
   but target the in-cluster Service names + chart port mappings
   (document-repository and backend expose port 80 → targetPort 3001/3000;
@@ -76,7 +79,7 @@
     (dict "name" "MULTI_TURN_HISTORY_TURNS" "value" (.Values.opea.chatqna.multiTurnHistoryTurns | default "1" | toString))
     (dict "name" "DOC_REPO_URL" "value" (printf "http://document-repository.%s.svc.cluster.local:80" $ns))
     (dict "name" "BACKEND_SERVICE_URL" "value" (printf "http://backend.%s.svc.cluster.local:80" $ns))
-    (dict "name" "KEYCLOAK_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
+    (dict "name" "KEYCLOAK_URL" "value" (printf "%s://%s/auth" (.Values.ingress.scheme | default "https") (.Values.ingress.host | default "genieai.local")))
     (dict "name" "KC_REALM" "value" (.Values.opea.chatqna.kcRealm | default "genie"))
     (dict "name" "KEYCLOAK_INTERNAL_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
     (dict "name" "KC_CLIENT_ID" "value" (.Values.opea.chatqna.kcClientId | default "genie-app"))

@@ -15,18 +15,15 @@
     (dict "name" "EMBEDDING_MODEL_ID" "value" .Values.opea.embedding.modelId)
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
 -}}
-{{- $secretEnv := list
-    (dict "name" "HF_TOKEN" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "HF_TOKEN")))
-    (dict "name" "VLLM_API_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "VLLM_API_KEY")))
--}}
+{{- $secretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY")) | fromJsonArray -}}
 {{- $svcVals := dict
     "image" (dict "repository" "genie-ai-embedding" "tag" "main")
     "port" 6000
     "resources" (dict "requests" (dict "cpu" "100m" "memory" "256Mi") "limits" (dict "cpu" "1" "memory" "1Gi"))
     "env" (concat $urls $secretEnv)
     "probes" (dict
-      "readiness" (dict "tcpSocket" (dict "port" 6000) "initialDelaySeconds" 30 "periodSeconds" 15)
-      "liveness"  (dict "tcpSocket" (dict "port" 6000) "initialDelaySeconds" 60 "periodSeconds" 30)
+      "readiness" (dict "httpGet" (dict "path" "/health" "port" 6000) "initialDelaySeconds" 30 "periodSeconds" 15)
+      "liveness"  (dict "httpGet" (dict "path" "/health" "port" 6000) "initialDelaySeconds" 60 "periodSeconds" 30)
     )
 -}}
 {{- $_ := set $vals.services "embedding" $svcVals -}}

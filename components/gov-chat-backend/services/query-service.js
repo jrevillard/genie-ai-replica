@@ -429,7 +429,7 @@ class QueryService {
     logger.info('QueryService.stream_query_created', { queryId });
 
     // Build OPEA payload with stream: true
-    const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
+    const opeaHost = process.env.OPEA_HOST || 'chatqna-xeon-backend-server';
     const opeaPort = process.env.OPEA_PORT || '8888';
     const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
 
@@ -659,7 +659,7 @@ class QueryService {
         await this.queries.update(queryId, updateData);
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
-        const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
+        const opeaHost = process.env.OPEA_HOST || 'chatqna-xeon-backend-server';
         const opeaPort = process.env.OPEA_PORT || '8888';
         const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
 

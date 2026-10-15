@@ -5,7 +5,7 @@
 | **Epic** | Epic 10 — OKF Studio (creation & curation capstone) |
 | **GitLab** | !1076 (`okf-server::epic-10`, `prd::okf-server`, `status::backlog`, `type::story`) |
 | **Defect** | !1075 (P1) |
-| **Status** | backlog — discovered live 2026-10-15 during the concept-doc-ceiling run |
+| **Status** | **built** — `49499fecc` on `feat/concept-doc-ceiling` (MR !548 → `feat/okf-server`); pending live re-test |
 | **Design source** | `okf-studio-ux-design-2026-08-13.md` (Validate step remedy contract); D5 in [`3-10-okf-wizard-ux-remediation.md`](3-10-okf-wizard-ux-remediation.md) keeps the full three-pane editor in Curate |
 | **Trigger** | David's field report 2026-10-15, wizard step 7: *"Link suggestions show and when one link suggestion is accepted, they all disappear"* |
 
@@ -86,3 +86,29 @@ editor.
 - !1067 — bundle import opens the wizard on step 9, past the only step with a
   blocking requirement; same "user cannot see what they need" family
 - `docs/testing/concept-doc-ceiling-defect-log.md` BUG-10
+
+## Outcome — all four tasks done, plus one finding outside the scope
+
+| # | Task | Result |
+|---|---|---|
+| 1 | Hoist the proposal panel out of the issue `v-for`, keyed on `suggestFor` | done — panel-level, after the issue list |
+| 2 | Accepting leaves the remaining proposals rendered | done — `onAcceptLink` reads `suggestFor` instead of taking a `conceptId`, so the target page cannot disagree with the panel that rendered its button |
+| 3 | Same treatment for `wireExisting` and Sources creation | done — the result note is panel-level and keyed by `wireKey(issue)` |
+| 4 | Regression test | done — 4 cases, verified **falsifying** (all four fail against the pre-fix component) |
+
+**Extra defect found while in the same code (fixed).** `wireNote` was a single
+string rendered inside **every** citation row, so wiring one issue printed its
+result on all of them. It is now keyed to the issue it describes.
+
+**Why the original test could not catch this.** It mocks `fetchValidation` with a
+static report that always contains the orphan issue, so `refresh()` hands back the
+same orphan forever and the row never unmounts. The destruction under test needs a
+page that stops being an orphan the instant it gets *one* link — the new tests
+change their answer on the **second** fetch. That mock is why this shipped green.
+
+**Deliberately NOT fixed here.** The **Dismiss** button writes `p.dismissed = true`
+and nothing anywhere in the codebase ever reads that flag — grep for `dismissed`
+returns the write and one unrelated component. The affordance is dead: clicking it
+changes nothing visible. It is outside this story's scope and needs its own i18n
+decision for the dismissed state (14 locale files must stay deep-key-identical), so
+it is filed rather than silently expanded into.

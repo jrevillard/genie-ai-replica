@@ -58,13 +58,13 @@
     (dict "name" "CONTEXTUAL_LABEL_RAW" "value" (.Values.opea.dataprep.contextualLabelRaw | default "true" | toString))
     (dict "name" "VLLM_MODEL_ID" "value" (.Values.opea.models.llm.modelId | default "ibm-granite/granite-4.1-8b"))
     (dict "name" "VLLM_ENDPOINT" "value" $llmEndpoint)
-    (dict "name" "GPU_NODE_HOST" "value" (regexReplaceAll "^([a-z]+://)?(\\[[^\\]]+\\]|[^:/]+).*" (.Values.opea.gpu.nodeHost | default "") "$2"))
+    (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
     (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
     (dict "name" "DOCLING_DEVICE" "value" (.Values.opea.dataprep.doclingDevice | default "cuda"))
     (dict "name" "GUARDRAIL_URL" "value" (.Values.opea.dataprep.guardrailUrl | default "http://guardrail:9090/v1/guardrails"))
-    (dict "name" "DOCUMENT_REPOSITORY_URL" "value" (printf "http://document-repository.%s.svc.cluster.local:80" $ns))
-    (dict "name" "BACKEND_SERVICE_URL" "value" (printf "http://backend.%s.svc.cluster.local:80" $ns))
-    (dict "name" "KEYCLOAK_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
+    (dict "name" "DOCUMENT_REPOSITORY_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "document-repository" "port" 80)))
+    (dict "name" "BACKEND_SERVICE_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "backend" "port" 80)))
+    (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
     (dict "name" "KC_REALM" "value" (.Values.opea.dataprep.kcRealm | default "genie"))
     (dict "name" "KC_DATAPREP_CLIENT_ID" "value" (.Values.opea.dataprep.kcDataprepClientId | default "dataprep-service-client"))
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
@@ -101,17 +101,11 @@ in the values file is honored end-to-end for multi-line prompts). */ -}}
 {{- if $ctxPrompt -}}
 {{- $promptEnv = append $promptEnv (dict "name" "CONTEXTUAL_RETRIEVAL_PROMPT" "value" $ctxPrompt) -}}
 {{- end -}}
-{{- $arangoSecretEnv := list
-    (dict "name" "ARANGO_PASSWORD" "valueFrom" (dict "secretKeyRef" (dict "name" "arango-root-secret" "key" "password" "optional" true)))
--}}
+{{- $arangoSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
 {{- $kcSecretEnv := list
     (dict "name" "KC_DATAPREP_CLIENT_SECRET" "valueFrom" (dict "secretKeyRef" (dict "name" "kc-dataprep-client-secret" "key" "KC_DATAPREP_CLIENT_SECRET")))
 -}}
-{{- $gpuSecretEnv := list
-    (dict "name" "HF_TOKEN" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "HF_TOKEN")))
-    (dict "name" "VLLM_API_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "VLLM_API_KEY")))
-    (dict "name" "HUGGINGFACEHUB_API_TOKEN" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "VLLM_API_KEY")))
--}}
+{{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY" "HUGGINGFACEHUB_API_TOKEN")) | fromJsonArray -}}
 {{- $arangoEnv := list
     (dict "name" "ARANGO_URL" "value" (printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns))
     (dict "name" "ARANGO_DB" "value" "_system")

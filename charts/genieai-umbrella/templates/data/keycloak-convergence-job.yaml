@@ -150,7 +150,7 @@ spec:
             # appends a hardcoded "-service" suffix. Renaming the CR
             # breaks this URL with no render-time symptom.
             - name: KEYCLOAK_URL
-              value: {{ printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns | quote }}
+              value: {{ include "genieai-umbrella.keycloakInternalURL" . | quote }}
             - name: KEYCLOAK_USER
               valueFrom:
                 secretKeyRef:

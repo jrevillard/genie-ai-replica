@@ -152,14 +152,20 @@ spec:
         # this port the default-deny policy drops all traces at the source.
         - protocol: TCP
           port: 4318
-        {{- if .Values.observability.logs.enabled }}
-        # VictoriaLogs read path for the admin logs UI
-        # (VICTORIALOGS_URL). Port-scoped ipBlock — the vmoperator-managed
-        # VLSingle pod labels are not part of the genieai.io/component
-        # convention.
+    {{- if .Values.observability.logs.enabled }}
+    # VictoriaLogs read path for the admin logs UI (VICTORIALOGS_URL).
+    # Own rule, not a port in the shared any-destination list: the
+    # VLSingle pod carries vmoperator-stamped labels, so the peer is
+    # exact.
+    - to:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: victorialogs
+      ports:
         - protocol: TCP
           port: 9428
-        {{- end }}
+    {{- end }}
     # document-repository (file references) — post-DNAT pod port 3001;
     # the doc-repo ingress rule already permits backend as a peer.
     - to:

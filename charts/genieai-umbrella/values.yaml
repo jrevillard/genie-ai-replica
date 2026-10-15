@@ -41,13 +41,37 @@ global:
 # land with the sovereign deployment tier; it is rejected until then).
 clusterProfile: dev
 
-# Observability. The OpenTelemetry Collector CR is reconciled by the
-# OpenTelemetry Operator; the operator creates a Service named
-# `<cr-name>-collector` and the umbrella chart points in-cluster OTLP
-# exporters at that service (see templates/_lib/_observability.tpl).
-# Override `collectorCRName` when running parallel stacks or when the
-# CR is renamed to avoid hostname collisions.
+# Observability. Per-component flags — there is intentionally NO
+# master `enabled` switch. VictoriaLogs is the baseline: the admin
+# logs UI reads it, so `logs.enabled` defaults TRUE (VLSingle + OTel
+# collector gateway + filelog DaemonSet agent). Metrics, traces and
+# Grafana are opt-in (default FALSE) per environment via the deploy
+# repo overlay ConfigMap.
+#
+# Operator controllers (vmoperator, opentelemetry-operator,
+# grafana-operator) are cluster bootstrap prerequisites — installed
+# via genie-ai-deploy (Flux HelmReleases) or
+# genie-ai/scripts/install-prereqs.sh; the chart renders only the CRs.
 observability:
+  logs:
+    enabled: true
+    # VLSingle retention period. Compose §12C parity (30d default).
+    retentionPeriod: "30d"
+    storageSize: 20Gi
+  metrics:
+    enabled: false
+    # VMSingle retention period.
+    retentionPeriod: "30d"
+    storageSize: 20Gi
+  traces:
+    enabled: false
+    # VTSingle retention period.
+    retentionPeriod: "30d"
+    storageSize: 20Gi
+  grafana:
+    enabled: false
+  # OTel operator collector CR name; the in-cluster Service is named
+  # <cr>-collector (see templates/_lib/_observability.tpl).
   collectorCRName: genieai-collector
   # Collector OTLP/HTTP listener port. Default 4318 matches the
   # OpenTelemetry Operator's default `spec.ports[0].port`. Override

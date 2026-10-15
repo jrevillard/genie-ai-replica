@@ -33,7 +33,8 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
 spec:
   mode: deployment
-  config: |
+  # config as a map (otel-operator v1beta1 rejects string configs)
+  config:
     receivers:
       otlp:
         protocols:

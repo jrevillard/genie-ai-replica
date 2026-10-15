@@ -65,7 +65,7 @@ a per-concept diff the curator can expand, not just a count.
 
 ## BUG-03 — A bundle-imported repo opens on step 9 (Review), past the only step with mandatory work
 
-**Status: OPEN** · Severity: high (first-run experience) · Found 15:28–15:30 on tier 0 · **!1067**
+**Status: FIXED in `69983dbb2`, pending live re-test** · Severity: high (first-run experience) · Found 15:28–15:30 on tier 0 · **!1067**
 
 The bundle-import path creates the repo with only `{name, domain}`
 (`StudioTab.vue:467`) and never seeds `studio_step`, so the wizard's landing step
@@ -81,8 +81,33 @@ So the user clicks through nine steps and hits a dead end telling them to naviga
 backwards. This was the first thing that went wrong on the run, before any data
 was touched.
 
-**Fix:** seed `studio_step: 5` (Curate) on bundle import, exactly as the crawler
-path already does at `StudioTab.vue:674` and `:686`.
+**Verdict — fixed in `69983dbb2`. Two corrections to the original analysis**, both of
+which change the fix:
+
+1. **`lockedIndices` is not the mechanism.** It was proposed as the authority, but it
+   only *locks nothing* when `studio_step` is 9 — a consequence, not a cause. The real
+   chain is: the zip branch seeds **no draft** and navigates to the **dashboard**; the
+   operator opens the repo **later** via a card click; `onResume` finds no persisted
+   draft and takes the permissive fallback `studio_step: 9` at `StudioTab.vue:381`.
+   That fallback is where step 9 comes from.
+
+2. **The suggested one-line fix would not have worked as written.** Seeding only
+   `this.activeDraft` is useless here, because this branch navigates to the dashboard —
+   the value is gone before the card click. Only a **persisted** draft survives, so the
+   fix calls `okf/saveDraft`, the same call the crawler path makes at `:671-682`.
+
+A bundle already carries its concepts, so Input/Produce/Label have nothing to do; **5
+(Curate)** is the correct landing step and matches the crawler precedent. A repo
+created **without** a bundle still starts at step 1 (David, 2026-10-11) — unchanged,
+and now pinned by a test so this fix cannot drag it along.
+
+**A test that first passed against the broken code.** The round-trip test originally
+stubbed `getDraft` to return a hand-written `{studio_step: 5}`, and it passed against
+the **unfixed** component — it was asserting that resume honours a draft (always true)
+rather than that the import path *creates* one. It now stubs nothing: `onResume` reads
+the cached draft first, so with no server stub the import path is the only thing that
+can put one there. Both new tests fail against the pre-fix component and pass against
+the fixed one. Frontend **98/98 suites, 1911/1911 tests**.
 
 ---
 

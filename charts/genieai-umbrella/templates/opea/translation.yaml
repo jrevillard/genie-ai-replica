@@ -1,0 +1,93 @@
+{{/*
+  translation OPEA orchestrator. Compose-parity (docker-compose.yaml lines
+  917-949). Image is the UNCONDITIONAL docker.io upstream image
+  opea/translation:1.3, NOT the registry-prefixed genie-ai-* convention.
+  Same treatment as the keycloak-config-cli image in data/keycloak-
+  convergence-job.yaml: the upstream image is not mirrored in the genie-ai
+  CI registry, and the global.imageRegistry prefix would 404 the pull.
+  Air-gapped sites must mirror docker.io/opea/translation and rewrite via
+  insertAgent, not via the registry value. Hand-rendered instead of going
+  through genieai-umbrella.serviceDeployment because the factory
+  unconditionally prefixes the image with .Values.global.imageRegistry.
+  Container port 9031; tcpSocket probe on 9031 (the chart's Service port)
+  is sufficient — the upstream /health check targets container port 8888
+  but a tcpSocket on 9031 confirms the listener is reachable from the
+  kubelet without depending on the upstream HTTP path the chart cannot
+  verify.
+*/}}
+{{- if .Values.opea.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: translation
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      genieai.io/component: translation
+  template:
+    metadata:
+      labels:
+        {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 8 }}
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: translation
+          # Pulled from docker.io unconditionally: opea/translation is
+          # not mirrored in the registries deployments pull their other
+          # images from (verified 2026-10-15), and the
+          # global.imageRegistry prefix would 404 the pull. An air-gapped
+          # site must mirror docker.io/opea/translation and rewrite via
+          # insertAgent, not via the registry value.
+          image: docker.io/opea/translation:1.3
+          imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: 9031
+          env:
+            - name: LLM_ENDPOINT
+              value: {{ include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") }}
+            - name: LLM_MODEL_ID
+              value: {{ .Values.opea.translation.modelId }}
+          resources:
+            requests: { cpu: 200m, memory: 256Mi }
+            limits: { cpu: 2, memory: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["NET_RAW"]
+          readinessProbe:
+            tcpSocket:
+              port: 9031
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          livenessProbe:
+            tcpSocket:
+              port: 9031
+            initialDelaySeconds: 60
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: translation
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 9031
+      targetPort: 9031
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 4 }}
+{{- end -}}

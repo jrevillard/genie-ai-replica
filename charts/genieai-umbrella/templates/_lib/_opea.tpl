@@ -1,0 +1,61 @@
+{{/*
+genieai-umbrella.opeaGpuEndpoint — returns the full GPU endpoint URL for a given path key.
+
+Signature: {{ include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "<key>") }}
+
+Modes:
+  - external (default): joins opea.gpu.nodeHost with opea.gpu.paths.<key>.
+    Returns empty string when nodeHost is empty so callers can gate on it.
+  - in-cluster: returns an in-cluster Service URL using a fixed
+    service-name:port map (llm→vllm:8000, embedding→tei:80,
+    reranker→tei-reranker:80, translation→vllm-translation:9031,
+    docling→docling:5001).
+
+Unknown path key → fail.
+*/}}
+{{- define "genieai-umbrella.opeaGpuEndpoint" -}}
+{{- $root := .root -}}
+{{- $key  := .path -}}
+{{- $mode := $root.Values.opea.gpu.mode -}}
+
+{{- if eq $mode "in-cluster" -}}
+  {{- if eq $key "llm" -}}
+http://vllm.{{ $root.Values.namespace }}.svc.cluster.local:8000
+  {{- else if eq $key "embedding" -}}
+http://tei.{{ $root.Values.namespace }}.svc.cluster.local:80
+  {{- else if eq $key "reranker" -}}
+http://tei-reranker.{{ $root.Values.namespace }}.svc.cluster.local:80
+  {{- else if eq $key "translation" -}}
+http://vllm-translation.{{ $root.Values.namespace }}.svc.cluster.local:9031
+  {{- else if eq $key "docling" -}}
+http://docling.{{ $root.Values.namespace }}.svc.cluster.local:5001
+  {{- else -}}
+{{- fail (printf "unknown opea.gpu endpoint key: %s" $key) -}}
+  {{- end -}}
+
+{{- else if eq $mode "external" -}}
+  {{- $host := $root.Values.opea.gpu.nodeHost -}}
+  {{- if not $host -}}
+{{- "" -}}
+  {{- else -}}
+{{- trimSuffix "/" $host }}{{ get $root.Values.opea.gpu.paths $key }}
+  {{- end -}}
+
+{{- else -}}
+{{- fail (printf "unknown opea.gpu.mode: %s (expected external or in-cluster)" $mode) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+genieai-umbrella.opeaSslSkipVerify — returns "1" when the GPU node uses a
+self-signed certificate (nodeHost starts with https://), else "0".
+
+This mirrors the backend's NODE_TLS_REJECT_UNAUTHORIZED=0 rationale: the
+GPU node's certificate is signed by an internal CA that the trust store
+does not carry.
+
+Signature: {{ include "genieai-umbrella.opeaSslSkipVerify" . }}
+*/}}
+{{- define "genieai-umbrella.opeaSslSkipVerify" -}}
+{{- if hasPrefix "https://" .Values.opea.gpu.nodeHost -}}1{{- else -}}0{{- end -}}
+{{- end -}}

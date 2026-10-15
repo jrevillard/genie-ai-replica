@@ -709,8 +709,21 @@ KC_OKF_SERVER_CLIENT_SECRET=
 # lane claims a different parsed concept and drains it concurrently (requires
 # dataprep to accept parallel ingests — set DATAPREP_INGEST_CONCURRENCY to
 # match). 1 = the historical sequential behavior. Repos are independent units
-# of work: raise both values to scale with machine capacity (e.g. 6 on a
-# 24-vCPU workstation; watch dataprep/vLLM headroom).
+# of work: raise both values to scale with machine capacity. Set BOTH halves
+# to the same value; a higher OKF_INGEST_CONCURRENCY only earns 429 backoffs
+# while a lower one under-uses the worker. This pair is bounded by the MODEL
+# services, not the host -- watch dataprep/vLLM headroom, and lower it if chat
+# answering slows during a large drain.
+#
+#   SIZING (set deliberately, the default is a floor not a recommendation):
+#     4 cores  /  8 GB -> 2      16 cores / 32 GB -> 8
+#     8 cores  / 16 GB -> 4      24 cores / 64 GB -> 12
+#     32+ cores/ 64GB+ -> 16, then follow the model services
+#
+#   Apply to BOTH: OKF_INGEST_CONCURRENCY = DATAPREP_INGEST_CONCURRENCY
+#   After changing: docker compose up -d --force-recreate okf-server \
+#     pii-service dataprep-arango-service   (values are read at process start)
+#
 # OKF_INGEST_CONCURRENCY=1
 # IMPORT LANES (perf 2026-09-05): per-concept import pipeline parallelism in
 # okf-server (creation-side import, NOT the post-publish drain). 1 = the
@@ -1267,9 +1280,14 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Used by: okf-server. Compose: no. Ansible: yes (pii_concept_retry_pause_ms).
 # PII_WEB_CONCURRENCY=4
 #   Default: 4 (was 2 — chosen when the sidecar had 2 uvicorn workers).
-#   Worker PROCESSES, not threads (GIL-bound NER). Each holds its own ~390MB
-#   spaCy copy, so this is the sidecar's MEMORY knob — raise it only on a host
-#   with headroom (~400MB x workers, on top of the model).
+#   Worker PROCESSES, not threads (GIL-bound NER). Each loads its own model
+#   copy: MEASURED ~640MB per worker (sidecar at 2.57GiB with 4 workers), so
+#   budget workers x 640MB against free RAM before raising it. This is the
+#   sidecar's MEMORY knob first and a CPU knob second.
+#   NOTE when checking it is live: the spawned workers are
+#   multiprocessing.spawn children, so they do NOT appear as "uvicorn" in ps.
+#   Count /proc/*/comm == python3.11 instead, or you will wrongly conclude the
+#   workers never started.
 #   SET IT TO MATCH OKF_IMPORT_CONCURRENCY — they are one capacity setting. See
 #   the PAIRING RULE at the OKF_IMPORT_CONCURRENCY entry above: import lanes
 #   above the sidecar's worker count queue instead of adding throughput.

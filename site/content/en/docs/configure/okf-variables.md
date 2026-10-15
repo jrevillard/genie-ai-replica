@@ -56,23 +56,25 @@ Sizing guidance:
   embedding service — both are HTTP calls to services that handle concurrency
   natively, so throughput scales close to linearly with the slot count until
   document chunking (CPU) becomes the bottleneck.
-- Start with equal values on both variables (for example `6`/`6` on a 24-vCPU
-  workstation) and watch dataprep and the model services' headroom. Higher
-  `OKF_INGEST_CONCURRENCY` than `DATAPREP_INGEST_CONCURRENCY` just produces
-  `429` backoffs; the reverse under-uses the worker.
+- **Set both halves to the same value.** Higher `OKF_INGEST_CONCURRENCY` than
+  `DATAPREP_INGEST_CONCURRENCY` just produces `429` backoffs; the reverse
+  under-uses the worker. Start at half your cores (`12`/`12` on a 24-vCPU
+  workstation) and raise it while the model services have headroom — this pair
+  is limited by the **GPU/model services**, not by the host, so more slots stop
+  helping once the models saturate.
 - Indexing progress per repository is visible on the repository card and in the
   editor; the pending count is a **shared queue across repositories** — with
   lanes draining first-in-first-out across all repos, one repository's pending
   count can sit still while another's clears.
 
-### Why these default to 1 while the import pair defaults to 4
+### Why the two pairs are limited by different things
 
-The two pairs look inconsistent on purpose, because **they are limited by
-different things**:
+The four settings form **two pairs**, and the pairs are bounded by different
+resources. This is the part that matters when sizing:
 
-- **Import** is bounded by the host's own CPU. The dominant cost is the PII
-  sidecar's language-model scan, which runs on the machine and scales with cores.
-  A default of 4/4 uses that capacity on a typical host.
+- **Import** is bounded by the host's own CPU **and RAM**. The dominant cost is
+  the PII sidecar's language-model scan, which runs on the machine and scales
+  with cores.
 - **Indexing** is bounded by the **model services**, not by the host. Each concept
   calls the language model for labelling and the embedding service — both shared,
   and often backed by a single GPU. Adding slots there does not use more of the
@@ -80,8 +82,58 @@ different things**:
   from chat answering.
 
 So a higher index default would not be "faster by default" — it would be a
-default that slows down the assistant. Raise this pair deliberately, against the
+default that slows down the assistant. Raise that pair deliberately, against the
 model services' headroom, not against the core count.
+
+## Sizing all four settings for your host
+
+The shipped defaults are conservative and safe, not a recommendation for a
+machine of your size. On a 24-core host the import pair of `4`/`4` uses roughly
+a fifth of the available processing power — set it deliberately.
+
+All four are **configuration, not hard-coded behaviour**. Set them in your `.env`
+(the Docker Compose deployment) or in the Ansible `group_vars`; nothing needs to
+be rebuilt. Changing them requires recreating the affected containers, because
+the values are read once at process start:
+
+```bash
+docker compose up -d --force-recreate okf-server pii-service dataprep-arango-service
+```
+
+| Cores | RAM | `OKF_IMPORT_CONCURRENCY` = `PII_WEB_CONCURRENCY` | `OKF_INGEST_CONCURRENCY` = `DATAPREP_INGEST_CONCURRENCY` |
+|---:|---:|---:|---:|
+| 4 | 8 GB | `2` | `2` |
+| 8 | 16 GB | `4` | `4` |
+| 16 | 32 GB | `8` | `8` |
+| 24 | 64 GB | `12` | `12` |
+| 32+ | 64 GB+ | `16` (the clamp ceiling) | `16`, then follow the model services |
+
+The import pair's ceiling is `16`. `PII_WEB_CONCURRENCY` is a **memory** setting
+before it is a CPU setting: each worker process loads its own copy of the
+detection model, measured at roughly **640 MB per worker** on the current image.
+Multiply by the value you choose and leave headroom for everything else on the
+host — at `12` that is about 7.7 GB. A host that cannot afford that should
+lower the import pair, not raise it into swap.
+
+The index pair has no hard ceiling but a real one: it is whatever the model
+services will absorb. If a labelling or embedding call starts failing, or chat
+answers get slower during a large drain, this pair is set too high.
+
+### Confirm what a host actually got
+
+Do not infer the setting from timing. Every import writes the capacity it really
+started with to the okf-server log, under `OKF import lane capacity`:
+
+```
+OKF import lane capacity  repo_id=… concepts=… import_concurrency=12
+  pii_web_concurrency=12 paired=true cores=24
+```
+
+`paired` is the check that matters. It is `true` only when the import lanes do
+not exceed the sidecar's worker count; `false` means the extra lanes are queueing
+at the PII sidecar, which costs latency without adding throughput. If
+`pii_web_concurrency` reads `unset`, the two settings were not applied to the
+same deployment.
 
 ## Import capacity (creating a repository)
 
@@ -94,11 +146,15 @@ throughput.
 | Variable | Default | Purpose |
 |---|---|---|
 | `OKF_IMPORT_CONCURRENCY` | `4` | Number of concepts the okf-server importer drives through the pipeline at once. Clamped to `1`–`16`. |
-| `PII_WEB_CONCURRENCY` | `4` | Number of worker **processes** in the PII sidecar — how many text scans it can absorb at once. Each holds its own language model (~400 MB), so this is the sidecar's memory knob. |
+| `PII_WEB_CONCURRENCY` | `4` | Number of worker **processes** in the PII sidecar — how many text scans it can absorb at once. Each holds its own language model (~640 MB measured), so this is the sidecar's memory knob. |
 
-A rule of thumb for both is **`min(16, cores / 2)`**. It is a starting point, not
-a constant: the right value depends on the machine. On a 24-core host, `4`/`4`
-uses roughly a fifth of the available processing power.
+Size both from the **cores and RAM of the host you are deploying to**, not from
+the default. `min(16, cores / 2)` is the rule of thumb — `12`/`12` on a 24-core
+host, `8`/`8` on 16 cores, `4`/`4` on 8. Check the memory budget first (see
+[Sizing all four settings](#sizing-all-four-settings-for-your-host)), then set
+**both halves to the same value**: import lanes above the sidecar's worker count
+queue instead of adding throughput, so an unpaired setting costs latency and buys
+nothing.
 
 Every import writes the capacity it actually started with to the service log
 under `OKF import lane capacity`, including whether the two settings match — so

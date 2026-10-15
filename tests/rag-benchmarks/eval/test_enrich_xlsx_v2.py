@@ -69,9 +69,40 @@ def test_existing_non_ascii_is_not_mangled_by_the_escape_decoder():
     assert _extract_response(body) == "café con información ñ"
 
 
-def test_non_string_input_is_returned_as_is():
+def test_non_string_input_is_coerced_to_text():
+    """The annotation is `-> str` and the callers assume it.
+
+    Stored tuples rows are not validated, so a row whose `answer` is a number
+    reaches here directly; returning the int would raise AttributeError inside
+    is_abstention and abort the whole workbook build.
+    """
     assert _extract_response(None) == ""
-    assert _extract_response(42) == 42
+    assert _extract_response(42) == "42"
+    assert _extract_response({"a": 1}) == "{'a': 1}"
+    assert is_abstention(_extract_response(42)) == (False, "")
+
+
+def test_a_null_body_is_not_rendered_as_the_word_none():
+    """`str(None)` would turn a null response into a substantive-looking
+    two-word answer in the operator workbook."""
+    assert _extract_response("null") == "null"
+    assert _extract_response("true") == "true"
+
+
+def test_partially_double_encoded_text_is_still_decoded():
+    """Legacy reports carry literal escapes sitting next to real mojibake.
+
+    Gating the decoder on a whole-string ASCII check skips exactly this case, so
+    the answer keeps a literal `\\u00f3` and abstention detection stops matching
+    — the row then counts as answered instead of abstained.
+    """
+    body = json.dumps(
+        {"response": "Lo siento, no dispongo de informaci\\u00f3n suficiente (caf\\u00c3\\u00a9)."}
+    )
+    extracted = _extract_response(body)
+    assert "\\u00f3" not in extracted
+    assert "información" in extracted
+    assert is_abstention(extracted)[0] is True
 
 
 # ---------------------------------------------------------------------------

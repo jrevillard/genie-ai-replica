@@ -38,8 +38,8 @@ set. Choose one with `RERANKING_STRATEGY`:
 
 | Strategy | How it decides the cut | When to use |
 |---|---|---|
-| **`slice`** (default in the reranker service, `genieai_tei_reranker.py:79`) | Top-N by TEI cross-encoder score (`RERANKER_TOP_N` = 3). | Predictable context size. The right default for most deployments. |
-| **`adaptive`** (default in the chatqna wrapper, `genieai_chatqna.py:252`) | Utility-cost selection: `relevance × novelty − token_cost`; penalises near-duplicates (novelty sigmoid) and large context windows (context decay). | Dynamic context; tune `CONTEXT_DECAY_FACTOR` and friends. |
+| **`slice`** (default in the reranker service, `RERANKING_STRATEGY` (`genieai_tei_reranker.py`)) | Top-N by TEI cross-encoder score (`RERANKER_TOP_N` = 3). | Predictable context size. The right default for most deployments. |
+| **`adaptive`** (default in the chatqna wrapper, `RERANKING_STRATEGY` (`genieai_chatqna.py`)) | Utility-cost selection: `relevance × novelty − token_cost`; penalises near-duplicates (novelty sigmoid) and large context windows (context decay). | Dynamic context; tune `CONTEXT_DECAY_FACTOR` and friends. |
 | **`threshold`** | Keeps every chunk above `RERANKING_THRESHOLD`. | Strict quality gate. |
 | **`slice_threshold`** | Top-N, but only chunks that also clear `RERANKING_THRESHOLD`. | Predictable size + a quality floor. |
 | **`knee_threshold`** | Keeps chunks up to the largest score drop ("knee"). | Adapts to varied query difficulty. |
@@ -48,9 +48,9 @@ With `slice`, `RERANKER_TOP_N` (default 3) sets how many top chunks go to
 the LLM.
 
 > **Two defaults, two layers.** The TEI reranker microservice reads
-> `RERANKING_STRATEGY` with default `slice` (`genieai_tei_reranker.py:79`).
+> `RERANKING_STRATEGY` with default `slice` (`RERANKING_STRATEGY` (`genieai_tei_reranker.py`)).
 > The ChatQnA wrapper reads it with default `adaptive`
-> (`genieai_chatqna.py:252`). ChatQnA's value wins when ChatQnA is in the
+> (`RERANKING_STRATEGY` (`genieai_chatqna.py`)). ChatQnA's value wins when ChatQnA is in the
 > path; the reranker service only sees the per-request override that
 > ChatQnA forwards. Pick the strategy that matches the layer you expect to
 > serve the request.

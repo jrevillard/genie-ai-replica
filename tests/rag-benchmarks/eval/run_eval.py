@@ -282,12 +282,16 @@ def _extract_answer(body: str) -> str:
         # can carry no prose — and must not fall through to the serialised-envelope
         # dump, which is the shape this resolver used to return by mistake and
         # which every RAGAS metric then scored instead of the answer.
-        if "response" in data:
-            value = data["response"]
-            return "" if value is None else str(value)
+        #
+        # Non-string values are not answers. `str()` on a dict would emit a
+        # Python repr — single quotes, wrong key order — straight into the row
+        # that RAGAS then scores, so those fall through to the envelope dump
+        # instead, which is at least valid JSON.
+        if "response" in data and isinstance(data["response"], str):
+            return data["response"]
         for key in ("text", "answer", "generated_text"):
-            if data.get(key):
-                return str(data[key])
+            if isinstance(data.get(key), str) and data[key]:
+                return data[key]
         md = data.get("metadata") or {}
         if isinstance(md, dict) and md.get("answer"):
             return str(md["answer"])

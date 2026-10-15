@@ -56,17 +56,32 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
    `feat-k8s-migration` image tag in the laptop overlay (source fixes ride the
    branch: `KEYCLOAK_EXPECTED_ISSUER`, ClamAV host forwarding, backend
    `OPEA_HOST` default, streaming translation default-on).
-2. **Observability** — execute Plan 4 after a refresh pass: operator chart
-   versions re-check, VMServiceScrapes extended to the six OPEA orchestrators,
-   values knob `observability.collectorCRName` (already in values.yaml)
-   meeting its CRs. Ships the log pipeline (collector DaemonSet filelog →
-   VictoriaLogs) that repairs the admin logs UI (currently 503 — typed
-   `VlUnavailableError` with no VL in cluster).
-3. **Ingress (Phase 2)** — Gateway API (`Gateway` + `HTTPRoute`) + cert-manager,
+2. **Global code review of the whole MR** (running 2026-10-15) — findings
+   triaged and fixed before any new tier lands on the branch.
+3. **Documentation pass** (pre-merge, after review fixes):
+   - `site/content/en/docs/deploy/` — new Kubernetes deployment page (chart,
+     Flux, overlays, GPU modes external/in-cluster) alongside the
+     compose/swarm pages.
+   - `charts/README.md` + `charts/genieai-umbrella/README.md` — refresh
+     against 0.1.66 (values surface, `_lib` helpers, model skeleton).
+   - Root `CLAUDE.md` — helm/flux/kubectl essentials in Common Commands,
+     chart + deploy-repo layers in Architecture, Helm/Flux in the stack
+     table, `charts/` in Key Directories.
+   - `.claude/rules/K8s-WORKFLOW.md` (new) — cluster access patterns
+     (namespace, port-forwards), the `rtk proxy helm` output trap, the
+     byte-compare render gate, the chart-push → overlay-bump → flux
+     reconcile cycle.
+   - genie-ai-deploy README — overlay/SealedSecret model if missing.
+4. **Observability** — execute the refreshed plan
+   (`docs/superpowers/plans/2026-10-15-observability-tier.md`): vmoperator
+   CRs, collector gateway + filelog DaemonSet, Grafana, PII redaction,
+   VMServiceScrapes via the service factory. Repairs the admin logs UI
+   (currently 503 — typed `VlUnavailableError` with no VL in cluster).
+5. **Ingress (Phase 2)** — Gateway API (`Gateway` + `HTTPRoute`) + cert-manager,
    nginx stays the in-cluster aggregator; tighten the placeholder
    NetworkPolicy peers (`podSelector: {}`, broad `ipBlock`) once the gateway
    data-plane labels exist; kind+Calico CI gate for the policy surface.
-4. **CI completion** — `chart:contract` render-gate job, `ct lint`/`ct install`
+6. **CI completion** — `chart:contract` render-gate job, `ct lint`/`ct install`
    on kind, dashboards for chart test results.
 
 ## Parked / backlog

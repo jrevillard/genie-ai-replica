@@ -17,7 +17,13 @@ const conceptMetaService = require('./concept-meta-service');
 
 const COLLECTION = 'okf_concepts_meta';
 const VALID_ACTOR_PREFIXES = ['agent/', 'agent:', 'human:', 'process:'];
-const VALID_STATUS_ENUMS = ['draft', 'stable', 'deprecated'];
+// Shared vocabulary (okf-vocabulary). This list already read
+// ['draft','stable','deprecated'], which the tests and the live corpus agree
+// is correct; concept-meta-service's autocorrect read ['active','draft',
+// 'retired'] for the SAME field, which is what BUG-11 / !1077 fixed. The list
+// itself is unchanged here — it is now imported rather than restated, so the
+// next edit cannot fork a second copy.
+const VALID_STATUS_ENUMS = require('./okf-vocabulary').STATUS_VALUES;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Story 4.8-amend (2026-08-19): structural HARD errors block ingestion (a concept

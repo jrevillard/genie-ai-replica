@@ -1,16 +1,15 @@
 {{/*
-  retriever OPEA orchestrator. Compose-parity (docker-compose.yaml lines
-  1252-1340, `retriever-arango-service`). Factory-driven like the other
+  retriever OPEA orchestrator. Factory-driven like the other
   three OPEA deployments. ARANGO_* wired through the chart's arangoHost
   helper (single `arangodb-single.<ns>.svc.cluster.local:8529` URL;
   `ARANGO_DB` unified on `_system` like backend/doc-repo, regardless of
-  the compose `genie-ai` default). `RERANKING_STRATEGY` plus the
+  the image's own `genie-ai` default). `RERANKING_STRATEGY` plus the
   RETRIEVER_ARANGO_* and RETRIEVER_HYBRID_* tuning defaults lifted from
-  the compose env block via `| default` so per-deploy overrides land
+  the template via `| default` so per-deploy overrides land
   under `.Values.opea.retriever.<camelCase>`. GPU endpoints
   (`VLLM_ENDPOINT`, `TEI_EMBEDDING_ENDPOINT`) via the opea helpers;
   HF_TOKEN + VLLM_API_KEY from the vllm-api-key Secret. Container/listen
-  port 7000 (compose parity; healthcheck hits `/health` on that port).
+  port 7000; healthcheck hits `/health` on that port.
 */}}
 {{- if .Values.opea.enabled -}}
 {{- $vals  := deepCopy .Values -}}

@@ -1,11 +1,10 @@
 {{/*
-  reranker OPEA orchestrator. Compose-parity (docker-compose.yaml lines
-  1103-1154). TEI_RERANKING_ENDPOINT resolves to the gpu-path for
+  reranker OPEA orchestrator. TEI_RERANKING_ENDPOINT resolves to the gpu-path for
   `reranker`; HF_TOKEN + VLLM_API_KEY from the vllm-api-key Secret; the
   OTel exporter + LOG_LEVEL + the four adaptive-utility tuning knobs
   (NOVELTY_SIGMOID_*, CONTEXT_DECAY_FACTOR, MIN_VALUE_THRESHOLD) carry
-  compose defaults overridable via .Values.opea.reranker.* (camelCase).
-  Container/listen port 8000 (compose parity).
+  defaults overridable via .Values.opea.reranker.* (camelCase).
+  Container/listen port 8000.
 */}}
 {{- if .Values.opea.enabled -}}
 {{- $vals := deepCopy .Values -}}

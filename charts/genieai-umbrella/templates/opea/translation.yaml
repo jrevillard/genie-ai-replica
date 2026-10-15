@@ -1,6 +1,5 @@
 {{/*
-  translation OPEA orchestrator. Compose-parity (docker-compose.yaml lines
-  917-949). Image is the UNCONDITIONAL docker.io upstream image
+  translation OPEA orchestrator. Image is the UNCONDITIONAL docker.io upstream image
   opea/translation:1.3, NOT the registry-prefixed genie-ai-* convention.
   Same treatment as the keycloak-config-cli image in data/keycloak-
   convergence-job.yaml: the upstream image is not mirrored in the genie-ai
@@ -9,7 +8,7 @@
   insertAgent, not via the registry value. Hand-rendered instead of going
   through genieai-umbrella.serviceDeployment because the factory
   unconditionally prefixes the image with .Values.global.imageRegistry.
-  The image listens on 8888 (its own default; compose never maps the
+  The image listens on 8888 (its own default; nothing maps the
   port). The Service exposes 9031 -> 8888 because chatqna dials
   TRANSLATION_SERVICE_PORT 9031; the tcpSocket probe targets the real
   listener (8888).

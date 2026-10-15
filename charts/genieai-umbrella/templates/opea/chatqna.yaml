@@ -1,6 +1,5 @@
 {{/*
-  chatqna OPEA orchestrator. Compose-parity (docker-compose.yaml lines
-  1365-1434, `chatqna-xeon-backend-server`). Factory-driven like the
+  chatqna OPEA orchestrator. Factory-driven like the
   other five OPEA deployments. In-cluster peer wiring uses bare Service
   DNS names (the chart convention, mirroring the nginx upstreams:
   `embedding`, `retriever`, `reranker`, `translation`); ports match the
@@ -10,7 +9,7 @@
   the vllm-api-key Secret. `MEGA_SERVICE_HOST_IP` resolves to the
   chart's own `chatqna` Service.
 
-  CHATQNA_SYSTEM_PROMPT defaults to the empty string in compose
+  CHATQNA_SYSTEM_PROMPT defaults to the empty string
   (`${...:-}`); the chatqna Python code falls through to its built-in
   default in that case. The chart OMITS the env row entirely when the
   value is empty (Kubernetes then injects no env var; os.getenv returns
@@ -20,23 +19,23 @@
   honored end-to-end for multi-line prompts).
 
   The guardrail is not rendered by this chart; `GUARDRAIL_SERVICE_*`
-  carry the compose defaults (`guardrail:9090`) and the service tolerates
+  carry the defaults (`guardrail:9090`) and the service tolerates
   an unreachable guardrail. `GPU_NODE_HOST` is superseded by the
-  opeaGpuEndpoint helper. `OPENAI_API_KEY` defaults to empty in compose
+  opeaGpuEndpoint helper. `OPENAI_API_KEY` defaults to empty
   (`${VLLM_API_KEY:-}`); omitted because the Python default already
   handles the unset case.
 
   KEYCLOAK_URL is the PUBLIC origin (the pinned issuer on the Keycloak
   CR) — the validator compares it against the token's iss claim, which
   carries the public issuer. KEYCLOAK_INTERNAL_URL is the in-cluster
-  JWKS base (its code default names the compose service, unresolvable
+  JWKS base (its code default names an unresolvable service name,
   here). The public/in-cluster split mirrors the backend's translation
   wiring and Keycloak's hostname v2 backchannelDynamic.
-  DOC_REPO_URL/BACKEND_SERVICE_URL/KEYCLOAK_URL mirror the compose URLs
-  but target the in-cluster Service names + chart port mappings
+  DOC_REPO_URL/BACKEND_SERVICE_URL/KEYCLOAK_URL target the in-cluster
+  Service names + chart port mappings
   (document-repository and backend expose port 80 → targetPort 3001/3000;
-  keycloak-service:8080/auth). Container/listen port 8888 (compose
-  parity; compose healthcheck hits `/health` on that port).
+  keycloak-service:8080/auth). Container/listen port 8888; healthcheck
+  hits `/health` on that port.
 */}}
 {{- if .Values.opea.enabled -}}
 {{- $vals  := deepCopy .Values -}}
@@ -93,7 +92,7 @@
     (dict "name" "ENABLE_OBSERVABILITY" "value" (.Values.opea.chatqna.enableObservability | default "0" | toString))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}
-{{- /* CHATQNA_SYSTEM_PROMPT defaults to empty in compose (`${...:-}`);
+{{- /* CHATQNA_SYSTEM_PROMPT defaults to empty;
 the chatqna Python code falls through to its built-in prompt when the
 env is empty/falsy. Rendering the env row with `| default "" | quote`
 would emit the literal two-character string `""`, which the Python code
@@ -111,8 +110,7 @@ end-to-end for multi-line prompts). */ -}}
 {{- end -}}
 {{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "VLLM_API_KEY")) | fromJsonArray -}}
 {{- /* workingDir: the image ENTRYPOINT runs `python genieai_chatqna.py`
-with a RELATIVE path; the script lives in /app/ChatQnA/ (compose sets
-working_dir: /app/ChatQnA). Without it the container starts in /app and
+with a RELATIVE path; the script lives in /app/ChatQnA/. Without it the container starts in /app and
 exits immediately ("can't open file"). */ -}}
 {{- $svcVals := dict
     "image" (dict "repository" "genie-ai-chatqna-server" "tag" "main")

@@ -33,7 +33,9 @@ const config = require('../config');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 
-const TYPE_ENUM = ['topic', 'entity', 'process', 'event', 'source'];
+// Shared vocabulary (okf-vocabulary). CONTENT_TYPES only: this is what the
+// model may CHOOSE, so the reserved root type is deliberately not offered.
+const TYPE_ENUM = require('./okf-vocabulary').CONTENT_TYPES;
 const NO_LABEL = 'no_label';
 const DEFAULT_LANES = 4;
 const CURATION_TIMEOUT_MS = parseInt(process.env.OKF_CURATION_TIMEOUT_MS, 10) || 30000;

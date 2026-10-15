@@ -1169,13 +1169,23 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         full_prompt_tokens = len(tokenizer.encode(system_instructions + user_content))
         # Check if the total token count exceeds the model's limit
         if full_prompt_tokens + max_answer_tokens > max_model_tokens - 200:  # Leave buffer
-            # Calculate maximum tokens for history
-            prompt_add_context_tokens = len(tokenizer.encode(prompt_add_context))
-            translated_history_tokens = len(tokenizer.encode(translated_history_string))
-
-            max_history_tokens = (
-                max_model_tokens + translated_history_tokens - max_answer_tokens - prompt_add_context_tokens - 200
+            # Budget for the history: the window minus what is already known to
+            # be there — the system prompt, the non-history part of the user
+            # content, the answer reserve, and a safety buffer. The skeleton is
+            # measured on the rebuilt (truncated) prompt template so it matches
+            # what is finally sent. Segment separators (" |<-MSG->| ") are not
+            # counted individually (~1-2 tokens per segment, absorbed by the
+            # buffer).
+            skeleton_tokens = len(
+                tokenizer.encode(
+                    f"\n\nUSER INFORMATION:\n{user_context_string}"
+                    "\n\nCHAT HISTORY:\n"
+                    f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}"
+                )
             )
+            system_tokens = len(tokenizer.encode(system_instructions))
+
+            max_history_tokens = max_model_tokens - system_tokens - max_answer_tokens - skeleton_tokens - 200
             # Split the history into segments
             history_segments = translated_history_string.split(" |<-MSG->| ")
             truncated_history = []

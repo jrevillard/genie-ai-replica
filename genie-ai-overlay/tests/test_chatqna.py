@@ -744,9 +744,9 @@ class TestAlignInputs:
             assert "msg1" in user_msg
             mock_counter.add.assert_not_called()
 
-        def test_budget_exceeded_but_history_fits_no_metric(self):
-            """Budget check true (large system prompt + RAG content) while the whole
-            history fits the leftover budget → nothing was truncated: no counter."""
+        def test_large_system_prompt_shrinks_history_budget(self):
+            """The system prompt consumes the history budget: with a 1000-token
+            system prompt the oldest segment no longer fits and is dropped."""
 
             class _Tok:
                 def encode(self, text):
@@ -758,12 +758,12 @@ class TestAlignInputs:
             self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
             llm_params = {"max_tokens": 1024, "top_p": 0.9}
             inputs = {"inputs": "RAGTOK" * 5, "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
-            history = "USER: HISTTOK |<-MSG->| USER: HISTTOK |<-MSG->| USER: HISTTOK"
+            history = "USER: HISTTOK-old |<-MSG->| USER: HISTTOK-mid |<-MSG->| USER: HISTTOK-new"
 
-            # system=1000 + RAG=500 + history=1500 = 3000 prompt tokens; with the
-            # 4096 fallback window the budget check fires (3000+1024 > 3896), but
-            # the leftover history budget (4096-1024-500-200 = 2372) holds the
-            # whole 1500-token history.
+            # window 4096 − system 1000 − answer 1024 − skeleton (RAG 500) − 200
+            # = 1372 tokens of history: the newest (500) and mid (500) fit, the
+            # oldest does not. The old formula ignored the system prompt and
+            # kept all three.
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
                 patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
@@ -775,8 +775,46 @@ class TestAlignInputs:
                     self_mock, inputs, "llm_node", MagicMock(), llm_params, full_chat_history_string=history
                 )
             user_msg = result["messages"][1]["content"]
-            assert "HISTTOK" in user_msg  # nothing dropped
-            mock_counter.add.assert_not_called()
+            assert "HISTTOK-new" in user_msg  # newest kept
+            assert "HISTTOK-mid" in user_msg  # mid kept
+            assert "HISTTOK-old" not in user_msg  # oldest dropped
+            attrs = mock_counter.add.call_args.args[1]
+            assert attrs["dropped"] == 1
+
+        def test_system_and_content_alone_over_window_wipes_history(self):
+            """System prompt + RAG content alone overflow the window: the history
+            budget goes negative and every segment is dropped and reported."""
+
+            class _Tok:
+                def encode(self, text):
+                    return [0] * (
+                        1000 * text.count("SYSTOK") + 100 * text.count("RAGTOK") + 500 * text.count("HISTTOK")
+                    )
+
+            self_mock = MagicMock()
+            self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
+            llm_params = {"max_tokens": 1024, "top_p": 0.9}
+            inputs = {"inputs": "RAGTOK" * 5, "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
+            history = "USER: HISTTOK-a |<-MSG->| USER: HISTTOK-b |<-MSG->| USER: HISTTOK-c"
+
+            # system 3000 + skeleton 500 = 3500 prompt tokens before any history;
+            # budget = 4096 − 3000 − 1024 − 500 − 200 < 0 → wipe.
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
+                patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK SYSTOK SYSTOK"),
+                patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
+                patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
+            ):
+                result = align_inputs(
+                    self_mock, inputs, "llm_node", MagicMock(), llm_params, full_chat_history_string=history
+                )
+            user_msg = result["messages"][1]["content"]
+            assert "HISTTOK" not in user_msg  # nothing fits
+            assert "RAGTOK" in user_msg  # KB content preserved
+            attrs = mock_counter.add.call_args.args[1]
+            assert attrs["kept"] == 0
+            assert attrs["dropped"] == 3
 
 
 # ===========================================================================

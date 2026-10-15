@@ -90,3 +90,25 @@ All services use the fluentd logging driver to forward stdout/stderr to the Coll
 | Guardrail | 9090 | Disabled |
 | OPEA UI/Nginx | 5173 | Disabled |
 | Certbot | — | One-shot, `CERTBOT_REPLICAS:-0` |
+
+## OKF import capacity — read this before tuning throughput
+
+Two **independent pairs**, each of which only works when both halves move together.
+An agent sizing a host must set both, or the extra half just queues.
+
+| Pair | Creation side | Worker side | Raise one alone and… |
+|---|---|---|---|
+| **Import** | `OKF_IMPORT_CONCURRENCY` (default 4) | `PII_WEB_CONCURRENCY` (default 4) | extra lanes **queue at the PII sidecar** — latency up, throughput flat |
+| **Drain** | `OKF_INGEST_CONCURRENCY` (default 1) | `DATAPREP_INGEST_CONCURRENCY` (default 1) | extra lanes get **429** from dataprep; the worker backs off and retries |
+
+- **Rule of thumb: both halves ≈ `min(16, cores / 2)`.** Hardware-dependent, and
+  nothing infers it. On 24 cores a `4`/`4` import pair measured **443 % CPU** on the
+  PII sidecar while okf-server sat at **0.5 %** — about 18 % of the machine.
+- **`PII_WEB_CONCURRENCY` is a memory knob**: worker *processes*, each holding its
+  own ~400 MB language model. Do not raise it on a memory-constrained host.
+- **Every import logs `OKF import lane capacity`** with both values and whether they
+  are paired — check the log rather than inferring from timings.
+- `OKF_INGEST_MAX_CONCEPTS` (default 1000) is a **capacity** setting, checked
+  **after** the document-ceiling split, so the operator's document count is not the
+  number the cap sees (999 documents measured → 1112 concepts). `OKF_INGEST_MAX_ZIP_BYTES`
+  (256 MiB) is a **zip-bomb guard** — leave it alone on a working deployment.

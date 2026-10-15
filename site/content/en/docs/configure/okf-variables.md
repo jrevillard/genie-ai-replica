@@ -65,6 +65,51 @@ Sizing guidance:
   lanes draining first-in-first-out across all repos, one repository's pending
   count can sit still while another's clears.
 
+## Import capacity (creating a repository)
+
+Importing a repository — from a bundle, from documents, or from a crawl — is a
+different pipeline from indexing one, and has its own pair of settings. They
+follow the same rule as the drain pair above: **set both halves to the same
+value**, because lanes above the worker's capacity queue instead of adding
+throughput.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `OKF_IMPORT_CONCURRENCY` | `4` | Number of concepts the okf-server importer drives through the pipeline at once. Clamped to `1`–`16`. |
+| `PII_WEB_CONCURRENCY` | `4` | Number of worker **processes** in the PII sidecar — how many text scans it can absorb at once. Each holds its own language model (~400 MB), so this is the sidecar's memory knob. |
+
+A rule of thumb for both is **`min(16, cores / 2)`**. It is a starting point, not
+a constant: the right value depends on the machine. On a 24-core host, `4`/`4`
+uses roughly a fifth of the available processing power.
+
+Every import writes the capacity it actually started with to the service log
+under `OKF import lane capacity`, including whether the two settings match — so
+an under-provisioned host can be seen in the logs rather than inferred from how
+long the import took.
+
+### Import caps
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `OKF_INGEST_MAX_CONCEPTS` | `1000` | Maximum concepts in one import. A **capacity** setting, not a safety limit. |
+| `OKF_INGEST_MAX_ZIP_BYTES` | `268435456` (256 MiB) | Decompressed size of an imported bundle. A **zip-bomb guard** — not a capacity knob. |
+
+`OKF_INGEST_MAX_CONCEPTS` is applied **after** oversized documents are split, so
+the number of documents you selected is not the number the cap sees. A single
+999-document crawl was measured expanding to 1112 concepts across 89 split
+families — an import that looks comfortably within any reasonable limit. If a
+large import is rejected, raise the variable rather than splitting the work up;
+the limits that genuinely bound the work are the maximum concept length and the
+lane settings above.
+
+Suggested values:
+
+| Kind of repository | `OKF_INGEST_MAX_CONCEPTS` |
+|---|---|
+| Pilot or demonstration | a few hundred |
+| Departmental knowledge base | ~1000 (the default) |
+| National or crawl-scale base | 10,000 or more — set it deliberately |
+
 ## Stuck-drain protection (the reaper)
 
 A concept whose indexing never completes would block its repository from ever

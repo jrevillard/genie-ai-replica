@@ -19,6 +19,9 @@ global:
   # to, so an empty default leaves `helm install` with 404s.
   imageRegistry: "registry.opensource.unicc.org/un/itu/genie-ai"
   imagePullSecrets: []
+  # Architecture for the tooling images the hooks/test pods download
+  # (kubectl, jq). Clusters running arm64 nodes set arm64.
+  toolingArch: "amd64"
   # Registry for Helm hook Jobs and test pods that pull public Docker
   # Hub images (alpine, python, curlimages/curl). Separate from
   # `imageRegistry` above, which scopes service images to the GitLab
@@ -34,7 +37,7 @@ global:
   kubeletToolsMirror: ""
 
 # Drives chart-derived defaults (replica counts, data-tier topology,
-# observability). dev | staging | prod (sovereign is reserved — its branches
+# observability). dev | staging | prod (sovereign is reserved (rejected by values.schema.json's clusterProfile enum until the sovereign profile lands — its branches
 # land with the sovereign deployment tier; it is rejected until then).
 clusterProfile: dev
 
@@ -75,7 +78,7 @@ data:
   # controllers that reconcile them (CNPG, kube-arangodb, keycloak-operator)
   # are cluster bootstrap prerequisites — see the README's Cluster
   # prerequisites section.
-  # `services` tier enabled toggles are NOT yet declared in this values
+  # `services` tier enabled toggles are declared in this values
   # surface, so the dep-check loop currently asserts only the data tier
   # (it iterates both `services` and `data` maps but reads `false` for
   # every services.* key until those entries are added — the
@@ -407,6 +410,8 @@ services:
     # or clamav.<other-namespace>.svc.cluster.local).
     clamavHost: clamav
     clamavPort: 3310
+    # Toggles the doc-repo virus-scan step (CLAMSCAN_* wiring above).
+    virusScanning: true
     resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
     env: []
     secrets: []
@@ -511,6 +516,9 @@ services:
     serviceMonitor: false
 
   clamav:
+    cache:
+      enabled: true
+      size: 2Gi
     enabled: true
     replicas: 1
     # Tag: `stable-debian`. The chart

@@ -33,6 +33,8 @@ spec:
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
         runAsUser: 65534
       containers:
         - name: db-migrations

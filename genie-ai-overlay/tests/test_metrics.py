@@ -91,9 +91,24 @@ class TestInstrumentCreation:
 
         importlib.reload(chatqna.metrics)
 
-        mock_meter.create_counter.assert_called_with(
+        mock_meter.create_counter.assert_any_call(
             "genie.ai/chat/request",
             description="Total chat requests",
+        )
+
+    def test_history_truncation_counter_created(self, _mock_tracing_meter):
+        mock_meter = MagicMock()
+        _mock_tracing_meter.get_meter.return_value = mock_meter
+
+        import importlib
+
+        import chatqna.metrics
+
+        importlib.reload(chatqna.metrics)
+
+        mock_meter.create_counter.assert_any_call(
+            "genie.ai/chat/history/truncated",
+            description="Chat history truncations (generation guard and translation budget)",
         )
 
     def test_chat_rag_duration_histogram_created(self, _mock_tracing_meter):

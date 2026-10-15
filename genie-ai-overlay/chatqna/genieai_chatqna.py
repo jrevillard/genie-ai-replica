@@ -16,11 +16,12 @@ from datetime import date, datetime
 from metrics import (
     chat_rag_duration_seconds,
     chat_requests_total,
+    history_truncation_total,
     sanitize_attributes,
 )
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
-from core.model_cache import get_model_id
+from core.model_cache import get_max_model_len, get_model_id
 from tracing import (
     get_tracer,
     install_uvicorn_access_logging,
@@ -236,6 +237,49 @@ def _is_translategemma() -> bool:
     return "translategemma" in _get_translation_model_id().lower()
 
 
+# Context-window discovery TTL (seconds). The served window only changes on a
+# model swap, so re-probe far less aggressively than model-id detection
+# (MODEL_DETECT_TTL=60) to keep the synchronous probe out of the request path.
+MODEL_LEN_DETECT_TTL = int(os.getenv("MODEL_LEN_DETECT_TTL", "3600"))
+
+# Translation budget derivation from the discovered window. The completion
+# reserve assumes the translated output is roughly the size of the input (the
+# TranslateGemma payload also caps max_tokens near half the window).
+TRANSLATION_PROMPT_OVERHEAD_TOKENS = 512
+TRANSLATION_CHARS_PER_TOKEN = 3  # conservative: Spanish runs ~4-5 chars/token
+
+
+def _get_max_model_len() -> int:
+    """Return the served LLM context window in tokens.
+
+    Auto-detects ``max_model_len`` from the remote vLLM /v1/models payload
+    (TTL-cached, sharing the probe with model-id detection) when GPU_NODE_HOST
+    is set; otherwise returns the configured MAX_MODEL_LEN_TEXTGEN. Discovery
+    gaps and probe failures are logged by core.model_cache.
+    """
+    if _GPU_NODE_HOST and _VLLM_LLM_ENDPOINT:
+        detected = get_max_model_len(_VLLM_LLM_ENDPOINT, ttl_seconds=MODEL_LEN_DETECT_TTL)
+        if detected:
+            return detected
+    return MAX_MODEL_LEN_TEXTGEN
+
+
+def _get_max_translation_chars() -> int:
+    """Return the character budget for history forwarded to the translation model.
+
+    Derived from the discovered translation-model window so that the prompt
+    plus the completion (an input-sized translation) fit inside it; falls back
+    to the configured MAX_TRANSLATION_CHARS. Discovery gaps are logged by
+    core.model_cache.
+    """
+    if _GPU_NODE_HOST and _VLLM_TRANSLATION_ENDPOINT:
+        window = get_max_model_len(_VLLM_TRANSLATION_ENDPOINT, ttl_seconds=MODEL_LEN_DETECT_TTL)
+        if window:
+            budget = (window - TRANSLATION_PROMPT_OVERHEAD_TOKENS) // 2 * TRANSLATION_CHARS_PER_TOKEN
+            return max(budget, 1)
+    return MAX_TRANSLATION_CHARS
+
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk
@@ -256,9 +300,20 @@ RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.9))  # if RERANKI
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001")  # Document repository URL
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")  # Backend service URL
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
-MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max token length for text generation models
+# Fallback context window for the LLM, used when runtime discovery from the
+# vLLM /v1/models payload is unavailable (GPU_NODE_HOST unset, or the endpoint
+# does not expose max_model_len). See _get_max_model_len().
+MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))
 
-MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
+# Answer-token cap used when the request does not specify max_tokens. Kept
+# independent of the discovered context window: a big window must not invite
+# unbounded generations — it only widens the history budget.
+DEFAULT_MAX_ANSWER_TOKENS = 3896
+
+# Fallback character budget for history sent to translation, used when runtime
+# discovery of the translation model's window is unavailable. See
+# _get_max_translation_chars().
+MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
 
@@ -1106,8 +1161,8 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         user_content = prompt_add_context
 
         tokenizer = get_tokenizer()
-        max_model_tokens = MAX_MODEL_LEN_TEXTGEN
-        max_answer_tokens = llm_parameters_dict.get("max_tokens") or (MAX_MODEL_LEN_TEXTGEN - 200)
+        max_model_tokens = _get_max_model_len()
+        max_answer_tokens = llm_parameters_dict.get("max_tokens") or DEFAULT_MAX_ANSWER_TOKENS
         # Count tokens in full prompt (system + user combined for token limit check)
         full_prompt_tokens = len(tokenizer.encode(system_instructions + user_content))
         # Check if the total token count exceeds the model's limit
@@ -1130,6 +1185,25 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                     break
                 truncated_history.insert(0, segment)  # Maintain order
                 current_tokens += segment_tokens
+            dropped_segments = len(history_segments) - len(truncated_history)
+            history_truncation_total.add(
+                1,
+                {
+                    "path": "generation",
+                    "kept": len(truncated_history),
+                    "dropped": dropped_segments,
+                },
+            )
+            logger.warning(
+                "Chat history truncated to fit the LLM context window: "
+                "window_tokens=%s prompt_tokens=%s answer_budget_tokens=%s "
+                "kept_segments=%s dropped_segments=%s",
+                max_model_tokens,
+                full_prompt_tokens,
+                max_answer_tokens,
+                len(truncated_history),
+                dropped_segments,
+            )
             # Rebuild truncated history
             translated_history_string = " |<-MSG->| ".join(truncated_history)
             # Reconstruct user content (system instructions stay the same)
@@ -2124,7 +2198,7 @@ class ChatQnAService:
                 history, target_language, source_lang_code=source_lang_code, iso_code="en"
             )
 
-        max_translation_chars = MAX_TRANSLATION_CHARS
+        max_translation_chars = _get_max_translation_chars()
         current_chars = 0
         messages_to_process = []
         if logflag:
@@ -2139,6 +2213,22 @@ class ChatQnAService:
             messages_to_process.append(message)
             current_chars += message_chars
         messages_to_process.reverse()
+        dropped_messages = len(history) - len(messages_to_process)
+        if dropped_messages:
+            history_truncation_total.add(
+                1,
+                {
+                    "path": "translation",
+                    "kept": len(messages_to_process),
+                    "dropped": dropped_messages,
+                },
+            )
+            logger.warning(
+                "Chat history truncated for translation: budget_chars=%s kept_messages=%s dropped_messages=%s",
+                max_translation_chars,
+                len(messages_to_process),
+                dropped_messages,
+            )
 
         flattened_history_parts = []
         for message in messages_to_process:

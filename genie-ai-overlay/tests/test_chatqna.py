@@ -168,6 +168,31 @@ def create_mock_tokenizer(token_counts):
     return tokenizer
 
 
+def _counting_tokenizer():
+    """Additive mock tokenizer: 100 tokens per 'RAGTOK' occurrence, 500 per 'HISTTOK'.
+
+    Unlike the substring-keyed create_mock_tokenizer, this counts every
+    occurrence, so combined strings (prompt + embedded history) accumulate
+    deterministically.
+    """
+
+    class _CountingTokenizer:
+        def encode(self, text):
+            return [0] * (100 * text.count("RAGTOK") + 500 * text.count("HISTTOK"))
+
+    return _CountingTokenizer()
+
+
+@pytest.fixture(autouse=True)
+def _clear_model_len_cache():
+    """Isolate the module-global model_cache TTL cache per test."""
+    from core.model_cache import clear_cache
+
+    clear_cache()
+    yield
+    clear_cache()
+
+
 # ===========================================================================
 # Task 3: Test ChatTemplate.generate_rag_prompt()
 # ===========================================================================
@@ -632,6 +657,92 @@ class TestAlignInputs:
             user_msg = result["messages"][1]["content"]
             assert "msg1" not in user_msg  # truncated away
             assert "rag prompt" in user_msg  # content preserved
+
+        def test_history_survives_prompt_that_fits_discovered_window(self):
+            """Prompt (~8k tokens) + answer fit the real 65536-token window discovered
+            from /v1/models → the guard must not touch the chat history.
+
+            Under the stale 4096 default the same prompt overflows the budget and
+            the guard wipes the history entirely.
+            """
+            self_mock = MagicMock()
+            self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
+            llm_params = {"max_tokens": 1024, "top_p": 0.9}
+            inputs = {"inputs": "RAGTOK" * 80, "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
+            history = "USER: HISTTOK |<-MSG->| USER: HISTTOK |<-MSG->| USER: HISTTOK"
+
+            counting_tok = _counting_tokenizer()
+            models_resp = MagicMock()
+            models_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=counting_tok),
+                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", "10.0.0.110"),
+                patch("chatqna.genieai_chatqna._VLLM_LLM_ENDPOINT", "https://gpu-host/llm"),
+                patch("httpx.get", return_value=models_resp),
+            ):
+                result = align_inputs(
+                    self_mock, inputs, "llm_node", MagicMock(), llm_params, full_chat_history_string=history
+                )
+            user_msg = result["messages"][1]["content"]
+            assert "HISTTOK" in user_msg  # history intact
+            assert "RAGTOK" in user_msg  # KB content preserved
+
+        def test_history_wiped_only_when_budget_truly_exhausted_and_reported(self):
+            """When prompt+answer genuinely exhaust the window, history is dropped —
+            and the drop is reported through the truncation counter."""
+            self_mock = MagicMock()
+            self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
+            llm_params = {"max_tokens": 1024, "top_p": 0.9}
+            inputs = {"inputs": "RAGTOK" * 648, "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
+            history = "USER: HISTTOK |<-MSG->| USER: HISTTOK |<-MSG->| USER: HISTTOK"
+
+            counting_tok = _counting_tokenizer()
+            models_resp = MagicMock()
+            models_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=counting_tok),
+                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", "10.0.0.110"),
+                patch("chatqna.genieai_chatqna._VLLM_LLM_ENDPOINT", "https://gpu-host/llm"),
+                patch("httpx.get", return_value=models_resp),
+                patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
+            ):
+                result = align_inputs(
+                    self_mock, inputs, "llm_node", MagicMock(), llm_params, full_chat_history_string=history
+                )
+            user_msg = result["messages"][1]["content"]
+            assert "HISTTOK" not in user_msg  # no room — dropped
+            assert "RAGTOK" in user_msg  # KB content preserved
+            mock_counter.add.assert_called_once()
+            attrs = mock_counter.add.call_args.args[1]
+            assert attrs["path"] == "generation"
+            assert attrs["dropped"] == 3
+
+        def test_no_truncation_no_truncation_metric(self):
+            """A prompt well inside the window never increments the truncation counter."""
+            self_mock = MagicMock()
+            self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
+            llm_params = {"max_tokens": 1024, "top_p": 0.9}
+            inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
+            history = "USER: msg1 |<-MSG->| USER: msg2"
+            mock_tok = create_mock_tokenizer({"rag prompt": 100})
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=mock_tok),
+                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", "10.0.0.110"),
+                patch("chatqna.genieai_chatqna._VLLM_LLM_ENDPOINT", "https://gpu-host/llm"),
+                patch(
+                    "httpx.get", return_value=MagicMock(json=lambda: {"data": [{"id": "m", "max_model_len": 65536}]})
+                ),
+                patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
+            ):
+                result = align_inputs(
+                    self_mock, inputs, "llm_node", MagicMock(), llm_params, full_chat_history_string=history
+                )
+            user_msg = result["messages"][1]["content"]
+            assert "msg1" in user_msg
+            mock_counter.add.assert_not_called()
 
 
 # ===========================================================================
@@ -1640,6 +1751,76 @@ class TestTranslationHelpers:
         ):
             result = await svc._get_translated_history_string(history, "English")
         assert "Translated history" in result
+
+    @pytest.mark.asyncio
+    async def test_translation_budget_derived_from_discovered_window(self):
+        """8192-token translation window → 11520-char budget: both messages are
+        forwarded where the stale 2000-char budget dropped the oldest one."""
+        svc = create_chatqna_service()
+        history = [
+            {"role": "user", "content": "A" * 2500},
+            {"role": "assistant", "content": "B" * 500},
+        ]
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Translated history"}}]}
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        models_resp = MagicMock()
+        models_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 8192}]}
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna._GPU_NODE_HOST", "10.0.0.110"),
+            patch("chatqna.genieai_chatqna._VLLM_TRANSLATION_ENDPOINT", "https://gpu-host/translation"),
+            patch("httpx.get", return_value=models_resp),
+        ):
+            await svc._get_translated_history_string(history, "English")
+
+        sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
+        assert "AAAA" in sent_prompt  # oldest message forwarded
+        assert "BBBB" in sent_prompt  # newest message forwarded
+
+    @pytest.mark.asyncio
+    async def test_translation_dropped_messages_reported(self):
+        """Messages dropped by the translation budget are counted and attributed."""
+        svc = create_chatqna_service()
+        history = [
+            {"role": "user", "content": "KEEPME-xx"},
+            {"role": "assistant", "content": "DROPME-yyyyyyyyyyyyyyyyyyyy"},
+        ]
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Translated history"}}]}
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
+            patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 30),
+            patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
+        ):
+            await svc._get_translated_history_string(history, "English")
+
+        sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
+        assert "DROPME" in sent_prompt  # newest kept
+        assert "KEEPME" not in sent_prompt  # oldest dropped
+        mock_counter.add.assert_called_once()
+        attrs = mock_counter.add.call_args.args[1]
+        assert attrs["path"] == "translation"
+        assert attrs["kept"] == 1
+        assert attrs["dropped"] == 1
 
     @pytest.mark.asyncio
     async def test_translate_text_chunk_translategemma_format(self):

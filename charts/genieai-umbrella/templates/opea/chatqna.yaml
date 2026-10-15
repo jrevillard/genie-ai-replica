@@ -1,0 +1,133 @@
+{{/*
+  chatqna OPEA orchestrator. Compose-parity (docker-compose.yaml lines
+  1365-1434, `chatqna-xeon-backend-server`). Factory-driven like the
+  other five OPEA deployments. In-cluster peer wiring uses bare Service
+  DNS names (the chart convention, mirroring the nginx upstreams:
+  `embedding`, `retriever`, `reranker`, `translation`); ports match the
+  Services rendered in tasks 2-3 (embedding 6000, retriever 7000,
+  reranker 8000, translation 9031). GPU endpoints (`VLLM_LLM_ENDPOINT`,
+  `VLLM_TRANSLATION_ENDPOINT`) via the opea helpers; VLLM_API_KEY from
+  the vllm-api-key Secret. `MEGA_SERVICE_HOST_IP` resolves to the
+  chart's own `chatqna` Service.
+
+  CHATQNA_SYSTEM_PROMPT defaults to the empty string in compose
+  (`${...:-}`); the chatqna Python code falls through to its built-in
+  default in that case. The chart OMITS the env row entirely when the
+  value is empty (Kubernetes then injects no env var; os.getenv returns
+  the second arg and the Python fallback wins) and renders the
+  operator override as a bare value so the YAML emitter does not
+  re-quote it (a YAML block scalar like `|` in the values file is
+  honored end-to-end for multi-line prompts).
+
+  The guardrail is not rendered by this chart; `GUARDRAIL_SERVICE_*`
+  carry the compose defaults (`guardrail:9090`) and the service tolerates
+  an unreachable guardrail. `GPU_NODE_HOST` is superseded by the
+  opeaGpuEndpoint helper. `OPENAI_API_KEY` defaults to empty in compose
+  (`${VLLM_API_KEY:-}`); omitted because the Python default already
+  handles the unset case.
+
+  DOC_REPO_URL/BACKEND_SERVICE_URL/KEYCLOAK_URL mirror the compose URLs
+  but target the in-cluster Service names + chart port mappings
+  (document-repository and backend expose port 80 → targetPort 3001/3000;
+  keycloak-service:8080/auth). Container/listen port 8888 (compose
+  parity; compose healthcheck hits `/health` on that port).
+*/}}
+{{- if .Values.opea.enabled -}}
+{{- $vals  := deepCopy .Values -}}
+{{- $ns    := .Values.namespace -}}
+{{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
+{{- $translationEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") -}}
+{{- $tuningEnv := list
+    (dict "name" "CHATQNA_TYPE" "value" (.Values.opea.chatqna.chatqnaType | default "ChatQnA"))
+    (dict "name" "MEGA_SERVICE_HOST_IP" "value" "chatqna")
+    (dict "name" "LOG_LEVEL" "value" (.Values.opea.chatqna.logLevel | default "info"))
+    (dict "name" "EMBEDDING_SERVER_HOST_IP" "value" "embedding")
+    (dict "name" "EMBEDDING_SERVER_PORT" "value" "6000")
+    (dict "name" "RETRIEVER_SERVICE_HOST_IP" "value" "retriever")
+    (dict "name" "RETRIEVER_SERVICE_PORT" "value" "7000")
+    (dict "name" "RERANK_SERVER_HOST_IP" "value" "reranker")
+    (dict "name" "RERANK_SERVER_PORT" "value" "8000")
+    (dict "name" "TRANSLATION_SERVICE_HOST_IP" "value" "translation")
+    (dict "name" "TRANSLATION_SERVICE_PORT" "value" "9031")
+    (dict "name" "VLLM_LLM_ENDPOINT" "value" $llmEndpoint)
+    (dict "name" "VLLM_TRANSLATION_ENDPOINT" "value" $translationEndpoint)
+    (dict "name" "RERANKING_STRATEGY" "value" (.Values.opea.chatqna.rerankingStrategy | default "slice"))
+    (dict "name" "RERANKING_THRESHOLD" "value" (.Values.opea.chatqna.rerankingThreshold | default "0.75" | toString))
+    (dict "name" "RERANKER_TOP_N" "value" (.Values.opea.chatqna.rerankerTopN | default "3" | toString))
+    (dict "name" "RETRIEVER_ARANGO_K" "value" (.Values.opea.chatqna.retrieverArangoK | default "20" | toString))
+    (dict "name" "RETRIEVER_ARANGO_FETCH_K" "value" (.Values.opea.chatqna.retrieverArangoFetchK | default "30" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SCORE_THRESHOLD" "value" (.Values.opea.chatqna.retrieverArangoScoreThreshold | default "0.2" | toString))
+    (dict "name" "RETRIEVER_ARANGO_DISTANCE_THRESHOLD" "value" (.Values.opea.chatqna.retrieverArangoDistanceThreshold | default "1" | toString))
+    (dict "name" "RETRIEVER_ARANGO_LAMBDA_MULT" "value" (.Values.opea.chatqna.retrieverArangoLambdaMult | default "0.5" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SEARCH_START" "value" (.Values.opea.chatqna.retrieverArangoSearchStart | default "chunk"))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_ENABLED" "value" (.Values.opea.chatqna.retrieverArangoTraversalEnabled | default "true" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH" "value" (.Values.opea.chatqna.retrieverArangoTraversalMaxDepth | default "2" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED" "value" (.Values.opea.chatqna.retrieverArangoTraversalMaxReturned | default "5" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD" "value" (.Values.opea.chatqna.retrieverArangoTraversalScoreThreshold | default "0.7" | toString))
+    (dict "name" "CONFIDENCE_RANK_DECAY" "value" (.Values.opea.chatqna.confidenceRankDecay | default "0.5" | toString))
+    (dict "name" "RERANKER_SCORE_CALIBRATION" "value" (.Values.opea.chatqna.rerankerScoreCalibration | default "none"))
+    (dict "name" "RERANKER_SCORE_TEMPERATURE" "value" (.Values.opea.chatqna.rerankerScoreTemperature | default "1.0" | toString))
+    (dict "name" "LLM_SELF_CONFIDENCE_ENABLED" "value" (.Values.opea.chatqna.llmSelfConfidenceEnabled | default "0" | toString))
+    (dict "name" "MULTI_TURN_BLEND_ENABLED" "value" (.Values.opea.chatqna.multiTurnBlendEnabled | default "false" | toString))
+    (dict "name" "MULTI_TURN_BLEND_ALPHA" "value" (.Values.opea.chatqna.multiTurnBlendAlpha | default "0.7" | toString))
+    (dict "name" "MULTI_TURN_HISTORY_TURNS" "value" (.Values.opea.chatqna.multiTurnHistoryTurns | default "1" | toString))
+    (dict "name" "DOC_REPO_URL" "value" (printf "http://document-repository.%s.svc.cluster.local:80" $ns))
+    (dict "name" "BACKEND_SERVICE_URL" "value" (printf "http://backend.%s.svc.cluster.local:80" $ns))
+    (dict "name" "KEYCLOAK_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
+    (dict "name" "KC_REALM" "value" (.Values.opea.chatqna.kcRealm | default "genie"))
+    (dict "name" "KC_CLIENT_ID" "value" (.Values.opea.chatqna.kcClientId | default "genie-app"))
+    (dict "name" "CHATQNA_ENFORCE_ABSTENTION" "value" (.Values.opea.chatqna.chatqnaEnforceAbstention | default "true" | toString))
+    (dict "name" "GUARDRAIL_SERVICE_HOST_IP" "value" "guardrail")
+    (dict "name" "GUARDRAIL_SERVICE_PORT" "value" "9090")
+    (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (.Values.opea.chatqna.enableObservability | default "0" | toString))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+-}}
+{{- /* CHATQNA_SYSTEM_PROMPT defaults to empty in compose (`${...:-}`);
+the chatqna Python code falls through to its built-in prompt when the
+env is empty/falsy. Rendering the env row with `| default "" | quote`
+would emit the literal two-character string `""`, which the Python code
+would treat as a non-empty prompt and pass through to the LLM. The
+conditional append below OMITS the row entirely when the value is
+empty (Kubernetes then has no env var to inject; os.getenv returns the
+second arg, empty, and the Python fallback wins), and renders the
+operator override as a bare value so the YAML emitter does not
+re-quote it (a YAML block scalar like `|` in the values file is honored
+end-to-end for multi-line prompts). */ -}}
+{{- $promptEnv := list -}}
+{{- $systemPrompt := .Values.opea.chatqna.systemPrompt | default "" -}}
+{{- if $systemPrompt -}}
+{{- $promptEnv = append $promptEnv (dict "name" "CHATQNA_SYSTEM_PROMPT" "value" $systemPrompt) -}}
+{{- end -}}
+{{- $gpuSecretEnv := list
+    (dict "name" "VLLM_API_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "VLLM_API_KEY")))
+-}}
+{{- $svcVals := dict
+    "image" (dict "repository" "genie-ai-chatqna-server" "tag" "main")
+    "port" 8888
+    "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
+    "env" (concat $tuningEnv $promptEnv $gpuSecretEnv)
+    "probes" (dict
+      "readiness" (dict "httpGet" (dict "path" "/health" "port" "http") "initialDelaySeconds" 120 "periodSeconds" 15)
+      "liveness"  (dict "httpGet" (dict "path" "/health" "port" "http") "initialDelaySeconds" 180 "periodSeconds" 30)
+    )
+-}}
+{{- $_ := set $vals.services "chatqna" $svcVals -}}
+{{- $ctx := dict "name" "chatqna" "component" "chatqna" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatqna
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "chatqna") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 8888
+      targetPort: 8888
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "chatqna") | nindent 4 }}
+{{- end -}}

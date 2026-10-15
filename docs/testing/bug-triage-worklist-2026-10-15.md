@@ -163,8 +163,33 @@ in Wave 3 is treated as working.**
 
 ### 2.2 · ArangoDB 1202 logged at error and re-thrown by the retry wrapper — !1072
 
+**FIXED in `d79e37325`, pending live re-test.** Closes Wave 2's noise half.
+
 24 error lines per 2 minutes on a *clean* drain. This is what trains operators
-(and agents) to ignore error logs. Same fix shape as 0.1.
+(and agents) to ignore error logs.
+
+**The filed direction was half wrong, and the wrong half was the dangerous one.**
+The issue proposes not re-throwing from the wrapper. `isArangoNotFound` guards
+**18 call sites** that use it to tell *absent* from *failed*
+(`if (!isArangoNotFound(err)) throw err; // never mask as "no row"`). Swallowing the
+throw would convert every one of those into a silent "no row" — an outage rendered
+as an empty result. **Severity drops to `debug`; the error is still re-thrown**, and a
+test is named for that half.
+
+**A second defect found while verifying it.** Measured against the real driver:
+`collection.document()` miss → `errorNum 1202, code 404`; missing *collection* →
+`errorNum 1203, code 404`. `isArangoNotFound` keyed on `code === 404`, so it returned
+**true for a missing collection** — 18 call sites handed "document absent" for an
+infrastructure fault. `errorNum` is now authoritative; 1203 correctly stays a fault.
+
+**The measurement that was wrong.** My first cut treated only 1202 as absent. The
+okf-server suite then failed **33 tests**: the fixtures in `concept-meta-service.test.js`
+encode that `firstExample` throws `ArangoError 'no match'` with **errorNum 1204**, and
+`firstExample` was **removed in arangojs 10**, so my live probe was structurally
+incapable of seeing it. Both 1202 and 1204 mean "absent".
+
+> **Standing rule:** one live measurement is not enough when the local driver version
+> differs from the deployed one. Run the full suite, not just the targeted probe.
 
 ### 2.3 · Head suite: 20 ungrounded negative failures — !1071
 
@@ -280,7 +305,7 @@ guess. **Do not file as a defect until the mechanism is known.**
 | 3 | **!1070** — re-verify first; may be the !1079 footgun, not a separate defect | **CLOSED — not a bug.** `repo.graph_name` is `OKF_<uuid>` and no such collection exists, but the serving path deliberately derives names via `workingGraphName(repo)` (`retrieval-config-service.js:183`, documented in its module header). Design is correct; the field is a naming trap |
 | 4 | **!1069** — frontmatter renders invisible; data intact but invisible, so curators re-type it | **DONE** `89d0c54` — 12 undefined tokens across 11 files, not the 2 filed |
 | 5 | **!1077** → **!1075** → **!1067** — wizard cluster, ordered by how much each blocks | **ALL DONE** `59ebfb1f` · `49499fec` · `69983dbb2` — Wave 1 complete |
-| 6 | **!1072** — 1202 logged at error on a clean drain; trains everyone to ignore errors | next |
+| 6 | **!1072** — 1202 logged at error on a clean drain; trains everyone to ignore errors | **DONE** `d79e3732` — severity only; the re-throw is load-bearing |
 | 7 | **!1073** — 28 env vars never reach a container; make config trustworthy before Wave 3 | |
 | 8 | **!1080** + **!1081** together — throughput and capacity, config + documentation | |
 | 9 | **!1060/!1063** — only with a reproduction in hand | parked |

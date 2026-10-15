@@ -105,6 +105,36 @@ development_status:
   #        and docs:build (ingestion.md relref pointed at /docs/configuration/okf-variables;
   #        the page is under /docs/configure/ — Hugo REF_NOT_FOUND, exit 1).
   #   okf-server 1219/1219 across 49 suites.
+  #   DONE  !1072 / P2 (d79e3732) — 24 error-level lines per 2 min on a CLEAN drain.
+  #        The filed direction was HALF WRONG and the wrong half was the dangerous one:
+  #        the issue proposes not re-throwing from the retry wrapper, but isArangoNotFound
+  #        guards 18 call sites using it to tell "absent" from "failed"
+  #        (if (!isArangoNotFound(err)) throw err — "never mask as no row"). Swallowing
+  #        the throw would turn every one into a silent "no row", i.e. an outage
+  #        rendered as an empty result. So: severity drops to debug, the error is STILL
+  #        RE-THROWN, and a test is named for that half.
+  #        SECOND defect found while verifying: measured on the real driver,
+  #        collection.document() miss = errorNum 1202 code 404, MISSING COLLECTION =
+  #        errorNum 1203 code 404. isArangoNotFound keyed on code===404 so it returned
+  #        TRUE for a missing collection — an infrastructure fault reported to all 18 call
+  #        sites as "document absent". errorNum is now authoritative; 1203 stays a fault.
+  #        THE MEASUREMENT THAT WAS WRONG: the first cut treated only 1202 as absent and
+  #        okf-server failed 33 tests, because concept-meta-service.test.js fixtures encode
+  #        firstExample throwing ArangoError 'no match' with errorNum 1204 — and
+  #        firstExample was REMOVED in arangojs 10, so the live probe was structurally
+  #        unable to see it. Both 1202 and 1204 mean absent; only 1203 was wrong.
+  #        STANDING RULE: one live measurement is not enough when the local driver version
+  #        differs from the deployed one — run the FULL suite, not just the probe.
+  #        okf-server 1219/1219 (49 suites); shared/lib db-connection-service 8/8.
+  #        HONEST CAVEAT: the shared/lib test file is locally flaky on Windows (2/3) — the
+  #        PRE-EXISTING isolateModules test races mine on a transform-cache rename (EBUSY).
+  #        Environmental, not a code defect; all six new tests pass every run.
+  #   FIX  f2d70cee2 — a stray `}` in the !1075 style addition broke the PRODUCTION build
+  #        (postcss "Unexpected }", caught by build:frontend in pipeline 13025, not by any
+  #        test). WHY no test caught it: jest compiles the SFC template+script but its style
+  #        block never goes through postcss, and Prettier's Vue parser does not reject an
+  #        unbalanced brace inside <style>. Both gateways passed a file that cannot build.
+  #        Verified with a real `npm run build` (hash 0964d39bc1de7bf8).
   #   DONE  !1067 / BUG-03 (69983dbb2) — a bundle import opened the wizard on step 9
   #        "Review", past step 6 "Curate", the only step with a blocking requirement
   #        (frontmatter tags, PII acceptance, cross-links). TWO corrections to the

@@ -27,6 +27,15 @@ and the overlay points opeaHost at the in-cluster Service. */ -}}
 {{- if .Values.services.backend.opeaHost }}
 {{- $translationEnv = concat $translationEnv (list (dict "name" "OPEA_HOST" "value" .Values.services.backend.opeaHost)) -}}
 {{- end }}
+{{- /* STREAMING_TRANSLATION_ENABLED is a strict YAML boolean. Non-bool
+values (0, "0", "false") fail at render time: Sprig's default/coalesce
+treat false as empty and a non-empty string flips ternary to its true
+branch, so a lenient coercion would silently stream translated output
+against an operator's explicit off switch. */ -}}
+{{- $streamingTranslation := .Values.services.backend.translation.streamingEnabled -}}
+{{- if not (kindIs "bool" $streamingTranslation) -}}
+{{- fail "services.backend.translation.streamingEnabled must be a YAML boolean (true or false)" -}}
+{{- end -}}
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
     (dict "name" "KEYCLOAK_REALM" "value" "genie")
@@ -38,7 +47,7 @@ and the overlay points opeaHost at the in-cluster Service. */ -}}
     (dict "name" "TRANSLATION_CACHE" "value" "on")
     (dict "name" "TRANSLATION_CACHE_HOST" "value" (printf "redis-cache.%s.svc.cluster.local" $ns))
     (dict "name" "TRANSLATION_CACHE_PORT" "value" "6379")
-    (dict "name" "STREAMING_TRANSLATION_ENABLED" "value" (ternary "1" "0" (ne (printf "%v" .Values.services.backend.translation.streamingEnabled | default "true") "false")))
+    (dict "name" "STREAMING_TRANSLATION_ENABLED" "value" (ternary "1" "0" $streamingTranslation))
 -}}
 {{- $urls = concat $urls $translationEnv -}}
 {{- $secretEnv := list

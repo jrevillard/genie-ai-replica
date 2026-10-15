@@ -26,6 +26,9 @@
   (`${VLLM_API_KEY:-}`); omitted because the Python default already
   handles the unset case.
 
+  KEYCLOAK_INTERNAL_URL carries the in-cluster JWKS base — the code
+  default names the compose service (`http://keycloak:8080`), which does
+  not resolve on Kubernetes; the issuer check itself uses KEYCLOAK_URL.
   DOC_REPO_URL/BACKEND_SERVICE_URL/KEYCLOAK_URL mirror the compose URLs
   but target the in-cluster Service names + chart port mappings
   (document-repository and backend expose port 80 → targetPort 3001/3000;
@@ -75,6 +78,7 @@
     (dict "name" "BACKEND_SERVICE_URL" "value" (printf "http://backend.%s.svc.cluster.local:80" $ns))
     (dict "name" "KEYCLOAK_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
     (dict "name" "KC_REALM" "value" (.Values.opea.chatqna.kcRealm | default "genie"))
+    (dict "name" "KEYCLOAK_INTERNAL_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
     (dict "name" "KC_CLIENT_ID" "value" (.Values.opea.chatqna.kcClientId | default "genie-app"))
     (dict "name" "CHATQNA_ENFORCE_ABSTENTION" "value" (.Values.opea.chatqna.chatqnaEnforceAbstention | default "true" | toString))
     (dict "name" "GUARDRAIL_SERVICE_HOST_IP" "value" "guardrail")

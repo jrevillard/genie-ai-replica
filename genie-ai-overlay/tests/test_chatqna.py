@@ -7,6 +7,7 @@ from datetime import date
 from enum import Enum
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastapi import HTTPException
 
@@ -191,6 +192,19 @@ def _clear_model_len_cache():
     clear_cache()
     yield
     clear_cache()
+
+
+@pytest.fixture(autouse=True)
+def _no_vllm_endpoints():
+    """No vLLM exists in CI: window-discovery probes must fail fast.
+
+    Window probing is always on, so any test that reaches httpx.get without
+    its own mock would hit a real socket. Default to ConnectError; tests that
+    need a probe response patch httpx.get inside their own with-block (the
+    inner patch wins while active).
+    """
+    with patch("httpx.get", side_effect=httpx.ConnectError("no vLLM in unit tests")):
+        yield
 
 
 # ===========================================================================
@@ -680,8 +694,7 @@ class TestAlignInputs:
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
                 patch("chatqna.genieai_chatqna.get_tokenizer", return_value=counting_tok),
-                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", "10.0.0.110"),
-                patch("chatqna.genieai_chatqna._VLLM_LLM_ENDPOINT", "https://gpu-host/llm"),
+                patch("chatqna.genieai_chatqna._LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm"),
                 patch("httpx.get", return_value=models_resp),
             ):
                 result = align_inputs(
@@ -706,8 +719,7 @@ class TestAlignInputs:
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
                 patch("chatqna.genieai_chatqna.get_tokenizer", return_value=counting_tok),
-                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", "10.0.0.110"),
-                patch("chatqna.genieai_chatqna._VLLM_LLM_ENDPOINT", "https://gpu-host/llm"),
+                patch("chatqna.genieai_chatqna._LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm"),
                 patch("httpx.get", return_value=models_resp),
                 patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
             ):
@@ -732,8 +744,7 @@ class TestAlignInputs:
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
                 patch("chatqna.genieai_chatqna.get_tokenizer", return_value=mock_tok),
-                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", "10.0.0.110"),
-                patch("chatqna.genieai_chatqna._VLLM_LLM_ENDPOINT", "https://gpu-host/llm"),
+                patch("chatqna.genieai_chatqna._LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm"),
                 patch(
                     "httpx.get", return_value=MagicMock(json=lambda: {"data": [{"id": "m", "max_model_len": 65536}]})
                 ),
@@ -1876,8 +1887,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
-            patch("chatqna.genieai_chatqna._GPU_NODE_HOST", "10.0.0.110"),
-            patch("chatqna.genieai_chatqna._VLLM_TRANSLATION_ENDPOINT", "https://gpu-host/translation"),
+            patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
         ):
             await svc._get_translated_history_string(history, "English")
@@ -1945,8 +1955,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=True),
             patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
-            patch("chatqna.genieai_chatqna._GPU_NODE_HOST", "10.0.0.110"),
-            patch("chatqna.genieai_chatqna._VLLM_TRANSLATION_ENDPOINT", "https://gpu-host/translation"),
+            patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
         ):
             await svc._get_translated_history_string(history, "English")

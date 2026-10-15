@@ -104,3 +104,23 @@ class TestLazyModelResolution:
             result = mod._get_llm_model()
 
         assert result == "default-llm"
+
+    def test_discovery_endpoint_construction(self, monkeypatch):
+        """Window-discovery endpoints: compose defaults build from the service
+        host/port config; the remote endpoint vars win verbatim."""
+        monkeypatch.setenv("LLM_SERVER_HOST_IP", "vllm")
+        monkeypatch.setenv("LLM_SERVER_PORT", "8000")
+        monkeypatch.setenv("TRANSLATION_SERVICE_HOST_IP", "vllm-translation-guardrail")
+        monkeypatch.setenv("TRANSLATION_SERVICE_PORT", "9031")
+        monkeypatch.delenv("VLLM_LLM_ENDPOINT", raising=False)
+        monkeypatch.delenv("VLLM_TRANSLATION_ENDPOINT", raising=False)
+
+        mod = importlib.reload(sys.modules["chatqna.genieai_chatqna"])
+        assert mod._LLM_DISCOVERY_ENDPOINT == "http://vllm:8000"
+        assert mod._TRANSLATION_DISCOVERY_ENDPOINT == "http://vllm-translation-guardrail:9031"
+
+        monkeypatch.setenv("VLLM_LLM_ENDPOINT", "https://gpu-host:444/llm")
+        monkeypatch.setenv("VLLM_TRANSLATION_ENDPOINT", "https://gpu-host:444/translation")
+        mod = importlib.reload(sys.modules["chatqna.genieai_chatqna"])
+        assert mod._LLM_DISCOVERY_ENDPOINT == "https://gpu-host:444/llm"
+        assert mod._TRANSLATION_DISCOVERY_ENDPOINT == "https://gpu-host:444/translation"

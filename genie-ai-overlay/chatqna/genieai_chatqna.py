@@ -158,6 +158,11 @@ if _VLLM_TRANSLATION_ENDPOINT:
 else:
     TRANSLATION_LLM_URL = f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions"
     TRANSLATION_COMPLETIONS_URL = f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/completions"
+# Translation model window discovery: same endpoint rule as the LLM — remote
+# vLLM when configured, otherwise the compose-internal translation vLLM.
+_TRANSLATION_DISCOVERY_ENDPOINT = _VLLM_TRANSLATION_ENDPOINT or (
+    f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}"
+)
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
 EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddings")
@@ -195,6 +200,14 @@ if _VLLM_LLM_ENDPOINT:
 else:
     LLM_SERVER_ENDPOINT_PREFIX = ""
 LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
+
+# Endpoint the context-window discovery probes: the remote GPU node when
+# configured, otherwise the compose-internal vLLM (LLM_SERVER_HOST_IP:PORT —
+# chatqna already talks to it for generation). Probing is always on; when the
+# endpoint is unreachable the getters fall back to the configured constants.
+_LLM_DISCOVERY_ENDPOINT = _VLLM_LLM_ENDPOINT or (
+    f"http://{LLM_SERVER_HOST_IP}:{LLM_SERVER_PORT}{LLM_SERVER_ENDPOINT_PREFIX}"
+)
 
 # Auto-detect remote vLLM models with TTL caching (see core/model_cache.py).
 # GPU_NODE_HOST gates this: local GPU deployments keep their explicit config
@@ -247,37 +260,30 @@ try:
 except ValueError:
     MODEL_LEN_DETECT_TTL = 3600
 
-# Translation budget derivation from the discovered window. The completion
-# reserve assumes the translated output is roughly the size of the input (the
-# TranslateGemma payload also caps max_tokens near half the window).
-TRANSLATION_PROMPT_OVERHEAD_TOKENS = 512
-TRANSLATION_CHARS_PER_TOKEN = 3  # conservative: Spanish runs ~4-5 chars/token
-
 
 def _get_max_model_len() -> int:
     """Return the served LLM context window in tokens.
 
-    Auto-detects ``max_model_len`` from the remote vLLM /v1/models payload
-    (TTL-cached, sharing the probe with model-id detection) when GPU_NODE_HOST
-    is set; otherwise returns the configured MAX_MODEL_LEN_TEXTGEN. Discovery
-    gaps and probe failures are logged by core.model_cache.
+    Always probes the LLM endpoint (remote GPU node when VLLM_LLM_ENDPOINT is
+    set, otherwise the compose-internal vLLM) for ``max_model_len`` —
+    TTL-cached, sharing the probe with model-id detection. Falls back to the
+    configured MAX_MODEL_LEN_TEXTGEN when the endpoint is unreachable or does
+    not expose the field (both logged by core.model_cache).
     """
-    if _GPU_NODE_HOST and _VLLM_LLM_ENDPOINT:
-        detected = get_max_model_len(_VLLM_LLM_ENDPOINT, ttl_seconds=MODEL_LEN_DETECT_TTL)
-        if detected:
-            return detected
+    detected = get_max_model_len(_LLM_DISCOVERY_ENDPOINT, ttl_seconds=MODEL_LEN_DETECT_TTL)
+    if detected:
+        return detected
     return MAX_MODEL_LEN_TEXTGEN
 
 
 def _get_translation_window() -> int | None:
     """Return the discovered translation-model window in tokens, or None.
 
-    None when probing is off (no GPU_NODE_HOST) or the endpoint does not
-    expose the field — callers fall back to their configured values.
+    None only until a probe has ever succeeded — model_cache serves the last
+    known (stale) window when a re-probe fails, and None when the endpoint is
+    unreachable from the start or does not expose the field.
     """
-    if _GPU_NODE_HOST and _VLLM_TRANSLATION_ENDPOINT:
-        return get_max_model_len(_VLLM_TRANSLATION_ENDPOINT, ttl_seconds=MODEL_LEN_DETECT_TTL)
-    return None
+    return get_max_model_len(_TRANSLATION_DISCOVERY_ENDPOINT, ttl_seconds=MODEL_LEN_DETECT_TTL)
 
 
 def _get_max_translation_chars() -> int:
@@ -295,6 +301,13 @@ def _get_max_translation_chars() -> int:
         budget = (window - TRANSLATION_PROMPT_OVERHEAD_TOKENS) // 2 * TRANSLATION_CHARS_PER_TOKEN
         return max(budget, 1)
     return MAX_TRANSLATION_CHARS
+
+
+# Translation budget derivation from the discovered window. The completion
+# reserve assumes the translated output is roughly the size of the input (the
+# TranslateGemma payload also caps max_tokens near half the window).
+TRANSLATION_PROMPT_OVERHEAD_TOKENS = 512
+TRANSLATION_CHARS_PER_TOKEN = 3  # conservative: Spanish runs ~4-5 chars/token
 
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
@@ -318,8 +331,8 @@ DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001")  # Document re
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")  # Backend service URL
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
 # Fallback context window for the LLM, used when runtime discovery from the
-# vLLM /v1/models payload is unavailable (GPU_NODE_HOST unset, or the endpoint
-# does not expose max_model_len). See _get_max_model_len().
+# vLLM /v1/models payload fails (endpoint unreachable, or it does not expose
+# max_model_len). See _get_max_model_len().
 MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))
 
 # Answer-token cap used when the request does not specify max_tokens. Kept
@@ -328,7 +341,7 @@ MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))
 DEFAULT_MAX_ANSWER_TOKENS = 3896
 
 # Fallback character budget for history sent to translation, used when runtime
-# discovery of the translation model's window is unavailable. See
+# discovery of the translation model's window fails. See
 # _get_max_translation_chars().
 MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)

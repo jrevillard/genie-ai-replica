@@ -4,7 +4,9 @@
 #
 # Probe logic lives in core/model_cache.py. Each service (chatqna, retriever,
 # dataprep) calls get_model_id() to resolve the model served by a remote vLLM
-# node, gated on GPU_NODE_HOST.
+# node, gated on GPU_NODE_HOST; chatqna additionally discovers the served
+# context window (get_max_model_len) with probing always on — remote endpoint
+# when configured, compose-internal vLLM otherwise.
 
 import logging
 import os
@@ -379,9 +381,10 @@ class TestChatqnaGetters:
 class TestChatqnaContextWindowGetters:
     """Fallback chain: runtime discovery → configured env value → nothing else.
 
-    The discovery leg only runs when GPU_NODE_HOST is set (remote vLLM), mirroring
-    the _get_llm_model pattern. The configured constant is read at call time so a
-    deployer-set MAX_MODEL_LEN_TEXTGEN / MAX_TRANSLATION_CHARS always wins over
+    Probing is always on (the remote GPU endpoint when configured, otherwise
+    the compose-internal vLLM); the configured constants apply only when the
+    probe fails or the field is missing. The constants are read at call time
+    so a deployer-set MAX_MODEL_LEN_TEXTGEN / MAX_TRANSLATION_CHARS wins over
     the code default.
     """
 
@@ -397,15 +400,41 @@ class TestChatqnaContextWindowGetters:
         with patch("httpx.get", return_value=mock_resp):
             assert mod._get_max_model_len() == 65536
 
-    def test_get_max_model_len_falls_back_to_configured_without_gpu_host(self, monkeypatch):
+    def test_get_max_model_len_probes_without_gpu_node_host(self, monkeypatch):
+        """Probing is always on: a compose deployment (LLM_SERVER_HOST_IP=vllm)
+        discovers the real window without any GPU_NODE_HOST configured."""
         import chatqna.genieai_chatqna as mod
 
         monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
+        monkeypatch.setattr(mod, "_LLM_DISCOVERY_ENDPOINT", "http://vllm:8000")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
+
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            assert mod._get_max_model_len() == 65536
+        assert mock_get.call_args.args[0] == "http://vllm:8000/v1/models"
+
+    def test_get_max_translation_chars_probes_without_gpu_node_host(self, monkeypatch):
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
+        monkeypatch.setattr(mod, "_TRANSLATION_DISCOVERY_ENDPOINT", "http://vllm-translation-guardrail:9031")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 2048}]}
+
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            assert mod._get_max_translation_chars() == (2048 - 512) // 2 * 3
+        assert mock_get.call_args.args[0] == "http://vllm-translation-guardrail:9031/v1/models"
+
+    def test_get_max_model_len_falls_back_when_probe_fails(self, monkeypatch):
+        import chatqna.genieai_chatqna as mod
+
         monkeypatch.setattr(mod, "MAX_MODEL_LEN_TEXTGEN", 4096)
 
-        with patch("httpx.get") as mock_get:
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
             assert mod._get_max_model_len() == 4096
-        mock_get.assert_not_called()
 
     def test_get_max_model_len_probe_failure_falls_back_to_configured(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
@@ -453,15 +482,13 @@ class TestChatqnaContextWindowGetters:
         with patch("httpx.get", return_value=mock_resp):
             assert mod._get_max_translation_chars() == 11520
 
-    def test_get_max_translation_chars_falls_back_to_configured(self, monkeypatch):
+    def test_get_max_translation_chars_falls_back_when_probe_fails(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
         monkeypatch.setattr(mod, "MAX_TRANSLATION_CHARS", 2000)
 
-        with patch("httpx.get") as mock_get:
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
             assert mod._get_max_translation_chars() == 2000
-        mock_get.assert_not_called()
 
     def test_get_max_translation_chars_probe_failure_falls_back(self, monkeypatch):
         import chatqna.genieai_chatqna as mod

@@ -374,19 +374,21 @@ HUGGING_FACE_HUB_TOKEN=
 # MULTI_TURN_BLEND_ALPHA=0.7         # query weight α; 1.0 = query-only, 0.0 = history-only
 # MULTI_TURN_HISTORY_TURNS=1         # number of prior turns blended (1 = previous turn only)
 
-# Chat context-window discovery. With GPU_NODE_HOST set, chatqna reads the real
-# window from the vLLM /v1/models payload (max_model_len) and discovery WINS.
-# These knobs matter only on deployments WITHOUT GPU_NODE_HOST (probing off) or
-# when the probe fails — an empty CHAT HISTORY on large prompts means the
-# fallback below is too small for the served model.
+# Chat context-window discovery. chatqna always probes /v1/models (remote GPU
+# node when configured, otherwise the compose-internal vLLM) and discovery
+# WINS. These knobs are the fallback for when the probe fails. Symptom that
+# the fallback is too small for the served model: an empty CHAT HISTORY on
+# large prompts.
 # Used by: chatqna (genieai_chatqna.py)
 # Default: 4096 (conservative fallback; the served vLLM models expose 8192+)
 # MAX_MODEL_LEN_TEXTGEN=4096
 
 # Fallback character budget for chat history sent to the translation model.
-# Derived from the translation model's window when probing is enabled; set it
-# explicitly only on non-probing deployments (dense scripts like CJK need a
-# lower value than the Latin-script-derived default).
+# Derived from the translation model's window whenever the probe answers
+# (the compose translation vLLM defaults to a 2048-token window → ~2300 chars
+# discovered, slightly above this fallback); set it explicitly only where the
+# probe fails. Dense scripts like CJK produce more tokens per char than the
+# Latin-script estimate — lower this knob for such deployments.
 # Used by: chatqna (genieai_chatqna.py)
 # Default: 2000
 # MAX_TRANSLATION_CHARS=2000

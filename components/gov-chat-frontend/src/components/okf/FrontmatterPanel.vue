@@ -405,9 +405,9 @@ export default {
   flex-direction: column;
   gap: var(--space-md);
   padding: var(--space-md);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
+  background: var(--surface);
 }
 .okf-fmp__header {
   display: flex;
@@ -418,12 +418,12 @@ export default {
 .okf-fmp__title {
   margin: 0;
   font-size: var(--text-sm);
-  font-weight: var(--font-weight-semibold);
+  font-weight: 600;
 }
 .okf-fmp__help {
   margin: 0;
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  color: var(--muted);
 }
 .okf-fmp__fields {
   display: flex;
@@ -437,12 +437,12 @@ export default {
 }
 .okf-fmp__field-name {
   font-size: var(--text-xs);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-muted);
+  font-weight: 500;
+  color: var(--muted);
 }
 .okf-fmp__field-count {
-  color: var(--color-text-faint);
-  font-weight: var(--font-weight-regular);
+  color: var(--muted-soft);
+  font-weight: 400;
 }
 .okf-fmp__values {
   display: flex;
@@ -452,23 +452,23 @@ export default {
 .okf-fmp__tag {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2xs);
+  gap: var(--space-xs);
   padding: 2px var(--space-xs);
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-base);
+  border: 1px solid var(--border);
+  background: var(--bg);
 }
 .okf-fmp__tag-value {
-  color: var(--color-text);
+  color: var(--fg);
 }
 /* LLM-proposed forbidden chip (accept/dismiss suggestion): dashed accent
    border + muted accent fill — DS tokens only, distinct from the solid
    curator-owned chip. Accept = leave it and Save; dismiss = click ×. */
 .okf-fmp__tag--suggested {
   border-style: dashed;
-  border-color: var(--accent, var(--color-border));
-  background: var(--accent-muted, var(--color-surface-base));
+  border-color: var(--accent, var(--border));
+  background: var(--accent-muted, var(--bg));
 }
 .okf-fmp__tag-remove {
   appearance: none;
@@ -476,11 +476,11 @@ export default {
   border: 0;
   cursor: pointer;
   font-size: var(--text-xs);
-  color: var(--color-text-faint);
+  color: var(--muted-soft);
   padding: 0 2px;
 }
 .okf-fmp__empty {
-  color: var(--color-text-faint);
+  color: var(--muted-soft);
   font-size: var(--text-xs);
 }
 .okf-fmp__add {
@@ -492,26 +492,26 @@ export default {
   min-width: 0;
   padding: 2px var(--space-xs);
   font-size: var(--text-xs);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
-  background: var(--color-surface-base);
+  background: var(--bg);
 }
 .okf-fmp__error {
   margin: 0;
-  color: var(--color-danger, currentColor);
+  color: var(--danger, currentColor);
   font-size: var(--text-xs);
 }
 /* 1-8g-m — suggestion provenance: what it was derived from, and what the
    corpus guard removed. Deliberately quieter than an error. */
 .okf-fmp__coverage {
   margin: 0;
-  color: var(--color-text-secondary, currentColor);
+  color: var(--muted-soft, currentColor);
   font-size: var(--text-xs);
 }
 .okf-fmp__rejected {
   margin: 0;
   padding-left: var(--space-md);
-  color: var(--color-text-secondary, currentColor);
+  color: var(--muted-soft, currentColor);
   font-size: var(--text-xs);
 }
 .okf-fmp__footer {
@@ -521,12 +521,12 @@ export default {
   flex-wrap: wrap;
 }
 .okf-fmp__saved {
-  color: var(--color-success, currentColor);
+  color: var(--success, currentColor);
   font-size: var(--text-xs);
 }
 .okf-fmp__saved-time {
-  color: var(--color-text-faint);
-  margin-left: var(--space-2xs);
+  color: var(--muted-soft);
+  margin-left: var(--space-xs);
 }
 .okf-fmp.is-compact {
   padding: var(--space-sm);

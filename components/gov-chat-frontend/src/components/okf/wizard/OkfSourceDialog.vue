@@ -379,7 +379,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--overlay, rgba(9, 14, 20, 0.45));
+  background: var(--overlay-bg, rgba(9, 14, 20, 0.45));
 }
 .okf-src {
   width: 560px;

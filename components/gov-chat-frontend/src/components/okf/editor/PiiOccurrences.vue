@@ -705,7 +705,7 @@ export default {
   overflow-wrap: anywhere;
 }
 .okf-pii__empty {
-  color: var(--text-muted, inherit);
+  color: var(--muted, inherit);
   margin: 0;
   font-size: var(--text-sm);
 }
@@ -767,7 +767,7 @@ export default {
 .okf-pii__file-label {
   font-size: var(--text-xs);
   font-weight: 600;
-  color: var(--text-muted, inherit);
+  color: var(--muted, inherit);
 }
 .okf-pii__replacement {
   min-width: 180px;
@@ -789,12 +789,12 @@ export default {
   font-weight: 600;
 }
 .okf-pii__item--resolved .okf-pii__desc {
-  color: var(--text-muted, inherit);
+  color: var(--muted, inherit);
 }
 .okf-pii__when {
   margin-left: auto;
   font-size: var(--text-xs);
-  color: var(--text-muted, inherit);
+  color: var(--muted, inherit);
 }
 .okf-pii__diff {
   font-size: var(--text-sm);
@@ -818,6 +818,6 @@ export default {
 }
 .okf-pii__arrow {
   margin: 0 var(--space-xs);
-  color: var(--text-muted, inherit);
+  color: var(--muted, inherit);
 }
 </style>

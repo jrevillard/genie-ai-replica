@@ -1275,7 +1275,7 @@ export default {
   background: var(--success);
 }
 .okf-re__head-dot--stale {
-  background: var(--warn);
+  background: var(--warning);
 }
 .okf-re__head-dot--missing {
   background: var(--danger);

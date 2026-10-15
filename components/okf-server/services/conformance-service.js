@@ -160,7 +160,7 @@ async function persistConformanceIssues(repo_id, concept_id, issues) {
 /**
  * Aggregate per-repo quality metrics from okf_concepts_meta (read-time).
  * @param {string} repo_id
- * @returns {object} { concept_count, conformance_issue_count, broken_link_count, stale_concept_count, pii_hit_count, has_reserved_index }
+ * @returns {object} { concept_count, conformance_issue_count, stale_concept_count, pii_hit_count, has_reserved_index }
  */
 async function getRepoMetrics(repo_id) {
   return withSpan('okf.conformance.metrics', async (span) => {
@@ -169,6 +169,20 @@ async function getRepoMetrics(repo_id) {
     const db = await getDb();
     const today = DateTime.now().toUTC().toISODate();
 
+    // pii_hit_count counts concepts that are SCANNED, CARRY findings, and have
+    // NO resolution recorded — i.e. work a curator still has to action. It was
+    // previously a hardcoded literal 0, so the metric read a healthy zero on
+    // repos where every concept had findings (measured on Bali: 1113/1113
+    // concepts carrying hits while the metric reported 0). `pii_state` alone
+    // cannot express this: it reads 'clean' both before and after a bulk
+    // accept, because accepting RESOLVES the findings rather than removing
+    // them, so the discriminator has to be the presence of pii_resolutions.
+    //
+    // broken_link_count was removed rather than implemented. The product has no
+    // broken-link concept anywhere: validation-service's issue types are
+    // conformance / orphan / near_duplicate / citation, and no route, component
+    // or service read this field. A fabricated zero is worse than an absent
+    // field, so the field is gone until something defines it.
     const cursor = await db.query(aql`
       LET docs = (FOR d IN ${db.collection(COLLECTION)} FILTER d.repo_id == ${repo_id} RETURN d)
       RETURN {
@@ -176,8 +190,11 @@ async function getRepoMetrics(repo_id) {
         conformance_issue_count: SUM(FOR d IN docs RETURN LENGTH(d.conformance_issues) || 0),
         stale_concept_count: SUM(FOR d IN docs FILTER d.stale_after != null AND d.stale_after <= ${today} RETURN 1),
         has_reserved_index: LENGTH(FOR d IN docs FILTER d.concept_id == 'index' RETURN 1) > 0,
-        broken_link_count: 0,
-        pii_hit_count: 0
+        pii_hit_count: SUM(
+          FOR d IN docs
+          FILTER LENGTH(d.pii_findings || []) > 0 && LENGTH(d.pii_resolutions || []) == 0
+          RETURN 1
+        )
       }
     `);
     const result = await cursor.all();
@@ -186,7 +203,6 @@ async function getRepoMetrics(repo_id) {
       conformance_issue_count: 0,
       stale_concept_count: 0,
       has_reserved_index: false,
-      broken_link_count: 0,
       pii_hit_count: 0
     };
     recordOp('metrics', 'success');

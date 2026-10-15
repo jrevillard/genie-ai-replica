@@ -1404,7 +1404,6 @@ jest.mock('../services/conformance-service', () => ({
     conformance_issue_count: 0,
     stale_concept_count: 0,
     has_reserved_index: false,
-    broken_link_count: 0,
     pii_hit_count: 0
   })
 }));
@@ -1419,7 +1418,6 @@ describe('GET /api/okf/repos/:repo_id/metrics (wizard-idempotency directive, 202
       conformance_issue_count: 0,
       stale_concept_count: 0,
       has_reserved_index: true,
-      broken_link_count: 0,
       pii_hit_count: 0
     });
     const conceptMeta = require('../services/concept-meta-service');

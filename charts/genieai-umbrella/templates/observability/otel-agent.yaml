@@ -195,11 +195,11 @@ spec:
         limit_percentage: 75
         spike_limit_percentage: 15
     exporters:
-      otlp:
-        # The gateway Service exposes OTLP/HTTP on 4318 — the exporter
-        # must speak http/protobuf (default gRPC frames a 4317 listener).
+      # otlphttp speaks OTLP/HTTP+protobuf — the gateway's 4318 port.
+      # (The `otlp` exporter is gRPC-only on 4317; both work, this
+      # matches the gateway's own downstream exporter type.)
+      otlphttp/gateway:
         endpoint: http://{{ .Values.observability.collectorCRName }}-collector.{{ .Values.namespace }}.svc.cluster.local:4318
-        protocol: http/protobuf
         tls:
           insecure: true
         sending_queue:
@@ -233,7 +233,7 @@ spec:
             - transform/strip_python_log_prefix
             - memory_limiter
             - batch
-          exporters: [otlp]
+          exporters: [otlphttp/gateway]
   volumes:
     - name: pods-log
       hostPath:

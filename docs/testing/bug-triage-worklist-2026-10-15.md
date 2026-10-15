@@ -12,42 +12,45 @@ fails loudly.
 
 ## Wave 0 — do first: silent-wrong results
 
-These do not announce themselves. A user gets a confident wrong answer and no
-error anywhere. Everything in Wave 1 is loud by comparison.
+**Currently EMPTY.** The one item filed here, !1079, was demoted after
+verification — see below. Do not reconstruct this wave without first
+establishing that a failure is genuinely silent.
 
-### 0.1 · Fail loud on ArangoDB cursor errors — !1079
+### ~0 · ~~Fail loud on ArangoDB cursor errors~~ — !1079 — **DEMOTED, premise falsified**
 
-**The single highest-leverage fix in the queue.** AQL cannot reference a
-hyphenated collection name unquoted — the hyphen parses as subtraction:
+Filed as the highest-leverage Wave 0 fix on the premise that production queries
+could silently receive an empty result. **That premise was wrong.**
 
-```aql
-FOR d IN OKF_solar-system_v1_SOURCE RETURN d._key
--- {"error":true,"errorNum":1203,"errorMessage":"collection or view not found: OKF_solar"}
+`arangojs` — the driver every service uses — **throws** on an unquoted hyphenated
+collection name:
+
+```
+UNQUOTED hyphen   -> THREW errorNum=1203
+BACKTICKED        -> OK rows=1
+CONTROL no-hyphen -> OK rows=1
 ```
 
-Every OKF graph name derives from a bundle slug, so **every one contains a
-hyphen**. The response carries no `result` field, so `(await db.query(aql)).result || []`
-returns `[]` and a caller concludes the collection is empty.
+AQL cannot reference `OKF_solar-system_v1_SOURCE` unquoted (the hyphen parses as
+subtraction), but the driver surfaces that as a loud `1203`, which is correct
+behaviour. The silent-empty is a property of **raw `POST /_api/cursor`**, where
+ArangoDB returns HTTP 200 with `{"error":true,...}` and no `result` field. That
+is how it was found — by diagnostic scripts, not by the application.
 
-Why first: this exact shape cost three wrong conclusions in one session,
-including a near-miss filed as *"144 concepts indexed, repo reports Serving, graph
-is empty — silent false-success"*. The graph held 3,011 chunks. **Fixing this one
-turns every future instance of the whole class from silent-wrong into a loud
-error**, and it is a small change to the shared DB layer — not a per-query patch.
+Reclassified as a **diagnostics footgun**: the error message names a *truncated*
+collection (`OKF_solar`), which is genuinely misleading, and a non-throwing
+client reads the absent `result` as an empty collection. Worth a quoting helper
+and a note in `arangodb-collections.md`; not urgent.
 
-Two parts: reject on `error`/`errorNum` in the shared driver, and a quoting
-helper so the correct AQL form is the easy one.
+**The lesson worth carrying:** I ranked this first off a raw-HTTP observation and
+did not test the driver until afterwards. "Does the client throw, or return
+empty?" is a one-minute check that would have changed the answer.
 
-### 0.2 · Graph collections named after the bundle, not `repo.graph_name` — !1070
+### ~0.2 · Graph collections named after the bundle — !1070 — **re-verify first**
 
-Same family, same class of surprise: the collections the repo *names* read empty
-after a successful ingest, because the graph is written under a bundle-derived
-name (`OKF_solar-system_v1`) while `repo.graph_name` says something else
-(`OKF_<uuid>`). An operator or agent checking `repo.graph_name` sees nothing and
-concludes the ingest failed.
-
-Fixing 0.1 first makes this fail loudly instead of silently, which is what makes
-it diagnosable.
+`repo.graph_name` is `OKF_<uuid>`, and **UUIDs contain hyphens** — so "the named
+collection reads empty" is very likely the same `1203` footgun rather than a
+separate data-integrity defect. Check this before spending time on it; it may
+collapse into the !1079 footgun above.
 
 ---
 
@@ -206,31 +209,31 @@ guess. **Do not file as a defect until the mechanism is known.**
 
 ## Suggested execution order
 
-**Gate before any large ingest (Tier 3/4, or a customer deployment).** Items 1–3
-are the reason: with the cursor-error bug live, a query that returns `[]` is
-indistinguishable from a query that found nothing, and with the metrics bug live
-the dashboard reports zero PII hits and zero broken links on a repo where every
-concept has findings. **Neither the drain's success nor its failure is currently
-observable.** Fixing the instruments before trusting them is cheaper than
-debugging a 42-hour drain whose result cannot be read.
+**Gate before any large ingest (Tier 3/4, or a customer deployment).** Revised
+2026-10-15 after !1079 was demoted and !1065 was fixed.
 
-1. **!1079** — fail loud on cursor errors (unblocks honest diagnosis of 0.2, 2.2)
-2. **!1065 / BUG-12** — make `pii_hit_count` and `broken_link_count` real, or
-   delete them so the absence is visible rather than disguised as a healthy zero.
-   Confirmed reproducing live on Bali: 1113/1113 concepts carry PII findings
-   while the metrics line reports `pii_hit_count: 0`.
-3. **!1082** — the suggester blocker; without it curation cannot complete
-4. **!1070** — graph naming, diagnosable once !1079 lands
-5. **!1069** — invisible frontmatter (data is intact, operators are re-typing it)
-6. **!1077** → **!1075** → **!1067** — the wizard cluster, ordered by how much each blocks
-7. **!1073** — make config trustworthy before touching Wave 3
-8. **!1080** + **!1081** together — throughput and capacity, both are configuration + documentation
-9. **!1060/!1063** — only with a reproduction in hand
-10. Wave 4 polish; decide !1065 close-or-amend
+| # | Item | State |
+|---|---|---|
+| 1 | **!1065 / BUG-12** — `pii_hit_count` computed, `broken_link_count` removed | **DONE** `c080288` |
+| 2 | **!1082** — suggester returns 22 entities against a ceiling of 20; accept 400s and every tag is lost | blocking Bali now |
+| 3 | **!1069** — frontmatter renders invisible; data intact but invisible, so curators re-type it | active curation surface |
+| 4 | **!1070** — re-verify first; may be the !1079 footgun, not a separate defect | needs a 10-minute check |
+| 5 | **!1077** → **!1075** → **!1067** — wizard cluster, ordered by how much each blocks | |
+| 6 | **!1072** — 1202 logged at error on a clean drain; trains everyone to ignore errors | |
+| 7 | **!1073** — 28 env vars never reach a container; make config trustworthy before Wave 3 | |
+| 8 | **!1080** + **!1081** together — throughput and capacity, config + documentation | |
+| 9 | **!1060/!1063** — only with a reproduction in hand | parked |
+| 10 | Wave 4 polish; !1061, !1064, !1074, !1062 | |
+| — | !1079 — quoting helper + `arangodb-collections.md` note | low, any time |
 
-**Items 1–3 are the pre-ingest gate.** They are small, independent, and together
-they make the rest of the queue diagnosable. Item 2 is two lines either way —
-compute the metrics or delete the fields.
+**Wave 0 is empty and that is the finding, not an oversight.** Every
+silent-wrong item in the list turned out either to be loud already (!1079) or to
+be fixed (!1065). The remaining queue is blocking or cosmetic, not
+invisible.
+
+One standing rule from this pass: **before ranking a finding as silent-wrong,
+verify the client.** A raw-HTTP observation is not evidence about the
+application, and I ranked one first off exactly that.
 
 **Wave 0 first, always.** Every wave below it is cheaper to diagnose once a
 silently-empty query raises an error instead of returning `[]`.

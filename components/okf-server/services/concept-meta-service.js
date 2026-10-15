@@ -35,7 +35,7 @@ const parserService = require('./parser-service');
 
 const COLLECTION = 'okf_concepts_meta';
 
-const LIFECYCLE_STATUSES = ['draft', 'stable', 'deprecated'];
+const LIFECYCLE_STATUSES = require('./okf-vocabulary').STATUS_VALUES;
 
 const meter = getMeter();
 const opsCounter = meter.createCounter('okf_concepts_meta_operations_total', {
@@ -988,8 +988,22 @@ async function patchConceptFields(repo_id, concept_id, { frontmatterPatch, body 
 // Story #978 — Editor "Autocorrect" (frontmatter-only, per David Q8)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AUTOCORRECT_TYPE_ENUM = ['topic', 'entity', 'process', 'event', 'source'];
-const AUTOCORRECT_STATUS_ENUM = ['active', 'draft', 'retired'];
+// Vocabulary lives in okf-vocabulary so it cannot drift from what the product
+// actually writes. `AUTOCORRECT_TYPE_ENUM` includes the reserved root type:
+// the bundle root is written with type 'index' (crawl-conversion-service) and
+// may carry the authorial 'BundleRoot', and is_index is determined by IDENTITY
+// (see the comment at :154-157) — so flagging its own reserved page as
+// INVALID_TYPE produced a dead end with no remedy. BUG-11 / !1077.
+//
+// `AUTOCORRECT_STATUS_ENUM` was 'active|draft|retired' — a list nothing in the
+// product produces. The corpus carries draft/stable (2,860 / 5 of 2,979
+// concepts) and the regression test at concept-meta-service.test.js:304
+// asserts `retired' is invalid. Autocorrect was therefore rejecting the
+// `stable' concepts really have and accepting values nothing writes. Same
+// vocabulary the rest of the service validates against, BUG-11 / !1077.
+const { ALL_TYPES, CONTENT_TYPES, STATUS_VALUES } = require('./okf-vocabulary');
+const AUTOCORRECT_TYPE_ENUM = ALL_TYPES;
+const AUTOCORRECT_STATUS_ENUM = STATUS_VALUES;
 
 /** Plan an autocorrect pass for one concept's frontmatter. Pure — no DB. */
 function planAutocorrectForConcept(meta) {
@@ -1004,7 +1018,9 @@ function planAutocorrectForConcept(meta) {
     warnings.push({
       rule: 'INVALID_TYPE',
       severity: 'warning',
-      message: `type "${fm.type}" not in ${AUTOCORRECT_TYPE_ENUM.join('|')}`
+      // Name the content types, not the full list: the reserved root types are
+      // recognised and must not read as "you should have used one of these".
+      message: `type "${fm.type}" not in ${CONTENT_TYPES.join('|')}`
     });
   }
 
@@ -1164,6 +1180,9 @@ async function autocorrectRepo(repo_id, dry_run = true) {
 }
 
 module.exports = {
+  // Exported for the vocabulary guard (okf-vocabulary.test.js), which asserts
+  // the reserved index type is never flagged INVALID_TYPE.
+  planAutocorrectForConcept,
   upsertConceptMeta,
   getConceptMeta,
   getConceptMetaFromAnyRepo,

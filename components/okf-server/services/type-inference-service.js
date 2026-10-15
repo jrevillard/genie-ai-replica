@@ -21,7 +21,9 @@
 // curated bundles keep their authored types).
 
 const STRATEGIES = ['heuristics', 'llm', 'hybrid'];
-const TYPES = ['topic', 'entity', 'process', 'event', 'source'];
+// Shared vocabulary (okf-vocabulary). CONTENT_TYPES only — inference assigns a
+// content type; the reserved index type is identified by identity, never inferred.
+const TYPES = require('./okf-vocabulary').CONTENT_TYPES;
 
 /** Resolve the strategy param (already validated) → what actually runs. */
 function resolveStrategy(strategy) {

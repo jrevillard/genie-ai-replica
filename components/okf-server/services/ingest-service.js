@@ -377,6 +377,16 @@ function zipToRawInputs(zipBase64, maxConcepts, bundleName) {
  * overlap under the scans. */
 function importConcurrency() {
   const parsed = parseInt(process.env.OKF_IMPORT_CONCURRENCY || '', 10);
+  // The fallback stays 1 while the DEPLOYMENT default is 4 (compose / env /
+  // env.j2 / docs, !1080). These are deliberately different surfaces: compose
+  // always sets the variable, so 4 is what a deployment actually runs, whereas
+  // this is the defensive value used when the variable is absent or malformed.
+  //
+  // Raising it to 4 to "make them consistent" was TRIED and REVERTED:
+  // import-links-integration.test.js exercises the real import path against a
+  // mock DB and fails at 4 lanes — the index concept never lands in
+  // okf_concepts_meta. Sequential is also the safer behaviour for anything
+  // running okf-server outside compose.
   return Math.min(Math.max(Number.isFinite(parsed) && parsed > 0 ? parsed : 1, 1), 16);
 }
 

@@ -30,7 +30,16 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
 # serializes EVERY scan — one 90 KB crawl page saturates the process (client
 # 10 s timeouts, even /ready starves → docker marks the service unhealthy).
 # Processes parallelize where threads cannot; each loads its own model copy.
-# Size for the node: 2 = default sane floor; raise on many-core deployments.
+#
+# Default 4 (was 2, chosen when the sidecar ran 2 workers) — !1080. It is ONE
+# HALF OF A PAIR: set it equal to OKF_IMPORT_CONCURRENCY, because import lanes
+# above the sidecar's worker count queue rather than adding throughput. Measured
+# on a 24-core host with the pair at 4/4: the sidecar ran 443% CPU while
+# okf-server sat at 0.5% — so 4 is a FLOOR for a machine that size, and already
+# too high on a 4-core VPS. Sizing rule: min(16, cores / 2).
+#
+# MEMORY, not just CPU: each worker holds its own ~390 MB spaCy copy, so this is
+# also the sidecar's memory knob.
 #
 # WHY THERE IS NO `--max-requests` HERE (measured 2026-10-13). Recycling a
 # worker on a request schedule was considered and REJECTED on evidence:
@@ -52,4 +61,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
 # MALLOC_ARENA_MAX was also tested: it flattens worker memory under concurrent
 # load but does NOT prevent a death (6/6 deaths with the cap), so it is not
 # set here.
-CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 8000 --workers ${PII_WEB_CONCURRENCY:-2}"]
+#
+# AC7 (config-validator) pins this default against compose and env.j2 — a change
+# here that is not mirrored in both surfaces fails the pipeline, which is how the
+# original 2-vs-4 drift was caught.
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 8000 --workers ${PII_WEB_CONCURRENCY:-4}"]

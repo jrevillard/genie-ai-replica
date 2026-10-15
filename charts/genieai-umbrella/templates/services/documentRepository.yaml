@@ -17,8 +17,8 @@
 Keycloak CR (hostname v2); JWKS keeps resolving in-cluster through
 KEYCLOAK_URL. Without the override the service derives the expected
 issuer from the in-cluster URL and rejects every browser token. */ -}}
-{{- /* Dataprep URL parts are explicit. The service's own defaults name the
-compose service (dataprep-arango-service), and DATAPREP_PORT collides with
+{{- /* Dataprep URL parts are explicit. The service's own default host
+names a service absent here, and DATAPREP_PORT collides with
 the Kubernetes-injected connection env for the dataprep Service
 (tcp://<ip>:5000) — the controller concatenates host:port into a URL, so
 both rows must be set explicitly. */ -}}

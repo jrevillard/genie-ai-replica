@@ -1,8 +1,8 @@
 {{/*
   Shared model-weights cache for the in-cluster GPU models (vllm,
   vllm-translation, tei, tei-reranker). Optional — the default is
-  emptyDir per pod (compose parity: fresh HF download on every pod
-  start). Enabling the cache mounts one ReadWriteOnce claim on all
+  emptyDir per pod (fresh HF download on every pod start). Enabling
+  the cache mounts one ReadWriteOnce claim on all
   four model Deployments; the single-gpu=true node assumption makes
   RWO sufficient (all model pods co-schedule on that node). Multi-GPU
   clusters need a ReadWriteMany class or one claim per model.

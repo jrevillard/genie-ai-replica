@@ -1,6 +1,5 @@
 {{/*
-  TEI embedding server (in-cluster GPU mode only). Compose parity:
-  docker-compose.yaml gpu-models profile, service `tei`. Image from
+  TEI embedding server (in-cluster GPU mode only). Image from
   ghcr.io unconditionally (not mirrored; air-gapped sites rewrite via
   insertAgent). The embedding model id inherits
   .Values.opea.embedding.modelId so the orchestrators and the

@@ -129,7 +129,7 @@ data:
     passwordPolicy: length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
     # Login-page locales; empty = default 9-locale list.
     supportedLocales: []
-    # Access-token TTL in seconds (compose parity).
+    # Access-token TTL in seconds.
     accessTokenLifespan: 300
     # Confidential-client secrets. These values are read ONLY by the
     # render-time guard below: the chart renders no secret, and kcc
@@ -289,7 +289,7 @@ services:
       # UI languages. Defaults ON.
       streamingEnabled: true
     # OPEA chat pipeline host (chatqna service). Empty = the code's
-    # compose-parity default — set it when the OPEA tier joins the
+    # image default — set it to the chatqna Service when the OPEA
     # chart (in-cluster Service name).
     opeaHost: ""
     port: 3000
@@ -513,7 +513,7 @@ services:
   clamav:
     enabled: true
     replicas: 1
-    # Tag: `stable-debian` (matches docker-compose.yaml:714). The chart
+    # Tag: `stable-debian`. The chart
     # used `1.3` historically, but Docker Hub's clamav/clamav 1.x line
     # only ships `1.4+`; the operator logs `manifest unknown` and the
     # pod stays in ImagePullBackOff. `stable-debian` is a moving tag
@@ -593,9 +593,9 @@ services:
     podDisruptionBudget: null
     serviceMonitor: false
 
-# OPEA AI/ML tier. Disabled by default; enabling renders the compose-parity
+# OPEA AI/ML tier. Disabled by default; enabling renders the six
 # OPEA services (chatqna, retriever, dataprep, reranker, embedding,
-# translation). The per-service templates carry the compose defaults for
+# translation). The per-service templates carry the defaults for
 # chart-specific tuning (RERANKING_*, RETRIEVER_*, CHATQNA_*, etc.).
 opea:
   enabled: false
@@ -618,7 +618,7 @@ opea:
   dataprep: {}     # chunking / labeling / contextual retrieval — defaults in templates
   reranker:
     # Adaptive-utility tuning knobs read at reranker startup; only used
-    # when RERANKING_STRATEGY=adaptive. Defaults match docker-compose.yaml
+    # when RERANKING_STRATEGY=adaptive.
     # lines 1130-1133.
     noveltySigmoidA: "20.0"
     noveltySigmoidB: "0.25"

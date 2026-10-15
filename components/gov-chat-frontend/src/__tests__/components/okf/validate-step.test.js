@@ -142,6 +142,151 @@ describe('OkfStepValidate — orphan link suggestions (#1036 Class A)', () => {
   });
 });
 
+describe('OkfStepValidate — remedy panels outlive the issue they cure (!1075 / Story 10.8)', () => {
+  // WHY THE ORIGINAL TEST COULD NOT CATCH THIS
+  //
+  // The pre-existing suggestion test mocks `fetchValidation` with a STATIC
+  // report that always contains the orphan issue. Accepting a proposal calls
+  // refresh(), which re-fetches — but the mock hands back the same orphan
+  // forever, so the row never unmounts and the destruction never happens. The
+  // defect needs a page that stops being an orphan the instant it gets ONE
+  // link, so these tests change their answer on the SECOND fetch.
+  const orphanIssue = {
+    type: 'orphan',
+    severity: 'warning',
+    concept_id: 'lonely',
+    title: 'Lonely Page',
+    message: 'No page links to this concept.',
+    remedy: 'Accept link suggestions.'
+  };
+
+  function reportThatClearsAfterFirstFetch(issue) {
+    let fetches = 0;
+    return () => {
+      fetches += 1;
+      return { ok: true, report: reportWith(fetches === 1 ? [issue] : []) };
+    };
+  }
+
+  it('AC1: accepting one proposal leaves the other proposals rendered', async () => {
+    const proposals = [
+      { to_concept_id: 'who-pen', label: 'PEN package' },
+      { to_concept_id: 'who-tax', label: 'Tax filing' },
+      { to_concept_id: 'who-dut', label: 'Duty rules' }
+    ];
+    const { w } = mountValidate({
+      'okf/fetchValidation': reportThatClearsAfterFirstFetch(orphanIssue),
+      'okf/suggestLinks': () => ({ ok: true, result: { concept_id: 'lonely', proposals } }),
+      'okf/acceptLink': () => ({ ok: true, result: { success: true } })
+    });
+    await settle(w);
+    await w.find('.okf-step-validate__issue-actions button').trigger('click');
+    await settle(w);
+    expect(w.findAll('.okf-step-validate__sug-row')).toHaveLength(3);
+
+    const firstAccept = w.findAll('button').find((b) => b.text() === 'Accept');
+    await firstAccept.trigger('click');
+    await settle(w);
+
+    // The orphan row IS gone — the page now has a link, which is the whole
+    // point of accepting. That is correct behaviour.
+    expect(w.findAll('.okf-step-validate__issue')).toHaveLength(0);
+
+    // ...and the proposals survive it. This is the assertion the defect fails.
+    expect(w.findAll('.okf-step-validate__sug-row')).toHaveLength(3);
+  });
+
+  it('AC2: the accepted proposal shows Done and the rest still offer Accept', async () => {
+    const proposals = [
+      { to_concept_id: 'who-pen', label: 'PEN package' },
+      { to_concept_id: 'who-tax', label: 'Tax filing' }
+    ];
+    const { w } = mountValidate({
+      'okf/fetchValidation': reportThatClearsAfterFirstFetch(orphanIssue),
+      'okf/suggestLinks': () => ({ ok: true, result: { concept_id: 'lonely', proposals } }),
+      'okf/acceptLink': () => ({ ok: true, result: { success: true } })
+    });
+    await settle(w);
+    await w.find('.okf-step-validate__issue-actions button').trigger('click');
+    await settle(w);
+
+    await w
+      .findAll('button')
+      .find((b) => b.text() === 'Accept')
+      .trigger('click');
+    await settle(w);
+
+    // The "Done" affordance for an accepted proposal — built at the old :106,
+    // then destroyed one interaction earlier by the nesting this story fixes.
+    expect(w.text()).toContain('Done');
+    expect(w.findAll('button').filter((b) => b.text() === 'Accept')).toHaveLength(1);
+  });
+
+  it('AC3: the remaining proposals are reachable without re-running Suggest links', async () => {
+    const proposals = [
+      { to_concept_id: 'who-pen', label: 'PEN package' },
+      { to_concept_id: 'who-tax', label: 'Tax filing' }
+    ];
+    const { w, dispatched } = mountValidate({
+      'okf/fetchValidation': reportThatClearsAfterFirstFetch(orphanIssue),
+      'okf/suggestLinks': () => ({ ok: true, result: { concept_id: 'lonely', proposals } }),
+      'okf/acceptLink': () => ({ ok: true, result: { success: true } })
+    });
+    await settle(w);
+    await w.find('.okf-step-validate__issue-actions button').trigger('click');
+    await settle(w);
+    await w
+      .findAll('button')
+      .find((b) => b.text() === 'Accept')
+      .trigger('click');
+    await settle(w);
+
+    // The "Suggest links" BUTTON lives on the orphan row, which is gone — so the
+    // second proposal must be reachable from the panel that is left, WITHOUT
+    // re-running the suggest call. Assert on the dispatches, not on text: the
+    // panel heading reuses the 'Suggest links' label (same verb-phrase section
+    // title as 'Cross-link topics' above it), so text is not the signal.
+    expect(w.findAll('.okf-step-validate__issue-actions button')).toHaveLength(0);
+    const remaining = w.findAll('button').find((b) => b.text() === 'Accept');
+    expect(remaining).toBeTruthy();
+    await remaining.trigger('click');
+    await settle(w);
+
+    const accepted = dispatched.filter((d) => d.type === 'okf/acceptLink');
+    expect(accepted).toHaveLength(2);
+    expect(accepted.map((d) => d.payload.toConceptId)).toEqual(['who-pen', 'who-tax']);
+    // Exactly ONE suggest call — the remaining proposal cost nothing extra.
+    expect(dispatched.filter((d) => d.type === 'okf/suggestLinks')).toHaveLength(1);
+  });
+
+  it('AC4: the citation wire note outlives the citation issue it clears', async () => {
+    const { w } = mountValidate({
+      'okf/fetchValidation': reportThatClearsAfterFirstFetch({
+        type: 'citation',
+        severity: 'warning',
+        concept_id: null,
+        title: 'Citations not linked to the Sources page',
+        message: '3 page(s) cite documents but do not link to the Sources page.',
+        remedy: 'Wire the Sources page.',
+        citing_count: 3,
+        hub_concept_id: null
+      }),
+      'okf/wireCitations': () => ({ ok: true, result: { wired: 3, hub_concept_id: 'sources', hub_created: true } })
+    });
+    await settle(w);
+    const wireBtn = w.findAll('button').find((b) => b.text().includes('Create the Sources page'));
+    expect(wireBtn).toBeTruthy();
+    await wireBtn.trigger('click');
+    await settle(w);
+
+    // The citation issue clears once the hub exists...
+    expect(w.findAll('.okf-step-validate__issue')).toHaveLength(0);
+    // ...so a note nested in that row would report the success to nobody.
+    expect(w.find('.okf-step-validate__wire-note').exists()).toBe(true);
+    expect(w.text()).toContain('Created the Sources page and linked 3 page(s).');
+  });
+});
+
 describe('OkfStepValidate — near-duplicate remedy (#1036 Class B)', () => {
   it('lists the members and deletes through the store action', async () => {
     const { w, dispatched } = mountValidate({

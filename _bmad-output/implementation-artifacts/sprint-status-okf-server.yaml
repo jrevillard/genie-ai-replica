@@ -105,6 +105,30 @@ development_status:
   #        and docs:build (ingestion.md relref pointed at /docs/configuration/okf-variables;
   #        the page is under /docs/configure/ — Hugo REF_NOT_FOUND, exit 1).
   #   okf-server 1219/1219 across 49 suites.
+  #   DONE  !1080 + !1081 / Wave 3 (10eced5a, e1531706) — import capacity. Config and
+  #        documentation, no logic change.
+  #        OKF_INGEST_MAX_CONCEPTS 200 -> 1000 and OKF_INGEST_MAX_ZIP_BYTES 25 MiB ->
+  #        256 MiB, EACH IN ALL FOUR declaration sites (service default, compose, env,
+  #        env.j2). crossReference conflicting=0 is the check that they agree.
+  #        The concept cap is documented as a CAPACITY knob, not a safety limit: it is
+  #        checked AFTER the document-ceiling split, so 999 documents measured 1112
+  #        concepts and a 200 cap rejected an ordinary crawl. The zip cap is documented
+  #        as a BOMB GUARD and explicitly NOT to be tuned.
+  #        Import pair defaults 1/2 -> 4/4 (the 2 dated from 2 uvicorn workers). The
+  #        pairing rule is now on EVERY surface an agent or operator might read one of:
+  #        env (both sites), CLAUDE.md, .claude/rules/ENVIRONMENT.md,
+  #        configure/okf-variables.md, knowledge-base/ingestion.md. The two pairs are kept
+  #        distinct because they fail differently — import lanes above the sidecar's
+  #        workers QUEUE, drain lanes above dataprep's slots get 429.
+  #        Every import now logs "OKF import lane capacity" with both values, whether they
+  #        are PAIRED, and the core count — a misconfigured host is visible in the logs
+  #        instead of inferred from timings.
+  #        Three tests pinning the 200 default were UPDATED, not deleted — they pin the
+  #        resolver's fallback behaviour; only the expected number changed.
+  #        NOT DONE: !1080's wall-clock acceptance (import Bali at 12/12 vs 4/4). That
+  #        belongs to the live re-import cycle and is NOT claimed here.
+  #   => WAVES 0-3 COMPLETE. Every item above is proven by tests + falsifying checks; every
+  #      one still needs the live re-import to close. That is now the whole queue.
   #   DONE  !1073 / P2 (4758e71) — 28 documented OKF_* knobs reached NO container. There is
   #        no env_file: anywhere in docker-compose.yaml, so a var absent from a service's
   #        environment: block is unreachable: setting it in .env did nothing, silently.

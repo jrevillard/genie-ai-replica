@@ -220,6 +220,24 @@ _INGEST_CTX: contextvars.ContextVar = contextvars.ContextVar("ingest_ctx", defau
 # bottleneck (~70% of wall time; see perf analysis on release/el-salvador).
 # Tunable via env.
 MAX_CONCURRENT_BATCHES = int(os.getenv("DATAPREP_MAX_CONCURRENT_BATCHES", "20"))
+
+# Module-global vLLM batch gate, shared by every ingest task (review 2026-10-15).
+# The per-task `asyncio.Semaphore(MAX_CONCURRENT_BATCHES)` this replaces capped
+# each CONCEPT independently, so N concurrent ingests presented N x the cap to
+# the shared GPU — measured 12 lanes x 20 = up to 240 concurrent calls, inflating
+# per-call latency 3-15x and making added concurrency buy queueing, not
+# throughput. One module-level gate makes DATAPREP_MAX_CONCURRENT_BATCHES the
+# fleet-wide cap it reads as. Created lazily so env overrides still apply.
+_BATCH_GATE: asyncio.Semaphore | None = None
+
+
+def _global_batch_gate() -> asyncio.Semaphore:
+    global _BATCH_GATE
+    if _BATCH_GATE is None:
+        _BATCH_GATE = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+    return _BATCH_GATE
+
+
 # Number of chunks sent per LLM labeling call. >1 batches chunks into a single
 # call to cut network round-trips to a (often remote) vLLM. Default 4 balances
 # throughput (4x fewer calls) with compatibility across models; raise to 8 on
@@ -983,18 +1001,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             if chunk_count is not None:
                 payload["chunk_count"] = chunk_count
 
-        try:
-            propagate.inject(headers)
-            # Also apply semaphore here to be safe
-            async with (
-                self._log_semaphore,
-                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
-                session.patch(url, json=payload, headers=headers) as response,
-            ):
-                if response.status != 200:
-                    logger.error(f"Failed to update status {status} for {file_id}: {await response.text()}")
-        except Exception as e:
-            logger.error(f"Error calling status API: {e}")
+        # 3 attempts with backoff (review 2026-10-15): this PATCH is the ONLY
+        # channel that flips a meta row to 'indexed' — a single lost call
+        # discards the whole ~30-min ingest and the worker re-bills it in full.
+        for attempt in range(1, 4):
+            try:
+                propagate.inject(headers)
+                async with (
+                    self._log_semaphore,
+                    aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
+                    session.patch(url, json=payload, headers=headers) as response,
+                ):
+                    if response.status != 200:
+                        logger.error(f"Failed to update status {status} for {file_id}: {await response.text()}")
+                    return
+            except Exception as e:
+                logger.error(f"Error calling status API (attempt {attempt}/3) for {file_id}: {e}")
+                if attempt < 3:
+                    await asyncio.sleep(min(2 ** (attempt - 1), 8))
 
     async def _write_ingestion_log(self, file_id: str, level: str, stage: str, message: str):
         """Writes human-readable logs to the Document Repository (Spec 5.2/6.2).
@@ -1228,7 +1252,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             f"concurrency: {MAX_CONCURRENT_BATCHES}"
         )
 
-        semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+        semaphore = _global_batch_gate()
         logger.info(
             f"LLM labeling: {len(chunks)} chunks "
             f"(concurrency={MAX_CONCURRENT_BATCHES}, batch_size={LABEL_LLM_BATCH_SIZE}, "
@@ -1722,6 +1746,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         back to the raw chunk). Emits a ``dataprep.llm.context_chunk`` span.
         """
         for attempt in range(1, 4):
+            if attempt > 1:
+                # Backoff between retries — see _llm_call_single (review 2026-10-15).
+                await asyncio.sleep(min(2 ** (attempt - 1), 8))
             with background_span(
                 "dataprep.llm.context_chunk",
                 attributes={
@@ -1833,6 +1860,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
     async def _llm_call_single(self, client, model, system_prompt, index, text, file_id, file_labels) -> list[str]:
         """One LLM call for a single chunk with up to 3 retries. Emits an OTel span."""
         for attempt in range(1, 4):
+            if attempt > 1:
+                # Backoff between retries: 3 immediate attempts against a struggling
+                # gateway deepen its queue instead of recovering (review 2026-10-15).
+                await asyncio.sleep(min(2 ** (attempt - 1), 8))
             with background_span(
                 "dataprep.llm.label_chunk",
                 attributes={
@@ -2440,13 +2471,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # chunk so the embedding carries the document's subject (see
                     # spec-contextual-retrieval.md). No-op (returns chunks unchanged)
                     # when CONTEXTUAL_RETRIEVAL_ENABLED=false.
-                    contextualized = await self._apply_contextualization(original_chunks, input, input.file_id)
                     # Decoupled mode (CONTEXTUAL_LABEL_RAW, default true): label the
                     # RAW chunk (the context prefix distorts labeling — over/under-
                     # label) and use the contextualized text ONLY for the embedding.
                     # When false, the context is fed to both (label contextualized).
-                    label_input = original_chunks if CONTEXTUAL_LABEL_RAW else contextualized
-                    labelled_docs = await self._apply_labels(label_input, all_labels, file_labels, input.file_id)
+                    # Under decoupled mode the two stages are INDEPENDENT (labeling
+                    # reads original_chunks), so run them concurrently — serially they
+                    # added the entire labeling wall time on top of contextualization
+                    # (review 2026-10-15). Both streams share the module-global batch
+                    # gate, so gathering does not raise total vLLM concurrency.
+                    if CONTEXTUAL_LABEL_RAW:
+                        contextualized, labelled_docs = await asyncio.gather(
+                            self._apply_contextualization(original_chunks, input, input.file_id),
+                            self._apply_labels(original_chunks, all_labels, file_labels, input.file_id),
+                        )
+                    else:
+                        contextualized = await self._apply_contextualization(original_chunks, input, input.file_id)
+                        labelled_docs = await self._apply_labels(contextualized, all_labels, file_labels, input.file_id)
 
                     # 5. Graph Insertion (BATCHED & CONCURRENT)
                     # BREAKING CHANGE (v1.3 → v1.5): default changed from "genie_graph" to "GRAPH".
@@ -2492,11 +2533,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         embed_text = contextualized[i] if i < len(contextualized) else doc["text"]
                         documents_to_process.append(Document(page_content=embed_text, metadata=metadata))
 
-                    BATCH_SIZE = 10
+                    # Chunks per graph-extraction batch. Each batch runs as one task
+                    # under the (now global) batch gate, but convert_to_graph_documents
+                    # makes ONE vLLM call PER CHUNK sequentially inside its batch thread
+                    # — so smaller batches = finer parallelism under the same gate.
+                    # Env-tunable (review 2026-10-15); 3 keeps ~12 docs in flight at
+                    # gate=4 instead of 40 serialized inside 4 fat threads.
+                    BATCH_SIZE = int(os.getenv("DATAPREP_GRAPH_BATCH_SIZE", "10"))
                     total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
 
                     self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
-                    semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+                    semaphore = _global_batch_gate()
                     tasks = []
 
                     for i in range(0, len(documents_to_process), BATCH_SIZE):

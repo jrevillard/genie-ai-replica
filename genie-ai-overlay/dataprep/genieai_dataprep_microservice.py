@@ -375,6 +375,22 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
 
             # --- Trigger Tracked Background Task ---
             # We use asyncio.create_task to maintain a reference for the "Kill" functionality.
+
+            # IDEMPOTENCY GUARD (review 2026-10-15): refuse a second ingest while a
+            # task for the SAME fileId is still running. Overwriting the registry
+            # entry orphaned the first task — untouchable, unkillable, its writes
+            # racing the new run and its generic-Exception auto-retract able to
+            # delete the NEW run's chunks after it reported Ingested. The worker's
+            # liveness probe makes this rare; this makes it harmless (409, the
+            # worker's existing backoff handles it).
+            _existing = active_ingestion_tasks.get(payload.fileId)
+            if _existing is not None and not _existing.done():
+                logger.warning(f"Rejecting ingest for {payload.fileId}: a task is already in flight (409)")
+                return JSONResponse(
+                    status_code=409,
+                    content={"detail": f"An ingest task for fileId '{payload.fileId}' is already running"},
+                )
+
             task = asyncio.create_task(loader.ingest_file_with_guardrail(input_req, lock_file=lock_file))
             _slot_owner_task.append(task)  # register for the synchronous-release guard
             active_ingestion_tasks[payload.fileId] = task

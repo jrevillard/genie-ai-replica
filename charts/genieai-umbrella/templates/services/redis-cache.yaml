@@ -43,8 +43,7 @@ spec:
             # `optional: true` so the pod starts even when the Secret
             # has not been materialized (e.g. dev installs where the
             # SealedSecret bundle is not yet rendered). redis then
-            # runs without AUTH — same caveat as the compose path
-            # when the SMTP/secrets are unset.
+            # runs without AUTH (dev installs).
             - name: REDISCLI_AUTH
               valueFrom:
                 secretKeyRef:

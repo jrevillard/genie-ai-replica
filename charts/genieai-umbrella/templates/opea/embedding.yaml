@@ -1,10 +1,9 @@
 {{/*
-  embedding OPEA orchestrator. Compose-parity (docker-compose.yaml lines
-  1024-1064): two endpoint envs (EMBEDDING_MODEL_ENDPOINT and
+  embedding OPEA orchestrator: two endpoint envs (EMBEDDING_MODEL_ENDPOINT and
   TEI_EMBEDDING_ENDPOINT) that resolve to the same gpu-path; HF_TOKEN +
   VLLM_API_KEY from the vllm-api-key Secret; OPEA_SSL_SKIP_VERIFY derived
   from the gpu node URL scheme. Container/listen port 6000; healthcheck
-  hits /health on that port (compose parity).
+  hits /health on that port.
 */}}
 {{- if .Values.opea.enabled -}}
 {{- $vals := deepCopy .Values -}}

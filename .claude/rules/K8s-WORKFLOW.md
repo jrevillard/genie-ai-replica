@@ -12,8 +12,9 @@ the contracts that matter when editing `charts/genieai-umbrella/**` or the
   exists).
 - **Flux namespace**: `flux-system` (GitLab Agent + HelmRelease live here).
 - **Chart publishing**: pushes to the `charts/genieai-umbrella/**` branch
-  publish **instantly** via the GitRepository source-ref `branch: main`
-  (HEAD, no SHA pin). HelmRelease `chart.spec.chart` rewrites to that
+  publish **instantly** via the GitRepository source-ref
+  `branch: feat/k8s-migration` (HEAD, no SHA pin) — pushes to `main` do NOT
+  reach the laptop cluster. HelmRelease `chart.spec.chart` rewrites to that
   branch HEAD — **no CI wait** between commit and Flux picking it up.
 - **What does NOT trigger an upgrade**: a `valuesFrom` ConfigMap or Secret
   content change alone. Flux watches chart-source references; values are
@@ -49,7 +50,7 @@ rtk proxy helm template genieai charts/genieai-umbrella/ \
 flux reconcile helmrelease genieai -n flux-system
 
 # 6. Watch rollout
-kubectl -n genieai rollout status deploy/genieai-umbrella-<service> --timeout=300s
+kubectl -n genieai rollout status deploy/genieai-genieai-umbrella-<service> --timeout=300s
 ```
 
 ## Render gates
@@ -68,7 +69,7 @@ ownership errors. **Always** render with `-n genieai`.
 `data.keycloak.failOnPlaceholderSecrets` defaults to `true` (prod safety).
 The laptop overlay sets it `false` (overlay values via `values:` inline block
 in `helmrelease.yaml`), feeding real client secrets through `envSecrets` rows
-that reference SealedSecret-decrypted Secrets. A render with no overlay values
+that reference the Secrets the SealedSecret controller materializes in the namespace. A render with no overlay values
 **must** carry `--set data.keycloak.failOnPlaceholderSecrets=false` or the
 render fails loudly on `change-me-*` placeholders.
 
@@ -112,14 +113,16 @@ both `opea.gpu.mode` values.
 # Always work in the app namespace
 kubectl -n genieai get pods,svc,deploy
 
-# Pod / Service / Deployment name prefix = chart-name = genieai-umbrella-
+# Naming: Deployments = <release>-genieai-umbrella-<service>
+# (genieai-genieai-umbrella-backend, ...); Services use literal short names
+# (svc/nginx, svc/backend, svc/clamav, ...).
 kubectl -n genieai get pods -l app.kubernetes.io/name=<chart>
 
 # Pod env (BEFORE theorizing why a feature is misbehaving)
-kubectl -n genieai exec deploy/genieai-umbrella-backend -- env | grep -E 'KEYCLOAK|OPEA|CORS'
+kubectl -n genieai exec deploy/genieai-genieai-umbrella-backend -- env | grep -E 'KEYCLOAK|OPEA|CORS'
 
 # Port-forward nginx to a browser-friendly port (laptop overlay uses 8080)
-kubectl -n genieai port-forward svc/genieai-umbrella-nginx 8080:80
+kubectl -n genieai port-forward svc/nginx 8080:80
 
 # Arango port-forward + cluster-secret password (NOT the repo .env value)
 kubectl -n genieai port-forward svc/arangodb-single-single 8529:8529
@@ -147,7 +150,7 @@ Special case — `vllm-api-key` carries **two** keys:
 
 The end-to-end test that proves the stack works. Per cycle, run all four:
 
-1. `/api/health` returns 200 via `kubectl -n genieai port-forward svc/genieai-umbrella-nginx 8080:80` → `curl localhost:8080/api/health`.
+1. `/api/health` returns 200 via `kubectl -n genieai port-forward svc/nginx 8080:80` → `curl localhost:8080/api/health`.
 2. Chat stream in French — UI lang `fr`, send a question, confirm the streamed response arrives in French in real time (validates streaming translation: `STREAMING_TRANSLATION_ENABLED=1`).
 3. Document upload → ClamAV scan → dataprep ingestion — drop a PDF in the doc-repo UI; observe GRAPH_SOURCE collection grow (Arango query).
 4. RAG answer with citations — ask a domain question whose answer is in the just-ingested PDF; confirm the `sources` array on the answer is non-empty.

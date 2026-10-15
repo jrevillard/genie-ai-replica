@@ -266,9 +266,37 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `VUE_APP_AVAILABLE_LOCALES` - Whitelist of active UI locales (comma-separated codes, e.g. `en,es`; unset = all locales)
 - `OKF_MAX_CRAWL_SOURCE_MB` - Max crawled-source file size (MB) okf-server converts into an OKF repository (authoritative pre-flight of the server-side streaming conversion job). Default 10240 (10 GB); mode B batches to the cap, mode A limited to ~45 MB (one request body)
 - `OKF_CONVERSION_DEBUG` - `1` = fine-grained per-page/per-batch logging in the crawl→OKF conversion job
-- `OKF_IMPORT_CONCURRENCY` - okf-server import lanes (parallel per-concept import pipeline on the creation side — NOT the post-publish drain). Default 1 (historical single-flight); clamp 1..16. Raise together with `PII_WEB_CONCURRENCY` (PII scans dominate lane time)
+- `OKF_IMPORT_CONCURRENCY` - okf-server import lanes (parallel per-concept import pipeline on the creation side — NOT the post-publish drain). Default **4** (was 1); clamp 1..16. **PAIRED with `PII_WEB_CONCURRENCY` — they are one capacity setting, not two** (see *Import capacity* below)
+- `PII_WEB_CONCURRENCY` - PII sidecar worker PROCESSES (not threads; GIL-bound NER, ~390 MB spaCy each). Default **4** (was 2, chosen when the sidecar had 2 uvicorn workers). Paired with `OKF_IMPORT_CONCURRENCY`
+- `OKF_INGEST_MAX_CONCEPTS` - max concepts per import batch. Default **1000** (was 200). A **capacity knob, not a safety limit** — see *Import capacity* below
 - `OKF_INGEST_CONCURRENCY` - okf-server drain lanes (parallel concept indexing; repos are independent units of work). Default 1 (sequential). Raise together with `DATAPREP_INGEST_CONCURRENCY` to scale with machine capacity
 - `DATAPREP_INGEST_CONCURRENCY` - concurrent ingest slots per dataprep container (flock slot pool; 429 only when all busy). Default 1 (historical single-flight)
+
+#### Import capacity — sizing for a host (!1080, !1081)
+
+Two **separate pairs**, each of which only works when both halves move together:
+
+| Pair | Creation side | Worker side | Consequence of raising one alone |
+|---|---|---|---|
+| **Import** | `OKF_IMPORT_CONCURRENCY` | `PII_WEB_CONCURRENCY` | extra lanes **queue at the sidecar** — latency up, throughput flat |
+| **Drain** | `OKF_INGEST_CONCURRENCY` | `DATAPREP_INGEST_CONCURRENCY` | extra lanes get **429** from dataprep; the worker backs off and retries |
+
+- **Rule of thumb: both halves ≈ `min(16, cores / 2)`.** There is no correct
+  constant — it is hardware-dependent and nothing infers it for you.
+- **Measured, not estimated.** On a 24-core / 64 GB host with the import pair at
+  4/4: the PII sidecar ran **443 % CPU** while okf-server sat at 0.5 % and dataprep
+  at 0.2 % — ~18 % of the machine, the rest idle. 4/4 is a *floor* for that host,
+  and already oversubscribed on a 4-core VPS.
+- **Every import logs the capacity it actually got** (`OKF import lane capacity`),
+  with both values and whether they are paired — so a misconfigured host is visible
+  in the logs instead of inferred from timings.
+- **`OKF_INGEST_MAX_CONCEPTS` is checked AFTER the document-ceiling split**, so an
+  operator's "how many documents did I pick" is **not** the number the cap sees.
+  Measured on Bali: 999 documents in → **1112** concepts out (89 split families).
+  That is why 200 fired on ordinary crawls and 1000 is the default. Raise it
+  deliberately for crawl-scale deployments (10,000+ for a national base); the
+  bounds that actually protect the machine are `OKF_MAX_CONCEPT_DOC_CHARS` and the
+  lane caps, not this number.
 - `KEYCLOAK_SUPPORTED_LOCALES` - Keycloak login-page locales (JSON array, e.g. `["en","es"]`; unset = curated default)
 - `STREAMING_TRANSLATION_ENABLED` - Stream the target-language chat translation during generation instead of English-then-flip (issue #829). `1`/`0`; default `0` (current behavior)
 

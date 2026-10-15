@@ -9,6 +9,19 @@ const translationService = require('../services/translation-service');
 const { extractCommittableUnit } = require('../services/translation/stream-boundary');
 const { parsePositiveInt } = require('../shared-lib');
 
+// Metadata persisted when chatqna never sent a metadata event. One factory, so
+// the disconnect path and the done path cannot drift into storing two different
+// key sets for the same kind of query — a post-hoc AQL on metadata.abstained
+// would otherwise skip every disconnected query.
+const emptyStreamMetadata = () => ({
+  source_documents: [],
+  confidence_score: 0,
+  is_grounded: false,
+  retrieval_confidence_score: null,
+  abstained: false,
+  abstention_reason: null
+});
+
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes
   router.use(keycloakAuthMiddleware.authenticate);
@@ -322,11 +335,29 @@ module.exports = (queryService) => {
           } else if (parsed.type === 'metadata') {
             // chatqna already computed reranker-grounded source docs + is_grounded; capture
             // them instead of re-running retrieval on the backend.
+            //
+            // retrieval_confidence_score, abstained and abstention_reason are
+            // diagnostic fields: they exist so a persisted query can be
+            // explained afterwards (QueryInspector, eval). Dropping them here
+            // left the stored metadata with only source_documents /
+            // confidence_score / is_grounded — indistinguishable between two
+            // very different abstentions.
             capturedMetadata = {
               source_documents: parsed.source_documents,
               confidence_score: parsed.confidence_score,
-              is_grounded: parsed.is_grounded
+              is_grounded: parsed.is_grounded,
+              retrieval_confidence_score: parsed.retrieval_confidence_score,
+              abstained: parsed.abstained,
+              abstention_reason: parsed.abstention_reason
             };
+            // Presence-keyed, carried through as-is (including an explicit null):
+            // chatqna omits the key when LLM_SELF_CONFIDENCE_ENABLED is off and
+            // sets it to null when the feature is on but the sentinel was
+            // malformed. The inspector renders its block on hasOwnProperty and
+            // its "no sentinel" state on a null value, so both must survive.
+            if (Object.prototype.hasOwnProperty.call(parsed, 'self_confidence')) {
+              capturedMetadata.self_confidence = parsed.self_confidence;
+            }
           } else if (parsed.type === 'done') {
             doHandleStreamDone();
           } else if (parsed.type === 'error') {
@@ -360,11 +391,16 @@ module.exports = (queryService) => {
           opeaController.abort();
           logger.info('QueryService.stream_client_disconnected', { queryId });
           if (fullResponseText) {
+            // Keep whatever chatqna already reported: discarding it here threw
+            // away the diagnostic fields even on a stream that got far enough
+            // to receive the metadata event before the client went away.
             queryService
-              .finalizeStreamQuery(queryId, fullResponseText, Date.now() - startTime, {
-                source_documents: [],
-                confidence_score: 0
-              })
+              .finalizeStreamQuery(
+                queryId,
+                fullResponseText,
+                Date.now() - startTime,
+                capturedMetadata || emptyStreamMetadata()
+              )
               .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
           }
         }
@@ -408,7 +444,7 @@ module.exports = (queryService) => {
     const responseTime = Date.now() - startTime;
     // Source documents + grounding come from chatqna's in-stream metadata event
     // (reranker verdict + is_grounded), not from a backend-side retrieval.
-    const metadata = capturedMetadata || { source_documents: [], confidence_score: 0, is_grounded: false };
+    const metadata = capturedMetadata || emptyStreamMetadata();
 
     res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata, responseTime })}\n\n`);
 

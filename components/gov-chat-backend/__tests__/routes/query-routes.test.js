@@ -808,6 +808,138 @@ describe('GET /:queryId', () => {
       expect(metadata).toBeDefined();
       expect(metadata.source_documents).toEqual([]);
       expect(metadata.is_grounded).toBe(false);
+      // The no-metadata-event fallback keeps the same key set as the captured
+      // one, so a stored query does not depend on whether chatqna answered.
+      expect(metadata.retrieval_confidence_score).toBeNull();
+      expect(metadata.abstained).toBe(false);
+      expect(metadata.abstention_reason).toBeNull();
+      expect(metadata).not.toHaveProperty('self_confidence');
+    });
+
+    // These four fields never reach the chat UI. They are the diagnostic half of
+    // the envelope: without them a persisted query cannot be explained after the
+    // fact — an ingestion-side abstention is indistinguishable from an ordinary
+    // low-confidence one, and a self-grade that overrode a 0.26 retrieval score
+    // is invisible unless someone reconstructs it from the traces by hand.
+    it('should forward the diagnostic metadata fields and persist them', async () => {
+      const mockStream = setupSSEStream();
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"answer"}\n\n');
+      mockStream.push(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":1,"retrieval_confidence_score":0.26,"self_confidence":100,"is_grounded":true,"abstained":false,"abstention_reason":null}\n\n'
+      );
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
+      expect(metadata.retrieval_confidence_score).toBe(0.26);
+      expect(metadata.self_confidence).toBe(100);
+      expect(metadata.abstained).toBe(false);
+      expect(metadata.abstention_reason).toBeNull();
+
+      // The divergence is only useful if it survives persistence — ArangoDB is
+      // where post-hoc analysis reads from.
+      expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+        'q1',
+        'answer',
+        expect.any(Number),
+        expect.objectContaining({
+          confidence_score: 1,
+          retrieval_confidence_score: 0.26,
+          self_confidence: 100,
+          abstained: false,
+          abstention_reason: null
+        })
+      );
+    });
+
+    it('should omit self_confidence when chatqna sends none', async () => {
+      // The admin inspector renders its Self-Confidence block on
+      // hasOwnProperty(metadata, 'self_confidence'), and chatqna only sets the
+      // key when LLM_SELF_CONFIDENCE_ENABLED. Forwarding a normalised null would
+      // make the block render on every query and report "no sentinel" for a
+      // feature that is simply switched off.
+      const mockStream = setupSSEStream();
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"answer"}\n\n');
+      mockStream.push(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0.5,"retrieval_confidence_score":0.5,"is_grounded":true,"abstained":false,"abstention_reason":null}\n\n'
+      );
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
+      expect(metadata).not.toHaveProperty('self_confidence');
+
+      const persisted = queryService.finalizeStreamQuery.mock.calls[0][3];
+      expect(persisted).not.toHaveProperty('self_confidence');
+    });
+
+    it('should keep an explicit null self_confidence so the inspector can say "no sentinel"', async () => {
+      // chatqna sets self_confidence to null when LLM_SELF_CONFIDENCE_ENABLED is
+      // on but the LLM omitted the [[CONF:…]] sentinel. The inspector renders
+      // its block on key presence and this state on a null value — dropping the
+      // key would make the block vanish instead of explaining the missing grade.
+      const mockStream = setupSSEStream();
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"answer"}\n\n');
+      mockStream.push(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0.4,"retrieval_confidence_score":0.4,"self_confidence":null,"is_grounded":true,"abstained":false,"abstention_reason":null}\n\n'
+      );
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
+      expect(metadata).toHaveProperty('self_confidence', null);
+
+      const persisted = queryService.finalizeStreamQuery.mock.calls[0][3];
+      expect(persisted).toHaveProperty('self_confidence', null);
+    });
+
+    it('should forward an abstention reason so it can be told apart from a plain ungrounded answer', async () => {
+      const mockStream = setupSSEStream();
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"I cannot answer that."}\n\n');
+      mockStream.push(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0,"is_grounded":false,"abstained":true,"abstention_reason":"reranker_input_too_long"}\n\n'
+      );
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
+      expect(metadata.abstained).toBe(true);
+      expect(metadata.abstention_reason).toBe('reranker_input_too_long');
+
+      expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+        'q1',
+        'I cannot answer that.',
+        expect.any(Number),
+        expect.objectContaining({ abstained: true, abstention_reason: 'reranker_input_too_long' })
+      );
     });
   });
 

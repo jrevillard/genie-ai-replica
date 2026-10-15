@@ -1,10 +1,10 @@
 {{- /*
   Observability-tier NetworkPolicies — one per collector workload
-  (gateway + filelog agent), per-component-flag-gated. The vmoperator-
-  managed VMSingle / VLSingle / VTSingle pods are addressed with
-  port-scoped ipBlocks (the operator's pod labels are not part of
-  the genieai.io/component convention — same approach the existing
-  OPEA policies use for OTLP egress and Keycloak egress).
+  (gateway + filelog agent), per-component-flag-gated. Storage pods
+  are addressed by their vmoperator-stamped labels (managed-by:
+  vm-operator + app.kubernetes.io/instance: <cr-name>, verified on a
+  live cluster); the gateway collector by managed-by:
+  opentelemetry-operator in the stack namespace.
 */}}
 {{- if or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled }}
 ---
@@ -53,13 +53,12 @@ spec:
         - protocol: TCP
           port: 53
     {{- if .Values.observability.logs.enabled }}
-    # VLSingle OTLP ingest (VL default OTLP port 9428). Port-scoped
-    # ipBlock pending verified peer labels — the vmoperator-managed
-    # VLSingle pod labels are not part of the genieai.io/component
-    # convention.
+    # VLSingle OTLP ingest (VL default OTLP port 9428).
     - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: victorialogs
       ports:
         - protocol: TCP
           port: 9428
@@ -67,8 +66,10 @@ spec:
     {{- if .Values.observability.metrics.enabled }}
     # VMSingle Prometheus remote-write (VM default 8428).
     - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
       ports:
         - protocol: TCP
           port: 8428
@@ -76,8 +77,10 @@ spec:
     {{- if .Values.observability.traces.enabled }}
     # VTSingle OTLP/HTTP ingest (VT default 4318).
     - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vtraces
       ports:
         - protocol: TCP
           port: 4318
@@ -113,11 +116,16 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # Forward to the collector gateway (OTLP/HTTP :4318). Port-scoped
-    # ipBlock pending verified peer labels.
+    # Forward to the collector gateway (OTLP/HTTP :4318) in the stack
+    # namespace — the gateway pods carry the otel-operator managed-by
+    # label.
     - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/managed-by: opentelemetry-operator
       ports:
         - protocol: TCP
           port: 4318

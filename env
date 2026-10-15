@@ -651,10 +651,11 @@ HUGGING_FACE_HUB_TOKEN=
 # Default: info
 # LOG_LEVEL=debug
 
-# Stream the target-language translation during chat streaming (issue #829) instead
-# of streaming English and flipping to the UI language at the end. 1 = stream-translate
-# complete sentence/paragraph units as they arrive; 0 (default) = current behavior.
-# STREAMING_TRANSLATION_ENABLED=0
+# Stream the target-language translation during chat streaming (issue #829).
+# 1 (default) = stream-translate complete sentence/paragraph units as they
+# arrive; 0 = English-only stream (the frontend never translates chat answers
+# client-side, so non-English UIs get English answers with 0).
+# STREAMING_TRANSLATION_ENABLED=1
 
 # Multi-turn vector-space blending (issue #833). Blends the query embedding
 # with the previous N turns' embedding (V = α·EQ + (1-α)·EH) at the retriever's

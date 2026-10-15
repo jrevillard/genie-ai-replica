@@ -84,6 +84,14 @@ OKF import lane capacity  repo_id=… concepts=… import_concurrency=12
   deployment (the var belongs to the sidecar service; it is normally absent from
   okf-server, which is exactly the signal that nobody set both ends).
 
+**`paired` is a configuration check, not a contention gauge.** It compares one
+import's lanes to the sidecar's workers and cannot see other in-flight imports.
+Nothing prevents a second `POST /import` while one is running, and each import
+takes its own pool — so two concurrent imports demand `2 × OKF_IMPORT_CONCURRENCY`
+scans and **both** still log `paired: true`. Size the pair for the number of
+imports you might run at once. Tracked as BUG-17 in
+`docs/testing/bug-triage-worklist-2026-10-15.md`.
+
 A stuck-drain lane is a different failure and is not a sizing problem — see the
 reaper settings in `env` (`OKF_INGEST_WORKER_REAP_GRACE_MS`,
 `OKF_INGEST_WORKER_MAX_CLAIMS`).

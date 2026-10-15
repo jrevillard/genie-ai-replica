@@ -380,3 +380,88 @@ application, and I ranked one first off exactly that.
 
 **Wave 0 first, always.** Every wave below it is cheaper to diagnose once a
 silently-empty query raises an error instead of returning `[]`.
+---
+
+## BUG-17 — concurrent imports oversubscribe the PII sidecar, and the 504 invites a double-import
+
+**New, 2026-10-15, found while raising concurrency during the Bali live re-test.**
+Not yet in GitLab — creation was blocked by the local permission classifier, so
+it is recorded here and needs filing. Three distinct defects, one root area:
+**the import path has no concurrency control of any kind.**
+
+### 17a — no guard against concurrent imports (the real one)
+
+`POST /:repo_id/import` (`routes/repos-routes.js:69`) checks authz and repo
+writability (409 when serving/drain-frozen) and then **proceeds**. There is no
+"import already in progress" check, no per-repo lock, and no global semaphore —
+the only concurrency construct in the path is `importConcurrency()`
+(`services/ingest-service.js:378`), which builds a lane pool **per invocation**.
+
+Consequence: the PII demand is `imports × OKF_IMPORT_CONCURRENCY` against a
+fixed `PII_WEB_CONCURRENCY`.
+
+| Concurrent imports | PII scans demanded | Workers | Effect |
+|---:|---:|---:|---|
+| 1 | 12 | 12 | paired |
+| 2 | 24 | 12 | 12 queue |
+| 3 | 36 | 12 | 24 queue |
+
+**This falsifies the `paired` flag documented in `CAPACITY-SIZING.md`.**
+`_logLaneCapacity` compares *one* import's lane count to the sidecar's worker
+count and has no visibility of other in-flight imports, so a second import still
+logs `paired=true` while the pair together oversubscribes 2:1. The pairing rule
+is per-import; the contention is global. Compounding it, `PII_WEB_CONCURRENCY`
+is normally **absent from okf-server's own env** (it belongs to the sidecar), so
+in a real deployment `paired` is `null` — a "did you set both ends" signal, not
+a contention gauge. The docs must stop implying it is the latter.
+
+Also note the drain side is a different mechanism and is already capped:
+`OKF_REPO_INGEST_CAP=3` (`workers/ingestWorker.js:307`) bounds per-repo
+in-flight rows and is unrelated to import.
+
+### 17b — the 60s gateway timeout invites a retry that is not safe
+
+Measured live: the Bali import ran **12:33:58 → beyond 12:45** against Kong's
+default `proxy_read_timeout` (unset in `kong.conf` → nginx 60s):
+
+```
+POST /api/okf/repos/e77ed721-.../import HTTP/1.1" 504 102
+```
+
+The browser gives up at 60s; **okf-server keeps working** — 555 concepts had
+landed by 12:45 and the import was still running. The natural user reaction to
+that 504 is to press import again, and nothing stops them.
+
+The content-hash dedup at `ingest-service.js:606-613` does **not** save the
+second import: it short-circuits only when `index_status === 'indexed'`, and
+rows mid-import are `parsed`. So a retry re-upserts every concept (same
+`concept_id`, so it overwrites rather than duplicates) while **doubling PII
+load and interleaving writes with the in-flight import**.
+
+### 17c — repo list is 1.34 MB, polled every few seconds
+
+`GET /api/okf/repos?lifecycle=all` returns **1,339,846 bytes** and the admin UI
+polls it continuously during an import. Kong logs `an upstream response is
+buffered to a temporary file` on every poll — each response is written to disk.
+This is pure overhead while the thing the user is waiting for is a 20-minute
+blocking POST that already timed out.
+
+### Suggested fix, in order
+
+1. **Per-repo import lock** — 409 `IMPORT_IN_PROGRESS` while one is in flight.
+   Cheapest, prevents the data-path damage, and makes 17b safe. Must be a
+   durable marker (a repo field or a lease row), not in-process state, so it
+   holds across a restart.
+2. **Per-route `proxy_read_timeout` on the okf import route**, or return `202`
+   with a job id and let the UI poll. Removes the retry temptation at the source.
+3. **Make `paired` honest** — either compare against *observed* concurrent
+   imports, or relabel it in the docs as a configuration check only.
+4. **Trim the repo-list payload** while an import is running (counts only, no
+   full bodies).
+
+### Verification for whoever picks this up
+
+- Two `POST /import` on one repo, second returns 409 (not a second pool).
+- `docker exec okf-server` shows no more than `PII_WEB_CONCURRENCY` established
+  connections to `pii:8000` at any instant, however many imports are running.
+- A client that times out at 60s and retries does not double the PII load.

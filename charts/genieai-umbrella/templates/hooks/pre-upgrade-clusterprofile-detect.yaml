@@ -151,7 +151,7 @@ spec:
                   "  name: $ns" \
                   "reason: ClusterProfileDetected" \
                   "type: Warning" \
-                  "message: $DRIFT_MSG" \
+                  "message: \"$DRIFT_MSG\"" \
                   | ( kubectl create -f - >/dev/null 2>/tmp/event.err; rc=$?; cat /tmp/event.err >&2; exit $rc ) \
                     || echo "WARN: event create failed" >&2
               fi

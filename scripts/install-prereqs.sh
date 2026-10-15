@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent installer for the 4 cluster operators that the genie-ai
+# Idempotent installer for the 7 cluster operators that the genie-ai
 # chart requires as cluster-wide bootstrap (NOT chart dependencies).
 #
 # Usage: KUBECONFIG=/path/to/kubeconfig ./scripts/install-prereqs.sh
@@ -10,6 +10,11 @@
 #   - cloudnative-pg 0.22.0      (namespace cnpg-system)
 #   - kube-arangodb 1.4.5        (namespace arango-system)
 #   - sealed-secrets 0.40.0      (namespace sealed-secrets)
+#   - cert-manager v1.18.2       (namespace cert-manager; required by the otel-operator webhooks)
+#   - victoria-metrics-operator 0.68.1 (namespace vmoperator-system; reconciles the
+#     chart's VLSingle/VMSingle/VTSingle/VMServiceScrape CRs — the log tier is on by default)
+#   - opentelemetry-operator 0.126.0  (namespace opentelemetry-operator-system; reconciles the
+#     chart's OpenTelemetryCollector CRs — collector gateway + filelog agent)
 #
 # Re-running is safe: each install is gated on a `kubectl get namespace`
 # + `helm list -n <ns>` check that short-circuits when the helm release
@@ -24,6 +29,9 @@ KC_OPERATOR_VERSION="${KC_OPERATOR_VERSION:-26.8.0}"
 CNPG_VERSION="${CNPG_VERSION:-0.22.0}"
 ARANGO_OPERATOR_VERSION="${ARANGO_OPERATOR_VERSION:-1.4.5}"
 SEALED_SECRETS_VERSION="${SEALED_SECRETS_VERSION:-0.40.0}"
+CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.18.2}"
+VM_OPERATOR_VERSION="${VM_OPERATOR_VERSION:-0.68.1}"
+OTEL_OPERATOR_VERSION="${OTEL_OPERATOR_VERSION:-0.126.0}"
 
 READY_TIMEOUT="${READY_TIMEOUT:-5m}"
 
@@ -168,13 +176,80 @@ install_sealed_secrets() {
   wait_deploy_ready "${ns}" "sealed-secrets-controller"
 }
 
+install_cert_manager() {
+  # Prerequisite for the otel-operator admission webhooks (the operator
+  # chart issues cert-manager.io/v1 Certificates for its serving certs;
+  # without cert-manager the webhook pod never becomes Ready and every
+  # OpenTelemetryCollector CR write is rejected).
+  local ns="cert-manager" release="cert-manager"
+  ensure_namespace "${ns}"
+  if helm list -n "${ns}" -q 2>/dev/null | grep -qx "${release}"; then
+    log "cert-manager ${CERT_MANAGER_VERSION} (release ${release}): already installed, skip"
+    return 0
+  fi
+  log "cert-manager ${CERT_MANAGER_VERSION}: helm install"
+  helm repo add jetstack https://charts.jetstack.io >/dev/null 2>&1 || true
+  helm repo update >/dev/null 2>&1
+  helm install "${release}" jetstack/cert-manager \
+    --version "${CERT_MANAGER_VERSION}" \
+    --namespace "${ns}" --create-namespace=false \
+    --set crds.enabled=true \
+    --wait --timeout "${READY_TIMEOUT}"
+  wait_deploy_ready "${ns}" "cert-manager"
+}
+
+install_vmoperator() {
+  # Reconciles the chart's VLSingle/VMSingle/VTSingle/VMServiceScrape
+  # CRs (operator.victoriametrics.com group). Required by the default
+  # install: the log tier (VictoriaLogs baseline) is on by default.
+  local ns="vmoperator-system" release="victoria-metrics-operator"
+  ensure_namespace "${ns}"
+  if helm list -n "${ns}" -q 2>/dev/null | grep -qx "${release}"; then
+    log "victoria-metrics-operator ${VM_OPERATOR_VERSION} (release ${release}): already installed, skip"
+    return 0
+  fi
+  log "victoria-metrics-operator ${VM_OPERATOR_VERSION}: helm install"
+  helm repo add vm https://victoriametrics.github.io/helm-charts >/dev/null 2>&1 || true
+  helm repo update >/dev/null 2>&1
+  helm install "${release}" vm/victoria-metrics-operator \
+    --version "${VM_OPERATOR_VERSION}" \
+    --namespace "${ns}" --create-namespace=false \
+    --wait --timeout "${READY_TIMEOUT}"
+  wait_deploy_ready "${ns}" "victoria-metrics-operator"
+}
+
+install_otel_operator() {
+  # Reconciles the chart's OpenTelemetryCollector CRs (gateway + filelog
+  # agent). Depends on cert-manager (install_cert_manager runs first).
+  local ns="opentelemetry-operator-system" release="opentelemetry-operator"
+  ensure_namespace "${ns}"
+  if helm list -n "${ns}" -q 2>/dev/null | grep -qx "${release}"; then
+    log "opentelemetry-operator ${OTEL_OPERATOR_VERSION} (release ${release}): already installed, skip"
+    return 0
+  fi
+  log "opentelemetry-operator ${OTEL_OPERATOR_VERSION}: helm install"
+  helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts >/dev/null 2>&1 || true
+  helm repo update >/dev/null 2>&1
+  helm install "${release}" open-telemetry/opentelemetry-operator \
+    --version "${OTEL_OPERATOR_VERSION}" \
+    --namespace "${ns}" --create-namespace=false \
+    --wait --timeout "${READY_TIMEOUT}"
+  wait_deploy_ready "${ns}" "opentelemetry-operator-controller-manager"
+}
+
 main() {
-  log "install 4 cluster operators (keycloak-system/cnpg-system/arango-system/sealed-secrets)"
+  log "install 7 cluster operators (keycloak/cnpg/arango/sealed-secrets/cert-manager/vmoperator/otel-operator)"
   install_keycloak_operator
   install_cloudnative_pg
   install_kube_arangodb
   install_sealed_secrets
-  log "4 operators installed; keycloak-system/cnpg-system/arango-system/sealed-secrets all Ready"
+  install_cert_manager
+  install_vmoperator
+  install_otel_operator
+  # grafana-operator is NOT installed here: the chart's Grafana CRs are
+  # opt-in (observability.grafana.enabled, default false). A cluster
+  # enabling them installs grafana-operator per charts/README.md.
+  log "7 operators installed; all namespaces Ready"
 }
 
 main "$@"

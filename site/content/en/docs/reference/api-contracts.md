@@ -760,7 +760,7 @@ stable; renaming a field is a breaking change.
 | Type | Fields | Notes |
 |------|--------|-------|
 | `chunk` | `content: string` | One streaming chunk (an English text unit by default) |
-| `metadata` | `queryId: string`, `responseTime: number`, `source_documents?: array`, `confidence_score?: number`, `is_grounded?: boolean` | Captured from chatqna's in-stream metadata, forwarded to client (no separate backend retrieval) |
+| `metadata` | `queryId: string`, `responseTime: number`, `source_documents?: array`, `confidence_score?: number`, `is_grounded?: boolean`, `retrieval_confidence_score?: number \| null`, `self_confidence?: number \| null`, `abstained?: boolean`, `abstention_reason?: string \| null` | Captured from chatqna's in-stream metadata, forwarded to client (no separate backend retrieval) |
 | `translation` | `content: string` | Emitted by `/api/translate/*` only when `STREAMING_TRANSLATION_ENABLED=0` (the English-then-flip path) |
 | `chunk` | `content: string` (translated) | Emitted by streaming-translation path — see below |
 | `error` | `message: string`, `code: string` | Closes the stream after emission |
@@ -782,6 +782,20 @@ data: {"type":"done","queryId":"abc123"}
 
 Keepalive comment lines (`: keepalive`) are emitted on a fixed interval so
 intermediate proxies do not time out the connection.
+
+#### Metadata fields
+
+`confidence_score` is the citizen-facing value: the LLM self-grade when
+`LLM_SELF_CONFIDENCE_ENABLED=1`, otherwise the retrieval confidence. The
+remaining fields are diagnostics for the admin Query Inspector and post-hoc
+evaluation — a chat client should render `confidence_score` only.
+
+| Field | Meaning |
+|-------|---------|
+| `retrieval_confidence_score` | Raw rank-weighted retrieval confidence, always present. `null` when chatqna omits it. |
+| `self_confidence` | LLM self-grade. **Keyed by presence**: absent when `LLM_SELF_CONFIDENCE_ENABLED=0`, `null` when the feature is on but the `[[CONF:…]]` sentinel was missing or malformed. Consumers must test the key, not the value, to tell "disabled" from "no sentinel". |
+| `abstained` | `true` when chatqna withheld a real answer. Defaults to `false`. |
+| `abstention_reason` | Machine-readable cause. On this event, `reranker_input_too_long` — the reranker refused an oversized input. (`translation_input_too_long` is a different transport: it surfaces as an HTTP 422, not as a metadata event.) Defaults to `null`. |
 
 ### Streaming translation (issue #829)
 

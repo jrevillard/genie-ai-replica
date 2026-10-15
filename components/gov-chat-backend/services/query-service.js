@@ -267,7 +267,7 @@ class QueryService {
       try {
         const obj = JSON.parse(trimmed);
         if (obj && obj.type === 'metadata') {
-          return {
+          const parsed = {
             type: 'metadata',
             source_documents: obj.source_documents ?? [],
             confidence_score: obj.confidence_score ?? 0,
@@ -275,9 +275,24 @@ class QueryService {
             // admin/eval (QueryInspector). confidence_score above is the
             // citizen-facing value (LLM self-grade when enabled, else retrieval).
             retrieval_confidence_score: obj.retrieval_confidence_score ?? null,
-            self_confidence: Object.prototype.hasOwnProperty.call(obj, 'self_confidence') ? obj.self_confidence : null,
+            // Why the answer is missing, when it is: chatqna abstains with a
+            // machine-readable reason (e.g. "reranker_input_too_long"), and the
+            // generic is_grounded=false alone cannot tell an ingestion-side
+            // abstention from an ordinary low-confidence one.
+            abstained: obj.abstained ?? false,
+            abstention_reason: obj.abstention_reason ?? null,
             is_grounded: obj.is_grounded ?? false
           };
+          // self_confidence is keyed by PRESENCE, not by value. chatqna emits
+          // the key only when LLM_SELF_CONFIDENCE_ENABLED, and emits an explicit
+          // null when the sentinel was omitted or malformed. The inspector
+          // renders its block on hasOwnProperty and its "no sentinel" state on
+          // a null value, so collapsing "feature off" into "no sentinel" here
+          // would make the two indistinguishable.
+          if (Object.prototype.hasOwnProperty.call(obj, 'self_confidence')) {
+            parsed.self_confidence = obj.self_confidence;
+          }
+          return parsed;
         }
       } catch {
         // Not valid JSON — fall through to token-chunk handling.

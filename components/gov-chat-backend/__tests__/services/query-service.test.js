@@ -435,10 +435,13 @@ describe('QueryService', () => {
       expect(result.is_grounded).toBe(true);
       expect(result.confidence_score).toBe(0.9);
       expect(result.source_documents).toHaveLength(1);
-      // Retrieval/self confidence default to null when chatqna omits them
-      // (feature off or pre-feature queries).
+      // Retrieval confidence defaults to null when chatqna omits it.
       expect(result.retrieval_confidence_score).toBeNull();
-      expect(result.self_confidence).toBeNull();
+      // self_confidence is presence-keyed and must stay absent here: chatqna
+      // omits the key when the feature is off, and sets it to null when the
+      // feature is on but the sentinel was missing. The inspector renders on
+      // hasOwnProperty and its "no sentinel" state on a null value.
+      expect(result).not.toHaveProperty('self_confidence');
     });
 
     it('should pass through retrieval_confidence_score and self_confidence', () => {
@@ -455,6 +458,37 @@ describe('QueryService', () => {
       expect(result.confidence_score).toBe(0.82);
       expect(result.retrieval_confidence_score).toBe(0.91);
       expect(result.self_confidence).toBe(0.82);
+    });
+
+    it('should default abstention fields when chatqna omits them', () => {
+      const meta = {
+        type: 'metadata',
+        source_documents: [],
+        confidence_score: 0.5,
+        retrieval_confidence_score: 0.5,
+        is_grounded: false
+      };
+      const result = queryService.parseChatQnASSELine(JSON.stringify(meta));
+      // Normalised here rather than letting undefined reach the route: the
+      // streamed relay forwards this object whole, so a missing key would be a
+      // missing key in ArangoDB and in every AQL filter built on it.
+      expect(result.abstained).toBe(false);
+      expect(result.abstention_reason).toBeNull();
+    });
+
+    it('should pass through abstained and abstention_reason', () => {
+      const meta = {
+        type: 'metadata',
+        source_documents: [],
+        confidence_score: 0,
+        retrieval_confidence_score: 0,
+        is_grounded: false,
+        abstained: true,
+        abstention_reason: 'reranker_input_too_long'
+      };
+      const result = queryService.parseChatQnASSELine(JSON.stringify(meta));
+      expect(result.abstained).toBe(true);
+      expect(result.abstention_reason).toBe('reranker_input_too_long');
     });
 
     it('should preserve explicit null self_confidence (sentinel missing)', () => {

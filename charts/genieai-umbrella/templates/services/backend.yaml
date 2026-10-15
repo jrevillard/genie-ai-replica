@@ -55,6 +55,13 @@ against an operator's explicit off switch. */ -}}
     (dict "name" "TRANSLATION_CACHE_PORT" "value" "6379")
     (dict "name" "STREAMING_TRANSLATION_ENABLED" "value" (ternary "1" "0" $streamingTranslation))
 -}}
+{{- /* Admin logs UI data source — the vmoperator-managed VLSingle
+      Service (<cr-name> pattern). Rendered only when the log tier is
+      on; without it the backend treats VL as absent and every
+      /api/admin/logs read 503s with the typed vl_unreachable error. */ -}}
+{{- if .Values.observability.logs.enabled -}}
+{{- $urls = concat $urls (list (dict "name" "VICTORIALOGS_URL" "value" (printf "http://vlsingle-victorialogs.%s.svc.cluster.local:9428" $ns))) -}}
+{{- end }}
 {{- $urls = concat $urls $translationEnv -}}
 {{- $secretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
 {{- $secretEnv = concat $secretEnv $translationSecrets -}}

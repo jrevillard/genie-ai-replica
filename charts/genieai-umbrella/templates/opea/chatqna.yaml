@@ -57,6 +57,8 @@
     (dict "name" "TRANSLATION_SERVICE_PORT" "value" "9031")
     (dict "name" "VLLM_LLM_ENDPOINT" "value" $llmEndpoint)
     (dict "name" "VLLM_TRANSLATION_ENDPOINT" "value" $translationEndpoint)
+    (dict "name" "LLM_MODEL" "value" (.Values.opea.models.llm.modelId | default "ibm-granite/granite-4.1-8b"))
+    (dict "name" "VLLM_TRANSLATION_MODEL_ID" "value" (.Values.opea.translation.modelId | default "google/gemma-3-4b-it"))
     (dict "name" "RERANKING_STRATEGY" "value" (.Values.opea.chatqna.rerankingStrategy | default "slice"))
     (dict "name" "RERANKING_THRESHOLD" "value" (.Values.opea.chatqna.rerankingThreshold | default "0.75" | toString))
     (dict "name" "RERANKER_TOP_N" "value" (.Values.opea.chatqna.rerankerTopN | default "3" | toString))

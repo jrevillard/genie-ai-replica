@@ -1,0 +1,182 @@
+# Kubernetes Workflow
+
+Day-to-day operating loop for the GENIE.AI Helm chart on the dev cluster, and
+the contracts that matter when editing `charts/genieai-umbrella/**` or the
+`genie-ai-deploy` overlay.
+
+## Cluster topology
+
+- **Cluster**: local **minikube** on the developer's laptop.
+- **App namespace**: `genieai` (created by `install.createNamespace: true`
+  on the HelmRelease — pre-install/pre-upgrade hooks must NOT assume it
+  exists).
+- **Flux namespace**: `flux-system` (GitLab Agent + HelmRelease live here).
+- **Chart publishing**: pushes to the `charts/genieai-umbrella/**` branch
+  publish **instantly** via the GitRepository source-ref `branch: main`
+  (HEAD, no SHA pin). HelmRelease `chart.spec.chart` rewrites to that
+  branch HEAD — **no CI wait** between commit and Flux picking it up.
+- **What does NOT trigger an upgrade**: a `valuesFrom` ConfigMap or Secret
+  content change alone. Flux watches chart-source references; values are
+  watched indirectly. Force: `flux reconcile helmrelease genieai -n flux-system`.
+
+## Chart dev cycle (the exact loop)
+
+```bash
+# 1. Edit templates/values
+# 2. Lint (strict → fails on warnings)
+helm lint --strict charts/genieai-umbrella/
+
+# 3. Render locally
+#    BARE `helm template …` gets garbled by the rtk hook (the hook
+#    rewrites `helm` as `rtk helm` and `rtk helm template` doesn't
+#    pass the args through cleanly for SOME subcommands). ALWAYS
+#    prefix with `rtk proxy` to bypass the hook for this command.
+rtk proxy helm template genieai charts/genieai-umbrella/ \
+  -n genieai \
+  -f <(yq -o=json '.values' overlays/jrevillard-laptop/dev/values.yaml | yq -P) \
+  > /tmp/rendered.yaml
+
+# 4. Bump chart version in two places (always together)
+#    - charts/genieai-umbrella/Chart.yaml (version + appVersion if changed)
+#    - genie-ai-deploy overlay: overlays/jrevillard-laptop/dev/helmrelease.yaml
+#      spec.chart.spec.version
+
+# 5. Commit chart + push genie-ai-deploy (overlay version bump). Order:
+#    a) push chart repo (chart publish first, otherwise overlay can pull
+#       a non-existent tag)
+#    b) push overlay with new `version:`
+#    c) trigger reconcile
+flux reconcile helmrelease genieai -n flux-system
+
+# 6. Watch rollout
+kubectl -n genieai rollout status deploy/genieai-umbrella-<service> --timeout=300s
+```
+
+## Render gates
+
+Two gates before any chart push. Skip either, expect silent breakage.
+
+### Gate A — namespace guard (`-n genieai`)
+
+The chart's Namespace resource, hook Jobs, and test pods read
+`.Release.Namespace`. Render without `-n genieai` and the chart renders a
+Namespace into the wrong namespace, then the install fails with cross-namespace
+ownership errors. **Always** render with `-n genieai`.
+
+### Gate B — placeholder-secret guard
+
+`data.keycloak.failOnPlaceholderSecrets` defaults to `true` (prod safety).
+The laptop overlay sets it `false` (overlay values via `values:` inline block
+in `helmrelease.yaml`), feeding real client secrets through `envSecrets` rows
+that reference SealedSecret-decrypted Secrets. A render with no overlay values
+**must** carry `--set data.keycloak.failOnPlaceholderSecrets=false` or the
+render fails loudly on `change-me-*` placeholders.
+
+### Gate C — byte-compare for pure refactors
+
+For chart edits that touch only structure (no value, no `opea.gpu.mode` flip,
+no per-service image tag):
+
+```bash
+# Render both, diff by line; expected: zero non-whitespace diffs
+diff <(rtk proxy helm template genieai charts/genieai-umbrella/ -n genieai \
+       --set opea.gpu.mode=external) \
+     <(rtk proxy helm template genieai charts/genieai-umbrella/ -n genieai \
+       --set opea.gpu.mode=in-cluster)
+```
+
+For intentional changes, classify every line of the diff BEFORE pushing —
+walk it like a PR review. Refactor diffs must round-trip identically across
+both `opea.gpu.mode` values.
+
+## Helm traps (eat these once)
+
+- **`#` comments inside `list(...)` or `dict(...)` actions**: parse error.
+  Comments only work at the YAML-document level or inside plain template
+  flow.
+- **`{{- X -}}` trimming**: the trailing `-}}` strips the newline AFTER
+  the action AND the leading whitespace on the next line. A `{{- X -}}`
+  immediately before `---` glues the YAML separator. Use `{{- X }}` or
+  `{{ X -}}` deliberately when you want one-side trim only.
+- **Sprig `default` / `coalesce`** treat `false` as empty (`default "x" false`
+  returns `"x"`). For boolean knobs, use `kindIs "bool"` guards, not
+  `default`.
+- **`helm template` tolerates what `helm upgrade` rejects**. The render gate
+  is necessary but not sufficient — eyeball doc boundaries (`---`),
+  service-name prefixes (`genieai-umbrella-`), and field-name drift
+  (Kubernetes CamelCase ≠ Helm kebab-case).
+
+## Debugging
+
+```bash
+# Always work in the app namespace
+kubectl -n genieai get pods,svc,deploy
+
+# Pod / Service / Deployment name prefix = chart-name = genieai-umbrella-
+kubectl -n genieai get pods -l app.kubernetes.io/name=<chart>
+
+# Pod env (BEFORE theorizing why a feature is misbehaving)
+kubectl -n genieai exec deploy/genieai-umbrella-backend -- env | grep -E 'KEYCLOAK|OPEA|CORS'
+
+# Port-forward nginx to a browser-friendly port (laptop overlay uses 8080)
+kubectl -n genieai port-forward svc/genieai-umbrella-nginx 8080:80
+
+# Arango port-forward + cluster-secret password (NOT the repo .env value)
+kubectl -n genieai port-forward svc/arangodb-single-single 8529:8529
+ARANGO_PWD=$(kubectl -n genieai get secret arango-root-secret \
+  -o jsonpath='{.data.password}' | base64 -d)
+```
+
+## Secrets model (laptop)
+
+Sealed secrets pinned to Sealed Secrets `~> 2.20.x` (controller `>= 0.40.0`).
+Operator-side bootstrap uses `kubeseal` against the cluster controller cert.
+The laptop overlay's `secrets/` directory carries one SealedSecret per
+cluster Secret — apply-order matters (Keycloak realm import fails if
+`keycloak-admin-credentials` is missing when the post-install kcc Job runs).
+
+Special case — `vllm-api-key` carries **two** keys:
+
+- `VLLM_API_KEY` — the GPU node API key, sent as `Authorization: Bearer`.
+- `HF_TOKEN` — must have access to the **gated** model
+  (`google/gemma-3-4b-it` — translation model). Without it, the translation
+  endpoint returns 403 and the backend silently falls back to the in-process
+  CPU model.
+
+## Live validation set
+
+The end-to-end test that proves the stack works. Per cycle, run all four:
+
+1. `/api/health` returns 200 via `kubectl -n genieai port-forward svc/genieai-umbrella-nginx 8080:80` → `curl localhost:8080/api/health`.
+2. Chat stream in French — UI lang `fr`, send a question, confirm the streamed response arrives in French in real time (validates streaming translation: `STREAMING_TRANSLATION_ENABLED=1`).
+3. Document upload → ClamAV scan → dataprep ingestion — drop a PDF in the doc-repo UI; observe GRAPH_SOURCE collection grow (Arango query).
+4. RAG answer with citations — ask a domain question whose answer is in the just-ingested PDF; confirm the `sources` array on the answer is non-empty.
+
+## Local image iteration (laptop-build, primary use case)
+
+```bash
+eval $(minikube docker-env)
+docker build -t genie-ai-backend:dev components/gov-chat-backend/
+# repeat for every service you change
+
+# Override per-service in overlays/jrevillard-laptop/dev/values.yaml:
+# services:
+#   backend:
+#     image: { repository: genie-ai-backend, tag: dev, pullPolicy: Never }
+# (Always use `pullPolicy: Never` for local builds — otherwise the kubelet
+# resolves the bare name to Docker Hub, which doesn't carry the genie-ai-*
+# images, and the pod ImagePullBackOffs.)
+
+flux reconcile helmrelease genieai -n flux-system
+```
+
+Registry images are validation-only — one-time proof that the GitOps wiring
+(Flux + Agent + SealedSecrets) works end-to-end before swapping to local builds.
+
+## Reference
+
+- Migration ledger + plan map: `docs/charts/migration-status.md`.
+- Sealed secrets research: `docs/charts/sealed-secrets-state-of-art-2026q4.md`.
+- OTel collector migration: `docs/charts/otel-migration.md`.
+- Deploy repo README: `genie-ai-deploy/README.md` (overlay/Flux/SOPS model,
+  per-laptop overlay).

@@ -20,7 +20,10 @@ aliases:
    and model-memory sizing.
 5. [NVIDIA A40 Install Guide](/docs/deploy/a40-install/) — a worked
    end-to-end A40 GPU install walkthrough.
-6. [Deployment Topologies](/docs/deploy/topologies/) — every supported
+6. [Kubernetes Deployment](/docs/deploy/kubernetes/) — Helm chart
+   deployment: cluster prerequisites, install paths (plain helm or the
+   Flux overlay repo), required Secrets, GPU modes, and validation.
+7. [Deployment Topologies](/docs/deploy/topologies/) — every supported
    topology in one place: single-node, multi-node Swarm, CPU-only, with
    /without OPEA, with/without GPU, remote GPU, observability, and
    Let's Encrypt — with a node-label matrix, profile matrix, and

@@ -92,8 +92,12 @@ overlays/<cluster>/<env>/
 ├── kustomization.yaml            # resource list (incl. SealedSecrets)
 ├── gitrepository-chart.yaml      # Flux GitRepository for genie-ai repo
 ├── helmrelease.yaml              # HelmRelease → charts/genieai-umbrella
+├── helmrelease-kube-arangodb.yaml # per-namespace ArangoDB operator HelmRelease
+├── helmrepository-arango.yaml    # chart source for that operator
+├── namespace-genieai.yaml        # the genieai Namespace
 ├── values.yaml                   # ConfigMap values (cluster-shared, public)
-├── secrets.template.yaml         # plaintext source (NOT committed)
+├── secrets.template.yaml         # plaintext source for SOPS encryption (committed)
+├── secrets.sops.yaml             # encrypted output (committed; decrypts via Flux SOPS integration when configured)
 └── secrets/                      # SealedSecret materializations
     ├── arango-root-secret.yaml
     ├── keycloak-admin-credentials.yaml
@@ -103,14 +107,21 @@ overlays/<cluster>/<env>/
 The `HelmRelease` references two values sources — a `ConfigMap` of
 operator-owned values, and a `Secret` of SOPS-decrypted values — and
 materializes them via `valuesFrom`. Inline `values:` carries only the
+Application Secrets consumed by the chart (the table above) are
+materialized in the `genieai` namespace as regular Secrets by the
+SealedSecret controller (one `SealedSecret` per Secret, committed in the
+overlay's `secrets/` directory) and mounted by the chart's pods directly
+— they do not flow through `valuesFrom`.
+
 per-overlay deltas:
 
 ```yaml
 valuesFrom:
   - name: genieai-public        # ConfigMap
     kind: ConfigMap
-  - name: genieai-secrets       # SOPS-decrypted Secret
-    kind: Secret
+  - name: genieai-secrets       # operator-override Secret (SOPS path;
+    kind: Secret                # encrypted-only until the Flux SOPS
+                                # decryption provider is installed)
 values:
   data:
     keycloak:
@@ -139,7 +150,6 @@ the release completes.
 | `kc-grafana-client-secret` | `KC_GRAFANA_CLIENT_SECRET` | Grafana OIDC client |
 | `email-password` | `password` | SMTP — required only when `data.keycloak.verifyEmail=true` |
 | `translation-cache-password` | `password` | Backend translation cache |
-| `huggingface-hub-token` | `HF_TOKEN` | Hugging Face model pulls |
 
 Additional Secrets used in the SealedSecret pattern: `keycloak-db-credentials`,
 `arango-jwt-secret`. A `kc-grafana-client-secret` is required when Grafana

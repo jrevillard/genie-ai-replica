@@ -1,4 +1,10 @@
 {{- if .Values.observability.grafana.enabled }}
+{{- /* Grafana without a datasource is a blank canvas: every dashboard
+renders broken. Fail at render time when no storage component is
+enabled alongside it. */ -}}
+{{- if not (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled) -}}
+{{- fail "observability.grafana.enabled=true requires at least one storage component (logs/metrics/traces enabled) — otherwise Grafana has no datasource" -}}
+{{- end }}
 {{- /*
   Grafana instance + datasources, rendered as grafana-operator CRs.
   Operator (grafana-operator / bitnami) is a cluster bootstrap

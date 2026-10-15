@@ -78,15 +78,28 @@ docker run -d --name "$VL_CONTAINER" --network "$NETWORK" \
   "$VL_IMAGE" -storageDataPath=/vlogs >/dev/null
 
 # --- Collector (production config, read-only) --------------------------------
+# PII_SMOKE_CONFIG overrides the config under test. Default is the compose
+# production config; the Helm chart CI path points it at the collector config
+# rendered from charts/genieai-umbrella (the PII OTTL lives in a chart helper
+# shared by the filelog agent and the OTLP gateway) with the VL exporter host
+# rewritten to this run's VL container.
 # The file_storage/victoriatraces directory MUST exist or the collector exits
 # at startup ("directory must exist") — compose guarantees this via the
 # one-shot otel-collector-init service that mkdir -p's it. Reproduced here.
+CONFIG_FILE="${PII_SMOKE_CONFIG:-${ROOT}/configs/otel/otel-collector-config.yaml}"
+# Chart-rendered configs carry the in-cluster VL Service hostname; the
+# placeholder is rewritten to this run's VL container so the collector
+# can reach it on the docker network.
+if [ "${PII_SMOKE_CONFIG:-}" ] && grep -q "genie-pii-vl-HOSTPLACEHOLDER" "$CONFIG_FILE"; then
+  sed "s/genie-pii-vl-HOSTPLACEHOLDER/${VL_CONTAINER}/g" "$CONFIG_FILE" > "${STATE_DIR}/config.yaml"
+  CONFIG_FILE="${STATE_DIR}/config.yaml"
+fi
 docker run -d --name "$COLLECTOR_CONTAINER" --network "$NETWORK" \
   -e VICTORIALOGS_URL="http://${VL_CONTAINER}:9428" \
   -e VICTORIALOGS_URL_HOST="${VL_CONTAINER}" \
   -e VICTORIALOGS_TENANT_ID_ACCOUNT_ID=0 \
   -e VICTORIALOGS_TENANT_ID_PROJECT_ID=0 \
-  -v "${ROOT}/configs/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro" \
+  -v "${CONFIG_FILE}:/etc/otelcol-contrib/config.yaml:ro" \
   -v "${STATE_DIR}/victoriatraces:/var/lib/otelcol/file_storage/victoriatraces" \
   "$COLLECTOR_IMAGE" --config=/etc/otelcol-contrib/config.yaml >/dev/null
 

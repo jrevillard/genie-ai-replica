@@ -48,13 +48,33 @@ const createSchema = Joi.object({
 // the same `frontmatter` field for symmetry so the wizard's Curate
 // step (which edits the YAML) and the lifecycle `publish` hook (which
 // reads the gate) share one shape.
+// Tag ceilings — SINGLE SOURCE OF TRUTH.
+//
+// These are enforced on the WRITE path by frontmatterSchema below. The
+// frontmatter SUGGESTER must produce the same bounds, or it emits payloads the
+// API rejects: measured live on Bali, the suggester returned 22 entities against
+// a ceiling of 20, and because Joi rejects the whole request body the curator
+// lost the 6 topics and all 20 accepted entities as well — not just the two over
+// the limit. Keep the two sides reading these constants rather than repeating
+// the numbers; a ceiling enforced on one side only is what produced that bug.
+const TAG_LIMITS = {
+  topic: 8,
+  entity: 20,
+  forbidden: 24,
+  keyword: 20,
+  tagLength: 64,
+  summaryLength: 1024
+};
+
+const tagString = () => Joi.string().min(1).max(TAG_LIMITS.tagLength);
+
 const frontmatterSchema = Joi.object({
-  topic: Joi.array().items(Joi.string().min(1).max(64)).min(0).max(8),
-  entity: Joi.array().items(Joi.string().min(1).max(64)).max(20),
+  topic: Joi.array().items(tagString()).min(0).max(TAG_LIMITS.topic),
+  entity: Joi.array().items(tagString()).max(TAG_LIMITS.entity),
   scope: Joi.string().allow('').max(64),
-  forbidden: Joi.array().items(Joi.string().min(1).max(64)).min(0).max(24),
-  summary: Joi.string().allow('').max(1024),
-  keyword: Joi.array().items(Joi.string().min(1).max(64)).max(20),
+  forbidden: Joi.array().items(tagString()).min(0).max(TAG_LIMITS.forbidden),
+  summary: Joi.string().allow('').max(TAG_LIMITS.summaryLength),
+  keyword: Joi.array().items(tagString()).max(TAG_LIMITS.keyword),
   // Per-row approved_at (Story 1.6 carry-over, Story 1.7 keeps it for
   // the partial-approval option). The publish gate checks every
   // approved_at is set.
@@ -119,4 +139,4 @@ const piiAckSchema = Joi.object({
   acknowledge: Joi.boolean().required()
 });
 
-module.exports = { createSchema, updateSchema, cloneSchema, aclSchema, sourceSchema, lifecycleSchema, piiAckSchema };
+module.exports = { createSchema, updateSchema, cloneSchema, aclSchema, sourceSchema, lifecycleSchema, piiAckSchema, TAG_LIMITS };

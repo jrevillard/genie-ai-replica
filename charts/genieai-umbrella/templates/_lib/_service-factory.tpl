@@ -80,7 +80,10 @@ spec:
       containers:
         - name: {{ $objectName }}
           image: {{- if $ctx.Values.global.imageRegistry }} {{ $ctx.Values.global.imageRegistry }}/{{ $svc.image.repository }}{{ else }} {{ $svc.image.repository }}{{ end }}:{{ $svc.image.tag | default "latest" }}
-          imagePullPolicy: {{ $ctx.Values.global.imagePullPolicy | default "IfNotPresent" }}
+          # Per-service pullPolicy wins (mutable branch tags need Always —
+          # IfNotPresent keeps serving the digest cached at first deploy);
+          # global pullPolicy follows; IfNotPresent otherwise.
+          imagePullPolicy: {{ $svc.image.pullPolicy | default $ctx.Values.global.imagePullPolicy | default "IfNotPresent" }}
           {{- with $svc.command }}
           command:
             {{- toYaml . | nindent 12 }}

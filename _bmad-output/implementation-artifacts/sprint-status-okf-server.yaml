@@ -50,13 +50,36 @@ development_status:
   #   WAVE 4 — polish: !1066, !1068.
   #   NEEDS A DECISION: !1065 was filed with a WRONG mechanism (BUG-12 proved pii_hit_count
   #          and broken_link_count are hardcoded literals in the AQL, not a stale counter).
-  #          Close-as-superseded or amend, or whoever picks it up implements the wrong fix.
+  #          CLOSED as fixed in c080288 — see below; no separate decision needed.
   #   OPEN QUESTION, no owner: 5 of 89 Bali split families have a stored part 2 exactly ONE
   #          character longer than the shipped splitter produces from either extraction
   #          variant; 74/89 are byte-exact. The --- horizontal-rule hypothesis was TESTED
   #          and is dead (zero across all 999 files). Do NOT file as a defect until the
   #          mechanism is known — instrument the body handed to the splitter.
   # === END NEXT CAB ===============================================================
+  # 2026-10-15 BATCH A PROGRESS — bug-clearing pass before the Bali re-run:
+  #   DONE  !1065 / BUG-12 (c080288) — pii_hit_count was a hardcoded literal and reported 0
+  #        on Bali where 1113/1113 concepts carry findings; now COMPUTED as findings-minus-
+  #        resolutions (pii_state reads clean before AND after accept, so it cannot express
+  #        it). broken_link_count REMOVED — the product defines no broken-link concept
+  #        (validation types are conformance/orphan/near_duplicate/citation) and nothing
+  #        read the field. The old test asserted 0 against a MOCKED query, so it could
+  #        never catch this; replaced with assertions on the query text.
+  #   DONE  !1082 / BUG-15 (5fd5adb) — suggester returned 22 entities against a 20 ceiling;
+  #        Joi rejects the whole body so every tag was lost. TAG_LIMITS is now an exported
+  #        single source of truth consumed by BOTH the validator and the suggester, with
+  #        drops logged and returned in over_ceiling rather than silently truncated.
+  #   CLOSED !1070 as NOT-A-BUG — repo.graph_name is OKF_<uuid> and no such collection exists,
+  #        but the serving path deliberately derives names via workingGraphName(repo)
+  #        (retrieval-config-service.js:183, documented in its module header). Design is
+  #        correct; the field is a naming trap, worth renaming separately.
+  #   DEMOTED !1079 to severity::low — arangojs THROWS errorNum 1203 on an unquoted
+  #        hyphenated collection, so production fails loud. The silent-empty is a property
+  #        of raw POST /_api/cursor (HTTP 200, error:true, no result field) — i.e. my own
+  #        diagnostic scripts. It was ranked Wave 0 on an untested premise; a one-minute
+  #        "does the client throw or return empty" check would have answered it.
+  #   STANDING RULE: before ranking a finding as silent-wrong, verify the client.
+  #   okf-server 1202/1202 across 48 suites, three consecutive clean runs.
   epic-1: in-progress        # [RECONCILED 2026-10-07] 1-0, 6-1b, 1-3, 1-6 done; 1-0b unit leg, 1-2 carrier pin, 1-7 ungated legs in-progress; 1-1, 1-4, 1-5 status pending verification (1-1 BFF wire-up likely merged given the spec exists and the base commit is 1.3; needs GitLab MR lookup to confirm). Story 1.6 (frontmatter routing) merged 2026-10-07 12:32 UTC via !513 → commit b4222243b on feat/okf-server.
   1-1-retriever-multigraph-fanout-rrf: review  # [RECONCILED 2026-10-06] retriever-side fan-out scaffolding shipped via 1-0 commit 18b34cd13 (per course-correction bundling); 1-1 spec narrowed to BFF wire-up (the actual e2e gap that unblocks OKF queries). Spec at _bmad-output/implementation-artifacts/spec-1-1-retriever-multigraph-fanout-rrf.md (ready-for-dev 2026-10-06, 4372 tokens — user override of 1600 ceiling). Per course-correction §3 build order 1-1 was supposed to precede 1-2, but the BFF wire-up is the actual missing piece (chatqna forwarder is shipped at chatqna.py:1020, retriever carrier is shipped at retriever.py:927-933, BFF never passes the kwarg). [2026-10-06 build] implemented + reviewed (3-layer review, 9 patch groups fixed, 0 loopbacks) on feat/okf-1-1-bff-wireup; backend 1800/1809 (9 pre-existing local-env), OPEA covering suites 451/451, okf-server 747/747; live .102 validation + deploy pending (Path-2 venue).
   1-2-chatqna-forwards-graph-set: in-progress       # [RECONCILED 2026-10-06] AC1 carrier pin landed (596a11fcd + 60b9355ce — fan-out engages on ≥1 graph); chatqna forwarder per its own file: "Implementation follows Wave R5"; no behavioral change to single-graph path

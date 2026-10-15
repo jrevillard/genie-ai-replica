@@ -723,6 +723,58 @@ multi-key form — `COLLECT cid = d.concept_id, ci = d.chunk_index WITH COUNT IN
 
 ---
 
+## BUG-15 — The tag suggester returns more than the API accepts; every tag is lost · **!1082**
+
+**Status: FIXED (commit `5fd5adb`)** · Severity: high (curation blocked, silent collateral loss) · Found 2026-10-15, Bali tier 3, wizard step 5 (Curate), local build · **!1082**
+
+**Symptom.** *Error saving the tags.* From the log:
+
+```
+frontmatter.suggest.done {"entity":22,"topic":6,"forbidden":6,"forbidden_rejected":0}
+PATCH /api/okf/repos/747b185f-… → Request validation failed
+    at validate (repository-controller.js:79:20)
+    at updateRepo (repository-controller.js:618:19)
+```
+
+**Root cause — the write path is right, the producer ignored it.**
+`frontmatter-service.js:856-862` assembled `topic` and `entity` with `uniqTags()`
+and **no count ceiling**, while `summary` on the very next line got
+`.slice(0, 512)`. The validator caps `topic` 8 / `entity` 20 / `forbidden` 24 /
+`keyword` 20, so the suggester could and did emit arrays the write path rejects.
+Reproduced against the shipped schema with no ambiguity:
+
+```
+entity 20 -> accepted
+entity 21 -> REJECTED: "frontmatter.entity" must contain less than or equal to 20 items
+topic   9 -> REJECTED: "frontmatter.topic" must contain less than or equal to 8 items
+65-char  -> REJECTED: length must be less than or equal to 64 characters
+```
+
+**Why it is worse than two tags too many.** Joi rejects the **whole request
+body**, so accepting a 22-entity suggestion discards the 6 topics and all 20
+accepted entities as well. The curator sees a generic failure with no field name.
+
+**The API is correct and unchanged** — `error-handler.js:33` returns
+`400 VALIDATION_ERROR` with `details: ['"frontmatter.entity" must contain less
+than or equal to 20 items']`. The defect is entirely produce-side.
+
+**Fix.** `TAG_LIMITS` is now an exported single source of truth in
+`validators/repository-validator.js`, with `frontmatterSchema` built from it;
+`suggestTags` imports the same constants rather than restating them. Truncation
+is never silent — drops are logged as `frontmatter.suggest.over_ceiling` and
+returned in `over_ceiling`, mirroring the existing `forbidden_rejected` contract.
+
+**Pattern.** Third ceiling in this area enforced on only one side, after the
+`type: index` enum drift (BUG-11) and `broken_link_count` (BUG-12). The fix is
+one shared constant, not a second number that can drift.
+
+**Verification.** Seven new cases asserting capped output validates at every input
+size 0–100 across all four fields, over-length strings filtered, the exact Bali
+shape becoming a writable 20 with topics intact, and `TAG_LIMITS` pinned.
+okf-server **1202/1202**, three consecutive clean runs.
+
+---
+
 ## Run log — tier 0 (Alphabet Company Information)
 
 Repo `42b2f2df-880c-4ed5-9208-7b36f05a8029`, domain "Alphabet Company",

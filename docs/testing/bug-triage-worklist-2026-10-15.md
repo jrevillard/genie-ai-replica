@@ -58,19 +58,15 @@ collapse into the !1079 footgun above.
 
 Loud failures that stop a curator doing their job. Ordered by how much they block.
 
-### 1.0 · Suggester returns more tags than the API accepts — !1082
+### 1.0 · ~~Suggester returns more tags than the API accepts~~ — !1082 — **FIXED** `5fd5adb`
 
-**Blocks curation outright.** Found live on Bali, 2026-10-15.
-`frontmatter.suggest` returned 22 entities; the validator caps entity at 20, so
-the PATCH 400s — and because Joi rejects the whole body, **every** tag is lost,
-not just the two over the ceiling. `summary` is truncated on the next line;
-`topic`/`entity` are not (`frontmatter-service.js:856-862`). The API is correct
-(`error-handler.js:33` returns the field detail); the defect is produce-side.
-
-Third ceiling in this area enforced on only one side — after `type: index`
-(BUG-11) and `entity`. Fix asks for one exported constant consumed by both
-validator and suggester, dropped tags **logged not silently truncated**, and a
-property test asserting `updateSchema.validate(suggestion)` never errors.
+**Was blocking curation outright.** `frontmatter.suggest` returned 22 entities
+against a ceiling of 20, so the PATCH 400'd — and because Joi rejects the whole
+body, every tag was lost, not just the two over the ceiling. Fixed by making
+`TAG_LIMITS` an exported single source of truth consumed by both the validator
+and the suggester, with drops logged and returned in `over_ceiling` rather than
+silently truncated. Third ceiling in this area enforced on one side only, after
+`type: index` (BUG-11) and `broken_link_count` (BUG-12).
 
 ### 1.1 · Frontmatter panel renders invisible in dark mode — !1069
 
@@ -215,9 +211,9 @@ guess. **Do not file as a defect until the mechanism is known.**
 | # | Item | State |
 |---|---|---|
 | 1 | **!1065 / BUG-12** — `pii_hit_count` computed, `broken_link_count` removed | **DONE** `c080288` |
-| 2 | **!1082** — suggester returns 22 entities against a ceiling of 20; accept 400s and every tag is lost | blocking Bali now |
-| 3 | **!1069** — frontmatter renders invisible; data intact but invisible, so curators re-type it | active curation surface |
-| 4 | **!1070** — re-verify first; may be the !1079 footgun, not a separate defect | needs a 10-minute check |
+| 2 | **!1082** — suggester returns 22 entities against a ceiling of 20; accept 400s and every tag is lost | **DONE** `5fd5adb` |
+| 3 | **!1070** — re-verify first; may be the !1079 footgun, not a separate defect | **CLOSED — not a bug.** `repo.graph_name` is `OKF_<uuid>` and no such collection exists, but the serving path deliberately derives names via `workingGraphName(repo)` (`retrieval-config-service.js:183`, documented in its module header). Design is correct; the field is a naming trap |
+| 4 | **!1069** — frontmatter renders invisible; data intact but invisible, so curators re-type it | next |
 | 5 | **!1077** → **!1075** → **!1067** — wizard cluster, ordered by how much each blocks | |
 | 6 | **!1072** — 1202 logged at error on a clean drain; trains everyone to ignore errors | |
 | 7 | **!1073** — 28 env vars never reach a container; make config trustworthy before Wave 3 | |

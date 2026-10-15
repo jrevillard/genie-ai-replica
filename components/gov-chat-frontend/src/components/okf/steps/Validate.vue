@@ -83,7 +83,11 @@
             {{ issue.remedy }}
           </p>
 
-          <!-- ORPHAN remedy: accept/reject LLM link suggestions. -->
+          <!-- ORPHAN remedy: the ENTRY POINT only. The proposal list itself
+            renders at panel level (below the issue list) — see the lifetime
+            note there. It used to be nested in here, which meant accepting
+            the first proposal cured the orphan, unmounted this row, and took
+            every remaining proposal with it. !1075 / Story 10.8. -->
           <div v-if="issue.type === 'orphan' && !frozenAt" class="okf-step-validate__issue-actions">
             <DsButton variant="secondary" small :disabled="suggestBusy" @click="onSuggestLinks(issue.concept_id)">
               {{
@@ -92,32 +96,6 @@
                   : translate('okf.validation.action.suggestLinks', 'Suggest links')
               }}
             </DsButton>
-            <div v-if="suggestFor === issue.concept_id && suggestion" class="okf-step-validate__suggestions">
-              <p v-if="!suggestion.proposals || suggestion.proposals.length === 0" class="okf-step-validate__sug-empty">
-                {{
-                  suggestion.error ||
-                  translate('okf.validation.suggest.empty', 'No suggestions — link it manually in the editor.')
-                }}
-              </p>
-              <ul v-else class="okf-step-validate__sug-list">
-                <li v-for="p in suggestion.proposals" :key="p.to_concept_id" class="okf-step-validate__sug-row">
-                  <span class="okf-step-validate__sug-target">
-                    {{ p.label }} <span class="okf-step-validate__sug-id">→ {{ p.to_concept_id }}</span>
-                  </span>
-                  <DsButton v-if="p.accepted" variant="ghost" small disabled>
-                    {{ translate('okf.validation.actionDone.done', 'Done') }}
-                  </DsButton>
-                  <template v-else>
-                    <DsButton variant="primary" small :disabled="acceptBusy" @click="onAcceptLink(issue.concept_id, p)">
-                      {{ translate('okf.validation.action.accept', 'Accept') }}
-                    </DsButton>
-                    <DsButton variant="ghost" small @click="p.dismissed = true">
-                      {{ translate('okf.validation.action.dismiss', 'Dismiss') }}
-                    </DsButton>
-                  </template>
-                </li>
-              </ul>
-            </div>
           </div>
 
           <!-- NEAR-DUPLICATE remedy: keep one, delete the rest — with the
@@ -165,12 +143,14 @@
             </ul>
           </div>
 
-          <!-- CITATION remedy: one click creates/wires the Sources page. -->
+          <!-- CITATION remedy: one click creates/wires the Sources page. The
+            RESULT note renders at panel level for the same lifetime reason as
+            the suggestion list: wiring clears the citation issue, so a note
+            nested in here would vanish the moment it had something to say. -->
           <div v-if="issue.type === 'citation' && !frozenAt" class="okf-step-validate__issue-actions">
-            <p v-if="wireNote" class="okf-step-validate__wire-note">{{ wireNote }}</p>
             <DsButton variant="primary" small :disabled="wireBusy" @click="onWireCitations(issue)">
               {{
-                wireBusy
+                wireBusy && wireFor === wireKey(issue)
                   ? translate('okf.validation.action.working', 'Working…')
                   : issue.hub_concept_id
                     ? translate('okf.validation.action.wireExisting', 'Link {n} page(s) to "{hub}"')
@@ -185,6 +165,53 @@
           </div>
         </li>
       </ul>
+
+      <!-- REMEDY PANELS AT PANEL LEVEL (!1075 / Story 10.8).
+           These live OUTSIDE the issue v-for on purpose. Every remedy here
+           cures the issue it belongs to, and each one calls refresh() — so a
+           panel nested inside its issue row is destroyed by its own success,
+           one interaction before the curator can see the result. The accepted
+           proposal's "Done" state (written at :106 in the old nesting) could
+           never be seen for exactly that reason. Their lifetime must depend on
+           the panel's own key (suggestFor / wireFor), never on the row's
+           existence. -->
+
+      <div v-if="suggestFor && suggestion" class="okf-step-validate__suggestions">
+        <!-- Title reuses the existing action key (no new i18n key: the 14 locale
+             files must stay deep-key-identical). The page is identified by its
+             concept id, which is an identifier rather than prose, so it is
+             rendered as a code chip and not translated. -->
+        <p class="okf-step-validate__suggestions-title">
+          {{ translate('okf.validation.action.suggestLinks', 'Suggest links') }}
+          <code class="okf-step-validate__concept-chip">{{ suggestFor }}</code>
+        </p>
+        <p v-if="!suggestion.proposals || suggestion.proposals.length === 0" class="okf-step-validate__sug-empty">
+          {{
+            suggestion.error ||
+            translate('okf.validation.suggest.empty', 'No suggestions — link it manually in the editor.')
+          }}
+        </p>
+        <ul v-else class="okf-step-validate__sug-list">
+          <li v-for="p in suggestion.proposals" :key="p.to_concept_id" class="okf-step-validate__sug-row">
+            <span class="okf-step-validate__sug-target">
+              {{ p.label }} <span class="okf-step-validate__sug-id">→ {{ p.to_concept_id }}</span>
+            </span>
+            <DsButton v-if="p.accepted" variant="ghost" small disabled>
+              {{ translate('okf.validation.actionDone.done', 'Done') }}
+            </DsButton>
+            <template v-else>
+              <DsButton variant="primary" small :disabled="acceptBusy" @click="onAcceptLink(p)">
+                {{ translate('okf.validation.action.accept', 'Accept') }}
+              </DsButton>
+              <DsButton variant="ghost" small @click="p.dismissed = true">
+                {{ translate('okf.validation.action.dismiss', 'Dismiss') }}
+              </DsButton>
+            </template>
+          </li>
+        </ul>
+      </div>
+
+      <p v-if="wireNote" class="okf-step-validate__wire-note">{{ wireNote }}</p>
     </div>
 
     <!-- WHOLE-CORPUS TOPIC LINKS (Story 1-8g-p): the SAME generic pass the
@@ -405,6 +432,11 @@ export default {
       // action states
       wireBusy: false,
       wireNote: '',
+      // Which citation issue the busy flag and the note belong to (!1075). The
+      // note used to live inside every citation row, so wiring one issue
+      // printed its result on ALL of them — and wiring clears the issue, so the
+      // row carrying the message unmounted immediately after.
+      wireFor: null,
       suggestFor: null,
       suggestBusy: false,
       suggestion: null,
@@ -612,8 +644,12 @@ export default {
         error: (res && res.error) || 'unavailable'
       };
     },
-    async onAcceptLink(conceptId, proposal) {
+    // Accept one proposal. Reads suggestFor rather than taking a conceptId, so the
+    // target page can never disagree with the panel that rendered the button.
+    async onAcceptLink(proposal) {
       if (this.acceptBusy) return;
+      const conceptId = this.suggestFor;
+      if (!conceptId) return;
       this.acceptBusy = true;
       const res = await this.$store.dispatch('okf/acceptLink', {
         repoId: this.repoId,
@@ -624,7 +660,11 @@ export default {
       this.acceptBusy = false;
       if (res && res.ok) {
         proposal.accepted = true;
-        this.refresh(); // the orphan issue clears once the page is linked
+        // The orphan issue clears once the page is linked, so the report is
+        // refetched — but the proposal panel is keyed on suggestFor and lives
+        // OUTSIDE the issue list, so the remaining proposals and this one's
+        // "Done" state both survive. That is the !1075 fix.
+        this.refresh();
       }
     },
     // NEAR-DUPLICATE remedy: delete one member (the steward keeps the rest).
@@ -647,6 +687,14 @@ export default {
     // Stable identity of a near-duplicate group (title strings can collide).
     dupKey(issue) {
       return (issue.members || []).join('|');
+    },
+    // Stable identity of a citation issue (!1075). The server emits exactly ONE
+    // citation issue per report and it is repo-level — `concept_id: null`
+    // (validation-service.js:220-232) — so the hub is the only thing that can
+    // vary. Keyed on the hub so this stays correct if the server ever splits
+    // the issue per hub.
+    wireKey(issue) {
+      return `citation:${issue.hub_concept_id || 'none'}`;
     },
     // #1039 near-duplicate preview: fetch each member's body before the
     // steward decides what to delete. Capped at 5 members / PREVIEW_CHARS.
@@ -682,6 +730,7 @@ export default {
       if (this.wireBusy) return;
       this.wireBusy = true;
       this.wireNote = '';
+      this.wireFor = this.wireKey(issue);
       const res = await this.$store.dispatch('okf/wireCitations', {
         repoId: this.repoId,
         hubConceptId: issue.hub_concept_id || undefined
@@ -1046,6 +1095,28 @@ export default {
 .okf-step-validate__suggestions,
 .okf-step-validate__dup-list {
   width: 100%;
+}
+/* The proposal panel is no longer nested inside an issue row (!1075), so it
+   reads as its own block with a heading, the same way the whole-corpus
+   topic-link remedy below does. */
+.okf-step-validate__suggestions {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.okf-step-validate__suggestions-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
 }
 .okf-step-validate__sug-empty {
   margin: 0;

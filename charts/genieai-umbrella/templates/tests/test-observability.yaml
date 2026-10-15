@@ -1,0 +1,82 @@
+{{- /*
+  Observability-tier reachability smoke test. Probes the
+  per-component operator-managed storage backends' /health endpoints:
+  VLSingle :9428, VMSingle :8428, VTSingle :10428. Each check is
+  gated on the corresponding component flag so the same template
+  works for the logs-only baseline install (default) and the
+  all-on overlay.
+
+  Skipped: Grafana /admin /health, collector-gateway 13133 (the
+  collector self-telemetry path is exercised by the live PII smoke
+  on the deployed cluster; a TCP-probe in the test pod adds noise
+  without catching what the live smoke doesn't already catch).
+*/}}
+{{- if or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-test-observability
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: t
+      image: "{{ .Values.global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+        capabilities:
+          drop:
+            - ALL
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          failures=0
+          # Single check helper: <name> <host> <port> <path> <expected>.
+          check() {
+            host=$1
+            port=$2
+            path=$3
+            expected=$4
+            code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "http://${host}:${port}${path}" 2>/dev/null || echo 000)
+            if [ "$code" = "$expected" ]; then
+              echo "PASS: ${host}:${port}${path} -> ${code}"
+            else
+              echo "FAIL: ${host}:${port}${path} expected ${expected}, got ${code}"
+              failures=$((failures+1))
+            fi
+          }
+          {{- /* Each check hits the operator-managed Service — the
+                 stable in-cluster contract. VL/VM/VT each expose
+                 /health on their default port; the response is a
+                 bare 200 OK on a healthy instance. */ -}}
+          {{- if .Values.observability.logs.enabled }}
+          check victorialogs 9428 /health 200
+          {{- end }}
+          {{- if .Values.observability.metrics.enabled }}
+          check vmetrics 8428 /health 200
+          {{- end }}
+          {{- if .Values.observability.traces.enabled }}
+          check vtraces 10428 /health 200
+          {{- end }}
+          if [ "$failures" -gt 0 ]; then
+            echo "FAIL: $failures observability backend(s) unreachable"
+            exit 1
+          fi
+          echo "PASS: observability backends reachable"
+{{- end }}

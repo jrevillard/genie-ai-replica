@@ -1,0 +1,128 @@
+{{/*
+  vLLM translation model. Renders only when both opea.enabled is true
+  and opea.gpu.mode is "in-cluster" — the external mode (the laptop
+  default) keeps the chart pointing the orchestrators at a remote GPU
+  node and emits no model pods at all.
+
+  Compose parity: docker-compose.yaml gpu-models profile, service
+  `vllm-translation-guardrail` (lines ~868-928). The image, command
+  flags, env, volumes and healthcheck mirror the compose service
+  verbatim. The translation model id is exposed through
+  .Values.opea.translation.modelId (default google/gemma-3-4b-it,
+  matching compose). Container/listen port 9031.
+
+  Image is pulled from docker.io unconditionally — same rationale as
+  templates/opea/models/vllm.yaml and the kcc/ArangoDB exception in
+  templates/data/keycloak-convergence-job.yaml.
+
+  Model-cache volume is emptyDir — see templates/opea/models/vllm.yaml
+  for the broader rationale on PVC-as-operator-concern.
+*/}}
+{{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") -}}
+{{- $ns := .Values.namespace -}}
+{{- $modelId := .Values.opea.translation.modelId -}}
+{{- $res := .Values.opea.models.resources | default (dict "requests" (dict "nvidia.com/gpu" 1) "limits" (dict "nvidia.com/gpu" 1)) -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-translation
+  namespace: {{ $ns }}
+  labels:
+    app: vllm-translation
+    app.kubernetes.io/name: vllm-translation
+    app.kubernetes.io/component: vllm-translation
+    app.kubernetes.io/part-of: genieai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-translation
+  template:
+    metadata:
+      labels:
+        app: vllm-translation
+    spec:
+      nodeSelector:
+        gpu: "true"
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: vllm-translation
+          image: docker.io/vllm/vllm-openai:v0.10.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --model
+            - {{ $modelId | quote }}
+            - --gpu_memory_utilization
+            - "0.3"
+            - --served-model-name
+            - {{ $modelId | quote }}
+            - --max_model_len
+            - "2048"
+            - --dtype=auto
+            - --port
+            - "9031"
+            - --no-enable-chunked-prefill
+            - --max-num-seqs
+            - "16"
+            - --chat-template-content-format
+            - openai
+          ports:
+            - name: http
+              containerPort: 9031
+          env:
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vllm-api-key
+                  key: HF_TOKEN
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: all
+          resources:
+            {{- toYaml $res | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+          readinessProbe:
+            tcpSocket:
+              port: 9031
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9031
+            initialDelaySeconds: 120
+            periodSeconds: 30
+          startupProbe:
+            tcpSocket:
+              port: 9031
+            failureThreshold: 30
+            periodSeconds: 10
+      volumes:
+        - name: hf-cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-translation
+  namespace: {{ $ns }}
+  labels:
+    app: vllm-translation
+spec:
+  ports:
+    - name: http
+      port: 9031
+      targetPort: 9031
+  selector:
+    app: vllm-translation
+{{- end -}}

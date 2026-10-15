@@ -82,7 +82,7 @@
     (dict "name" "KEYCLOAK_URL" "value" (printf "%s://%s/auth" (.Values.ingress.scheme | default "https") (.Values.ingress.host | default "genieai.local")))
     (dict "name" "KC_REALM" "value" (.Values.opea.chatqna.kcRealm | default "genie"))
     (dict "name" "KEYCLOAK_INTERNAL_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
-(dict "name" "GPU_NODE_HOST" "value" (regexReplaceAll "^([a-z]+://)?([^:/]+).*" (.Values.opea.gpu.nodeHost | default "") "$2"))
+(dict "name" "GPU_NODE_HOST" "value" (regexReplaceAll "^([a-z]+://)?(\\[[^\\]]+\\]|[^:/]+).*" (.Values.opea.gpu.nodeHost | default "") "$2"))
     (dict "name" "KC_CLIENT_ID" "value" (.Values.opea.chatqna.kcClientId | default "genie-app"))
     (dict "name" "CHATQNA_ENFORCE_ABSTENTION" "value" (.Values.opea.chatqna.chatqnaEnforceAbstention | default "true" | toString))
     (dict "name" "GUARDRAIL_SERVICE_HOST_IP" "value" "guardrail")

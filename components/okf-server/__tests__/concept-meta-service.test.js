@@ -198,7 +198,6 @@ describe('concept-meta-service.upsertConceptMeta (G9)', () => {
           conformance_issue_count: 1,
           stale_concept_count: 1,
           has_reserved_index: false,
-          broken_link_count: 0,
           pii_hit_count: 0
         }
       ]
@@ -211,12 +210,15 @@ describe('concept-meta-service.upsertConceptMeta (G9)', () => {
     expect(arg.query).toContain('FOR d IN @value0');
     expect(arg.query).toContain('conformance_issue_count');
     expect(arg.bindVars.value1).toBe('r1');
+    // broken_link_count removed (no such concept in the product); pii_hit_count
+    // is computed from findings minus resolutions, never a literal zero.
+    expect(arg.query).not.toContain('broken_link_count');
+    expect(arg.query).toContain('pii_hit_count');
     expect(m).toEqual({
       concept_count: 2,
       conformance_issue_count: 1,
       stale_concept_count: 1,
       has_reserved_index: false,
-      broken_link_count: 0,
       pii_hit_count: 0
     });
   });

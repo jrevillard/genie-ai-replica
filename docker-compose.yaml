@@ -771,6 +771,56 @@ services:
       # lanes in ingest-service. Default 1 = historical single-flight; raise
       # together with PII_WEB_CONCURRENCY (the scans dominate lane time).
       - OKF_IMPORT_CONCURRENCY=${OKF_IMPORT_CONCURRENCY:-1}
+      # ================================================================
+      # !1073 — the knobs `env` documents as operator-facing but never
+      # actually reached a container. There is NO env_file: anywhere in this
+      # file, so a variable absent from a service's environment: block is
+      # unreachable by definition: setting it in .env did nothing, silently.
+      # All 26 below are read by okf-server (grep-verified against the code,
+      # not inferred from the name). Defaults are the SERVICE's own defaults,
+      # repeated here so `env` and compose cannot disagree.
+      #
+      # The 27th and 28th documented OKF_* vars — OKF_SEARCH_STYLE and
+      # OKF_FRONTMATTER_TAG_BATCH_SIZE — are deliberately NOT wired: nothing
+      # in the codebase reads either (spec 1-6 assigns OKF_SEARCH_STYLE to the
+      # retriever, but the overlay never reads it). Wiring them would put a
+      # live-looking variable in the container that changes nothing, which is
+      # worse than the current honest absence. Filed as unimplemented.
+      # ================================================================
+      # --- ingest-worker timing (workers/ingestWorker.js) ---
+      - OKF_INGEST_WORKER_JOB_POLL_MS=${OKF_INGEST_WORKER_JOB_POLL_MS:-5000}
+      - OKF_INGEST_WORKER_JOB_TIMEOUT_MS=${OKF_INGEST_WORKER_JOB_TIMEOUT_MS:-1800000}
+      - OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS=${OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS:-1800000}
+      - OKF_INGEST_WORKER_SWEEP_GRACE_MS=${OKF_INGEST_WORKER_SWEEP_GRACE_MS:-3600000}
+      # --- size-adaptive job windows (spec #1020 §5.9) ---
+      - OKF_JOB_WINDOW_ADAPTIVE=${OKF_JOB_WINDOW_ADAPTIVE:-false}
+      - OKF_JOB_WINDOW_FLOOR_MS=${OKF_JOB_WINDOW_FLOOR_MS:-1800000}
+      - OKF_JOB_WINDOW_MAX_MS=${OKF_JOB_WINDOW_MAX_MS:-21600000}
+      - OKF_JOB_WINDOW_SEC_PER_CHUNK_MS=${OKF_JOB_WINDOW_SEC_PER_CHUNK_MS:-5000}
+      # --- claim / scheduling (fair claim, spec #1020 §5.2) ---
+      - OKF_CLAIM_STRATEGY=${OKF_CLAIM_STRATEGY:-fifo}
+      - OKF_REPO_INGEST_CAP=${OKF_REPO_INGEST_CAP:-0}
+      # --- 5xx kick backoff (spec #1020 §5.5) ---
+      - OKF_KICK_BACKOFF_BASE_MS=${OKF_KICK_BACKOFF_BASE_MS:-0}
+      - OKF_KICK_BACKOFF_MAX_MS=${OKF_KICK_BACKOFF_MAX_MS:-900000}
+      # --- import caps (ingest-service / converters) ---
+      - OKF_INGEST_MAX_CONCEPTS=${OKF_INGEST_MAX_CONCEPTS:-200}
+      - OKF_INGEST_MAX_ZIP_BYTES=${OKF_INGEST_MAX_ZIP_BYTES:-26214400}
+      - OKF_MAX_CONCURRENT_CONVERSIONS=${OKF_MAX_CONCURRENT_CONVERSIONS:-2}
+      - OKF_XLSX_ROWS_PER_CONCEPT=${OKF_XLSX_ROWS_PER_CONCEPT:-200}
+      - OKF_CSV_ROWS_PER_CONCEPT=${OKF_CSV_ROWS_PER_CONCEPT:-200}
+      # --- retrieval routing (config.js) ---
+      - OKF_RETRIEVAL_MODE=${OKF_RETRIEVAL_MODE:-legacy}
+      - OKF_RETRIEVAL_MAX_FANOUT_GRAPHS=${OKF_RETRIEVAL_MAX_FANOUT_GRAPHS:-5}
+      - OKF_RETRIEVAL_SPINE_MAX_HOPS=${OKF_RETRIEVAL_SPINE_MAX_HOPS:-2}
+      - OKF_RETRIEVAL_EXTRACTED_HOP_CAP=${OKF_RETRIEVAL_EXTRACTED_HOP_CAP:-1}
+      - OKF_RETRIEVAL_CANDIDATE_CAP_PER_GRAPH=${OKF_RETRIEVAL_CANDIDATE_CAP_PER_GRAPH:-50}
+      - OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL=${OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL:-200}
+      # --- frontmatter (frontmatter-service / retrieval-config-service) ---
+      - OKF_FRONTMATTER_VALIDATE_BATCH_SIZE=${OKF_FRONTMATTER_VALIDATE_BATCH_SIZE:-4}
+      - OKF_FRONTMATTER_SUMMARY_TTL_MS=${OKF_FRONTMATTER_SUMMARY_TTL_MS:-60000}
+      # --- ingest settle lease (lifecycle-service) ---
+      - OKF_SETTLE_LEASE_MS=${OKF_SETTLE_LEASE_MS:-600000}
     networks:
       - genieai_network
     deploy:

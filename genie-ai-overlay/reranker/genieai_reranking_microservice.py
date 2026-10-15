@@ -47,9 +47,9 @@ from comps.cores.proto.api_protocol import ChatCompletionRequest, RerankingReque
 from comps.cores.proto.docarray import LLMParamsDoc, LVMVideoDoc, RerankedDoc, SearchedDoc, SearchedMultimodalDoc
 from comps.cores.telemetry.opea_telemetry import opea_telemetry
 from comps.rerankings.src.integrations.genieai_tei_reranker import (  # noqa: F401
-    RERANKING_STRATEGY,
     GenieTEIReranking,
     RerankerInputTooLongError,
+    resolve_reranking_strategy,
 )
 from pydantic import Field
 
@@ -96,13 +96,13 @@ async def reranking(
     # (request payload first, RERANKING_STRATEGY as fallback). Reading the env
     # var alone reported the hardcoded default on every request — the reranker
     # container does not define RERANKING_STRATEGY at all, so reranker.rerank
-    # contradicted the reranker.tei_invoke span of the same trace. Resolving it
-    # against the component's own constant makes the two spans structurally
-    # unable to drift, rather than agreeing by coincidence.
-    input_dict = (
-        input.model_dump(exclude_none=True) if hasattr(input, "model_dump") else getattr(input, "dict", lambda: {})()
-    )
-    reranking_strategy = input_dict.get("reranking_strategy", RERANKING_STRATEGY)
+    # contradicted the reranker.tei_invoke span of the same trace. Both spans
+    # call the component's own resolver, so they cannot drift, and an unknown or
+    # empty strategy name reports the branch that actually runs instead of a
+    # name no branch ever executed. Read as an attribute rather than through a
+    # second model_dump() of the whole payload — that deep-copies every doc
+    # text and embedding on the hot path to read one string.
+    reranking_strategy = resolve_reranking_strategy(getattr(input, "reranking_strategy", None))
     input_doc_count = len(input.retrieved_docs) if hasattr(input, "retrieved_docs") and input.retrieved_docs else 0
 
     with tracer.start_as_current_span("reranker.rerank") as span:

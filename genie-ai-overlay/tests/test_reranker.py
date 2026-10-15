@@ -101,6 +101,11 @@ def create_mock_searched_doc(
         dump["top_n"] = top_n
     doc.model_dump = MagicMock(return_value=dump)
     doc.top_n = top_n
+    # The strategy resolver reads the declared attribute (pydantic exposes
+    # declared fields as attributes); the dump above is what the component still
+    # reads threshold / top_n from. Set both, or the mock does not look like a
+    # real request model and the strategy silently falls back to the default.
+    doc.reranking_strategy = reranking_strategy
     return doc
 
 
@@ -798,6 +803,11 @@ def create_mock_chat_request(
         dump["top_n"] = top_n
     doc.model_dump = MagicMock(return_value=dump)
     doc.top_n = top_n
+    # The strategy resolver reads the declared attribute (pydantic exposes
+    # declared fields as attributes); the dump above is what the component still
+    # reads threshold / top_n from. Set both, or the mock does not look like a
+    # real request model and the strategy silently falls back to the default.
+    doc.reranking_strategy = reranking_strategy
     return doc
 
 

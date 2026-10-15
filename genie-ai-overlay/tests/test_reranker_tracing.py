@@ -104,7 +104,7 @@ class TestRerankingEndpointSpan:
             await rms_module.reranking(input_data)
 
             tracer.start_as_current_span.assert_called_with("reranker.rerank")
-            span.set_attribute.assert_any_call("reranker.strategy", "slice")
+            span.set_attribute.assert_any_call("reranker.strategy", rtc_module.RERANKING_STRATEGY)
 
     @pytest.mark.asyncio
     async def test_reranking_reports_the_request_strategy_not_the_env_default(self, mock_tracer):
@@ -124,7 +124,7 @@ class TestRerankingEndpointSpan:
 
             input_data = MagicMock()
             input_data.retrieved_docs = [MagicMock()]
-            input_data.model_dump = MagicMock(return_value={"reranking_strategy": "adaptive"})
+            input_data.reranking_strategy = "adaptive"
 
             await rms_module.reranking(input_data)
 
@@ -150,12 +150,14 @@ class TestRerankingEndpointSpan:
 
             span.set_attribute.assert_any_call("reranker.strategy", rtc_module.RERANKING_STRATEGY)
 
-    def test_the_microservice_does_not_re_read_the_env_for_the_strategy(self):
-        """The fallback must be the component's import-time constant, not a
-        second os.getenv copy: two reads can disagree (env mutated after import)
-        and that disagreement is exactly what put the wrong strategy in the
-        trace in the first place."""
-        assert rms_module.RERANKING_STRATEGY is rtc_module.RERANKING_STRATEGY
+    def test_both_spans_go_through_the_component_resolver(self):
+        """The two spans must share the resolver, not merely agree today.
+
+        Sharing a constant was half the fix: the drift-prone part was the
+        resolution expression itself, and a copy in each file would drift again
+        the moment the component changed how it resolves.
+        """
+        assert rms_module.resolve_reranking_strategy is rtc_module.resolve_reranking_strategy
 
     @pytest.mark.asyncio
     async def test_reranking_records_input_and_output_doc_counts(self, mock_tracer):
@@ -313,6 +315,7 @@ class TestRerankerComponentSpan:
         consult reranking_threshold must still report it."""
         tracer, span = mock_tracer
         request = self._make_input()
+        request.reranking_strategy = strategy
         request.model_dump = MagicMock(return_value={"reranking_strategy": strategy})
 
         with (
@@ -426,6 +429,9 @@ class TestRerankerSpanStrategyParity:
         request = MagicMock()
         request.retrieved_docs = [MagicMock()]
         request.__class__ = _RealSearchedDoc
+        # The strategy resolver reads the declared attribute; the component
+        # still reads threshold / top_n off a serialised dump.
+        request.reranking_strategy = strategy
         request.model_dump = MagicMock(return_value={"reranking_strategy": strategy})
         # `adaptive` refuses to run without query + chunk embeddings, so the
         # parity case covers it only if the request carries them.
@@ -448,7 +454,7 @@ class TestRerankerSpanStrategyParity:
         return mock_session
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("strategy", ["adaptive", "knee_threshold", "slice_threshold", "threshold"])
+    @pytest.mark.parametrize("strategy", ["adaptive", "knee_threshold", "slice_threshold", "threshold", "slice"])
     async def test_both_spans_report_the_requested_strategy(self, strategy):
         ms_tracer, ms_span = self._make_tracer()
         comp_tracer, comp_span = self._make_tracer()
@@ -469,3 +475,110 @@ class TestRerankerSpanStrategyParity:
 
         assert self._strategy_from_span(ms_span) == strategy
         assert self._strategy_from_span(comp_span) == strategy
+
+
+# ---------------------------------------------------------------------------
+# Unknown / empty strategy — the span must report the branch that runs
+# ---------------------------------------------------------------------------
+
+
+class TestRerankerStrategyNormalisation:
+    """`reranking_strategy` is an unvalidated `str | None` and ChatQnA forwards
+    any non-None value verbatim. Before normalisation both spans recorded the
+    requested name while the code below them fell through to `slice`."""
+
+    def test_a_known_strategy_is_returned_as_is(self):
+        assert rtc_module.resolve_reranking_strategy("adaptive") == "adaptive"
+        assert rtc_module.resolve_reranking_strategy("knee_threshold") == "knee_threshold"
+
+    @pytest.mark.parametrize("requested", ["adaptive_v2", "", None, "SLICE", "  slice  "])
+    def test_an_unknown_or_empty_strategy_falls_back_to_the_default(self, requested):
+        # `.get(key, default)` only fires on a MISSING key: an empty string or a
+        # typo arrives as a present value, so the default never applied.
+        assert rtc_module.resolve_reranking_strategy(requested) == rtc_module.RERANKING_STRATEGY
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("requested", ["adaptive_v2", ""])
+    async def test_both_spans_report_the_strategy_that_actually_runs(self, requested):
+        """The whole point: what the span says is what the code does."""
+        ms_tracer, ms_span = self._spans()
+        comp_tracer, comp_span = self._spans()
+        expected = rtc_module.RERANKING_STRATEGY
+
+        with patch.object(rms_module, "tracer", ms_tracer):
+            mock_response = MagicMock()
+            mock_response.reranked_docs = [MagicMock()]
+            rms_module.loader.invoke = AsyncMock(return_value=mock_response)
+            await rms_module.reranking(self._request(requested))
+
+        with (
+            patch.object(rtc_module, "tracer", comp_tracer),
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=self._session()),
+        ):
+            reranker = GenieTEIReranking.__new__(GenieTEIReranking)
+            reranker.base_url = "http://tei-reranker:80"
+            await reranker.invoke(self._request(requested))
+
+        assert self._strategy(ms_span) == expected
+        assert self._strategy(comp_span) == expected
+
+    @pytest.mark.asyncio
+    async def test_an_unbounded_client_string_never_reaches_the_span(self):
+        """`reranking_strategy` used to be written verbatim to the span from an
+        authenticated request body — unbounded length and cardinality on the
+        attribute operators query. Normalisation closes it."""
+        ms_tracer, ms_span = self._spans()
+        hostile = "x" * 100_000
+
+        with patch.object(rms_module, "tracer", ms_tracer):
+            mock_response = MagicMock()
+            mock_response.reranked_docs = [MagicMock()]
+            rms_module.loader.invoke = AsyncMock(return_value=mock_response)
+            await rms_module.reranking(self._request(hostile))
+
+        assert self._strategy(ms_span) in rtc_module.RERANKING_STRATEGIES
+
+    @staticmethod
+    def _spans():
+        tracer = MagicMock()
+        span = MagicMock()
+        span.__enter__ = MagicMock(return_value=span)
+        span.__exit__ = MagicMock(return_value=False)
+        tracer.start_as_current_span.return_value = span
+        return tracer, span
+
+    @staticmethod
+    def _strategy(span):
+        values = [c.args[1] for c in span.set_attribute.call_args_list if c.args[0] == "reranker.strategy"]
+        assert len(values) == 1, f"expected one reranker.strategy, got {values}"
+        return values[0]
+
+    @staticmethod
+    def _request(strategy):
+        request = MagicMock()
+        request.retrieved_docs = [MagicMock()]
+        request.__class__ = _RealSearchedDoc
+        request.reranking_strategy = strategy
+        request.embedding = [0.1, 0.2]
+        request.chunk_embeddings = [[0.1, 0.2]]
+        return request
+
+    @staticmethod
+    def _session():
+        mock_response = AsyncMock()
+        mock_response.json = AsyncMock(return_value=[{"index": 0, "score": 0.9}])
+        mock_response.status = 200
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+        session = AsyncMock()
+        session.post = MagicMock(return_value=mock_response)
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=False)
+        return session
+
+    @pytest.fixture(autouse=True)
+    def patch_searched_doc(self):
+        original_sd = rtc_module.SearchedDoc
+        rtc_module.SearchedDoc = _RealSearchedDoc
+        yield
+        rtc_module.SearchedDoc = original_sd

@@ -80,9 +80,30 @@ RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 3))
 
+RERANKING_STRATEGIES = ("slice", "threshold", "slice_threshold", "knee_threshold", "adaptive")
+
 # The only two strategies that consult RERANKING_THRESHOLD. slice and
 # knee_threshold cut on count / curve shape; adaptive cuts on marginal value.
 THRESHOLD_STRATEGIES = ("threshold", "slice_threshold")
+
+
+def resolve_reranking_strategy(requested: str | None, default: str = RERANKING_STRATEGY) -> str:
+    """Return the strategy that will actually run, given the request's value.
+
+    `reranking_strategy` is a bare ``str | None`` on the request models and
+    ChatQnA forwards any non-None value verbatim, so the span could record a
+    name that no branch ever executes — and then execute ``slice``. An unknown
+    or empty name resolves to the deployment default here, so what the span
+    reports is what the code below it does. Both the component and the
+    microservice span call this, which is what keeps the two spans from
+    disagreeing.
+    """
+    if requested and requested in RERANKING_STRATEGIES:
+        return requested
+    if requested:
+        logger.warning(f"Unknown strategy {requested}. Defaulting to {default}.")
+    return default
+
 
 # Adaptive utility-cost selection parameters
 NOVELTY_SIGMOID_A = float(os.getenv("NOVELTY_SIGMOID_A", 20.0))
@@ -262,7 +283,7 @@ class GenieTEIReranking(OpeaTEIReranking):
         logger.info(f"[ DEBUG - VERBOSE ] RERANKER INPUT: {input_dict}")
 
         reranking_results = []
-        reranking_strategy = input_dict.get("reranking_strategy", RERANKING_STRATEGY)
+        reranking_strategy = resolve_reranking_strategy(getattr(input, "reranking_strategy", None))
         reranking_threshold = input_dict.get("reranking_threshold", RERANKING_THRESHOLD)
         reranker_top_n = input_dict.get("top_n", RERANKER_TOP_N)
         input_doc_count = len(input.retrieved_docs) if input.retrieved_docs else 0
@@ -525,7 +546,10 @@ class GenieTEIReranking(OpeaTEIReranking):
                             )
 
                 else:
-                    logger.warning(f"Unknown strategy {reranking_strategy}. Defaulting to slice.")
+                    # Unreachable: resolve_reranking_strategy() guarantees the
+                    # value is one of RERANKING_STRATEGIES, so one branch above
+                    # always runs. Kept as a floor — an empty selection would be
+                    # a silent failure, a slice selection is not.
                     for best_response in decoded_response[:reranker_top_n]:
                         doc = _safe_get_doc(input.retrieved_docs, best_response["index"])
                         if doc is None:

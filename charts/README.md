@@ -35,7 +35,7 @@ diff -u <(git show HEAD:path/to/baseline.yaml) /tmp/genieai-rendered.yaml
 
 ## Conventions
 
-- Helm API v2, Helm 4.x.
+- Helm API v2, Helm 3.16.x (CI pins dtzar/helm-kubectl:3.16.0).
 - No secrets in `values.yaml` or `values-override.yaml`. Secrets are operator-materialized (SealedSecret, External Secrets Operator, SOPS, manual, etc.).
 - Tests live in each chart's `templates/tests/` (Helm convention).
 - Install with `-n <ns> --create-namespace` — the Namespace is a regular resource; hooks and the release Secret need it first.

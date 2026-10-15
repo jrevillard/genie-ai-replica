@@ -105,6 +105,36 @@ development_status:
   #        and docs:build (ingestion.md relref pointed at /docs/configuration/okf-variables;
   #        the page is under /docs/configure/ — Hugo REF_NOT_FOUND, exit 1).
   #   okf-server 1219/1219 across 49 suites.
+  #   DONE  !1073 / P2 (4758e71) — 28 documented OKF_* knobs reached NO container. There is
+  #        no env_file: anywhere in docker-compose.yaml, so a var absent from a service's
+  #        environment: block is unreachable: setting it in .env did nothing, silently.
+  #        Hit three separate times in one session.
+  #        26 WIRED into the okf-server block with the SERVICE's own defaults, plus emitted
+  #        by deploy/ansible/templates/env.j2 for cloud parity. Each service assignment was
+  #        made by grepping what READS the var, not by inferring from its name.
+  #        2 DELIBERATELY NOT WIRED — OKF_SEARCH_STYLE and OKF_FRONTMATTER_TAG_BATCH_SIZE
+  #        are read by NOTHING (spec 1-6 assigns the first to the retriever; the OPEA overlay
+  #        never reads it). They are documented-and-unimplemented, not unwired: a
+  #        live-LOOKING var that changes nothing is worse than an honest absence. Named
+  #        allowlist, asserted to be EXACTLY those two so the exemption cannot widen.
+  #        CI WAS STRUCTURALLY BLIND TWICE OVER, both now closed:
+  #          - parseEnvTemplate skipped # lines, and `env` has 300 commented variable
+  #            definitions vs 61 active — so these could not reach the orphan gate even in
+  #            principle. They now parse into a SEPARATE `documented` array (merging into
+  #            `variables` would swamp every existing check that reads it).
+  #          - Nothing asserted the env->compose direction. AC9 does, proven non-vacuous
+  #            and falsifying: 33 unwired pre-fix -> 0 post-fix (33 not 28 because 5 are
+  #            documented twice in `env`).
+  #        AC10 ADDED — the same drift class keeps recurring: 22 OKF_* knobs are documented
+  #        in TWO sections of `env` and nothing enforced agreement. That is the shape that
+  #        produced BUG-11, BUG-12 and BUG-15. Scoped to OKF_* on purpose: unscoped it
+  #        flags 12 legitimate multi-context examples (local install vs remote GPU node).
+  #        Verified directly in node (jest is EBUSY-locked on these files locally, CI is
+  #        Linux): 61 active vars, orphaned=4, conflicting=0 unchanged; `documented` does
+  #        not leak into crossReference; AC2 unaffected (all 26 carry defaults); ESLint adds
+  #        zero new problems (the 6 in the test file are pre-existing at HEAD).
+  #        Deliberately NOT reformatted docker-compose.yaml or the test file: both were
+  #        already Prettier-dirty at HEAD, so no gate covers them.
   #   DONE  !1072 / P2 (d79e3732) — 24 error-level lines per 2 min on a CLEAN drain.
   #        The filed direction was HALF WRONG and the wrong half was the dangerous one:
   #        the issue proposes not re-throwing from the retry wrapper, but isArangoNotFound

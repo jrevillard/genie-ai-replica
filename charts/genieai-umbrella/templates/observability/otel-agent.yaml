@@ -54,16 +54,22 @@ spec:
           # kubelet's /var/log/pods/<...>/N.log is a symlink to the
           # runtime's real file: docker (minikube, *-json.log, JSON
           # envelope) or containerd (CRI "<time> <stream> <F|P> <log>"
-          # envelope). Route by file suffix, unwrap either envelope.
-          # on_error default (send) keeps foreign lines flowing with
-          # body intact.
-          - type: router
-            id: get-format
-            routes:
-              - output: parse-docker
-                expr: '$$.attributes["log.file.path"] matches ".*json[.]log$"'
-              - output: parse-cri
-                expr: '$$.attributes["log.file.path"] matches ".*[.]log$"'
+          # envelope). Unwrap either envelope via a sequential fallback
+          # chain — no router: the CRI regex is anchored on a leading
+          # RFC3339 timestamp (docker-JSON lines start with '{' and can
+          # never match it), and json_parser then catches the docker
+          # lines. on_error (send) keeps every entry flowing with body
+          # intact, so plain lines pass through untouched.
+          - type: regex_parser
+            id: parse-cri
+            regex: '^(?P<time>[0-9]{4}-[0-9]{2}-[0-9]{2}T[^ ]+) (?P<stream>stdout|stderr) (?P<logtag>[FP]) (?P<log>.*)$'
+            parse_from: body
+            parse_to: attributes
+            on_error: send
+            timestamp:
+              parse_from: attributes.time
+              layout_type: gotime
+              layout: '2006-01-02T15:04:05.999999999Z07:00'
           - type: json_parser
             id: parse-docker
             parse_from: body
@@ -73,26 +79,10 @@ spec:
               parse_from: attributes.time
               layout_type: gotime
               layout: '2006-01-02T15:04:05.999999999Z07:00'
-          - type: regex_parser
-            id: parse-cri
-            regex: '^(?P<time>[^ ]+) (?P<stream>stdout|stderr) (?P<logtag>[FP]) (?P<log>.*)$'
-            parse_from: body
-            parse_to: attributes
-            on_error: send
-            timestamp:
-              parse_from: attributes.time
-              layout_type: gotime
-              layout: '2006-01-02T15:04:05.999999999Z07:00'
           - type: move
-            id: move-docker
+            id: move-log
             from: attributes.log
             to: body
-            output: parse-metadata
-          - type: move
-            id: move-cri
-            from: attributes.log
-            to: body
-            output: parse-metadata
           # Downstream transforms inspect the raw app line (JSON winston
           # lines, Python prefixes), so the un-wrapped log becomes body.
           # Pod identity comes from the kubelet-controlled file path

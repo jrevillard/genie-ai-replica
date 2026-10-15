@@ -281,6 +281,10 @@ services:
     translation:
       endpoint: ""
       modelId: ""
+    # OPEA chat pipeline host (chatqna service). Empty = the code's
+    # compose-parity default — set it when the OPEA tier joins the
+    # chart (in-cluster Service name).
+    opeaHost: ""
     port: 3000
     # Image USER is `node` (uid 1000). PSA `restricted` requires
     # runAsNonRoot: true and the namespace PSA accepts non-root UIDs.

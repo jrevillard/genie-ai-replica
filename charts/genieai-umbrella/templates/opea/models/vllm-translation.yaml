@@ -51,6 +51,16 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      initContainers:
+        # Compose parity: `depends_on: vllm: condition: service_healthy`
+        # serializes the two HF model downloads. Without it both vLLM
+        # pods pull concurrently on the single GPU node and can OOM.
+        - name: wait-for-vllm
+          image: curlimages/curl:8.10.1
+          command:
+            - sh
+            - -c
+            - until curl -sf http://vllm.{{ $ns }}.svc.cluster.local:8000/health; do echo waiting for vllm; sleep 5; done
       containers:
         - name: vllm-translation
           image: docker.io/vllm/vllm-openai:v0.10.0
@@ -93,23 +103,35 @@ spec:
             - name: hf-cache
               mountPath: /root/.cache/huggingface
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: 9031
             initialDelaySeconds: 60
             periodSeconds: 10
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: 9031
             initialDelaySeconds: 120
             periodSeconds: 30
           startupProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: 9031
             failureThreshold: 30
             periodSeconds: 10
       volumes:
+        {{- if .Values.opea.models.cache.enabled }}
+        # Shared model-weights cache (see templates/opea/models/model-cache-pvc.yaml).
+        # ReadWriteOnce on the single gpu=true node; all four model pods
+        # share the claim.
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: genieai-model-cache
+        {{- else }}
         - name: hf-cache
           emptyDir: {}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

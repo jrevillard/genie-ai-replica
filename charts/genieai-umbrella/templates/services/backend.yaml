@@ -2,30 +2,36 @@
 {{- $ns := .Values.namespace -}}
 {{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
 {{- $backendVals := deepCopy .Values -}}
-{{- /* Remote translation API (OpenAI-compatible vLLM). Unset endpoint:
-the backend's auto mode probes the in-cluster translation service
-(gpu-models tier) and, finding none here, falls back to an in-process
-CPU model (~6 Gi and a core of steady inference). Setting the endpoint
-targets a GPU node's translation API directly. Consumers of the other
-GPU endpoints (VLLM_ENDPOINT, EMBEDDING/RERANKER/DOCLING) are the OPEA
-services — wired when that tier joins the chart. */ -}}
+{{- /* Remote translation API (OpenAI-compatible vLLM). The endpoint
+defaults to the in-cluster vllm-translation model Service when the OPEA
+tier runs in-cluster GPU mode; an explicit value (external GPU node URL)
+wins. Unset everywhere, the backend's auto mode probes its own
+compose-era default, finds nothing, and falls back to an in-process CPU
+model (~6 Gi and a core of steady inference). */ -}}
+{{- $translationEndpoint := .Values.services.backend.translation.endpoint -}}
+{{- if and (not $translationEndpoint) .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") -}}
+{{- $translationEndpoint = printf "http://vllm-translation.%s.svc.cluster.local:9031" .Values.namespace -}}
+{{- end -}}
 {{- $translationEnv := list -}}
 {{- $translationSecrets := list -}}
-{{- if .Values.services.backend.translation.endpoint }}
+{{- if $translationEndpoint }}
 {{- $translationEnv = list
-    (dict "name" "VLLM_TRANSLATION_ENDPOINT" "value" .Values.services.backend.translation.endpoint)
+    (dict "name" "VLLM_TRANSLATION_ENDPOINT" "value" $translationEndpoint)
     (dict "name" "VLLM_TRANSLATION_MODEL_ID" "value" (.Values.services.backend.translation.modelId | default "google/gemma-3-4b-it"))
 -}}
 {{- $translationSecrets = list
     (dict "name" "VLLM_API_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "VLLM_API_KEY")))
 -}}
 {{- end }}
-{{- /* OPEA chat pipeline (chatqna). Unset = the code default
-(chatqna-xeon-backend-server) — no ChatQnA service exists in
-this chart yet; chat streaming fails fast until the OPEA tier joins
-and the overlay points opeaHost at the in-cluster Service. */ -}}
-{{- if .Values.services.backend.opeaHost }}
-{{- $translationEnv = concat $translationEnv (list (dict "name" "OPEA_HOST" "value" .Values.services.backend.opeaHost)) -}}
+{{- /* OPEA chat pipeline (chatqna). When the OPEA tier is enabled the
+host defaults to the in-cluster chatqna Service; the code default names
+a compose-only service that does not resolve here. */ -}}
+{{- $opeaHost := .Values.services.backend.opeaHost -}}
+{{- if and (not $opeaHost) .Values.opea.enabled -}}
+{{- $opeaHost = printf "chatqna.%s.svc.cluster.local" .Values.namespace -}}
+{{- end -}}
+{{- if $opeaHost }}
+{{- $translationEnv = concat $translationEnv (list (dict "name" "OPEA_HOST" "value" $opeaHost) (dict "name" "OPEA_PORT" "value" "8888")) -}}
 {{- end }}
 {{- /* STREAMING_TRANSLATION_ENABLED is a strict YAML boolean. Non-bool
 values (0, "0", "false") fail at render time: Sprig's default/coalesce
@@ -115,6 +121,8 @@ spec:
       ports:
         - protocol: UDP
           port: 53
+        - protocol: TCP
+          port: 53
     # Data tier: ArangoDB (8529), CNPG keycloak-db (5432), Keycloak (8080),
     # Redis cache (6379). Port-scoped any-destination pending verified
     # peer labels — see header note above. Operators tightening to
@@ -158,6 +166,16 @@ spec:
       ports:
         - protocol: TCP
           port: 8888
+    {{- end }}
+    {{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") }}
+    # In-cluster translation model (VLLM_TRANSLATION_ENDPOINT default).
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm-translation
+      ports:
+        - protocol: TCP
+          port: 9031
     {{- end }}
     {{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "external") }}
     # External GPU node — VLLM_TRANSLATION_ENDPOINT when the operator

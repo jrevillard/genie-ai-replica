@@ -65,6 +65,8 @@ spec:
       ports:
         - protocol: UDP
           port: 53
+        - protocol: TCP
+          port: 53
     # Backend BFF. Post-DNAT pod port (3000), not the Service port (80).
     - to:
         - podSelector:

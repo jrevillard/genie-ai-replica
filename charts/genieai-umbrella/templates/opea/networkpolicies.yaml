@@ -83,8 +83,10 @@ spec:
             matchLabels:
               genieai.io/component: translation
       ports:
+        # Post-DNAT pod port; the Service maps 9031 to the image's
+        # listener 8888.
         - protocol: TCP
-          port: 9031
+          port: 8888
     # document-repository (DOC_REPO_URL). Post-DNAT pod port 3001.
     - to:
         - podSelector:
@@ -496,8 +498,9 @@ spec:
             matchLabels:
               genieai.io/component: chatqna
       ports:
+        # Post-DNAT pod port; the Service maps 9031 to 8888.
         - protocol: TCP
-          port: 9031
+          port: 8888
   egress:
     # DNS resolution to kube-system.
     - to:

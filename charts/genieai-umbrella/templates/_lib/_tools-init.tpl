@@ -31,8 +31,8 @@ URLs at a single internal mirror.
       mkdir -p /tools/bin
       BASE="{{ .Values.global.kubeletToolsMirror | default "https://dl.k8s.io" }}"
       BASE_JQ="{{ .Values.global.kubeletToolsMirror | default "https://github.com/jqlang" }}"
-      curl -fsSL "$BASE/release/v1.33.0/bin/linux/amd64/kubectl" -o /tools/bin/kubectl
+      curl -fsSL "$BASE/release/v1.33.0/bin/linux/{{ .Values.global.toolingArch | default "amd64" }}/kubectl" -o /tools/bin/kubectl
       chmod +x /tools/bin/kubectl
-      curl -fsSL "$BASE_JQ/jq/releases/download/jq-1.7.1/jq-linux-amd64" -o /tools/bin/jq
+      curl -fsSL "$BASE_JQ/jq/releases/download/jq-1.7.1/jq-linux-{{ .Values.global.toolingArch | default "amd64" }}" -o /tools/bin/jq
       chmod +x /tools/bin/jq
 {{- end -}}

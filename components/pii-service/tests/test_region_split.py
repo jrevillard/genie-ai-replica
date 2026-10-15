@@ -168,10 +168,18 @@ def test_offsets_are_absolute_across_regions(recording_client, monkeypatch):
     # And the span must index the original text: the fake analyzer reports the
     # first min(5, len) chars of each region, so slicing the ORIGINAL at the
     # returned offsets must reproduce exactly what the analyzer saw.
-    for h, (off, chunk) in zip(hits, regions):
+    for h, (off, chunk) in zip(hits, regions, strict=True):
         width = min(5, len(chunk))
         assert h["end"] - h["start"] == width
-        assert text[h["start"]:h["end"]] == chunk[:width]
+        assert h["start"] == off
+        # Slice the ORIGINAL at the REGION's own offset rather than at the hit's
+        # reported span. The claim being tested is that region N maps to the
+        # analyzer's view of that region; slicing at h["start"]/h["end"] routes
+        # the check through the very offsets under test, so a wrong translation
+        # would slice a self-consistent but wrong window and pass. The
+        # `starts == [off ...]` assertion above already proves one hit per
+        # region, which is why strict=True is safe here.
+        assert text[off : off + width] == chunk[:width]
 
 
 def test_redaction_spans_regions_joined(recording_client):

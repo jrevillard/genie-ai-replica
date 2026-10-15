@@ -1,0 +1,95 @@
+{{/*
+  retriever OPEA orchestrator. Compose-parity (docker-compose.yaml lines
+  1252-1340, `retriever-arango-service`). Factory-driven like the other
+  three OPEA deployments. ARANGO_* wired through the chart's arangoHost
+  helper (single `arangodb-single.<ns>.svc.cluster.local:8529` URL;
+  `ARANGO_DB` unified on `_system` like backend/doc-repo, regardless of
+  the compose `genie-ai` default). `RERANKING_STRATEGY` plus the
+  RETRIEVER_ARANGO_* and RETRIEVER_HYBRID_* tuning defaults lifted from
+  the compose env block via `| default` so per-deploy overrides land
+  under `.Values.opea.retriever.<camelCase>`. GPU endpoints
+  (`VLLM_ENDPOINT`, `TEI_EMBEDDING_ENDPOINT`) via the opea helpers;
+  HF_TOKEN + VLLM_API_KEY from the vllm-api-key Secret. Container/listen
+  port 7000 (compose parity; healthcheck hits `/health` on that port).
+*/}}
+{{- if .Values.opea.enabled -}}
+{{- $vals  := deepCopy .Values -}}
+{{- $ns    := .Values.namespace -}}
+{{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
+{{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
+{{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
+{{- $tuningEnv := list
+    (dict "name" "ARANGO_GRAPH_NAME" "value" (.Values.opea.retriever.arangoGraphName | default "GRAPH"))
+    (dict "name" "RETRIEVER_COMPONENT_NAME" "value" (.Values.opea.retriever.retrieverComponentName | default "GENIE_RETRIEVER_ARANGODB"))
+    (dict "name" "RETRIEVER_ARANGO_K" "value" (.Values.opea.retriever.retrieverArangoK | default "20" | toString))
+    (dict "name" "RETRIEVER_ARANGO_FETCH_K" "value" (.Values.opea.retriever.retrieverArangoFetchK | default "30" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SCORE_THRESHOLD" "value" (.Values.opea.retriever.retrieverArangoScoreThreshold | default "0.2" | toString))
+    (dict "name" "RETRIEVER_ARANGO_DISTANCE_THRESHOLD" "value" (.Values.opea.retriever.retrieverArangoDistanceThreshold | default "1" | toString))
+    (dict "name" "RETRIEVER_ARANGO_LAMBDA_MULT" "value" (.Values.opea.retriever.retrieverArangoLambdaMult | default "0.5" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SEARCH_START" "value" (.Values.opea.retriever.retrieverArangoSearchStart | default "chunk"))
+    (dict "name" "RETRIEVER_ARANGO_SEARCH_MODE" "value" (.Values.opea.retriever.retrieverArangoSearchMode | default "vector"))
+    (dict "name" "RETRIEVER_ARANGO_USE_APPROX_SEARCH" "value" (.Values.opea.retriever.retrieverArangoUseApproxSearch | default "false" | toString))
+    (dict "name" "RETRIEVER_ARANGO_DISTANCE_STRATEGY" "value" (.Values.opea.retriever.retrieverArangoDistanceStrategy | default "COSINE"))
+    (dict "name" "RETRIEVER_ARANGO_NUM_CENTROIDS" "value" (.Values.opea.retriever.retrieverArangoNumCentroids | default "1" | toString))
+    (dict "name" "RETRIEVER_ARANGO_FILTER_STRATEGY" "value" (.Values.opea.retriever.retrieverArangoFilterStrategy | default "OR"))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_ENABLED" "value" (.Values.opea.retriever.retrieverArangoTraversalEnabled | default "true" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH" "value" (.Values.opea.retriever.retrieverArangoTraversalMaxDepth | default "2" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED" "value" (.Values.opea.retriever.retrieverArangoTraversalMaxReturned | default "5" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD" "value" (.Values.opea.retriever.retrieverArangoTraversalScoreThreshold | default "0.7" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES" "value" (.Values.opea.retriever.retrieverArangoTraversalConcurrentBatches | default "10" | toString))
+    (dict "name" "RETRIEVER_HYBRID_RETRIEVAL_ENABLED" "value" (.Values.opea.retriever.retrieverHybridRetrievalEnabled | default "true" | toString))
+    (dict "name" "RETRIEVER_HYBRID_RRF_K" "value" (.Values.opea.retriever.retrieverHybridRrfK | default "60" | toString))
+    (dict "name" "RETRIEVER_HYBRID_BM25_CANDIDATES" "value" (.Values.opea.retriever.retrieverHybridBm25Candidates | default "50" | toString))
+    (dict "name" "RETRIEVER_HYBRID_DENSE_WEIGHT" "value" (.Values.opea.retriever.retrieverHybridDenseWeight | default "1.0" | toString))
+    (dict "name" "RETRIEVER_HYBRID_LEXICAL_WEIGHT" "value" (.Values.opea.retriever.retrieverHybridLexicalWeight | default "1.0" | toString))
+    (dict "name" "RETRIEVER_HYBRID_BM25_ANALYZER" "value" (.Values.opea.retriever.retrieverHybridBm25Analyzer | default "text_en"))
+    (dict "name" "RERANKING_STRATEGY" "value" (.Values.opea.retriever.rerankingStrategy | default "slice"))
+    (dict "name" "RETRIEVER_SUMMARIZER_ENABLED" "value" (.Values.opea.retriever.retrieverSummarizerEnabled | default "false" | toString))
+    (dict "name" "LOG_LEVEL" "value" (.Values.opea.retriever.logLevel | default "info"))
+    (dict "name" "VLLM_ENDPOINT" "value" $llmEndpoint)
+    (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
+    (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (.Values.opea.retriever.enableObservability | default "0" | toString))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+-}}
+{{- $arangoSecretEnv := list
+    (dict "name" "ARANGO_PASSWORD" "valueFrom" (dict "secretKeyRef" (dict "name" "arango-root-secret" "key" "password" "optional" true)))
+-}}
+{{- $gpuSecretEnv := list
+    (dict "name" "HF_TOKEN" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "HF_TOKEN")))
+    (dict "name" "VLLM_API_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "VLLM_API_KEY")))
+-}}
+{{- $arangoEnv := list
+    (dict "name" "ARANGO_URL" "value" (printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns))
+    (dict "name" "ARANGO_DB" "value" "_system")
+    (dict "name" "ARANGO_USERNAME" "value" "root")
+-}}
+{{- $svcVals := dict
+    "image" (dict "repository" "genie-ai-retriever-arango" "tag" "main")
+    "port" 7000
+    "resources" (dict "requests" (dict "cpu" "200m" "memory" "256Mi") "limits" (dict "cpu" "2" "memory" "2Gi"))
+    "env" (concat $arangoEnv $tuningEnv $arangoSecretEnv $gpuSecretEnv)
+    "probes" (dict
+      "readiness" (dict "tcpSocket" (dict "port" 7000) "initialDelaySeconds" 30 "periodSeconds" 15)
+      "liveness"  (dict "tcpSocket" (dict "port" 7000) "initialDelaySeconds" 60 "periodSeconds" 30)
+    )
+-}}
+{{- $_ := set $vals.services "retriever" $svcVals -}}
+{{- $ctx := dict "name" "retriever" "component" "retriever" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: retriever
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "retriever") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 7000
+      targetPort: 7000
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "retriever") | nindent 4 }}
+{{- end -}}

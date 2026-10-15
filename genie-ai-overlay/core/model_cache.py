@@ -3,19 +3,25 @@
 
 """TTL-cached model auto-detection for remote vLLM endpoints.
 
-Provides ``get_model_id()`` — probes the vLLM ``/v1/models`` endpoint once, then
-serves the result from an in-memory cache for ``MODEL_DETECT_TTL`` seconds (default
-60s). On cache expiry the endpoint is re-probed; on probe failure the last known
-value is returned (stale is better than broken). This lets services pick up model
-changes on the GPU node without a restart.
+Provides ``get_model_id()`` and ``get_max_model_len()`` — the vLLM
+``/v1/models`` endpoint is probed once and both values (model id and
+``max_model_len``) are served from the same in-memory cache entry for
+``MODEL_DETECT_TTL`` seconds (default 60s). On cache expiry the endpoint
+is re-probed; on probe failure the last known values are returned (stale
+is better than broken). This lets services pick up model changes on the
+GPU node without a restart.
+
+``max_model_len`` is a vLLM extension to the OpenAI payload — strict
+OpenAI-compatible providers may omit it, in which case
+``get_max_model_len()`` returns None (and a warning is logged) so callers
+can fall back to their configured window.
 
 Usage::
 
-    from core.model_cache import get_model_id
+    from core.model_cache import get_max_model_len, get_model_id
 
     model = get_model_id("https://gpu.example.com/llm")
-    if model:
-        use(model)
+    window = get_max_model_len("https://gpu.example.com/llm")
 """
 
 import logging

@@ -242,7 +242,10 @@ def _is_translategemma() -> bool:
 # _get_llm_model() / _get_translation_model_id() (default MODEL_DETECT_TTL=60)
 # on the same endpoint, the shared cache entry is refreshed on their cadence
 # and this TTL only governs when no other accessor has run recently.
-MODEL_LEN_DETECT_TTL = int(os.getenv("MODEL_LEN_DETECT_TTL", "3600"))
+try:
+    MODEL_LEN_DETECT_TTL = int(os.getenv("MODEL_LEN_DETECT_TTL", "3600"))
+except ValueError:
+    MODEL_LEN_DETECT_TTL = 3600
 
 # Translation budget derivation from the discovered window. The completion
 # reserve assumes the translated output is roughly the size of the input (the
@@ -1199,14 +1202,9 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                 current_tokens += segment_tokens
             dropped_segments = len(history_segments) - len(truncated_history)
             if dropped_segments:
-                history_truncation_total.add(
-                    1,
-                    {
-                        "path": "generation",
-                        "kept": len(truncated_history),
-                        "dropped": dropped_segments,
-                    },
-                )
+                # kept/dropped counts live in the warning log — metric attributes
+                # stay low-cardinality (one series per path).
+                history_truncation_total.add(1, {"path": "generation"})
                 logger.warning(
                     "Chat history truncated to fit the LLM context window: "
                     "window_tokens=%s prompt_tokens=%s answer_budget_tokens=%s "
@@ -2228,14 +2226,7 @@ class ChatQnAService:
         messages_to_process.reverse()
         dropped_messages = len(history) - len(messages_to_process)
         if dropped_messages:
-            history_truncation_total.add(
-                1,
-                {
-                    "path": "translation",
-                    "kept": len(messages_to_process),
-                    "dropped": dropped_messages,
-                },
-            )
+            history_truncation_total.add(1, {"path": "translation"})
             logger.warning(
                 "Chat history truncated for translation: budget_chars=%s kept_messages=%s dropped_messages=%s",
                 max_translation_chars,

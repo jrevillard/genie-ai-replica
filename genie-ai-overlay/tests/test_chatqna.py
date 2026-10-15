@@ -637,7 +637,9 @@ class TestAlignInputs:
 
             # System prompt is ~200 tokens, user content is ~100 tokens = ~300 total
             # With max_model_tokens=600 and max_answer_tokens=1024 → need truncation
-            # max_history_tokens = 600 - 1024 - 200 = -624 (negative → truncation triggers)
+            # max_history_tokens = 600 - system(0) - 1024 - skeleton(0) - 200 = -624
+            # (negative → truncation triggers; this mock matches neither the system
+            # prompt nor the skeleton, so only the window/answer/buffer terms bite)
             mock_tok = create_mock_tokenizer({"system": 200, "USER": 100})
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
@@ -715,9 +717,8 @@ class TestAlignInputs:
             assert "HISTTOK" not in user_msg  # no room — dropped
             assert "RAGTOK" in user_msg  # KB content preserved
             mock_counter.add.assert_called_once()
-            attrs = mock_counter.add.call_args.args[1]
-            assert attrs["path"] == "generation"
-            assert attrs["dropped"] == 3
+            # Counts stay in the warning log; metric attributes stay low-cardinality.
+            assert mock_counter.add.call_args.args[1] == {"path": "generation"}
 
         def test_no_truncation_no_truncation_metric(self):
             """A prompt well inside the window never increments the truncation counter."""
@@ -767,6 +768,7 @@ class TestAlignInputs:
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
                 patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
+                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
                 patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK"),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
                 patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
@@ -778,8 +780,7 @@ class TestAlignInputs:
             assert "HISTTOK-new" in user_msg  # newest kept
             assert "HISTTOK-mid" in user_msg  # mid kept
             assert "HISTTOK-old" not in user_msg  # oldest dropped
-            attrs = mock_counter.add.call_args.args[1]
-            assert attrs["dropped"] == 1
+            assert mock_counter.add.call_args.args[1] == {"path": "generation"}
 
         def test_system_and_content_alone_over_window_wipes_history(self):
             """System prompt + RAG content alone overflow the window: the history
@@ -802,6 +803,7 @@ class TestAlignInputs:
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
                 patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
+                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
                 patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK SYSTOK SYSTOK"),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
                 patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
@@ -812,9 +814,7 @@ class TestAlignInputs:
             user_msg = result["messages"][1]["content"]
             assert "HISTTOK" not in user_msg  # nothing fits
             assert "RAGTOK" in user_msg  # KB content preserved
-            attrs = mock_counter.add.call_args.args[1]
-            assert attrs["kept"] == 0
-            assert attrs["dropped"] == 3
+            assert mock_counter.add.call_args.args[1] == {"path": "generation"}
 
 
 # ===========================================================================
@@ -1889,10 +1889,8 @@ class TestTranslationHelpers:
         assert "DROPME" in sent_prompt  # newest kept
         assert "KEEPME" not in sent_prompt  # oldest dropped
         mock_counter.add.assert_called_once()
-        attrs = mock_counter.add.call_args.args[1]
-        assert attrs["path"] == "translation"
-        assert attrs["kept"] == 1
-        assert attrs["dropped"] == 1
+        # Counts stay in the warning log; metric attributes stay low-cardinality.
+        assert mock_counter.add.call_args.args[1] == {"path": "translation"}
 
     @pytest.mark.asyncio
     async def test_translate_text_chunk_translategemma_format(self):

@@ -66,13 +66,13 @@ spec:
                  /health on their default port; the response is a
                  bare 200 OK on a healthy instance. */ -}}
           {{- if .Values.observability.logs.enabled }}
-          check victorialogs 9428 /health 200
+          check vlsingle-victorialogs 9428 /health 200
           {{- end }}
           {{- if .Values.observability.metrics.enabled }}
-          check vmetrics 8428 /health 200
+          check vmsingle-vmetrics 8428 /health 200
           {{- end }}
           {{- if .Values.observability.traces.enabled }}
-          check vtraces 10428 /health 200
+          check vtsingle-vtraces 10428 /health 200
           {{- end }}
           if [ "$failures" -gt 0 ]; then
             echo "FAIL: $failures observability backend(s) unreachable"

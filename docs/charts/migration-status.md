@@ -84,8 +84,14 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
    nginx stays the in-cluster aggregator; tighten the placeholder
    NetworkPolicy peers (`podSelector: {}`, broad `ipBlock`) once the gateway
    data-plane labels exist; kind+Calico CI gate for the policy surface.
-6. **CI completion** — `chart:contract` render-gate job, `ct lint`/`ct install`
-   on kind, dashboards for chart test results.
+6. **CI completion** — `chart:contract` render-gate job (MUST: render chart
+   with overlay-shaped values, extract the gateway collector config, run
+   `PII_SMOKE_CONFIG=<rendered> tests/otel-collector/run-pii-smoke.sh` — the
+   PII OTTL now lives in the chart helper, a second copy of the compose
+   regex that WILL drift without this gate — and assert operator Service
+   names `<kind>-<cr-name>` in every rendered URL), `ct lint`/`ct install`
+   on kind (kind prereqs now include cert-manager/vmoperator/otel-operator
+   via `scripts/install-prereqs.sh`), dashboards for chart test results.
 
 ## Parked / backlog
 

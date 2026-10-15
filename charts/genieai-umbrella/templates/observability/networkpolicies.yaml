@@ -1,0 +1,118 @@
+{{- /*
+  Observability-tier NetworkPolicies — one per collector workload
+  (gateway + filelog agent), per-component-flag-gated. The vmoperator-
+  managed VMSingle / VLSingle / VTSingle pods are addressed with
+  port-scoped ipBlocks (the operator's pod labels are not part of
+  the genieai.io/component convention — same approach the existing
+  OPEA policies use for OTLP egress and Keycloak egress).
+*/}}
+{{- if or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled }}
+---
+# Collector gateway: receives OTLP from app SDKs and from the
+# filelog agent; ships to VLSingle / VMSingle / VTSingle.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: collector-gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: collector-gateway
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # OTLP/HTTP + OTLP/gRPC from any pod in the namespace. App
+    # SDKs dial the gateway at 4318 (HTTP) and 4317 (gRPC); the
+    # filelog agent dials 4318 from the same namespace too.
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 4318
+        - protocol: TCP
+          port: 4317
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- if .Values.observability.logs.enabled }}
+    # VLSingle OTLP ingest (VL default OTLP port 9428). Port-scoped
+    # ipBlock pending verified peer labels — the vmoperator-managed
+    # VLSingle pod labels are not part of the genieai.io/component
+    # convention.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 9428
+    {{- end }}
+    {{- if .Values.observability.metrics.enabled }}
+    # VMSingle Prometheus remote-write (VM default 8428).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8428
+    {{- end }}
+    {{- if .Values.observability.traces.enabled }}
+    # VTSingle OTLP/HTTP ingest (VT default 4318).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4318
+        - protocol: TCP
+          port: 4317
+    {{- end }}
+---
+# Filelog agent (DaemonSet): tails containerd's pod-log path on each
+# node and forwards to the gateway over OTLP. Ingress is closed
+# (the agent never accepts inbound traffic — filelog is a one-way
+# pull from the host filesystem).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: collector-agent
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: collector-agent
+  policyTypes:
+    - Egress
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Forward to the collector gateway (OTLP/HTTP :4318). Port-scoped
+    # ipBlock pending verified peer labels.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4318
+{{- end }}

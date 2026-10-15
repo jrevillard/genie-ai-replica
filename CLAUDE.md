@@ -361,7 +361,7 @@ docker compose up -d --force-recreate okf-server pii-service dataprep-arango-ser
   small VPS, set these deliberately from the table.
 
 - `KEYCLOAK_SUPPORTED_LOCALES` - Keycloak login-page locales (JSON array, e.g. `["en","es"]`; unset = curated default)
-- `STREAMING_TRANSLATION_ENABLED` - Stream the target-language chat translation during generation instead of English-then-flip (issue #829). `1`/`0`; default `0` (current behavior)
+- `STREAMING_TRANSLATION_ENABLED` - Stream the target-language chat translation during generation instead of English-then-flip (issue #829). `1`/`0`; default `1` — the frontend never translates chat answers client-side, so with `0` non-English UIs get English answers
 - `CONFIG_DIR_FRONTEND` / `CONFIG_DIR_KEYCLOAK` - Host paths bind-mounted read-only into the frontend (`/app/dist/config`) and Keycloak (`/opt/keycloak/themes`, the themes root — every theme under it is served) containers. Hold the theme CSS, runtime JSON config, logo, splash assets and the whole `genie` Keycloak theme. Seeded from the deployed branch by the `config_bootstrap` role and **mirrored on every deploy** — the branch is the source of truth, so edits made directly on the node are overwritten by the next deploy; keep changes in the repository. Set by Ansible (`deploy/ansible/templates/env.j2`, from `config_dir` in `group_vars/all.yml`); the root `env` template carries the local-dev defaults. **A bind mount never falls back to image contents** — Docker creates a missing source path as an empty root-owned directory that shadows the image, so an unseeded host yields an unbranded frontend and Keycloak with no error anywhere.
 
 **API Keys:**

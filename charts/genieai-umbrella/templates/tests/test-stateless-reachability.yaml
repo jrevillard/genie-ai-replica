@@ -7,7 +7,7 @@ metadata:
   name: {{ include "genieai-common.fullname" . }}-test-stateless-reach
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test") | nindent 4 }}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 4 }}
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation
@@ -85,7 +85,9 @@ spec:
           check nginx 80 /healthz 200
           {{- end }}
           {{- if .Values.services.clamav.enabled }}
-          check_tcp clamav 3310
+          # The clamav NetworkPolicy only admits documentRepository pods —
+          # this backend-labeled pod cannot pass a policy-enforcing CNI.
+          # Probed via the documentRepository-labeled sibling pod below.
           {{- end }}
           {{- if .Values.services.redisCache.enabled }}
           check_tcp redis-cache 6379
@@ -95,3 +97,26 @@ spec:
             exit 1
           fi
           echo "PASS: all stateless-tier services reachable"
+---
+# clamav reachability from the only peer its NetworkPolicy admits.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-test-clamav-reach
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "documentRepository") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: clamav-reach
+      image: {{ .Values.global.toolingImageRegistry | default "docker.io" }}/busybox:1.36
+      command: ["sh", "-c", "nc -z -w 5 clamav 3310 && echo 'PASS: clamav reachable' || (echo 'FAIL: clamav unreachable'; exit 1)"]

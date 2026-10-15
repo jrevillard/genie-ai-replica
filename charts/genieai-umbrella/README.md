@@ -429,5 +429,5 @@ any particular mechanism.
 
 ## Per-environment overlay
 
-Apply per-env config via `deploy/environments/<env>/values-override.yaml`.
+Apply per-env config via `genie-ai-deploy/overlays/<cluster>/<env>/values.yaml`.
 See that directory's `README.md`.

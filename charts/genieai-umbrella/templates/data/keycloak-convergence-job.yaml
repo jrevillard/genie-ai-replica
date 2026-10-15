@@ -67,7 +67,7 @@ name them.
 SMTP placeholders are listed unconditionally: the realm file's
 smtpServer block is unconditional too (genie-realm.yaml:18-26), so a
 default install with smtp:null must still resolve them — to empty
-strings, exactly as the compose path does today. Gating them on smtp
+strings. Gating them on smtp
 being set would fail this assertion on every default render.
 */ -}}
 {{- $known = append $known "EMAIL_FROM" -}}
@@ -201,7 +201,7 @@ spec:
             # empty string (omitempty on the API type), and kcc's
             # substitution then fails the whole import on the missing
             # variable — so unset fields get non-empty sentinels instead
-            # of the compose path's empty strings. With auth=false the
+            # empty strings would fail kcc's substitution. With auth=false the
             # host/user values are never dialed.
             - name: EMAIL_FROM
               value: {{ $smtp.from | default "no-reply@genieai.local" | quote }}
@@ -239,8 +239,8 @@ spec:
               value: {{ .Values.data.keycloak.defaultLocale | quote }}
             # JSON array literal, not a comma-joined string: the realm
             # file's supportedLocales is a list field, and kcc's textual
-            # substitution must inject a parseable JSON array (compose
-            # passes the same shape). A CSV here fails the import with
+            # substitution must inject a parseable JSON array. A CSV
+            # here fails the import with
             # "Cannot construct instance of java.util.HashSet".
             - name: KEYCLOAK_SUPPORTED_LOCALES
               value: {{ .Values.data.keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans") | toJson | quote }}

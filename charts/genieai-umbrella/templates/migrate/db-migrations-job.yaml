@@ -2,8 +2,8 @@
 {{- /*
 The migrations image (components/gov-chat-backend/Dockerfile.migrations)
 creates the ArangoDB collections the backend's user provisioning writes
-to. Compose gates the backend on service_completed_successfully; the
-hook ordering here is the equivalent — this Job (weight 5) runs before
+to. The helm hook ordering gates the backend on this Job's success
+(the equivalent of a depends_on condition) — this Job (weight 5) runs before
 the Keycloak convergence Job (weight 10) on install and upgrade, and
 the backend starts unconditionally but fails its first authenticated
 request without the collections, which is what this Job prevents.

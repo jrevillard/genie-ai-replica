@@ -213,6 +213,23 @@ and never reported non-zero on any repo, including ones with broken links.
 Whoever picks this up will otherwise implement the wrong fix. Either close it
 superseded by a correctly-scoped rewrite, or amend it.
 
+### BUG-16 — the Dismiss button on a link suggestion is dead
+
+**New, 2026-10-15, found while fixing !1075.** Not yet in GitLab — creation was
+blocked by the local permission classifier, so it is recorded in
+`concept-doc-ceiling-defect-log.md` and still needs filing.
+
+`Validate.vue` branches on `p.accepted` and nothing else, so the `p.dismissed = true`
+that Dismiss writes cannot change what renders. A codebase grep for `dismissed`
+returns that write and `Narrative.vue` only.
+
+It needs a **decision before it needs a fix**: does a dismissed proposal disappear
+from the list, or stay struck through with an Undo? Disappearing is destructive with
+no way back. Either option needs new i18n keys across 14 deep-key-identical locale
+files, which is why it did not go in with Story 10.8.
+
+Suggested: keep it visible with an Undo, mirroring the "Done" pattern.
+
 ---
 
 ## Open question with no owner yet

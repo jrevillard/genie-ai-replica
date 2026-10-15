@@ -488,6 +488,34 @@ export default {
       this.importStatus = '';
       if (zip) {
         const classification = this.importClassification;
+        // LAND ON CURATE, NOT PAST IT (!1067). This branch sends the steward to
+        // the dashboard and they open the repo LATER via a card click, which
+        // runs onResume() — and a repo with no PERSISTED draft gets the
+        // permissive fallback `studio_step: 9` at :381. That parked every
+        // bundle import on step 9 "Review", past step 6 "Curate", which is the
+        // only step with a blocking requirement: frontmatter tags, PII
+        // acceptance and cross-links all get resolved there. The operator
+        // clicked through nine steps and hit a dead end whose only guidance
+        // ("the LLM can draft them in Curate") lives on step 10.
+        //
+        // Setting `activeDraft` here would NOT fix it — this branch navigates
+        // to the dashboard, so only a PERSISTED draft survives to the card
+        // click. Hence saveDraft, matching the crawler path at :671-682.
+        this.$store.dispatch('okf/saveDraft', {
+          repoId,
+          draft: {
+            repo_id: repoId,
+            name: result.repo.name,
+            domain: result.repo.domain,
+            concept_count: (result.repo && result.repo.concept_count) || 1,
+            // A bundle already carries its concepts, so Input/Produce/Label
+            // have nothing to do; 5 = Curate, the same landing step the
+            // crawler path seeds, and the only step that blocks.
+            studio_step: 5,
+            source: 'editor',
+            updated_at: Date.now()
+          }
+        });
         this.view = 'dashboard'; // the card is the progress surface
         try {
           okfRepoOps

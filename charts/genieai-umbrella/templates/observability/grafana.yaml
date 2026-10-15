@@ -86,7 +86,7 @@ spec:
     name: VictoriaLogs
     type: victoriametrics-logs-datasource
     access: proxy
-    url: http://victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428
+    url: http://vlsingle-victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428
     uid: victoriametrics-logs
     editable: false
     jsonData:
@@ -121,7 +121,7 @@ spec:
     name: VictoriaMetrics
     type: prometheus
     access: proxy
-    url: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428
+    url: http://vmsingle-vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428
     uid: victoriametrics
     isDefault: true
     editable: false
@@ -150,7 +150,7 @@ spec:
     name: VictoriaTraces
     type: jaeger
     access: proxy
-    url: http://vtraces.{{ .Values.namespace }}.svc.cluster.local:10428
+    url: http://vtsingle-vtraces.{{ .Values.namespace }}.svc.cluster.local:10428
     uid: victoriatraces
     editable: false
 {{- end }}

@@ -1,41 +1,51 @@
 # GENIE.AI Helm charts
 
-This directory holds the Kubernetes-deployment Helm charts for GENIE.AI.
-
-## Status
-
-Foundation, data layer, and stateless service tier complete. Remaining
-tiers: observability, AI/ML, per-env config + ingress, CI integration,
-docs.
+Kubernetes-deployment Helm charts for GENIE.AI.
 
 ## Charts
 
-| Chart | Status | Purpose |
-|---|---|---|
-| `genieai-common` | foundation | Library chart (templates + helpers) |
-| `genieai-umbrella` | foundation + data layer + service tier | Single-install chart; renders data layer + stateless app services in one `helm install` |
+| Chart | Purpose |
+|---|---|
+| `genieai-common` | Library chart. Templates + helpers shared by the umbrella. Not installed directly. |
+| `genieai-umbrella` | Single-install chart. Renders the full GENIE.AI service topology (stateless tier, data layer, OPEA AI/ML tier, keycloak-config-cli convergence) in one `helm install`. |
+
+## Status
+
+`genieai-umbrella` 0.1.69 covers foundation, service tier, data layer, and the OPEA tier (render-validated). Observability rendering and the per-environment Gateway API / cert-manager ingress tier are in progress; both will land as additional templates in the same chart.
 
 ## Cluster prerequisites
 
-Operator controllers (CNPG ≥1.30, kube-arangodb 1.4.x, sealed-secrets ≥0.40,
-keycloak-operator 26.x; later: GPU, cert-manager, envoy-gateway) are cluster
-bootstrap prerequisites — installed once per cluster, before any release.
-Per-release operator installs would create competing cluster-scoped
-controllers. See `genieai-umbrella/README.md` for install hints.
+Operator controllers (CNPG ≥1.30, kube-arangodb 1.4.x, sealed-secrets ≥0.40, keycloak-operator 26.x, OpenTelemetry Operator, GPU operator, cert-manager, Envoy Gateway) are cluster bootstrap prerequisites — installed once per cluster, before any release. Per-release operator installs would create competing cluster-scoped controllers. See `genieai-umbrella/README.md` for install hints.
+
+## Render gates
+
+The umbrella is validated by two stages. Both must pass before a release lands on `main`.
+
+```bash
+# 1. helm lint + ct lint — schema, template conventions, cross-reference checks
+helm lint charts/genieai-umbrella --strict
+make -C charts lint
+
+# 2. helm template byte-diff — operator-facing surface stays stable
+make -C charts template              # writes /tmp/genieai-rendered.yaml
+diff -u <(git show HEAD:path/to/baseline.yaml) /tmp/genieai-rendered.yaml
+```
+
+`ct install` against a kind cluster + `helm test` runs the smoke jobs (namespace existence, data-tier dependency reachability). Trigger via `make -C charts test`.
+
+## Conventions
+
+- Helm API v2, Helm 4.x.
+- No secrets in `values.yaml` or `values-override.yaml`. Secrets are operator-materialized (SealedSecret, External Secrets Operator, SOPS, manual, etc.).
+- Tests live in each chart's `templates/tests/` (Helm convention).
+- Install with `-n <ns> --create-namespace` — the Namespace is a regular resource; hooks and the release Secret need it first.
+- Vendored dep tarballs are generated, not tracked — run `make -C charts deps` after cloning or dep changes. `Chart.lock` IS tracked.
+- Hook Jobs live in `templates/hooks/*.yaml` with explicit `helm.sh/hook` annotations (phase + weight). The subdirectory is organizational; Helm scans `templates/` recursively.
+- Hook + test-pod init containers download `kubectl` and `jq` from public release URLs. Set `global.kubeletToolsMirror` for air-gapped clusters.
+- NetworkPolicy: every rendered service gets a default-deny + explicit allowlist policy. The OPEA model Deployments get ingress-only policies; orchestrators see per-peer egress rules scoped to the call graph.
+- PodDisruptionBudget: only emitted when `replicas >= 2`.
 
 ## Other directories
 
 - `deploy/environments/` — per-environment Kustomize overlays + values-override files.
 - `docs/charts/` — dev-internal reference docs (operator selection, migration playbooks).
-
-## Conventions
-
-- Helm API v2. Helm 4.x.
-- No secrets in `values-override.yaml`. Use SealedSecret resources (default backend).
-- Tests live in each chart's `templates/tests/` directory (Helm convention)
-- Install requires `-n <ns> --create-namespace` (the Namespace is a regular resource; the release Secret and hooks need it first)
-- Vendored dep tarballs are generated, not tracked — run `make deps` (from `charts/`) after cloning or dep changes. `Chart.lock` IS tracked (pins dep versions for reproducible builds). `ct install` for integration, `helm test` for smoke.
-- Hook Jobs live in `templates/hooks/*.yaml` with explicit `helm.sh/hook` annotations (phase + weight). Helm scans `templates/` recursively — the subdirectory is organizational only.
-- Hook + test-pod init containers download `kubectl` and `jq` from public release URLs by default. Set `global.kubeletToolsMirror` in `values.yaml` to route them through an internal mirror for air-gapped / sovereign clusters.
-- NetworkPolicy: every service gets default-deny + explicit allowlist.
-- PDB: only emitted when `replicas >= 2` (avoids drain block on singletons).

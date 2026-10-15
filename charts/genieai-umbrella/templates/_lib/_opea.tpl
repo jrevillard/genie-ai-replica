@@ -38,7 +38,7 @@ http://vllm-translation.{{ $root.Values.namespace }}.svc.cluster.local:9031
   {{- else if eq $key "docling" -}}
 {{- /* No docling Deployment is rendered in-cluster; an empty endpoint
 makes dataprep use its in-process docling converter (the same fallback
-compose relies on with an empty DOCLING_ENDPOINT). */ -}}
+an empty env var produces). */ -}}
 {{- "" -}}
   {{- end -}}
 

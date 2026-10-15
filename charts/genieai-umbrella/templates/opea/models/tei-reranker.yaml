@@ -1,8 +1,7 @@
 {{/*
-  TEI reranker server (in-cluster GPU mode only). Compose parity:
-  docker-compose.yaml gpu-models profile, service `tei_reranker`.
-  Model id from .Values.opea.models.reranker.modelId. Image from
-  ghcr.io unconditionally (see tei.yaml). Skeleton via
+  TEI reranker server (in-cluster GPU mode only). Model id from
+  .Values.opea.models.reranker.modelId. Image from ghcr.io
+  unconditionally (see tei.yaml). Skeleton via
   genieai-umbrella.modelDeployment.
 */}}
 {{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") -}}

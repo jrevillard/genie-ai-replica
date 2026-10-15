@@ -68,7 +68,6 @@ spec:
               --json-output
               --model-id {{ $modelId }}
               --auto-truncate false
-              --max-batch-tokens 8192
           ports:
             - name: http
               containerPort: 80

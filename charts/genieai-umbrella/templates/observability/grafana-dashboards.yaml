@@ -1,9 +1,9 @@
 {{- if .Values.observability.grafana.enabled }}
 {{- /*
   GrafanaFolders + GrafanaDashboard + GrafanaAlertRuleGroup CRs.
-  GrafanaFolders group dashboards into a UI tree (compose parity
-  with provisioning's `foldersFromFilesStructure: true` — the on-disk
-  path under `dashboards/` mirrors the Grafana folder layout).
+  GrafanaFolders group dashboards into a UI tree: General for the
+  application-facing dashboards, Observability for the stack
+  dashboards.
 
   Dashboards: configs/grafana/provisioning/dashboards/*.json +
   dashboards/observability/*.json. JSON content is inlined via
@@ -35,8 +35,7 @@
   "victoriametrics-single-node.json"
   "victoriatraces-single-node.json" -}}
 ---
-# Folders. General mirrors `dashboards/` (the compose path used
-# foldersFromFilesStructure: true with an empty folder title).
+# Folders. General holds the application-facing dashboards.
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaFolder
 metadata:

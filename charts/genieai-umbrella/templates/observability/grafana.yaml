@@ -12,12 +12,12 @@ enabled alongside it. */ -}}
   (the bitnami v4.9.x chart ships this group; the upstream
   grafana-operator project also uses it).
 
-  Datasource shapes mirror configs/grafana/provisioning/datasources/vm-datasource.yml
-  exactly — type, url, uid, editable, jsonData — with the compose
-  service hostnames swapped for in-cluster Service FQDNs (the
-  operator-managed vmoperator CRs render Services named after the CR
-  metadata.name: "victorialogs" :9428, "vmetrics" :8428, "vtraces" :10428
-  for the Jaeger query API VT serves natively — no tempo-proxy).
+  Datasource definitions (type, url, uid, editable, jsonData) keep
+  the contract the shipped dashboard JSON bakes in via uid
+  references. Service FQDNs point at the operator-managed storage
+  CRs, whose Services are named after the CR metadata.name:
+  "victorialogs" :9428, "vmetrics" :8428, "vtraces" :10428 for the
+  Jaeger query API VictoriaTraces serves natively.
 
   allowCrossNamespaceImport: true on metrics + traces datasources
   so dashboards in operator-managed folders (provisioned across
@@ -130,11 +130,10 @@ spec:
       httpMethod: POST
 {{- end }}
 {{- if .Values.observability.traces.enabled }}
-# VictoriaTraces datasource — VictoriaTraces serves the Jaeger HTTP
-# API natively on port 10428 (no tempo-proxy on this path; the
-# compose `tempo-proxy:10429` indirection is dropped because the
-# vmoperator-managed VTSingle exposes the Jaeger query API directly).
-# Type mirrors vm-datasource.yml: "jaeger".
+# VictoriaTraces datasource — the datasource talks to the VTSingle
+# Service directly: VictoriaTraces serves the Jaeger HTTP API
+# natively on port 10428, no intermediary proxy.
+# Type "jaeger" per the dashboard datasource contract.
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
 metadata:

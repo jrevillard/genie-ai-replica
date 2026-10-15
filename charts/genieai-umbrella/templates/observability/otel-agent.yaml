@@ -2,17 +2,15 @@
 {{- /*
   OTel Collector filelog agent — DaemonSet mode. One pod per node,
   tails containerd's pod-log path under /var/log/pods (one log file per container),
-  runs the compose-equivalent transform pipeline (PII redaction,
-  envelope trace lift, severity stamp, body normalisation, Python
-  prefix strip), and forwards to the gateway via OTLP/HTTP.
+  strips the CRI envelope (timestamp/stream/logtag prefix), runs the
+  log transform pipeline (PII redaction, envelope trace lift, severity
+  stamp, body normalisation, Python prefix strip), and forwards to the
+  gateway via OTLP.
 
-  Compose parity: the Docker fluentd driver + the
-  configs/otel/otel-collector-config.yaml transforms combined are
-  collapsed into a single filelog→OTLP agent here. The fluentd
-  service's stamp_log_metadata_from_msg (fluentd-side metadata
-  re-parse) is replaced by the k8sattributes processor (native
-  pod/namespace/labels enrichment from the kubelet API) — no regex
-  on fluent.tag, no manual service.name stamp from compose labels.
+  Pod/namespace/label enrichment comes from the k8sattributes
+  processor (kubelet API), not from log-line re-parsing — the
+  service.name stamp reads the container name the file path and the
+  processor provide.
 
   PII redaction: pii_redact statements ported VERBATIM from
   configs/otel/otel-collector-config.yaml. The double-escape trap
@@ -52,7 +50,25 @@ spec:
         start_at: end
         include_file_path: true
         operators:
-          - type: cri
+          # CRI line format: "<time> <stream> <F|P> <log>". stanza has no
+          # `cri` operator — a regex_parser strips the envelope; on a
+          # non-matching line the entry passes through with body intact
+          # (on_error default = send), so foreign lines are not dropped.
+          - type: regex_parser
+            id: parse-cri
+            regex: '^(?P<time>[^ ]+) (?P<stream>stdout|stderr) (?P<logtag>[FP]) (?P<log>.*)$'
+            parse_from: body
+            parse_to: attributes
+            on_error: send
+            timestamp:
+              parse_from: attributes.time
+              layout_type: gotime
+              layout: '2006-01-02T15:04:05.999999999Z07:00'
+          # Downstream transforms inspect the raw app line (JSON winston
+          # lines, Python prefixes), so the un-wrapped log becomes body.
+          - type: move
+            from: attributes.log
+            to: body
     processors:
       k8sattributes:
         auth_type: serviceAccount

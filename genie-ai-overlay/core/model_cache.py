@@ -35,6 +35,10 @@ logger = logging.getLogger(__name__)
 # Default TTL in seconds. Overridable per-deployment via MODEL_DETECT_TTL env var.
 MODEL_TTL_DEFAULT = 60
 
+# How long a failed probe is remembered (seconds): bounds the retry storm when
+# nothing answers the probe to one attempt per window instead of one per request.
+NEGATIVE_CACHE_TTL = 60
+
 # endpoint_url -> {"model_id": str|None, "max_model_len": int|None, "ts": float}
 _cache: dict[str, dict] = {}
 
@@ -80,17 +84,18 @@ def _probe(endpoint_url: str) -> dict | None:
 
 
 def _coerce_max_model_len(value) -> int | None:
-    """Coerce a probed ``max_model_len`` to int, or None if unusable.
+    """Coerce a probed ``max_model_len`` to a usable int, or None.
 
-    Some proxies serialize the field as a JSON string; anything the callers
-    cannot do arithmetic on (bool, float, dict, garbage) is dropped so a bad
-    payload never poisons the cache entry.
+    Some proxies serialize the field as a JSON string, others report -1 or 0
+    as an "unknown" sentinel; anything that cannot serve as a context window
+    (non-positive, bool, float, dict, garbage) is dropped so a bad payload
+    never poisons the cache entry.
     """
     if isinstance(value, bool):
         return None
-    if isinstance(value, int):
+    if isinstance(value, int) and value > 0:
         return value
-    if isinstance(value, str) and value.strip().isdigit():
+    if isinstance(value, str) and value.strip().isdigit() and int(value) > 0:
         return int(value)
     return None
 
@@ -101,7 +106,9 @@ def _cached_field(endpoint_url: str, ttl_seconds: int | None, field: str):
     On cache hit (within TTL): return the cached value without probing.
     On cache expiry: re-probe once and refresh every cached field from the
     same payload. On probe failure: serve the stale cached value if one
-    exists (stale > broken), else None.
+    exists (stale > broken), else None. A failed probe is remembered for
+    NEGATIVE_CACHE_TTL seconds so an unreachable endpoint costs one probe per
+    window instead of one per request.
     """
     if not endpoint_url:
         return None
@@ -111,6 +118,12 @@ def _cached_field(endpoint_url: str, ttl_seconds: int | None, field: str):
     entry = _cache.get(endpoint_url)
 
     if entry and (now - entry["ts"]) < ttl:
+        return entry[field]
+
+    # Recently failed probe: within the negative-cache window, answer from the
+    # cached entry (stale values when some exist, None otherwise) without
+    # re-probing.
+    if entry and (now - entry.get("last_fail_ts", 0)) < NEGATIVE_CACHE_TTL:
         return entry[field]
 
     # Cache miss or expired — re-probe.
@@ -133,11 +146,14 @@ def _cached_field(endpoint_url: str, ttl_seconds: int | None, field: str):
             )
         return value
 
-    # Probe failed. Return stale value if available (stale > broken).
+    # Probe failed. Remember the failure briefly, then serve whatever the
+    # entry holds (stale values when some exist, None otherwise).
     if entry:
+        entry["last_fail_ts"] = now
         logger.info("model_cache: probe failed for %s, serving stale cached value", endpoint_url)
         return entry[field]
 
+    _cache[endpoint_url] = {"model_id": None, "max_model_len": None, "ts": 0, "last_fail_ts": now}
     return None
 
 

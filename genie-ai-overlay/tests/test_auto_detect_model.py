@@ -312,6 +312,44 @@ class TestModelCacheMaxModelLen:
 
         assert result is None
 
+    def test_non_positive_max_model_len_is_dropped(self):
+        """Zero or negative values (plausible 'unknown' sentinels like -1) are
+        unusable as windows: dropping them keeps every budget arithmetic sane."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": -1}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert get_max_model_len("https://gpu-host/llm") is None
+
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": 0}]}
+        clear_cache()
+        with patch("httpx.get", return_value=mock_resp):
+            assert get_max_model_len("https://gpu-host/llm") is None
+
+    def test_failed_probe_is_negatively_cached_then_serves_stale(self):
+        """A failed probe is remembered briefly (one probe per negative TTL, not
+        one per request), and a previously known window keeps being served."""
+        ok_resp = MagicMock()
+        ok_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": 65536}]}
+
+        with patch("httpx.get", return_value=ok_resp):
+            assert get_max_model_len("https://gpu-host/llm", ttl_seconds=0) == 65536
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")) as mock_get:
+            # Within the negative-cache window (ttl 0 forces the expiry): no
+            # re-probe, stale value served.
+            assert get_max_model_len("https://gpu-host/llm", ttl_seconds=0) == 65536
+            assert get_max_model_len("https://gpu-host/llm", ttl_seconds=0) == 65536
+            assert mock_get.call_count == 1
+
+    def test_failed_probe_with_no_history_caches_none_briefly(self):
+        """Same negative cache when no window was ever known: one probe per
+        window instead of one per request."""
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")) as mock_get:
+            assert get_max_model_len("https://gpu-host/llm") is None
+            assert get_max_model_len("https://gpu-host/llm") is None
+            assert mock_get.call_count == 1
+
 
 # ---------------------------------------------------------------------------
 # chatqna getters — _get_llm_model / _get_translation_model_id
@@ -388,17 +426,17 @@ class TestChatqnaContextWindowGetters:
     the code default.
     """
 
-    def test_get_max_model_len_detected_when_gpu_host_set(self, monkeypatch):
+    def test_get_max_model_len_uses_remote_endpoint_when_configured(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
-        monkeypatch.setattr(mod, "_VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
+        monkeypatch.setattr(mod, "_LLM_DISCOVERY_ENDPOINT", "https://10.0.0.110/llm")
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
 
-        with patch("httpx.get", return_value=mock_resp):
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
             assert mod._get_max_model_len() == 65536
+        assert mock_get.call_args.args[0] == "https://10.0.0.110/llm/v1/models"
 
     def test_get_max_model_len_probes_without_gpu_node_host(self, monkeypatch):
         """Probing is always on: a compose deployment (LLM_SERVER_HOST_IP=vllm)
@@ -473,8 +511,7 @@ class TestChatqnaContextWindowGetters:
         """8192-token window → (8192-512)/2 × 3 = 11520 chars (completion reserve ≈ input size)."""
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
-        monkeypatch.setattr(mod, "_VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
+        monkeypatch.setattr(mod, "_TRANSLATION_DISCOVERY_ENDPOINT", "https://10.0.0.110/translation")
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 8192}]}
@@ -499,6 +536,20 @@ class TestChatqnaContextWindowGetters:
 
         with patch("httpx.get", side_effect=httpx.ConnectError("down")):
             assert mod._get_max_translation_chars() == 2000
+
+    def test_explicit_max_translation_chars_caps_discovered_budget(self, monkeypatch):
+        """A deployer-set MAX_TRANSLATION_CHARS caps the derived budget even when
+        discovery wins — the documented dense-script (CJK) mitigation."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation")
+        monkeypatch.setenv("MAX_TRANSLATION_CHARS", "500")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 8192}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert mod._get_max_translation_chars() == 500
 
 
 # ---------------------------------------------------------------------------

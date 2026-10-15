@@ -5,6 +5,7 @@
 import argparse
 import ast
 import asyncio
+import contextlib
 import copy
 import json
 import math
@@ -290,15 +291,19 @@ def _get_max_translation_chars() -> int:
     """Return the character budget for history forwarded to the translation model.
 
     Derived from the discovered translation-model window so that the prompt
-    plus the completion (an input-sized translation) fit inside it; falls back
-    to the configured MAX_TRANSLATION_CHARS. Discovery gaps are logged by
-    core.model_cache. The chars-per-token ratio is a Latin-script estimate —
-    denser scripts (CJK, Devanagari) produce more tokens per char, so
-    deployments serving them should lower MAX_TRANSLATION_CHARS.
+    plus the completion (an input-sized translation) fit inside it; a
+    deployer-set MAX_TRANSLATION_CHARS caps that derivation (the dense-script
+    mitigation — CJK runs ~1 token/char, not 3), and falls back to the
+    configured MAX_TRANSLATION_CHARS when the probe has no answer. Discovery
+    gaps are logged by core.model_cache.
     """
     window = _get_translation_window()
     if window:
         budget = (window - TRANSLATION_PROMPT_OVERHEAD_TOKENS) // 2 * TRANSLATION_CHARS_PER_TOKEN
+        explicit = os.getenv("MAX_TRANSLATION_CHARS")
+        if explicit:
+            with contextlib.suppress(ValueError):
+                budget = min(budget, int(explicit))
         return max(budget, 1)
     return MAX_TRANSLATION_CHARS
 
@@ -308,6 +313,10 @@ def _get_max_translation_chars() -> int:
 # TranslateGemma payload also caps max_tokens near half the window).
 TRANSLATION_PROMPT_OVERHEAD_TOKENS = 512
 TRANSLATION_CHARS_PER_TOKEN = 3  # conservative: Spanish runs ~4-5 chars/token
+# Rough per-message overhead in the flattened history ("USER: " / "ASSISTANT: "
+# prefixes plus the " |<-MSG->| " separator) — the char budget counts content
+# only, so each kept message is charged this allowance.
+TRANSLATION_MSG_OVERHEAD_CHARS = 20
 
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
@@ -1208,7 +1217,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                 tokenizer.encode(
                     f"\n\nUSER INFORMATION:\n{user_context_string}"
                     "\n\nCHAT HISTORY:\n"
-                    f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}"
+                    f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}"
                 )
             )
             system_tokens = len(tokenizer.encode(system_instructions))
@@ -1242,11 +1251,13 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                 )
             # Rebuild truncated history
             translated_history_string = " |<-MSG->| ".join(truncated_history)
-            # Reconstruct user content (system instructions stay the same)
+            # Reconstruct user content (system instructions stay the same) — same
+            # template as the original prompt_add_context, so the model sees one
+            # consistent prompt shape whether or not truncation ran.
             user_content = (
                 f"\n\nUSER INFORMATION:\n{user_context_string}"
                 f"\n\nCHAT HISTORY:\n{translated_history_string}"
-                f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}"
+                f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}"
             )
 
         # FIX: Send system and user as separate messages for proper chat template handling
@@ -2260,10 +2271,10 @@ class ChatQnAService:
             if logflag:
                 logger.debug(f"Examining message: {message}")
             message_chars = len(message["content"])
-            if current_chars + message_chars > max_translation_chars:
+            if current_chars + message_chars + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
                 break
             messages_to_process.append(message)
-            current_chars += message_chars
+            current_chars += message_chars + TRANSLATION_MSG_OVERHEAD_CHARS
         messages_to_process.reverse()
         dropped_messages = len(history) - len(messages_to_process)
         if dropped_messages:

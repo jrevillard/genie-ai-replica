@@ -1917,8 +1917,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
-            patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
-            patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 30),
+            patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 70),
             patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
         ):
             await svc._get_translated_history_string(history, "English")

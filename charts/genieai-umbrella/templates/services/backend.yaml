@@ -138,4 +138,32 @@ spec:
       ports:
         - protocol: TCP
           port: 3001
+    {{- if .Values.opea.enabled }}
+    # Chat stream: the backend dials the chatqna orchestrator directly
+    # (OPEA_HOST:8888) when the OPEA tier is enabled. query-service.js
+    # builds the URL with no nginx hop; this egress rule is the only
+    # path that lets the chat stream reach chatqna under default-deny.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+      ports:
+        - protocol: TCP
+          port: 8888
+    {{- end }}
+    {{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "external") }}
+    # External GPU node — VLLM_TRANSLATION_ENDPOINT when the operator
+    # routes the BFF's translation path at the same GPU node the OPEA
+    # orchestrators reach. Port family (443 + 444) is intentionally
+    # broad because services.backend.translation.endpoint is a free
+    # string; a future tightening can derive the port from the URL.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 444
+    {{- end }}
 {{- end -}}

@@ -39,7 +39,6 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: collector-agent
 spec:
   mode: daemonset
   tolerations:

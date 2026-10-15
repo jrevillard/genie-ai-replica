@@ -30,8 +30,7 @@ metadata:
   name: backend
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: metrics
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "metrics") | nindent 4 }}
 spec:
   selector:
     matchLabels:
@@ -48,8 +47,7 @@ metadata:
   name: frontend
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: metrics
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "metrics") | nindent 4 }}
 spec:
   selector:
     matchLabels:
@@ -66,8 +64,7 @@ metadata:
   name: nginx
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: metrics
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "metrics") | nindent 4 }}
 spec:
   selector:
     matchLabels:
@@ -84,8 +81,7 @@ metadata:
   name: document-repository
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: metrics
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "metrics") | nindent 4 }}
 spec:
   selector:
     matchLabels:
@@ -102,8 +98,7 @@ metadata:
   name: redis-cache
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: metrics
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "metrics") | nindent 4 }}
 spec:
   selector:
     matchLabels:
@@ -124,8 +119,7 @@ metadata:
   name: chatqna
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: metrics
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "metrics") | nindent 4 }}
 spec:
   selector:
     matchLabels:
@@ -140,8 +134,7 @@ metadata:
   name: retriever
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: metrics
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "metrics") | nindent 4 }}
 spec:
   selector:
     matchLabels:
@@ -156,8 +149,7 @@ metadata:
   name: dataprep
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: metrics
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "metrics") | nindent 4 }}
 spec:
   selector:
     matchLabels:
@@ -172,8 +164,7 @@ metadata:
   name: reranker
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: metrics
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "metrics") | nindent 4 }}
 spec:
   selector:
     matchLabels:
@@ -188,8 +179,7 @@ metadata:
   name: embedding
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: metrics
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "metrics") | nindent 4 }}
 spec:
   selector:
     matchLabels:
@@ -204,8 +194,7 @@ metadata:
   name: translation
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: metrics
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "metrics") | nindent 4 }}
 spec:
   selector:
     matchLabels:

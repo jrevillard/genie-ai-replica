@@ -1,0 +1,30 @@
+{{- if .Values.observability.metrics.enabled }}
+{{- /*
+  VMSingle CR — single-node VictoriaMetrics.
+  apiVersion: VMSingle stays on operator.victoriametrics.com/v1beta1
+  in vmoperator v0.75.0 (VMSingle was not promoted to v1 alongside
+  VLSingle/VTSingle). Validation deferred to first reconcile — the
+  operator is not installed locally.
+
+  The operator creates the in-cluster Service prefixed with metadata.name
+  ("vmetrics") on the standard VM HTTP port 8428. Remote-write exporters
+  point at http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428/api/v1/write
+  (the Prometheus remote-write endpoint).
+*/}}
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMSingle
+metadata:
+  name: vmetrics
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  retentionPeriod: {{ .Values.observability.metrics.retentionPeriod | quote }}
+  removePvcAfterDelete: false
+  storage:
+    resources:
+      requests:
+        storage: {{ .Values.observability.metrics.storageSize | quote }}
+  replicaCount: 1
+{{- end }}

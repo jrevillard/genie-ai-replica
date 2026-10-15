@@ -971,7 +971,7 @@ export default {
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
-  background: var(--surface-muted, rgba(255, 255, 255, 0.85));
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.85));
   border-radius: var(--radius-md);
   pointer-events: none; /* pure overlay — it must never eat graph clicks */
 }

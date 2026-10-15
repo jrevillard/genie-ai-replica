@@ -566,10 +566,41 @@ that file are unaffected. Frontend **98/98 suites, 1908/1908 tests**.
 
 **Found in passing, deliberately NOT fixed here.** The **Dismiss** button writes
 `p.dismissed = true`, and nothing anywhere in the codebase ever reads that flag —
-`grep dismissed` returns the write plus one unrelated component. Clicking it
-changes nothing visible. It is outside Story 10.8's scope and needs its own i18n
-decision (14 locale files must stay deep-key-identical), so it is filed rather than
-silently folded in.
+`grep dismissed` returns the write plus one unrelated component (`Narrative.vue`,
+which *does* branch on its own `dismissed` at `:34`, so it is the shape this should
+have). Clicking it changes nothing visible. It is outside Story 10.8's scope and
+needs its own i18n decision (14 locale files must stay deep-key-identical), so it is
+filed rather than silently folded in.
+
+### BUG-16 — The Dismiss button on a link suggestion is dead
+
+**Status: OPEN, not yet in GitLab** · Severity: medium (dead affordance) · Found
+2026-10-15 while fixing !1075
+
+The template branches on exactly one flag — `v-if="p.accepted"` / `v-else` — so
+setting `p.dismissed` cannot change what renders:
+
+```html
+<DsButton variant="ghost" small @click="p.dismissed = true">
+  {{ translate('okf.validation.action.dismiss', 'Dismiss') }}
+</DsButton>
+```
+
+A codebase-wide grep for `dismissed` returns this write and `Narrative.vue` only.
+Same class as the "Done" button !1075 just fixed: a resolved-state affordance built
+and then made unreachable.
+
+**Not fixed inline**, because it needs two decisions that belong to a change of this
+size: what a dismissed proposal should *look like* (removed, or struck through with
+an **Undo** — removal is destructive with no way back), and the i18n keys either
+option needs across 14 deep-key-identical locale files.
+
+**Suggested direction:** keep the proposal in the list in a dismissed state with an
+Undo, mirroring the "Done" pattern — a dismissed proposal that silently vanishes
+cannot be reconsidered.
+
+> The GitLab issue was drafted but **creation was blocked by the local permission
+> classifier**, so it is recorded here instead. It still needs filing.
 
 ## BUG-07 — Saved frontmatter loads correctly but renders invisible (root cause: BUG-06)
 

@@ -1,0 +1,15 @@
+{{- if .Values.observability.logs.enabled }}
+{{- /* Dedicated namespace for the filelog agent DaemonSet: reading the
+node's /var/log/pods requires hostPath volumes, which the release
+namespace's pod-security baseline forbids. Only this namespace relaxes
+to privileged. */ -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}-obs
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: privileged
+    pod-security.kubernetes.io/audit: privileged
+    app.kubernetes.io/part-of: genieai
+{{- end }}

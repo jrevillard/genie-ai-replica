@@ -36,7 +36,7 @@ apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
 metadata:
   name: genieai-agent
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Values.namespace }}-obs
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
 spec:

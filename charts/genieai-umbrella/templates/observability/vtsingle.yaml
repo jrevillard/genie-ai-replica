@@ -1,0 +1,31 @@
+{{- if .Values.observability.traces.enabled }}
+{{- /*
+  VTSingle CR — single-node VictoriaTraces.
+  apiVersion: vmoperator v0.75.0 places VTSingle under
+  operator.victoriametrics.com/v1 (the same group as VLSingle). Earlier
+  releases exposed it under a separate victoriametrics.com/v1beta1
+  group that is no longer served by the current CRD. Validation
+  deferred to first reconcile — the operator is not installed locally.
+
+  The operator creates the in-cluster Service prefixed with metadata.name
+  ("vtraces") and exposes VictoriaTraces' native OTLP receiver on
+  port 4318 (HTTP) and 4317 (gRPC) — no tempo-proxy needed because
+  VictoriaTraces speaks the Jaeger/Tempo HTTP API natively.
+*/}}
+apiVersion: operator.victoriametrics.com/v1
+kind: VTSingle
+metadata:
+  name: vtraces
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: traces
+spec:
+  retentionPeriod: {{ .Values.observability.traces.retentionPeriod | quote }}
+  removePvcAfterDelete: false
+  storage:
+    resources:
+      requests:
+        storage: {{ .Values.observability.traces.storageSize | quote }}
+  replicaCount: 1
+{{- end }}

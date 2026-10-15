@@ -1,0 +1,35 @@
+{{- if .Values.observability.logs.enabled }}
+{{- /*
+  VLSingle CR — single-node VictoriaLogs.
+  Reconciled by the vmoperator (cluster bootstrap prerequisite, NOT a
+  chart dependency — see charts/README.md). The operator creates the
+  Deployment + Service + VMServiceScrape prefixed with metadata.name
+  ("victorialogs"), so OTLP ingest reaches
+  http://victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428
+  (VictoriaLogs default OTLP port).
+
+  apiVersion: vmoperator v0.75.0 consolidates VLSingle under
+  operator.victoriametrics.com/v1. Earlier releases exposed it under
+  logs.victoriametrics.com/v1beta1; that group is no longer served by
+  the current CRD. Validation is deferred to first reconcile — the
+  operator is not installed locally, so helm template + lint cannot
+  catch a group mismatch; the field shape was checked against the
+  vmoperator v0.75.0 API docs (VLSingleSpec).
+*/}}
+apiVersion: operator.victoriametrics.com/v1
+kind: VLSingle
+metadata:
+  name: victorialogs
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: logs
+spec:
+  retentionPeriod: {{ .Values.observability.logs.retentionPeriod | quote }}
+  removePvcAfterDelete: false
+  storage:
+    resources:
+      requests:
+        storage: {{ .Values.observability.logs.storageSize | quote }}
+  replicaCount: 1
+{{- end }}

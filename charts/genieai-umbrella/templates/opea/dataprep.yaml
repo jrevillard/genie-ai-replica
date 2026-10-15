@@ -57,7 +57,8 @@
     (dict "name" "CONTEXTUAL_STRATEGY" "value" (.Values.opea.dataprep.contextualStrategy | default "per_chunk"))
     (dict "name" "CONTEXTUAL_LABEL_RAW" "value" (.Values.opea.dataprep.contextualLabelRaw | default "true" | toString))
     (dict "name" "VLLM_MODEL_ID" "value" (.Values.opea.dataprep.vllmModelId | default "meta-llama/Meta-Llama-3.1-8B-Instruct"))
-    (dict "name" "VLLM_ENDPOINT" "value" $llmEndpoint)
+    (dict "name" "VLLM_ENDPOINT"
+(dict "name" "GPU_NODE_HOST" "value" (regexReplaceAll "^([a-z]+://)?([^:/]+).*" (.Values.opea.gpu.nodeHost | default "") "$2")) "value" $llmEndpoint)
     (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
     (dict "name" "DOCLING_ENDPOINT" "value" $doclingEndpoint)
     (dict "name" "DOCLING_DEVICE" "value" (.Values.opea.dataprep.doclingDevice | default "cuda"))

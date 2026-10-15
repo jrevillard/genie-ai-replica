@@ -326,6 +326,47 @@ class TestModelCacheMaxModelLen:
         with patch("httpx.get", return_value=mock_resp):
             assert get_max_model_len("https://gpu-host/llm") is None
 
+    def test_unparseable_digit_strings_are_dropped(self):
+        """Strings str.isdigit() accepts but int() rejects (superscripts etc.)
+        must fall back to None, not raise out of the accessor."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": "²"}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert get_max_model_len("https://gpu-host/llm") is None
+
+    def test_integral_float_is_accepted(self):
+        """A proxy serializing the window as a JSON float (65536.0) still
+        discovers the window — dropping it would resurface the history wipe."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": 65536.0}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert get_max_model_len("https://gpu-host/llm") == 65536
+
+    def test_entry_without_id_is_treated_as_failed_probe(self, caplog):
+        """A payload entry with no 'id' is an invalid probe: warn and follow the
+        failure path instead of caching None as a silent success."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"max_model_len": 4096}]}
+
+        with (
+            patch("httpx.get", return_value=mock_resp),
+            caplog.at_level(logging.WARNING, logger="core.model_cache"),
+        ):
+            assert get_max_model_len("https://gpu-host/llm") is None
+
+        assert any("no model id" in r.getMessage() for r in caplog.records)
+
+    def test_model_id_probe_failure_retries_on_every_call(self):
+        """The negative cache is a window-discovery concern: model-id consumers
+        (dataprep chunk labeling) keep retrying immediately on the next call."""
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")) as mock_get:
+            assert get_model_id("https://gpu-host/llm") is None
+            assert get_model_id("https://gpu-host/llm") is None
+
+        assert mock_get.call_count == 2
+
     def test_failed_probe_is_negatively_cached_then_serves_stale(self):
         """A failed probe is remembered briefly (one probe per negative TTL, not
         one per request), and a previously known window keeps being served."""

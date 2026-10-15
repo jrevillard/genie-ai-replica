@@ -257,9 +257,20 @@ def _is_translategemma() -> bool:
 # on the same endpoint, the shared cache entry is refreshed on their cadence
 # and this TTL only governs when no other accessor has run recently.
 try:
-    MODEL_LEN_DETECT_TTL = int(os.getenv("MODEL_LEN_DETECT_TTL", "3600"))
+    MODEL_LEN_DETECT_TTL = max(int(os.getenv("MODEL_LEN_DETECT_TTL", "3600")), 1)
 except ValueError:
     MODEL_LEN_DETECT_TTL = 3600
+
+
+def _build_user_content(user_context_string: str, history_string: str, rag_augmented_prompt: str) -> str:
+    """The user-message template — the single source for prompt assembly, the
+    truncation-budget skeleton, and the post-truncation rebuild, so the
+    measured budget always matches what is finally sent."""
+    return (
+        f"\n\nUSER INFORMATION:\n{user_context_string}"
+        f"\n\nCHAT HISTORY:\n{history_string}"
+        f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}"
+    )
 
 
 def _get_max_model_len() -> int:
@@ -293,19 +304,28 @@ def _get_max_translation_chars() -> int:
     Derived from the discovered translation-model window so that the prompt
     plus the completion (an input-sized translation) fit inside it; a
     deployer-set MAX_TRANSLATION_CHARS caps that derivation (the dense-script
-    mitigation — CJK runs ~1 token/char, not 3), and falls back to the
-    configured MAX_TRANSLATION_CHARS when the probe has no answer. Discovery
-    gaps are logged by core.model_cache.
+    mitigation — CJK runs ~1 token/char, not 3), and the same configured value
+    is the fallback when the probe has no answer. Discovery gaps are logged by
+    core.model_cache.
     """
     window = _get_translation_window()
-    if window:
-        budget = (window - TRANSLATION_PROMPT_OVERHEAD_TOKENS) // 2 * TRANSLATION_CHARS_PER_TOKEN
-        explicit = os.getenv("MAX_TRANSLATION_CHARS")
-        if explicit:
-            with contextlib.suppress(ValueError):
-                budget = min(budget, int(explicit))
-        return max(budget, 1)
-    return MAX_TRANSLATION_CHARS
+    if not window:
+        return _translation_chars_fallback()
+    budget = (window - TRANSLATION_PROMPT_OVERHEAD_TOKENS) // 2 * TRANSLATION_CHARS_PER_TOKEN
+    explicit = os.getenv("MAX_TRANSLATION_CHARS")
+    if explicit:
+        with contextlib.suppress(ValueError):
+            budget = min(budget, int(explicit))
+    return max(budget, 1)
+
+
+def _translation_chars_fallback() -> int:
+    """The deployer-configured char budget, reread at call time (tests and
+    embedded use may change the env after import)."""
+    try:
+        return int(os.getenv("MAX_TRANSLATION_CHARS", str(MAX_TRANSLATION_CHARS)))
+    except ValueError:
+        return MAX_TRANSLATION_CHARS
 
 
 # Translation budget derivation from the discovered window. The completion
@@ -1190,11 +1210,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             else:
                 logger.error("[SYSTEM PROMPT DEBUG] CHATQNA_SYSTEM_PROMPT IS NONE OR EMPTY!")
 
-        prompt_add_context = (
-            f"\n\nUSER INFORMATION:\n{user_context_string}"
-            f"\n\nCHAT HISTORY:\n{translated_history_string}"
-            f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}"
-        )
+        prompt_add_context = _build_user_content(user_context_string, translated_history_string, rag_augmented_prompt)
 
         # FIX: Separate system and user content for proper chat template handling
         user_content = prompt_add_context
@@ -1213,13 +1229,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             # what is finally sent. Segment separators (" |<-MSG->| ") are not
             # counted individually (~1-2 tokens per segment, absorbed by the
             # buffer).
-            skeleton_tokens = len(
-                tokenizer.encode(
-                    f"\n\nUSER INFORMATION:\n{user_context_string}"
-                    "\n\nCHAT HISTORY:\n"
-                    f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}"
-                )
-            )
+            skeleton_tokens = len(tokenizer.encode(_build_user_content(user_context_string, "", rag_augmented_prompt)))
             system_tokens = len(tokenizer.encode(system_instructions))
 
             max_history_tokens = max_model_tokens - system_tokens - max_answer_tokens - skeleton_tokens - 200
@@ -1254,11 +1264,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             # Reconstruct user content (system instructions stay the same) — same
             # template as the original prompt_add_context, so the model sees one
             # consistent prompt shape whether or not truncation ran.
-            user_content = (
-                f"\n\nUSER INFORMATION:\n{user_context_string}"
-                f"\n\nCHAT HISTORY:\n{translated_history_string}"
-                f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}"
-            )
+            user_content = _build_user_content(user_context_string, translated_history_string, rag_augmented_prompt)
 
         # FIX: Send system and user as separate messages for proper chat template handling
         next_inputs["messages"] = [
@@ -2221,20 +2227,24 @@ class ChatQnAService:
             f"<end_of_turn>\n<start_of_turn>model\n"
         )
 
-    def _translation_output_cap(self, flattened_history_string: str) -> int:
+    def _translation_output_cap(self, flattened_history_string: str) -> int | None:
         """Completion cap for the TranslateGemma payload.
 
         Base ceiling is len//2 (bounded 512..4096). When the translation window
         is discovered, the cap is clamped so the prompt estimate (chars /
         chars-per-token ratio) plus the completion stays inside the window —
         otherwise vLLM rejects the whole request and the history goes back
-        untranslated.
+        untranslated. Returns None when even the clamped cap drops below the
+        512-token floor (window too tight for a meaningful translation); the
+        caller should skip the translation and send the history as-is.
         """
         cap = min(max(len(flattened_history_string) // 2, 512), 4096)
         window = _get_translation_window()
         if window:
             prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
             cap = min(cap, max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate))
+            if cap < 512:
+                return None
         return cap
 
     async def _get_translated_history_string(
@@ -2305,11 +2315,17 @@ class ChatQnAService:
                 source_lang_name=source_lang_code.upper(),
                 target_lang_name="English",
             )
+            output_cap = self._translation_output_cap(flattened_history_string)
+            if output_cap is None:
+                logger.warning(
+                    "Translation window too tight to translate the history meaningfully; returning it untranslated"
+                )
+                return flattened_history_string
             payload = {
                 "model": _get_translation_model_id(),
                 "prompt": prompt,
                 "temperature": 0.0,
-                "max_tokens": self._translation_output_cap(flattened_history_string),
+                "max_tokens": output_cap,
                 "repetition_penalty": 1.2,
             }
             url = TRANSLATION_COMPLETIONS_URL

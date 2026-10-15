@@ -38,6 +38,7 @@ class TestLazyModelResolution:
             importlib.reload(sys.modules["chatqna.genieai_chatqna"])
 
         mock_get.assert_not_called()
+        _reload_with_clean_env(monkeypatch)
 
     def test_getter_returns_detected_model(self, monkeypatch):
         """_get_llm_model probes and returns the detected model."""
@@ -60,7 +61,7 @@ class TestLazyModelResolution:
         import chatqna.genieai_chatqna as mod
 
         monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
-        monkeypatch.setenv("LLM_MODEL", "default-llm")
+        monkeypatch.setattr(mod, "LLM_MODEL", "default-llm")
 
         with patch("httpx.get") as mock_get:
             result = mod._get_llm_model()
@@ -98,7 +99,7 @@ class TestLazyModelResolution:
 
         monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
         monkeypatch.setattr(mod, "_VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
-        monkeypatch.setenv("LLM_MODEL", "default-llm")
+        monkeypatch.setattr(mod, "LLM_MODEL", "default-llm")
 
         with patch("httpx.get", side_effect=httpx.ConnectError("fail")):
             result = mod._get_llm_model()
@@ -124,3 +125,21 @@ class TestLazyModelResolution:
         mod = importlib.reload(sys.modules["chatqna.genieai_chatqna"])
         assert mod._LLM_DISCOVERY_ENDPOINT == "https://gpu-host:444/llm"
         assert mod._TRANSLATION_DISCOVERY_ENDPOINT == "https://gpu-host:444/translation"
+        _reload_with_clean_env(monkeypatch)
+
+
+def _reload_with_clean_env(monkeypatch):
+    """Reload the module with the discovery-related env cleared so the mutated
+    module state never leaks into later-collected test files."""
+    for var in (
+        "GPU_NODE_HOST",
+        "VLLM_LLM_ENDPOINT",
+        "VLLM_TRANSLATION_ENDPOINT",
+        "LLM_SERVER_HOST_IP",
+        "LLM_SERVER_PORT",
+        "TRANSLATION_SERVICE_HOST_IP",
+        "TRANSLATION_SERVICE_PORT",
+        "LLM_MODEL",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    importlib.reload(sys.modules["chatqna.genieai_chatqna"])

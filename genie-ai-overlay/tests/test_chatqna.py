@@ -1967,6 +1967,36 @@ class TestTranslationHelpers:
         assert payload["max_tokens"] == 2956
 
     @pytest.mark.asyncio
+    async def test_translation_skipped_when_window_too_tight(self):
+        """When even a minimal completion cannot fit the discovered window
+        (window < 1536 tokens makes the clamped cap drop below the 512-token
+        floor), the history goes back untranslated instead of requesting a
+        garbage blob that would poison the next prompt."""
+        svc = create_chatqna_service()
+        history = [
+            {"role": "user", "content": "A" * 300},
+            {"role": "assistant", "content": "B" * 300},
+        ]
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=MagicMock())
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        models_resp = MagicMock()
+        models_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 1024}]}
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=True),
+            patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
+            patch("httpx.get", return_value=models_resp),
+        ):
+            result = await svc._get_translated_history_string(history, "English")
+
+        flattened = "USER: " + "A" * 300 + " |<-MSG->| " + "ASSISTANT: " + "B" * 300
+        assert result == flattened  # untranslated, no HTTP call made
+        mock_client.post.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_translate_text_chunk_translategemma_format(self):
         svc = create_chatqna_service()
         mock_response = MagicMock()

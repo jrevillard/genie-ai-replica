@@ -86,17 +86,25 @@ def _probe(endpoint_url: str) -> dict | None:
 def _coerce_max_model_len(value) -> int | None:
     """Coerce a probed ``max_model_len`` to a usable int, or None.
 
-    Some proxies serialize the field as a JSON string, others report -1 or 0
-    as an "unknown" sentinel; anything that cannot serve as a context window
-    (non-positive, bool, float, dict, garbage) is dropped so a bad payload
+    Some proxies serialize the field as a JSON string (possibly with exotic
+    digit characters) or as a JSON float; others report -1 or 0 as an
+    "unknown" sentinel. Anything that cannot serve as a context window
+    (non-positive, bool, non-integral, garbage) is dropped so a bad payload
     never poisons the cache entry.
     """
     if isinstance(value, bool):
         return None
-    if isinstance(value, int) and value > 0:
-        return value
-    if isinstance(value, str) and value.strip().isdigit() and int(value) > 0:
-        return int(value)
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, float):
+        coerced = int(value)
+        return coerced if coerced > 0 and coerced == value else None
+    if isinstance(value, str):
+        try:
+            coerced = int(value.strip())
+        except ValueError:
+            return None
+        return coerced if coerced > 0 else None
     return None
 
 
@@ -106,9 +114,11 @@ def _cached_field(endpoint_url: str, ttl_seconds: int | None, field: str):
     On cache hit (within TTL): return the cached value without probing.
     On cache expiry: re-probe once and refresh every cached field from the
     same payload. On probe failure: serve the stale cached value if one
-    exists (stale > broken), else None. A failed probe is remembered for
+    exists (stale > broken), else None. For ``max_model_len`` (the field the
+    chat request path waits on) a failed probe is additionally remembered for
     NEGATIVE_CACHE_TTL seconds so an unreachable endpoint costs one probe per
-    window instead of one per request.
+    window instead of one per request; ``model_id`` consumers (dataprep and
+    retriever labeling) keep retrying on every call.
     """
     if not endpoint_url:
         return None
@@ -120,15 +130,16 @@ def _cached_field(endpoint_url: str, ttl_seconds: int | None, field: str):
     if entry and (now - entry["ts"]) < ttl:
         return entry[field]
 
-    # Recently failed probe: within the negative-cache window, answer from the
-    # cached entry (stale values when some exist, None otherwise) without
-    # re-probing.
-    if entry and (now - entry.get("last_fail_ts", 0)) < NEGATIVE_CACHE_TTL:
+    # Recently failed probe on the request-path field: within the negative-
+    # cache window, answer from the cached entry (stale values when some
+    # exist, None otherwise) without re-probing.
+    last_fail_ts = entry.get("last_fail_ts") if entry else None
+    if field == "max_model_len" and last_fail_ts is not None and (now - last_fail_ts) < NEGATIVE_CACHE_TTL:
         return entry[field]
 
     # Cache miss or expired — re-probe.
     probed = _probe(endpoint_url)
-    if probed is not None:
+    if probed is not None and probed.get("id") is not None:
         _cache[endpoint_url] = {
             "model_id": probed.get("id"),
             "max_model_len": _coerce_max_model_len(probed.get("max_model_len")),
@@ -146,14 +157,20 @@ def _cached_field(endpoint_url: str, ttl_seconds: int | None, field: str):
             )
         return value
 
-    # Probe failed. Remember the failure briefly, then serve whatever the
-    # entry holds (stale values when some exist, None otherwise).
+    # Invalid (no id) or failed probe. Remember the failure briefly for the
+    # request-path field, then serve whatever the entry holds (stale values
+    # when some exist, None otherwise).
+    if probed is not None:
+        logger.warning("model_cache: %s/v1/models returned an entry with no model id", endpoint_url)
     if entry:
-        entry["last_fail_ts"] = now
-        logger.info("model_cache: probe failed for %s, serving stale cached value", endpoint_url)
+        if field == "max_model_len":
+            entry["last_fail_ts"] = now
+        if probed is None:
+            logger.info("model_cache: probe failed for %s, serving stale cached value", endpoint_url)
         return entry[field]
 
-    _cache[endpoint_url] = {"model_id": None, "max_model_len": None, "ts": 0, "last_fail_ts": now}
+    if field == "max_model_len":
+        _cache[endpoint_url] = {"model_id": None, "max_model_len": None, "ts": 0, "last_fail_ts": now}
     return None
 
 

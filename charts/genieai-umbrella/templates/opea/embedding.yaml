@@ -1,0 +1,50 @@
+{{/*
+  embedding OPEA orchestrator. Compose-parity (docker-compose.yaml lines
+  1024-1064): two endpoint envs (EMBEDDING_MODEL_ENDPOINT and
+  TEI_EMBEDDING_ENDPOINT) that resolve to the same gpu-path; HF_TOKEN +
+  VLLM_API_KEY from the vllm-api-key Secret; OPEA_SSL_SKIP_VERIFY derived
+  from the gpu node URL scheme. Container/listen port 6000; healthcheck
+  hits /health on that port (compose parity).
+*/}}
+{{- if .Values.opea.enabled -}}
+{{- $vals := deepCopy .Values -}}
+{{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
+{{- $urls := list
+    (dict "name" "EMBEDDING_MODEL_ENDPOINT" "value" $embeddingEndpoint)
+    (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
+    (dict "name" "EMBEDDING_MODEL_ID" "value" .Values.opea.embedding.modelId)
+    (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
+-}}
+{{- $secretEnv := list
+    (dict "name" "HF_TOKEN" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "HF_TOKEN")))
+    (dict "name" "VLLM_API_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "VLLM_API_KEY")))
+-}}
+{{- $svcVals := dict
+    "image" (dict "repository" "genie-ai-embedding" "tag" "main")
+    "port" 6000
+    "resources" (dict "requests" (dict "cpu" "100m" "memory" "256Mi") "limits" (dict "cpu" "1" "memory" "1Gi"))
+    "env" (concat $urls $secretEnv)
+    "probes" (dict
+      "readiness" (dict "tcpSocket" (dict "port" 6000) "initialDelaySeconds" 30 "periodSeconds" 15)
+      "liveness"  (dict "tcpSocket" (dict "port" 6000) "initialDelaySeconds" 60 "periodSeconds" 30)
+    )
+-}}
+{{- $_ := set $vals.services "embedding" $svcVals -}}
+{{- $ctx := dict "name" "embedding" "component" "embedding" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: embedding
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "embedding") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 6000
+      targetPort: 6000
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "embedding") | nindent 4 }}
+{{- end -}}

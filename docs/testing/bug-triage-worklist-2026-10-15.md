@@ -78,17 +78,49 @@ Highest-severity item where nothing errors.
 
 ### 1.2 · `type: index` is written, accepted, then flagged INVALID_TYPE — !1077
 
+**FIXED in `59ebfb1fc`, pending live re-test.**
+
 The product writes `type: 'index'` on the bundle root (`crawl-conversion-service.js:709`),
 accepts it as valid in `is_index` (`concept-meta-service.js:157`), then flags it
 `INVALID_TYPE` against a 5-value enum that has no `index`. There is **no guided
 remedy**, so a curator hits a wall. Two vocabularies maintained independently is
 the root cause; the same shape produced BUG-12's enum drift.
 
+Resolution: new `services/okf-vocabulary.js` as the single source of truth, imported
+by all four consumers rather than restated, plus a guard test that fails if any
+consumer re-introduces either literal. The reserved root types (`index`,
+`BundleRoot`) are recognised but deliberately kept **out** of the autocorrect remedy
+text — offering a recognised reserved type as a choice would be misleading.
+
+The companion status-vocabulary disagreement also closed here, and **not** in the
+direction first assumed: measured against the live corpus (2,979 concepts — 2,860
+`draft` / 5 `stable` / 114 absent, with `active` and `retired` occurring **zero**
+times) and against `concept-meta-service.test.js:304`, which asserts `retired` is
+invalid, the correct list is `['draft','stable','deprecated']` — so
+`conformance-service` was right and **autocorrect held the wrong list**, flagging the
+`stable` concepts that really exist.
+
+Verification: okf-server **49/49 suites, 1219/1219 tests**; 17 new cases in
+`__tests__/okf-vocabulary.test.js`.
+
 ### 1.3 · Accepting one link suggestion unmounts all the others — !1075
+
+**FIXED in `49499fecc` (Story 10.8), pending live re-test.**
 
 Suggestions render *inside* the orphan issue row they remediate; accepting one
 cures the orphan, the row unmounts, and every remaining proposal is destroyed.
-Story 10.8 (!1076) is the remediation and is already written.
+Both panels now render at panel level keyed on `suggestFor` / `wireFor`.
+
+Two things worth carrying forward from this one:
+
+- **The orphan row also carries the "Suggest links" entry point**, so once the page
+  has a link the row stops rendering — meaning the remaining proposals were not just
+  destroyed, they were *unreachable*. The remediation path worked exactly once per page.
+- **The original test mocked a static report**, so `refresh()` returned the same
+  orphan forever and the unmount never happened. That mock is why it shipped green.
+  Any test for a self-clearing UI must make the refetched report DIFFER.
+- The pre-existing test's green result was not evidence of correctness here — it was
+  evidence the mock was too weak to reach the defect.
 
 ### 1.4 · PII sidecar worker dies — !1060, !1063
 
@@ -213,14 +245,15 @@ guess. **Do not file as a defect until the mechanism is known.**
 | 1 | **!1065 / BUG-12** — `pii_hit_count` computed, `broken_link_count` removed | **DONE** `c080288` |
 | 2 | **!1082** — suggester returns 22 entities against a ceiling of 20; accept 400s and every tag is lost | **DONE** `5fd5adb` |
 | 3 | **!1070** — re-verify first; may be the !1079 footgun, not a separate defect | **CLOSED — not a bug.** `repo.graph_name` is `OKF_<uuid>` and no such collection exists, but the serving path deliberately derives names via `workingGraphName(repo)` (`retrieval-config-service.js:183`, documented in its module header). Design is correct; the field is a naming trap |
-| 4 | **!1069** — frontmatter renders invisible; data intact but invisible, so curators re-type it | next |
-| 5 | **!1077** → **!1075** → **!1067** — wizard cluster, ordered by how much each blocks | |
-| 6 | **!1072** — 1202 logged at error on a clean drain; trains everyone to ignore errors | |
+| 4 | **!1069** — frontmatter renders invisible; data intact but invisible, so curators re-type it | **DONE** `89d0c54` — 12 undefined tokens across 11 files, not the 2 filed |
+| 5 | **!1077** → **!1075** → **!1067** — wizard cluster, ordered by how much each blocks | **!1077 DONE** `59ebfb1f` · **!1075 DONE** `49499fec` · !1067 next |
+| 6 | **!1072** — 1202 logged at error on a clean drain; trains everyone to ignore errors | next |
 | 7 | **!1073** — 28 env vars never reach a container; make config trustworthy before Wave 3 | |
 | 8 | **!1080** + **!1081** together — throughput and capacity, config + documentation | |
 | 9 | **!1060/!1063** — only with a reproduction in hand | parked |
 | 10 | Wave 4 polish; !1061, !1064, !1074, !1062 | |
 | — | !1079 — quoting helper + `arangodb-collections.md` note | low, any time |
+| — | !1082 / !1065 / !1070 / !1069 / !1077 — **all closed with verdict**, still open on GitLab pending the live re-test | |
 
 **Wave 0 is empty and that is the finding, not an oversight.** Every
 silent-wrong item in the list turned out either to be loud already (!1079) or to

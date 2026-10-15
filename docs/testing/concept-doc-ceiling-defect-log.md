@@ -369,18 +369,22 @@ so the test catches the dead literal immediately.
 
 ### Companion finding — two status vocabularies disagree
 
-| File | Enum |
-|---|---|
-| `conformance-service.js:20` | `['draft', 'stable', 'deprecated']` |
-| `concept-meta-service.js:992` | `['active', 'draft', 'retired']` |
+**RESOLVED 2026-10-15 as part of BUG-11 / !1077 — see the verdict there.** The two
+lists were the *same field* read two ways, and the evidence picks the winner:
+`['draft','stable','deprecated']`. What was initially assumed to be the drift is the
+wrong way round — `conformance-service` was right and **autocorrect was the wrong one**,
+so autocorrect was rejecting the `stable` concepts that really exist while accepting
+`active`/`retired`, which nothing produces. Details and the measurements are under
+BUG-11.
 
-`INVALID_STATUS` and `INVALID_STATUS_ENUM` disagree about the same field. **Same
-failure shape as BUG-11** — two lists maintained independently. The OKF spec should
-mandate one and the other should derive from it.
+| File | Enum | Verdict |
+|---|---|---|
+| `conformance-service.js:20` | `['draft', 'stable', 'deprecated']` | **correct** — now imported, not restated |
+| `concept-meta-service.js:992` | `['active', 'draft', 'retired']` | **wrong** — fixed to `['draft','stable','deprecated']` |
 
 ## BUG-11 — The product writes `type: index`, recognises it as valid, then flags it INVALID_TYPE with no remedy · **!1077**
 
-**Status: OPEN** · Severity: high · Found 2026-10-15, wizard step 8 (Auto-correct), live
+**Status: FIXED in `59ebfb1fc`, pending live re-test** · Severity: high · Found 2026-10-15, wizard step 8 (Auto-correct), live
 
 **Symptom.** `index — INVALID_TYPE: type "index" not in topic|entity|process|event|source`,
 with no way to fix it.
@@ -391,9 +395,9 @@ with no way to fix it.
 2. `concept-meta-service.js:157` **recognises** it as load-bearing:
    `is_index: fm.type === 'index' || path === 'index.md' || p.concept_id === 'index'`,
    and `bundle-export-service.js:93` finds the root via `rows.find(r => r.is_index)`.
-3. `concept-meta-service.js:991` **rejects** it:
+3. `concept-meta-service.js:991` **rejected** it:
    `AUTOCORRECT_TYPE_ENUM = ['topic','entity','process','event','source']` — no `index`
-   — so `:1003-1007` emits `INVALID_TYPE`.
+   — so `:1003-1007` emitted `INVALID_TYPE`.
 
 It is **warn-only by design** (`:1000`: *"warn (don't change) if outside enum"*), which
 here makes the flag **unresolvable by construction**. And `grep` for `INVALID_TYPE` across
@@ -414,22 +418,61 @@ type-based branch is doing no work. The type was reassigned to a taxonomy value 
 not describe the page, and root-page identification silently degraded to a filename
 coincidence. Nothing reports that divergence.
 
-**Direction.** Two paths cannot both be right. Either `index` is a valid type — in which
-case `AUTOCORRECT_TYPE_ENUM` is missing a value the product writes, and adding it removes
-the false positive at source — or the taxonomy genuinely excludes it, in which case
-`crawl-conversion-service.js:709` writes a value it does not accept and the writer should
-change. The OKF spec decides which. Separately, every rule should either offer a remedy or
-be rendered as explicitly advisory: a blocking-looking row with no action leaves the
-curator unable to tell actionable from noise. Add a test asserting the value written at
-`:709` is accepted by the enum at `:991` — the two lists are maintained independently,
-which is how they drifted.
+**Verdict on the direction the spec decides.** The first branch is correct: `index` **is**
+a valid type. Two independent writers produce it and a third treats it as load-bearing,
+so the enum was the odd one out. Adding it to the enum removes the false positive at
+source. The second branch — changing `crawl-conversion-service.js:709` — would have been
+wrong, and would also have left `concept-meta-service.js:157` and
+`bundle-export-service.js:93` carrying a branch for a value nothing writes.
+
+**Fix.** New `services/okf-vocabulary.js` is the single source of truth. `ALL_TYPES` is
+`CONTENT_TYPES + RESERVED_INDEX_TYPES`, where the reserved set is `['index',
+'BundleRoot']` — the value the writer emits plus the authorial spelling. `AUTOCORRECT_TYPE_ENUM`
+now reads `ALL_TYPES`, so both spellings stop being flagged.
+
+The reserved types stay **out of the remedy text**: `INVALID_TYPE` still names only
+`CONTENT_TYPES.join('|')`, because a recognised reserved type must not read as "you should
+have used one of these". The five content types remain what inference and LLM curation may
+*choose*; the reserved types are only ever *recognised*.
+
+**Status vocabulary — the companion finding, resolved by measurement.** There is no spec
+document declaring either list, so the tests and the live corpus decide:
+
+| Source | Says |
+|---|---|
+| `conformance-service.test.js:54` | `draft`/`stable`/`deprecated` are **valid** |
+| `concept-meta-service.test.js:304` | REGRESSION test: `status: 'retired'` → falls back to `draft`, i.e. **invalid** |
+| `parser-service.test.js:43`, `ingest-service.test.js:28` | both exercise `status: 'stable'` |
+| Live, 2,979 concepts | frontmatter.status = **2,860 `draft` / 5 `stable` / 114 absent**. `active` and `retired` occur **zero** times |
+
+So `draft|stable|deprecated` is right and **autocorrect held the wrong list**. It was
+drawing `INVALID_STATUS` on the `stable` concepts that genuinely exist, while accepting
+`active`/`retired` — one of which the regression test explicitly calls invalid.
+
+Note `lifecycle_status` is *derived* from this same value
+(`concept-meta-service.js:122`), so there is no second vocabulary to keep in step: one
+list, one field.
+
+**Verification.** New `__tests__/okf-vocabulary.test.js`, 17 tests: the reserved types
+draw no `INVALID_TYPE` while a genuinely unknown type still does; `draft`/`stable`/
+`deprecated` draw no `INVALID_STATUS` while `active`/`retired`/`published` still do; and
+a **guard** that strips comments from all four consumers and fails if any re-introduces
+either literal — so a sixth copy cannot fork silently. That guard is what caught this:
+it flagged a fourth restatement in `concept-meta-service.js:38` that the initial fix
+missed. okf-server **49/49 suites, 1219/1219 tests**.
+
+**Not fixed here (separate, smaller):** the `type` reassignment that degraded
+root-page identification to a filename coincidence. `is_index` now falls back to
+`path === 'index.md'` only, and nothing reports that divergence — that is !979, still
+open. And the wider point stands: every rule should either offer a remedy or render as
+explicitly advisory.
 
 **Related:** !1076 / Story 10.8 (same step, remedy panels that vanish), !979 (`is_index`
 lost on bundle roots typed other than index).
 
 ## BUG-10 — Accepting one link suggestion unmounts all the others · **!1075**
 
-**Status: OPEN** · Severity: high (data entry blocked) · Found 2026-10-15, wizard step 7 (Validate), live on the local build · **!1075**
+**Status: FIXED in `49499fecc`, pending live re-test** · Severity: high (data entry blocked) · Found 2026-10-15, wizard step 7 (Validate), live on the local build · **!1075**
 
 **Symptom.** *Link suggestions show, and when one link suggestion is accepted,
 they all disappear.* Not cleared — every remaining un-accepted proposal vanishes
@@ -500,6 +543,33 @@ to do.
 Worth noting the same nesting hazard applies to the neighbouring remedies in this
 step (`wireExisting` at `:176`, `Sources` creation at `:181`), which also sit
 inside their issue rows and also call `refresh()`.
+
+**Verdict — fixed in `49499fecc` (Story 10.8).** Both panels now render at panel
+level, outside the issue `v-for`, keyed on their own state (`suggestFor` /
+`wireFor`), so their lifetime depends on that rather than on whether the row still
+exists. `onAcceptLink` reads `suggestFor` instead of taking a `conceptId`, so the
+target page cannot disagree with the panel that rendered its button.
+
+**An extra defect found in the same code, also fixed.** `wireNote` was a single
+string rendered inside **every** citation row, so wiring one issue printed its
+result on all of them. It is now keyed to the issue it describes.
+
+**Why the original test could not catch this.** It mocks `fetchValidation` with a
+*static* report that always contains the orphan, so `refresh()` hands back the
+same orphan forever, the row never unmounts, and the destruction never happens.
+The mock is the reason this shipped green. The new tests change their answer on
+the **second** fetch, which is what makes the page stop being an orphan.
+
+**Verification.** Four cases, verified **falsifying** — all four fail against the
+pre-fix component and pass against the fixed one, and the 13 pre-existing tests in
+that file are unaffected. Frontend **98/98 suites, 1908/1908 tests**.
+
+**Found in passing, deliberately NOT fixed here.** The **Dismiss** button writes
+`p.dismissed = true`, and nothing anywhere in the codebase ever reads that flag —
+`grep dismissed` returns the write plus one unrelated component. Clicking it
+changes nothing visible. It is outside Story 10.8's scope and needs its own i18n
+decision (14 locale files must stay deep-key-identical), so it is filed rather than
+silently folded in.
 
 ## BUG-07 — Saved frontmatter loads correctly but renders invisible (root cause: BUG-06)
 

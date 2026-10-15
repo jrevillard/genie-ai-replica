@@ -80,6 +80,54 @@ development_status:
   #        "does the client throw or return empty" check would have answered it.
   #   STANDING RULE: before ranking a finding as silent-wrong, verify the client.
   #   okf-server 1202/1202 across 48 suites, three consecutive clean runs.
+  #   DONE  !1069 / BUG-07 (89d0c54) — the OKF tree styled against 12 tokens defined
+  #        NOWHERE in the theme. An undefined var() is invalid at computed-value time,
+  #        so it falls back to the initial value: the frontmatter panel rendered
+  #        effectively invisible, and curators re-type data that was intact. 11 files,
+  #        not the 2 that were filed. font-weight is NOT a token (ds/ uses literal
+  #        600/500/400). Guard added in designTokens.test.js — asserts no OKF component
+  #        references a property no theme or scoped override defines, globally OR locally.
+  #   DONE  !1077 / BUG-11 (59ebfb1f) — autocorrect flagged the product's OWN bundle root
+  #        type "index" INVALID_TYPE with no remedy. New services/okf-vocabulary.js is the
+  #        single source of truth, imported by 4 consumers instead of restated 5 times;
+  #        reserved root types are recognised but kept OUT of the remedy text (offering a
+  #        recognised reserved type as a choice would mislead). A guard test strips
+  #        comments per consumer and fails if either literal reappears — that guard is
+  #        what caught a 4th restatement the first fix attempt missed.
+  #        COMPANION FINDING RESOLVED, and NOT in the direction first assumed. Measured
+  #        live (2979 concepts: 2860 draft / 5 stable / 114 absent; `active` and `retired`
+  #        occur ZERO times) plus concept-meta-service.test.js:304 (an explicit REGRESSION
+  #        test that `retired` is invalid), the correct list is [draft,stable,deprecated].
+  #        So conformance-service was RIGHT and AUTOCORRECT held the wrong list — it was
+  #        flagging the `stable` concepts that genuinely exist while accepting
+  #        active/retired. lifecycle_status derives from the same field, so one list only.
+  #   TWO CI FIXES (ed9c5f4f1) — lint:frontend (pii-panel-rescan.test.js not Prettier-clean)
+  #        and docs:build (ingestion.md relref pointed at /docs/configuration/okf-variables;
+  #        the page is under /docs/configure/ — Hugo REF_NOT_FOUND, exit 1).
+  #   okf-server 1219/1219 across 49 suites.
+  #   DONE  !1075 / BUG-10 (49499fec, Story 10.8) — accepting one link suggestion
+  #        unmounted every remaining proposal INCLUDING the one just accepted. The
+  #        proposal list was a DESCENDANT of the orphan row it remediates; accepting
+  #        the first gives the page a link, which CURES the orphan, so refresh()
+  #        removed the row and the proposals went with it as children. Worse: that row
+  #        also carries the "Suggest links" entry point, and once the page has a link it
+  #        is no longer orphaned — so the remaining proposals were UNREACHABLE, not just
+  #        destroyed. The remediation path worked exactly once per page.
+  #        Both panels now render at PANEL LEVEL keyed on suggestFor / wireFor. onAcceptLink
+  #        reads suggestFor rather than taking a conceptId, so the target page cannot
+  #        disagree with the panel that rendered its button.
+  #        EXTRA defect found and fixed in the same code: wireNote was one string rendered
+  #        inside EVERY citation row, so wiring one issue printed its result on all.
+  #        THE TEST-WRITING LESSON: the original test mocked fetchValidation with a STATIC
+  #        report, so refresh() returned the same orphan forever and the unmount never
+  #        happened. The mock was why it shipped green. A test for a self-clearing UI must
+  #        make the REFETCHED report differ, or it cannot reach the defect.
+  #        Verified FALSIFYING — all 4 new tests fail against the pre-fix component, pass
+  #        against the fixed one; the 13 pre-existing tests in that file are unaffected.
+  #        Frontend 1908/1908 across 98 suites.
+  #        FILED, NOT FIXED (out of story scope, needs its own i18n decision across 14
+  #        locale files): the Dismiss button writes p.dismissed = true and NOTHING anywhere
+  #        reads that flag — the affordance is dead.
   epic-1: in-progress        # [RECONCILED 2026-10-07] 1-0, 6-1b, 1-3, 1-6 done; 1-0b unit leg, 1-2 carrier pin, 1-7 ungated legs in-progress; 1-1, 1-4, 1-5 status pending verification (1-1 BFF wire-up likely merged given the spec exists and the base commit is 1.3; needs GitLab MR lookup to confirm). Story 1.6 (frontmatter routing) merged 2026-10-07 12:32 UTC via !513 → commit b4222243b on feat/okf-server.
   1-1-retriever-multigraph-fanout-rrf: review  # [RECONCILED 2026-10-06] retriever-side fan-out scaffolding shipped via 1-0 commit 18b34cd13 (per course-correction bundling); 1-1 spec narrowed to BFF wire-up (the actual e2e gap that unblocks OKF queries). Spec at _bmad-output/implementation-artifacts/spec-1-1-retriever-multigraph-fanout-rrf.md (ready-for-dev 2026-10-06, 4372 tokens — user override of 1600 ceiling). Per course-correction §3 build order 1-1 was supposed to precede 1-2, but the BFF wire-up is the actual missing piece (chatqna forwarder is shipped at chatqna.py:1020, retriever carrier is shipped at retriever.py:927-933, BFF never passes the kwarg). [2026-10-06 build] implemented + reviewed (3-layer review, 9 patch groups fixed, 0 loopbacks) on feat/okf-1-1-bff-wireup; backend 1800/1809 (9 pre-existing local-env), OPEA covering suites 451/451, okf-server 747/747; live .102 validation + deploy pending (Path-2 venue).
   1-2-chatqna-forwards-graph-set: in-progress       # [RECONCILED 2026-10-06] AC1 carrier pin landed (596a11fcd + 60b9355ce — fan-out engages on ≥1 graph); chatqna forwarder per its own file: "Implementation follows Wave R5"; no behavioral change to single-graph path

@@ -34,7 +34,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 | deploy repo | `…-deploy-repo.md` | ✅ shipped (`genie-ai-deploy`, Flux, per-laptop overlay) |
 | 7 — CI | `…-ci.md` | 🟡 partial (`chart:lint` + `chart:install` jobs exist; no `chart:contract` gate, no ct full suite, no kind+Calico install gate) |
 | 8 — docs | `…-docs.md` | 🟡 partial (`charts/README.md`; per-env overlay docs not written) |
-| 4 — observability | `…-observability.md` | ⬜ written, never executed (0 tasks run) |
+| 4 — observability | `2026-10-15-observability-tier.md` | ✅ shipped (charts 0.2.0–0.2.17: VLSingle baseline + collector gateway + filelog agent + Grafana CRs + VMServiceScrapes; live-validated on the laptop — admin logs 200, PII smoke green on the chart-rendered config; metrics/traces/grafana opt-in flags are render-validated only) |
 | 6 — per-env ingress | `…-per-env-ingress.md` | ⬜ Task 1 only → the "Phase 2" below |
 
 ## Supersessions (why two plans were replaced)
@@ -72,11 +72,14 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
      byte-compare render gate, the chart-push → overlay-bump → flux
      reconcile cycle.
    - genie-ai-deploy README — overlay/SealedSecret model if missing.
-4. **Observability** — execute the refreshed plan
-   (`docs/superpowers/plans/2026-10-15-observability-tier.md`): vmoperator
-   CRs, collector gateway + filelog DaemonSet, Grafana, PII redaction,
-   VMServiceScrapes via the service factory. Repairs the admin logs UI
-   (currently 503 — typed `VlUnavailableError` with no VL in cluster).
+4. **Observability** — ✅ shipped 2026-10-15 (chart 0.2.17, commit range
+   `a32c922ae..` incl. hotfixes): admin logs UI 200 with live rows, service
+   filter functional, PII smoke green against the chart-rendered gateway
+   config. Residuals: whole-tier adversarial review pending; VT OTLP port
+   unverified until traces enabled somewhere; `${p}`/`${s}` OTTL
+   capture-group refs are eaten by confmap in collector 0.152 (replacement
+   drops boundary chars) — same latent behavior in the compose config, kept
+   verbatim; backlog.
 5. **Ingress (Phase 2)** — Gateway API (`Gateway` + `HTTPRoute`) + cert-manager,
    nginx stays the in-cluster aggregator; tighten the placeholder
    NetworkPolicy peers (`podSelector: {}`, broad `ipBlock`) once the gateway

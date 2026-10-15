@@ -51,6 +51,9 @@ spec:
         check_interval: 1s
         limit_percentage: 75
         spike_limit_percentage: 15
+{{- if .Values.observability.logs.enabled }}
+{{- include "genieai-umbrella.otelLogTransformProcessors" . | nindent 6 }}
+{{- end }}
     exporters:
 {{- if .Values.observability.logs.enabled }}
       otlphttp/victorialogs:
@@ -110,7 +113,10 @@ spec:
 {{- if .Values.observability.logs.enabled }}
         logs:
           receivers: [otlp]
-          processors: [memory_limiter, batch]
+          # Same transform set as the filelog agent — OTLP-sourced logs
+          # (app services with ENABLE_OBSERVABILITY) get identical PII
+          # redaction and body normalisation before VictoriaLogs.
+          processors: [transform/pii_redact, transform/extract_envelope_trace_context, transform/stamp_log_metadata_from_msg, transform/normalize_log_body, transform/strip_python_log_prefix, memory_limiter, batch]
           exporters: [otlphttp/victorialogs]
 {{- end }}
 {{- if .Values.observability.metrics.enabled }}

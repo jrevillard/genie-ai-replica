@@ -573,3 +573,86 @@ on them risks deleting distinct pages.
 - A genuine near-duplicate pair differing only after 24 KB must still be caught.
 - No reported group may contain a pair below the threshold once union-find is
   applied — assert the grouping is a clique, not merely connected.
+
+---
+
+## BUG-20 — deleting one duplicate re-runs the whole-repo scan, and truncation is silent
+
+**New, 2026-10-15, reported live on Bali.** Not yet in GitLab — creation blocked
+by the permission classifier. Recorded here.
+
+### 20a — every validation read re-scans the entire repo
+
+`getValidationReport` (`services/validation-service.js:264`) has **no caching** —
+zero cache/TTL/memo lines in the module. Every call does:
+
+```js
+const rows = await loadRows(repo_id);   // all 1,113 concepts, incl. body_head
+const report = computeReport(rows);     // includes the O(n^2) near-dup scan
+```
+
+`GET /:repo_id/validation` (`routes/repos-routes.js:205`) is a plain GET, so any
+UI refetch after a mutation pays the full scan. **Deleting one duplicate concept
+therefore triggers a complete repo-wide re-scan** — the user-visible symptom.
+
+This compounds BUG-19: the scan that re-runs is the one with the 24 KB-prefix
+false positives, and the user cannot get a fast read of "is this repo clean"
+without paying for it.
+
+### 20b — **truncated results are presented as complete** (the serious half)
+
+The near-dup scan has a runaway guard:
+
+```js
+if (comparisons >= DUP_MAX_COMPARISONS) {   // 20,000
+  logger.warn('validation near-dup scan hit the comparison cap — results may be partial', { comparisons });
+  break;
+}
+```
+
+It `break`s and returns whatever it found so far. **Nothing in the returned
+report records that it was partial** — no `partial: true`, no `truncated_at`, no
+count of concepts actually compared. The `break` is also out of the inner loop
+only, so the outer loop keeps comparing against the *next* candidate with a
+counter already over the cap, which makes the behaviour harder to reason about
+than a clean bail-out.
+
+Consequence: a curator on a large repo sees **fewer duplicates than really
+exist**, with no indication anything was skipped. The natural reading is "this
+repo is clean" — the exact inverse of the truth, and the most dangerous possible
+failure for a tool whose remedy is *delete the concepts*. It is a
+silent-wrong-result defect, which by this worklist's own ordering rule outranks
+the P1s.
+
+**Worse in combination with BUG-18:** the warning goes to a log the UI never
+shows, and the scan has no spinner, so a curator sees a fast response and has no
+reason to suspect anything was skipped.
+
+**Suggested fix, in order.**
+
+1. **Surface truncation.** Return `partial: true` + `compared` / `candidates`
+   counts from the report and render it in the UI. Until this lands, every
+   duplicate result on a large repo is untrustworthy.
+2. **Break out of both loops** on the cap so the behaviour is at least
+   well-defined, and make the guard a hard stop rather than a per-inner-loop
+   check.
+3. **Cache the report** keyed on (repo_id, a cheap mutation counter or max
+   `updated_at`), invalidated on concept add/remove/patch. Turns a
+   delete-one-concept into a recompute-once, not a rescan-per-refetch.
+4. Consider an **inverted index / MinHash prefilter** so the scan is
+   sub-quadratic — 20,000 comparisons is a low ceiling for a 1,113-concept
+   corpus, and BUG-19a (24 KB prefix) means the candidate set is inflated by
+   shared boilerplate to begin with.
+
+**Interim guidance for curators:** do not treat "no duplicates found" on a
+large repo as meaningful until 20b is fixed. Check the okf-server log for
+`hit the comparison cap` after the scan.
+
+### Verification for whoever picks this up
+
+- Delete one concept; the following `GET /validation` must not re-run the scan
+  (assert via the `okf.validation.report` span's duration, or a cache-hit marker).
+- Force the cap with a synthetic corpus; the response must carry
+  `partial: true` and the UI must show it.
+- A 1,113-concept crawl must complete the near-dup scan without truncation, or
+  truncate *loudly*.

@@ -239,10 +239,13 @@ spec:
       hostPath:
         path: /var/log/pods
         type: ""
-    - name: var-log
-      hostPath:
-        path: /var/log
-        type: ""
+  # The operator wires spec.volumes into the DaemonSet pod only when a
+  # matching volumeMount exists — without this the filelog glob watches
+  # an empty directory.
+  volumeMounts:
+    - name: pods-log
+      mountPath: /var/log/pods
+      readOnly: true
   securityContext:
     runAsUser: 0
     runAsGroup: 0

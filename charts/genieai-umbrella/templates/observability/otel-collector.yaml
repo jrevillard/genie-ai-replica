@@ -54,7 +54,9 @@ spec:
     exporters:
 {{- if .Values.observability.logs.enabled }}
       otlphttp/victorialogs:
-        endpoint: http://vlsingle-victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428/insert/opentelemetry/v1/logs
+        # Base URL only — the exporter appends /v1/logs (VictoriaLogs
+        # serves OTLP ingestion at /opentelemetry/v1/logs).
+        endpoint: http://vlsingle-victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428/opentelemetry
         sending_queue:
           enabled: true
           num_consumers: 10

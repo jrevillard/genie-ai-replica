@@ -32,6 +32,10 @@ const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { isArangoNotFound } = require('./arango-errors');
+// Single source of truth for the tag ceilings — the SAME constants the write
+// path validates against. See the block at the `cap()` definition for why the
+// suggester cannot be allowed to exceed them.
+const { TAG_LIMITS } = require('../validators/repository-validator');
 
 // ---------- Config (env-driven; env vars match the docker-compose template) ----------
 //
@@ -853,25 +857,54 @@ async function suggestTags(repoId, _opts = {}) {
       });
     }
     span.setAttribute('okf.forbidden_rejected', screened.rejected.length);
+    // Ceilings are the WRITE path's (validators/repository-validator.js
+    // TAG_LIMITS). The suggester must respect the same bounds, or it returns
+    // payloads the API rejects — and because Joi rejects the whole body, a
+    // curator accepting a 22-entity suggestion against a 20 ceiling loses the
+    // topics and every accepted entity too. Measured on Bali 2026-10-15.
+    //
+    // Truncation is NEVER silent: anything dropped is reported in
+    // `over_ceiling` with the field, the limit and the values, so the curator
+    // can re-add a dropped tag deliberately rather than discover it missing.
+    const dropped = [];
+    const cap = (list, field) => {
+      const limit = TAG_LIMITS[field];
+      if (list.length <= limit) return list;
+      const kept = list.slice(0, limit);
+      dropped.push({ field, limit, kept: kept.length, dropped: list.length - limit, values: list.slice(limit) });
+      return kept;
+    };
+    const clean = (list) => list.filter((t) => t.length <= TAG_LIMITS.tagLength);
+
     const out = {
-      topic: uniqTags(
-        arr('topic', 'topics', 'repo_level_topics', 'topic_set', 'subjects').map(normalizeTag).filter(Boolean)
+      topic: cap(
+        clean(uniqTags(arr('topic', 'topics', 'repo_level_topics', 'topic_set', 'subjects').map(normalizeTag).filter(Boolean))),
+        'topic'
       ),
-      entity: uniqTags(
-        arr('entity', 'entities', 'named_entities', 'people_products_places').map(normalizeTag).filter(Boolean)
+      entity: cap(
+        clean(uniqTags(arr('entity', 'entities', 'named_entities', 'people_products_places').map(normalizeTag).filter(Boolean))),
+        'entity'
       ),
       scope: normalizeTag(parsed.scope || parsed.scope_label || parsed.scope_word || parsed.scope_kind),
-      forbidden: screened.kept,
+      forbidden: cap(clean(screened.kept), 'forbidden'),
       summary:
         typeof parsed.summary === 'string'
           ? parsed.summary.slice(0, 512)
           : typeof parsed.description === 'string'
             ? parsed.description.slice(0, 512)
             : null,
-      keyword: uniqTags(
-        arr('keyword', 'keywords', 'specific_terms', 'low_coverage_terms').map(normalizeTag).filter(Boolean)
+      keyword: cap(
+        clean(uniqTags(arr('keyword', 'keywords', 'specific_terms', 'low_coverage_terms').map(normalizeTag).filter(Boolean))),
+        'keyword'
       )
     };
+    if (dropped.length) {
+      logger.warn('frontmatter.suggest.over_ceiling', {
+        repo_id: repoId,
+        dropped: dropped.map((d) => ({ field: d.field, limit: d.limit, kept: d.kept, dropped: d.dropped }))
+      });
+    }
+    out.over_ceiling = dropped;
     // Routing-gate contract (2026-10-09): the proposed forbidden set is
     // ALSO returned flagged as suggestions — [{value, suggested: true}] —
     // so the curator UI renders accept/dismiss chips and the routing

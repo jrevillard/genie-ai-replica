@@ -55,6 +55,20 @@ it diagnosable.
 
 Loud failures that stop a curator doing their job. Ordered by how much they block.
 
+### 1.0 · Suggester returns more tags than the API accepts — !1082
+
+**Blocks curation outright.** Found live on Bali, 2026-10-15.
+`frontmatter.suggest` returned 22 entities; the validator caps entity at 20, so
+the PATCH 400s — and because Joi rejects the whole body, **every** tag is lost,
+not just the two over the ceiling. `summary` is truncated on the next line;
+`topic`/`entity` are not (`frontmatter-service.js:856-862`). The API is correct
+(`error-handler.js:33` returns the field detail); the defect is produce-side.
+
+Third ceiling in this area enforced on only one side — after `type: index`
+(BUG-11) and `entity`. Fix asks for one exported constant consumed by both
+validator and suggester, dropped tags **logged not silently truncated**, and a
+property test asserting `updateSchema.validate(suggestion)` never errors.
+
 ### 1.1 · Frontmatter panel renders invisible in dark mode — !1069
 
 Saved tags and fields load correctly and render as nothing — styles reference a
@@ -192,14 +206,31 @@ guess. **Do not file as a defect until the mechanism is known.**
 
 ## Suggested execution order
 
+**Gate before any large ingest (Tier 3/4, or a customer deployment).** Items 1–3
+are the reason: with the cursor-error bug live, a query that returns `[]` is
+indistinguishable from a query that found nothing, and with the metrics bug live
+the dashboard reports zero PII hits and zero broken links on a repo where every
+concept has findings. **Neither the drain's success nor its failure is currently
+observable.** Fixing the instruments before trusting them is cheaper than
+debugging a 42-hour drain whose result cannot be read.
+
 1. **!1079** — fail loud on cursor errors (unblocks honest diagnosis of 0.2, 2.2)
-2. **!1070** — graph naming, now diagnosable
-3. **!1069** — invisible frontmatter (data is intact, operators are re-typing it)
-4. **!1077** → **!1075** → **!1067** — the wizard cluster, ordered by how much each blocks
-5. **!1073** — make config trustworthy before touching Wave 3
-6. **!1080** + **!1081** together — throughput and capacity, both are configuration + documentation
-7. **!1060/!1063** — only with a reproduction in hand
-8. Wave 4 polish; decide !1065
+2. **!1065 / BUG-12** — make `pii_hit_count` and `broken_link_count` real, or
+   delete them so the absence is visible rather than disguised as a healthy zero.
+   Confirmed reproducing live on Bali: 1113/1113 concepts carry PII findings
+   while the metrics line reports `pii_hit_count: 0`.
+3. **!1082** — the suggester blocker; without it curation cannot complete
+4. **!1070** — graph naming, diagnosable once !1079 lands
+5. **!1069** — invisible frontmatter (data is intact, operators are re-typing it)
+6. **!1077** → **!1075** → **!1067** — the wizard cluster, ordered by how much each blocks
+7. **!1073** — make config trustworthy before touching Wave 3
+8. **!1080** + **!1081** together — throughput and capacity, both are configuration + documentation
+9. **!1060/!1063** — only with a reproduction in hand
+10. Wave 4 polish; decide !1065 close-or-amend
+
+**Items 1–3 are the pre-ingest gate.** They are small, independent, and together
+they make the rest of the queue diagnosable. Item 2 is two lines either way —
+compute the metrics or delete the fields.
 
 **Wave 0 first, always.** Every wave below it is cheaper to diagnose once a
 silently-empty query raises an error instead of returning `[]`.

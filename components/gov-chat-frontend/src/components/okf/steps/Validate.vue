@@ -1117,7 +1117,6 @@ export default {
   font-weight: 600;
   font-size: var(--text-sm);
 }
-}
 .okf-step-validate__sug-empty {
   margin: 0;
   color: var(--muted);

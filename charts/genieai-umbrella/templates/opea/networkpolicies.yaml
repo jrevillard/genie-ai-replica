@@ -1,0 +1,455 @@
+{{/*
+  OPEA NetworkPolicies — one per orchestrator (chatqna, retriever,
+  dataprep, reranker, embedding, translation). Per-service default-deny
+  with explicit ingress allowlist (mirrors the real call graph) and
+  egress allowlist scoped to the in-cluster peers each service's env
+  actually dials. Header-only gate: opea.enabled.
+
+  GPU-model Deployments (vllm, tei, tei-reranker, vllm-translation; the
+  in-cluster mode only) get NO policy in this file. They live on GPU
+  nodes and their peer labels are not part of the genieai.io/component
+  convention; tightening them is deferred to the Phase-2 policy pass.
+
+  External GPU mode (opea.gpu.mode=external AND nodeHost set) widens
+  egress to 0.0.0.0/0 on TCP 443 + 444 for the GPU node's TLS ports.
+  The chart does not parse nodeHost's port (the genieai-umbrella.
+  opeaGpuEndpoint helper concatenates the host + the per-path suffix
+  without consulting the host's URL), so the port family is
+  intentionally broad; a future tightening can derive it from the URL.
+*/}}
+{{- if .Values.opea.enabled -}}
+---
+# chatqna (port 8888). Ingress: backend BFF. Egress: in-cluster
+# orchestrator peers (embedding 6000, retriever 7000, reranker 8000,
+# translation 9031), document-repository (3001), backend BFF (3000),
+# keycloak (8080), OTLP, external GPU node when in external mode.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: chatqna
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "chatqna") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: chatqna
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 8888
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # In-cluster orchestrator peers (post-DNAT pod ports).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: embedding
+      ports:
+        - protocol: TCP
+          port: 6000
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: retriever
+      ports:
+        - protocol: TCP
+          port: 7000
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: reranker
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: translation
+      ports:
+        - protocol: TCP
+          port: 9031
+    # document-repository (DOC_REPO_URL). Post-DNAT pod port 3001.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: 3001
+    # Backend BFF (BACKEND_SERVICE_URL). Post-DNAT pod port 3000.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 3000
+    # Keycloak (KEYCLOAK_URL). Port-scoped ipBlock pending verified
+    # peer labels — the operator-managed Keycloak pod labels are not
+    # part of the genieai.io/component convention. Same rationale as
+    # backend.yaml's data-tier egress.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8080
+    # OTLP exporter. Required for the observability pipeline; without
+    # this port the default-deny policy drops chatqna telemetry.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4318
+    {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
+    # External GPU node — TLS. The port family (443 + 444) is
+    # intentionally broad because opea.gpu.nodeHost is concatenated
+    # verbatim with per-path suffixes by opeaGpuEndpoint; the chart
+    # does not parse the host's URL.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 444
+    {{- end }}
+---
+# retriever (port 7000). Ingress: chatqna. Egress: ArangoDB (8529),
+# OTLP, external GPU node when in external mode. retriever.yaml has no
+# KEYCLOAK_URL env, so keycloak egress is NOT included.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: retriever
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "retriever") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: retriever
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+      ports:
+        - protocol: TCP
+          port: 7000
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # ArangoDB (ARANGO_URL). Port-scoped ipBlock pending verified peer
+    # labels — the operator-managed kube-arangodb pod labels are not
+    # part of the genieai.io/component convention. Same rationale as
+    # backend.yaml's data-tier egress.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8529
+    # OTLP exporter.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4318
+    {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
+    # External GPU node — TLS (TEI_EMBEDDING_ENDPOINT, VLLM_ENDPOINT).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 444
+    {{- end }}
+---
+# dataprep (port 5000). Ingress: documentRepository. Egress: ArangoDB
+# (8529), keycloak (8080), document-repository (3001), backend BFF
+# (3000), OTLP, external GPU node when in external mode.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dataprep
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "dataprep") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: dataprep
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: 5000
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # ArangoDB (ARANGO_URL). Port-scoped ipBlock.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8529
+    # Keycloak (KEYCLOAK_URL). Port-scoped ipBlock.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8080
+    # document-repository (DOCUMENT_REPOSITORY_URL). Post-DNAT pod port 3001.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: 3001
+    # Backend BFF (BACKEND_SERVICE_URL). Post-DNAT pod port 3000.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 3000
+    # OTLP exporter.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4318
+    {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
+    # External GPU node — TLS (VLLM_ENDPOINT, TEI_EMBEDDING_ENDPOINT,
+    # DOCLING_ENDPOINT).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 444
+    {{- end }}
+---
+# embedding (port 6000). Ingress: chatqna + retriever + dataprep.
+# Egress: OTLP, external GPU node when in external mode.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: embedding
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "embedding") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: embedding
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+        - podSelector:
+            matchLabels:
+              genieai.io/component: retriever
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+      ports:
+        - protocol: TCP
+          port: 6000
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # OTLP exporter.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4318
+    {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
+    # External GPU node — TLS (TEI_EMBEDDING_ENDPOINT).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 444
+    {{- end }}
+---
+# reranker (port 8000). Ingress: chatqna. Egress: OTLP, external GPU
+# node when in external mode.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: reranker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "reranker") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: reranker
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # OTLP exporter.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4318
+    {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
+    # External GPU node — TLS (TEI_RERANKING_ENDPOINT).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 444
+    {{- end }}
+---
+# translation (port 9031). Ingress: chatqna. Egress: OTLP, external
+# GPU node when in external mode.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: translation
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: translation
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+      ports:
+        - protocol: TCP
+          port: 9031
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # OTLP exporter.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4318
+    {{- if and (eq .Values.opea.gpu.mode "external") .Values.opea.gpu.nodeHost }}
+    # External GPU node — TLS (LLM_ENDPOINT).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 444
+    {{- end }}
+{{- end -}}

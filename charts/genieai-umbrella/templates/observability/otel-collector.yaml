@@ -1,0 +1,126 @@
+{{- if or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled }}
+{{- /*
+  OTel Collector gateway — deployment mode. Receives OTLP from
+  instrumented app services and from the filelog DaemonSet agent,
+  routes each signal to the matching storage backend.
+
+  name: matches the Service derivation in _lib/_observability.tpl
+  (<cr-name>-collector). Default .Values.observability.collectorCRName
+  = "genieai-collector" → Service "genieai-collector-collector" on
+  port .Values.observability.collectorPort.
+
+  Service mesh traffic: app SDKs export via
+  http://genieai-collector-collector.<ns>.svc.cluster.local:4318 (the
+  helper genieai-umbrella.otlpEndpoint returns the same URL — see
+  service-factory callers).
+
+  Conditional exporters / pipelines: each signal only ships when its
+  flag is on. With only one flag on, the chart renders a single
+  pipeline and that pipeline's exporter — no orphan exporters.
+
+  Validation: the operator-managed Service ports are operator-defaults
+  (4318 HTTP, 8428 VM, 9428 VL, 4318 VT). The collector config is a
+  string (`|` block scalar) — the operator parses it as-is and ships
+  the rendered ConfigMap to the collector pods. Validation deferred
+  to first reconcile — the operator is not installed locally.
+*/}}
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: {{ .Values.observability.collectorCRName }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: collector-gateway
+spec:
+  mode: deployment
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:{{ .Values.observability.collectorPort }}
+          grpc:
+            endpoint: 0.0.0.0:4317
+    processors:
+      batch:
+        timeout: 5s
+        send_batch_size: 1024
+        send_batch_max_size: 2048
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 15
+    exporters:
+{{- if .Values.observability.logs.enabled }}
+      otlphttp/victorialogs:
+        endpoint: http://victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428/insert/opentelemetry/v1/logs
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 1000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+{{- end }}
+{{- if .Values.observability.metrics.enabled }}
+      prometheusremotewrite/victoriametrics:
+        endpoint: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428/api/v1/write
+        tls:
+          insecure: true
+        resource_to_telemetry_conversion:
+          enabled: true
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+        timeout: 15s
+{{- end }}
+{{- if .Values.observability.traces.enabled }}
+      otlphttp/victoriatraces:
+        endpoint: http://vtraces.{{ .Values.namespace }}.svc.cluster.local:4318
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+        timeout: 15s
+{{- end }}
+    service:
+      telemetry:
+        metrics:
+          level: detailed
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: 0.0.0.0
+                    port: 8888
+      pipelines:
+{{- if .Values.observability.logs.enabled }}
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlphttp/victorialogs]
+{{- end }}
+{{- if .Values.observability.metrics.enabled }}
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [prometheusremotewrite/victoriametrics]
+{{- end }}
+{{- if .Values.observability.traces.enabled }}
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlphttp/victoriatraces]
+{{- end }}
+{{- end }}

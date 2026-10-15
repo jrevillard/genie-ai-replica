@@ -322,6 +322,29 @@ P1.7 devient partiellement obsolète: le proxy `/auth/` n'est plus un bloc nginx
 
 ---
 
+## Phase 3 — tier OPEA (décision de topologie, 2026-10-15)
+
+Le tier AI/ML reproduit la **topologie compose**, avec le GPU en option
+binaire — pas de variante K8s-spécifique:
+
+1. **Orchestrators OPEA in-cluster** (chatqna, retriever, reranker,
+   embedding, dataprep) — équivalents des services du profile `opea`.
+2. **Backend modèle, au choix** (un seul jeu de values):
+   - **API GPU externe** (mode remote-GPU compose, env §14): la famille
+     d'endpoints (`VLLM_ENDPOINT`, `EMBEDDING_SERVICE_URL`,
+     `RERANKER_SERVICE_URL`, `VLLM_TRANSLATION_ENDPOINT`,
+     `DOCLING_ENDPOINT`) pointe vers le nœud GPU (`GPU_NODE_HOST`),
+     auth `VLLM_API_KEY`. C'est le mode laptop/production actuel —
+     déjà partiellement câblé (translation 0.1.45).
+   - **Modèles in-cluster** (mode gpu-models compose): vLLM + TEI
+     déployés dans le chart derrière un nodeSelector `gpu=true` — pour
+     les clusters qui ont leurs propres GPU.
+3. Les orchestrators sont identiques dans les deux modes; seules les
+   URLs d'endpoints changent. Les vars se câblent dans les templates
+   du tier au moment où il rejoint le chart — jamais en avance
+   (câblage orphelin = valeurs mortes non testables).
+4. `HUGGING_FACE_HUB_TOKEN` accompagne le tier (pull des modèles).
+
 ## Vérification
 
 **Sans cluster**, à chaque task : `helm lint --strict`, le job `chart:contract` de P1.11, et le diff byte-identique du Job de convergence pour P1.1.

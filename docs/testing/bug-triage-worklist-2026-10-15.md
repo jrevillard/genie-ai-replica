@@ -465,3 +465,111 @@ blocking POST that already timed out.
 - `docker exec okf-server` shows no more than `PII_WEB_CONCURRENCY` established
   connections to `pii:8000` at any instant, however many imports are running.
 - A client that times out at 60s and retries does not double the PII load.
+
+---
+
+## BUG-18 — long-running operations give no progress feedback (spinner gap)
+
+**New, 2026-10-15, found during the Bali live re-test.** Not yet in GitLab —
+creation was blocked by the local permission classifier. Recorded here.
+
+Two operations that take minutes on a 1,113-concept repo render **no spinner**,
+only a disabled button:
+
+| Operation | UI | Current feedback |
+|---|---|---|
+| Frontmatter **apply** (bulk) | `editor/AutocorrectPanel.vue` | `applying = true` disables the button; **nothing renders** |
+| Duplicate / conformance scan | `steps/Validate.vue` | disabled button only |
+
+**The feedback is inverted.** `AutocorrectPanel.vue:35-36` has the component's
+only `DsSpinner`, gated on `v-if="scanning"` — so the fast dry-run *propose* gets
+a spinner and the slow *write* does not. The apply re-parses every concept
+(measured: 1,112 parses, several minutes), which is exactly when a spinner
+matters most.
+
+Per-field apply has the same gap: `applyingField` disables the row button
+(`:72`) with no indicator.
+
+**Why it is worse than cosmetic:** it makes the 504 (BUG-17b) actively harmful.
+With no progress feedback, a user cannot distinguish "still working" from
+"hung", so the only available action is to click again — and the 60s gateway
+timeout means the browser has *already* given up. The UI invites the double-click
+that the missing import lock cannot prevent.
+
+**Fix.** Render `DsSpinner` (or a determinate progress bar if the endpoint can
+report it) whenever `applying || applyingField || scanning`, not just `scanning`.
+Reuse the existing `piiBulkBusy` pattern from `RepoEditor.vue:462-463` — the
+state and the pattern are both already in the codebase.
+
+---
+
+## BUG-19 — near-duplicate detection is structurally prone to false positives
+
+**New, 2026-10-15, reported live on Bali.** Not yet in GitLab — creation blocked
+by the permission classifier. Recorded here.
+
+The duplicate scan flags "quite a lot of false positives" on Bali (1,113
+concepts). Two compounding defects in `services/validation-service.js`:
+
+### 19a — similarity is computed on a 24 KB prefix, length-filtered on the full body
+
+```js
+// line 100-101
+.filter((r) => (r.body_len || 0) >= DUP_MIN_BODY)
+.map((r) => ({ id: norm(r.concept_id), len: r.body_len, sh: shingles(r.body_head) }))
+```
+
+`body_head` is `SUBSTRING(m.body, 0, 24000)` (`:256`) — the first 24 KB — while
+`body_len` is `LENGTH(m.body)`, the **full** length. The 5% length window
+therefore admits a pair using full-body lengths, but the Jaccard similarity only
+ever sees the first 24 KB of each.
+
+For documents **under** 24 KB the two agree and the comparison is sound. For
+documents **over** 24 KB — which is nearly all of Bali, split at a 250,000-char
+ceiling — any shared boilerplate in the opening (frontmatter, a standard lede, a
+navigation template, a repeated disclaimer) drives Jaccard over the threshold
+regardless of how different the remaining 90% is.
+
+**So the detector is most reliable exactly where it is least needed (short,
+distinct docs) and least reliable on the crawl-scale corpus it exists to
+govern.**
+
+### 19b — union-find makes one false pair collapse a whole corpus
+
+Matching is transitive: a single spurious pair merges two groups permanently
+(`parent.set(ra, rb)`). With 19a producing spurious pairs at scale, a handful of
+them chains unrelated concepts into one reported group, and the UI shows
+"N near-identical pages" for what is really a boilerplate artifact plus a
+transitive chain. A curator cannot tell a real duplicate family from a merged
+blob, and the remedy (keep-one-delete-the-rest) is **destructive**.
+
+### 19c — the threshold was lowered to catch template sets
+
+`DUP_SIM = 0.85`, lowered from 0.9 because "the NCD template sets sit at 0.896"
+(`:90`). Calibrating down to catch near-identical *templates* is precisely what
+maximises false positives on documents that legitimately share a template —
+the two goals are in direct tension and 0.85 resolves it toward false positives.
+
+**Suggested fix, in order.**
+
+1. Compare on the **full body**, or at minimum compare the full body when both
+   candidates exceed the prefix. The 24 KB cap needs a stated reason — if it is
+   a performance guard, make it explicit (`DUP_BODY_SAMPLE`) and record the
+   measured cost of removing it.
+2. **Strip frontmatter and boilerplate before shingling.** Comparing raw body
+   heads compares the parts most likely to be identical by construction.
+3. Report **pairwise** similarity alongside each group so a curator can see why
+   members were grouped, and make the destructive remedy opt-in per member.
+4. Revisit `DUP_SIM` with 19a fixed — the two changes interact and re-tuning the
+   threshold before fixing the input would bake in the wrong calibration.
+
+**Do not act on Bali's current duplicate findings until 19a is fixed.** Acting
+on them risks deleting distinct pages.
+
+### Verification for whoever picks this up
+
+- Import a repo with two long documents (>24 KB) sharing a 20 KB boilerplate
+  opening and differing entirely after it. Today: flagged. After: not flagged.
+- A genuine near-duplicate pair differing only after 24 KB must still be caught.
+- No reported group may contain a pair below the threshold once union-find is
+  applied — assert the grouping is a clique, not merely connected.

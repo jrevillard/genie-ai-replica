@@ -566,7 +566,13 @@ describe('Configuration Validation Suite', () => {
     // not in the compose okf-server block), so parity here means "ansible
     // emits them with the code's own default", not "compose agrees".
     const PII_CODE_DEFAULTS = {
-      PII_WEB_CONCURRENCY: '2',
+      // 4 since !1080, matching the uvicorn --workers default in
+      // components/pii-service/Dockerfile. This map is a HAND-MAINTAINED MIRROR
+      // of the code's own defaults — the same "the same fact stated in two
+      // places" shape as BUG-11/12/15 — so it is the 4th copy to move when the
+      // default moves: Dockerfile CMD, compose, env.j2, and here. The assertion
+      // below is what makes forgetting one of them loud instead of silent.
+      PII_WEB_CONCURRENCY: '4',
       PII_REGION_MAX_CHARS: '50000',
       PII_CONCEPT_RETRY_PAUSE_MS: '8000',
       PII_SERVICE_URL: 'http://pii-service:8000',

@@ -131,9 +131,25 @@ reproduction** — it has resisted three attempts.
 
 ### 1.5 · Bundle-imported repo opens on wizard step 9 — !1067
 
+**FIXED in `69983dbb2`, pending live re-test.** Closes the wizard cluster (1.2 → 1.3
+→ 1.5).
+
 Opens past the only step with a blocking requirement, with no cue that Curate
-(where PII, frontmatter and cross-links are resolved) exists. Cheap to fix once
-1.1–1.3 are in, because all three are step-9/10 surfaces.
+(where PII, frontmatter and cross-links are resolved) exists.
+
+Two corrections to the filed analysis, both of which change the fix:
+
+- **`lockedIndices` is not the mechanism.** It only locks nothing when `studio_step`
+  is 9. The real chain is: the zip branch seeds no draft and navigates to the
+  dashboard; the operator opens the repo **later** via a card click; `onResume` finds
+  no persisted draft and takes the permissive `studio_step: 9` fallback at
+  `StudioTab.vue:381`.
+- **The filed one-line fix would not have worked.** Setting `activeDraft` is useless
+  because the branch navigates away before the card click. Only a **persisted** draft
+  survives — hence `okf/saveDraft`, matching the crawler path at `:671-682`.
+
+**Wave 1 is now complete** (1.1 `!1065`, 1.2 `!1077`, 1.3 `!1075`, 1.5 `!1067`), with
+1.4 (`!1060`/`!1063`) deliberately still parked for want of a reproduction.
 
 ---
 
@@ -263,7 +279,7 @@ guess. **Do not file as a defect until the mechanism is known.**
 | 2 | **!1082** — suggester returns 22 entities against a ceiling of 20; accept 400s and every tag is lost | **DONE** `5fd5adb` |
 | 3 | **!1070** — re-verify first; may be the !1079 footgun, not a separate defect | **CLOSED — not a bug.** `repo.graph_name` is `OKF_<uuid>` and no such collection exists, but the serving path deliberately derives names via `workingGraphName(repo)` (`retrieval-config-service.js:183`, documented in its module header). Design is correct; the field is a naming trap |
 | 4 | **!1069** — frontmatter renders invisible; data intact but invisible, so curators re-type it | **DONE** `89d0c54` — 12 undefined tokens across 11 files, not the 2 filed |
-| 5 | **!1077** → **!1075** → **!1067** — wizard cluster, ordered by how much each blocks | **!1077 DONE** `59ebfb1f` · **!1075 DONE** `49499fec` · !1067 next |
+| 5 | **!1077** → **!1075** → **!1067** — wizard cluster, ordered by how much each blocks | **ALL DONE** `59ebfb1f` · `49499fec` · `69983dbb2` — Wave 1 complete |
 | 6 | **!1072** — 1202 logged at error on a clean drain; trains everyone to ignore errors | next |
 | 7 | **!1073** — 28 env vars never reach a container; make config trustworthy before Wave 3 | |
 | 8 | **!1080** + **!1081** together — throughput and capacity, config + documentation | |

@@ -195,6 +195,7 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
   test('429 busy → back off, NO meta transition, NO crash (dataprep single-flight)', async () => {
     programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
     const busy = Object.assign(new Error('429'), { response: { status: 429 } });
+    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
     authedAxios.post.mockRejectedValue(busy);
     const res = await worker._processOneJob();
     expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
@@ -220,6 +221,7 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
 
   test('dataprep transport error → outcome error; row TOUCHED (queue advances) but NOT transitioned', async () => {
     programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
     authedAxios.post.mockRejectedValue(new Error('dataprep down'));
     const res = await worker._processOneJob();
     expect(res.outcome).toBe('error');
@@ -470,6 +472,7 @@ describe('kick-5xx backoff (spec #1020 §5.5 — OKF_KICK_BACKOFF_BASE_MS)', () 
 
   test('backoff disabled (default) → transport error parks NOTHING (today behavior)', async () => {
     programQueries([JOB]);
+    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
     authedAxios.post.mockRejectedValue(new Error('dataprep down'));
     await worker._processOneJob();
     expect(patches().every((p) => p.next_attempt_after === undefined)).toBe(true);
@@ -516,6 +519,7 @@ describe('kick-5xx backoff (spec #1020 §5.5 — OKF_KICK_BACKOFF_BASE_MS)', () 
     process.env.OKF_KICK_BACKOFF_BASE_MS = '1000';
     programQueries([JOB]);
     // Real axios throws on 4xx/5xx — this is the shape production errors have.
+    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
     authedAxios.post.mockRejectedValue(Object.assign(new Error('422'), { response: { status: 422 } }));
     await worker._processOneJob();
     expect(patches().every((p) => p.next_attempt_after === undefined)).toBe(true);
@@ -536,6 +540,7 @@ describe('kick-5xx backoff (spec #1020 §5.5 — OKF_KICK_BACKOFF_BASE_MS)', () 
   test('429 is never parked even with backoff enabled (slot busy ≠ failing)', async () => {
     process.env.OKF_KICK_BACKOFF_BASE_MS = '1000';
     programQueries([JOB]);
+    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // retract OK - drive the failure through the KICK
     authedAxios.post.mockRejectedValue(Object.assign(new Error('429'), { response: { status: 429 } }));
     const res = await worker._processOneJob();
     expect(res.outcome).toBe('busy');

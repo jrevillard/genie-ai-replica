@@ -261,6 +261,11 @@ async function claimNextJob(db) {
   `)
   ).all();
   if (!rows[0]) return null;
+  // was_stale_reclaim (review 2026-10-15): rows[0] was read BEFORE the stamp, so
+  // a non-null worker_claimed_at here means this claim took over a TIMED-OUT
+  // prior claim. The kick path probes dataprep liveness for such rows — a live
+  // task must not be raced by the WS5 retract + re-POST.
+  rows[0].was_stale_reclaim = rows[0].worker_claimed_at != null;
   await _stampClaim(db, rows[0].repo_id, rows[0].concept_id);
   return rows[0];
 }
@@ -354,7 +359,7 @@ async function claimNextJobFair(db) {
         ingest_attempts: (cand.ingest_attempts == null ? 0 : cand.ingest_attempts) + 1
       } IN okf_concepts_meta
       RETURN {
-        job: KEEP(NEW, ${CLAIM_KEEP_FIELDS}),
+        job: MERGE(KEEP(NEW, ${CLAIM_KEEP_FIELDS}), { was_stale_reclaim: cand.worker_claimed_at != null }),
         repo_in_flight: pick.in_flight,
         repo_queue_depth: pick.queue_depth,
         claim_wait_ms: DATE_NOW() - DATE_TIMESTAMP(NEW.updated_at)
@@ -771,6 +776,40 @@ async function _processOneJob() {
     const conceptId = job.concept_id;
     const fileId = conceptId; // the concept_id is the dataprep fileId (content-keyed)
 
+    // 0b. STALE-RECLAIM LIVENESS PROBE (review 2026-10-15): a row whose previous
+    //    claim timed out may still have a LIVE dataprep task — claimStaleMs (30
+    //    min flat) equals the measured per-concept duration on the contended
+    //    GPU, so claim age alone proves nothing. Racing a live task with the
+    //    retract+re-POST below duplicates chunks/edges now, and the orphan's
+    //    generic-failure path auto-retracts by fileId — deleting the NEW run's
+    //    chunks after it reported Ingested. Probe first: alive → release the
+    //    claim, park briefly, let the callback (or a later probe) resolve it.
+    if (job.was_stale_reclaim) {
+      const alive = await dataprepTaskAlive(fileId);
+      if (alive) {
+        try {
+          await conceptMetaService.upsertConceptMeta(
+            job.repo_id,
+            { concept_id: conceptId, repo_id: job.repo_id },
+            {
+              patch: {
+                worker_claimed_at: null,
+                last_worker_error: 'stale-reclaim probe: dataprep task still alive — deferred',
+                next_attempt_after: new Date(Date.now() + 60000).toISOString()
+              }
+            }
+          );
+        } catch {
+          /* best-effort */
+        }
+        logger.info('Ingest worker: stale-reclaim probe found a LIVE dataprep task — deferring', {
+          concept_id: conceptId
+        });
+        recordJob('deferred_live', job.repo_id);
+        return { outcome: 'deferred_live', concept_id: conceptId };
+      }
+    }
+
     // 0. ALWAYS RETRACT (WS5, David, 2026-09-25): idempotent re-ingest.
     //    dataprep "appends, never replaces" — a concept that fails mid-POST
     //    leaves partial chunks behind; the next attempt's POST without a
@@ -780,8 +819,13 @@ async function _processOneJob() {
     //    partial-failure case. Always retract — dataprep's retract is a
     //    no-op when no chunks exist for the fileId (idempotent), so the
     //    cost is one extra HTTP call per concept on the success path.
-    //    Best-effort: a retract failure logs and proceeds to the POST (the
-    //    existing re-index fallback).
+    //    REVIEW FIX (2026-10-15): a FAILED retract no longer proceeds to the
+    //    POST — appending after an unknown retract state is exactly the
+    //    duplicate-chunks case this block exists to prevent. Abort instead:
+    //    release the claim, park on the kick backoff, retry retract first on
+    //    the next claim. dataprep's no-op retract means a healthy dataprep
+    //    never lands here; a failure means it is degraded and a blind POST
+    //    would race its half-cleared state.
     try {
       await authedAxios.post(
         `${config.dataprep.url}/v1/dataprep/retract_file`,
@@ -793,14 +837,31 @@ async function _processOneJob() {
       }
     } catch (err) {
       const intent = job.last_good_index_at ? 're-index retract' : 'pre-POST retract';
-      logger.warn(`Ingest worker: ${intent} failed (proceeding): [${conceptId}] ${err.message}`);
+      logger.warn(`Ingest worker: ${intent} failed (aborting cycle, will retry): [${conceptId}] ${err.message}`);
       writeBundleIngestionLog(
         job.repo_id,
         conceptId,
         'WARN',
         'System',
-        `${intent} failed (proceeding): ` + err.message
+        `${intent} failed (aborting cycle, will retry): ` + err.message
       );
+      try {
+        await conceptMetaService.upsertConceptMeta(
+          job.repo_id,
+          { concept_id: conceptId, repo_id: job.repo_id },
+          {
+            patch: {
+              worker_claimed_at: null,
+              last_worker_error: `${intent} failed: ${err.message}`.slice(0, 500),
+              next_attempt_after: nextAttemptAfter(job.ingest_attempts)
+            }
+          }
+        );
+      } catch {
+        /* best-effort */
+      }
+      recordJob('error', job.repo_id);
+      return { outcome: 'retract_failed', concept_id: conceptId };
     }
 
     // 1. POST the concept's markdown DIRECTLY to dataprep (content-only).

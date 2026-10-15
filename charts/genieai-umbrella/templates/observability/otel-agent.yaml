@@ -1,8 +1,9 @@
 {{- if .Values.observability.logs.enabled }}
 {{- /*
   OTel Collector filelog agent — DaemonSet mode. One pod per node,
-  tails containerd's pod-log path under /var/log/pods (one log file per container),
-  strips the CRI envelope (timestamp/stream/logtag prefix), runs the
+  tails kubelet's pod-log path under /var/log/pods (one symlinked log
+  file per container, targets owned by the container runtime), strips
+  the runtime envelope (docker-json or CRI), runs the
   log transform pipeline (PII redaction, envelope trace lift, severity
   stamp, body normalisation, Python prefix strip), and forwards to the
   gateway via OTLP.
@@ -50,10 +51,28 @@ spec:
         start_at: end
         include_file_path: true
         operators:
-          # CRI line format: "<time> <stream> <F|P> <log>". stanza has no
-          # `cri` operator — a regex_parser strips the envelope; on a
-          # non-matching line the entry passes through with body intact
-          # (on_error default = send), so foreign lines are not dropped.
+          # kubelet's /var/log/pods/<...>/N.log is a symlink to the
+          # runtime's real file: docker (minikube, *-json.log, JSON
+          # envelope) or containerd (CRI "<time> <stream> <F|P> <log>"
+          # envelope). Route by file suffix, unwrap either envelope.
+          # on_error default (send) keeps foreign lines flowing with
+          # body intact.
+          - type: router
+            id: get-format
+            routes:
+              - output: parse-docker
+                expr: '$$.attributes["log.file.path"] matches ".*json[.]log$"'
+              - output: parse-cri
+                expr: '$$.attributes["log.file.path"] matches ".*[.]log$"'
+          - type: json_parser
+            id: parse-docker
+            parse_from: body
+            parse_to: attributes
+            on_error: send
+            timestamp:
+              parse_from: attributes.time
+              layout_type: gotime
+              layout: '2006-01-02T15:04:05.999999999Z07:00'
           - type: regex_parser
             id: parse-cri
             regex: '^(?P<time>[^ ]+) (?P<stream>stdout|stderr) (?P<logtag>[FP]) (?P<log>.*)$'
@@ -64,11 +83,18 @@ spec:
               parse_from: attributes.time
               layout_type: gotime
               layout: '2006-01-02T15:04:05.999999999Z07:00'
-          # Downstream transforms inspect the raw app line (JSON winston
-          # lines, Python prefixes), so the un-wrapped log becomes body.
           - type: move
+            id: move-docker
             from: attributes.log
             to: body
+            output: parse-metadata
+          - type: move
+            id: move-cri
+            from: attributes.log
+            to: body
+            output: parse-metadata
+          # Downstream transforms inspect the raw app line (JSON winston
+          # lines, Python prefixes), so the un-wrapped log becomes body.
           # Pod identity comes from the kubelet-controlled file path
           # (/var/log/pods/<ns>_<pod>_<uid>/<container>/N.log) — no API
           # call, no ambiguity. k8sattributes then associates by these
@@ -239,12 +265,29 @@ spec:
       hostPath:
         path: /var/log/pods
         type: ""
+    # Runtime-backed symlink targets: kubelet's pod-log files point
+    # into the container runtime's storage, so both runtimes' roots
+    # must be visible or every open() fails with ENOENT.
+    - name: docker-containers
+      hostPath:
+        path: /var/lib/docker/containers
+        type: ""
+    - name: containerd-root
+      hostPath:
+        path: /var/lib/containerd
+        type: ""
   # The operator wires spec.volumes into the DaemonSet pod only when a
   # matching volumeMount exists — without this the filelog glob watches
   # an empty directory.
   volumeMounts:
     - name: pods-log
       mountPath: /var/log/pods
+      readOnly: true
+    - name: docker-containers
+      mountPath: /var/lib/docker/containers
+      readOnly: true
+    - name: containerd-root
+      mountPath: /var/lib/containerd
       readOnly: true
   securityContext:
     runAsUser: 0

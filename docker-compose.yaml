@@ -768,9 +768,12 @@ services:
       # Fine-grained per-page/per-flush conversion logging when =1.
       - OKF_CONVERSION_DEBUG=${OKF_CONVERSION_DEBUG:-}
       # Import pipeline parallelism (perf 2026-09-05): per-concept import
-      # lanes in ingest-service. Default 1 = historical single-flight; raise
-      # together with PII_WEB_CONCURRENCY (the scans dominate lane time).
-      - OKF_IMPORT_CONCURRENCY=${OKF_IMPORT_CONCURRENCY:-1}
+      # lanes in ingest-service. PAIRED with the pii-service's
+      # PII_WEB_CONCURRENCY — import lanes above the sidecar's worker count
+      # queue instead of adding throughput (!1080). Both ≈ min(16, cores/2);
+      # 4/4 is a floor for a 24-core host, which measured ~18% utilisation.
+      # Every import logs the capacity it got ("OKF import lane capacity").
+      - OKF_IMPORT_CONCURRENCY=${OKF_IMPORT_CONCURRENCY:-4}
       # ================================================================
       # !1073 — the knobs `env` documents as operator-facing but never
       # actually reached a container. There is NO env_file: anywhere in this
@@ -804,7 +807,7 @@ services:
       - OKF_KICK_BACKOFF_BASE_MS=${OKF_KICK_BACKOFF_BASE_MS:-0}
       - OKF_KICK_BACKOFF_MAX_MS=${OKF_KICK_BACKOFF_MAX_MS:-900000}
       # --- import caps (ingest-service / converters) ---
-      - OKF_INGEST_MAX_CONCEPTS=${OKF_INGEST_MAX_CONCEPTS:-200}
+      - OKF_INGEST_MAX_CONCEPTS=${OKF_INGEST_MAX_CONCEPTS:-1000}
       - OKF_INGEST_MAX_ZIP_BYTES=${OKF_INGEST_MAX_ZIP_BYTES:-26214400}
       - OKF_MAX_CONCURRENT_CONVERSIONS=${OKF_MAX_CONCURRENT_CONVERSIONS:-2}
       - OKF_XLSX_ROWS_PER_CONCEPT=${OKF_XLSX_ROWS_PER_CONCEPT:-200}
@@ -839,7 +842,7 @@ services:
     environment:
       # uvicorn worker processes (GIL-bound NER needs processes, not threads;
       # raise on many-core deployments)
-      - PII_WEB_CONCURRENCY=${PII_WEB_CONCURRENCY:-2}
+      - PII_WEB_CONCURRENCY=${PII_WEB_CONCURRENCY:-4}
       # Max chars per analyze() call. Bounds how long ONE scan holds the GIL,
       # which is what starves uvicorn's supervisor into SIGKILLing the worker
       # (measured 2026-10-13: an 850 KB page killed the worker 8/8 times).

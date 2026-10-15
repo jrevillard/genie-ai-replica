@@ -717,7 +717,25 @@ KC_OKF_SERVER_CLIENT_SECRET=
 # historical single-flight; clamp 1..16. Raise together with
 # PII_WEB_CONCURRENCY — the PII sidecar scans dominate lane time (measured
 # ~100% of a 4.3 min/batch wikipedia import before the bump).
-# OKF_IMPORT_CONCURRENCY=1
+#
+# PAIRING RULE (!1080) — these two are ONE capacity setting, not two:
+#   OKF_IMPORT_CONCURRENCY  how many concepts flow through the pipeline at once
+#   PII_WEB_CONCURRENCY     how many NER scans the sidecar can absorb
+# Import lanes ABOVE the sidecar's worker count do not add throughput — the
+# extra lanes queue at the sidecar, so you pay latency for nothing. Raise them
+# together or not at all.
+#
+# SIZING: both ≈ min(16, cores / 2). Measured on a 24-core / 64GB host with the
+# pair at 4/4: the PII sidecar ran 443% CPU while okf-server sat at 0.5% and
+# dataprep at 0.2% — about 18% of the machine, with the rest idle. At 4/4 on a
+# 24-core host you are leaving roughly 5x on the table; at 4/4 on a 4-core VPS
+# you are already oversubscribed. There is no correct constant — read the core
+# count.
+#
+# Every import logs the lane capacity it actually got ("OKF import lane
+# capacity"), including both values and whether they are paired, so a
+# misconfigured host is visible in the logs rather than inferred from timings.
+# OKF_IMPORT_CONCURRENCY=4
 # Stuck-drain reaper: a concept claimed but not terminal after this many ms is
 # dead-lettered (dead lane / lost callback), and a concept claimed more than
 # OKF_INGEST_WORKER_MAX_CLAIMS times is treated as poison. WAITING concepts
@@ -1239,11 +1257,14 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   sidecar worker respawn — one was observed taking ~10-20s, and recording a
 #   permanent error for it is what once blocked a repository indefinitely.
 #   Used by: okf-server. Compose: no. Ansible: yes (pii_concept_retry_pause_ms).
-# PII_WEB_CONCURRENCY=2
-#   Default: 2 in the sidecar image. Worker PROCESSES, not threads (GIL-bound
-#   NER). Each holds its own ~390MB spaCy copy, so this is the sidecar's memory
-#   knob — raise it only on a host with headroom. Set it to match
-#   OKF_IMPORT_CONCURRENCY when tuning import throughput together.
+# PII_WEB_CONCURRENCY=4
+#   Default: 4 (was 2 — chosen when the sidecar had 2 uvicorn workers).
+#   Worker PROCESSES, not threads (GIL-bound NER). Each holds its own ~390MB
+#   spaCy copy, so this is the sidecar's MEMORY knob — raise it only on a host
+#   with headroom (~400MB x workers, on top of the model).
+#   SET IT TO MATCH OKF_IMPORT_CONCURRENCY — they are one capacity setting. See
+#   the PAIRING RULE at the OKF_IMPORT_CONCURRENCY entry above: import lanes
+#   above the sidecar's worker count queue instead of adding throughput.
 #   Compose: yes. Ansible: yes (pii_web_concurrency).
 # PII_REGION_MAX_CHARS=50000
 #   Default: 50000 in the sidecar. Max chars per analyze() call. A single long
@@ -1310,11 +1331,27 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Default: 900000. Compose: no.
 
 # --- okf-server: import + conversion (creation side) ---
-# OKF_IMPORT_CONCURRENCY=1
-#   Default: 1 (parallel per-concept import lanes; PII scans dominate;
-#   distinct from the drain OKF_INGEST_CONCURRENCY). Compose: yes. Ansible: yes.
-# OKF_INGEST_MAX_CONCEPTS=200
-#   Default: 200 (max concepts per import batch). Compose: no.
+# OKF_IMPORT_CONCURRENCY=4
+#   Default: 4 (was 1 — strictly serial). Parallel per-concept import lanes;
+#   PII scans dominate; distinct from the drain OKF_INGEST_CONCURRENCY.
+#   PAIRED WITH PII_WEB_CONCURRENCY — see the PAIRING RULE above. Clamp 1..16.
+#   Compose: yes. Ansible: yes.
+# OKF_INGEST_MAX_CONCEPTS=1000
+#   Default: 1000 (was 200). Max concepts per import batch.
+#   USE-CASE DEPENDENT — this is a CAPACITY knob, not a safety limit:
+#     pilot / demo repository      a few hundred is plenty
+#     department knowledge base    ~1000 (the default)
+#     national / crawl-scale base  10,000+ — raise it deliberately
+#   Why 200 was wrong: the cap is checked AFTER the document-ceiling split, so
+#   the operator's "how many documents did I select" is NOT the number the cap
+#   sees. Measured on Bali: 999 documents in, 1112 concepts out (89 split
+#   families) — a 200 cap rejects that outright. An operator picking 400
+#   documents has no way to predict that oversized pages multiply it to 600+.
+#   Raising it is safe because the bounds that actually protect the machine are
+#   the per-concept document ceiling (OKF_MAX_CONCEPT_DOC_CHARS) and the lane
+#   caps — not this number. At 1000, TOO_MANY_CONCEPTS stays reserved for
+#   genuine misconfiguration rather than firing on ordinary large crawls.
+#   Compose: yes. Ansible: yes.
 # OKF_INGEST_MAX_ZIP_BYTES=26214400
 #   Default: 26214400 (25 MiB zip-bomb guard). Compose: no.
 # OKF_MAX_CRAWL_SOURCE_MB=10240

@@ -27,5 +27,5 @@ helm-extra-args: --timeout 300s
 # SealedSecrets can never decrypt there. `ct install` renders defaults,
 # so the data CRs + SealedSecrets are disabled for the install check; the
 # tiers re-enable as operator provisioning lands.
-helm-extra-set-args: --set data.postgres.enabled=false --set data.arangodb.enabled=false --set data.keycloak.enabled=false --set secrets.sealedSecrets.enabled=false
+helm-extra-set-args: --set data.postgres.enabled=false --set data.arangodb.enabled=false --set data.keycloak.enabled=false
 debug: true

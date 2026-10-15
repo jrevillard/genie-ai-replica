@@ -328,7 +328,12 @@ describe('OkfPiiOccurrences — Re-scan PERSISTS (2026-10-12)', () => {
     await settle(w);
     await w.setData({
       resolutions: [
-        { action: 'accept_all_findings', before: null, after: 'accepted (all findings on this concept)', at: '2026-10-13T10:00:00Z' }
+        {
+          action: 'accept_all_findings',
+          before: null,
+          after: 'accepted (all findings on this concept)',
+          at: '2026-10-13T10:00:00Z'
+        }
       ]
     });
     expect(w.text()).toContain('kept in the text');

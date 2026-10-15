@@ -134,7 +134,7 @@ capped by configuration so a deployment can match the capacity of its machine:
 
 Both default to `1` (the historical strictly-sequential behavior). Raising them
 together scales indexing throughput with the machine — see
-[OKF Configuration Variables]({{< relref "/docs/configuration/okf-variables" >}})
+[OKF Configuration Variables]({{< relref "/docs/configure/okf-variables" >}})
 for sizing guidance.
 
 ## What gets stored

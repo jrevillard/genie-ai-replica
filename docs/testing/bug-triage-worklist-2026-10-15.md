@@ -157,9 +157,34 @@ Two corrections to the filed analysis, both of which change the fix:
 
 ### 2.1 · 28 env vars documented but never reach a container — !1073
 
-Setting them in `.env` is silently ignored. Everything in Wave 0 and Wave 1 that
-is configurable depends on this being trustworthy. **Fix before any config knob
-in Wave 3 is treated as working.**
+**FIXED in `4758e71f8`, pending live re-test.** Everything in Wave 0 and Wave 1 that is
+configurable depended on this being trustworthy.
+
+Setting them in `.env` is silently ignored — there is no `env_file:` anywhere in
+docker-compose.yaml, so a variable absent from a service's `environment:` block is
+unreachable by definition.
+
+**26 wired, 2 deliberately not — and the 2 are a different bug.** All 28 confirmed
+(64 documented `OKF_*`, 36 wired, 28 not); each service assignment made by grepping what
+**reads** the var, not by its name. But `OKF_SEARCH_STYLE` and
+`OKF_FRONTMATTER_TAG_BATCH_SIZE` are read by **nothing** — spec 1-6 assigns the first to
+the retriever and the overlay never reads it. Wiring them would create
+live-*looking* variables that change nothing, which is worse than the honest absence.
+They sit in a named allowlist asserted to be exactly those two.
+
+**Why CI was structurally blind, twice over** — both now closed:
+
+- `parseEnvTemplate` skipped `#` lines, and `env` has **300 commented variable
+  definitions against 61 active ones**. The knobs could not reach the orphan gate even
+  in principle. They now parse into a **separate `documented` array** — merging them
+  into `variables` would swamp every existing check.
+- Nothing asserted the **env→compose** direction. **AC9** does now, and is proven
+  non-vacuous and falsifying: 33 unwired pre-fix → **0** post-fix.
+
+**AC10 added** because the same drift class keeps recurring: **22 `OKF_*` knobs are
+documented twice in `env`** and nothing enforced agreement — the shape that produced
+BUG-11, BUG-12 and BUG-15. Scoped to `OKF_*` on purpose; unscoped it flags 12
+legitimate multi-context examples (local install vs remote GPU node).
 
 ### 2.2 · ArangoDB 1202 logged at error and re-thrown by the retry wrapper — !1072
 
@@ -306,7 +331,7 @@ guess. **Do not file as a defect until the mechanism is known.**
 | 4 | **!1069** — frontmatter renders invisible; data intact but invisible, so curators re-type it | **DONE** `89d0c54` — 12 undefined tokens across 11 files, not the 2 filed |
 | 5 | **!1077** → **!1075** → **!1067** — wizard cluster, ordered by how much each blocks | **ALL DONE** `59ebfb1f` · `49499fec` · `69983dbb2` — Wave 1 complete |
 | 6 | **!1072** — 1202 logged at error on a clean drain; trains everyone to ignore errors | **DONE** `d79e3732` — severity only; the re-throw is load-bearing |
-| 7 | **!1073** — 28 env vars never reach a container; make config trustworthy before Wave 3 | |
+| 7 | **!1073** — 28 env vars never reach a container; make config trustworthy before Wave 3 | **DONE** `4758e71` — 26 wired, 2 are unimplemented and allowlisted; AC9+AC10 added |
 | 8 | **!1080** + **!1081** together — throughput and capacity, config + documentation | |
 | 9 | **!1060/!1063** — only with a reproduction in hand | parked |
 | 10 | Wave 4 polish; !1061, !1064, !1074, !1062 | |

@@ -1,7 +1,6 @@
 {{/*
   vLLM OpenAI-compatible chat server (in-cluster GPU mode only; the
-  external mode emits no model pods). Compose parity: docker-compose.yaml
-  gpu-models profile, service `vllm`. Image pulled from docker.io
+  external mode emits no model pods). Image pulled from docker.io
   unconditionally — not mirrored in the GitLab registry; an air-gapped
   site mirrors it and rewrites the reference via insertAgent. Skeleton
   via genieai-umbrella.modelDeployment; this file carries only the

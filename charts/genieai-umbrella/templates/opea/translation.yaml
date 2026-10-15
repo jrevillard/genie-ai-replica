@@ -56,6 +56,13 @@ spec:
               value: {{ include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") }}
             - name: LLM_MODEL_ID
               value: {{ .Values.opea.translation.modelId }}
+            # Observability exporter — derived from the umbrella
+            # observability flags (any signal on → SDK initialises)
+            # rather than a per-service knob.
+            - name: ENABLE_OBSERVABILITY
+              value: {{ ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled) }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ include "genieai-umbrella.otlpEndpoint" . }}
           resources:
             requests: { cpu: 200m, memory: 256Mi }
             limits: { cpu: 2, memory: 2Gi }

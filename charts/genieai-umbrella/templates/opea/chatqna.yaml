@@ -89,7 +89,7 @@
     (dict "name" "GUARDRAIL_SERVICE_HOST_IP" "value" "guardrail")
     (dict "name" "GUARDRAIL_SERVICE_PORT" "value" "9090")
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
-    (dict "name" "ENABLE_OBSERVABILITY" "value" (.Values.opea.chatqna.enableObservability | default "0" | toString))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled)))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}
 {{- /* CHATQNA_SYSTEM_PROMPT defaults to empty;

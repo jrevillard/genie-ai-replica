@@ -214,7 +214,8 @@ spec:
         - protocol: TCP
           port: 443
     {{- end }}
-{{- end -}}---
+{{- end }}
+---
 {{- if .Values.services.clamav.cache.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim

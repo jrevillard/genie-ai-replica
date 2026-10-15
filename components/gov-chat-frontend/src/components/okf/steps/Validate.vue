@@ -1103,7 +1103,7 @@ export default {
   align-items: center;
   gap: var(--space-xs);
   margin: 0;
-  font-weight: var(--font-weight-semibold);
+  font-weight: 600;
   font-size: var(--text-sm);
 }
 .okf-step-validate__topic-links-note {

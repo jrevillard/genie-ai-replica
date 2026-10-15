@@ -3184,7 +3184,7 @@ export default {
   background: transparent;
   color: var(--fg);
   border-radius: var(--radius-sm, 4px);
-  padding: var(--space-2xs, 2px) var(--space-xs);
+  padding: var(--space-xs, 2px) var(--space-xs);
   font-size: var(--text-sm);
 }
 .okf-headtest__name-input--compact {
@@ -3201,7 +3201,7 @@ export default {
   border-radius: var(--radius-sm, 4px);
   min-width: var(--space-lg);
   padding: 0 var(--space-xs);
-  margin-left: var(--space-2xs, 2px);
+  margin-left: var(--space-xs, 2px);
   cursor: pointer;
   font-size: var(--text-sm);
   line-height: 1.4;
@@ -3300,9 +3300,9 @@ export default {
 .okf-headtest__probe-panel {
   margin: var(--space-sm) 0;
   padding: var(--space-sm);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  background: var(--surface-raised);
+  background: var(--surface);
 }
 .okf-headtest__probe-head {
   display: flex;
@@ -3319,8 +3319,8 @@ export default {
 }
 .okf-headtest__probe-meta {
   display: block;
-  margin-top: var(--space-2xs);
-  color: var(--text-muted);
+  margin-top: var(--space-xs);
+  color: var(--muted);
   font-size: var(--text-xs);
 }
 .okf-headtest__probe-legs {
@@ -3338,7 +3338,7 @@ export default {
 .okf-headtest__probe-reason {
   margin: var(--space-xs) 0;
   font-size: var(--text-sm);
-  color: var(--text-secondary);
+  color: var(--muted-soft);
 }
 .okf-headtest__probe-files {
   display: flex;
@@ -3353,7 +3353,7 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-secondary);
+  color: var(--muted-soft);
   font-size: var(--text-xs);
 }
 .okf-headtest__summary {

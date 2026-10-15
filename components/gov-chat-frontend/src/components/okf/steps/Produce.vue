@@ -882,7 +882,7 @@ export default {
 .okf-step__stage--active .okf-step__stage-name,
 .okf-step__stage--active .okf-step__stage-count {
   color: var(--fg);
-  font-weight: var(--font-weight-semibold);
+  font-weight: 600;
 }
 .okf-step__stage--done .okf-step__stage-name {
   color: var(--fg);

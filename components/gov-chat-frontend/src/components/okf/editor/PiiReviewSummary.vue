@@ -239,7 +239,7 @@ export default {
   margin: 0;
   padding: var(--space-sm);
   border-radius: var(--radius-sm);
-  background: var(--warning-bg, var(--surface-variant, var(--surface)));
+  background: var(--warning-bg, var(--surface, var(--surface)));
   color: var(--fg);
   font-size: var(--text-sm);
 }

@@ -336,7 +336,7 @@ export default {
   background: var(--success);
 }
 .okf-step__head-dot--stale {
-  background: var(--warn);
+  background: var(--warning);
 }
 .okf-step__head-dot--missing {
   background: var(--danger);

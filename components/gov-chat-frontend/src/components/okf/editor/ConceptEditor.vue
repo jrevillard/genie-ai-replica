@@ -1181,8 +1181,8 @@ export default {
   gap: var(--space-sm);
 }
 .okf-ce__fm-repo-tags {
-  margin: var(--space-2xs) 0 0;
-  color: var(--text-muted);
+  margin: var(--space-xs) 0 0;
+  color: var(--muted);
   font-size: var(--text-xs);
 }
 .okf-ce__fm-term {
@@ -1269,28 +1269,28 @@ export default {
   gap: var(--space-sm);
   padding: var(--space-md);
   margin-top: var(--space-md);
-  border: 1px solid var(--color-border-subtle, #e2e2e2);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-md, 4px);
-  background: var(--color-surface-raised, #fafafa);
+  background: var(--surface);
 }
 .okf-ce__fm-perrepo-title {
   margin: 0;
   font-size: var(--text-sm);
-  font-weight: var(--font-weight-semibold, 600);
+  font-weight: 600;
 }
 .okf-ce__fm-perrepo-hint {
   margin: 0;
   font-size: var(--text-xs);
-  color: var(--muted, #666);
+  color: var(--muted);
 }
 .okf-ce__fm-perrepo-field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2xs, 4px);
+  gap: var(--space-xs, 4px);
 }
 .okf-ce__fm-perrepo-field-count {
-  color: var(--color-text-faint, #999);
-  font-weight: var(--font-weight-regular, 400);
+  color: var(--muted-soft);
+  font-weight: 400;
 }
 .okf-ce__fm-perrepo-textarea {
   width: 100%;
@@ -1298,22 +1298,22 @@ export default {
   padding: var(--space-xs, 8px);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  border: 1px solid var(--color-border, #d0d0d0);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm, 3px);
-  background: var(--color-surface-base, #fff);
-  color: var(--fg, #222);
+  background: var(--bg);
+  color: var(--fg);
   resize: vertical;
   line-height: 1.5;
 }
 .okf-ce__fm-perrepo-textarea:focus {
-  outline: 2px solid var(--color-focus, #4a90e2);
+  outline: 2px solid var(--accent);
   outline-offset: -2px;
   border-color: transparent;
 }
 .okf-ce__fm-perrepo-hint-inline {
-  margin: var(--space-2xs, 4px) 0 0;
+  margin: var(--space-xs, 4px) 0 0;
   font-size: var(--text-xs);
-  color: var(--color-text-faint, #999);
+  color: var(--muted-soft);
 }
 .okf-ce__loading,
 .okf-ce__error {

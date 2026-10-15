@@ -693,7 +693,7 @@ export default {
   text-align: left;
 }
 .okf-shell__pii-link:hover {
-  color: var(--accent-strong, var(--accent));
+  color: var(--accent, var(--accent));
 }
 .okf-shell__error {
   margin: var(--space-xs) 0 0;

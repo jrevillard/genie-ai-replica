@@ -69,10 +69,42 @@ spec:
           - type: move
             from: attributes.log
             to: body
+          # Pod identity comes from the kubelet-controlled file path
+          # (/var/log/pods/<ns>_<pod>_<uid>/<container>/N.log) — no API
+          # call, no ambiguity. k8sattributes then associates by these
+          # resource attributes to add pod labels and node name.
+          - type: regex_parser
+            id: parse-metadata
+            regex: '^/var/log/pods/(?P<namespace>[^_]+)_(?P<pod>.+)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/(?P<container>[^/]+)/[^/]+[.]log$'
+            parse_from: attributes["log.file.path"]
+            parse_to: attributes
+          - type: move
+            from: attributes.pod
+            to: resource["k8s.pod.name"]
+          - type: move
+            from: attributes.namespace
+            to: resource["k8s.namespace.name"]
+          - type: move
+            from: attributes.container
+            to: resource["k8s.container.name"]
     processors:
       k8sattributes:
         auth_type: serviceAccount
         passthrough: false
+        # Watch only the stack's namespace — the processor's RBAC needs
+        # are then namespaced (Role), not cluster-scoped.
+        filter:
+          namespace: {{ .Values.namespace }}
+        # Associate entries by the pod identity parsed from the log
+        # file path (set as resource attributes by the filelog
+        # operators above).
+        pod_association:
+          # Sources within one entry are ANDed: pod name + namespace.
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.name
+              - from: resource_attribute
+                name: k8s.namespace.name
         extract:
           metadata:
             - k8s.namespace.name
@@ -80,7 +112,6 @@ spec:
             - k8s.pod.uid
             - k8s.pod.ip
             - k8s.node.name
-            - k8s.container.name
           labels:
             - key: app.kubernetes.io/component
             - key: app.kubernetes.io/name
@@ -165,7 +196,10 @@ spec:
         spike_limit_percentage: 15
     exporters:
       otlp:
+        # The gateway Service exposes OTLP/HTTP on 4318 — the exporter
+        # must speak http/protobuf (default gRPC frames a 4317 listener).
         endpoint: http://{{ .Values.observability.collectorCRName }}-collector.{{ .Values.namespace }}.svc.cluster.local:4318
+        protocol: http/protobuf
         tls:
           insecure: true
         sending_queue:
@@ -212,4 +246,36 @@ spec:
   securityContext:
     runAsUser: 0
     runAsGroup: 0
+---
+# Namespaced watch rights for the agent's k8sattributes processor.
+# The SA lives in the agent's own namespace (<namespace>-obs, created
+# by the otel-operator as <cr-name>-collector); the Role lives in the
+# stack namespace where the watched pods run.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: genieai-agent-collector-pod-watch
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: genieai-agent-collector-pod-watch
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: genieai-agent-collector-pod-watch
+subjects:
+  - kind: ServiceAccount
+    name: genieai-agent-collector
+    namespace: {{ .Values.namespace }}-obs
 {{- end }}

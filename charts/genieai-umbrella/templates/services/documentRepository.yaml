@@ -25,7 +25,7 @@ both rows must be set explicitly. */ -}}
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
     (dict "name" "KC_REALM" "value" "genie")
-    (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s://%s/auth/realms/genie" (.Values.ingress.scheme | default "https") (.Values.ingress.host | default "genieai.local")))
+    (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s/realms/genie" (include "genieai-umbrella.keycloakPublicIssuer" .)))
     (dict "name" "KC_CLIENT_ID" "value" "dataprep-service-client")
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
     (dict "name" "ARANGO_DB" "value" "_system")
@@ -38,7 +38,8 @@ both rows must be set explicitly. */ -}}
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}
 {{- $secretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
-{{- $_ := set $vals.services.documentRepository "env" (concat $urls $secretEnv) -}}
+{{- $existingEnv := index $vals.services.documentRepository "env" | default list -}}
+{{- $_ := set $vals.services.documentRepository "env" (concat $existingEnv $urls $secretEnv) -}}
 {{- $ctx := dict "name" "documentRepository" "component" "documentRepository" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---
@@ -95,6 +96,8 @@ spec:
               kubernetes.io/metadata.name: kube-system
       ports:
         - protocol: UDP
+          port: 53
+        - protocol: TCP
           port: 53
     # Backend BFF. Post-DNAT pod port (3000).
     - to:

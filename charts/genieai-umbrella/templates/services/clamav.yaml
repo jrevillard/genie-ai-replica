@@ -105,8 +105,16 @@ spec:
             medium: Memory
         # clamd scans against the signature set in /var/lib/clamav; without
         # a writable mount freshclam cannot stage the .cvd files there.
+        {{- if .Values.services.clamav.cache.enabled }}
+        # Signature database (~200 MB CVD set) on a persistent claim so a
+        # pod restart does not re-download from the CVD mirror.
+        - name: clamav-data
+          persistentVolumeClaim:
+            claimName: genieai-clamav-cache
+        {{- else }}
         - name: clamav-data
           emptyDir: {}
+        {{- end }}
         # The entrypoint runs `install -o clamav -g clamav /run/clamav`
         # and `chown` it. /run/clamav is NOT in the image — it's a tmpfs
         # the entrypoint expects to find. The factory's pod-level
@@ -206,4 +214,19 @@ spec:
         - protocol: TCP
           port: 443
     {{- end }}
-{{- end -}}
+{{- end -}}---
+{{- if .Values.services.clamav.cache.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: genieai-clamav-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/part-of: genieai
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.services.clamav.cache.size | default "2Gi" }}
+{{- end }}

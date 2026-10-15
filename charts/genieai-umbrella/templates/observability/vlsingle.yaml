@@ -3,9 +3,9 @@
   VLSingle CR — single-node VictoriaLogs.
   Reconciled by the vmoperator (cluster bootstrap prerequisite, NOT a
   chart dependency — see charts/README.md). The operator creates the
-  Deployment + Service + VMServiceScrape prefixed with metadata.name
-  ("victorialogs"), so OTLP ingest reaches
-  http://victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428
+  Deployment + Service named <kind>-<metadata.name>
+  ("vlsingle-victorialogs"), so OTLP ingest reaches
+  http://vlsingle-victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428
   (VictoriaLogs default OTLP port).
 
   apiVersion: vmoperator v0.75.0 consolidates VLSingle under

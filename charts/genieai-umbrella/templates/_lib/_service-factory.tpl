@@ -84,6 +84,9 @@ spec:
           # IfNotPresent keeps serving the digest cached at first deploy);
           # global pullPolicy follows; IfNotPresent otherwise.
           imagePullPolicy: {{ $svc.image.pullPolicy | default $ctx.Values.global.imagePullPolicy | default "IfNotPresent" }}
+          {{- with $svc.workingDir }}
+          workingDir: {{ . }}
+          {{- end }}
           {{- with $svc.command }}
           command:
             {{- toYaml . | nindent 12 }}

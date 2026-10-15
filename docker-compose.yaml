@@ -594,8 +594,10 @@ services:
       # so it must cover a cold TLS handshake to a remote GPU node.
       - TRANSLATION_PROBE_TIMEOUT_SECONDS=${TRANSLATION_PROBE_TIMEOUT_SECONDS:-30}
       # Stream the target-language translation during chat (#829): stream the UI
-      # language while generating instead of English-then-flip. 0 = current behavior.
-      - STREAMING_TRANSLATION_ENABLED=${STREAMING_TRANSLATION_ENABLED:-0}
+      # language while generating instead of English-only (the frontend never
+      # translates chat answers client-side, so with this off non-English UIs
+      # get English answers). Set 0 to disable.
+      - STREAMING_TRANSLATION_ENABLED=${STREAMING_TRANSLATION_ENABLED:-1}
       # OPEA runtime patches for remote GPU node (SSL bypass)
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-}
       # GPU node API key for Authorization: Bearer (translation, vLLM calls)

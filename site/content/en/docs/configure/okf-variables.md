@@ -65,6 +65,24 @@ Sizing guidance:
   lanes draining first-in-first-out across all repos, one repository's pending
   count can sit still while another's clears.
 
+### Why these default to 1 while the import pair defaults to 4
+
+The two pairs look inconsistent on purpose, because **they are limited by
+different things**:
+
+- **Import** is bounded by the host's own CPU. The dominant cost is the PII
+  sidecar's language-model scan, which runs on the machine and scales with cores.
+  A default of 4/4 uses that capacity on a typical host.
+- **Indexing** is bounded by the **model services**, not by the host. Each concept
+  calls the language model for labelling and the embedding service — both shared,
+  and often backed by a single GPU. Adding slots there does not use more of the
+  machine; it queues on the model, and on a shared GPU it takes capacity away
+  from chat answering.
+
+So a higher index default would not be "faster by default" — it would be a
+default that slows down the assistant. Raise this pair deliberately, against the
+model services' headroom, not against the core count.
+
 ## Import capacity (creating a repository)
 
 Importing a repository — from a bundle, from documents, or from a crawl — is a

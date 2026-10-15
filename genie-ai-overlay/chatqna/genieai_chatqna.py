@@ -238,8 +238,10 @@ def _is_translategemma() -> bool:
 
 
 # Context-window discovery TTL (seconds). The served window only changes on a
-# model swap, so re-probe far less aggressively than model-id detection
-# (MODEL_DETECT_TTL=60) to keep the synchronous probe out of the request path.
+# model swap, so a long TTL is enough. Note: while a request path calls
+# _get_llm_model() / _get_translation_model_id() (default MODEL_DETECT_TTL=60)
+# on the same endpoint, the shared cache entry is refreshed on their cadence
+# and this TTL only governs when no other accessor has run recently.
 MODEL_LEN_DETECT_TTL = int(os.getenv("MODEL_LEN_DETECT_TTL", "3600"))
 
 # Translation budget derivation from the discovered window. The completion
@@ -1186,24 +1188,25 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                 truncated_history.insert(0, segment)  # Maintain order
                 current_tokens += segment_tokens
             dropped_segments = len(history_segments) - len(truncated_history)
-            history_truncation_total.add(
-                1,
-                {
-                    "path": "generation",
-                    "kept": len(truncated_history),
-                    "dropped": dropped_segments,
-                },
-            )
-            logger.warning(
-                "Chat history truncated to fit the LLM context window: "
-                "window_tokens=%s prompt_tokens=%s answer_budget_tokens=%s "
-                "kept_segments=%s dropped_segments=%s",
-                max_model_tokens,
-                full_prompt_tokens,
-                max_answer_tokens,
-                len(truncated_history),
-                dropped_segments,
-            )
+            if dropped_segments:
+                history_truncation_total.add(
+                    1,
+                    {
+                        "path": "generation",
+                        "kept": len(truncated_history),
+                        "dropped": dropped_segments,
+                    },
+                )
+                logger.warning(
+                    "Chat history truncated to fit the LLM context window: "
+                    "window_tokens=%s prompt_tokens=%s answer_budget_tokens=%s "
+                    "kept_segments=%s dropped_segments=%s",
+                    max_model_tokens,
+                    full_prompt_tokens,
+                    max_answer_tokens,
+                    len(truncated_history),
+                    dropped_segments,
+                )
             # Rebuild truncated history
             translated_history_string = " |<-MSG->| ".join(truncated_history)
             # Reconstruct user content (system instructions stay the same)

@@ -744,6 +744,40 @@ class TestAlignInputs:
             assert "msg1" in user_msg
             mock_counter.add.assert_not_called()
 
+        def test_budget_exceeded_but_history_fits_no_metric(self):
+            """Budget check true (large system prompt + RAG content) while the whole
+            history fits the leftover budget → nothing was truncated: no counter."""
+
+            class _Tok:
+                def encode(self, text):
+                    return [0] * (
+                        1000 * text.count("SYSTOK") + 100 * text.count("RAGTOK") + 500 * text.count("HISTTOK")
+                    )
+
+            self_mock = MagicMock()
+            self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
+            llm_params = {"max_tokens": 1024, "top_p": 0.9}
+            inputs = {"inputs": "RAGTOK" * 5, "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
+            history = "USER: HISTTOK |<-MSG->| USER: HISTTOK |<-MSG->| USER: HISTTOK"
+
+            # system=1000 + RAG=500 + history=1500 = 3000 prompt tokens; with the
+            # 4096 fallback window the budget check fires (3000+1024 > 3896), but
+            # the leftover history budget (4096-1024-500-200 = 2372) holds the
+            # whole 1500-token history.
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
+                patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK"),
+                patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
+                patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
+            ):
+                result = align_inputs(
+                    self_mock, inputs, "llm_node", MagicMock(), llm_params, full_chat_history_string=history
+                )
+            user_msg = result["messages"][1]["content"]
+            assert "HISTTOK" in user_msg  # nothing dropped
+            mock_counter.add.assert_not_called()
+
 
 # ===========================================================================
 # Bundled-dict path: align_inputs consumes from genie_params dict

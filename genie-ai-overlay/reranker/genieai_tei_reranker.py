@@ -80,6 +80,10 @@ RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 3))
 
+# The only two strategies that consult RERANKING_THRESHOLD. slice and
+# knee_threshold cut on count / curve shape; adaptive cuts on marginal value.
+THRESHOLD_STRATEGIES = ("threshold", "slice_threshold")
+
 # Adaptive utility-cost selection parameters
 NOVELTY_SIGMOID_A = float(os.getenv("NOVELTY_SIGMOID_A", 20.0))
 NOVELTY_SIGMOID_B = float(os.getenv("NOVELTY_SIGMOID_B", 0.25))
@@ -266,7 +270,12 @@ class GenieTEIReranking(OpeaTEIReranking):
         with tracer.start_as_current_span("reranker.tei_invoke") as span:
             span.set_attribute("reranker.strategy", reranking_strategy)
             span.set_attribute("reranker.top_n", reranker_top_n)
-            span.set_attribute("reranker.score_threshold", reranking_threshold)
+            # Only threshold / slice_threshold consult reranking_threshold.
+            # Publishing it unconditionally stamped a gate on spans where none
+            # was applied, so a reader saw a threshold on a slice or adaptive
+            # trace and concluded the reranker had been cut off by it.
+            if reranking_strategy in THRESHOLD_STRATEGIES:
+                span.set_attribute("reranker.score_threshold", reranking_threshold)
             reranker_model_id = os.getenv("RERANKER_MODEL_ID", os.getenv("TEI_RERANKING_ENDPOINT", ""))
             span.set_attribute("reranker.model_id", reranker_model_id)
             span.set_attribute("reranker.input_doc_count", input_doc_count)

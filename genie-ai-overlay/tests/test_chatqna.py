@@ -3063,7 +3063,6 @@ class TestMultiTurnBlendHelpers:
             chat_request.temperature = None
             chat_request.frequency_penalty = None
             chat_request.presence_penalty = None
-            chat_request.repetition_penalty = None
             chat_request.stream = None
             chat_request.chat_template = None
             chat_request.model = None
@@ -3075,7 +3074,6 @@ class TestMultiTurnBlendHelpers:
                 temperature=chat_request.temperature if chat_request.temperature else 0.01,
                 frequency_penalty=chat_request.frequency_penalty if chat_request.frequency_penalty else 0.0,
                 presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
-                repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
                 stream=chat_request.stream if chat_request.stream else False,
             )
             if chat_request.max_tokens is not None:
@@ -3097,7 +3095,6 @@ class TestMultiTurnBlendHelpers:
             chat_request.temperature = None
             chat_request.frequency_penalty = None
             chat_request.presence_penalty = None
-            chat_request.repetition_penalty = None
             chat_request.stream = None
             chat_request.chat_template = None
             chat_request.model = None
@@ -3108,7 +3105,6 @@ class TestMultiTurnBlendHelpers:
                 temperature=chat_request.temperature if chat_request.temperature else 0.01,
                 frequency_penalty=chat_request.frequency_penalty if chat_request.frequency_penalty else 0.0,
                 presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
-                repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
                 stream=chat_request.stream if chat_request.stream else False,
             )
             if chat_request.max_tokens is not None:

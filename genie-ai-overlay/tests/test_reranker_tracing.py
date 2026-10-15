@@ -107,6 +107,57 @@ class TestRerankingEndpointSpan:
             span.set_attribute.assert_any_call("reranker.strategy", "slice")
 
     @pytest.mark.asyncio
+    async def test_reranking_reports_the_request_strategy_not_the_env_default(self, mock_tracer):
+        """reranker.rerank must report the strategy the REQUEST asked for.
+
+        The reranker container defines no RERANKING_STRATEGY env var, so reading
+        the env alone stamped the hardcoded "slice" default onto every trace
+        while the component span of the same trace reported the real strategy.
+        Diagnosing reranking from VictoriaTraces then read the wrong strategy.
+        """
+        tracer, span = mock_tracer
+
+        with patch.object(rms_module, "tracer", tracer):
+            mock_response = MagicMock()
+            mock_response.reranked_docs = [MagicMock()]
+            rms_module.loader.invoke = AsyncMock(return_value=mock_response)
+
+            input_data = MagicMock()
+            input_data.retrieved_docs = [MagicMock()]
+            input_data.model_dump = MagicMock(return_value={"reranking_strategy": "adaptive"})
+
+            await rms_module.reranking(input_data)
+
+            span.set_attribute.assert_any_call("reranker.strategy", "adaptive")
+
+    @pytest.mark.asyncio
+    async def test_reranking_falls_back_to_the_component_default(self, mock_tracer):
+        """Without a per-request strategy the span reports the component's own
+        RERANKING_STRATEGY constant — the same object the component span reads,
+        so the two cannot disagree."""
+        tracer, span = mock_tracer
+
+        with patch.object(rms_module, "tracer", tracer):
+            mock_response = MagicMock()
+            mock_response.reranked_docs = [MagicMock()]
+            rms_module.loader.invoke = AsyncMock(return_value=mock_response)
+
+            input_data = MagicMock()
+            input_data.retrieved_docs = [MagicMock()]
+            input_data.model_dump = MagicMock(return_value={})
+
+            await rms_module.reranking(input_data)
+
+            span.set_attribute.assert_any_call("reranker.strategy", rtc_module.RERANKING_STRATEGY)
+
+    def test_the_microservice_does_not_re_read_the_env_for_the_strategy(self):
+        """The fallback must be the component's import-time constant, not a
+        second os.getenv copy: two reads can disagree (env mutated after import)
+        and that disagreement is exactly what put the wrong strategy in the
+        trace in the first place."""
+        assert rms_module.RERANKING_STRATEGY is rtc_module.RERANKING_STRATEGY
+
+    @pytest.mark.asyncio
     async def test_reranking_records_input_and_output_doc_counts(self, mock_tracer):
         """reranking() must record input and output doc counts."""
         tracer, span = mock_tracer
@@ -249,9 +300,30 @@ class TestRerankerComponentSpan:
             tracer.start_as_current_span.assert_called_once_with("reranker.tei_invoke")
             span.set_attribute.assert_any_call("reranker.strategy", "slice")
             span.set_attribute.assert_any_call("reranker.top_n", 3)
-            span.set_attribute.assert_any_call("reranker.score_threshold", 0.75)
             span.set_attribute.assert_any_call("reranker.input_doc_count", 2)
             span.set_attribute.assert_any_call("reranker.output_doc_count", 2)
+            # slice does not consult the threshold, so the span must not claim
+            # one was applied.
+            assert not [c for c in span.set_attribute.call_args_list if c.args[0] == "reranker.score_threshold"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("strategy", ["threshold", "slice_threshold"])
+    async def test_threshold_strategies_do_publish_the_applied_threshold(self, mock_tracer, strategy):
+        """The counterpart to the slice case: the two strategies that actually
+        consult reranking_threshold must still report it."""
+        tracer, span = mock_tracer
+        request = self._make_input()
+        request.model_dump = MagicMock(return_value={"reranking_strategy": strategy})
+
+        with (
+            patch.object(rtc_module, "tracer", tracer),
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=self._make_session()),
+        ):
+            reranker = GenieTEIReranking.__new__(GenieTEIReranking)
+            reranker.base_url = "http://tei-reranker:80"
+            await reranker.invoke(request)
+
+        span.set_attribute.assert_any_call("reranker.score_threshold", rtc_module.RERANKING_THRESHOLD)
 
     @pytest.mark.asyncio
     async def test_invoke_sets_model_id_from_env(self, mock_tracer, monkeypatch):
@@ -308,3 +380,92 @@ class TestRerankerComponentSpan:
 
             span.record_exception.assert_called_once()
             span.set_status.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Test: the two spans of one rerank report the same strategy
+# ---------------------------------------------------------------------------
+
+
+class TestRerankerSpanStrategyParity:
+    """reranker.rerank and reranker.tei_invoke must never disagree.
+
+    They describe the same rerank: the microservice wraps the component, so a
+    request produces both spans in one trace. When they reported different
+    strategies, VictoriaTraces showed two contradictory values and picking the
+    wrong one sent the diagnosis down the wrong path.
+    """
+
+    @staticmethod
+    def _strategy_from_span(span):
+        """Extract the reranker.strategy value the span was stamped with."""
+        values = [c.args[1] for c in span.set_attribute.call_args_list if c.args[0] == "reranker.strategy"]
+        assert len(values) == 1, f"expected exactly one reranker.strategy attribute, got {values}"
+        return values[0]
+
+    @pytest.fixture(autouse=True)
+    def patch_searched_doc(self):
+        """SearchedDoc is a MagicMock in conftest; invoke() isinstance-checks it."""
+        original_sd = rtc_module.SearchedDoc
+        rtc_module.SearchedDoc = _RealSearchedDoc
+        yield
+        rtc_module.SearchedDoc = original_sd
+
+    @staticmethod
+    def _make_tracer():
+        tracer = MagicMock()
+        span = MagicMock()
+        span.__enter__ = MagicMock(return_value=span)
+        span.__exit__ = MagicMock(return_value=False)
+        tracer.start_as_current_span.return_value = span
+        return tracer, span
+
+    @staticmethod
+    def _make_request(strategy):
+        """A request whose model_dump carries the given per-request strategy."""
+        request = MagicMock()
+        request.retrieved_docs = [MagicMock()]
+        request.__class__ = _RealSearchedDoc
+        request.model_dump = MagicMock(return_value={"reranking_strategy": strategy})
+        # `adaptive` refuses to run without query + chunk embeddings, so the
+        # parity case covers it only if the request carries them.
+        request.embedding = [0.1, 0.2]
+        request.chunk_embeddings = [[0.1, 0.2]]
+        return request
+
+    @staticmethod
+    def _make_tei_session():
+        response_data = [{"index": 0, "score": 0.9}]
+        mock_response = AsyncMock()
+        mock_response.json = AsyncMock(return_value=response_data)
+        mock_response.status = 200
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+        mock_session = AsyncMock()
+        mock_session.post = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        return mock_session
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("strategy", ["adaptive", "knee_threshold", "slice_threshold", "threshold"])
+    async def test_both_spans_report_the_requested_strategy(self, strategy):
+        ms_tracer, ms_span = self._make_tracer()
+        comp_tracer, comp_span = self._make_tracer()
+
+        with patch.object(rms_module, "tracer", ms_tracer):
+            mock_response = MagicMock()
+            mock_response.reranked_docs = [MagicMock()]
+            rms_module.loader.invoke = AsyncMock(return_value=mock_response)
+            await rms_module.reranking(self._make_request(strategy))
+
+        with (
+            patch.object(rtc_module, "tracer", comp_tracer),
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=self._make_tei_session()),
+        ):
+            reranker = GenieTEIReranking.__new__(GenieTEIReranking)
+            reranker.base_url = "http://tei-reranker:80"
+            await reranker.invoke(self._make_request(strategy))
+
+        assert self._strategy_from_span(ms_span) == strategy
+        assert self._strategy_from_span(comp_span) == strategy

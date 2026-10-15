@@ -332,9 +332,39 @@ ssh <user>@<host> '
 '
 ```
 
-**Gate**: all three assertions pass. If `.done.jsonl` differs from
+# 3.5 Dump-tuples: answers are readable text, not a serialised envelope.
+#     chatqna answers {"response": <text>, "metadata": {...}} and run_eval.py
+#     must resolve the `response` key. If it misses, the row carries the whole
+#     envelope serialised as a string — and RAGAS then judges a JSON string
+#     instead of the answer. Every metric still lands in [0,1], so nothing
+#     downstream fails: the run looks clean and the scores are meaningless.
+#     An empty answer is legitimate (an abstention carries no prose) — only
+#     the envelope shape is a defect.
+ssh <user>@<host> '
+  python3 -c "
+    import json
+    rows = json.load(open(\"/tmp/rag-eval/reports/eval_tuples_<TAG>.json\"))
+    blobs = [r[\"id\"] for r in rows if r.get(\"answer\",\"\").lstrip().startswith(\"{\\\"response\\\"\")]
+    empty = [r[\"id\"] for r in rows if not r.get(\"answer\")]
+    assert not blobs, f\"{len(blobs)} rows carry the serialised envelope: {blobs[:5]}\"
+    print(\"OK n=\", len(rows), \"envelope_rows=0 empty_answers=\", len(empty))
+  "
+'
+```
+
+**Gate**: every assertion in 3.1–3.5 passes. If `.done.jsonl` differs from
 `per_query`, the run was interrupted mid-write — see "When things go wrong"
 below.
+
+> **Reports predating the `response`-key fix.** Before it, `_extract_answer`
+> missed chatqna's key and every `answer` field held the serialised envelope,
+> so those RAGAS scores describe a JSON string rather than the answer. Anchor
+> metrics (recall / precision / ndcg) are unaffected — they read the reranker's
+> chunk keys, never the answer text. Discard any tuples + RAGAS report built
+> before the fix and re-run Phase 3 with `EVAL_FRESH=1`; a plain re-run resumes
+> from the `.done.jsonl` sidecar and would rewrite the same envelope rows.
+> Run 3.5 on every report — it is the cheapest way to know which side of the
+> fix a given report sits on.
 
 ### Resume
 

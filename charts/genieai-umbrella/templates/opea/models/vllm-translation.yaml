@@ -1,15 +1,12 @@
 {{/*
-  vLLM translation model (in-cluster GPU mode only). Compose parity:
-  docker-compose.yaml gpu-models profile, service
-  `vllm-translation-guardrail`. Image from docker.io unconditionally
-  (see vllm.yaml). Carries a wait-for-vllm initContainer — compose
-  parity for `depends_on: vllm: condition: service_healthy`, which
+  vLLM translation model (in-cluster GPU mode only). Image from docker.io unconditionally
+  (see vllm.yaml). Carries a wait-for-vllm initContainer that
   serializes the two HF model downloads on a single GPU node.
   Skeleton via genieai-umbrella.modelDeployment.
 */}}
 {{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") -}}
 {{- $modelId := .Values.opea.translation.modelId -}}
-{{- $initText := printf "      initContainers:\n        # Compose parity: `depends_on: vllm: condition: service_healthy`\n        # serializes the two HF model downloads. Without it both vLLM\n        # pods pull concurrently on the single GPU node and can OOM.\n        - name: wait-for-vllm\n          image: curlimages/curl:8.10.1\n          command:\n            - sh\n            - -c\n            - until curl -sf http://vllm.%s.svc.cluster.local:8000/health; do echo waiting for vllm; sleep 5; done" .Values.namespace -}}
+{{- $initText := printf "      initContainers:\n        # Serializes the two HF model downloads: without it both vLLM\n        # pods pull concurrently on the single GPU node and can OOM.\n        - name: wait-for-vllm\n          image: curlimages/curl:8.10.1\n          command:\n            - sh\n            - -c\n            - until curl -sf http://vllm.%s.svc.cluster.local:8000/health; do echo waiting for vllm; sleep 5; done" .Values.namespace -}}
 {{- include "genieai-umbrella.modelDeployment" (dict
       "root" .
       "name" "vllm-translation"

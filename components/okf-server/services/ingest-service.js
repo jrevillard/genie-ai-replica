@@ -34,7 +34,18 @@ const { authedAxios } = require('./service-token');
 const dbService = require('../shared-lib/db-connection-service');
 const config = require('../config');
 
-const DEFAULT_MAX_CONCEPTS = 200;
+// !1081 — 200 was wrong for almost every real deployment. It is checked AFTER
+// the document-ceiling split, so the operator's "how many documents did I pick"
+// is not the number the cap sees: Bali was 999 documents in and 1112 concepts
+// out (89 split families), which a 200 cap rejects outright. 1000 covers the
+// overwhelming majority of real deployments without tuning, and is high enough
+// that nobody trips it by accident — so TOO_MANY_CONCEPTS stays reserved for
+// genuine misconfiguration rather than for ordinary large crawls.
+//
+// It is NOT a safety limit on its own: the bounds that actually protect the
+// machine are the per-concept doc ceiling and the lane caps. Raise it per
+// deployment rather than treating it as fixed.
+const DEFAULT_MAX_CONCEPTS = 1000;
 const ENQUEUE_TIMEOUT_MS = 30000; // 4f cap — never hang the request on doc-repo
 const DEFAULT_MAX_ZIP_BYTES = 26214400; // 25 MiB decompressed cap (zip-bomb guard)
 
@@ -361,6 +372,42 @@ function zipToRawInputs(zipBase64, maxConcepts, bundleName) {
 function importConcurrency() {
   const parsed = parseInt(process.env.OKF_IMPORT_CONCURRENCY || '', 10);
   return Math.min(Math.max(Number.isFinite(parsed) && parsed > 0 ? parsed : 1, 1), 16);
+}
+
+/**
+ * !1080 — state the lane capacity an import actually got, once per import.
+ *
+ * The pairing rule (import concurrency <= the PII sidecar's worker count) was
+ * prose in a comment nobody reads, so a deployment running 4 import lanes
+ * against 2 sidecar workers just queues at the sidecar — more latency, no more
+ * throughput — with nothing in the logs to show it. Raising one knob without
+ * the other was invisible; this makes it visible at import start.
+ *
+ * PII_WEB_CONCURRENCY is read from THIS process's env only so the two can be
+ * compared in one line. It is not set on okf-server (it belongs to the sidecar
+ * service), so it is normally absent and reported as "unknown" — which is
+ * itself the signal that the operator never set it on both ends.
+ */
+function _logLaneCapacity(repoId, conceptCount) {
+  const lanes = importConcurrency();
+  const sidecar = process.env.PII_WEB_CONCURRENCY;
+  const paired = sidecar ? lanes <= parseInt(sidecar, 10) : null;
+  logger.info('OKF import lane capacity', {
+    repo_id: repoId,
+    concepts: conceptCount,
+    import_concurrency: lanes,
+    pii_web_concurrency: sidecar || 'unset (set it on the pii-service too)',
+    // false = import lanes exceed the sidecar's scan capacity. Not an error:
+    // extra lanes queue rather than fail, so this is a WARN to make the
+    // throughput ceiling visible instead of silently paid in latency.
+    paired,
+    cores: require('os').cpus().length,
+    suggestion:
+      sidecar && !paired
+        ? `raise PII_WEB_CONCURRENCY to >= ${lanes} on the pii-service, or lower OKF_IMPORT_CONCURRENCY`
+        : 'rule of thumb: both ≈ min(16, cores / 2)'
+  });
+  return lanes;
 }
 
 /** Fixed-size worker pool over items, preserving RESULT positions. */
@@ -752,7 +799,7 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
       started_at: new Date().toISOString()
     });
   }
-  const outcomes = await _pool(rawInputs, importConcurrency(), async (raw) => {
+  const outcomes = await _pool(rawInputs, _logLaneCapacity(repo_id, rawInputs.length), async (raw) => {
     const o = await _importOneConcept(repo_id, raw, {
       bundleVersion,
       graphName,

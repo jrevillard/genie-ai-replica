@@ -475,9 +475,13 @@ describe('ingestService.markdownFor (review fix: gray-matter serialization)', ()
 describe('ingestService.maxConceptsFromEnv (review fix: NaN-safe cap)', () => {
   afterEach(() => delete process.env.OKF_INGEST_MAX_CONCEPTS);
 
-  test('unset → default 200', () => {
+  test('unset → default 1000', () => {
+    // 1000 since !1081. 200 fired TOO_MANY_CONCEPTS on ordinary large crawls:
+    // the cap is checked AFTER the document-ceiling split, so Bali was 999
+    // documents in and 1112 concepts out (89 split families) — an operator's
+    // "documents I selected" is not the number the cap sees.
     delete process.env.OKF_INGEST_MAX_CONCEPTS;
-    expect(ingestService.maxConceptsFromEnv()).toBe(200);
+    expect(ingestService.maxConceptsFromEnv()).toBe(1000);
   });
   test('valid number → that number', () => {
     process.env.OKF_INGEST_MAX_CONCEPTS = '50';
@@ -485,11 +489,11 @@ describe('ingestService.maxConceptsFromEnv (review fix: NaN-safe cap)', () => {
   });
   test('garbage → default (never NaN — NaN comparisons are always false)', () => {
     process.env.OKF_INGEST_MAX_CONCEPTS = 'banana';
-    expect(ingestService.maxConceptsFromEnv()).toBe(200);
+    expect(ingestService.maxConceptsFromEnv()).toBe(1000);
   });
   test('zero/negative → default (a nonsensical cap is not a cap)', () => {
     process.env.OKF_INGEST_MAX_CONCEPTS = '0';
-    expect(ingestService.maxConceptsFromEnv()).toBe(200);
+    expect(ingestService.maxConceptsFromEnv()).toBe(1000);
   });
 });
 

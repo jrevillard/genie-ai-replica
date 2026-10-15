@@ -54,7 +54,7 @@ spec:
     exporters:
 {{- if .Values.observability.logs.enabled }}
       otlphttp/victorialogs:
-        endpoint: http://victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428/insert/opentelemetry/v1/logs
+        endpoint: http://vlsingle-victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428/insert/opentelemetry/v1/logs
         sending_queue:
           enabled: true
           num_consumers: 10
@@ -66,7 +66,7 @@ spec:
 {{- end }}
 {{- if .Values.observability.metrics.enabled }}
       prometheusremotewrite/victoriametrics:
-        endpoint: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428/api/v1/write
+        endpoint: http://vmsingle-vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428/api/v1/write
         tls:
           insecure: true
         resource_to_telemetry_conversion:
@@ -80,7 +80,7 @@ spec:
 {{- end }}
 {{- if .Values.observability.traces.enabled }}
       otlphttp/victoriatraces:
-        endpoint: http://vtraces.{{ .Values.namespace }}.svc.cluster.local:4318
+        endpoint: http://vtsingle-vtraces.{{ .Values.namespace }}.svc.cluster.local:4318
         tls:
           insecure: true
         sending_queue:

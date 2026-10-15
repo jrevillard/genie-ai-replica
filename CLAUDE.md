@@ -338,7 +338,10 @@ docker compose up -d --force-recreate okf-server pii-service dataprep-arango-ser
   the okf-server log: it reports `import_concurrency`, `pii_web_concurrency`,
   `cores` and `paired`. `paired: false` means import lanes exceed the sidecar's
   workers — the extra lanes are queueing. `pii_web_concurrency: unset` means the
-  two were not applied to the same deployment.
+  two were not applied to the same deployment. **`paired` is a configuration
+  check, not a contention gauge** — it cannot see other in-flight imports, and
+  `POST /:repo_id/import` has no guard against a concurrent one, so N concurrent
+  imports demand N × lanes and all report `paired: true` (BUG-17).
 - **The shipped defaults are a floor, not a recommendation.** 4/4 on 24 cores is
   ~18 % utilisation (measured). If you are deploying to a host larger than a
   small VPS, set these deliberately from the table.

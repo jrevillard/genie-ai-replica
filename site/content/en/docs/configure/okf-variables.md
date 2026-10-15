@@ -129,11 +129,17 @@ OKF import lane capacity  repo_id=… concepts=… import_concurrency=12
   pii_web_concurrency=12 paired=true cores=24
 ```
 
-`paired` is the check that matters. It is `true` only when the import lanes do
-not exceed the sidecar's worker count; `false` means the extra lanes are queueing
-at the PII sidecar, which costs latency without adding throughput. If
-`pii_web_concurrency` reads `unset`, the two settings were not applied to the
-same deployment.
+`paired` is a **configuration** check, not a contention gauge. It is `true` when
+this import's lanes do not exceed the sidecar's worker count; `false` means the
+extra lanes are queueing at the PII sidecar, which costs latency without adding
+throughput. If `pii_web_concurrency` reads `unset`, the two settings were not
+applied to the same deployment.
+
+It cannot tell you whether *other* imports are running. Nothing stops a second
+import while one is in flight, and each import takes its own lanes — so two
+concurrent imports demand twice the scan capacity and both still report
+`paired: true`. If you run imports back to back, set the pair for the number you
+might run at once, not the number you are running now.
 
 ## Import capacity (creating a repository)
 

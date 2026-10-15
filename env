@@ -1279,8 +1279,13 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   caps — not this number. At 1000, TOO_MANY_CONCEPTS stays reserved for
 #   genuine misconfiguration rather than firing on ordinary large crawls.
 #   Compose: yes. Ansible: yes.
-# OKF_INGEST_MAX_ZIP_BYTES=26214400
-#   Default: 26214400 (25 MiB zip-bomb guard). Compose: no.
+# OKF_INGEST_MAX_ZIP_BYTES=268435456
+#   Default: 268435456 (256 MiB decompressed zip-bomb guard; was 25 MiB).
+#   25 MiB was BELOW real bundles — Bali decompresses to 91.9 MB and Indonesia
+#   to 109.4 MB, so the guard rejected both. This is a BOMB GUARD, not a capacity
+#   knob: unlike OKF_INGEST_MAX_CONCEPTS there is no legitimate reason to raise
+#   it further, so leave it alone on a working deployment.
+#   Compose: yes. Ansible: yes.
 # OKF_MAX_CRAWL_SOURCE_MB=10240
 #   Default: 10240 (10 GB crawled-source cap). Compose: yes. Ansible: yes.
 # OKF_MAX_CONCURRENT_CONVERSIONS=2

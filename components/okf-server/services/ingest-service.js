@@ -47,7 +47,13 @@ const config = require('../config');
 // deployment rather than treating it as fixed.
 const DEFAULT_MAX_CONCEPTS = 1000;
 const ENQUEUE_TIMEOUT_MS = 30000; // 4f cap — never hang the request on doc-repo
-const DEFAULT_MAX_ZIP_BYTES = 26214400; // 25 MiB decompressed cap (zip-bomb guard)
+// Decompressed size cap (zip-bomb guard). 25 MiB was below real bundles: Bali
+// is 91.9 MB decompressed and Indonesia 109.4 MB, so BOTH would be rejected
+// by the guard. 256 MiB keeps the guard doing its actual job (stopping a
+// decompression bomb) while admitting ordinary large corpora. This is a bomb
+// guard, NOT a capacity knob — unlike OKF_INGEST_MAX_CONCEPTS it has no
+// legitimate reason to be raised further.
+const DEFAULT_MAX_ZIP_BYTES = 268435456; // 256 MiB decompressed cap
 
 const meter = getMeter();
 const opsCounter = meter.createCounter('okf_ingest_operations_total', {

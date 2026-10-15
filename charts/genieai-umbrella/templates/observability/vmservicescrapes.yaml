@@ -1,0 +1,217 @@
+{{- if .Values.observability.metrics.enabled }}
+{{- /*
+  VMServiceScrapes — one per Service the chart renders that exposes a
+  Prometheus-friendly metrics surface. Reconciled by vmoperator; the
+  CRD group is operator.victoriametrics.com/v1beta1.
+
+  selector.matchLabels targets `genieai.io/component: <slug>` — the
+  label every chart-rendered Service emits via the
+  genieai-common.labels helper. Endpoints reference the Service port
+  by NAME (the `http` / `redis` port name in each Service spec), not
+  the numeric Service port — the operator resolves the name against
+  the target Service.
+
+  Scope: the eleven Services the chart renders today (stateless tier
+  + OPEA orchestrators). GPU model Deployments are EXCLUDED by
+  default — vLLM / TEI / vllm-translation carry `app: <name>` labels
+  rather than the genieai.io/component convention, and their
+  self-metrics are rarely scraped. Operators that want GPU self-
+  metrics add a custom VMServiceScrape out of band.
+
+  OPEA orchestrators ship a `/metrics` endpoint on their container
+  port (the same listener that serves `/health`); the Prometheus
+  exporter path is the Service's `http` port name.
+*/}}
+{{- if .Values.services.backend.enabled }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    matchLabels:
+      genieai.io/component: backend
+  endpoints:
+    - port: http
+      interval: 30s
+{{- end }}
+{{- if .Values.services.frontend.enabled }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    matchLabels:
+      genieai.io/component: frontend
+  endpoints:
+    - port: http
+      interval: 30s
+{{- end }}
+{{- if .Values.services.nginx.enabled }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: nginx
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    matchLabels:
+      genieai.io/component: nginx
+  endpoints:
+    - port: http
+      interval: 30s
+{{- end }}
+{{- if .Values.services.documentRepository.enabled }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: document-repository
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    matchLabels:
+      genieai.io/component: documentRepository
+  endpoints:
+    - port: http
+      interval: 30s
+{{- end }}
+{{- if .Values.services.redisCache.enabled }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: redis-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    matchLabels:
+      genieai.io/component: redis-cache
+  # redis-cache Service port name is `redis`, not `http` — verified
+  # in templates/services/redis-cache.yaml.
+  endpoints:
+    - port: redis
+      interval: 30s
+{{- end }}
+{{- if .Values.opea.enabled }}
+{{- /* All six OPEA orchestrators render together — the per-service
+templates are gated on the umbrella .Values.opea.enabled flag. */ -}}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: chatqna
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    matchLabels:
+      genieai.io/component: chatqna
+  endpoints:
+    - port: http
+      interval: 30s
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: retriever
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    matchLabels:
+      genieai.io/component: retriever
+  endpoints:
+    - port: http
+      interval: 30s
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: dataprep
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    matchLabels:
+      genieai.io/component: dataprep
+  endpoints:
+    - port: http
+      interval: 30s
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: reranker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    matchLabels:
+      genieai.io/component: reranker
+  endpoints:
+    - port: http
+      interval: 30s
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: embedding
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    matchLabels:
+      genieai.io/component: embedding
+  endpoints:
+    - port: http
+      interval: 30s
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: translation
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    matchLabels:
+      genieai.io/component: translation
+  endpoints:
+    - port: http
+      interval: 30s
+{{- end }}
+{{- end }}

@@ -50,7 +50,7 @@
     (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
     (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
-    (dict "name" "ENABLE_OBSERVABILITY" "value" (.Values.opea.retriever.enableObservability | default "0" | toString))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled)))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
 -}}
 {{- $arangoSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}

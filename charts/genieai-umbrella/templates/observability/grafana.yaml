@@ -1,0 +1,156 @@
+{{- if .Values.observability.grafana.enabled }}
+{{- /*
+  Grafana instance + datasources, rendered as grafana-operator CRs.
+  Operator (grafana-operator / bitnami) is a cluster bootstrap
+  prerequisite — see charts/README.md. CRD group: grafana.integreatly.org/v1beta1
+  (the bitnami v4.9.x chart ships this group; the upstream
+  grafana-operator project also uses it).
+
+  Datasource shapes mirror configs/grafana/provisioning/datasources/vm-datasource.yml
+  exactly — type, url, uid, editable, jsonData — with the compose
+  service hostnames swapped for in-cluster Service FQDNs (the
+  operator-managed vmoperator CRs render Services named after the CR
+  metadata.name: "victorialogs" :9428, "vmetrics" :8428, "vtraces" :10428
+  for the Jaeger query API VT serves natively — no tempo-proxy).
+
+  allowCrossNamespaceImport: true on metrics + traces datasources
+  so dashboards in operator-managed folders (provisioned across
+  namespaces by GrafanaFolder CRs the operator ships) can resolve
+  them. Logs datasource stays local — VL is namespace-scoped to
+  the admin-logs UI per environment.
+
+  Admin secret: spec.credentialsEx is the operator-managed way to
+  reference an existing admin user/password Secret (the deploy repo
+  materializes a SealedSecret with `user` + `password` keys). The
+  chart references the secret by name — values are not rendered.
+
+  root_url / server config: left at operator defaults; the
+  gateway / ingress in front of the cluster sets the public origin
+  via the existing `ingress.host` + `ingress.scheme` values.
+*/}}
+apiVersion: grafana.integreatly.org/v1beta1
+kind: Grafana
+metadata:
+  name: genieai-grafana
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: grafana
+spec:
+  # Operator-managed admin credentials; values are not rendered —
+  # the SealedSecret materializes a Secret named
+  # "grafana-admin-credentials" with `user` and `password` keys.
+  # The chart references the secret by name; the operator wires
+  # GF_SECURITY_ADMIN_USER__PASSWORD__FILE from there.
+  credentialsEx:
+    secretName: grafana-admin-credentials
+    usernameKey: user
+    passwordKey: password
+  # Resource block: modest defaults; per-environment overrides via
+  # the `observability.grafana.resources` values knob in the overlay
+  # ConfigMap. Hard cap of 1Gi to keep the laptop overlay under
+  # 4Gi effective memory.
+  resources:
+    {{- toYaml (.Values.observability.grafana.resources | default (dict "requests" (dict "cpu" "100m" "memory" "128Mi") "limits" (dict "cpu" "500m" "memory" "1Gi"))) | nindent 4 }}
+  config:
+    # server: root_url is left empty; the operator injects the
+    # in-cluster Service URL and the ingress fronting it carries
+    # the public origin. The "GF_" prefixes follow the operator's
+    # env-var convention; config-as-yaml is a passthrough.
+    log:
+      mode: console
+    security:
+      admin_user: __admin__
+---
+{{- if .Values.observability.logs.enabled }}
+# VictoriaLogs datasource — mirrors vm-datasource.yml's "VictoriaLogs"
+# entry (type victoriametrics-logs-datasource, uid
+# victoriametrics-logs, derived-fields to trace datasource).
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: victorialogs
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: logs
+spec:
+  instanceSelector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  datasource:
+    name: VictoriaLogs
+    type: victoriametrics-logs-datasource
+    access: proxy
+    url: http://victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428
+    uid: victoriametrics-logs
+    editable: false
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - datasourceUid: victoriatraces
+          matcherRegex: "/trace_id=\"([^\"]+)\"/"
+          name: TraceID
+          url: "$${__value.raw}"
+        - datasourceUid: victoriatraces
+          matcherRegex: "/span_id=\"([^\"]+)\"/"
+          name: SpanID
+          url: "$${__value.raw}"
+{{- end }}
+{{- if .Values.observability.metrics.enabled }}
+# VictoriaMetrics datasource — mirrors vm-datasource.yml's
+# "VictoriaMetrics" entry (type prometheus, uid victoriametrics,
+# isDefault: true).
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: victoriametrics
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  instanceSelector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  allowCrossNamespaceImport: true
+  datasource:
+    name: VictoriaMetrics
+    type: prometheus
+    access: proxy
+    url: http://vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428
+    uid: victoriametrics
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: POST
+{{- end }}
+{{- if .Values.observability.traces.enabled }}
+# VictoriaTraces datasource — VictoriaTraces serves the Jaeger HTTP
+# API natively on port 10428 (no tempo-proxy on this path; the
+# compose `tempo-proxy:10429` indirection is dropped because the
+# vmoperator-managed VTSingle exposes the Jaeger query API directly).
+# Type mirrors vm-datasource.yml: "jaeger".
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: victoriatraces
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+    app.kubernetes.io/component: traces
+spec:
+  instanceSelector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  allowCrossNamespaceImport: true
+  datasource:
+    name: VictoriaTraces
+    type: jaeger
+    access: proxy
+    url: http://vtraces.{{ .Values.namespace }}.svc.cluster.local:10428
+    uid: victoriatraces
+    editable: false
+{{- end }}
+{{- end }}

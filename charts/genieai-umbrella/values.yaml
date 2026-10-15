@@ -657,7 +657,6 @@ opea:
     contextDecayFactor: "0.0025"
     minValueThreshold: "-1.0"
     logLevel: info
-    enableObservability: "0"
   embedding:
     modelId: BAAI/bge-large-en-v1.5
   translation:

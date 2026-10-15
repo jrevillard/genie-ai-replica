@@ -11,7 +11,7 @@
 {{- $urls := list
     (dict "name" "TEI_RERANKING_ENDPOINT" "value" (include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "reranker")))
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
-    (dict "name" "ENABLE_OBSERVABILITY" "value" (.Values.opea.reranker.enableObservability | default "0" | toString))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled)))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
     (dict "name" "LOG_LEVEL" "value" (.Values.opea.reranker.logLevel | default "info"))
     (dict "name" "NOVELTY_SIGMOID_A" "value" (.Values.opea.reranker.noveltySigmoidA | default "20.0" | toString))

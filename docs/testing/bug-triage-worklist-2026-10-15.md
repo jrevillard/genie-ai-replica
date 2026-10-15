@@ -242,6 +242,8 @@ the sign-off evidence for two.
 
 ## Wave 3 — throughput and capacity
 
+**BOTH DONE in `10eced5ae` + `e1531706b`, pending live re-test.**
+
 ### 3.1 · Import throughput pinned at 4 concurrent PII scans — !1080
 
 Measured: 24 cores, 442% used by the sidecar, okf-server at 0.52%. `12` is
@@ -250,12 +252,41 @@ Needs the defaults raised **and** the pairing rule documented in
 `operate/scaling.md`, `reference/env-vars.md`, `.claude/rules/ENVIRONMENT.md` and
 `CLAUDE.md` — an agent reading only one of those must still get it right.
 
+Defaults raised **1/2 → 4/4** in all declaration sites (compose, `env`, `env.j2`) —
+the `2` dated from when the sidecar had 2 uvicorn workers. Documented on **every**
+surface named above plus `configure/okf-variables.md` and `knowledge-base/ingestion.md`.
+
+Every import now logs `OKF import lane capacity` with both values, whether they are
+**paired**, and the core count — so a 4-lane/2-worker host is visible in the logs
+instead of inferred from timings.
+
+The two pairs are kept distinct throughout because they fail differently: **import**
+lanes above the sidecar's workers *queue* (latency up, throughput flat); **drain**
+lanes above dataprep's slots get **429** and retry.
+
+> **Not done:** the issue's wall-clock acceptance (import Bali at 12/12 and compare
+> against 4/4). That belongs to the live re-import cycle, not to a config commit.
+
 ### 3.2 · `OKF_INGEST_MAX_CONCEPTS` defaults to 200 — !1081
 
 Raise to 1000; `OKF_INGEST_MAX_ZIP_BYTES` from 25 MiB to 256 MiB in the same pass
 (Bali is 91.9 MB decompressed, Indonesia 109.4 MB). Document as use-case-dependent
 capacity with the Bali worked example, because the cap is checked **after**
 splitting and the operator cannot predict the outcome from the document count.
+
+Both raised **in all four declaration sites** (service default, compose, `env`,
+`env.j2`) — `crossReference conflicting=0` is the check that they agree, and it
+would fail on a partial edit. The zip cap is documented as a **bomb guard and not
+a capacity knob**, so nobody "tunes" it later.
+
+Three existing tests pinned the `200` default; they were **updated, not deleted** —
+they pin the resolver's fallback behaviour, and only the expected number changed.
+
+---
+
+**Waves 0–3 are now complete.** What remains is not a defect queue but the
+**verification** half: everything above is proven by tests and falsifying checks,
+and every one of them still needs the live re-import to close.
 
 ---
 
@@ -332,7 +363,7 @@ guess. **Do not file as a defect until the mechanism is known.**
 | 5 | **!1077** → **!1075** → **!1067** — wizard cluster, ordered by how much each blocks | **ALL DONE** `59ebfb1f` · `49499fec` · `69983dbb2` — Wave 1 complete |
 | 6 | **!1072** — 1202 logged at error on a clean drain; trains everyone to ignore errors | **DONE** `d79e3732` — severity only; the re-throw is load-bearing |
 | 7 | **!1073** — 28 env vars never reach a container; make config trustworthy before Wave 3 | **DONE** `4758e71` — 26 wired, 2 are unimplemented and allowlisted; AC9+AC10 added |
-| 8 | **!1080** + **!1081** together — throughput and capacity, config + documentation | |
+| 8 | **!1080** + **!1081** together — throughput and capacity, config + documentation | **DONE** `10eced5a` + `e1531706` — Waves 0–3 complete |
 | 9 | **!1060/!1063** — only with a reproduction in hand | parked |
 | 10 | Wave 4 polish; !1061, !1064, !1074, !1062 | |
 | — | !1079 — quoting helper + `arangodb-collections.md` note | low, any time |

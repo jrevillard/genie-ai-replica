@@ -1,0 +1,121 @@
+{{/*
+  dataprep OPEA orchestrator. Compose-parity (docker-compose.yaml lines
+  1156-1254, `dataprep-arango-service`). Factory-driven like the other
+  four OPEA deployments. ARANGO_* wired through the chart's arangoHost
+  helper (single `arangodb-single.<ns>.svc.cluster.local:8529` URL;
+  `ARANGO_DB` unified on `_system` like backend/doc-repo/retriever,
+  regardless of the compose `genie-ai` default). Keycloak client wiring
+  is secretKeyRef-backed: `KC_DATAPREP_CLIENT_SECRET` from the operator-
+  managed `kc-dataprep-client-secret` Secret (already in the cluster per
+  the convergence flow). GPU endpoints (`VLLM_ENDPOINT`,
+  `TEI_EMBEDDING_ENDPOINT`, `DOCLING_ENDPOINT`) via the opea helpers;
+  HF_TOKEN + VLLM_API_KEY from the vllm-api-key Secret. Container/listen
+  port 5000 (compose parity; healthcheck hits `/health` on that port).
+
+  LABEL_SELECTOR_SYSTEM_PROMPT and CONTEXTUAL_RETRIEVAL_PROMPT default
+  to the empty string in the compose env block (`${...:-}`); the
+  dataprep Python code falls through to its own built-in prompts in
+  that case, so the chart carries the empty default verbatim and lets
+  operators override via `.Values.opea.dataprep.<camelCase>`. Both
+  render with `| quote` so a multi-line override produces a single
+  valid YAML scalar.
+
+  The guardrail is not rendered by this chart; `GUARDRAIL_URL` carries
+  the compose default (`http://guardrail:9090/v1/guardrails`) and the
+  service tolerates an unreachable guardrail.
+*/}}
+{{- if .Values.opea.enabled -}}
+{{- $vals  := deepCopy .Values -}}
+{{- $ns    := .Values.namespace -}}
+{{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
+{{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
+{{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
+{{- $doclingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "docling") -}}
+{{- $tuningEnv := list
+    (dict "name" "DATAPREP_COMPONENT_NAME" "value" (.Values.opea.dataprep.dataprepComponentName | default "GENIE_DATAPREP_ARANGODB"))
+    (dict "name" "ARANGO_GRAPH_NAME" "value" (.Values.opea.dataprep.arangoGraphName | default "GRAPH"))
+    (dict "name" "DATAPREP_MAX_CONCURRENT_BATCHES" "value" (.Values.opea.dataprep.dataprepMaxConcurrentBatches | default "20" | toString))
+    (dict "name" "DATAPREP_LLM_LABEL_BATCH_SIZE" "value" (.Values.opea.dataprep.dataprepLlmLabelBatchSize | default "4" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_PDF" "value" (.Values.opea.dataprep.dataprepChunkSizePdf | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_DOCX" "value" (.Values.opea.dataprep.dataprepChunkSizeDocx | default "1000" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_XLSX" "value" (.Values.opea.dataprep.dataprepChunkSizeXlsx | default "1500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_PPTX" "value" (.Values.opea.dataprep.dataprepChunkSizePptx | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_HTML" "value" (.Values.opea.dataprep.dataprepChunkSizeHtml | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_TXT" "value" (.Values.opea.dataprep.dataprepChunkSizeTxt | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_MD" "value" (.Values.opea.dataprep.dataprepChunkSizeMd | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_OVERLAP" "value" (.Values.opea.dataprep.dataprepChunkOverlap | default "50" | toString))
+    (dict "name" "LABELING_STRATEGY" "value" (.Values.opea.dataprep.labelingStrategy | default "llm"))
+    (dict "name" "EMBEDDING_LABEL_THRESHOLD" "value" (.Values.opea.dataprep.embeddingLabelThreshold | default "0.75" | toString))
+    (dict "name" "BM25_LABEL_THRESHOLD" "value" (.Values.opea.dataprep.bm25LabelThreshold | default "2.00" | toString))
+    (dict "name" "CONTENT_EXTRACTION_METHOD" "value" (.Values.opea.dataprep.contentExtractionMethod | default "docling"))
+    (dict "name" "LABEL_SELECTOR_SYSTEM_PROMPT" "value" (.Values.opea.dataprep.labelSelectorSystemPrompt | default "" | quote))
+    (dict "name" "CONTEXTUAL_RETRIEVAL_ENABLED" "value" (.Values.opea.dataprep.contextualRetrievalEnabled | default "true" | toString))
+    (dict "name" "DATAPREP_CONTEXTUAL_MODEL" "value" (.Values.opea.dataprep.dataprepContextualModel | default ""))
+    (dict "name" "DATAPREP_CONTEXTUAL_DOC_BUDGET" "value" (.Values.opea.dataprep.dataprepContextualDocBudget | default "6000" | toString))
+    (dict "name" "DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL" "value" (.Values.opea.dataprep.dataprepContextualDocBudgetDocLevel | default "100000" | toString))
+    (dict "name" "DATAPREP_CONTEXTUAL_MAX_TOKENS" "value" (.Values.opea.dataprep.dataprepContextualMaxTokens | default "512" | toString))
+    (dict "name" "CONTEXTUAL_RETRIEVAL_PROMPT" "value" (.Values.opea.dataprep.contextualRetrievalPrompt | default "" | quote))
+    (dict "name" "CONTEXTUAL_STRATEGY" "value" (.Values.opea.dataprep.contextualStrategy | default "per_chunk"))
+    (dict "name" "CONTEXTUAL_LABEL_RAW" "value" (.Values.opea.dataprep.contextualLabelRaw | default "true" | toString))
+    (dict "name" "VLLM_MODEL_ID" "value" (.Values.opea.dataprep.vllmModelId | default "meta-llama/Meta-Llama-3.1-8B-Instruct"))
+    (dict "name" "VLLM_ENDPOINT" "value" $llmEndpoint)
+    (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
+    (dict "name" "DOCLING_ENDPOINT" "value" $doclingEndpoint)
+    (dict "name" "DOCLING_DEVICE" "value" (.Values.opea.dataprep.doclingDevice | default "cuda"))
+    (dict "name" "GUARDRAIL_URL" "value" (.Values.opea.dataprep.guardrailUrl | default "http://guardrail:9090/v1/guardrails"))
+    (dict "name" "DOCUMENT_REPOSITORY_URL" "value" (printf "http://document-repository.%s.svc.cluster.local:80" $ns))
+    (dict "name" "BACKEND_SERVICE_URL" "value" (printf "http://backend.%s.svc.cluster.local:80" $ns))
+    (dict "name" "KEYCLOAK_URL" "value" (printf "http://keycloak-service.%s.svc.cluster.local:8080/auth" $ns))
+    (dict "name" "KC_REALM" "value" (.Values.opea.dataprep.kcRealm | default "genie"))
+    (dict "name" "KC_DATAPREP_CLIENT_ID" "value" (.Values.opea.dataprep.kcDataprepClientId | default "dataprep-service-client"))
+    (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
+    (dict "name" "KEYCLOAK_SSL_SKIP_VERIFY" "value" (.Values.opea.dataprep.keycloakSslSkipVerify | default "0" | toString))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (.Values.opea.dataprep.enableObservability | default "0" | toString))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+    (dict "name" "LOG_LEVEL" "value" (.Values.opea.dataprep.logLevel | default "info"))
+-}}
+{{- $arangoSecretEnv := list
+    (dict "name" "ARANGO_PASSWORD" "valueFrom" (dict "secretKeyRef" (dict "name" "arango-root-secret" "key" "password" "optional" true)))
+-}}
+{{- $kcSecretEnv := list
+    (dict "name" "KC_DATAPREP_CLIENT_SECRET" "valueFrom" (dict "secretKeyRef" (dict "name" "kc-dataprep-client-secret" "key" "KC_DATAPREP_CLIENT_SECRET")))
+-}}
+{{- $gpuSecretEnv := list
+    (dict "name" "HF_TOKEN" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "HF_TOKEN")))
+    (dict "name" "VLLM_API_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "VLLM_API_KEY")))
+    (dict "name" "HUGGINGFACEHUB_API_TOKEN" "valueFrom" (dict "secretKeyRef" (dict "name" "vllm-api-key" "key" "VLLM_API_KEY")))
+-}}
+{{- $arangoEnv := list
+    (dict "name" "ARANGO_URL" "value" (printf "http://%s.%s.svc.cluster.local:8529" $arangoHost $ns))
+    (dict "name" "ARANGO_DB" "value" "_system")
+    (dict "name" "ARANGO_USERNAME" "value" "root")
+-}}
+{{- $svcVals := dict
+    "image" (dict "repository" "genie-ai-dataprep-arango" "tag" "main")
+    "port" 5000
+    "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
+    "env" (concat $arangoEnv $tuningEnv $arangoSecretEnv $kcSecretEnv $gpuSecretEnv)
+    "probes" (dict
+      "readiness" (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 30 "periodSeconds" 15)
+      "liveness"  (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 60 "periodSeconds" 30)
+    )
+-}}
+{{- $_ := set $vals.services "dataprep" $svcVals -}}
+{{- $ctx := dict "name" "dataprep" "component" "dataprep" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dataprep
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "dataprep") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "dataprep") | nindent 4 }}
+{{- end -}}

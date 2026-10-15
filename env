@@ -686,6 +686,14 @@ KC_OKF_SERVER_CLIENT_SECRET=
 # you are already oversubscribed. There is no correct constant — read the core
 # count.
 #
+# WHY THE IMPORT PAIR SHIPS AT 4 AND THE DRAIN PAIR AT 1 (not an oversight):
+# the two are limited by DIFFERENT things. Import is bounded by the host's own CPU
+# — the PII scan runs locally and scales with cores. The drain is bounded by the
+# MODEL SERVICES: labelling calls the LLM and the embedding service, both shared
+# and often on one GPU. Raising the drain pair does not use more of the machine; it
+# queues on the model, and on a shared GPU it takes capacity away from chat
+# answering. Size the drain pair against the model's headroom, not the core count.
+#
 # Every import logs the lane capacity it actually got ("OKF import lane
 # capacity"), including both values and whether they are paired, so a
 # misconfigured host is visible in the logs rather than inferred from timings.

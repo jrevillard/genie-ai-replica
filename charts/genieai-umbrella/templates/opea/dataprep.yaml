@@ -56,7 +56,7 @@
     (dict "name" "DATAPREP_CONTEXTUAL_MAX_TOKENS" "value" (.Values.opea.dataprep.dataprepContextualMaxTokens | default "512" | toString))
     (dict "name" "CONTEXTUAL_STRATEGY" "value" (.Values.opea.dataprep.contextualStrategy | default "per_chunk"))
     (dict "name" "CONTEXTUAL_LABEL_RAW" "value" (.Values.opea.dataprep.contextualLabelRaw | default "true" | toString))
-    (dict "name" "VLLM_MODEL_ID" "value" (.Values.opea.dataprep.vllmModelId | default "ibm-granite/granite-4.1-8b"))
+    (dict "name" "VLLM_MODEL_ID" "value" (.Values.opea.models.llm.modelId | default "ibm-granite/granite-4.1-8b"))
     (dict "name" "VLLM_ENDPOINT" "value" $llmEndpoint)
     (dict "name" "GPU_NODE_HOST" "value" (regexReplaceAll "^([a-z]+://)?(\\[[^\\]]+\\]|[^:/]+).*" (.Values.opea.gpu.nodeHost | default "") "$2"))
     (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)

@@ -1,0 +1,132 @@
+{{/*
+  vLLM OpenAI-compatible chat server. Renders only when both opea.enabled
+  is true and opea.gpu.mode is "in-cluster" — the external mode (the
+  laptop default) keeps the chart pointing the orchestrators at a remote
+  GPU node and emits no model pods at all.
+
+  Compose parity: docker-compose.yaml gpu-models profile, service `vllm`
+  (lines ~785-840). Image, command, env, volumes, healthcheck all mirror
+  the compose service verbatim. The model id is the only knob exposed
+  through values (default meta-llama/Meta-Llama-3.1-8B-Instruct).
+
+  Image is pulled from docker.io unconditionally. The upstream
+  vllm/vllm-openai image is not mirrored in the GitLab Container
+  Registry the rest of the stack pulls from, and a conditional
+  global.imageRegistry prefix would 404 the pull. Same rationale as the
+  kcc/ArangoDB exception in templates/data/keycloak-convergence-job.yaml.
+  An air-gapped site must mirror docker.io/vllm/vllm-openai and rewrite
+  the image reference via insertAgent, not via the registry value.
+
+  The chart mounts an emptyDir at the compose-equivalent model-cache
+  path (/root/.cache/huggingface). HF weights are large; an emptyDir
+  forces a re-download on every pod restart. Choosing a PVC is an
+  operator concern (size, storage class, node-affinity for GPU
+  nodes) — the chart does not impose one. Operators wanting cache
+  persistence must mount a PVC and overlay this path.
+*/}}
+{{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") -}}
+{{- $ns := .Values.namespace -}}
+{{- $modelId := .Values.opea.models.llm.modelId -}}
+{{- $res := .Values.opea.models.resources | default (dict "requests" (dict "nvidia.com/gpu" 1) "limits" (dict "nvidia.com/gpu" 1)) -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: {{ $ns }}
+  labels:
+    app: vllm
+    app.kubernetes.io/name: vllm
+    app.kubernetes.io/component: vllm
+    app.kubernetes.io/part-of: genieai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      nodeSelector:
+        gpu: "true"
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: vllm
+          image: docker.io/vllm/vllm-openai:v0.10.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --model
+            - {{ $modelId | quote }}
+            - --gpu_memory_utilization
+            - "0.55"
+            - --served-model-name
+            - {{ $modelId | quote }}
+            - --max_model_len
+            - "65536"
+            - --max_num_seqs
+            - "64"
+            - --dtype=half
+            - --enforce-eager
+            - --port
+            - "8000"
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vllm-api-key
+                  key: HF_TOKEN
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: all
+          resources:
+            {{- toYaml $res | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          startupProbe:
+            tcpSocket:
+              port: 8000
+            failureThreshold: 30
+            periodSeconds: 10
+      volumes:
+        - name: hf-cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm
+  namespace: {{ $ns }}
+  labels:
+    app: vllm
+spec:
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  selector:
+    app: vllm
+{{- end -}}

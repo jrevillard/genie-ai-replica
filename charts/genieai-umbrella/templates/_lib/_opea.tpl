@@ -36,7 +36,10 @@ http://tei-reranker.{{ $root.Values.namespace }}.svc.cluster.local:80
   {{- else if eq $key "translation" -}}
 http://vllm-translation.{{ $root.Values.namespace }}.svc.cluster.local:9031
   {{- else if eq $key "docling" -}}
-http://docling.{{ $root.Values.namespace }}.svc.cluster.local:5001
+{{- /* No docling Deployment is rendered in-cluster; an empty endpoint
+makes dataprep use its in-process docling converter (the same fallback
+compose relies on with an empty DOCLING_ENDPOINT). */ -}}
+{{- "" -}}
   {{- end -}}
 
 {{- else if eq $mode "external" -}}

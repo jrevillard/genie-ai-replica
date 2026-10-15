@@ -634,14 +634,23 @@ opea:
   translation:
     modelId: google/gemma-3-4b-it
   models:
-    # in-cluster mode only — mirrors the gpu-models compose service parity.
+    # in-cluster mode only.
     llm:
-      modelId: meta-llama/Meta-Llama-3.1-8B-Instruct
+      modelId: ibm-granite/granite-4.1-8b
     reranker:
-      # TEI reranker model. Inherits compose default (BAAI/bge-reranker-v2-m3).
-      # The embedding model reads from opea.embedding.modelId; the LLM from
-      # opea.models.llm.modelId; only the reranker model needed a new key.
+      # TEI reranker model. The embedding model reads from
+      # opea.embedding.modelId; the LLM from opea.models.llm.modelId;
+      # only the reranker model needed a new key.
       modelId: BAAI/bge-reranker-v2-m3
+    # Shared model-weights cache mounted by all four model Deployments.
+    # HF weights are 4-16 GB per model; without a persistent cache every
+    # pod restart re-downloads them. ReadWriteOnce — assumes all model
+    # pods on the single gpu=true node; multi-GPU clusters need RWX or
+    # per-model claims.
+    cache:
+      enabled: true
+      storageClassName: ""
+      size: 100Gi
     resources: {}
 
 # clusterProfile-driven replica overrides. prod runs multiple replicas per

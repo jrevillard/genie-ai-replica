@@ -47,6 +47,7 @@
     (dict "name" "RETRIEVER_SUMMARIZER_ENABLED" "value" (.Values.opea.retriever.retrieverSummarizerEnabled | default "false" | toString))
     (dict "name" "LOG_LEVEL" "value" (.Values.opea.retriever.logLevel | default "info"))
     (dict "name" "VLLM_ENDPOINT" "value" $llmEndpoint)
+    (dict "name" "VLLM_MODEL_ID" "value" (.Values.opea.models.llm.modelId | default "ibm-granite/granite-4.1-8b"))
     (dict "name" "GPU_NODE_HOST" "value" (regexReplaceAll "^([a-z]+://)?(\\[[^\\]]+\\]|[^:/]+).*" (.Values.opea.gpu.nodeHost | default "") "$2"))
     (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))

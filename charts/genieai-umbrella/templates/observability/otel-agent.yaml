@@ -43,7 +43,8 @@ spec:
   mode: daemonset
   tolerations:
     - operator: Exists
-  config: |
+  # config as a map (otel-operator v1beta1 rejects string configs)
+  config:
     receivers:
       filelog:
         include:

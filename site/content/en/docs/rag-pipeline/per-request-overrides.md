@@ -91,7 +91,7 @@ Backed by `GenieaiRerankerParms(RerankerParms)` in
 |---|---|---|---|
 | `top_n` | int | `RERANKER_TOP_N` | Chunks kept for `slice` / `slice_threshold`. |
 | `reranking_strategy` | string | `RERANKING_STRATEGY` | `slice`, `adaptive`, `threshold`, `slice_threshold`, `knee_threshold`. |
-| `reranking_threshold` | float | `RERANKING_THRESHOLD` | Score gate. |
+| `reranking_threshold` | float | `RERANKING_THRESHOLD` | Score gate. Read by `threshold` / `slice_threshold` only — sending it with any other strategy (including the `adaptive` default) is accepted and ignored. |
 
 ## Example: A/B a top-k comparison
 

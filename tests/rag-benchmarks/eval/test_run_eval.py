@@ -1302,3 +1302,62 @@ def test_f1_chatqna_resolver_prefers_env_override(monkeypatch):
         pass
     # force=True passed on the HarnessError reaction
     assert invoked == [True]
+
+
+# ---------------------------------------------------------------------------
+# _extract_answer — the chatqna response envelope
+# ---------------------------------------------------------------------------
+
+
+def test_extract_answer_reads_the_response_key():
+    """chatqna answers {"response": <text>, "metadata": {...}}.
+
+    The answer must resolve to the text. When the resolver missed `response`
+    it fell through every candidate key and returned a serialised dump of the
+    whole envelope, so dump-tuples rows carried a JSON blob as their answer and
+    every RAGAS metric reading that string scored the blob.
+    """
+    body = json.dumps(
+        {"response": "The answer is 42.", "metadata": {"confidence_score": 0.9, "is_grounded": True}}
+    )
+    assert run_eval._extract_answer(body) == "The answer is 42."
+
+
+def test_extract_answer_prefers_response_over_metadata_answer():
+    """Top-level `response` wins over a metadata-scoped answer."""
+    body = json.dumps({"response": "top level", "metadata": {"answer": "nested"}})
+    assert run_eval._extract_answer(body) == "top level"
+
+
+def test_extract_answer_returns_empty_for_an_empty_response():
+    """`response` resolves on presence, so a present-but-empty value is an
+    empty answer rather than a licence to fall through to the serialised
+    envelope. chatqna emits `response` on every answer including an abstention
+    that carries no prose."""
+    body = json.dumps({"response": "", "metadata": {"abstained": True, "confidence_score": 0}})
+    assert run_eval._extract_answer(body) == ""
+
+
+def test_extract_answer_with_no_answer_key_falls_back_to_the_envelope():
+    """A body that is not a chatqna envelope still yields something
+    inspectable rather than an empty string."""
+    body = json.dumps({"detail": [{"msg": "input too long"}]})
+    assert json.loads(run_eval._extract_answer(body)) == {"detail": [{"msg": "input too long"}]}
+
+
+def test_extract_answer_still_falls_back_to_the_legacy_keys():
+    """The historical shapes keep working — the envelope is not the only caller."""
+    assert run_eval._extract_answer(json.dumps({"text": "t"})) == "t"
+    assert run_eval._extract_answer(json.dumps({"answer": "a"})) == "a"
+    assert run_eval._extract_answer(json.dumps({"generated_text": "g"})) == "g"
+    assert run_eval._extract_answer(json.dumps({"metadata": {"answer": "n"}})) == "n"
+
+
+def test_extract_answer_returns_the_abstention_prose():
+    """An abstention is a real answer, not an empty response: chatqna fills
+    `response` with the (localised) abstention text and flags the cause in
+    metadata. It must resolve to that prose so the row is attributable."""
+    body = json.dumps(
+        {"response": "I do not have enough information to answer.", "metadata": {"abstained": True}}
+    )
+    assert run_eval._extract_answer(body) == "I do not have enough information to answer."

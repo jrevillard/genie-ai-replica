@@ -38,8 +38,8 @@ set. Choose one with `RERANKING_STRATEGY`:
 
 | Strategy | How it decides the cut | When to use |
 |---|---|---|
-| **`slice`** (default in the reranker service, `genieai_tei_reranker.py:46`) | Top-N by TEI cross-encoder score (`RERANKER_TOP_N` = 3). | Predictable context size. The right default for most deployments. |
-| **`adaptive`** (default in the chatqna wrapper, `genieai_chatqna.py:204`) | Utility-cost selection: `relevance × novelty − token_cost`; penalises near-duplicates (novelty sigmoid) and large context windows (context decay). | Dynamic context; tune `CONTEXT_DECAY_FACTOR` and friends. |
+| **`slice`** (default in the reranker service, `genieai_tei_reranker.py:79`) | Top-N by TEI cross-encoder score (`RERANKER_TOP_N` = 3). | Predictable context size. The right default for most deployments. |
+| **`adaptive`** (default in the chatqna wrapper, `genieai_chatqna.py:252`) | Utility-cost selection: `relevance × novelty − token_cost`; penalises near-duplicates (novelty sigmoid) and large context windows (context decay). | Dynamic context; tune `CONTEXT_DECAY_FACTOR` and friends. |
 | **`threshold`** | Keeps every chunk above `RERANKING_THRESHOLD`. | Strict quality gate. |
 | **`slice_threshold`** | Top-N, but only chunks that also clear `RERANKING_THRESHOLD`. | Predictable size + a quality floor. |
 | **`knee_threshold`** | Keeps chunks up to the largest score drop ("knee"). | Adapts to varied query difficulty. |
@@ -48,9 +48,9 @@ With `slice`, `RERANKER_TOP_N` (default 3) sets how many top chunks go to
 the LLM.
 
 > **Two defaults, two layers.** The TEI reranker microservice reads
-> `RERANKING_STRATEGY` with default `slice` (`genieai_tei_reranker.py:46`).
+> `RERANKING_STRATEGY` with default `slice` (`genieai_tei_reranker.py:79`).
 > The ChatQnA wrapper reads it with default `adaptive`
-> (`genieai_chatqna.py:204`). ChatQnA's value wins when ChatQnA is in the
+> (`genieai_chatqna.py:252`). ChatQnA's value wins when ChatQnA is in the
 > path; the reranker service only sees the per-request override that
 > ChatQnA forwards. Pick the strategy that matches the layer you expect to
 > serve the request.
@@ -141,7 +141,7 @@ The three signals appear separately in the SSE metadata event — see
 |---|---|---|
 | `RERANKING_STRATEGY` | `slice` (reranker) / `adaptive` (chatqna) | Selection strategy. |
 | `RERANKER_TOP_N` | 3 | Chunks kept (for `slice` / `slice_threshold`, and as a cap). |
-| `RERANKING_THRESHOLD` | 0.75 | Score gate (for `threshold` / `slice_threshold` / `knee_threshold`). The docker-compose / TEI reranker default is `0.75`; the in-code chatqna default is `0.9` (overridden by the env var / docker-compose at runtime). |
+| `RERANKING_THRESHOLD` | 0.75 | Score gate. Read by `threshold` / `slice_threshold` **only** — `slice`, `knee_threshold` and `adaptive` (the ChatQnA default) never read it, so tuning it on those strategies changes nothing. The docker-compose / TEI reranker default is `0.75`; the in-code chatqna default is `0.9` (overridden by the env var / docker-compose at runtime). |
 | `RERANKER_SCORE_CALIBRATION` | `none` | Raw-score → `[0,1]` mapping (`sigmoid` is opt-in). |
 | `RERANKER_SCORE_TEMPERATURE` | 1.0 | Temperature for sigmoid calibration. |
 | `CONFIDENCE_RANK_DECAY` | 0.5 | Per-rank exponential weight decay (rank 0 = best). |

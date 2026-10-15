@@ -215,7 +215,7 @@ The request body fields below act as per-request overrides over the deployment d
 |--------------|---------|---------|-------|
 | `top_n` | `RERANKER_TOP_N` | `3` | Final chunks forwarded to the LLM |
 | `reranking_strategy` | `RERANKING_STRATEGY` | `slice` | See [Architecture — §9.3 Reranker Strategies](/docs/architecture/architecture/#93-reranker-strategies) |
-| `reranking_threshold` | `RERANKING_THRESHOLD` | (env) | Threshold used by `threshold` / `slice_threshold` / `knee_threshold` strategies |
+| `reranking_threshold` | `RERANKING_THRESHOLD` | (env) | Threshold used by `threshold` / `slice_threshold` only — `slice`, `knee_threshold` and `adaptive` never read it |
 | `traversal_max_depth` | `RETRIEVER_TRAVERSAL_MAX_DEPTH` | (env) | Graph traversal depth |
 | `traversal_max_returned` | `RETRIEVER_TRAVERSAL_MAX_RETURNED` | (env) | Graph traversal fan-out |
 | `traversal_score_threshold` | `RETRIEVER_TRAVERSAL_SCORE_THRESHOLD` | (env) | Minimum graph-edge score to follow |

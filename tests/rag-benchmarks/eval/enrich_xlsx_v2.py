@@ -169,8 +169,11 @@ COLUMN_DOCS: dict[str, str] = {
         "empty otherwise. Spots rows that bypassed the LLM judge entirely."
     ),
     "answer_first_200": (
-        "First 200 chars of the chatqna response (envelope unwrapped: "
-        'parses the {"response": "..."} JSON and decodes literal \\uXXXX escapes).'
+        "First 200 chars of the chatqna response. Legacy reports stored the "
+        'whole {"response": "..."} envelope in this field; those are unwrapped. '
+        "A JSON-shaped answer (e.g. {\"resultado\": 42}) is NOT an envelope and "
+        "passes through verbatim — re-enriched workbooks show prose where older "
+        "ones showed envelopes."
     ),
     "abstained": (
         "yes / no — yes if the response matches an abstention pattern "
@@ -375,9 +378,17 @@ def _is_unresolved(g_row: dict[str, Any]) -> bool:
 
 
 def _extract_response(answer: Any) -> str:
-    """Unwrap the chatqna JSON envelope ``{"response": "..."}`` and decode
-    literal ``\\uXXXX`` escapes the v5 G2 run exposed on the Spanish
-    abstention path. Non-string or non-JSON inputs pass through verbatim.
+    """Unwrap a legacy chatqna JSON envelope ``{"response": "..."}``.
+
+    Reports written before the eval harness learned the ``response`` key store
+    the whole envelope in the answer field; those still need unwrapping, along
+    with the literal ``\\uXXXX`` escapes that double-encoding left on the
+    Spanish abstention path.
+
+    Everything else passes through verbatim. In particular a real answer that
+    happens to be valid JSON (``{"resultado": 42}``) is not an envelope: it has
+    no ``response`` / ``answer`` key, so unwrapping it would erase the answer
+    and the row would then count as answered rather than abstained.
     """
     if not answer or not isinstance(answer, str):
         return answer or ""
@@ -385,8 +396,19 @@ def _extract_response(answer: Any) -> str:
         env = json.loads(answer)
     except (TypeError, ValueError):
         return answer
-    inner = env.get("response", env.get("answer", "")) if isinstance(env, dict) else str(env)
-    if isinstance(inner, str) and "\\u" in inner:
+    if not isinstance(env, dict):
+        # A JSON scalar or array is an answer, not an envelope. Coerce it so
+        # `"hola"` reads as hola and `""` reads as empty — the unquoted form
+        # would otherwise reach is_abstention() as a real two-character answer.
+        return str(env)
+    if "response" not in env and "answer" not in env:
+        return answer
+    inner = env.get("response", env.get("answer", ""))
+    # Decode escapes only on a pure-ASCII string. The decode reinterprets bytes
+    # as latin-1, so running it on text that already carries real non-ASCII
+    # characters turns every one of them into mojibake (ñ → Ã±). A genuinely
+    # double-encoded string is pure ASCII, so the guard costs nothing.
+    if isinstance(inner, str) and "\\u" in inner and inner.isascii():
         try:
             inner = inner.encode("utf-8").decode("unicode_escape")
         except (UnicodeDecodeError, UnicodeEncodeError):

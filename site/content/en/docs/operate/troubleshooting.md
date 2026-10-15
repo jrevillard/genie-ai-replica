@@ -139,6 +139,9 @@ wired.
   reranker `RERANKING_THRESHOLD` may be filtering everything. These are set
   in `.env` and require a service restart. To diagnose: raise each threshold
   by 0.1 and re-query; if results reappear, the thresholds were too tight.
+  Check `RERANKING_STRATEGY` first, though: `RERANKING_THRESHOLD` is read only
+  by the `threshold` and `slice_threshold` strategies. The chatqna default is
+  `adaptive`, which ignores it entirely — raising it there changes nothing.
   Defaults are documented at
   `docker-compose.yaml:1290,1384,1394` (retrieval `0.2`, reranker `0.75`) and
   in [Configuration &rarr; Environment
@@ -305,7 +308,7 @@ flowchart TD
     C --> E{Which stage is<br/>red or slow?}
     E -- embedding --> F[Check vLLM / TEI health<br/>docker service ls &#124; grep vllm]
     E -- retriever --> G[ArangoDB connectivity<br/>+ RETRIEVER_ARANGO_SCORE_THRESHOLD]
-    E -- reranker --> H[RERANKING_THRESHOLD<br/>+ reranker service health]
+    E -- reranker --> H[RERANKING_THRESHOLD<br/>(threshold strategies only)<br/>+ reranker service health]
     E -- llm --> I[vLLM OOM / context length<br/>+ response_format=json_object]
     F --> J[Service Logs dashboard<br/>filter service.name=<svc>]
     G --> J

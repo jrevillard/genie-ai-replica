@@ -385,7 +385,7 @@ data: {"type":"error","message":"Error description"}
 | `RERANK_SERVER_PORT` | Reranker port | `8000` *(compose override; code default `80`)* |
 | `RERANKING_STRATEGY` | Slice / threshold / knee_threshold / adaptive | `slice` (compose default; ChatQnA code default `adaptive`) |
 | `RERANKER_TOP_N` | Chunks kept for slice strategy | `3` |
-| `RERANKING_THRESHOLD` | Min reranker score for threshold strategy | `0.9` (ChatQnA default) |
+| `RERANKING_THRESHOLD` | Min reranker score for the `threshold` / `slice_threshold` strategies only (`adaptive` ignores it) | `0.9` (ChatQnA default) |
 | `CONFIDENCE_RANK_DECAY` | Exponential weight decay per rank | `0.5` |
 | `MULTI_TURN_BLEND_ENABLED` | Vector-space blending of multi-turn history | `false` |
 | `MULTI_TURN_BLEND_ALPHA` | Query weight α (1.0 = query-only) | `0.7` |

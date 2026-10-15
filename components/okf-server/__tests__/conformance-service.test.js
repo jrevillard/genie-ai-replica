@@ -154,8 +154,7 @@ describe('conformance-service — getRepoMetrics (DB)', () => {
           conformance_issue_count: 3,
           stale_concept_count: 1,
           has_reserved_index: true,
-          broken_link_count: 0,
-          pii_hit_count: 0
+          pii_hit_count: 2
         }
       ]
     });
@@ -164,8 +163,43 @@ describe('conformance-service — getRepoMetrics (DB)', () => {
     expect(metrics.conformance_issue_count).toBe(3);
     expect(metrics.stale_concept_count).toBe(1);
     expect(metrics.has_reserved_index).toBe(true);
-    expect(metrics.broken_link_count).toBe(0);
-    expect(metrics.pii_hit_count).toBe(0);
+    expect(metrics.pii_hit_count).toBe(2);
+  });
+
+  // The mock above supplies the answer, so it CANNOT catch a hardcoded metric —
+  // which is exactly how pii_hit_count stayed literally 0 while Bali reported
+  // 1113 concepts carrying findings. These assert on the QUERY TEXT, which is
+  // the only thing the mock does not supply for us.
+  test('pii_hit_count is COMPUTED from findings minus resolutions, not a literal', async () => {
+    db.query.mockResolvedValue({ all: async () => [{ concept_count: 0 }] });
+    await getRepoMetrics('r1');
+    const arg = db.query.mock.calls[0][0];
+    const aql = typeof arg === "string" ? arg : String(arg.query);
+    expect(aql).toMatch(/pii_hit_count:\s*SUM\(/);
+    // The discriminator must be the resolution record: pii_state reads 'clean'
+    // both before and after a bulk accept, so filtering on it is meaningless.
+    expect(aql).toMatch(/LENGTH\(d\.pii_findings\s*\|\|\s*\[\]\)\s*>\s*0/);
+    expect(aql).toMatch(/LENGTH\(d\.pii_resolutions\s*\|\|\s*\[\]\)\s*==\s*0/);
+  });
+
+  test('no metric is hardcoded to a literal zero', async () => {
+    db.query.mockResolvedValue({ all: async () => [{ concept_count: 0 }] });
+    await getRepoMetrics('r1');
+    const arg = db.query.mock.calls[0][0];
+    const aql = typeof arg === "string" ? arg : String(arg.query);
+    // Guards the whole class, not just this field.
+    expect(aql).not.toMatch(/\b\w+_count:\s*0\b/);
+    expect(aql).not.toMatch(/\bpii_hit_count:\s*0\b/);
+  });
+
+  test('broken_link_count is gone — the product defines no such concept', async () => {
+    db.query.mockResolvedValue({
+      all: async () => [{ concept_count: 1, pii_hit_count: 0 }]
+    });
+    const metrics = await getRepoMetrics('r1');
+    expect(metrics).not.toHaveProperty('broken_link_count');
+    const arg = db.query.mock.calls[0][0];
+    expect(typeof arg === 'string' ? arg : String(arg.query)).not.toMatch(/broken_link_count/);
   });
 
   test('handles empty repo (no concepts)', async () => {

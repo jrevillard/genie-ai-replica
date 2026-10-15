@@ -281,6 +281,13 @@ services:
     translation:
       endpoint: ""
       modelId: ""
+      # Stream the target-language chat translation during generation
+      # (issue #829) instead of an English-only stream. The frontend
+      # translates only the right-sidebar content client-side; chat
+      # answers are translated exclusively by this backend flag, so
+      # with it off the streamed answer stays English for non-English
+      # UI languages. Defaults ON.
+      streamingEnabled: true
     # OPEA chat pipeline host (chatqna service). Empty = the code's
     # compose-parity default — set it when the OPEA tier joins the
     # chart (in-cluster Service name).

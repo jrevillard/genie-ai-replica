@@ -38,6 +38,7 @@ and the overlay points opeaHost at the in-cluster Service. */ -}}
     (dict "name" "TRANSLATION_CACHE" "value" "on")
     (dict "name" "TRANSLATION_CACHE_HOST" "value" (printf "redis-cache.%s.svc.cluster.local" $ns))
     (dict "name" "TRANSLATION_CACHE_PORT" "value" "6379")
+    (dict "name" "STREAMING_TRANSLATION_ENABLED" "value" (ternary "1" "0" (ne (printf "%v" .Values.services.backend.translation.streamingEnabled | default "true") "false")))
 -}}
 {{- $urls = concat $urls $translationEnv -}}
 {{- $secretEnv := list

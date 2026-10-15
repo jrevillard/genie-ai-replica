@@ -644,6 +644,7 @@ class TestAlignInputs:
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
                 patch("chatqna.genieai_chatqna.get_tokenizer", return_value=mock_tok),
+                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 600),
             ):
                 result = align_inputs(
@@ -815,6 +816,33 @@ class TestAlignInputs:
             assert "HISTTOK" not in user_msg  # nothing fits
             assert "RAGTOK" in user_msg  # KB content preserved
             assert mock_counter.add.call_args.args[1] == {"path": "generation"}
+
+        def test_empty_history_never_reports_truncation(self):
+            """First turn (no history) with an overflowing prompt: nothing can be
+            dropped, so no warning and no counter event."""
+
+            class _Tok:
+                def encode(self, text):
+                    return [0] * (1000 * text.count("SYSTOK") + 100 * text.count("RAGTOK"))
+
+            self_mock = MagicMock()
+            self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
+            llm_params = {"max_tokens": 1024, "top_p": 0.9}
+            inputs = {"inputs": "RAGTOK" * 5, "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
+
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
+                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
+                patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK SYSTOK SYSTOK"),
+                patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
+                patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
+            ):
+                result = align_inputs(
+                    self_mock, inputs, "llm_node", MagicMock(), llm_params, full_chat_history_string=""
+                )
+            mock_counter.add.assert_not_called()
+            assert "RAGTOK" in result["messages"][1]["content"]
 
 
 # ===========================================================================
@@ -1891,6 +1919,44 @@ class TestTranslationHelpers:
         mock_counter.add.assert_called_once()
         # Counts stay in the warning log; metric attributes stay low-cardinality.
         assert mock_counter.add.call_args.args[1] == {"path": "translation"}
+
+    @pytest.mark.asyncio
+    async def test_translategemma_output_cap_fits_discovered_window(self):
+        """The TranslateGemma payload's max_tokens is clamped so prompt estimate +
+        completion cannot exceed the discovered window (else vLLM rejects the
+        whole request and the history goes back untranslated)."""
+        svc = create_chatqna_service()
+        history = [
+            {"role": "user", "content": "A" * 4000},
+            {"role": "assistant", "content": "B" * 4000},
+        ]
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"choices": [{"text": "Translated"}]}
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        models_resp = MagicMock()
+        models_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 6144}]}
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=True),
+            patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
+            patch("chatqna.genieai_chatqna._GPU_NODE_HOST", "10.0.0.110"),
+            patch("chatqna.genieai_chatqna._VLLM_TRANSLATION_ENDPOINT", "https://gpu-host/translation"),
+            patch("httpx.get", return_value=models_resp),
+        ):
+            await svc._get_translated_history_string(history, "English")
+
+        payload = mock_client.post.call_args.kwargs["json"]
+        # Both messages survive the char-budget filter (8028 ≤ 8448). Flattened
+        # prompt ≈ 8028 chars → ~2676 tokens at 3 chars/token; the output cap is
+        # clamped to 6144 − 512 (prompt wrapper) − 2676 = 2956, below the len//2
+        # base ceiling that would overflow a 6144-token window.
+        assert payload["max_tokens"] == 2956
 
     @pytest.mark.asyncio
     async def test_translate_text_chunk_translategemma_format(self):

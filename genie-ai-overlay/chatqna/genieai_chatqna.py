@@ -269,19 +269,31 @@ def _get_max_model_len() -> int:
     return MAX_MODEL_LEN_TEXTGEN
 
 
+def _get_translation_window() -> int | None:
+    """Return the discovered translation-model window in tokens, or None.
+
+    None when probing is off (no GPU_NODE_HOST) or the endpoint does not
+    expose the field — callers fall back to their configured values.
+    """
+    if _GPU_NODE_HOST and _VLLM_TRANSLATION_ENDPOINT:
+        return get_max_model_len(_VLLM_TRANSLATION_ENDPOINT, ttl_seconds=MODEL_LEN_DETECT_TTL)
+    return None
+
+
 def _get_max_translation_chars() -> int:
     """Return the character budget for history forwarded to the translation model.
 
     Derived from the discovered translation-model window so that the prompt
     plus the completion (an input-sized translation) fit inside it; falls back
     to the configured MAX_TRANSLATION_CHARS. Discovery gaps are logged by
-    core.model_cache.
+    core.model_cache. The chars-per-token ratio is a Latin-script estimate —
+    denser scripts (CJK, Devanagari) produce more tokens per char, so
+    deployments serving them should lower MAX_TRANSLATION_CHARS.
     """
-    if _GPU_NODE_HOST and _VLLM_TRANSLATION_ENDPOINT:
-        window = get_max_model_len(_VLLM_TRANSLATION_ENDPOINT, ttl_seconds=MODEL_LEN_DETECT_TTL)
-        if window:
-            budget = (window - TRANSLATION_PROMPT_OVERHEAD_TOKENS) // 2 * TRANSLATION_CHARS_PER_TOKEN
-            return max(budget, 1)
+    window = _get_translation_window()
+    if window:
+        budget = (window - TRANSLATION_PROMPT_OVERHEAD_TOKENS) // 2 * TRANSLATION_CHARS_PER_TOKEN
+        return max(budget, 1)
     return MAX_TRANSLATION_CHARS
 
 
@@ -1189,8 +1201,8 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             system_tokens = len(tokenizer.encode(system_instructions))
 
             max_history_tokens = max_model_tokens - system_tokens - max_answer_tokens - skeleton_tokens - 200
-            # Split the history into segments
-            history_segments = translated_history_string.split(" |<-MSG->| ")
+            # Split the history into segments (empty history = nothing to drop)
+            history_segments = translated_history_string.split(" |<-MSG->| ") if translated_history_string else []
             truncated_history = []
             current_tokens = 0
             # Start from most recent messages
@@ -2185,6 +2197,22 @@ class ChatQnAService:
             f"<end_of_turn>\n<start_of_turn>model\n"
         )
 
+    def _translation_output_cap(self, flattened_history_string: str) -> int:
+        """Completion cap for the TranslateGemma payload.
+
+        Base ceiling is len//2 (bounded 512..4096). When the translation window
+        is discovered, the cap is clamped so the prompt estimate (chars /
+        chars-per-token ratio) plus the completion stays inside the window —
+        otherwise vLLM rejects the whole request and the history goes back
+        untranslated.
+        """
+        cap = min(max(len(flattened_history_string) // 2, 512), 4096)
+        window = _get_translation_window()
+        if window:
+            prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
+            cap = min(cap, max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate))
+        return cap
+
     async def _get_translated_history_string(
         self, history: list, target_language: str, source_lang_code: str = "en"
     ) -> str:
@@ -2257,7 +2285,7 @@ class ChatQnAService:
                 "model": _get_translation_model_id(),
                 "prompt": prompt,
                 "temperature": 0.0,
-                "max_tokens": min(max(len(flattened_history_string) // 2, 512), 4096),
+                "max_tokens": self._translation_output_cap(flattened_history_string),
                 "repetition_penalty": 1.2,
             }
             url = TRANSLATION_COMPLETIONS_URL

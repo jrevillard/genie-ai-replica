@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # Default TTL in seconds. Overridable per-deployment via MODEL_DETECT_TTL env var.
 MODEL_TTL_DEFAULT = 60
 
-# endpoint_url -> {"model_id": str|None, "ts": float}
+# endpoint_url -> {"model_id": str|None, "max_model_len": int|None, "ts": float}
 _cache: dict[str, dict] = {}
 
 
@@ -79,6 +79,22 @@ def _probe(endpoint_url: str) -> dict | None:
     return None
 
 
+def _coerce_max_model_len(value) -> int | None:
+    """Coerce a probed ``max_model_len`` to int, or None if unusable.
+
+    Some proxies serialize the field as a JSON string; anything the callers
+    cannot do arithmetic on (bool, float, dict, garbage) is dropped so a bad
+    payload never poisons the cache entry.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value)
+    return None
+
+
 def _cached_field(endpoint_url: str, ttl_seconds: int | None, field: str):
     """Return one field of the endpoint's model entry, cached for the TTL.
 
@@ -102,7 +118,7 @@ def _cached_field(endpoint_url: str, ttl_seconds: int | None, field: str):
     if probed is not None:
         _cache[endpoint_url] = {
             "model_id": probed.get("id"),
-            "max_model_len": probed.get("max_model_len"),
+            "max_model_len": _coerce_max_model_len(probed.get("max_model_len")),
             "ts": now,
         }
         value = _cache[endpoint_url][field]

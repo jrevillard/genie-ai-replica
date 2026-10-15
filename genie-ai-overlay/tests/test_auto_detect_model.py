@@ -287,6 +287,29 @@ class TestModelCacheMaxModelLen:
     def test_empty_endpoint_returns_none(self):
         assert get_max_model_len("") is None
 
+    def test_string_max_model_len_is_coerced_to_int(self):
+        """A proxy returning max_model_len as a JSON string must not poison the
+        cache with a value the callers cannot do arithmetic on."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": "65536"}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            result = get_max_model_len("https://gpu-host/llm")
+
+        assert result == 65536
+        assert isinstance(result, int)
+
+    def test_non_numeric_max_model_len_is_dropped(self):
+        """A value no arithmetic can use (garbage string, dict, float) → None +
+        the missing-field warning path, instead of a poisoned cache entry."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": {"tokens": 65536}}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            result = get_max_model_len("https://gpu-host/llm")
+
+        assert result is None
+
 
 # ---------------------------------------------------------------------------
 # chatqna getters — _get_llm_model / _get_translation_model_id

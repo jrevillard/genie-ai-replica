@@ -283,6 +283,14 @@ Two **separate pairs**, each of which only works when both halves move together:
 
 - **Rule of thumb: both halves ≈ `min(16, cores / 2)`.** There is no correct
   constant — it is hardware-dependent and nothing infers it for you.
+- **The two pairs are limited by different things, which is why the import pair
+  ships at 4/4 and the drain pair at 1/1.** Import is bounded by the host's own
+  CPU (the PII sidecar's scan runs locally and scales with cores). Indexing is
+  bounded by the **model services** — labelling calls the LLM and the embedding
+  service, both shared and often on one GPU. Raising the drain pair does not use
+  more of the machine; it queues on the model and, on a shared GPU, takes capacity
+  away from chat answering. Size the drain pair against the model's headroom, not
+  the core count.
 - **Measured, not estimated.** On a 24-core / 64 GB host with the import pair at
   4/4: the PII sidecar ran **443 % CPU** while okf-server sat at 0.5 % and dataprep
   at 0.2 % — ~18 % of the machine, the rest idle. 4/4 is a *floor* for that host,

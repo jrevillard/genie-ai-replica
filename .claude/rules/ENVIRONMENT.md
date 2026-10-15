@@ -104,6 +104,13 @@ An agent sizing a host must set both, or the extra half just queues.
 - **Rule of thumb: both halves ≈ `min(16, cores / 2)`.** Hardware-dependent, and
   nothing infers it. On 24 cores a `4`/`4` import pair measured **443 % CPU** on the
   PII sidecar while okf-server sat at **0.5 %** — about 18 % of the machine.
+- **The pairs are limited by DIFFERENT things — that is why import ships at 4/4 and
+  drain at 1/1, and it is not an oversight.** Import is bounded by the host's CPU
+  (the PII scan runs locally). Drain is bounded by the **model services**: labelling
+  calls the LLM and the embedding service, both shared and often on one GPU. Raising
+  the drain pair does not use more of the machine — it queues on the model and, on a
+  shared GPU, takes capacity away from chat answering. Size the drain pair against
+  the model's headroom, NOT against the core count.
 - **`PII_WEB_CONCURRENCY` is a memory knob**: worker *processes*, each holding its
   own ~400 MB language model. Do not raise it on a memory-constrained host.
 - **Every import logs `OKF import lane capacity`** with both values and whether they

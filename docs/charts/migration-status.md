@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-15)
 
-- Chart `genieai-umbrella` at **0.1.62** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.1.66** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Full stack validated end-to-end live: OIDC login (PKCE, pinned issuer) →
   chat stream → chatqna → retriever → LLM on the external GPU node

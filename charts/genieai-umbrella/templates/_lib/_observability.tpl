@@ -48,6 +48,13 @@
   - transform/strip_python_log_prefix: drop CRITICAL/INFO/... prefixes
     from Python service lines.
 
+  Deliberately NOT ported from the source config: the docker-label
+  service.name stamp (fluentd/Compose labels do not exist here — the
+  filelog agent stamps from k8s.container.name and OTLP SDKs set
+  service.name in their Resource) and transform/kong_span_names
+  (Kong is not deployed on the Kubernetes path; re-add from
+  configs/otel/otel-collector-config.yaml if it ever is).
+
   Returns YAML at zero indent; callers nindent to their processors
   map (6 spaces).
 */}}

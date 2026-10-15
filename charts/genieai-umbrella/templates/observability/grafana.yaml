@@ -15,9 +15,10 @@ enabled alongside it. */ -}}
   Datasource definitions (type, url, uid, editable, jsonData) keep
   the contract the shipped dashboard JSON bakes in via uid
   references. Service FQDNs point at the operator-managed storage
-  CRs, whose Services are named after the CR metadata.name:
-  "victorialogs" :9428, "vmetrics" :8428, "vtraces" :10428 for the
-  Jaeger query API VictoriaTraces serves natively.
+  CRs, whose Services follow the <kind>-<cr-name> pattern:
+  "vlsingle-victorialogs" :9428, "vmsingle-vmetrics" :8428,
+  "vtsingle-vtraces" :10428 for the Jaeger query API VictoriaTraces
+  serves natively.
 
   allowCrossNamespaceImport: true on metrics + traces datasources
   so dashboards in operator-managed folders (provisioned across

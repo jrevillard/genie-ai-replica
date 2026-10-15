@@ -19,8 +19,11 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
 spec:
   podSelector:
+    # The operator owns the workload pods' labels; the stable selector
+    # is the managed-by label (OTC pods for both CRs carry it — the
+    # gateway and agent policies then differ only by ports).
     matchLabels:
-      app.kubernetes.io/component: collector-gateway
+      app.kubernetes.io/managed-by: opentelemetry-operator
   policyTypes:
     - Ingress
     - Egress
@@ -93,7 +96,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/component: collector-agent
+      app.kubernetes.io/managed-by: opentelemetry-operator
   policyTypes:
     - Egress
   egress:

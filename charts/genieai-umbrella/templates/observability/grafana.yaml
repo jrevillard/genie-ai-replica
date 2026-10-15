@@ -41,7 +41,6 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: grafana
 spec:
   # Operator-managed admin credentials; values are not rendered —
   # the SealedSecret materializes a Secret named
@@ -79,7 +78,6 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: logs
 spec:
   instanceSelector:
     matchLabels:
@@ -114,7 +112,6 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: metrics
 spec:
   instanceSelector:
     matchLabels:
@@ -145,7 +142,6 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
-    app.kubernetes.io/component: traces
 spec:
   instanceSelector:
     matchLabels:

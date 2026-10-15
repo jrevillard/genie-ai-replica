@@ -5,13 +5,16 @@ Signature: {{ include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "
 
 Modes:
   - external (default): joins opea.gpu.nodeHost with opea.gpu.paths.<key>.
-    Returns empty string when nodeHost is empty so callers can gate on it.
+    Fails at render time when nodeHost is empty — the orchestrator env rows
+    carry these URLs verbatim, and an empty value would reach the pods as a
+    literal empty-string endpoint (connection failure at runtime instead of
+    a named error at install time).
   - in-cluster: returns an in-cluster Service URL using a fixed
     service-name:port map (llm→vllm:8000, embedding→tei:80,
     reranker→tei-reranker:80, translation→vllm-translation:9031,
     docling→docling:5001).
 
-Unknown path key → fail.
+Unknown path key → fail. Unknown mode → fail.
 */}}
 {{- define "genieai-umbrella.opeaGpuEndpoint" -}}
 {{- $root := .root -}}
@@ -39,7 +42,7 @@ http://docling.{{ $root.Values.namespace }}.svc.cluster.local:5001
 {{- else if eq $mode "external" -}}
   {{- $host := $root.Values.opea.gpu.nodeHost -}}
   {{- if not $host -}}
-{{- "" -}}
+{{- fail "opea.gpu.mode=external requires opea.gpu.nodeHost (e.g. https://gpu-node:444); without it every orchestrator would render an empty GPU endpoint" -}}
   {{- else -}}
 {{- trimSuffix "/" $host }}{{ index $root.Values.opea.gpu.paths $key }}
   {{- end -}}

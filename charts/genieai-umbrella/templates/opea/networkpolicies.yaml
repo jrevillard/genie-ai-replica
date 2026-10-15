@@ -133,6 +133,25 @@ spec:
         - protocol: TCP
           port: 444
     {{- end }}
+    {{- if eq .Values.opea.gpu.mode "in-cluster" }}
+    # In-cluster GPU models (VLLM_LLM_ENDPOINT, VLLM_TRANSLATION_ENDPOINT).
+    # The model Deployments carry `app: <name>` pod labels, not the
+    # genieai.io/component convention.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm-translation
+      ports:
+        - protocol: TCP
+          port: 9031
+    {{- end }}
 ---
 # retriever (port 7000). Ingress: chatqna. Egress: ArangoDB (8529),
 # OTLP, external GPU node when in external mode. retriever.yaml has no
@@ -197,6 +216,23 @@ spec:
           port: 443
         - protocol: TCP
           port: 444
+    {{- end }}
+    {{- if eq .Values.opea.gpu.mode "in-cluster" }}
+    # In-cluster GPU models (VLLM_ENDPOINT, TEI_EMBEDDING_ENDPOINT).
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tei
+      ports:
+        - protocol: TCP
+          port: 80
     {{- end }}
 ---
 # dataprep (port 5000). Ingress: documentRepository. Egress: ArangoDB
@@ -284,6 +320,25 @@ spec:
         - protocol: TCP
           port: 444
     {{- end }}
+    {{- if eq .Values.opea.gpu.mode "in-cluster" }}
+    # In-cluster GPU models (VLLM_ENDPOINT, TEI_EMBEDDING_ENDPOINT).
+    # DOCLING_ENDPOINT has no in-cluster Deployment to target — the
+    # chart renders no docling model service.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tei
+      ports:
+        - protocol: TCP
+          port: 80
+    {{- end }}
 ---
 # embedding (port 6000). Ingress: chatqna + retriever + dataprep.
 # Egress: OTLP, external GPU node when in external mode.
@@ -344,6 +399,16 @@ spec:
         - protocol: TCP
           port: 444
     {{- end }}
+    {{- if eq .Values.opea.gpu.mode "in-cluster" }}
+    # In-cluster GPU model (TEI_EMBEDDING_ENDPOINT).
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tei
+      ports:
+        - protocol: TCP
+          port: 80
+    {{- end }}
 ---
 # reranker (port 8000). Ingress: chatqna. Egress: OTLP, external GPU
 # node when in external mode.
@@ -398,6 +463,16 @@ spec:
         - protocol: TCP
           port: 444
     {{- end }}
+    {{- if eq .Values.opea.gpu.mode "in-cluster" }}
+    # In-cluster GPU model (TEI_RERANKING_ENDPOINT).
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tei-reranker
+      ports:
+        - protocol: TCP
+          port: 80
+    {{- end }}
 ---
 # translation (port 9031). Ingress: chatqna. Egress: OTLP, external
 # GPU node when in external mode.
@@ -451,5 +526,15 @@ spec:
           port: 443
         - protocol: TCP
           port: 444
+    {{- end }}
+    {{- if eq .Values.opea.gpu.mode "in-cluster" }}
+    # In-cluster GPU model (LLM_ENDPOINT).
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm-translation
+      ports:
+        - protocol: TCP
+          port: 9031
     {{- end }}
 {{- end -}}

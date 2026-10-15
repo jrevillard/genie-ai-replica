@@ -18,6 +18,11 @@ Unknown path key → fail.
 {{- $key  := .path -}}
 {{- $mode := $root.Values.opea.gpu.mode -}}
 
+{{- $validKeys := list "llm" "embedding" "reranker" "translation" "docling" -}}
+{{- if not (has $key $validKeys) -}}
+{{- fail (printf "unknown opea.gpu endpoint key: %s" $key) -}}
+{{- end -}}
+
 {{- if eq $mode "in-cluster" -}}
   {{- if eq $key "llm" -}}
 http://vllm.{{ $root.Values.namespace }}.svc.cluster.local:8000
@@ -29,8 +34,6 @@ http://tei-reranker.{{ $root.Values.namespace }}.svc.cluster.local:80
 http://vllm-translation.{{ $root.Values.namespace }}.svc.cluster.local:9031
   {{- else if eq $key "docling" -}}
 http://docling.{{ $root.Values.namespace }}.svc.cluster.local:5001
-  {{- else -}}
-{{- fail (printf "unknown opea.gpu endpoint key: %s" $key) -}}
   {{- end -}}
 
 {{- else if eq $mode "external" -}}
@@ -38,7 +41,7 @@ http://docling.{{ $root.Values.namespace }}.svc.cluster.local:5001
   {{- if not $host -}}
 {{- "" -}}
   {{- else -}}
-{{- trimSuffix "/" $host }}{{ get $root.Values.opea.gpu.paths $key }}
+{{- trimSuffix "/" $host }}{{ index $root.Values.opea.gpu.paths $key }}
   {{- end -}}
 
 {{- else -}}

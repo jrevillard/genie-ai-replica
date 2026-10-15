@@ -46,7 +46,8 @@
     (dict "name" "RERANKING_STRATEGY" "value" (.Values.opea.retriever.rerankingStrategy | default "slice"))
     (dict "name" "RETRIEVER_SUMMARIZER_ENABLED" "value" (.Values.opea.retriever.retrieverSummarizerEnabled | default "false" | toString))
     (dict "name" "LOG_LEVEL" "value" (.Values.opea.retriever.logLevel | default "info"))
-    (dict "name" "VLLM_ENDPOINT" "value" $llmEndpoint)
+    (dict "name" "VLLM_ENDPOINT"
+(dict "name" "GPU_NODE_HOST" "value" (regexReplaceAll "^([a-z]+://)?([^:/]+).*" (.Values.opea.gpu.nodeHost | default "") "$2")) "value" $llmEndpoint)
     (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (.Values.opea.retriever.enableObservability | default "0" | toString))

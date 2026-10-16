@@ -73,7 +73,7 @@ only the custom resources they manage.
 | CloudNativePG | ≥1.30 | `helm install cnpg cloudnative-pg --repo https://cloudnative-pg.github.io/charts` |
 | kube-arangodb | 1.4.x | `helm install arango kube-arangodb --repo https://arangodb.github.io/kube-arangodb` |
 | sealed-secrets | ≥0.40 | `helm install sealed-secrets sealed-secrets --repo https://bitnami.github.io/sealed-secrets` |
-| keycloak-operator | 26.8.0 | `kubectl apply -k 'github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=26.8.0'` (Quarkus-based modern operator; 4 CRDs in `k8s.keycloak.org`). Alternatives: OLM (`installPlanApproval: Manual` recommended — auto-upgrade causes unintended Keycloak version bumps), or `oci://quay.io/keycloak/keycloak-operator-helm` (experimental, cluster-wide). |
+| keycloak-operator | 26.8.0 | `./scripts/install-prereqs.sh` (Kustomize overlay that overrides the upstream `keycloak` namespace to `keycloak-system`; Quarkus-based modern operator, 4 CRDs in `k8s.keycloak.org`). Alternatives: OLM (`installPlanApproval: Manual` recommended — auto-upgrade causes unintended Keycloak version bumps), or `oci://quay.io/keycloak/keycloak-operator-helm` (experimental, cluster-wide). |
 | OpenTelemetry Operator | latest | (required by `observability.*`; the collector Service it creates is what `otlpEndpoint` points at) |
 | GPU operator (NVIDIA) | latest | (required by `opea.gpu.mode=in-cluster`; the in-cluster model Deployments target `gpu=true` nodes) |
 | cert-manager + Envoy Gateway | latest | (required by the per-environment ingress tier — Phase 2) |

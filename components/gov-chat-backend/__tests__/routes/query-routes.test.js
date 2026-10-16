@@ -132,6 +132,7 @@ const { createValidToken } = require('../fixtures/tokens');
 const queryService = require('../../services/query-service');
 const axios = require('axios');
 const { keycloakAuthMiddleware } = require('../../middleware/keycloak-auth-middleware');
+const { context, propagation } = require('@opentelemetry/api');
 
 const validToken = createValidToken();
 
@@ -147,6 +148,21 @@ beforeEach(() => {
     next();
   });
   process.env.OPEA_STREAMING = 'true';
+});
+
+// `tracingBaggage.withBaggage` scopes the correlation id to the chatqna request
+// through context propagation. The SDK registers AsyncLocalStorageContextManager
+// at startup, but NODE_ENV === 'test' short-circuits tracing.js, so without a
+// context manager `context.with` degrades to a plain call and the baggage never
+// becomes active — the code under test would be correct but untestable.
+// Unregistered afterwards so the global does not leak to other suites.
+beforeAll(() => {
+  const { AsyncLocalStorageContextManager } = require('@opentelemetry/context-async-hooks');
+  context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
+});
+
+afterAll(() => {
+  context.disable();
 });
 
 function authGet(path) {
@@ -1040,6 +1056,79 @@ describe('GET /:queryId', () => {
       const response = await responsePromise;
       expect(response.status).toBe(200);
       expect(response.text).toContain('"type":"done","queryId":"q1"');
+    });
+  });
+
+  // The chatqna request is the ONE place genie.query_id attaches to outgoing
+  // traffic. Everything else here proves the stream works, not that the
+  // correlation id rides along with it — deleting the withBaggage wrapper in
+  // query-routes.js leaves every other test in this file green.
+  describe('query id correlation baggage', () => {
+    const QUERY_ID_KEY = 'genie.query_id';
+
+    // Serialize the active baggage the way the W3C header would carry it.
+    const activeBaggageEntries = () => {
+      const baggage = propagation.getActiveBaggage();
+      if (!baggage) return [];
+      return [...baggage.getAllEntries()].map(([key, entry]) => `${key}=${entry.value}`);
+    };
+
+    // The baggage must be read INSIDE the mock, at call time. Reading it after
+    // the handler returns would observe an already-unwound context and pass
+    // vacuously — that timing is the entire test.
+    const captureBaggageOnPost = () => {
+      const seen = [];
+      axios.post.mockImplementation(() => {
+        seen.push(activeBaggageEntries());
+        const mockStream = new Readable({ read() {} });
+        mockStream.push('data: {"type":"chunk","content":"hi"}\n\n');
+        mockStream.push('data: {"type":"done","queryId":"q-1"}\n\n');
+        mockStream.push(null);
+        return Promise.resolve({ data: mockStream });
+      });
+      return seen;
+    };
+
+    beforeEach(() => {
+      queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+      queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    });
+
+    it('carries genie.query_id on the chatqna request when a query id exists', async () => {
+      queryService.initStreamQuery.mockResolvedValue({
+        queryId: 'q-1',
+        opeaUrl: 'http://chatqna:8888/v1/chatqna',
+        opeaPayload: { messages: [] }
+      });
+      const seen = captureBaggageOnPost();
+
+      const response = await authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      expect(response.status).toBe(200);
+      expect(seen).toEqual([[`${QUERY_ID_KEY}=q-1`]]);
+    });
+
+    it('sends no baggage at all when there is no query id, never the string "undefined"', async () => {
+      queryService.initStreamQuery.mockResolvedValue({
+        opeaUrl: 'http://chatqna:8888/v1/chatqna',
+        opeaPayload: { messages: [] }
+      });
+      const seen = captureBaggageOnPost();
+
+      const response = await authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      expect(response.status).toBe(200);
+      expect(seen).toEqual([[]]);
+      // `propagation.createBaggage` coerces undefined to the literal string
+      // "undefined", which passes every downstream shape check and joins to
+      // nothing. Assert on the flattened entries so any such value is caught.
+      expect(seen.flat().join(',')).not.toContain('undefined');
     });
   });
 });

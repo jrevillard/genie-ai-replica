@@ -1240,10 +1240,17 @@ class TestDataprepInputTooLong:
         assert _is_vllm_input_overflow(exc) is False
 
     @pytest.mark.asyncio
-    async def test_context_single_call_overflow_raises_typed(self, monkeypatch):
-        """_context_single_call: vLLM context overflow raises DataprepInputTooLongError instead of returning ''."""
-        from dataprep.genieai_dataprep_arangodb import DataprepInputTooLongError
+    async def test_context_single_call_overflow_returns_raw_no_retry(self, monkeypatch):
+        """_context_single_call: vLLM context overflow degrades to the raw chunk
+        (returns '') after ONE attempt — a 400 is deterministic, retrying the
+        identical prompt is wasted calls.
 
+        Bali regression (2026-10-16): this site used to raise
+        DataprepInputTooLongError, which killed the WHOLE ingest (0 chunks
+        persisted, concept terminal-failed) — breaking the documented
+        "never blocks ingestion (raw-chunk fallback)" contextualization
+        contract. The fail-loud contract above stays for LABELING only.
+        """
         dp = create_dataprep()
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
@@ -1253,21 +1260,23 @@ class TestDataprepInputTooLong:
         mock_client.chat.completions.create = AsyncMock(
             side_effect=Exception("Error code: 400 - context length exceeded (max 4096 tokens)")
         )
+        write_log = AsyncMock()
 
         with (
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
-            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
-            pytest.raises(DataprepInputTooLongError),
+            patch.object(dp, "_write_ingestion_log", write_log),
         ):
-            await dp._context_single_call(mock_client, "m", "sys", 0, "chunk text", "file1")
-        # Fail-loud: exactly one attempt, not three.
-        assert mock_client.chat.completions.create.call_count == 1
+            ctx = await dp._context_single_call(mock_client, "m", "sys", 0, "chunk text", "file1")
+
+        assert ctx == ""  # caller keeps the raw chunk
+        assert mock_client.chat.completions.create.call_count == 1  # no 3x retry on a deterministic 400
+        assert any("overflow" in str(c.args[3]).lower() for c in write_log.await_args_list)
 
     @pytest.mark.asyncio
-    async def test_context_doc_call_overflow_raises_typed(self, monkeypatch):
-        """_context_doc_call: doc-level context overflow raises DataprepInputTooLongError instead of returning ''."""
-        from dataprep.genieai_dataprep_arangodb import DataprepInputTooLongError
-
+    async def test_context_doc_call_overflow_returns_raw_no_retry(self, monkeypatch):
+        """_context_doc_call: doc-level context overflow degrades to raw chunks
+        (returns '') after ONE attempt — Bali regression 2026-10-16, see the
+        single-call test above."""
         dp = create_dataprep()
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
@@ -1277,14 +1286,89 @@ class TestDataprepInputTooLong:
         mock_client.chat.completions.create = AsyncMock(
             side_effect=Exception("This model's maximum context length is 2048 tokens. Please reduce the length.")
         )
+        write_log = AsyncMock()
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", write_log),
+        ):
+            ctx = await dp._context_doc_call(mock_client, "m", "sys", "file1")
+
+        assert ctx == ""  # caller (_contextualize_doc_level) falls back to raw chunks
+        assert mock_client.chat.completions.create.call_count == 1
+        assert any("overflow" in str(c.args[3]).lower() for c in write_log.await_args_list)
+
+    @pytest.mark.asyncio
+    async def test_context_batch_call_overflow_falls_back_per_chunk(self, monkeypatch):
+        """Bali regression (2026-10-16): the batch context call 400'd by ONE token
+        (Cyrillic-heavy doc at ~1.75 chars/token vs the CHARS_PER_TOKEN=4
+        derivation estimate) and the fatal raise killed the whole ingest. The
+        overflow must fall back to per-chunk calls — a per-chunk call reserves
+        512 output tokens instead of the batch's N x 512, which is exactly the
+        term that overflowed."""
+
+        def ok_response(i):
+            resp = MagicMock()
+            resp.choices = [MagicMock()]
+            resp.choices[0].message.content = json.dumps({"context": f"ctx {i}"})
+            resp.usage = MagicMock(completion_tokens=5, prompt_tokens=10)
+            return resp
+
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        calls = {"n": 0}
+
+        async def fake_create(**kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                # The batch call overflows; every per-chunk call then succeeds.
+                raise Exception(
+                    "Error code: 400 - {'error': {'message': \"This model's maximum context "
+                    "length is 65536 tokens. However, you requested 8192 output tokens and "
+                    'your prompt contains at least 57345 input tokens."}}'
+                )
+            return ok_response(calls["n"])
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=fake_create)
+        write_log = AsyncMock()
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", write_log),
+        ):
+            out = await dp._context_batch_call(mock_client, "m", "sys", [(0, "a"), (1, "b"), (2, "c")], "file1")
+
+        assert out == {0: "ctx 2", 1: "ctx 3", 2: "ctx 4"}  # all chunks contextualized
+        assert calls["n"] == 4  # 1 failed batch + 3 per-chunk recoveries
+        assert any("overflow" in str(c.args[3]).lower() for c in write_log.await_args_list)
+
+    @pytest.mark.asyncio
+    async def test_context_batch_call_overflow_then_single_overflow_yields_raw(self, monkeypatch):
+        """Worst case: the doc context alone exceeds the window, so batch AND
+        every per-chunk call overflow. Every chunk must come back '' (raw), and
+        NOTHING may raise — the ingest completes on raw chunks."""
+
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("BadRequestError: This model's maximum context length is 65536 tokens")
+        )
 
         with (
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
-            pytest.raises(DataprepInputTooLongError),
         ):
-            await dp._context_doc_call(mock_client, "m", "sys", "file1")
-        assert mock_client.chat.completions.create.call_count == 1
+            out = await dp._context_batch_call(mock_client, "m", "sys", [(0, "a"), (1, "b")], "file1")
+
+        assert out == {0: "", 1: ""}  # raw chunks — the ingest is NOT failed
 
 
 # ---------------------------------------------------------------------------

@@ -32,13 +32,18 @@ from tracing import (
 tracer = get_tracer(__name__)
 
 
-# --- vLLM context-overflow fail-loud contract ---
+# --- vLLM context-overflow fail-loud contract (LABELING ONLY) ---
 # Mirrors the reranker fix (RerankerInputTooLongError, genieai_tei_reranker.py:39): when
-# vLLM rejects a request because the prompt exceeds the model's max_model_len, the call site
-# must raise a typed exception instead of silently swallowing the error and falling back
-# to the raw chunk. Counter + OTel span attribute surface this to operators.
+# vLLM rejects a LABELING request because the prompt exceeds the model's max_model_len,
+# the call site raises this typed exception instead of silently swallowing the error.
+# Counter + OTel span attribute surface this to operators.
+#
+# The CONTEXT-GENERATION call sites deliberately do NOT raise: contextualization is
+# optional enrichment and its documented contract is "never blocks ingestion (raw-chunk
+# fallback)" — they log to _write_ingestion_log, count the metric, and degrade to
+# per-chunk calls / raw chunks (Bali regression 2026-10-16, see _context_batch_call).
 class DataprepInputTooLongError(RuntimeError):
-    """Raised when a vLLM labeling or context-generation call exceeds the model's context window.
+    """Raised when a vLLM labeling call exceeds the model's context window.
 
     vLLM returns BadRequestError("This model's maximum context length is N tokens...
     Please reduce the length...") when the prompt + reserved output exceeds the
@@ -1624,23 +1629,37 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 except Exception as e:
                     err = f"{type(e).__name__}: {str(e)[:200]}"
                     if _is_vllm_input_overflow(e):
+                        # Bali regression (2026-10-16): a Cyrillic-heavy fragment
+                        # tokenized at ~1.75 chars/token against the derivation's
+                        # CHARS_PER_TOKEN=4 estimate, the batch call 400'd by ONE
+                        # token — and the raise that used to live here killed the
+                        # WHOLE ingest (0 chunks persisted, concept terminal-failed),
+                        # breaking the "never blocks ingestion" contract. The term
+                        # that overflowed is usually the batch's N x
+                        # CONTEXTUAL_MAX_TOKENS output reservation; a per-chunk call
+                        # reserves 512 instead of N x 512 and fits. Degrade, never
+                        # fail the ingest: the context is optional enrichment, the
+                        # raw chunks are the payload.
                         _dataprep_input_too_long_total.add(1, {"dataprep.call_site": "context_batch"})
                         with suppress(Exception):
                             span.set_attribute("dataprep.input_too_long", True)
                         await self._write_ingestion_log(
                             file_id,
-                            "ERROR",
+                            "WARN",
                             "Contextualization",
-                            f"Batch context vLLM context overflow ({err}). Aborting.",
+                            f"Batch context vLLM context overflow ({err}); retrying per-chunk "
+                            f"(512-token output reservation fits where the batch's N x 512 did not).",
                         )
-                        raise DataprepInputTooLongError(f"vLLM context overflow at context_batch: {err}") from e
-                    logger.warning(f"Batch context failed {[i for i, _ in batch]}: {err}; falling back to per-chunk.")
-                    await self._write_ingestion_log(
-                        file_id,
-                        "WARN",
-                        "Contextualization",
-                        f"Batch context failed ({err}); falling back to per-chunk.",
-                    )
+                    else:
+                        logger.warning(
+                            f"Batch context failed {[i for i, _ in batch]}: {err}; falling back to per-chunk."
+                        )
+                        await self._write_ingestion_log(
+                            file_id,
+                            "WARN",
+                            "Contextualization",
+                            f"Batch context failed ({err}); falling back to per-chunk.",
+                        )
         # per-chunk fallback (single-chunk batch, parse failure, or call error)
         fallback: dict[int, str] = {}
         for i, text in batch:
@@ -1714,16 +1733,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 except Exception as e:
                     err = f"{type(e).__name__}: {str(e)[:200]}"
                     if _is_vllm_input_overflow(e):
+                        # Deterministic 400 — no retry. The caller treats "" as
+                        # "use raw chunks for this document" (Bali regression
+                        # 2026-10-16 — see _context_batch_call).
                         _dataprep_input_too_long_total.add(1, {"dataprep.call_site": "context_doc"})
                         with suppress(Exception):
                             span.set_attribute("dataprep.input_too_long", True)
                         await self._write_ingestion_log(
                             file_id,
-                            "ERROR",
+                            "WARN",
                             "Contextualization",
-                            f"Doc-level context vLLM context overflow ({err}). Aborting.",
+                            f"Doc-level context vLLM context overflow ({err}); using raw chunks.",
                         )
-                        raise DataprepInputTooLongError(f"vLLM context overflow at context_doc: {err}") from e
+                        return ""
                     logger.warning(f"Doc-level context attempt {attempt}/3 failed: {err}")
                     await self._write_ingestion_log(
                         file_id,
@@ -1789,16 +1811,21 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 except Exception as e:
                     err = f"{type(e).__name__}: {str(e)[:200]}"
                     if _is_vllm_input_overflow(e):
+                        # Deterministic 400 — retrying the same prompt is wasted
+                        # calls. When the doc context alone exceeds the window the
+                        # raw chunk is the correct degradation, not a failed
+                        # ingest (Bali regression 2026-10-16 — see
+                        # _context_batch_call).
                         _dataprep_input_too_long_total.add(1, {"dataprep.call_site": "context_single"})
                         with suppress(Exception):
                             span.set_attribute("dataprep.input_too_long", True)
                         await self._write_ingestion_log(
                             file_id,
-                            "ERROR",
+                            "WARN",
                             "Contextualization",
-                            f"Chunk {index}: context vLLM context overflow ({err}). Aborting.",
+                            f"Chunk {index}: context vLLM context overflow ({err}); using raw chunk.",
                         )
-                        raise DataprepInputTooLongError(f"vLLM context overflow at context_single: {err}") from e
+                        return ""
                     logger.warning(f"Chunk {index}: context attempt {attempt}/3 failed: {err}")
                     await self._write_ingestion_log(
                         file_id,

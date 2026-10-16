@@ -151,6 +151,8 @@ def _reload_with_clean_env(monkeypatch):
         "TRANSLATION_SERVICE_HOST_IP",
         "TRANSLATION_SERVICE_PORT",
         "LLM_MODEL",
+        "MAX_MODEL_LEN_TEXTGEN",
+        "MAX_TRANSLATION_CHARS",
     ):
         monkeypatch.delenv(var, raising=False)
     importlib.reload(sys.modules["chatqna.genieai_chatqna"])

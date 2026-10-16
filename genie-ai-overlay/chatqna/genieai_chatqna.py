@@ -247,11 +247,6 @@ def _is_translategemma() -> bool:
     return "translategemma" in _get_translation_model_id().lower()
 
 
-# Context-window discovery TTL (seconds). The served window only changes on a
-# model swap, so a long TTL is enough. Note: while a request path calls
-# _get_llm_model() / _get_translation_model_id() (default MODEL_DETECT_TTL=60)
-# on the same endpoint, the shared cache entry is refreshed on their cadence
-# and this TTL only governs when no other accessor has run recently.
 def _env_int(name: str, default: int) -> int:
     """Parse an int env var tolerantly: unset OR set-to-empty (compose's
     default injection for the semantic knobs) or non-numeric values all fall
@@ -262,6 +257,11 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+# Context-window discovery TTL (seconds). The served window only changes on a
+# model swap, so a long TTL is enough. Note: while a request path calls
+# _get_llm_model() / _get_translation_model_id() (default MODEL_DETECT_TTL=60)
+# on the same endpoint, the shared cache entry is refreshed on their cadence
+# and this TTL only governs when no other accessor has run recently.
 MODEL_LEN_DETECT_TTL = max(_env_int("MODEL_LEN_DETECT_TTL", 3600), 1)
 
 
@@ -331,7 +331,7 @@ def _get_max_translation_chars() -> int:
         return _env_int("MAX_TRANSLATION_CHARS", MAX_TRANSLATION_CHARS)
     budget = (window - TRANSLATION_PROMPT_OVERHEAD_TOKENS) // 2 * TRANSLATION_CHARS_PER_TOKEN
     explicit = _env_int("MAX_TRANSLATION_CHARS", 0)
-    if explicit:
+    if explicit > 0:
         budget = min(budget, explicit)
     return max(budget, 1)
 

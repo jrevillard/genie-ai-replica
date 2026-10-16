@@ -41,7 +41,8 @@ MODEL_TTL_DEFAULT = 60
 NEGATIVE_CACHE_TTL = 60
 
 # endpoint_url -> {"model_id": str|None, "max_model_len": int|None,
-#                  "ts": float|None (None on a failure stub), "last_fail_ts": float}
+#                  "ts": float|None (None on a failure stub),
+#                  "last_fail_ts": float|missing (stamped on failure only)}
 _cache: dict[str, dict] = {}
 
 

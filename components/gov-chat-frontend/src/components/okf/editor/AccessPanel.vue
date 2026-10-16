@@ -64,7 +64,32 @@
     </div>
 
     <template v-else>
-      <table v-if="model.holders.length" class="okf-access__table">
+      <!-- GROUP grants — the scale path: one operation, any member count. -->
+      <table v-if="model.group_holders.length" class="okf-access__table">
+        <thead>
+          <tr>
+            <th>{{ translate('okf.editor.access.col.group', 'Group') }}</th>
+            <th>{{ translate('okf.editor.access.col.level', 'Level') }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="g in model.group_holders" :key="g.group_id">
+            <td>{{ g.name }}</td>
+            <td>
+              <DsPill variant="info">{{ g.levels.join(', ') }}</DsPill>
+            </td>
+            <td>
+              <DsButton variant="secondary" small :disabled="busyGroup === g.name" @click="revokeGroup(g)">
+                {{ translate('okf.editor.access.revoke', 'Revoke') }}
+              </DsButton>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Per-user grants (attribute-based). -->
+      <table v-if="model.user_holders.length" class="okf-access__table">
         <thead>
           <tr>
             <th>{{ translate('okf.editor.access.col.user', 'User') }}</th>
@@ -73,8 +98,13 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="h in model.holders" :key="h.user_id">
-            <td>{{ h.username }}</td>
+          <tr v-for="h in model.user_holders" :key="h.user_id">
+            <td>
+              {{ h.username }}
+              <DsPill v-if="h.via === 'role'" variant="warning">{{
+                translate('okf.editor.access.viaRole', 'direct role')
+              }}</DsPill>
+            </td>
             <td>
               <DsPill variant="info">{{ h.levels.join(', ') }}</DsPill>
             </td>
@@ -86,23 +116,49 @@
           </tr>
         </tbody>
       </table>
-      <p v-else class="okf-access__empty">
-        {{ translate('okf.editor.access.noHolders', 'No users granted yet.') }}
+      <p v-if="!model.user_holders.length && !model.group_holders.length" class="okf-access__empty">
+        {{ translate('okf.editor.access.noHolders', 'No users or groups granted yet.') }}
       </p>
 
+      <!-- GROUP grant — the enterprise path (one operation, any member count). -->
       <div class="okf-access__grant">
         <DsInput
-          v-model="grantUsername"
+          v-model="grantGroupName"
           type="text"
-          :placeholder="translate('okf.editor.access.usernamePlaceholder', 'Username')"
+          :placeholder="translate('okf.editor.access.groupPlaceholder', 'Group name')"
           class="okf-access__grant-user"
         />
+        <DsSelect v-model="grantGroupLevel" class="okf-access__grant-level">
+          <option value="read">{{ translate('okf.editor.access.levelRead', 'Read') }}</option>
+          <option value="admin">{{ translate('okf.editor.access.levelAdmin', 'Admin') }}</option>
+        </DsSelect>
+        <DsButton variant="primary" small :disabled="!grantGroupName || busyGroup !== null" @click="grantGroup">
+          {{ translate('okf.editor.access.grantGroup', 'Grant group') }}
+        </DsButton>
+      </div>
+      <p class="okf-access__hint">
+        {{
+          translate(
+            'okf.editor.access.groupHint',
+            'Every member of the group gains access at their next login — one operation for any number of users.'
+          )
+        }}
+      </p>
+
+      <!-- BULK per-user grant: one username per line. -->
+      <textarea
+        v-model="grantUsernames"
+        rows="3"
+        class="okf-access__grant-users"
+        :placeholder="translate('okf.editor.access.usernamesPlaceholder', 'Usernames — one per line')"
+      ></textarea>
+      <div class="okf-access__grant">
         <DsSelect v-model="grantLevel" class="okf-access__grant-level">
           <option value="read">{{ translate('okf.editor.access.levelRead', 'Read') }}</option>
           <option value="admin">{{ translate('okf.editor.access.levelAdmin', 'Admin') }}</option>
         </DsSelect>
-        <DsButton variant="primary" small :disabled="!grantUsername || busy" @click="grant">
-          {{ translate('okf.editor.access.grant', 'Grant') }}
+        <DsButton variant="primary" small :disabled="!userList.length || busy !== null" @click="grant">
+          {{ translate('okf.editor.access.grant', 'Grant users') }}
         </DsButton>
       </div>
     </template>
@@ -136,9 +192,18 @@ export default {
       busy: null,
       error: '',
       notice: '',
-      model: { restricted: false, required_scopes: [], holders: [], configured: false },
-      grantUsername: '',
-      grantLevel: 'read'
+      model: {
+        restricted: false,
+        required_scopes: [],
+        user_holders: [],
+        group_holders: [],
+        configured: false
+      },
+      grantUsernames: '',
+      grantLevel: 'read',
+      grantGroupName: '',
+      grantGroupLevel: 'read',
+      busyGroup: null
     };
   },
   async created() {
@@ -149,7 +214,14 @@ export default {
       this.loading = true;
       this.error = '';
       try {
-        this.model = await repoOkfService.getAccess(this.repoId);
+        const m = await repoOkfService.getAccess(this.repoId);
+        this.model = {
+          restricted: m.restricted,
+          required_scopes: m.required_scopes,
+          user_holders: m.user_holders || [],
+          group_holders: m.group_holders || [],
+          configured: m.configured
+        };
       } catch (err) {
         this.error = this.errText(err);
       } finally {
@@ -173,22 +245,67 @@ export default {
         this.toggling = false;
       }
     },
+    userList() {
+      return this.grantUsernames
+        .split(/[\n,;]+/)
+        .map((u) => u.trim())
+        .filter(Boolean);
+    },
     async grant() {
-      this.busy = this.grantUsername;
+      const usernames = this.userList();
+      if (!usernames.length) return;
+      this.busy = 'bulk';
       this.error = '';
       this.notice = '';
       try {
-        await repoOkfService.grantAccess(this.repoId, {
-          username: this.grantUsername.trim(),
-          level: this.grantLevel
-        });
-        this.notice = this.translate('okf.editor.access.grantedNotice', 'Access granted — effective at next login.');
-        this.grantUsername = '';
+        const out = await repoOkfService.grantAccess(this.repoId, { usernames, level: this.grantLevel });
+        const missing = (out && out.missing) || [];
+        this.notice = missing.length
+          ? this.translate('okf.editor.access.grantedSomeNotice', 'Granted {n} — unknown: {m}')
+              .replace('{n}', String(out.granted.length))
+              .replace('{m}', missing.join(', '))
+          : this.translate('okf.editor.access.grantedNotice', 'Access granted — effective at next login.');
+        this.grantUsernames = '';
         await this.refresh();
       } catch (err) {
         this.error = this.errText(err);
       } finally {
         this.busy = null;
+      }
+    },
+    async grantGroup() {
+      this.busyGroup = this.grantGroupName;
+      this.error = '';
+      this.notice = '';
+      try {
+        await repoOkfService.grantGroupAccess(this.repoId, {
+          group: this.grantGroupName.trim(),
+          level: this.grantGroupLevel
+        });
+        this.notice = this.translate(
+          'okf.editor.access.grantedGroupNotice',
+          'Group granted — every member gains access at next login.'
+        );
+        this.grantGroupName = '';
+        await this.refresh();
+      } catch (err) {
+        this.error = this.errText(err);
+      } finally {
+        this.busyGroup = null;
+      }
+    },
+    async revokeGroup(g) {
+      this.busyGroup = g.name;
+      this.error = '';
+      this.notice = '';
+      try {
+        await repoOkfService.revokeGroupAccess(this.repoId, { group: g.name });
+        this.notice = this.translate('okf.editor.access.revokedNotice', 'Access revoked.');
+        await this.refresh();
+      } catch (err) {
+        this.error = this.errText(err);
+      } finally {
+        this.busyGroup = null;
       }
     },
     async revoke(username) {
@@ -272,6 +389,11 @@ export default {
   color: var(--success);
   font-size: 12px;
   margin: 8px 0 0;
+}
+.okf-access__truncated {
+  color: var(--danger);
+  font-size: 12px;
+  margin: 6px 0 0;
 }
 .okf-access__empty {
   font-size: 12px;

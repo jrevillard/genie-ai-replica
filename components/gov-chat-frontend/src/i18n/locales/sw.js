@@ -1588,19 +1588,28 @@ export default {
         restrict: 'Punguza hifadhi',
         unconfiguredTip:
           'Kutoa/kubatilisha inahitaji vitambulisho vya Keycloak kwenye seva (KC_OKF_ACCESS_CLIENT_SECRET). Utekaji wa ukandamizaji unaendelea bila.',
-        user: 'Mtumiaji',
-        level: 'Kiwango',
         revoke: 'Batilisha',
-        noHolders: 'Hakuna mtumiaji aliyepelekwa bado.',
-        usernamePlaceholder: 'Jina la mtumiaji',
         levelRead: 'Soma',
         levelAdmin: 'Msimamizi',
-        grant: 'Toa',
         error: 'Operesheni imeshindikana.',
         grantedNotice: 'Ufikiaji umetolewa — utaanza kuingia mara ijayo.',
         revokedNotice: 'Ufikiaji umebatilishwa.',
         nowRestricted: 'Hifadhi imepunguzwa.',
-        nowOpen: 'Hifadhi iko wazi kwa wote.'
+        nowOpen: 'Hifadhi iko wazi kwa wote.',
+        col: {
+          user: 'Mtumiaji',
+          level: 'Kiwango',
+          group: 'Kundi'
+        },
+        viaRole: 'wadhifa wa moja kwa moja',
+        noHolders: 'Hakuna mtumiaji wala kundi lililopewa ufikiaji.',
+        groupPlaceholder: 'Jina la kundi',
+        usernamesPlaceholder: 'Majina ya watumiaji — mmoja kwa mstari',
+        grantGroup: 'Toa kwa kundi',
+        grant: 'Toa kwa watumiaji',
+        groupHint: 'Kila mwanakundi anapata ufikiaji anapoingia tena — operesheni moja kwa idadi yoyote ya watumiaji.',
+        grantedSomeNotice: 'Imetolewa {n} — hayajulikani: {m}',
+        grantedGroupNotice: 'Kundi limopewa — kila mwanakundi anapata ufikiaji anapoingia tena.'
       },
       autocorrect: {
         blankBefore: '(tupu)',

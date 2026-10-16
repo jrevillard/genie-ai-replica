@@ -1580,19 +1580,28 @@ export default {
         restrict: 'Limita depot',
         unconfiguredTip:
           'Duna/tira aseeg presiza Keycloak kredensial na server (KC_OKF_ACCESS_CLIENT_SECRET). Limitason ta traba nhotodu.',
-        user: 'User',
-        level: 'Nivel',
         revoke: 'Tira',
-        noHolders: 'Nda run user ku tin aseeg.',
-        usernamePlaceholder: 'Nomi di user',
         levelRead: 'Le',
         levelAdmin: 'Admin',
-        grant: 'Duna',
         error: 'Operason pa perde.',
         grantedNotice: 'Aseeg duna — e kobra ku login pa pruksimu.',
         revokedNotice: 'Aseeg tira.',
         nowRestricted: 'Depot limita.',
-        nowOpen: 'Depot aberto pa tur.'
+        nowOpen: 'Depot aberto pa tur.',
+        col: {
+          user: 'User',
+          level: 'Nivel',
+          group: 'Grupu'
+        },
+        viaRole: 'role diret',
+        noHolders: 'Nda user ni grupu ku tin aseeg.',
+        groupPlaceholder: 'Nomi di grupu',
+        usernamesPlaceholder: 'Nomi di user — un pa liña',
+        grantGroup: 'Duna pa grupu',
+        grant: 'Duna pa useris',
+        groupHint: 'Kada membro di grupu sim aseeg ku login pruksimu — un operason pa kualker number di user.',
+        grantedSomeNotice: 'Duna {n} — pa konexi: {m}',
+        grantedGroupNotice: 'Grupu duna — kada membro sim aseeg ku login pruksimu.'
       },
       autocorrect: {
         blankBefore: '(fende mang soto)',

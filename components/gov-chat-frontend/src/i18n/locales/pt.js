@@ -1601,19 +1601,29 @@ export default {
         restrict: 'Restringir repositório',
         unconfiguredTip:
           'Conceder/revogar exige credenciais Keycloak no servidor (KC_OKF_ACCESS_CLIENT_SECRET). A restrição funciona de qualquer forma.',
-        user: 'Usuário',
-        level: 'Nível',
         revoke: 'Revogar',
-        noHolders: 'Nenhum usuário com acesso.',
-        usernamePlaceholder: 'Nome de usuário',
         levelRead: 'Leitura',
         levelAdmin: 'Admin',
-        grant: 'Conceder',
         error: 'A operação falhou.',
         grantedNotice: 'Acesso concedido — vale no próximo login.',
         revokedNotice: 'Acesso revogado.',
         nowRestricted: 'Repositório restrito.',
-        nowOpen: 'Repositório aberto a todos.'
+        nowOpen: 'Repositório aberto a todos.',
+        col: {
+          user: 'Usuário',
+          level: 'Nível',
+          group: 'Grupo'
+        },
+        viaRole: 'papel direto',
+        noHolders: 'Nenhum usuário ou grupo com acesso.',
+        groupPlaceholder: 'Nome do grupo',
+        usernamesPlaceholder: 'Nomes de usuário — um por linha',
+        grantGroup: 'Conceder ao grupo',
+        grant: 'Conceder a usuários',
+        groupHint:
+          'Cada membro do grupo obtém acesso no próximo login — uma operação para qualquer número de usuários.',
+        grantedSomeNotice: 'Concedidos {n} — desconhecidos: {m}',
+        grantedGroupNotice: 'Grupo concedido — cada membro obtém acesso no próximo login.'
       },
       autocorrect: {
         blankBefore: '(vazio)',

@@ -1,20 +1,26 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
-// Story 6-1c — the OKF admin facility for per-repository access control.
+// Story 6-1c — the OKF admin facility for per-repository access control,
+// built for enterprise scale.
 //
 // Routes (repos-routes.js, admin-scoped per repo):
-//   GET  /:repo_id/access          → { restricted, required_scopes, holders, configured }
-//   PUT  /:repo_id/access          → { restricted: bool } — toggle the gate
-//   POST /:repo_id/access/grant    → { username, level: 'read'|'admin' }
-//   POST /:repo_id/access/revoke   → { username }
+//   GET   /:repo_id/access             → { restricted, required_scopes,
+//                                         user_holders, group_holders, configured }
+//   PUT   /:repo_id/access             → { restricted: bool } — toggle the gate
+//   POST  /:repo_id/access/grant       → { usernames: [..] | username, level }
+//                                         — bulk PER-USER attribute grants
+//   POST  /:repo_id/access/revoke      → { usernames: [..] | username }
+//   POST  /:repo_id/access/grant-group → { group, level } — one operation,
+//                                         any member count (role named as the
+//                                         scope string, assigned to the group)
+//   POST  /:repo_id/access/revoke-group → { group, level? }
 //
 // The toggle writes `acl.restricted` DIRECTLY on the repo doc (a serving
 // maintenance write — repository-service.update() only accepts frontmatter
-// patches while serving, and access restriction must work on LIVE repos;
-// lifecycle transitions already write docs directly for the same reason).
-// Grants/revokes write the user's `okf_scopes` attribute through Keycloak
-// (keycloak-access-service); the realm's protocol mapper ships them in the
-// user's next token, and access-control-service enforces on the read path.
+// patches while serving, and access restriction must work on LIVE repos).
+// Enforcement (access-control-service) reads whatever scope entries the
+// token carries — attribute grants and role/group grants are identical to
+// it; grants take effect at the user's next login in both cases.
 
 const Joi = require('joi');
 const keycloakAccess = require('../services/keycloak-access-service');
@@ -24,11 +30,29 @@ const { logger } = require('../shared-lib/logger');
 const dbService = require('../shared-lib/db-connection-service');
 
 const toggleSchema = Joi.object({ restricted: Joi.boolean().required() });
-const grantSchema = Joi.object({
-  username: Joi.string().min(1).required(),
+const grantSchema = Joi.alternatives()
+  .try(
+    Joi.object({
+      usernames: Joi.array().items(Joi.string().min(1)).min(1).required(),
+      level: Joi.string().valid('read', 'admin').required()
+    }),
+    Joi.object({ username: Joi.string().min(1).required(), level: Joi.string().valid('read', 'admin').required() })
+  )
+  .required();
+const revokeSchema = Joi.alternatives()
+  .try(
+    Joi.object({ usernames: Joi.array().items(Joi.string().min(1)).min(1).required() }),
+    Joi.object({ username: Joi.string().min(1).required() })
+  )
+  .required();
+const groupGrantSchema = Joi.object({
+  group: Joi.string().min(1).required(),
   level: Joi.string().valid('read', 'admin').required()
 });
-const revokeSchema = Joi.object({ username: Joi.string().min(1).required() });
+const groupRevokeSchema = Joi.object({
+  group: Joi.string().min(1).required(),
+  level: Joi.string().valid('read', 'admin')
+});
 
 class AccessError extends Error {
   constructor(code, message, status) {
@@ -46,13 +70,18 @@ function validate(schema, body) {
   return value;
 }
 
+/** Normalize {username} | {usernames[]} → string[] with a stable order. */
+function usernameList(body) {
+  return body.usernames || [body.username];
+}
+
 async function loadRepo(repoId) {
   const db = await dbService.getConnection();
   let doc;
   try {
     doc = await db.collection('okf_repositories').document(repoId);
   } catch (err) {
-    if (err && (err.code === 404 || err.errorNum === 1202)) {
+    if (err && (err.code === 404 || err.errorNum === 1202 || err.errorNum === 1204)) {
       throw new AccessError('REPO_NOT_FOUND', `Repository ${repoId} not found`, 404);
     }
     throw err;
@@ -77,29 +106,63 @@ async function audit(action, req, repoId, details) {
   }
 }
 
-/** GET /:repo_id/access — the panel's read model. */
+function requireConfigured() {
+  if (!keycloakAccess.isConfigured()) {
+    throw new AccessError(
+      'ACCESS_CONTROL_UNCONFIGURED',
+      'Grant/revoke requires Keycloak credentials (KC_OKF_ACCESS_CLIENT_SECRET) on okf-server',
+      503
+    );
+  }
+}
+
+/** GET /:repo_id/access — the panel's read model, computed SERVER-SIDE. */
 async function getAccess(req, res, next) {
   try {
     const repo = await loadRepo(req.params.repo_id);
     const configured = keycloakAccess.isConfigured();
-    let holders = [];
+    const userHolders = [];
+    const groupHolders = [];
     if (configured) {
-      const users = await keycloakAccess.listUsersWithScopes();
-      holders = users
-        .map((u) => {
-          const granted = keycloakAccess
-            .userScopes(u)
-            .map(parseOkfScope)
-            .filter((p) => p && p.repo === repo.repo_id);
-          return granted.length ? { user_id: u.id, username: u.username, levels: granted.map((g) => g.level) } : null;
-        })
-        .filter(Boolean);
+      // Server-side attribute search per level — no realm listing, no cap.
+      for (const level of ['read', 'admin']) {
+        const scope = `okf:t:${repo.repo_id}:${level}`;
+        const users = await keycloakAccess.usersWithAttribute(scope);
+        users.forEach((u) => {
+          const row = userHolders.find((h) => h.user_id === u.id);
+          if (row) row.levels.push(level);
+          else userHolders.push({ user_id: u.id, username: u.username, levels: [level], via: 'user' });
+        });
+      }
+      // Group grants: the two roles named as this repo's scopes.
+      for (const level of ['read', 'admin']) {
+        const scope = `okf:t:${repo.repo_id}:${level}`;
+        let members;
+        try {
+          members = await keycloakAccess.roleMembers(scope);
+        } catch (err) {
+          if (err.statusCode === 404) continue; // role never created — no group grants
+          throw err;
+        }
+        members.groups.forEach((g) => {
+          const row = groupHolders.find((h) => h.group_id === g.id);
+          if (row) row.levels.push(level);
+          else groupHolders.push({ group_id: g.id, name: g.name, levels: [level] });
+        });
+        members.users.forEach((u) => {
+          // direct user-role assignments (not via attribute) count as user holders
+          const row = userHolders.find((h) => h.user_id === u.id);
+          if (row && !row.levels.includes(level)) row.levels.push(level);
+          else if (!row) userHolders.push({ user_id: u.id, username: u.username, levels: [level], via: 'role' });
+        });
+      }
     }
     res.status(200).json({
       repo_id: repo.repo_id,
       restricted: Boolean(repo.acl && repo.acl.restricted),
       required_scopes: (repo.acl && repo.acl.required_scopes) || [],
-      holders,
+      user_holders: userHolders,
+      group_holders: groupHolders,
       configured
     });
   } catch (err) {
@@ -122,54 +185,119 @@ async function putAccess(req, res, next) {
   }
 }
 
-/** POST /:repo_id/access/grant — append this repo's scope to a user. */
+/** POST /:repo_id/access/grant — bulk per-user attribute grants. */
 async function grantAccess(req, res, next) {
   try {
-    const { username, level } = validate(grantSchema, req.body);
-    if (!keycloakAccess.isConfigured()) {
-      throw new AccessError(
-        'ACCESS_CONTROL_UNCONFIGURED',
-        'Grant/revoke requires Keycloak credentials (KC_OKF_ACCESS_CLIENT_SECRET) on okf-server',
-        503
-      );
-    }
+    const body = validate(grantSchema, req.body);
+    const usernames = usernameList(body);
+    const { level } = body;
+    requireConfigured();
     const repo = await loadRepo(req.params.repo_id);
-    const user = await keycloakAccess.findUserByUsername(username);
-    if (!user) throw new AccessError('USER_NOT_FOUND', `User "${username}" not found`, 404);
     const scope = `okf:t:${repo.repo_id}:${level}`;
-    const next = [...keycloakAccess.userScopes(user), scope];
-    await keycloakAccess.setUserScopes(user, next);
-    await audit('repo.access.grant', req, repo.repo_id, { username, level, scope });
-    res.status(200).json({ ok: true, username, scopes: [...new Set(next)] });
+    const granted = [];
+    const missing = [];
+    for (const username of usernames) {
+      const user = await keycloakAccess.findUserByUsername(username);
+      if (!user) {
+        missing.push(username);
+        continue;
+      }
+      const nextScopes = [...keycloakAccess.userScopes(user), scope];
+      await keycloakAccess.setUserScopes(user, nextScopes);
+      granted.push(username);
+    }
+    await audit('repo.access.grant', req, repo.repo_id, { usernames: granted, missing, level, scope });
+    res.status(missing.length && !granted.length ? 404 : 200).json({
+      ok: granted.length > 0,
+      granted,
+      missing,
+      level
+    });
   } catch (err) {
     next(err);
   }
 }
 
-/** POST /:repo_id/access/revoke — strip this repo's scopes from a user. */
+/** POST /:repo_id/access/revoke — strip this repo's attribute scopes from users. */
 async function revokeAccess(req, res, next) {
   try {
-    const { username } = validate(revokeSchema, req.body);
-    if (!keycloakAccess.isConfigured()) {
-      throw new AccessError(
-        'ACCESS_CONTROL_UNCONFIGURED',
-        'Grant/revoke requires Keycloak credentials (KC_OKF_ACCESS_CLIENT_SECRET) on okf-server',
-        503
-      );
-    }
+    const usernames = usernameList(validate(revokeSchema, req.body));
+    requireConfigured();
     const repo = await loadRepo(req.params.repo_id);
-    const user = await keycloakAccess.findUserByUsername(username);
-    if (!user) throw new AccessError('USER_NOT_FOUND', `User "${username}" not found`, 404);
-    const kept = keycloakAccess.userScopes(user).filter((s) => {
-      const p = parseOkfScope(s);
-      return !(p && p.repo === repo.repo_id);
-    });
-    await keycloakAccess.setUserScopes(user, kept);
-    await audit('repo.access.revoke', req, repo.repo_id, { username });
-    res.status(200).json({ ok: true, username, scopes: kept });
+    const revoked = [];
+    const missing = [];
+    for (const username of usernames) {
+      const user = await keycloakAccess.findUserByUsername(username);
+      if (!user) {
+        missing.push(username);
+        continue;
+      }
+      const kept = keycloakAccess.userScopes(user).filter((s) => {
+        const p = parseOkfScope(s);
+        return !(p && p.repo === repo.repo_id);
+      });
+      await keycloakAccess.setUserScopes(user, kept);
+      revoked.push(username);
+    }
+    await audit('repo.access.revoke', req, repo.repo_id, { usernames: revoked, missing });
+    res.status(missing.length && !revoked.length ? 404 : 200).json({ ok: revoked.length > 0, revoked, missing });
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { getAccess, putAccess, grantAccess, revokeAccess, AccessError };
+/** POST /:repo_id/access/grant-group — one grant, any member count. */
+async function grantGroupAccess(req, res, next) {
+  try {
+    const { group, level } = validate(groupGrantSchema, req.body);
+    requireConfigured();
+    const repo = await loadRepo(req.params.repo_id);
+    const scope = `okf:t:${repo.repo_id}:${level}`;
+    const role = await keycloakAccess.ensureRole(scope);
+    const grp = await keycloakAccess.ensureGroup(group);
+    await keycloakAccess.setGroupRole(grp, role, true);
+    await audit('repo.access.grant_group', req, repo.repo_id, { group, level, scope });
+    res.status(200).json({ ok: true, group, level, scope, note: 'effective at each member next login' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** POST /:repo_id/access/revoke-group — remove the role from the group. */
+async function revokeGroupAccess(req, res, next) {
+  try {
+    const { group, level } = validate(groupRevokeSchema, req.body);
+    requireConfigured();
+    const repo = await loadRepo(req.params.repo_id);
+    const levels = level ? [level] : ['read', 'admin'];
+    const removed = [];
+    for (const lv of levels) {
+      const scope = `okf:t:${repo.repo_id}:${lv}`;
+      let role;
+      try {
+        role = await keycloakAccess.ensureRole(scope);
+      } catch (err) {
+        if (err.statusCode === 404) continue;
+        throw err;
+      }
+      const grp = await keycloakAccess.findGroupByName(group);
+      if (!grp) continue;
+      await keycloakAccess.setGroupRole(grp, role, false);
+      removed.push(lv);
+    }
+    await audit('repo.access.revoke_group', req, repo.repo_id, { group, levels: removed });
+    res.status(200).json({ ok: removed.length > 0, group, removed });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  getAccess,
+  putAccess,
+  grantAccess,
+  revokeAccess,
+  grantGroupAccess,
+  revokeGroupAccess,
+  AccessError
+};

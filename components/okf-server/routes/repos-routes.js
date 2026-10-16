@@ -48,13 +48,15 @@ router.delete('/:repo_id', requireRepoScope('repo_id', 'admin'), ctrl.deleteRepo
 
 // Story 6-1c — per-repository access control (the admin facility). Read is
 // repo-read-scoped; the toggle + grant/revoke are repo-admin-scoped. Grants
-// write Keycloak user attributes (503 ACCESS_CONTROL_UNCONFIGURED until
-// KC_OKF_ACCESS_CLIENT_SECRET is set on okf-server); the toggle and the
-// read-path ENFORCEMENT need no Keycloak.
+// write Keycloak (user attributes or group-assigned roles; 503
+// ACCESS_CONTROL_UNCONFIGURED until KC_OKF_ACCESS_CLIENT_SECRET is set on
+// okf-server); the toggle and the read-path ENFORCEMENT need no Keycloak.
 router.get('/:repo_id/access', requireRepoScope('repo_id', 'read'), accessCtrl.getAccess);
 router.put('/:repo_id/access', requireRepoScope('repo_id', 'admin'), accessCtrl.putAccess);
 router.post('/:repo_id/access/grant', requireRepoScope('repo_id', 'admin'), accessCtrl.grantAccess);
 router.post('/:repo_id/access/revoke', requireRepoScope('repo_id', 'admin'), accessCtrl.revokeAccess);
+router.post('/:repo_id/access/grant-group', requireRepoScope('repo_id', 'admin'), accessCtrl.grantGroupAccess);
+router.post('/:repo_id/access/revoke-group', requireRepoScope('repo_id', 'admin'), accessCtrl.revokeGroupAccess);
 
 // PII scan (Story 2.8 — ADR-okf-004 rev): explicit concepts OR file discovery
 // OR {"scope":"concepts"} — the ASYNC repo-wide CONCEPT rescan (202 + poll).

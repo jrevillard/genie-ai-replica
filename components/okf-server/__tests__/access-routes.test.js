@@ -1,8 +1,8 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
-// Story 6-1c — HTTP-layer tests for the access-control admin facility
-// (GET/PUT /:repo_id/access, POST grant/revoke): gates, status codes, the
-// Keycloak interaction contract, audit. Pattern: retrieval-config-routes.test.js.
+// Story 6-1c — HTTP-layer tests for the access-control admin facility at
+// ENTERPRISE SCALE: bulk user grants, group grants via roles, SERVER-SIDE
+// holder search (no realm listing). Pattern: retrieval-config-routes.test.js.
 
 jest.mock('../shared-lib/keycloak-auth-service', () => ({ verifyToken: jest.fn() }));
 jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn().mockResolvedValue(null) }));
@@ -19,7 +19,12 @@ jest.mock('../shared-lib/tracing', () => ({
 jest.mock('../services/keycloak-access-service', () => ({
   isConfigured: jest.fn(() => true),
   findUserByUsername: jest.fn(),
-  listUsersWithScopes: jest.fn(),
+  usersWithAttribute: jest.fn(async () => []),
+  ensureRole: jest.fn(async (scope) => ({ id: 'role-' + scope, name: scope })),
+  ensureGroup: jest.fn(async (name) => ({ id: 'grp-' + name, name })),
+  findGroupByName: jest.fn(async (name) => ({ id: 'grp-' + name, name })),
+  setGroupRole: jest.fn(),
+  roleMembers: jest.fn(async () => ({ users: [], groups: [] })),
   userScopes: jest.fn((u) => (u && u.attributes && u.attributes.okf_scopes) || []),
   setUserScopes: jest.fn(),
   _clearTokenCache: jest.fn()
@@ -69,42 +74,48 @@ function seedRepo(overrides) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // clearAllMocks does NOT undo mockReturnValue set by the unconfigured-case
-  // tests — re-pin the default every time so it cannot leak forward.
   keycloakAccess.isConfigured.mockReturnValue(true);
 });
 
 describe('GET /api/okf/repos/:repo_id/access', () => {
-  test('200 — read holder sees the panel model with holders computed from Keycloak', async () => {
+  test('200 — SERVER-SIDE holders: attribute search per level + role members', async () => {
     authReader();
     seedRepo({ acl: { restricted: true, required_scopes: ['okf:t:island-tourism:admin'] } });
-    keycloakAccess.listUsersWithScopes.mockResolvedValue([
-      { id: 'u1', username: 'alice', attributes: { okf_scopes: [`okf:itu:${RID}:read`, 'okf:itu:r-other:admin'] } },
-      { id: 'u2', username: 'bob', attributes: { okf_scopes: ['okf:itu:r-other:read'] } }
-    ]);
+    keycloakAccess.usersWithAttribute.mockImplementation(async (scope) =>
+      scope.endsWith(':read') ? [{ id: 'u1', username: 'alice' }] : []
+    );
+    keycloakAccess.roleMembers.mockImplementation(async (scope) =>
+      scope.endsWith(':admin')
+        ? { users: [{ id: 'u2', username: 'bob' }], groups: [{ id: 'g1', name: 'curators' }] }
+        : { users: [], groups: [] }
+    );
     const res = await request(createApp()).get(`/api/okf/repos/${RID}/access`).set('Authorization', TOKEN);
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ repo_id: RID, restricted: true, configured: true });
-    expect(res.body.holders).toEqual([{ user_id: 'u1', username: 'alice', levels: ['read'] }]);
+    // attribute search per level — NEVER a realm listing
+    expect(keycloakAccess.usersWithAttribute).toHaveBeenCalledWith(`okf:t:${RID}:read`);
+    expect(keycloakAccess.usersWithAttribute).toHaveBeenCalledWith(`okf:t:${RID}:admin`);
+    expect(res.body.user_holders).toEqual([
+      { user_id: 'u1', username: 'alice', levels: ['read'], via: 'user' },
+      { user_id: 'u2', username: 'bob', levels: ['admin'], via: 'role' }
+    ]);
+    expect(res.body.group_holders).toEqual([{ group_id: 'g1', name: 'curators', levels: ['admin'] }]);
   });
 
-  test('unconfigured deployment: 200 with configured=false and empty holders (enforcement unaffected)', async () => {
+  test('unconfigured deployment: 200 with configured=false and no Keycloak calls', async () => {
     authReader();
     seedRepo();
     keycloakAccess.isConfigured.mockReturnValue(false);
     const res = await request(createApp()).get(`/api/okf/repos/${RID}/access`).set('Authorization', TOKEN);
     expect(res.status).toBe(200);
     expect(res.body.configured).toBe(false);
-    expect(res.body.holders).toEqual([]);
-    expect(keycloakAccess.listUsersWithScopes).not.toHaveBeenCalled();
+    expect(res.body.user_holders).toEqual([]);
+    expect(keycloakAccess.usersWithAttribute).not.toHaveBeenCalled();
   });
 
   test('404 for an unknown repo', async () => {
-    // tools-admin (not a repo-scoped holder) so the ROUTE gate passes for an
-    // arbitrary repo id — the 404 must come from the repo lookup itself.
     keycloakAuthService.verifyToken.mockResolvedValue({
       sub: 'steward-1',
-      preferred_username: 'steward',
       realm_access: { roles: ['tools-admin'] }
     });
     mockDb._reset();
@@ -144,48 +155,60 @@ describe('PUT /api/okf/repos/:repo_id/access (toggle)', () => {
   });
 });
 
-describe('POST /api/okf/repos/:repo_id/access/grant', () => {
-  test('admin grants read — scope appended (deduped), user written, audited', async () => {
+describe('POST /api/okf/repos/:repo_id/access/grant (bulk users)', () => {
+  test('BULK grant: every username processed, missing users reported not fatal', async () => {
     authAdmin();
     seedRepo();
-    keycloakAccess.findUserByUsername.mockResolvedValue({
-      id: 'u1',
-      username: 'alice',
-      attributes: { okf_scopes: ['okf:itu:r-other:read'] }
-    });
+    keycloakAccess.findUserByUsername.mockImplementation(async (u) =>
+      u === 'ghost' ? null : { id: 'u-' + u, username: u, attributes: { okf_scopes: [] } }
+    );
     const res = await request(createApp())
       .post(`/api/okf/repos/${RID}/access/grant`)
       .set('Authorization', TOKEN)
-      .send({ username: 'alice', level: 'read' });
+      .send({ usernames: ['alice', 'bob', 'ghost'], level: 'read' });
     expect(res.status).toBe(200);
-    expect(res.body.scopes).toEqual(['okf:itu:r-other:read', `okf:t:${RID}:read`]);
-    expect(keycloakAccess.setUserScopes).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), [
-      'okf:itu:r-other:read',
-      `okf:t:${RID}:read`
-    ]);
+    expect(res.body).toMatchObject({ ok: true, granted: ['alice', 'bob'], missing: ['ghost'] });
+    expect(keycloakAccess.setUserScopes).toHaveBeenCalledTimes(2);
+    expect(keycloakAccess.setUserScopes).toHaveBeenCalledWith(
+      expect.objectContaining({ username: 'alice' }),
+      [`okf:t:${RID}:read`]
+    );
     expect(writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'repo.access.grant',
         repo_id: RID,
-        details: { username: 'alice', level: 'read', scope: `okf:t:${RID}:read` }
+        details: {
+          usernames: ['alice', 'bob'],
+          missing: ['ghost'],
+          level: 'read',
+          scope: `okf:t:${RID}:read`
+        }
       })
     );
   });
 
-  test('idempotent: granting the same scope twice does not duplicate it', async () => {
+  test('SINGLE username still works (back-compat shape)', async () => {
     authAdmin();
     seedRepo();
-    keycloakAccess.findUserByUsername.mockResolvedValue({
-      id: 'u1',
-      username: 'alice',
-      attributes: { okf_scopes: [`okf:t:${RID}:read`] }
-    });
+    keycloakAccess.findUserByUsername.mockResolvedValue({ id: 'u1', username: 'alice', attributes: { okf_scopes: [] } });
     const res = await request(createApp())
       .post(`/api/okf/repos/${RID}/access/grant`)
       .set('Authorization', TOKEN)
-      .send({ username: 'alice', level: 'read' });
+      .send({ username: 'alice', level: 'admin' });
     expect(res.status).toBe(200);
-    expect(res.body.scopes).toEqual([`okf:t:${RID}:read`]);
+    expect(res.body.granted).toEqual(['alice']);
+  });
+
+  test('all users unknown → 404 with the full missing list', async () => {
+    authAdmin();
+    seedRepo();
+    keycloakAccess.findUserByUsername.mockResolvedValue(null);
+    const res = await request(createApp())
+      .post(`/api/okf/repos/${RID}/access/grant`)
+      .set('Authorization', TOKEN)
+      .send({ usernames: ['ghost1', 'ghost2'], level: 'read' });
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ ok: false, missing: ['ghost1', 'ghost2'] });
   });
 
   test('503 ACCESS_CONTROL_UNCONFIGURED when no Keycloak credentials', async () => {
@@ -195,39 +218,64 @@ describe('POST /api/okf/repos/:repo_id/access/grant', () => {
     const res = await request(createApp())
       .post(`/api/okf/repos/${RID}/access/grant`)
       .set('Authorization', TOKEN)
-      .send({ username: 'alice', level: 'read' });
+      .send({ usernames: ['alice'], level: 'read' });
     expect(res.status).toBe(503);
     expect(res.body.error).toBe('ACCESS_CONTROL_UNCONFIGURED');
   });
+});
 
-  test('404 USER_NOT_FOUND', async () => {
+describe('POST /api/okf/repos/:repo_id/access/grant-group (scale path)', () => {
+  test('ONE operation: ensure role (named as the scope) + ensure group + assign + audit', async () => {
     authAdmin();
     seedRepo();
-    keycloakAccess.findUserByUsername.mockResolvedValue(null);
     const res = await request(createApp())
-      .post(`/api/okf/repos/${RID}/access/grant`)
+      .post(`/api/okf/repos/${RID}/access/grant-group`)
       .set('Authorization', TOKEN)
-      .send({ username: 'ghost', level: 'read' });
-    expect(res.status).toBe(404);
-    expect(res.body.error).toBe('USER_NOT_FOUND');
+      .send({ group: 'curators', level: 'read' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, group: 'curators', scope: `okf:t:${RID}:read` });
+    expect(keycloakAccess.ensureRole).toHaveBeenCalledWith(`okf:t:${RID}:read`);
+    expect(keycloakAccess.ensureGroup).toHaveBeenCalledWith('curators');
+    expect(keycloakAccess.setGroupRole).toHaveBeenCalledWith(
+      { id: 'grp-curators', name: 'curators' },
+      { id: `role-okf:t:${RID}:read`, name: `okf:t:${RID}:read` },
+      true
+    );
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'repo.access.grant_group', repo_id: RID })
+    );
+  });
+
+  test('revoke-group with no level strips BOTH levels', async () => {
+    authAdmin();
+    seedRepo();
+    const res = await request(createApp())
+      .post(`/api/okf/repos/${RID}/access/revoke-group`)
+      .set('Authorization', TOKEN)
+      .send({ group: 'curators' });
+    expect(res.status).toBe(200);
+    expect(res.body.removed.sort()).toEqual(['admin', 'read']);
+    expect(keycloakAccess.setGroupRole).toHaveBeenCalledTimes(2);
   });
 });
 
 describe('POST /api/okf/repos/:repo_id/access/revoke', () => {
-  test('admin revokes — only THIS repo scopes stripped, others kept', async () => {
+  test('only THIS repo scopes stripped, others kept, bulk-safe', async () => {
     authAdmin();
     seedRepo();
     keycloakAccess.findUserByUsername.mockResolvedValue({
       id: 'u1',
       username: 'alice',
-      attributes: { okf_scopes: [`okf:itu:${RID}:read`, 'okf:itu:r-other:admin', `okf:itu:${RID}:admin`] }
+      attributes: { okf_scopes: [`okf:t:${RID}:read`, 'okf:itu:r-other:admin', `okf:t:${RID}:admin`] }
     });
     const res = await request(createApp())
       .post(`/api/okf/repos/${RID}/access/revoke`)
       .set('Authorization', TOKEN)
-      .send({ username: 'alice' });
+      .send({ usernames: ['alice'] });
     expect(res.status).toBe(200);
-    expect(res.body.scopes).toEqual(['okf:itu:r-other:admin']);
-    expect(writeAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'repo.access.revoke', repo_id: RID }));
+    expect(keycloakAccess.setUserScopes).toHaveBeenCalledWith(expect.anything(), ['okf:itu:r-other:admin']);
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'repo.access.revoke', repo_id: RID })
+    );
   });
 });

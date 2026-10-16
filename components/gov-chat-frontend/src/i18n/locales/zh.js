@@ -1565,19 +1565,28 @@ export default {
         restrict: '限制仓库',
         unconfiguredTip:
           '授予/撤销需要服务器上的 Keycloak 凭据（KC_OKF_ACCESS_CLIENT_SECRET）。限制本身的执行不受影响。',
-        user: '用户',
-        level: '级别',
         revoke: '撤销',
-        noHolders: '尚未授予任何用户。',
-        usernamePlaceholder: '用户名',
         levelRead: '读取',
         levelAdmin: '管理',
-        grant: '授予',
         error: '操作失败。',
         grantedNotice: '已授予访问权限 — 下次登录时生效。',
         revokedNotice: '已撤销访问权限。',
         nowRestricted: '仓库已限制。',
-        nowOpen: '仓库已对所有用户开放。'
+        nowOpen: '仓库已对所有用户开放。',
+        col: {
+          user: '用户',
+          level: '级别',
+          group: '组'
+        },
+        viaRole: '直接角色',
+        noHolders: '尚未授予任何用户或组。',
+        groupPlaceholder: '组名称',
+        usernamesPlaceholder: '用户名 — 每行一个',
+        grantGroup: '授予组',
+        grant: '授予用户',
+        groupHint: '组的每个成员在下次登录时获得访问权限 — 一次操作适用于任意数量的用户。',
+        grantedSomeNotice: '已授予 {n} 个 — 未找到：{m}',
+        grantedGroupNotice: '已授予组 — 每个成员在下次登录时获得访问权限。'
       },
       autocorrect: {
         blankBefore: '（空白）',

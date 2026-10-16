@@ -1605,19 +1605,29 @@ export default {
         restrict: 'Restreindre le dépôt',
         unconfiguredTip:
           'Accorder/révoquer nécessite des identifiants Keycloak sur le serveur (KC_OKF_ACCESS_CLIENT_SECRET). Le contrôle de restriction fonctionne sans.',
-        user: 'Utilisateur',
-        level: 'Niveau',
         revoke: 'Révoquer',
-        noHolders: 'Aucun utilisateur autorisé.',
-        usernamePlaceholder: "Nom d'utilisateur",
+        error: "L'opération a échoué.",
         levelRead: 'Lecture',
         levelAdmin: 'Admin',
-        grant: 'Accorder',
-        error: "L'opération a échoué.",
         grantedNotice: 'Accès accordé — effectif à la prochaine connexion.',
         revokedNotice: 'Accès révoqué.',
         nowRestricted: 'Dépôt restreint.',
-        nowOpen: 'Dépôt ouvert à tous.'
+        nowOpen: 'Dépôt ouvert à tous.',
+        col: {
+          user: 'Utilisateur',
+          level: 'Niveau',
+          group: 'Groupe'
+        },
+        viaRole: 'rôle direct',
+        noHolders: 'Aucun utilisateur ni groupe autorisé.',
+        groupPlaceholder: 'Nom du groupe',
+        usernamesPlaceholder: "Noms d'utilisateur — un par ligne",
+        grantGroup: 'Accorder au groupe',
+        grant: 'Accorder aux utilisateurs',
+        groupHint:
+          "Chaque membre du groupe obtient l'accès à sa prochaine connexion — une seule opération, quel que soit le nombre d'utilisateurs.",
+        grantedSomeNotice: '{n} accordés — inconnus : {m}',
+        grantedGroupNotice: "Groupe autorisé — chaque membre obtient l'accès à sa prochaine connexion."
       },
       autocorrect: {
         blankBefore: '(vide)',

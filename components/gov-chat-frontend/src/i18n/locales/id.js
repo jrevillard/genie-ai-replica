@@ -1595,19 +1595,29 @@ export default {
         restrict: 'Batasi repositori',
         unconfiguredTip:
           'Memberi/mencabut akses butuh kredensial Keycloak di server (KC_OKF_ACCESS_CLIENT_SECRET). Pembatasan tetap bekerja.',
-        user: 'Pengguna',
-        level: 'Tingkat',
         revoke: 'Cabut',
-        noHolders: 'Belum ada pengguna yang diberi akses.',
-        usernamePlaceholder: 'Nama pengguna',
         levelRead: 'Baca',
         levelAdmin: 'Admin',
-        grant: 'Berikan',
         error: 'Operasi gagal.',
         grantedNotice: 'Akses diberikan — berlaku saat login berikutnya.',
         revokedNotice: 'Akses dicabut.',
         nowRestricted: 'Repositori dibatasi.',
-        nowOpen: 'Repositori terbuka untuk semua.'
+        nowOpen: 'Repositori terbuka untuk semua.',
+        col: {
+          user: 'Pengguna',
+          level: 'Tingkat',
+          group: 'Grup'
+        },
+        viaRole: 'peran langsung',
+        noHolders: 'Belum ada pengguna atau grup yang diberi akses.',
+        groupPlaceholder: 'Nama grup',
+        usernamesPlaceholder: 'Nama pengguna — satu per baris',
+        grantGroup: 'Berikan ke grup',
+        grant: 'Berikan ke pengguna',
+        groupHint:
+          'Setiap anggota grup memperoleh akses saat login berikutnya — satu operasi untuk jumlah pengguna berapa pun.',
+        grantedSomeNotice: 'Diberikan {n} — tidak dikenal: {m}',
+        grantedGroupNotice: 'Grup diberikan akses — setiap anggota memperolehnya saat login berikutnya.'
       },
       autocorrect: {
         blankBefore: '(kosong)',

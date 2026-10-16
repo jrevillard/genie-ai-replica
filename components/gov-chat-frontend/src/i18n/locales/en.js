@@ -1906,19 +1906,29 @@ export default {
         restrict: 'Restrict repository',
         unconfiguredTip:
           'Grant/revoke needs Keycloak credentials on the server (KC_OKF_ACCESS_CLIENT_SECRET). Restriction enforcement works regardless.',
-        user: 'User',
-        level: 'Level',
         revoke: 'Revoke',
-        noHolders: 'No users granted yet.',
-        usernamePlaceholder: 'Username',
         levelRead: 'Read',
         levelAdmin: 'Admin',
-        grant: 'Grant',
         error: 'Operation failed.',
         grantedNotice: 'Access granted — effective at next login.',
         revokedNotice: 'Access revoked.',
         nowRestricted: 'Repository restricted.',
-        nowOpen: 'Repository open for all users.'
+        nowOpen: 'Repository open for all users.',
+        col: {
+          user: 'User',
+          level: 'Level',
+          group: 'Group'
+        },
+        viaRole: 'direct role',
+        noHolders: 'No users or groups granted yet.',
+        groupPlaceholder: 'Group name',
+        usernamesPlaceholder: 'Usernames — one per line',
+        grantGroup: 'Grant group',
+        grant: 'Grant users',
+        groupHint:
+          'Every member of the group gains access at their next login — one operation for any number of users.',
+        grantedSomeNotice: 'Granted {n} — unknown: {m}',
+        grantedGroupNotice: 'Group granted — every member gains access at next login.'
       },
       autocorrect: {
         blankBefore: '(blank)',

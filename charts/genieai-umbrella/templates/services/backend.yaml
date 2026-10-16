@@ -107,13 +107,17 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Same-namespace pods on the app port. AuthN/AuthZ is enforced at the
-    # edge (Envoy Gateway); the gateway's data-plane pods live in their
-    # own namespace and reach backend via a routed path rather than a
-    # direct pod-to-pod peer in this namespace. The `podSelector: {}`
-    # below is a placeholder for the gateway-tier selector (Plan 6/ingress
-    # will tighten it to a specific peer label once the edge gateway's
-    # data-plane label shape is known).
+    # The Envoy Gateway data plane (edge routing: /api, /api-docs) plus
+    # same-namespace consumers on the app port — the frontend BFF-dials
+    # the backend directly for SPA-initiated calls, and chatqna fetches
+    # user context from /api/me/context.
+    {{- if .Values.ingress.enabled }}
+    - from:
+        {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 3000
+    {{- end }}
     - from:
         - podSelector: {}
       ports:
@@ -178,7 +182,7 @@ spec:
     {{- if .Values.opea.enabled }}
     # Chat stream: the backend dials the chatqna orchestrator directly
     # (OPEA_HOST:8888) when the OPEA tier is enabled. query-service.js
-    # builds the URL with no nginx hop; this egress rule is the only
+    # builds the URL internally; this egress rule is the only
     # path that lets the chat stream reach chatqna under default-deny.
     - to:
         - podSelector:

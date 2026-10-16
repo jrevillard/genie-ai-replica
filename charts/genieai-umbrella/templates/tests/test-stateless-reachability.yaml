@@ -81,9 +81,6 @@ spec:
           {{- if .Values.services.documentRepository.enabled }}
           check document-repository 80 /health 200
           {{- end }}
-          {{- if .Values.services.nginx.enabled }}
-          check nginx 80 /healthz 200
-          {{- end }}
           {{- if .Values.services.clamav.enabled }}
           # The clamav NetworkPolicy only admits documentRepository pods —
           # this backend-labeled pod cannot pass a policy-enforcing CNI.

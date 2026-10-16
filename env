@@ -373,6 +373,10 @@ HUGGING_FACE_HUB_TOKEN=
 # MULTI_TURN_BLEND_ENABLED=false
 # MULTI_TURN_BLEND_ALPHA=0.7         # query weight α; 1.0 = query-only, 0.0 = history-only
 # MULTI_TURN_HISTORY_TURNS=1         # number of prior turns blended (1 = previous turn only)
+# MULTI_TURN_MODE=blend              # condense = per-turn standalone-query rewrite
+#                                    # (fail-closed, issue #1091); blend = vector-space
+#                                    # blending above. condense overrides the blend flag.
+# MULTI_TURN_CONDENSE_HISTORY_TURNS=4  # conversation segments fed to the condense rewrite
 
 # Chat context-window: three tiers. A SET MAX_MODEL_LEN_TEXTGEN caps what
 # chatqna uses even when discovery answers — a deliberate consumer-side cap

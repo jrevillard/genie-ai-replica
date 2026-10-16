@@ -20,7 +20,7 @@ spec:
   # only gates whether the operator needs manual approval for the failover.
   primaryUpdateMethod: switchover
   # Hardcoded to ghcr.io/cloudnative-pg/postgresql:16 — never prefixed
-  # by global.imageRegistry. The GitLab registry mirror at
+  # by the top-level imageRegistry. The GitLab registry mirror at
   # registry.opensource.unicc.org/un/itu/genie-ai does not carry
   # cloudnative-pg/postgresql, so the conditional prefix
   # (`<imageRegistry>/cloudnative-pg/postgresql:16`) was producing

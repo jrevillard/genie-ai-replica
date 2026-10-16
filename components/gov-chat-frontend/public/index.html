@@ -17,8 +17,8 @@
     <!-- Runtime configuration (cloud-native: loaded at container startup) -->
     <!-- CSS tokens load first; main.js overrides a runtime subset via loadConfig() -->
     <link rel="stylesheet" href="/config/theme-variables.css"
-          onerror="fetch('/config/theme-variables-fallback.css').then(r=>r.text()).then(t=>{const s=document.createElement('style');s.textContent=t;document.head.appendChild(s);this.remove();}).catch(()=>{})">
-    <script src="/config/config.js"></script>
+          onerror="fetch('/theme-fallback.css').then(r=>r.text()).then(t=>{const s=document.createElement('style');s.textContent=t;document.head.appendChild(s);this.remove();}).catch(()=>{})">
+    <script src="/runtime/config.js"></script>
     <div id="app"></div>
     <!-- built files will be auto injected -->
   </body>

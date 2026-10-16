@@ -41,7 +41,7 @@ const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { isArangoNotFound, isArangoConflict } = require('./arango-errors');
-const { deriveScopeAuthz } = require('./scope-authz-service');
+const { deriveScopeAuthz, currentScopeMode, isScopeModeOpen } = require('./scope-authz-service');
 const config = require('../config');
 const { workingGraphName } = require('./graph-lifecycle-service');
 const auditService = require('./audit-service');
@@ -224,9 +224,12 @@ function _resetFrontmatterSummaryCache(repoId) {
  * refined by code review 2026-09-20): the effective CONFIG is global
  * governance posture, but the SERVING VIEW is per-caller — superadmin sees
  * every serving repo, a scoped caller sees exactly their intersection
- * (zero-hit by construction, mirroring /authz/graphs), and an unprivileged
- * caller sees none. `engaged` is therefore the CALLER's ADR-039 D2 gate:
- * mode ∈ {okf_only, hybrid} AND ≥1 graph serving FOR THIS CALLER.
+ * (zero-hit by construction, mirroring /authz/graphs), and a scopeless
+ * caller sees none — UNLESS OKF_SCOPE_MODE is open (the default since
+ * 2026-10-16): scopes RESTRICT, their absence no longer disables, so a
+ * caller whose scopes grant nothing sees every serving repo. `engaged` is
+ * therefore the CALLER's ADR-039 D2 gate: mode ∈ {okf_only, hybrid} AND ≥1
+ * graph serving FOR THIS CALLER.
  * @param {{okfScopes?: string[], isSuperAdmin?: boolean}} [caller]
  */
 async function getRetrievalConfig(caller = {}) {
@@ -234,7 +237,14 @@ async function getRetrievalConfig(caller = {}) {
     const { isSuperAdmin, authorizedRepoIds } = deriveScopeAuthz(caller.okfScopes, caller.isSuperAdmin);
     const { config: cfg, source } = await getEffectiveConfig();
     const allServing = await servingRepos();
-    const serving = isSuperAdmin ? allServing : allServing.filter((r) => authorizedRepoIds.has(r.repo_id));
+    // DEFAULT-OPEN (2026-10-16, read side only): see the docstring. Mirrors
+    // resolveGraphSet exactly — the two views must never disagree about what
+    // a caller may reach, or the carrier and the engaged gate diverge.
+    const unrestricted =
+      isSuperAdmin ||
+      authorizedRepoIds === null ||
+      (isScopeModeOpen() && authorizedRepoIds.size === 0);
+    const serving = unrestricted ? allServing : allServing.filter((r) => authorizedRepoIds.has(r.repo_id));
     const servingCount = serving.length;
     // WHITELIST, not negation: only a known non-legacy mode engages (a
     // corrupted mode value can never switch the fan-out on).
@@ -252,6 +262,7 @@ async function getRetrievalConfig(caller = {}) {
     return {
       config: cfg,
       source,
+      scope_mode: currentScopeMode(),
       serving_graph_count: servingCount,
       serving_repo_ids: serving.map((r) => r.repo_id),
       serving_graphs: serving.map((r) => ({ repo_id: r.repo_id, graph_name: r.graph_name, domain: r.domain })),

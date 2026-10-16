@@ -20,6 +20,9 @@ organise and maintain them, and what makes content retrieve well.
 
 - [Ingestion]({{< relref "ingestion" >}}) — the upload → scan → chunk → label →
   embed → store pipeline, supported formats, and size limits.
+- [Access control]({{< relref "access-control" >}}) — who can query which OKF
+  repository: the default-open read model, Keycloak scopes, the write-side
+  rules, and the planned admin facility.
 - [Document lifecycle]({{< relref "document-lifecycle" >}}) — upload, processing
   states, updating, and retracting documents.
 - [Labelling & taxonomy]({{< relref "labelling-taxonomy" >}}) — how chunks are

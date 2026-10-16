@@ -71,16 +71,34 @@ describe('GET /api/okf/retrieval-config', () => {
     expect(res.body.config).toMatchObject({ mode: 'legacy' });
   });
 
-  test('401 without a token (router authenticate gate)', async () => {
+  test('DEFAULT-OPEN (2026-10-16): 200 with NO okf scope — the serving read admits scopeless callers', async () => {
+    // The route mounts BEFORE the router-wide gate with allowScopelessWhenOpen:
+    // in open mode (the default) a regular user's chat path resolves the
+    // serving view without holding any okf:* scope.
+    authScoped([]);
+    const res = await request(createApp()).get('/api/okf/retrieval-config').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(retrievalConfigService.getRetrievalConfig).toHaveBeenCalledWith({
+      okfScopes: [],
+      isSuperAdmin: false
+    });
+  });
+
+  test('401 without a token (router authenticate gate still applies to the serving read)', async () => {
     const res = await request(createApp()).get('/api/okf/retrieval-config');
     expect(res.status).toBe(401);
   });
 
-  test('403 with no okf scope (router requireScope gate, default deny)', async () => {
-    authScoped([]);
-    const res = await request(createApp()).get('/api/okf/retrieval-config').set('Authorization', TOKEN);
-    expect(res.status).toBe(403);
-    expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+  test('403 with no okf scope while OKF_SCOPE_MODE=closed (historical default-deny)', async () => {
+    process.env.OKF_SCOPE_MODE = 'closed';
+    try {
+      authScoped([]);
+      const res = await request(createApp()).get('/api/okf/retrieval-config').set('Authorization', TOKEN);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+    } finally {
+      delete process.env.OKF_SCOPE_MODE;
+    }
   });
 });
 
@@ -162,5 +180,34 @@ describe('GET /api/okf/authz/graphs', () => {
     authzResolverService.resolveGraphSet.mockRejectedValue(new Error('boom'));
     const res = await request(createApp()).get('/api/okf/authz/graphs').set('Authorization', TOKEN);
     expect(res.status).toBe(500);
+  });
+
+  test('DEFAULT-OPEN (2026-10-16): 200 with NO okf scope — the BFF authz call succeeds for a regular user', async () => {
+    authScoped([]);
+    authzResolverService.resolveGraphSet.mockResolvedValue({
+      superadmin: false,
+      scope_mode: 'open',
+      graph_names: ['OKF_kenya-gov_v3'],
+      per_graph_labels: {},
+      domains: {},
+      repos: [{ repo_id: 'r-kenya', graph_name: 'OKF_kenya-gov_v3' }],
+      generated_at: '2026-09-20T00:00:00Z',
+      ttl_seconds: 30
+    });
+    const res = await request(createApp()).get('/api/okf/authz/graphs').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body.scope_mode).toBe('open');
+  });
+
+  test('403 with no okf scope while OKF_SCOPE_MODE=closed', async () => {
+    process.env.OKF_SCOPE_MODE = 'closed';
+    try {
+      authScoped([]);
+      const res = await request(createApp()).get('/api/okf/authz/graphs').set('Authorization', TOKEN);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+    } finally {
+      delete process.env.OKF_SCOPE_MODE;
+    }
   });
 });

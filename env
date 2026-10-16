@@ -1253,6 +1253,19 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # OKF_AUDIENCE=okf-server
 #   Default: unset (= no RFC 8707 audience check on bearer JWTs).
 #   Used by: okf-server. Compose: yes. Ansible: yes (guarded).
+# OKF_SCOPE_MODE=open
+#   Default: open. Values: open | closed. Used by: okf-server (read side).
+#   Compose: yes. Ansible: yes (okf_scope_mode).
+#   DEFAULT-OPEN OKF read authorization (product decision 2026-10-16):
+#   open — a caller whose JWT carries NO okf:* scopes is authorized for ALL
+#   serving repos, so every regular user's chat query can reach each
+#   ingested+published repo. closed — the historical default-deny (Story 6.1,
+#   ADR-okf-025): nothing granted = nothing authorized (legacy GRAPH only).
+#   In BOTH modes a granted scope still restricts its holder to exactly the
+#   scoped repos, and the WRITE side (repo CRUD, ingest, lifecycle) stays
+#   closed-list — the flag never opens a write path. Flipping requires an
+#   okf-server container recreate (read per call, no rebuild).
+#   Full capability reference: site/content/en/docs/knowledge-base/access-control.md
 
 # --- okf-server: internal service wiring (container DNS defaults) ---
 # DATAPREP_URL=http://dataprep-arango-service:5000

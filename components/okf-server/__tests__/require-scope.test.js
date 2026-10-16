@@ -79,6 +79,50 @@ describe('requireScope(read)', () => {
   });
 });
 
+describe('requireScope(read, { allowScopelessWhenOpen }) — DEFAULT-OPEN serving reads (2026-10-16)', () => {
+  beforeEach(() => jest.clearAllMocks());
+  afterEach(() => {
+    delete process.env.OKF_SCOPE_MODE;
+  });
+
+  test('open (default): a scopeless caller is admitted', async () => {
+    const next = jest.fn();
+    await requireScope('read', { allowScopelessWhenOpen: true })(mkReq({ scopes: [] }), mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  test('closed: a scopeless caller is denied exactly as before', async () => {
+    process.env.OKF_SCOPE_MODE = 'closed';
+    const res = mockRes();
+    const next = jest.fn();
+    await requireScope('read', { allowScopelessWhenOpen: true })(mkReq({ scopes: [] }), res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'FORBIDDEN_SCOPE' }));
+    expect(writeAudit).toHaveBeenCalled();
+  });
+
+  test('open: a caller with a scope passes through the normal path (option changes nothing)', async () => {
+    const next = jest.fn();
+    await requireScope('read', { allowScopelessWhenOpen: true })(mkReq({ scopes: ['okf:t1:repoA:read'] }), mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  test('open: superadmin passes (unchanged)', async () => {
+    const next = jest.fn();
+    await requireScope('read', { allowScopelessWhenOpen: true })(mkReq({ scopes: [], superAdmin: true }), mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  test('requireRepoScope NEVER accepts the option — scopeless admin attempt still 403s in open mode', async () => {
+    const res = mockRes();
+    const next = jest.fn();
+    await requireRepoScope('repo_id', 'admin')(mkReq({ scopes: [] }), res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+});
+
 describe('requireScope/requireRepoScope strictness (2026-08-16 review fixes)', () => {
   beforeEach(() => jest.clearAllMocks());
 

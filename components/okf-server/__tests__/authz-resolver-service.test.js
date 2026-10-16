@@ -145,3 +145,46 @@ describe('resolveGraphSet (serving ∩ authorized)', () => {
     expect(mockDb.query).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('resolveGraphSet DEFAULT-OPEN (OKF_SCOPE_MODE, product decision 2026-10-16)', () => {
+  beforeEach(() => {
+    mockDb._reset();
+    retrievalConfigService._resetServingCache();
+  });
+  afterEach(() => {
+    delete process.env.OKF_SCOPE_MODE;
+  });
+
+  test('open (default): a scopeless caller gets ALL serving graphs', async () => {
+    seedServing([
+      servingRow(),
+      servingRow({ repo_id: 'r-health', name: 'Health Services', domain: 'health', version: 1 })
+    ]);
+    const out = await resolveGraphSet({ okfScopes: [], isSuperAdmin: false });
+    expect(out.superadmin).toBe(false); // honest — default-open is NOT superadmin
+    expect(out.scope_mode).toBe('open');
+    expect(out.graph_names).toEqual(['OKF_kenya-gov_v3', 'OKF_health-services_v1']);
+    expect(out.repos.map((r) => r.repo_id)).toEqual(['r-kenya', 'r-health']);
+  });
+
+  test('open: a caller holding ANY effective scope keeps exact-list semantics', async () => {
+    seedServing([servingRow(), servingRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
+    const out = await resolveGraphSet({ okfScopes: ['okf:itu:r-other:read'], isSuperAdmin: false });
+    expect(out.graph_names).toEqual([]); // scopes restrict — open ≠ open-everything
+  });
+
+  test('closed restores the historical default-deny for scopeless callers', async () => {
+    process.env.OKF_SCOPE_MODE = 'closed';
+    seedServing([servingRow()]);
+    const out = await resolveGraphSet({ okfScopes: [], isSuperAdmin: false });
+    expect(out.scope_mode).toBe('closed');
+    expect(out.graph_names).toEqual([]);
+  });
+
+  test('open does not change superadmin or wildcard (already unrestricted)', async () => {
+    seedServing([servingRow()]);
+    const out = await resolveGraphSet({ okfScopes: [], isSuperAdmin: true });
+    expect(out.superadmin).toBe(true);
+    expect(out.graph_names).toEqual(['OKF_kenya-gov_v3']);
+  });
+});

@@ -106,6 +106,17 @@ class TestLazyModelResolution:
 
         assert result == "default-llm"
 
+    def test_empty_env_vars_do_not_crash_import(self, monkeypatch):
+        """Compose injects the semantic knobs SET TO EMPTY STRING by default —
+        import must tolerate that (int('') would crash-loop the container)."""
+        monkeypatch.setenv("MAX_MODEL_LEN_TEXTGEN", "")
+        monkeypatch.setenv("MAX_TRANSLATION_CHARS", "")
+
+        mod = importlib.reload(sys.modules["chatqna.genieai_chatqna"])
+        assert mod.MAX_MODEL_LEN_TEXTGEN == 65536
+        assert mod.MAX_TRANSLATION_CHARS == 2000
+        _reload_with_clean_env(monkeypatch)
+
     def test_discovery_endpoint_construction(self, monkeypatch):
         """Window-discovery endpoints: compose defaults build from the service
         host/port config; the remote endpoint vars win verbatim."""

@@ -25,6 +25,7 @@ Usage::
 """
 
 import logging
+import math
 import os
 import time
 
@@ -97,6 +98,8 @@ def _coerce_max_model_len(value) -> int | None:
     if isinstance(value, int):
         return value if value > 0 else None
     if isinstance(value, float):
+        if not math.isfinite(value):
+            return None
         coerced = int(value)
         return coerced if coerced > 0 and coerced == value else None
     if isinstance(value, str):
@@ -170,7 +173,7 @@ def _cached_field(endpoint_url: str, ttl_seconds: int | None, field: str):
         return entry[field]
 
     if field == "max_model_len":
-        _cache[endpoint_url] = {"model_id": None, "max_model_len": None, "ts": 0, "last_fail_ts": now}
+        _cache[endpoint_url] = {"model_id": None, "max_model_len": None, "ts": now, "last_fail_ts": now}
     return None
 
 

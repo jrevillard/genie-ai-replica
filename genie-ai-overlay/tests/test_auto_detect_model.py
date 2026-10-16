@@ -335,6 +335,16 @@ class TestModelCacheMaxModelLen:
         with patch("httpx.get", return_value=mock_resp):
             assert get_max_model_len("https://gpu-host/llm") is None
 
+    @pytest.mark.parametrize("poison", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_floats_are_dropped(self, poison):
+        """json.loads accepts bare NaN/Infinity; int() raises on them and the
+        coercion runs outside _probe's broad except — they must drop to None."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": poison}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert get_max_model_len("https://gpu-host/llm") is None
+
     def test_integral_float_is_accepted(self):
         """A proxy serializing the window as a JSON float (65536.0) still
         discovers the window — dropping it would resurface the history wipe."""
@@ -502,10 +512,10 @@ class TestChatqnaContextWindowGetters:
         monkeypatch.setenv("MAX_MODEL_LEN_TEXTGEN", "not-a-number")
 
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
+        mock_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 8192}]}
 
         with patch("httpx.get", return_value=mock_resp):
-            assert mod._get_max_model_len() == 65536
+            assert mod._get_max_model_len() == 8192
 
     def test_get_max_model_len_probes_without_gpu_node_host(self, monkeypatch):
         """Probing is always on: a compose deployment (LLM_SERVER_HOST_IP=vllm)

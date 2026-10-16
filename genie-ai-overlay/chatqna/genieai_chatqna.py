@@ -283,8 +283,9 @@ def _get_max_model_len() -> int:
     2. Otherwise the endpoint is probed (remote GPU node when VLLM_LLM_ENDPOINT
        is set, otherwise the compose-internal vLLM) for ``max_model_len`` —
        TTL-cached, sharing the probe with model-id detection.
-    3. The 4096 code default only when the probe has no answer (unreachable
-       endpoint, missing field — logged by core.model_cache).
+    3. The 65536 code default (project-standard Granite) only when the probe
+       has no answer (unreachable endpoint, missing field — logged by
+       core.model_cache).
     """
     explicit = os.getenv("MAX_MODEL_LEN_TEXTGEN")
     if explicit:
@@ -369,12 +370,24 @@ RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.9))  # if RERANKI
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001")  # Document repository URL
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")  # Backend service URL
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
+
+
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var tolerantly: unset OR set-to-empty (compose's
+    default injection for the semantic knobs) or non-numeric values all fall
+    back to the default instead of crash-looping the service at import."""
+    try:
+        return int(os.getenv(name) or default)
+    except ValueError:
+        return default
+
+
 # Fallback context window for the LLM, used when runtime discovery from the
 # vLLM /v1/models payload fails (endpoint unreachable, or it does not expose
 # max_model_len). Sized for the project-standard Granite model; deployments
 # serving smaller models behind a non-vLLM backend should set the env var.
 # See _get_max_model_len().
-MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 65536))
+MAX_MODEL_LEN_TEXTGEN = _env_int("MAX_MODEL_LEN_TEXTGEN", 65536)
 
 # Answer-token cap used when the request does not specify max_tokens. Kept
 # independent of the discovered context window: a big window must not invite
@@ -384,7 +397,7 @@ DEFAULT_MAX_ANSWER_TOKENS = 3896
 # Fallback character budget for history sent to translation, used when runtime
 # discovery of the translation model's window fails. See
 # _get_max_translation_chars().
-MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))
+MAX_TRANSLATION_CHARS = _env_int("MAX_TRANSLATION_CHARS", 2000)
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
 

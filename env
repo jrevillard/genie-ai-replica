@@ -390,9 +390,10 @@ HUGGING_FACE_HUB_TOKEN=
 # Fallback character budget for chat history sent to the translation model.
 # Derived from the translation model's window whenever the probe answers
 # (the compose translation vLLM defaults to a 2048-token window → ~2300 chars
-# discovered, slightly above this fallback); set it explicitly only where the
-# probe fails. Dense scripts like CJK produce more tokens per char than the
-# Latin-script estimate — lower this knob for such deployments.
+# discovered); a SET value caps that derivation even when discovery wins —
+# dense scripts like CJK produce more tokens per char than the Latin-script
+# estimate, so lower this knob for such deployments. The fallback applies
+# where the probe fails.
 # Used by: chatqna (genieai_chatqna.py)
 # Default: 2000
 # MAX_TRANSLATION_CHARS=2000

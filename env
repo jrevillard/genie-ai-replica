@@ -398,12 +398,8 @@ HUGGING_FACE_HUB_TOKEN=
 # Default: 2000
 # MAX_TRANSLATION_CHARS=2000
 
-# How often (seconds) chatqna re-probes the served context window. Long by
-# design (the window changes only on a model swap); under traffic the shared
-# model-id cache refreshes the entry every MODEL_DETECT_TTL (60s) anyway.
-# Used by: chatqna (genieai_chatqna.py)
-# Default: 3600
-# MODEL_LEN_DETECT_TTL=3600
+# Window-discovery refresh shares the MODEL_DETECT_TTL knob (same cache entry
+# as model-id detection — under traffic the entry refreshes every 60 s).
 
 # Application session lifetime for automatic purging (MILLISECONDS, NOT seconds or minutes).
 # Controls how long an inactive analytics session is kept before automatic cleanup.

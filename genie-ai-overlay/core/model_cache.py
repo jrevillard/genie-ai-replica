@@ -40,6 +40,11 @@ MODEL_TTL_DEFAULT = 60
 # nothing answers the probe to one attempt per window instead of one per request.
 NEGATIVE_CACHE_TTL = 60
 
+# Sanity ceiling for a probed window (tokens). The largest real models sit two
+# orders of magnitude below this; anything bigger is a broken proxy value that
+# would silently disable every truncation guard.
+MAX_SANE_MODEL_WINDOW_TOKENS = 10_000_000
+
 # endpoint_url -> {"model_id": str|None, "max_model_len": int|None,
 #                  "ts": float|None (None on a failure stub),
 #                  "last_fail_ts": float|missing (stamped on failure only)}
@@ -92,24 +97,28 @@ def _coerce_max_model_len(value) -> int | None:
     Some proxies serialize the field as a JSON string (possibly with exotic
     digit characters) or as a JSON float; others report -1 or 0 as an
     "unknown" sentinel. Anything that cannot serve as a context window
-    (non-positive, bool, non-integral, garbage) is dropped so a bad payload
-    never poisons the cache entry.
+    (non-positive, non-finite, non-integral, absurdly large, garbage) is
+    dropped so a bad payload never poisons the cache entry — an absurdly
+    large window would silently disable the truncation guard.
     """
+    coerced = None
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
-        return value if value > 0 else None
-    if isinstance(value, float):
+        coerced = value
+    elif isinstance(value, float):
         if not math.isfinite(value):
             return None
         coerced = int(value)
-        return coerced if coerced > 0 and coerced == value else None
-    if isinstance(value, str):
+        if coerced != value:
+            return None
+    elif isinstance(value, str):
         try:
             coerced = int(value.strip())
         except ValueError:
             return None
-        return coerced if coerced > 0 else None
+    if coerced is not None and 0 < coerced <= MAX_SANE_MODEL_WINDOW_TOKENS:
+        return coerced
     return None
 
 

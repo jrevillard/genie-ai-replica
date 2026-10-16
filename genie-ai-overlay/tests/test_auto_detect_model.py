@@ -329,6 +329,16 @@ class TestModelCacheMaxModelLen:
         with patch("httpx.get", return_value=mock_resp):
             assert get_max_model_len("https://gpu-host/llm") is None
 
+    def test_absurd_windows_are_dropped(self):
+        """An integral-but-absurd window (a 1e20 'unknown' from a broken proxy)
+        would silently disable the truncation guard: anything above a sane
+        ceiling drops to None."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": int(1e20)}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert get_max_model_len("https://gpu-host/llm") is None
+
     def test_unparseable_digit_strings_are_dropped(self):
         """Strings str.isdigit() accepts but int() rejects (superscripts etc.)
         must fall back to None, not raise out of the accessor."""

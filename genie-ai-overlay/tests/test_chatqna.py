@@ -1967,33 +1967,64 @@ class TestTranslationHelpers:
         assert payload["max_tokens"] == 2956
 
     @pytest.mark.asyncio
-    async def test_translation_skipped_when_window_too_tight(self):
-        """When even a minimal completion cannot fit the discovered window
-        (window < 1536 tokens makes the clamped cap drop below the 512-token
-        floor), the history goes back untranslated instead of requesting a
-        garbage blob that would poison the next prompt."""
+    async def test_small_window_still_translates_tiny_history(self):
+        """A tiny history on a small (1024-token) window fits comfortably: the
+        cap is clamped to the room left (1024 − 512 − ~109 = ~147) and the
+        translation RUNS — the old fixed 512-token floor disabled it forever."""
         svc = create_chatqna_service()
         history = [
-            {"role": "user", "content": "A" * 300},
-            {"role": "assistant", "content": "B" * 300},
+            {"role": "user", "content": "A" * 150},
+            {"role": "assistant", "content": "B" * 150},
         ]
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Translated"}}]}
+        mock_response.raise_for_status = MagicMock()
+
         mock_client = AsyncMock()
-        mock_client.post = AsyncMock(return_value=MagicMock())
+        mock_client.post.return_value = mock_response
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         models_resp = MagicMock()
         models_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 1024}]}
+        mock_response.json.return_value = {"choices": [{"text": "Translated"}]}
         with (
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=True),
+            patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
         ):
             result = await svc._get_translated_history_string(history, "English")
 
-        flattened = "USER: " + "A" * 300 + " |<-MSG->| " + "ASSISTANT: " + "B" * 300
-        assert result == flattened  # untranslated, no HTTP call made
+        assert result == "Translated"
+        payload = mock_client.post.call_args.kwargs["json"]
+        # flattened ≈ 328 chars → ~109 prompt tokens; base cap floor 512
+        # clamped to the room left: 1024 − 512 − 109 = 403
+        assert payload["max_tokens"] == 403
+
+    @pytest.mark.asyncio
+    async def test_translation_skipped_when_budget_fits_no_message(self):
+        """A budget smaller than the newest message drops everything: no empty
+        prompt is sent to the translation model (its junk reply would become
+        the next prompt's chat history) — the result is an empty history."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "X" * 600}]
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=MagicMock())
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
+            patch("httpx.get", return_value=MagicMock(json=lambda: {"data": [{"id": "m", "max_model_len": 768}]})),
+        ):
+            result = await svc._get_translated_history_string(history, "English")
+
+        assert result == ""  # nothing survived the budget: empty history, no junk
         mock_client.post.assert_not_called()
 
     @pytest.mark.asyncio

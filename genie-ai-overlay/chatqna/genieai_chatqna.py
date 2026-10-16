@@ -257,12 +257,9 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-# Context-window discovery TTL (seconds). The served window only changes on a
-# model swap, so a long TTL is enough. Note: while a request path calls
-# _get_llm_model() / _get_translation_model_id() (default MODEL_DETECT_TTL=60)
-# on the same endpoint, the shared cache entry is refreshed on their cadence
-# and this TTL only governs when no other accessor has run recently.
-MODEL_LEN_DETECT_TTL = max(_env_int("MODEL_LEN_DETECT_TTL", 3600), 1)
+# Window discovery shares the model-id cache entry, so the MODEL_DETECT_TTL
+# env var governs its refresh cadence too (under traffic the entry is
+# refreshed every 60 s by the model-id accessors regardless of the window).
 
 
 def _build_user_content(user_context_string: str, history_string: str, rag_augmented_prompt: str) -> str:
@@ -300,7 +297,7 @@ def _get_max_model_len() -> int:
     explicit = _env_int("MAX_MODEL_LEN_TEXTGEN", 0)
     if explicit > 0:
         return explicit
-    detected = get_max_model_len(_LLM_DISCOVERY_ENDPOINT, ttl_seconds=MODEL_LEN_DETECT_TTL)
+    detected = get_max_model_len(_LLM_DISCOVERY_ENDPOINT)
     if detected:
         return detected
     return MAX_MODEL_LEN_TEXTGEN
@@ -313,7 +310,7 @@ def _get_translation_window() -> int | None:
     known (stale) window when a re-probe fails, and None when the endpoint is
     unreachable from the start or does not expose the field.
     """
-    return get_max_model_len(_TRANSLATION_DISCOVERY_ENDPOINT, ttl_seconds=MODEL_LEN_DETECT_TTL)
+    return get_max_model_len(_TRANSLATION_DISCOVERY_ENDPOINT)
 
 
 def _get_max_translation_chars() -> int:
@@ -2247,16 +2244,17 @@ class ChatQnAService:
         is discovered, the cap is clamped so the prompt estimate (chars /
         chars-per-token ratio) plus the completion stays inside the window —
         otherwise vLLM rejects the whole request and the history goes back
-        untranslated. Returns None when even the clamped cap drops below the
-        512-token floor (window too tight for a meaningful translation); the
-        caller should skip the translation and send the history as-is.
+        untranslated. Returns None when the clamped cap drops below the
+        estimated input size (the completion would be shorter than what there
+        is to translate); the caller should skip the translation and send the
+        history as-is.
         """
         cap = _translation_base_cap(flattened_history_string)
         window = _get_translation_window()
         if window:
             prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
             cap = min(cap, max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate))
-            if cap < 512:
+            if cap < prompt_token_estimate:
                 return None
         return cap
 
@@ -2308,6 +2306,11 @@ class ChatQnAService:
                 len(messages_to_process),
                 dropped_messages,
             )
+        if not messages_to_process:
+            # Even the newest message exceeds the whole budget: nothing to
+            # translate — sending an empty prompt would only harvest the
+            # model's junk reply as chat history.
+            return ""
 
         flattened_history_parts = []
         for message in messages_to_process:

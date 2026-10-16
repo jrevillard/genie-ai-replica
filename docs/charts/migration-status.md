@@ -111,6 +111,11 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   Deployment or a fail-fast guard.
 - Issue #1064 (compose-side ClamAV dual-mode + env mismatch) — the k8s side
   is fixed here; the image/compose side stays open upstream of this branch.
+- filelog agent has no `file_storage` extension: every restart with
+  `start_at: end` drops the logs emitted during the restart window (no
+  duplicates possible; scoping `include` in 0.2.20 did not change this).
+  Add `file_storage` + wire it into the receiver if that gap ever matters
+  operationally.
 - Dataprep vendored `llm_transformer` (sync langchain in `to_thread`) has no
   effective request timeout; long ingestions can pin threads on a stalled
   upstream (observed once against the shared GPU node; pod restart recovered).

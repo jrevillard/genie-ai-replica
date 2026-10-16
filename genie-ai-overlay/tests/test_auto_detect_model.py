@@ -479,6 +479,34 @@ class TestChatqnaContextWindowGetters:
             assert mod._get_max_model_len() == 65536
         assert mock_get.call_args.args[0] == "https://10.0.0.110/llm/v1/models"
 
+    def test_explicit_max_model_len_overrides_discovery(self, monkeypatch):
+        """A deployer-set MAX_MODEL_LEN_TEXTGEN caps the usable window even when
+        discovery answers — the deliberate consumer-side performance cap."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm")
+        monkeypatch.setenv("MAX_MODEL_LEN_TEXTGEN", "16384")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
+
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            assert mod._get_max_model_len() == 16384
+        mock_get.assert_not_called()
+
+    def test_explicit_max_model_len_garbage_is_ignored(self, monkeypatch):
+        """A non-numeric or non-positive override falls through to discovery."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm")
+        monkeypatch.setenv("MAX_MODEL_LEN_TEXTGEN", "not-a-number")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert mod._get_max_model_len() == 65536
+
     def test_get_max_model_len_probes_without_gpu_node_host(self, monkeypatch):
         """Probing is always on: a compose deployment (LLM_SERVER_HOST_IP=vllm)
         discovers the real window without any GPU_NODE_HOST configured."""

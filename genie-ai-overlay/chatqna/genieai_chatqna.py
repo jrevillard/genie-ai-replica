@@ -274,14 +274,24 @@ def _build_user_content(user_context_string: str, history_string: str, rag_augme
 
 
 def _get_max_model_len() -> int:
-    """Return the served LLM context window in tokens.
+    """Return the usable LLM context window in tokens, in three tiers.
 
-    Always probes the LLM endpoint (remote GPU node when VLLM_LLM_ENDPOINT is
-    set, otherwise the compose-internal vLLM) for ``max_model_len`` —
-    TTL-cached, sharing the probe with model-id detection. Falls back to the
-    configured MAX_MODEL_LEN_TEXTGEN when the endpoint is unreachable or does
-    not expose the field (both logged by core.model_cache).
+    1. A deployer-set MAX_MODEL_LEN_TEXTGEN (env read at call time) wins — a
+       deliberate consumer-side cap (e.g. keep the model off its full window
+       under load) without touching the GPU config. Use the vLLM
+       --max_model_len flag instead to cap what the model serves.
+    2. Otherwise the endpoint is probed (remote GPU node when VLLM_LLM_ENDPOINT
+       is set, otherwise the compose-internal vLLM) for ``max_model_len`` —
+       TTL-cached, sharing the probe with model-id detection.
+    3. The 4096 code default only when the probe has no answer (unreachable
+       endpoint, missing field — logged by core.model_cache).
     """
+    explicit = os.getenv("MAX_MODEL_LEN_TEXTGEN")
+    if explicit:
+        with contextlib.suppress(ValueError):
+            value = int(explicit)
+            if value > 0:
+                return value
     detected = get_max_model_len(_LLM_DISCOVERY_ENDPOINT, ttl_seconds=MODEL_LEN_DETECT_TTL)
     if detected:
         return detected

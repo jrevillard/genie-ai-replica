@@ -31,7 +31,7 @@ Move all theme assets (frontend palette + brand JSON + Keycloak theme) to runtim
 
 ```
                     ┌─────────────────────────────────────────────┐
-                    │ /opt/genieai-<env>/config/                   │
+                    │ /opt/genieai/config/                          │
                     │   ├── frontend/                              │
                     │   │   ├── theme-variables.css                │
                     │   │   ├── genie-ai-config.json               │
@@ -60,23 +60,24 @@ Move all theme assets (frontend palette + brand JSON + Keycloak theme) to runtim
 ### Source-of-truth strategy
 
 - **Repo** (`components/gov-chat-frontend/public/config/`, `configs/keycloak/themes/genie/`) is the canonical source for default theme assets.
-- **Ansible** (`config_bootstrap` role) rsyncs repo defaults into `/opt/genieai-{{ env_name }}/config/` on every node at deploy time using `synchronize` with `delete: false` and `rsync_opts: [--ignore-existing]`. This:
+- **Ansible** (`config_bootstrap` role) rsyncs repo defaults into `{{ config_dir }}` on every node at deploy time using `synchronize` with `delete: false` and `rsync_opts: [--ignore-existing]`. This:
   - Skips files that already exist on the node (preserves manual operator edits made between deploys)
   - Never deletes files that exist only on the node (no data loss)
   - Idempotent: second invocation is a no-op (all files already present)
-- **rsync source paths** are computed from `playbook_dir` (role uses cross-tree rsync, not its own `files/` directory):
-  - `frontend`: `{{ playbook_dir }}/../../components/gov-chat-frontend/public/config/`
-  - `keycloak`: `{{ playbook_dir }}/../../configs/keycloak/themes/genie/`
-  - Avoids role-local file duplication that would drift from the canonical repo paths
+- **`config_dir`** is defined in `group_vars/all.yml` as `"{{ deploy_dir }}/config"` (i.e. `/opt/genieai/config`). It is promoted to `group_vars` rather than kept as a role default because the bind mounts are rendered by the separate `deploy` play via `env.j2`, which does not include this role — a role default would render as an empty string there. It is derived from `deploy_dir` rather than an inventory group name so the path does not move when a host's groups are reordered, and so operators find the editable theme files inside the deploy directory they already know.
+- **rsync source paths** are not taken from the local checkout. The role downloads a branch-pinned archive from GitLab (`?path=<repo-relative dir>`) and rsyncs out of the extraction root:
+  - `frontend`: `components/gov-chat-frontend/public/config`
+  - `keycloak`: `configs/keycloak/themes/genie`
+  - The playbook never clones the repo onto the node, and the documented workflow runs it from a local checkout that may sit on a different branch than the one being deployed — seeding from `playbook_dir` would write the wrong theme assets, and `--ignore-existing` would then lock that mistake in.
 - **No shared filesystem** (NFS/CephFS) — Ansible is the single source-of-truth distributor, matching the existing deploy contract.
-- **`env_name`** is defined in `group_vars/all.yml` as the inventory group name (e.g., `main`, `test`, `itu_rtx_el_salvador`) and used in the role's `config_dir` default. Fallback in the role: `config_dir: "/opt/genieai-{{ env_name | default(group_names[0] | default('default')) }}/config"`.
 
 ### Mount strategy
 
-- Per-component bind mount (not full-image replacement). The image keeps its baked defaults; the mount provides a runtime overlay. If the mount is missing, services fall back to baked defaults.
+- Per-component bind mount (not full-image replacement). The image keeps its baked defaults; the mount provides a runtime overlay.
+- **There is no fallback to the baked defaults.** A bind mount never falls back to the image contents: Docker *creates a missing source path as an empty root-owned directory* rather than failing, so an unpopulated mount silently shadows everything under the mount point. See "Bind mount source empty" under Error handling for the full failure mode.
 - Two bind mounts total:
-  - `/opt/genieai-<env>/config/frontend/` → `/app/dist/config/` (frontend, read-only)
-  - `/opt/genieai-<env>/config/keycloak/themes/genie/` → `/opt/keycloak/themes/genie/` (keycloak, read-only)
+  - `/opt/genieai/config/frontend/` → `/app/dist/config/` (frontend, read-only)
+  - `/opt/genieai/config/keycloak/themes/genie/` → `/opt/keycloak/themes/genie/` (keycloak, read-only)
 
 ## Component changes
 
@@ -126,7 +127,7 @@ services:
 ```
 
 - Default values target the repo paths so `docker compose up` works locally with zero config.
-- In Swarm mode, Ansible writes `CONFIG_DIR_FRONTEND` and `CONFIG_DIR_KEYCLOAK` into `/opt/genieai-<env>/.env` from the new role's defaults.
+- In Swarm mode, Ansible writes `CONFIG_DIR_FRONTEND` and `CONFIG_DIR_KEYCLOAK` into `/opt/genieai/.env` from `config_dir`.
 
 ### Ansible (`deploy/ansible/`)
 
@@ -184,11 +185,18 @@ services:
 
 ### Keycloak: theme CSS missing
 
-- Keycloak falls back to upstream default theme. Acceptable degradation but ugly. Mitigation: the `config_bootstrap` role's `synchronize` step uses `delete: false` so baked images stay available. Ansible logs a warning if `config_dir/keycloak/themes/genie/` is empty after the role runs.
+- Keycloak falls back to the unbranded built-in theme. Ugly but functional — the login flow still works.
+- `delete: false` does **not** keep the image-baked theme available. `delete` only governs how rsync treats files that are *already on the host*: it prevents the sync from removing them. It says nothing about the image's own contents, which a bind mount hides entirely. The only thing that keeps the theme available is the role having actually populated the host directory.
+- The role does not warn when the destination is empty. Its guard runs on the *extracted archive* (`ansible.builtin.assert` over `config_bootstrap_extract_check`), which catches a wrong `repo_branch`, a truncated download, or a changed archive layout — it fires before anything is synced — but there is no post-sync check of the destination tree. An operator who sets `config_bootstrap_sync_enabled: false`, or who empties the directory by hand, gets no signal from Ansible.
 
-### Swarm: bind mount path missing
+### Bind mount source empty or missing
 
-- Service starts normally using image-baked defaults. Ansible logs warning. This is the backwards-compat path — existing deploys continue to work without any host-side setup.
+- **Docker never falls back to the image contents.** When the host side of a bind mount does not exist, Docker creates it as an empty root-owned directory and mounts it over the container path. The service starts normally, reports healthy, and serves nothing.
+- Failure mode when `CONFIG_DIR_FRONTEND` / `CONFIG_DIR_KEYCLOAK` are unset **and** their repo-relative defaults do not resolve on the node (they will not: the playbook never clones the repo onto the node):
+  - **Frontend** — the empty mount shadows `/app/dist/config/`, so the theme stylesheet, the splash assets and the logo are all gone. `/config/theme-variables.css` 404s and the `onerror` handler inlines `theme-variables-fallback.css` (image-baked), so the page still renders with the default tokens; but the runtime JSON config 404s too, and the splash/logo are simply absent. Unbranded, visibly wrong, no error anywhere.
+  - **Keycloak** — the empty mount shadows `/opt/keycloak/themes/genie/`, so Keycloak serves its unbranded built-in theme.
+  - Both are **silent**. No container crashes, no healthcheck fails, no log line names the missing directory.
+- **Mitigation** — the `config_bootstrap` role seeds those directories, and it is tagged `deploy` as well as `config`, so a routine `ansible-playbook deploy.yml --tags deploy` populates them before the stack comes up. A node that has never run the role is the exposure, not a node running a normal deploy.
 
 ## Testing strategy
 
@@ -208,22 +216,23 @@ services:
   - Run the role twice on a fresh VM → assert second run is no-op (`config_dir` already populated)
   - Delete one file in `config_dir/frontend/`, rerun → assert file NOT recreated (manual edits preserved)
 
-- **Backward compat smoke**:
-  - Deploy with no `CONFIG_DIR_FRONTEND` env set → assert frontend loads (uses image-baked defaults)
-  - Deploy with no `CONFIG_DIR_KEYCLOAK` env set → assert keycloak serves upstream theme (or its own baked fallback)
+- **Un-seeded node smoke** (documents the failure mode rather than asserting a fallback):
+  - Deploy with no `CONFIG_DIR_FRONTEND` env set and an empty host `config/frontend/` → assert the stack still comes up healthy, and record that the theme stylesheet, splash and logo are gone. A bind mount never falls back to image contents, so this is the expected degradation, not a bug to fix.
+  - Deploy with no `CONFIG_DIR_KEYCLOAK` env set and an empty host `config/keycloak/themes/genie/` → assert Keycloak serves its unbranded built-in theme
+  - Then run the role on the same node and assert both surfaces come back branded
 
 ## Migration & rollback
 
 ### Rollout
 
 1. Merge MR on `main` → CI builds images that still contain baked-in defaults (no behavior change).
-2. First Ansible deploy with `--tags config` → creates `/opt/genieai-<env>/config/{frontend,keycloak/themes/genie}/` with rsync'd defaults.
+2. First Ansible deploy with `--tags config` (also covered by a routine `--tags deploy`) → creates `/opt/genieai/config/{frontend,keycloak/themes/genie}/` with rsync'd defaults.
 3. Future theme changes: edit file on the node + `docker service update --force <svc>`.
 
 ### Rollback
 
 - Remove the bind mount lines from `docker-compose.yaml` and redeploy. Image-baked defaults restored. No data loss.
-- Or unset `CONFIG_DIR_FRONTEND` / `CONFIG_DIR_KEYCLOAK` in `.env` and redeploy — mount paths fall back to `./components/gov-chat-frontend/public/config` and `./configs/keycloak/themes/genie` which don't exist in production but the service still starts using baked defaults.
+- Do **not** roll back by unsetting `CONFIG_DIR_FRONTEND` / `CONFIG_DIR_KEYCLOAK`. That is the one rollback that looks safe and is not: the compose defaults are repo-relative paths that do not exist on a deployed node, so Docker creates both as empty root-owned directories and the mount still shadows the image contents. Unbranded, same as before. Roll back by removing the bind mount lines, or by pointing the vars at a populated host directory.
 
 ### Deprecation
 
@@ -235,7 +244,7 @@ services:
 - Editing `genie-ai-config.json` on a host → visible in browser after `docker service update --force frontend`, no image rebuild
 - Editing Keycloak login CSS on a host → visible in browser after `docker service update --force keycloak`, no image rebuild
 - Existing tokens (AgroGenio for el-salvador, default for main) preserved as baked defaults
-- Backwards-compatible: existing deploys continue to work without `CONFIG_DIR_*` env vars
+- Backwards-compatible **for any node that has been through the `config_bootstrap` role**: after the role has seeded `/opt/genieai/config/`, a deploy works without `CONFIG_DIR_*` being set explicitly. This is *not* a property of the bind mount — a node that has never run the role, or one where `config_bootstrap_sync_enabled` is false, renders unbranded with no error (see "Bind mount source empty or missing").
 - Ansible deploy supports both full (`build,deploy,config`) and theme-only (`config` alone, plus a `docker service update --force`) flows
 - One MR implementing the full migration + updated docs
 

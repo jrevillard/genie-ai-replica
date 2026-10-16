@@ -1,0 +1,53 @@
+{{/*
+Canonical TLS Secret name. Precedence:
+  1. ingress.tls.secretName — operator pre-baked certificate (sovereign
+     deployments that manage keys outside cert-manager). Setting it also
+     suppresses the chart's Certificate CR.
+  2. <host>-tls — matches the cert-manager Certificate CR this chart
+     renders (its secretName uses this same helper).
+The Gateway listener's certificateRefs and the Certificate CR both call
+this helper — a second derivation site would let the two drift and leave
+the https listener waiting on a Secret nobody writes.
+*/}}
+{{- define "genieai-umbrella.tlsSecretName" -}}
+{{- .Values.ingress.tls.secretName | default (printf "%s-tls" (.Values.ingress.host | default "genieai")) -}}
+{{- end -}}
+{{- if .Values.ingress.enabled -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: genieai
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
+spec:
+  gatewayClassName: {{ .Values.ingress.className | default "envoy" | quote }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- /*
+      The https listener renders ONLY when ingress.tls.enabled — Gateway
+      API rejects `tls: {mode: Terminate}` without a certificateRefs
+      entry, so the listener is rendered fully or not at all. The http
+      listener stays for the cert-manager http01 bootstrap path and for
+      HTTP→HTTPS redirect, which the operator expresses as an HTTPRoute
+      with a requestRedirect filter attached to the http listener.
+    */ -}}
+    {{- if .Values.ingress.tls.enabled }}
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ include "genieai-umbrella.tlsSecretName" . }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+{{- end -}}

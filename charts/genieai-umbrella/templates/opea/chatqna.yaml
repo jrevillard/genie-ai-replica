@@ -1,8 +1,8 @@
 {{/*
   chatqna OPEA orchestrator. Factory-driven like the
   other five OPEA deployments. In-cluster peer wiring uses bare Service
-  DNS names (the chart convention, mirroring the nginx upstreams:
-  `embedding`, `retriever`, `reranker`, `translation`); ports match the
+  DNS names (the chart convention, mirroring the edge route
+  upstreams: `embedding`, `retriever`, `reranker`, `translation`); ports match the
   Services rendered in tasks 2-3 (embedding 6000, retriever 7000,
   reranker 8000, translation 9031). GPU endpoints (`VLLM_LLM_ENDPOINT`,
   `VLLM_TRANSLATION_ENDPOINT`) via the opea helpers; VLLM_API_KEY from

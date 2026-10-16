@@ -1,0 +1,43 @@
+{{- if .Values.data.keycloak.enabled -}}
+{{- /*
+  Keycloak ingress policy. Three peer families reach port 8080:
+  - the Envoy Gateway data plane — edge routing of /auth/ (same-origin
+    OIDC with the SPA), only when the ingress tier is on;
+  - the backend — realm token validation flows through the internal
+    KEYCLOAK_URL, not the edge;
+  - same-namespace pods — the post-install convergence and migration
+    Jobs drive the Admin API on the same port.
+
+  Ingress-only by design: Keycloak's egress surface (SMTP, backchannel
+  logout, outbound federated IdPs) is deployment-specific; a wrong
+  default-deny there breaks login in ways nothing in this chart can
+  see. Egress hardening is an operator decision.
+*/ -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "keycloak") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: keycloak
+      app.kubernetes.io/managed-by: keycloak-operator
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- if .Values.ingress.enabled }}
+    - from:
+        {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 8080
+    {{- end }}
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080
+{{- end -}}

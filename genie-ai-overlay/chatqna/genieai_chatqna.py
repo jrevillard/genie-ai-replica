@@ -2874,14 +2874,41 @@ class ChatQnAService:
         if logflag:
             logger.debug(f"Last_translated_message_content: {last_translated_message_content}")
 
-        # Multi-turn vector-space blending (issue #833): extract the previous N
-        # turns and pass them alongside the query. The EXISTING embedding node
-        # embeds both in ONE batched TEI call (E2 design — no separate embed
-        # helper, no duplicated embedding logic); align_outputs EMBEDDING blends
-        # the two vectors (V = α·EQ + (1-α)·EH). history_text="" disables the
-        # blend transparently (flag off / first turn / empty history).
+        # Multi-turn retrieval query resolution (issue #1091):
+        #   - blend (default): issue-#833 vector-space blending, unchanged.
+        #   - condense: one short LLM call rewrites the follow-up into a
+        #     standalone query; retrieval AND rerank use the rewritten query
+        #     (fail-closed: a failed rewrite fails the turn — 503, no
+        #     blend/raw-query fallback). condense overrides the blend flag.
+        retrieval_query = last_translated_message_content
+        condense_raw_query = None
         history_text = ""
-        if MULTI_TURN_BLEND_ENABLED and MULTI_TURN_HISTORY_TURNS > 0:
+        if MULTI_TURN_MODE == "condense":
+            if MULTI_TURN_BLEND_ENABLED:
+                logger.warning(
+                    "MULTI_TURN_MODE=condense overrides MULTI_TURN_BLEND_ENABLED=true — "
+                    "vector-space blending is ignored while condense mode is active."
+                )
+            condense_history = _extract_history_text(translated_history_string, MULTI_TURN_CONDENSE_HISTORY_TURNS)
+            if condense_history:
+                retrieval_query = await self._condense_query(condense_history, last_translated_message_content)
+                # The RAG prompt question stays the RAW last message; the
+                # rewritten query is retrieval/rerank-only (align_outputs).
+                condense_raw_query = last_translated_message_content
+            else:
+                # Zero LLM calls, but the skip is observable — mode active,
+                # no history. Answers "why is there no rewrite?" from traces.
+                _condense_tracer = get_tracer("chatqna.query_condense")
+                with _condense_tracer.start_as_current_span("chatqna.query_condense") as _span:
+                    _span.set_attributes(
+                        sanitize_attributes(
+                            {
+                                "genie.condense.mode": MULTI_TURN_MODE,
+                                "genie.condense.status": "skipped_no_history",
+                            }
+                        )
+                    )
+        elif MULTI_TURN_BLEND_ENABLED and MULTI_TURN_HISTORY_TURNS > 0:
             history_text = _extract_history_text(translated_history_string, MULTI_TURN_HISTORY_TURNS)
             if history_text and logflag:
                 logger.debug(
@@ -2987,7 +3014,7 @@ class ChatQnAService:
                 try:
                     result_dict, runtime_graph = await self.megaservice.schedule(
                         initial_inputs={
-                            "text": last_translated_message_content,
+                            "text": retrieval_query,
                             # Carried through to the embedding node so it can batch
                             # [query, history] in ONE TEI call. Empty when blending
                             # is disabled (flag off / first turn). Non-EmbedDoc field
@@ -3003,6 +3030,10 @@ class ChatQnAService:
                             "retrieval_context": retrieval_context,
                             "original_language": original_language,
                             "user_details": user_details,
+                            # RAW last message under condense mode; the RAG
+                            # prompt uses it as the question (the rewritten
+                            # query must not enter the answer prompt).
+                            **({"condense_raw_query": condense_raw_query} if condense_raw_query is not None else {}),
                         },
                     )
                 except _RerankerInputTooLongError:

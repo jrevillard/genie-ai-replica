@@ -24,7 +24,12 @@ fi
 # Keycloak client ID (defaults to genie-app)
 KEYCLOAK_CLIENT_ID="${VUE_APP_KEYCLOAK_CLIENT_ID:-genie-app}"
 
-cat > /app/dist/config.js << EOF
+# Runtime config lives under /config/ to match the nginx ^~ /config/ location.
+# The directory is created by the compose bind mount in deployed stacks; mkdir
+# keeps the entrypoint safe when the image runs without it.
+mkdir -p /app/dist/config
+
+cat > /app/dist/config/config.js << EOF
 window.APP_CONFIG = {
   apiUrl: "${API_URL}",
   proxyHost: "${VUE_PROXY_HOST:-localhost}",

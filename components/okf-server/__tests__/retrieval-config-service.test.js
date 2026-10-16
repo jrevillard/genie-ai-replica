@@ -154,14 +154,48 @@ describe('retrieval-config-service (Story 1.7, ADR-okf-039)', () => {
     test('SERVING VIEW IS PER-CALLER (code-review fix): scoped caller sees only their intersection', async () => {
       mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: 'hybrid' });
       seedServing([repoRow(), repoRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
-      // config posture stays global, but a caller scoped to r-health sees only
-      // r-health — a zero-scoped tenant sees an EMPTY serving set.
+      // config posture stays global; a caller scoped to r-health sees only
+      // r-health. A scopeless caller sees EVERYTHING (default-open, below) —
+      // this test pins the scoped-restriction half.
       const scoped = await svc.getRetrievalConfig({ okfScopes: ['okf:itu:r-health:read'], isSuperAdmin: false });
       expect(scoped.config.mode).toBe('hybrid'); // global posture
       expect(scoped.serving_repo_ids).toEqual(['r-health']); // per-caller view
-      const nobody = await svc.getRetrievalConfig({ okfScopes: [], isSuperAdmin: false });
-      expect(nobody.serving_graph_count).toBe(0);
-      expect(nobody.engaged).toBe(false);
+    });
+
+    // DEFAULT-OPEN (product decision 2026-10-16, read side only): scopes
+    // RESTRICT, their absence no longer disables. Mirrors the resolveGraphSet
+    // contract exactly — the carrier and the engaged gate must never disagree.
+    describe('DEFAULT-OPEN serving view (OKF_SCOPE_MODE)', () => {
+      afterEach(() => {
+        delete process.env.OKF_SCOPE_MODE;
+      });
+
+      test('open (default): scopeless caller sees ALL serving repos and engages', async () => {
+        mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: 'hybrid' });
+        seedServing([repoRow(), repoRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
+        const out = await svc.getRetrievalConfig({ okfScopes: [], isSuperAdmin: false });
+        expect(out.scope_mode).toBe('open');
+        expect(out.serving_graph_count).toBe(2);
+        expect(out.engaged).toBe(true);
+      });
+
+      test('open: a caller holding ANY effective scope keeps exact-list semantics', async () => {
+        mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: 'hybrid' });
+        seedServing([repoRow(), repoRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
+        const out = await svc.getRetrievalConfig({ okfScopes: ['okf:itu:r-other:read'], isSuperAdmin: false });
+        expect(out.serving_graph_count).toBe(0); // scopes restrict — open ≠ open-everything
+        expect(out.engaged).toBe(false);
+      });
+
+      test('closed restores the historical default-deny (nothing granted = nothing authorized)', async () => {
+        process.env.OKF_SCOPE_MODE = 'closed';
+        mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: 'hybrid' });
+        seedServing([repoRow(), repoRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
+        const out = await svc.getRetrievalConfig({ okfScopes: [], isSuperAdmin: false });
+        expect(out.scope_mode).toBe('closed');
+        expect(out.serving_graph_count).toBe(0);
+        expect(out.engaged).toBe(false);
+      });
     });
 
     test('serving-set memo: repeat calls reuse the cache; TTL EXPIRY re-queries', async () => {

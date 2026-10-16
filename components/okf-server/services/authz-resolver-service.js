@@ -24,14 +24,14 @@
 
 const { DateTime } = require('luxon');
 const { servingRepos, SERVING_TTL_MS } = require('./retrieval-config-service');
-const { deriveScopeAuthz } = require('./scope-authz-service');
+const { deriveScopeAuthz, currentScopeMode, isScopeModeOpen } = require('./scope-authz-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 
 /**
  * Resolve the caller's traversable graph set.
  * @param {{okfScopes: string[], isSuperAdmin: boolean}} caller
- * @returns {Promise<{superadmin: boolean, graph_names: string[], per_graph_labels: Object<string,null>, domains: Object<string,string|null>, repos: Array<{repo_id,name,domain,graph_name}>, generated_at: string, ttl_seconds: number}>}
+ * @returns {Promise<{superadmin: boolean, scope_mode: string, graph_names: string[], per_graph_labels: Object<string,null>, domains: Object<string,string|null>, repos: Array<{repo_id,name,domain,graph_name}>, generated_at: string, ttl_seconds: number}>}
  */
 async function resolveGraphSet(caller) {
   return withSpan('okf.authz.resolve_graph_set', async (span) => {
@@ -40,7 +40,18 @@ async function resolveGraphSet(caller) {
     // The intersection IS the zero-hit guarantee: only serving rows whose
     // repo_id the caller is authorized for survive — unauthorized (or
     // draft/retracted) repos never enter the response at all.
-    const allowed = isSuperAdmin ? serving : serving.filter((r) => authorizedRepoIds.has(r.repo_id));
+    // DEFAULT-OPEN (2026-10-16, read side only): in open mode a caller whose
+    // scopes grant nothing (empty set) is unrestricted — every serving repo
+    // is traversable, so an ingested+published repo is reachable by every
+    // regular user's query. A caller holding ANY effective scope keeps the
+    // exact list semantics (scopes restrict); null (superadmin/wildcard) is
+    // unrestricted in both modes. The WRITE side never sees this rule —
+    // repository-controller callerAuthz keeps the closed list.
+    const unrestricted =
+      isSuperAdmin ||
+      authorizedRepoIds === null ||
+      (isScopeModeOpen() && authorizedRepoIds.size === 0);
+    const allowed = unrestricted ? serving : serving.filter((r) => authorizedRepoIds.has(r.repo_id));
     const graph_names = allowed.map((r) => r.graph_name);
     const per_graph_labels = {};
     const domains = {};
@@ -51,16 +62,22 @@ async function resolveGraphSet(caller) {
       // (code-review 2026-09-20): two access patterns, one payload.
       domains[r.graph_name] = r.domain || null;
     }
+    const scopeMode = currentScopeMode();
     span.setAttribute('okf.authz.superadmin', isSuperAdmin);
+    span.setAttribute('okf.authz.scope_mode', scopeMode);
+    span.setAttribute('okf.authz.unrestricted', unrestricted);
     span.setAttribute('okf.authz.serving_count', serving.length);
     span.setAttribute('okf.authz.authorized_graphs', graph_names.length);
     logger.info('Graph set resolved', {
       superadmin: isSuperAdmin,
+      scope_mode: scopeMode,
+      unrestricted,
       serving: serving.length,
       authorized: graph_names.length
     });
     return {
       superadmin: isSuperAdmin,
+      scope_mode: scopeMode,
       graph_names,
       per_graph_labels,
       domains,
@@ -83,6 +100,4 @@ async function resolveGraphSet(caller) {
 
 // deriveScopeAuthz is re-exported for backward compatibility (the resolver was
 // its original home; the single authority now lives in scope-authz-service).
-module.exports = { deriveScopeAuthz, resolveGraphSet };
-
 module.exports = { deriveScopeAuthz, resolveGraphSet };

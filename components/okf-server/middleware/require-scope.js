@@ -60,8 +60,15 @@ function deny(res, message) {
  * Router-wide gate: the caller holds ANY okf scope at read-or-admin level
  * (exact or wildcard), or is the tools-admin bootstrap super-role.
  * @param {string} requiredLevel — 'read' (the only router-gate level today).
+ * @param {{allowScopelessWhenOpen?: boolean}} [opts] — when true, a caller
+ *        with ZERO effective okf scopes is admitted while OKF_SCOPE_MODE is
+ *        open (the default — DEFAULT-OPEN, product decision 2026-10-16).
+ *        Only the two chat-serving read routes mount this variant; the
+ *        router-wide gate and every per-repo gate keep the strict semantics,
+ *        so scopeless callers reach exactly the serving-graph reads and
+ *        nothing else. requireRepoScope NEVER accepts the option.
  */
-function requireScope(requiredLevel = 'read') {
+function requireScope(requiredLevel = 'read', opts = {}) {
   assertLevel(requiredLevel);
   const satisfies = LEVEL_SATISFIES[requiredLevel];
   return (req, res, next) => {
@@ -71,6 +78,19 @@ function requireScope(requiredLevel = 'read') {
       return !!p && satisfies(p.level);
     });
     if (has || req.okfIsSuperAdmin) return next();
+    if (opts.allowScopelessWhenOpen) {
+      // Lazy require: scope-authz-service imports parseOkfScope from THIS
+      // module, so a top-level require would be a load-order-dependent
+      // cycle. By call time both modules are fully loaded.
+      const { isScopeModeOpen } = require('../services/scope-authz-service');
+      if (isScopeModeOpen()) {
+        // Default-open: the read gate admits the scopeless caller. Logged,
+        // not audited — /authz/graphs is called per chat query and the audit
+        // table would fill with one row per question.
+        logger.info('OKF scope gate: default-open admits scopeless caller', { path: req.path });
+        return next();
+      }
+    }
     logger.warn('OKF authz denied: no okf scope', { sub: req.user && req.user.sub, path: req.path });
     auditDenial('authz.denied.scope', req);
     return deny(res, `This operation requires an okf ${requiredLevel} scope`);

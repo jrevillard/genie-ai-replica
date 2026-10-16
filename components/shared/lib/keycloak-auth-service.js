@@ -134,7 +134,7 @@ async function init(idpUrl) {
   try {
     res = await fetch(discoveryUrl, { signal: controller.signal });
   } catch (err) {
-    throw new Error(`OIDC discovery fetch failed (timeout/unreachable after ${discoveryTimeoutMs}ms): ${err.message}`);
+    throw new Error(`OIDC discovery fetch failed (timeout/unreachable after ${discoveryTimeoutMs}ms): ${err.message}`, { cause: err });
   } finally {
     clearTimeout(discoveryTimer);
   }

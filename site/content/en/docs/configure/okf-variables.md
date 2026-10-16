@@ -207,6 +207,21 @@ Waiting concepts — the normal case in a large backlog — are **never** reaped
 no matter how old they are or how deep the queue. Only claim state (a stale
 claim or too many attempts) triggers a dead-letter.
 
+## Access control mode (`OKF_SCOPE_MODE`)
+
+Controls which repositories a user's chat queries can reach. Full capability
+reference: [Access control](/docs/knowledge-base/access-control/).
+
+| Variable | Default | Values | Purpose |
+|---|---|---|---|
+| `OKF_SCOPE_MODE` | `open` | `open` \| `closed` | `open` — a user whose JWT carries no `okf:*` scopes is authorized for **all** serving repositories (the intended behavior: every ingested, published repo is queryable by every regular user). `closed` — the historical default-deny: no OKF repository reachable without a granted scope. |
+
+In both modes: a granted scope still restricts its holder to exactly the scoped
+repositories (scopes restrict — their absence no longer disables), and the
+write side (repo CRUD, ingest, lifecycle, governance) always requires an
+`admin` scope or the super-role. Flipping the value needs an okf-server
+container recreate, not a rebuild.
+
 ## Related variables
 
 These are set once per deployment and rarely touched; they are listed in the

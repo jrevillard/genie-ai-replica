@@ -705,6 +705,37 @@ describe('Configuration Validation Suite', () => {
     });
   });
 
+  // --- DEFAULT-OPEN OKF read authorization (product decision 2026-10-16).
+  // The mode flag is load-bearing in the OPPOSITE direction of the guard
+  // knobs: its default ('open') is what makes serving repos reachable by
+  // regular users, so a plumbing drift that silently made it 'closed' would
+  // shut every regular user out of OKF fan-out with no error anywhere —
+  // the exact silent-wrong class this file exists to catch. The scope
+  // authority reads it per call in scope-authz-service.js.
+  describe('DEFAULT-OPEN: OKF_SCOPE_MODE plumbing', () => {
+    test('OKF_SCOPE_MODE is piped in the okf-server compose block with the open default', () => {
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(/- OKF_SCOPE_MODE=\$\{OKF_SCOPE_MODE:-open\}/);
+    });
+
+    test('OKF_SCOPE_MODE is documented in the env template with the open default', () => {
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*OKF_SCOPE_MODE=open\s*(#.*)?$/m);
+    });
+
+    test('OKF_SCOPE_MODE is emitted by ansible env.j2 with the open default', () => {
+      const scopeVars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect({ name: 'OKF_SCOPE_MODE', found: !!scopeVars.OKF_SCOPE_MODE, default: scopeVars.OKF_SCOPE_MODE ? scopeVars.OKF_SCOPE_MODE.default : null }).toEqual({
+        name: 'OKF_SCOPE_MODE',
+        found: true,
+        default: 'open'
+      });
+    });
+  });
+
   // Story 1-8g: the Lab click-test reranks a query against the repo corpus
   // through the pipeline's TEI /rerank. Empty default = the probe answers
   // verdict=unknown with an honest note (never a fake score).

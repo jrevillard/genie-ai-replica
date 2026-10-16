@@ -60,8 +60,16 @@ Move all theme assets (frontend palette + brand JSON + Keycloak theme) to runtim
 ### Source-of-truth strategy
 
 - **Repo** (`components/gov-chat-frontend/public/config/`, `configs/keycloak/themes/genie/`) is the canonical source for default theme assets.
-- **Ansible** (`config_bootstrap` role) rsyncs the repo defaults into `/opt/genieai-<env>/config/` on every node at deploy time, **only if the destination directory is empty**. This preserves manual edits made directly on a node.
+- **Ansible** (`config_bootstrap` role) rsyncs repo defaults into `/opt/genieai-{{ env_name }}/config/` on every node at deploy time using `synchronize` with `delete: false` and `rsync_opts: [--ignore-existing]`. This:
+  - Skips files that already exist on the node (preserves manual operator edits made between deploys)
+  - Never deletes files that exist only on the node (no data loss)
+  - Idempotent: second invocation is a no-op (all files already present)
+- **rsync source paths** are computed from `playbook_dir` (role uses cross-tree rsync, not its own `files/` directory):
+  - `frontend`: `{{ playbook_dir }}/../../components/gov-chat-frontend/public/config/`
+  - `keycloak`: `{{ playbook_dir }}/../../configs/keycloak/themes/genie/`
+  - Avoids role-local file duplication that would drift from the canonical repo paths
 - **No shared filesystem** (NFS/CephFS) — Ansible is the single source-of-truth distributor, matching the existing deploy contract.
+- **`env_name`** is defined in `group_vars/all.yml` as the inventory group name (e.g., `main`, `test`, `itu_rtx_el_salvador`) and used in the role's `config_dir` default. Fallback in the role: `config_dir: "/opt/genieai-{{ env_name | default(group_names[0] | default('default')) }}/config"`.
 
 ### Mount strategy
 
@@ -75,21 +83,32 @@ Move all theme assets (frontend palette + brand JSON + Keycloak theme) to runtim
 ### Frontend (`components/gov-chat-frontend/`)
 
 - **Move**: `src/theme-variables.css` → `public/config/theme-variables.css`
-  - `public/` is Vite's passthrough directory (not bundled, copied verbatim to `dist/`)
+  - The Vue CLI `public/` directory is copied verbatim to `dist/` at build time (passthrough, not bundled)
   - The CSS is then served at runtime via `/config/theme-variables.css`
 - **`src/main.js`**:
   - Remove `import './theme-variables.css'` (line 24)
   - Existing `loadConfig()` already injects CSS custom properties from `genie-ai-config.json` (brand, colors, navbar, font) — no change needed
   - No further extension in this MR; future palette additions go through `genie-ai-config.json` schema
-- **`public/index.html`**: add `<link rel="stylesheet" href="/config/theme-variables.css">` before the existing `<script src="/config.js">`
-- **`nginx.conf`**: add a new `location /config/` block BEFORE the regex location that matches `.css`, with `Cache-Control: no-cache, must-revalidate`. The current regex `~* \.(js|css|...)` would otherwise impose `immutable, max-age=31536000` and break live updates.
+- **`public/index.html`**: add `<link rel="stylesheet" href="/config/theme-variables.css">` before the existing `<script src="/config.js">`. Add an HTML comment above the `<link>` documenting the load order contract: "CSS tokens load first; `main.js` overrides a runtime subset via `loadConfig()`."
+- **`public/config/theme-variables-fallback.css`** (NEW): a verbatim copy of the upstream `theme-variables.css` content shipped inside the image as a safety net. `index.html` `<link onerror>` fetches this file and inlines it via JS (no inline-style spaghetti of 50+ tokens in HTML). Single source of truth: the canonical file is the fallback file; update both together.
+- **`nginx.conf`**:
+  - Add `location ^~ /config/` block (note the `^~` modifier, NOT plain `location /config/`). The `^~` modifier tells nginx to use this prefix match as the priority match even when a regex location also matches — without it, the existing regex `~* \.(js|css|...)` wins regardless of source-file ordering and would still apply `Cache-Control: immutable, max-age=31536000` to `/config/*`, defeating the entire purpose.
+  - The block sets `Cache-Control: no-cache, must-revalidate`. Browsers send `If-Modified-Since` / `If-None-Match`; nginx returns `304 Not Modified` with the updated body when the file changed.
+  - **Coverage**: `/config/` covers `theme-variables.css`, `genie-ai-config.json`, splash assets, AND the relocated `config.js` (see below).
+- **`docker-entrypoint.sh` + `server.js`**: change `/config.js` → `/config/config.js` so the runtime-generated config file lives under the bind-mounted `config/` directory and inherits the no-cache policy. Update both the writer (entrypoint) and the loader (`index.html` `<script>` tag). This is the fix for the pre-existing immutable-cache bug on `/config.js` (out of scope for this MR originally, but trivial to include while `nginx.conf` is being touched).
 
 ### Keycloak (`configs/keycloak/`)
 
 - **Delete**: `configs/keycloak/Dockerfile` (no longer needed — upstream image provides defaults)
-- **Keep**: `configs/keycloak/themes/genie/login/{theme.properties, template.ftl}` and any `resources/css/*.css`
-- **`docker-compose.yaml`** (line 1578): replace `build: configs/keycloak/` with `image: quay.io/keycloak/keycloak:26.7`
-- Add bind mount for `/opt/keycloak/themes/genie/` (see Mount strategy above)
+- **Keep**: all four themed subdirectories under `configs/keycloak/themes/genie/`:
+  - `login/` — login pages
+  - `account/` — account console
+  - `admin/` — admin console
+  - `email/` — email templates (password reset, verify email, etc.)
+  - The realm config (`configs/keycloak/genie-realm.yaml`) sets all four theme types (`loginTheme`, `accountTheme`, `adminTheme`, `emailTheme`) to the same value via `KEYCLOAK_THEME`, so ALL FOUR subdirs must be present or the relevant flow silently reverts to upstream defaults. The El Salvador `!385` brand overhaul shipped assets across all four flows.
+- **`docker-compose.yaml`** (line 1578): replace `build: configs/keycloak/` with `image: quay.io/keycloak/keycloak:26.7.0` (exact patch pin for reproducibility; matches project pin-everything convention)
+- Add bind mount for `/opt/keycloak/themes/genie/` (see Mount strategy above). The mount source must contain all four subdirs; the rsync step in `config_bootstrap` covers the entire `themes/genie/` subtree, not just `themes/genie/login/`.
+- **CI impact**: deleting `configs/keycloak/Dockerfile` removes one image from the build matrix. Verify `.gitlab-ci.yml` does not reference `configs/keycloak/Dockerfile` paths in build, scan, promote, or smoke steps. Pipeline must build N-1 images post-merge.
 
 ### docker-compose.yaml
 
@@ -114,9 +133,9 @@ services:
 - **New role** `roles/config_bootstrap/`:
   - `tasks/main.yml`:
     - `file: path={{ config_dir }}/{{ item }} state=directory mode=0755` for `frontend/` and `keycloak/themes/genie/`
-    - `synchronize: src={{ role_path }}/files/frontend/ dest={{ config_dir }}/frontend/` (rsync, `delete: false`, only copies files that don't exist locally)
-    - Same for `keycloak/themes/genie/`
-  - `defaults/main.yml`: `config_dir: /opt/genieai-{{ env_name }}/config`
+    - `synchronize: src={{ playbook_dir }}/../../components/gov-chat-frontend/public/config/ dest={{ config_dir }}/frontend/ delete=false rsync_opts=["--ignore-existing"]`
+    - `synchronize: src={{ playbook_dir }}/../../configs/keycloak/themes/genie/ dest={{ config_dir }}/keycloak/themes/genie/ delete=false rsync_opts=["--ignore-existing"]`
+  - `defaults/main.yml`: `config_dir: "/opt/genieai-{{ env_name | default(group_names[0] | default('default')) }}/config"`
   - `meta/main.yml`: `galaxy_info` with author + dependencies
 
 - **`deploy.yml`**: new play with `tags: [config]` that applies the role to `[all]`. Update header comment to document the new tag.
@@ -125,7 +144,7 @@ services:
   - Add: `CONFIG_DIR_FRONTEND={{ config_dir }}/frontend`
   - Add: `CONFIG_DIR_KEYCLOAK={{ config_dir }}/keycloak`
 
-- **`group_vars/all.yml`**: no new entry needed (the var is local to the role's defaults).
+- **`group_vars/all.yml`**: add `env_name: "{{ group_names[0] | default('default') }}"` so the role's `config_dir` resolves consistently across inventory groups. The `env_name` value is used purely as a path component (e.g., `/opt/genieai-main/`, `/opt/genieai-test/`); it does not change deploy semantics.
 
 ## File-level change list
 
@@ -133,14 +152,20 @@ services:
 |------|--------|
 | `components/gov-chat-frontend/src/theme-variables.css` | DELETE |
 | `components/gov-chat-frontend/public/config/theme-variables.css` | CREATE (moved content) |
+| `components/gov-chat-frontend/public/config/theme-variables-fallback.css` | CREATE (verbatim copy of `theme-variables.css` for `<link onerror>` recovery) |
 | `components/gov-chat-frontend/src/main.js` | Remove `import './theme-variables.css'` |
-| `components/gov-chat-frontend/public/index.html` | Add `<link rel="stylesheet" href="/config/theme-variables.css">` |
-| `components/gov-chat-frontend/nginx.conf` | Add `location /config/` block with no-cache |
+| `components/gov-chat-frontend/public/index.html` | Add `<link rel="stylesheet" href="/config/theme-variables.css">` with `onerror`; relocate `<script src="/config.js">` to `<script src="/config/config.js">` |
+| `components/gov-chat-frontend/nginx.conf` | Add `location ^~ /config/` block (note: `^~`, not bare prefix) with `no-cache, must-revalidate` |
+| `components/gov-chat-frontend/docker-entrypoint.sh` | Update runtime config writer from `/app/dist/config.js` → `/app/dist/config/config.js` |
+| `components/gov-chat-frontend/public/config/.goutputstream-0J6X82` | DELETE (GIMP temp file, 211K, accidentally tracked) |
+| `components/gov-chat-frontend/public/config/splash.xcf` | DELETE (GIMP source file, 211K, accidentally tracked) |
 | `configs/keycloak/Dockerfile` | DELETE |
-| `docker-compose.yaml` | Replace keycloak `build:` with `image:`; add 2 bind mounts |
+| `docker-compose.yaml` | Replace keycloak `build:` with `image: quay.io/keycloak/keycloak:26.7.0`; add 2 bind mounts |
+| `.gitlab-ci.yml` | Remove `configs/keycloak/Dockerfile` from build matrix (one fewer image) |
 | `deploy/ansible/roles/config_bootstrap/` | NEW role |
 | `deploy/ansible/deploy.yml` | Add new play with `tags: [config]`; update docstring |
 | `deploy/ansible/templates/env.j2` | Add 2 new env vars |
+| `deploy/ansible/group_vars/all.yml` | Add `env_name: "{{ group_names[0] | default('default') }}"` |
 
 ## Error handling
 
@@ -150,7 +175,12 @@ services:
 
 ### Frontend: `/config/theme-variables.css` 404
 
-- New risk: page renders unstyled. Mitigation: `<link>` carries `onerror="document.head.appendChild(Object.assign(document.createElement('style'),{textContent:':root{--brand:#4071cb;--bg:#fff;--fg:#1a1a1a;--success:#22c55e;--warning:#f59e0b;--danger:#ef4444;--info:#3b82f6;}'}))"` as an inline fallback. Page degrades to default GENIE.AI palette instead of unstyled white.
+- New risk: page renders unstyled (or renders with only the 7 CSS vars that `loadConfig()` injects from `genie-ai-config.json`, leaving 40+ tokens unset). Mitigation: `<link>` carries an `onerror` handler that fetches `/config/theme-variables-fallback.css` (sibling file shipped inside the image), inlines its textContent into a `<style>` element, and removes the broken link. The fallback file is a verbatim copy of the canonical `theme-variables.css` at build time, kept in sync via the implementation commit. Single source of truth — the canonical file IS the fallback file; update both together (or symlink within the repo).
+
+### Frontend: `/config.js` cache staleness (pre-existing, fixed in this MR)
+
+- Pre-existing bug: `docker-entrypoint.sh` writes `/app/dist/config.js` at container start based on env vars, but the regex `nginx.conf` location `~* \.(js|css|...)` applies `Cache-Control: immutable, max-age=31536000`. Env-var-driven URL changes were invisible to browsers for up to 1 year.
+- Fix in this MR: relocate runtime config writer to `/app/dist/config/config.js` (under the bind-mounted `config/` directory), update `index.html` `<script>` tag, and let the new `location ^~ /config/` block apply `no-cache, must-revalidate`. Trivial to include while `nginx.conf` is being touched; otherwise we'd ship a half-fix.
 
 ### Keycloak: theme CSS missing
 
@@ -168,9 +198,11 @@ services:
   - `loadConfig()` mock `fetch` to return malformed JSON → assert error logged, fallback used
 
 - **Playwright E2E** (`tests/e2e/`):
-  - Fetch `/config/theme-variables.css` → assert `Cache-Control` header is `no-cache, must-revalidate`
-  - Fetch `/assets/index-*.js` (hashed asset) → assert `Cache-Control` header is `immutable, max-age=31536000`
-  - Edit `genie-ai-config.json` on a test fixture, restart container, fetch the page → assert new color applied (visual regression)
+  - Fetch `/config/theme-variables.css` → assert `Cache-Control` header is `no-cache, must-revalidate` (no `immutable`, no `max-age=31536000`)
+  - Fetch `/assets/index-*.js` (hashed asset) → assert `Cache-Control` header is `immutable, max-age=31536000` (unchanged from current behavior)
+  - Fetch `/config/config.js` (runtime-generated, after the relocation) → assert `Cache-Control` is `no-cache, must-revalidate` (fixes pre-existing stale-cache bug on env-var changes)
+  - Edit `genie-ai-config.json` on a test fixture, `page.reload()` (NOT hard reload), assert new color applied AND the network panel shows ONE request (the `304` revalidation), not two. This guards against accidental reintroduction of `immutable` on `/config/`.
+  - Edit `theme-variables.css` on the host, `docker service update --force frontend`, `page.reload()`, assert new token value applied. End-to-end acceptance test.
 
 - **Ansible smoke test**:
   - Run the role twice on a fresh VM → assert second run is no-op (`config_dir` already populated)

@@ -189,6 +189,17 @@ describe('resolveGraphSet DEFAULT-OPEN (OKF_SCOPE_MODE, product decision 2026-10
     expect(out.graph_names).toEqual([]);
   });
 
+  test('an explicitly EMPTY OKF_SCOPE_MODE is garbage, not absence — degrades to closed', async () => {
+    // Contract (env template): only the variable's ABSENCE means open; a
+    // present-but-empty value is a misconfigured pin attempt and must fail
+    // closed (compose passes it through via the unset-only ${VAR-open} form).
+    process.env.OKF_SCOPE_MODE = '';
+    seedServing([servingRow()]);
+    const out = await resolveGraphSet({ okfScopes: [], isSuperAdmin: false });
+    expect(out.scope_mode).toBe('closed');
+    expect(out.graph_names).toEqual([]);
+  });
+
   test('closed restores the historical default-deny for scopeless callers', async () => {
     process.env.OKF_SCOPE_MODE = 'closed';
     seedServing([servingRow()]);

@@ -690,7 +690,10 @@ services:
       # ingested+published repo. 'closed' — the historical default-deny
       # (nothing granted = nothing authorized). Any granted scope still
       # restricts to its exact list; the WRITE side is closed in both modes.
-      - OKF_SCOPE_MODE=${OKF_SCOPE_MODE:-open}
+      # Unset-only default (`-`, not `:-`): an explicitly EMPTY value must
+      # reach the container as explicit garbage and degrade to closed (with
+      # a warning), per the env-file contract — not silently become open.
+      - OKF_SCOPE_MODE=${OKF_SCOPE_MODE-open}
       # Story 2.9.1: service-account credentials for okf-server → doc-repo HTTP
       # (the okf-server Keycloak client provisioned by Story 6.1). Empty = calls
       # go unauthenticated and doc-repo rejects them (loud one-time warning).

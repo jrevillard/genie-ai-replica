@@ -19,7 +19,8 @@
 //
 // Failure policy (fail-closed — never escalates to fan-out on a config
 // outage): 401 propagates (the request itself is invalid — no silent legacy
-// fallback); 403 means the caller holds no okf read scope, so the per-caller
+// fallback); 403 means the caller holds no okf read scope OR the deployment
+// runs OKF_SCOPE_MODE=closed (default-deny) — either way the per-caller
 // serving view is empty by construction → legacy default; 5xx/network →
 // last-known-good config, else the legacy default (mode=legacy, engaged=false).
 // The resolved value (including the failure-resolved one) is cached for the
@@ -262,7 +263,12 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           typeof raw.config.mode === 'string' &&
           typeof raw.engaged === 'boolean'
         ) {
-          _lastGoodConfig = raw;
+          // Exposure boundary (2026-10-16): okf-server nulls config.updated_by
+          // for non-superadmin callers, but the last-known-good copy is
+          // served to ANY caller on upstream failure — keep the admin's
+          // identity sub out of the shared copy (the BFF itself reads only
+          // the posture fields; this is defense in depth).
+          _lastGoodConfig = { ...raw, config: { ...raw.config, updated_by: null } };
           return raw;
         }
         logger.warn('RetrievalConfigClient.malformed_config_response', {

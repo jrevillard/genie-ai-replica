@@ -16,24 +16,11 @@
 
 const { logger } = require('../shared-lib/logger');
 const { writeAudit } = require('../services/audit-service');
-
-const LEVELS = ['read', 'admin'];
-
-/** Parse `okf:{tenant}:{repo}:{read|admin}` → {tenant, repo, level} | null.
- * Level MUST be a grammar level — anything else (typos like 'write') is not a
- * scope and grants nothing. */
-function parseOkfScope(scope) {
-  if (typeof scope !== 'string') return null;
-  const parts = scope.split(':');
-  if (parts.length !== 4 || parts[0] !== 'okf') return null;
-  if (!LEVELS.includes(parts[3])) return null;
-  return { tenant: parts[1], repo: parts[2], level: parts[3] };
-}
-
-const LEVEL_SATISFIES = {
-  read: (level) => level === 'read' || level === 'admin',
-  admin: (level) => level === 'admin'
-};
+// Grammar + read verdict come from the SINGLE scope authority. Top-level is
+// safe: scope-authz-service imports nothing from THIS module (the grammar
+// lives there), so there is no cycle. parseOkfScope is re-exported below for
+// backward compatibility (2026-10-16 review fix — was a lazy require).
+const { parseOkfScope, LEVEL_SATISFIES, deriveReadAuthz } = require('../services/scope-authz-service');
 
 function assertLevel(level) {
   if (!LEVEL_SATISFIES[level]) {
@@ -68,6 +55,13 @@ function deny(res, message) {
  *        so scopeless callers reach exactly the serving-graph reads and
  *        nothing else. requireRepoScope NEVER accepts the option.
  */
+// Default-open admission logging: the fact ("open mode is on") is a
+// deployment-level constant, so log it ONCE per process — a per-request row
+// on every chat query would only double hot-path log volume (the handlers
+// already log scope_mode on every resolve). Not audited: /authz/graphs runs
+// per chat query and the audit table would fill with one row per question.
+let _admittedScopelessLogged = false;
+
 function requireScope(requiredLevel = 'read', opts = {}) {
   assertLevel(requiredLevel);
   const satisfies = LEVEL_SATISFIES[requiredLevel];
@@ -79,18 +73,19 @@ function requireScope(requiredLevel = 'read', opts = {}) {
     });
     if (has || req.okfIsSuperAdmin) return next();
     if (opts.allowScopelessWhenOpen) {
-      // Lazy require: scope-authz-service imports parseOkfScope from THIS
-      // module, so a top-level require would be a load-order-dependent
-      // cycle. By call time both modules are fully loaded. The open test is
-      // the RAW claim list (hasAnyScopeEntry) — a token whose okf entries
-      // are all malformed counts as "scoped" and stays denied, matching the
-      // resolver's DEFAULT-OPEN rule exactly.
-      const { isScopeModeOpen, hasAnyScopeEntry } = require('../services/scope-authz-service');
-      if (isScopeModeOpen() && !hasAnyScopeEntry(req.okfScopes)) {
-        // Default-open: the read gate admits the scopeless caller. Logged,
-        // not audited — /authz/graphs is called per chat query and the audit
-        // table would fill with one row per question.
-        logger.info('OKF scope gate: default-open admits scopeless caller', { path: req.path });
+      // The admission test is the authority's single read verdict
+      // (deriveReadAuthz) — never a local recomposition of the rule. For
+      // every caller reaching this branch (no grammar-valid scope, no
+      // super-role) it reduces to "open mode && RAW claim list empty": a
+      // token whose okf entries are all malformed counts as "scoped" and
+      // stays denied, matching the resolver's DEFAULT-OPEN rule exactly.
+      if (deriveReadAuthz(req.okfScopes, req.okfIsSuperAdmin).unrestricted) {
+        if (!_admittedScopelessLogged) {
+          _admittedScopelessLogged = true;
+          logger.info('OKF scope gate: default-open admits scopeless callers (OKF_SCOPE_MODE=open)', {
+            path: req.path
+          });
+        }
         return next();
       }
     }

@@ -15,27 +15,30 @@ const { withSpan } = require('../shared-lib/tracing');
 // tools-admin bootstrap super-role) gets 403 before any handler (Story 6.1).
 router.use(authenticate);
 
-// DEFAULT-OPEN serving reads (product decision 2026-10-16): the two
-// chat-path read endpoints mount BEFORE the router-wide scope gate with
+// DEFAULT-OPEN serving reads (product decision 2026-10-16): the chat-path
+// read endpoints live on a dedicated sub-router whose gate carries
 // allowScopelessWhenOpen — while OKF_SCOPE_MODE is open (the default), a
 // caller holding no okf scopes may read them, which is the whole point of
 // default-open: every regular user's query resolves the serving graph set.
-// In closed mode the option is inert and the historical gate applies. These
-// are the ONLY surfaces a scopeless caller reaches: every other route,
-// including all repo management and mutations, stays behind the strict
-// router gate + per-repo scopes below.
-router.get('/retrieval-config', requireScope('read', { allowScopelessWhenOpen: true }), retrievalConfigController.getRetrievalConfig);
-router.get('/authz/graphs', requireScope('read', { allowScopelessWhenOpen: true }), authzResolverController.getGraphs);
+// In closed mode the option is inert and the historical gate applies. The
+// sub-router is the ONLY surface a scopeless caller reaches: every other
+// route, including all repo management and mutations, stays behind the
+// strict router gate + per-repo scopes below. Registering a route HERE is
+// the single structural marker for "default-open serving read" — no
+// ordering-plus-option pair to keep in sync.
+const servingReads = express.Router();
+servingReads.use(requireScope('read', { allowScopelessWhenOpen: true }));
+servingReads.get('/retrieval-config', retrievalConfigController.getRetrievalConfig);
+servingReads.get('/authz/graphs', authzResolverController.getGraphs);
+router.use(servingReads);
 
 router.use(requireScope('read'));
 
 // Repository CRUD (Story 2.2) — inherits authenticate above.
 router.use('/repos', require('./repos-routes'));
 
-// Retrieval mode governance (Story 1.7, ADR-okf-039 D3): the read-model is
-// read-scoped (chat path service token + Studio card) — mounted ABOVE the
-// router gate with allowScopelessWhenOpen (default-open serving reads); the
-// governance write is tools-admin only and audited before→after in the service.
+// Retrieval mode governance (Story 1.7, ADR-okf-039 D3): the governance
+// write is tools-admin only and audited before→after in the service.
 router.put('/retrieval-config', requireRole('tools-admin'), retrievalConfigController.putRetrievalConfig);
 
 // Frontmatter (Story 1.6, 2026-10-07): read-by-default for the BFF/retriever

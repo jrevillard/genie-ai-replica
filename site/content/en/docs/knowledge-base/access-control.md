@@ -92,12 +92,15 @@ standard `scope` claim).
   first (see [Keycloak integration](#keycloak-integration)), otherwise every
   regular user loses OKF access entirely.
 - **How to flip it:** set `OKF_SCOPE_MODE=closed` in `.env` (Docker Compose)
-  or `group_vars` (Ansible) and recreate the okf-server container. The value
+  or `okf_scope_mode: closed` in `group_vars` (Ansible — the env template key
+  is snake_case; an `OKF_SCOPE_MODE:` key in group_vars is silently unused and
+  the deployment stays open) and recreate the okf-server container. The value
   is read per request; no rebuild is needed.
 - **Invalid values fail closed.** Only `open` and `closed` are recognized; the
-  variable's *absence* means `open`. An explicit typo (e.g. `OKF_SCOPE_MODE=opn`)
-  degrades to `closed` — a misconfigured attempt to pin a deployment must not
-  silently fail open.
+  variable's *absence* means `open`. An explicitly **empty** value counts as
+  invalid, not as absent. An explicit typo (e.g. `OKF_SCOPE_MODE=opn`)
+  degrades to `closed` with a warning in the okf-server log — a misconfigured
+  attempt to pin a deployment must not silently fail open.
 - **Any granted scope still restricts its holder in both modes.** Open mode is
   not "ignore scopes"; it is "absence of scopes is not a denial". A token
   carrying okf scope entries that are all malformed (e.g. wrong level or

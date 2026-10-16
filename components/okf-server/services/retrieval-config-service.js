@@ -41,7 +41,7 @@ const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { isArangoNotFound, isArangoConflict } = require('./arango-errors');
-const { deriveScopeAuthz, currentScopeMode, isScopeModeOpen, hasAnyScopeEntry } = require('./scope-authz-service');
+const { deriveReadAuthz } = require('./scope-authz-service');
 const config = require('../config');
 const { workingGraphName } = require('./graph-lifecycle-service');
 const auditService = require('./audit-service');
@@ -234,25 +234,23 @@ function _resetFrontmatterSummaryCache(repoId) {
  */
 async function getRetrievalConfig(caller = {}) {
   return withSpan('okf.retrieval_config.get', async (span) => {
-    const { isSuperAdmin, authorizedRepoIds } = deriveScopeAuthz(caller.okfScopes, caller.isSuperAdmin);
+    const { authorizedRepoIds, scopeMode, unrestricted } = deriveReadAuthz(caller.okfScopes, caller.isSuperAdmin);
     const { config: cfg, source } = await getEffectiveConfig();
     // DEFAULT-OPEN exposure control (2026-10-16): the GET is reachable by
     // scopeless callers now, and `updated_by` is the governing admin's
     // Keycloak sub — identity metadata the chat path has no use for. It
-    // stays visible ONLY to the superadmin (the Studio governance card).
-    if (!caller.isSuperAdmin && cfg && typeof cfg === 'object') {
+    // stays visible ONLY to the tools-admin super-role: the check is
+    // DELIBERATELY the RAW caller flag, not deriveScopeAuthz's
+    // wildcard-equivalent — a wildcard steward token is reach-equivalent to
+    // an admin but is not the admin identity (pinned by test).
+    if (!caller.isSuperAdmin) {
       cfg.updated_by = null;
     }
     const allServing = await servingRepos();
-    // DEFAULT-OPEN (2026-10-16, read side only): see the docstring. Mirrors
-    // resolveGraphSet exactly — the two views must never disagree about what
-    // a caller may reach, or the carrier and the engaged gate diverge. The
-    // open test is the RAW claim list (hasAnyScopeEntry) — malformed-only
-    // tokens stay closed-list.
-    const unrestricted =
-      isSuperAdmin ||
-      authorizedRepoIds === null ||
-      (isScopeModeOpen() && !hasAnyScopeEntry(caller.okfScopes));
+    // DEFAULT-OPEN (2026-10-16, read side only): see the docstring. The
+    // unrestricted verdict is the SINGLE scope authority's deriveReadAuthz —
+    // the same rule /authz/graphs and the scope gate use, so this serving
+    // view and the carrier can never disagree about what a caller may reach.
     const serving = unrestricted ? allServing : allServing.filter((r) => authorizedRepoIds.has(r.repo_id));
     const servingCount = serving.length;
     // WHITELIST, not negation: only a known non-legacy mode engages (a
@@ -271,7 +269,7 @@ async function getRetrievalConfig(caller = {}) {
     return {
       config: cfg,
       source,
-      scope_mode: currentScopeMode(),
+      scope_mode: scopeMode,
       serving_graph_count: servingCount,
       serving_repo_ids: serving.map((r) => r.repo_id),
       serving_graphs: serving.map((r) => ({ repo_id: r.repo_id, graph_name: r.graph_name, domain: r.domain })),

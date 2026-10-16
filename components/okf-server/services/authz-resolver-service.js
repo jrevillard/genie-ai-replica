@@ -24,7 +24,7 @@
 
 const { DateTime } = require('luxon');
 const { servingRepos, SERVING_TTL_MS } = require('./retrieval-config-service');
-const { deriveScopeAuthz, currentScopeMode, isScopeModeOpen, hasAnyScopeEntry } = require('./scope-authz-service');
+const { deriveScopeAuthz, deriveReadAuthz } = require('./scope-authz-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 
@@ -35,24 +35,20 @@ const { withSpan } = require('../shared-lib/tracing');
  */
 async function resolveGraphSet(caller) {
   return withSpan('okf.authz.resolve_graph_set', async (span) => {
-    const { isSuperAdmin, authorizedRepoIds } = deriveScopeAuthz(caller.okfScopes, caller.isSuperAdmin);
+    const { isSuperAdmin, authorizedRepoIds, scopeMode, unrestricted } = deriveReadAuthz(
+      caller.okfScopes,
+      caller.isSuperAdmin
+    );
     const serving = await servingRepos();
     // The intersection IS the zero-hit guarantee: only serving rows whose
     // repo_id the caller is authorized for survive — unauthorized (or
-    // draft/retracted) repos never enter the response at all.
-    // DEFAULT-OPEN (2026-10-16, read side only): in open mode a caller whose
-    // token carries NO okf scope entry at all is unrestricted — every serving
-    // repo is traversable, so an ingested+published repo is reachable by
-    // every regular user's query. The test is the RAW claim list (see
-    // hasAnyScopeEntry): malformed-only tokens stay closed-list. A caller
-    // holding ANY scope entry keeps the exact list semantics (scopes
-    // restrict); null (superadmin/wildcard) is unrestricted in both modes.
-    // The WRITE side never sees this rule — repository-controller callerAuthz
-    // keeps the closed list.
-    const unrestricted =
-      isSuperAdmin ||
-      authorizedRepoIds === null ||
-      (isScopeModeOpen() && !hasAnyScopeEntry(caller.okfScopes));
+    // draft/retracted) repos never enter the response at all. The
+    // DEFAULT-OPEN unrestricted verdict comes from the SINGLE scope
+    // authority (deriveReadAuthz — open mode + RAW-claim-list test,
+    // malformed-only tokens stay closed-list), so this view, the
+    // retrieval-config serving view and the scope gate can never drift
+    // apart. The WRITE side never sees that rule — repository-controller
+    // callerAuthz keeps the closed list.
     const allowed = unrestricted ? serving : serving.filter((r) => authorizedRepoIds.has(r.repo_id));
     const graph_names = allowed.map((r) => r.graph_name);
     const per_graph_labels = {};
@@ -64,7 +60,6 @@ async function resolveGraphSet(caller) {
       // (code-review 2026-09-20): two access patterns, one payload.
       domains[r.graph_name] = r.domain || null;
     }
-    const scopeMode = currentScopeMode();
     span.setAttribute('okf.authz.superadmin', isSuperAdmin);
     span.setAttribute('okf.authz.scope_mode', scopeMode);
     span.setAttribute('okf.authz.unrestricted', unrestricted);

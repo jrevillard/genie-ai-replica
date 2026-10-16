@@ -1256,7 +1256,10 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # OKF_SCOPE_MODE=open
 #   Default: open (when the variable is ABSENT). Values: open | closed.
 #   An EXPLICIT garbage value degrades to closed (a misconfigured attempt to
-#   pin the deployment must not silently fail open).
+#   pin the deployment must not silently fail open). An EMPTY value counts as
+#   explicit garbage, not as absence (compose uses the unset-only ${VAR-open}
+#   form so an empty setting reaches the container and degrades to closed
+#   with a logged warning).
 #   Used by: okf-server (read side).
 #   Compose: yes. Ansible: yes (okf_scope_mode).
 #   DEFAULT-OPEN OKF read authorization (product decision 2026-10-16):

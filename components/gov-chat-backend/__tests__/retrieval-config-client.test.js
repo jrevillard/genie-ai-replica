@@ -124,16 +124,27 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(axios.get).toHaveBeenCalledTimes(2);
   });
 
-  it('okf-server 5xx: serves the last-known-good config', async () => {
-    axios.get.mockReturnValueOnce(okfGetResponse(HYBRID_CONFIG)).mockImplementationOnce(() => okfGetError(503)); // rejection created at CALL time
+  it('okf-server 5xx: serves the last-known-good config (identity-sanitized)', async () => {
+    axios.get
+      .mockReturnValueOnce(
+        okfGetResponse({ ...HYBRID_CONFIG, config: { ...HYBRID_CONFIG.config, updated_by: 'steward-9' } })
+      )
+      .mockImplementationOnce(() => okfGetError(503)); // rejection created at CALL time
     const bearer = makeBearer(['okf:t:a:read']);
 
     const good = await client.getRetrievalConfig(bearer);
+    expect(good.config.updated_by).toBe('steward-9'); // the caller's own response is verbatim
     nowMs += REAL_TTL_MS + 1;
     const degraded = await client.getRetrievalConfig(bearer);
 
-    expect(degraded).toBe(good); // the LKG object verbatim
+    // Posture fields survive verbatim from the last-known-good...
     expect(degraded.engaged).toBe(true);
+    expect(degraded.config.mode).toBe('hybrid');
+    expect(degraded.serving_repo_ids).toEqual(['a', 'b']);
+    // ...but the shared LKG copy never carries the governing admin's sub:
+    // it is served to ANY caller on upstream failure, so the okf-server's
+    // per-caller updated_by redaction must hold on this side too.
+    expect(degraded.config.updated_by).toBeNull();
   });
 
   it('okf-server 401: throws the typed error (propagates, never cached into a stale lockout)', async () => {

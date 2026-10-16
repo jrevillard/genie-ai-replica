@@ -240,30 +240,24 @@ class TestModelCacheMaxModelLen:
 
         assert result is None
 
-    def test_id_and_len_share_one_probe(self):
-        """get_model_id and get_max_model_len hit /v1/models once for both values."""
+    @pytest.mark.parametrize("access_order", [["id", "len"], ["len", "id"]])
+    def test_id_and_len_share_one_probe(self, access_order):
+        """get_model_id and get_max_model_len hit /v1/models once for both
+        values, in either access order."""
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": 8192}]}
 
-        with patch("httpx.get", return_value=mock_resp) as mock_get:
-            model_id = get_model_id("https://gpu-host/llm", ttl_seconds=60)
-            model_len = get_max_model_len("https://gpu-host/llm", ttl_seconds=60)
-
-        assert model_id == "model-a"
-        assert model_len == 8192
-        assert mock_get.call_count == 1
-
-    def test_len_and_id_share_one_probe(self):
-        """Same, other access order — len first, id second."""
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": 8192}]}
+        accessors = {
+            "id": lambda: get_model_id("https://gpu-host/llm", ttl_seconds=60),
+            "len": lambda: get_max_model_len("https://gpu-host/llm", ttl_seconds=60),
+        }
 
         with patch("httpx.get", return_value=mock_resp) as mock_get:
-            model_len = get_max_model_len("https://gpu-host/llm", ttl_seconds=60)
-            model_id = get_model_id("https://gpu-host/llm", ttl_seconds=60)
+            first, second = accessors[access_order[0]](), accessors[access_order[1]]()
 
-        assert model_len == 8192
-        assert model_id == "model-a"
+        values = {"id": "model-a", "len": 8192}
+        assert first == values[access_order[0]]
+        assert second == values[access_order[1]]
         assert mock_get.call_count == 1
 
     def test_stale_max_model_len_served_on_probe_failure(self):

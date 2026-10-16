@@ -157,7 +157,7 @@ rather than a confident-but-wrong answer.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `MULTI_TURN_MODE` | `blend` | Mode selector. `blend` (default) keeps the vector-space blending path above. `condense` switches to the standalone-query rewrite. Unknown values fall through to `blend`. |
+| `MULTI_TURN_MODE` | `blend` | Mode selector. Only the exact string `condense` (after `strip().lower()`) enters the condense branch — anything else skips it. Vector-space blending runs in the `elif` branch, gated on `MULTI_TURN_BLEND_ENABLED=true` AND `MULTI_TURN_HISTORY_TURNS > 0`. A typo'd mode with blend disabled (the default) falls through to stateless retrieval on the raw query — neither condense nor blend runs. |
 | `MULTI_TURN_CONDENSE_HISTORY_TURNS` | `4` | Number of prior conversation segments fed to the condense rewrite prompt. Only consulted when `MULTI_TURN_MODE=condense`; the blend path keeps its own `MULTI_TURN_HISTORY_TURNS` knob. |
 
 Setting `MULTI_TURN_MODE=condense` while `MULTI_TURN_BLEND_ENABLED=true`
@@ -194,9 +194,10 @@ Attributes:
 | `genie.condense.prompt_tokens` | `ok` only | Tokens consumed by the condense prompt. |
 | `genie.condense.completion_tokens` | `ok` only | Tokens emitted by the condense response. |
 
-In Grafana's RAG pipeline waterfall, `chatqna.query_condense` appears
-between `chatqna.orchestrate` and the retriever leg for any multi-turn
-turn where history is present; single-turn queries never open it.
+In Grafana's RAG pipeline waterfall, `chatqna.query_condense` precedes
+`chatqna.orchestrate` on every condense-mode turn where history is
+present; the two spans are siblings (not nested), with condense first.
+Single-turn queries never open it.
 
 ### Verification
 

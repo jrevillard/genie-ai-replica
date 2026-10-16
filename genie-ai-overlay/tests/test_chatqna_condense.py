@@ -404,6 +404,29 @@ class TestHandleRequestCondenseWiring:
         # condense span emission behind the orchestrate one.
         mock_tracer.start_as_current_span.assert_any_call("chatqna.query_condense")
 
+    @pytest.mark.asyncio
+    async def test_condense_history_turns_zero_skips_rewrite(self):
+        """MULTI_TURN_CONDENSE_HISTORY_TURNS=0 disables the rewrite path,
+        mirroring the documented blend-path behavior of MULTI_TURN_HISTORY_TURNS=0
+        (chatqna.py:2373). ``_extract_history_text`` returns "" for n<=0
+        (chatqna.py:409), so the condense branch takes its no-history skip:
+        ``_condense_query`` is NOT awaited, the raw last message becomes the
+        retrieval query, and no ``condense_raw_query`` key is forwarded to
+        the megaservice. Pins the "0 disables" behavior."""
+        svc = self._svc_with_schedule()  # multi-segment history blob
+        condense = AsyncMock(return_value="should not be called")
+        with (
+            self._patches(),
+            patch.object(chatqna_module, "MULTI_TURN_MODE", "condense"),
+            patch.object(chatqna_module, "MULTI_TURN_CONDENSE_HISTORY_TURNS", 0),
+            patch.object(ChatQnAService, "_condense_query", new=condense),
+        ):
+            await svc.handle_request(self._req())
+        condense.assert_not_awaited()
+        call = svc.megaservice.schedule.await_args
+        assert call.kwargs["initial_inputs"]["text"] == "maize instead"
+        assert "condense_raw_query" not in call.kwargs["genie_params"]
+
 
 # ---------------------------------------------------------------------------
 # Task 4: RAG-prompt raw-query override at both align_outputs sites (issue #1091)

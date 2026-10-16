@@ -1,12 +1,20 @@
 const { CompositePropagator, W3CBaggagePropagator, W3CTraceContextPropagator } = require('@opentelemetry/core');
 const { context, defaultTextMapSetter, propagation } = require('@opentelemetry/api');
 
-// @opentelemetry/core v2 dropped the default argument: `inject(context, carrier,
-// setter)` requires an explicit setter when the propagator instance is called
-// directly (only the global `propagation.inject` still defaults it). A missing
-// setter is NOT a loud failure — CompositePropagator catches the resulting
-// TypeError and emits a diag warning, so the carrier simply comes out empty and
-// the run looks like "no baggage was ever set".
+// DO NOT "simplify" the `defaultTextMapSetter` argument away from the inject
+// calls below.
+//
+// In @opentelemetry/core v2, `inject(context, carrier, setter)` has NO default
+// setter — only the global `propagation.inject` supplies one. And the failure is
+// silent: CompositePropagator catches the resulting TypeError and emits a diag
+// warning, so a missing setter leaves the carrier empty and the run reads as
+// "no baggage was ever set" rather than as an error. Dropping the argument
+// therefore produces a silently degraded trace with a green suite.
+//
+// Production is unaffected: the SDK installs this propagator as the global, and
+// the instrumentation path goes through the global, which does default the
+// setter. The explicit argument is only needed when calling the instance by hand,
+// which is what this test does.
 
 describe('query correlation propagator', () => {
   const baggage = require('../tracing-baggage');

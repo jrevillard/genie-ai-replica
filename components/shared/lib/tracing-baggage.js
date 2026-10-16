@@ -10,6 +10,13 @@ const { context, propagation } = require('@opentelemetry/api');
  * trace-context-only propagator here is what makes the two sides asymmetric,
  * and `genie.query_id` would never reach chatqna.
  *
+ * Injection goes through the global propagator installed on the SDK, whose
+ * `inject` supplies the default setter. Calling this propagator's `inject`
+ * directly is a different story: @opentelemetry/core v2 gives the setter no
+ * default, and CompositePropagator swallows the resulting TypeError as a
+ * diag warning, so a missing setter is indistinguishable from "no baggage".
+ * Pass `defaultTextMapSetter` explicitly if you ever call it by hand.
+ *
  * @returns {CompositePropagator}
  */
 function createGeniePropagator() {

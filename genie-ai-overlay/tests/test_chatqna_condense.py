@@ -24,6 +24,15 @@ from chatqna.genieai_chatqna import (
     _parse_condense_response,
 )
 
+# Hoisted from the per-test lazy imports that pre-dated this file's
+# refactor: the comps mocks are pre-populated by tests/conftest.py before
+# collection, so the import order is safe at module top.
+from tests.test_chatqna import (
+    _fake_parms,
+    create_chatqna_service,
+    create_mock_request,
+)
+
 
 class TestCondensePromptAssembly:
     def test_user_content_places_history_then_latest_message(self):
@@ -138,34 +147,49 @@ def _make_httpx_response(status_code=200, json_data=None, text=None):
     return resp
 
 
+def _make_fake_client(post):
+    """Return a class whose ``AsyncClient.post`` delegates to ``post``.
+
+    Five pre-refactor ``_FakeClient`` classes inlined an identical
+    ``__init__`` / ``__aenter__`` / ``__aexit__`` skeleton — only ``post``
+    varied. The factory collapses them into one; each test defines a small
+    ``_post(url, json=..., headers=...)`` and patches the AsyncClient symbol
+    with ``_make_fake_client(_post)``. ``post`` may be a regular function
+    (sync body is fine — ``__init__`` and ``__aenter__`` stay async).
+    """
+
+    class _FakeClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            return post(url, json=json, headers=headers)
+
+    return _FakeClient
+
+
 class TestCondenseQueryCall:
     """_condense_query: endpoint/model resolution, payload shape, span attrs."""
 
     @pytest.mark.asyncio
     async def test_ok_returns_query_and_sends_frozen_payload(self):
-        from tests.test_chatqna import create_chatqna_service
-
         svc = create_chatqna_service()
         captured = {}
 
-        class _FakeClient:
-            def __init__(self, *a, **kw):
-                pass
-
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *a):
-                return False
-
-            async def post(self, url, json=None, headers=None):
-                captured.update(url=url, json=json, headers=headers)
-                return _make_httpx_response(json_data=_condense_response_payload())
+        def _post(url, json=None, headers=None):
+            captured.update(url=url, json=json, headers=headers)
+            return _make_httpx_response(json_data=_condense_response_payload())
 
         with (
             patch.object(chatqna_module, "_get_llm_model", return_value="granite-4.1-8b"),
             patch.object(chatqna_module, "OPENAI_API_KEY", "test-key"),
-            patch.object(chatqna_module.httpx, "AsyncClient", _FakeClient),
+            patch.object(chatqna_module.httpx, "AsyncClient", _make_fake_client(_post)),
         ):
             query = await svc._condense_query("USER: bean?\nASSISTANT: EAC ...", "maize instead")
 
@@ -190,8 +214,6 @@ class TestCondenseQueryCall:
         other attrs (``mode`` / ``status`` / ``latency_ms``) still go through
         ``sanitize_attributes``. This test pins that the raw path is taken
         for the counters and that they reach the span verbatim."""
-        from tests.test_chatqna import create_chatqna_service
-
         svc = create_chatqna_service()
         tracer = MagicMock()
         span = MagicMock()
@@ -199,25 +221,14 @@ class TestCondenseQueryCall:
         span.__exit__ = MagicMock(return_value=False)
         tracer.start_as_current_span.return_value = span
 
-        class _FakeClient:
-            def __init__(self, *a, **kw):
-                pass
-
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *a):
-                return False
-
-            async def post(self, url, json=None, headers=None):
-                # usage carries the two counter values that must surface on
-                # the span.
-                return _make_httpx_response(json_data=_condense_response_payload())
+        def _post(url, json=None, headers=None):
+            # usage carries the two counter values that must surface on the span.
+            return _make_httpx_response(json_data=_condense_response_payload())
 
         with (
             patch.object(chatqna_module, "_get_llm_model", return_value="granite-4.1-8b"),
             patch.object(chatqna_module, "OPENAI_API_KEY", "test-key"),
-            patch.object(chatqna_module.httpx, "AsyncClient", _FakeClient),
+            patch.object(chatqna_module.httpx, "AsyncClient", _make_fake_client(_post)),
             patch.object(chatqna_module, "get_tracer", return_value=tracer),
             # chatqna imports sanitize_attributes from `metrics` (a MagicMock
             # in conftest). Restore the real one so the sanitized dict is
@@ -253,24 +264,15 @@ class TestCondenseQueryCall:
         ],
     )
     async def test_transport_failures_map_to_503(self, exc, reason):
-        from tests.test_chatqna import create_chatqna_service
-
         svc = create_chatqna_service()
 
-        class _FakeClient:
-            def __init__(self, *a, **kw):
-                pass
+        def _post(url, json=None, headers=None):
+            raise exc
 
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *a):
-                return False
-
-            async def post(self, url, json=None, headers=None):
-                raise exc
-
-        with patch.object(chatqna_module.httpx, "AsyncClient", _FakeClient), pytest.raises(HTTPException) as ei:
+        with (
+            patch.object(chatqna_module.httpx, "AsyncClient", _make_fake_client(_post)),
+            pytest.raises(HTTPException) as ei,
+        ):
             await svc._condense_query("h", "m")
         assert ei.value.status_code == 503
         assert ei.value.detail["error"] == "condense_failed"
@@ -287,8 +289,6 @@ class TestCondenseQueryCall:
         ],
     )
     async def test_decode_failures_map_to_503(self, json_data, reason):
-        from tests.test_chatqna import create_chatqna_service
-
         svc = create_chatqna_service()
         resp = _make_httpx_response(
             text="not json" if json_data is None else None,
@@ -297,45 +297,29 @@ class TestCondenseQueryCall:
         if json_data is None:
             resp.json.side_effect = json_module.JSONDecodeError("x", "d", 0)
 
-        class _FakeClient:
-            def __init__(self, *a, **kw):
-                pass
+        def _post(url, json=None, headers=None):
+            return resp
 
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *a):
-                return False
-
-            async def post(self, url, json=None, headers=None):
-                return resp
-
-        with patch.object(chatqna_module.httpx, "AsyncClient", _FakeClient), pytest.raises(HTTPException) as ei:
+        with (
+            patch.object(chatqna_module.httpx, "AsyncClient", _make_fake_client(_post)),
+            pytest.raises(HTTPException) as ei,
+        ):
             await svc._condense_query("h", "m")
         assert ei.value.status_code == 503
         assert ei.value.detail["reason"] == reason
 
     @pytest.mark.asyncio
     async def test_http_5xx_maps_to_503(self):
-        from tests.test_chatqna import create_chatqna_service
-
         svc = create_chatqna_service()
         resp = _make_httpx_response(status_code=500, json_data={"error": "internal"})
 
-        class _FakeClient:
-            def __init__(self, *a, **kw):
-                pass
+        def _post(url, json=None, headers=None):
+            return resp
 
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *a):
-                return False
-
-            async def post(self, url, json=None, headers=None):
-                return resp
-
-        with patch.object(chatqna_module.httpx, "AsyncClient", _FakeClient), pytest.raises(HTTPException) as ei:
+        with (
+            patch.object(chatqna_module.httpx, "AsyncClient", _make_fake_client(_post)),
+            pytest.raises(HTTPException) as ei,
+        ):
             await svc._condense_query("h", "m")
         assert ei.value.status_code == 503
         assert ei.value.detail["reason"] == "http_error"
@@ -354,8 +338,6 @@ class TestHandleRequestCondenseWiring:
     def _svc_with_schedule(
         history_blob: str = _DEFAULT_HISTORY_BLOB,
     ):
-        from tests.test_chatqna import create_chatqna_service
-
         svc = create_chatqna_service()
         svc.megaservice.schedule = AsyncMock(return_value=({"llm": {"text": "ok"}}, {}))
         svc._get_translated_history_string = AsyncMock(return_value=history_blob)
@@ -365,8 +347,6 @@ class TestHandleRequestCondenseWiring:
 
     @staticmethod
     def _req():
-        from tests.test_chatqna import create_mock_request
-
         return create_mock_request(
             data={"messages": [{"role": "user", "content": "x"}], "model": "m"},
             headers={"Authorization": "Bearer tok"},
@@ -375,8 +355,6 @@ class TestHandleRequestCondenseWiring:
     @staticmethod
     def _patches():
         from contextlib import ExitStack
-
-        from tests.test_chatqna import _fake_parms
 
         # Bundle the fixtures into a single context manager so callers can
         # write ``with self._patches():`` instead of unpacking five patches.

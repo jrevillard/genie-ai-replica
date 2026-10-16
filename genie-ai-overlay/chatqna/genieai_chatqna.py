@@ -804,6 +804,57 @@ def _gp(kwargs: dict, key: str, default=None):
     return kwargs.get(key, default)
 
 
+def _condense_raw_or(kwargs, default):
+    """Return the condense-mode raw last message (issue #1091), or ``default``.
+
+    ``condense_raw_query`` is the RAW last user message forwarded through
+    ``genie_params`` in condense mode; the rewritten query is retrieval/rerank
+    input only and must never enter the answer-LLM prompt. When the key is
+    absent (default-blend / single-turn / condense-no-history skip), the
+    caller's existing value is preserved bit-for-bit.
+    """
+    raw = _gp(kwargs, "condense_raw_query", None)
+    return raw if raw is not None else default
+
+
+def _condense_span_attrs(span, status, latency_ms):
+    """Emit the three condense span attrs that go through ``sanitize_attributes``.
+
+    Used by the ok path, the merged-failure path, and the no-history skip path.
+    The two token counters (prompt_tokens / completion_tokens) intentionally
+    bypass this helper — the PII regex in ``tracing._PII_KEY_PATTERNS`` would
+    drop any key containing ``token``, and they carry no PII (integer counts
+    only). The ok path keeps the raw ``span.set_attribute`` calls.
+    """
+    span.set_attributes(
+        sanitize_attributes(
+            {
+                "genie.condense.mode": MULTI_TURN_MODE,
+                "genie.condense.status": status,
+                "genie.condense.latency_ms": latency_ms,
+            }
+        )
+    )
+
+
+def _raise_condense_503(reason, exc):
+    """Raise the fail-closed condense envelope (issue #1091).
+
+    Byte-identical to the pre-refactor on-the-wire response: a single
+    ``{"error", "reason", "message"}`` dict under ``HTTPException(503).detail``.
+    ``reason`` classifies the failure so callers / dashboards can tell
+    timeout vs http_error vs parse apart.
+    """
+    raise HTTPException(
+        status_code=503,
+        detail={
+            "error": "condense_failed",
+            "reason": reason,
+            "message": "Query rewriting failed; this turn cannot be answered reliably. Please retry.",
+        },
+    ) from exc
+
+
 def _build_filter_labels(retrieval_context: dict) -> list[str]:
     """Build the retriever filter-label list from the retrieval context.
 
@@ -1574,9 +1625,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             # Condense mode (issue #1091): the RAG prompt question is the RAW
             # last user message; the rewritten standalone query is retrieval and
             # rerank input only — it must never enter the answer-LLM prompt.
-            _condense_raw = _gp(kwargs, "condense_raw_query", None)
-            if _condense_raw is not None:
-                received_prompt = _condense_raw
+            received_prompt = _condense_raw_or(kwargs, received_prompt)
 
             if str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
                 abstention_instructions = (
@@ -1679,9 +1728,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         # Condense mode (issue #1091): the RAG prompt question is the RAW
         # last user message; the rewritten standalone query is retrieval and
         # rerank input only — it must never enter the answer-LLM prompt.
-        _condense_raw = _gp(kwargs, "condense_raw_query", None)
-        if _condense_raw is not None:
-            initial_query = _condense_raw
+        initial_query = _condense_raw_or(kwargs, initial_query)
 
         # System instructions for integration of retrieved documents are already included in the CHATQNA_SYSTEM_PROMPT
         # OPTIONAL:
@@ -2540,58 +2587,20 @@ class ChatQnAService:
                 # (integer counts only). Repo precedent: dataprep emits
                 # `dataprep.llm.prompt_tokens` / `completion_tokens` via raw
                 # `span.set_attribute` for exactly this reason.
-                span.set_attributes(
-                    sanitize_attributes(
-                        {
-                            "genie.condense.mode": MULTI_TURN_MODE,
-                            "genie.condense.status": "ok",
-                            "genie.condense.latency_ms": round((time.monotonic() - _start) * 1000),
-                        }
-                    )
-                )
+                _condense_span_attrs(span, "ok", round((time.monotonic() - _start) * 1000))
                 span.set_attribute("genie.condense.prompt_tokens", usage.get("prompt_tokens", 0))
                 span.set_attribute("genie.condense.completion_tokens", usage.get("completion_tokens", 0))
                 logger.debug(f"Condense rewrite ok: {standalone_query}")
                 return standalone_query
-            except CondenseError as e:
-                span.set_attributes(
-                    sanitize_attributes(
-                        {
-                            "genie.condense.mode": MULTI_TURN_MODE,
-                            "genie.condense.status": "failed",
-                            "genie.condense.latency_ms": round((time.monotonic() - _start) * 1000),
-                        }
-                    )
+            except (CondenseError, httpx.TimeoutException, httpx.HTTPError) as e:
+                reason = (
+                    e.reason
+                    if isinstance(e, CondenseError)
+                    else ("timeout" if isinstance(e, httpx.TimeoutException) else "http_error")
                 )
-                logger.warning(f"Condense rewrite failed ({e.reason}): {e}")
-                raise HTTPException(
-                    status_code=503,
-                    detail={
-                        "error": "condense_failed",
-                        "reason": e.reason,
-                        "message": "Query rewriting failed; this turn cannot be answered reliably. Please retry.",
-                    },
-                ) from e
-            except (httpx.TimeoutException, httpx.HTTPError) as e:
-                reason = "timeout" if isinstance(e, httpx.TimeoutException) else "http_error"
-                span.set_attributes(
-                    sanitize_attributes(
-                        {
-                            "genie.condense.mode": MULTI_TURN_MODE,
-                            "genie.condense.status": "failed",
-                            "genie.condense.latency_ms": round((time.monotonic() - _start) * 1000),
-                        }
-                    )
-                )
-                logger.warning(f"Condense rewrite transport failure: {type(e).__name__}: {e}")
-                raise HTTPException(
-                    status_code=503,
-                    detail={
-                        "error": "condense_failed",
-                        "reason": reason,
-                        "message": "Query rewriting failed; this turn cannot be answered reliably. Please retry.",
-                    },
-                ) from e
+                _condense_span_attrs(span, "failed", round((time.monotonic() - _start) * 1000))
+                logger.warning(f"Condense rewrite failed ({reason}): {type(e).__name__}: {e}")
+                _raise_condense_503(reason, e)
 
     def load_language_codes(self, filepath: str) -> dict:
         """Load language codes from a JSON file."""
@@ -2925,8 +2934,16 @@ class ChatQnAService:
         #     (fail-closed: a failed rewrite fails the turn — 503, no
         #     blend/raw-query fallback). condense overrides the blend flag.
         retrieval_query = last_translated_message_content
-        condense_raw_query = None
         history_text = ""
+        # Built incrementally so the condense-rewrite branch can splice in
+        # ``condense_raw_query`` (see below) before the schedule call. The
+        # remaining keys are filled in once the retriever/reranker
+        # parameters are constructed further down.
+        genie_params = {
+            "full_chat_history_string": translated_history_string,
+            "original_language": original_language,
+            "user_details": user_details,
+        }
         if MULTI_TURN_MODE == "condense":
             if MULTI_TURN_BLEND_ENABLED:
                 logger.warning(
@@ -2949,7 +2966,7 @@ class ChatQnAService:
                     retrieval_query = await self._condense_query(condense_history, last_translated_message_content)
                     # The RAG prompt question stays the RAW last message; the
                     # rewritten query is retrieval/rerank-only (align_outputs).
-                    condense_raw_query = last_translated_message_content
+                    genie_params["condense_raw_query"] = last_translated_message_content
                 except HTTPException:
                     _condense_duration = time.time() - _condense_start
                     _condense_err_attrs = sanitize_attributes(
@@ -2969,14 +2986,7 @@ class ChatQnAService:
                 # no history. Answers "why is there no rewrite?" from traces.
                 _condense_tracer = get_tracer("chatqna.query_condense")
                 with _condense_tracer.start_as_current_span("chatqna.query_condense") as _span:
-                    _span.set_attributes(
-                        sanitize_attributes(
-                            {
-                                "genie.condense.mode": MULTI_TURN_MODE,
-                                "genie.condense.status": "skipped_no_history",
-                            }
-                        )
-                    )
+                    _condense_span_attrs(_span, "skipped_no_history", 0)
         elif MULTI_TURN_BLEND_ENABLED and MULTI_TURN_HISTORY_TURNS > 0:
             history_text = _extract_history_text(translated_history_string, MULTI_TURN_HISTORY_TURNS)
             if history_text and logflag:
@@ -3081,6 +3091,12 @@ class ChatQnAService:
 
             try:
                 try:
+                    # Fill in the keys that depend on the parameters built
+                    # above; ``condense_raw_query`` was already set (or
+                    # omitted) by the condense-rewrite branch.
+                    genie_params["retriever_parameters"] = retriever_parameters
+                    genie_params["reranker_parameters"] = reranker_parameters
+                    genie_params["retrieval_context"] = retrieval_context
                     result_dict, runtime_graph = await self.megaservice.schedule(
                         initial_inputs={
                             "text": retrieval_query,
@@ -3092,18 +3108,7 @@ class ChatQnAService:
                             "_blend_alpha": MULTI_TURN_BLEND_ALPHA,
                         },
                         llm_parameters=parameters,
-                        genie_params={
-                            "retriever_parameters": retriever_parameters,
-                            "reranker_parameters": reranker_parameters,
-                            "full_chat_history_string": translated_history_string,
-                            "retrieval_context": retrieval_context,
-                            "original_language": original_language,
-                            "user_details": user_details,
-                            # RAW last message under condense mode; the RAG
-                            # prompt uses it as the question (the rewritten
-                            # query must not enter the answer prompt).
-                            **({"condense_raw_query": condense_raw_query} if condense_raw_query is not None else {}),
-                        },
+                        genie_params=genie_params,
                     )
                 except _RerankerInputTooLongError:
                     # Already typed by align_outputs — skip the chain walk.

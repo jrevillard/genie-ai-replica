@@ -53,9 +53,9 @@ spec:
       # Pod-level securityContext: seccompProfile is mandatory
       # (PSA restricted admission rejects pods without it). The
       # runAsUser/runAsNonRoot defaults that previously sat here
-      # are removed: nginx/frontend/clamav entrypoints write to
-      # paths owned by the image's default USER (root=0 for nginx
-      # and frontend, 100 for clamav) and crash-loop on 65534. Each
+      # are removed: the frontend/clamav entrypoints write to
+      # paths owned by the image's default USER (root=0 for the
+      # frontend, 100 for clamav) and crash-loop on 65534. Each
       # service declares its own user via `securityContext` (container
       # level) in values.yaml.
       #
@@ -128,13 +128,13 @@ spec:
             # are safe regardless of UID: no privilege escalation,
             # and only NET_RAW dropped from capabilities. We KEEP
             # CHOWN, FOWNER, DAC_OVERRIDE, SETUID, SETGID — needed
-            # by entrypoints that chown paths at startup (nginx, the
+            # by entrypoints that chown paths at startup (the
             # embedded-nginx frontend). Dropping ALL also drops
             # CHOWN, which made the chown fail with EPERM even when
             # running as root. UID and runAsNonRoot are service-
-            # specific — nginx/frontend/clamav's entrypoints write
+            # specific — the frontend/clamav entrypoints write
             # to paths owned by the image's default USER (root for
-            # nginx/frontend, 100 for clamav) and break when forced
+            # the frontend, 100 for clamav) and break when forced
             # to 65534. Each service declares its own `securityContext`
             # in values.yaml.
             {{- $scc := $svc.securityContext | default (dict "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "NET_RAW"))) -}}

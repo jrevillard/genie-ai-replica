@@ -1,0 +1,83 @@
+{{- if .Values.ingress.enabled -}}
+{{- /*
+  Edge routing: the Gateway owns the hostname and TLS, this route owns
+  the path matrix. PathPrefix precedence is longest-match-first per the
+  Gateway API spec, so /api/files and /api/labels beat /api/ itself. Envoy
+  sets Host and
+  X-Forwarded-* on upstream calls natively — Keycloak needs both to derive
+  its issuer from the public origin instead of the in-cluster service name.
+
+  backend / document-repository / keycloak / frontend Services are the
+  only upstreams; chat SSE streams pass through unbuffered by default.
+*/ -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: genieai
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
+spec:
+  parentRefs:
+    - name: genieai
+      # Bind to the https listener when TLS is on, http otherwise — the
+      # Gateway renders the https listener conditionally, so sectionName
+      # must name the listener that actually exists.
+      sectionName: {{ if .Values.ingress.tls.enabled }}https{{ else }}http{{ end }}
+  hostnames:
+    - {{ .Values.ingress.host | required "ingress.host is required when ingress.enabled=true" | quote }}
+  rules:
+    {{- /* document-repository API paths: longest-prefix exceptions that beat the /api/ rule below. */}}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/files
+      backendRefs:
+        - name: document-repository
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/labels
+      backendRefs:
+        - name: document-repository
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /uploads/
+      backendRefs:
+        - name: document-repository
+          port: 80
+    {{- /* Backend BFF: /api + swagger. */}}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/
+        - path:
+            type: PathPrefix
+            value: /api-docs/
+      backendRefs:
+        - name: backend
+          port: 80
+    {{- /* Keycloak OIDC endpoints, same-origin with the SPA. The /auth
+           prefix reaches Keycloak as-is (its http-relative-path is
+           /auth); Envoy preserves the incoming Host header and stamps
+           X-Forwarded-Proto/Port, which Keycloak needs to derive the
+           issuer from the public origin. */}}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /auth/
+      backendRefs:
+        - name: keycloak-service
+          port: 8080
+    {{- /* Frontend SPA catch-all. */}}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: frontend
+          port: 80
+{{- end -}}

@@ -1,0 +1,31 @@
+{{- /*
+  cert-manager Certificate for the https listener. Skipped entirely when
+  ingress.tls.secretName is set: a pre-baked certificate means the
+  operator owns the Secret, and rendering a Certificate CR would mint a
+  second, unused Secret under the derived name while the listener waits
+  on the pre-baked one.
+
+  The Issuer is a cluster-bootstrap concern the chart never installs —
+  issuerRef names whatever ClusterIssuer the operator created beforehand
+  (the CI conftest gate fails any chart override that hardcodes one).
+*/ -}}
+{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled (not .Values.ingress.tls.secretName) -}}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "genieai-umbrella.tlsSecretName" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
+spec:
+  issuerRef:
+    name: {{ .Values.ingress.tls.issuerName | required "ingress.tls.issuerName is required when ingress.tls.enabled=true and ingress.tls.secretName is empty" }}
+    kind: ClusterIssuer
+    group: cert-manager.io
+  # Same helper the Gateway listener's certificateRefs uses — a divergence
+  # leaves the listener NotReady (ResolvedRefs=False) while cert-manager
+  # fills a Secret nobody references.
+  secretName: {{ include "genieai-umbrella.tlsSecretName" . }}
+  dnsNames:
+    - {{ .Values.ingress.host | quote }}
+{{- end -}}

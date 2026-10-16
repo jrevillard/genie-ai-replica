@@ -2,5 +2,8 @@ dependencies:
 - name: genieai-common
   repository: file://../genieai-common
   version: 0.1.0
-digest: sha256:00943846b80988a883432da172f6f6aa43433311aa795974d171c5536c85de1a
-generated: "2026-10-09T20:31:42.519951307+02:00"
+- name: gateway-helm
+  repository: oci://docker.io/envoyproxy
+  version: v1.9.2
+digest: sha256:b2112e2cc27f9ccb462c48a6941351bb863d094c44c918e2f41b1f79ef3136a4
+generated: "2026-10-16T09:32:25.977896514+02:00"

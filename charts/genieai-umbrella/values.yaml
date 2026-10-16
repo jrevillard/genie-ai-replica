@@ -90,12 +90,43 @@ observability:
 pluggable:
   storageClassName: ""                # "" = cluster default storage class
 
+# Envoy Gateway controller (chart dependency). On by default — the edge
+# tier couples 1:1 with the Gateway/HTTPRoute resources the chart renders.
+# false = another controller owns the `ingress.className` GatewayClass
+# (chart still renders the controller-agnostic Gateway API resources).
+# An off-cluster edge does NOT disable this: it forwards to the in-cluster
+# Envoy data plane, which stays the single path router. See
+# site/content/en/docs/deploy/ for the exposure topologies.
+envoyGateway:
+  enabled: true
+
 ingress:
   host: genieai.local                 # public hostname for redirect URLs
   # Scheme of the public origin. Feeds KC_PUBLIC_ORIGIN (realm
   # redirectUris/webOrigins): a port-forward demo serves plain HTTP, so
   # the overlay sets http:// there or every login redirect mismatches.
   scheme: https
+  # Gateway API tier (Plan 6 Phase 2). Off by default: the laptop overlay
+  # reach the stack through `kubectl port-forward` of the Envoy data-plane
+  # an Envoy Gateway (or any controller implementing the `envoy` class)
+  # flip this on.
+  enabled: false
+  # GatewayClass the Gateway binds to. The controller that owns the class
+  # is a cluster prerequisite (scripts/install-prereqs.sh installs Envoy
+  # Gateway); the chart never installs it.
+  className: envoy
+  tls:
+    # HTTPS listener + cert-manager Certificate. Requires an Issuer the
+    # operator created beforehand (issuerName); a pre-baked Secret
+    # (secretName) skips the Certificate CR entirely — sovereign
+    # deployments that manage keys outside cert-manager.
+    enabled: false
+    issuerName: ""
+    secretName: ""
+  # Cross-origin API access. Empty list = no CORS SecurityPolicy rendered
+  # (same-origin deployments — the default topology — need none).
+  cors:
+    allowOrigins: []
 
 data:
   # The `enabled` toggles gate the custom resources only; the operator
@@ -261,10 +292,6 @@ dependencyGraph:
     documentRepository:
       - backend
     clamav: []
-    nginx:
-      - frontend
-      - backend
-      - documentRepository
   data:
     postgres:
       - ""                                # no deps; lowest tier
@@ -467,75 +494,6 @@ services:
     probes:
       readiness: { httpGet: { path: /health, port: 3001 }, initialDelaySeconds: 10, periodSeconds: 10 }
       liveness:  { tcpSocket: { port: 3001 }, initialDelaySeconds: 30, periodSeconds: 30 }
-    podDisruptionBudget: null
-    serviceMonitor: false
-
-  nginx:
-    enabled: true
-    replicas: 1
-    # The stock image's baked nginx config proxies /api to the Kong gateway,
-    # which is no longer deployed. The edge tier mounts a ConfigMap over
-    # the upstream template so this image can serve the SPA + backend proxy.
-    image: { repository: genie-ai-nginx, tag: "main" }
-    port: 8080
-    # Image USER is root (uid 0). The entrypoint runs
-    # `mkdir -p /etc/nginx/certs` and renders the cert volume at
-    # startup — both paths are owned by root in the image. The
-    # runAsUser 65534 blanket the factory used to set crashed
-    # every reload with `Permission denied`.
-    securityContext:
-      runAsNonRoot: false
-      runAsUser: 0
-      allowPrivilegeEscalation: false
-      # Drop only the cap that grants raw-socket access. We KEEP
-      # CAP_CHOWN, CAP_FOWNER, CAP_DAC_OVERRIDE, CAP_SETUID,
-      # CAP_SETGID: nginx's entrypoint chowns /var/cache/nginx
-      # to uid 101 at startup, which needs CAP_CHOWN. Dropping
-      # ALL also drops CHOWN and the chown fails with EPERM
-      # even when running as root — every previous 0.1.x install
-      # hit this with the same `Operation not permitted` chown
-      # error in the pod's stderr.
-      capabilities:
-        drop: ["NET_RAW"]
-    # The genie-ai-nginx entrypoint envsubst-renders default.conf FROM
-    # its baked template AT STARTUP; mounting a read-only subPath OVER
-    # the rendered file would fail with EROFS. Mount the ConfigMap
-    # over the template PATH so envsubst reads the override and emits
-    # a writable default.conf.
-    #
-    # nginx entrypoint also chowns /var/cache/nginx/* to uid 101
-    # (the `nginx` user in the image) and writes temp files to
-    # /var/run + /tmp. Without these emptyDir mounts the chown
-    # fails with 'Operation not permitted' and the pod crash-loops.
-    #
-    # The single `volumes:` / `volumeMounts:` lists below are
-    # consolidated — the previous chart had them as two separate
-    # keys, and YAML's last-key-wins semantics silently dropped
-    # the emptyDirs.
-    volumes:
-      - name: nginx-cache
-        emptyDir: {}
-      - name: nginx-run
-        emptyDir: {}
-      - name: conf
-        configMap:
-          name: nginx-override
-          defaultMode: 0o444
-    volumeMounts:
-      - name: nginx-cache
-        mountPath: /var/cache/nginx
-      - name: nginx-run
-        mountPath: /var/run
-      - name: conf
-        mountPath: /etc/nginx/conf.d/default.conf.template
-        subPath: default.conf.template
-    resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
-    env: []
-    secrets: []
-    pvc: null
-    probes:
-      readiness: { httpGet: { path: /healthz, port: 8080 }, initialDelaySeconds: 5, periodSeconds: 10 }
-      liveness:  { httpGet: { path: /healthz, port: 8080 }, initialDelaySeconds: 30, periodSeconds: 30 }
     podDisruptionBudget: null
     serviceMonitor: false
 

@@ -288,7 +288,9 @@ Set in `group_vars/<env>/vars.yml`:
 | `chatqna_enforce_abstention` | `true` | Whether to enforce abstention |
 | `opea_streaming` | `true` | Enable SSE streaming for ChatQnA responses. Set to `false` to disable |
 | `chatqna_stream_timeout` | `3600000` | Timeout in milliseconds for ChatQnA streaming responses (default: 1 hour). Set to `300000` for 5 minutes |
-| `multi_turn_blend_enabled` | `false` | Multi-turn vector-space blending (issue #833): blend the query embedding with the previous N turns (`V = α·EQ + (1-α)·EH`) so pronoun-heavy follow-ups retrieve the prior turn's subject. Off by default. Only the dense retrieval leg is blended. |
+| `multi_turn_mode` | `blend` | Multi-turn retrieval strategy (issue #1091). `condense` = one short LLM call rewrites each follow-up into a standalone retrieval query (retrieval and rerank use the rewritten query); `blend` = the vector-space blending below. Only the exact value `condense` activates condense; a typo'd value skips condense and falls through to stateless retrieval unless the blend flag is on. `condense` overrides `multi_turn_blend_enabled` (a warning names both variables). Fail-closed: a failed rewrite fails the turn with HTTP 503. |
+| `multi_turn_condense_history_turns` | `4` | Conversation segments (USER and ASSISTANT messages) fed to the condense rewrite. `0` disables the rewrite (stateless retrieval). Independent of `multi_turn_history_turns` (blend's knob). |
+| `multi_turn_blend_enabled` | `false` | Multi-turn vector-space blending (issue #833): blend the query embedding with the previous N turns (`V = α·EQ + (1-α)·EH`) so pronoun-heavy follow-ups retrieve the prior turn's subject. Off by default. Only the dense retrieval leg is blended. Ignored when `multi_turn_mode` is `condense`. |
 | `multi_turn_blend_alpha` | `0.7` | Query weight α for blending. `1.0` = query-only (equivalent to disabled), `0.0` = history-only. |
 | `multi_turn_history_turns` | `1` | Number of prior turns blended. `0` disables even if `multi_turn_blend_enabled` is true. |
 

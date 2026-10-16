@@ -333,7 +333,7 @@ class TestAlignGeneratorWiring:
 
 
 class TestAlignInputsWiring:
-    """align_inputs is the hook guaranteed to receive llm_parameters_dict."""
+    """The request params on chatqna.orchestrate are read from the wire body."""
 
     def _run(self, llm_params, inputs):
         self_mock = _orchestrator()
@@ -354,15 +354,84 @@ class TestAlignInputsWiring:
     def test_request_params_land_on_the_enclosing_orchestrate_span(self, captured_spans):
         tracer = chatqna_module.get_tracer("chatqna.orchestrate")
         with tracer.start_as_current_span("chatqna.orchestrate"):
-            self._run(
+            result = self._run(
                 {"max_tokens": 512, "top_p": 0.9, "temperature": 0.2, "stream": True},
-                {"inputs": "rag prompt", "stream": True, "frequency_penalty": 0.0, "temperature": 0.7},
+                {"inputs": "rag prompt", "stream": True, "frequency_penalty": 0.3, "temperature": 0.7},
             )
 
         (orchestrate,) = captured_spans("chatqna.orchestrate")
+        # max_tokens / top_p are written from llm_parameters_dict...
         assert orchestrate.attributes[A["llm_req_max_tokens"]] == 512
         assert orchestrate.attributes[A["llm_req_top_p"]] == 0.9
-        assert orchestrate.attributes[A["llm_req_temperature"]] == 0.2
+        # ...and agree with the body.
+        assert orchestrate.attributes[A["llm_req_temperature"]] == result["temperature"]
+        assert orchestrate.attributes[A["llm_req_frequency_penalty"]] == result["frequency_penalty"]
+
+    def test_span_reports_the_wire_body_not_the_parameters_dict(self, captured_spans):
+        """Degenerate case: the two sources deliberately disagree.
+
+        ``align_inputs`` writes temperature and frequency_penalty into the body
+        from ``inputs``, NOT from ``llm_parameters_dict``. A span that read the
+        latter would report values vLLM never receives — reproducing, on the
+        very span built to expose it, the "params silently altered before vLLM"
+        blind spot this issue is about.
+        """
+        tracer = chatqna_module.get_tracer("chatqna.orchestrate")
+        with tracer.start_as_current_span("chatqna.orchestrate"):
+            result = self._run(
+                {"max_tokens": 512, "top_p": 0.9, "temperature": 0.2, "frequency_penalty": 0.1, "stream": True},
+                {"inputs": "rag prompt", "stream": True, "frequency_penalty": 0.9, "temperature": 0.7},
+            )
+
+        # Prove the two sources really do differ on this run.
+        assert result["temperature"] == 0.7
+        assert result["frequency_penalty"] == 0.9
+
+        (orchestrate,) = captured_spans("chatqna.orchestrate")
+        assert orchestrate.attributes[A["llm_req_temperature"]] == 0.7
+        assert orchestrate.attributes[A["llm_req_frequency_penalty"]] == 0.9
+
+    def test_repetition_penalty_is_not_recorded_because_it_is_never_sent(self, captured_spans):
+        """A parameter chatqna does not put in the body must not be advertised.
+
+        ``repetition_penalty`` is real vLLM vocabulary, but align_inputs never
+        writes it -- so recording it would name a parameter vLLM never received.
+        """
+        tracer = chatqna_module.get_tracer("chatqna.orchestrate")
+        with tracer.start_as_current_span("chatqna.orchestrate"):
+            result = self._run(
+                {"max_tokens": 512, "top_p": 0.9, "temperature": 0.2, "repetition_penalty": 1.1, "stream": True},
+                {"inputs": "rag prompt", "stream": True, "frequency_penalty": 0.0, "temperature": 0.7},
+            )
+
+        assert "repetition_penalty" not in result
+        (orchestrate,) = captured_spans("chatqna.orchestrate")
+        assert A["llm_req_repetition_penalty"] not in orchestrate.attributes
+
+    def test_repetition_penalty_is_not_recorded_on_llm_invoke_either(self, captured_spans):
+        """The llm.invoke hooks read llm_parameters_dict, which is where the lie would survive.
+
+        Those two align hooks have no request body in scope, so a mapping entry
+        for a parameter chatqna never sends would advertise it there even though
+        the orchestrate span correctly omits it.
+        """
+        span = chatqna_module._emit_llm_invoke_open({"max_tokens": 512, "repetition_penalty": 1.1, "stream": False})
+        chatqna_module._emit_llm_invoke_close(span)
+
+        assert A["llm_req_repetition_penalty"] not in captured_spans("llm.invoke")[0].attributes
+
+    def test_every_recorded_param_is_one_align_inputs_actually_sends(self):
+        """Guards the whole mapping against advertising a parameter chatqna drops.
+
+        Asserts against the body ``align_inputs`` builds rather than against a
+        copy of the list, so adding a mapping entry without a matching
+        ``next_inputs`` write fails here.
+        """
+        import inspect
+
+        source = inspect.getsource(chatqna_module.align_inputs)
+        for key, _attr in chatqna_module._LLM_REQUEST_PARAM_ATTRS:
+            assert f'next_inputs["{key}"]' in source, f"{key} is recorded but never sent"
 
     def test_streaming_request_asks_for_usage(self):
         result = self._run(
@@ -380,17 +449,20 @@ class TestAlignInputsWiring:
 
         assert "stream_options" not in result
 
-    def test_stream_flag_is_read_from_the_llm_parameters_dict_only(self):
-        """llm_parameters_dict is the single source for the stream decision.
+    def test_stream_options_is_gated_on_llm_parameters_dict_not_inputs(self):
+        """stream_options follows llm_parameters_dict; the body's stream follows inputs.
 
-        A mismatch between the two dicts must not produce a request that claims
-        to be synchronous while asking for streamed usage.
+        A mismatch produces a request that streams without asking for usage, so
+        the streaming llm.invoke span omits token attributes. That state is
+        recorded rather than papered over: pinning which gate wins is the point,
+        not asserting the two can never differ.
         """
         result = self._run(
             {"max_tokens": 512, "top_p": 0.9, "stream": False},
             {"inputs": "rag prompt", "stream": True, "frequency_penalty": 0.0, "temperature": 0.7},
         )
 
+        assert result["stream"] is True
         assert "stream_options" not in result
 
 

@@ -71,16 +71,22 @@ align_tracer = get_tracer("chatqna.align_outputs")
 # lifetime is owned by the streaming generator, not by an orchestrator node.
 llm_tracer = get_tracer("chatqna.llm")
 
-# Sampling parameters recorded on spans, mapped from the key comps' own
-# `llm_parameters_dict` uses. Shared so the llm.invoke span and the
-# chatqna.orchestrate span stamp the same set under the same names — one
-# vocabulary, one place to add a parameter.
+# Sampling parameters recorded on spans, keyed by the field name they carry on
+# the wire. Shared so the llm.invoke span and the chatqna.orchestrate span stamp
+# the same set under the same names — one vocabulary, one place to add a
+# parameter.
+#
+# Every entry here is a field `align_inputs` writes into `next_inputs`. A
+# parameter chatqna never sends is deliberately absent: `repetition_penalty` is
+# the obvious candidate (it is in the span vocabulary, because it is a real vLLM
+# sampling parameter) but chatqna does not put it in the request body, so
+# recording a value for it would advertise a parameter vLLM never received.
+# Add it here in the same commit that adds the `next_inputs` write.
 _LLM_REQUEST_PARAM_ATTRS = (
     ("max_tokens", "llm_req_max_tokens"),
     ("top_p", "llm_req_top_p"),
     ("temperature", "llm_req_temperature"),
     ("frequency_penalty", "llm_req_frequency_penalty"),
-    ("repetition_penalty", "llm_req_repetition_penalty"),
 )
 
 
@@ -163,25 +169,32 @@ def _llm_request_params(llm_parameters_dict) -> dict:
     return {}
 
 
-def _record_llm_request_params(span, llm_parameters_dict) -> None:
-    """Stamp the sampling params comps is about to send onto ``span``.
+def _record_llm_request_params(span, request_fields) -> None:
+    """Stamp the sampling params carried by ``request_fields`` onto ``span``.
+
+    ``request_fields`` is the request body where one is available — the
+    ``next_inputs`` ``align_inputs`` assembles — so the span reports what goes on
+    the wire, not what a parameter dictionary intended. The two differ: chatqna
+    takes ``temperature`` and ``frequency_penalty`` from ``inputs``, not from
+    ``llm_parameters_dict``.
 
     Each param is written ONLY when present: absence is the signal this span
     exists to surface (a param dropped between chatqna and vLLM), so no
     sentinel values are written in its place.
     """
-    params = _llm_request_params(llm_parameters_dict)
+    params = _llm_request_params(request_fields)
     for key, attr in _LLM_REQUEST_PARAM_ATTRS:
         value = params.get(key)
         if value is not None:
             span.set_attribute(ATTRIBUTE_NAMES[attr], value)
 
 
-def _stamp_llm_request_params_on_current_span(llm_parameters_dict) -> None:
+def _stamp_llm_request_params_on_current_span(request_fields) -> None:
     """Record the request params on the enclosing chatqna.orchestrate span.
 
-    ``align_inputs`` receives ``llm_parameters_dict`` as a named positional, so
-    it is the one hook guaranteed to see the parameters. ``align_generator`` is
+    Called from the ``align_inputs`` LLM branch with the assembled
+    ``next_inputs``. ``align_inputs`` is also the one hook guaranteed to see
+    ``llm_parameters_dict`` as a named positional, while ``align_generator`` is
     only reachable through ``**kwargs`` and whether comps forwards the dict
     there cannot be verified from this source tree — recording the params here
     as well means they reach a span either way. A module-level holder was
@@ -191,17 +204,23 @@ def _stamp_llm_request_params_on_current_span(llm_parameters_dict) -> None:
     span = otel_trace.get_current_span()
     if span is None or not span.is_recording():
         return
-    _record_llm_request_params(span, llm_parameters_dict)
+    _record_llm_request_params(span, request_fields)
 
 
 def _emit_llm_invoke_open(llm_parameters_dict: dict):
-    """Open the llm.invoke span and record what is about to be sent.
+    """Open the llm.invoke span and record the request parameters.
 
     ``start_span``, not ``start_as_current_span``: the latter returns an
     ``_AgnosticContextManager``, not a Span, and calling ``set_attribute`` on it
     raises AttributeError. The streaming path needs a real Span whose lifetime
     it owns — open across the generator's yields, closed from a finally when the
     upstream raises or the consumer abandons the stream.
+
+    The two ``align`` hooks that open this span have no request body in scope,
+    so the parameters come from ``llm_parameters_dict`` — comps' record of the
+    request it is about to issue. That is the best available source here, and it
+    is why the authoritative copy lands on ``chatqna.orchestrate``, stamped from
+    ``next_inputs`` in ``align_inputs``.
 
     ``stream`` resolves from the same dict as every other param, so
     ``llm.stream`` and ``llm.stream_options.include_usage`` cannot disagree.
@@ -1570,11 +1589,17 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             # llm.invoke span omits the token attributes rather than reporting
             # wrong ones.
             next_inputs["stream_options"] = {"include_usage": True}
-        # The same dict gates the stream flag above and the llm.stream /
-        # llm.stream_options.include_usage attributes, so they cannot disagree.
-        _stamp_llm_request_params_on_current_span(llm_parameters_dict)
         next_inputs["frequency_penalty"] = inputs["frequency_penalty"]
         next_inputs["temperature"] = inputs["temperature"]
+        # Stamp from next_inputs — the body actually sent — not from
+        # llm_parameters_dict. max_tokens/top_p do come from that dict, but
+        # temperature and frequency_penalty come from `inputs`, so a span
+        # reading llm_parameters_dict would report values the wire never
+        # carries: the exact blind spot this span exists to close. Reading the
+        # body also collapses the divergence between next_inputs["stream"]
+        # (from `inputs`) and the stream_options gate (from
+        # llm_parameters_dict) onto one recorded truth.
+        _stamp_llm_request_params_on_current_span(next_inputs)
         inputs = next_inputs
         if logflag:
             logger.debug(f"Raw input of the llm\n {inputs}\n")

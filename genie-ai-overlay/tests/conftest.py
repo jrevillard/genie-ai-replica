@@ -249,17 +249,32 @@ def pytest_unconfigure(config):
     _SPAN_EXPORTER.clear()
 
 
-# Spans this project emits, and therefore the only ones the vocabulary sweep
-# applies to. FastAPI auto-instrumentation also emits spans carrying
-# ``http.method`` / ``url.full`` / ``http.status_code``, which are legitimately
-# outside the vocabulary — sweeping those would mean suppressing failures we do
-# not understand, which is worse than not sweeping at all.
+# Spans whose attributes the vocabulary sweep polices.
+#
+# COVERS every span this project emits that records vocabulary-governed
+# attributes, across chatqna, retriever and reranker. Each name here is one a
+# later task adds attributes to, so an unswept name is one where a new leak
+# would go uncaught — that is why ``chatqna.orchestrate`` and ``reranker.rerank``
+# are included alongside the obvious five.
+#
+# DOES NOT COVER, deliberately:
+#   * FastAPI auto-instrumentation (``http.method`` / ``url.full`` /
+#     ``http.status_code`` …). Legitimately outside our vocabulary; sweeping them
+#     would mean suppressing failures we do not understand.
+#   * ``dataprep.*`` (``ingest`` / ``retract`` / ``kill_ingest`` / ``chunking``).
+#     Known unswept debt: dataprep is a separate service outside this issue's
+#     scope, and ``dataprep.ingest`` currently records ``dataprep.file_type`` /
+#     ``dataprep.file_id`` straight from the upload payload, which is the kind of
+#     emission this sweep exists to catch. Recorded as follow-up debt in the task
+#     report rather than fixed or silently omitted here.
 OWNED_SPAN_NAMES = frozenset(
     {
         "llm.invoke",
+        "chatqna.orchestrate",
         "chatqna.reranker_selection",
         "chatqna.stream_outcome",
         "retriever.hybrid_search",
+        "reranker.rerank",
         "reranker.tei_invoke",
     }
 )
@@ -300,6 +315,12 @@ def sweep_owned_spans():
         assert_spans_clean(_SPAN_EXPORTER.get_finished_spans())
     finally:
         _SPAN_EXPORTER.clear()
+
+
+@pytest.fixture
+def owned_span_names():
+    """Expose OWNED_SPAN_NAMES so a test can assert the mirror has not drifted."""
+    return OWNED_SPAN_NAMES
 
 
 @pytest.fixture

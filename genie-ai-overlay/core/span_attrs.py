@@ -134,6 +134,12 @@ ATTRIBUTE_NAMES = {
     "answer_abstained": "answer.abstained",
     # Reranker adaptive
     "rag_adaptive_chunk_keys": "rag.adaptive_chunk_keys",
+    # chatqna.orchestrate — emitted today at genieai_chatqna.py:2807-2808 and
+    # SURVIVING this work: task 4 adds blend/history/prompt-budget attributes
+    # beside these writes rather than replacing them, so they are destination
+    # vocabulary, not backlog.
+    "rag_query_length": "rag.query_length",
+    "rag_model_id": "rag.model_id",
 }
 
 # Attributes EMITTED TODAY by production code that this change renames or
@@ -179,6 +185,9 @@ DEPRECATED_ATTRIBUTE_NAMES = {
     # JSON_ENCODED_ATTRIBUTE_NAMES.
     "rag.adaptive_context_decay_factor": "task 8",
     "rag.adaptive_min_value_threshold": "task 8",
+    # chatqna.orchestrate — emitted at genieai_chatqna.py:2891, superseded by
+    # task 7's answer.abstained / answer.sentinel_present on chatqna.stream_outcome.
+    "abstained.reason": "task 7",
 }
 
 # Attributes whose value is a STRUCTURE OTel cannot represent natively (a list of
@@ -249,9 +258,14 @@ def _string_values(value):
     Sets and dict keys are traversed too. OTel only accepts homogeneous sequences
     as attribute values, so a set never reaches VictoriaTraces — but "the SDK
     would have dropped it anyway" is not a reason to accept prose silently.
+
+    Bytes are decoded rather than skipped: the SDK would reject them too, and a
+    value smuggled through as bytes must not be the one way past the shape rule.
     """
     if isinstance(value, str):
         yield value
+    elif isinstance(value, (bytes, bytearray)):
+        yield value.decode("utf-8", errors="replace")
     elif isinstance(value, (list, tuple, set, frozenset)):
         for item in value:
             yield from _string_values(item)

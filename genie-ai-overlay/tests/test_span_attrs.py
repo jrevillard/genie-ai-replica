@@ -29,6 +29,18 @@ from core.span_attrs import (
 
 VOCABULARY = sorted(ATTRIBUTE_NAMES.values())
 
+# Mirrors tests/conftest.py OWNED_SPAN_NAMES. Duplicated rather than imported so
+# a conftest that drops a span name fails a test here too.
+OWNED_SPAN_NAMES = {
+    "llm.invoke",
+    "chatqna.orchestrate",
+    "chatqna.reranker_selection",
+    "chatqna.stream_outcome",
+    "retriever.hybrid_search",
+    "reranker.rerank",
+    "reranker.tei_invoke",
+}
+
 
 class TestLabelDigest:
     def test_digest_is_eight_lowercase_hex_chars(self):
@@ -118,8 +130,8 @@ class TestVocabularyShape:
     def test_values_are_unique(self):
         assert len(set(VOCABULARY)) == len(VOCABULARY)
 
-    def test_vocabulary_has_fifty_entries(self):
-        assert len(ATTRIBUTE_NAMES) == 50
+    def test_vocabulary_has_fifty_two_entries(self):
+        assert len(ATTRIBUTE_NAMES) == 52
 
 
 class TestDeprecatedAttributeNames:
@@ -153,8 +165,28 @@ class TestDeprecatedAttributeNames:
         ]
 
     def test_registering_the_backlog_did_not_inflate_the_vocabulary(self):
-        assert len(ATTRIBUTE_NAMES) == 50
-        assert len(DEPRECATED_ATTRIBUTE_NAMES) == 20
+        assert len(ATTRIBUTE_NAMES) == 52
+        assert len(DEPRECATED_ATTRIBUTE_NAMES) == 21
+
+
+class TestBytesValues:
+    """Bytes must not be the one way past the shape rule."""
+
+    def test_prose_bytes_are_a_violation(self):
+        assert free_text_violations({"rag.fetch_k": b"some prose here"})
+
+    def test_whitespace_free_bytes_pass(self):
+        assert free_text_violations({"rag.fetch_k": b"mmr"}) == []
+
+    def test_overlong_bytes_are_a_violation(self):
+        assert free_text_violations({"rag.fetch_k": b"x" * (MAX_STRING_LEN + 1)})
+
+    def test_bytearray_is_covered_too(self):
+        assert free_text_violations({"rag.fetch_k": bytearray(b"some prose here")})
+
+    def test_undecodable_bytes_do_not_crash(self):
+        """errors='replace' — an invalid byte must not raise."""
+        assert free_text_violations({"rag.fetch_k": b"\xff\xfe some prose"}) is not None
 
 
 class TestJsonEncodedAttributeNames:
@@ -215,6 +247,51 @@ def _emit(name, attributes):
         for key, value in attributes.items():
             span.set_attribute(key, value)
     return span
+
+
+class TestOwnedSpanCoverage:
+    """Every span a later task writes to must be swept, not just the obvious ones.
+
+    An unswept span is one where a newly added leak is invisible — which is why
+    ``chatqna.orchestrate`` (tasks 4, 6, 7) and ``reranker.rerank`` are covered.
+    """
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "llm.invoke",
+            "chatqna.orchestrate",
+            "chatqna.reranker_selection",
+            "chatqna.stream_outcome",
+            "retriever.hybrid_search",
+            "reranker.rerank",
+            "reranker.tei_invoke",
+        ],
+    )
+    def test_span_is_swept(self, name):
+        assert name in OWNED_SPAN_NAMES
+
+    def test_mirror_matches_conftest(self, owned_span_names):
+        """A conftest that drops a span must fail here, not just silently."""
+        assert set(owned_span_names) == OWNED_SPAN_NAMES
+
+    @pytest.mark.parametrize(
+        "name",
+        ["dataprep.ingest", "dataprep.retract", "dataprep.chunking", "dataprep.kill_ingest"],
+    )
+    def test_dataprep_is_known_unswept(self, name):
+        """Documented debt, not an oversight. See the conftest comment."""
+        assert name not in OWNED_SPAN_NAMES
+
+    def test_orchestrate_bites(self, span_sweep, captured_spans):
+        """The gap that motivated round 4: tasks 4/6/7 write here."""
+        _emit("chatqna.orchestrate", {"rag.sniffed_query": "banana"})
+        with pytest.raises(AssertionError):
+            span_sweep(captured_spans())
+
+    def test_orchestrate_accepts_its_vocabulary_keys(self, span_sweep, captured_spans):
+        _emit("chatqna.orchestrate", {"rag.query_length": 42, "rag.model_id": "granite-4.1-8b"})
+        assert span_sweep(captured_spans()) is None
 
 
 class TestOwnedSpanSweep:

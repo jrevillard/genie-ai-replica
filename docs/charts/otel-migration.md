@@ -109,6 +109,32 @@ kubectl logs -n genieai deploy/genieai-collector-collector | head
 # 6. Metrics: VMSingle target list includes backend/documentRepository
 ```
 
+## 7b. Deleting ingested rows from VictoriaLogs (runbook)
+
+The delete API is flag-gated and the chart deliberately leaves it OFF
+(upstream default; leaving it enabled is a data-loss footgun on a
+cluster-scoped HTTP surface). Any cluster that ran a pre-0.2.20 agent
+(or otherwise ingested rows it should not keep) can purge them
+one-time:
+
+```bash
+# 1. Enable the flag on the live CR (NOT in the chart):
+kubectl -n <ns> patch vlsingle victorialogs --type merge \
+  -p '{"spec":{"extraArgs":{"delete.enable":"true"}}}'
+# wait for the VL pod to roll
+
+# 2. Submit one async delete task per LogsQL filter (port-forward 9428):
+kubectl -n <ns> port-forward svc/vlsingle-victorialogs 19428:9428 &
+curl -X POST "http://localhost:19428/delete/run_task" \
+  --data-urlencode 'filter=k8s.namespace.name:flux-system'
+# progress: GET /delete/active_tasks (empty list = done)
+
+# 3. Disable the flag again (Helm/Flux also reverts it on the next
+#    reconcile of the chart-rendered CR):
+kubectl -n <ns> patch vlsingle victorialogs --type merge \
+  -p '{"spec":{"extraArgs":{"delete.enable":null}}}'
+```
+
 ## 8. Decision pending (not this doc's scope)
 
 **Confirmed 2026-10-08 by user**: Kong REMOVED (not demoted), K8s min 1.33, Envoy Gateway v1.9 locked. Applied to spec + Plans 2/3 (decision 7 in `docs/charts/k8s-native-audit.md`).

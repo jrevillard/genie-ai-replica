@@ -74,40 +74,54 @@ ensure_namespace() {
 
 install_keycloak_operator() {
   local ns="keycloak-system"
+  # Pre-flight: an operator left in the upstream kustomize default
+  # namespace (`keycloak`, from the pre-overlay install command) would
+  # fight this one over the same CRs once both watch all namespaces.
+  # Refuse rather than silently install a second one.
+  if kubectl get deployment keycloak-operator -n keycloak >/dev/null 2>&1; then
+    printf 'ERROR: keycloak-operator found in namespace "keycloak" (upstream default). Remove it before installing into "%s" — two watch-all operators reconcile the same CRs.\n' "${ns}" >&2
+    exit 1
+  fi
   if kubectl get namespace "${ns}" >/dev/null 2>&1 && \
      kubectl get deployment keycloak-operator -n "${ns}" >/dev/null 2>&1; then
-    log "keycloak-operator ${KC_OPERATOR_VERSION}: already present, skip"
-    return 0
-  fi
-  ensure_namespace "${ns}"
-  # Official modern Keycloak 26+ operator (Quarkus-based, v2beta1 CRDs).
-  # Installed via Kustomize from keycloak/k8s-resources — NOT the archived
-  # keycloak/keycloak-operator (which is WildFly-era, v1alpha1, archived
-  # 2022-11-16). kustomize injects the namespace and rewires RoleBindings
-  # (apply -f per-file breaks RBAC + misses 2 of the 4 CRDs).
-  #
-  # The upstream kustomization pins namespace `keycloak`; a local overlay
-  # with a `namespace:` field overrides it (top-level wins) so every
-  # namespaced object — Deployment, ServiceAccount, RoleBindings, subjects
-  # included — lands in keycloak-system. One leak: the upstream
-  # ClusterRoleBinding is cluster-scoped and the namespace transformer
-  # does not touch its subject, so its subject is patched separately
-  # below.
-  log "keycloak-operator ${KC_OPERATOR_VERSION}: install via Kustomize overlay (ref=${KC_OPERATOR_VERSION} of keycloak-k8s-resources, ns=${ns})"
-  local overlay
-  overlay=$(mktemp -d)
-  cat > "${overlay}/kustomization.yaml" <<EOF
+    log "keycloak-operator ${KC_OPERATOR_VERSION}: already present"
+  else
+    ensure_namespace "${ns}"
+    # Official modern Keycloak 26+ operator (Quarkus-based, v2beta1 CRDs).
+    # Installed via Kustomize from keycloak/k8s-resources — NOT the archived
+    # keycloak/keycloak-operator (which is WildFly-era, v1alpha1, archived
+    # 2022-11-16). kustomize injects the namespace and rewires RoleBindings
+    # (apply -f per-file breaks RBAC + misses 2 of the 4 CRDs).
+    #
+    # The upstream kustomization pins namespace `keycloak`; a local overlay
+    # with a `namespace:` field overrides it (top-level wins) so every
+    # namespaced object — Deployment, ServiceAccount, RoleBindings, subjects
+    # included — lands in keycloak-system. One leak: the upstream
+    # ClusterRoleBinding is cluster-scoped and the namespace transformer
+    # does not touch its subject, so its subject is patched below — on
+    # every run, not only at install.
+    log "keycloak-operator ${KC_OPERATOR_VERSION}: install via Kustomize overlay (ref=${KC_OPERATOR_VERSION} of keycloak-k8s-resources, ns=${ns})"
+    local overlay
+    overlay=$(mktemp -d)
+    cat > "${overlay}/kustomization.yaml" <<EOF
 namespace: ${ns}
 resources:
   - github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=${KC_OPERATOR_VERSION}
 EOF
-  kubectl apply -k "${overlay}"
-  rm -rf "${overlay}"
+    if ! kubectl apply -k "${overlay}"; then
+      rm -rf "${overlay}"
+      return 1
+    fi
+    rm -rf "${overlay}"
+    wait_deploy_ready "${ns}" "keycloak-operator"
+  fi
+  # Everything below is idempotent and runs on EVERY invocation so
+  # out-of-band drift (e.g. someone re-applies the upstream kustomization
+  # bare, or a subject namespace drifts) is repaired on the next run.
   kubectl patch clusterrolebinding keycloak-operator-clusterrole-binding \
     --type json \
     -p "[{\"op\":\"replace\",\"path\":\"/subjects/0/namespace\",\"value\":\"${ns}\"}]"
-  wait_deploy_ready "${ns}" "keycloak-operator"
-  # The upstream kustomize ships namespaced RoleBindings only, so the
+  # The upstream kustomization ships namespaced RoleBindings only, so the
   # operator reconciles Keycloak CRs in its own namespace and ignores
   # every application namespace. GENIE.AI renders Keycloak CRs next to
   # the app (e.g. ns genieai), so promote the four per-controller
@@ -115,8 +129,6 @@ EOF
   # namespace envs. Empty string is the JOSDK "watch all namespaces"
   # value — the literal "JOSDK_WATCH_ALL" is NOT (the operator treats
   # it as a namespace name and reconciles nothing, silently).
-  local sa_ns
-  sa_ns=$(kubectl get deploy keycloak-operator -o jsonpath='{.metadata.namespace}')
   for role in keycloakcontroller keycloakrealmimportcontroller \
               keycloakoidcclientcontroller keycloaksamlclientcontroller; do
     kubectl apply -f - <<EOF
@@ -131,15 +143,15 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: keycloak-operator
-    namespace: ${sa_ns}
+    namespace: ${ns}
 EOF
   done
-  kubectl -n "${sa_ns}" set env deploy/keycloak-operator \
+  kubectl -n "${ns}" set env deploy/keycloak-operator \
     QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKCONTROLLER_NAMESPACES= \
     QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKREALMIMPORTCONTROLLER_NAMESPACES= \
     QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKSAMLCLIENTCONTROLLER_NAMESPACES= \
     QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKOIDCCLIENTCONTROLLER_NAMESPACES=
-  wait_deploy_ready "${sa_ns}" "keycloak-operator"
+  wait_deploy_ready "${ns}" "keycloak-operator"
 }
 
 install_cloudnative_pg() {

@@ -89,6 +89,17 @@ describe('GET /api/okf/retrieval-config', () => {
     expect(res.status).toBe(401);
   });
 
+  test('open mode: a token whose okf entries are ALL malformed still 403s (restriction intended)', async () => {
+    // Route-level pin of the raw-claim-list rule (2026-10-16 review gap): the
+    // gate must not fall open for a token carrying okf entries that are all
+    // malformed — parseOkfScopes → middleware wiring is exercised end-to-end
+    // here, not just the unit-level injected arrays.
+    authScoped(['okf:only-three', 'okf:t1:repoA:write']);
+    const res = await request(createApp()).get('/api/okf/retrieval-config').set('Authorization', TOKEN);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+  });
+
   test('403 with no okf scope while OKF_SCOPE_MODE=closed (historical default-deny)', async () => {
     process.env.OKF_SCOPE_MODE = 'closed';
     try {

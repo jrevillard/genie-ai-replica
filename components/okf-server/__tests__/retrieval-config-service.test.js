@@ -187,6 +187,23 @@ describe('retrieval-config-service (Story 1.7, ADR-okf-039)', () => {
         expect(out.engaged).toBe(false);
       });
 
+      test('open: a MALFORMED-only okf_scopes claim stays closed-list (the mirror of the resolver rule)', async () => {
+        // The raw-claim-list test: the token carries okf entries, so the
+        // operator intended a restriction — no silent fall-open. Pins the
+        // getRetrievalConfig half of the "must mirror resolveGraphSet"
+        // contract (2026-10-16 review: this branch was only tested at the
+        // resolver and gate level, so the mirror could drift unnoticed).
+        mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: 'hybrid' });
+        seedServing([repoRow(), repoRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
+        const out = await svc.getRetrievalConfig({
+          okfScopes: ['okf:only-three', 'okf:t1:r-kenya:write'],
+          isSuperAdmin: false
+        });
+        expect(out.scope_mode).toBe('open');
+        expect(out.serving_graph_count).toBe(0);
+        expect(out.engaged).toBe(false);
+      });
+
       test('closed restores the historical default-deny (nothing granted = nothing authorized)', async () => {
         process.env.OKF_SCOPE_MODE = 'closed';
         mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: 'hybrid' });
@@ -209,6 +226,23 @@ describe('retrieval-config-service (Story 1.7, ADR-okf-039)', () => {
         expect(plain.config.updated_by).toBeNull();
         const admin = await svc.getRetrievalConfig({ okfScopes: [], isSuperAdmin: true });
         expect(admin.config.updated_by).toBe('steward-9');
+      });
+
+      test('updated_by stays stripped for a WILDCARD-scope caller without the tools-admin role (raw-flag rule, pinned)', async () => {
+        // The strip deliberately checks the RAW caller flag (the tools-admin
+        // super-role), NOT deriveScopeAuthz's wildcard-equivalent: a wildcard
+        // steward token is reach-equivalent to an admin (unrestricted serving
+        // view, /authz/graphs reports superadmin:true) but is not the admin
+        // identity. This cell pins that distinction so the two notions of
+        // "superadmin" cannot be silently conflated later.
+        mockDb.collection('okf_system_config').save({
+          _key: 'retrieval', mode: 'hybrid', revision: 3,
+          updated_at: '2026-10-16T00:00:00Z', updated_by: 'steward-9'
+        });
+        seedServing([repoRow()]);
+        const wildcard = await svc.getRetrievalConfig({ okfScopes: ['okf:*:*:read'], isSuperAdmin: false });
+        expect(wildcard.serving_graph_count).toBe(1); // unrestricted reach (wildcard)
+        expect(wildcard.config.updated_by).toBeNull(); // identity metadata: role-only
       });
     });
 

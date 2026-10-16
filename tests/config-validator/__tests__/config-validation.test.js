@@ -715,8 +715,19 @@ describe('Configuration Validation Suite', () => {
   describe('DEFAULT-OPEN: OKF_SCOPE_MODE plumbing', () => {
     test('OKF_SCOPE_MODE is piped in the okf-server compose block with the open default', () => {
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
-      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
-      expect(okfBlock).toMatch(/- OKF_SCOPE_MODE=\$\{OKF_SCOPE_MODE:-open\}/);
+      const start = full.indexOf('  okf-server:');
+      const end = full.indexOf('  pii-service:');
+      // Guard both anchors: if a service is renamed/moved, indexOf returns -1
+      // and slice(start, -1) would silently span every later service block —
+      // turning "piped in the okf-server block" into "present anywhere after
+      // it", defeating the plumbing-drift catch this test exists for.
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      const okfBlock = full.slice(start, end);
+      // Unset-only default (`${VAR-open}`, NOT `${VAR:-open}`): an explicitly
+      // empty .env value must reach the container as explicit garbage and
+      // degrade to closed — not be silently coerced to open at interpolation.
+      expect(okfBlock).toMatch(/- OKF_SCOPE_MODE=\$\{OKF_SCOPE_MODE-open\}/);
     });
 
     test('OKF_SCOPE_MODE is documented in the env template with the open default', () => {

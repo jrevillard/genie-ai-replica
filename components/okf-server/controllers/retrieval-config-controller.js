@@ -1,10 +1,13 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 // Story 1.7 (ADR-okf-039 D3/D7) — retrieval-config HTTP surface.
-// GET: read-scoped (the /api/okf router gate) — the chat path's service token
-//      and the Studio card both read the same read-model. The SERVING VIEW is
-//      per-caller (superadmin sees all; a scoped caller sees their
-//      intersection; config posture stays global — governance, not scope data).
+// GET: default-open serving read — mounted on the serving-reads sub-router
+//      ABOVE the router-wide strict gate with allowScopelessWhenOpen (open
+//      mode admits scopeless callers; closed mode 403s them). The chat
+//      path's token and the Studio card both read the same read-model. The
+//      SERVING VIEW is per-caller (superadmin sees all; a scoped caller sees
+//      their intersection; config posture stays global — governance, not
+//      scope data).
 // PUT: tools-admin only — joi-validated at the boundary, revision-bumped,
 //      optimistic-concurrency-guarded, audited before→after in the service.
 

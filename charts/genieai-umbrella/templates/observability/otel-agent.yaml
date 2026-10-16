@@ -46,8 +46,15 @@ spec:
   config:
     receivers:
       filelog:
+        # Stack namespaces only (app ns + the collectors' own -obs ns).
+        # Tailing every namespace ingests cluster noise (flux, kube-system)
+        # whose zap-JSON bodies use the `msg` key, not `message` — the
+        # normalisation transform leaves those raw, the admin logs TYPE
+        # column renders `{"time"` fragments, and the dashboard error
+        # counts report the cluster's controllers instead of the stack.
         include:
-          - /var/log/pods/*/*/*.log
+          - /var/log/pods/{{ .Values.namespace }}_*/*/*.log
+          - /var/log/pods/{{ .Values.namespace }}-obs_*/*/*.log
         start_at: end
         include_file_path: true
         operators:

@@ -135,21 +135,25 @@ Expected: 1 commit on `feat/runtime-theme-config`. Working tree clean.
 
 ---
 
-## Task 2: Frontend Runtime CSS Relocation + Fallback + index.html + main.js
+## Task 2: Frontend Runtime CSS Relocation + Fallback + Extract loadConfig + index.html + main.js
 
 **Files:**
 - Create: `components/gov-chat-frontend/public/config/theme-variables.css` (moved content)
 - Create: `components/gov-chat-frontend/public/config/theme-variables-fallback.css` (verbatim copy)
+- Create: `components/gov-chat-frontend/public/config/config.js` (dev-mode placeholder; verbatim copy of `public/config.js`)
+- Create: `components/gov-chat-frontend/src/config-loader.js` (extracted `loadConfig` for testability)
 - Delete: `components/gov-chat-frontend/src/theme-variables.css`
-- Modify: `components/gov-chat-frontend/src/main.js` (remove import line 24)
+- Modify: `components/gov-chat-frontend/src/main.js` (import from `config-loader.js`; remove import line 24)
 - Modify: `components/gov-chat-frontend/public/index.html` (add `<link>` with `onerror`; relocate `<script src="/config.js">` → `/config/config.js`; add HTML comment)
 
 **Interfaces:**
-- Consumes: existing `src/theme-variables.css` content (read it, do not modify)
+- Consumes: existing `src/theme-variables.css` content (read it, do not modify); existing `loadConfig` body in `src/main.js`
 - Produces:
+  - `src/config-loader.js`: exports `loadConfig` + the module-level `config` default object. Same shape as before — main.js behavior unchanged.
   - `/config/theme-variables.css` served at runtime by nginx (via new `location ^~ /config/` block in Task 3)
   - `/config/theme-variables-fallback.css` as recovery target for `onerror`
-  - `main.js` no longer bundles the CSS
+  - `/config/config.js` dev placeholder so `npm run dev` works without the entrypoint
+  - `main.js` no longer bundles the CSS; loads `loadConfig` from `config-loader.js`
   - `index.html` loads CSS at runtime and uses updated script path
 
 - [ ] **Step 1: Read source CSS**
@@ -180,14 +184,59 @@ diff -q public/config/theme-variables.css public/config/theme-variables-fallback
 
 Expected: `diff` returns silently (files identical). If they differ, redo the copy.
 
-- [ ] **Step 4: Remove import from main.js**
+- [ ] **Step 4: Create dev-mode placeholder for /config/config.js**
 
 ```bash
 cd components/gov-chat-frontend
-grep -n "theme-variables.css" src/main.js
+mkdir -p public/config
+cp public/config.js public/config/config.js
+diff -q public/config.js public/config/config.js
 ```
 
-Expected output should show `24:import './theme-variables.css';`. If line number is different, use the actual line number in the next command.
+Expected: `diff` returns silently. The 260-byte `public/config.js` (existing dev fallback) is replicated under `public/config/` so Vue CLI's dev server (`npm run dev`) serves it at `/config/config.js`. Production uses the entrypoint-generated version (Task 3).
+
+- [ ] **Step 5: Extract `loadConfig` to `src/config-loader.js`**
+
+Open `components/gov-chat-frontend/src/main.js`. The `loadConfig` function body (lines ~25-100 based on inspection) plus the module-level `config` literal it depends on must move to a new file `src/config-loader.js`. The shape:
+
+```javascript
+// src/config-loader.js
+const defaults = {
+  app: {
+    title: 'GENIE.AI',
+    icon: { type: 'file', value: '/config/logo-genie-ai.jpeg' },
+  },
+  theme: {
+    brandColor: '#4071cb',
+  },
+  features: { chat: { welcomeMessage: 'Welcome to GENIE.AI', botName: 'GENIE.AI' } },
+  custom: {},
+};
+
+let config = { ...defaults };
+
+export async function loadConfig() {
+  // ... (existing body, unchanged) ...
+  return config;
+}
+
+export { config as default };
+```
+
+In `src/main.js`, replace the inlined `config` literal and `loadConfig` with:
+```javascript
+import loadConfig, { config } from './config-loader';
+```
+
+Verify the import resolves cleanly:
+```bash
+cd components/gov-chat-frontend
+grep -n "config-loader\|loadConfig" src/main.js | head -10
+```
+
+Expected: shows the new import line and any other `loadConfig` usages unchanged.
+
+- [ ] **Step 6: Remove import from main.js**
 
 Open `components/gov-chat-frontend/src/main.js` and delete the `import './theme-variables.css';` line (whichever line number it actually is at).
 
@@ -198,7 +247,7 @@ grep -n "theme-variables.css" components/gov-chat-frontend/src/main.js
 
 Expected: no output.
 
-- [ ] **Step 5: Update index.html**
+- [ ] **Step 7: Update index.html**
 
 Open `components/gov-chat-frontend/public/index.html` and make the following changes:
 
@@ -217,7 +266,7 @@ With:
 <script src="/config/config.js"></script>
 ```
 
-- [ ] **Step 6: Verify Vue build still produces expected output**
+- [ ] **Step 8: Verify Vue build still produces expected output**
 
 ```bash
 cd components/gov-chat-frontend
@@ -226,12 +275,12 @@ npm run build 2>&1 | tail -20
 
 Expected: build succeeds. Inspect `dist/config/`:
 ```bash
-ls dist/config/theme-variables*.css dist/config.js 2>/dev/null
+ls dist/config/theme-variables*.css dist/config/config.js 2>/dev/null
 ```
 
-Expected: `theme-variables.css` and `theme-variables-fallback.css` present in `dist/config/`, but `dist/config.js` should NOT exist (it's now generated by entrypoint at runtime under `dist/config/config.js`).
+Expected: `theme-variables.css`, `theme-variables-fallback.css`, AND `config.js` (dev placeholder) all present in `dist/config/`.
 
-- [ ] **Step 7: Lint and format check**
+- [ ] **Step 9: Lint and format check**
 
 ```bash
 cd components/gov-chat-frontend
@@ -241,26 +290,34 @@ npm run format:check 2>&1 | tail -5
 
 Expected: no errors. If errors appear, fix them before committing (run `npm run lint:fix` and `npm run format`).
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/runtime-theme-config
 git add components/gov-chat-frontend/src/theme-variables.css \
         components/gov-chat-frontend/public/config/theme-variables.css \
         components/gov-chat-frontend/public/config/theme-variables-fallback.css \
+        components/gov-chat-frontend/public/config/config.js \
+        components/gov-chat-frontend/src/config-loader.js \
         components/gov-chat-frontend/src/main.js \
         components/gov-chat-frontend/public/index.html
-git commit -m "feat(frontend): move theme CSS to runtime-loaded config
+git commit -m "feat(frontend): move theme CSS to runtime-loaded config + extract loadConfig
 
 theme-variables.css now lives in public/config/ (Vue CLI passthrough,
 not bundled). Loaded at runtime via <link> in index.html. A verbatim
 fallback file is also shipped so the <link onerror> handler can recover
 gracefully when the runtime file is unreachable (e.g. mount missing).
 The /config.js runtime-generated file is relocated to /config/config.js
-so it inherits the same no-cache nginx location as the CSS.
+so it inherits the same no-cache nginx location as the CSS. A static
+placeholder at public/config/config.js (verbatim copy of the existing
+public/config.js dev fallback) keeps 'npm run dev' working without
+requiring the docker-entrypoint writer to run.
 
-Removes the import in src/main.js (line 24) — main.js still injects a
-runtime subset of CSS custom properties via loadConfig()."
+The loadConfig function and its module-level config default object are
+extracted from src/main.js into src/config-loader.js. This makes
+loadConfig independently importable for unit tests without dragging in
+Vue, Vuex, ApexCharts, and the top-level await mount sequence. main.js
+imports loadConfig from the new file; no behavior change at runtime."
 ```
 
 Expected: 1 commit on `feat/runtime-theme-config`.
@@ -380,16 +437,17 @@ Expected: 1 commit on `feat/runtime-theme-config`.
 
 ---
 
-## Task 4: Delete Keycloak Dockerfile + Switch to Upstream Image
+## Task 4: Delete Keycloak Dockerfile + Switch to Upstream Image + CI + deploy-shared-facts
 
 **Files:**
 - Delete: `configs/keycloak/Dockerfile`
 - Modify: `docker-compose.yaml` (line 1578, the keycloak `build:` directive)
-- Modify: `.gitlab-ci.yml` (remove any references to `configs/keycloak/Dockerfile`)
+- Modify: `.gitlab-ci.yml` (remove `genie-ai-keycloak` jobs; KEEP `genie-ai-keycloak-config` jobs)
+- Modify: `deploy/ansible/tasks/deploy-shared-facts.yml` (remove `genie-ai-keycloak` entry from `genieai_images`)
 
 **Interfaces:**
 - Consumes: existing `configs/keycloak/Dockerfile` (read once for context, then delete)
-- Produces: keycloak service uses upstream `quay.io/keycloak/keycloak:26.7.0` image; CI no longer builds a custom keycloak image
+- Produces: keycloak service uses upstream `quay.io/keycloak/keycloak:26.7.0` image; CI no longer builds a custom keycloak image; Ansible no longer validates overrides against the removed image
 
 - [ ] **Step 1: Inspect the existing Dockerfile**
 
@@ -448,21 +506,54 @@ If any subdir is missing, this is a separate problem (do NOT silently fix it in 
 
 - [ ] **Step 5: Update .gitlab-ci.yml**
 
-Open `.gitlab-ci.yml` and search for:
-- `configs/keycloak/Dockerfile` paths
-- `genie-ai-keycloak` image name references
-- Any build matrix entries or scan/promote jobs that iterate over the keycloak image
+CRITICAL: there are TWO Keycloak-related images in the build matrix:
+- `genie-ai-keycloak` (built from `configs/keycloak/Dockerfile`) — DELETE this from CI
+- `genie-ai-keycloak-config` (built from `configs/keycloak/Dockerfile.config-cli`) — KEEP this; it imports the realm YAML at runtime and does not depend on the theme files
 
-For each occurrence, remove the keycloak image from the build matrix. If keycloak was the only image in a build stage, remove the stage.
-
-Verify removal:
+First, count and identify ALL occurrences of `genie-ai-keycloak` (NOT `genie-ai-keycloak-config`):
 ```bash
-grep -nE "(configs/keycloak|genie-ai-keycloak)" .gitlab-ci.yml | head -10
+grep -nE "genie-ai-keycloak" .gitlab-ci.yml | grep -v "genie-ai-keycloak-config"
 ```
 
-Expected: no output (no remaining references). If references remain that you cannot safely remove, surface to user.
+Expected: multiple lines referencing build/scan/promote jobs for the `genie-ai-keycloak` image. The exact line numbers depend on the .gitlab-ci.yml layout but expect 5-10 lines covering build, scan, promote (and possibly cleanup) stages.
 
-- [ ] **Step 6: Validate docker-compose still parses**
+For EACH occurrence of `genie-ai-keycloak` (NOT `genie-ai-keycloak-config`), remove the corresponding job block. Typical CI patterns to remove:
+- A `build:keycloak` job that references `genie-ai-keycloak`
+- A `scan:keycloak` job (Trivy scan of the same image)
+- A `promote:keycloak` job (retag digests)
+
+DO NOT remove `build:keycloak-config`, `scan:keycloak-config`, or `promote:keycloak-config`. These belong to the config-cli image which the realm import depends on.
+
+After the edit, verify:
+```bash
+grep -nE "genie-ai-keycloak\b" .gitlab-ci.yml
+```
+
+Expected: no output (the `\b` word boundary prevents matching `genie-ai-keycloak-config`).
+
+Verify the config-cli image is still referenced:
+```bash
+grep -n "genie-ai-keycloak-config" .gitlab-ci.yml | wc -l
+```
+
+Expected: a non-zero count (typically 3-5 lines for build/scan/promote).
+
+If references remain that you cannot safely remove, surface to user.
+
+- [ ] **Step 6: Update deploy-shared-facts.yml**
+
+The `genieai_images` set_fact at line 18-34 of `deploy/ansible/tasks/deploy-shared-facts.yml` enumerates the 16 images Ansible validates `image_tag_overrides` against. Remove the `genie-ai-keycloak` entry to keep validation honest; an operator who passes `image_tag_overrides={'genie-ai-keycloak': 'v1'}` would otherwise see the override accepted but silently ignored (env.j2 still emits unused `GENIE_AI_KEYCLOAK_IMAGE` vars).
+
+Open `deploy/ansible/tasks/deploy-shared-facts.yml` and delete the entry that has `name: "genie-ai-keycloak"` (and only that one — the `keycloak-config` entry stays).
+
+Verify:
+```bash
+grep -n "genie-ai-keycloak" deploy/ansible/tasks/deploy-shared-facts.yml
+```
+
+Expected: only `keycloak-config` lines remain.
+
+- [ ] **Step 7: Validate docker-compose still parses**
 
 ```bash
 docker compose config --quiet 2>&1 | head -10
@@ -470,13 +561,14 @@ docker compose config --quiet 2>&1 | head -10
 
 Expected: no errors. If errors appear, fix the yaml (likely indentation or stray `build:` args).
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/runtime-theme-config
 git add configs/keycloak/Dockerfile \
         docker-compose.yaml \
-        .gitlab-ci.yml
+        .gitlab-ci.yml \
+        deploy/ansible/tasks/deploy-shared-facts.yml
 git commit -m "refactor(keycloak): switch to upstream image, drop custom Dockerfile
 
 The local Dockerfile only existed to COPY themes/ into the image. With
@@ -490,8 +582,13 @@ types to KEYCLOAK_THEME, so all four subdirs are required to preserve
 the existing UX (login screen, account console, admin console, email
 templates).
 
-.gitlab-ci.yml no longer builds a keycloak image — one fewer image in
-the build matrix."
+.gitlab-ci.yml removes build/scan/promote for genie-ai-keycloak but
+KEEPS genie-ai-keycloak-config (Dockerfile.config-cli) which imports
+the realm YAML at runtime and does not depend on theme files.
+
+deploy-shared-facts.yml drops the genie-ai-keycloak entry from
+genieai_images so image_tag_overrides validation no longer accepts
+override keys that would silently no-op."
 ```
 
 Expected: 1 commit on `feat/runtime-theme-config`.
@@ -562,11 +659,21 @@ Expected: no errors.
 
 - [ ] **Step 6: Smoke-test local compose up for the changed services**
 
+CRITICAL: Keycloak 26.7.0 takes ~30 seconds for first boot (Postgres import + realm import). Do NOT exec into containers immediately after `up -d`; wait for the healthcheck to pass.
+
 ```bash
 docker compose up -d frontend keycloak 2>&1 | tail -15
 ```
 
-Expected: both services start. Check that `/app/dist/config/` exists inside the frontend container:
+Wait for the services to reach a healthy state:
+
+```bash
+# Polls docker compose ps every 2s for up to 90s, exits 0 when both are 'running' (not 'starting')
+timeout 90 bash -c 'until docker compose ps --format json 2>/dev/null | jq -e ".[] | select(.Service==\"frontend\" or .Service==\"keycloak\") | select(.State==\"running\") | length == 2" >/dev/null 2>&1; do sleep 2; done'
+echo "Both services running"
+```
+
+Check `/app/dist/config/` exists inside the frontend container:
 
 ```bash
 docker compose exec frontend ls /app/dist/config/ 2>&1 | head -10
@@ -628,8 +735,9 @@ Expected: 1 commit on `feat/runtime-theme-config`.
 **Interfaces:**
 - Consumes:
   - `playbook_dir` (Ansible-provided, used to compute cross-tree rsync sources)
+  - `config_dir` (defined in `group_vars/all.yml` so it is visible to BOTH the `config_bootstrap` role plays AND the `deploy` play that renders env.j2)
   - `env_name` (from `group_vars/all.yml`)
-  - `group_names` (Ansible-provided, used as fallback in `config_dir` default)
+  - `group_names` (Ansible-provided, used as fallback in `env_name` and `config_dir` defaults)
 - Produces:
   - `/opt/genieai-<env_name>/config/frontend/` and `/opt/genieai-<env_name>/config/keycloak/themes/genie/` on every node
   - `CONFIG_DIR_FRONTEND` and `CONFIG_DIR_KEYCLOAK` env vars in the rendered `/opt/genieai-<env_name>/.env`
@@ -652,14 +760,12 @@ mkdir -p deploy/ansible/roles/config_bootstrap/{tasks,defaults,meta}
 
 - [ ] **Step 3: Create defaults/main.yml**
 
+`config_dir` is NOT defined here — it lives in `group_vars/all.yml` (Step 6) so it is visible across plays (the `deploy` play that renders env.j2 is separate from this role's play). The role inherits `config_dir` from group_vars.
+
 Write `deploy/ansible/roles/config_bootstrap/defaults/main.yml`:
 
 ```yaml
 ---
-# Default config directory for runtime-loaded theme assets.
-# Resolves per-environment so multi-env hosts don't collide on a shared path.
-config_dir: "/opt/genieai-{{ env_name | default(group_names[0] | default('default')) }}/config"
-
 # Whether to actually rsync from the repo. Operators can set false to skip
 # when they want to manage the host directory entirely by hand.
 config_bootstrap_sync_enabled: true
@@ -701,7 +807,17 @@ Write `deploy/ansible/roles/config_bootstrap/tasks/main.yml`:
     label: "{{ item.dest_subdir }}"
   when: config_bootstrap_sync_enabled | bool
   register: config_bootstrap_sync
-  changed_when: config_bootstrap_sync.rc == 0  # rsync returns 0 even on no-op
+  changed_when: config_bootstrap_sync.changed | bool
+
+- name: Assert synchronize was idempotent on rerun (manual edits preserved)
+  ansible.builtin.assert:
+    that:
+      - not config_bootstrap_sync.changed | bool or config_bootstrap_sync.rc == 0
+    fail_msg: "config_bootstrap: synchronize reported changed=true after a no-op run; check --ignore-existing flag is still present"
+    success_msg: "config_bootstrap: idempotent (no files transferred on rerun)"
+  when:
+    - config_bootstrap_sync_enabled | bool
+    - not ansible_check_mode | default(false) | bool
 ```
 
 - [ ] **Step 5: Create meta/main.yml**
@@ -724,7 +840,9 @@ galaxy_info:
 dependencies: []
 ```
 
-- [ ] **Step 6: Add `env_name` to group_vars/all.yml**
+- [ ] **Step 6: Add `env_name` AND `config_dir` to group_vars/all.yml**
+
+CRITICAL: `config_dir` MUST live in group_vars (not the role's defaults/main.yml) because env.j2 is rendered in the SEPARATE `deploy` play which does not include this role. Role defaults are scoped to the role's plays; only group_vars are visible across all plays.
 
 ```bash
 grep -n "deploy_dir:" deploy/ansible/group_vars/all.yml | head -3
@@ -737,14 +855,21 @@ In `deploy/ansible/group_vars/all.yml`, add (alongside `deploy_dir`):
 # Defaults to the first inventory group the host belongs to, so multi-env
 # hosts do not collide on /opt/genieai-/config.
 env_name: "{{ group_names[0] | default('default') }}"
+
+# Runtime config directory on the host. Promoted to group_vars so both
+# the config_bootstrap role AND the deploy play (which renders env.j2)
+# see the same value. The nested |length filter guards against an empty
+# string slipping through the |default filter (Jinja's default() only
+# fires on undefined, not empty).
+config_dir: "/opt/genieai-{{ env_name | default(group_names[0] | default('default')) }}/config"
 ```
 
-Verify the addition:
+Verify the additions:
 ```bash
-grep -n "env_name:" deploy/ansible/group_vars/all.yml
+grep -n "env_name:\|config_dir:" deploy/ansible/group_vars/all.yml
 ```
 
-Expected: a single line showing the new var definition.
+Expected: two lines, one for each var definition.
 
 - [ ] **Step 7: Add 2 vars to env.j2**
 
@@ -752,9 +877,10 @@ Expected: a single line showing the new var definition.
 grep -n "KEYCLOAK_THEME\|GENIE_AI_CONFIG\|deploy_dir" deploy/ansible/templates/env.j2 | head -10
 ```
 
-In `deploy/ansible/templates/env.j2`, near the bottom (alongside the existing image-tag overrides), add:
+In `deploy/ansible/templates/env.j2`, find the `{% endfor %}` line that closes the `{% for img in genieai_images %}` loop (around line 413). Place the new lines AFTER the `{% endfor %}` and BEFORE the next existing block (e.g., `{% if data_dir %}`). Do NOT place them inside the for loop or they will render once per image (16 copies). Add a section comment:
 
 ```jinja
+# RUNTIME THEME CONFIG MOUNTS (mount sources for /config/ bind mounts)
 CONFIG_DIR_FRONTEND={{ config_dir }}/frontend
 CONFIG_DIR_KEYCLOAK={{ config_dir }}/keycloak
 ```
@@ -808,22 +934,24 @@ deploy.yml gains a play tagged [config] that applies the role to all
 hosts. env.j2 exports CONFIG_DIR_FRONTEND and CONFIG_DIR_KEYCLOAK for
 docker-compose to consume.
 
-group_vars/all.yml adds env_name, resolved from the inventory group
-name, so multi-env hosts don't collide on a shared path."
+group_vars/all.yml adds env_name (resolved from the inventory group
+name) AND config_dir (promoted from role defaults so env.j2 — rendered
+in the separate deploy play — sees the same value). The role inherits
+config_dir from group_vars."
 ```
 
 Expected: 1 commit on `feat/runtime-theme-config`.
 
 ---
 
-## Task 7: Jest Unit Tests for loadConfig Fallback
+## Task 7: Jest Unit Tests for config-loader Fallback
 
 **Files:**
-- Create: `components/gov-chat-frontend/src/__tests__/loadConfig.spec.js`
+- Create: `components/gov-chat-frontend/src/__tests__/config-loader.spec.js`
 
 **Interfaces:**
-- Consumes: existing `src/main.js` `loadConfig` function (read it; don't modify behavior in this task)
-- Produces: Jest tests verifying loadConfig's fallback path on fetch failure
+- Consumes: extracted `src/config-loader.js` module (Task 2) exporting `loadConfig` + a module-level `config` default object
+- Produces: Jest tests pinning the fallback contract: fetch is attempted, fallback used on failure, success injects CSS custom properties
 
 - [ ] **Step 1: Inspect existing test directory**
 
@@ -834,14 +962,16 @@ cat components/gov-chat-frontend/jest.config.js
 
 Use the existing test patterns as a reference. Skip if `__tests__/` does not exist yet.
 
-- [ ] **Step 2: Write the failing test**
+- [ ] **Step 2: Write the failing tests**
 
-Create `components/gov-chat-frontend/src/__tests__/loadConfig.spec.js`:
+CRITICAL: assertions must verify the ACTUAL fallback path, not coincidentally-passing values. The module-level `config` default has `theme.brandColor: '#4071cb'` — a test that asserts `config.theme.brandColor === '#4071cb'` after a 404 would pass even if `loadConfig` never attempted fetch. Pin fetch invocation and side effects instead.
+
+Create `components/gov-chat-frontend/src/__tests__/config-loader.spec.js`:
 
 ```javascript
-import { loadConfig } from '../main';
+import { loadConfig, config } from '../config-loader';
 
-// Mock fetch globally
+// Capture original fetch for restoration
 const originalFetch = global.fetch;
 
 describe('loadConfig', () => {
@@ -851,21 +981,49 @@ describe('loadConfig', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    jest.restoreAllMocks();
   });
 
-  it('uses bundled defaults when /config/genie-ai-config.json returns 404', async () => {
+  it('attempts to fetch /config/genie-ai-config.json on every call', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: false, status: 404 });
+
+    await loadConfig();
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith('/config/genie-ai-config.json');
+  });
+
+  it('uses bundled defaults when fetch returns 404 (no override applied)', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: false, status: 404 });
+
+    const result = await loadConfig();
+
+    // Bundled defaults preserved — fields NOT in default object stay absent
+    expect(result.theme.brandColor).toBe('#4071cb');
+    expect(result.theme.colors).toBeUndefined();
+    expect(result.theme.navbar).toBeUndefined();
+  });
+
+  it('merges fetched JSON over defaults when fetch succeeds', async () => {
     global.fetch.mockResolvedValueOnce({
-      ok: false,
-      status: 404,
+      ok: true,
+      json: () => Promise.resolve({
+        theme: {
+          brandColor: '#ff0000',
+          colors: { success: '#00ff00', warning: '#ffff00' },
+        },
+      }),
     });
 
-    const config = await loadConfig();
+    const result = await loadConfig();
 
-    // Default brandColor fallback is '#4071cb' per public/config/config.js
-    expect(config.theme.brandColor).toBe('#4071cb');
+    expect(result.theme.brandColor).toBe('#ff0000');          // overridden
+    expect(result.theme.colors.success).toBe('#00ff00');      // injected
+    expect(result.theme.colors.warning).toBe('#ffff00');     // injected
+    expect(result.app.title).toBe('GENIE.AI');                // default preserved (nested merge)
   });
 
-  it('injects CSS custom properties when fetch returns valid JSON', async () => {
+  it('injects CSS custom properties on document.documentElement when fetch succeeds', async () => {
     const setProperty = jest.spyOn(document.documentElement.style, 'setProperty');
 
     global.fetch.mockResolvedValueOnce({
@@ -889,8 +1047,18 @@ describe('loadConfig', () => {
     expect(setProperty).toHaveBeenCalledWith('--navbar-fg', '#ffffff');
     expect(setProperty).toHaveBeenCalledWith('--font-body', 'Arial');
     expect(setProperty).toHaveBeenCalledWith('--font-scale', '1.2');
+  });
 
-    setProperty.mockRestore();
+  it('does NOT inject any CSS custom properties when fetch fails (fallback path)', async () => {
+    const setProperty = jest.spyOn(document.documentElement.style, 'setProperty');
+
+    global.fetch.mockResolvedValueOnce({ ok: false, status: 404 });
+
+    await loadConfig();
+
+    // No brandColor in fetched JSON, no CSS var should be set
+    const brandCalls = setProperty.mock.calls.filter(call => call[0] === '--brand');
+    expect(brandCalls).toHaveLength(0);
   });
 
   it('falls back to defaults on JSON parse error', async () => {
@@ -899,8 +1067,8 @@ describe('loadConfig', () => {
       json: () => Promise.reject(new Error('invalid JSON')),
     });
 
-    const config = await loadConfig();
-    expect(config.theme.brandColor).toBe('#4071cb');
+    const result = await loadConfig();
+    expect(result.theme.brandColor).toBe('#4071cb');
   });
 });
 ```
@@ -909,12 +1077,12 @@ describe('loadConfig', () => {
 
 ```bash
 cd components/gov-chat-frontend
-npm test -- loadConfig 2>&1 | tail -30
+npm test -- config-loader 2>&1 | tail -30
 ```
 
-Expected: all 3 tests pass.
+Expected: all 6 tests pass.
 
-If tests fail, fix the test or the loadConfig implementation. Do NOT modify `main.js` behavior in this task — only fix the test if it is wrong.
+If tests fail, the most likely cause is that the module-level `config` object is mutable across tests (tests share state via the same module instance). If that's the case, add `jest.resetModules()` in `beforeEach` and re-`import` inside each test. Do NOT modify `config-loader.js` behavior in this task — only fix the test setup if needed.
 
 - [ ] **Step 4: Run full frontend test suite to verify no regressions**
 
@@ -929,13 +1097,22 @@ Expected: all tests pass, no new failures.
 
 ```bash
 cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/runtime-theme-config
-git add components/gov-chat-frontend/src/__tests__/loadConfig.spec.js
+git add components/gov-chat-frontend/src/__tests__/config-loader.spec.js
 git commit -m "test(frontend): loadConfig fallback and CSS injection coverage
 
-Three unit tests pin loadConfig behavior:
-1. Fetch 404 → bundled defaults used (the new /config/genie-ai-config.json
-   may be missing on first deploy before Ansible rsync runs)
-2. Valid JSON → CSS custom properties set on documentElement
+Six unit tests pin loadConfig behavior:
+1. Fetch attempted exactly once with the expected URL
+2. Fetch 404 → bundled defaults preserved (no override, no stale merge)
+3. Fetch success → fetched JSON merged over defaults (overrides applied)
+4. CSS custom properties injected on document.documentElement per the schema
+5. Fetch 404 → no CSS properties set (no stale vars from prior calls)
+6. JSON parse error → defaults preserved
+
+Tests import from config-loader (extracted in Task 2) to avoid
+triggering main.js's top-level side effects (Vue, Vuex, ApexCharts,
+createApp, mount). Tests pin the actual fallback contract — assertions
+that would pass coincidentally (e.g. assert brandColor='#4071cb'
+without verifying fetch was called) are avoided."
 3. JSON parse error → bundled defaults used (defensive against mount returning
    a partial file)"
 ```
@@ -999,7 +1176,17 @@ test.describe('Runtime theme config', () => {
   test('editing theme-variables.css on host updates browser on page.reload()', async ({ page, request }) => {
     // This test requires SSH access to the Swarm manager node.
     // Skip if not in a deploy environment that supports it.
-    test.skip(!process.env.DEPLOY_HOST, 'Requires DEPLOY_HOST env var for host-side edit');
+    test.skip(
+      !process.env.DEPLOY_HOST || !process.env.DEPLOY_ENV_NAME,
+      'Requires DEPLOY_HOST and DEPLOY_ENV_NAME env vars for host-side edit'
+    );
+
+    // Derive host path and service name from env_name (matches Ansible's
+    // config_dir derivation in group_vars/all.yml).
+    const envName = process.env.DEPLOY_ENV_NAME;
+    const configDir = `/opt/genieai-${envName}/config`;
+    const stackName = `genieai_${envName.replace(/[^a-z0-9]/gi, '_')}`;
+    const serviceName = `${stackName}_frontend`;
 
     // 1. Fetch original CSS content
     const originalResponse = await request.get('/config/theme-variables.css');
@@ -1018,13 +1205,14 @@ test.describe('Runtime theme config', () => {
       `$1#deadbeef`
     );
     const { execSync } = require('child_process');
+    const sshTarget = `${process.env.DEPLOY_SSH_USER}@${process.env.DEPLOY_HOST}`;
     execSync(
-      `ssh ${process.env.DEPLOY_SSH_USER}@${process.env.DEPLOY_HOST} "echo '${newContent.replace(/'/g, "'\\''")}' > /opt/genieai-main/config/frontend/theme-variables.css"`
+      `ssh ${sshTarget} "echo '${newContent.replace(/'/g, "'\\''")}' > ${configDir}/frontend/theme-variables.css"`
     );
 
     // 4. docker service update --force
     execSync(
-      `ssh ${process.env.DEPLOY_SSH_USER}@${process.env.DEPLOY_HOST} "docker service update --force genieai_main_frontend"`
+      `ssh ${sshTarget} "docker service update --force ${serviceName}"`
     );
 
     // 5. Wait for service to come back healthy
@@ -1039,10 +1227,10 @@ test.describe('Runtime theme config', () => {
 
     // 7. Restore original file
     execSync(
-      `ssh ${process.env.DEPLOY_SSH_USER}@${process.env.DEPLOY_HOST} "echo '${originalContent.replace(/'/g, "'\\''")}' > /opt/genieai-main/config/frontend/theme-variables.css"`
+      `ssh ${sshTarget} "echo '${originalContent.replace(/'/g, "'\\''")}' > ${configDir}/frontend/theme-variables.css"`
     );
     execSync(
-      `ssh ${process.env.DEPLOY_SSH_USER}@${process.env.DEPLOY_HOST} "docker service update --force genieai_main_frontend"`
+      `ssh ${sshTarget} "docker service update --force ${serviceName}"`
     );
   });
 });
@@ -1098,39 +1286,38 @@ Create `deploy/ansible/roles/config_bootstrap/tests/test_idempotence.sh`:
 ```bash
 #!/usr/bin/env bash
 # Smoke test for config_bootstrap role idempotence.
-# Usage: ./test_idempotence.sh <inventory_file> <env_name>
-# Example: ./test_idempotence.sh inventory/test.ini test
+# Usage: ./test_idempotence.sh <inventory_file> <env_name> <host>
+# Example: ./test_idempotence.sh inventory/test.ini test gateway-01
 
 set -euo pipefail
 
 INVENTORY="${1:-inventory/test.ini}"
 ENV_NAME="${2:-test}"
+HOST="${3:-$(ansible -i "$INVENTORY" gateway --list-hosts 2>/dev/null | head -1 | awk '{print $1}')}"
 
 # Ensure the role runs from the deploy/ansible directory
 cd "$(dirname "$0")/../../.."
 
+echo "=== Targeting single host: $HOST ==="
 echo "=== Run 1: populate host runtime config dir ==="
-ansible-playbook -i "$INVENTORY" deploy.yml --tags config --extra-vars "env_name=$ENV_NAME"
+ansible-playbook -i "$INVENTORY" deploy.yml --tags config --limit "$HOST" --extra-vars "env_name=$ENV_NAME"
 
 echo "=== Verify theme-variables.css exists on host ==="
-ansible -i "$INVENTORY" all -m shell -a "test -f /opt/genieai-$ENV_NAME/config/frontend/theme-variables.css"
+ansible -i "$INVENTORY" "$HOST" -m shell -a "test -f /opt/genieai-$ENV_NAME/config/frontend/theme-variables.css"
 
 echo "=== Run 2: rerun, should be no-op (idempotence) ==="
-ansible-playbook -i "$INVENTORY" deploy.yml --tags config --extra-vars "env_name=$ENV_NAME"
+ansible-playbook -i "$INVENTORY" deploy.yml --tags config --limit "$HOST" --extra-vars "env_name=$ENV_NAME"
 
 echo "=== Verify all 4 Keycloak themed subdirs ==="
-ansible -i "$INVENTORY" all -m shell -a "ls /opt/genieai-$ENV_NAME/config/keycloak/themes/genie/"
+ansible -i "$INVENTORY" "$HOST" -m shell -a "ls /opt/genieai-$ENV_NAME/config/keycloak/themes/genie/"
 
 echo "=== Verify manual edits are preserved on rerun ==="
-# Pick a host
-HOST=$(ansible -i "$INVENTORY" all --list-hosts 2>/dev/null | head -1 | awk '{print $1}')
-
 # Edit a file on the host (add a comment line)
 ansible -i "$INVENTORY" "$HOST" -m shell -a \
   "echo '/* manual edit */' >> /opt/genieai-$ENV_NAME/config/frontend/theme-variables.css"
 
 # Rerun the role
-ansible-playbook -i "$INVENTORY" deploy.yml --tags config --extra-vars "env_name=$ENV_NAME"
+ansible-playbook -i "$INVENTORY" deploy.yml --tags config --limit "$HOST" --extra-vars "env_name=$ENV_NAME"
 
 # Verify the manual edit is still there
 ansible -i "$INVENTORY" "$HOST" -m shell -a \
@@ -1277,7 +1464,7 @@ No `CONFIG_DIR_*` env vars set → service starts using image-baked defaults. Ex
 Closes #998
 EOF
 )" \
-  --label "tech-debt,deployment,architecture" \
+  --label "tech-debt" --label "deployment" --label "architecture" \
   --remove-source-branch
 ```
 

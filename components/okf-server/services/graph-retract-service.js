@@ -93,7 +93,9 @@ async function dropRepoGraphsForRepo(repo_id) {
         }
       } catch (err) {
         logger.warn('Graph teardown: orphan sweep query failed', {
-          repo_id, prefix, error: err.message
+          repo_id,
+          prefix,
+          error: err.message
         });
       }
     }

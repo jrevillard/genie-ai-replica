@@ -63,10 +63,9 @@ async function main() {
   let updatedRepos = 0;
   let skippedRepos = 0;
   for (const [repoId, rows] of byRepo) {
-    const repoCursor = await db.query(
-      'FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter',
-      { rid: repoId }
-    );
+    const repoCursor = await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter', {
+      rid: repoId
+    });
     const repoRows = await repoCursor.all();
     const existing = (repoRows && repoRows[0] && repoRows[0][0]) || null;
     if (existing && existing.updated_at) {

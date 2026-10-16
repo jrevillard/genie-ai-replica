@@ -331,7 +331,13 @@ function draftWholeMarkdown(text, { baseSlug, title, meta }) {
   // a file with no authorial sources gets the importing document's stamp.
   if (!Array.isArray(frontmatter.sources) || frontmatter.sources.length === 0) {
     frontmatter.sources = [
-      { kind: 'document', resource: meta.baseResource, file_id: meta.file_id, file_name: meta.file_name, locator: 'whole document' }
+      {
+        kind: 'document',
+        resource: meta.baseResource,
+        file_id: meta.file_id,
+        file_name: meta.file_name,
+        locator: 'whole document'
+      }
     ];
   }
   return [
@@ -665,9 +671,7 @@ async function runDocumentsConversion(job) {
                 }
               })
             )
-            .catch((e) =>
-              logger.warn('OKF topic-link progress write failed: ' + e.message, { repo_id })
-            );
+            .catch((e) => logger.warn('OKF topic-link progress write failed: ' + e.message, { repo_id }));
           return linkWrites;
         };
         topicLinks = await authorRepoTopicLinks(cRepo, {

@@ -80,7 +80,9 @@ beforeEach(() => {
 
 describe('delete cascade wires backingFileService.hardDelete', () => {
   test('remove() hard-deletes the backing files', async () => {
-    await mockDb.collection('okf_repositories').save({ _key: REPO, repo_id: REPO, name: 'R', lifecycle_state: 'draft' });
+    await mockDb
+      .collection('okf_repositories')
+      .save({ _key: REPO, repo_id: REPO, name: 'R', lifecycle_state: 'draft' });
     await repoService.remove(REPO, ACTOR);
     expect(backingFileService.hardDelete).toHaveBeenCalledTimes(1);
     expect(backingFileService.hardDelete.mock.calls[0][0]).toBe(REPO);
@@ -91,7 +93,9 @@ describe('delete cascade wires backingFileService.hardDelete', () => {
     // Arango REMOVE; once it runs, the files docs are gone and hardDelete has
     // no file_id left to hand document-repository — the upload bytes would be
     // orphaned in the storage dir forever (no FK, no reclamation path).
-    await mockDb.collection('okf_repositories').save({ _key: REPO, repo_id: REPO, name: 'R', lifecycle_state: 'draft' });
+    await mockDb
+      .collection('okf_repositories')
+      .save({ _key: REPO, repo_id: REPO, name: 'R', lifecycle_state: 'draft' });
     await repoService.remove(REPO, ACTOR);
     expect(order).toEqual(['hardDelete', 'retractRepoGraph']);
   });
@@ -116,7 +120,9 @@ describe('delete cascade wires backingFileService.hardDelete', () => {
   });
 
   test('a backing-file failure never fails the DELETE (best-effort cascade branch)', async () => {
-    await mockDb.collection('okf_repositories').save({ _key: REPO, repo_id: REPO, name: 'R', lifecycle_state: 'draft' });
+    await mockDb
+      .collection('okf_repositories')
+      .save({ _key: REPO, repo_id: REPO, name: 'R', lifecycle_state: 'draft' });
     backingFileService.hardDelete.mockRejectedValueOnce(new Error('doc-repo unreachable'));
     const res = await repoService.remove(REPO, ACTOR);
     // The registry entry still goes — that is what "delete" means.

@@ -72,14 +72,12 @@ describe('repository-service.update — the rename path (born-right graph carry)
     expect(oldNameArg).toBe('Old Name');
     // its own audit row
     const rows = writeAudit.mock.calls.map((c) => c[0]);
-    expect(rows.some((r) => r.action === 'repo.rename' && /"Old Name" to "New Name"/.test(r.description))).toBe(
-      true
-    );
+    expect(rows.some((r) => r.action === 'repo.rename' && /"Old Name" to "New Name"/.test(r.description))).toBe(true);
   });
 
   test('a NON-name update does not touch the graph', async () => {
     seedRepo();
-    await repoService.update(RID, { 'acl': { required_scopes: ['x'] } });
+    await repoService.update(RID, { acl: { required_scopes: ['x'] } });
     expect(renameForRepoNameChange).not.toHaveBeenCalled();
   });
 

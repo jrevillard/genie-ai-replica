@@ -619,9 +619,7 @@ function buildSuggestContext(groups, n) {
   // Per-label quota is FLAT (equal material per subject), bounded by what the
   // group actually has and by SUGGEST_PER_LABEL_ROWS so one huge label can't
   // flood the prompt. `n` and the char budget are the overall rails.
-  const ordered = usable
-    .slice()
-    .sort((a, b) => b.total - a.total || String(a.label).localeCompare(String(b.label)));
+  const ordered = usable.slice().sort((a, b) => b.total - a.total || String(a.label).localeCompare(String(b.label)));
   const perLabel = Math.max(1, SUGGEST_PER_LABEL_ROWS);
   const charBudget = Math.max(2000, n);
   const quotas = new Map();
@@ -878,11 +876,19 @@ async function suggestTags(repoId, _opts = {}) {
 
     const out = {
       topic: cap(
-        clean(uniqTags(arr('topic', 'topics', 'repo_level_topics', 'topic_set', 'subjects').map(normalizeTag).filter(Boolean))),
+        clean(
+          uniqTags(
+            arr('topic', 'topics', 'repo_level_topics', 'topic_set', 'subjects').map(normalizeTag).filter(Boolean)
+          )
+        ),
         'topic'
       ),
       entity: cap(
-        clean(uniqTags(arr('entity', 'entities', 'named_entities', 'people_products_places').map(normalizeTag).filter(Boolean))),
+        clean(
+          uniqTags(
+            arr('entity', 'entities', 'named_entities', 'people_products_places').map(normalizeTag).filter(Boolean)
+          )
+        ),
         'entity'
       ),
       scope: normalizeTag(parsed.scope || parsed.scope_label || parsed.scope_word || parsed.scope_kind),
@@ -894,7 +900,9 @@ async function suggestTags(repoId, _opts = {}) {
             ? parsed.description.slice(0, 512)
             : null,
       keyword: cap(
-        clean(uniqTags(arr('keyword', 'keywords', 'specific_terms', 'low_coverage_terms').map(normalizeTag).filter(Boolean))),
+        clean(
+          uniqTags(arr('keyword', 'keywords', 'specific_terms', 'low_coverage_terms').map(normalizeTag).filter(Boolean))
+        ),
         'keyword'
       )
     };
@@ -982,10 +990,8 @@ async function validateFrontmatter(repoId, frontmatter, _opts = {}) {
             resp.data.choices[0].message.content;
           const parsed = extractJson(content, {
             repair:
-              (resp.data &&
-                resp.data.choices &&
-                resp.data.choices[0] &&
-                resp.data.choices[0].finish_reason) === 'length'
+              (resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].finish_reason) ===
+              'length'
           });
           const results = parsed && parsed.results;
           if (!Array.isArray(results)) return { tag, inconsistent: false, match_ratio: 0, reason: 'parse_failed' };

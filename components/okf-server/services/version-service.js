@@ -59,9 +59,7 @@ const { createHash } = require('node:crypto');
  * publishable content actually moves.
  */
 function fingerprintOf(concepts) {
-  const parts = (concepts || [])
-    .map((c) => `${c.concept_id}:${c.content_hash || ''}`)
-    .sort();
+  const parts = (concepts || []).map((c) => `${c.concept_id}:${c.content_hash || ''}`).sort();
   return createHash('sha256').update(parts.join('\n')).digest('hex');
 }
 
@@ -296,8 +294,7 @@ async function mintVersion(repo_id, opts = {}, actor) {
       // steward cannot meaningfully author by hand. Each blocking entry names
       // the concept AND its issues in clear terms.
       const nonConformant = concepts.filter(
-        (c) =>
-          Array.isArray(c.conformance_issues) && c.conformance_issues.some((i) => i && i.severity === 'error')
+        (c) => Array.isArray(c.conformance_issues) && c.conformance_issues.some((i) => i && i.severity === 'error')
       );
       if (nonConformant.length > 0) {
         const detail = nonConformant

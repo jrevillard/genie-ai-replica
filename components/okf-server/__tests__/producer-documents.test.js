@@ -161,7 +161,9 @@ describe('producer-service — segmentation + whole-corpus linking', () => {
 
   it('draftWholeMarkdown: frontmatter without a usable title is rejected; frontmatter-less falls back; authorial-less sources get the stamp', () => {
     expect(producer.draftWholeMarkdown('no frontmatter here\n## Head\nbody', { baseSlug: 'x', meta })).toBeNull();
-    expect(producer.draftWholeMarkdown('---\ndescription: no title key\n---\nbody', { baseSlug: 'x', meta })).toBeNull();
+    expect(
+      producer.draftWholeMarkdown('---\ndescription: no title key\n---\nbody', { baseSlug: 'x', meta })
+    ).toBeNull();
 
     const stamped = producer.draftWholeMarkdown('---\ntitle: Fresh concept\n---\n\nBody text.\n', {
       baseSlug: 'fresh',
@@ -447,9 +449,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
         data: { file: { file_id: 'fc', file_name: 'market.csv', file_type: 'text/csv', size: buf.length } }
       });
     });
-    await mockDb
-      .collection('okf_repositories')
-      .save({ _key: RID, repo_id: RID, name: 'Imported', domain: 'general' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Imported', domain: 'general' });
     await producer.startDocumentsConversion({
       repo_id: RID,
       file_ids: ['fc'],
@@ -484,9 +484,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
         data: { file: { file_id: 'fc', file_name: 'broken.csv', file_type: 'text/csv', size: junk.length } }
       });
     });
-    await mockDb
-      .collection('okf_repositories')
-      .save({ _key: RID, repo_id: RID, name: 'Imported', domain: 'general' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Imported', domain: 'general' });
     await producer.startDocumentsConversion({
       repo_id: RID,
       file_ids: ['fc'],
@@ -548,9 +546,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
     authedAxios.patch.mockRejectedValue(new Error('403 FORBIDDEN'));
     await producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1', 'f2'], actor: 'tester' });
     await new Promise((r) => setTimeout(r, 50));
-    const totals = logger.error.mock.calls.filter((c) =>
-      String(c[0]).includes('okf_repo_id stamp:')
-    );
+    const totals = logger.error.mock.calls.filter((c) => String(c[0]).includes('okf_repo_id stamp:'));
     expect(totals).toHaveLength(1);
     expect(String(totals[0][0])).toContain('2/2');
     expect(totals[0][1]).toMatchObject({ stamp_failures: 2, files: 2 });

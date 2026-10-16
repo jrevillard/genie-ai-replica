@@ -115,12 +115,7 @@ describe('pii-service', () => {
 
   it('scanConcept(hit) → persists counts only (NFR-P2) + returns occurrences', async () => {
     mockSidecarPost.mockResolvedValue(
-      sidecarRegions(
-        [],
-        [{ type: 'EMAIL_ADDRESS', start: 0, end: 11, score: 0.9 }],
-        '',
-        'john@x.org hi'
-      )
+      sidecarRegions([], [{ type: 'EMAIL_ADDRESS', start: 0, end: 11, score: 0.9 }], '', 'john@x.org hi')
     );
     const r = await piiService.scanConcept('repoA', 'c1', {}, 'john@x.org hi');
     expect(r.pii_state).toBe('hit');
@@ -140,9 +135,7 @@ describe('pii-service', () => {
   it('upsert is idempotent — second scan updates, not duplicates', async () => {
     mockSidecarPost.mockResolvedValue(sidecarRegions(...fmClean));
     await piiService.scanConcept('repoA', 'c1', {}, 'x');
-    mockSidecarPost.mockResolvedValue(
-      sidecarRegions([], [{ type: 'PERSON', start: 0, end: 4, score: 0.8 }], '', 'y')
-    );
+    mockSidecarPost.mockResolvedValue(sidecarRegions([], [{ type: 'PERSON', start: 0, end: 4, score: 0.8 }], '', 'y'));
     await piiService.scanConcept('repoA', 'c1', {}, 'y');
     const docs = Object.values(mockDb._stores.okf_concepts_meta);
     expect(docs.length).toBe(1);

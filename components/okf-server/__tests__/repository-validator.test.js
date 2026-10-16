@@ -19,7 +19,16 @@ function fmWith(forbidden) {
 
 describe('updateSchema forbidden-tag ceiling (1-8c)', () => {
   test('accepts the curator set plus a batch of suggested tags (8 total)', () => {
-    const forbidden = ['mental-health', 'nutrition', 'exercise', 'genetics', 'epidemiology', 'communicable-disease', 'hiv', 'infectious-disease'];
+    const forbidden = [
+      'mental-health',
+      'nutrition',
+      'exercise',
+      'genetics',
+      'epidemiology',
+      'communicable-disease',
+      'hiv',
+      'infectious-disease'
+    ];
     const { error } = updateSchema.validate(fmWith(forbidden));
     expect(error).toBeUndefined();
   });
@@ -87,7 +96,7 @@ describe('tag ceilings — producer output is always writable', () => {
     };
     const { error } = updateSchema.validate({ frontmatter: writable });
     expect(error).toBeUndefined();
-    expect(writable.topic).toHaveLength(6);   // under the ceiling — untouched
+    expect(writable.topic).toHaveLength(6); // under the ceiling — untouched
     expect(writable.entity).toHaveLength(20); // truncated, and the topics survive
   });
 

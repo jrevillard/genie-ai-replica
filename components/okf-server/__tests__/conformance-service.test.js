@@ -174,7 +174,7 @@ describe('conformance-service — getRepoMetrics (DB)', () => {
     db.query.mockResolvedValue({ all: async () => [{ concept_count: 0 }] });
     await getRepoMetrics('r1');
     const arg = db.query.mock.calls[0][0];
-    const aql = typeof arg === "string" ? arg : String(arg.query);
+    const aql = typeof arg === 'string' ? arg : String(arg.query);
     expect(aql).toMatch(/pii_hit_count:\s*SUM\(/);
     // The discriminator must be the resolution record: pii_state reads 'clean'
     // both before and after a bulk accept, so filtering on it is meaningless.
@@ -186,7 +186,7 @@ describe('conformance-service — getRepoMetrics (DB)', () => {
     db.query.mockResolvedValue({ all: async () => [{ concept_count: 0 }] });
     await getRepoMetrics('r1');
     const arg = db.query.mock.calls[0][0];
-    const aql = typeof arg === "string" ? arg : String(arg.query);
+    const aql = typeof arg === 'string' ? arg : String(arg.query);
     // Guards the whole class, not just this field.
     expect(aql).not.toMatch(/\b\w+_count:\s*0\b/);
     expect(aql).not.toMatch(/\bpii_hit_count:\s*0\b/);

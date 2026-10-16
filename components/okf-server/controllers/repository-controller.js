@@ -1964,7 +1964,7 @@ module.exports = {
   discoverFromManifests,
   patchConcept,
   resplitRepo,
-reingestFailed,
+  reingestFailed,
   autocorrectRepo,
   transitionLifecycle,
   exportRepoZip,

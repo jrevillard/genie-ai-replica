@@ -60,18 +60,17 @@ function sanitizeConfigShape(raw) {
 // REJECTED here (unlike the read-path sanitizer, a PUT typo should fail loudly,
 // not silently vanish): the operator must see that `repo_id` (say) is not
 // configurable.
-const retrievalConfigPatchSchema = Joi
-  .object({
-    mode: Joi.string().valid(...MODES),
-    max_fanout_graphs: Joi.number().integer().min(LIMITS.max_fanout_graphs.min).max(LIMITS.max_fanout_graphs.max),
-    spine_max_hops: Joi.number().integer().min(LIMITS.spine_max_hops.min).max(LIMITS.spine_max_hops.max),
-    extracted_hop_cap: Joi.number().integer().min(LIMITS.extracted_hop_cap.min).max(LIMITS.extracted_hop_cap.max),
-    candidate_cap_per_graph: Joi.number()
-      .integer()
-      .min(LIMITS.candidate_cap_per_graph.min)
-      .max(LIMITS.candidate_cap_per_graph.max),
-    candidate_cap_global: Joi.number().integer().min(LIMITS.candidate_cap_global.min).max(LIMITS.candidate_cap_global.max)
-  })
+const retrievalConfigPatchSchema = Joi.object({
+  mode: Joi.string().valid(...MODES),
+  max_fanout_graphs: Joi.number().integer().min(LIMITS.max_fanout_graphs.min).max(LIMITS.max_fanout_graphs.max),
+  spine_max_hops: Joi.number().integer().min(LIMITS.spine_max_hops.min).max(LIMITS.spine_max_hops.max),
+  extracted_hop_cap: Joi.number().integer().min(LIMITS.extracted_hop_cap.min).max(LIMITS.extracted_hop_cap.max),
+  candidate_cap_per_graph: Joi.number()
+    .integer()
+    .min(LIMITS.candidate_cap_per_graph.min)
+    .max(LIMITS.candidate_cap_per_graph.max),
+  candidate_cap_global: Joi.number().integer().min(LIMITS.candidate_cap_global.min).max(LIMITS.candidate_cap_global.max)
+})
   .min(1) // an empty/fieldless PUT is meaningless — reject, don't no-op
   .unknown(false)
   .required();

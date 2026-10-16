@@ -2279,6 +2279,34 @@ lint:doc-repo:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+lint:okf-server:
+  extends: .lint_node
+  # Companion to test:okf-server (2026-10-16 review finding): the component
+  # had no lint coverage in CI either — eslint/prettier ran only locally.
+  before_script:
+    - cd components/okf-server && npm ci
+  script:
+    - npm run lint
+    - npm run format:check
+  cache:
+    - key:
+        files:
+          - components/okf-server/package-lock.json
+        prefix: lint-okf-server
+      paths:
+        - components/okf-server/node_modules/
+      fallback_keys:
+        - "lint-okf-server-$CI_DEFAULT_BRANCH"
+        - "lint-okf-server-"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/okf-server/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 lint:python:
   image: python:3.11-slim
   stage: lint
@@ -2517,6 +2545,48 @@ test:doc-repo:
         path: components/document-repository/coverage/cobertura-coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+test:okf-server:
+  extends: .test_node
+  # 2026-10-16 review finding: this component shipped build/scan/promote jobs
+  # but NO test job — a 1,291-test suite (auth, authz, retrieval-config, the
+  # whole OKF surface) ran only on developer machines. Mirrors test:backend.
+  before_script:
+    # shared/lib must install first — okf-server's jest roots include
+    # ../shared/lib/__tests__ (same pattern as backend) and its suites require
+    # shared/lib/node_modules in the resolution path.
+    - cd components/shared/lib && npm ci
+    - cd - && cd components/okf-server && npm ci
+  script:
+    # --maxWorkers=2 caps concurrent jest workers (cgroup OOM reaper kills
+    # default workers × heap on this suite size — see test:frontend's note).
+    - npm test -- --maxWorkers=2 --coverage --coverageReporters=text-summary --coverageReporters=cobertura
+  coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
+  cache:
+    - key:
+        files:
+          - components/okf-server/package-lock.json
+        prefix: test-okf-server
+      paths:
+        - components/okf-server/node_modules/
+      fallback_keys:
+        - "test-okf-server-$CI_DEFAULT_BRANCH"
+        - "test-okf-server-"
+  artifacts:
+    reports:
+      junit: components/okf-server/reports/jest-okf-server.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: components/okf-server/coverage/cobertura-coverage.xml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/okf-server/**/*"
+        - "components/shared/**/*"
+        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success

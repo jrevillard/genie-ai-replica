@@ -169,10 +169,9 @@ describe('POST /api/okf/repos/:repo_id/access/grant (bulk users)', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true, granted: ['alice', 'bob'], missing: ['ghost'] });
     expect(keycloakAccess.setUserScopes).toHaveBeenCalledTimes(2);
-    expect(keycloakAccess.setUserScopes).toHaveBeenCalledWith(
-      expect.objectContaining({ username: 'alice' }),
-      [`okf:t:${RID}:read`]
-    );
+    expect(keycloakAccess.setUserScopes).toHaveBeenCalledWith(expect.objectContaining({ username: 'alice' }), [
+      `okf:t:${RID}:read`
+    ]);
     expect(writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'repo.access.grant',
@@ -190,7 +189,11 @@ describe('POST /api/okf/repos/:repo_id/access/grant (bulk users)', () => {
   test('SINGLE username still works (back-compat shape)', async () => {
     authAdmin();
     seedRepo();
-    keycloakAccess.findUserByUsername.mockResolvedValue({ id: 'u1', username: 'alice', attributes: { okf_scopes: [] } });
+    keycloakAccess.findUserByUsername.mockResolvedValue({
+      id: 'u1',
+      username: 'alice',
+      attributes: { okf_scopes: [] }
+    });
     const res = await request(createApp())
       .post(`/api/okf/repos/${RID}/access/grant`)
       .set('Authorization', TOKEN)
@@ -274,8 +277,6 @@ describe('POST /api/okf/repos/:repo_id/access/revoke', () => {
       .send({ usernames: ['alice'] });
     expect(res.status).toBe(200);
     expect(keycloakAccess.setUserScopes).toHaveBeenCalledWith(expect.anything(), ['okf:itu:r-other:admin']);
-    expect(writeAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'repo.access.revoke', repo_id: RID })
-    );
+    expect(writeAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'repo.access.revoke', repo_id: RID }));
   });
 });

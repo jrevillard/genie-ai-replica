@@ -132,7 +132,10 @@ async function ensureRole(scope) {
 
 /** Find a top-level group by exact name (search is substring; match client-side). */
 async function findGroupByName(name) {
-  const groups = await jsonOrThrow(await adminApi('GET', `/groups?search=${encodeURIComponent(name)}&max=100`), 'group search');
+  const groups = await jsonOrThrow(
+    await adminApi('GET', `/groups?search=${encodeURIComponent(name)}&max=100`),
+    'group search'
+  );
   return groups.find((g) => g.name === name) || null;
 }
 

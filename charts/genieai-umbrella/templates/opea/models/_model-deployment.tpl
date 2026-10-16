@@ -11,7 +11,7 @@ Context keys (all from a dict built by the caller with "root" set):
   name         workload + Service name (also the `app:` label the
                orchestrator NetworkPolicies match)
   image        full image reference (upstream registries; NOT prefixed
-               by global.imageRegistry — the images are not mirrored)
+               by the top-level imageRegistry — the images are not mirrored)
   port         container + Service port
   mountPath    model-cache volume mount path
   argsText     the args block body, verbatim, already indented for the

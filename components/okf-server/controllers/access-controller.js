@@ -34,9 +34,19 @@ const grantSchema = Joi.alternatives()
   .try(
     Joi.object({
       usernames: Joi.array().items(Joi.string().min(1)).min(1).required(),
-      level: Joi.string().valid('read', 'admin').required()
+      level: Joi.string().valid('read', 'admin').default('read')
     }),
-    Joi.object({ username: Joi.string().min(1).required(), level: Joi.string().valid('read', 'admin').required() })
+    Joi.object({
+      username: Joi.string().min(1).required(),
+      level: Joi.string().valid('read', 'admin').default('read')
+    }),
+    // Grant-by-search: EVERY user matching the query, server-side, all pages.
+    // The scale path for "100s and 1000s of users" — the picker sends the
+    // query, the server walks the directory. No username list on the wire.
+    Joi.object({
+      query: Joi.string().min(2).max(200).required(),
+      level: Joi.string().valid('read', 'admin').default('read')
+    })
   )
   .required();
 const revokeSchema = Joi.alternatives()
@@ -47,7 +57,7 @@ const revokeSchema = Joi.alternatives()
   .required();
 const groupGrantSchema = Joi.object({
   group: Joi.string().min(1).required(),
-  level: Joi.string().valid('read', 'admin').required()
+  level: Joi.string().valid('read', 'admin').default('read')
 });
 const groupRevokeSchema = Joi.object({
   group: Joi.string().min(1).required(),
@@ -170,6 +180,41 @@ async function getAccess(req, res, next) {
   }
 }
 
+/** GET /:repo_id/access/users?q= — the grant picker's USER SEARCH.
+ * Server-side Keycloak search (username/email/name); each result is marked
+ * with whether the user already holds this repo's query access, so the
+ * picker can check them off. Admin-scoped: the panel lives in the editor,
+ * which regular users never reach. */
+async function getAccessUsers(req, res, next) {
+  try {
+    requireConfigured();
+    const repo = await loadRepo(req.params.repo_id);
+    const q = typeof req.query.q === 'string' ? req.query.q.slice(0, 200) : '';
+    // Current query-access holders: attribute grants + direct role grants.
+    const readScope = `okf:t:${repo.repo_id}:read`;
+    const holderIds = new Set();
+    (await keycloakAccess.usersWithAttribute(readScope)).forEach((u) => holderIds.add(u.id));
+    try {
+      (await keycloakAccess.roleMembers(readScope)).users.forEach((u) => holderIds.add(u.id));
+    } catch (err) {
+      if (err.statusCode !== 404) throw err; // role never created — no role grants yet
+    }
+    const users = await keycloakAccess.searchUsers(q, 50);
+    // Match count for the "select all N matching" action (grant-by-search).
+    // Only for a non-empty query — an empty search is the whole realm, and
+    // realm-wide grants go through groups, not through this panel.
+    const total_matching = q ? await keycloakAccess.countUsers(q) : null;
+    res.status(200).json({
+      repo_id: repo.repo_id,
+      q,
+      total_matching,
+      users: users.map((u) => ({ ...u, has_access: holderIds.has(u.id) }))
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 /** PUT /:repo_id/access — toggle the restriction gate (works while serving). */
 async function putAccess(req, res, next) {
   try {
@@ -185,15 +230,54 @@ async function putAccess(req, res, next) {
   }
 }
 
-/** POST /:repo_id/access/grant — bulk per-user attribute grants. */
+/** POST /:repo_id/access/grant — bulk per-user attribute grants.
+ * Three shapes: {usernames[]} (picker checkboxes), {username} (back-compat),
+ * {query} (grant-by-search: every directory user matching the query — the
+ * scale path; the server walks all result pages itself). */
 async function grantAccess(req, res, next) {
   try {
     const body = validate(grantSchema, req.body);
-    const usernames = usernameList(body);
     const { level } = body;
     requireConfigured();
     const repo = await loadRepo(req.params.repo_id);
     const scope = `okf:t:${repo.repo_id}:${level}`;
+
+    if (body.query) {
+      // Grant-by-search: users come FROM the directory (no missing entries
+      // possible), granted with a small worker pool so 1000 users ≈ seconds,
+      // not minutes. setUserScopes is idempotent for users already holding
+      // the scope (the scope is appended to their EXISTING set).
+      const users = await keycloakAccess.usersMatching(body.query);
+      let granted = 0;
+      const failures = [];
+      const queue = [...users];
+      async function worker() {
+        for (;;) {
+          const user = queue.shift();
+          if (!user) return;
+          try {
+            const nextScopes = [...keycloakAccess.userScopes(user), scope];
+            await keycloakAccess.setUserScopes(user, nextScopes);
+            granted += 1;
+          } catch {
+            failures.push(user.username);
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(5, users.length) }, worker));
+      await audit('repo.access.grant', req, repo.repo_id, {
+        query: body.query,
+        matched: users.length,
+        granted,
+        failed: failures,
+        level,
+        scope
+      });
+      res.status(200).json({ ok: granted > 0, query: body.query, matched: users.length, granted, failed: failures });
+      return;
+    }
+
+    const usernames = usernameList(body);
     const granted = [];
     const missing = [];
     for (const username of usernames) {
@@ -294,6 +378,7 @@ async function revokeGroupAccess(req, res, next) {
 
 module.exports = {
   getAccess,
+  getAccessUsers,
   putAccess,
   grantAccess,
   revokeAccess,

@@ -101,6 +101,56 @@ async function findUserByUsername(username) {
 }
 
 /**
+ * General user search for the grant picker (steward types a name, picks from
+ * results). SERVER-SIDE q search across username/email/first/last — never a
+ * full realm listing. One page (the picker is incremental; the steward
+ * narrows with the query).
+ */
+async function searchUsers(term, limit = 50) {
+  const max = Math.max(1, Math.min(100, limit));
+  const q = (term || '').trim();
+  const suffix = `first=0&max=${max}`;
+  const path = q ? `/users?q=${encodeURIComponent(q)}&${suffix}` : `/users?${suffix}`;
+  const users = await jsonOrThrow(await adminApi('GET', path), 'user search');
+  return users.map(minimalUser);
+}
+
+/** Total users matching a query (the picker's "select all N matching" bar).
+ * Empty q = whole realm count. */
+async function countUsers(term) {
+  const q = (term || '').trim();
+  const path = q ? `/users/count?q=${encodeURIComponent(q)}` : '/users/count';
+  return jsonOrThrow(await adminApi('GET', path), 'user count');
+}
+
+/** EVERY user matching a query, all pages — the grant-by-search bulk path
+ * ("grant all N users matching '<q>'"). Hard cap as a runaway guard; a realm
+ * so large that matching users exceed it should use GROUP grants instead. */
+async function usersMatching(term, cap = 10000) {
+  const q = (term || '').trim();
+  const out = [];
+  let first = 0;
+  for (;;) {
+    const path = `/users?q=${encodeURIComponent(q)}&first=${first}&max=${USERS_PAGE}`;
+    const page = await jsonOrThrow(await adminApi('GET', path), 'user search (bulk)');
+    out.push(...page);
+    if (page.length < USERS_PAGE || out.length >= cap) return out.slice(0, cap);
+    first += USERS_PAGE;
+  }
+}
+
+/** Keep only what the picker + grant paths need — never leak full profiles. */
+function minimalUser(u) {
+  return {
+    id: u.id,
+    username: u.username,
+    name: [u.firstName, u.lastName].filter(Boolean).join(' ') || null,
+    email: u.email || null,
+    enabled: u.enabled !== false
+  };
+}
+
+/**
  * Users holding a specific scope entry, via SERVER-SIDE attribute search
  * (KC 19+ `?q=attr:value`; colon-laden values verified live on KC 26).
  * Paginated — no cap, no client-side realm listing.
@@ -194,6 +244,9 @@ async function setUserScopes(user, scopes) {
 module.exports = {
   isConfigured,
   findUserByUsername,
+  searchUsers,
+  countUsers,
+  usersMatching,
   usersWithAttribute,
   ensureRole,
   ensureGroup,

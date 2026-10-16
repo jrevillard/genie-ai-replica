@@ -5,8 +5,18 @@
     - a restriction toggle (restricted repos are fenced off from regular
       users until granted; unrestricted repos follow the deployment's
       default-open rule — every new repo starts OPEN for all users),
-    - the grant/revoke table (writes the user's okf_scopes attribute
-      through Keycloak; takes effect at the user's next login).
+    - the grant/revoke UI. Grants are QUERY ACCESS, period — this panel's
+      only audience is stewards (regular users never reach the editor), so
+      no "levels" are exposed; stewardship comes from realm roles, not here.
+
+  The USER GRANT is a picker dialog with server-side search and TWO bulk
+  paths, sized for hundreds/thousands of users (David, 2026-10-17):
+    - checkboxes on the visible page (a handful of known users),
+    - "select all N matching" → grant-by-search: the SERVER walks every
+      directory page matching the query and grants each user. 3 clicks for
+      1,000 users; no username list ever crosses the wire.
+  GROUP grants remain the path for entire populations (one operation, any
+  member count).
 
   The panel degrades honestly when okf-server has no Keycloak credentials
   (configured=false): the toggle still works (enforcement needs no
@@ -34,7 +44,7 @@
             )
           : translate(
               'okf.editor.access.hintOpen',
-              'Every signed-in user can query this repository. Restrict it to fence it off and grant access per user.'
+              'Every signed-in user can query this repository. Restrict it to fence it off and grant access per user or group.'
             )
       }}
     </p>
@@ -64,21 +74,17 @@
     </div>
 
     <template v-else>
-      <!-- GROUP grants — the scale path: one operation, any member count. -->
+      <!-- GROUP grants — the population path (one operation, any member count). -->
       <table v-if="model.group_holders.length" class="okf-access__table">
         <thead>
           <tr>
             <th>{{ translate('okf.editor.access.col.group', 'Group') }}</th>
-            <th>{{ translate('okf.editor.access.col.level', 'Level') }}</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="g in model.group_holders" :key="g.group_id">
             <td>{{ g.name }}</td>
-            <td>
-              <DsPill variant="info">{{ g.levels.join(', ') }}</DsPill>
-            </td>
             <td>
               <DsButton variant="secondary" small :disabled="busyGroup === g.name" @click="revokeGroup(g)">
                 {{ translate('okf.editor.access.revoke', 'Revoke') }}
@@ -93,7 +99,6 @@
         <thead>
           <tr>
             <th>{{ translate('okf.editor.access.col.user', 'User') }}</th>
-            <th>{{ translate('okf.editor.access.col.level', 'Level') }}</th>
             <th></th>
           </tr>
         </thead>
@@ -104,9 +109,6 @@
               <DsPill v-if="h.via === 'role'" variant="warning">{{
                 translate('okf.editor.access.viaRole', 'direct role')
               }}</DsPill>
-            </td>
-            <td>
-              <DsPill variant="info">{{ h.levels.join(', ') }}</DsPill>
             </td>
             <td>
               <DsButton variant="secondary" small :disabled="busy === h.username" @click="revoke(h.username)">
@@ -120,7 +122,10 @@
         {{ translate('okf.editor.access.noHolders', 'No users or groups granted yet.') }}
       </p>
 
-      <!-- GROUP grant — the enterprise path (one operation, any member count). -->
+      <DsButton variant="primary" small class="okf-access__grant-btn" @click="openPicker">
+        {{ translate('okf.editor.access.grantUsersCta', 'Grant access to users…') }}
+      </DsButton>
+
       <div class="okf-access__grant">
         <DsInput
           v-model="grantGroupName"
@@ -128,10 +133,6 @@
           :placeholder="translate('okf.editor.access.groupPlaceholder', 'Group name')"
           class="okf-access__grant-user"
         />
-        <DsSelect v-model="grantGroupLevel" class="okf-access__grant-level">
-          <option value="read">{{ translate('okf.editor.access.levelRead', 'Read') }}</option>
-          <option value="admin">{{ translate('okf.editor.access.levelAdmin', 'Admin') }}</option>
-        </DsSelect>
         <DsButton variant="primary" small :disabled="!grantGroupName || busyGroup !== null" @click="grantGroup">
           {{ translate('okf.editor.access.grantGroup', 'Grant group') }}
         </DsButton>
@@ -144,24 +145,90 @@
           )
         }}
       </p>
-
-      <!-- BULK per-user grant: one username per line. -->
-      <textarea
-        v-model="grantUsernames"
-        rows="3"
-        class="okf-access__grant-users"
-        :placeholder="translate('okf.editor.access.usernamesPlaceholder', 'Usernames — one per line')"
-      ></textarea>
-      <div class="okf-access__grant">
-        <DsSelect v-model="grantLevel" class="okf-access__grant-level">
-          <option value="read">{{ translate('okf.editor.access.levelRead', 'Read') }}</option>
-          <option value="admin">{{ translate('okf.editor.access.levelAdmin', 'Admin') }}</option>
-        </DsSelect>
-        <DsButton variant="primary" small :disabled="!userList.length || busy !== null" @click="grant">
-          {{ translate('okf.editor.access.grant', 'Grant users') }}
-        </DsButton>
-      </div>
     </template>
+
+    <!-- USER PICKER — server-side search + checkboxes + grant-by-search. -->
+    <DsDialog
+      :visible="pickerOpen"
+      :title="translate('okf.editor.access.pickerTitle', 'Grant query access')"
+      size="lg"
+      :actions="pickerActions"
+      @close="closePicker"
+      @action="onPickerAction"
+    >
+      <div class="okf-access__picker">
+        <DsInput
+          v-model="pickerQuery"
+          type="text"
+          class="okf-access__picker-search"
+          :placeholder="translate('okf.editor.access.pickerSearch', 'Search users by name, username or email')"
+        />
+        <p v-if="pickerLoading" class="okf-access__picker-status">
+          {{ translate('okf.editor.access.pickerSearching', 'Searching…') }}
+        </p>
+        <!-- Grant-by-search bar: only when the query matches MORE than the page —
+             this is the path that scales to hundreds and thousands of users. -->
+        <div
+          v-if="!pickerLoading && grantByQuery === null && pickerTotal > pickerUsers.length"
+          class="okf-access__picker-all"
+        >
+          <span class="okf-access__picker-match">
+            {{
+              translate('okf.editor.access.pickerMatching', '{n} users match this search').replace(
+                '{n}',
+                String(pickerTotal)
+              )
+            }}
+          </span>
+          <DsButton variant="secondary" small @click="grantByQuery = true">
+            {{ translate('okf.editor.access.pickerSelectAll', 'Select all {n}').replace('{n}', String(pickerTotal)) }}
+          </DsButton>
+        </div>
+        <div v-else-if="grantByQuery" class="okf-access__picker-all okf-access__picker-all--on">
+          <span>
+            {{
+              translate('okf.editor.access.pickerAllSelected', 'All {n} matching users selected').replace(
+                '{n}',
+                String(pickerTotal)
+              )
+            }}
+          </span>
+          <DsButton variant="ghost" small @click="grantByQuery = null">
+            {{ translate('okf.editor.access.pickerClearSelection', 'Clear') }}
+          </DsButton>
+        </div>
+
+        <ul v-if="!pickerLoading && pickerUsers.length" class="okf-access__picker-list">
+          <li v-for="u in pickerUsers" :key="u.id" :class="{ 'okf-access__picker-row--off': u.has_access }">
+            <label class="okf-access__picker-row">
+              <input
+                type="checkbox"
+                :checked="pickerSelected.has(u.username)"
+                :disabled="u.has_access || granting"
+                @change="togglePick(u)"
+              />
+              <span class="okf-access__picker-username">{{ u.username }}</span>
+              <span class="okf-access__picker-name">{{ u.name || '' }}</span>
+              <span class="okf-access__picker-email">{{ u.email || '' }}</span>
+              <DsPill v-if="u.has_access" variant="success">
+                {{ translate('okf.editor.access.pickerHasAccess', 'has access') }}
+              </DsPill>
+            </label>
+          </li>
+        </ul>
+        <p v-else-if="!pickerLoading" class="okf-access__picker-status">
+          {{ translate('okf.editor.access.pickerEmpty', 'No users match.') }}
+        </p>
+        <p v-if="pickerTotal > 500" class="okf-access__hint">
+          {{
+            translate(
+              'okf.editor.access.pickerLargeHint',
+              'For very large sets, prefer a group grant — one operation, any member count.'
+            )
+          }}
+        </p>
+      </div>
+    </DsDialog>
 
     <p v-if="error" class="okf-access__error">{{ error }}</p>
     <p v-if="notice" class="okf-access__notice">{{ notice }}</p>
@@ -173,13 +240,15 @@ import translateMixin from '../../../mixins/translateMixin';
 import DsButton from '../../ds/Button.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsInput from '../../ds/Input.vue';
-import DsSelect from '../../ds/Select.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
+import DsDialog from '../../ds/Dialog.vue';
 import repoOkfService from '../../../services/repoOkfService';
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 export default {
   name: 'OkfAccessPanel',
-  components: { DsButton, DsPill, DsInput, DsSelect, DsInfoTip },
+  components: { DsButton, DsPill, DsInput, DsInfoTip, DsDialog },
   mixins: [translateMixin],
   props: {
     repoId: { type: String, required: true }
@@ -199,15 +268,59 @@ export default {
         group_holders: [],
         configured: false
       },
-      grantUsernames: '',
-      grantLevel: 'read',
       grantGroupName: '',
-      grantGroupLevel: 'read',
-      busyGroup: null
+      busyGroup: null,
+      // Picker state.
+      pickerOpen: false,
+      pickerQuery: '',
+      pickerUsers: [],
+      pickerTotal: 0,
+      pickerLoading: false,
+      pickerSelected: new Set(),
+      grantByQuery: null,
+      granting: false,
+      searchTimer: null
     };
+  },
+  computed: {
+    pickerActions() {
+      if (this.granting) {
+        return [
+          { key: 'cancel', label: this.translate('common.cancel', 'Cancel'), variant: 'secondary', disabled: true },
+          {
+            key: 'grant',
+            label: this.translate('okf.editor.access.pickerGranting', 'Granting {n} users…').replace(
+              '{n}',
+              String(this.grantByQuery ? this.pickerTotal : this.pickerSelected.size)
+            ),
+            variant: 'primary',
+            disabled: true
+          }
+        ];
+      }
+      const n = this.grantByQuery ? this.pickerTotal : this.pickerSelected.size;
+      return [
+        { key: 'cancel', label: this.translate('common.cancel', 'Cancel'), variant: 'secondary' },
+        {
+          key: 'grant',
+          label: this.translate('okf.editor.access.pickerGrant', 'Grant access ({n})').replace('{n}', String(n)),
+          variant: 'primary',
+          disabled: n === 0
+        }
+      ];
+    }
+  },
+  watch: {
+    pickerQuery() {
+      clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(() => this.searchUsers(), SEARCH_DEBOUNCE_MS);
+    }
   },
   async created() {
     await this.refresh();
+  },
+  beforeUnmount() {
+    clearTimeout(this.searchTimer);
   },
   methods: {
     async refresh() {
@@ -245,32 +358,78 @@ export default {
         this.toggling = false;
       }
     },
-    userList() {
-      return this.grantUsernames
-        .split(/[\n,;]+/)
-        .map((u) => u.trim())
-        .filter(Boolean);
+    openPicker() {
+      this.pickerOpen = true;
+      this.pickerQuery = '';
+      this.pickerUsers = [];
+      this.pickerTotal = 0;
+      this.pickerSelected = new Set();
+      this.grantByQuery = null;
+      this.granting = false;
+      this.searchUsers();
     },
-    async grant() {
-      const usernames = this.userList();
-      if (!usernames.length) return;
-      this.busy = 'bulk';
+    closePicker() {
+      if (this.granting) return; // a bulk grant is in flight — keep the dialog up
+      this.pickerOpen = false;
+    },
+    async searchUsers() {
+      this.pickerLoading = true;
+      try {
+        const out = await repoOkfService.getAccessUsers(this.repoId, this.pickerQuery);
+        this.pickerUsers = (out && out.users) || [];
+        this.pickerTotal = (out && out.total_matching) || 0;
+        this.grantByQuery = null; // a new search invalidates select-all-matching
+        // Drop selections that no longer appear (stale picks across searches).
+        const visible = new Set(this.pickerUsers.map((u) => u.username));
+        this.pickerSelected = new Set(Array.from(this.pickerSelected).filter((u) => visible.has(u)));
+      } catch (err) {
+        this.error = this.errText(err);
+      } finally {
+        this.pickerLoading = false;
+      }
+    },
+    togglePick(u) {
+      if (u.has_access) return;
+      const next = new Set(this.pickerSelected);
+      if (next.has(u.username)) next.delete(u.username);
+      else next.add(u.username);
+      this.pickerSelected = next;
+    },
+    async onPickerAction(key) {
+      if (key === 'cancel') {
+        this.closePicker();
+        return;
+      }
+      if (key !== 'grant' || this.granting) return;
+      const byQuery = this.grantByQuery !== null;
+      const usernames = Array.from(this.pickerSelected);
+      if (!byQuery && !usernames.length) return;
+      this.granting = true;
       this.error = '';
       this.notice = '';
       try {
-        const out = await repoOkfService.grantAccess(this.repoId, { usernames, level: this.grantLevel });
+        const out = byQuery
+          ? await repoOkfService.grantAccess(this.repoId, { query: this.pickerQuery.trim() })
+          : await repoOkfService.grantAccess(this.repoId, { usernames });
         const missing = (out && out.missing) || [];
+        const n = byQuery ? (out && out.granted) || 0 : (out && out.granted && out.granted.length) || 0;
         this.notice = missing.length
           ? this.translate('okf.editor.access.grantedSomeNotice', 'Granted {n} — unknown: {m}')
-              .replace('{n}', String(out.granted.length))
+              .replace('{n}', String(n))
               .replace('{m}', missing.join(', '))
-          : this.translate('okf.editor.access.grantedNotice', 'Access granted — effective at next login.');
-        this.grantUsernames = '';
+          : this.translate('okf.editor.access.grantedNotice', 'Access granted — effective at each user’s next login.');
+        if (byQuery && out && out.granted !== undefined) {
+          this.notice = this.translate(
+            'okf.editor.access.grantedQueryNotice',
+            'Granted {n} users — effective at each user’s next login.'
+          ).replace('{n}', String(out.granted));
+        }
+        this.pickerOpen = false;
         await this.refresh();
       } catch (err) {
         this.error = this.errText(err);
       } finally {
-        this.busy = null;
+        this.granting = false;
       }
     },
     async grantGroup() {
@@ -278,10 +437,7 @@ export default {
       this.error = '';
       this.notice = '';
       try {
-        await repoOkfService.grantGroupAccess(this.repoId, {
-          group: this.grantGroupName.trim(),
-          level: this.grantGroupLevel
-        });
+        await repoOkfService.grantGroupAccess(this.repoId, { group: this.grantGroupName.trim() });
         this.notice = this.translate(
           'okf.editor.access.grantedGroupNotice',
           'Group granted — every member gains access at next login.'
@@ -377,8 +533,8 @@ export default {
 .okf-access__grant-user {
   flex: 1;
 }
-.okf-access__grant-level {
-  width: 110px;
+.okf-access__grant-btn {
+  margin-top: 12px;
 }
 .okf-access__error {
   color: var(--danger);
@@ -390,16 +546,74 @@ export default {
   font-size: 12px;
   margin: 8px 0 0;
 }
-.okf-access__truncated {
-  color: var(--danger);
-  font-size: 12px;
-  margin: 6px 0 0;
-}
 .okf-access__empty {
   font-size: 12px;
   color: var(--muted);
 }
 .okf-access__unconfigured {
   margin-top: 10px;
+}
+.okf-access__picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.okf-access__picker-search {
+  width: 100%;
+}
+.okf-access__picker-all {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border, var(--border-light));
+  border-radius: 6px;
+  font-size: 12px;
+}
+.okf-access__picker-all--on {
+  border-color: var(--primary);
+}
+.okf-access__picker-match {
+  color: var(--muted);
+}
+.okf-access__picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border, var(--border-light));
+  border-radius: 6px;
+}
+.okf-access__picker-list li + li {
+  border-top: 1px solid var(--border, var(--border-light));
+}
+.okf-access__picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.okf-access__picker-row--off .okf-access__picker-row {
+  cursor: default;
+  color: var(--muted);
+}
+.okf-access__picker-username {
+  font-weight: 600;
+  min-width: 120px;
+}
+.okf-access__picker-name {
+  color: var(--muted);
+  flex: 1;
+}
+.okf-access__picker-email {
+  color: var(--muted);
+}
+.okf-access__picker-status {
+  font-size: 12px;
+  color: var(--muted);
 }
 </style>

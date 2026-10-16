@@ -168,8 +168,17 @@ const repoOkfService = {
     const res = await httpService.put(`/okf/repos/${encodeURIComponent(repoId)}/access`, { restricted });
     return res && res.data;
   },
-  async grantAccess(repoId, { usernames, username, level }) {
-    const body = usernames ? { usernames, level } : { username, level };
+  /** Picker search: server-side Keycloak user search + has_access marks. */
+  async getAccessUsers(repoId, q) {
+    const res = await httpService.get(
+      `/okf/repos/${encodeURIComponent(repoId)}/access/users?q=${encodeURIComponent(q || '')}`
+    );
+    return res && res.data;
+  },
+  /** Grant query access — checkboxes (usernames[]), single (username), or
+   * grant-by-search (query: every matching directory user, server-side). */
+  async grantAccess(repoId, { usernames, username, query }) {
+    const body = query ? { query } : usernames ? { usernames } : { username };
     const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/access/grant`, body);
     return res && res.data;
   },

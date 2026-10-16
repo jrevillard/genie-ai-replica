@@ -19,6 +19,9 @@ jest.mock('../shared-lib/tracing', () => ({
 jest.mock('../services/keycloak-access-service', () => ({
   isConfigured: jest.fn(() => true),
   findUserByUsername: jest.fn(),
+  searchUsers: jest.fn(async () => []),
+  countUsers: jest.fn(async () => 0),
+  usersMatching: jest.fn(async () => []),
   usersWithAttribute: jest.fn(async () => []),
   ensureRole: jest.fn(async (scope) => ({ id: 'role-' + scope, name: scope })),
   ensureGroup: jest.fn(async (name) => ({ id: 'grp-' + name, name })),
@@ -125,6 +128,35 @@ describe('GET /api/okf/repos/:repo_id/access', () => {
   });
 });
 
+describe('GET /api/okf/repos/:repo_id/access/users (picker search)', () => {
+  test('server-side search + has_access marks + total_matching for select-all', async () => {
+    authAdmin();
+    seedRepo();
+    keycloakAccess.searchUsers.mockResolvedValue([
+      { id: 'u1', username: 'alice', name: 'Alice A', email: 'a@x', enabled: true },
+      { id: 'u2', username: 'bob', name: 'Bob B', email: 'b@x', enabled: true }
+    ]);
+    keycloakAccess.countUsers.mockResolvedValue(1200);
+    keycloakAccess.usersWithAttribute.mockResolvedValue([{ id: 'u2', username: 'bob' }]);
+    keycloakAccess.roleMembers.mockResolvedValue({ users: [], groups: [] });
+    const res = await request(createApp()).get(`/api/okf/repos/${RID}/access/users?q=ali`).set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(keycloakAccess.searchUsers).toHaveBeenCalledWith('ali', 50);
+    expect(keycloakAccess.countUsers).toHaveBeenCalledWith('ali');
+    expect(res.body.total_matching).toBe(1200);
+    expect(res.body.users[0]).toMatchObject({ username: 'alice', has_access: false });
+    expect(res.body.users[1]).toMatchObject({ username: 'bob', has_access: true });
+  });
+
+  test('read-only holder gets 403 (the picker is steward-only)', async () => {
+    authReader();
+    seedRepo();
+    const res = await request(createApp()).get(`/api/okf/repos/${RID}/access/users?q=a`).set('Authorization', TOKEN);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+  });
+});
+
 describe('PUT /api/okf/repos/:repo_id/access (toggle)', () => {
   test('admin toggles restriction on a SERVING repo — direct doc write + audit', async () => {
     authAdmin();
@@ -200,6 +232,52 @@ describe('POST /api/okf/repos/:repo_id/access/grant (bulk users)', () => {
       .send({ username: 'alice', level: 'admin' });
     expect(res.status).toBe(200);
     expect(res.body.granted).toEqual(['alice']);
+  });
+
+  test('NO LEVEL → defaults to read (query access, the only UI grant)', async () => {
+    authAdmin();
+    seedRepo();
+    keycloakAccess.findUserByUsername.mockResolvedValue({
+      id: 'u1',
+      username: 'alice',
+      attributes: { okf_scopes: [] }
+    });
+    const res = await request(createApp())
+      .post(`/api/okf/repos/${RID}/access/grant`)
+      .set('Authorization', TOKEN)
+      .send({ username: 'alice' });
+    expect(res.status).toBe(200);
+    expect(keycloakAccess.setUserScopes).toHaveBeenCalledWith(expect.anything(), [`okf:t:${RID}:read`]);
+  });
+
+  test('GRANT-BY-SEARCH: one query grants EVERY matching user server-side', async () => {
+    authAdmin();
+    seedRepo();
+    // 1000 users matched by the query — granted via the worker pool, no
+    // username list on the wire.
+    const users = Array.from({ length: 1000 }, (_, i) => ({
+      id: 'u' + i,
+      username: 'user' + i,
+      attributes: { okf_scopes: [] }
+    }));
+    keycloakAccess.usersMatching.mockResolvedValue(users);
+    const res = await request(createApp())
+      .post(`/api/okf/repos/${RID}/access/grant`)
+      .set('Authorization', TOKEN)
+      .send({ query: 'contractor' });
+    expect(res.status).toBe(200);
+    expect(keycloakAccess.usersMatching).toHaveBeenCalledWith('contractor');
+    expect(keycloakAccess.setUserScopes).toHaveBeenCalledTimes(1000);
+    expect(keycloakAccess.setUserScopes).toHaveBeenCalledWith(expect.objectContaining({ username: 'user0' }), [
+      `okf:t:${RID}:read`
+    ]);
+    expect(res.body).toMatchObject({ ok: true, query: 'contractor', matched: 1000, granted: 1000 });
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'repo.access.grant',
+        details: expect.objectContaining({ query: 'contractor', granted: 1000, level: 'read' })
+      })
+    );
   });
 
   test('all users unknown → 404 with the full missing list', async () => {

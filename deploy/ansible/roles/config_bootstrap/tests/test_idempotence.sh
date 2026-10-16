@@ -17,8 +17,10 @@
 #   <inventory_file>  Required. e.g. inventory/itu_rtx_el_salvador.ini
 #   <host>            Required. A single host from that inventory, e.g. el-salvador-01
 #   [vault_id]        Optional. Passed through as --vault-id to every ansible call.
-#   [become_password] Optional. Passed through as --become-password. Needed when
-#                     the target's sudo is not passwordless.
+#   [become_password] Optional. Written to a temporary 0600 file passed as
+#                     --become-password-file to every ansible call (ansible has
+#                     no --become-password flag). The file is removed on exit.
+#                     Needed when the target's sudo is not passwordless.
 #
 # Both the inventory and the host must be given explicitly: the script never
 # guesses a target, and it never falls back to a hardcoded host. Run it against
@@ -59,8 +61,9 @@ Usage:
   <inventory_file>  Required. e.g. inventory/itu_rtx_el_salvador.ini
   <host>            Required. A single host from that inventory, e.g. el-salvador-01
   [vault_id]        Optional. Passed through as --vault-id to every ansible call.
-  [become_password] Optional. Passed through as --become-password. Needed when
-                    the target's sudo is not passwordless.
+  [become_password] Optional. Passed as --become-password-file via a temporary
+                    0600 file (removed on exit). Needed when the target's sudo
+                    is not passwordless.
 
 Both the inventory and the host must be given explicitly - the script never
 guesses a target and never falls back to a hardcoded host.
@@ -117,7 +120,7 @@ cd "$ANSIBLE_DIR"
 ansible_run() {
     local -a extra=()
     [ -n "$VAULT_ID" ] && extra+=(--vault-id "$VAULT_ID")
-    [ -n "$BECOME_PASSWORD" ] && extra+=(--become-password "$BECOME_PASSWORD")
+    [ -n "$BECOME_PW_FILE" ] && extra+=(--become-password-file "$BECOME_PW_FILE")
     # shellcheck disable=SC2086
     if [ "$#" -gt 0 ] && [ "${1:-}" = "raw" ]; then
         shift
@@ -160,12 +163,26 @@ resolve_config_dir() {
 
 # --- restore-on-exit ----------------------------------------------------------
 
+# ansible has no --become-password flag. Hand the password over through a
+# temporary 0600 file (no trailing newline) that restore() deletes on exit.
+# Created after argument validation but before the first ansible call and the
+# trap below, so no die() exit can leak the file.
+BECOME_PW_FILE=""
+if [ -n "$BECOME_PASSWORD" ]; then
+    BECOME_PW_FILE="$(mktemp)"
+    printf '%s' "$BECOME_PASSWORD" > "$BECOME_PW_FILE"
+fi
+
 BACKUP_PATH=""
 EXPECTED_PATH=""
 RESTORE_ARMED="false"
 
 restore() {
     local exit_code="$?"
+    # Runs on every exit (armed or not): scrub the become-password file first.
+    if [ -n "${BECOME_PW_FILE:-}" ] && [ -f "$BECOME_PW_FILE" ]; then
+        rm -f "$BECOME_PW_FILE"
+    fi
     [ "$RESTORE_ARMED" = "true" ] || return "$exit_code"
     RESTORE_ARMED="false"
     if [ -n "$EXPECTED_PATH" ]; then

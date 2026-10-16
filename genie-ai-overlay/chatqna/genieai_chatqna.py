@@ -178,6 +178,16 @@ EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddin
 MULTI_TURN_BLEND_ENABLED = os.getenv("MULTI_TURN_BLEND_ENABLED", "false").lower() == "true"
 MULTI_TURN_BLEND_ALPHA = float(os.getenv("MULTI_TURN_BLEND_ALPHA", "0.7"))
 MULTI_TURN_HISTORY_TURNS = int(os.getenv("MULTI_TURN_HISTORY_TURNS", "1"))
+# Multi-turn retrieval mode (issue #1091): "blend" = issue-#833 vector-space
+# blending (default, unchanged); "condense" = per-turn standalone-query
+# rewrite — one short LLM call rewrites the follow-up, retrieval AND rerank
+# use the rewritten query, fail-closed on any rewrite failure.
+MULTI_TURN_MODE = os.getenv("MULTI_TURN_MODE", "blend").strip().lower()
+# Conversation segments (USER/ASSISTANT messages, same semantics as
+# _extract_history_text) fed to the condense rewrite. Dedicated knob: the
+# blend's MULTI_TURN_HISTORY_TURNS stays blend-only so deleting the blend
+# later does not orphan condense semantics.
+MULTI_TURN_CONDENSE_HISTORY_TURNS = int(os.getenv("MULTI_TURN_CONDENSE_HISTORY_TURNS", "4"))
 RETRIEVER_SERVICE_HOST_IP = os.getenv("RETRIEVER_SERVICE_HOST_IP", "0.0.0.0")
 RETRIEVER_SERVICE_PORT = int(os.getenv("RETRIEVER_SERVICE_PORT", 7025))
 RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
@@ -415,6 +425,61 @@ def _blend_embeddings(query_emb, history_emb, alpha):
         return query_emb
     a = max(0.0, min(1.0, float(alpha)))
     return [a * q + (1.0 - a) * h for q, h in zip(query_emb, history_emb, strict=False)]
+
+
+# Condense-question rewrite (issue #1091). The rewrite call shares the chat
+# LLM's endpoint/model and is fail-closed: any failure classification below
+# fails the turn with LLM-failure semantics (503) — no blend or raw-query
+# fallback. Product stance: a wrong answer is worse than a failed turn.
+_CONDENSE_SYSTEM_PROMPT = (
+    "You rewrite a user's follow-up message into a standalone information-retrieval "
+    "query. Resolve pronouns and implicit references using the chat history. "
+    "EXCLUDE anything the user rejects. Output JSON only: "
+    '{"standalone_query": "..."}'
+)
+_CONDENSE_MAX_TOKENS = 48
+_CONDENSE_TIMEOUT_SECONDS = 5.0
+
+
+class CondenseError(Exception):
+    """Condense-rewrite failure, classified for the 503 envelope.
+
+    reason: timeout | http_error | bad_body | missing_field | empty_query
+    """
+
+    def __init__(self, reason: str, detail: str = ""):
+        super().__init__(f"{reason}: {detail[:200]}")
+        self.reason = reason
+
+
+def _build_condense_user_content(history_text: str, last_message: str) -> str:
+    """Condense user content: history window, then the latest message."""
+    return f"CHAT HISTORY:\n{history_text}\n\nLATEST MESSAGE:\n{last_message}\n\nStandalone query:"
+
+
+def _parse_condense_response(content) -> str:
+    """Extract the standalone query from the condense LLM's JSON output.
+
+    Raises CondenseError for every malformed shape (fail-closed, issue #1091):
+    missing_field (non-string content), bad_body (unparseable JSON),
+    empty_query (missing/blank standalone_query).
+    """
+    if not isinstance(content, str):
+        raise CondenseError("missing_field", f"content is {type(content).__name__}")
+    stripped = content.strip()
+    # response_format json_object makes fences rare, but a fenced reply must
+    # not fail a legitimate turn.
+    if stripped.startswith("```"):
+        stripped = stripped.split("\n", 1)[1] if "\n" in stripped else stripped
+        stripped = stripped.rsplit("```", 1)[0].strip()
+    try:
+        payload = json.loads(stripped)
+    except json.JSONDecodeError as e:
+        raise CondenseError("bad_body", f"invalid JSON: {str(e)[:120]}") from e
+    query = payload.get("standalone_query") if isinstance(payload, dict) else None
+    if not isinstance(query, str) or not query.strip():
+        raise CondenseError("empty_query", f"standalone_query missing/blank: {stripped[:120]}")
+    return query.strip()
 
 
 # ---------------------------------------------------------------------------

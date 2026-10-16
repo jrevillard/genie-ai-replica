@@ -63,6 +63,18 @@ spec:
     backchannelDynamic: true
   ingress:
     enabled: false
+  {{- /*
+    Optional image override. Unset (default) the operator runs its own
+    pinned stock Keycloak image — no GENIE.AI theme in it, and the realm's
+    loginTheme falls back to the built-in theme. The theme-baked
+    genie-ai-keycloak image (configs/keycloak/Dockerfile: stock + COPY
+    themes) is the natural choice wherever the registry is reachable.
+    Same convention as the service factory: imageRegistry-prefixed when
+    the top-level imageRegistry is set.
+  */ -}}
+  {{- if .Values.data.keycloak.image.repository }}
+  image: {{ printf "%s/%s:%s" (.Values.imageRegistry | default "") .Values.data.keycloak.image.repository (.Values.data.keycloak.image.tag | default "main") }}
+  {{- end }}
   # Trust X-Forwarded-* from Envoy. KC_PROXY=edge was removed in KC 24+;
   # spec.proxy.headers is the only path. Misconfiguration manifests as
   # `Invalid parameter: redirect_uri` loops on login.

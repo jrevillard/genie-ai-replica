@@ -187,23 +187,36 @@ describe('ONE conversion per repo (2026-09-09 test-flake catch)', () => {
   test('a second startConversion for the same repo is refused while one is in flight', async () => {
     const md = ['## Source: https://a.example/one', '# One', 'body'].join('\n');
     mockSource(md);
+    // CI flake (pipelines 13530/13534/13535, 2026-10-16): the test races the
+    // runner's own COMPLETION, not its registration. `live.set` runs before
+    // startConversion resolves (so the old poll loops were aimed at nothing),
+    // but with everything mocked the background runner can finish its work
+    // and `live.delete` itself BEFORE the second call — which then
+    // legitimately starts. No polling ceiling can fix that; the in-flight
+    // state is transient by design. Instead HOLD the runner at its awaited
+    // import step: `live` stays set until we release, making the 409
+    // deterministic regardless of machine speed.
+    const pendingIngests = [];
+    ingestService.ingestRepoConcepts.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          pendingIngests.push(resolve);
+        })
+    );
     const first = conv.startConversion({ repo_id: 'r1', file_id: 'f1', split_mode: 'B' });
-    // CI flake (pipelines 13530 + 13534, 2026-10-16): the registration of
-    // `r1` in the live map happens after an awaited mocked-DB call. Ceilings
-    // of 400 ms then 2 s both proved too tight under --maxWorkers=2 + coverage
-    // overhead — the second call then legitimately started instead of being
-    // refused. The ceiling is now 30 s (it costs nothing when registration
-    // lands — the loop exits immediately) and a loud guard replaces the
-    // confusing "resolved instead of rejected" assertion failure if the
-    // registration truly never happens.
-    for (let i = 0; i < 15000 && !conv.live.has('r1'); i += 1) await new Promise((r) => setTimeout(r, 2));
-    if (!conv.live.has('r1')) {
-      throw new Error('conversion registration never landed in the live map within 30 s — flake guard');
-    }
+    // The awaited call resolving guarantees registration (live.set precedes
+    // the return), and the held ingest keeps it registered.
+    await expect(first).resolves.toMatchObject({ status: 'queued' });
+    expect(conv.live.has('r1')).toBe(true);
     await expect(conv.startConversion({ repo_id: 'r1', file_id: 'f1', split_mode: 'B' })).rejects.toMatchObject({
       code: 'CONVERSION_IN_FLIGHT',
       status: 409
     });
+    // Release the runner (the import step can fire per-flush AND for the
+    // index concept — resolve every held call and stop gating future ones)
+    // and let the conversion reach its terminal state.
+    ingestService.ingestRepoConcepts.mockResolvedValue({ accepted: 1, rejected: [] });
+    pendingIngests.splice(0).forEach((resolve) => resolve({ accepted: 1, rejected: [] }));
     await waitForTerminal();
     await first.catch(() => {});
   });

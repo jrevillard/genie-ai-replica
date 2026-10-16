@@ -747,3 +747,109 @@ on the okf-server event loop — blocking every other request while it runs
   p50/p95 and the error rate at each, so the value is chosen from data.
 - A run with a failing endpoint must fail visibly and quickly, not spend 35
   minutes in per-call timeouts.
+
+---
+
+## BUG-22 — chat answer document links in the right sidebar are not functional
+
+**New, 2026-10-16, found during the multi-repo fan-out verification (David: "the
+document links displayed in the right sidebar are not functional").** Not yet in
+GitLab — creation blocked by the permission classifier. Recorded here.
+
+Every document card in the chat right sidebar is a **dead click** — for OKF
+concept hits and doc-repository file hits alike. This predates OKF: the click
+handler was never implemented. Worse, the data underneath OKF cards could not
+support a working link even if the handler existed.
+
+### 22a — the proximate cause: the click handler is an empty stub
+
+`RightSideBarComponent.vue:271-303` renders each document card with
+`@click="openDocument(doc)"`, which emits `open-document`. The parent handler:
+
+```js
+// ChatBotComponent.vue:762-764
+handleOpenDocument(_doc) {
+  // Document opened
+},
+```
+
+A no-op. Nothing opens, nothing navigates, no feedback. Every card in the
+sidebar has been unclickable for its entire life.
+
+### 22b — OKF hits carry no resolvable target even if 22a were fixed
+
+When the hit is an OKF concept chunk (doc-repo metadata lookup 404s **by
+design** — concept ids resolve in okf-server, not doc-repo), chatqna surfaces
+the card from in-payload provenance
+(`genie-ai-overlay/chatqna/genieai_chatqna.py:1866-1902`):
+
+```python
+okf_source = {
+    "document_id": file_id,                          # == concept_id
+    "document_name": str(file_id).replace("_", " "), # mangled concept id, not a title
+    "url": "",
+    ...
+    "concept_id": file_id,
+    "source": "okf-concept",
+    # graph_name / repo_id attached only when the retriever sent them
+}
+```
+
+Three gaps:
+
+1. **`url` is empty** — nothing on the card is a link target.
+2. **`document_name` is the raw concept id** with underscores swapped for
+   spaces — not the concept's title. The sidebar renders id-noise where a
+   human-readable name should be.
+3. **`repo_id` is always absent**, so the card cannot even name the repo it
+   came from. The retriever's `_attach_provenance`
+   (`genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1760`) accepts a
+   `repo_id` parameter, but both live call sites (`:2194`, `:2220`) pass only
+   `graph_name` — the parameter exists, unused.
+
+### 22c — doc-repo hits are only half-built too
+
+For normal doc-repository files, chatqna deliberately leaves `url` empty
+(`:1846-1849`: "Clients (web + mobile) build the view URL from their own public
+base + file_id") — except crawled HTML pages, which carry a real external
+`source_url`. So the contract already says the CLIENT constructs the URL, and
+the client side of that contract is the stub in 22a.
+
+### 22d — adjacent: fixture documents still ship in a production path
+
+`components/gov-chat-backend/services/query-service.js:187` onward pushes
+**hardcoded placeholder documents** into `source_documents`
+(`document_id: doc_id_${Math.floor(Math.random()*1000)}`,
+`url: 'http://example.com/docs/...'`, canned text) keyed on service-label
+substring matches (`id`, `birth registration`, `passport`, `tax`). This is
+demo-grade fixture data in a production response path, independent of 22a-c,
+and it pollutes the sidebar whenever that fallback path engages.
+
+### Suggested fix, in order
+
+1. **Wire `handleOpenDocument`** (22a) — route by card kind:
+   - `source === 'okf-concept'` → the OKF editor concept deep link
+     (`repo_id` + `concept_id`; the `?tab=&file=` deep-link pattern from
+     story 7.7's ImportDocumentsDialog provenance cards already exists).
+   - doc-repo file → the document-repository file view URL built from
+     `document_id` (the client half of the contract at chatqna `:1846-1849`).
+   - crawled HTML → open `url` (the external `source_url`) in a new tab.
+   - no target resolvable → disable the card affordance; a card that LOOKS
+     clickable and does nothing is the current bug.
+2. **Pass `repo_id` through the retriever** (22b.3) — both `_attach_provenance`
+   call sites have it in scope at fusion time; the parameter is already in the
+   signature. Without it OKF cards cannot deep-link.
+3. **Fix the OKF `document_name`** (22b.2) — prefer the concept title. The
+   chunk payload carries the concept body, not its title; the honest minimum
+   is a deterministic display form, the right fix is fetching (or carrying)
+   the title at ingest so it rides the provenance.
+4. **Delete the fixture block** (22d) or gate it behind an explicit demo flag.
+
+### Verification for whoever picks this up
+
+- Click each card kind: OKF concept opens the concept in the OKF editor;
+  doc-repo file opens its file view; crawled HTML opens the external page.
+- No card is a silent dead click; a card with no resolvable target renders as
+  non-clickable (cursor + affordance), not as a button that does nothing.
+- The OKF card shows the concept title, not an underscore-mangled id.
+- After 22d: no `example.com` URL can appear in any chat response.

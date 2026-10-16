@@ -16,15 +16,15 @@ global:
   # Set to your container registry when adopting the chart on a
   # different setup; empty = kubelet resolves the bare name against
   # Docker Hub, which the genie-ai-* service images are NOT published
-  # to, so an empty default leaves `helm install` with 404s.
-  imageRegistry: "registry.opensource.unicc.org/un/itu/genie-ai"
+  # to, so an empty default leaves `helm install` with 404s (see
+  # top-level imageRegistry).
   imagePullSecrets: []
   # Architecture for the tooling images the hooks/test pods download
   # (kubectl, jq). Clusters running arm64 nodes set arm64.
   toolingArch: "amd64"
   # Registry for Helm hook Jobs and test pods that pull public Docker
-  # Hub images (alpine, python, curlimages/curl). Separate from
-  # `imageRegistry` above, which scopes service images to the GitLab
+  # Hub images (alpine, python, curlimages/curl). Separate from the
+  # top-level `imageRegistry`, which scopes service images to the GitLab
   # Container Registry; tooling images are not republished there, so
   # they must keep their public registry. Empty = docker.io.
   toolingImageRegistry: ""
@@ -87,6 +87,13 @@ observability:
 # a missing parent map even under `with`/`default` guards — the keys must
 # exist in values.yaml before any template reads them.
 # Per-environment overrides elaborate both blocks; do not duplicate them here.
+# Registry prefix for the genie-ai-* service images. Deliberately NOT
+# under `global.`: `global.imageRegistry` is a Helm-wide convention that
+# every subchart consumes (gateway-helm rewrites its images through it),
+# and this registry only mirrors GENIE.AI images — subchart images
+# (Envoy Gateway) must keep their upstream registry.
+imageRegistry: "registry.opensource.unicc.org/un/itu/genie-ai"
+
 pluggable:
   storageClassName: ""                # "" = cluster default storage class
 
@@ -99,17 +106,6 @@ pluggable:
 # site/content/en/docs/deploy/ for the exposure topologies.
 envoyGateway:
   enabled: true
-
-# gateway-helm reads the PARENT global.imageRegistry (a genie-services
-# convention: sites mirror images into their own registry). Envoy's
-# images are not mirrored there, so pin them explicitly — gateway-helm
-# uses a non-empty repository verbatim (registry included).
-gateway-helm:
-  deployment:
-    envoyGateway:
-      image:
-        repository: docker.io/envoyproxy/gateway
-        tag: v1.9.2
 
 ingress:
   host: genieai.local                 # public hostname for redirect URLs

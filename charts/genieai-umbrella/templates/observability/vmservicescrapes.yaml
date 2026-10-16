@@ -56,23 +56,7 @@ spec:
     - port: http
       interval: 30s
 {{- end }}
-{{- if .Values.services.nginx.enabled }}
----
-apiVersion: operator.victoriametrics.com/v1beta1
-kind: VMServiceScrape
-metadata:
-  name: nginx
-  namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "metrics") | nindent 4 }}
-spec:
-  selector:
-    matchLabels:
-      genieai.io/component: nginx
-  endpoints:
-    - port: http
-      interval: 30s
-{{- end }}
+
 {{- if .Values.services.documentRepository.enabled }}
 ---
 apiVersion: operator.victoriametrics.com/v1beta1

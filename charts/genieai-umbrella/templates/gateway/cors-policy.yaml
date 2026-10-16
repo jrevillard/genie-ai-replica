@@ -1,0 +1,37 @@
+{{- /*
+  Optional CORS policy. HTTPRoute has no CORS field in Gateway API —
+  Envoy Gateway v1+ expresses it as a SecurityPolicy targeting the
+  route. Rendered only when ingress.cors.allowOrigins is non-empty:
+  the default topology is same-origin (SPA + API behind one host) and
+  needs no policy.
+*/ -}}
+{{- if and .Values.ingress.enabled .Values.ingress.cors.allowOrigins -}}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: genieai-cors
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: genieai
+  cors:
+    allowOrigins:
+      {{- range .Values.ingress.cors.allowOrigins }}
+      - {{ . | quote }}
+      {{- end }}
+    # Operator-tunable via values — hard-coded lists here would silently
+    # ignore values overrides (dead-key class) and drop methods/headers
+    # the defaults promised.
+    allowMethods:
+      {{- range (.Values.ingress.cors.allowMethods | default (list "GET" "POST" "PUT" "PATCH" "DELETE" "OPTIONS")) }}
+      - {{ . | quote }}
+      {{- end }}
+    allowHeaders:
+      {{- range (.Values.ingress.cors.allowHeaders | default (list "Authorization" "Content-Type" "X-Requested-With")) }}
+      - {{ . | quote }}
+      {{- end }}
+{{- end -}}

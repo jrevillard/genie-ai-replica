@@ -2451,6 +2451,104 @@ class ChatQnAService:
             logger.error(f"Translation error: {e}")
             return flattened_history_string
 
+    async def _condense_query(self, history_text: str, last_message: str) -> str:
+        """Rewrite a follow-up into a standalone retrieval query (issue #1091).
+
+        One short LLM call against the chat LLM's endpoint/model
+        (temperature 0, guided JSON, 5 s timeout, no retry). Fail-closed:
+        every failure classification raises HTTPException(503) — the turn
+        fails with LLM-failure semantics; retrieval never sees the raw or
+        blended query on this path.
+        """
+        url = (
+            f"{LLM_SERVER_PROTOCOL}://{LLM_SERVER_HOST_IP}:{LLM_SERVER_PORT}"
+            f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions"
+        )
+        payload = {
+            "model": _get_llm_model(),
+            "messages": [
+                {"role": "system", "content": _CONDENSE_SYSTEM_PROMPT},
+                {"role": "user", "content": _build_condense_user_content(history_text, last_message)},
+            ],
+            "temperature": 0.0,
+            "max_tokens": _CONDENSE_MAX_TOKENS,
+            "response_format": {"type": "json_object"},
+            "stream": False,
+        }
+        tracer = get_tracer("chatqna.query_condense")
+        _start = time.monotonic()
+        with tracer.start_as_current_span("chatqna.query_condense") as span:
+            try:
+                async with httpx.AsyncClient(timeout=_CONDENSE_TIMEOUT_SECONDS) as client:
+                    response = await client.post(
+                        url, json=payload, headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
+                    )
+                    response.raise_for_status()
+                    try:
+                        body = response.json()
+                    except json.JSONDecodeError as e:
+                        # 200 with a non-JSON body — classified, not escaped
+                        # (spec failure-classification item 3).
+                        raise CondenseError("bad_body", f"non-JSON body: {str(e)[:120]}") from e
+                try:
+                    content = body["choices"][0]["message"]["content"]
+                except (KeyError, IndexError, TypeError) as e:
+                    raise CondenseError("missing_field", f"unexpected response shape: {str(body)[:120]}") from e
+                standalone_query = _parse_condense_response(content)
+                usage = body.get("usage") or {}
+                span.set_attributes(
+                    sanitize_attributes(
+                        {
+                            "genie.condense.mode": MULTI_TURN_MODE,
+                            "genie.condense.status": "ok",
+                            "genie.condense.latency_ms": round((time.monotonic() - _start) * 1000),
+                            "genie.condense.prompt_tokens": usage.get("prompt_tokens", 0),
+                            "genie.condense.completion_tokens": usage.get("completion_tokens", 0),
+                        }
+                    )
+                )
+                logger.debug(f"Condense rewrite ok: {standalone_query}")
+                return standalone_query
+            except CondenseError as e:
+                span.set_attributes(
+                    sanitize_attributes(
+                        {
+                            "genie.condense.mode": MULTI_TURN_MODE,
+                            "genie.condense.status": "failed",
+                            "genie.condense.latency_ms": round((time.monotonic() - _start) * 1000),
+                        }
+                    )
+                )
+                logger.warning(f"Condense rewrite failed ({e.reason}): {e}")
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "condense_failed",
+                        "reason": e.reason,
+                        "message": "Query rewriting failed; this turn cannot be answered reliably. Please retry.",
+                    },
+                ) from e
+            except (httpx.TimeoutException, httpx.HTTPError) as e:
+                reason = "timeout" if isinstance(e, httpx.TimeoutException) else "http_error"
+                span.set_attributes(
+                    sanitize_attributes(
+                        {
+                            "genie.condense.mode": MULTI_TURN_MODE,
+                            "genie.condense.status": "failed",
+                            "genie.condense.latency_ms": round((time.monotonic() - _start) * 1000),
+                        }
+                    )
+                )
+                logger.warning(f"Condense rewrite transport failure: {type(e).__name__}: {e}")
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "condense_failed",
+                        "reason": reason,
+                        "message": "Query rewriting failed; this turn cannot be answered reliably. Please retry.",
+                    },
+                ) from e
+
     def load_language_codes(self, filepath: str) -> dict:
         """Load language codes from a JSON file."""
         try:

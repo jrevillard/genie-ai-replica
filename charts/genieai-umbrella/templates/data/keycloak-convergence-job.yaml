@@ -130,7 +130,7 @@ spec:
           # Pulled from docker.io unconditionally: kcc is not mirrored in
           # the registries deployments pull their other images from
           # (verified 2026-10-14, UNICC mirror), and a conditional
-          # global.imageRegistry prefix would 404 the pull. An air-gapped
+          # imageRegistry prefix would 404 the pull. An air-gapped
           # site must mirror docker.io/adorsys/keycloak-config-cli and
           # rewrite via insertAgent, not via the registry value.
           image: docker.io/adorsys/keycloak-config-cli:6.5.0-26

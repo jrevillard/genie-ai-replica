@@ -10,7 +10,7 @@ request without the collections, which is what this Job prevents.
 */ -}}
 {{- $ns := .Values.namespace -}}
 {{- $arangoHost := include "genieai-umbrella.arangoHost" . -}}
-{{- $registry := .Values.global.imageRegistry -}}
+{{- $registry := .Values.imageRegistry -}}
 {{- $img := .Values.services.backend.migrationsImage | default dict -}}
 apiVersion: batch/v1
 kind: Job

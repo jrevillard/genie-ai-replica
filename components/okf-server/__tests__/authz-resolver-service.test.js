@@ -105,20 +105,33 @@ describe('resolveGraphSet (serving ∩ authorized)', () => {
     expect(out.generated_at).toBeTruthy();
   });
 
-  test('scoped caller → intersection only (isolation: repo A never sees repo B)', async () => {
-    seedServing([servingRow(), servingRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
-    const out = await resolveGraphSet({ okfScopes: ['okf:itu:r-kenya:read'], isSuperAdmin: false });
-    expect(out.graph_names).toEqual(['OKF_kenya-gov_v3']); // r-health ABSENT
-    expect(out.repos.map((r) => r.repo_id)).toEqual(['r-kenya']);
-    expect(out.superadmin).toBe(false);
+  test('CLOSED mode: scoped caller → intersection only (isolation: repo A never sees repo B)', async () => {
+    // The Story-6.1 exact list lives in closed mode now — open mode bases
+    // every caller on the public set (David's rule: grants sit ON TOP of
+    // public repos, never remove them).
+    process.env.OKF_SCOPE_MODE = 'closed';
+    try {
+      seedServing([servingRow(), servingRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
+      const out = await resolveGraphSet({ okfScopes: ['okf:itu:r-kenya:read'], isSuperAdmin: false });
+      expect(out.graph_names).toEqual(['OKF_kenya-gov_v3']); // r-health ABSENT
+      expect(out.repos.map((r) => r.repo_id)).toEqual(['r-kenya']);
+      expect(out.superadmin).toBe(false);
+    } finally {
+      delete process.env.OKF_SCOPE_MODE;
+    }
   });
 
-  test('zero overlap → empty sets (zero-hit by construction)', async () => {
-    seedServing([servingRow()]);
-    const out = await resolveGraphSet({ okfScopes: ['okf:itu:r-other:read'], isSuperAdmin: false });
-    expect(out.graph_names).toEqual([]);
-    expect(out.per_graph_labels).toEqual({});
-    expect(out.repos).toEqual([]);
+  test('CLOSED mode: zero overlap → empty sets (zero-hit by construction)', async () => {
+    process.env.OKF_SCOPE_MODE = 'closed';
+    try {
+      seedServing([servingRow()]);
+      const out = await resolveGraphSet({ okfScopes: ['okf:itu:r-other:read'], isSuperAdmin: false });
+      expect(out.graph_names).toEqual([]);
+      expect(out.per_graph_labels).toEqual({});
+      expect(out.repos).toEqual([]);
+    } finally {
+      delete process.env.OKF_SCOPE_MODE;
+    }
   });
 
   test('authorized but NOT serving (draft/retracted) → excluded', async () => {
@@ -167,18 +180,25 @@ describe('resolveGraphSet DEFAULT-OPEN (OKF_SCOPE_MODE, product decision 2026-10
     expect(out.repos.map((r) => r.repo_id)).toEqual(['r-kenya', 'r-health']);
   });
 
-  test('open: a caller holding ANY effective scope keeps exact-list semantics', async () => {
+  test('open: a caller holding a NON-granting scope still sees the PUBLIC repos (grants never remove access)', async () => {
+    // David's rule (2026-10-16): "the user's ACL list determines what they
+    // have access to ON TOP of the repos that are open for public access."
+    // A scope that names nothing relevant changes NOTHING in open mode —
+    // the exact list is closed-mode semantics only.
     seedServing([servingRow(), servingRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
     const out = await resolveGraphSet({ okfScopes: ['okf:itu:r-other:read'], isSuperAdmin: false });
-    expect(out.graph_names).toEqual([]); // scopes restrict — open ≠ open-everything
+    expect(out.graph_names).toEqual(['OKF_kenya-gov_v3', 'OKF_health-services_v1']); // public set intact
   });
 
-  test('open: a MALFORMED-only okf_scopes claim stays closed-list (restriction intended)', async () => {
-    // Raw-list test (hasAnyScopeEntry): the token carries okf entries, so the
-    // operator intended a restriction — no silent fall-open.
-    seedServing([servingRow()]);
+  test('open: a MALFORMED-only claim sees the PUBLIC repos but NO restricted ones (restriction intended)', async () => {
+    // Raw-list rule: the token carries okf entries, so no restricted repo
+    // falls open — but public access is never revoked by garbage claims.
+    seedServing([
+      servingRow({ acl: { restricted: true } }),
+      servingRow({ repo_id: 'r-open', name: 'Open', version: 1 })
+    ]);
     const out = await resolveGraphSet({ okfScopes: ['okf:only-three', 'okf:t1:r-kenya:write'], isSuperAdmin: false });
-    expect(out.graph_names).toEqual([]);
+    expect(out.graph_names).toEqual(['OKF_open_v1']); // restricted kenya gated out, public repo intact
   });
 
   test('an EXPLICIT garbage OKF_SCOPE_MODE degrades to closed (never silent-open)', async () => {

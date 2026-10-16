@@ -139,18 +139,19 @@ describe('integration: BOTH read views apply the gate identically', () => {
     expect(view.serving_repo_ids).toEqual(['r-open']); // same verdict — the invariant
   });
 
-  test('granted holder reaches the restricted repo in BOTH views', async () => {
+  test('granted holder reaches the restricted repo ON TOP of the public set (David rule 3)', async () => {
     seedServing([servingRow(), servingRow({ repo_id: 'r-open', name: 'Open', acl: null })]);
-    // A scoped holder is on the CLOSED-LIST path (any scope ⇒ exact list),
-    // so r-open is correctly absent — the assertion is exactly their list,
-    // and the point is bali is IN it (the gate admitted the granted holder).
+    // Open mode: the base is the PUBLIC set for every caller; the grant adds
+    // the restricted repo ON TOP. A grant must NEVER strip public access
+    // (the first cut's exact-list rule did exactly that — caught in review
+    // against the product model).
     const out = await resolveGraphSet({ okfScopes: ['okf:itu:r-bali:read'], isSuperAdmin: false });
-    expect(out.graph_names).toEqual(['OKF_bali_v1']);
+    expect(out.graph_names.sort()).toEqual(['OKF_bali_v1', 'OKF_open_v1'].sort());
     const view = await retrievalConfigService.getRetrievalConfig({
       okfScopes: ['okf:itu:r-bali:read'],
       isSuperAdmin: false
     });
-    expect(view.serving_repo_ids).toEqual(['r-bali']);
+    expect(view.serving_repo_ids.sort()).toEqual(['r-bali', 'r-open'].sort());
   });
 
   test('superadmin bypasses the restriction gate entirely', async () => {

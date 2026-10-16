@@ -1546,6 +1546,12 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
             # handle template
             received_prompt = data.get("initial_query", inputs.get("text", ""))
+            # Condense mode (issue #1091): the RAG prompt question is the RAW
+            # last user message; the rewritten standalone query is retrieval and
+            # rerank input only — it must never enter the answer-LLM prompt.
+            _condense_raw = _gp(kwargs, "condense_raw_query", None)
+            if _condense_raw is not None:
+                received_prompt = _condense_raw
 
             if str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
                 abstention_instructions = (
@@ -1645,6 +1651,12 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
         # 3. Build the RAG prompt
         initial_query = inputs.get("initial_query", " ")
+        # Condense mode (issue #1091): the RAG prompt question is the RAW
+        # last user message; the rewritten standalone query is retrieval and
+        # rerank input only — it must never enter the answer-LLM prompt.
+        _condense_raw = _gp(kwargs, "condense_raw_query", None)
+        if _condense_raw is not None:
+            initial_query = _condense_raw
 
         # System instructions for integration of retrieved documents are already included in the CHATQNA_SYSTEM_PROMPT
         # OPTIONAL:

@@ -27,5 +27,6 @@ spec:
   # fills a Secret nobody references.
   secretName: {{ include "genieai-umbrella.tlsSecretName" . }}
   dnsNames:
-    - {{ .Values.ingress.host | quote }}
+    # SANs carry no port — strip it from a port-bearing ingress.host.
+    - {{ include "genieai-umbrella.ingressHostname" . | quote }}
 {{- end -}}

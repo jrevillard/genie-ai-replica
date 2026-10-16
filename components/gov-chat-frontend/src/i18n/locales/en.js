@@ -1893,6 +1893,33 @@ export default {
         titlePh: 'e.g. Wildlife in the Mara',
         updateIndex: 'Append to the index Contents list'
       },
+      access: {
+        label: 'Repository access',
+        title: 'Access',
+        restricted: 'Restricted',
+        openForAll: 'Open for all users',
+        hintRestricted:
+          'Only granted users (and stewards) can query this repository. Grant access below — it takes effect at the user’s next login.',
+        hintOpen:
+          'Every signed-in user can query this repository. Restrict it to fence it off and grant access per user.',
+        unrestrict: 'Open for all users',
+        restrict: 'Restrict repository',
+        unconfiguredTip:
+          'Grant/revoke needs Keycloak credentials on the server (KC_OKF_ACCESS_CLIENT_SECRET). Restriction enforcement works regardless.',
+        user: 'User',
+        level: 'Level',
+        revoke: 'Revoke',
+        noHolders: 'No users granted yet.',
+        usernamePlaceholder: 'Username',
+        levelRead: 'Read',
+        levelAdmin: 'Admin',
+        grant: 'Grant',
+        error: 'Operation failed.',
+        grantedNotice: 'Access granted — effective at next login.',
+        revokedNotice: 'Access revoked.',
+        nowRestricted: 'Repository restricted.',
+        nowOpen: 'Repository open for all users.'
+      },
       autocorrect: {
         blankBefore: '(blank)',
         blankBadge: 'no frontmatter — full proposal',

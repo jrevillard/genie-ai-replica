@@ -151,6 +151,35 @@ const repoOkfService = {
     }
   },
 
+  // --- Story 6-1c: per-repository access control (the admin facility) ---
+  async getAccess(repoId) {
+    const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/access`);
+    const b = res && res.data;
+    return {
+      restricted: Boolean(b && b.restricted),
+      required_scopes: (b && b.required_scopes) || [],
+      holders: (b && b.holders) || [],
+      configured: Boolean(b && b.configured)
+    };
+  },
+  async putAccess(repoId, restricted) {
+    const res = await httpService.put(`/okf/repos/${encodeURIComponent(repoId)}/access`, { restricted });
+    return res && res.data;
+  },
+  async grantAccess(repoId, { username, level }) {
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/access/grant`, {
+      username,
+      level
+    });
+    return res && res.data;
+  },
+  async revokeAccess(repoId, { username }) {
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/access/revoke`, {
+      username
+    });
+    return res && res.data;
+  },
+
   async getRepoLinks(repoId) {
     // Editor graph projection (David, 2026-09-04): the LIVE author-stated
     // edges from okf_concepts_meta — never the ArangoDB serving graph. Silent:

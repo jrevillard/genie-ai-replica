@@ -307,11 +307,11 @@ function isHeadingCandidate(t, nextLine) {
  * (the editor graph drops dangling targets) and even produced empty
  * pre-heading fragments. Returns null for frontmatter-less markdown —
  * unstructured content keeps the T6-lite segmentation. */
-function draftWholeMarkdown(text, { baseSlug, title, meta }) {
+function draftWholeMarkdown(text, { baseSlug, title: _title, meta }) {
   const raw = String(text || '');
   if (!/^---\r?\n/.test(raw)) return null; // no frontmatter block at all
-  let fm = {};
-  let content = '';
+  let fm;
+  let content;
   try {
     const matter = require('gray-matter');
     const parsed = matter(raw); // gray-matter wants the WHOLE document (delimiters included)

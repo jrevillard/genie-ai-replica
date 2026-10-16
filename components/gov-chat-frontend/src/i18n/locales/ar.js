@@ -1571,6 +1571,32 @@ export default {
         titlePh: 'مثال: الحياة البرية في مارا',
         updateIndex: 'إلحاق بقائمة المحتويات في الفهرس'
       },
+      access: {
+        label: 'الوصول إلى المستودع',
+        title: 'الوصول',
+        restricted: 'مقيّد',
+        openForAll: 'مفتوح للجميع',
+        hintRestricted:
+          'يستطيع الاستعلام عن هذا المستودع المستخدمون المصرّح لهم (والأمناء) فقط. امنح الوصول أدناه — يسري عند تسجيل الدخول التالي.',
+        hintOpen: 'يمكن لأي مستخدم مسجّل الاستعلام عن هذا المستودع. قيّده وامح الوصول لكل مستخدم.',
+        unrestrict: 'فتح للجميع',
+        restrict: 'تقييد المستودع',
+        unconfiguredTip:
+          'المنح/الإلغاء يتطلب بيانات اعتماد Keycloak على الخادم (KC_OKF_ACCESS_CLIENT_SECRET). فرض التقييد يعمل بغض النظر عن ذلك.',
+        user: 'المستخدم',
+        level: 'المستوى',
+        revoke: 'إلغاء',
+        noHolders: 'لم يُمنح الوصول لأحد بعد.',
+        usernamePlaceholder: 'اسم المستخدم',
+        levelRead: 'قراءة',
+        levelAdmin: 'إدارة',
+        grant: 'منح',
+        error: 'فشلت العملية.',
+        grantedNotice: 'تم منح الوصول — يسري عند تسجيل الدخول التالي.',
+        revokedNotice: 'تم إلغاء الوصول.',
+        nowRestricted: 'تم تقييد المستودع.',
+        nowOpen: 'المستودع مفتوح للجميع.'
+      },
       autocorrect: {
         blankBefore: '(فارغ)',
         blankBadge: 'لا يوجد frontmatter — اقتراح كامل',

@@ -697,6 +697,12 @@ services:
       # go unauthenticated and doc-repo rejects them (loud one-time warning).
       - KC_OKF_SERVER_CLIENT_ID=${KC_OKF_SERVER_CLIENT_ID:-okf-server}
       - KC_OKF_SERVER_CLIENT_SECRET=${KC_OKF_SERVER_CLIENT_SECRET:-}
+      # Story 6-1c: credentials for the OKF access-control GRANT/REVOKE facility
+      # (Keycloak Admin API via the genie-proxy-client service account). Empty
+      # secret = the facility answers 503 ACCESS_CONTROL_UNCONFIGURED; the
+      # read-path RESTRICTION enforcement needs no Keycloak and keeps working.
+      - KC_OKF_ACCESS_CLIENT_ID=${KC_OKF_ACCESS_CLIENT_ID:-genie-proxy-client}
+      - KC_OKF_ACCESS_CLIENT_SECRET=${KC_OKF_ACCESS_CLIENT_SECRET:-}
       # Story 2.9.4: the ingestion worker (crawlWorker pattern — poll loop over
       # Pending OKF files docs; sequential by design, dataprep is single-flight).
       - OKF_INGEST_WORKER_ENABLED=${OKF_INGEST_WORKER_ENABLED:-true}

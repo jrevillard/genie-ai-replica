@@ -1576,6 +1576,32 @@ export default {
         titlePh: 'mf. Wanyamapori katika Mara',
         updateIndex: 'Ambatisha kwenye orodha ya Yaliyomo katika faharasa'
       },
+      access: {
+        label: 'Ufikiaji wa hifadhi',
+        title: 'Ufikiaji',
+        restricted: 'Imepunguzwa',
+        openForAll: 'Wazi kwa wote',
+        hintRestricted:
+          'Watumiaji waliopewa ufikiaji (na wasimamizi) pekee wanaweza kuuliza hifadhi hii. Toa ufikiaji hapa chini — itaanza kufanya kazi kuingia mara ijayo.',
+        hintOpen: 'Kila mtumiaji aliyeingia anaweza kuuliza hifadhi hii. Punguza na toa ufikiaji kwa kila mtumiaji.',
+        unrestrict: 'Fungua kwa wote',
+        restrict: 'Punguza hifadhi',
+        unconfiguredTip:
+          'Kutoa/kubatilisha inahitaji vitambulisho vya Keycloak kwenye seva (KC_OKF_ACCESS_CLIENT_SECRET). Utekaji wa ukandamizaji unaendelea bila.',
+        user: 'Mtumiaji',
+        level: 'Kiwango',
+        revoke: 'Batilisha',
+        noHolders: 'Hakuna mtumiaji aliyepelekwa bado.',
+        usernamePlaceholder: 'Jina la mtumiaji',
+        levelRead: 'Soma',
+        levelAdmin: 'Msimamizi',
+        grant: 'Toa',
+        error: 'Operesheni imeshindikana.',
+        grantedNotice: 'Ufikiaji umetolewa — utaanza kuingia mara ijayo.',
+        revokedNotice: 'Ufikiaji umebatilishwa.',
+        nowRestricted: 'Hifadhi imepunguzwa.',
+        nowOpen: 'Hifadhi iko wazi kwa wote.'
+      },
       autocorrect: {
         blankBefore: '(tupu)',
         blankBadge: 'hakuna frontmatter — pendekezo kamili',

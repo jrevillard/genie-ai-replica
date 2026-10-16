@@ -25,6 +25,7 @@
 const { DateTime } = require('luxon');
 const { servingRepos, SERVING_TTL_MS } = require('./retrieval-config-service');
 const { deriveScopeAuthz, deriveReadAuthz } = require('./scope-authz-service');
+const { filterServingByAcl } = require('./access-control-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 
@@ -49,7 +50,15 @@ async function resolveGraphSet(caller) {
     // retrieval-config serving view and the scope gate can never drift
     // apart. The WRITE side never sees that rule — repository-controller
     // callerAuthz keeps the closed list.
-    const allowed = unrestricted ? serving : serving.filter((r) => authorizedRepoIds.has(r.repo_id));
+    // STORY 6-1c: the per-repo restriction gate. `privileged` is the DERIVED
+    // flag (role/wildcard — authorizedRepoIds === null), NEVER the open-mode
+    // unrestricted verdict: a default-open scopeless caller is fenced out of
+    // restricted repos until granted (access-control-service docstring).
+    const allowed = filterServingByAcl(
+      unrestricted ? serving : serving.filter((r) => authorizedRepoIds.has(r.repo_id)),
+      caller.okfScopes,
+      authorizedRepoIds === null
+    );
     const graph_names = allowed.map((r) => r.graph_name);
     const per_graph_labels = {};
     const domains = {};

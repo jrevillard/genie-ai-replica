@@ -138,7 +138,7 @@ async function main() {
 // the new frontmatter field shape. Approved rows are carried over;
 // unapproved rows are dropped (the migration runs after the publish
 // gate, so the rows should be approved, but be defensive).
-function mergeRowsIntoFrontmatter(repoId, rows, existing) {
+function mergeRowsIntoFrontmatter(repoId, rows, _existing) {
   const byField = { topic: [], entity: [], scope: '', forbidden: [], summary: '', keyword: [] };
   const _approved = [];
   for (const r of rows) {

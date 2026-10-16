@@ -283,6 +283,15 @@ class TestModelCacheMaxModelLen:
     def test_empty_endpoint_returns_none(self):
         assert get_max_model_len("") is None
 
+    def test_negative_stub_does_not_suppress_model_id_retries(self):
+        """The window getter's failure stub must not let the model-id accessor
+        TTL-hit it: dataprep/retriever keep retrying on every call."""
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")) as mock_get:
+            assert get_max_model_len("https://gpu-host/llm") is None  # creates the stub
+            assert get_model_id("https://gpu-host/llm") is None  # must re-probe
+
+        assert mock_get.call_count == 2
+
     def test_string_max_model_len_is_coerced_to_int(self):
         """A proxy returning max_model_len as a JSON string must not poison the
         cache with a value the callers cannot do arithmetic on."""

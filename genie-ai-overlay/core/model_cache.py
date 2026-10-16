@@ -40,7 +40,8 @@ MODEL_TTL_DEFAULT = 60
 # nothing answers the probe to one attempt per window instead of one per request.
 NEGATIVE_CACHE_TTL = 60
 
-# endpoint_url -> {"model_id": str|None, "max_model_len": int|None, "ts": float}
+# endpoint_url -> {"model_id": str|None, "max_model_len": int|None,
+#                  "ts": float|None (None on a failure stub), "last_fail_ts": float}
 _cache: dict[str, dict] = {}
 
 
@@ -130,7 +131,7 @@ def _cached_field(endpoint_url: str, ttl_seconds: int | None, field: str):
     ttl = _resolve_ttl(ttl_seconds)
     entry = _cache.get(endpoint_url)
 
-    if entry and (now - entry["ts"]) < ttl:
+    if entry and entry["ts"] is not None and (now - entry["ts"]) < ttl:
         return entry[field]
 
     # Recently failed probe on the request-path field: within the negative-
@@ -173,7 +174,10 @@ def _cached_field(endpoint_url: str, ttl_seconds: int | None, field: str):
         return entry[field]
 
     if field == "max_model_len":
-        _cache[endpoint_url] = {"model_id": None, "max_model_len": None, "ts": now, "last_fail_ts": now}
+        # ts stays None: a failure stub must never satisfy the success-TTL
+        # hit branch (that would let model-id consumers ride the stub for a
+        # full TTL instead of retrying), only last_fail_ts governs here.
+        _cache[endpoint_url] = {"model_id": None, "max_model_len": None, "ts": None, "last_fail_ts": now}
     return None
 
 

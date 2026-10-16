@@ -705,7 +705,7 @@ export default {
 
     async loadQuickHelpButtons() {
       try {
-        const { loadConfig } = await import('../main.js');
+        const loadConfig = (await import('../config-loader')).default;
         const config = await loadConfig();
         this.cachedConfig = config;
         const buttons = config?.features?.chat?.quickHelp?.buttons || [];

@@ -85,8 +85,27 @@ install_keycloak_operator() {
   # keycloak/keycloak-operator (which is WildFly-era, v1alpha1, archived
   # 2022-11-16). kustomize injects the namespace and rewires RoleBindings
   # (apply -f per-file breaks RBAC + misses 2 of the 4 CRDs).
-  log "keycloak-operator ${KC_OPERATOR_VERSION}: install via Kustomize (ref=26.8.0+ of keycloak-k8s-resources)"
-  kubectl apply -k "github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=${KC_OPERATOR_VERSION}"
+  #
+  # The upstream kustomization pins namespace `keycloak`; a local overlay
+  # with a `namespace:` field overrides it (top-level wins) so every
+  # namespaced object — Deployment, ServiceAccount, RoleBindings, subjects
+  # included — lands in keycloak-system. One leak: the upstream
+  # ClusterRoleBinding is cluster-scoped and the namespace transformer
+  # does not touch its subject, so its subject is patched separately
+  # below.
+  log "keycloak-operator ${KC_OPERATOR_VERSION}: install via Kustomize overlay (ref=${KC_OPERATOR_VERSION} of keycloak-k8s-resources, ns=${ns})"
+  local overlay
+  overlay=$(mktemp -d)
+  cat > "${overlay}/kustomization.yaml" <<EOF
+namespace: ${ns}
+resources:
+  - github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=${KC_OPERATOR_VERSION}
+EOF
+  kubectl apply -k "${overlay}"
+  rm -rf "${overlay}"
+  kubectl patch clusterrolebinding keycloak-operator-clusterrole-binding \
+    --type json \
+    -p "[{\"op\":\"replace\",\"path\":\"/subjects/0/namespace\",\"value\":\"${ns}\"}]"
   wait_deploy_ready "${ns}" "keycloak-operator"
   # The upstream kustomize ships namespaced RoleBindings only, so the
   # operator reconciles Keycloak CRs in its own namespace and ignores

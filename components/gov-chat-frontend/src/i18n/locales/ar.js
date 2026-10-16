@@ -1583,19 +1583,28 @@ export default {
         restrict: 'تقييد المستودع',
         unconfiguredTip:
           'المنح/الإلغاء يتطلب بيانات اعتماد Keycloak على الخادم (KC_OKF_ACCESS_CLIENT_SECRET). فرض التقييد يعمل بغض النظر عن ذلك.',
-        user: 'المستخدم',
-        level: 'المستوى',
         revoke: 'إلغاء',
-        noHolders: 'لم يُمنح الوصول لأحد بعد.',
-        usernamePlaceholder: 'اسم المستخدم',
         levelRead: 'قراءة',
         levelAdmin: 'إدارة',
-        grant: 'منح',
         error: 'فشلت العملية.',
         grantedNotice: 'تم منح الوصول — يسري عند تسجيل الدخول التالي.',
         revokedNotice: 'تم إلغاء الوصول.',
         nowRestricted: 'تم تقييد المستودع.',
-        nowOpen: 'المستودع مفتوح للجميع.'
+        nowOpen: 'المستودع مفتوح للجميع.',
+        col: {
+          user: 'المستخدم',
+          level: 'المستوى',
+          group: 'المجموعة'
+        },
+        viaRole: 'دور مباشر',
+        noHolders: 'لا يوجد مستخدمون أو مجموعات مُمنحة.',
+        groupPlaceholder: 'اسم المجموعة',
+        usernamesPlaceholder: 'أسماء المستخدمين — واحد في كل سطر',
+        grantGroup: 'منح للمجموعة',
+        grant: 'منح للمستخدمين',
+        groupHint: 'كل عضو في المجموعة يحصل على الوصول عند تسجيل الدخول التالي — عملية واحدة لأي عدد من المستخدمين.',
+        grantedSomeNotice: 'تم منح {n} — غير معروفين: {m}',
+        grantedGroupNotice: 'تم منح المجموعة — كل عضو يحصل على الوصول عند تسجيل الدخول التالي.'
       },
       autocorrect: {
         blankBefore: '(فارغ)',

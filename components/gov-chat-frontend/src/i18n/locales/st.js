@@ -1601,19 +1601,29 @@ export default {
         restrict: 'Fokotsa polokelo',
         unconfiguredTip:
           'Ho fana/tlosa ho hloka Keycloak ho seva (KC_OKF_ACCESS_CLIENT_SECRET). Phihlelo e sebetsa ntle le eona.',
-        user: 'Mosebelisi',
-        level: 'Boemo',
         revoke: 'Tlosa',
-        noHolders: 'Ha ho mosebelisi ea fuoeng phihlelo.',
-        usernamePlaceholder: 'Lebitso la mosebelisi',
         levelRead: 'Bala',
         levelAdmin: 'Taolo',
-        grant: 'Fana',
         error: 'Tshebetso e hafetsoe.',
         grantedNotice: 'Phihlelo e fanoeng — e sebetsa ha a kena hape.',
         revokedNotice: 'Phihlelo e tlosoe.',
         nowRestricted: 'Polokelo e fokotsoe.',
-        nowOpen: 'Polokelo e bulehile ho bohle.'
+        nowOpen: 'Polokelo e bulehile ho bohle.',
+        col: {
+          user: 'Mosebelisi',
+          level: 'Boemo',
+          group: 'Group'
+        },
+        viaRole: 'role ea kgonthe',
+        noHolders: 'Ha ho mosebelisi kapa group ea fanoeng phihlelo.',
+        groupPlaceholder: 'Lebitso la group',
+        usernamesPlaceholder: 'Mabitso a basebelisi — o le mong ka mohala',
+        grantGroup: 'Fana group',
+        grant: 'Fana basebelisi',
+        groupHint:
+          'Setho se seng le se seng sa group se fuman phihlelo ha se kena hape — tshebetso e le nngwe bakeng sa palo efe kapa efe.',
+        grantedSomeNotice: 'E fanoeng {n} — ha e tsejoe: {m}',
+        grantedGroupNotice: 'Group e fanoeng — setho se seng le se seng se fuman phihlelo ha se kena hape.'
       },
       autocorrect: {
         blankBefore: '(e se nang letho)',

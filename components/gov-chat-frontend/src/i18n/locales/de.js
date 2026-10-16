@@ -1603,19 +1603,29 @@ export default {
         restrict: 'Repository einschränken',
         unconfiguredTip:
           'Gewähren/Widerrufen erfordert Keycloak-Zugangsdaten auf dem Server (KC_OKF_ACCESS_CLIENT_SECRET). Die Einschränkung funktioniert trotzdem.',
-        user: 'Benutzer',
-        level: 'Stufe',
         revoke: 'Widerrufen',
-        noHolders: 'Noch keine Benutzer mit Zugang.',
-        usernamePlaceholder: 'Benutzername',
         levelRead: 'Lesen',
         levelAdmin: 'Admin',
-        grant: 'Gewähren',
         error: 'Vorgang fehlgeschlagen.',
         grantedNotice: 'Zugang gewährt — wirksam bei der nächsten Anmeldung.',
         revokedNotice: 'Zugang widerrufen.',
         nowRestricted: 'Repository eingeschränkt.',
-        nowOpen: 'Repository für alle offen.'
+        nowOpen: 'Repository für alle offen.',
+        col: {
+          user: 'Benutzer',
+          level: 'Stufe',
+          group: 'Gruppe'
+        },
+        viaRole: 'direkte Rolle',
+        noHolders: 'Keine Benutzer oder Gruppen mit Zugang.',
+        groupPlaceholder: 'Gruppenname',
+        usernamesPlaceholder: 'Benutzernamen — einer pro Zeile',
+        grantGroup: 'Gruppe berechtigen',
+        grant: 'Benutzer berechtigen',
+        groupHint:
+          'Jedes Gruppenmitglied erhält den Zugang bei der nächsten Anmeldung — eine Operation für beliebig viele Benutzer.',
+        grantedSomeNotice: '{n} gewährt — unbekannt: {m}',
+        grantedGroupNotice: 'Gruppe gewährt — jedes Mitglied erhält den Zugang bei der nächsten Anmeldung.'
       },
       autocorrect: {
         blankBefore: '(leer)',

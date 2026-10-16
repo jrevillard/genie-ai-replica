@@ -1,13 +1,28 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
-// Story 6-1c — the GRANT/REVOKE facility: writes `okf_scopes` user
-// attributes through the Keycloak Admin API so granted scopes ride the
-// caller's JWT on next login (the realm's existing user-attribute protocol
-// mapper on the genie-app client — configs/keycloak/genie-realm.yaml — mints
-// the claim; no realm change needed).
+// Story 6-1c — the GRANT/REVOKE facility, built for enterprise scale.
 //
-// Auth mode: the genie-proxy-client service account (the same delegated
-// user-management client the BFF uses, KEYCLOAK_PROXY_*). okf-server gets its
+// TWO grant mechanisms, both consumed by the same enforcement (the token's
+// okf-scopes list — middleware/auth.js merges all sources):
+//   1. PER-USER attribute grants: `okf:{tenant}:{repo}:{level}` entries in
+//      the user's okf_scopes attribute (the realm's existing user-attribute
+//      protocol mapper ships them in the JWT). Auditable per user, visible
+//      in the Keycloak admin console.
+//   2. GROUP grants via ROLES NAMED AS SCOPE STRINGS: the facility creates
+//      a realm role per (repo, level) — name == the scope string — and
+//      assigns it to a GROUP; every member inherits it in
+//      realm_access.roles at token mint (verified live on KC 26). One
+//      operation scales to any member count; Keycloak manages bulk
+//      membership natively.
+//
+// Holder enumeration is SERVER-SIDE: Keycloak attribute search
+// (GET /users?q=okf_scopes:<scope>) and role-member endpoints
+// (/roles/{name}/users, /roles/{name}/groups — colons in role names are
+// legal path characters, sent RAW). The first cut listed the whole realm
+// client-side with a 300-user cap — a prototype decision that does not
+// survive enterprise scale and was replaced wholesale.
+//
+// Auth mode: the genie-proxy-client service account. okf-server gets its
 // OWN credentials (KC_OKF_ACCESS_CLIENT_ID/SECRET): empty secret = the
 // facility is UNCONFIGURED and the access routes answer 503 — enforcement
 // (access-control-service) never needs Keycloak and keeps working.
@@ -20,7 +35,7 @@ const CLIENT_ID = process.env.KC_OKF_ACCESS_CLIENT_ID || 'genie-proxy-client';
 const CLIENT_SECRET = process.env.KC_OKF_ACCESS_CLIENT_SECRET || '';
 
 const FETCH_TIMEOUT_MS = 10_000;
-const LIST_MAX = 300; // realm users pulled to compute holders (bounded)
+const USERS_PAGE = 100; // per-page ceiling for paginated user queries
 
 let cachedToken = null;
 
@@ -67,23 +82,93 @@ async function adminApi(method, path, body = null, retried = false) {
   return response;
 }
 
+async function jsonOrThrow(r, what) {
+  if (!r.ok) {
+    const text = await r.text();
+    logger.error(`OKF access: ${what} failed`, { status: r.status, body: text.slice(0, 300) });
+    throw Object.assign(new Error(`${what} failed: ${r.status}`), { statusCode: r.status === 404 ? 404 : 502 });
+  }
+  return r.status === 204 ? null : r.json();
+}
+
 /** Exact-username lookup → the Keycloak user representation (or null). */
 async function findUserByUsername(username) {
-  const r = await adminApi('GET', `/users?username=${encodeURIComponent(username)}&exact=true&max=2`);
-  if (!r.ok) {
-    throw Object.assign(new Error(`user lookup failed: ${r.status}`), { statusCode: 502 });
-  }
-  const users = await r.json();
+  const users = await jsonOrThrow(
+    await adminApi('GET', `/users?username=${encodeURIComponent(username)}&exact=true&max=2`),
+    'user lookup'
+  );
   return users.length === 1 ? users[0] : null;
 }
 
-/** All enabled realm users carrying their attributes (bounded by LIST_MAX). */
-async function listUsersWithScopes() {
-  const r = await adminApi('GET', `/users?max=${LIST_MAX}&briefRepresentation=false`);
-  if (!r.ok) {
-    throw Object.assign(new Error(`user list failed: ${r.status}`), { statusCode: 502 });
+/**
+ * Users holding a specific scope entry, via SERVER-SIDE attribute search
+ * (KC 19+ `?q=attr:value`; colon-laden values verified live on KC 26).
+ * Paginated — no cap, no client-side realm listing.
+ */
+async function usersWithAttribute(scope) {
+  const out = [];
+  let first = 0;
+  for (;;) {
+    const page = await jsonOrThrow(
+      await adminApi('GET', `/users?q=${encodeURIComponent(`okf_scopes:${scope}`)}&first=${first}&max=${USERS_PAGE}`),
+      'attribute search'
+    );
+    out.push(...page);
+    if (page.length < USERS_PAGE) return out;
+    first += USERS_PAGE;
   }
-  return r.json();
+}
+
+/** Ensure a realm role NAMED as the scope string exists; return its full representation. */
+async function ensureRole(scope) {
+  try {
+    return await jsonOrThrow(await adminApi('GET', `/roles/${scope}`), 'role fetch');
+  } catch (err) {
+    if (err.statusCode !== 404) throw err;
+  }
+  await jsonOrThrow(await adminApi('POST', '/roles', { name: scope }), 'role create');
+  return jsonOrThrow(await adminApi('GET', `/roles/${scope}`), 'role fetch');
+}
+
+/** Find a top-level group by exact name (search is substring; match client-side). */
+async function findGroupByName(name) {
+  const groups = await jsonOrThrow(await adminApi('GET', `/groups?search=${encodeURIComponent(name)}&max=100`), 'group search');
+  return groups.find((g) => g.name === name) || null;
+}
+
+/** Create the group if missing; return its representation. */
+async function ensureGroup(name) {
+  const existing = await findGroupByName(name);
+  if (existing) return existing;
+  await jsonOrThrow(await adminApi('POST', '/groups', { name }), 'group create');
+  const created = await findGroupByName(name);
+  if (!created) throw Object.assign(new Error('group create succeeded but group not found'), { statusCode: 502 });
+  return created;
+}
+
+/**
+ * Assign / remove a role on a group. The role-mappings endpoint needs the
+ * FULL representation (id + name) — a name-only body 404s (verified live).
+ */
+async function setGroupRole(group, role, assign) {
+  const verb = assign ? 'POST' : 'DELETE';
+  await jsonOrThrow(
+    await adminApi(verb, `/groups/${group.id}/role-mappings/realm`, [{ id: role.id, name: role.name }]),
+    'group role mapping'
+  );
+}
+
+/** Direct user members + groups holding the role (raw-colon paths — verified live). */
+async function roleMembers(scope) {
+  const users = await jsonOrThrow(await adminApi('GET', `/roles/${scope}/users?max=${USERS_PAGE}`), 'role users');
+  let groups;
+  try {
+    groups = await jsonOrThrow(await adminApi('GET', `/roles/${scope}/groups?max=${USERS_PAGE}`), 'role groups');
+  } catch (err) {
+    if (err.statusCode !== 404) throw err;
+    groups = [];
+  }
+  return { users, groups };
 }
 
 /** Read a user's okf_scopes attribute (always an array). */
@@ -106,7 +191,12 @@ async function setUserScopes(user, scopes) {
 module.exports = {
   isConfigured,
   findUserByUsername,
-  listUsersWithScopes,
+  usersWithAttribute,
+  ensureRole,
+  ensureGroup,
+  findGroupByName,
+  setGroupRole,
+  roleMembers,
   userScopes,
   setUserScopes,
   _clearTokenCache() {

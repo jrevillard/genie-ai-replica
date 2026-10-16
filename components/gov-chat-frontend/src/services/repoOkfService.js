@@ -151,14 +151,16 @@ const repoOkfService = {
     }
   },
 
-  // --- Story 6-1c: per-repository access control (the admin facility) ---
+  // --- Story 6-1c: per-repository access control (the admin facility,
+  //     enterprise scale: bulk user grants + group grants via roles). ---
   async getAccess(repoId) {
     const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/access`);
     const b = res && res.data;
     return {
       restricted: Boolean(b && b.restricted),
       required_scopes: (b && b.required_scopes) || [],
-      holders: (b && b.holders) || [],
+      user_holders: (b && b.user_holders) || [],
+      group_holders: (b && b.group_holders) || [],
       configured: Boolean(b && b.configured)
     };
   },
@@ -166,17 +168,25 @@ const repoOkfService = {
     const res = await httpService.put(`/okf/repos/${encodeURIComponent(repoId)}/access`, { restricted });
     return res && res.data;
   },
-  async grantAccess(repoId, { username, level }) {
-    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/access/grant`, {
-      username,
-      level
-    });
+  async grantAccess(repoId, { usernames, username, level }) {
+    const body = usernames ? { usernames, level } : { username, level };
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/access/grant`, body);
     return res && res.data;
   },
-  async revokeAccess(repoId, { username }) {
-    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/access/revoke`, {
-      username
-    });
+  async revokeAccess(repoId, { usernames, username }) {
+    const body = usernames ? { usernames } : { username };
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/access/revoke`, body);
+    return res && res.data;
+  },
+  async grantGroupAccess(repoId, { group, level }) {
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/access/grant-group`, { group, level });
+    return res && res.data;
+  },
+  async revokeGroupAccess(repoId, { group, level }) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/access/revoke-group`,
+      level ? { group, level } : { group }
+    );
     return res && res.data;
   },
 

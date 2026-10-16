@@ -12,8 +12,10 @@ const { logger } = require('../shared-lib/logger');
 /**
  * Parse `okf:{tenant}:{repo}:{read|admin}` scopes from the verified payload.
  * Sources: `okf_scopes` claim (array OR space-separated string) first, then the
- * standard `scope` claim (space-separated). Only `okf:`-prefixed string entries
- * are kept; duplicates removed, order preserved (Story 6.1 / ADR-okf-025 D16-a).
+ * standard `scope` claim (space-separated), then realm ROLE NAMES that ARE
+ * scope strings (6-1c group grants — see the note at the third source below).
+ * Only `okf:`-prefixed string entries are kept; duplicates removed, order
+ * preserved (Story 6.1 / ADR-okf-025 D16-a).
  */
 function parseOkfScopes(payload) {
   const out = [];
@@ -37,6 +39,15 @@ function parseOkfScopes(payload) {
   }
   if (typeof p.scope === 'string') {
     p.scope.split(/\s+/).forEach(push);
+  }
+  // Source 3 (Story 6-1c, enterprise scale): realm ROLE NAMES that ARE scope
+  // strings. Roles named `okf:{tenant}:{repo}:{level}` can be assigned to a
+  // user directly or inherited from a GROUP (verified live on KC 26: a user
+  // whose only path to the role is group membership carries it in
+  // realm_access.roles) — one grant operation scales to any member count,
+  // and Keycloak's own UI/API manages bulk membership.
+  if (p.realm_access && Array.isArray(p.realm_access.roles)) {
+    p.realm_access.roles.forEach(push);
   }
   return out;
 }

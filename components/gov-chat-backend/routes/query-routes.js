@@ -4,7 +4,7 @@ const axios = require('axios');
 const http = require('http');
 const https = require('https');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
-const { logger } = require('../shared-lib');
+const { logger, spanAttrs, tracingBaggage } = require('../shared-lib');
 const translationService = require('../services/translation-service');
 const { extractCommittableUnit } = require('../services/translation/stream-boundary');
 const { parsePositiveInt } = require('../shared-lib');
@@ -190,17 +190,38 @@ module.exports = (queryService) => {
       const streamTimeout = parseInt(process.env.CHATQNA_STREAM_TIMEOUT, 10) || 3600000;
       opeaController = new AbortController();
 
-      const opeaResponse = await axios.post(opeaUrl, opeaPayload, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authHeaders?.authorization && { Authorization: authHeaders.authorization })
-        },
-        responseType: 'stream',
-        timeout: streamTimeout,
-        signal: opeaController.signal,
-        httpAgent: new http.Agent({ keepAlive: true }),
-        httpsAgent: new https.Agent({ keepAlive: true })
-      });
+      // Carry the query id into the trace so a trace joins to the stored query
+      // document. When queryId is absent the request simply carries no baggage
+      // and every service leaves the attribute unset — never a placeholder.
+      const opeaResponse = queryId
+        ? await tracingBaggage.withBaggage(spanAttrs.QUERY_ID_KEY, queryId, () =>
+            axios.post(opeaUrl, opeaPayload, {
+              headers: {
+                'Content-Type': 'application/json',
+                ...(authHeaders?.authorization && {
+                  Authorization: authHeaders.authorization
+                })
+              },
+              responseType: 'stream',
+              timeout: streamTimeout,
+              signal: opeaController.signal,
+              httpAgent: new http.Agent({ keepAlive: true }),
+              httpsAgent: new https.Agent({ keepAlive: true })
+            })
+          )
+        : await axios.post(opeaUrl, opeaPayload, {
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authHeaders?.authorization && {
+                Authorization: authHeaders.authorization
+              })
+            },
+            responseType: 'stream',
+            timeout: streamTimeout,
+            signal: opeaController.signal,
+            httpAgent: new http.Agent({ keepAlive: true }),
+            httpsAgent: new https.Agent({ keepAlive: true })
+          });
 
       const stream = opeaResponse.data;
       let fullResponseText = '';

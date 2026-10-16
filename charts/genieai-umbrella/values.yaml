@@ -100,6 +100,17 @@ pluggable:
 envoyGateway:
   enabled: true
 
+# gateway-helm reads the PARENT global.imageRegistry (a genie-services
+# convention: sites mirror images into their own registry). Envoy's
+# images are not mirrored there, so pin them explicitly — gateway-helm
+# uses a non-empty repository verbatim (registry included).
+gateway-helm:
+  deployment:
+    envoyGateway:
+      image:
+        repository: docker.io/envoyproxy/gateway
+        tag: v1.9.2
+
 ingress:
   host: genieai.local                 # public hostname for redirect URLs
   # Scheme of the public origin. Feeds KC_PUBLIC_ORIGIN (realm

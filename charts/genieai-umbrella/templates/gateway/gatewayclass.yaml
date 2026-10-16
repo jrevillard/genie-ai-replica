@@ -14,5 +14,9 @@ metadata:
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
 spec:
-  controllerName: gateway.envoyproxy.io/gateway-class-controller
+  # EG >=1.7 identifies as gatewayclass-controller (no dash) — the
+  # documented gateway-class-controller string is silently ignored
+  # (controller logs "GatewayClass name for gateway doesn't match
+  # configured name" and the class stays Pending forever).
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
 {{- end -}}

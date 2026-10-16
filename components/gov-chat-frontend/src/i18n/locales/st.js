@@ -1589,6 +1589,32 @@ export default {
         titlePh: 'mohlala: Liphoofolo tse hlaha Mara',
         updateIndex: 'Eketsa lethathamong la Tse ka Hare ho index'
       },
+      access: {
+        label: 'Phihlelo ea polokelo',
+        title: 'Phihlelo',
+        restricted: 'E fokotsoeng',
+        openForAll: 'E bulehileng ho bohle',
+        hintRestricted:
+          'Basebelisi ba fuoeng phihlelo (le batsebedisi) feela ba ka botsa polokelo ena. Fana ka phihlelo ka tlase — e sebetsa ha ba kena hape.',
+        hintOpen: 'Mosebelisi ohle oa sene a ka botsa polokelo ena. E fokotse mme o fane ka phihlelo ka mosebelisi.',
+        unrestrict: 'Bulehla bohle',
+        restrict: 'Fokotsa polokelo',
+        unconfiguredTip:
+          'Ho fana/tlosa ho hloka Keycloak ho seva (KC_OKF_ACCESS_CLIENT_SECRET). Phihlelo e sebetsa ntle le eona.',
+        user: 'Mosebelisi',
+        level: 'Boemo',
+        revoke: 'Tlosa',
+        noHolders: 'Ha ho mosebelisi ea fuoeng phihlelo.',
+        usernamePlaceholder: 'Lebitso la mosebelisi',
+        levelRead: 'Bala',
+        levelAdmin: 'Taolo',
+        grant: 'Fana',
+        error: 'Tshebetso e hafetsoe.',
+        grantedNotice: 'Phihlelo e fanoeng — e sebetsa ha a kena hape.',
+        revokedNotice: 'Phihlelo e tlosoe.',
+        nowRestricted: 'Polokelo e fokotsoe.',
+        nowOpen: 'Polokelo e bulehile ho bohle.'
+      },
       autocorrect: {
         blankBefore: '(e se nang letho)',
         blankBadge: 'ha ho frontmatter — tlhahiso e felletseng',

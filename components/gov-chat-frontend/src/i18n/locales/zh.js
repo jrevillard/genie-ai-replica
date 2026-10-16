@@ -1554,6 +1554,31 @@ export default {
         titlePh: '例如：马赛马拉的野生动物',
         updateIndex: '追加至索引的目录列表'
       },
+      access: {
+        label: '仓库访问',
+        title: '访问',
+        restricted: '已限制',
+        openForAll: '对所有用户开放',
+        hintRestricted: '只有被授权的用户（和管理员）可以查询此仓库。在下方授予访问权限 — 用户下次登录时生效。',
+        hintOpen: '任何已登录用户都可以查询此仓库。限制它并按用户授予访问权限。',
+        unrestrict: '对所有人开放',
+        restrict: '限制仓库',
+        unconfiguredTip:
+          '授予/撤销需要服务器上的 Keycloak 凭据（KC_OKF_ACCESS_CLIENT_SECRET）。限制本身的执行不受影响。',
+        user: '用户',
+        level: '级别',
+        revoke: '撤销',
+        noHolders: '尚未授予任何用户。',
+        usernamePlaceholder: '用户名',
+        levelRead: '读取',
+        levelAdmin: '管理',
+        grant: '授予',
+        error: '操作失败。',
+        grantedNotice: '已授予访问权限 — 下次登录时生效。',
+        revokedNotice: '已撤销访问权限。',
+        nowRestricted: '仓库已限制。',
+        nowOpen: '仓库已对所有用户开放。'
+      },
       autocorrect: {
         blankBefore: '（空白）',
         blankBadge: '无 frontmatter — 完整补全提案',

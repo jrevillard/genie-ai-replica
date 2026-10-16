@@ -1592,6 +1592,33 @@ export default {
         titlePh: 'par ex. La faune dans le Mara',
         updateIndex: "Ajouter à la liste des matières de l'index"
       },
+      access: {
+        label: 'Accès au dépôt',
+        title: 'Accès',
+        restricted: 'Restreint',
+        openForAll: 'Ouvert à tous',
+        hintRestricted:
+          'Seuls les utilisateurs autorisés (et les gardiens) peuvent interroger ce dépôt. Accordez l’accès ci-dessous — effet à la prochaine connexion.',
+        hintOpen:
+          'Tout utilisateur connecté peut interroger ce dépôt. Restreignez-le pour le cloisonner et accordez l’accès par utilisateur.',
+        unrestrict: 'Ouvrir à tous',
+        restrict: 'Restreindre le dépôt',
+        unconfiguredTip:
+          'Accorder/révoquer nécessite des identifiants Keycloak sur le serveur (KC_OKF_ACCESS_CLIENT_SECRET). Le contrôle de restriction fonctionne sans.',
+        user: 'Utilisateur',
+        level: 'Niveau',
+        revoke: 'Révoquer',
+        noHolders: 'Aucun utilisateur autorisé.',
+        usernamePlaceholder: "Nom d'utilisateur",
+        levelRead: 'Lecture',
+        levelAdmin: 'Admin',
+        grant: 'Accorder',
+        error: "L'opération a échoué.",
+        grantedNotice: 'Accès accordé — effectif à la prochaine connexion.',
+        revokedNotice: 'Accès révoqué.',
+        nowRestricted: 'Dépôt restreint.',
+        nowOpen: 'Dépôt ouvert à tous.'
+      },
       autocorrect: {
         blankBefore: '(vide)',
         blankBadge: 'aucun frontmatter — proposition complète',

@@ -31,7 +31,10 @@ jest.mock('../shared-lib/tracing', () => ({
 }));
 
 const conv = require('../services/crawl-conversion-service');
-const dbService = require('../shared-lib/db-connection-service');
+// NOTE: db-connection-service is NOT required at the top on purpose — the
+// withMockedDb helper below re-requires it INSIDE a resetModules() fresh
+// registry (configuring a top-level instance would be a silent no-op; see
+// the comment there). A top-level require would be unused.
 
 const SERVICES = path.join(__dirname, '..', 'services');
 

@@ -10,7 +10,11 @@ const Joi = require('joi');
 
 const aclSchema = Joi.object({
   required_scopes: Joi.array().items(Joi.string()).optional(),
-  sensitivity: Joi.string().optional()
+  sensitivity: Joi.string().optional(),
+  // Story 6-1c: opt-in per-repo restriction. Absent/false on every historical
+  // repo — enforcement (access-control-service) only consults required_scopes
+  // when true, so default-open keeps working for unrestricted repos.
+  restricted: Joi.boolean().optional()
 });
 
 const sourceSchema = Joi.object({

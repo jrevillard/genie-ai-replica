@@ -1590,6 +1590,33 @@ export default {
         titlePh: 'z. B. Wildtiere in der Mara',
         updateIndex: 'An die Inhaltsliste des Index anhängen'
       },
+      access: {
+        label: 'Repository-Zugriff',
+        title: 'Zugriff',
+        restricted: 'Eingeschränkt',
+        openForAll: 'Für alle offen',
+        hintRestricted:
+          'Nur berechtigte Benutzer (und Stewards) können dieses Repository abfragen. Zugang unten gewähren — wirksam bei der nächsten Anmeldung.',
+        hintOpen:
+          'Jeder angemeldete Benutzer kann dieses Repository abfragen. Schränke es ein und gewähre Zugriff pro Benutzer.',
+        unrestrict: 'Für alle öffnen',
+        restrict: 'Repository einschränken',
+        unconfiguredTip:
+          'Gewähren/Widerrufen erfordert Keycloak-Zugangsdaten auf dem Server (KC_OKF_ACCESS_CLIENT_SECRET). Die Einschränkung funktioniert trotzdem.',
+        user: 'Benutzer',
+        level: 'Stufe',
+        revoke: 'Widerrufen',
+        noHolders: 'Noch keine Benutzer mit Zugang.',
+        usernamePlaceholder: 'Benutzername',
+        levelRead: 'Lesen',
+        levelAdmin: 'Admin',
+        grant: 'Gewähren',
+        error: 'Vorgang fehlgeschlagen.',
+        grantedNotice: 'Zugang gewährt — wirksam bei der nächsten Anmeldung.',
+        revokedNotice: 'Zugang widerrufen.',
+        nowRestricted: 'Repository eingeschränkt.',
+        nowOpen: 'Repository für alle offen.'
+      },
       autocorrect: {
         blankBefore: '(leer)',
         blankBadge: 'Kein Frontmatter — vollständiger Vorschlag',

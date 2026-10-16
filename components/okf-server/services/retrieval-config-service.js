@@ -42,6 +42,7 @@ const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { isArangoNotFound, isArangoConflict } = require('./arango-errors');
 const { deriveReadAuthz } = require('./scope-authz-service');
+const { filterServingByAcl } = require('./access-control-service');
 const config = require('../config');
 const { workingGraphName } = require('./graph-lifecycle-service');
 const auditService = require('./audit-service');
@@ -177,7 +178,7 @@ async function servingRepos(opts = {}) {
       'FOR r IN okf_repositories ' +
         "FILTER r.lifecycle_state == 'publish' && r.ingested_at != null && r.deleted_at == null " +
         'SORT r.name ASC ' +
-        "RETURN KEEP(r, ['repo_id', 'name', 'domain', 'version', 'lifecycle_state', 'ingested_at'])"
+        "RETURN KEEP(r, ['repo_id', 'name', 'domain', 'version', 'lifecycle_state', 'ingested_at', 'acl'])"
     )
   ).all();
   const serving = rows.map((r) => ({ ...r, graph_name: workingGraphName(r) }));
@@ -251,7 +252,12 @@ async function getRetrievalConfig(caller = {}) {
     // unrestricted verdict is the SINGLE scope authority's deriveReadAuthz —
     // the same rule /authz/graphs and the scope gate use, so this serving
     // view and the carrier can never disagree about what a caller may reach.
-    const serving = unrestricted ? allServing : allServing.filter((r) => authorizedRepoIds.has(r.repo_id));
+    // STORY 6-1c: the per-repo restriction gate runs AFTER the mode/list
+    // filter in BOTH read views (mirrored in resolveGraphSet) — a RESTRICTED
+    // repo additionally requires the caller to hold a repo (or wildcard)
+    // scope even in open mode.
+    const modeAllowed = unrestricted ? allServing : allServing.filter((r) => authorizedRepoIds.has(r.repo_id));
+    const serving = filterServingByAcl(modeAllowed, caller.okfScopes, authorizedRepoIds === null);
     const servingCount = serving.length;
     // WHITELIST, not negation: only a known non-legacy mode engages (a
     // corrupted mode value can never switch the fan-out on).

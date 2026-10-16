@@ -147,6 +147,10 @@
         @saved="onFrontmatterPanelSaved"
         @flush-before-save="flushConceptEditorSave"
       />
+      <!-- Story 6-1c (2026-10-16): per-repository access control in the
+           editor's right rail — restriction toggle + grant/revoke. New repos
+           default OPEN for all users; restriction is opt-in per repo. -->
+      <OkfAccessPanel v-if="repoId" :repo-id="repoId" @changed="onAccessChanged" />
       <!-- Story 1-8 (2026-10-08): compact head status under the tag panel —
            the vectorized head is what the tags become at publish; the CTA
            opens the Routing Lab to test it against competing repositories. -->
@@ -393,6 +397,7 @@ import DsDialog from '../../ds/Dialog.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
 import OkfAutocorrectPanel from './AutocorrectPanel.vue';
 import OkfHeadTestDialog from './HeadTestDialog.vue';
+import OkfAccessPanel from './AccessPanel.vue';
 import OkfPiiRepoRescan from './PiiRepoRescan.vue';
 
 const TYPE_OPTIONS = ['topic', 'entity', 'process', 'event', 'source'].map((t) => ({ value: t, label: t }));
@@ -416,6 +421,7 @@ export default {
     FrontmatterPanel,
     OkfAutocorrectPanel,
     OkfHeadTestDialog,
+    OkfAccessPanel,
     OkfPiiRepoRescan
   },
   mixins: [translateMixin],
@@ -692,6 +698,11 @@ export default {
       // re-reads the freshly-saved YAML instead of its stale draft.
       this.$store.dispatch('okf/fetchRepos');
       this.conceptReloadKey += 1;
+    },
+    // Story 6-1c: a restriction toggle changes who can query this repo —
+    // refresh the cached repo doc so badges/gates re-evaluate.
+    onAccessChanged() {
+      this.$store.dispatch('okf/fetchRepos');
     },
     // Story 1-8: a head rebuild inside the Routing Lab rewrites the repo
     // doc — refresh the cached repo so the badge + gates re-evaluate.

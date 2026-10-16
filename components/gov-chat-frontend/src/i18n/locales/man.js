@@ -1568,6 +1568,32 @@ export default {
         titlePh: 'āinwōt Menin mour ilo Mara',
         updateIndex: 'Kobaiki ilo laajrak in Kobban ilo index'
       },
+      access: {
+        label: 'Aseeg yesli depot',
+        title: 'Aseeg',
+        restricted: 'E limita',
+        openForAll: 'E aberto pa tur',
+        hintRestricted:
+          'S useris ku tin aseeg (i steward) por buska depot sta. Duna aseeg aba — e kobra ku user login li pa pruksimu.',
+        hintOpen: 'Kada user ku ta login por buska depot sta. Limita li i duna aseeg pa kada user.',
+        unrestrict: 'Abri pa tur',
+        restrict: 'Limita depot',
+        unconfiguredTip:
+          'Duna/tira aseeg presiza Keycloak kredensial na server (KC_OKF_ACCESS_CLIENT_SECRET). Limitason ta traba nhotodu.',
+        user: 'User',
+        level: 'Nivel',
+        revoke: 'Tira',
+        noHolders: 'Nda run user ku tin aseeg.',
+        usernamePlaceholder: 'Nomi di user',
+        levelRead: 'Le',
+        levelAdmin: 'Admin',
+        grant: 'Duna',
+        error: 'Operason pa perde.',
+        grantedNotice: 'Aseeg duna — e kobra ku login pa pruksimu.',
+        revokedNotice: 'Aseeg tira.',
+        nowRestricted: 'Depot limita.',
+        nowOpen: 'Depot aberto pa tur.'
+      },
       autocorrect: {
         blankBefore: '(fende mang soto)',
         blankBadge: 'ejjel̦o̦k frontmatter — aolepen peba',

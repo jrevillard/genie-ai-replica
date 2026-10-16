@@ -13,6 +13,7 @@ const router = express.Router();
 const { requireRole } = require('../middleware/require-role');
 const { requireRepoScope } = require('../middleware/require-scope');
 const ctrl = require('../controllers/repository-controller');
+const accessCtrl = require('../controllers/access-controller');
 
 // List / Read — scope-filtered in the controller (default-deny, G3).
 router.get('/', ctrl.listRepos);
@@ -44,6 +45,16 @@ router.post('/convert-from-crawl', requireRole('tools-admin'), ctrl.convertFromC
 router.post('/convert-from-documents', requireRole('tools-admin'), ctrl.convertFromDocuments);
 router.patch('/:repo_id', requireRepoScope('repo_id', 'admin'), ctrl.updateRepo);
 router.delete('/:repo_id', requireRepoScope('repo_id', 'admin'), ctrl.deleteRepo);
+
+// Story 6-1c — per-repository access control (the admin facility). Read is
+// repo-read-scoped; the toggle + grant/revoke are repo-admin-scoped. Grants
+// write Keycloak user attributes (503 ACCESS_CONTROL_UNCONFIGURED until
+// KC_OKF_ACCESS_CLIENT_SECRET is set on okf-server); the toggle and the
+// read-path ENFORCEMENT need no Keycloak.
+router.get('/:repo_id/access', requireRepoScope('repo_id', 'read'), accessCtrl.getAccess);
+router.put('/:repo_id/access', requireRepoScope('repo_id', 'admin'), accessCtrl.putAccess);
+router.post('/:repo_id/access/grant', requireRepoScope('repo_id', 'admin'), accessCtrl.grantAccess);
+router.post('/:repo_id/access/revoke', requireRepoScope('repo_id', 'admin'), accessCtrl.revokeAccess);
 
 // PII scan (Story 2.8 — ADR-okf-004 rev): explicit concepts OR file discovery
 // OR {"scope":"concepts"} — the ASYNC repo-wide CONCEPT rescan (202 + poll).

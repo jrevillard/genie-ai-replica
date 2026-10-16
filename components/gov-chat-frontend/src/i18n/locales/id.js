@@ -1583,6 +1583,32 @@ export default {
         titlePh: 'mis. Satwa liar di Mara',
         updateIndex: 'Tambahkan ke daftar Isi indeks'
       },
+      access: {
+        label: 'Akses repositori',
+        title: 'Akses',
+        restricted: 'Dibatasi',
+        openForAll: 'Terbuka untuk semua',
+        hintRestricted:
+          'Hanya pengguna yang diberi akses (dan steward) yang dapat mengakses repositori ini. Berikan akses di bawah — berlaku saat login berikutnya.',
+        hintOpen: 'Setiap pengguna yang masuk dapat mengakses repositori ini. Batasi dan berikan akses per pengguna.',
+        unrestrict: 'Buka untuk semua',
+        restrict: 'Batasi repositori',
+        unconfiguredTip:
+          'Memberi/mencabut akses butuh kredensial Keycloak di server (KC_OKF_ACCESS_CLIENT_SECRET). Pembatasan tetap bekerja.',
+        user: 'Pengguna',
+        level: 'Tingkat',
+        revoke: 'Cabut',
+        noHolders: 'Belum ada pengguna yang diberi akses.',
+        usernamePlaceholder: 'Nama pengguna',
+        levelRead: 'Baca',
+        levelAdmin: 'Admin',
+        grant: 'Berikan',
+        error: 'Operasi gagal.',
+        grantedNotice: 'Akses diberikan — berlaku saat login berikutnya.',
+        revokedNotice: 'Akses dicabut.',
+        nowRestricted: 'Repositori dibatasi.',
+        nowOpen: 'Repositori terbuka untuk semua.'
+      },
       autocorrect: {
         blankBefore: '(kosong)',
         blankBadge: 'tanpa frontmatter — proposal lengkap',

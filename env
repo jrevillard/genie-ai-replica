@@ -1272,6 +1272,17 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   closed-list — the flag never opens a write path. Flipping requires an
 #   okf-server container recreate (read per call, no rebuild).
 #   Full capability reference: site/content/en/docs/knowledge-base/access-control.md
+# KC_OKF_ACCESS_CLIENT_ID=genie-proxy-client
+#   Default: genie-proxy-client. Story 6-1c: the service account okf-server
+#   uses for the access-control grant/revoke facility (Keycloak Admin API
+#   writes to a user's okf_scopes attribute). Used by: okf-server.
+#   Compose: yes. Ansible: yes (kc_okf_access_client_id).
+# KC_OKF_ACCESS_CLIENT_SECRET=<secret>
+#   Default: unset (= the grant/revoke routes answer 503
+#   ACCESS_CONTROL_UNCONFIGURED). Set to the genie-proxy-client secret to
+#   enable the facility. Restriction ENFORCEMENT (acl.restricted on a repo)
+#   needs no Keycloak and works either way. Used by: okf-server.
+#   Compose: yes. Ansible: yes (vault: kc_okf_access_client_secret).
 
 # --- okf-server: internal service wiring (container DNS defaults) ---
 # DATAPREP_URL=http://dataprep-arango-service:5000

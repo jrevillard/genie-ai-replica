@@ -1588,6 +1588,33 @@ export default {
         titlePh: 'ex.: Vida selvagem no Mara',
         updateIndex: 'Anexar à lista de Conteúdo do índice'
       },
+      access: {
+        label: 'Acesso ao repositório',
+        title: 'Acesso',
+        restricted: 'Restrito',
+        openForAll: 'Aberto a todos',
+        hintRestricted:
+          'Apenas usuários autorizados (e stewards) podem consultar este repositório. Conceda acesso abaixo — vale a partir do próximo login.',
+        hintOpen:
+          'Qualquer usuário autenticado pode consultar este repositório. Restrinja-o e conceda acesso por usuário.',
+        unrestrict: 'Abrir a todos',
+        restrict: 'Restringir repositório',
+        unconfiguredTip:
+          'Conceder/revogar exige credenciais Keycloak no servidor (KC_OKF_ACCESS_CLIENT_SECRET). A restrição funciona de qualquer forma.',
+        user: 'Usuário',
+        level: 'Nível',
+        revoke: 'Revogar',
+        noHolders: 'Nenhum usuário com acesso.',
+        usernamePlaceholder: 'Nome de usuário',
+        levelRead: 'Leitura',
+        levelAdmin: 'Admin',
+        grant: 'Conceder',
+        error: 'A operação falhou.',
+        grantedNotice: 'Acesso concedido — vale no próximo login.',
+        revokedNotice: 'Acesso revogado.',
+        nowRestricted: 'Repositório restrito.',
+        nowOpen: 'Repositório aberto a todos.'
+      },
       autocorrect: {
         blankBefore: '(vazio)',
         blankBadge: 'sem frontmatter — proposta completa',

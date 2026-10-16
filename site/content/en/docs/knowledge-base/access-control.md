@@ -139,55 +139,83 @@ hints the next query toward them ("sticky" graphs). Sticky hints are always
 loses reach to a repository (or a repository is retracted), the next query
 cannot follow the conversation into it.
 
-## Repository-level ACL — declared, not yet enforced
+## Repository-level restriction (the admin facility)
 
-Repositories carry an `acl.required_scopes` field (stamped at creation, e.g.
-`okf:t:{domain}:admin`). **Today this field is metadata only** — the serving
-path does not consult it. It is the anchor for the planned enforcement work:
-once the admin facility (below) can grant scopes, per-repository
-`required_scopes` become the second gate a caller must satisfy before a
-specific repository enters their authorized set. Until that ships, the honest
-statement is: repository-level restriction is possible only by granting (or
-not granting) scopes per user.
+Every repository carries an access-control entry — **new repositories default
+OPEN for all users**; restriction is opt-in per repository. Two pieces:
+
+### The restriction toggle
+
+In the repository editor's right rail, the **Access** panel shows each
+repository's posture and a toggle:
+
+- **Open for all users** *(the default, including every newly created
+  repository)*: the repository follows the deployment's mode — in the default
+  `open` mode, every signed-in user's queries can reach it.
+- **Restricted**: the repository is fenced off. Only stewards (super-role or
+  wildcard scope) and users holding a grant for that repository can query it —
+  in EITHER mode. Default-open does not bypass a restriction: a scopeless
+  regular user reaches every *unrestricted* repo but is fenced out of
+  restricted ones until granted.
+
+Restriction is enforced at the two serving reads (`/authz/graphs` and
+`/retrieval-config`), identically — the chat carrier and the engagement gate
+can never disagree about a restricted repository.
+
+### Grants and revocations
+
+The same panel grants and revokes per-user access (`read` or `admin` level).
+A grant writes an `okf:{tenant}:{repo}:{level}` entry into the user's
+`okf_scopes` Keycloak attribute; the existing protocol mapper ships it in the
+user's token, so **a grant takes effect at the user's next login** and
+survives logout everywhere (it is a Keycloak attribute, not a session).
+Every grant, revoke and restriction toggle is written to the audit log.
+
+Grants require okf-server to hold Keycloak credentials for the delegated
+user-management client:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `KC_OKF_ACCESS_CLIENT_ID` | `genie-proxy-client` | The service account okf-server uses for grant/revoke Admin-API writes. |
+| `KC_OKF_ACCESS_CLIENT_SECRET` | unset | Its secret. Unset = the grant/revoke routes answer `503 ACCESS_CONTROL_UNCONFIGURED` (the panel says so honestly) — **restriction enforcement needs no Keycloak and keeps working**. |
+
+### The declared `required_scopes` field
+
+Repositories are stamped at creation with `acl.required_scopes` (a
+domain-steward scope). With the facility shipped, a restricted repository is
+also traversable by holders of any scope satisfying one of those declared
+entries — the hand-set path for operators who provision scopes directly in
+Keycloak rather than through the panel.
 
 ## Keycloak integration
 
-**What already ships** — the claim plumbing exists in the provisioned realm
-(`configs/keycloak/genie-realm.yaml`): an `okf-scopes` protocol mapper on the
-`genie-app` and `okf-server` clients copies a multivalued user attribute
-`okf_scopes` into the token's `okf_scopes` claim. The built-in admin user is
-provisioned with `okf_scopes: [okf:*:*:admin]` through exactly this path —
-which is why steward tokens carry the wildcard. A regular user's token mints
-the same claim as an **empty array** (the mapper runs; the attribute is
-simply unset), which the resolver treats as scopeless.
+**What ships** — the claim plumbing and the grant facility:
 
-**What does not ship yet** — a *facility* to grant scopes to regular users.
-Setting the `okf_scopes` user attribute is possible today only by hand in the
-Keycloak admin console; there is no admin-UI page, no backend API, and no
-documented procedure for it. That is precisely why the default matters: with
-no way to grant scopes, `closed` mode locks every regular user out of OKF
-answers, while `open` mode delivers the intended behavior — *once a
-repository is ingested and published, any regular user's query can be routed
-to it*.
+- The realm template (`configs/keycloak/genie-realm.yaml`) provisions an
+  `okf-scopes` protocol mapper on the `genie-app` and `okf-server` clients
+  that copies a multivalued user attribute `okf_scopes` into the token's
+  `okf_scopes` claim. The built-in admin user carries
+  `okf_scopes: [okf:*:*:admin]` through exactly this path.
+- The repository editor's **Access** panel grants and revokes per-user,
+  per-repo access by writing that same attribute through the Keycloak Admin
+  API (the `genie-proxy-client` service account; see the
+  `KC_OKF_ACCESS_*` table above). Every change is audited.
 
-**Planned** (sprint item *6-1c repo-access-control-admin-keycloak*) — the
-grant facility, reusing the existing mapper:
+Setting a user's `okf_scopes` attribute by hand in the Keycloak admin console
+also works and lands in their next token — the panel is the convenient,
+audited path, not the only one.
 
-1. **Grant/revoke UI** in the OKF admin facility: set the `okf_scopes` user
-   attribute per user or group through the Keycloak Admin API (the
-   `genie-proxy-client` service account exists for exactly this class of
-   delegated user management), with an audit trail.
-2. **Realm-provisioning symmetry:** the realm template gains a documented
-   attribute convention so deployments can bootstrap scoped users
-   declaratively.
-3. **Enforcement:** once grants are being made, administrators choose per
-   deployment whether to flip `OKF_SCOPE_MODE=closed` (restrict-by-default)
-   or stay open and use scopes only for exceptional restrictions.
-4. **Per-repository ACL enforcement:** `acl.required_scopes` on the repository
-   doc becomes a live second gate in the authorized-set resolution.
+**Operational interplay with the mode flag** — grants RESTRICT in every mode,
+and restriction fences repos off in every mode. A deployment can therefore:
 
-No pipeline change is needed for any of it: okf-server already parses exactly
-the claim the mapper mints.
+- stay `open` and use per-repo restriction + grants only for the repositories
+  that need fencing (the default posture), or
+- flip `OKF_SCOPE_MODE=closed` for restrict-by-default once grants exist, and
+  grant access per user per repo — every regular user then reaches exactly
+  the granted set.
+
+No pipeline change is involved in any of this: okf-server consumes the claim
+the mapper mints.
 
 ## Request flow and observability
 

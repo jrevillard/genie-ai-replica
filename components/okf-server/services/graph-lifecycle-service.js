@@ -148,9 +148,9 @@ async function audit(action, repoId, actor, extra = {}) {
 async function resolveGraphName(db, candidates) {
   for (const name of candidates) {
     if (!name) continue;
-    const col = db.collection(`${name}_SOURCE`); // eslint-disable-line no-await-in-loop
+    const col = db.collection(`${name}_SOURCE`);
     if (await col.exists()) return name;
-    const ent = db.collection(`${name}_ENTITY`); // eslint-disable-line no-await-in-loop
+    const ent = db.collection(`${name}_ENTITY`);
     if (await ent.exists()) return name;
   }
   return candidates.find(Boolean); // nothing exists — use the primary candidate

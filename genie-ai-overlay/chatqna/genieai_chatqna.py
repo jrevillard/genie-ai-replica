@@ -12,6 +12,7 @@ import os
 import re
 import time
 from datetime import date, datetime
+from urllib.parse import urlparse
 
 from metrics import (
     chat_rag_duration_seconds,
@@ -22,7 +23,7 @@ from metrics import (
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.model_cache import get_max_model_len, get_model_id
-from core.span_attrs import QUERY_ID_KEY, query_id_from_baggage
+from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, query_id_from_baggage
 from tracing import (
     get_tracer,
     install_uvicorn_access_logging,
@@ -35,6 +36,8 @@ setup_tracing("genieai-chatqna")
 
 import aiohttp  # for async http requests
 import httpx
+from opentelemetry import context as otel_context
+from opentelemetry import trace as otel_trace
 from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
@@ -62,6 +65,23 @@ install_uvicorn_access_logging()
 # The orchestrate handler keeps its own scope-local tracer; this one serves the
 # service-merge path where both candidate and selected chunk ids are known.
 align_tracer = get_tracer("chatqna.align_outputs")
+
+# Tracer for the per-LLM-call span. Separate from align_tracer because the
+# llm.invoke span is opened with start_span (not start_as_current_span) and its
+# lifetime is owned by the streaming generator, not by an orchestrator node.
+llm_tracer = get_tracer("chatqna.llm")
+
+# Sampling parameters recorded on spans, mapped from the key comps' own
+# `llm_parameters_dict` uses. Shared so the llm.invoke span and the
+# chatqna.orchestrate span stamp the same set under the same names — one
+# vocabulary, one place to add a parameter.
+_LLM_REQUEST_PARAM_ATTRS = (
+    ("max_tokens", "llm_req_max_tokens"),
+    ("top_p", "llm_req_top_p"),
+    ("temperature", "llm_req_temperature"),
+    ("frequency_penalty", "llm_req_frequency_penalty"),
+    ("repetition_penalty", "llm_req_repetition_penalty"),
+)
 
 
 class _RerankerInputTooLongError(Exception):
@@ -120,6 +140,117 @@ def _emit_reranker_selection_span(candidate_chunk_keys, selected_chunk_keys, sel
         _query_id = query_id_from_baggage()
         if _query_id:
             sel_span.set_attribute(QUERY_ID_KEY, _query_id)
+
+
+def _llm_request_params(llm_parameters_dict) -> dict:
+    """Return comps' LLM parameters as a plain mapping.
+
+    ``llm_parameters_dict`` arrives as a dict in the sync/streaming align
+    hooks. Tolerating a pydantic-style object costs nothing and keeps the
+    callers free of the distinction.
+    """
+    if not llm_parameters_dict:
+        return {}
+    if hasattr(llm_parameters_dict, "get"):
+        return llm_parameters_dict
+    for attr in ("model_dump", "dict"):
+        dumper = getattr(llm_parameters_dict, attr, None)
+        if callable(dumper):
+            try:
+                return dict(dumper())
+            except Exception:
+                break
+    return {}
+
+
+def _record_llm_request_params(span, llm_parameters_dict) -> None:
+    """Stamp the sampling params comps is about to send onto ``span``.
+
+    Each param is written ONLY when present: absence is the signal this span
+    exists to surface (a param dropped between chatqna and vLLM), so no
+    sentinel values are written in its place.
+    """
+    params = _llm_request_params(llm_parameters_dict)
+    for key, attr in _LLM_REQUEST_PARAM_ATTRS:
+        value = params.get(key)
+        if value is not None:
+            span.set_attribute(ATTRIBUTE_NAMES[attr], value)
+
+
+def _stamp_llm_request_params_on_current_span(llm_parameters_dict) -> None:
+    """Record the request params on the enclosing chatqna.orchestrate span.
+
+    ``align_inputs`` receives ``llm_parameters_dict`` as a named positional, so
+    it is the one hook guaranteed to see the parameters. ``align_generator`` is
+    only reachable through ``**kwargs`` and whether comps forwards the dict
+    there cannot be verified from this source tree — recording the params here
+    as well means they reach a span either way. A module-level holder was
+    rejected: chatqna serves concurrent turns, so mutable module state would
+    interleave between requests.
+    """
+    span = otel_trace.get_current_span()
+    if span is None or not span.is_recording():
+        return
+    _record_llm_request_params(span, llm_parameters_dict)
+
+
+def _emit_llm_invoke_open(llm_parameters_dict: dict):
+    """Open the llm.invoke span and record what is about to be sent.
+
+    ``start_span``, not ``start_as_current_span``: the latter returns an
+    ``_AgnosticContextManager``, not a Span, and calling ``set_attribute`` on it
+    raises AttributeError. The streaming path needs a real Span whose lifetime
+    it owns — open across the generator's yields, closed from a finally when the
+    upstream raises or the consumer abandons the stream.
+
+    ``stream`` resolves from the same dict as every other param, so
+    ``llm.stream`` and ``llm.stream_options.include_usage`` cannot disagree.
+    """
+    params = _llm_request_params(llm_parameters_dict)
+    stream = bool(params.get("stream"))
+    span = llm_tracer.start_span("llm.invoke", context=otel_context.get_current())
+    span.set_attribute(ATTRIBUTE_NAMES["llm_stream"], stream)
+    _record_llm_request_params(span, params)
+    if stream:
+        span.set_attribute(ATTRIBUTE_NAMES["llm_stream_options_include_usage"], True)
+    _query_id = query_id_from_baggage()
+    if _query_id:
+        span.set_attribute(QUERY_ID_KEY, _query_id)
+    return span
+
+
+def _emit_llm_invoke_record(span, response) -> None:
+    """Record model, token usage and finish_reason from one OpenAI response.
+
+    Accepts a single chunk while streaming: fields absent from that chunk are
+    not written, so the chunk that carries usage lands them.
+    """
+    if not isinstance(response, dict):
+        return
+    model = response.get("model")
+    if model:
+        span.set_attribute(ATTRIBUTE_NAMES["llm_model"], model)
+    usage = response.get("usage")
+    if isinstance(usage, dict):
+        for key, attr in (
+            ("prompt_tokens", "llm_usage_prompt_tokens"),
+            ("completion_tokens", "llm_usage_completion_tokens"),
+            ("total_tokens", "llm_usage_total_tokens"),
+        ):
+            value = usage.get(key)
+            if value is not None:
+                span.set_attribute(ATTRIBUTE_NAMES[attr], value)
+    for choice in response.get("choices") or []:
+        if not isinstance(choice, dict):
+            continue
+        reason = choice.get("finish_reason")
+        if reason:
+            span.set_attribute(ATTRIBUTE_NAMES["llm_finish_reason"], reason)
+
+
+def _emit_llm_invoke_close(span) -> None:
+    """End the llm.invoke span."""
+    span.end()
 
 
 # Respect LOG_LEVEL: patch uvicorn's LOGGING_CONFIG (applied at startup via
@@ -221,8 +352,6 @@ LLM_SERVER_PROTOCOL = "http"
 # override host/port/protocol so MicroService constructs the correct URL.
 _VLLM_LLM_ENDPOINT = os.getenv("VLLM_LLM_ENDPOINT", "")
 if _VLLM_LLM_ENDPOINT:
-    from urllib.parse import urlparse
-
     _parsed = urlparse(_VLLM_LLM_ENDPOINT)
     LLM_SERVER_HOST_IP = _parsed.hostname or LLM_SERVER_HOST_IP
     LLM_SERVER_PORT = _parsed.port or 443
@@ -1429,6 +1558,21 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         next_inputs["max_tokens"] = llm_parameters_dict["max_tokens"]
         next_inputs["top_p"] = llm_parameters_dict["top_p"]
         next_inputs["stream"] = inputs["stream"]
+        if llm_parameters_dict.get("stream"):
+            # vLLM returns `usage` on a streamed response only when the request
+            # opts in. Without this the llm.invoke span reports tokens for the
+            # sync path and nothing for the streaming path.
+            #
+            # DEPENDENCY (unverifiable from this tree): chatqna -> textgen -> vLLM
+            # must forward `stream_options`. Whether the vendored textgen wrapper
+            # does is only observable against a running deployment; if it is
+            # dropped, streaming usage is unavailable at this layer and the
+            # llm.invoke span omits the token attributes rather than reporting
+            # wrong ones.
+            next_inputs["stream_options"] = {"include_usage": True}
+        # The same dict gates the stream flag above and the llm.stream /
+        # llm.stream_options.include_usage attributes, so they cannot disagree.
+        _stamp_llm_request_params_on_current_span(llm_parameters_dict)
         next_inputs["frequency_penalty"] = inputs["frequency_penalty"]
         next_inputs["temperature"] = inputs["temperature"]
         inputs = next_inputs
@@ -1779,12 +1923,20 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             next_data["file_id_pairs"] = inputs["file_id_pairs"]
 
     elif self.services[cur_node].service_type == ServiceType.LLM and not llm_parameters_dict["stream"]:
-        if "faqgen" in self.services[cur_node].endpoint:
-            next_data = data
-        else:
-            if logflag:
-                logger.debug(f"\nRaw output of the llm\n {data}\n")
-            next_data["text"] = data["choices"][0]["message"]["content"]
+        _llm_span = _emit_llm_invoke_open(llm_parameters_dict)
+        try:
+            _emit_llm_invoke_record(_llm_span, data)
+            _service_path = urlparse(self.services[cur_node].endpoint).path
+            if _service_path:
+                _llm_span.set_attribute(ATTRIBUTE_NAMES["llm_service_path"], _service_path)
+            if "faqgen" in self.services[cur_node].endpoint:
+                next_data = data
+            else:
+                if logflag:
+                    logger.debug(f"\nRaw output of the llm\n {data}\n")
+                next_data["text"] = data["choices"][0]["message"]["content"]
+        finally:
+            _emit_llm_invoke_close(_llm_span)
         if logflag:
             logger.debug(f"\nAligned output of the llm\n {next_data}\n")
     else:
@@ -1804,26 +1956,33 @@ def align_generator(self, gen, **kwargs):
     # "model":"meta-llama/Meta-Llama-3-8B-Instruct","system_fingerprint":"2.0.1-native",
     # "choices":[{"index":0,"delta":{"role":"assistant","content":"?"},"logprobs":null,
     # "finish_reason":null}]}\n\n'
-    for line in gen:
-        line = line.decode("utf-8")
-        chunks = [chunk.strip() for chunk in line.split("\n\n") if chunk.strip()]
-        for line in chunks:
-            start = line.find("{")
-            end = line.rfind("}") + 1
-            json_str = line[start:end]
-            try:
-                # sometimes yield empty chunk, do a fallback here
-                json_data = json.loads(json_str)
-                if "ops" in json_data and "op" in json_data["ops"][0]:
-                    if "value" in json_data["ops"][0] and isinstance(json_data["ops"][0]["value"], str):
-                        yield f"data: {repr(json_data['ops'][0]['value'].encode('utf-8'))}\n\n"
-                    else:
-                        pass
-                elif "content" in json_data["choices"][0]["delta"]:
-                    yield f"data: {repr(json_data['choices'][0]['delta']['content'].encode('utf-8'))}\n\n"
-            except Exception:
-                yield f"data: {repr(json_str.encode('utf-8'))}\n\n"
-    yield "data: [DONE]\n\n"
+    _llm_span = _emit_llm_invoke_open(kwargs.get("llm_parameters_dict") or {})
+    try:
+        for line in gen:
+            line = line.decode("utf-8")
+            chunks = [chunk.strip() for chunk in line.split("\n\n") if chunk.strip()]
+            for line in chunks:
+                start = line.find("{")
+                end = line.rfind("}") + 1
+                json_str = line[start:end]
+                try:
+                    # sometimes yield empty chunk, do a fallback here
+                    json_data = json.loads(json_str)
+                    _emit_llm_invoke_record(_llm_span, json_data)
+                    if "ops" in json_data and "op" in json_data["ops"][0]:
+                        if "value" in json_data["ops"][0] and isinstance(json_data["ops"][0]["value"], str):
+                            yield f"data: {repr(json_data['ops'][0]['value'].encode('utf-8'))}\n\n"
+                        else:
+                            pass
+                    elif "content" in json_data["choices"][0]["delta"]:
+                        yield f"data: {repr(json_data['choices'][0]['delta']['content'].encode('utf-8'))}\n\n"
+                except Exception:
+                    yield f"data: {repr(json_str.encode('utf-8'))}\n\n"
+        yield "data: [DONE]\n\n"
+    finally:
+        # Closes even if the upstream generator raises or the consumer abandons
+        # the stream mid-iteration.
+        _emit_llm_invoke_close(_llm_span)
 
 
 class ChatQnAService:

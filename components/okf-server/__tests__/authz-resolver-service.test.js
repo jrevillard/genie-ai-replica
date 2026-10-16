@@ -173,6 +173,22 @@ describe('resolveGraphSet DEFAULT-OPEN (OKF_SCOPE_MODE, product decision 2026-10
     expect(out.graph_names).toEqual([]); // scopes restrict — open ≠ open-everything
   });
 
+  test('open: a MALFORMED-only okf_scopes claim stays closed-list (restriction intended)', async () => {
+    // Raw-list test (hasAnyScopeEntry): the token carries okf entries, so the
+    // operator intended a restriction — no silent fall-open.
+    seedServing([servingRow()]);
+    const out = await resolveGraphSet({ okfScopes: ['okf:only-three', 'okf:t1:r-kenya:write'], isSuperAdmin: false });
+    expect(out.graph_names).toEqual([]);
+  });
+
+  test('an EXPLICIT garbage OKF_SCOPE_MODE degrades to closed (never silent-open)', async () => {
+    process.env.OKF_SCOPE_MODE = 'opn'; // operator typo
+    seedServing([servingRow()]);
+    const out = await resolveGraphSet({ okfScopes: [], isSuperAdmin: false });
+    expect(out.scope_mode).toBe('closed');
+    expect(out.graph_names).toEqual([]);
+  });
+
   test('closed restores the historical default-deny for scopeless callers', async () => {
     process.env.OKF_SCOPE_MODE = 'closed';
     seedServing([servingRow()]);

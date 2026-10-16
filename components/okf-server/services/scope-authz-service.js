@@ -29,11 +29,16 @@ const { parseOkfScope } = require('../middleware/require-scope');
 
 /**
  * The effective scope mode, re-read per call so tests can flip the env and
- * operators change it with a container recreate (no rebuild).
+ * operators change it with a container recreate (no rebuild). An EXPLICIT
+ * garbage value degrades to 'closed' with a warning — a misconfigured
+ * attempt to pin the deployment must not silently fail open. Only the
+ * ABSENCE of the variable means the open default.
  * @returns {'open'|'closed'}
  */
 function currentScopeMode() {
-  return (process.env.OKF_SCOPE_MODE || 'open').trim().toLowerCase() === 'closed' ? 'closed' : 'open';
+  const raw = (process.env.OKF_SCOPE_MODE || 'open').trim().toLowerCase();
+  if (raw === 'open' || raw === 'closed') return raw;
+  return 'closed'; // explicit garbage — restrictive, never silent-open
 }
 
 /** True when the read side authorizes zero-effective-scope callers for all serving repos. */
@@ -61,4 +66,17 @@ function deriveScopeAuthz(okfScopes, isSuperAdmin) {
   return { isSuperAdmin: false, authorizedRepoIds: repos };
 }
 
-module.exports = { deriveScopeAuthz, currentScopeMode, isScopeModeOpen };
+/**
+ * The DEFAULT-OPEN test for the read side: does this caller hold ANY okf
+ * scope entry in its token? Tested against the RAW claim list, never the
+ * derived set — a caller scoped to a repo that is not currently serving has
+ * a non-empty derived set and must NOT fall open, and a token whose okf
+ * entries are all MALFORMED counts as "scoped" (the operator intended a
+ * restriction; closed is its visible symptom, not a silent fall-open).
+ * @param {string[]} okfScopes
+ */
+function hasAnyScopeEntry(okfScopes) {
+  return Array.isArray(okfScopes) && okfScopes.length > 0;
+}
+
+module.exports = { deriveScopeAuthz, currentScopeMode, isScopeModeOpen, hasAnyScopeEntry };

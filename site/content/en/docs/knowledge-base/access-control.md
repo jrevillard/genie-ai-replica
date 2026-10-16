@@ -94,8 +94,15 @@ standard `scope` claim).
 - **How to flip it:** set `OKF_SCOPE_MODE=closed` in `.env` (Docker Compose)
   or `group_vars` (Ansible) and recreate the okf-server container. The value
   is read per request; no rebuild is needed.
+- **Invalid values fail closed.** Only `open` and `closed` are recognized; the
+  variable's *absence* means `open`. An explicit typo (e.g. `OKF_SCOPE_MODE=opn`)
+  degrades to `closed` — a misconfigured attempt to pin a deployment must not
+  silently fail open.
 - **Any granted scope still restricts its holder in both modes.** Open mode is
-  not "ignore scopes"; it is "absence of scopes is not a denial".
+  not "ignore scopes"; it is "absence of scopes is not a denial". A token
+  carrying okf scope entries that are all malformed (e.g. wrong level or
+  segment count) counts as *scoped* and keeps the closed list — the
+  restriction was intended, and closed is its visible symptom.
 
 ## What a scopeless caller can and cannot reach
 
@@ -104,10 +111,22 @@ read endpoints on the OKF API — nothing else:
 
 | Surface | Scopeless caller in open mode |
 |---|---|
-| `GET /api/okf/authz/graphs` (the chat authorization endpoint) | ✅ Allowed |
-| `GET /api/okf/retrieval-config` (the chat posture read) | ✅ Allowed |
+| `GET /api/okf/authz/graphs` (the chat authorization endpoint) | ✅ Allowed — note this response enumerates the serving inventory: repository names, ids, domains and graph names |
+| `GET /api/okf/retrieval-config` (the chat posture read) | ✅ Allowed — with the governing admin's identity (`updated_by`) stripped; identity metadata is superadmin-only |
 | Repository list, concept content, Studio, Lab, audit | ❌ Still scope-gated |
 | Any write (repo CRUD, ingest, lifecycle, governance) | ❌ Requires `admin` scope or super-role — in both modes |
+
+Two deliberate consequences, stated plainly:
+
+- **Read-side openness is cross-tenant.** The tenant segment of a scope is
+  currently ignored everywhere (a Story 6.1 consistency rule), so in open mode
+  a scopeless user reaches serving repositories from *every* domain, not just
+  "their" tenant. Tenant-scoped read isolation arrives with the admin-facility
+  work item, not before.
+- **The serving inventory is readable.** Any authenticated user can learn
+  which repositories exist and serve. Repositories' *content* stays behind
+  the query pipeline (answers only surface chunks relevant to a query); only
+  the names/ids/domains are exposed.
 
 ## Conversation continuity (sticky routing)
 
@@ -130,30 +149,42 @@ not granting) scopes per user.
 
 ## Keycloak integration
 
-**Today** — no Keycloak client scopes or protocol mappers for `okf:*` claims
-ship with the product, and there is no admin UI to grant one. That is precisely
-why the default matters: with no way to grant scopes, `closed` mode locks
-every regular user out of OKF answers, while `open` mode delivers the intended
-behavior — *once a repository is ingested and published, any regular user's
-query can be routed to it*.
+**What already ships** — the claim plumbing exists in the provisioned realm
+(`configs/keycloak/genie-realm.yaml`): an `okf-scopes` protocol mapper on the
+`genie-app` and `okf-server` clients copies a multivalued user attribute
+`okf_scopes` into the token's `okf_scopes` claim. The built-in admin user is
+provisioned with `okf_scopes: [okf:*:*:admin]` through exactly this path —
+which is why steward tokens carry the wildcard. A regular user's token mints
+the same claim as an **empty array** (the mapper runs; the attribute is
+simply unset), which the resolver treats as scopeless.
 
-**Planned** (sprint item *okf-repo-access-control-keycloak*) — the full
-facility:
+**What does not ship yet** — a *facility* to grant scopes to regular users.
+Setting the `okf_scopes` user attribute is possible today only by hand in the
+Keycloak admin console; there is no admin-UI page, no backend API, and no
+documented procedure for it. That is precisely why the default matters: with
+no way to grant scopes, `closed` mode locks every regular user out of OKF
+answers, while `open` mode delivers the intended behavior — *once a
+repository is ingested and published, any regular user's query can be routed
+to it*.
 
-1. **Keycloak side:** an `okf-scope` client scope with protocol mappers that
-   put `okf:{tenant}:{repo}:{level}` entries into the token's `okf_scopes`
-   claim; roles or groups per repository.
-2. **Admin facility:** grant and revoke repository access per user or group
-   from the OKF admin UI, with an audit trail; writes the grantings through to
-   Keycloak so tokens carry them on next login.
-3. **Enforcement:** once scopes are being granted, administrators choose per
-   deployment whether to flip `OKF_SCOPE_MODE=closed` (restrict-by-default) or
-   stay open and use scopes only for exceptional restrictions.
+**Planned** (sprint item *6-1c repo-access-control-admin-keycloak*) — the
+grant facility, reusing the existing mapper:
+
+1. **Grant/revoke UI** in the OKF admin facility: set the `okf_scopes` user
+   attribute per user or group through the Keycloak Admin API (the
+   `genie-proxy-client` service account exists for exactly this class of
+   delegated user management), with an audit trail.
+2. **Realm-provisioning symmetry:** the realm template gains a documented
+   attribute convention so deployments can bootstrap scoped users
+   declaratively.
+3. **Enforcement:** once grants are being made, administrators choose per
+   deployment whether to flip `OKF_SCOPE_MODE=closed` (restrict-by-default)
+   or stay open and use scopes only for exceptional restrictions.
 4. **Per-repository ACL enforcement:** `acl.required_scopes` on the repository
    doc becomes a live second gate in the authorized-set resolution.
 
-No pipeline change is needed when that lands: okf-server already reads the
-claims the mappers will produce.
+No pipeline change is needed for any of it: okf-server already parses exactly
+the claim the mapper mints.
 
 ## Request flow and observability
 

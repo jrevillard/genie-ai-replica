@@ -114,6 +114,17 @@ describe('requireScope(read, { allowScopelessWhenOpen }) — DEFAULT-OPEN servin
     expect(next).toHaveBeenCalled();
   });
 
+  test('open: a token with ONLY malformed okf entries stays DENIED (scoped, not scopeless)', async () => {
+    // The open test is the RAW claim list: the operator put okf entries on
+    // this token, so a restriction was intended — closed is its visible
+    // symptom, not a silent fall-open. Matches the resolver's rule exactly.
+    const res = mockRes();
+    const next = jest.fn();
+    await requireScope('read', { allowScopelessWhenOpen: true })(mkReq({ scopes: ['okf:only-three', 'okf:t1:repoA:write'] }), res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
   test('requireRepoScope NEVER accepts the option — scopeless admin attempt still 403s in open mode', async () => {
     const res = mockRes();
     const next = jest.fn();

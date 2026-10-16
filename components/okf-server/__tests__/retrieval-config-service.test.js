@@ -196,6 +196,20 @@ describe('retrieval-config-service (Story 1.7, ADR-okf-039)', () => {
         expect(out.serving_graph_count).toBe(0);
         expect(out.engaged).toBe(false);
       });
+
+      test('updated_by (the governing admin sub) is stripped for non-superadmin callers', async () => {
+        // DEFAULT-OPEN exposure control: the GET is reachable by scopeless
+        // callers; Keycloak identity metadata is superadmin-only.
+        mockDb.collection('okf_system_config').save({
+          _key: 'retrieval', mode: 'hybrid', revision: 3,
+          updated_at: '2026-10-16T00:00:00Z', updated_by: 'steward-9'
+        });
+        seedServing([repoRow()]);
+        const plain = await svc.getRetrievalConfig({ okfScopes: [], isSuperAdmin: false });
+        expect(plain.config.updated_by).toBeNull();
+        const admin = await svc.getRetrievalConfig({ okfScopes: [], isSuperAdmin: true });
+        expect(admin.config.updated_by).toBe('steward-9');
+      });
     });
 
     test('serving-set memo: repeat calls reuse the cache; TTL EXPIRY re-queries', async () => {

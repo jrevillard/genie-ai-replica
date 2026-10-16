@@ -27,8 +27,6 @@
     path: "{{ config_dir }}/{{ item.dest_subdir }}"
     state: directory
     mode: "0755"
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
   loop: "{{ config_bootstrap_pairs }}"
   loop_control:
     label: "{{ item.dest_subdir }}"
@@ -106,26 +104,7 @@
     label: "{{ item.dest_subdir }}"
   when: config_bootstrap_sync_enabled | bool
 
-# These files exist to be hand-edited by an operator on the node, and sudo on
-# these hosts needs an interactive password, so root-owned 0644 files would make
-# the workflow this role exists to enable impossible. Also the upgrade path: a
-# node seeded by an earlier run has root-owned files that the rsync above (now
-# running as ansible_user) cannot overwrite, so this must run before the next
-# deploy is expected to work. Same approach as the deploy play's "Fix ownership
-# to ansible_user" task.
-- name: Fix ownership to ansible_user
-  become_user: root
-  ansible.builtin.file:
-    path: "{{ config_dir }}"
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
-    recurse: true
-
-# Root so a run aborted by the extraction assert can be retried: /tmp is sticky,
-# so entries left root-owned by an earlier root run cannot be replaced or removed
-# by ansible_user. Same escalation as the chown task above.
 - name: Remove downloaded archives and extraction scratch directory
-  become_user: root
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent

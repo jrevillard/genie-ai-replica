@@ -123,7 +123,7 @@ clustering:
 - The Keycloak image defaults `cache-owners=1` — for clustering override
   `KC_CACHE_OWNERS_COUNT=2` and set `KC_CACHE_STACK=jdg` plus a JGroups
   transport (`JDBC_PING` works against the shared Postgres). The bundled
-  `genie-ai-keycloak` image does not ship these overrides; for true
+  the stock `quay.io/keycloak/keycloak` image does not ship these overrides; for true
   clustering replace the in-stack service with a Keycloak cluster
   deployment.
 

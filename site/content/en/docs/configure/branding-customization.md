@@ -42,7 +42,10 @@ Two files are deliberately **outside** the mount and must not be hand-edited:
 
 ### The edit → reload loop
 
-1. **Edit the file on the node**, for example `/opt/genieai/config/frontend/genie-ai-config.json` or `/opt/genieai/config/keycloak/themes/genie/login/resources/img/logo.png`.
+1. **Edit the file on the node**, for example `/opt/genieai/config/frontend/genie-ai-config.json` or `/opt/genieai/config/keycloak/themes/genie/login/resources/img/logo.png`. The runtime config directories are seeded by Ansible as root-owned `0755`/`0644`, so editing them needs `sudo`:
+   ```bash
+   sudo vi /opt/genieai/config/frontend/genie-ai-config.json
+   ```
 2. **Force the container to pick up the mount contents.** A bind mount is resolved when the container starts, so a plain restart is required — the file change alone is not visible to the running container.
    ```bash
    # Swarm

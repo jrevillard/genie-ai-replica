@@ -419,7 +419,6 @@
   hosts: all
   tags: [config, deploy]
   become: true
-  become_user: "{{ ansible_user }}"
   roles:
     - role: config_bootstrap
 

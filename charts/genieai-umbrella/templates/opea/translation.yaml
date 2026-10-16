@@ -3,11 +3,11 @@
   opea/translation:1.3, NOT the registry-prefixed genie-ai-* convention.
   Same treatment as the keycloak-config-cli image in data/keycloak-
   convergence-job.yaml: the upstream image is not mirrored in the genie-ai
-  CI registry, and the global.imageRegistry prefix would 404 the pull.
+  CI registry, and the imageRegistry prefix would 404 the pull.
   Air-gapped sites must mirror docker.io/opea/translation and rewrite via
   insertAgent, not via the registry value. Hand-rendered instead of going
   through genieai-umbrella.serviceDeployment because the factory
-  unconditionally prefixes the image with .Values.global.imageRegistry.
+  unconditionally prefixes the image with .Values.imageRegistry.
   The image listens on 8888 (its own default; nothing maps the
   port). The Service exposes 9031 -> 8888 because chatqna dials
   TRANSLATION_SERVICE_PORT 9031; the tcpSocket probe targets the real
@@ -43,7 +43,7 @@ spec:
           # Pulled from docker.io unconditionally: opea/translation is
           # not mirrored in the registries deployments pull their other
           # images from (verified 2026-10-15), and the
-          # global.imageRegistry prefix would 404 the pull. An air-gapped
+          # imageRegistry prefix would 404 the pull. An air-gapped
           # site must mirror docker.io/opea/translation and rewrite via
           # insertAgent, not via the registry value.
           image: docker.io/opea/translation:1.3

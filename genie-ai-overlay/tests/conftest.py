@@ -261,12 +261,18 @@ def pytest_unconfigure(config):
 #   * FastAPI auto-instrumentation (``http.method`` / ``url.full`` /
 #     ``http.status_code`` …). Legitimately outside our vocabulary; sweeping them
 #     would mean suppressing failures we do not understand.
-#   * ``dataprep.*`` (``ingest`` / ``retract`` / ``kill_ingest`` / ``chunking``).
-#     Known unswept debt: dataprep is a separate service outside this issue's
-#     scope, and ``dataprep.ingest`` currently records ``dataprep.file_type`` /
-#     ``dataprep.file_id`` straight from the upload payload, which is the kind of
-#     emission this sweep exists to catch. Recorded as follow-up debt in the task
-#     report rather than fixed or silently omitted here.
+#   * ``dataprep.*`` — all 14 spans the service emits (``ingest``,
+#     ``ingest.background``, ``retract``, ``kill_ingest``, ``chunking``,
+#     ``healthcheck``, ``ensure_vector_index``, ``initialize_client``,
+#     ``log_environment_variables``, and the five ``llm.*`` ones). Known unswept
+#     debt: dataprep is a separate service outside this issue's scope, and its
+#     spans carry vocabulary-bearing attributes — ``dataprep.ingest`` records
+#     ``dataprep.file_type`` / ``dataprep.file_id`` straight from the upload
+#     payload, and ``dataprep.llm.label_chunk`` / ``dataprep.llm.context_doc``
+#     record ``dataprep.llm_model``. Exactly the emissions this sweep exists to
+#     catch. Recorded as follow-up debt in the task report rather than fixed or
+#     silently omitted here; ``TestOwnedSpanCoverage::test_dataprep_pin_matches_the_code``
+#     re-derives the list from the source so the pin cannot drift.
 OWNED_SPAN_NAMES = frozenset(
     {
         "llm.invoke",

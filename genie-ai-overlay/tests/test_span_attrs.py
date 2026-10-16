@@ -41,6 +41,33 @@ OWNED_SPAN_NAMES = {
     "reranker.tei_invoke",
 }
 
+# Every dataprep span the code emits, pinned as KNOWN UNSWEPT (out of scope for
+# issue 1090 — see the conftest comment). Derived from the source, not written by
+# hand: the hand-written list was missing 8 of the 14, and a hand-maintained list
+# goes stale silently. TestOwnedSpanCoverage::test_dataprep_pin_matches_the_code
+# re-derives it and fails if this drifts.
+#
+# Several carry vocabulary-bearing attributes — dataprep.llm.label_chunk and
+# dataprep.llm.context_doc record dataprep.llm_model, the latter also
+# dataprep.contextual_strategy — so this is real unswept surface, not an empty
+# formality.
+DATAPREP_SPAN_NAMES = {
+    "dataprep.chunking",
+    "dataprep.ensure_vector_index",
+    "dataprep.healthcheck",
+    "dataprep.ingest",
+    "dataprep.ingest.background",
+    "dataprep.initialize_client",
+    "dataprep.kill_ingest",
+    "dataprep.llm.context_batch",
+    "dataprep.llm.context_chunk",
+    "dataprep.llm.context_doc",
+    "dataprep.llm.label_batch",
+    "dataprep.llm.label_chunk",
+    "dataprep.log_environment_variables",
+    "dataprep.retract",
+}
+
 
 class TestLabelDigest:
     def test_digest_is_eight_lowercase_hex_chars(self):
@@ -142,10 +169,23 @@ class TestDeprecatedAttributeNames:
         overlap = set(ATTRIBUTE_NAMES.values()) & set(DEPRECATED_ATTRIBUTE_NAMES)
         assert overlap == set()
 
-    def test_every_entry_names_the_task_that_removes_it(self):
-        """An entry without an owner is a permanent addition in disguise."""
-        for key, owner in DEPRECATED_ATTRIBUTE_NAMES.items():
-            assert re.fullmatch(r"task \d+", owner), f"{key} has no task owner"
+    def test_every_entry_states_why_it_is_legacy(self):
+        """An entry must record WHAT IT IS, not a task that may not exist.
+
+        The register previously attributed every key to the task that seemed to
+        supersede it. Auditing each write site against the plan found NO task
+        removes any of them — so an entry claiming a retiring task would be a
+        lie that satisfies a pattern-matching test. Every value now states the
+        real reason instead, and must say why.
+        """
+        for key, reason in DEPRECATED_ATTRIBUTE_NAMES.items():
+            assert reason.startswith("legacy: "), f"{key}: {reason!r}"
+            assert len(reason) > len("legacy: "), f"{key} states no reason"
+
+    def test_no_entry_claims_a_task_that_does_not_exist(self):
+        """A bare 'task N' attribution is exactly the defect being removed."""
+        for key, reason in DEPRECATED_ATTRIBUTE_NAMES.items():
+            assert not re.search(r"\btask \d+\b", reason), f"{key} still claims a task"
 
     def test_deprecated_keys_are_accepted(self):
         assert free_text_violations({"rag.search_mode": "hybrid"}) == []
@@ -275,10 +315,7 @@ class TestOwnedSpanCoverage:
         """A conftest that drops a span must fail here, not just silently."""
         assert set(owned_span_names) == OWNED_SPAN_NAMES
 
-    @pytest.mark.parametrize(
-        "name",
-        ["dataprep.ingest", "dataprep.retract", "dataprep.chunking", "dataprep.kill_ingest"],
-    )
+    @pytest.mark.parametrize("name", sorted(DATAPREP_SPAN_NAMES))
     def test_dataprep_is_known_unswept(self, name):
         """Documented debt, not an oversight. See the conftest comment."""
         assert name not in OWNED_SPAN_NAMES
@@ -292,6 +329,30 @@ class TestOwnedSpanCoverage:
     def test_orchestrate_accepts_its_vocabulary_keys(self, span_sweep, captured_spans):
         _emit("chatqna.orchestrate", {"rag.query_length": 42, "rag.model_id": "granite-4.1-8b"})
         assert span_sweep(captured_spans()) is None
+
+    def test_dataprep_pin_matches_the_code(self, owned_span_names):
+        """The pin must list every dataprep span the code actually emits.
+
+        A hand-maintained list goes stale silently: a new dataprep span would
+        start unswept with no failing test. Deriving it from the source keeps the
+        pin honest.
+        """
+        import pathlib
+        import re as _re
+
+        root = pathlib.Path(__file__).resolve().parent.parent
+        # Only names opened as spans — a bare "dataprep.*" string also appears as
+        # an attribute-key prefix (dataprep.file_id), and those are not spans.
+        opener = _re.compile(
+            r"""(?:start_span|start_as_current_span|background_span|with_span)\(\s*["'](dataprep\.[a-z_.]+)["']"""
+        )
+        emitted = set()
+        for path in list(root.glob("dataprep/*.py")) + [root / "tracing.py"]:
+            emitted.update(opener.findall(path.read_text(encoding="utf-8", errors="replace")))
+        assert emitted == set(DATAPREP_SPAN_NAMES), (
+            f"dataprep pin is stale: code emits {sorted(emitted)}, pin lists {sorted(DATAPREP_SPAN_NAMES)}"
+        )
+        assert not (emitted & set(owned_span_names)), "a dataprep span started being swept"
 
 
 class TestOwnedSpanSweep:

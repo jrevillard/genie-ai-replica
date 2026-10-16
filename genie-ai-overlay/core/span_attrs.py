@@ -71,7 +71,7 @@ _DIGEST_SIZE = 4  # bytes -> 8 hex characters
 
 _ANY_WHITESPACE = re.compile(r"\s")
 
-# The full vocabulary (50 entries), keyed by a short identifier for call sites.
+# The full vocabulary (52 entries), keyed by a short identifier for call sites.
 # Values are the literal attribute name. NOTE: ``rag.fetch_k`` is only CONSULTED by the retriever
 # under ``search_type == "mmr"``; chatqna defaults to similarity_score_threshold.
 # It is recorded regardless, because a span that reported what was used rather
@@ -142,52 +142,65 @@ ATTRIBUTE_NAMES = {
     "rag_model_id": "rag.model_id",
 }
 
-# Attributes EMITTED TODAY by production code that this change renames or
-# removes. Kept out of ATTRIBUTE_NAMES on purpose: ATTRIBUTE_NAMES is the
-# DESTINATION vocabulary, and admitting names that later tasks exist to rename
-# would put dead keys into the thing every later task imports.
+# Attributes EMITTED TODAY by production code that are NOT in the destination
+# vocabulary, registered so the per-test sweep can police EXISTING spans.
+# Without them the sweep reports ~100 teardown errors, and a guard that is
+# permanently red is a guard nobody reads.
 #
-# Registered here so the per-test sweep can police EXISTING spans. Without them
-# the sweep reports 100 teardown errors, and a guard that is permanently red is a
-# guard nobody reads.
+# Why not fold them into ATTRIBUTE_NAMES: this set is the honest record of what
+# production emits today, kept separate from what the plan publishes as the
+# destination. Collapsing the two would hide the difference between "this is the
+# vocabulary" and "this is what we inherited".
 #
-# Each value names the task that removes it. An entry without an owner is just a
-# permanent addition wearing a temporary label.
+# **AUDITED — every entry below survives this plan.** An earlier revision
+# attributed each key to the task that seemed to supersede it; auditing every
+# write site against the plan showed NO task in this plan removes any of them.
+# The relevant tasks all ADD attributes beside these writes rather than replacing
+# them — the plan is explicit for the reranker: "adds a parallel array rather
+# than reshaping the shipped attribute, because the eval harness already keys on
+# it" — and two selection keys are that harness contract. They are therefore
+# legacy, not pending-deletion, and each entry records what it is rather than a
+# task that does not exist.
 #
-# What this set does NOT do is relax the privacy guard: a deprecated key is still
-# subject to the full layer-2 shape check, so prose on any of these is still a
-# violation.
+# What this set does NOT do is relax the privacy guard: a registered legacy key is
+# still subject to the full layer-2 shape check, so prose on any of these is still
+# a violation.
 DEPRECATED_ATTRIBUTE_NAMES = {
-    # chatqna.reranker_selection key emission migrated by task 3
-    "rag.candidate_chunk_keys": "task 3",
-    "rag.selected_chunk_keys": "task 3",
-    "rag.selected_scores": "task 3",
-    "rag.candidate_count": "task 3",
-    "rag.selected_count": "task 3",
-    # retriever.hybrid_search key emission migrated by task 5
-    "rag.search_mode": "task 5",
-    "rag.top_k": "task 5",
-    "rag.chunk_count": "task 5",
-    "retriever.summarizer.input_too_long": "task 5",
-    "retriever.summarizer.overflow_count": "task 5",
-    # retriever.summarizer.overflow_doc_ids is NOT here — it is
-    # JSON-encoded, so it belongs to JSON_ENCODED_ATTRIBUTE_NAMES.
-    # reranker.tei_invoke key emission migrated by task 8
-    "reranker.strategy": "task 8",
-    "reranker.top_n": "task 8",
-    "reranker.model_id": "task 8",
-    "reranker.input_doc_count": "task 8",
-    "reranker.output_doc_count": "task 8",
-    "reranker.score_threshold": "task 8",
-    "reranker.input_too_long": "task 8",
-    "reranker.rejected_tokens": "task 8",
-    # rag.adaptive_breakdown is NOT here — it is JSON-encoded, so it belongs to
-    # JSON_ENCODED_ATTRIBUTE_NAMES.
-    "rag.adaptive_context_decay_factor": "task 8",
-    "rag.adaptive_min_value_threshold": "task 8",
-    # chatqna.orchestrate — emitted at genieai_chatqna.py:2891, superseded by
-    # task 7's answer.abstained / answer.sentinel_present on chatqna.stream_outcome.
-    "abstained.reason": "task 7",
+    # chatqna.reranker_selection — genieai_chatqna.py:114-118. Task 6 adds
+    # rag.adaptive_chunk_keys as a PARALLEL array and explicitly does not reshape
+    # these; the eval harness keys on rag.selected_chunk_keys.
+    "rag.candidate_chunk_keys": "legacy: eval-harness contract",
+    "rag.selected_chunk_keys": "legacy: eval-harness contract",
+    "rag.selected_scores": "legacy: eval-harness contract",
+    "rag.candidate_count": "legacy: eval-harness contract",
+    "rag.selected_count": "legacy: eval-harness contract",
+    # retriever.hybrid_search — genieai_retriever_arangodb.py:878-879. Task 5 adds
+    # rag.search_type / rag.fetch_k beside these; it never deletes lines 878-879.
+    "rag.search_mode": "legacy: superseded in meaning, not in emission",
+    "rag.top_k": "legacy: superseded in meaning, not in emission",
+    # rag.chunk_count is written on BOTH retriever.hybrid_search
+    # (:1428) and chatqna.orchestrate (genieai_chatqna.py:2870); no task touches
+    # either site.
+    "rag.chunk_count": "legacy: no task touches either write site",
+    "retriever.summarizer.input_too_long": "legacy: no task touches the write site",
+    "retriever.summarizer.overflow_count": "legacy: no task touches the write site",
+    # reranker.tei_invoke — genieai_tei_reranker.py. Task 8 adds
+    # rag.adaptive_chunk_keys and removes nothing.
+    "reranker.strategy": "legacy: no task touches the write site",
+    "reranker.top_n": "legacy: no task touches the write site",
+    "reranker.model_id": "legacy: no task touches the write site",
+    "reranker.input_doc_count": "legacy: no task touches the write site",
+    "reranker.output_doc_count": "legacy: no task touches the write site",
+    "reranker.score_threshold": "legacy: no task touches the write site",
+    "reranker.input_too_long": "legacy: no task touches the write site",
+    "reranker.rejected_tokens": "legacy: no task touches the write site",
+    "rag.adaptive_context_decay_factor": "legacy: no task touches the write site",
+    "rag.adaptive_min_value_threshold": "legacy: no task touches the write site",
+    # chatqna.orchestrate — genieai_chatqna.py:2891. Nothing removes this write;
+    # the abstention flag added on a DIFFERENT span (chatqna.stream_outcome) is
+    # additive. The two coexist: a per-request reason here, a per-response flag
+    # there.
+    "abstained.reason": "legacy: survives — another task adds a flag on a different span, it does not remove this",
 }
 
 # Attributes whose value is a STRUCTURE OTel cannot represent natively (a list of

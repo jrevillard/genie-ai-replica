@@ -22,6 +22,7 @@ from metrics import (
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.model_cache import get_max_model_len, get_model_id
+from core.span_attrs import QUERY_ID_KEY, query_id_from_baggage
 from tracing import (
     get_tracer,
     install_uvicorn_access_logging,
@@ -116,6 +117,9 @@ def _emit_reranker_selection_span(candidate_chunk_keys, selected_chunk_keys, sel
         sel_span.set_attribute("rag.selected_scores", selected_scores)
         sel_span.set_attribute("rag.candidate_count", len(candidate_chunk_keys))
         sel_span.set_attribute("rag.selected_count", len(selected_chunk_keys))
+        _query_id = query_id_from_baggage()
+        if _query_id:
+            sel_span.set_attribute(QUERY_ID_KEY, _query_id)
 
 
 # Respect LOG_LEVEL: patch uvicorn's LOGGING_CONFIG (applied at startup via

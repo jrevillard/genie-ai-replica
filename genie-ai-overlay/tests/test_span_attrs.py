@@ -11,14 +11,18 @@ whitespace and passes — which is exactly why layer 1 exists.
 """
 
 import json
+import pathlib
 import re
 
 import pytest
 
+import core.span_attrs
 from core.span_attrs import (
     ATTRIBUTE_NAMES,
     DEPRECATED_ATTRIBUTE_NAMES,
+    EVAL_HARNESS_KEYS,
     JSON_ENCODED_ATTRIBUTE_NAMES,
+    LEGACY_REASONS,
     MAX_STRING_LEN,
     QUERY_ID_KEY,
     UNRESOLVED,
@@ -186,6 +190,52 @@ class TestDeprecatedAttributeNames:
         """A bare 'task N' attribution is exactly the defect being removed."""
         for key, reason in DEPRECATED_ATTRIBUTE_NAMES.items():
             assert not re.search(r"\btask \d+\b", reason), f"{key} still claims a task"
+
+    def test_every_reason_comes_from_the_allowed_set(self):
+        """A free-text reason is unfalsifiable; a closed set is checkable.
+
+        The prefix check alone let three false claims through: "legacy: eval-
+        harness contract" is a plausible-sounding sentence, and three of the
+        five keys carrying it are read by no harness at all. Requiring
+        membership in ``LEGACY_REASONS`` is what makes a novel reason a
+        deliberate decision rather than an unreviewed sentence.
+        """
+        for key, reason in DEPRECATED_ATTRIBUTE_NAMES.items():
+            assert reason in LEGACY_REASONS, f"{key}: {reason!r} is not an allowed reason"
+
+    def test_the_allowed_reason_set_has_no_unused_entries(self):
+        """The mirror check — otherwise the vocabulary rots into "any string passes"."""
+        assert LEGACY_REASONS - set(DEPRECATED_ATTRIBUTE_NAMES.values()) == set()
+
+    def test_only_the_two_keys_the_harness_reads_claim_the_harness_contract(self):
+        """The false claim, pinned so it cannot come back.
+
+        ``tests/rag-benchmarks/eval/run_eval.py`` reads exactly two of the five
+        chatqna selection keys. ``rag.selected_scores``, ``rag.candidate_count``
+        and ``rag.selected_count`` are written by chatqna and read nowhere else.
+        """
+        claimed = {k for k, r in DEPRECATED_ATTRIBUTE_NAMES.items() if r == "legacy: eval-harness contract"}
+        assert claimed == EVAL_HARNESS_KEYS
+
+    def test_the_harness_really_reads_exactly_those_keys(self):
+        """Re-derive the harness contract from the harness source, not from us."""
+        source = (
+            pathlib.Path(__file__).resolve().parents[2] / "tests" / "rag-benchmarks" / "eval" / "run_eval.py"
+        ).read_text()
+        read_in_harness = {key for key in DEPRECATED_ATTRIBUTE_NAMES if key.startswith("rag.") and f'"{key}"' in source}
+        assert read_in_harness == EVAL_HARNESS_KEYS, f"harness source reads {sorted(read_in_harness)}"
+
+    def test_no_entry_claims_a_key_will_be_renamed_or_removed(self):
+        """The plan's pattern is add-beside. No key here is pending deletion.
+
+        The old module docstring and ``free_text_violations`` docstring both
+        said this set holds keys "that this work renames or removes". It does
+        not, and the two selection keys it names are read by the eval harness —
+        so a future author acting on that wording would delete live writes.
+        """
+        source = pathlib.Path(core.span_attrs.__file__).read_text()
+        for phrase in ("renames or removes", "being renamed"):
+            assert phrase not in source, f"span_attrs.py still claims a key is {phrase!r}"
 
     def test_deprecated_keys_are_accepted(self):
         assert free_text_violations({"rag.search_mode": "hybrid"}) == []

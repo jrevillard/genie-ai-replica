@@ -22,10 +22,18 @@ enforced at emission and checked mechanically, in two layers:
    handled structurally, below, which is what lets layer 2 stay absolute.
 
 Layer 1 accepts a second set, ``DEPRECATED_ATTRIBUTE_NAMES``: keys production
-emits today that this work renames or removes. Those are registered so the sweep
-can police existing spans without reporting the backlog as a fresh leak — see
-that dict for why they are deliberately not in ``ATTRIBUTE_NAMES``. Both layers
-apply to them exactly as to vocabulary keys.
+emits today that are NOT part of the destination vocabulary. They are registered
+so the sweep can police existing spans without reporting the backlog as a fresh
+leak — see that dict for why they are deliberately not in ``ATTRIBUTE_NAMES``.
+Both layers apply to them exactly as to vocabulary keys.
+
+**Nothing in that set is renamed or removed by this work.** Every one of its keys
+pre-dates this plan and every one survives it: the plan's pattern is to ADD
+attributes BESIDE these writes, never to replace them. This matters beyond
+bookkeeping — ``tests/rag-benchmarks/eval/run_eval.py`` reads
+``rag.candidate_chunk_keys`` and ``rag.selected_chunk_keys``, so anyone reading
+this set as a deletion backlog and removing those writes would break the
+retrieval evaluation harness.
 
 **Array vs JSON.** Flat scalar sequences are emitted as ARRAYS — OTel represents
 those natively, so a list of chunk keys is a real array attribute, never a
@@ -158,22 +166,31 @@ ATTRIBUTE_NAMES = {
 # The relevant tasks all ADD attributes beside these writes rather than replacing
 # them — the plan is explicit for the reranker: "adds a parallel array rather
 # than reshaping the shipped attribute, because the eval harness already keys on
-# it" — and two selection keys are that harness contract. They are therefore
-# legacy, not pending-deletion, and each entry records what it is rather than a
-# task that does not exist.
+# it". They are therefore legacy, not pending-deletion, and each entry records
+# what it is rather than a task that does not exist.
+#
+# Each reason is drawn from ``LEGACY_REASONS`` below. That is deliberate: a
+# free-text reason is unfalsifiable prose, and this set already shipped three
+# reasons that read true in the abstract ("eval-harness contract") while being
+# false of the keys they were attached to. A closed vocabulary plus
+# ``tests/test_span_attrs.py::TestLegacyReasons`` pinning which keys carry which
+# reason makes a wrong claim a test failure rather than something a reviewer has
+# to remember to re-audit.
 #
 # What this set does NOT do is relax the privacy guard: a registered legacy key is
 # still subject to the full layer-2 shape check, so prose on any of these is still
 # a violation.
 DEPRECATED_ATTRIBUTE_NAMES = {
-    # chatqna.reranker_selection — genieai_chatqna.py:114-118. Task 6 adds
+    # chatqna.reranker_selection — genieai_chatqna.py:114-118. Task 8 adds
     # rag.adaptive_chunk_keys as a PARALLEL array and explicitly does not reshape
-    # these; the eval harness keys on rag.selected_chunk_keys.
+    # these. Exactly two of these five are the eval-harness contract
+    # (tests/rag-benchmarks/eval/run_eval.py:331-332); the other three are
+    # chatqna-local diagnostics with no reader outside the write site.
     "rag.candidate_chunk_keys": "legacy: eval-harness contract",
     "rag.selected_chunk_keys": "legacy: eval-harness contract",
-    "rag.selected_scores": "legacy: eval-harness contract",
-    "rag.candidate_count": "legacy: eval-harness contract",
-    "rag.selected_count": "legacy: eval-harness contract",
+    "rag.selected_scores": "legacy: no production reader outside its write site",
+    "rag.candidate_count": "legacy: no production reader outside its write site",
+    "rag.selected_count": "legacy: no production reader outside its write site",
     # retriever.hybrid_search — genieai_retriever_arangodb.py:878-879. Task 5 adds
     # rag.search_type / rag.fetch_k beside these; it never deletes lines 878-879.
     "rag.search_mode": "legacy: superseded in meaning, not in emission",
@@ -202,6 +219,27 @@ DEPRECATED_ATTRIBUTE_NAMES = {
     # there.
     "abstained.reason": "legacy: survives — another task adds a flag on a different span, it does not remove this",
 }
+
+# The complete set of reasons a DEPRECATED_ATTRIBUTE_NAMES value may carry.
+#
+# Closed on purpose (see the block comment above). A test asserts membership in
+# both directions: no entry may use a reason outside this set, and no reason here
+# may go unused — so the vocabulary cannot silently rot into "any string passes".
+LEGACY_REASONS = frozenset(
+    {
+        "legacy: eval-harness contract",
+        "legacy: no production reader outside its write site",
+        "legacy: superseded in meaning, not in emission",
+        "legacy: no task touches either write site",
+        "legacy: no task touches the write site",
+        "legacy: survives — another task adds a flag on a different span, it does not remove this",
+    }
+)
+
+# The keys the retrieval-quality eval harness actually reads. Pinned as data so
+# the claim in the comment above it is checkable against the harness source
+# rather than asserted by hand.
+EVAL_HARNESS_KEYS = frozenset({"rag.candidate_chunk_keys", "rag.selected_chunk_keys"})
 
 # Attributes whose value is a STRUCTURE OTel cannot represent natively (a list of
 # dicts, or any non-homogeneous sequence). OTel attribute values are primitives
@@ -295,9 +333,10 @@ def free_text_violations(attributes: dict) -> list[str]:
     Layer 1: an unregistered key is a leak by definition — it means something
     wrote to a span without declaring what it was. A key is registered if it is
     in EITHER ``ATTRIBUTE_NAMES`` (destination vocabulary) or
-    ``DEPRECATED_ATTRIBUTE_NAMES`` (emitted today, being renamed). Registering a
-    deprecated key relaxes nothing about its VALUE — layer 2 applies identically
-    to both sets, so prose on a deprecated key is still caught.
+    ``DEPRECATED_ATTRIBUTE_NAMES`` (emitted today, outside that vocabulary and
+    all of it surviving this work). Registering a legacy key relaxes nothing
+    about its VALUE — layer 2 applies identically to both sets, so prose on a
+    legacy key is still caught.
 
     Layer 2: a string value with whitespace, or longer than MAX_STRING_LEN, is
     prose. Shape-based on purpose: a denylist of forbidden substrings rots and is
@@ -324,3 +363,16 @@ def assert_no_free_text(attributes: dict) -> None:
     violations = free_text_violations(attributes)
     if violations:
         raise AssertionError(f"Span attribute leak (no collector-side redaction on the traces pipeline): {violations}")
+
+
+def query_id_from_baggage() -> str | None:
+    """Return the ``genie.query_id`` correlation id from the active context.
+
+    ``None`` when the caller sent no baggage — any client that is not the Node
+    backend, or a hand-crafted request. Callers omit the attribute in that case
+    rather than writing a placeholder, so "no correlation id" stays
+    distinguishable from "empty correlation id".
+    """
+    from opentelemetry import baggage as _baggage
+
+    return _baggage.get_baggage(QUERY_ID_KEY)

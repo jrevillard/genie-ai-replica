@@ -21,6 +21,7 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.model_cache import get_model_id
+from core.span_attrs import QUERY_ID_KEY, query_id_from_baggage
 from tracing import (
     background_span,
     install_uvicorn_access_logging,
@@ -877,6 +878,9 @@ class GenieaiArangoRetriever(OpeaComponent):
         span = tracer.start_span("retriever.hybrid_search")
         span.set_attribute("rag.search_mode", ARANGO_SEARCH_MODE)
         span.set_attribute("rag.top_k", input.k if hasattr(input, "k") else 0)
+        _query_id = query_id_from_baggage()
+        if _query_id:
+            span.set_attribute(QUERY_ID_KEY, _query_id)
 
         try:
             #################

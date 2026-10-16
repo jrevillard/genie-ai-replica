@@ -25,6 +25,7 @@ from opentelemetry import propagate
 from opentelemetry.trace import Status, StatusCode
 from pydantic import Field
 
+from core.span_attrs import QUERY_ID_KEY, query_id_from_baggage
 from tracing import (
     get_meter,
     get_tracer,
@@ -312,6 +313,9 @@ class GenieTEIReranking(OpeaTEIReranking):
             reranker_model_id = os.getenv("RERANKER_MODEL_ID", os.getenv("TEI_RERANKING_ENDPOINT", ""))
             span.set_attribute("reranker.model_id", reranker_model_id)
             span.set_attribute("reranker.input_doc_count", input_doc_count)
+            _query_id = query_id_from_baggage()
+            if _query_id:
+                span.set_attribute(QUERY_ID_KEY, _query_id)
 
             if input.retrieved_docs:
                 docs = [doc.text for doc in input.retrieved_docs]

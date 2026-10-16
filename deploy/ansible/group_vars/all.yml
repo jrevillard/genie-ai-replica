@@ -9,6 +9,17 @@
 deploy_dir: /opt/genieai
 data_dir: ./data
 
+# Runtime theme config directory on the host, bind-mounted read-only into the
+# frontend and Keycloak containers. Promoted to group_vars so both the
+# config_bootstrap role AND the deploy play (which renders env.j2) see the same
+# value — role defaults are scoped to the role's own plays and would render as
+# an empty string in env.j2.
+#
+# Derived from deploy_dir rather than an inventory group name so the path is
+# stable no matter how the inventory orders a host's groups, and so operators
+# find the editable theme files inside the deploy directory they already know.
+config_dir: "{{ deploy_dir }}/config"
+
 # =============================================================================
 # DOCKER / NVIDIA — VERSION PINNING
 # =============================================================================

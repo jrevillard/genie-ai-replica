@@ -17,6 +17,7 @@
 #   install  - Docker, NVIDIA toolkit, Swarm init
 #   prepare  - Git clone, directories, SSL certs
 #   build    - Docker login to GitLab Container Registry (images pre-built by CI)
+#   config   - Populate host runtime theme config dirs (also runs under `deploy`)
 #   deploy   - Generate .env, validate, deploy stack, verify
 
 - name: GENIE.AI - Detect environment
@@ -408,6 +409,18 @@
       when: item.stat.exists
       loop_control:
         label: "{{ item.item }}"
+
+# Runtime theme assets are bind-mounted read-only into the frontend and
+# Keycloak containers. Docker never falls back to the image contents when a
+# bind mount source is empty, so the host directories must be populated on
+# every node before the stack is deployed. Tagged `deploy` as well as `config`
+# so a normal deploy always refreshes them.
+- name: GENIE.AI - Bootstrap runtime config dirs (theme assets)
+  hosts: all
+  tags: [config, deploy]
+  become: true
+  roles:
+    - role: config_bootstrap
 
 - name: GENIE.AI - Authenticate to GitLab Container Registry
   hosts: swarm_managers

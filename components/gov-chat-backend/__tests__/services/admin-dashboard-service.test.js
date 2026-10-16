@@ -4,19 +4,7 @@ require('../setup-env');
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 
-jest.mock(
-  '../../shared-lib',
-  () => ({
-    logger: {
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn()
-    },
-    dbService: { getConnection: jest.fn() }
-  }),
-  { virtual: true }
-);
+jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
 
 jest.mock('arangojs', () => ({
   aql: (strings, ...values) => ({ _aql: true, strings, values })
@@ -313,14 +301,20 @@ describe('AdminDashboardService', () => {
     });
 
     // ArangoDB (error 1552) rejects bind vars the query text does not
-    // declare. The count query shares the filter bind vars but has no
-    // LIMIT clause, so handing it limit/offset fails the whole search.
+    // declare, and a declared var left unbound fails too (missing bind
+    // value) — the mock enforces both directions like the real server.
     function strictArangoQuery(query, bindVars = {}) {
       const declared = new Set(Array.from(query.matchAll(/@([A-Za-z_][A-Za-z0-9_]*)/g), (m) => m[1]));
       for (const key of Object.keys(bindVars)) {
         if (!declared.has(key)) {
           const err = new Error(`bind parameter '${key}' was not declared in the query`);
           err.errorNum = 1552;
+          return Promise.reject(err);
+        }
+      }
+      for (const name of declared) {
+        if (!(name in bindVars)) {
+          const err = new Error(`bind parameter '@${name}' was declared in the query but not bound`);
           return Promise.reject(err);
         }
       }
@@ -339,6 +333,59 @@ describe('AdminDashboardService', () => {
 
       const result = await adminDashboardService.searchUsers({ term: 'admin', field: 'all', limit: 20, offset: 0 });
       expect(result.total).toBe(1);
+    });
+
+    it('defaults non-numeric raw limit/offset instead of binding NaN', async () => {
+      mockDb.query.mockImplementation(strictArangoQuery);
+
+      // admin-routes passes req.query verbatim; '' and 'abc' reach the
+      // service as strings and must not become null bind vars.
+      const result = await adminDashboardService.searchUsers({ term: '', field: 'all', limit: '', offset: 'abc' });
+
+      expect(result.limit).toBe(20);
+      expect(result.offset).toBe(0);
+      const usersBindVars = mockDb.query.mock.calls[1][1];
+      expect(usersBindVars).toEqual({ limit: 20, offset: 0 });
+    });
+
+    it('clamps oversized limit and echoes the clamped value', async () => {
+      mockDb.query.mockImplementation(strictArangoQuery);
+
+      const result = await adminDashboardService.searchUsers({ term: 'admin', field: 'all', limit: '999999' });
+
+      expect(result.limit).toBe(1000);
+      expect(mockDb.query.mock.calls[1][1].limit).toBe(1000);
+    });
+
+    it('preserves limit: 0 as zero rows, not the 20-row default', async () => {
+      mockDb.query.mockImplementation(strictArangoQuery);
+
+      // MR description claim: "keeps limit=0 meaningful (a caller asking for
+      // zero rows)". parsePositiveInt with { min: 0 } must NOT fall through
+      // to defaultValue when the input is the floor — a regression to
+      // min: 1 would silently flip this contract.
+      const result = await adminDashboardService.searchUsers({ term: '', field: 'all', limit: 0, offset: 0 });
+
+      expect(result.limit).toBe(0);
+      expect(mockDb.query.mock.calls[1][1].limit).toBe(0);
+      // strictArangoQuery ignores the LIMIT clause, so a regression that
+      // drops `LIMIT @offset, @limit` from the usersQuery would still pass
+      // the bind-var assertions above. Source-inspect the query string so
+      // the LIMIT form itself is enforced — survives identifier renames.
+      const usersQueryText = mockDb.query.mock.calls[1][0];
+      expect(usersQueryText).toMatch(/LIMIT\s+@offset,\s+@limit/);
+    });
+
+    it.each([
+      ['100%', '%100\\%%', 'percent wildcard would match nearly every row'],
+      ['a_b', '%a\\_b%', 'underscore wildcard would match any single char'],
+      ['a\\b', '%a\\\\b%', 'backslash must be escaped first to not break \\% / \\_ pairs']
+    ])('escapes LIKE wildcards in the search term: %s', async (input, expected, _why) => {
+      mockDb.query.mockImplementation(strictArangoQuery);
+
+      await adminDashboardService.searchUsers({ term: input, field: 'email' });
+
+      expect(mockDb.query.mock.calls[1][1].term).toBe(expected);
     });
   });
 

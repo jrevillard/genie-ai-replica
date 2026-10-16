@@ -5,12 +5,12 @@ description: |
   stack with one `helm install` — typically consumed via per-env Kustomize
   overlays at `deploy/environments/<env>/`.
 type: application
-version: 0.2.20
+version: 0.2.21
 # `appVersion` mirrors the chart version deliberately: it tracks the chart
 # layout, not the GENIE.AI product release (the two version on independent
 # axes; deployed image tags are governed by values, not by appVersion).
 # Never "latest" — OCI registries reject it for immutable promotion.
-appVersion: 0.2.20
+appVersion: 0.2.21
 keywords:
   - genie-ai
   - umbrella
@@ -31,8 +31,20 @@ dependencies:
   - name: genieai-common
     version: "0.1.0"
     repository: "file://../genieai-common"
+  # Envoy Gateway — the edge tier this chart's Gateway/HTTPRoute CRs bind
+  # to. Unlike the data-layer operators below, the edge controller couples
+  # 1:1 with the ingress resources the chart renders (GatewayClass, data
+  # plane placement), so it ships WITH the chart by default. Disable it
+  # (envoyGateway.enabled=false) when another controller owns the
+  # `ingress.className` GatewayClass, or when an off-cluster edge forwards
+  # to a controller installed by other means — the chart then renders only
+  # the controller-agnostic Gateway API resources.
+  - name: gateway-helm
+    version: "v1.9.2"
+    repository: "oci://docker.io/envoyproxy"
+    condition: envoyGateway.enabled
 # Operator controllers (CNPG, kube-arangodb, sealed-secrets,
-# keycloak-operator, GPU, cert-manager, envoy-gateway) are cluster
-# bootstrap prerequisites installed once per cluster — the chart renders
-# only the custom resources they manage. Per-release operator installs
-# would create competing cluster-scoped controllers.
+# keycloak-operator, GPU, cert-manager) are cluster bootstrap
+# prerequisites installed once per cluster — the chart renders only the
+# custom resources they manage. Per-release operator installs would
+# create competing cluster-scoped controllers.

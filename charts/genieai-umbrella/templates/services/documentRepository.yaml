@@ -75,16 +75,20 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Backend (file references) plus same-namespace peers on the
-    # container port (post-DNAT). The `podSelector: {}` below is a
-    # placeholder for the gateway-tier selector (Plan 6/ingress will
-    # tighten it to a specific peer label once the edge gateway's
-    # data-plane label shape is known).
+    # The Envoy Gateway data plane (edge routing: /api/files, /api/labels,
+    # /uploads) and the backend (file references) on the container port
+    # (post-DNAT).
+    {{- if .Values.ingress.enabled }}
+    - from:
+        {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 3001
+    {{- end }}
     - from:
         - podSelector:
             matchLabels:
               genieai.io/component: backend
-        - podSelector: {}
       ports:
         - protocol: TCP
           port: 3001

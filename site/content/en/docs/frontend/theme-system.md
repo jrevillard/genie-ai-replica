@@ -70,7 +70,7 @@ OKLch encodes color as **L**ightness, **C**hroma (saturation), **H**ue. The rela
 
 > The full config also defines `app`, `services`, `locale`, and other non-theme sections. Those are not consumed by the theme system.
 
-## CSS derivation — `src/theme-variables.css`
+## CSS derivation — `public/config/theme-variables.css`
 
 Two selectors: `:root` for light, `[data-theme="dark"]` (plus `html[data-theme="dark"]` and `body[data-theme="dark"]` for safety) for dark. Both reference `--brand`. The whole file is OKLch.
 

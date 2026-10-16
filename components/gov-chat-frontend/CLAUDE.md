@@ -43,8 +43,10 @@ This frontend is governed by the **GENIE.AI Design System (DS)**. The DS is the 
 ### Architecture
 
 ```
-src/
+public/config/
 ├── theme-variables.css    # Token definitions (OKLch CSS custom properties)
+│                         # served at runtime from /config/, not bundled by webpack
+src/
 ├── theme-components.css   # Global component selectors using DS tokens
 └── components/
     └── ds/                # DS primitive components (the building blocks)

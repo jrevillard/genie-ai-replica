@@ -40,7 +40,7 @@ in `genie-ai-overlay/core/constants.py`.
 | `frontend` | _(not instrumented)_ | `frontend` | `genie-ai-frontend` |
 | `kong` | _(Kong OTel plugin)_ | `kong` | `kong:3.9.3` |
 | `nginx` | _(not instrumented)_ | `nginx` | `genie-ai-nginx` |
-| `keycloak` | _(not instrumented)_ | `keycloak` | `genie-ai-keycloak` |
+| `keycloak` | _(not instrumented)_ | `keycloak` | `quay.io/keycloak/keycloak:26.7.0` |
 | `arangodb` | _(not instrumented)_ | `arango-vector-db` | `arangodb/arangodb:3.12.4` |
 | `redis` | _(not instrumented)_ | `redis-cache` | `redis:7-alpine` |
 | `clamav` | _(not instrumented)_ | `clamav` | `clamav/clamav:stable-debian` |

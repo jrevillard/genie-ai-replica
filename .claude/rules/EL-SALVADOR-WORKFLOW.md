@@ -291,7 +291,7 @@ There are **two scopes** of tag control when deploying via `--extra-vars`.
 
 #### Global tag (`genie_ai_global_tag`)
 
-All 16 images share this tag. Use when validating a full dev branch
+All 15 images share this tag. Use when validating a full dev branch
 end-to-end:
 
 ```bash

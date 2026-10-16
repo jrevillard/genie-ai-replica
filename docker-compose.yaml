@@ -1417,10 +1417,12 @@ services:
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
-      # Context-window discovery fallbacks (used only when the /v1/models probe
-      # fails — see the env template section for MAX_MODEL_LEN_TEXTGEN).
-      MAX_MODEL_LEN_TEXTGEN: ${MAX_MODEL_LEN_TEXTGEN:-4096}
-      MAX_TRANSLATION_CHARS: ${MAX_TRANSLATION_CHARS:-2000}
+      # Context-window discovery: the two semantic knobs MUST default to EMPTY
+      # here — a non-empty compose default would count as a deployer-set value
+      # and silently override discovery (see the env template section for
+      # MAX_MODEL_LEN_TEXTGEN).
+      MAX_MODEL_LEN_TEXTGEN: ${MAX_MODEL_LEN_TEXTGEN:-}
+      MAX_TRANSLATION_CHARS: ${MAX_TRANSLATION_CHARS:-}
       MODEL_LEN_DETECT_TTL: ${MODEL_LEN_DETECT_TTL:-3600}
       # Confidence scoring — rank-weighted aggregate of calibrated reranker scores.
       CONFIDENCE_RANK_DECAY: ${CONFIDENCE_RANK_DECAY:-0.5}

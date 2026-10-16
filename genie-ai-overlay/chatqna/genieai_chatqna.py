@@ -371,8 +371,10 @@ BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")  #
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
 # Fallback context window for the LLM, used when runtime discovery from the
 # vLLM /v1/models payload fails (endpoint unreachable, or it does not expose
-# max_model_len). See _get_max_model_len().
-MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))
+# max_model_len). Sized for the project-standard Granite model; deployments
+# serving smaller models behind a non-vLLM backend should set the env var.
+# See _get_max_model_len().
+MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 65536))
 
 # Answer-token cap used when the request does not specify max_tokens. Kept
 # independent of the discovered context window: a big window must not invite

@@ -379,12 +379,13 @@ HUGGING_FACE_HUB_TOKEN=
 # (e.g. keep the model off its full window under load); to cap what the model
 # SERVES use vLLM's --max_model_len instead. Unset, chatqna probes /v1/models
 # (remote GPU node when configured, otherwise the compose-internal vLLM) and
-# discovery WINS. The 4096 default only applies when the probe fails.
+# discovery WINS. The 65536 default only applies when the probe fails.
 # Symptom that the fallback is too small for the served model: an empty
 # CHAT HISTORY on large prompts.
 # Used by: chatqna (genieai_chatqna.py)
-# Default: 4096 (conservative fallback; the served vLLM models expose 8192+)
-# MAX_MODEL_LEN_TEXTGEN=4096
+# Default: 65536 (the project-standard Granite window; set lower only behind
+# a non-vLLM backend serving a smaller model)
+# MAX_MODEL_LEN_TEXTGEN=65536
 
 # Fallback character budget for chat history sent to the translation model.
 # Derived from the translation model's window whenever the probe answers

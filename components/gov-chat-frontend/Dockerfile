@@ -6,7 +6,11 @@ COPY package.json package-lock.json ./
 RUN npm install --legacy-peer-deps
 
 COPY . .
-RUN npm run build
+# The image-baked theme fallback is generated from the canonical token file at
+# build time (single source of truth; no committed duplicate). The /config bind
+# mount shadows /app/dist/config at runtime, so the copy must live at the dist
+# root, outside the mount point.
+RUN npm run build && cp dist/config/theme-variables.css dist/theme-fallback.css
 
 FROM nginx:alpine
 
@@ -16,6 +20,7 @@ COPY --from=build /app/dist /app/dist
 RUN chmod -R a+r /app/dist
 
 COPY nginx.conf /etc/nginx/nginx.conf.template
+COPY nginx-revalidate-headers.inc /etc/nginx/nginx-revalidate-headers.inc
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

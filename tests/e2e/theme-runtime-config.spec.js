@@ -5,7 +5,8 @@ const { test, expect } = require('@playwright/test');
 // /config/theme-variables.css, /runtime/config.js and /theme-fallback.css are all
 // editable (or regenerated) outside the image build, so a browser must revalidate
 // them on every load. The frontend nginx pins this with a `^~ /config/` prefix
-// location and two exact-match (`=`) locations, which take precedence over the
+// location, exact-match (`=`) locations and the @theme_fallback named location
+// (all sharing nginx-revalidate-headers.inc), which take precedence over the
 // `~* \.(js|css|...)$` rule that stamps hashed assets with a one-year immutable
 // cache. Dropping either modifier silently reintroduces that cache on files that
 // operators edit at runtime, which is exactly what these tests exist to catch.

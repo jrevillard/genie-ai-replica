@@ -24,7 +24,7 @@
 
 const { DateTime } = require('luxon');
 const { servingRepos, SERVING_TTL_MS } = require('./retrieval-config-service');
-const { deriveScopeAuthz, currentScopeMode, isScopeModeOpen } = require('./scope-authz-service');
+const { deriveScopeAuthz, currentScopeMode, isScopeModeOpen, hasAnyScopeEntry } = require('./scope-authz-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 
@@ -41,16 +41,18 @@ async function resolveGraphSet(caller) {
     // repo_id the caller is authorized for survive — unauthorized (or
     // draft/retracted) repos never enter the response at all.
     // DEFAULT-OPEN (2026-10-16, read side only): in open mode a caller whose
-    // scopes grant nothing (empty set) is unrestricted — every serving repo
-    // is traversable, so an ingested+published repo is reachable by every
-    // regular user's query. A caller holding ANY effective scope keeps the
-    // exact list semantics (scopes restrict); null (superadmin/wildcard) is
-    // unrestricted in both modes. The WRITE side never sees this rule —
-    // repository-controller callerAuthz keeps the closed list.
+    // token carries NO okf scope entry at all is unrestricted — every serving
+    // repo is traversable, so an ingested+published repo is reachable by
+    // every regular user's query. The test is the RAW claim list (see
+    // hasAnyScopeEntry): malformed-only tokens stay closed-list. A caller
+    // holding ANY scope entry keeps the exact list semantics (scopes
+    // restrict); null (superadmin/wildcard) is unrestricted in both modes.
+    // The WRITE side never sees this rule — repository-controller callerAuthz
+    // keeps the closed list.
     const unrestricted =
       isSuperAdmin ||
       authorizedRepoIds === null ||
-      (isScopeModeOpen() && authorizedRepoIds.size === 0);
+      (isScopeModeOpen() && !hasAnyScopeEntry(caller.okfScopes));
     const allowed = unrestricted ? serving : serving.filter((r) => authorizedRepoIds.has(r.repo_id));
     const graph_names = allowed.map((r) => r.graph_name);
     const per_graph_labels = {};

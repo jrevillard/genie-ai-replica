@@ -81,9 +81,12 @@ function requireScope(requiredLevel = 'read', opts = {}) {
     if (opts.allowScopelessWhenOpen) {
       // Lazy require: scope-authz-service imports parseOkfScope from THIS
       // module, so a top-level require would be a load-order-dependent
-      // cycle. By call time both modules are fully loaded.
-      const { isScopeModeOpen } = require('../services/scope-authz-service');
-      if (isScopeModeOpen()) {
+      // cycle. By call time both modules are fully loaded. The open test is
+      // the RAW claim list (hasAnyScopeEntry) — a token whose okf entries
+      // are all malformed counts as "scoped" and stays denied, matching the
+      // resolver's DEFAULT-OPEN rule exactly.
+      const { isScopeModeOpen, hasAnyScopeEntry } = require('../services/scope-authz-service');
+      if (isScopeModeOpen() && !hasAnyScopeEntry(req.okfScopes)) {
         // Default-open: the read gate admits the scopeless caller. Logged,
         // not audited — /authz/graphs is called per chat query and the audit
         // table would fill with one row per question.

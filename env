@@ -1254,7 +1254,10 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Default: unset (= no RFC 8707 audience check on bearer JWTs).
 #   Used by: okf-server. Compose: yes. Ansible: yes (guarded).
 # OKF_SCOPE_MODE=open
-#   Default: open. Values: open | closed. Used by: okf-server (read side).
+#   Default: open (when the variable is ABSENT). Values: open | closed.
+#   An EXPLICIT garbage value degrades to closed (a misconfigured attempt to
+#   pin the deployment must not silently fail open).
+#   Used by: okf-server (read side).
 #   Compose: yes. Ansible: yes (okf_scope_mode).
 #   DEFAULT-OPEN OKF read authorization (product decision 2026-10-16):
 #   open — a caller whose JWT carries NO okf:* scopes is authorized for ALL

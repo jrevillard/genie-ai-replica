@@ -182,11 +182,17 @@ data:
     adminUsername: genie-admin
     defaultLocale: en
     # Login/account/admin/email theme name, exported as KEYCLOAK_THEME.
-    # The `genie` theme ships in the image on the Docker Swarm path; on
-    # Kubernetes the operator's stock image has no such theme and
-    # Keycloak falls back to its default. See issue !998 for the
+    # The `genie` theme ships in the genie-ai-keycloak image; with the
+    # operator's stock image (image.repository empty) Keycloak silently
+    # falls back to its default theme. See issue !998 for the
     # mount-only branding work.
     theme: genie
+    # Unset = the keycloak-operator's pinned stock image (no GENIE.AI
+    # theme). Set repository to the theme-baked genie-ai-keycloak image
+    # to enable the realm theme.
+    image:
+      repository: ""
+      tag: "main"
     # Gates the new-user email-verification flow; requires smtp to be set
     # when true (Keycloak rejects verification emails without a server).
     verifyEmail: false

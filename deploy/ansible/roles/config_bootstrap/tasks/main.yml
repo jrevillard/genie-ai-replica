@@ -121,7 +121,11 @@
     group: "{{ ansible_user }}"
     recurse: true
 
+# Root so a run aborted by the extraction assert can be retried: /tmp is sticky,
+# so entries left root-owned by an earlier root run cannot be replaced or removed
+# by ansible_user. Same escalation as the chown task above.
 - name: Remove downloaded archives and extraction scratch directory
+  become_user: root
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent

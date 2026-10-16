@@ -207,3 +207,56 @@ def set_env_vars(monkeypatch):
     monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
     monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "BAAI/bge-large-en-v1.5")
     monkeypatch.setenv("RETRIEVER_MODEL_ID", "BAAI/bge-large-en-v1.5")
+
+
+# --- Tracing test support -----------------------------------------------------
+# Assertions read FINISHED spans out of an in-memory exporter, never mock span
+# objects. A mock assertion passes regardless of what the SDK does, and this
+# repo has the counter-example: tests/otel-collector/run-pii-smoke.sh passed
+# against a completely broken redactor because it asserted on the wrong surface.
+#
+# Installed in pytest_configure, NOT on first fixture use: set_tracer_provider is
+# once-per-process, and test_dataprep_tracing.py / test_reranker_tracing.py call
+# the real tracing.setup_tracing(), which installs a provider of their own. First
+# caller wins, so ours has to be first — otherwise a CI shard or a -k filter
+# silently yields zero spans.
+from opentelemetry import trace as _otel_trace
+from opentelemetry.sdk.trace import TracerProvider as _SdkTracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor as _SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+    InMemorySpanExporter as _InMemorySpanExporter,
+)
+
+_SPAN_EXPORTER = _InMemorySpanExporter()
+
+
+def pytest_configure(config):
+    provider = _SdkTracerProvider()
+    provider.add_span_processor(_SimpleSpanProcessor(_SPAN_EXPORTER))
+    _otel_trace.set_tracer_provider(provider)
+    installed = _otel_trace.get_tracer_provider()
+    if not isinstance(installed, _SdkTracerProvider):
+        raise RuntimeError(
+            "Tracing tests cannot run: another TracerProvider was installed "
+            f"first ({type(installed).__name__}). The in-memory exporter would "
+            "receive no spans and every captured_spans() assertion would fail."
+        )
+
+
+def pytest_unconfigure(config):
+    _SPAN_EXPORTER.clear()
+
+
+@pytest.fixture
+def captured_spans():
+    """Return a callable giving finished spans, optionally filtered by name."""
+    _SPAN_EXPORTER.clear()
+
+    def _get(name=None):
+        spans = _SPAN_EXPORTER.get_finished_spans()
+        if name is not None:
+            spans = [s for s in spans if s.name == name]
+        return spans
+
+    yield _get
+    _SPAN_EXPORTER.clear()

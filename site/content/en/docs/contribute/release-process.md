@@ -56,7 +56,7 @@ GENIE.AI follows [Semantic Versioning](https://semver.org/):
    git tag vX.Y.Z && git push origin vX.Y.Z
    ```
 
-   CI publishes 16 Docker images tagged `vX.Y.Z` and `latest`.
+   CI publishes 15 Docker images tagged `vX.Y.Z` and `latest`.
 
 ## PATCH release
 

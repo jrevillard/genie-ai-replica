@@ -91,7 +91,7 @@ Move all theme assets (frontend palette + brand JSON + Keycloak theme) to runtim
   - Existing `loadConfig()` already injects CSS custom properties from `genie-ai-config.json` (brand, colors, navbar, font) — no change needed
   - No further extension in this MR; future palette additions go through `genie-ai-config.json` schema
 - **`public/index.html`**: add `<link rel="stylesheet" href="/config/theme-variables.css">` before the existing `<script src="/config.js">`. Add an HTML comment above the `<link>` documenting the load order contract: "CSS tokens load first; `main.js` overrides a runtime subset via `loadConfig()`."
-- **`public/config/theme-variables-fallback.css`** (NEW): a verbatim copy of the upstream `theme-variables.css` content shipped inside the image as a safety net. `index.html` `<link onerror>` fetches this file and inlines it via JS (no inline-style spaghetti of 50+ tokens in HTML). Single source of truth: the canonical file is the fallback file; update both together.
+- **`public/config/theme-fallback.css`** (NEW): a verbatim copy of the upstream `theme-variables.css` content shipped inside the image as a safety net. `index.html` `<link onerror>` fetches this file and inlines it via JS (no inline-style spaghetti of 50+ tokens in HTML). Single source of truth: the canonical file is the fallback file; update both together.
 - **`nginx.conf`**:
   - Add `location ^~ /config/` block (note the `^~` modifier, NOT plain `location /config/`). The `^~` modifier tells nginx to use this prefix match as the priority match even when a regex location also matches — without it, the existing regex `~* \.(js|css|...)` wins regardless of source-file ordering and would still apply `Cache-Control: immutable, max-age=31536000` to `/config/*`, defeating the entire purpose.
   - The block sets `Cache-Control: no-cache, must-revalidate`. Browsers send `If-Modified-Since` / `If-None-Match`; nginx returns `304 Not Modified` with the updated body when the file changed.
@@ -153,7 +153,7 @@ services:
 |------|--------|
 | `components/gov-chat-frontend/src/theme-variables.css` | DELETE |
 | `components/gov-chat-frontend/public/config/theme-variables.css` | CREATE (moved content) |
-| `components/gov-chat-frontend/public/config/theme-variables-fallback.css` | CREATE (verbatim copy of `theme-variables.css` for `<link onerror>` recovery) |
+| `components/gov-chat-frontend/public/config/theme-fallback.css` | CREATE (verbatim copy of `theme-variables.css` for `<link onerror>` recovery) |
 | `components/gov-chat-frontend/src/main.js` | Remove `import './theme-variables.css'` |
 | `components/gov-chat-frontend/public/index.html` | Add `<link rel="stylesheet" href="/config/theme-variables.css">` with `onerror`; relocate `<script src="/config.js">` to `<script src="/config/config.js">` |
 | `components/gov-chat-frontend/nginx.conf` | Add `location ^~ /config/` block (note: `^~`, not bare prefix) with `no-cache, must-revalidate` |
@@ -176,7 +176,7 @@ services:
 
 ### Frontend: `/config/theme-variables.css` 404
 
-- New risk: page renders unstyled (or renders with only the 7 CSS vars that `loadConfig()` injects from `genie-ai-config.json`, leaving 40+ tokens unset). Mitigation: `<link>` carries an `onerror` handler that fetches `/config/theme-variables-fallback.css` (sibling file shipped inside the image), inlines its textContent into a `<style>` element, and removes the broken link. The fallback file is a verbatim copy of the canonical `theme-variables.css` at build time, kept in sync via the implementation commit. Single source of truth — the canonical file IS the fallback file; update both together (or symlink within the repo).
+- New risk: page renders unstyled (or renders with only the 7 CSS vars that `loadConfig()` injects from `genie-ai-config.json`, leaving 40+ tokens unset). Mitigation: `<link>` carries an `onerror` handler that fetches `/config/theme-fallback.css` (sibling file shipped inside the image), inlines its textContent into a `<style>` element, and removes the broken link. The fallback file is a verbatim copy of the canonical `theme-variables.css` at build time, kept in sync via the implementation commit. Single source of truth — the canonical file IS the fallback file; update both together (or symlink within the repo).
 
 ### Frontend: `/config.js` cache staleness (pre-existing, fixed in this MR)
 
@@ -193,7 +193,7 @@ services:
 
 - **Docker never falls back to the image contents.** When the host side of a bind mount does not exist, Docker creates it as an empty root-owned directory and mounts it over the container path. The service starts normally, reports healthy, and serves nothing.
 - Failure mode when `CONFIG_DIR_FRONTEND` / `CONFIG_DIR_KEYCLOAK` are unset **and** their repo-relative defaults do not resolve on the node (they will not: the playbook never clones the repo onto the node):
-  - **Frontend** — the empty mount shadows `/app/dist/config/`, so the theme stylesheet, the splash assets and the logo are all gone. `/config/theme-variables.css` 404s and the `onerror` handler inlines `theme-variables-fallback.css` (image-baked), so the page still renders with the default tokens; but the runtime JSON config 404s too, and the splash/logo are simply absent. Unbranded, visibly wrong, no error anywhere.
+  - **Frontend** — the empty mount shadows `/app/dist/config/`, so the theme stylesheet, the splash assets and the logo are all gone. `/config/theme-variables.css` 404s and the `onerror` handler inlines `theme-fallback.css` (image-baked), so the page still renders with the default tokens; but the runtime JSON config 404s too, and the splash/logo are simply absent. Unbranded, visibly wrong, no error anywhere.
   - **Keycloak** — the empty mount shadows `/opt/keycloak/themes/genie/`, so Keycloak serves its unbranded built-in theme.
   - Both are **silent**. No container crashes, no healthcheck fails, no log line names the missing directory.
 - **Mitigation** — the `config_bootstrap` role seeds those directories, and it is tagged `deploy` as well as `config`, so a routine `ansible-playbook deploy.yml --tags deploy` populates them before the stack comes up. A node that has never run the role is the exposure, not a node running a normal deploy.

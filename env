@@ -886,6 +886,9 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # seeds the directories from the repository. The values below are the local-dev
 # defaults and match docker-compose exactly.
 #
+#   Docker: N/A (images built locally for `docker compose up`, pulled from registry for Swarm)
+#   Swarm:  images pulled from GitLab Container Registry (per-service vars above)
+
 # A bind mount never falls back to the image contents. Docker creates a missing
 # source path as an empty root-owned directory, which then shadows everything
 # under the mount point. An empty host directory therefore means an unbranded
@@ -893,8 +896,6 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # screen -- silently, with no crash and no health signal.
 CONFIG_DIR_FRONTEND=./components/gov-chat-frontend/public/config
 CONFIG_DIR_KEYCLOAK=./configs/keycloak/themes/genie
-#   Docker: N/A (images built locally for `docker compose up`, pulled from registry for Swarm)
-#   Swarm:  images pulled from GitLab Container Registry (per-service vars above)
 #
 # NGINX_PUBLIC_DOMAIN=<gateway-node-fqdn>
 #   Docker: localhost

@@ -188,7 +188,12 @@ describe('ONE conversion per repo (2026-09-09 test-flake catch)', () => {
     const md = ['## Source: https://a.example/one', '# One', 'body'].join('\n');
     mockSource(md);
     const first = conv.startConversion({ repo_id: 'r1', file_id: 'f1', split_mode: 'B' });
-    for (let i = 0; i < 200 && !conv.live.has('r1'); i += 1) await new Promise((r) => setTimeout(r, 2));
+    // CI flake (first test:okf-server runs, 2026-10-16): the registration of
+    // `r1` in the live map happens after an awaited mocked-DB call — 400 ms
+    // was not always enough under --maxWorkers=2 + coverage overhead, and
+    // the second call then legitimately started instead of being refused.
+    // 2s ceiling; the loop exits the moment registration lands.
+    for (let i = 0; i < 1000 && !conv.live.has('r1'); i += 1) await new Promise((r) => setTimeout(r, 2));
     await expect(conv.startConversion({ repo_id: 'r1', file_id: 'f1', split_mode: 'B' })).rejects.toMatchObject({
       code: 'CONVERSION_IN_FLIGHT',
       status: 409

@@ -21,6 +21,21 @@ enforced at emission and checked mechanically, in two layers:
    allowlist — the one value that would have required one (taxonomy labels) is
    handled structurally, below, which is what lets layer 2 stay absolute.
 
+Layer 1 accepts a second set, ``DEPRECATED_ATTRIBUTE_NAMES``: keys production
+emits today that this work renames or removes. Those are registered so the sweep
+can police existing spans without reporting the backlog as a fresh leak — see
+that dict for why they are deliberately not in ``ATTRIBUTE_NAMES``. Both layers
+apply to them exactly as to vocabulary keys.
+
+**Array vs JSON.** Flat scalar sequences are emitted as ARRAYS — OTel represents
+those natively, so a list of chunk keys is a real array attribute, never a
+hand-stringed JSON blob. Structures OTel *cannot* represent (a list of dicts, any
+non-homogeneous sequence) are JSON-encoded instead, and are declared in
+``JSON_ENCODED_ATTRIBUTE_NAMES``. Those are validated by PARSING: the value must
+parse, and every leaf string inside it faces the same layer-2 shape check. That is
+strictly stronger than exempting them — prose smuggled into a leaf still fails,
+and an unparseable blob is a defect.
+
 Taxonomy labels are the one thing that cannot be recorded raw. The label
 taxonomy is fetched from the Backend Service at runtime, so no static vocabulary
 exists to validate it against, and real labels contain spaces ("Soil
@@ -30,10 +45,12 @@ against their own taxonomy to recover the label, with no free text recorded and
 nothing to maintain. Brute-forcing a digest yields only taxonomy values the
 operator already holds.
 
-Mirrored on the Node side in ``components/shared/lib/span-attrs.js``.
+Mirrored on the Node side in ``components/shared/lib/span-attrs.js``, created by
+the companion Node task.
 """
 
 import hashlib
+import json
 import re
 
 # Key for the correlation id carried in OTel baggage. The value is the opaque
@@ -54,8 +71,8 @@ _DIGEST_SIZE = 4  # bytes -> 8 hex characters
 
 _ANY_WHITESPACE = re.compile(r"\s")
 
-# The full vocabulary, keyed by a short identifier for call sites. Values are the
-# literal attribute name. NOTE: ``rag.fetch_k`` is only CONSULTED by the retriever
+# The full vocabulary (50 entries), keyed by a short identifier for call sites.
+# Values are the literal attribute name. NOTE: ``rag.fetch_k`` is only CONSULTED by the retriever
 # under ``search_type == "mmr"``; chatqna defaults to similarity_score_threshold.
 # It is recorded regardless, because a span that reported what was used rather
 # than what was configured would be the same transparency failure this guards
@@ -119,6 +136,70 @@ ATTRIBUTE_NAMES = {
     "rag_adaptive_chunk_keys": "rag.adaptive_chunk_keys",
 }
 
+# Attributes EMITTED TODAY by production code that this change renames or
+# removes. Kept out of ATTRIBUTE_NAMES on purpose: ATTRIBUTE_NAMES is the
+# DESTINATION vocabulary, and admitting names that later tasks exist to rename
+# would put dead keys into the thing every later task imports.
+#
+# Registered here so the per-test sweep can police EXISTING spans. Without them
+# the sweep reports 100 teardown errors, and a guard that is permanently red is a
+# guard nobody reads.
+#
+# Each value names the task that removes it. An entry without an owner is just a
+# permanent addition wearing a temporary label.
+#
+# What this set does NOT do is relax the privacy guard: a deprecated key is still
+# subject to the full layer-2 shape check, so prose on any of these is still a
+# violation.
+DEPRECATED_ATTRIBUTE_NAMES = {
+    # chatqna.reranker_selection key emission migrated by task 3
+    "rag.candidate_chunk_keys": "task 3",
+    "rag.selected_chunk_keys": "task 3",
+    "rag.selected_scores": "task 3",
+    "rag.candidate_count": "task 3",
+    "rag.selected_count": "task 3",
+    # retriever.hybrid_search key emission migrated by task 5
+    "rag.search_mode": "task 5",
+    "rag.top_k": "task 5",
+    "rag.chunk_count": "task 5",
+    "retriever.summarizer.input_too_long": "task 5",
+    "retriever.summarizer.overflow_count": "task 5",
+    # retriever.summarizer.overflow_doc_ids is NOT here — it is
+    # JSON-encoded, so it belongs to JSON_ENCODED_ATTRIBUTE_NAMES.
+    # reranker.tei_invoke key emission migrated by task 8
+    "reranker.strategy": "task 8",
+    "reranker.top_n": "task 8",
+    "reranker.model_id": "task 8",
+    "reranker.input_doc_count": "task 8",
+    "reranker.output_doc_count": "task 8",
+    "reranker.score_threshold": "task 8",
+    "reranker.input_too_long": "task 8",
+    "reranker.rejected_tokens": "task 8",
+    # rag.adaptive_breakdown is NOT here — it is JSON-encoded, so it belongs to
+    # JSON_ENCODED_ATTRIBUTE_NAMES.
+    "rag.adaptive_context_decay_factor": "task 8",
+    "rag.adaptive_min_value_threshold": "task 8",
+}
+
+# Attributes whose value is a STRUCTURE OTel cannot represent natively (a list of
+# dicts, or any non-homogeneous sequence). OTel attribute values are primitives
+# or homogeneous sequences only, so these MUST be JSON-encoded — emitting the raw
+# list would be rejected by the SDK or silently mangled.
+#
+# This is a declared category with real validation, NOT an exemption:
+# ``free_text_violations`` parses the value and applies the layer-2 shape rule to
+# every leaf string inside it. An unparseable blob fails, and prose smuggled into
+# a leaf still fails.
+#
+# Distinct from ``ATTRIBUTE_NAMES``: the vocabulary's own ``rag.candidate_keys`` /
+# ``rag.selected_chunk_keys`` / task 8's ``rag.adaptive_chunk_keys`` are FLAT lists
+# of scalars, which OTel represents natively, so they are emitted as real arrays,
+# not JSON. Only genuinely unrepresentable structures belong here.
+JSON_ENCODED_ATTRIBUTE_NAMES = {
+    "rag.adaptive_breakdown",  # reranker: list of per-chunk decision records
+    "retriever.summarizer.overflow_doc_ids",  # retriever: list of overflow doc ids
+}
+
 
 def label_digest(label: str) -> str:
     """Return the 8-hex-char stable digest of one taxonomy label.
@@ -127,18 +208,56 @@ def label_digest(label: str) -> str:
     an operator can reproduce a digest from their own taxonomy. Not a security
     boundary: recovering a label requires the taxonomy, which the operator
     already holds.
+
+    A 4-byte digest collides at roughly 65k labels sharing one salt. That limit
+    is deliberate and far above the handful of labels on a single span; a wider
+    digest would break the 8-hex-char shape this exists to satisfy.
     """
     return hashlib.blake2s(label.encode("utf-8"), key=_DIGEST_KEY, digest_size=_DIGEST_SIZE).hexdigest()
 
 
+def _json_encoded_violations(key, value) -> list[str]:
+    """Validate a JSON-encoded structure by parsing, not by flat shape.
+
+    A value in ``JSON_ENCODED_ATTRIBUTE_NAMES`` holds a structure OTel cannot
+    represent natively, so it must be JSON. Three rules, and the middle one is
+    what makes this stronger than an exemption:
+
+    1. It must parse. An unparseable blob in this category is a defect — and
+       prose essentially never parses as JSON.
+    2. Every leaf string inside the parsed structure is subject to the ordinary
+       layer-2 shape check. ``{"note": "the farmer said his soil was sandy"}``
+       fails exactly as it would if written flat.
+    3. The container's own separators (``, ``, ``, ``: ``, braces) are not prose
+       and are deliberately exempt — that is the whole reason for the category.
+    """
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        return [f"{key}: JSON-encoded value does not parse"]
+
+    violations = []
+    for text in _string_values(parsed):
+        if _ANY_WHITESPACE.search(text) or len(text) > MAX_STRING_LEN:
+            violations.append(f"{key}: free-text leaf in JSON value {text!r}")
+    return violations
+
+
 def _string_values(value):
-    """Yield every string reachable in an attribute value."""
+    """Yield every string reachable in an attribute value.
+
+    Sets and dict keys are traversed too. OTel only accepts homogeneous sequences
+    as attribute values, so a set never reaches VictoriaTraces — but "the SDK
+    would have dropped it anyway" is not a reason to accept prose silently.
+    """
     if isinstance(value, str):
         yield value
-    elif isinstance(value, (list, tuple)):
+    elif isinstance(value, (list, tuple, set, frozenset)):
         for item in value:
             yield from _string_values(item)
     elif isinstance(value, dict):
+        for item in value:
+            yield from _string_values(item)
         for item in value.values():
             yield from _string_values(item)
 
@@ -147,16 +266,24 @@ def free_text_violations(attributes: dict) -> list[str]:
     """Return one entry per attribute that leaks, either by key or by shape.
 
     Layer 1: an unregistered key is a leak by definition — it means something
-    wrote to a span without declaring what it was.
+    wrote to a span without declaring what it was. A key is registered if it is
+    in EITHER ``ATTRIBUTE_NAMES`` (destination vocabulary) or
+    ``DEPRECATED_ATTRIBUTE_NAMES`` (emitted today, being renamed). Registering a
+    deprecated key relaxes nothing about its VALUE — layer 2 applies identically
+    to both sets, so prose on a deprecated key is still caught.
 
     Layer 2: a string value with whitespace, or longer than MAX_STRING_LEN, is
     prose. Shape-based on purpose: a denylist of forbidden substrings rots and is
     defeated by wording nobody anticipated, whereas whitespace and length are
     properties no phrasing avoids.
     """
+    registered = set(ATTRIBUTE_NAMES.values()) | set(DEPRECATED_ATTRIBUTE_NAMES)
     violations = []
     for key, value in (attributes or {}).items():
-        if key not in ATTRIBUTE_NAMES.values():
+        if key in JSON_ENCODED_ATTRIBUTE_NAMES:
+            violations.extend(_json_encoded_violations(key, value))
+            continue
+        if key not in registered:
             violations.append(f"{key}: unregistered attribute key")
             continue
         for text in _string_values(value):

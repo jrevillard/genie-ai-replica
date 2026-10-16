@@ -227,6 +227,8 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
     InMemorySpanExporter as _InMemorySpanExporter,
 )
 
+from core.span_attrs import free_text_violations
+
 _SPAN_EXPORTER = _InMemorySpanExporter()
 
 
@@ -235,7 +237,7 @@ def pytest_configure(config):
     provider.add_span_processor(_SimpleSpanProcessor(_SPAN_EXPORTER))
     _otel_trace.set_tracer_provider(provider)
     installed = _otel_trace.get_tracer_provider()
-    if not isinstance(installed, _SdkTracerProvider):
+    if installed is not provider:
         raise RuntimeError(
             "Tracing tests cannot run: another TracerProvider was installed "
             f"first ({type(installed).__name__}). The in-memory exporter would "
@@ -245,6 +247,65 @@ def pytest_configure(config):
 
 def pytest_unconfigure(config):
     _SPAN_EXPORTER.clear()
+
+
+# Spans this project emits, and therefore the only ones the vocabulary sweep
+# applies to. FastAPI auto-instrumentation also emits spans carrying
+# ``http.method`` / ``url.full`` / ``http.status_code``, which are legitimately
+# outside the vocabulary — sweeping those would mean suppressing failures we do
+# not understand, which is worse than not sweeping at all.
+OWNED_SPAN_NAMES = frozenset(
+    {
+        "llm.invoke",
+        "chatqna.reranker_selection",
+        "chatqna.stream_outcome",
+        "retriever.hybrid_search",
+        "reranker.tei_invoke",
+    }
+)
+
+
+def assert_spans_clean(spans, owned_span_names=OWNED_SPAN_NAMES):
+    """Raise AssertionError naming every leaking attribute on an owned span.
+
+    Split out from the fixture so a test can prove the sweep bites: an
+    autouse-fixture failure cannot be asserted from inside the test it fails.
+    """
+    leaks = []
+    for span in spans:
+        if span.name not in owned_span_names:
+            continue
+        violations = free_text_violations(dict(span.attributes))
+        if violations:
+            leaks.append(f"{span.name}: {violations}")
+    if leaks:
+        raise AssertionError(
+            f"Span attribute leak on an owned span (no collector-side redaction on the traces pipeline): {leaks}"
+        )
+
+
+@pytest.fixture(autouse=True)
+def sweep_owned_spans():
+    """Fail any test whose spans carry undeclared attributes or prose values.
+
+    Enforcement has to be automatic: the vocabulary is only as strong as the
+    habit of checking it, and ``tracing.with_span`` cannot do that check (it
+    sees only the attributes passed at construction, while emission sites call
+    ``span.set_attribute()`` afterwards). Sweeping the exported spans is the one
+    place that sees the final state of every attribute.
+    """
+    _SPAN_EXPORTER.clear()
+    yield
+    try:
+        assert_spans_clean(_SPAN_EXPORTER.get_finished_spans())
+    finally:
+        _SPAN_EXPORTER.clear()
+
+
+@pytest.fixture
+def span_sweep():
+    """Expose ``assert_spans_clean`` so tests can prove the sweep bites."""
+    return assert_spans_clean
 
 
 @pytest.fixture

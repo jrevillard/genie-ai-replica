@@ -10,12 +10,15 @@ is a violation. Layer 2 alone is NOT sufficient — a one-word user query has no
 whitespace and passes — which is exactly why layer 1 exists.
 """
 
+import json
 import re
 
 import pytest
 
 from core.span_attrs import (
     ATTRIBUTE_NAMES,
+    DEPRECATED_ATTRIBUTE_NAMES,
+    JSON_ENCODED_ATTRIBUTE_NAMES,
     MAX_STRING_LEN,
     QUERY_ID_KEY,
     UNRESOLVED,
@@ -114,3 +117,140 @@ class TestVocabularyShape:
 
     def test_values_are_unique(self):
         assert len(set(VOCABULARY)) == len(VOCABULARY)
+
+    def test_vocabulary_has_fifty_entries(self):
+        assert len(ATTRIBUTE_NAMES) == 50
+
+
+class TestDeprecatedAttributeNames:
+    """The deprecation register keeps the sweep green without weakening it."""
+
+    def test_sets_are_disjoint(self):
+        """A name in both would be a dead key in the destination vocabulary."""
+        overlap = set(ATTRIBUTE_NAMES.values()) & set(DEPRECATED_ATTRIBUTE_NAMES)
+        assert overlap == set()
+
+    def test_every_entry_names_the_task_that_removes_it(self):
+        """An entry without an owner is a permanent addition in disguise."""
+        for key, owner in DEPRECATED_ATTRIBUTE_NAMES.items():
+            assert re.fullmatch(r"task \d+", owner), f"{key} has no task owner"
+
+    def test_deprecated_keys_are_accepted(self):
+        assert free_text_violations({"rag.search_mode": "hybrid"}) == []
+
+    def test_every_deprecated_name_is_accepted(self):
+        assert free_text_violations({name: "x" for name in DEPRECATED_ATTRIBUTE_NAMES}) == []
+
+    def test_shape_check_still_applies_to_deprecated_keys(self):
+        """Registration relaxes the key layer only, never the value layer."""
+        assert free_text_violations({"rag.top_k": "not a number"})
+        assert free_text_violations({"reranker.model_id": "granite 4.1 8b"})
+
+    def test_a_still_unregistered_key_is_still_caught(self):
+        """The whole point: the backlog did not open the door."""
+        assert free_text_violations({"rag.sniffed_query": "banana"}) == [
+            "rag.sniffed_query: unregistered attribute key"
+        ]
+
+    def test_registering_the_backlog_did_not_inflate_the_vocabulary(self):
+        assert len(ATTRIBUTE_NAMES) == 50
+        assert len(DEPRECATED_ATTRIBUTE_NAMES) == 20
+
+
+class TestJsonEncodedAttributeNames:
+    """A declared category validated by PARSING — strictly stronger than exempt.
+
+    OTel accepts primitives or homogeneous sequences only, so a list of dicts
+    genuinely cannot go on a span except JSON-encoded. That makes the flat
+    shape rule inapplicable, not the privacy guard.
+    """
+
+    def test_disjoint_from_the_vocabulary(self):
+        assert set(JSON_ENCODED_ATTRIBUTE_NAMES) & set(ATTRIBUTE_NAMES.values()) == set()
+
+    def test_disjoint_from_the_deprecated_set(self):
+        assert set(JSON_ENCODED_ATTRIBUTE_NAMES) & set(DEPRECATED_ATTRIBUTE_NAMES) == set()
+
+    def test_ids_and_numbers_pass(self):
+        value = json.dumps([{"idx": 0, "score": 0.95, "selected": True}, {"idx": 1, "score": 0.6}])
+        assert free_text_violations({"rag.adaptive_breakdown": value}) == []
+
+    def test_doc_id_list_passes(self):
+        assert free_text_violations({"retriever.summarizer.overflow_doc_ids": json.dumps(["chunkA", "chunkB"])}) == []
+
+    def test_prose_in_a_leaf_fails(self):
+        """The reason this is parsing and not exemption."""
+        value = json.dumps([{"note": "the farmer said his soil was sandy"}])
+        violations = free_text_violations({"rag.adaptive_breakdown": value})
+        assert violations
+        assert "free-text leaf in JSON value" in violations[0]
+
+    def test_prose_fails_even_when_deeply_nested(self):
+        value = json.dumps([{"a": {"b": ["still some prose here"]}}])
+        assert free_text_violations({"rag.adaptive_breakdown": value})
+
+    def test_unparseable_value_fails(self):
+        (violation,) = free_text_violations({"rag.adaptive_breakdown": "not json at all"})
+        assert "does not parse" in violation
+
+    def test_prose_blob_fails_to_parse_and_is_caught(self):
+        assert free_text_violations({"rag.adaptive_breakdown": "the farmer said his soil was sandy"})
+
+    def test_overlong_leaf_fails(self):
+        value = json.dumps([{"id": "x" * (MAX_STRING_LEN + 1)}])
+        assert free_text_violations({"rag.adaptive_breakdown": value})
+
+    def test_every_declared_name_is_validated(self):
+        """No declared name silently escapes checking."""
+        for name in JSON_ENCODED_ATTRIBUTE_NAMES:
+            assert free_text_violations({name: "unparseable prose"})
+
+
+def _emit(name, attributes):
+    """Record one finished span through the session provider."""
+    from opentelemetry import trace
+
+    tracer = trace.get_tracer("test_span_attrs")
+    with tracer.start_as_current_span(name) as span:
+        for key, value in attributes.items():
+            span.set_attribute(key, value)
+    return span
+
+
+class TestOwnedSpanSweep:
+    """The autouse sweep is the only enforcement point, so prove it bites.
+
+    ``sweep_owned_spans`` runs at teardown, and a teardown failure cannot be
+    asserted from inside the test that triggers it — so these exercise the
+    ``assert_spans_clean`` helper the fixture delegates to, against spans that
+    really went through the SDK's exporter.
+    """
+
+    def test_unregistered_key_on_an_owned_span_fails_the_sweep(self, span_sweep, captured_spans):
+        _emit("llm.invoke", {"rag.sniffed_query": "banana"})
+        with pytest.raises(AssertionError) as excinfo:
+            span_sweep(captured_spans())
+        assert "rag.sniffed_query: unregistered attribute key" in str(excinfo.value)
+
+    def test_prose_on_a_registered_key_fails_the_sweep(self, span_sweep, captured_spans):
+        _emit("llm.invoke", {"rag.search_type": "Soil Management"})
+        with pytest.raises(AssertionError) as excinfo:
+            span_sweep(captured_spans())
+        assert "free-text value" in str(excinfo.value)
+
+    def test_declared_attributes_on_an_owned_span_pass_the_sweep(self, span_sweep, captured_spans):
+        _emit("llm.invoke", {"rag.fetch_k": 3, "rag.search_type": "mmr"})
+        assert span_sweep(captured_spans()) is None
+
+    def test_unowned_spans_are_not_swept(self, span_sweep, captured_spans):
+        """FastAPI auto-instrumentation is legitimately outside the vocabulary."""
+        _emit("GET /api/chat", {"http.method": "GET", "url.full": "http://x/api"})
+        assert span_sweep(captured_spans()) is None
+
+    def test_sweep_names_the_span_and_the_key(self, span_sweep, captured_spans):
+        _emit("retriever.hybrid_search", {"rag.leaked_text": "x"})
+        with pytest.raises(AssertionError) as excinfo:
+            span_sweep(captured_spans())
+        message = str(excinfo.value)
+        assert "retriever.hybrid_search" in message
+        assert "rag.leaked_text" in message

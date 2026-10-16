@@ -104,11 +104,17 @@
     label: "{{ item.dest_subdir }}"
   when: config_bootstrap_sync_enabled | bool
 
-- name: Remove downloaded archives and extraction scratch directory
+- name: Remove extraction scratch directory
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ config_bootstrap_tmp_root }}"
     state: absent
-  loop:
-    - "{{ config_bootstrap_tmp_root }}"
-    - "{{ config_bootstrap_tmp_root }}-{{ repo_branch | replace('/', '-') }}-frontend.tar.gz"
-    - "{{ config_bootstrap_tmp_root }}-{{ repo_branch | replace('/', '-') }}-keycloak-themes-genie.tar.gz"
+
+# Derives each archive name with the same expression as the download task, so
+# adding or renaming a config_bootstrap_pairs entry cleans up after itself.
+- name: Remove downloaded per-pair archives
+  ansible.builtin.file:
+    path: "{{ config_bootstrap_tmp_root }}-{{ repo_branch | replace('/', '-') }}-{{ item.dest_subdir | replace('/', '-') }}.tar.gz"
+    state: absent
+  loop: "{{ config_bootstrap_pairs }}"
+  loop_control:
+    label: "{{ item.dest_subdir }}"

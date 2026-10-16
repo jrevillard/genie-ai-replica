@@ -71,7 +71,7 @@ spec:
             # entrypoint runs `chown -R clamav:clamav /var/lib/clamav`
             # at startup, which needs CAP_CHOWN. Dropping ALL drops
             # CHOWN too and the chown fails with EPERM (same fix as
-            # the factory default + nginx + frontend in 0.1.11).
+            # the factory default + frontend).
             capabilities:
               drop: ["NET_RAW"]
           volumeMounts:

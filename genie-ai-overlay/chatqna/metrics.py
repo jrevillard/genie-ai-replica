@@ -37,10 +37,16 @@ chat_rag_duration_seconds = _meter.create_histogram(
     unit="s",
 )
 
+history_truncation_total = _meter.create_counter(
+    "genie.ai/chat/history/truncated",
+    description="Chat history truncations (generation guard and translation budget)",
+)
+
 __all__ = [
     "get_meter",
     "chat_requests_total",
     "chat_rag_duration_seconds",
+    "history_truncation_total",
     "sanitize_attributes",
     "_PII_KEYS",
 ]

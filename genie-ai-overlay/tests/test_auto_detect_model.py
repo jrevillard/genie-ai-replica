@@ -4,8 +4,11 @@
 #
 # Probe logic lives in core/model_cache.py. Each service (chatqna, retriever,
 # dataprep) calls get_model_id() to resolve the model served by a remote vLLM
-# node, gated on GPU_NODE_HOST.
+# node, gated on GPU_NODE_HOST; chatqna additionally discovers the served
+# context window (get_max_model_len) with probing always on — remote endpoint
+# when configured, compose-internal vLLM otherwise.
 
+import logging
 import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -14,7 +17,7 @@ import httpx
 import pytest
 
 from core import model_cache
-from core.model_cache import clear_cache, get_model_id
+from core.model_cache import clear_cache, get_max_model_len, get_model_id
 
 
 # ---------------------------------------------------------------------------
@@ -44,7 +47,7 @@ class TestModelCacheProbe:
         with patch("httpx.get", return_value=mock_resp) as mock_get:
             result = model_cache._probe("https://gpu-host/llm")
 
-        assert result == "ibm-granite/granite-3.3-2b-instruct"
+        assert result["id"] == "ibm-granite/granite-3.3-2b-instruct"
         mock_get.assert_called_once()
         call_kwargs = mock_get.call_args
         assert call_kwargs.kwargs["verify"] is False
@@ -61,7 +64,7 @@ class TestModelCacheProbe:
         with patch("httpx.get", return_value=mock_resp) as mock_get:
             result = model_cache._probe("https://gpu-host/llm")
 
-        assert result == "ibm-granite/granite-3.3-2b-instruct"
+        assert result["id"] == "ibm-granite/granite-3.3-2b-instruct"
         assert mock_get.call_args.kwargs["verify"] is True
 
     def test_returns_none_when_no_models_in_response(self):
@@ -140,7 +143,7 @@ class TestModelCacheProbe:
         with patch("httpx.get", return_value=mock_resp):
             result = model_cache._probe("https://gpu-host/llm")
 
-        assert result == "model-first"
+        assert result["id"] == "model-first"
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +211,211 @@ class TestModelCacheTtl:
 
 
 # ---------------------------------------------------------------------------
+# get_max_model_len — context-window discovery from the same /v1/models probe
+# ---------------------------------------------------------------------------
+class TestModelCacheMaxModelLen:
+    """Tests for core.model_cache.get_max_model_len.
+
+    The vLLM /v1/models payload carries max_model_len alongside the model id;
+    both must be parsed from the SAME probe and served from the SAME cache
+    entry (no second HTTP call).
+    """
+
+    def test_returns_max_model_len_on_success(self):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": 65536}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            result = get_max_model_len("https://gpu-host/llm")
+
+        assert result == 65536
+
+    def test_missing_field_returns_none(self):
+        """Strict OpenAI providers omit max_model_len (vLLM extension) → None."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a"}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            result = get_max_model_len("https://gpu-host/llm")
+
+        assert result is None
+
+    @pytest.mark.parametrize("access_order", [["id", "len"], ["len", "id"]])
+    def test_id_and_len_share_one_probe(self, access_order):
+        """get_model_id and get_max_model_len hit /v1/models once for both
+        values, in either access order."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": 8192}]}
+
+        accessors = {
+            "id": lambda: get_model_id("https://gpu-host/llm", ttl_seconds=60),
+            "len": lambda: get_max_model_len("https://gpu-host/llm", ttl_seconds=60),
+        }
+
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            first, second = accessors[access_order[0]](), accessors[access_order[1]]()
+
+        values = {"id": "model-a", "len": 8192}
+        assert first == values[access_order[0]]
+        assert second == values[access_order[1]]
+        assert mock_get.call_count == 1
+
+    def test_stale_max_model_len_served_on_probe_failure(self):
+        """After a successful probe, a failed re-probe serves the stale window."""
+        ok_resp = MagicMock()
+        ok_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": 65536}]}
+
+        with patch("httpx.get", return_value=ok_resp):
+            first = get_max_model_len("https://gpu-host/llm", ttl_seconds=0)
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
+            second = get_max_model_len("https://gpu-host/llm", ttl_seconds=0)
+
+        assert first == 65536
+        assert second == 65536
+
+    def test_first_probe_failure_returns_none(self):
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
+            result = get_max_model_len("https://gpu-host/llm")
+
+        assert result is None
+
+    def test_empty_endpoint_returns_none(self):
+        assert get_max_model_len("") is None
+
+    def test_negative_stub_does_not_suppress_model_id_retries(self):
+        """The window getter's failure stub must not let the model-id accessor
+        TTL-hit it: dataprep/retriever keep retrying on every call."""
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")) as mock_get:
+            assert get_max_model_len("https://gpu-host/llm") is None  # creates the stub
+            assert get_model_id("https://gpu-host/llm") is None  # must re-probe
+
+        assert mock_get.call_count == 2
+
+    def test_string_max_model_len_is_coerced_to_int(self):
+        """A proxy returning max_model_len as a JSON string must not poison the
+        cache with a value the callers cannot do arithmetic on."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": "65536"}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            result = get_max_model_len("https://gpu-host/llm")
+
+        assert result == 65536
+        assert isinstance(result, int)
+
+    def test_non_numeric_max_model_len_is_dropped(self):
+        """A value no arithmetic can use (garbage string, dict, float) → None +
+        the missing-field warning path, instead of a poisoned cache entry."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": {"tokens": 65536}}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            result = get_max_model_len("https://gpu-host/llm")
+
+        assert result is None
+
+    def test_non_positive_max_model_len_is_dropped(self):
+        """Zero or negative values (plausible 'unknown' sentinels like -1) are
+        unusable as windows: dropping them keeps every budget arithmetic sane."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": -1}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert get_max_model_len("https://gpu-host/llm") is None
+
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": 0}]}
+        clear_cache()
+        with patch("httpx.get", return_value=mock_resp):
+            assert get_max_model_len("https://gpu-host/llm") is None
+
+    def test_absurd_windows_are_dropped(self):
+        """An integral-but-absurd window (a 1e20 'unknown' from a broken proxy)
+        would silently disable the truncation guard: anything above a sane
+        ceiling drops to None."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": int(1e20)}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert get_max_model_len("https://gpu-host/llm") is None
+
+    def test_unparseable_digit_strings_are_dropped(self):
+        """Strings str.isdigit() accepts but int() rejects (superscripts etc.)
+        must fall back to None, not raise out of the accessor."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": "²"}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert get_max_model_len("https://gpu-host/llm") is None
+
+    @pytest.mark.parametrize("poison", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_floats_are_dropped(self, poison):
+        """json.loads accepts bare NaN/Infinity; int() raises on them and the
+        coercion runs outside _probe's broad except — they must drop to None."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": poison}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert get_max_model_len("https://gpu-host/llm") is None
+
+    def test_integral_float_is_accepted(self):
+        """A proxy serializing the window as a JSON float (65536.0) still
+        discovers the window — dropping it would resurface the history wipe."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": 65536.0}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert get_max_model_len("https://gpu-host/llm") == 65536
+
+    def test_entry_without_id_is_treated_as_failed_probe(self, caplog):
+        """A payload entry with no 'id' is an invalid probe: warn and follow the
+        failure path instead of caching None as a silent success."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"max_model_len": 4096}]}
+
+        with (
+            patch("httpx.get", return_value=mock_resp),
+            caplog.at_level(logging.WARNING, logger="core.model_cache"),
+        ):
+            assert get_max_model_len("https://gpu-host/llm") is None
+
+        assert any("no model id" in r.getMessage() for r in caplog.records)
+
+    def test_model_id_probe_failure_retries_on_every_call(self):
+        """The negative cache is a window-discovery concern: model-id consumers
+        (dataprep chunk labeling) keep retrying immediately on the next call."""
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")) as mock_get:
+            assert get_model_id("https://gpu-host/llm") is None
+            assert get_model_id("https://gpu-host/llm") is None
+
+        assert mock_get.call_count == 2
+
+    def test_failed_probe_is_negatively_cached_then_serves_stale(self):
+        """A failed probe is remembered briefly (one probe per negative TTL, not
+        one per request), and a previously known window keeps being served."""
+        ok_resp = MagicMock()
+        ok_resp.json.return_value = {"data": [{"id": "model-a", "max_model_len": 65536}]}
+
+        with patch("httpx.get", return_value=ok_resp):
+            assert get_max_model_len("https://gpu-host/llm", ttl_seconds=0) == 65536
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")) as mock_get:
+            # Within the negative-cache window (ttl 0 forces the expiry): no
+            # re-probe, stale value served.
+            assert get_max_model_len("https://gpu-host/llm", ttl_seconds=0) == 65536
+            assert get_max_model_len("https://gpu-host/llm", ttl_seconds=0) == 65536
+            assert mock_get.call_count == 1
+
+    def test_failed_probe_with_no_history_caches_none_briefly(self):
+        """Same negative cache when no window was ever known: one probe per
+        window instead of one per request."""
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")) as mock_get:
+            assert get_max_model_len("https://gpu-host/llm") is None
+            assert get_max_model_len("https://gpu-host/llm") is None
+            assert mock_get.call_count == 1
+
+
+# ---------------------------------------------------------------------------
 # chatqna getters — _get_llm_model / _get_translation_model_id
 # ---------------------------------------------------------------------------
 class TestChatqnaGetters:
@@ -267,6 +475,173 @@ class TestChatqnaGetters:
         monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "gemma-3-4b-it")
 
         assert mod._is_translategemma() is False
+
+
+# ---------------------------------------------------------------------------
+# chatqna context-window getters — _get_max_model_len / _get_max_translation_chars
+# ---------------------------------------------------------------------------
+class TestChatqnaContextWindowGetters:
+    """Fallback chain: runtime discovery → configured env value → nothing else.
+
+    Probing is always on (the remote GPU endpoint when configured, otherwise
+    the compose-internal vLLM); the configured constants apply only when the
+    probe fails or the field is missing. The constants are read at call time
+    so a deployer-set MAX_MODEL_LEN_TEXTGEN / MAX_TRANSLATION_CHARS wins over
+    the code default.
+    """
+
+    def test_get_max_model_len_uses_remote_endpoint_when_configured(self, monkeypatch):
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_LLM_DISCOVERY_ENDPOINT", "https://10.0.0.110/llm")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
+
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            assert mod._get_max_model_len() == 65536
+        assert mock_get.call_args.args[0] == "https://10.0.0.110/llm/v1/models"
+
+    def test_explicit_max_model_len_overrides_discovery(self, monkeypatch):
+        """A deployer-set MAX_MODEL_LEN_TEXTGEN caps the usable window even when
+        discovery answers — the deliberate consumer-side performance cap."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm")
+        monkeypatch.setenv("MAX_MODEL_LEN_TEXTGEN", "16384")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
+
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            assert mod._get_max_model_len() == 16384
+        mock_get.assert_not_called()
+
+    def test_explicit_max_model_len_garbage_is_ignored(self, monkeypatch):
+        """A non-numeric or non-positive override falls through to discovery."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm")
+        monkeypatch.setenv("MAX_MODEL_LEN_TEXTGEN", "not-a-number")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 8192}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert mod._get_max_model_len() == 8192
+
+    def test_get_max_model_len_probes_without_gpu_node_host(self, monkeypatch):
+        """Probing is always on: a compose deployment (LLM_SERVER_HOST_IP=vllm)
+        discovers the real window without any GPU_NODE_HOST configured."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
+        monkeypatch.setattr(mod, "_LLM_DISCOVERY_ENDPOINT", "http://vllm:8000")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
+
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            assert mod._get_max_model_len() == 65536
+        assert mock_get.call_args.args[0] == "http://vllm:8000/v1/models"
+
+    def test_get_max_translation_chars_probes_without_gpu_node_host(self, monkeypatch):
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
+        monkeypatch.setattr(mod, "_TRANSLATION_DISCOVERY_ENDPOINT", "http://vllm-translation-guardrail:9031")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 2048}]}
+
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            assert mod._get_max_translation_chars() == (2048 - 512) // 2 * 3
+        assert mock_get.call_args.args[0] == "http://vllm-translation-guardrail:9031/v1/models"
+
+    def test_get_max_model_len_falls_back_when_probe_fails(self, monkeypatch):
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "MAX_MODEL_LEN_TEXTGEN", 4096)
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
+            assert mod._get_max_model_len() == 4096
+
+    def test_get_max_model_len_probe_failure_falls_back_to_configured(self, monkeypatch):
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
+        monkeypatch.setattr(mod, "_VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
+        monkeypatch.setattr(mod, "MAX_MODEL_LEN_TEXTGEN", 4096)
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
+            assert mod._get_max_model_len() == 4096
+
+    def test_probe_failure_is_logged_as_warning(self, caplog):
+        """Probe failures must be visible: a silent fallback hides window drift."""
+        with (
+            caplog.at_level(logging.WARNING, logger="core.model_cache"),
+            patch("httpx.get", side_effect=httpx.ConnectError("down")),
+        ):
+            get_max_model_len("https://gpu-host/llm")
+
+        assert any("probe failed" in r.getMessage() for r in caplog.records)
+
+    def test_missing_field_is_logged_as_warning(self, caplog):
+        """Strict-OpenAI endpoints without max_model_len must warn (fallback follows)."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "model-a"}]}
+
+        with (
+            caplog.at_level(logging.WARNING, logger="core.model_cache"),
+            patch("httpx.get", return_value=mock_resp),
+        ):
+            get_max_model_len("https://gpu-host/llm")
+
+        assert any("max_model_len" in r.getMessage() for r in caplog.records)
+
+    def test_get_max_translation_chars_derived_from_discovered_window(self, monkeypatch):
+        """8192-token window → (8192-512)/2 × 3 = 11520 chars (completion reserve ≈ input size)."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_TRANSLATION_DISCOVERY_ENDPOINT", "https://10.0.0.110/translation")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 8192}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert mod._get_max_translation_chars() == 11520
+
+    def test_get_max_translation_chars_falls_back_when_probe_fails(self, monkeypatch):
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "MAX_TRANSLATION_CHARS", 2000)
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
+            assert mod._get_max_translation_chars() == 2000
+
+    def test_get_max_translation_chars_probe_failure_falls_back(self, monkeypatch):
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
+        monkeypatch.setattr(mod, "_VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
+        monkeypatch.setattr(mod, "MAX_TRANSLATION_CHARS", 2000)
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
+            assert mod._get_max_translation_chars() == 2000
+
+    def test_explicit_max_translation_chars_caps_discovered_budget(self, monkeypatch):
+        """A deployer-set MAX_TRANSLATION_CHARS caps the derived budget even when
+        discovery wins — the documented dense-script (CJK) mitigation."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation")
+        monkeypatch.setenv("MAX_TRANSLATION_CHARS", "500")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 8192}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert mod._get_max_translation_chars() == 500
 
 
 # ---------------------------------------------------------------------------

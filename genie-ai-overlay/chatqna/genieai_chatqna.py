@@ -16,11 +16,12 @@ from datetime import date, datetime
 from metrics import (
     chat_rag_duration_seconds,
     chat_requests_total,
+    history_truncation_total,
     sanitize_attributes,
 )
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
-from core.model_cache import get_model_id
+from core.model_cache import get_max_model_len, get_model_id
 from tracing import (
     get_tracer,
     install_uvicorn_access_logging,
@@ -151,12 +152,16 @@ TRANSLATION_MODEL_ID = os.getenv("VLLM_TRANSLATION_MODEL_ID", "")
 # bypassing the OPEA translation microservice which reformats payloads and breaks
 # TranslateGemma's structured chat template. Falls back to OPEA proxy if not set.
 _VLLM_TRANSLATION_ENDPOINT = os.getenv("VLLM_TRANSLATION_ENDPOINT", "")
-if _VLLM_TRANSLATION_ENDPOINT:
-    TRANSLATION_LLM_URL = f"{_VLLM_TRANSLATION_ENDPOINT}/v1/chat/completions"
-    TRANSLATION_COMPLETIONS_URL = f"{_VLLM_TRANSLATION_ENDPOINT}/v1/completions"
-else:
-    TRANSLATION_LLM_URL = f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions"
-    TRANSLATION_COMPLETIONS_URL = f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/completions"
+# Translation base URL — the single construction of the remote-vs-compose
+# rule: direct vLLM when VLLM_TRANSLATION_ENDPOINT is set (bypassing the OPEA
+# translation microservice, which reformats payloads and breaks TranslateGemma's
+# structured chat template), the compose-internal translation vLLM otherwise.
+# Every translation consumer derives from it, including window discovery.
+_TRANSLATION_DISCOVERY_ENDPOINT = _VLLM_TRANSLATION_ENDPOINT or (
+    f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}"
+)
+TRANSLATION_LLM_URL = f"{_TRANSLATION_DISCOVERY_ENDPOINT}/v1/chat/completions"
+TRANSLATION_COMPLETIONS_URL = f"{_TRANSLATION_DISCOVERY_ENDPOINT}/v1/completions"
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
 EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddings")
@@ -194,6 +199,12 @@ if _VLLM_LLM_ENDPOINT:
 else:
     LLM_SERVER_ENDPOINT_PREFIX = ""
 LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
+
+# Endpoint the context-window discovery probes: the remote GPU node when
+# configured, otherwise the compose-internal vLLM (LLM_SERVER_HOST_IP:PORT —
+# chatqna already talks to it for generation). Probing is always on; when the
+# endpoint is unreachable the getters fall back to the configured constants.
+_LLM_DISCOVERY_ENDPOINT = _VLLM_LLM_ENDPOINT or f"http://{LLM_SERVER_HOST_IP}:{LLM_SERVER_PORT}"
 
 # Auto-detect remote vLLM models with TTL caching (see core/model_cache.py).
 # GPU_NODE_HOST gates this: local GPU deployments keep their explicit config
@@ -236,6 +247,103 @@ def _is_translategemma() -> bool:
     return "translategemma" in _get_translation_model_id().lower()
 
 
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var tolerantly: unset OR set-to-empty (compose's
+    default injection for the semantic knobs) or non-numeric values all fall
+    back to the default instead of crash-looping the service at import."""
+    try:
+        return int(os.getenv(name) or default)
+    except ValueError:
+        return default
+
+
+# Window discovery shares the model-id cache entry, so the MODEL_DETECT_TTL
+# env var governs its refresh cadence too (under traffic the entry is
+# refreshed every 60 s by the model-id accessors regardless of the window).
+
+
+def _build_user_content(user_context_string: str, history_string: str, rag_augmented_prompt: str) -> str:
+    """The user-message template — the single source for prompt assembly, the
+    truncation-budget skeleton, and the post-truncation rebuild, so the
+    measured budget always matches what is finally sent."""
+    return (
+        f"\n\nUSER INFORMATION:\n{user_context_string}"
+        f"\n\nCHAT HISTORY:\n{history_string}"
+        f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}"
+    )
+
+
+def _translation_base_cap(text: str) -> int:
+    """Base completion cap for a translation request: roughly half the input
+    size, bounded to a floor that keeps short inputs translatable and a
+    ceiling that keeps long ones bounded. Shared by every translation path."""
+    return min(max(len(text) // 2, 512), 4096)
+
+
+def _get_max_model_len() -> int:
+    """Return the usable LLM context window in tokens, in three tiers.
+
+    1. A deployer-set MAX_MODEL_LEN_TEXTGEN (env read at call time) wins — a
+       deliberate consumer-side cap (e.g. keep the model off its full window
+       under load) without touching the GPU config. Use the vLLM
+       --max_model_len flag instead to cap what the model serves.
+    2. Otherwise the endpoint is probed (remote GPU node when VLLM_LLM_ENDPOINT
+       is set, otherwise the compose-internal vLLM) for ``max_model_len`` —
+       TTL-cached, sharing the probe with model-id detection.
+    3. The 65536 code default (project-standard Granite) only when the probe
+       has no answer (unreachable endpoint, missing field — logged by
+       core.model_cache).
+    """
+    explicit = _env_int("MAX_MODEL_LEN_TEXTGEN", 0)
+    if explicit > 0:
+        return explicit
+    detected = get_max_model_len(_LLM_DISCOVERY_ENDPOINT)
+    if detected:
+        return detected
+    return MAX_MODEL_LEN_TEXTGEN
+
+
+def _get_translation_window() -> int | None:
+    """Return the discovered translation-model window in tokens, or None.
+
+    None only until a probe has ever succeeded — model_cache serves the last
+    known (stale) window when a re-probe fails, and None when the endpoint is
+    unreachable from the start or does not expose the field.
+    """
+    return get_max_model_len(_TRANSLATION_DISCOVERY_ENDPOINT)
+
+
+def _get_max_translation_chars() -> int:
+    """Return the character budget for history forwarded to the translation model.
+
+    Derived from the discovered translation-model window so that the prompt
+    plus the completion (an input-sized translation) fit inside it; a
+    deployer-set MAX_TRANSLATION_CHARS caps that derivation (the dense-script
+    mitigation — CJK runs ~1 token/char, not 3), and the same configured value
+    is the fallback when the probe has no answer. Discovery gaps are logged by
+    core.model_cache.
+    """
+    window = _get_translation_window()
+    if not window:
+        return _env_int("MAX_TRANSLATION_CHARS", MAX_TRANSLATION_CHARS)
+    budget = (window - TRANSLATION_PROMPT_OVERHEAD_TOKENS) // 2 * TRANSLATION_CHARS_PER_TOKEN
+    explicit = _env_int("MAX_TRANSLATION_CHARS", 0)
+    if explicit > 0:
+        budget = min(budget, explicit)
+    return max(budget, 1)
+
+
+# Translation budget derivation from the discovered window. The completion
+# reserve assumes the translated output is roughly the size of the input (the
+# TranslateGemma payload also caps max_tokens near half the window).
+TRANSLATION_PROMPT_OVERHEAD_TOKENS = 512
+TRANSLATION_CHARS_PER_TOKEN = 3  # conservative: Spanish runs ~4-5 chars/token
+# Rough per-message overhead in the flattened history ("USER: " / "ASSISTANT: "
+# prefixes plus the " |<-MSG->| " separator) — the char budget counts content
+# only, so each kept message is charged this allowance.
+TRANSLATION_MSG_OVERHEAD_CHARS = 20
+
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk
@@ -256,9 +364,23 @@ RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.9))  # if RERANKI
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001")  # Document repository URL
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")  # Backend service URL
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
-MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max token length for text generation models
 
-MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
+# Fallback context window for the LLM, used when runtime discovery from the
+# vLLM /v1/models payload fails (endpoint unreachable, or it does not expose
+# max_model_len). Sized for the project-standard Granite model; deployments
+# serving smaller models behind a non-vLLM backend should set the env var.
+# See _get_max_model_len().
+MAX_MODEL_LEN_TEXTGEN = _env_int("MAX_MODEL_LEN_TEXTGEN", 65536)
+
+# Answer-token cap used when the request does not specify max_tokens. Kept
+# independent of the discovered context window: a big window must not invite
+# unbounded generations — it only widens the history budget.
+DEFAULT_MAX_ANSWER_TOKENS = 3896
+
+# Fallback character budget for history sent to translation, used when runtime
+# discovery of the translation model's window fails. See
+# _get_max_translation_chars().
+MAX_TRANSLATION_CHARS = _env_int("MAX_TRANSLATION_CHARS", 2000)
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
 
@@ -1096,31 +1218,33 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             else:
                 logger.error("[SYSTEM PROMPT DEBUG] CHATQNA_SYSTEM_PROMPT IS NONE OR EMPTY!")
 
-        prompt_add_context = (
-            f"\n\nUSER INFORMATION:\n{user_context_string}"
-            f"\n\nCHAT HISTORY:\n{translated_history_string}"
-            f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}"
-        )
-
         # FIX: Separate system and user content for proper chat template handling
-        user_content = prompt_add_context
+        user_content = _build_user_content(user_context_string, translated_history_string, rag_augmented_prompt)
 
         tokenizer = get_tokenizer()
-        max_model_tokens = MAX_MODEL_LEN_TEXTGEN
-        max_answer_tokens = llm_parameters_dict.get("max_tokens") or (MAX_MODEL_LEN_TEXTGEN - 200)
-        # Count tokens in full prompt (system + user combined for token limit check)
-        full_prompt_tokens = len(tokenizer.encode(system_instructions + user_content))
+        max_model_tokens = _get_max_model_len()
+        max_answer_tokens = llm_parameters_dict.get("max_tokens") or DEFAULT_MAX_ANSWER_TOKENS
+        # Count tokens part by part: the pieces feed the history budget below,
+        # so encoding them separately costs nothing extra on overflow requests.
+        # The 200-token buffer absorbs the ±1 boundary tokens the combined
+        # encode would merge.
+        system_tokens = len(tokenizer.encode(system_instructions))
+        user_content_tokens = len(tokenizer.encode(user_content))
+        full_prompt_tokens = system_tokens + user_content_tokens
         # Check if the total token count exceeds the model's limit
         if full_prompt_tokens + max_answer_tokens > max_model_tokens - 200:  # Leave buffer
-            # Calculate maximum tokens for history
-            prompt_add_context_tokens = len(tokenizer.encode(prompt_add_context))
-            translated_history_tokens = len(tokenizer.encode(translated_history_string))
+            # Budget for the history: the window minus what is already known to
+            # be there — the system prompt, the non-history part of the user
+            # content, the answer reserve, and a safety buffer. The skeleton is
+            # measured on the rebuilt (truncated) prompt template so it matches
+            # what is finally sent. Segment separators (" |<-MSG->| ") are not
+            # counted individually (~1-2 tokens per segment, absorbed by the
+            # buffer).
+            skeleton_tokens = len(tokenizer.encode(_build_user_content(user_context_string, "", rag_augmented_prompt)))
 
-            max_history_tokens = (
-                max_model_tokens + translated_history_tokens - max_answer_tokens - prompt_add_context_tokens - 200
-            )
-            # Split the history into segments
-            history_segments = translated_history_string.split(" |<-MSG->| ")
+            max_history_tokens = max_model_tokens - system_tokens - max_answer_tokens - skeleton_tokens - 200
+            # Split the history into segments (empty history = nothing to drop)
+            history_segments = translated_history_string.split(" |<-MSG->| ") if translated_history_string else []
             truncated_history = []
             current_tokens = 0
             # Start from most recent messages
@@ -1130,14 +1254,27 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                     break
                 truncated_history.insert(0, segment)  # Maintain order
                 current_tokens += segment_tokens
+            dropped_segments = len(history_segments) - len(truncated_history)
+            if dropped_segments:
+                # kept/dropped counts live in the warning log — metric attributes
+                # stay low-cardinality (one series per path).
+                history_truncation_total.add(1, {"path": "generation"})
+                logger.warning(
+                    "Chat history truncated to fit the LLM context window: "
+                    "window_tokens=%s prompt_tokens=%s answer_budget_tokens=%s "
+                    "kept_segments=%s dropped_segments=%s",
+                    max_model_tokens,
+                    full_prompt_tokens,
+                    max_answer_tokens,
+                    len(truncated_history),
+                    dropped_segments,
+                )
             # Rebuild truncated history
             translated_history_string = " |<-MSG->| ".join(truncated_history)
-            # Reconstruct user content (system instructions stay the same)
-            user_content = (
-                f"\n\nUSER INFORMATION:\n{user_context_string}"
-                f"\n\nCHAT HISTORY:\n{translated_history_string}"
-                f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}"
-            )
+            # Reconstruct user content (system instructions stay the same) — the
+            # same single template, so the model sees one consistent prompt
+            # shape whether or not truncation ran.
+            user_content = _build_user_content(user_context_string, translated_history_string, rag_augmented_prompt)
 
         # FIX: Send system and user as separate messages for proper chat template handling
         next_inputs["messages"] = [
@@ -2100,6 +2237,27 @@ class ChatQnAService:
             f"<end_of_turn>\n<start_of_turn>model\n"
         )
 
+    def _translation_output_cap(self, flattened_history_string: str) -> int | None:
+        """Completion cap for the TranslateGemma payload.
+
+        Base ceiling is len//2 (bounded 512..4096). When the translation window
+        is discovered, the cap is clamped so the prompt estimate (chars /
+        chars-per-token ratio) plus the completion stays inside the window —
+        otherwise vLLM rejects the whole request and the history goes back
+        untranslated. Returns None when the clamped cap drops below the
+        estimated input size (the completion would be shorter than what there
+        is to translate); the caller should skip the translation and send the
+        history as-is.
+        """
+        cap = _translation_base_cap(flattened_history_string)
+        window = _get_translation_window()
+        if window:
+            prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
+            cap = min(cap, max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate))
+            if cap < prompt_token_estimate:
+                return None
+        return cap
+
     async def _get_translated_history_string(
         self, history: list, target_language: str, source_lang_code: str = "en"
     ) -> str:
@@ -2124,7 +2282,7 @@ class ChatQnAService:
                 history, target_language, source_lang_code=source_lang_code, iso_code="en"
             )
 
-        max_translation_chars = MAX_TRANSLATION_CHARS
+        max_translation_chars = _get_max_translation_chars()
         current_chars = 0
         messages_to_process = []
         if logflag:
@@ -2134,11 +2292,25 @@ class ChatQnAService:
             if logflag:
                 logger.debug(f"Examining message: {message}")
             message_chars = len(message["content"])
-            if current_chars + message_chars > max_translation_chars:
+            if current_chars + message_chars + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
                 break
             messages_to_process.append(message)
-            current_chars += message_chars
+            current_chars += message_chars + TRANSLATION_MSG_OVERHEAD_CHARS
         messages_to_process.reverse()
+        dropped_messages = len(history) - len(messages_to_process)
+        if dropped_messages:
+            history_truncation_total.add(1, {"path": "translation"})
+            logger.warning(
+                "Chat history truncated for translation: budget_chars=%s kept_messages=%s dropped_messages=%s",
+                max_translation_chars,
+                len(messages_to_process),
+                dropped_messages,
+            )
+        if not messages_to_process:
+            # Even the newest message exceeds the whole budget: nothing to
+            # translate — sending an empty prompt would only harvest the
+            # model's junk reply as chat history.
+            return ""
 
         flattened_history_parts = []
         for message in messages_to_process:
@@ -2159,11 +2331,17 @@ class ChatQnAService:
                 source_lang_name=source_lang_code.upper(),
                 target_lang_name="English",
             )
+            output_cap = self._translation_output_cap(flattened_history_string)
+            if output_cap is None:
+                logger.warning(
+                    "Translation window too tight to translate the history meaningfully; returning it untranslated"
+                )
+                return flattened_history_string
             payload = {
                 "model": _get_translation_model_id(),
                 "prompt": prompt,
                 "temperature": 0.0,
-                "max_tokens": min(max(len(flattened_history_string) // 2, 512), 4096),
+                "max_tokens": output_cap,
                 "repetition_penalty": 1.2,
             }
             url = TRANSLATION_COMPLETIONS_URL
@@ -2271,7 +2449,7 @@ class ChatQnAService:
                 "model": _get_translation_model_id(),
                 "prompt": prompt,
                 "temperature": 0.0,
-                "max_tokens": min(max(len(text) // 2, 512), 4096),
+                "max_tokens": _translation_base_cap(text),
                 "repetition_penalty": 1.2,
             }
             url = TRANSLATION_COMPLETIONS_URL

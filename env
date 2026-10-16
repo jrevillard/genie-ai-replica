@@ -374,6 +374,33 @@ HUGGING_FACE_HUB_TOKEN=
 # MULTI_TURN_BLEND_ALPHA=0.7         # query weight α; 1.0 = query-only, 0.0 = history-only
 # MULTI_TURN_HISTORY_TURNS=1         # number of prior turns blended (1 = previous turn only)
 
+# Chat context-window: three tiers. A SET MAX_MODEL_LEN_TEXTGEN caps what
+# chatqna uses even when discovery answers — a deliberate consumer-side cap
+# (e.g. keep the model off its full window under load); to cap what the model
+# SERVES use vLLM's --max_model_len instead. Unset, chatqna probes /v1/models
+# (remote GPU node when configured, otherwise the compose-internal vLLM) and
+# discovery WINS. The 65536 default only applies when the probe fails.
+# Symptom that the fallback is too small for the served model: an empty
+# CHAT HISTORY on large prompts.
+# Used by: chatqna (genieai_chatqna.py)
+# Default: 65536 (the project-standard Granite window; set lower only behind
+# a non-vLLM backend serving a smaller model)
+# MAX_MODEL_LEN_TEXTGEN=65536
+
+# Fallback character budget for chat history sent to the translation model.
+# Derived from the translation model's window whenever the probe answers
+# (the compose translation vLLM defaults to a 2048-token window → ~2300 chars
+# discovered); a SET value caps that derivation even when discovery wins —
+# dense scripts like CJK produce more tokens per char than the Latin-script
+# estimate, so lower this knob for such deployments. The fallback applies
+# where the probe fails.
+# Used by: chatqna (genieai_chatqna.py)
+# Default: 2000
+# MAX_TRANSLATION_CHARS=2000
+
+# Window-discovery refresh shares the MODEL_DETECT_TTL knob (same cache entry
+# as model-id detection — under traffic the entry refreshes every 60 s).
+
 # Application session lifetime for automatic purging (MILLISECONDS, NOT seconds or minutes).
 # Controls how long an inactive analytics session is kept before automatic cleanup.
 # Used by: backend (session-service.js)

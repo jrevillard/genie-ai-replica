@@ -67,6 +67,7 @@ from comps import (
 )
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDocRepo
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from genieai_dataprep_loader import GenieDataprepLoader

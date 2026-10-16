@@ -1,0 +1,107 @@
+---
+# Populates the host directories that docker-compose bind-mounts for runtime
+# theme assets. A bind mount never falls back to the image contents: an empty
+# or missing host directory shadows everything under the mount point, so the
+# assets must actually be copied onto every node that runs the stack.
+#
+# Defaults are fetched from GitLab at repo_branch rather than from playbook_dir.
+# The playbook never clones the repo onto the node, and the documented workflow
+# runs it from a local checkout that may sit on a different branch than the one
+# being deployed — seeding from the local checkout would write the wrong theme
+# assets, and --ignore-existing would then lock that mistake in.
+
+- name: Ensure rsync is available on the target
+  ansible.builtin.package:
+    name: rsync
+    state: present
+
+- name: Ensure runtime config directories exist
+  ansible.builtin.file:
+    path: "{{ config_dir }}/{{ item.dest_subdir }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ config_bootstrap_pairs }}"
+  loop_control:
+    label: "{{ item.dest_subdir }}"
+
+# Same endpoint shape the Grafana provisioning download uses in deploy.yml:
+# a whole-directory archive at the pinned branch, with --strip-components=1
+# to drop the archive's top-level <branch>-<sha>-<short>/ prefix. The archive
+# preserves the full repo-relative path, so item.src is still present as a
+# subdirectory of the extraction root.
+- name: Download theme config archive at {{ repo_branch }}
+  ansible.builtin.get_url:
+    url: "{{ repo_url | regex_replace('\\.git$', '') }}/-/archive/{{ repo_branch }}/genieai-config.tar.gz?path={{ item.src }}"
+    dest: "{{ config_bootstrap_tmp_root }}-{{ repo_branch | replace('/', '-') }}-{{ item.dest_subdir | replace('/', '-') }}.tar.gz"
+    force: true
+    mode: '0644'
+  loop: "{{ config_bootstrap_pairs }}"
+  loop_control:
+    label: "{{ item.src }}"
+  when: config_bootstrap_sync_enabled | bool
+
+- name: Extract theme config archive at {{ repo_branch }}
+  ansible.builtin.unarchive:
+    src: "{{ config_bootstrap_tmp_root }}-{{ repo_branch | replace('/', '-') }}-{{ item.dest_subdir | replace('/', '-') }}.tar.gz"
+    dest: "{{ config_bootstrap_tmp_root }}/{{ item.dest_subdir | replace('/', '-') }}"
+    remote_src: true
+    extra_opts:
+      - "--strip-components=1"
+  loop: "{{ config_bootstrap_pairs }}"
+  loop_control:
+    label: "{{ item.src }}"
+  when: config_bootstrap_sync_enabled | bool
+
+# Guard: a wrong branch, a truncated download or a changed archive layout must
+# fail the deploy here, before anything is synced into the mount source. Checking
+# one well-known entrypoint asset per pair catches both an empty extraction and a
+# silently reshaped tree.
+- name: Stat the expected asset in each extracted archive
+  ansible.builtin.stat:
+    path: "{{ config_bootstrap_tmp_root }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/{{ item.expect }}"
+  loop: "{{ config_bootstrap_pairs }}"
+  loop_control:
+    label: "{{ item.expect }}"
+  register: config_bootstrap_extract_check
+  when: config_bootstrap_sync_enabled | bool
+
+- name: Fail when an extracted archive is missing its expected asset
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: >-
+      config_bootstrap: the archive for {{ item.item.dest_subdir }} does not contain
+      {{ item.item.src }}/{{ item.item.expect }}. Check that repo_branch
+      ({{ repo_branch }}) really ships those assets before deploying.
+    success_msg: "config_bootstrap: {{ item.item.expect }} found for {{ item.item.dest_subdir }}"
+  loop: "{{ config_bootstrap_extract_check.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.expect | default('unknown') }}"
+  when:
+    - config_bootstrap_sync_enabled | bool
+    - not ansible_check_mode | default(false) | bool
+
+# delete: false + --ignore-existing keeps manual operator edits intact between
+# deploys. Without --ignore-existing, every deploy would silently overwrite them.
+# The trailing slash on src is load-bearing: without it rsync copies the source
+# directory *by name*, adding an extra level under dest.
+- name: Rsync branch defaults to host runtime config dir (preserve manual edits)
+  ansible.posix.synchronize:
+    src: "{{ config_bootstrap_tmp_root }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
+    dest: "{{ config_dir }}/{{ item.dest_subdir }}"
+    delete: false
+    rsync_opts:
+      - "--ignore-existing"
+  loop: "{{ config_bootstrap_pairs }}"
+  loop_control:
+    label: "{{ item.dest_subdir }}"
+  when: config_bootstrap_sync_enabled | bool
+
+- name: Remove downloaded archives and extraction scratch directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ config_bootstrap_tmp_root }}"
+    - "{{ config_bootstrap_tmp_root }}-{{ repo_branch | replace('/', '-') }}-frontend.tar.gz"
+    - "{{ config_bootstrap_tmp_root }}-{{ repo_branch | replace('/', '-') }}-keycloak-themes-genie.tar.gz"

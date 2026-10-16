@@ -36,29 +36,29 @@ const { withSpan } = require('../shared-lib/tracing');
  */
 async function resolveGraphSet(caller) {
   return withSpan('okf.authz.resolve_graph_set', async (span) => {
-    const { isSuperAdmin, authorizedRepoIds, scopeMode, unrestricted } = deriveReadAuthz(
-      caller.okfScopes,
-      caller.isSuperAdmin
-    );
+    const { isSuperAdmin, authorizedRepoIds, scopeMode } = deriveReadAuthz(caller.okfScopes, caller.isSuperAdmin);
     const serving = await servingRepos();
-    // The intersection IS the zero-hit guarantee: only serving rows whose
-    // repo_id the caller is authorized for survive — unauthorized (or
-    // draft/retracted) repos never enter the response at all. The
-    // DEFAULT-OPEN unrestricted verdict comes from the SINGLE scope
-    // authority (deriveReadAuthz — open mode + RAW-claim-list test,
-    // malformed-only tokens stay closed-list), so this view, the
-    // retrieval-config serving view and the scope gate can never drift
-    // apart. The WRITE side never sees that rule — repository-controller
-    // callerAuthz keeps the closed list.
-    // STORY 6-1c: the per-repo restriction gate. `privileged` is the DERIVED
-    // flag (role/wildcard — authorizedRepoIds === null), NEVER the open-mode
-    // unrestricted verdict: a default-open scopeless caller is fenced out of
-    // restricted repos until granted (access-control-service docstring).
-    const allowed = filterServingByAcl(
-      unrestricted ? serving : serving.filter((r) => authorizedRepoIds.has(r.repo_id)),
-      caller.okfScopes,
-      authorizedRepoIds === null
-    );
+    // BASE SET (David's rule, 2026-10-16: "the user's ACL list determines what
+    // they have access to ON TOP of the repos that are open for public
+    // access"):
+    //   - OPEN mode: the base is ALL serving repos (the public set). Grants
+    //     are ADDITIVE — a granted user never loses the public repos; the
+    //     per-repo restriction gate below is what decides the restricted
+    //     ones. (The first cut applied the Story-6.1 exact-list rule in open
+    //     mode too, which made a single grant strip a user of every open
+    //     repo — caught in review against the product model.)
+    //   - CLOSED mode: the historical exact list (scopes = the whole
+    //     universe a caller may reach). Privileged callers (role/wildcard —
+    //     authorizedRepoIds === null) get everything in both modes.
+    // STORY 6-1c then applies the per-repo restriction gate IDENTICALLY in
+    // both modes: a RESTRICTED repo needs privilege or a grant regardless.
+    // This view, the retrieval-config serving view and the scope gate share
+    // the single scope authority, so they can never drift apart. The WRITE
+    // side never sees these rules — repository-controller callerAuthz keeps
+    // the closed list.
+    const privileged = authorizedRepoIds === null;
+    const base = scopeMode === 'open' || privileged ? serving : serving.filter((r) => authorizedRepoIds.has(r.repo_id));
+    const allowed = filterServingByAcl(base, caller.okfScopes, privileged);
     const graph_names = allowed.map((r) => r.graph_name);
     const per_graph_labels = {};
     const domains = {};
@@ -71,13 +71,13 @@ async function resolveGraphSet(caller) {
     }
     span.setAttribute('okf.authz.superadmin', isSuperAdmin);
     span.setAttribute('okf.authz.scope_mode', scopeMode);
-    span.setAttribute('okf.authz.unrestricted', unrestricted);
+    span.setAttribute('okf.authz.privileged', authorizedRepoIds === null);
     span.setAttribute('okf.authz.serving_count', serving.length);
     span.setAttribute('okf.authz.authorized_graphs', graph_names.length);
     logger.info('Graph set resolved', {
       superadmin: isSuperAdmin,
       scope_mode: scopeMode,
-      unrestricted,
+      privileged: authorizedRepoIds === null,
       serving: serving.length,
       authorized: graph_names.length
     });

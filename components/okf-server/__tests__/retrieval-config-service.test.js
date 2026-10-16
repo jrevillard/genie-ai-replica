@@ -151,19 +151,24 @@ describe('retrieval-config-service (Story 1.7, ADR-okf-039)', () => {
       expect(out.serving_graphs[0]).toMatchObject({ repo_id: 'r-kenya', graph_name: 'OKF_kenya-gov_v3' });
     });
 
-    test('SERVING VIEW IS PER-CALLER (code-review fix): scoped caller sees only their intersection', async () => {
-      mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: 'hybrid' });
-      seedServing([repoRow(), repoRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
-      // config posture stays global; a caller scoped to r-health sees only
-      // r-health. A scopeless caller sees EVERYTHING (default-open, below) —
-      // this test pins the scoped-restriction half.
-      const scoped = await svc.getRetrievalConfig({ okfScopes: ['okf:itu:r-health:read'], isSuperAdmin: false });
-      expect(scoped.config.mode).toBe('hybrid'); // global posture
-      expect(scoped.serving_repo_ids).toEqual(['r-health']); // per-caller view
+    test('CLOSED mode: serving view is per-caller — scoped caller sees only their intersection', async () => {
+      // The exact list is CLOSED-mode semantics; in open mode grants sit ON
+      // TOP of the public set (David 2026-10-16) and never remove access.
+      process.env.OKF_SCOPE_MODE = 'closed';
+      try {
+        mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: 'hybrid' });
+        seedServing([repoRow(), repoRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
+        const scoped = await svc.getRetrievalConfig({ okfScopes: ['okf:itu:r-health:read'], isSuperAdmin: false });
+        expect(scoped.config.mode).toBe('hybrid'); // global posture
+        expect(scoped.serving_repo_ids).toEqual(['r-health']); // per-caller exact list
+      } finally {
+        delete process.env.OKF_SCOPE_MODE;
+      }
     });
 
-    // DEFAULT-OPEN (product decision 2026-10-16, read side only): scopes
-    // RESTRICT, their absence no longer disables. Mirrors the resolveGraphSet
+    // DEFAULT-OPEN (product decision 2026-10-16, read side only): the public
+    // repos are the base for EVERY caller in open mode; grants (and the
+    // per-repo restriction gate) decide the rest. Mirrors the resolveGraphSet
     // contract exactly — the carrier and the engaged gate must never disagree.
     describe('DEFAULT-OPEN serving view (OKF_SCOPE_MODE)', () => {
       afterEach(() => {
@@ -179,29 +184,28 @@ describe('retrieval-config-service (Story 1.7, ADR-okf-039)', () => {
         expect(out.engaged).toBe(true);
       });
 
-      test('open: a caller holding ANY effective scope keeps exact-list semantics', async () => {
+      test('open: a non-granting scope changes NOTHING — the public set stays (grants never remove access)', async () => {
         mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: 'hybrid' });
         seedServing([repoRow(), repoRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
         const out = await svc.getRetrievalConfig({ okfScopes: ['okf:itu:r-other:read'], isSuperAdmin: false });
-        expect(out.serving_graph_count).toBe(0); // scopes restrict — open ≠ open-everything
-        expect(out.engaged).toBe(false);
+        expect(out.serving_graph_count).toBe(2); // the public set, intact
+        expect(out.engaged).toBe(true);
       });
 
-      test('open: a MALFORMED-only okf_scopes claim stays closed-list (the mirror of the resolver rule)', async () => {
-        // The raw-claim-list test: the token carries okf entries, so the
-        // operator intended a restriction — no silent fall-open. Pins the
-        // getRetrievalConfig half of the "must mirror resolveGraphSet"
-        // contract (2026-10-16 review: this branch was only tested at the
-        // resolver and gate level, so the mirror could drift unnoticed).
+      test('open: a MALFORMED-only claim keeps the PUBLIC repos but reaches no restricted one (the mirror of the resolver rule)', async () => {
+        // The raw-claim-list rule gates RESTRICTED repos only; public access
+        // is never revoked. Pins the getRetrievalConfig half of the "must
+        // mirror resolveGraphSet" contract (2026-10-16 review: this branch
+        // was only tested at the resolver and gate level, so the mirror
+        // could drift unnoticed).
         mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: 'hybrid' });
-        seedServing([repoRow(), repoRow({ repo_id: 'r-health', name: 'Health Services', version: 1 })]);
+        seedServing([repoRow({ acl: { restricted: true } }), repoRow({ repo_id: 'r-open', name: 'Open', version: 1 })]);
         const out = await svc.getRetrievalConfig({
           okfScopes: ['okf:only-three', 'okf:t1:r-kenya:write'],
           isSuperAdmin: false
         });
         expect(out.scope_mode).toBe('open');
-        expect(out.serving_graph_count).toBe(0);
-        expect(out.engaged).toBe(false);
+        expect(out.serving_repo_ids).toEqual(['r-open']); // restricted gated, public intact
       });
 
       test('closed restores the historical default-deny (nothing granted = nothing authorized)', async () => {

@@ -46,8 +46,8 @@ Three facts define the model:
 |---|---|
 | `tools-admin` super-role | Every serving repository |
 | A wildcard scope (`okf:*:*:read` or `admin`) | Every serving repository |
-| One or more exact scopes (`okf:itu:repo-a:read`) | Exactly the scoped repositories — in both modes |
-| No `okf:*` scopes (the default for every regular user) | **Every serving repository** (`OKF_SCOPE_MODE=open`, the default) — or none (`closed`) |
+| No `okf:*` scopes (the default for every regular user) | Every serving **unrestricted** repository (open mode) — or nothing (closed mode) |
+| Holding grants (one or more exact scopes) | **Open mode:** every unrestricted repository *plus* the restricted repositories they are granted — grants add on top of public access, they never remove it. **Closed mode:** exactly the scoped list. |
 
 Two properties hold in every mode:
 
@@ -101,11 +101,15 @@ standard `scope` claim).
   invalid, not as absent. An explicit typo (e.g. `OKF_SCOPE_MODE=opn`)
   degrades to `closed` with a warning in the okf-server log — a misconfigured
   attempt to pin a deployment must not silently fail open.
-- **Any granted scope still restricts its holder in both modes.** Open mode is
-  not "ignore scopes"; it is "absence of scopes is not a denial". A token
-  carrying okf scope entries that are all malformed (e.g. wrong level or
-  segment count) counts as *scoped* and keeps the closed list — the
-  restriction was intended, and closed is its visible symptom.
+- **Grants add; they never remove.** In open mode the *unrestricted*
+  repositories are the public base for every caller, and scopes only decide
+  the **restricted** ones — a granted user keeps every public repository and
+  gains their grants on top. (Exact-list semantics — scopes are your whole
+  universe — apply in closed mode only.) A token carrying okf scope entries
+  that are all **malformed** (e.g. wrong level or segment count) reaches no
+  restricted repository — the restriction was intended, and its absence from
+  the restricted set is the visible symptom — but malformed entries never
+  revoke public access either.
 
 ## What a scopeless caller can and cannot reach
 
@@ -205,14 +209,15 @@ Setting a user's `okf_scopes` attribute by hand in the Keycloak admin console
 also works and lands in their next token — the panel is the convenient,
 audited path, not the only one.
 
-**Operational interplay with the mode flag** — grants RESTRICT in every mode,
-and restriction fences repos off in every mode. A deployment can therefore:
+**Operational interplay with the mode flag** — restriction fences repos off
+in every mode; what the mode changes is the base set:
 
 - stay `open` and use per-repo restriction + grants only for the repositories
-  that need fencing (the default posture), or
-- flip `OKF_SCOPE_MODE=closed` for restrict-by-default once grants exist, and
-  grant access per user per repo — every regular user then reaches exactly
-  the granted set.
+  that need fencing: everyone keeps the public repositories, granted users
+  additionally reach the fenced ones (the default posture), or
+- flip `OKF_SCOPE_MODE=closed` for restrict-by-default once grants exist:
+  scopes then define a caller's entire reachable set (the exact list), and
+  every regular user reaches exactly what they are granted.
 
 No pipeline change is involved in any of this: okf-server consumes the claim
 the mapper mints.

@@ -38,7 +38,7 @@ async function loadConfig() {
 
   const root = document.documentElement;
   const theme = config.theme || {};
-  root.style.setProperty('--brand', theme.brandColor || '#4071cb');
+  root.style.setProperty('--brand', theme.brandColor || defaults.theme.brandColor);
 
   if (theme.bg) {
     root.style.setProperty('--config-bg', theme.bg);

@@ -341,7 +341,7 @@ OPEA provides microservices for:
 
 ### Keycloak
 **Component Type:** Identity and Access Management
-**Version:** latest (Docker image: quay.io/keycloak/keycloak:latest)
+**Version:** 26.7.0 (Docker image: quay.io/keycloak/keycloak:26.7.0)
 **Repository:** https://www.keycloak.org/
 **License:** Apache 2.0
 **License URL:** https://github.com/keycloak/keycloak/blob/main/LICENSE

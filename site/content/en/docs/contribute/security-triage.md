@@ -87,7 +87,7 @@ Never conflate the two.
 ## Monthly loop
 
 - **Pipeline schedule** (cron `0 4 1 * *` Europe/Paris) sets
-  `FORCE_IMAGE_REBUILD=true`: rebuilds all 16 images, rescans, promotes,
+  `FORCE_IMAGE_REBUILD=true`: rebuilds all 15 images, rescans, promotes,
   then the E2E suite validates the fresh images.
 - **Manual trigger**:
   ```bash

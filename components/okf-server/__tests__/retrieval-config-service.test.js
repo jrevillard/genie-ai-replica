@@ -218,8 +218,11 @@ describe('retrieval-config-service (Story 1.7, ADR-okf-039)', () => {
         // DEFAULT-OPEN exposure control: the GET is reachable by scopeless
         // callers; Keycloak identity metadata is superadmin-only.
         mockDb.collection('okf_system_config').save({
-          _key: 'retrieval', mode: 'hybrid', revision: 3,
-          updated_at: '2026-10-16T00:00:00Z', updated_by: 'steward-9'
+          _key: 'retrieval',
+          mode: 'hybrid',
+          revision: 3,
+          updated_at: '2026-10-16T00:00:00Z',
+          updated_by: 'steward-9'
         });
         seedServing([repoRow()]);
         const plain = await svc.getRetrievalConfig({ okfScopes: [], isSuperAdmin: false });
@@ -236,8 +239,11 @@ describe('retrieval-config-service (Story 1.7, ADR-okf-039)', () => {
         // identity. This cell pins that distinction so the two notions of
         // "superadmin" cannot be silently conflated later.
         mockDb.collection('okf_system_config').save({
-          _key: 'retrieval', mode: 'hybrid', revision: 3,
-          updated_at: '2026-10-16T00:00:00Z', updated_by: 'steward-9'
+          _key: 'retrieval',
+          mode: 'hybrid',
+          revision: 3,
+          updated_at: '2026-10-16T00:00:00Z',
+          updated_by: 'steward-9'
         });
         seedServing([repoRow()]);
         const wildcard = await svc.getRetrievalConfig({ okfScopes: ['okf:*:*:read'], isSuperAdmin: false });

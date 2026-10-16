@@ -134,13 +134,17 @@ async function processRepo(repo, _opts) {
       const v = suggested[field];
       if (v) approved.push({ field, value: v, approved_at: now, approved_by: 'republish-with-tags-script' });
     }
-    const summary = await frontmatterService.writeFrontmatterToRepoDoc(rid, {
-      ...suggested,
-      _approved: approved
-    }, {
-      actor: { user_id: 'republish-with-tags-script', source: 'script' },
-      version: repo.version || Date.now()
-    });
+    const summary = await frontmatterService.writeFrontmatterToRepoDoc(
+      rid,
+      {
+        ...suggested,
+        _approved: approved
+      },
+      {
+        actor: { user_id: 'republish-with-tags-script', source: 'script' },
+        version: repo.version || Date.now()
+      }
+    );
     record(
       rid,
       'PASS',

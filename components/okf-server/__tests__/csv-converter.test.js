@@ -545,7 +545,14 @@ describe('mdEscape — a cell can never shift its column count', () => {
   test('the xlsx path shares the helper and is equally protected', async () => {
     const raw = `C:${BS}path${BS}|match`;
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['a', 'b', 'c'], [raw, 2, 3]]), 'Sheet1');
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([
+        ['a', 'b', 'c'],
+        [raw, 2, 3]
+      ]),
+      'Sheet1'
+    );
     const { concepts } = await convertXlsx(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }), {
       file_id: 'f',
       file_name: 'e.xlsx',

@@ -141,7 +141,11 @@ router.post(
   requireRepoScope('repo_id', 'admin'),
   ctrl.explainTestSuiteFailures
 );
-router.get('/:repo_id/routing-testsuite/:suite_key/explain/:run_key', requireRepoScope('repo_id', 'read'), ctrl.getExplainFailures);
+router.get(
+  '/:repo_id/routing-testsuite/:suite_key/explain/:run_key',
+  requireRepoScope('repo_id', 'read'),
+  ctrl.getExplainFailures
+);
 // Story 1-8d — the COMPREHENSIVE advisor: aggregates recent runs (all
 // classes), simulates tag-set changes against the gate, recommends the
 // globally-optimal add/remove set under a zero-positive-harm constraint.
@@ -294,10 +298,6 @@ router.post('/:repo_id/autocorrect', requireRepoScope('repo_id', 'admin'), ctrl.
 // drain is in flight. Registered AFTER the concepts/:concept_id family so the
 // literal segment is never swallowed by a parametrised sibling.
 router.post('/:repo_id/reingest-failed', requireRepoScope('repo_id', 'admin'), ctrl.reingestFailed);
-router.post(
-  '/:repo_id/concepts/:concept_id/reingest',
-  requireRepoScope('repo_id', 'admin'),
-  ctrl.reingestFailed
-);
+router.post('/:repo_id/concepts/:concept_id/reingest', requireRepoScope('repo_id', 'admin'), ctrl.reingestFailed);
 
 module.exports = router;

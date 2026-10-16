@@ -1775,21 +1775,21 @@ describe('POST /api/okf/repos/:repo_id/reingest-failed', () => {
   test('200 admin scope → returns the requeued count and ids', async () => {
     authScoped(['okf:t1:repoA:admin']);
     repoService.getById.mockResolvedValue(INGESTED);
-    const res = await request(createApp())
-      .post('/api/okf/repos/repoA/reingest-failed')
-      .set('Authorization', TOKEN);
+    const res = await request(createApp()).post('/api/okf/repos/repoA/reingest-failed').set('Authorization', TOKEN);
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true, repo_id: 'repoA', requeued: 2, concept_ids: ['c1', 'c2'] });
-    expect(reingestSpy).toHaveBeenCalledWith('repoA', { conceptId: null }, expect.objectContaining({ sub: 'steward-1' }));
+    expect(reingestSpy).toHaveBeenCalledWith(
+      'repoA',
+      { conceptId: null },
+      expect.objectContaining({ sub: 'steward-1' })
+    );
   });
 
   test('200 — zero requeued is a success, not an error', async () => {
     authScoped(['okf:t1:repoA:admin']);
     repoService.getById.mockResolvedValue(INGESTED);
     reingestSpy.mockResolvedValue({ ok: true, requeued: 0, conceptIds: [] });
-    const res = await request(createApp())
-      .post('/api/okf/repos/repoA/reingest-failed')
-      .set('Authorization', TOKEN);
+    const res = await request(createApp()).post('/api/okf/repos/repoA/reingest-failed').set('Authorization', TOKEN);
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true, requeued: 0 });
   });
@@ -1799,9 +1799,7 @@ describe('POST /api/okf/repos/:repo_id/reingest-failed', () => {
     repoService.getById.mockResolvedValue({ ...INGESTED, ingested_at: null });
     // Let the REAL guard run so the contract itself is under test.
     assertSpy.mockRestore();
-    const res = await request(createApp())
-      .post('/api/okf/repos/repoA/reingest-failed')
-      .set('Authorization', TOKEN);
+    const res = await request(createApp()).post('/api/okf/repos/repoA/reingest-failed').set('Authorization', TOKEN);
     expect(res.status).toBe(409);
     expect(reingestSpy).not.toHaveBeenCalled();
   });
@@ -1810,9 +1808,7 @@ describe('POST /api/okf/repos/:repo_id/reingest-failed', () => {
     authScoped(['okf:t1:repoA:admin']);
     repoService.getById.mockResolvedValue({ ...INGESTED, rag_drain_active: true });
     assertSpy.mockRestore();
-    const res = await request(createApp())
-      .post('/api/okf/repos/repoA/reingest-failed')
-      .set('Authorization', TOKEN);
+    const res = await request(createApp()).post('/api/okf/repos/repoA/reingest-failed').set('Authorization', TOKEN);
     expect(res.status).toBe(409);
     expect(reingestSpy).not.toHaveBeenCalled();
   });
@@ -1824,18 +1820,14 @@ describe('POST /api/okf/repos/:repo_id/reingest-failed', () => {
     authScoped(['okf:t1:repoA:admin']);
     repoService.getById.mockResolvedValue(INGESTED);
     assertSpy.mockRestore();
-    const res = await request(createApp())
-      .post('/api/okf/repos/repoA/reingest-failed')
-      .set('Authorization', TOKEN);
+    const res = await request(createApp()).post('/api/okf/repos/repoA/reingest-failed').set('Authorization', TOKEN);
     expect(res.status).toBe(200);
   });
 
   test('403 with read-scope only — and the service is NEVER reached', async () => {
     authScoped(['okf:t1:repoA:read']);
     repoService.getById.mockResolvedValue(INGESTED);
-    const res = await request(createApp())
-      .post('/api/okf/repos/repoA/reingest-failed')
-      .set('Authorization', TOKEN);
+    const res = await request(createApp()).post('/api/okf/repos/repoA/reingest-failed').set('Authorization', TOKEN);
     expect(res.status).toBe(403);
     expect(reingestSpy).not.toHaveBeenCalled();
     expect(assertSpy).not.toHaveBeenCalled();
@@ -1844,9 +1836,7 @@ describe('POST /api/okf/repos/:repo_id/reingest-failed', () => {
   test('404 when getById resolves null (foreign repo, anti-enumeration)', async () => {
     authScoped(['okf:t1:repoA:admin']);
     repoService.getById.mockResolvedValue(null);
-    const res = await request(createApp())
-      .post('/api/okf/repos/repoA/reingest-failed')
-      .set('Authorization', TOKEN);
+    const res = await request(createApp()).post('/api/okf/repos/repoA/reingest-failed').set('Authorization', TOKEN);
     expect(res.status).toBe(400);
     expect(reingestSpy).not.toHaveBeenCalled();
   });

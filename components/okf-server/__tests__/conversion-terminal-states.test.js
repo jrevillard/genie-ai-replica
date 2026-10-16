@@ -161,9 +161,7 @@ describe('conversion sweep vocabulary', () => {
           // Model the AQL server-side: everything not in the terminal bind is swept.
           const terminal = bind.terminal || [];
           swept.push(
-            ...['queued', 'converting', 'classifying', 'linking-topics', 'done'].filter(
-              (s) => !terminal.includes(s)
-            )
+            ...['queued', 'converting', 'classifying', 'linking-topics', 'done'].filter((s) => !terminal.includes(s))
           );
           return { all: async () => [] };
         }),

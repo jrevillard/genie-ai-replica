@@ -126,10 +126,31 @@ describe('versionService.mintVersion (ADR-031: repo-level, monotonic, INSERT-onl
 
   test('per-version modification ledger rides the manifest (David, 2026-09-09)', async () => {
     seedRepo();
-    programQuery([], [
-      { concept_id: 'alphabet_inc', action: 'redact', type: 'PERSON', where: 'body', before: 'John Smith', after: 'REDACTED', at: '2026-09-09T10:00:00.000Z', actor: 'steward-1' },
-      { concept_id: 'alphabet_inc', action: 'accept', type: 'DATE_TIME', where: 'body', before: '2009', after: null, at: '2026-09-09T11:00:00.000Z', actor: 'steward-1' }
-    ]);
+    programQuery(
+      [],
+      [
+        {
+          concept_id: 'alphabet_inc',
+          action: 'redact',
+          type: 'PERSON',
+          where: 'body',
+          before: 'John Smith',
+          after: 'REDACTED',
+          at: '2026-09-09T10:00:00.000Z',
+          actor: 'steward-1'
+        },
+        {
+          concept_id: 'alphabet_inc',
+          action: 'accept',
+          type: 'DATE_TIME',
+          where: 'body',
+          before: '2009',
+          after: null,
+          at: '2026-09-09T11:00:00.000Z',
+          actor: 'steward-1'
+        }
+      ]
+    );
     await versionService.mintVersion(REPO);
     const mods = mockDb._stores.okf_versions[REPO + '_1'].pii_modifications;
     expect(mods.total_delta).toBe(2);
@@ -287,7 +308,11 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
         index_status: 'indexed',
         conformance_issues: [
           { code: 'INVALID_STATUS_ENUM', severity: 'warning' },
-          { code: 'SOURCE_MISSING_RESOURCE', severity: 'warning', message: 'Source entry 0 is missing a non-empty "resource" field' }
+          {
+            code: 'SOURCE_MISSING_RESOURCE',
+            severity: 'warning',
+            message: 'Source entry 0 is missing a non-empty "resource" field'
+          }
         ],
         pii_state: 'clean'
       }

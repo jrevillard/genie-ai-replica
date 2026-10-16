@@ -139,4 +139,13 @@ const piiAckSchema = Joi.object({
   acknowledge: Joi.boolean().required()
 });
 
-module.exports = { createSchema, updateSchema, cloneSchema, aclSchema, sourceSchema, lifecycleSchema, piiAckSchema, TAG_LIMITS };
+module.exports = {
+  createSchema,
+  updateSchema,
+  cloneSchema,
+  aclSchema,
+  sourceSchema,
+  lifecycleSchema,
+  piiAckSchema,
+  TAG_LIMITS
+};

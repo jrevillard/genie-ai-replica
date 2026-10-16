@@ -722,17 +722,17 @@ async function transition(repoId, action, actor, opts = {}) {
         // 1. The repo doc is the source of truth — read what's already there
         //    (the curator may have authored via the editor's center pane in
         //    a previous edit) and use it as the publish-time tag set.
-        const repoRow = await (
-          // LIFECYCLE-FRONT-BUGFIX (2026-10-08): the previous query was
-          // 'RETURN r.frontmatter, r.name' — AQL doesn't allow returning
-          // multiple comma-separated expressions (the parser barks at
-          // "unexpected ','"). The publish path crashed with 400 on
-          // every publish. Return a single document; we only need
-          // r.frontmatter downstream.
-          // AWAIT-BUGFIX (2026-10-08, live smoke): the outer await was
-          // ALSO missing — repoRow was a Promise, existingFm always null,
-          // and the publish gate silently PASSED (fell to the auto-suggest
-          // branch) while the stored frontmatter was ignored.
+        const repoRow = await // LIFECYCLE-FRONT-BUGFIX (2026-10-08): the previous query was
+        // 'RETURN r.frontmatter, r.name' — AQL doesn't allow returning
+        // multiple comma-separated expressions (the parser barks at
+        // "unexpected ','"). The publish path crashed with 400 on
+        // every publish. Return a single document; we only need
+        // r.frontmatter downstream.
+        // AWAIT-BUGFIX (2026-10-08, live smoke): the outer await was
+        // ALSO missing — repoRow was a Promise, existingFm always null,
+        // and the publish gate silently PASSED (fell to the auto-suggest
+        // branch) while the stored frontmatter was ignored.
+        (
           await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter', {
             rid: repoId
           })
@@ -822,12 +822,24 @@ async function transition(repoId, action, actor, opts = {}) {
           for (const field of ['topic', 'entity', 'forbidden', 'keyword']) {
             const arr = Array.isArray(suggested[field]) ? suggested[field] : [];
             for (const value of arr) {
-              if (value) approved.push({ field, value, approved_at: now, approved_by: actor && actor.user_id ? actor.user_id : 'auto-publish' });
+              if (value)
+                approved.push({
+                  field,
+                  value,
+                  approved_at: now,
+                  approved_by: actor && actor.user_id ? actor.user_id : 'auto-publish'
+                });
             }
           }
           for (const field of ['scope', 'summary']) {
             const v = suggested[field];
-            if (v) approved.push({ field, value: v, approved_at: now, approved_by: actor && actor.user_id ? actor.user_id : 'auto-publish' });
+            if (v)
+              approved.push({
+                field,
+                value: v,
+                approved_at: now,
+                approved_by: actor && actor.user_id ? actor.user_id : 'auto-publish'
+              });
           }
           await frontmatterService.writeFrontmatterToRepoDoc(
             repoId,
@@ -1223,10 +1235,7 @@ async function reingestFailed(repoId, opts = {}, actor = {}) {
   const { pending } = await armRagDrain(db, repoId, repo, actor, { reason: 're-ingest' });
   await audit('repo.reingest', repoId, actor, {
     description:
-      'Re-ingest — retried ' +
-      requeued +
-      ' failed concept(s)' +
-      (opts.conceptId ? ' (' + opts.conceptId + ')' : ''),
+      'Re-ingest — retried ' + requeued + ' failed concept(s)' + (opts.conceptId ? ' (' + opts.conceptId + ')' : ''),
     details: { requeued, pending, concept_ids: conceptIds, concept_id: opts.conceptId || null }
   });
   logger.info('OKF re-ingest armed', {

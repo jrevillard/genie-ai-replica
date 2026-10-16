@@ -104,13 +104,21 @@ describe('requireScope(read, { allowScopelessWhenOpen }) — DEFAULT-OPEN servin
 
   test('open: a caller with a scope passes through the normal path (option changes nothing)', async () => {
     const next = jest.fn();
-    await requireScope('read', { allowScopelessWhenOpen: true })(mkReq({ scopes: ['okf:t1:repoA:read'] }), mockRes(), next);
+    await requireScope('read', { allowScopelessWhenOpen: true })(
+      mkReq({ scopes: ['okf:t1:repoA:read'] }),
+      mockRes(),
+      next
+    );
     expect(next).toHaveBeenCalled();
   });
 
   test('open: superadmin passes (unchanged)', async () => {
     const next = jest.fn();
-    await requireScope('read', { allowScopelessWhenOpen: true })(mkReq({ scopes: [], superAdmin: true }), mockRes(), next);
+    await requireScope('read', { allowScopelessWhenOpen: true })(
+      mkReq({ scopes: [], superAdmin: true }),
+      mockRes(),
+      next
+    );
     expect(next).toHaveBeenCalled();
   });
 
@@ -120,7 +128,11 @@ describe('requireScope(read, { allowScopelessWhenOpen }) — DEFAULT-OPEN servin
     // symptom, not a silent fall-open. Matches the resolver's rule exactly.
     const res = mockRes();
     const next = jest.fn();
-    await requireScope('read', { allowScopelessWhenOpen: true })(mkReq({ scopes: ['okf:only-three', 'okf:t1:repoA:write'] }), res, next);
+    await requireScope('read', { allowScopelessWhenOpen: true })(
+      mkReq({ scopes: ['okf:only-three', 'okf:t1:repoA:write'] }),
+      res,
+      next
+    );
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(403);
   });

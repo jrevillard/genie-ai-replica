@@ -94,9 +94,7 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
     process.env.KEYCLOAK_URL = 'http://kong:8000/auth';
     process.env.KEYCLOAK_PUBLIC_URL = 'https://localhost/auth';
     axios.post.mockRejectedValue(new Error('socket disconnected'));
-    await expect(getServiceToken()).rejects.toThrow(
-      /failed for \d+ endpoint\(s\): .*kong:8000.*localhost\/auth/s
-    );
+    await expect(getServiceToken()).rejects.toThrow(/failed for \d+ endpoint\(s\): .*kong:8000.*localhost\/auth/s);
   });
 
   test('authedAxios injects the Bearer header on requests', async () => {

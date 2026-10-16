@@ -132,6 +132,11 @@ ingress:
     secretName: ""
   # Cross-origin API access. Empty list = no CORS SecurityPolicy rendered
   # (same-origin deployments — the default topology — need none).
+  # Namespace of the Envoy data plane. Empty = the Gateway's own
+  # namespace (EG 1.x default — the proxy pods carry
+  # gateway.envoyproxy.io/owning-gateway-* labels there). Set only when
+  # an EnvoyProxy CR moves the data plane elsewhere.
+  dataplaneNamespace: ""
   cors:
     allowOrigins: []
 

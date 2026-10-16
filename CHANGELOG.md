@@ -7,14 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **Mobile auth session no longer dead-ends on a transient failure (M25 / DW-325):** a refresh failure caused by a network drop or timeout cleared every token and logged the user out permanently with no path back. `auth_interceptor` now distinguishes an unrecoverable grant rejection (`invalid_grant` / `invalid_token` / `unauthorized_client`) from a transient one, attempts recovery on a 401 even when no token is in hand, and reports the two cases distinctly (`TRANSIENT_FAILURE` vs `SESSION_EXPIRED`) so callers can offer a retry instead of a re-login. In-flight refreshes are awaited rather than short-circuited, which previously sent callers back into a second 401 with an already-expired token. (!427)
-
-### Changed
-
-- **`release/el-salvador` reconciled with the shared code line (!540):** the branch had diverged two ways — the shared line advanced (live-validated retriever `K=32` T13b champion, `dataprep_chunk_size_md` 1400 per !397, fluentd buffering + canonical OTel `service.name` labelling) while the branch still carried the build tested on device. Both sides are now merged, with the mobile tree preserved byte-identically and the newer deploy tuning adopted. Conflict resolutions: `itu_rtx_el_salvador/vars.yml` and `docker-compose.yaml` take the newer side (el-salvador identity — mvp.ai domain, `keycloak_theme: genie-el-salvador`, mobile client/scheme, adaptive reranking — verified intact); backend `winston-transport` dependency added. The merge's silent deletion of `app_auth_test.dart` and `connectivity_checker_test.dart` was reverted. Three items that existed in no branch were ported forward: the conversation null-guard above, the M25 auth recovery above, and the mobile bug backlog/work plan (M28–M33 matrix plus the `backendUrl` `/api` regression record).
-
 ## [3.1.0] - 2026-11-25
 
 **In one line: the OKF knowledge-base feature arrives — dark by default, a deployment enables it with `OKF_ENABLED=1` — Kubernetes becomes a deployment target alongside Compose and Swarm, the AMD ROCm / Strix Halo GPU path ships, and the security wave closes the front-matter RCE (CVE-2026-78847), the cryptography advisories (CVE-2026-69249 / -69248 / -69247), the nginx CVEs (CVE-2026-9256 and four more), the Keycloak Java runtime (CVE-2026-114938, "Java4Shell") and parse5 (CVE-2026-133245).**

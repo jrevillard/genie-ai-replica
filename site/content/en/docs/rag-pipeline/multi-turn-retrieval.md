@@ -197,7 +197,11 @@ Attributes:
 In Grafana's RAG pipeline waterfall, `chatqna.query_condense` precedes
 `chatqna.orchestrate` on every condense-mode turn where history is
 present; the two spans are siblings (not nested), with condense first.
-Single-turn queries never open it.
+Under condense mode every request opens the span — `ok`/`failed` on the
+call path, `skipped_no_history` when the history window is empty
+(including single-turn requests). Under blend mode (`MULTI_TURN_MODE=blend`,
+the default) no `chatqna.query_condense` span is opened at all — the span
+emission is gated on the mode check in `handle_request`.
 
 ### Verification
 

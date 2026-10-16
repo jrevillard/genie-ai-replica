@@ -139,7 +139,23 @@ except ImportError:
 logflag = os.getenv("LOGFLAG", True)
 
 
-MEGA_SERVICE_PORT = int(os.getenv("MEGA_SERVICE_PORT", 8888))
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var tolerantly: unset OR set-to-empty (compose's
+    default injection for the semantic knobs) or non-numeric values all fall
+    back to the default instead of crash-looping the service at import.
+
+    Defined here (above the MULTI_TURN_* constants) so the int-with-default
+    env knobs in this file can use it; previously the condense knob used a
+    bare ``int(os.getenv(...))`` that crashed at import when the env var
+    was empty or non-numeric (findings #3 / issue #1091). Mirrors the same
+    tolerant pattern used elsewhere (see ``MAX_MODEL_LEN_TEXTGEN``)."""
+    try:
+        return int(os.getenv(name) or default)
+    except ValueError:
+        return default
+
+
+MEGA_SERVICE_PORT = _env_int("MEGA_SERVICE_PORT", 8888)
 GUARDRAIL_SERVICE_HOST_IP = os.getenv("GUARDRAIL_SERVICE_HOST_IP", "0.0.0.0")
 GUARDRAIL_SERVICE_PORT = int(os.getenv("GUARDRAIL_SERVICE_PORT", 80))
 TRANSLATION_SERVICE_HOST_IP = os.getenv("TRANSLATION_SERVICE_HOST_IP", "0.0.0.0")
@@ -165,6 +181,8 @@ TRANSLATION_COMPLETIONS_URL = f"{_TRANSLATION_DISCOVERY_ENDPOINT}/v1/completions
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
 EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddings")
+
+
 # Multi-turn vector-space blending (issue #833). When enabled, the query
 # embedding is blended with the previous N turns' embedding
 # (V = α·EQ + (1-α)·EH) at the retriever's dense leg, so pronoun-heavy
@@ -187,7 +205,7 @@ MULTI_TURN_MODE = os.getenv("MULTI_TURN_MODE", "blend").strip().lower()
 # _extract_history_text) fed to the condense rewrite. Dedicated knob: the
 # blend's MULTI_TURN_HISTORY_TURNS stays blend-only so deleting the blend
 # later does not orphan condense semantics.
-MULTI_TURN_CONDENSE_HISTORY_TURNS = int(os.getenv("MULTI_TURN_CONDENSE_HISTORY_TURNS", "4"))
+MULTI_TURN_CONDENSE_HISTORY_TURNS = _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 4)
 RETRIEVER_SERVICE_HOST_IP = os.getenv("RETRIEVER_SERVICE_HOST_IP", "0.0.0.0")
 RETRIEVER_SERVICE_PORT = int(os.getenv("RETRIEVER_SERVICE_PORT", 7025))
 RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
@@ -255,16 +273,6 @@ def _is_translategemma() -> bool:
     other models use the chat completions API.
     """
     return "translategemma" in _get_translation_model_id().lower()
-
-
-def _env_int(name: str, default: int) -> int:
-    """Parse an int env var tolerantly: unset OR set-to-empty (compose's
-    default injection for the semantic knobs) or non-numeric values all fall
-    back to the default instead of crash-looping the service at import."""
-    try:
-        return int(os.getenv(name) or default)
-    except ValueError:
-        return default
 
 
 # Window discovery shares the model-id cache entry, so the MODEL_DETECT_TTL
@@ -437,7 +445,7 @@ _CONDENSE_SYSTEM_PROMPT = (
     "EXCLUDE anything the user rejects. Output JSON only: "
     '{"standalone_query": "..."}'
 )
-_CONDENSE_MAX_TOKENS = 48
+_CONDENSE_MAX_TOKENS = 64
 _CONDENSE_TIMEOUT_SECONDS = 5.0
 
 
@@ -468,9 +476,26 @@ def _parse_condense_response(content) -> str:
         raise CondenseError("missing_field", f"content is {type(content).__name__}")
     stripped = content.strip()
     # response_format json_object makes fences rare, but a fenced reply must
-    # not fail a legitimate turn.
+    # not fail a legitimate turn. Strip both single-line (`` ```json{...}``` ``)
+    # and multi-line (`` ```json\\n{...}\\n``` ``) variants robustly. The
+    # opening fence is `` ``` `` followed by an optional language tag (e.g.
+    # ``json``); the tag ends at the first newline (multi-line) or at the
+    # first non-tag character (single-line).
     if stripped.startswith("```"):
-        stripped = stripped.split("\n", 1)[1] if "\n" in stripped else stripped
+        # Multi-line path: the language tag (if any) sits between `` ``` ``
+        # and the first newline. Drop everything up to and including that
+        # newline.
+        if "\n" in stripped:
+            stripped = stripped.split("\n", 1)[1]
+        else:
+            # Single-line path: `` ```json{...}``` `` — drop `` ``` `` plus
+            # the optional alphanumeric language tag. ``[A-Za-z0-9]*`` is
+            # greedy but bounded to the tag charset (no spaces), so it stops
+            # at the first non-tag character (the JSON body).
+            stripped = re.sub(r"^```[A-Za-z0-9]*", "", stripped, count=1)
+        # Drop the closing fence: keep everything up to the LAST `` ``` ``
+        # run in the body (rsplit handles both ``\\n``` `` and inline
+        # ``}``` `` identically).
         stripped = stripped.rsplit("```", 1)[0].strip()
     try:
         payload = json.loads(stripped)
@@ -2508,17 +2533,24 @@ class ChatQnAService:
                     raise CondenseError("missing_field", f"unexpected response shape: {str(body)[:120]}") from e
                 standalone_query = _parse_condense_response(content)
                 usage = body.get("usage") or {}
+                # String/enum attrs go through sanitize_attributes; the two
+                # token counters are emitted via raw set_attribute — the
+                # PII regex (tracing._PII_KEY_PATTERNS, key "token" →
+                # match) would otherwise drop them, and they carry no PII
+                # (integer counts only). Repo precedent: dataprep emits
+                # `dataprep.llm.prompt_tokens` / `completion_tokens` via raw
+                # `span.set_attribute` for exactly this reason.
                 span.set_attributes(
                     sanitize_attributes(
                         {
                             "genie.condense.mode": MULTI_TURN_MODE,
                             "genie.condense.status": "ok",
                             "genie.condense.latency_ms": round((time.monotonic() - _start) * 1000),
-                            "genie.condense.prompt_tokens": usage.get("prompt_tokens", 0),
-                            "genie.condense.completion_tokens": usage.get("completion_tokens", 0),
                         }
                     )
                 )
+                span.set_attribute("genie.condense.prompt_tokens", usage.get("prompt_tokens", 0))
+                span.set_attribute("genie.condense.completion_tokens", usage.get("completion_tokens", 0))
                 logger.debug(f"Condense rewrite ok: {standalone_query}")
                 return standalone_query
             except CondenseError as e:
@@ -2903,10 +2935,35 @@ class ChatQnAService:
                 )
             condense_history = _extract_history_text(translated_history_string, MULTI_TURN_CONDENSE_HISTORY_TURNS)
             if condense_history:
-                retrieval_query = await self._condense_query(condense_history, last_translated_message_content)
-                # The RAG prompt question stays the RAW last message; the
-                # rewritten query is retrieval/rerank-only (align_outputs).
-                condense_raw_query = last_translated_message_content
+                # Condense-failed 503 turns must still surface on the same
+                # chat_requests_total / chat_rag_duration_seconds counters
+                # as the other error paths — the condense raise happens
+                # before the orchestrate-span metrics block, so the failure
+                # would otherwise be invisible to dashboards. Mirror the
+                # _chat_attrs contract (response_type / abstained / error /
+                # retrieval_source) with a local fallback for
+                # retrieval_source since retriever_parameters is not built
+                # yet at this point in the request.
+                _condense_start = time.time()
+                try:
+                    retrieval_query = await self._condense_query(condense_history, last_translated_message_content)
+                    # The RAG prompt question stays the RAW last message; the
+                    # rewritten query is retrieval/rerank-only (align_outputs).
+                    condense_raw_query = last_translated_message_content
+                except HTTPException:
+                    _condense_duration = time.time() - _condense_start
+                    _condense_err_attrs = sanitize_attributes(
+                        {
+                            "response_type": "streaming" if chat_request.stream else "sync",
+                            "abstained": "false",
+                            "error": "true",
+                            "retrieval_source": getattr(chat_request, "search_type", None)
+                            or "similarity_score_threshold",
+                        }
+                    )
+                    chat_requests_total.add(1, _condense_err_attrs)
+                    chat_rag_duration_seconds.record(_condense_duration, _condense_err_attrs)
+                    raise
             else:
                 # Zero LLM calls, but the skip is observable — mode active,
                 # no history. Answers "why is there no rewrite?" from traces.

@@ -81,6 +81,42 @@ class TestParseCondenseResponse:
             _parse_condense_response(None)
         assert ei.value.reason == "missing_field"
 
+    def test_single_line_fenced_json_is_tolerated(self):
+        """Single-line `` ```json{...}``` `` reply (no inner newline) — the
+        previous ``split('\\n', 1)`` branch did not fire and the leading fence
+        leaked into ``json.loads`` → JSONDecodeError → 503. Findings #5."""
+        assert _parse_condense_response('```json{"standalone_query": "maize"}```') == "maize"
+
+    def test_multiline_fenced_json_is_tolerated(self):
+        """Multi-line `` ```json\\n{...}\\n``` `` — pinned by the existing
+        ``test_fenced_json_is_tolerated``; re-asserted under the new fence
+        handling."""
+        fenced = '```json\n{"standalone_query": "maize"}\n```'
+        assert _parse_condense_response(fenced) == "maize"
+
+    def test_fenced_json_without_language_tag_is_tolerated(self):
+        """`` ```\\n{...}\\n``` `` — no ``json`` language tag."""
+        assert _parse_condense_response('```\n{"standalone_query": "maize"}\n```') == "maize"
+
+    def test_tolerant_env_int_helper_falls_back_on_empty(self):
+        """Finding #3: the bare ``int(os.getenv(...))`` form crashed the
+        service at import when the condense knob was set to empty.
+        ``_env_int`` (now defined above the MULTI_TURN_* constants) must
+        return the default for empty / unset / non-numeric values."""
+        from chatqna.genieai_chatqna import _env_int
+
+        # Default path (unset).
+        assert _env_int("UNSET_VAR_THAT_DOES_NOT_EXIST_XYZ", 4) == 4
+        # Empty string (compose's default injection for semantic knobs).
+        with patch.dict("os.environ", {"MULTI_TURN_CONDENSE_HISTORY_TURNS": ""}, clear=False):
+            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 4) == 4
+        # Non-numeric value — must not raise, must fall back to default.
+        with patch.dict("os.environ", {"MULTI_TURN_CONDENSE_HISTORY_TURNS": "abc"}, clear=False):
+            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 4) == 4
+        # Valid value — passes through unchanged.
+        with patch.dict("os.environ", {"MULTI_TURN_CONDENSE_HISTORY_TURNS": "7"}, clear=False):
+            assert _env_int("MULTI_TURN_CONDENSE_HISTORY_TURNS", 4) == 7
+
 
 def _condense_response_payload(content='{"standalone_query": "maize planting density CENTA"}'):
     return {
@@ -137,13 +173,76 @@ class TestCondenseQueryCall:
         assert captured["url"].endswith("/v1/chat/completions")
         assert captured["json"]["model"] == "granite-4.1-8b"
         assert captured["json"]["temperature"] == 0.0
-        assert captured["json"]["max_tokens"] == 48
+        assert captured["json"]["max_tokens"] == 64
         assert captured["json"]["response_format"] == {"type": "json_object"}
         assert captured["json"]["stream"] is False
         assert captured["json"]["messages"][0]["role"] == "system"
         assert captured["json"]["messages"][0]["content"] == _CONDENSE_SYSTEM_PROMPT
         assert captured["json"]["messages"][1]["content"].endswith("Standalone query:")
         assert captured["headers"]["Authorization"] == "Bearer test-key"
+
+    @pytest.mark.asyncio
+    async def test_token_attrs_emitted_via_raw_set_attribute_bypass_pii_filter(self):
+        """Finding #1: ``sanitize_attributes`` drops any key whose name matches
+        the ``token`` PII regex — the condense span's ``prompt_tokens`` /
+        ``completion_tokens`` ints would be silently dropped. The fix routes
+        ONLY the two token counters through raw ``span.set_attribute``; the
+        other attrs (``mode`` / ``status`` / ``latency_ms``) still go through
+        ``sanitize_attributes``. This test pins that the raw path is taken
+        for the counters and that they reach the span verbatim."""
+        from tests.test_chatqna import create_chatqna_service
+
+        svc = create_chatqna_service()
+        tracer = MagicMock()
+        span = MagicMock()
+        span.__enter__ = MagicMock(return_value=span)
+        span.__exit__ = MagicMock(return_value=False)
+        tracer.start_as_current_span.return_value = span
+
+        class _FakeClient:
+            def __init__(self, *a, **kw):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def post(self, url, json=None, headers=None):
+                # usage carries the two counter values that must surface on
+                # the span.
+                return _make_httpx_response(json_data=_condense_response_payload())
+
+        with (
+            patch.object(chatqna_module, "_get_llm_model", return_value="granite-4.1-8b"),
+            patch.object(chatqna_module, "OPENAI_API_KEY", "test-key"),
+            patch.object(chatqna_module.httpx, "AsyncClient", _FakeClient),
+            patch.object(chatqna_module, "get_tracer", return_value=tracer),
+            # chatqna imports sanitize_attributes from `metrics` (a MagicMock
+            # in conftest). Restore the real one so the sanitized dict is
+            # actually a dict we can inspect.
+            patch.object(chatqna_module, "sanitize_attributes", side_effect=lambda d: dict(d)),
+        ):
+            await svc._condense_query("h", "m")
+
+        # The two token counters MUST be set on the span directly (raw path)
+        # so the PII regex cannot drop them.
+        span.set_attribute.assert_any_call("genie.condense.prompt_tokens", 183)
+        span.set_attribute.assert_any_call("genie.condense.completion_tokens", 16)
+
+        # The other attrs (mode / status / latency_ms) flow through
+        # set_attributes(...) with the sanitized dict — pin that the dict
+        # does NOT carry the token counters (they would be filtered out).
+        set_attributes_calls = span.set_attributes.call_args_list
+        assert set_attributes_calls, "expected set_attributes(...) call(s) for ok path"
+        merged: dict = {}
+        for call in set_attributes_calls:
+            merged.update(call.args[0])
+        # Sanity: non-token attrs land; token attrs are NOT in the sanitized dict.
+        assert merged.get("genie.condense.status") == "ok"
+        assert "genie.condense.prompt_tokens" not in merged
+        assert "genie.condense.completion_tokens" not in merged
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -408,8 +507,9 @@ class TestHandleRequestCondenseWiring:
     async def test_condense_history_turns_zero_skips_rewrite(self):
         """MULTI_TURN_CONDENSE_HISTORY_TURNS=0 disables the rewrite path,
         mirroring the documented blend-path behavior of MULTI_TURN_HISTORY_TURNS=0
-        (chatqna.py:2373). ``_extract_history_text`` returns "" for n<=0
-        (chatqna.py:409), so the condense branch takes its no-history skip:
+        (the blend ``elif`` branch in handle_request, ``MULTI_TURN_BLEND_ENABLED
+        and MULTI_TURN_HISTORY_TURNS > 0``). ``_extract_history_text`` returns
+        "" for n<=0, so the condense branch takes its no-history skip:
         ``_condense_query`` is NOT awaited, the raw last message becomes the
         retrieval query, and no ``condense_raw_query`` key is forwarded to
         the megaservice. Pins the "0 disables" behavior."""

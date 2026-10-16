@@ -151,7 +151,15 @@ describe('Locale consistency', () => {
     // raw {n} past a scripted escape once; the guard now pins all three).
     'okf.editor.piiBulk.done_accept',
     'okf.editor.piiBulk.done_redact',
-    'okf.editor.piiBulk.done_remove'
+    'okf.editor.piiBulk.done_remove',
+    // 6-1c picker (2026-10-17): grant-by-search counts, consumed via
+    // translate().replace('{n}') in AccessPanel.vue.
+    'okf.editor.access.pickerMatching',
+    'okf.editor.access.pickerSelectAll',
+    'okf.editor.access.pickerAllSelected',
+    'okf.editor.access.pickerGrant',
+    'okf.editor.access.pickerGranting',
+    'okf.editor.access.grantedQueryNotice'
   ];
   // #1042 batch delete: consumed via AdminDashboard.translate (compiled $t).
   const replaceConsumedEscaped = [

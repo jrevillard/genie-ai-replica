@@ -403,3 +403,167 @@ class TestHandleRequestCondenseWiring:
         # RAG block opens — the brief's ``assert_called_with`` would miss the
         # condense span emission behind the orchestrate one.
         mock_tracer.start_as_current_span.assert_any_call("chatqna.query_condense")
+
+
+# ---------------------------------------------------------------------------
+# Task 4: RAG-prompt raw-query override at both align_outputs sites (issue #1091)
+# ---------------------------------------------------------------------------
+class TestRagPromptRawQueryOverride:
+    """align_outputs must use the RAW last message as the RAG prompt question
+    when ``condense_raw_query`` is present in ``genie_params`` — the condense
+    output (LLM-generated text) is retrieval + rerank input only and must
+    never enter the answer-LLM prompt. Absent key ⇒ today's ``initial_query``
+    behavior at both sites (I5b guard).
+
+    Harness style copied verbatim from ``tests/test_chatqna.py`` ``TestAlignOutputs``
+    (rerank ~1388-1401, retriever ~1153-1248) — only the asserted prompt source
+    differs across the two sites.
+    """
+
+    @staticmethod
+    def _genie_params_kwargs(with_raw):
+        # No GenieaiRerankerParms instantiation — under the comps mock a
+        # second instantiation raises StopIteration, and the dict-path
+        # ({reranked_docs: [...]}) these tests drive never reads it.
+        gp = {"full_chat_history_string": ""}
+        if with_raw is not None:
+            gp["condense_raw_query"] = with_raw
+        return {"genie_params": gp}
+
+    @staticmethod
+    def _build_rerank_fake():
+        """Reuse the exact fake construction from test_chatqna.py:1388-1401."""
+        from tests.test_chatqna import FakeServiceType, create_mock_service_node
+
+        self_mock = MagicMock()
+        self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+        data = {
+            "reranked_docs": [
+                {"text": "doc1", "score": 0.95},
+                {"text": "doc2", "score": 0.80},
+            ]
+        }
+        # In condense mode, inputs["initial_query"] carries the REWRITTEN
+        # query (retriever's echo); the RAW last message lives in
+        # genie_params["condense_raw_query"] (Task 3). The override must
+        # prefer the raw string so the answer-LLM prompt is grounded.
+        inputs = {
+            "initial_query": "rewritten query",
+            "retrieved_docs": [
+                {"id": "d1", "text": "doc1"},
+                {"id": "d2", "text": "doc2"},
+            ],
+        }
+        return self_mock, data, inputs
+
+    def test_rerank_prompt_uses_raw_when_key_present(self):
+        from tests.test_chatqna import FakeServiceType, align_outputs
+
+        self_mock, data, inputs = self._build_rerank_fake()
+        with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            result = align_outputs(
+                self_mock,
+                data,
+                "rerank_node",
+                inputs,
+                MagicMock(),
+                {},
+                **self._genie_params_kwargs("RAW MESSAGE"),
+            )
+        assert "inputs" in result
+        # RAW message must be the prompt prefix; the rewritten query must NOT
+        # leak into the answer-LLM prompt.
+        assert result["inputs"].startswith("RAW MESSAGE"), (
+            f"expected prompt to start with condense_raw_query, got: {result['inputs'][:80]!r}"
+        )
+        assert "rewritten query" not in result["inputs"]
+
+    def test_rerank_prompt_unchanged_when_key_absent(self):
+        from tests.test_chatqna import FakeServiceType, align_outputs
+
+        self_mock, data, inputs = self._build_rerank_fake()
+        with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            result = align_outputs(
+                self_mock,
+                data,
+                "rerank_node",
+                inputs,
+                MagicMock(),
+                {},
+                **self._genie_params_kwargs(None),
+            )
+        assert "inputs" in result
+        # I5b guard: absent key ⇒ bit-for-bit current behavior
+        # (prompt starts with inputs["initial_query"]).
+        assert result["inputs"].startswith("rewritten query"), (
+            f"expected prompt to start with initial_query, got: {result['inputs'][:80]!r}"
+        )
+
+    @staticmethod
+    def _build_no_rerank_retriever_fake():
+        """Reuse the exact fake construction from test_chatqna.py:1153-1176."""
+        from tests.test_chatqna import (
+            FakeServiceType,
+            create_mock_runtime_graph,
+            create_mock_service_node,
+        )
+
+        self_mock = MagicMock()
+        self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+        # downstream returns a node NOT starting with "rerank" → with_rerank=False
+        # → the no-rerank prompt-build branch (received_prompt path, line ~1548).
+        graph = create_mock_runtime_graph(downstream_nodes=["llm_node"])
+        data = {
+            "initial_query": "rewritten query",
+            "retrieved_docs": [{"id": "d1", "text": "doc1"}],
+            "metadata": [{"file_ids": ["f1"]}],
+        }
+        inputs = {"text": "rewritten query"}
+        return self_mock, data, inputs, graph
+
+    def test_no_rerank_prompt_uses_raw_when_key_present(self):
+        from tests.test_chatqna import FakeServiceType, align_outputs
+
+        self_mock, data, inputs, graph = self._build_no_rerank_retriever_fake()
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch("chatqna.genieai_chatqna.RETRIEVER_SEARCH_START", "chunk"),
+        ):
+            result = align_outputs(
+                self_mock,
+                data,
+                "retriever_node",
+                inputs,
+                graph,
+                {},
+                **self._genie_params_kwargs("RAW MESSAGE"),
+            )
+        assert "inputs" in result
+        assert result["inputs"].startswith("RAW MESSAGE"), (
+            f"expected prompt to start with condense_raw_query, got: {result['inputs'][:80]!r}"
+        )
+        assert "rewritten query" not in result["inputs"]
+
+    def test_no_rerank_prompt_unchanged_when_key_absent(self):
+        from tests.test_chatqna import FakeServiceType, align_outputs
+
+        self_mock, data, inputs, graph = self._build_no_rerank_retriever_fake()
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch("chatqna.genieai_chatqna.RETRIEVER_SEARCH_START", "chunk"),
+        ):
+            result = align_outputs(
+                self_mock,
+                data,
+                "retriever_node",
+                inputs,
+                graph,
+                {},
+                **self._genie_params_kwargs(None),
+            )
+        assert "inputs" in result
+        # I5b guard: absent key ⇒ bit-for-bit current behavior
+        # (received_prompt = data["initial_query"] in the no-rerank branch).
+        assert result["inputs"].startswith("rewritten query"), (
+            f"expected prompt to start with initial_query, got: {result['inputs'][:80]!r}"
+        )

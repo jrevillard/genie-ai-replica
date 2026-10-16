@@ -1,4 +1,15 @@
 {{/*
+Hostname without any port. ingress.host MAY carry a public port (e.g.
+genieai.local:4443 when a non-privileged local forward fronts the edge);
+the OIDC issuer and KC_PUBLIC_ORIGIN keep the port, but Gateway API
+hostnames, certificate dnsNames and SAN-derived secret names must not —
+HTTPRoute hostname validation rejects ports, and hostname matching
+strips the port from the Host header anyway.
+*/}}
+{{- define "genieai-umbrella.ingressHostname" -}}
+{{- (.Values.ingress.host | default "genieai.local") | splitList ":" | first -}}
+{{- end -}}
+{{/*
 Canonical TLS Secret name. Precedence:
   1. ingress.tls.secretName — operator pre-baked certificate (sovereign
      deployments that manage keys outside cert-manager). Setting it also
@@ -10,7 +21,7 @@ this helper — a second derivation site would let the two drift and leave
 the https listener waiting on a Secret nobody writes.
 */}}
 {{- define "genieai-umbrella.tlsSecretName" -}}
-{{- .Values.ingress.tls.secretName | default (printf "%s-tls" (.Values.ingress.host | default "genieai")) -}}
+{{- .Values.ingress.tls.secretName | default (printf "%s-tls" (include "genieai-umbrella.ingressHostname" .)) -}}
 {{- end -}}
 {{- if .Values.ingress.enabled -}}
 apiVersion: gateway.networking.k8s.io/v1

@@ -25,7 +25,9 @@ spec:
       # must name the listener that actually exists.
       sectionName: {{ if .Values.ingress.tls.enabled }}https{{ else }}http{{ end }}
   hostnames:
-    - {{ .Values.ingress.host | required "ingress.host is required when ingress.enabled=true" | quote }}
+    # Port-free hostname — a port on ingress.host is legal for the public
+    # origin (issuer, redirects) but forbidden in HTTPRoute hostnames.
+    - {{ include "genieai-umbrella.ingressHostname" . | quote }}
   rules:
     {{- /* document-repository API paths: longest-prefix exceptions that beat the /api/ rule below. */}}
     - matches:

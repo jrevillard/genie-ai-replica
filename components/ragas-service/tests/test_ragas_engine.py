@@ -140,6 +140,13 @@ def test_tei_embeddings_posts_the_native_contract(monkeypatch, engine_env):
     assert captured["headers"]["Authorization"] == "Bearer tok"
     assert tei.embed_query("q") == [0.1, 0.2]
 
+    # ragas's async paths (KG transforms, metric chains) call aembed_* —
+    # the class must expose them (live bug #6).
+    import asyncio
+
+    assert asyncio.run(tei.aembed_documents(["a"])) == [[0.1, 0.2], [0.3, 0.4]]
+    assert asyncio.run(tei.aembed_query("q")) == [0.1, 0.2]
+
 
 def test_build_embeddings_openai_dialect(monkeypatch, engine_env):
     import ragas_engine

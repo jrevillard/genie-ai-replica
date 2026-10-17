@@ -221,6 +221,16 @@ class _TeiEmbeddings:
     def embed_query(self, text: str) -> list[float]:
         return self._post([text])[0]
 
+    # ragas runs its KG transforms and metric chains under asyncio and calls
+    # the aembed_* surface — a duck-typed class without these dies with
+    # "'_TeiEmbeddings' object has no attribute 'aembed_documents'" (live
+    # bug #6, 2026-10-17). Offload the sync httpx call to a worker thread.
+    async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+        return await asyncio.to_thread(self._post, list(texts))
+
+    async def aembed_query(self, text: str) -> list[float]:
+        return (await asyncio.to_thread(self._post, [text]))[0]
+
 
 def build_embeddings():
     """Wrap the embedder endpoint. Returns None when unconfigured —

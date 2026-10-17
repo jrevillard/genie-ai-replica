@@ -229,6 +229,27 @@ The grant facility behind per-repo restriction has its own credentials:
 | `KC_OKF_ACCESS_CLIENT_ID` | `genie-proxy-client` | Service account okf-server uses for grant/revoke and group-role Admin-API writes. The realm template provisions its `realm-management` grants (`manage-users`, `manage-realm`). |
 | `KC_OKF_ACCESS_CLIENT_SECRET` | unset | The client's secret. Unset = grants answer `503 ACCESS_CONTROL_UNCONFIGURED`; restriction enforcement is unaffected. |
 
+## RAGAS benchmarking (the Lab's Benchmarks tab)
+
+Backs the RAGAS evaluation feature (see [OKF Studio](/docs/knowledge-base/okf-studio/)).
+**No feature is indexed on a specific model** — the judge/embedder variables point at
+the deployment's chosen OpenAI-compatible endpoints and default to the deployment's
+LLM configuration; per-task model minimums (strict JSON output, window sizes, no
+reasoning-token leak into judge completions) are part of the feature's spec.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `OKF_RAGAS_URL` | `http://ragas-service:8090` | The ragas-service sidecar's URL as okf-server resolves it. Unreachable = honest `503 RAGAS_UNAVAILABLE` per Lab route — never a hang. |
+| `RAGAS_INTERNAL_SECRET` | = `OKF_INTERNAL_SECRET` | Shared secret authenticating okf-server to the sidecar (fail-closed when unset). |
+| `RAGAS_JUDGE_BASE_URL` | = vLLM endpoint `/v1` | Judge + testset-generator endpoint (any OpenAI-compatible local server: vLLM, LiteLLM, …). |
+| `RAGAS_JUDGE_MODEL` | = `VLLM_LLM_MODEL_ID` | The judge/generator model — must meet the minimums above. |
+| `RAGAS_JUDGE_API_KEY` | = `VLLM_API_KEY` | Bearer token for the judge endpoint. |
+| `RAGAS_EMBED_BASE_URL` | TEI embedding service | Embedder endpoint (answer relevancy + testset generation). |
+| `RAGAS_EMBED_MODEL` | = `EMBED_MODEL_ID` | Embedding model — must be consistent within a run. |
+| `OKF_RAGAS_TESTSET_SIZE_DEFAULT` | `20` | The generate form's initial suite size; the user sets the actual dimensions per generation. |
+| `OKF_RAGAS_MAX_ENTRIES` | `200` | Hard cap per suite (generation + import). |
+| `OKF_RAGAS_RUN_CONCURRENCY` | `2` | Per-run question concurrency — bounds LLM load on the shared GPU so benchmarking does not starve chat answering. |
+
 ## Related variables
 
 These are set once per deployment and rarely touched; they are listed in the

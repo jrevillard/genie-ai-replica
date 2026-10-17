@@ -91,6 +91,49 @@ or wizard step 10) tests that routing against the live corpus:
   and re-test without leaving the loop. Suggestions are guarded: they cannot
   forbid a repository's own entities, and apply is deduplicated and damped.
 
+## RAGAS Benchmarks
+
+The Lab's fourth tab — **Benchmarks** — measures what routing tests cannot:
+*answer quality*. It runs [RAGAS](https://ragas.io) evaluation (the same
+framework as the offline `tests/rag-benchmarks` harness) inside the Studio,
+with suites interchangeable with that harness's xlsx formats:
+
+- **Generate** a benchmark suite from one or more repositories (the current
+  one alone, or with any number of related repositories — multi-hop
+  questions cross repo boundaries when they are combined). You set the
+  dimensions: question count (default 20), the query-type distribution, and
+  the number of personas. Each entry carries the question, its expected
+  answer, and the reference passages the answer should be grounded in.
+- **Manage** entries with full parity to the other suites: edit the question
+  or expected answer, flip an entry in-scope/out-of-scope, remove it, add
+  your own, rename the suite, delete it, and probe a single entry against
+  the live corpus.
+- **Run** the suite: each question is answered through the retrieval
+  pipeline (the same corpora, embedding, and reranker the chat uses) and
+  scored by the selected RAGAS metrics — faithfulness, context precision,
+  context recall, and answer relevancy by default, with the full
+  single-turn catalog selectable (factual and answer correctness, semantic
+  similarity, entity recall, noise sensitivity, and more).
+- **Results** render per-question in a table with metric bars, as aggregate
+  gauges, as a run-over-run trend, and as a status breakdown — and export
+  as a **PDF report**, or as an xlsx workbook using the offline harness's
+  column vocabulary.
+- **Explain failures** attributes each failing row to the stage that broke
+  (routing, corpus, reranker, LLM, abstention, or judge) and proposes
+  guarded advice — including *repository-level* changes: frontmatter tag
+  adjustments through the same guarded machinery as the routing teaching
+  loop, and concept-content curation suggestions that name the concept and
+  the gap.
+- **Interchange**: import a benchmark suite authored in the harness's
+  `Test Dataset` xlsx format; export your suite so the harness's
+  `xlsx_to_gold.py` consumes it unmodified. Results flow one way (export).
+
+Benchmark suites appear in the same **Saved suites** list as the routing
+suites, marked with a RAGAS badge. No feature is tied to a specific model:
+the judge and embedder point at the deployment's own OpenAI-compatible
+endpoints (defaults inherit the LLM configuration); the per-task model
+minimums are documented in the deployment guide.
+
 ## Where things are recorded
 
 - Every lifecycle action, access change and import is written to the

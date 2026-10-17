@@ -1218,7 +1218,7 @@
         <!-- 1-8f: SAVED SUITES — the load targets for "saved, modified and
              rerun". Every generated suite persists; Load pulls its full
              rows back as the editable current suite. -->
-        <div v-if="savedSuites.length" class="okf-headtest__saved-suites">
+        <div v-if="allSavedSuites.length" class="okf-headtest__saved-suites">
           <h4 class="okf-headtest__pane-title">
             {{ translate('okf.headTest.suites.savedTitle', 'Saved suites') }}
           </h4>
@@ -1242,10 +1242,15 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="s in savedSuites" :key="s._key">
+              <!-- Story 8-6: ONE list, both kinds — RAGAS rows carry the
+                   accent pill and route their actions to the Benchmarks
+                   tab; head rows behave exactly as before. -->
+              <tr v-for="s in allSavedSuites" :key="s._key">
                 <td>
+                  <DsPill v-if="s.__ragas" variant="accent" label="RAGAS" class="okf-headtest__suite-kind" />
                   <!-- 1-8f: inline rename — commit on blur/Enter when changed. -->
                   <input
+                    v-if="!s.__ragas"
                     class="okf-headtest__name-input okf-headtest__name-input--compact"
                     type="text"
                     :value="s.name || ''"
@@ -1254,25 +1259,27 @@
                     :disabled="busy !== null"
                     @change="onRenameSuite(s, $event.target.value)"
                   />
+                  <span v-else class="okf-headtest__ragas-name">{{ s.name || '—' }}</span>
                 </td>
                 <td>
                   <code>{{ s._key }}</code>
                 </td>
                 <td>{{ shortDate(s.created_at) }}</td>
-                <td>{{ s.positives != null ? s.positives : '—' }}</td>
-                <td>{{ s.negatives != null ? s.negatives : '—' }}</td>
+                <td>
+                  {{
+                    !s.__ragas && s.positives != null ? s.positives : s.__ragas && s.entries != null ? s.entries : '—'
+                  }}
+                </td>
+                <td>{{ !s.__ragas && s.negatives != null ? s.negatives : s.__ragas ? '—' : '—' }}</td>
                 <td v-if="!readOnly">
                   <DsButton
                     variant="secondary"
                     small
                     :disabled="busy !== null || suiteLoading || (suite && suite.suite_key === s._key)"
-                    @click="onLoadSuite(s._key)"
+                    @click="s.__ragas ? onLoadRagasSuite(s) : onLoadSuite(s._key)"
                   >
                     {{ translate('okf.headTest.suites.load', 'Load') }}
                   </DsButton>
-                  <!-- 1-8g: remove the suite (and its run docs) from the
-                       Saved list — including the currently-loaded one
-                       (the local copy clears with it). -->
                   <button
                     type="button"
                     class="okf-headtest__row-btn okf-headtest__row-btn--danger"
@@ -1288,6 +1295,13 @@
           </table>
         </div>
         <p v-if="error" class="okf-headtest__error">{{ error }}</p>
+      </div>
+      <!-- Story 8-6 — the RAGAS Benchmarks pane. Self-contained child (the
+           panel owns its generate/run/results/explain/import/export UI);
+           the dialog only supplies the repo + read-only posture and merges
+           the panel's suites into the shared saved list above. -->
+      <div v-show="tab === 'ragas'" class="okf-headtest__pane">
+        <OkfRagasPanel ref="ragasPanel" :repo="repo" :read-only="readOnly" @changed="refreshRagasSuites()" />
       </div>
       <!-- 1-8g-t (David): suite deletion MUST be confirmed with a dialog —
            the × button only ARMS the confirmation; the delete fires solely
@@ -1329,6 +1343,7 @@
 import translateMixin from '../../../mixins/translateMixin';
 import DsDialog from '../../ds/Dialog.vue';
 import DsTabs from '../../ds/Tabs.vue';
+import OkfRagasPanel from './RagasPanel.vue';
 import DsButton from '../../ds/Button.vue';
 import DsInput from '../../ds/Input.vue';
 import DsSelect from '../../ds/Select.vue';
@@ -1351,7 +1366,19 @@ const HEAD_FIELDS = [
 
 export default {
   name: 'OkfHeadTestDialog',
-  components: { DsDialog, DsTabs, DsButton, DsInput, DsSelect, DsPill, DsTag, DsSpinner, DsInfoTip, DsProgress },
+  components: {
+    DsDialog,
+    DsTabs,
+    DsButton,
+    DsInput,
+    DsSelect,
+    DsPill,
+    DsTag,
+    DsSpinner,
+    DsInfoTip,
+    DsProgress,
+    OkfRagasPanel
+  },
   mixins: [translateMixin],
   props: {
     visible: { type: Boolean, default: false },
@@ -1382,6 +1409,7 @@ export default {
       runs: [],
       // 1-8f: persisted suites (kind 'suite') — the Load targets.
       savedSuites: [],
+      savedRagasSuites: [],
       deleteConfirm: null,
       // 1-8g: the click-test's full result (head verdict + corpus verdict +
       // reason + reference files + rerank-ranked chunks) — rendered as the
@@ -1500,8 +1528,17 @@ export default {
       return [
         { value: 'head', label: this.translate('okf.headTest.tab.head', 'Head') },
         { value: 'test', label: this.translate('okf.headTest.tab.test', 'Test') },
-        { value: 'suites', label: this.translate('okf.headTest.tab.suites', 'Suites & analytics') }
+        { value: 'suites', label: this.translate('okf.headTest.tab.suites', 'Suites & analytics') },
+        { value: 'ragas', label: this.translate('okf.headTest.tab.ragas', 'Benchmarks') }
       ];
+    },
+    /** Story 8-6: the unified saved-suites list — head suites and RAGAS
+     * benchmark suites in ONE table (David: integrated but visually
+     * differentiated), newest first. */
+    allSavedSuites() {
+      const head = (this.savedSuites || []).map((s) => ({ ...s, __ragas: false }));
+      const ragas = (this.savedRagasSuites || []).map((s) => ({ ...s, __ragas: true }));
+      return [...head, ...ragas].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
     },
     headFields() {
       const fm = (this.repo && this.repo.frontmatter) || {};
@@ -2018,6 +2055,7 @@ export default {
           this.reverted = false;
           this.fmHistory = [];
           this.refreshRuns();
+          this.refreshRagasSuites();
           if (!this.readOnly) this.loadFrontmatterHistory();
         }
       }
@@ -2859,6 +2897,17 @@ export default {
       const suites = await this.$store.dispatch('okf/headSuiteListRuns', { repoId: this.repo.repo_id, kind: 'suite' });
       if (suites.ok) this.savedSuites = suites.runs;
     },
+    /** Story 8-6: the RAGAS half of the integrated saved list — fetched
+     * SEPARATELY from refreshRuns (its own failure tolerance, no coupling
+     * to the head listings) and refreshed when the Benchmarks pane reports
+     * a change. */
+    async refreshRagasSuites() {
+      const ragas = await this.$store.dispatch('okf/ragasListRuns', {
+        repoId: this.repo.repo_id,
+        kind: 'ragas_suite'
+      });
+      this.savedRagasSuites = ragas.ok ? ragas.runs : [];
+    },
     /** 1-8f: rename a saved suite (inline in the Saved-suites table). */
     async onRenameSuite(suite, value) {
       const name = String(value || '').trim();
@@ -2898,10 +2947,16 @@ export default {
       if (this.busy !== null) return;
       this.busy = 'suite-delete';
       this.error = '';
-      const res = await this.$store.dispatch('okf/headSuiteDelete', {
-        repoId: this.repo.repo_id,
-        suiteKey: s._key
-      });
+      // Story 8-6: the integrated list deletes through the kind's own action.
+      const res = s.__ragas
+        ? await this.$store.dispatch('okf/ragasDelete', {
+            repoId: this.repo.repo_id,
+            suiteKey: s._key
+          })
+        : await this.$store.dispatch('okf/headSuiteDelete', {
+            repoId: this.repo.repo_id,
+            suiteKey: s._key
+          });
       this.busy = null;
       this.deleteConfirm = null;
       if (!res || !res.ok) {
@@ -2909,12 +2964,19 @@ export default {
           (res && res.message) || this.translate('okf.headTest.error.suiteDelete', 'Could not delete the suite');
         return;
       }
+      if (s.__ragas) this.savedRagasSuites = this.savedRagasSuites.filter((x) => x._key !== s._key);
       this.savedSuites = this.savedSuites.filter((x) => x._key !== s._key);
       if (this.suite && this.suite.suite_key === s._key) {
         this.suite = null;
         this.lastRunSummary = null;
         this.lastRunSuiteKey = null;
       }
+    },
+    /** Story 8-6: load a RAGAS suite from the integrated saved list —
+     * switch to the Benchmarks tab and hand the key to the panel. */
+    onLoadRagasSuite(s) {
+      this.tab = 'ragas';
+      if (this.$refs.ragasPanel) this.$refs.ragasPanel.loadSuite(s._key);
     },
     /** 1-8g: the click-test — run THIS row's query against the live corpus
      * (embed → top-K → the pipeline's reranker → coverage verdict). The
@@ -3076,6 +3138,13 @@ export default {
 </script>
 
 <style scoped>
+/* Story 8-6 — the integrated saved-suites list's RAGAS differentiation. */
+.okf-headtest__suite-kind {
+  margin-right: 6px;
+}
+.okf-headtest__ragas-name {
+  font-size: 13px;
+}
 .okf-headtest__repo-line {
   display: flex;
   align-items: center;

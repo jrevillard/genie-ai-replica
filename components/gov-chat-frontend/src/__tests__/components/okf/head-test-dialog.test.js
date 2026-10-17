@@ -120,11 +120,12 @@ beforeEach(() => {
   dispatch.mockResolvedValue({ ok: true, runs: [] });
 });
 
-it('renders the three tabs and a fresh-head badge', async () => {
+it('renders the four tabs and a fresh-head badge', async () => {
   const w = mountDialog();
   await w.vm.$nextTick();
+  // Story 8-6: the fourth tab (Benchmarks) hosts the RAGAS panel.
   const tabs = w.vm.tabDefs.map((t) => t.value);
-  expect(tabs).toEqual(['head', 'test', 'suites']);
+  expect(tabs).toEqual(['head', 'test', 'suites', 'ragas']);
   expect(w.vm.headStatus).toBe('present');
 });
 

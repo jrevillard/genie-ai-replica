@@ -2831,7 +2831,8 @@ export default {
       tab: {
         head: 'Head',
         test: 'Test',
-        suites: 'Suites & analytics'
+        suites: 'Suites & analytics',
+        ragas: 'Vergleichstests'
       },
       head: {
         dim: 'Dimensions',
@@ -3071,6 +3072,108 @@ export default {
         colScore: 'Rerank-Score',
         colFile: 'Datei',
         colContent: 'Chunk-Inhalt'
+      }
+    },
+    ragas: {
+      current: 'aktuell',
+      generate: {
+        title: 'Vergleichstest-Suite generieren',
+        hint: 'Erzeugt Fragen mit erwarteten Ausgaben aus den ausgewählten Repositories — eines oder mehrere, das aktuelle Repository allein oder mit verwandten Repositories.',
+        size: 'Fragen',
+        single: 'Einzel-Hop %',
+        multiAbstract: 'Mehrfach-Hop (abstrakt) %',
+        multiSpecific: 'Mehrfach-Hop (spezifisch) %',
+        personas: 'Personas',
+        button: 'Generieren',
+        working: 'Wird generiert — das dauert einige Minuten…'
+      },
+      import: {
+        button: 'Suite importieren (.xlsx)',
+        working: 'Import läuft…'
+      },
+      suite: {
+        namePlaceholder: 'Name des Vergleichstests (optional)',
+        add: 'Frage hinzufügen',
+        addPrompt: 'Hinzuzufügende Frage:',
+        addReference: 'Erwartete Antwort (optional):',
+        flipTip: 'Im Geltungsbereich / außerhalb umschalten',
+        probeTip: 'Diese Frage gegen den Live-Korpus testen',
+        removeTip: 'Diese Frage entfernen'
+      },
+      col: {
+        query: 'Frage',
+        reference: 'Erwartete Antwort',
+        passages: 'Textstellen',
+        scope: 'Geltungsbereich'
+      },
+      oos: 'außerhalb des Geltungsbereichs',
+      inscope: 'im Geltungsbereich',
+      metrics: {
+        label: 'Metriken:'
+      },
+      run: {
+        button: 'Vergleichstest ausführen',
+        working: 'Wird ausgeführt…',
+        phase: {
+          retrieval: 'Abruf läuft',
+          judge: 'Bewertung läuft'
+        }
+      },
+      export: {
+        suite: 'Suite exportieren (.xlsx)',
+        results: 'Ergebnisse exportieren (.xlsx)'
+      },
+      results: {
+        title: 'Ergebnisse des Vergleichstests',
+        failing: '{n} fehlgeschlagen',
+        allPass: 'alle bestanden',
+        failingShort: 'fehlgeschlagen',
+        answer: 'Antwort',
+        state: 'Status',
+        error: 'Fehler',
+        abstained: 'enthalten',
+        answered: 'beantwortet',
+        pdf: 'PDF-Bericht exportieren'
+      },
+      explain: {
+        button: 'Fehlschläge erklären',
+        title: 'Fehlerzuordnung und Empfehlungen',
+        none: 'Keine fehlgeschlagenen Zeilen zuzuordnen.',
+        stage: 'Phase',
+        fails: 'Fehlgeschlagene Metriken',
+        recommendation: 'Empfehlung'
+      },
+      history: {
+        title: 'Ausführungsverlauf',
+        run: 'Ausführung',
+        when: 'Wann',
+        status: 'Status',
+        load: 'Ansehen'
+      },
+      advice: {
+        knob: 'Stellschraube',
+        tag: 'Repo-Tag',
+        content: 'Inhalt',
+        prompt: 'Prompt'
+      },
+      metric: {
+        faithfulness: 'Treue',
+        context_precision: 'Kontextgenauigkeit',
+        context_recall: 'Kontextabdeckung',
+        answer_relevancy: 'Antwortrelevanz',
+        context_utilization: 'Kontextausnutzung',
+        context_entities_recall: 'Abdeckung der Kontext-Entitäten',
+        factual_correctness: 'faktische Korrektheit',
+        answer_correctness: 'Antwortkorrektheit',
+        answer_similarity: 'Antwortähnlichkeit',
+        noise_sensitivity: 'Rauschempfindlichkeit'
+      },
+      pdf: {
+        title: 'RAGAS-Vergleichstestbericht',
+        suite: 'Suite',
+        run: 'Ausführung',
+        summary: 'Zusammenfassung',
+        perQuery: 'Scores pro Frage'
       }
     }
   },

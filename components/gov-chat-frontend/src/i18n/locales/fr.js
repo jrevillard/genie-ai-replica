@@ -2831,7 +2831,8 @@ export default {
       tab: {
         head: 'Head',
         test: 'Test',
-        suites: 'Suites & analytics'
+        suites: 'Suites & analytics',
+        ragas: 'Bancs d’essai'
       },
       head: {
         dim: 'Dimensions',
@@ -3069,6 +3070,108 @@ export default {
         colScore: 'Score de rerank',
         colFile: 'Fichier',
         colContent: 'Contenu du segment'
+      }
+    },
+    ragas: {
+      current: 'en cours',
+      generate: {
+        title: 'Générer une suite de bancs d’essai',
+        hint: 'Synthétise des questions avec les sorties attendues à partir des dépôts sélectionnés — un ou plusieurs : le dépôt actuel seul ou avec des dépôts apparentés.',
+        size: 'Questions',
+        single: 'Mono-saut %',
+        multiAbstract: 'Multi-sauts (abstrait) %',
+        multiSpecific: 'Multi-sauts (spécifique) %',
+        personas: 'Personas',
+        button: 'Générer',
+        working: 'Génération — cela prend plusieurs minutes…'
+      },
+      import: {
+        button: 'Importer une suite (.xlsx)',
+        working: 'Importation…'
+      },
+      suite: {
+        namePlaceholder: 'Nom du banc d’essai (facultatif)',
+        add: 'Ajouter une question',
+        addPrompt: 'Question à ajouter :',
+        addReference: 'Réponse attendue (facultatif) :',
+        flipTip: 'Basculer dans le périmètre / hors périmètre',
+        probeTip: 'Sonder cette question sur le corpus réel',
+        removeTip: 'Retirer cette question'
+      },
+      col: {
+        query: 'Question',
+        reference: 'Réponse attendue',
+        passages: 'Passages',
+        scope: 'Périmètre'
+      },
+      oos: 'hors périmètre',
+      inscope: 'dans le périmètre',
+      metrics: {
+        label: 'Métriques :'
+      },
+      run: {
+        button: 'Lancer le banc d’essai',
+        working: 'Exécution…',
+        phase: {
+          retrieval: 'récupération',
+          judge: 'évaluation'
+        }
+      },
+      export: {
+        suite: 'Exporter la suite (.xlsx)',
+        results: 'Exporter les résultats (.xlsx)'
+      },
+      results: {
+        title: 'Résultats du banc d’essai',
+        failing: '{n} en échec',
+        allPass: 'toutes réussies',
+        failingShort: 'en échec',
+        answer: 'Réponse',
+        state: 'État',
+        error: 'erreur',
+        abstained: 'abstention',
+        answered: 'répondu',
+        pdf: 'Exporter le rapport PDF'
+      },
+      explain: {
+        button: 'Expliquer les échecs',
+        title: 'Attribution des échecs et conseils',
+        none: 'Aucune ligne en échec à attribuer.',
+        stage: 'Étape',
+        fails: 'Métriques en échec',
+        recommendation: 'Recommandation'
+      },
+      history: {
+        title: 'Historique des exécutions',
+        run: 'Exécution',
+        when: 'Quand',
+        status: 'Statut',
+        load: 'Voir'
+      },
+      advice: {
+        knob: 'réglage',
+        tag: 'étiquette du dépôt',
+        content: 'contenu',
+        prompt: 'prompt'
+      },
+      metric: {
+        faithfulness: 'fidélité',
+        context_precision: 'précision du contexte',
+        context_recall: 'rappel du contexte',
+        answer_relevancy: 'pertinence de la réponse',
+        context_utilization: 'utilisation du contexte',
+        context_entities_recall: 'rappel des entités du contexte',
+        factual_correctness: 'exactitude factuelle',
+        answer_correctness: 'exactitude de la réponse',
+        answer_similarity: 'similarité de la réponse',
+        noise_sensitivity: 'sensibilité au bruit'
+      },
+      pdf: {
+        title: 'Rapport de banc d’essai RAGAS',
+        suite: 'Suite',
+        run: 'Exécution',
+        summary: 'Résumé',
+        perQuery: 'Scores par question'
       }
     }
   },

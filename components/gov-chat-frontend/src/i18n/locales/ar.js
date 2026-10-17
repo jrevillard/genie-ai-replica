@@ -2786,7 +2786,8 @@ export default {
       tab: {
         head: 'Head',
         test: 'Test',
-        suites: 'Suites & analytics'
+        suites: 'Suites & analytics',
+        ragas: 'اختبارات مرجعية'
       },
       head: {
         dim: 'Dimensions',
@@ -3018,6 +3019,108 @@ export default {
         colScore: 'نتيجة إعادة الترتيب',
         colFile: 'ملف',
         colContent: 'محتوى المقطع'
+      }
+    },
+    ragas: {
+      current: 'الحالي',
+      generate: {
+        title: 'إنشاء مجموعة اختبارات مرجعية',
+        hint: 'يولّد أسئلة بإجابات متوقعة من المستودعات المحددة — واحد أو أكثر، المستودع الحالي وحده أو مع مستودعات ذات صلة.',
+        size: 'الأسئلة',
+        single: 'خطوة واحدة %',
+        multiAbstract: 'خطوات متعددة (مجردة) %',
+        multiSpecific: 'خطوات متعددة (محددة) %',
+        personas: 'الشخصيات',
+        button: 'إنشاء',
+        working: 'جارٍ الإنشاء — يستغرق هذا دقائق…'
+      },
+      import: {
+        button: 'استيراد مجموعة (.xlsx)',
+        working: 'جارٍ الاستيراد…'
+      },
+      suite: {
+        namePlaceholder: 'اسم الاختبار المرجعي (اختياري)',
+        add: 'إضافة سؤال',
+        addPrompt: 'السؤال المراد إضافته:',
+        addReference: 'الإجابة المتوقعة (اختياري):',
+        flipTip: 'تبديل داخل النطاق / خارجه',
+        probeTip: 'اختبار هذا السؤال مقابل المتن الحي',
+        removeTip: 'إزالة هذا السؤال'
+      },
+      col: {
+        query: 'السؤال',
+        reference: 'الإجابة المتوقعة',
+        passages: 'المقاطع',
+        scope: 'النطاق'
+      },
+      oos: 'خارج النطاق',
+      inscope: 'داخل النطاق',
+      metrics: {
+        label: 'المقاييس:'
+      },
+      run: {
+        button: 'تشغيل الاختبار المرجعي',
+        working: 'جارٍ التشغيل…',
+        phase: {
+          retrieval: 'جارٍ الاسترجاع',
+          judge: 'جارٍ التقييم'
+        }
+      },
+      export: {
+        suite: 'تصدير المجموعة (.xlsx)',
+        results: 'تصدير النتائج (.xlsx)'
+      },
+      results: {
+        title: 'نتائج الاختبار المرجعي',
+        failing: '{n} فاشلة',
+        allPass: 'كلها ناجحة',
+        failingShort: 'فاشلة',
+        answer: 'الإجابة',
+        state: 'الحالة',
+        error: 'خطأ',
+        abstained: 'امتنع عن الإجابة',
+        answered: 'تمت الإجابة',
+        pdf: 'تصدير تقرير PDF'
+      },
+      explain: {
+        button: 'شرح الإخفاقات',
+        title: 'إسناد الإخفاقات ونصائح',
+        none: 'لا توجد صفوف فاشلة لإسنادها.',
+        stage: 'المرحلة',
+        fails: 'المقاييس الفاشلة',
+        recommendation: 'التوصية'
+      },
+      history: {
+        title: 'سجل التشغيلات',
+        run: 'تشغيل',
+        when: 'متى',
+        status: 'الحالة',
+        load: 'عرض'
+      },
+      advice: {
+        knob: 'مفتاح ضبط',
+        tag: 'وسم المستودع',
+        content: 'المحتوى',
+        prompt: 'الموجه'
+      },
+      metric: {
+        faithfulness: 'الوفاء',
+        context_precision: 'دقة السياق',
+        context_recall: 'استرجاع السياق',
+        answer_relevancy: 'ملاءمة الإجابة',
+        context_utilization: 'استخدام السياق',
+        context_entities_recall: 'استرجاع كيانات السياق',
+        factual_correctness: 'الصحة الواقعية',
+        answer_correctness: 'صحة الإجابة',
+        answer_similarity: 'تشابه الإجابة',
+        noise_sensitivity: 'الحساسية للضوضاء'
+      },
+      pdf: {
+        title: 'تقرير الاختبار المرجعي RAGAS',
+        suite: 'المجموعة',
+        run: 'تشغيل',
+        summary: 'الملخص',
+        perQuery: 'درجات كل سؤال'
       }
     }
   },

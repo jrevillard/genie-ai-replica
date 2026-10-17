@@ -2806,7 +2806,8 @@ export default {
       tab: {
         head: 'Head',
         test: 'Test',
-        suites: 'Suites & analytics'
+        suites: 'Suites & analytics',
+        ragas: 'মানদণ্ড পরীক্ষা'
       },
       head: {
         dim: 'Dimensions',
@@ -3041,6 +3042,108 @@ export default {
         colScore: 'Rerank স্কোর',
         colFile: 'ফাইল',
         colContent: 'চাঙ্কের বিষয়বস্তু'
+      }
+    },
+    ragas: {
+      current: 'বর্তমান',
+      generate: {
+        title: 'মানদণ্ড পরীক্ষার একটি স্যুট তৈরি করুন',
+        hint: 'নির্বাচিত রিপোজিটরিগুলো থেকে প্রত্যাশিত উত্তরসহ প্রশ্ন তৈরি করে — এক বা একাধিক: শুধু বর্তমান রিপোজিটরি বা সম্পর্কিত রিপোজিটরিসহ।',
+        size: 'প্রশ্ন',
+        single: 'একক-হপ %',
+        multiAbstract: 'বহু-হপ (বিমূর্ত) %',
+        multiSpecific: 'বহু-হপ (নির্দিষ্ট) %',
+        personas: 'ব্যক্তিত্ব',
+        button: 'তৈরি করুন',
+        working: 'তৈরি হচ্ছে — এতে কয়েক মিনিট লাগবে…'
+      },
+      import: {
+        button: 'স্যুট ইমপোর্ট করুন (.xlsx)',
+        working: 'ইমপোর্ট হচ্ছে…'
+      },
+      suite: {
+        namePlaceholder: 'মানদণ্ড পরীক্ষার নাম (ঐচ্ছিক)',
+        add: 'প্রশ্ন যোগ করুন',
+        addPrompt: 'যোগ করার প্রশ্ন:',
+        addReference: 'প্রত্যাশিত উত্তর (ঐচ্ছিক):',
+        flipTip: 'পরিসরের মধ্যে / বাইরে টগল করুন',
+        probeTip: 'প্রকৃত কর্পাসের বিপরীতে এই প্রশ্নটি পরীক্ষা করুন',
+        removeTip: 'এই প্রশ্নটি সরান'
+      },
+      col: {
+        query: 'প্রশ্ন',
+        reference: 'প্রত্যাশিত উত্তর',
+        passages: 'অনুচ্ছেদ',
+        scope: 'পরিসর'
+      },
+      oos: 'পরিসরের বাইরে',
+      inscope: 'পরিসরের মধ্যে',
+      metrics: {
+        label: 'মেট্রিক্স:'
+      },
+      run: {
+        button: 'মানদণ্ড পরীক্ষা চালান',
+        working: 'চলছে…',
+        phase: {
+          retrieval: 'পুনরুদ্ধার হচ্ছে',
+          judge: 'মূল্যায়ন হচ্ছে'
+        }
+      },
+      export: {
+        suite: 'স্যুট রপ্তানি করুন (.xlsx)',
+        results: 'ফলাফল রপ্তানি করুন (.xlsx)'
+      },
+      results: {
+        title: 'মানদণ্ড পরীক্ষার ফলাফল',
+        failing: '{n}টি ব্যর্থ',
+        allPass: 'সব উত্তীর্ণ',
+        failingShort: 'ব্যর্থ',
+        answer: 'উত্তর',
+        state: 'অবস্থা',
+        error: 'ত্রুটি',
+        abstained: 'উত্তর থেকে বিরত',
+        answered: 'উত্তর দেওয়া হয়েছে',
+        pdf: 'PDF রিপোর্ট রপ্তানি করুন'
+      },
+      explain: {
+        button: 'ব্যর্থতা ব্যাখ্যা করুন',
+        title: 'ব্যর্থতার কারণ নির্ণয় ও পরামর্শ',
+        none: 'ব্যাখ্যা করার মতো কোনো ব্যর্থ সারি নেই।',
+        stage: 'ধাপ',
+        fails: 'ব্যর্থ মেট্রিক্স',
+        recommendation: 'সুপারিশ'
+      },
+      history: {
+        title: 'চালানোর ইতিহাস',
+        run: 'চালানো',
+        when: 'কখন',
+        status: 'স্থিতি',
+        load: 'দেখুন'
+      },
+      advice: {
+        knob: 'নিয়ন্ত্রণ',
+        tag: 'রিপোজিটরি ট্যাগ',
+        content: 'কনটেন্ট',
+        prompt: 'প্রম্পট'
+      },
+      metric: {
+        faithfulness: 'বিশ্বস্ততা',
+        context_precision: 'প্রসঙ্গের নির্ভুলতা',
+        context_recall: 'প্রসঙ্গের সম্পূর্ণতা',
+        answer_relevancy: 'উত্তরের প্রাসঙ্গিকতা',
+        context_utilization: 'প্রসঙ্গের ব্যবহার',
+        context_entities_recall: 'প্রসঙ্গের সত্তার সম্পূর্ণতা',
+        factual_correctness: 'তথ্যগত সঠিকতা',
+        answer_correctness: 'উত্তরের সঠিকতা',
+        answer_similarity: 'উত্তরের সাদৃশ্য',
+        noise_sensitivity: 'নয়েজ সংবেদনশীলতা'
+      },
+      pdf: {
+        title: 'RAGAS মানদণ্ড পরীক্ষার রিপোর্ট',
+        suite: 'স্যুট',
+        run: 'চালানো',
+        summary: 'সারসংক্ষেপ',
+        perQuery: 'প্রতি প্রশ্নে স্কোর'
       }
     }
   },

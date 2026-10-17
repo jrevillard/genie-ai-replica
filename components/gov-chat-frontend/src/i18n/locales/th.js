@@ -2792,7 +2792,8 @@ export default {
       tab: {
         head: 'Head',
         test: 'Test',
-        suites: 'Suites & analytics'
+        suites: 'Suites & analytics',
+        ragas: 'การทดสอบเปรียบเทียบ'
       },
       head: {
         dim: 'Dimensions',
@@ -3024,6 +3025,108 @@ export default {
         colScore: 'คะแนน rerank',
         colFile: 'ไฟล์',
         colContent: 'เนื้อหาชังก์'
+      }
+    },
+    ragas: {
+      current: 'ปัจจุบัน',
+      generate: {
+        title: 'สร้างชุดทดสอบเปรียบเทียบ',
+        hint: 'สังเคราะห์คำถามพร้อมคำตอบที่คาดหวังจากรีปอซิทอรีที่เลือก — หนึ่งรายการหรือมากกว่า ทั้งรีปอซิทอรีปัจจุบันเพียงลำพังหรือร่วมกับรายการที่เกี่ยวข้อง',
+        size: 'คำถาม',
+        single: 'ฮอปเดี่ยว %',
+        multiAbstract: 'หลายฮอป (นามธรรม) %',
+        multiSpecific: 'หลายฮอป (เฉพาะเจาะจง) %',
+        personas: 'บุคลิกผู้ใช้',
+        button: 'สร้าง',
+        working: 'กำลังสร้าง — ใช้เวลาไม่กี่นาที…'
+      },
+      import: {
+        button: 'นำเข้าชุดทดสอบ (.xlsx)',
+        working: 'กำลังนำเข้า…'
+      },
+      suite: {
+        namePlaceholder: 'ชื่อการทดสอบเปรียบเทียบ (ไม่บังคับ)',
+        add: 'เพิ่มคำถาม',
+        addPrompt: 'คำถามที่จะเพิ่ม:',
+        addReference: 'คำตอบที่คาดหวัง (ไม่บังคับ):',
+        flipTip: 'สลับในขอบเขต / นอกขอบเขต',
+        probeTip: 'ทดสอบคำถามนี้กับคลังข้อมูลจริง',
+        removeTip: 'ลบคำถามนี้'
+      },
+      col: {
+        query: 'คำถาม',
+        reference: 'คำตอบที่คาดหวัง',
+        passages: 'ตอนข้อความ',
+        scope: 'ขอบเขต'
+      },
+      oos: 'นอกขอบเขต',
+      inscope: 'ในขอบเขต',
+      metrics: {
+        label: 'ตัวชี้วัด:'
+      },
+      run: {
+        button: 'เรียกใช้การทดสอบเปรียบเทียบ',
+        working: 'กำลังเรียกใช้…',
+        phase: {
+          retrieval: 'กำลังดึงข้อมูล',
+          judge: 'กำลังให้คะแนน'
+        }
+      },
+      export: {
+        suite: 'ส่งออกชุดทดสอบ (.xlsx)',
+        results: 'ส่งออกผลลัพธ์ (.xlsx)'
+      },
+      results: {
+        title: 'ผลการทดสอบเปรียบเทียบ',
+        failing: '{n} รายการไม่ผ่าน',
+        allPass: 'ผ่านทั้งหมด',
+        failingShort: 'ไม่ผ่าน',
+        answer: 'คำตอบ',
+        state: 'สถานะ',
+        error: 'ข้อผิดพลาด',
+        abstained: 'งดตอบ',
+        answered: 'ตอบแล้ว',
+        pdf: 'ส่งออกรายงาน PDF'
+      },
+      explain: {
+        button: 'อธิบายความล้มเหลว',
+        title: 'การระบุสาเหตุความล้มเหลวและคำแนะนำ',
+        none: 'ไม่มีแถวที่ไม่ผ่านให้วิเคราะห์',
+        stage: 'ขั้นตอน',
+        fails: 'ตัวชี้วัดที่ไม่ผ่าน',
+        recommendation: 'คำแนะนำ'
+      },
+      history: {
+        title: 'ประวัติการเรียกใช้',
+        run: 'การเรียกใช้',
+        when: 'เมื่อ',
+        status: 'สถานะ',
+        load: 'ดู'
+      },
+      advice: {
+        knob: 'พารามิเตอร์',
+        tag: 'แท็กรีปอซิทอรี',
+        content: 'เนื้อหา',
+        prompt: 'พรอมป์ต์'
+      },
+      metric: {
+        faithfulness: 'ความซื่อตรงต่อแหล่งที่มา',
+        context_precision: 'ความแม่นยำของบริบท',
+        context_recall: 'ความครอบคลุมของบริบท',
+        answer_relevancy: 'ความเกี่ยวข้องของคำตอบ',
+        context_utilization: 'การใช้ประโยชน์จากบริบท',
+        context_entities_recall: 'ความครอบคลุมเอนทิตีในบริบท',
+        factual_correctness: 'ความถูกต้องเชิงข้อเท็จจริง',
+        answer_correctness: 'ความถูกต้องของคำตอบ',
+        answer_similarity: 'ความคล้ายคลึงของคำตอบ',
+        noise_sensitivity: 'ความไวต่อสัญญาณรบกวน'
+      },
+      pdf: {
+        title: 'รายงานการทดสอบเปรียบเทียบ RAGAS',
+        suite: 'ชุดทดสอบ',
+        run: 'การเรียกใช้',
+        summary: 'สรุป',
+        perQuery: 'คะแนนรายคำถาม'
       }
     }
   },

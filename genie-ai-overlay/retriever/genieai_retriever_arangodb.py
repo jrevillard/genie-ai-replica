@@ -286,6 +286,23 @@ def _result_key(result: dict):
     is what makes index alignment a property of the code rather than a
     coincidence. ``None`` (an unkeyable document) stays ``None`` rather than
     becoming a shared placeholder that would merge two distinct documents.
+
+    INVARIANT the callers rely on: at most ONE retrieval result per request has
+    no id. Both legs key their documents -- the BM25 leg builds
+    ``Document(id=row["key"])`` from an AQL ``RETURN doc._key``, and the dense
+    leg comes from langchain-arangodb, which sets ``Document.id`` to the chunk
+    key -- so an unkeyable document is not a case either leg produces.
+
+    Where it would break: ``_dense_by_id`` is a plain dict comprehension over
+    the dense leg, so ``None`` is a single dict key -- two or more unkeyable
+    dense documents would collapse onto it, keeping only the last score, and
+    ``key in _dense_by_id`` would report ``dense_present`` true for EVERY
+    unkeyable slot in the fused list. ``rrf_fuse`` does not have that hole: it
+    gives each unkeyable doc a distinct ``__unkeyed_<n>`` identity, so two of
+    them stay two entries there and would disagree with the dense map here.
+    Recorded rather than restructured: the stated contract excludes the case, and
+    adding a synthetic key to ``_result_key`` would change what
+    ``rag.candidate_keys`` reports for every span.
     """
     return getattr(result.get("doc"), "id", None)
 
@@ -342,7 +359,7 @@ def _retrieval_parameter_attributes(input_dict: dict, base_mode: str, labels: li
         A["traversal_score_threshold"]: _as_float(input_dict.get("traversal_score_threshold")),
         A["traversal_injected_docs"]: 0,
         A["traversal_injected_neighbor_items"]: 0,
-        **_hybrid_configuration_attributes(),
+        **_hybrid_configuration_attributes(base_mode),
     }
 
 
@@ -426,7 +443,7 @@ def rrf_fuse(dense, bm25, k=HYBRID_RRF_K, dense_weight=HYBRID_DENSE_WEIGHT, lexi
     return sorted(scores.values(), key=lambda x: x["score"], reverse=True)
 
 
-def _hybrid_configuration_attributes() -> dict:
+def _hybrid_configuration_attributes(search_start: str) -> dict:
     """The RRF configuration in force, read off ``rrf_fuse``'s own signature.
 
     Read from the function rather than re-referenced from ``config.py``:
@@ -434,19 +451,22 @@ def _hybrid_configuration_attributes() -> dict:
     configuration in force, and a span that quoted the config module could
     disagree with the fusion that actually ran.
 
-    ``rag.hybrid.enabled`` is the DEPLOY flag. Fusion additionally requires a
-    chunk search start, recorded separately as ``rag.search_start_base``, so an
-    operator reading both can tell "the lexical channel is switched off" from
-    "it is on, but this request did not search chunks".
+    ``rag.hybrid.enabled`` reports whether the lexical channel was ENGAGED for
+    this request -- the deploy flag on AND a chunk search start -- which is the
+    same condition the fusion block is guarded by. The deploy flag alone is not
+    it: on an ``edge`` or ``node`` search the span would say ``true`` while no
+    fusion ran at all, and one attribute is what an operator reads. The search
+    start itself is recorded alongside as ``rag.search_start_base``.
 
-    Recorded as an explicit ``false``, never omitted. Without it a reader of
-    ``rag.scores.*`` must infer the retrieval mode from the ABSENCE of
-    ``rag.scores.bm25``, which is indistinguishable from a fusion that ran and
-    failed or found nothing.
+    ``true`` means the channel was engaged, not that it returned anything: a
+    BM25 search that found nothing, or that failed and degraded to dense-only,
+    still reports ``true`` and shows up as the ABSENCE of ``rag.scores.bm25``.
+    That is the distinction the flag exists to preserve -- "on, no lexical hit"
+    versus "off" -- and both are recorded as an explicit boolean, never omitted.
     """
     parameters = inspect.signature(rrf_fuse).parameters
     return {
-        A["rag_hybrid_enabled"]: bool(HYBRID_RETRIEVAL_ENABLED),
+        A["rag_hybrid_enabled"]: bool(HYBRID_RETRIEVAL_ENABLED and search_start == "chunk"),
         A["rag_hybrid_dense_weight"]: float(parameters["dense_weight"].default),
         A["rag_hybrid_lexical_weight"]: float(parameters["lexical_weight"].default),
         A["rag_hybrid_rrf_k"]: int(parameters["k"].default),

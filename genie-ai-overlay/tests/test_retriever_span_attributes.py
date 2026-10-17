@@ -280,13 +280,28 @@ class TestHybridConfiguration:
     def test_disabled_hybrid_is_recorded_as_false_not_omitted(self):
         """The defect this closes: an absent flag reads as 'unknown'."""
         with patch.object(retriever_module, "HYBRID_RETRIEVAL_ENABLED", False):
-            attrs = retriever_module._hybrid_configuration_attributes()
+            attrs = retriever_module._hybrid_configuration_attributes("chunk")
         assert attrs[A["rag_hybrid_enabled"]] is False
 
     def test_enabled_hybrid_is_recorded(self):
         with patch.object(retriever_module, "HYBRID_RETRIEVAL_ENABLED", True):
-            attrs = retriever_module._hybrid_configuration_attributes()
+            attrs = retriever_module._hybrid_configuration_attributes("chunk")
         assert attrs[A["rag_hybrid_enabled"]] is True
+
+    def test_enabled_on_the_deployment_but_not_engaged_reports_false(self):
+        """The flag is request-derived: fusion is guarded on a chunk search start.
+
+        An ``edge``/``node`` search runs no fusion at all, so reporting the
+        deploy flag alone would tell an operator the lexical channel ran when
+        it did not — the confident-wrong single attribute this guards against.
+        """
+        for search_start in ("edge", "node"):
+            with patch.object(retriever_module, "HYBRID_RETRIEVAL_ENABLED", True):
+                attrs = retriever_module._hybrid_configuration_attributes(search_start)
+            assert attrs[A["rag_hybrid_enabled"]] is False, search_start
+            # The configuration is still reported — the channel was available,
+            # it just could not be used for this request.
+            assert attrs[A["rag_hybrid_rrf_k"]] > 0
 
     def test_weights_and_k_are_read_off_the_fusion_itself(self):
         """Not off config.py: the signature IS what runs.
@@ -295,7 +310,7 @@ class TestHybridConfiguration:
         the configuration in force. A span quoting ``config.py`` separately
         could disagree with the fusion that actually ran.
         """
-        attrs = retriever_module._hybrid_configuration_attributes()
+        attrs = retriever_module._hybrid_configuration_attributes("chunk")
         parameters = inspect.signature(retriever_module.rrf_fuse).parameters
         assert attrs[A["rag_hybrid_dense_weight"]] == float(parameters["dense_weight"].default)
         assert attrs[A["rag_hybrid_lexical_weight"]] == float(parameters["lexical_weight"].default)
@@ -303,7 +318,7 @@ class TestHybridConfiguration:
 
     def test_the_values_are_primitives_the_otel_sdk_accepts(self):
         with patch.object(retriever_module, "HYBRID_RETRIEVAL_ENABLED", True):
-            for key, value in retriever_module._hybrid_configuration_attributes().items():
+            for key, value in retriever_module._hybrid_configuration_attributes("chunk").items():
                 assert isinstance(value, (bool, int, float)), key
 
     def test_they_travel_with_the_other_retrieval_parameters(self):
@@ -311,6 +326,17 @@ class TestHybridConfiguration:
             attrs = _retrieval_parameter_attributes({}, base_mode="chunk", labels=[])
         assert attrs[A["rag_hybrid_enabled"]] is True
         assert A["rag_hybrid_rrf_k"] in attrs
+
+    def test_the_flag_follows_the_search_start_through_the_emission_helper(self):
+        """The request-derived value must survive the trip to the attribute dict.
+
+        Guards the plumbing, not just the helper: a call site that passed the
+        deploy flag (or dropped the argument) here would report ``true`` on
+        every request again.
+        """
+        with patch.object(retriever_module, "HYBRID_RETRIEVAL_ENABLED", True):
+            assert _retrieval_parameter_attributes({}, base_mode="edge", labels=[])[A["rag_hybrid_enabled"]] is False
+            assert _retrieval_parameter_attributes({}, base_mode="chunk", labels=[])[A["rag_hybrid_enabled"]] is True
 
     def test_privacy(self):
         with patch.object(retriever_module, "HYBRID_RETRIEVAL_ENABLED", True):

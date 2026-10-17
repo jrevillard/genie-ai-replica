@@ -69,6 +69,18 @@ align_tracer = get_tracer("chatqna.align_outputs")
 # Tracer for the per-LLM-call span. Separate from align_tracer because the
 # llm.invoke span is opened with start_span (not start_as_current_span) and its
 # lifetime is owned by the streaming generator, not by an orchestrator node.
+#
+# UNVERIFIED, and stated rather than assumed: whether comps invokes the align
+# function inside handle_request's orchestrate block cannot be checked from this
+# tree. `comps` is vendored at build time, is not installed in the test venv, and
+# no Docker is available here. `align_generator` therefore captures the active
+# context when it is CALLED and parents the span on that, which closes the window
+# where a lazily-iterated generator would open its span against the request task's
+# context and start a new trace. If comps hands the chain over before the
+# orchestrate block closes, that capture is the orchestrate context and the span
+# joins the RAG trace; if it hands it over after, the capture is still earlier
+# than first iteration but may not be the RAG trace. Which of the two happens is
+# a fact about comps, not about this file.
 llm_tracer = get_tracer("chatqna.llm")
 
 # Tracer for the answer-level outcome of a streamed turn. The span is opened by
@@ -213,7 +225,7 @@ def _stamp_llm_request_params_on_current_span(request_fields) -> None:
     _record_llm_request_params(span, request_fields)
 
 
-def _emit_llm_invoke_open(llm_parameters_dict: dict):
+def _emit_llm_invoke_open(llm_parameters_dict: dict, *, stream_known: bool | None = None, parent_context=None):
     """Open the llm.invoke span and record the request parameters.
 
     ``start_span``, not ``start_as_current_span``: the latter returns an
@@ -228,15 +240,37 @@ def _emit_llm_invoke_open(llm_parameters_dict: dict):
     is why the authoritative copy lands on ``chatqna.orchestrate``, stamped from
     ``next_inputs`` in ``align_inputs``.
 
-    ``stream`` resolves from the same dict as every other param, so
-    ``llm.stream`` and ``llm.stream_options.include_usage`` cannot disagree.
+    ``stream_known`` carries what the CALL SITE knows about streaming, which the
+    parameter dict cannot always be asked for. ``align_generator`` IS the
+    streaming branch — the non-streaming LLM branch of ``align_outputs`` is
+    guarded on ``not llm_parameters_dict["stream"]`` — but it reaches this
+    function only through ``**kwargs``, and whether comps forwards the dict
+    there cannot be verified from this source tree. Deriving ``llm.stream`` from
+    an absent dict therefore records ``false`` on the one span whose job is to
+    report what the LLM call was, and confidently-wrong data is worse than none.
+
+    With ``stream_known`` set, ``llm.stream`` is that value.
+    ``llm.stream_options.include_usage`` is different: it is only emitted when
+    the dict actually carried ``stream``, because whether the request asked for
+    usage alongside the stream is genuinely unknown without it. Absence is the
+    correct degradation for an unknown; a guessed ``true`` is not. When
+    ``stream_known`` is None the dict is the only source and both attributes
+    resolve from it, so they cannot disagree.
+
+    ``parent_context`` parents the span to an explicitly captured context instead
+    of whatever is active at open time. A lazily-started generator can be
+    consumed after the orchestrating span has closed, at which point the active
+    context belongs to the request task and an unparented span starts a NEW
+    trace.
     """
     params = _llm_request_params(llm_parameters_dict)
-    stream = bool(params.get("stream"))
-    span = llm_tracer.start_span("llm.invoke", context=otel_context.get_current())
+    stream_observed = bool(params.get("stream"))
+    stream = stream_observed if stream_known is None else bool(stream_known)
+    parent_ctx = otel_context.get_current() if parent_context is None else parent_context
+    span = llm_tracer.start_span("llm.invoke", context=parent_ctx)
     span.set_attribute(ATTRIBUTE_NAMES["llm_stream"], stream)
     _record_llm_request_params(span, params)
-    if stream:
+    if stream_observed:
         span.set_attribute(ATTRIBUTE_NAMES["llm_stream_options_include_usage"], True)
     _query_id = query_id_from_baggage()
     if _query_id:
@@ -302,6 +336,13 @@ def _emit_stream_outcome_span(
     span = stream_outcome_tracer.start_span("chatqna.stream_outcome", context=parent_context)
     try:
         if span.is_recording():
+            # The correlation id comes from the ACTIVE context, not from
+            # ``parent_context``: the parent handle carries the trace, while the
+            # id travels as baggage, which is a property of whatever context is
+            # running right now. Omitted when no client sent one.
+            _query_id = query_id_from_baggage()
+            if _query_id:
+                span.set_attribute(QUERY_ID_KEY, _query_id)
             span.set_attribute(ATTRIBUTE_NAMES["retrieval_confidence"], float(retrieval_confidence))
             # Omitted, never nulled: an absent self-grade means the sentinel
             # never completed, which is a different fact from a score of 0.
@@ -2145,13 +2186,49 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
     return next_data
 
 
-def align_generator(self, gen, **kwargs):
+def align_generator(self, gen, *, parent_context=None, **kwargs):
+    """Wrap the LLM byte stream, recording it on an ``llm.invoke`` span.
+
+    A NON-generator on purpose, delegating the body to ``_align_generator_body``.
+    As a generator function its body would not run until something iterated it,
+    so every read of the active context inside the body would happen at first
+    iteration rather than at call time. If the framework hands out the lazy
+    chain from ``schedule()``, first iteration can land after the
+    ``chatqna.orchestrate`` ``with`` block has closed -- the active context then
+    belongs to the request task, and an ``llm.invoke`` span opened there starts a
+    NEW trace and never appears beside the retrieval and reranking spans it
+    belongs with. Capturing the context here, before the body is handed on, is
+    strictly earlier than first iteration and strictly no worse.
+
+    Whether comps calls the align function inside the orchestrate block cannot be
+    verified from this source tree: ``comps`` is vendored at build time and is
+    not installed in the test venv. So this removes one failure mode without
+    proving the span always joins the RAG trace -- ``parent_context`` lets a
+    caller that knows better state the parent explicitly.
+
+    The signature is comps': ``align_generator(self, gen, **kwargs)``. Nothing
+    new is required of the caller.
+    """
+    return _align_generator_body(
+        gen,
+        kwargs.get("llm_parameters_dict") or {},
+        # Resolved HERE, not inside the body: a fallback evaluated at first
+        # iteration is exactly the late read this split exists to prevent.
+        parent_context=otel_context.get_current() if parent_context is None else parent_context,
+    )
+
+
+def _align_generator_body(gen, llm_parameters_dict, parent_context):
     # OpenAI response format
     # data:{"id":"","object":"text_completion","created":1725530204,
     # "model":"meta-llama/Meta-Llama-3-8B-Instruct","system_fingerprint":"2.0.1-native",
     # "choices":[{"index":0,"delta":{"role":"assistant","content":"?"},"logprobs":null,
     # "finish_reason":null}]}\n\n'
-    _llm_span = _emit_llm_invoke_open(kwargs.get("llm_parameters_dict") or {})
+    _llm_span = _emit_llm_invoke_open(
+        llm_parameters_dict,
+        stream_known=True,
+        parent_context=parent_context,
+    )
     try:
         for line in gen:
             line = line.decode("utf-8")
@@ -3456,6 +3533,13 @@ class ChatQnAService:
             # block closes, when the active context is the request task's rather
             # than this trace's. The outcome span it parents needs this handle.
             _orchestrate_context = otel_trace.set_span_in_context(span)
+            # Stamped here so the id is on the span that owns the turn, not only
+            # on the leaf spans below it: a request that dies before the LLM
+            # node still leaves a trace an operator can join to the stored query.
+            # Omitted when the caller sent no baggage, never a placeholder.
+            _query_id = query_id_from_baggage()
+            if _query_id:
+                span.set_attribute(QUERY_ID_KEY, _query_id)
             span.set_attribute("rag.query_length", len(last_translated_message_content))
             span.set_attribute("rag.model_id", _get_llm_model())
             # What this request actually blended, and the answer reserve it is

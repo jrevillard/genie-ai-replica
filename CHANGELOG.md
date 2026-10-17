@@ -19,10 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   their answer-level outcome (confidence, groundedness) on a span joined to the
   same trace — including turns that abstain, so an abstention rate computed over
   that span no longer reads as zero because abstentions went unrecorded.
+  **Note on streamed token usage:** `llm.usage.*` on a streamed turn depends on
+  `stream_options: {include_usage: true}` surviving the chatqna → textgen → vLLM
+  chain. That has not been verified against a running deployment; on a streamed
+  turn the usage attributes are omitted rather than guessed if the flag does not
+  arrive. The non-streamed path records usage unconditionally.
 
-- **Trace-to-query correlation:** every RAG span carries `genie.query_id`, so a
-  trace can be joined to the stored query document. The value is an opaque
-  internal id. No prompt, document or user text is added to any trace attribute.
+- **Trace-to-query correlation:** the spans on a chat turn carry
+  `genie.query_id`, so a trace can be joined to the stored query document. The
+  value is an opaque internal id. It is present when the request came through
+  the web/mobile chat backend, which is what injects it; a client that talks to
+  chatqna directly (a hand-crafted `curl`, an evaluation harness) sends no
+  baggage, and those turns simply carry no correlation id. Document-ingestion
+  traces are a separate span family and are not covered. No prompt, document or
+  user text is added to any trace attribute.
 
 - **RAG eval toolchain overhaul** (`tests/rag-benchmarks/eval/` + `tests/rag-benchmarks/scripts/`): a single command now drives a full RAG-quality evaluation on a deployed stack — Phase 3 dump-tuples + Phase 5 anchor + Phase 4 RAGAS — with provably-safe ROPC enable/disable (curl-K secrets off argv, container-side expansion via `docker exec -e`, re-auth inside trap, 3 retries, exit 9 on revert failure), in-run realm-token refresh (240s TTL, 401→refresh+retry, `EVAL_KC_URL` / `EVAL_KC_REALM` / `EVAL_KC_CLIENT_ID` / `EVAL_KC_USER` / `EVAL_KC_PASSWORD`), atomic out-writes, resume derived from rows (1-row-per-id invariant), and a per-run sidecar JSON (`.meta.json`) with `n_entries` / `n_tuples` / `n_http_errors` / `n_missed_traces` / `skipped` for post-run assertions. The retired `run_eval_chunked.py` orchestrator is replaced by direct `python3 run_eval.py` calls in `run_anchor_with_cleanup.sh`; `run_eval.py` exits deterministically (0 clean, 2 usage, 3 degraded, 4 zero-scored) so a single shell pipe can drive CI. New exit codes on the wrapper itself: 8 = ROPC enable failed, 9 = ROPC revert failed (the revert is the only one that leaves a real security hole, so the wrapper exits 9 and the operator must verify manually).
 - **`tests/rag-benchmarks/eval/RUNBOOK.md`**: the new end-to-end recipe for the RAG eval toolchain. Five phases (0 pre-flight / 1 xlsx → gold / 2 match gold chunks / 3 dump-tuples / 4 RAGAS / 5 calibrate), each with copy-pasteable commands, env-var tables, exit-code maps, and a "When things go wrong" section (resume from `.done.jsonl`, salvage partial outputs, ROPC-left-enabled verification curl, chatqna warm-up, `ps` secrets spot-check, full `n_missed_traces` and `n_http_errors` triage tables). Replaces the old "use the script and hope" pattern. Generic placeholders only — no deployment-specific hostname, IP, stack, or DB name in the commands.

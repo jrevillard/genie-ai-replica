@@ -21,6 +21,13 @@ import reranker.genieai_tei_reranker as reranker_module
 import retriever.genieai_retriever_arangodb as retriever_module
 from core.span_attrs import QUERY_ID_KEY, query_id_from_baggage
 from reranker.genieai_tei_reranker import GenieTEIReranking
+from tests.test_chatqna import (
+    _fake_parms,
+    _patched_chat_request,
+    create_chatqna_service,
+    create_mock_chat_request_data,
+    create_mock_request,
+)
 
 
 def _attach_baggage(entries):
@@ -34,6 +41,50 @@ def _attach_baggage(entries):
     for key, value in entries.items():
         ctx = baggage.set_baggage(key, value, context=ctx)
     return otel_context.attach(ctx if ctx is not None else otel_context.get_current())
+
+
+def _emit_outcome_span():
+    """Call the real stream-outcome emitter with the argument shape production uses."""
+    chatqna_module._emit_stream_outcome_span(
+        parent_context=None,
+        retrieval_confidence=0.5,
+        self_confidence=None,
+        is_grounded=True,
+        sentinel_present=False,
+        abstained=False,
+    )
+
+
+def _run_handle_request():
+    """Drive the real ``handle_request`` far enough to emit chatqna.orchestrate.
+
+    The emission site is inside that function's ``with`` block, so a test that
+    called a helper instead would stay green with the site deleted -- which is
+    how this span family went unstamped in the first place. The request is
+    served by the ``reranker_input_too_long`` branch: the megaservice raises a
+    typed marker, chatqna returns an abstention, and the orchestrate span opens
+    and closes normally on the way.
+    """
+
+    async def _raise_marker(*_args, **_kwargs):
+        raise chatqna_module._RerankerInputTooLongError("TEI rejected input")
+
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+    svc.megaservice.schedule = _raise_marker
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=False),
+    ):
+        asyncio.run(svc.handle_request(req))
 
 
 class TestQueryIdFromBaggage:
@@ -70,6 +121,34 @@ class TestChatqnaStamping:
         (span,) = captured_spans("chatqna.reranker_selection")
         assert QUERY_ID_KEY not in span.attributes
 
+    def test_stream_outcome_carries_the_query_id(self, captured_spans):
+        token = _attach_baggage({QUERY_ID_KEY: "query-key-4"})
+        try:
+            _emit_outcome_span()
+        finally:
+            otel_context.detach(token)
+        (span,) = captured_spans("chatqna.stream_outcome")
+        assert span.attributes[QUERY_ID_KEY] == "query-key-4"
+
+    def test_stream_outcome_omits_the_query_id_without_baggage(self, captured_spans):
+        _emit_outcome_span()
+        (span,) = captured_spans("chatqna.stream_outcome")
+        assert QUERY_ID_KEY not in span.attributes
+
+    def test_orchestrate_carries_the_query_id(self, captured_spans):
+        token = _attach_baggage({QUERY_ID_KEY: "query-key-2"})
+        try:
+            _run_handle_request()
+        finally:
+            otel_context.detach(token)
+        (span,) = captured_spans("chatqna.orchestrate")
+        assert span.attributes[QUERY_ID_KEY] == "query-key-2"
+
+    def test_orchestrate_omits_the_query_id_without_baggage(self, captured_spans):
+        _run_handle_request()
+        (span,) = captured_spans("chatqna.orchestrate")
+        assert QUERY_ID_KEY not in span.attributes
+
 
 # ---------------------------------------------------------------------------
 # Retriever
@@ -94,8 +173,9 @@ class TestChatqnaStamping:
 #
 # The request object is a real pydantic model carrying the fields invoke reads.
 # It cannot be ``comps.cores.proto.genieai_api_protocol.RetrievalRequestArangoDB``
-# because conftest replaces the ``comps.cores.proto`` package with a MagicMock and
-# the real OPEA base (``api_protocol``) is not installed in the test venv.
+# because conftest replaces the ``comps.cores.proto`` package with a MagicMock: the
+# attribute imports fine, it resolves to a MagicMock, and a MagicMock is not a
+# usable type to construct a request from.
 
 
 class _RetrievalRequest(BaseModel):

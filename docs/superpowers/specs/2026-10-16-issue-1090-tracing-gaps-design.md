@@ -279,7 +279,7 @@ is advisory under other search types.
 | `rag.scores.dense_present` | JSON array of bool — `false` where the chunk was absent from the dense leg |
 | `rag.scores.bm25` | JSON array of float, aligned to `rag.candidate_keys` (hybrid only) |
 | `rag.scores.fused` | JSON array of float, aligned, before the `[:k]` cut |
-| `rag.scores_capped` | bool — input exceeded the ceiling |
+| `rag.scores.capped` | bool — input exceeded the ceiling |
 | `traversal.enabled` | bool |
 | `traversal.max_depth` / `.max_returned` / `.score_threshold` | int / int / float |
 | `traversal.injected_docs` | int |

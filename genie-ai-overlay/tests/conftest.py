@@ -336,8 +336,29 @@ def span_sweep():
 
 
 @pytest.fixture
+def span_exporter():
+    """Expose the in-memory exporter, so a deliberate leak can be cleaned up.
+
+    Only for tests that emit a leaking span ON PURPOSE to assert the sweep
+    catches it. The autouse sweep reads the same exporter at teardown, so
+    without a ``clear()`` at the end of such a test the leak is reported twice
+    -- once by the test's own assertion and once by the sweep -- and the test
+    fails for the wrong reason, which trains a reader to ignore the sweep.
+    """
+    return _SPAN_EXPORTER
+
+
+@pytest.fixture
 def captured_spans():
-    """Return a callable giving finished spans, optionally filtered by name."""
+    """Return a callable giving finished spans, optionally filtered by name.
+
+    Clears on SETUP only. A teardown clear here would empty the exporter before
+    ``sweep_owned_spans`` reads it: autouse fixtures are set up first and torn
+    down last, so this fixture's teardown runs FIRST and the sweep would see an
+    empty exporter and pass silently on every test that requests this one --
+    which is most tests that emit an owned span. The sweep clears at setup and
+    in its own ``finally``, so it owns the exporter's boundaries.
+    """
     _SPAN_EXPORTER.clear()
 
     def _get(name=None):
@@ -346,5 +367,4 @@ def captured_spans():
             spans = [s for s in spans if s.name == name]
         return spans
 
-    yield _get
-    _SPAN_EXPORTER.clear()
+    return _get

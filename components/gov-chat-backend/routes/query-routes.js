@@ -3,6 +3,7 @@ const router = express.Router();
 const axios = require('axios');
 const http = require('http');
 const https = require('https');
+const { trace } = require('@opentelemetry/api');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger, spanAttrs, tracingBaggage } = require('../shared-lib');
 const translationService = require('../services/translation-service');
@@ -190,38 +191,44 @@ module.exports = (queryService) => {
       const streamTimeout = parseInt(process.env.CHATQNA_STREAM_TIMEOUT, 10) || 3600000;
       opeaController = new AbortController();
 
+      // Stamp the correlation id on the span covering THIS handler — the server
+      // span for the incoming request — so a trace whose chatqna side never got
+      // far enough to stamp anything is still joinable to the stored query.
+      // getActiveSpan() is the right handle: the Express span is active for the
+      // whole handler. When queryId is absent nothing is written; an absent
+      // correlation id stays distinguishable from an empty one.
+      if (queryId) {
+        const activeSpan = trace.getActiveSpan();
+        if (activeSpan && activeSpan.isRecording()) {
+          activeSpan.setAttribute(spanAttrs.QUERY_ID_KEY, queryId);
+        }
+      }
+
+      // One options object for both branches below. Duplicating it made the two
+      // paths able to drift apart silently — the same request would carry
+      // different headers depending on whether a query id happened to exist.
+      const opeaRequestOptions = {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authHeaders?.authorization && {
+            Authorization: authHeaders.authorization
+          })
+        },
+        responseType: 'stream',
+        timeout: streamTimeout,
+        signal: opeaController.signal,
+        httpAgent: new http.Agent({ keepAlive: true }),
+        httpsAgent: new https.Agent({ keepAlive: true })
+      };
+
       // Carry the query id into the trace so a trace joins to the stored query
       // document. When queryId is absent the request simply carries no baggage
       // and every service leaves the attribute unset — never a placeholder.
       const opeaResponse = queryId
         ? await tracingBaggage.withBaggage(spanAttrs.QUERY_ID_KEY, queryId, () =>
-            axios.post(opeaUrl, opeaPayload, {
-              headers: {
-                'Content-Type': 'application/json',
-                ...(authHeaders?.authorization && {
-                  Authorization: authHeaders.authorization
-                })
-              },
-              responseType: 'stream',
-              timeout: streamTimeout,
-              signal: opeaController.signal,
-              httpAgent: new http.Agent({ keepAlive: true }),
-              httpsAgent: new https.Agent({ keepAlive: true })
-            })
+            axios.post(opeaUrl, opeaPayload, opeaRequestOptions)
           )
-        : await axios.post(opeaUrl, opeaPayload, {
-            headers: {
-              'Content-Type': 'application/json',
-              ...(authHeaders?.authorization && {
-                Authorization: authHeaders.authorization
-              })
-            },
-            responseType: 'stream',
-            timeout: streamTimeout,
-            signal: opeaController.signal,
-            httpAgent: new http.Agent({ keepAlive: true }),
-            httpsAgent: new https.Agent({ keepAlive: true })
-          });
+        : await axios.post(opeaUrl, opeaPayload, opeaRequestOptions);
 
       const stream = opeaResponse.data;
       let fullResponseText = '';

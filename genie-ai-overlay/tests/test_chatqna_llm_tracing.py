@@ -296,12 +296,20 @@ class TestAlignGeneratorWiring:
         assert emitted.attributes[A["llm_finish_reason"]] == "stop"
 
     def test_align_generator_omits_params_it_was_not_given(self, captured_spans):
-        """The parameters comps forwards (if any) are the only ones recorded."""
+        """What the call site knows is recorded; what it does not know is omitted.
+
+        ``align_generator`` IS the streaming branch, so ``llm.stream`` is true
+        whether or not comps forwarded ``llm_parameters_dict`` -- asserting
+        ``False`` here pinned the confident-wrong reading of an absent dict.
+        ``llm.stream_options.include_usage`` is the opposite case: whether the
+        request asked for usage alongside the stream is unknown without the
+        dict, so it is omitted rather than guessed.
+        """
         lines = [(b'data:{"choices":[{"delta":{"content":"x"},"finish_reason":"stop"}]}\n\n')]
         list(chatqna_module.align_generator(None, gen=iter(lines)))
 
         (emitted,) = captured_spans("llm.invoke")
-        assert emitted.attributes[A["llm_stream"]] is False
+        assert emitted.attributes[A["llm_stream"]] is True
         assert A["llm_req_max_tokens"] not in emitted.attributes
         assert A["llm_stream_options_include_usage"] not in emitted.attributes
 

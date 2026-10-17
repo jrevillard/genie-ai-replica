@@ -80,11 +80,20 @@ _DIGEST_SIZE = 4  # bytes -> 8 hex characters
 _ANY_WHITESPACE = re.compile(r"\s")
 
 # The full vocabulary (52 entries), keyed by a short identifier for call sites.
-# Values are the literal attribute name. NOTE: ``rag.fetch_k`` is only CONSULTED by the retriever
-# under ``search_type == "mmr"``; chatqna defaults to similarity_score_threshold.
-# It is recorded regardless, because a span that reported what was used rather
-# than what was configured would be the same transparency failure this guards
-# against — but read it as advisory outside mmr.
+# Values are the literal attribute name.
+#
+# Two entries are REQUEST-derived rather than deploy-derived, and are flagged
+# where they are declared:
+#   * ``rag.fetch_k`` is only CONSULTED by the retriever under
+#     ``search_type == "mmr"``; chatqna defaults to similarity_score_threshold.
+#     It is recorded regardless, because a span that reported what was used
+#     rather than what was configured would be the same transparency failure
+#     this guards against — but read it as advisory outside mmr.
+#   * ``rag.hybrid.enabled`` is true only when the lexical channel was engaged
+#     for THAT request (deploy flag on AND a chunk search start), not when the
+#     deployment has the flag on. An ``edge``/``node`` search reports false
+#     because no fusion ran. Read it as "was fusion possible for this request",
+#     with ``rag.search_start_base`` beside it.
 ATTRIBUTE_NAMES = {
     # Correlation
     "query_id": QUERY_ID_KEY,
@@ -109,11 +118,28 @@ ATTRIBUTE_NAMES = {
     "rag_filter_labels_enabled": "rag.filter_labels_enabled",
     "rag_filter_label_count": "rag.filter_label_count",
     "rag_filter_label_digests": "rag.filter_label_digests",
+    # Request-derived, see the note above: true means fusion was ENGAGED here.
     "rag_hybrid_enabled": "rag.hybrid.enabled",
     "rag_hybrid_dense_weight": "rag.hybrid.dense_weight",
     "rag_hybrid_lexical_weight": "rag.hybrid.lexical_weight",
     "rag_hybrid_rrf_k": "rag.hybrid.rrf_k",
     "rag_candidate_keys": "rag.candidate_keys",
+    # ------------------------------------------------------------------------
+    # JOIN SENTINELS — two different literals, both meaning "the join failed".
+    #
+    # ``rag.candidate_chunk_keys`` / ``rag.selected_chunk_keys`` (see
+    # DEPRECATED_ATTRIBUTE_NAMES) use the literal "N/A" — a pre-existing write
+    # at chatqna/genieai_chatqna.py, NOT changed here: the eval harness reads
+    # those arrays, and a different token would be a second way for it to see an
+    # unresolved entry as a chunk key.
+    # ``rag.adaptive_chunk_keys`` uses the module-level ``UNRESOLVED`` constant,
+    # likewise a token rather than a key.
+    #
+    # An operator joining chatqna's candidate/selected chunk keys to the
+    # reranker's adaptive breakdown must therefore special-case BOTH. Neither
+    # satisfies the layer-2 shape rule (no whitespace, short), which is exactly
+    # why they are easy to miss.
+    # ------------------------------------------------------------------------
     "rag_scores_dense": "rag.scores.dense",
     "rag_scores_dense_present": "rag.scores.dense_present",
     "rag_scores_bm25": "rag.scores.bm25",
@@ -186,6 +212,11 @@ DEPRECATED_ATTRIBUTE_NAMES = {
     # these. Exactly two of these five are the eval-harness contract
     # (tests/rag-benchmarks/eval/run_eval.py:331-332); the other three are
     # chatqna-local diagnostics with no reader outside the write site.
+    #
+    # The first two carry the JOIN SENTINEL "N/A" where a chunk could not be
+    # resolved — see the note on ``rag.candidate_keys`` in ATTRIBUTE_NAMES for
+    # why that literal differs from the reranker's ``UNRESOLVED`` and why
+    # changing it is off limits.
     "rag.candidate_chunk_keys": "legacy: eval-harness contract",
     "rag.selected_chunk_keys": "legacy: eval-harness contract",
     "rag.selected_scores": "legacy: no production reader outside its write site",

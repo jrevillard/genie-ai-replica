@@ -370,11 +370,12 @@ class TestOwnedSpanCoverage:
         """Documented debt, not an oversight. See the conftest comment."""
         assert name not in OWNED_SPAN_NAMES
 
-    def test_orchestrate_bites(self, span_sweep, captured_spans):
+    def test_orchestrate_bites(self, span_sweep, captured_spans, span_exporter):
         """The gap that motivated round 4: tasks 4/6/7 write here."""
         _emit("chatqna.orchestrate", {"rag.sniffed_query": "banana"})
         with pytest.raises(AssertionError):
             span_sweep(captured_spans())
+        span_exporter.clear()
 
     def test_orchestrate_accepts_its_vocabulary_keys(self, span_sweep, captured_spans):
         _emit("chatqna.orchestrate", {"rag.query_length": 42, "rag.model_id": "granite-4.1-8b"})
@@ -414,17 +415,19 @@ class TestOwnedSpanSweep:
     really went through the SDK's exporter.
     """
 
-    def test_unregistered_key_on_an_owned_span_fails_the_sweep(self, span_sweep, captured_spans):
+    def test_unregistered_key_on_an_owned_span_fails_the_sweep(self, span_sweep, captured_spans, span_exporter):
         _emit("llm.invoke", {"rag.sniffed_query": "banana"})
         with pytest.raises(AssertionError) as excinfo:
             span_sweep(captured_spans())
         assert "rag.sniffed_query: unregistered attribute key" in str(excinfo.value)
+        span_exporter.clear()
 
-    def test_prose_on_a_registered_key_fails_the_sweep(self, span_sweep, captured_spans):
+    def test_prose_on_a_registered_key_fails_the_sweep(self, span_sweep, captured_spans, span_exporter):
         _emit("llm.invoke", {"rag.search_type": "Soil Management"})
         with pytest.raises(AssertionError) as excinfo:
             span_sweep(captured_spans())
         assert "free-text value" in str(excinfo.value)
+        span_exporter.clear()
 
     def test_declared_attributes_on_an_owned_span_pass_the_sweep(self, span_sweep, captured_spans):
         _emit("llm.invoke", {"rag.fetch_k": 3, "rag.search_type": "mmr"})
@@ -435,10 +438,11 @@ class TestOwnedSpanSweep:
         _emit("GET /api/chat", {"http.method": "GET", "url.full": "http://x/api"})
         assert span_sweep(captured_spans()) is None
 
-    def test_sweep_names_the_span_and_the_key(self, span_sweep, captured_spans):
+    def test_sweep_names_the_span_and_the_key(self, span_sweep, captured_spans, span_exporter):
         _emit("retriever.hybrid_search", {"rag.leaked_text": "x"})
         with pytest.raises(AssertionError) as excinfo:
             span_sweep(captured_spans())
         message = str(excinfo.value)
         assert "retriever.hybrid_search" in message
         assert "rag.leaked_text" in message
+        span_exporter.clear()

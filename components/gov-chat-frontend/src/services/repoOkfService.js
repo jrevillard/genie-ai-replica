@@ -175,6 +175,13 @@ const repoOkfService = {
     );
     return res && res.data;
   },
+  /** Group combobox search: server-side Keycloak group search + has_access. */
+  async getAccessGroups(repoId, q) {
+    const res = await httpService.get(
+      `/okf/repos/${encodeURIComponent(repoId)}/access/groups?q=${encodeURIComponent(q || '')}`
+    );
+    return res && res.data;
+  },
   /** Grant query access — checkboxes (usernames[]), single (username), or
    * grant-by-search (query: every matching directory user, server-side). */
   async grantAccess(repoId, { usernames, username, query }) {

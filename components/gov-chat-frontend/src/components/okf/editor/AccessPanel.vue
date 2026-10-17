@@ -127,11 +127,20 @@
       </DsButton>
 
       <div class="okf-access__grant">
-        <DsInput
+        <!-- David (2026-10-17): a combobox, not free text — server-side group
+             search; granted groups are marked in the options. -->
+        <DsCombobox
           v-model="grantGroupName"
-          type="text"
-          :placeholder="translate('okf.editor.access.groupPlaceholder', 'Group name')"
+          remote
+          size="sm"
           class="okf-access__grant-user"
+          :options="groupOptions"
+          option-label="label"
+          option-value="value"
+          :placeholder="translate('okf.editor.access.groupPlaceholder', 'Pick a group…')"
+          :search-placeholder="translate('okf.editor.access.groupSearch', 'Search groups')"
+          :no-results-text="translate('okf.editor.access.groupNoResults', 'No groups match')"
+          @search="onGroupSearch"
         />
         <DsButton variant="primary" small :disabled="!grantGroupName || busyGroup !== null" @click="grantGroup">
           {{ translate('okf.editor.access.grantGroup', 'Grant group') }}
@@ -257,13 +266,14 @@ import DsPill from '../../ds/Pill.vue';
 import DsInput from '../../ds/Input.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import DsDialog from '../../ds/Dialog.vue';
+import DsCombobox from '../../ds/Combobox.vue';
 import repoOkfService from '../../../services/repoOkfService';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
 export default {
   name: 'OkfAccessPanel',
-  components: { DsButton, DsPill, DsInput, DsInfoTip, DsDialog },
+  components: { DsButton, DsPill, DsInput, DsInfoTip, DsDialog, DsCombobox },
   mixins: [translateMixin],
   props: {
     repoId: { type: String, required: true }
@@ -284,6 +294,8 @@ export default {
         configured: false
       },
       grantGroupName: '',
+      groupOptions: [],
+      groupSearchTimer: null,
       busyGroup: null,
       // Picker state.
       pickerOpen: false,
@@ -334,11 +346,32 @@ export default {
   },
   async created() {
     await this.refresh();
+    // First page of groups so the combobox has content on first open.
+    if (this.model.configured) this.onGroupSearch('');
   },
   beforeUnmount() {
     clearTimeout(this.searchTimer);
+    clearTimeout(this.groupSearchTimer);
   },
   methods: {
+    /** Debounced server-side group search for the combobox (remote mode). */
+    onGroupSearch(term) {
+      clearTimeout(this.groupSearchTimer);
+      this.groupSearchTimer = setTimeout(async () => {
+        try {
+          const out = await repoOkfService.getAccessGroups(this.repoId, term || '');
+          const groups = (out && out.groups) || [];
+          this.groupOptions = groups.map((g) => ({
+            value: g.name,
+            label: g.has_access
+              ? `${g.name} — ${this.translate('okf.editor.access.pickerHasAccess', 'has access')}`
+              : g.name
+          }));
+        } catch {
+          this.groupOptions = [];
+        }
+      }, SEARCH_DEBOUNCE_MS);
+    },
     async refresh() {
       this.loading = true;
       this.error = '';

@@ -20,6 +20,7 @@ jest.mock('../services/keycloak-access-service', () => ({
   isConfigured: jest.fn(() => true),
   findUserByUsername: jest.fn(),
   searchUsers: jest.fn(async () => []),
+  searchGroups: jest.fn(async () => []),
   countUsers: jest.fn(async () => 0),
   usersMatching: jest.fn(async () => []),
   usersWithAttribute: jest.fn(async () => []),
@@ -154,6 +155,27 @@ describe('GET /api/okf/repos/:repo_id/access/users (picker search)', () => {
     const res = await request(createApp()).get(`/api/okf/repos/${RID}/access/users?q=a`).set('Authorization', TOKEN);
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+  });
+});
+
+describe('GET /api/okf/repos/:repo_id/access/groups (combobox search)', () => {
+  test('server-side group search + has_access marks from the read role', async () => {
+    authAdmin();
+    seedRepo();
+    keycloakAccess.searchGroups.mockResolvedValue([
+      { id: 'g1', name: 'ministry-of-health' },
+      { id: 'g2', name: 'contractors' }
+    ]);
+    keycloakAccess.roleMembers.mockImplementation(async (scope) =>
+      scope.endsWith(':read')
+        ? { users: [], groups: [{ id: 'g1', name: 'ministry-of-health' }] }
+        : { users: [], groups: [] }
+    );
+    const res = await request(createApp()).get(`/api/okf/repos/${RID}/access/groups?q=min`).set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(keycloakAccess.searchGroups).toHaveBeenCalledWith('min', 50);
+    expect(res.body.groups[0]).toMatchObject({ name: 'ministry-of-health', has_access: true });
+    expect(res.body.groups[1]).toMatchObject({ name: 'contractors', has_access: false });
   });
 });
 

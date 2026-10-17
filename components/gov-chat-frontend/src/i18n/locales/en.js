@@ -1932,7 +1932,9 @@ export default {
         },
         viaRole: 'direct role',
         noHolders: 'No users or groups granted yet.',
-        groupPlaceholder: 'Group name',
+        groupPlaceholder: 'Pick a group…',
+        groupSearch: 'Search groups',
+        groupNoResults: 'No groups match',
         grantGroup: 'Grant group',
         groupHint:
           'Every member of the group gains access at their next login — one operation for any number of users.',

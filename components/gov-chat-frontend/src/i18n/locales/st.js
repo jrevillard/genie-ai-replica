@@ -1628,7 +1628,9 @@ export default {
         },
         viaRole: 'role ea kgonthe',
         noHolders: 'Ha ho mosebelisi kapa group ea fanoeng phihlelo.',
-        groupPlaceholder: 'Lebitso la group',
+        groupPlaceholder: 'Kgetha sehlopha…',
+        groupSearch: 'Batla dihlopha',
+        groupNoResults: 'Ha ho na dihlopha tshwanang',
         grantGroup: 'Fana group',
         groupHint:
           'Setho se seng le se seng sa group se fuman phihlelo ha se kena hape — tshebetso e le nngwe bakeng sa palo efe kapa efe.',

@@ -169,6 +169,16 @@ async function usersWithAttribute(scope) {
   }
 }
 
+/** Server-side group search for the grant combobox (KC `?search=` matches
+ * names, recursive; we return the top-level hits). */
+async function searchGroups(term, limit = 50) {
+  const max = Math.max(1, Math.min(100, limit));
+  const q = (term || '').trim();
+  const path = `/groups?search=${encodeURIComponent(q)}&max=${max}`;
+  const groups = await jsonOrThrow(await adminApi('GET', path), 'group search');
+  return groups.map((g) => ({ id: g.id, name: g.name }));
+}
+
 /** Ensure a realm role NAMED as the scope string exists; return its full representation. */
 async function ensureRole(scope) {
   try {
@@ -245,6 +255,7 @@ module.exports = {
   isConfigured,
   findUserByUsername,
   searchUsers,
+  searchGroups,
   countUsers,
   usersMatching,
   usersWithAttribute,

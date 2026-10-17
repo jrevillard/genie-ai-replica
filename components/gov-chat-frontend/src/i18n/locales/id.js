@@ -1598,7 +1598,7 @@ export default {
         revoke: 'Cabut',
         error: 'Operasi gagal.',
         grantedNotice: 'Akses diberikan — berlaku saat login berikutnya.',
-        revokedNotice: 'Akses dicabut.',
+        revokedNotice: 'Akses dicabut — berlaku saat login berikutnya pengguna.',
         nowRestricted: 'Repositori dibatasi.',
         nowOpen: 'Repositori terbuka untuk semua.',
         grantUsersCta: 'Berikan akses ke pengguna…',

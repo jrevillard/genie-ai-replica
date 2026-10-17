@@ -1608,7 +1608,7 @@ export default {
         revoke: 'Révoquer',
         error: "L'opération a échoué.",
         grantedNotice: 'Accès accordé — effectif à la prochaine connexion.',
-        revokedNotice: 'Accès révoqué.',
+        revokedNotice: 'Accès révoqué — effectif à la prochaine connexion de l’utilisateur.',
         nowRestricted: 'Dépôt restreint.',
         nowOpen: 'Dépôt ouvert à tous.',
         grantUsersCta: "Accorder l'accès à des utilisateurs…",

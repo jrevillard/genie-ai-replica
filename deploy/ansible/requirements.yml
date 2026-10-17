@@ -2,6 +2,3 @@
 collections:
   - name: community.docker
     version: ">=4.0.0"
-  # config_bootstrap role uses ansible.posix.synchronize to rsync theme assets.
-  - name: ansible.posix
-    version: ">=1.4.0"

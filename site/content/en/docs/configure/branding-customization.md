@@ -68,8 +68,9 @@ So if you want a repository change to win on a given node, edit it on the node, 
 ```bash
 rm /opt/genieai/config/frontend/genie-ai-config.json
 ansible-playbook -i inventory/<env>.ini deploy.yml --tags config --vault-id <env>@prompt
-docker service update --force <stack>_frontend
 ```
+
+The re-seeded file is live immediately — the bind mount serves it from disk, so a browser reload is all it takes (no frontend restart).
 
 Nodes that you want to follow the repository exactly — CI, or a deployment where nobody edits files by hand — can skip the sync entirely with `config_bootstrap_sync_enabled: false`.
 
@@ -101,7 +102,7 @@ The runtime fetch happens in `components/gov-chat-frontend/src/config-loader.js`
 
 ### How to change the frontend brand
 
-Edit `components/gov-chat-frontend/public/config/genie-ai-config.json` (or its copy at `/opt/genieai/config/frontend/genie-ai-config.json` on the node). The file is fetched at runtime from `/config/genie-ai-config.json` out of the bind-mounted directory, so changing a value needs neither an image rebuild nor a redeploy — force the container and reload, as described in [The edit → reload loop](#the-edit--reload-loop).
+Edit `components/gov-chat-frontend/public/config/genie-ai-config.json` (or its copy at `/opt/genieai/config/frontend/genie-ai-config.json` on the node). The file is fetched at runtime from `/config/genie-ai-config.json` out of the bind-mounted directory, so changing a value needs neither an image rebuild nor a redeploy — just reload the browser, as described in [The edit → reload loop](#the-edit--reload-loop).
 
 Example: replace the GENIE.AI brand with a partner institution's brand:
 
@@ -126,7 +127,7 @@ Example: replace the GENIE.AI brand with a partner institution's brand:
 }
 ```
 
-Then drop your logo at `components/gov-chat-frontend/public/config/logo-mygov.jpeg` (same filename as the `app.icon.value` path, under the `public/config/` directory). On a deployed node, drop it at `/opt/genieai/config/frontend/logo-mygov.jpeg` instead, then run `docker service update --force <stack>_frontend`.
+Then drop your logo at `components/gov-chat-frontend/public/config/logo-mygov.jpeg` (same filename as the `app.icon.value` path, under the `public/config/` directory). On a deployed node, drop it at `/opt/genieai/config/frontend/logo-mygov.jpeg` instead — the bind mount serves it immediately, no container action needed.
 
 The same file also accepts `theme.bg`, `theme.fg`, `theme.navbar.background`, `theme.navbar.text`, `theme.colors.{success,warning,danger,info}`, `theme.typography.fontFamily`, and `theme.typography.fontScale`. See [Theme System → JSON config](/docs/frontend/theme-system/#json-config) for the full schema.
 
@@ -160,7 +161,7 @@ The default logo path is `/config/logo-genie-ai.jpeg` (referenced in `config-loa
      "value": "/config/logo-<your-org>.jpeg"
    }
    ```
-3. **Pick up the new file** — `docker service update --force <stack>_frontend` (or `docker compose up -d --force-recreate frontend` in Compose mode). The `config/` directory is loaded from a bind-mounted host directory, not baked into the image, so no rebuild is required. A brand-new filename is the one case where a normal browser reload is not enough: the old 404 was cached, so hard-reload once.
+3. **Pick up the new file** — the `config/` directory is bind-mounted, so the file is live immediately; no rebuild and no container restart. A brand-new filename is the one case where a normal browser reload is not enough: the old 404 was cached, so hard-reload once.
 
 Recommended image specs:
 
@@ -268,8 +269,8 @@ After a redeploy, verify each surface end-to-end before announcing the rebrand:
 
 - **Wrong path.** `app.icon.value` must point at a file under `public/config/` (served at `/config/`). The leading slash matters. If you forget it, the request becomes relative to the current page and 404s on most routes.
 - **Wrong filename.** The path in the JSON must match the actual filename on disk, including the extension. The frontend does no extension rewriting.
-- **The container was not restarted.** The bind mount is resolved at container start, so a file you edited on the node stays invisible until you run `docker service update --force <stack>_frontend`. Check with `docker exec <frontend-container> ls /app/dist/config/` — if your file is not listed, the container predates your edit.
-- **Cached file.** Hard-refresh. If the problem persists, check `docker exec <frontend-container> ls /usr/share/nginx/html/config/` — your new file should be there.
+- **The mount is not wired.** A directory bind mount is live: a file edited on the node is visible in the container immediately, no restart needed. If `docker exec <frontend-container> ls /app/dist/config/` does not list your file, the container is not mounting the directory you edited — check `CONFIG_DIR_FRONTEND` in the node's env file, not the container's age.
+- **Cached file.** Hard-refresh. If the problem persists, check `docker exec <frontend-container> ls /app/dist/config/` — your new file should be there.
 
 ### Theme overrides ignored after Keycloak restart
 

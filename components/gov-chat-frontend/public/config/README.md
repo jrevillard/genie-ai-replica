@@ -4,7 +4,7 @@ This guide provides developers with detailed instructions for configuring the GE
 
 ## Overview
 
-The GENIE.AI framework powers customizable chatbot applications, with configurations stored in JSON files under `/public/config/`. These files are loaded at runtime by `main.js`, passed to components like `NavBarComponent.vue`, `SideBarComponent.vue`, and various screens, and used to style elements via CSS variables in `theme-variables.css` and component styles. Key configuration aspects include:
+The GENIE.AI framework powers customizable chatbot applications, with configurations stored in JSON files under `/public/config/`. These files are loaded at runtime by `src/config-loader.js` (invoked by `main.js` at startup), passed to components like `NavBarComponent.vue`, `SideBarComponent.vue`, and various screens, and used to style elements via CSS variables in `theme-variables.css` and component styles. Key configuration aspects include:
 - **Application Title and Icon**: Define the navbar and screen titles (e.g., `Huduma AI`) and SVG logos.
 - **Color Scheme**: Set primary colors for buttons, tabs, and links; navbar gradients; backgrounds; and text styles.
 - **Chatbot Features**: Configure welcome messages, bot names, and Quick Help buttons linked to specific knowledge areas and prompts.
@@ -321,7 +321,7 @@ To configure a new chatbot (e.g., "EcoChat"):
 ## How Configuration Works
 
 ### Loading and Distribution
-- **Loading** (`main.js`):
+- **Loading** (`src/config-loader.js`, invoked by `main.js` at startup):
   - Fetches the config file using `fetch` and merges with defaults:
     ```javascript
     let config = {

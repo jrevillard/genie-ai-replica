@@ -886,19 +886,20 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #
 # On a deployed node you do NOT set these by hand: Ansible writes them from
 # config_dir (deploy/ansible/templates/env.j2) and the config_bootstrap role
-# seeds the directories from the repository. The values below are the local-dev
-# defaults and match docker-compose exactly; Docker resolves them against the
-# compose file's directory. `docker stack deploy` only accepts ABSOLUTE bind
-# sources, so a Swarm node deployed without the Ansible playbook must have
-# CONFIG_DIR_FRONTEND / CONFIG_DIR_KEYCLOAK set to absolute host paths.
+# seeds the directories from the repository. Left unset for local dev, where
+# docker-compose falls back to its built-in defaults (the repo's config
+# directories); Docker resolves them against the compose file's directory.
+# `docker stack deploy` only accepts ABSOLUTE bind sources, so a Swarm node
+# deployed without the Ansible playbook must have CONFIG_DIR_FRONTEND /
+# CONFIG_DIR_KEYCLOAK set to absolute host paths. For example:
+#   CONFIG_DIR_FRONTEND=/opt/genieai/config/frontend
+#   CONFIG_DIR_KEYCLOAK=/opt/genieai/config/keycloak/themes/genie
 
 # A bind mount never falls back to the image contents. Docker creates a missing
 # source path as an empty root-owned directory, which then shadows everything
 # under the mount point. An empty host directory therefore means an unbranded
 # frontend (no theme stylesheet, splash or logo) and an unbranded Keycloak login
 # screen -- silently, with no crash and no health signal.
-CONFIG_DIR_FRONTEND=./components/gov-chat-frontend/public/config
-CONFIG_DIR_KEYCLOAK=./configs/keycloak/themes/genie
 #
 # NGINX_PUBLIC_DOMAIN=<gateway-node-fqdn>
 #   Docker: localhost

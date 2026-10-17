@@ -1556,7 +1556,7 @@ export default {
       },
       access: {
         label: '仓库访问',
-        title: '访问',
+        title: '访问控制',
         restricted: '已限制',
         openForAll: '对所有用户开放',
         hintRestricted: '只有被授权的用户（和管理员）可以查询此仓库。在下方授予访问权限 — 用户下次登录时生效。',
@@ -2368,7 +2368,7 @@ export default {
         versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
-        title: '移交',
+        title: '安全设置并完成',
         hint: '此知识库已准备就绪，可供审查。这里从不进行发布 — 请在仪表板上提交审批；批准和发布在仪表板或编辑器中进行。',
         nameOk: '知识库名称已设定',
         labelsOk: '标签已选定',

@@ -1590,7 +1590,7 @@ export default {
       },
       access: {
         label: 'Acceso al repositorio',
-        title: 'Acceso',
+        title: 'Control de acceso',
         restricted: 'Restringido',
         openForAll: 'Abierto a todos',
         hintRestricted:
@@ -2430,7 +2430,7 @@ export default {
         versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
-        title: 'Entrega',
+        title: 'Asegurar y finalizar',
         hint: 'Este repositorio está listo para revisión. Aquí nunca se publica — envíelo para aprobación desde el panel; la aprobación y la publicación se realizan desde el panel o el editor.',
         nameOk: 'Nombre del repositorio establecido',
         labelsOk: 'Etiquetas seleccionadas',

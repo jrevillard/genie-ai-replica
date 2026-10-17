@@ -1,10 +1,16 @@
 <!--
-  OkfStepPublish.vue — Step 10: HANDOFF (3.10 T5, decision D4). The wizard
-  NEVER publishes — "KEEP PUBLISHING OUT OF THE WIZARD. I MEANT IT."
-  Submit → approve → publish lives ONLY in the dashboard and the editor.
-  This step is the readiness summary + the explicit handoff to those
-  surfaces ("Open the Editor" in the wizard footer; "Open the Dashboard"
-  here).
+  OkfStepPublish.vue — Step 10: SECURE AND FINISH (3.10 T5, decision D4,
+  extended 2026-10-17). The wizard NEVER publishes — "KEEP PUBLISHING OUT OF
+  THE WIZARD. I MEANT IT." Submit → approve → publish lives ONLY in the
+  dashboard and the editor. This step is the readiness summary, the ACCESS
+  CONTROL configuration (Story 6-1c — wizard/editor parity rule), and the
+  explicit handoff to those surfaces ("Open the Editor" in the wizard
+  footer; "Open the Dashboard" here).
+
+  Access control here is CONFIGURATION, not a lifecycle transition — the
+  restriction toggle and grants write `acl.restricted` / Keycloak scopes
+  and never move lifecycle_state, so mounting them in the wizard respects
+  D4 exactly like the Curate frontmatter editing does.
 
   Live counts come from the /metrics payload (max-review F1: repo docs
   carry no concept_count — only conformance-service computes one). A
@@ -24,7 +30,7 @@
 -->
 <template>
   <div class="okf-step">
-    <h3 class="okf-step__title">{{ translate('okf.steps.publish.title', 'Handoff') }}</h3>
+    <h3 class="okf-step__title">{{ translate('okf.steps.publish.title', 'Secure and Finish') }}</h3>
     <p class="okf-step__hint">
       {{
         translate(
@@ -51,6 +57,15 @@
         )
       }}
     </p>
+    <!-- Story 6-1c (2026-10-17): SECURE — the wizard/editor parity rule.
+         Restriction + grants are configuration (acl.restricted / Keycloak
+         scopes), never a lifecycle transition, so the D4 "no publishing in
+         the wizard" rule is respected the same way Curate's frontmatter
+         editing respects it. New repos default OPEN; restriction is
+         opt-in here, before the handoff. -->
+    <div v-if="repoId" class="okf-step__access">
+      <OkfAccessPanel :repo-id="repoId" />
+    </div>
     <div class="okf-step__handoff">
       <DsButton variant="secondary" small @click="$emit('dashboard')">
         {{ translate('okf.steps.publish.openDashboard', 'Open the Dashboard') }}
@@ -110,13 +125,14 @@ import DsButton from '../../ds/Button.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import DsStatusTag from '../../ds/StatusTag.vue';
 import OkfHeadTestDialog from '../editor/HeadTestDialog.vue';
+import OkfAccessPanel from '../editor/AccessPanel.vue';
 import { mapGetters } from 'vuex';
 import translateMixin from '../../../mixins/translateMixin';
 import { getFrontmatter, isFrontmatterPublishReady } from '../../../services/frontmatterService';
 
 export default {
   name: 'OkfStepPublish',
-  components: { DsButton, DsInfoTip, DsStatusTag, OkfHeadTestDialog },
+  components: { DsButton, DsInfoTip, DsStatusTag, OkfHeadTestDialog, OkfAccessPanel },
   mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   emits: ['gate', 'dashboard'],
@@ -314,6 +330,12 @@ export default {
   display: flex;
   gap: var(--space-sm);
   align-items: center;
+}
+/* Story 6-1c: the Access Control panel in the wide wizard step body —
+   unbounded height here (the step scrolls with the page); the editor's
+   left-rail mount is the one that clips. */
+.okf-step__access {
+  max-width: 560px;
 }
 /* Story 1-8: read-only head card. */
 .okf-step__head-card {

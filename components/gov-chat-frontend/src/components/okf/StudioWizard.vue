@@ -143,7 +143,7 @@ const STEP_LABELS = [
   'Validate',
   'Auto-correct',
   'Review',
-  'Finish'
+  'Secure and Finish'
 ];
 
 export default {

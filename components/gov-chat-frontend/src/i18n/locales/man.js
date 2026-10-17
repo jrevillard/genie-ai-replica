@@ -1570,7 +1570,7 @@ export default {
       },
       access: {
         label: 'Aseeg yesli depot',
-        title: 'Aseeg',
+        title: 'Kontrollu di ases',
         restricted: 'E limita',
         openForAll: 'E aberto pa tur',
         hintRestricted:
@@ -2391,7 +2391,7 @@ export default {
         versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
-        title: 'Handoff',
+        title: 'Sigura i kaba',
         hint: 'This repository is ready for review. Publishing never happens here — submit it for approval on the dashboard, then approve and publish from the dashboard or the editor.',
         nameOk: 'Āt an jikin kakwōn em̦ōj likūti',
         labelsOk: 'Kakōl̦l̦e ko em̦ōj kāāleti',

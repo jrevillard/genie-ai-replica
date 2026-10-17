@@ -13,24 +13,33 @@
 -->
 <template>
   <div class="okf-re" role="region" :aria-label="translate('okf.editor.label', 'Repository editor')" :style="gridStyle">
-    <OkfConceptList
-      class="okf-re__rail"
-      :concepts="concepts"
-      :selected-id="selectedId"
-      :loading="loading"
-      :load-progress="loadProgress"
-      :label-options="labelOptions"
-      :read-only="readOnly"
-      :show-add-source="!readOnly"
-      @select="onSelect"
-      @add="addOpen = true"
-      @add-source="sourceOpen = true"
-      @resplit="resplitOpen = true"
-      @delete="onDeleteAsk"
-      @label="onTreeLabel"
-      @pii-bulk="onPiiBulkAsk"
-      @reingest="onReingestConcept"
-    />
+    <div class="okf-re__left">
+      <OkfConceptList
+        class="okf-re__rail"
+        :concepts="concepts"
+        :selected-id="selectedId"
+        :loading="loading"
+        :load-progress="loadProgress"
+        :label-options="labelOptions"
+        :read-only="readOnly"
+        :show-add-source="!readOnly"
+        @select="onSelect"
+        @add="addOpen = true"
+        @add-source="sourceOpen = true"
+        @resplit="resplitOpen = true"
+        @delete="onDeleteAsk"
+        @label="onTreeLabel"
+        @pii-bulk="onPiiBulkAsk"
+        @reingest="onReingestConcept"
+      />
+      <!-- Story 6-1c (2026-10-17, David): the Access Control panel lives in
+           the LEFT rail, directly under the Concepts panel — the right rail
+           got too crowded (frontmatter chips + head badge + access). Bounded
+           height so it never eats the concept list. -->
+      <div v-if="repoId" class="okf-re__access">
+        <OkfAccessPanel :repo-id="repoId" @changed="onAccessChanged" />
+      </div>
+    </div>
     <!-- FLEXIBLE COLUMNS (David, 2026-09-09): drag either splitter to resize;
          double-click resets that pane; arrow keys nudge (a11y). Track order
          MUST match DOM order: rail | split | center | split | meta. -->
@@ -147,10 +156,6 @@
         @saved="onFrontmatterPanelSaved"
         @flush-before-save="flushConceptEditorSave"
       />
-      <!-- Story 6-1c (2026-10-16): per-repository access control in the
-           editor's right rail — restriction toggle + grant/revoke. New repos
-           default OPEN for all users; restriction is opt-in per repo. -->
-      <OkfAccessPanel v-if="repoId" :repo-id="repoId" @changed="onAccessChanged" />
       <!-- Story 1-8 (2026-10-08): compact head status under the tag panel —
            the vectorized head is what the tags become at publish; the CTA
            opens the Routing Lab to test it against competing repositories. -->
@@ -1174,8 +1179,18 @@ export default {
 .okf-re__split:active {
   background: var(--accent-muted);
 }
+.okf-re__left {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .okf-re__rail {
   max-height: 640px;
+}
+.okf-re__access {
+  margin-top: 8px;
+  max-height: 340px;
+  overflow-y: auto;
 }
 .okf-re__view-toggle {
   display: inline-flex;

@@ -1592,7 +1592,7 @@ export default {
       },
       access: {
         label: 'Repository-Zugriff',
-        title: 'Zugriff',
+        title: 'Zugriffskontrolle',
         restricted: 'Eingeschränkt',
         openForAll: 'Für alle offen',
         hintRestricted:
@@ -2434,7 +2434,7 @@ export default {
         versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
-        title: 'Übergabe',
+        title: 'Absichern und fertigstellen',
         hint: 'Dieses Repository ist bereit zur Prüfung. Die Veröffentlichung erfolgt hier nie — reichen Sie es auf dem Dashboard zur Freigabe ein; Genehmigung und Veröffentlichung erfolgen über das Dashboard oder den Editor.',
         nameOk: 'Repository-Name festgelegt',
         labelsOk: 'Labels ausgewählt',

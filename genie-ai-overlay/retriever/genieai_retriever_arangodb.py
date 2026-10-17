@@ -1311,7 +1311,7 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             # Snapshot the DENSE leg unconditionally, once the dense search and
             # the label filter have both settled. Deliberately ABOVE the hybrid
-            # block: HYBRID_RETRIEVAL_ENABLED is off by default, so a snapshot
+            # block: when HYBRID_RETRIEVAL_ENABLED is off, a snapshot
             # taken inside it would leave the variable undefined on every
             # non-hybrid request.
             _dense_by_id = {_result_key(r): _as_float(r.get("score")) for r in search_res}

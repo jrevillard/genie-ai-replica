@@ -21,7 +21,7 @@
 - **Endpoints:** `urlparse(endpoint).path` only — never host, port, or query string.
 - **`file_id`, never `file_name`.**
 - **No span per chunk, no span per candidate.** Per-candidate vectors are single array attributes, capped at a ceiling derived from the deployment's `fetch_k`, not a hard-coded 32.
-- **Arrays of values, not hand-stringed JSON.** OTel accepts homogeneous sequences. A `json.dumps` string contains `", "` and trips the whitespace rule by construction.
+- **Flat scalar sequences go on as arrays; structures OTel cannot represent get JSON-encoded and are validated by parsing.** OTel attribute values are primitives or *homogeneous* sequences, so a list of dicts is not representable and must be JSON-encoded — `rag.adaptive_breakdown` and `retriever.summarizer.overflow_doc_ids` already work this way and stay that way. Those names live in `core/span_attrs.py:JSON_ENCODED_ATTRIBUTE_NAMES` and are checked by parsing, with every leaf string put through the same shape rule. Everything else in this plan emits real arrays.
 - **Tests assert on finished exported spans, never mocks.** `tests/otel-collector/run-pii-smoke.sh` passed against a completely broken redactor because it asserted on the wrong surface.
 - **Every gap gets a wiring test.** A helper unit test proves the helper; only a test that drives the real entry point proves the attribute reaches the span. Deleting every `set_attribute` call site must turn the suite red.
 - **JS shared-helper contract** (`components/CLAUDE.md`): re-export from `components/shared/lib/index.js` (Pitfall 2); consume as `require('../shared-lib')` without `/lib/` (Pitfall 1). Both have shipped runtime bugs.
@@ -33,7 +33,7 @@
 Inputs a reasonable person would expect to work that the happy path does not exercise — most likely to bite first.
 
 1. **`queryId` null at the axios call** (`initStreamQuery` returns it from query creation) → must skip baggage injection, not write the string `"undefined"`, which satisfies the shape guard and joins to nothing. Pinned in Task 2.
-2. **Non-hybrid retrieval** (`HYBRID_RETRIEVAL_ENABLED` is off by default) → the dense snapshot must still exist, or the score attributes are never emitted on production traffic. Pinned in Task 5.
+2. **Non-hybrid retrieval** (`RETRIEVER_HYBRID_RETRIEVAL_ENABLED` is **on** by default — `config.py:227` reads `os.getenv(..., "true")` — but a deployment may disable it) → the dense snapshot must still exist, or the score attributes are never emitted on that path. Pinned in Task 5.
 3. **A label-free query** — the common case — → all retrieval-parameter attributes must still be set. Pinned in Task 5.
 4. **A turn where the budget guard truncates history** → `rag.history.segments_sent` must be lower than `segments_in`, matching the truncation event. Pinned in Task 6.
 5. **A streaming response whose upstream sends no `usage`** → attributes omitted, span still closes. Pinned in Task 4.
@@ -1800,7 +1800,8 @@ filter silently not apply?" is the question:
 Snapshot the dense leg **unconditionally** after the dense search and the label
 filter settle — around line 1170, before the `if HYBRID_RETRIEVAL_ENABLED`
 block at 1178. Capturing it at 1180 instead leaves the variable undefined on
-every non-hybrid request, and hybrid is OFF by default:
+every request where the flag is off (`RETRIEVER_HYBRID_RETRIEVAL_ENABLED` is on
+by default, but a deployment may disable it):
 
 ```python
             _dense_by_id = {r["doc"].id: float(r.get("score", 0.0)) for r in search_res}

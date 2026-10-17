@@ -297,9 +297,12 @@ the presence mask; it never silently inherits another chunk's score.
 
 Capture points: the dense leg is snapshotted **unconditionally** after the dense
 search and label filter settle (`:1170`) — not inside the `HYBRID_RETRIEVAL_ENABLED`
-block, which is off by default and would leave the variable undefined on every
-non-hybrid request. The lexical leg is snapshotted from the `bm25_res` assignment
-(`:1181`). The fused leg is the `rrf_fuse` return before the top-k cut (`:1190`).
+block. That flag is **on by default** (`config.py:227` reads
+`os.getenv(..., "true")` and compose sets `:-true`), so the dense-only path is not the
+common case today — but it is reachable, and a snapshot taken inside the block would
+leave the variable undefined on every request where the flag is off. The lexical leg is
+snapshotted from the `bm25_res` assignment (`:1181`). The fused leg is the `rrf_fuse`
+return before the top-k cut (`:1190`).
 
 Traversal from the block at `:1226-1300`. `traversal.injected_docs` counts seed
 documents that received content; `traversal.injected_neighbor_items` counts the
@@ -358,13 +361,21 @@ means "this index had no metadata", while an empty string would mean "there was
 an empty key". `__unresolved__` contains no whitespace and is declared in the
 vocabulary module, so the shape rule stays absolute without an exemption.
 
-**Value encoding is uniform.** `rag.adaptive_chunk_keys` is a Python list, and
-its neighbour `rag.adaptive_breakdown` is a `json.dumps` string (emitted at
-`reranker:543`). OTel accepts homogeneous sequences directly and renders them as
-arrays, so new attributes use the list form; the shape guard's string layer then
-applies to strings only. Note that a JSON *string* containing `", "` would trip
-the whitespace rule by construction — `json.dumps`'s default separator — which is
-a second, independent reason not to hand-string new attributes.
+**Value encoding follows what OTel can represent.** OTel attribute values are
+primitives or *homogeneous* sequences, so a flat list of scalars goes on as a
+Python list and OTel renders it as an array. A **list of dicts is not
+representable** and must be JSON-encoded — which is why `rag.adaptive_breakdown`
+(`reranker:543`) and `retriever.summarizer.overflow_doc_ids` (`retriever:1359`)
+are `json.dumps` strings, deliberately.
+
+Those names are declared in `span_attrs.py:JSON_ENCODED_ATTRIBUTE_NAMES` and
+validated by **parsing** rather than by the flat shape rule: the value must
+`json.loads`, and every leaf string recursively gets the normal shape check. That
+is strictly stronger than exempting them — a JSON blob carrying prose still
+fails, because the leaf trips the rule — and it fails closed on anything that
+does not parse. `rag.adaptive_chunk_keys` is a flat list of strings and therefore
+a real array, differing from its neighbour for a concrete reason rather than by
+inconsistency.
 
 ### `genie.query_id` (gap 4)
 

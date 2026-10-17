@@ -3,7 +3,7 @@ galaxy_info:
   role_name: config_bootstrap
   author: GENIE.AI
   description: Sync repo theme defaults to host runtime config dir on every node
-  license: MIT
+  license: Apache-2.0
   min_ansible_version: "2.12"
   platforms:
   - name: Ubuntu

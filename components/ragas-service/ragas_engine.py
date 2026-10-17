@@ -356,8 +356,26 @@ async def generate_testset(
     if embeddings is None:
         raise RuntimeError("RAGAS_EMBED_MODEL is required for testset generation (KG transforms embed)")
 
+    # Per-concept cap on the text fed into the knowledge graph. The KG
+    # transforms (summaries, themes, entities, relationships) don't need the
+    # full body — and the relationship builder joins PAIRS of node contents,
+    # so two near-the-cap concepts overflow the judge's context window and
+    # kill the whole job with a 400 (live finding: one prompt hit 65537
+    # tokens against a 65536 window, 2026-10-17). ~24k chars ≈ 6k tokens
+    # keeps every transform prompt comfortably inside any sane window.
+    doc_cap = int(os.getenv("RAGAS_DOC_CHAR_CAP") or "24000")
+    if doc_cap > 0:
+
+        def _cap(text: str) -> str:
+            return text if len(text) <= doc_cap else text[:doc_cap]
+
+    else:
+
+        def _cap(text: str) -> str:  # <=0 disables the cap
+            return text
+
     docs = [
-        LCDocument(page_content=str(d.get("page_content") or ""), metadata=dict(d.get("metadata") or {}))
+        LCDocument(page_content=_cap(str(d.get("page_content") or "")), metadata=dict(d.get("metadata") or {}))
         for d in documents
     ]
     generator = TestsetGenerator(llm=llm, embedding_model=embeddings)

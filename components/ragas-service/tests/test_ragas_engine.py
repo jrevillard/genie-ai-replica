@@ -45,6 +45,7 @@ def test_generate_testset_passes_num_personas_to_generate(monkeypatch, engine_en
 
     def fake_apply_transforms(kg, transforms, run_config=None):
         seen["kg_nodes"] = len(kg.nodes)
+        seen["node_lengths"] = [len(n.properties.get("page_content") or "") for n in kg.nodes]
 
     monkeypatch.setattr(TestsetGenerator, "generate", fake_generate)
     monkeypatch.setattr(tr, "default_transforms", fake_default_transforms)
@@ -67,6 +68,62 @@ def test_generate_testset_passes_num_personas_to_generate(monkeypatch, engine_en
     assert seen["testset_size"] == 5
     assert seen["kg_nodes"] == 1  # one DOCUMENT node per concept
     assert out["samples"] == []
+
+
+def test_generate_testset_caps_concept_text_for_the_kg(monkeypatch, engine_env):
+    """The relationship builder joins PAIRS of node contents — a repo with
+    concepts near the 200k-char corpus cap overflowed the judge's 65536-token
+    window and killed the job (live bug #7). The KG input must be capped."""
+    from ragas.testset import TestsetGenerator
+    from ragas.testset import transforms as tr
+
+    import ragas_engine
+
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda: object())
+
+    seen = {}
+
+    class _Testset:
+        samples = []
+
+    def fake_generate(self, **kwargs):
+        return _Testset()
+
+    def fake_default_transforms(**_kwargs):
+        return object()
+
+    def fake_apply_transforms(kg, transforms, run_config=None):
+        seen["node_lengths"] = [len(n.properties.get("page_content") or "") for n in kg.nodes]
+
+    monkeypatch.setattr(TestsetGenerator, "generate", fake_generate)
+    monkeypatch.setattr(tr, "default_transforms", fake_default_transforms)
+    import ragas.testset.transforms as transforms_module
+
+    monkeypatch.setattr(transforms_module, "apply_transforms", fake_apply_transforms)
+
+    import asyncio
+
+    asyncio.run(
+        ragas_engine.generate_testset(
+            [
+                {"page_content": "x" * 500000, "metadata": {"repo_id": "r"}},
+                {"page_content": "y" * 10000, "metadata": {"repo_id": "r"}},
+            ],
+            testset_size=2,
+        )
+    )
+    assert seen["node_lengths"] == [24000, 10000]  # capped, not passed through
+
+    # <=0 disables the cap (operator escape hatch)
+    monkeypatch.setenv("RAGAS_DOC_CHAR_CAP", "0")
+    asyncio.run(
+        ragas_engine.generate_testset(
+            [{"page_content": "z" * 50000, "metadata": {"repo_id": "r"}}],
+            testset_size=1,
+        )
+    )
+    assert seen["node_lengths"] == [50000]
 
 
 def test_metric_registry_names_are_the_report_columns(engine_env):

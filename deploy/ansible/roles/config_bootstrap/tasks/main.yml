@@ -18,9 +18,9 @@
 
 # Root is needed to create {{ config_dir }} itself on a host that does not have
 # it yet (the play runs on `all`, including GPU nodes), mirroring the deploy
-# play's "Ensure deploy directory exists" task for the same tree. The owner is
-# set here rather than left to a later chown because the rsync below writes into
-# these directories as ansible_user and would fail on a root-owned one.
+# play's "Ensure deploy directory exists" task for the same tree. The
+# directories stay root-owned, consistent with the rest of the playbook: the
+# rsync below runs under the play's become, so it writes into them as root.
 - name: Ensure runtime config directories exist
   become_user: root
   ansible.builtin.file:
@@ -92,13 +92,23 @@
 # deploys. Without --ignore-existing, every deploy would silently overwrite them.
 # The trailing slash on src is load-bearing: without it rsync copies the source
 # directory *by name*, adding an extra level under dest.
+#
+# ansible.posix.synchronize is deliberately NOT used here: it runs rsync on the
+# Ansible controller and treats src as a controller-local path, while these
+# archives were downloaded and extracted on the target host. Plain rsync under
+# the play's become runs on the target, where the data actually is, and writes
+# into the root-owned config_dir without any --rsync-path sudo games.
 - name: Rsync branch defaults to host runtime config dir (preserve manual edits)
-  ansible.posix.synchronize:
-    src: "{{ config_bootstrap_tmp_root }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
-    dest: "{{ config_dir }}/{{ item.dest_subdir }}"
-    delete: false
-    rsync_opts:
-      - "--ignore-existing"
+  ansible.builtin.command:
+    argv:
+      - rsync
+      - --archive
+      - --ignore-existing
+      - --out-format=%i
+      - "{{ config_bootstrap_tmp_root }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
+      - "{{ config_dir }}/{{ item.dest_subdir }}/"
+  register: config_bootstrap_rsync
+  changed_when: config_bootstrap_rsync.stdout | trim | length > 0
   loop: "{{ config_bootstrap_pairs }}"
   loop_control:
     label: "{{ item.dest_subdir }}"

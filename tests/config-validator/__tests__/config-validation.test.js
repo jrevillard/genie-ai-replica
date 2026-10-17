@@ -816,6 +816,10 @@ describe('Configuration Validation Suite', () => {
         found: true,
         url: 'http://vllm:8000/v1'
       });
+      expect({ found: !!vars.RAGAS_EMBED_BASE_URL, url: vars.RAGAS_EMBED_BASE_URL ? vars.RAGAS_EMBED_BASE_URL.default : null }).toEqual({
+        found: true,
+        url: 'http://tei-embedding-server:80/v1'
+      });
       expect({ found: !!vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT, v: vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT ? vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT.default : null }).toEqual({
         found: true,
         v: '20'

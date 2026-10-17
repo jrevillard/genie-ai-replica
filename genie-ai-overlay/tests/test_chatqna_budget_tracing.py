@@ -246,18 +246,16 @@ def _function_node(name: str) -> ast.AST:
     )
 
 
-def _call_names_in(function_name: str) -> set[str]:
-    function = _function_node(function_name)
-    names = set()
-    for node in ast.walk(function):
-        if not isinstance(node, ast.Call):
-            continue
-        func = node.func
-        if isinstance(func, ast.Name):
-            names.add(func.id)
-        elif isinstance(func, ast.Attribute):
-            names.add(func.attr)
-    return names
+def _calls_to(function_name: str, callee: str) -> list[ast.Call]:
+    return [
+        node
+        for node in ast.walk(_function_node(function_name))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == callee
+    ]
+
+
+def _render(node: ast.AST) -> str:
+    return ast.unparse(node)
 
 
 class TestOrchestrateEmissionSite:
@@ -268,36 +266,47 @@ class TestOrchestrateEmissionSite:
     prevent: a span reporting the module default misreports every overridden
     request, and an answer reserve derived a second time disagrees with the
     truncation event in the default configuration.
+
+    Both assertions are on the ARGUMENTS of the emission call, not merely on
+    the callee appearing somewhere in the function. `_resolved_blend_settings`
+    stays reachable from the `history_text` guard regardless of what the span
+    records, so "the helper is called" is tautological with respect to the
+    attribute value; only the argument shape distinguishes the two.
     """
 
-    def test_blend_comes_from_the_per_request_resolution(self):
-        called = _call_names_in("handle_request")
-        assert "_resolved_blend_settings" in called, (
-            "handle_request must resolve the blend per request; reading the "
-            "MULTI_TURN_* constants directly reports the configuration, not "
-            "what this request blended."
+    def test_blend_attributes_are_fed_the_resolved_locals_not_the_constants(self):
+        calls = _calls_to("handle_request", "_blend_attributes")
+        assert len(calls) == 1, "handle_request must build the blend attributes exactly once"
+        rendered = [_render(arg) for arg in calls[0].args]
+        assert rendered == ["_blend_enabled", "_blend_alpha", "_blend_turns"], (
+            "the orchestrate span must record the per-request resolution "
+            f"locals, got {rendered} — echoing MULTI_TURN_* reports the "
+            "configuration, not what this request blended."
         )
-        assert "_blend_attributes" in called
 
-    def test_answer_budget_goes_through_the_shared_resolver(self):
-        called = _call_names_in("handle_request")
-        assert "_resolve_answer_budget_tokens" in called, (
-            "handle_request must read the answer reserve through the shared "
-            "resolver, or the span attribute and the truncation event "
-            "disagree whenever max_tokens is absent."
+    def test_answer_budget_resolver_reads_the_same_value_align_inputs_does(self):
+        calls = _calls_to("handle_request", "_resolve_answer_budget_tokens")
+        assert len(calls) == 1, "handle_request must resolve the answer reserve exactly once"
+        rendered = [_render(arg) for arg in calls[0].args]
+        assert rendered == ["getattr(parameters, 'max_tokens', None)"], (
+            "the orchestrate span must feed the resolver the requested "
+            f"max_tokens, got {rendered} — a different source makes the span "
+            "attribute disagree with the truncation event whenever max_tokens "
+            "is absent."
+        )
+
+    def test_align_inputs_resolves_the_answer_reserve_through_the_same_helper(self):
+        calls = _calls_to("align_inputs", "_resolve_answer_budget_tokens")
+        assert len(calls) == 1, "align_inputs must resolve the answer reserve through the shared helper"
+        rendered = [_render(arg) for arg in calls[0].args]
+        assert rendered == ["llm_parameters_dict.get('max_tokens')"], (
+            f"the guard's own reserve must come from the request too, got {rendered}"
         )
 
     def test_token_estimate_is_left_to_the_measuring_site(self):
         """A second derivation of the prompt estimate could drift from the one
         align_inputs measures; the orchestrate span passes None instead."""
-        handle_request = _function_node("handle_request")
-        budgets = [
-            node
-            for node in ast.walk(handle_request)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "_prompt_budget_attributes"
-        ]
+        budgets = _calls_to("handle_request", "_prompt_budget_attributes")
         assert budgets, "handle_request must feed the prompt-budget attributes"
         for call in budgets:
             estimate = next((kw.value for kw in call.keywords if kw.arg == "estimate"), None)

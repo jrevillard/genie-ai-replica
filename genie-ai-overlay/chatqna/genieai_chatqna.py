@@ -1658,6 +1658,8 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                 truncated_history.insert(0, segment)  # Maintain order
                 current_tokens += segment_tokens
             dropped_segments = len(history_segments) - len(truncated_history)
+            # Both counts are written here, inside the branch, so that
+            # ABSENCE means "the guard did not run" rather than "0 segments".
             # segments_sent is the TRUNCATED length: recording the incoming
             # count for both would make a truncated turn look untouched.
             _set_attributes(
@@ -3398,12 +3400,21 @@ class ChatQnAService:
             # What this request actually blended, and the answer reserve it is
             # budgeted against. The token estimate and the history counts are
             # written by align_inputs, which is the only site that measures
-            # them.
+            # them. window_tokens is written here as well as there: the two
+            # agree (same TTL-cached discovery), and the copy here survives a
+            # request that dies before the LLM node runs.
             _set_attributes(span, _blend_attributes(_blend_enabled, _blend_alpha, _blend_turns))
             _set_attributes(
                 span,
                 _prompt_budget_attributes(
                     window_tokens=_get_max_model_len(),
+                    # Same reserve align_inputs reads, via the same helper. The
+                    # two sources agree because comps turns LLMParams into a
+                    # dict that preserves the dataclass default: align_inputs
+                    # indexes that dict's "max_tokens" unguarded, so an absent
+                    # key would already KeyError there. align_inputs also
+                    # rewrites this attribute last, so a divergence can only
+                    # survive on a request that dies before the LLM node.
                     answer_budget_tokens=_resolve_answer_budget_tokens(getattr(parameters, "max_tokens", None)),
                     estimate=None,
                 ),

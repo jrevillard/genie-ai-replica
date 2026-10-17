@@ -1568,7 +1568,7 @@ export default {
         revoke: '撤销',
         error: '操作失败。',
         grantedNotice: '已授予访问权限 — 下次登录时生效。',
-        revokedNotice: '已撤销访问权限。',
+        revokedNotice: '已撤销访问权限 — 在该用户下次登录时生效。',
         nowRestricted: '仓库已限制。',
         nowOpen: '仓库已对所有用户开放。',
         grantUsersCta: '授予用户访问权限…',

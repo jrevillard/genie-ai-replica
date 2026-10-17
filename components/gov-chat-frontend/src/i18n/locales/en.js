@@ -1909,7 +1909,7 @@ export default {
         revoke: 'Revoke',
         error: 'Operation failed.',
         grantedNotice: 'Access granted — effective at next login.',
-        revokedNotice: 'Access revoked.',
+        revokedNotice: 'Access revoked — effective at that user’s next login.',
         nowRestricted: 'Repository restricted.',
         nowOpen: 'Repository open for all users.',
         grantUsersCta: 'Grant access to users…',

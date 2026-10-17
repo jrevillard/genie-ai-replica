@@ -1604,7 +1604,7 @@ export default {
         revoke: 'Tlosa',
         error: 'Tshebetso e hafetsoe.',
         grantedNotice: 'Phihlelo e fanoeng — e sebetsa ha a kena hape.',
-        revokedNotice: 'Phihlelo e tlosoe.',
+        revokedNotice: 'Tokelo e tsoere — e sebetsa ho keno ya mosebelisi ya hlaha.',
         nowRestricted: 'Polokelo e fokotsoe.',
         nowOpen: 'Polokelo e bulehile ho bohle.',
         grantUsersCta: 'Fana ka ho basebelisi…',

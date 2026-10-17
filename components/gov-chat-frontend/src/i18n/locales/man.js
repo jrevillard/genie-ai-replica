@@ -1583,7 +1583,7 @@ export default {
         revoke: 'Tira',
         error: 'Operason pa perde.',
         grantedNotice: 'Aseeg duna — e kobra ku login pa pruksimu.',
-        revokedNotice: 'Aseeg tira.',
+        revokedNotice: 'Ases tira — efetu na próksimu login di util.',
         nowRestricted: 'Depot limita.',
         nowOpen: 'Depot aberto pa tur.',
         grantUsersCta: 'Dá ases pa utilizadon…',

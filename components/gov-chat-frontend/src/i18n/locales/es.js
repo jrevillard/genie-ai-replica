@@ -1604,7 +1604,7 @@ export default {
         revoke: 'Revocar',
         error: 'La operación falló.',
         grantedNotice: 'Acceso concedido — efectivo en el próximo inicio de sesión.',
-        revokedNotice: 'Acceso revocado.',
+        revokedNotice: 'Acceso revocado — surte efecto en el próximo inicio de sesión del usuario.',
         nowRestricted: 'Repositorio restringido.',
         nowOpen: 'Repositorio abierto a todos.',
         grantUsersCta: 'Conceder acceso a usuarios…',

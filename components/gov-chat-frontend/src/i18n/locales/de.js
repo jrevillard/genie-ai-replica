@@ -1606,7 +1606,7 @@ export default {
         revoke: 'Widerrufen',
         error: 'Vorgang fehlgeschlagen.',
         grantedNotice: 'Zugang gewährt — wirksam bei der nächsten Anmeldung.',
-        revokedNotice: 'Zugang widerrufen.',
+        revokedNotice: 'Zugriff entzogen — wirksam bei der nächsten Anmeldung des Benutzers.',
         nowRestricted: 'Repository eingeschränkt.',
         nowOpen: 'Repository für alle offen.',
         grantUsersCta: 'Zugriff für Benutzer erteilen…',

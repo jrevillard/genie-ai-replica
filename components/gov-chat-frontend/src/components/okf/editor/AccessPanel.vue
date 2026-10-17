@@ -202,9 +202,10 @@
           <li v-for="u in pickerUsers" :key="u.id" :class="{ 'okf-access__picker-row--off': u.has_access }">
             <label class="okf-access__picker-row">
               <input
+                v-if="!u.has_access"
                 type="checkbox"
                 :checked="pickerSelected.has(u.username)"
-                :disabled="u.has_access || granting"
+                :disabled="granting"
                 @change="togglePick(u)"
               />
               <span class="okf-access__picker-username">{{ u.username }}</span>
@@ -213,6 +214,20 @@
               <DsPill v-if="u.has_access" variant="success">
                 {{ translate('okf.editor.access.pickerHasAccess', 'has access') }}
               </DsPill>
+              <!-- David (2026-10-17): "cannot remove grants once users have
+                   access" — the picker is where the steward GRANTED, so it
+                   must also be where they can REMOVE: granted rows get an
+                   inline Revoke (the checkbox would be a dead disabled
+                   affordance otherwise). -->
+              <DsButton
+                v-if="u.has_access"
+                variant="secondary"
+                small
+                :disabled="revokingInPicker === u.username"
+                @click="revokeInPicker(u)"
+              >
+                {{ translate('okf.editor.access.revoke', 'Revoke') }}
+              </DsButton>
             </label>
           </li>
         </ul>
@@ -279,6 +294,7 @@ export default {
       pickerSelected: new Set(),
       grantByQuery: null,
       granting: false,
+      revokingInPicker: null,
       searchTimer: null
     };
   },
@@ -395,6 +411,25 @@ export default {
       else next.add(u.username);
       this.pickerSelected = next;
     },
+    /** Revoke from the picker row (the grant surface is the revoke surface).
+     * Refreshes BOTH the picker results (has_access flips) and the holders. */
+    async revokeInPicker(u) {
+      this.revokingInPicker = u.username;
+      this.error = '';
+      this.notice = '';
+      try {
+        await repoOkfService.revokeAccess(this.repoId, { username: u.username });
+        this.notice = this.translate(
+          'okf.editor.access.revokedNotice',
+          'Access revoked — effective at that user’s next login.'
+        );
+        await Promise.all([this.searchUsers(), this.refresh()]);
+      } catch (err) {
+        this.error = this.errText(err);
+      } finally {
+        this.revokingInPicker = null;
+      }
+    },
     async onPickerAction(key) {
       if (key === 'cancel') {
         this.closePicker();
@@ -456,7 +491,10 @@ export default {
       this.notice = '';
       try {
         await repoOkfService.revokeGroupAccess(this.repoId, { group: g.name });
-        this.notice = this.translate('okf.editor.access.revokedNotice', 'Access revoked.');
+        this.notice = this.translate(
+          'okf.editor.access.revokedNotice',
+          'Access revoked — effective at that user’s next login.'
+        );
         await this.refresh();
       } catch (err) {
         this.error = this.errText(err);
@@ -470,7 +508,10 @@ export default {
       this.notice = '';
       try {
         await repoOkfService.revokeAccess(this.repoId, { username });
-        this.notice = this.translate('okf.editor.access.revokedNotice', 'Access revoked.');
+        this.notice = this.translate(
+          'okf.editor.access.revokedNotice',
+          'Access revoked — effective at that user’s next login.'
+        );
         await this.refresh();
       } catch (err) {
         this.error = this.errText(err);

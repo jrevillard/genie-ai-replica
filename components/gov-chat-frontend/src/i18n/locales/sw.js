@@ -1591,7 +1591,7 @@ export default {
         revoke: 'Batilisha',
         error: 'Operesheni imeshindikana.',
         grantedNotice: 'Ufikiaji umetolewa — utaanza kuingia mara ijayo.',
-        revokedNotice: 'Ufikiaji umebatilishwa.',
+        revokedNotice: 'Ufikiaji umefutwa — hutumika kwenye kuingia kwa mtumiaji mara inayofuata.',
         nowRestricted: 'Hifadhi imepunguzwa.',
         nowOpen: 'Hifadhi iko wazi kwa wote.',
         grantUsersCta: 'Toa ufikiaji kwa watumiaji…',

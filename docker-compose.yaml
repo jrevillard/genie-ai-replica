@@ -1578,6 +1578,10 @@ services:
       - no-new-privileges:true
     logging: *fluent-logging
     image: quay.io/keycloak/keycloak:26.7.0
+    # The upstream image ships an empty CMD (kc.sh prints its usage and exits
+    # without a subcommand). The dropped custom image baked `start` via its
+    # Dockerfile; restore that explicit startup for both compose and swarm.
+    command: ["start"]
     environment:
       - KC_BOOTSTRAP_ADMIN_USERNAME=admin
       - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}

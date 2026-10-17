@@ -1163,6 +1163,108 @@ test:pii-service:
       changes:
         paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
 
+# genie-ai-ragas-service (OKF RAGAS benchmark sidecar — Story 8-6, ADR-okf-043)
+build:ragas-service:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-ragas-service"
+    CONTEXT: "components/ragas-service/"
+    DOCKERFILE: "components/ragas-service/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+
+scan:ragas-service:
+  <<: *scan_template
+  needs:
+    - job: build:ragas-service
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-ragas-service"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+
+promote:ragas-service:
+  <<: *promote_template
+  needs:
+    - job: scan:ragas-service
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-ragas-service"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-ragas-service — test lane (mirror of the pii-service lane):
+# ruff + pytest against the real pinned stack.
+test:ragas-service:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - pip install --no-cache-dir -r components/ragas-service/requirements.txt ruff pytest
+  script:
+    - cd components/ragas-service
+    - ruff check app.py ragas_engine.py xlsx_io.py tests/
+    - python -m pytest tests/ -q --junitxml=reports/pytest-report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: components/ragas-service/reports/pytest-report.xml
+    paths:
+      - components/ragas-service/reports/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+
 # genie-ai-db-migrations
 build:db-migrations:
   <<: *build_template

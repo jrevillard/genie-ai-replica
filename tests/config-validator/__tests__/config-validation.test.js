@@ -781,6 +781,53 @@ describe('Configuration Validation Suite', () => {
     });
   });
 
+  // Story 8-6 (ADR-okf-043): the RAGAS benchmark sidecar + the okf-server
+  // knobs. Four-site parity: compose block, env template, ansible env.j2.
+  describe('Story 8-6: RAGAS benchmarking plumbing', () => {
+    test('OKF_RAGAS_URL is piped in the okf-server compose block with the sidecar default', () => {
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(/- OKF_RAGAS_URL=\$\{OKF_RAGAS_URL:-http:\/\/ragas-service:8090\}/);
+    });
+
+    test('the ragas-service compose block carries judge/embedder env with inherited defaults', () => {
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const block = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(block).toMatch(/- RAGAS_JUDGE_BASE_URL=\$\{RAGAS_JUDGE_BASE_URL:-http:\/\/vllm:8000\/v1\}/);
+      expect(block).toMatch(/- RAGAS_JUDGE_MODEL=\$\{RAGAS_JUDGE_MODEL:-\$\{VLLM_LLM_MODEL_ID:-\}\}/);
+      expect(block).toMatch(/- RAGAS_INTERNAL_SECRET=\$\{RAGAS_INTERNAL_SECRET:-\$\{OKF_INTERNAL_SECRET:-\}\}/);
+      expect(block).toMatch(/- RAGAS_EMBED_MODEL=\$\{RAGAS_EMBED_MODEL:-\$\{EMBED_MODEL_ID:-\}\}/);
+    });
+
+    test('OKF_RAGAS_TESTSET_SIZE_DEFAULT is documented in the env template with the 20 default', () => {
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*OKF_RAGAS_TESTSET_SIZE_DEFAULT=20.*$/m);
+    });
+
+    test('the ragas vars are emitted by ansible env.j2 (inherited defaults)', () => {
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect({ found: !!vars.OKF_RAGAS_URL, url: vars.OKF_RAGAS_URL ? vars.OKF_RAGAS_URL.default : null }).toEqual({
+        found: true,
+        url: 'http://ragas-service:8090'
+      });
+      expect({ found: !!vars.RAGAS_JUDGE_BASE_URL, url: vars.RAGAS_JUDGE_BASE_URL ? vars.RAGAS_JUDGE_BASE_URL.default : null }).toEqual({
+        found: true,
+        url: 'http://vllm:8000/v1'
+      });
+      expect({ found: !!vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT, v: vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT ? vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT.default : null }).toEqual({
+        found: true,
+        v: '20'
+      });
+    });
+
+    test('the ragas-service image is in the ansible image list', () => {
+      const facts = fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/tasks/deploy-shared-facts.yml'), 'utf8');
+      expect(facts).toMatch(/name: "genie-ai-ragas-service"/);
+    });
+  });
+
   // --- AC8: Contextual Retrieval knobs agree across compose and ansible -----
   //
   // The doc-context budget shipped as a hardcoded 6000 in docker-compose while

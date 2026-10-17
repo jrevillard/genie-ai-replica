@@ -1526,6 +1526,47 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   a suggested tag as a near-duplicate — nothing new to learn). Used by:
 #   okf-server head tests (guardSuggestions). Compose: yes. Ansible: yes.
 
+# --- RAGAS benchmarking in the OKF Lab (Story 8-6, ADR-okf-043) ---
+# The ragas-service Python sidecar owns testset generation, metric
+# evaluation, and the xlsx interchange with tests/rag-benchmarks; the
+# okf-server orchestrates. NO feature is indexed on a specific model —
+# the judge/embedder vars point at the deployment's chosen OpenAI-
+# compatible endpoints and default to the deployment's LLM config; the
+# per-task capability minimums live in the spec's model-requirements
+# companion (guided JSON, window sizes, no reasoning-token leak).
+# OKF_RAGAS_URL=http://ragas-service:8090
+#   Default: http://ragas-service:8090. The sidecar's base URL as okf-server
+#   resolves it on the overlay. Unreachable = honest 503 RAGAS_UNAVAILABLE
+#   per Lab route. Used by: okf-server (ragas-suite-service).
+# RAGAS_INTERNAL_SECRET=<shared secret with the sidecar>
+#   Default: OKF_INTERNAL_SECRET (the dataprep-callback contract — one
+#   deployment-wide internal secret). Fail-closed: unset rejects everything.
+#   Used by: okf-server -> ragas-service auth. Compose: yes. Ansible: yes.
+# RAGAS_JUDGE_BASE_URL=http://vllm:8000/v1
+#   Default: the deployment's vLLM endpoint. OpenAI-compatible judge/generator
+#   endpoint — any local server qualifies (vLLM, LiteLLM, ollama).
+# RAGAS_JUDGE_MODEL=<model id>
+#   Default: VLLM_LLM_MODEL_ID. The judge+generator model. Must meet the
+#   model-requirements minimums (strict JSON output; window sized for
+#   question+answer+contexts; no reasoning tokens in completions).
+# RAGAS_JUDGE_API_KEY=<bearer for the judge endpoint>
+#   Default: VLLM_API_KEY.
+# RAGAS_EMBED_BASE_URL=http://tei-embedding-server:80
+#   Default: the TEI embedding service. Required for answer_relevancy and
+#   testset generation (KG transforms embed); unset drops those honestly
+#   with a warning.
+# RAGAS_EMBED_MODEL=<embedding model id>
+#   Default: EMBED_MODEL_ID. Consistent within a run; matching the corpus
+#   embedder is recommended but not required for answer_relevancy.
+# OKF_RAGAS_TESTSET_SIZE_DEFAULT=20
+#   Default: 20. The generate form's initial size; the user sets the actual
+#   dimensions per generation (size, distribution weights, personas).
+# OKF_RAGAS_MAX_ENTRIES=200
+#   Default: 200. Hard cap per suite (generation + import).
+# OKF_RAGAS_RUN_CONCURRENCY=2
+#   Default: 2. Per-run query concurrency — bounds LLM load on the shared
+#   GPU so benchmarking does not starve chat answering.
+
 # --- okf-server: retrieval mode governance (Story 1.7, ADR-okf-039 D3) ---
 # OKF_RETRIEVAL_MODE=legacy
 #   Default: legacy (boot default; the okf_system_config doc overrides

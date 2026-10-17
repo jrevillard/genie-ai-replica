@@ -227,7 +227,19 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
     InMemorySpanExporter as _InMemorySpanExporter,
 )
 
+# ``metrics`` re-exports ``sanitize_attributes`` from ``tracing``; the bare
+# MagicMock installed above does not, so the name resolves to a callable that
+# RETURNS a MagicMock. The OTel SDK cannot tell that from a scalar value: it
+# runs the return through its attribute-value cleaner, which stringifies it,
+# then calls ``.items()`` on the string and raises. Reachable only once a real
+# TracerProvider is installed — a NonRecordingSpan ignores set_attributes
+# entirely — so the mock could lie about its contract for as long as the suite
+# had no real provider. Use the real function rather than a hand-written
+# stand-in: chatqna tests rely on the PII key filtering actually happening.
+import tracing  # noqa: E402  (after the sys.modules mocks, as above)
 from core.span_attrs import free_text_violations
+
+sys.modules["metrics"].sanitize_attributes = tracing.sanitize_attributes
 
 _SPAN_EXPORTER = _InMemorySpanExporter()
 

@@ -753,6 +753,8 @@ def _parse_condense_response(content) -> str:
     if not isinstance(query, str) or not query.strip():
         raise CondenseError("empty_query", f"standalone_query missing/blank: {stripped[:120]}")
     return query.strip()
+
+
 def _resolved_blend_settings(translated_history_string):
     """Resolve the multi-turn blend configuration for ONE request.
 

@@ -3063,7 +3063,8 @@ export default {
     },
     ragas: {
       paneTitle: 'Ditekanyo tsa RAGAS',
-      about: 'RAGAS e hlahloba hore na mothusi o hlahisa melaetsa le ho araba joang — tumelo, nepo le pitso ea mongobo, bohlokoa ba karabo le tse ding. Matha sete sa ditekanyo ho ela repo e le base ya tsebo.',
+      about:
+        'RAGAS e hlahloba hore na mothusi o hlahisa melaetsa le ho araba joang — tumelo, nepo le pitso ea mongobo, bohlokoa ba karabo le tse ding. Matha sete sa ditekanyo ho ela repo e le base ya tsebo.',
       aboutLabel: 'RAGAS ke eng?',
       aboutLink: 'Bala haholo go ragas.io',
       current: 'ea kajeno',

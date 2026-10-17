@@ -3054,7 +3054,8 @@ export default {
     },
     ragas: {
       paneTitle: 'Tolok ukur RAGAS',
-      about: 'RAGAS menilai seberapa baik asisten menemukan dan menjawab informasi — kesetiaan, presisi dan recall konteks, relevansi jawaban, dan lainnya. Jalankan suite tolok ukur untuk mengukur repositori sebagai basis pengetahuan.',
+      about:
+        'RAGAS menilai seberapa baik asisten menemukan dan menjawab informasi — kesetiaan, presisi dan recall konteks, relevansi jawaban, dan lainnya. Jalankan suite tolok ukur untuk mengukur repositori sebagai basis pengetahuan.',
       aboutLabel: 'Apa itu RAGAS?',
       aboutLink: 'Baca selengkapnya di ragas.io',
       current: 'saat ini',

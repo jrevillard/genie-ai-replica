@@ -15,6 +15,7 @@
   ansible.builtin.package:
     name: rsync
     state: present
+  when: config_bootstrap_sync_enabled | bool
 
 # Root is needed to create {{ config_dir }} itself on a host that does not have
 # it yet (the play runs on `all`, including GPU nodes), mirroring the deploy

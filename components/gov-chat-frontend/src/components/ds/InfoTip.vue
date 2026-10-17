@@ -1,7 +1,9 @@
 <!--
   DsInfoTip.vue — the ⓘ information icon (David, 2026-09-06): every domain
   term in the UI gets one, with a one-paragraph plain-language explanation
-  fed from the i18n glossary (never a docs link as the first resort).
+  fed from the i18n glossary (never a docs link as the first resort). An
+  optional href adds a "read more" link INSIDE the bubble — after the
+  explanation, never instead of it.
   Hover OR keyboard-focus reveals the tip; pure CSS positioning, DS tokens.
 -->
 <template>
@@ -18,7 +20,12 @@
     >
       ⓘ
     </button>
-    <span v-if="open" class="ds-infotip__bubble" role="tooltip">{{ text }}</span>
+    <span v-if="open" class="ds-infotip__bubble" role="tooltip">
+      {{ text }}
+      <a v-if="href" class="ds-infotip__link" :href="href" target="_blank" rel="noopener noreferrer" @click.stop>{{
+        linkLabel || href
+      }}</a>
+    </span>
   </span>
 </template>
 
@@ -29,7 +36,11 @@ export default {
     /** The plain-language explanation (from the i18n glossary). */
     text: { type: String, required: true },
     /** Accessible label for the icon itself (e.g. "What is Frontmatter?"). */
-    label: { type: String, default: 'More information' }
+    label: { type: String, default: 'More information' },
+    /** Optional "read more" link rendered inside the bubble, after the text. */
+    href: { type: String, default: '' },
+    /** Anchor text for the href link (defaults to the raw URL). */
+    linkLabel: { type: String, default: '' }
   },
   data() {
     return { open: false };
@@ -75,5 +86,11 @@ export default {
   z-index: 30;
   white-space: normal;
   text-align: left;
+}
+.ds-infotip__link {
+  display: block;
+  margin-top: var(--space-xs);
+  color: var(--accent);
+  text-decoration: underline;
 }
 </style>

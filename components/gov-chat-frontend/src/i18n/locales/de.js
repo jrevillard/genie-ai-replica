@@ -2832,7 +2832,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Vergleichstests'
+        ragas: 'RAGAS-Vergleichstests'
       },
       head: {
         dim: 'Dimensions',
@@ -3075,6 +3075,10 @@ export default {
       }
     },
     ragas: {
+      paneTitle: 'RAGAS-Vergleichstests',
+      about: 'RAGAS bewertet, wie gut der Assistent abruft und antwortet — Treue, Kontextgenauigkeit und -treffer, Antwortrelevanz und mehr. Führen Sie eine Vergleichstestsuite aus, um das Repository als Wissensbasis zu messen.',
+      aboutLabel: 'Was ist RAGAS?',
+      aboutLink: 'Mehr auf ragas.io',
       current: 'aktuell',
       generate: {
         title: 'Vergleichstest-Suite generieren',

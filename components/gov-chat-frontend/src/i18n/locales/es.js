@@ -2830,7 +2830,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Pruebas comparativas'
+        ragas: 'Pruebas comparativas de RAGAS'
       },
       head: {
         dim: 'Dimensions',
@@ -3072,6 +3072,10 @@ export default {
       }
     },
     ragas: {
+      paneTitle: 'Pruebas comparativas de RAGAS',
+      about: 'RAGAS puntúa qué tan bien el asistente recupera y responde — fidelidad, precisión y recuperación de contexto, relevancia de la respuesta y más. Ejecute una suite de pruebas comparativas para medir el repositorio como base de conocimiento.',
+      aboutLabel: '¿Qué es RAGAS?',
+      aboutLink: 'Lea más en ragas.io',
       current: 'actual',
       generate: {
         title: 'Generar una suite de pruebas comparativas',

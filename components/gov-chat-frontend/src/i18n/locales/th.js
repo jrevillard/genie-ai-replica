@@ -2793,7 +2793,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'การทดสอบเปรียบเทียบ'
+        ragas: 'การทดสอบเปรียบเทียบ RAGAS'
       },
       head: {
         dim: 'Dimensions',
@@ -3028,6 +3028,10 @@ export default {
       }
     },
     ragas: {
+      paneTitle: 'การทดสอบเปรียบเทียบ RAGAS',
+      about: 'RAGAS ให้คะแนนว่าผู้ช่วยเรียกข้อมูลและตอบได้ดีเพียงใด — ความซื่อสัตย์ ความแม่นยำและการครอบคลุมของบริบท ความเกี่ยวข้องของคำตอบ และอื่น ๆ รันชุดทดสอบเปรียบเทียบเพื่อวัดคลังเป็นฐานความรู้',
+      aboutLabel: 'RAGAS คืออะไร?',
+      aboutLink: 'อ่านเพิ่มเติมที่ ragas.io',
       current: 'ปัจจุบัน',
       generate: {
         title: 'สร้างชุดทดสอบเปรียบเทียบ',

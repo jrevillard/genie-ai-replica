@@ -1463,7 +1463,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Benchmarks'
+        ragas: 'RAGAS Benchmarks'
       },
       head: {
         dim: 'Dimensions',
@@ -1700,6 +1700,11 @@ export default {
       }
     },
     ragas: {
+      paneTitle: 'RAGAS Benchmarks',
+      about:
+        'RAGAS scores how well the assistant retrieves and answers — faithfulness, context precision and recall, answer relevancy and more. Run a benchmark suite to measure the repository as a knowledge base.',
+      aboutLabel: 'What is RAGAS?',
+      aboutLink: 'Read more at ragas.io',
       current: 'current',
       generate: {
         title: 'Generate a benchmark suite',

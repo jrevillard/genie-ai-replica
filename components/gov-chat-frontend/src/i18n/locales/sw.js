@@ -2809,7 +2809,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Vipimo vya kulinganisha'
+        ragas: 'Vipimo vya kulinganisha vya RAGAS'
       },
       head: {
         dim: 'Dimensions',
@@ -3048,6 +3048,10 @@ export default {
       }
     },
     ragas: {
+      paneTitle: 'Vipimo vya kulinganisha vya RAGAS',
+      about: 'RAGAS hupima msaidizi anavyopata taarifa na kujibu — uaminifu, usahihi wa muktadha na kukumbuka, umuhimu wa jibu na mengine. Endesha seti ya vipimo vya kulinganisha kupima hifadhi kama msingi wa maarifa.',
+      aboutLabel: 'RAGAS ni nini?',
+      aboutLink: 'Soma zaidi kwenye ragas.io',
       current: 'ya sasa',
       generate: {
         title: 'Tengeneza seti ya vipimo vya kulinganisha',

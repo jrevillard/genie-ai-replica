@@ -25,7 +25,7 @@ from opentelemetry import propagate
 from opentelemetry.trace import Status, StatusCode
 from pydantic import Field
 
-from core.span_attrs import QUERY_ID_KEY, query_id_from_baggage
+from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, UNRESOLVED, query_id_from_baggage
 from tracing import (
     get_meter,
     get_tracer,
@@ -256,6 +256,30 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
             selected_indices.append(i)
 
     return selected_indices, breakdown
+
+
+def _adaptive_chunk_keys(input_docs, adaptive_breakdown) -> list[str]:
+    """Chunk key for each adaptive_breakdown entry, in entry order.
+
+    The join is by `original_index` into the rerank input's document list.
+    `idx` is the candidate's position in TEI score-sorted order and does NOT
+    address `input_docs`, so reading the key at `idx` silently returns another
+    chunk's key. Positional, same length as `adaptive_breakdown`.
+
+    An entry whose index does not address a document, or whose document carries
+    no string `chunk_key`, yields UNRESOLVED rather than a placeholder that
+    reads like a real key.
+    """
+    keys = []
+    for record in adaptive_breakdown or []:
+        index = record.get("original_index")
+        doc = None
+        if isinstance(index, int) and not isinstance(index, bool) and 0 <= index < len(input_docs):
+            doc = input_docs[index]
+        metadata = getattr(doc, "metadata", None) or {}
+        chunk_key = metadata.get("chunk_key")
+        keys.append(chunk_key if isinstance(chunk_key, str) and chunk_key else UNRESOLVED)
+    return keys
 
 
 def _safe_get_doc(retrieved_docs, tei_index):
@@ -545,6 +569,15 @@ class GenieTEIReranking(OpeaTEIReranking):
                         span.set_attribute(
                             "rag.adaptive_breakdown",
                             json.dumps(adaptive_breakdown),
+                        )
+                        # Parallel array of chunk keys, one per breakdown entry,
+                        # so the breakdown is joinable to rag.candidate_chunk_keys
+                        # from the span alone. Emitted beside the breakdown and
+                        # not merged into it: that attribute is a shipped shape
+                        # the eval harness parses.
+                        span.set_attribute(
+                            ATTRIBUTE_NAMES["rag_adaptive_chunk_keys"],
+                            _adaptive_chunk_keys(input.retrieved_docs, adaptive_breakdown),
                         )
                         span.set_attribute("rag.adaptive_context_decay_factor", CONTEXT_DECAY_FACTOR)
                         span.set_attribute("rag.adaptive_min_value_threshold", MIN_VALUE_THRESHOLD)

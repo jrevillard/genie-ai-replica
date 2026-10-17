@@ -88,7 +88,13 @@ async function jsonOrThrow(r, what) {
     logger.error(`OKF access: ${what} failed`, { status: r.status, body: text.slice(0, 300) });
     throw Object.assign(new Error(`${what} failed: ${r.status}`), { statusCode: r.status === 404 ? 404 : 502 });
   }
-  return r.status === 204 ? null : r.json();
+  // Keycloak returns 201 with an EMPTY body for POST /roles and POST /groups
+  // (and 204 for the mapping writes). Parsing an empty body throws
+  // "Unexpected end of JSON input" and surfaced as the grant-group 500
+  // (2026-10-17) — read the text first, parse only when there is content.
+  const text = await r.text();
+  if (!text) return null;
+  return JSON.parse(text);
 }
 
 /** Exact-username lookup → the Keycloak user representation (or null). */

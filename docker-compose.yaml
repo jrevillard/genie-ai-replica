@@ -921,7 +921,7 @@ services:
       # Embedder (answer_relevancy + testset KG transforms) — TEI's
       # OpenAI-compatible route is /v1/embeddings, hence the /v1 suffix.
       - RAGAS_EMBED_BASE_URL=${RAGAS_EMBED_BASE_URL:-http://tei-embedding-server:80/v1}
-      - RAGAS_EMBED_MODEL=${RAGAS_EMBED_MODEL:-${EMBED_MODEL_ID:-}}
+      - RAGAS_EMBED_MODEL=${RAGAS_EMBED_MODEL:-${EMBEDDING_MODEL_ID:-}}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     build:
       context: components/ragas-service/

@@ -119,6 +119,10 @@ users:
         - manage-authorization
   # Service account user for genie-proxy-client — assigns realm-management client roles
   # keycloak-config-cli uses serviceAccountClientId to link this user entry to the client's service account
+  # Story 6-1c additions (2026-10-17): manage-realm (create the per-repo scope
+  # ROLES), manage-roles (assign/remove role mappings on groups), manage-groups
+  # (ensureGroup for forward-referenced groups). Without these, group grants
+  # 403/500 at role creation while user grants silently succeed.
   - username: service-account-genie-proxy-client
     enabled: true
     serviceAccountClientId: genie-proxy-client
@@ -128,6 +132,9 @@ users:
         - view-users
         - manage-users
         - view-realm
+        - manage-realm
+        - manage-roles
+        - manage-groups
   # Service account user for dataprep-service-client — assigns realm role for document-repository authorization
   - username: service-account-dataprep-service-client
     enabled: true
@@ -189,8 +196,9 @@ clients:
           access.token.claim: 'true'
 
   # Service account for GENIE.AI backend → Keycloak Admin API proxy
-  # Used to manage users, roles (CRUD, assign/remove) on behalf of GENIE.AI admin operations.
-  # Permissions are restricted: cannot modify realm settings, client config, or other admin operations.
+  # Used to manage users, roles (CRUD, assign/remove) on behalf of GENIE.AI admin operations,
+  # including the OKF access-control facility (per-repo scope roles + group grants, Story 6-1c).
+  # Permissions: user/group/role management; NOT realm settings or client config.
   - clientId: genie-proxy-client
     enabled: true
     publicClient: false

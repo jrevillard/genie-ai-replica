@@ -150,8 +150,10 @@ OPEN for all users**; restriction is opt-in per repository. Two pieces:
 
 ### The restriction toggle
 
-In the repository editor's right rail, the **Access** panel shows each
-repository's posture and a toggle:
+The **Access Control** panel lives in the repository editor's left sidebar,
+directly under the concepts list — and in the wizard's final step
+(**Secure and Finish**), so a repository can be fenced before it ever leaves
+the wizard. It shows each repository's posture and a toggle:
 
 - **Open for all users** *(the default, including every newly created
   repository)*: the repository follows the deployment's mode — in the default
@@ -168,11 +170,32 @@ can never disagree about a restricted repository.
 
 ### Grants and revocations
 
-The same panel grants and revokes per-user access (`read` or `admin` level).
-A grant writes an `okf:{tenant}:{repo}:{level}` entry into the user's
-`okf_scopes` Keycloak attribute; the existing protocol mapper ships it in the
-user's token, so **a grant takes effect at the user's next login** and
-survives logout everywhere (it is a Keycloak attribute, not a session).
+The panel grants **query access** — deliberately the only level it exposes
+(the panel's audience is stewards; stewardship itself comes from realm
+roles, not from here). Two grant paths, both sized for large user
+populations:
+
+- **Users — a searchable picker.** Type-ahead search hits the Keycloak
+  directory server-side (username, name or email); visible results carry
+  checkboxes, and already-granted users are tagged *has access* with an
+  inline **Revoke**. When the search matches more users than the visible
+  page, a **Select all *N* matching** action switches to *grant-by-search*:
+  the server walks every matching directory page and grants each user
+  through a worker pool — one operation grants hundreds or thousands of
+  users, and no username list crosses the wire. (For entire populations,
+  prefer a group.)
+- **Groups — a searchable combobox.** Granting a group assigns a
+  per-repository realm role to the Keycloak group; every member inherits
+  query access at their next login — one operation regardless of member
+  count. Groups and their membership stay in the identity provider
+  (Keycloak admin console, or LDAP/AD sync in enterprise deployments);
+  the panel only consumes them.
+
+A per-user grant writes an `okf:{tenant}:{repo}:{level}` entry into the
+user's `okf_scopes` Keycloak attribute; the existing protocol mapper ships
+it in the user's token, so **a grant takes effect at the user's next login**
+— and so does a revocation, which the panel states explicitly. Grants are
+additive: they never remove a user's access to unrestricted repositories.
 Every grant, revoke and restriction toggle is written to the audit log.
 
 Grants require okf-server to hold Keycloak credentials for the delegated
@@ -200,10 +223,19 @@ Keycloak rather than through the panel.
   that copies a multivalued user attribute `okf_scopes` into the token's
   `okf_scopes` claim. The built-in admin user carries
   `okf_scopes: [okf:*:*:admin]` through exactly this path.
-- The repository editor's **Access** panel grants and revokes per-user,
-  per-repo access by writing that same attribute through the Keycloak Admin
-  API (the `genie-proxy-client` service account; see the
-  `KC_OKF_ACCESS_*` table above). Every change is audited.
+- The repository editor's **Access Control** panel grants and revokes
+  per-user, per-repo access by writing that same attribute through the
+  Keycloak Admin API (the `genie-proxy-client` service account; see the
+  `KC_OKF_ACCESS_*` table above). Group grants create a realm role named
+  after the repository scope and assign it to the group — members inherit it
+  in `realm_access.roles` at token mint, which the middleware reads as a
+  scope source. Every change is audited.
+- The realm template provisions the service account's `realm-management`
+  grants (`manage-users` for attribute writes, `manage-realm` for creating
+  the per-repository scope roles). A Keycloak 403 on a group grant now
+  surfaces as `502 KEYCLOAK_FORBIDDEN` naming the missing grant — if you
+  provision clients by hand instead of from the template, that is the error
+  to look for.
 
 Setting a user's `okf_scopes` attribute by hand in the Keycloak admin console
 also works and lands in their next token — the panel is the convenient,

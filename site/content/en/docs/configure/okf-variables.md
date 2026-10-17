@@ -222,6 +222,13 @@ write side (repo CRUD, ingest, lifecycle, governance) always requires an
 `admin` scope or the super-role. Flipping the value needs an okf-server
 container recreate, not a rebuild.
 
+The grant facility behind per-repo restriction has its own credentials:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `KC_OKF_ACCESS_CLIENT_ID` | `genie-proxy-client` | Service account okf-server uses for grant/revoke and group-role Admin-API writes. The realm template provisions its `realm-management` grants (`manage-users`, `manage-realm`). |
+| `KC_OKF_ACCESS_CLIENT_SECRET` | unset | The client's secret. Unset = grants answer `503 ACCESS_CONTROL_UNCONFIGURED`; restriction enforcement is unaffected. |
+
 ## Related variables
 
 These are set once per deployment and rarely touched; they are listed in the

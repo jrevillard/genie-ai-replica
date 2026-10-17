@@ -400,7 +400,7 @@ workflow:
 
 # GitLab official Container Scanning template — produces the correct-schema report
 # (GitLab security dashboard + MR widget) + CycloneDX SBOM. Overridden below to
-# scan each of the 16 candidate images in tmp/. Blocking on HIGH/CRITICAL is via
+# scan each of the 15 candidate images in tmp/. Blocking on HIGH/CRITICAL is via
 # MR approval rules (see docs/adr/0001).
 include:
   # --- Security testing suite (GitLab Ultimate) ---
@@ -544,7 +544,7 @@ container_scanning:
 # dashboard "Parsing errors" in pipelines 6385 and 6402).
 #
 # Each scan:IMAGE job extends container_scanning via this alias (kept for
-# backward compatibility with the 16 existing scan:IMAGE jobs), sets its own
+# backward compatibility with the 15 existing scan:IMAGE jobs), sets its own
 # CS_IMAGE to the corresponding tmp/... image built in stage `build`, and adds
 # rules so the scan only runs when relevant files change. The
 # global container_scanning override above moves the stage from `test` to

@@ -530,7 +530,7 @@ Copy this checklist into the release MR or issue.
 ### Verification
 
 - [ ] CI pipeline passed (lint → test → config → build → scan → promote → release)
-- - [ ] All 15 Docker images tagged with the new version in Container Registry
+- [ ] All 15 Docker images tagged with the new version in Container Registry
 - [ ] GitLab Release created with changelog content
 - [ ] `latest` Docker tag updated (stable releases only — skip for pre-releases)
 - [ ] Dry-run deployment with the new tag succeeds

@@ -118,13 +118,25 @@ async function ensureCollection(db) {
   if (_collectionEnsured) return;
   const existing = new Set((await db.listCollections()).map((c) => c.name));
   if (!existing.has(COLLECTION)) {
-    await db.createCollection(COLLECTION);
-    logger.info('ragas-suite.collection_created', { name: COLLECTION });
+    try {
+      await db.createCollection(COLLECTION);
+      logger.info('ragas-suite.collection_created', { name: COLLECTION });
+    } catch (e) {
+      // head-suite-service creates the same shared collection — a cold boot
+      // can race it through the same await window. Losing that race is fine.
+      if (!/conflict|duplicate|exists/i.test(String(e && e.message))) throw e;
+    }
   }
   const col = db.collection(COLLECTION);
   const idx = (await col.indexes()).map((i) => i.fields.join(','));
   if (!idx.includes('repo_id')) await col.ensureIndex({ type: 'persistent', fields: ['repo_id'] });
   if (!idx.includes('created_at')) await col.ensureIndex({ type: 'persistent', fields: ['created_at'] });
+  // Compound indexes for the ragas query shapes: listing filters repo_id +
+  // kind (listRuns and the per-kind latest-run/latest-explain lookups); the
+  // boot sweep and orphan reap filter kind + status with NO repo_id, which
+  // would otherwise full-scan the shared okf_head_test_runs collection.
+  if (!idx.includes('repo_id,kind')) await col.ensureIndex({ type: 'persistent', fields: ['repo_id', 'kind'] });
+  if (!idx.includes('kind,status')) await col.ensureIndex({ type: 'persistent', fields: ['kind', 'status'] });
   _collectionEnsured = true;
 }
 

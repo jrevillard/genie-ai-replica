@@ -1,4 +1,5 @@
-// Story 8-6 live smoke (local build). NOT committed — dev-only harness.
+// Story 8-6 live smoke (local build). Dev-only harness, committed with the
+// story like smoke-1-8d.js.
 // Proves the RAGAS benchmarking surface end-to-end against the deployed
 // stack (sidecar + okf-server + remote GPU judge):
 //   POST /api/okf/repos/:id/ragas-testsuite            (202 + poll)
@@ -20,7 +21,12 @@ const SMOKE_USER = 'okf-smoke-86';
 const SMOKE_PW = crypto.randomBytes(18).toString('base64url') + '#aA1!';
 
 const env = {};
-for (const line of fs.readFileSync('.env', 'utf8').split(/\r?\n/)) {
+const ENV_FILE = ['./.env', 'C:/Dev/builds/main/.env'].find((p) => fs.existsSync(p));
+if (!ENV_FILE) {
+  console.error('FATAL: no .env found (cwd or C:/Dev/builds/main)');
+  process.exit(1);
+}
+for (const line of fs.readFileSync(ENV_FILE, 'utf8').split(/\r?\n/)) {
   const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
   if (m) env[m[1]] = m[2].replace(/^"|"$/g, '');
 }

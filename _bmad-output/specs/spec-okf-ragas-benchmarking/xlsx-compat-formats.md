@@ -1,5 +1,7 @@
 # xlsx compatibility formats — RAGAS ⇄ Jerome's `tests/rag-benchmarks`
 
+**Terminology (binding, per David 2026-10-17):** the user-facing term is **benchmark suite** (UI, docs, `ragas_suite` storage). **"Gold dataset"** is only Jerome's artifact name inside this compatibility contract — a proper noun for what `xlsx_to_gold.py` produces and the `Gold` tab (not renamable; it is his format). Never a hybrid. "Gold" is not RAGAS vocabulary — RAGAS calls ground truth `reference` / `reference_contexts` at field level.
+
 The compatibility contract, verified against his code (file:line anchors from the 2026-10-17 deep read of `feat/okf-server`'s tree, which matches `origin/main`). Two adopted companions carry the operational side: `../../../tests/rag-benchmarks/eval/CLAUDE.md` and `RUNBOOK.md`.
 
 ## 1. Suite xlsx (export target = his INPUT format; import source)

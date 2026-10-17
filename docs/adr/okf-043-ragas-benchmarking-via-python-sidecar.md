@@ -33,8 +33,9 @@ Two hard facts shape the decision:
 1. **A new stateless Python sidecar, `components/ragas-service/`** (FastAPI, mirroring the
    `pii-service` packaging precedent), owns the three things only Python can do faithfully:
    ragas `TestsetGenerator` (suite generation with reference answers), ragas `evaluate()`
-   (the four metrics), and all xlsx serialization (openpyxl, deps frozen to his
-   `requirements.txt` versions). **okf-server (Node) keeps orchestration** — jobs,
+   (the metric catalog — the harness-compatible four as the default selection, the full
+   single-turn RAG set selectable per suite/run), and all xlsx serialization (openpyxl,
+   deps frozen to his `requirements.txt` versions). **okf-server (Node) keeps orchestration** — jobs,
    persistence, authz, audit — in a new `ragas-suite-service.js` that clones the
    `head-suite-service.js` skeleton (same `okf_head_test_runs` collection with new kinds
    `ragas_suite`/`ragas_run`/`ragas_explain`, same 202+poll job pattern, locks, orphan
@@ -52,8 +53,9 @@ Two hard facts shape the decision:
    id/difficulty/query/answer/passages/source, `new-N` id joins, blank-line passages,
    `N/A` = out-of-scope) so it feeds `xlsx_to_gold.py` unmodified; results export uses his
    v2 vocabulary (Gold + `Run_<label>` + Compare + empty Calibrate; 22 `NEW_COLS`,
-   18 `COMPARE_HEADERS`; anchor columns blank); import accepts both our exports and his
-   v2 workbooks.
+   18 `COMPARE_HEADERS`; anchor columns blank; metrics beyond the default four append
+   extra `ragas_<metric>` columns his tooling ignores). **Suites import in his format;
+   results export only — no results import** (per David 2026-10-17).
 4. **Sovereign judging**: the sidecar's judge/embedder point at the deployment's local
    vLLM/TEI via `RAGAS_JUDGE_*`/`RAGAS_EMBED_*` (compose defaults from `VLLM_ENDPOINT`,
    `VLLM_LLM_MODEL_ID`, `VLLM_API_KEY`, `EMBED_MODEL_ID`) — the same deployment-local

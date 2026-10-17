@@ -22,20 +22,20 @@ The OKF Routing Lab can prove *routing* (which repository should answer) but not
 ## Capabilities
 
 - **CAP-1 — Generate RAGAS suites**
-  - **intent:** Steward selects one or more repositories — the current repository alone, or together with any number of related repositories — and generates a benchmark suite with expected outputs (queries, reference answers, reference passages) synthesized from the selected repos' concepts.
-  - **success:** With two or more repositories selected, the suite contains at least one multi-repo query; with a single repository, entries still carry query + reference answer + reference passages; the suite exists as a `ragas_suite` document and generation ran as a 202+poll job with progress phases.
+  - **intent:** Steward selects one or more repositories — the current repository alone, or together with any number of related repositories — and generates a benchmark suite with expected outputs (queries, reference answers, reference passages) synthesized from the selected repos' concepts, with user-settable dimensions (testset size, query-distribution weights, persona count) mirroring the existing suite-generator knobs.
+  - **success:** With two or more repositories selected, the suite contains at least one multi-repo query; with a single repository, entries still carry query + reference answer + reference passages; the suite exists as a `ragas_suite` document and generation ran as a 202+poll job with progress phases; testset size defaults to 20 and is user-settable.
 
 - **CAP-2 — xlsx interchange**
-  - **intent:** Steward imports and exports RAGAS benchmark suites AND results as xlsx files compatible with Jerome's `tests/rag-benchmarks` toolchain formats.
-  - **success:** An exported benchmark-suite xlsx fed to `xlsx_to_gold.py` (unmodified) yields the harness's `gold_dataset.json` with zero format-driven skips; a suite authored in his format imports and runs; a results xlsx round-trips back into run history.
+  - **intent:** Steward exports RAGAS benchmark suites and results as xlsx files compatible with Jerome's `tests/rag-benchmarks` toolchain formats, and imports benchmark suites (tests + expected results) authored in that format.
+  - **success:** An exported benchmark-suite xlsx fed to `xlsx_to_gold.py` (unmodified) yields the harness's `gold_dataset.json` with zero format-driven skips; a suite authored in his format imports and runs; an exported results xlsx carries the v2 results column vocabulary with the enabled metrics.
 
 - **CAP-3 — Execute suites**
-  - **intent:** Steward runs a RAGAS suite; each query gets retrieved contexts and a generated answer from the live corpus, scored by the four RAGAS metrics (faithfulness, context_precision, context_recall, answer_relevancy).
-  - **success:** A run completes with per-query metric scores and aggregates for all four metrics; jobs obey the Lab's concurrency/lock/orphan semantics; sidecar-absence degrades to a clear 503, never a hang.
+  - **intent:** Steward runs a RAGAS suite; each query gets retrieved contexts and a generated answer from the live corpus, scored by the selected RAGAS metrics — the full single-turn RAG catalog is available (see `model-requirements.md` and the companion formats), defaulting to the harness-compatible four (faithfulness, context_precision, context_recall, answer_relevancy).
+  - **success:** A run completes with per-query metric scores and aggregates for every enabled metric, always including the default four; jobs obey the Lab's concurrency/lock/orphan semantics; sidecar-absence degrades to a clear 503, never a hang.
 
 - **CAP-4 — Results display**
-  - **intent:** Run results render per-query in tabular form with metric scores and in aggregate chart form (per-metric gauges plus run-over-run trend).
-  - **success:** A completed run renders a per-query table with the four metric columns and meter bars, aggregate radial gauges, and a trend line across that suite's run history.
+  - **intent:** Run results render per-query in tabular form with metric scores and in aggregate chart form (per-metric gauges plus run-over-run trend) — charts in the Lab are mandatory, not optional.
+  - **success:** A completed run renders a per-query table with the enabled metric columns and meter bars, aggregate radial gauges, and a trend line across that suite's run history; the results export deliberately omits a Charts tab — the Lab owns charting.
 
 - **CAP-5 — Explain and advise**
   - **intent:** Failed rows get failure attribution (which pipeline stage broke) and guarded recommendations, in the same explain/advise pattern as the existing head/query tests.
@@ -47,7 +47,7 @@ The OKF Routing Lab can prove *routing* (which repository should answer) but not
 
 ## Constraints
 
-- ragas is Python-only and pinned at **0.4.3** (Jerome's pin): metric-number and report-shape parity with his chain is a hard requirement, so the sidecar dep set is frozen to his `requirements.txt` versions.
+- ragas is Python-only and pinned at **0.4.3** (Jerome's pin): metric-number and report-shape parity with his chain is a hard requirement, so the sidecar dep set is frozen to his `requirements.txt` versions. The full metric catalog is selectable, but the compat surface stays anchored: his 22 `NEW_COLS` emit verbatim (the four `ragas_*` columns filled from the default metrics) and metrics beyond the four append extra `ragas_<metric>` columns his tooling ignores.
 - xlsx compatibility is positional and tab-exact: the layouts in `xlsx-compat-formats.md` must be emitted and consumed verbatim (sheet name, header row 1, column order, `new-N` id joins, tab set, `NEW_COLS`/`COMPARE_HEADERS` names).
 - 100% additive to the existing Lab: no modification of head-suite behavior, existing suite semantics, or the four Lab entry points; RAGAS rides the same collection, job pattern, routes shape, and store envelope.
 - Sovereign stack: judge, generator, and embedder run on deployment-local endpoints **selected by use case and resource availability — no feature is indexed on a specific model**; every LLM-consuming task (suite generation, RAGAS judging, the answer leg, data curation, the existing suite tests) must meet the capability minimums in `model-requirements.md`: strict/guided JSON wherever structured output is parsed, per-task window minimums, no reasoning-token leak into judge completions.
@@ -59,7 +59,8 @@ The OKF Routing Lab can prove *routing* (which repository should answer) but not
 ## Non-goals
 
 - Not replacing Jerome's CLI harness: offline deep evaluation on the swarm node stays his toolchain's role.
-- No multi-turn samples or agent/tool metrics in v1.
+- No multi-turn samples, agent/tool, SQL, or multimodal metrics — structurally inapplicable to our sample shape, not merely deferred.
+- No results import: only benchmark suites (tests + expected results) import; results flow one way (export).
 - No latency or cost benchmarking (OTel trace waterfall remains that surface).
 - No anchor-path chunk-hash metrics in the RAGAS tab: the existing Suites feature owns those; exported results carry his anchor columns blank.
 - No chatqna-over-HTTP full-stack drive in v1 (Lab-internal replay only).
@@ -67,18 +68,10 @@ The OKF Routing Lab can prove *routing* (which repository should answer) but not
 
 ## Success signal
 
-A steward generates a suite from one or more repositories, runs it, and sees four metric scores per query with charts and failure explanations; the same suite exported as xlsx runs unmodified through `xlsx_to_gold.py` → `run_eval.py dump-tuples` → `run_ragas_eval.py` on the swarm node.
+A steward generates a suite from one or more repositories, runs it, and sees metric scores per query (default four, full catalog selectable) with mandatory Lab charts and failure explanations; the same suite exported as xlsx runs unmodified through `xlsx_to_gold.py` → `run_eval.py dump-tuples` → `run_ragas_eval.py` on the swarm node.
 
 ## Assumptions
 
 - Assumed any model meeting the `model-requirements.md` minimums works for every task; granite-4.1-8b and MiniMax-M3 (+ TEI bge-large) are validated instances, not requirements.
-- Assumed default testset size 12 keeps generation tractable on a shared GPU (config knob `OKF_RAGAS_TESTSET_SIZE_DEFAULT`).
 - Assumed sheet name `Test Dataset` (his `--sheet-name` default) is acceptable for exports.
 - Assumed `okf_head_test_runs` tolerates the new kinds without index changes (`repo_id` and `created_at` indexes already present).
-
-## Open Questions
-
-- Should the results export include his matplotlib Charts tab, or is omitting it (UI charts are the feature) acceptable?
-- Extend the metric set beyond the four in v1 (answer_correctness toggle), or strictly Jerome's four until parity is proven?
-- Default testset size (proposed 12) — and should generation require an explicit confirm given LLM cost on the shared GPU?
-- Should imported RAGAS results appear in the same run-over-run trend chart as native runs (proposed yes, tagged imported)?

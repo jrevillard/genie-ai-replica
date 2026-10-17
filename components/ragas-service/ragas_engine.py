@@ -55,6 +55,26 @@ def judge_configured() -> bool:
     return bool(_judge_base_url() and os.getenv("RAGAS_JUDGE_MODEL"))
 
 
+def _doc_char_cap() -> int:
+    """Per-concept KG-input cap in chars (0 = disabled). 'auto' derives from
+    the judge's context window so the transform prompts — including the
+    pair-joining relationship builder — always fit."""
+    raw = (os.getenv("RAGAS_DOC_CHAR_CAP") or "auto").strip().lower()
+    if raw in ("0", "off", "none", "disabled"):
+        return 0
+    if raw not in ("auto", ""):
+        try:
+            return max(0, int(raw))
+        except ValueError as e:
+            raise ValueError(f"RAGAS_DOC_CHAR_CAP must be a char count, 'auto', or 0 — got {raw!r}") from e
+    window = int(os.getenv("RAGAS_JUDGE_CONTEXT_TOKENS") or "65536")
+    overhead = int(os.getenv("RAGAS_PROMPT_OVERHEAD_TOKENS") or "2048")
+    reserve = int(os.getenv("RAGAS_OUTPUT_RESERVE_TOKENS") or "1024")
+    pair_safe_tokens = max(512, (window - overhead - reserve) // 2)
+    ceiling = int(os.getenv("RAGAS_DOC_CHAR_MAX") or "48000")
+    return min(pair_safe_tokens * 4, ceiling)
+
+
 # --------------------------------------------------------------------------
 # Model wiring
 # --------------------------------------------------------------------------
@@ -361,9 +381,15 @@ async def generate_testset(
     # full body — and the relationship builder joins PAIRS of node contents,
     # so two near-the-cap concepts overflow the judge's context window and
     # kill the whole job with a 400 (live finding: one prompt hit 65537
-    # tokens against a 65536 window, 2026-10-17). ~24k chars ≈ 6k tokens
-    # keeps every transform prompt comfortably inside any sane window.
-    doc_cap = int(os.getenv("RAGAS_DOC_CHAR_CAP") or "24000")
+    # tokens against a 65536 window, 2026-10-17).
+    #
+    # Sizing sticks to the SELECTED model's window (David, 2026-10-18):
+    # 'auto' (default) derives the cap from RAGAS_JUDGE_CONTEXT_TOKENS —
+    # (window − overhead − output reserve) ÷ 2 for the pair-join, × 4
+    # chars/token — then clamps to RAGAS_DOC_CHAR_MAX so huge windows don't
+    # explode runtime. An explicit RAGAS_DOC_CHAR_CAP number wins; <=0
+    # disables. Same discipline as DATAPREP_CONTEXTUAL_DOC_BUDGET.
+    doc_cap = _doc_char_cap()
     if doc_cap > 0:
 
         def _cap(text: str) -> str:
@@ -371,7 +397,7 @@ async def generate_testset(
 
     else:
 
-        def _cap(text: str) -> str:  # <=0 disables the cap
+        def _cap(text: str) -> str:  # cap disabled
             return text
 
     docs = [

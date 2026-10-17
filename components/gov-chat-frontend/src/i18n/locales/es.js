@@ -3077,6 +3077,67 @@ export default {
         'RAGAS puntúa qué tan bien el asistente recupera y responde — fidelidad, precisión y recuperación de contexto, relevancia de la respuesta y más. Ejecute una suite de pruebas comparativas para medir el repositorio como base de conocimiento.',
       aboutLabel: '¿Qué es RAGAS?',
       aboutLink: 'Lea más en ragas.io',
+      help: {
+        show: 'Ayuda',
+        hide: 'Ocultar ayuda',
+        more: 'Lea más en ragas.io',
+        repositories: {
+          title: 'Repositorios',
+          text: 'Qué repositorios alimentan la generación — solo el actual, o junto con relacionados. Varios repositorios permiten que las preguntas de saltos múltiples crucen sus fronteras.'
+        },
+        questions: {
+          title: 'Preguntas',
+          text: 'Cuántas preguntas sintetizar (20 por defecto). Los conjuntos más grandes tardan proporcionalmente más en generarse y ejecutarse.'
+        },
+        singleHop: {
+          title: 'Salto único %',
+          text: 'Proporción de preguntas extraídas de un solo concepto.'
+        },
+        multiAbstract: {
+          title: 'Saltos múltiples (abstracto) %',
+          text: 'Proporción de preguntas que combinan varios conceptos y razonan más allá de su texto literal.'
+        },
+        multiSpecific: {
+          title: 'Saltos múltiples (específico) %',
+          text: 'Proporción de preguntas que combinan varios conceptos manteniéndose fieles a su redacción exacta. Las tres proporciones deben sumar 100.'
+        },
+        personas: {
+          title: 'Personas',
+          text: 'Cuántas personas sintéticas varían la formulación y la perspectiva de las preguntas generadas.'
+        },
+        generate: {
+          title: 'Generar',
+          text: 'Construye la suite con el LLM: primero un recorrido del grafo de conocimiento sobre el corpus (la parte que tarda minutos), luego la síntesis de preguntas. Se ejecuta en segundo plano — puede cerrar el Lab sin perder nada. Eliminar una suite en generación cancela el trabajo.'
+        },
+        importSuite: {
+          title: 'Importar suite (.xlsx)',
+          text: 'Carga una suite existente en el formato xlsx de pruebas comparativas, compatible con el flujo de referencia de tests/rag-benchmarks.'
+        },
+        entries: {
+          title: 'Entradas de la prueba comparativa',
+          text: 'Una fila por pregunta con su respuesta esperada y pasajes de referencia. Edite una pregunta, pruébela contra el corpus real, sáquela del alcance (se conserva por contraste, excluida de la puntuación) o elimínela.'
+        },
+        metrics: {
+          title: 'Métricas',
+          text: 'Las cuatro predeterminadas — fidelidad, precisión del contexto, exhaustividad del contexto, pertinencia de la respuesta — más el catálogo ampliado de RAGAS. Las métricas que necesitan un modelo de embeddings se descartan con un aviso cuando no hay ninguno configurado.'
+        },
+        run: {
+          title: 'Ejecutar la prueba comparativa',
+          text: 'Repite la recuperación para cada entrada, genera respuestas y luego el modelo juez puntúa cada respuesta contra las referencias. El progreso se informa por fase; los resultados llegan al completarse la ejecución.'
+        },
+        results: {
+          title: 'Resultados',
+          text: 'Medias de las métricas como medidores con umbrales de aprobación, la tendencia entre ejecuciones y el detalle por pregunta con cada respuesta y sus puntuaciones.'
+        },
+        explain: {
+          title: 'Explicar los fallos',
+          text: 'Atribuye cada fila fallida a la recuperación, a la respuesta o a la propia referencia — y sugiere correcciones cautelosas, incluidos cambios a nivel de repositorio como etiquetas y curaduría de conceptos.'
+        },
+        exports: {
+          title: 'Exportaciones',
+          text: 'Suites y resultados como xlsx (compatibles con las herramientas de pruebas comparativas) y un informe PDF de los gráficos.'
+        }
+      },
       current: 'actual',
       generate: {
         title: 'Generar una suite de pruebas comparativas',

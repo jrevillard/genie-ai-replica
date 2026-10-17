@@ -3026,6 +3026,67 @@ export default {
         'RAGAS scores how well the assistant retrieves and answers — faithfulness, context precision and recall, answer relevancy and more. Run a benchmark suite to measure the repository as a knowledge base.',
       aboutLabel: 'What is RAGAS?',
       aboutLink: 'Read more at ragas.io',
+      help: {
+        show: 'Help',
+        hide: 'Hide help',
+        more: 'Read more at ragas.io',
+        repositories: {
+          title: 'Repositories',
+          text: 'Which repositories feed generation — the current one alone, or with related ones. Multiple repositories let multi-hop questions cross their boundaries.'
+        },
+        questions: {
+          title: 'Questions',
+          text: 'How many questions to synthesize (default 20). Larger sets take proportionally longer to generate and to run.'
+        },
+        singleHop: {
+          title: 'Single-hop %',
+          text: 'Share of questions drawn from a single concept.'
+        },
+        multiAbstract: {
+          title: 'Multi-hop (abstract) %',
+          text: 'Share of questions that combine several concepts and reason beyond their literal text.'
+        },
+        multiSpecific: {
+          title: 'Multi-hop (specific) %',
+          text: 'Share of questions that combine several concepts while staying grounded in their exact wording. The three shares should total 100.'
+        },
+        personas: {
+          title: 'Personas',
+          text: 'How many synthetic personas vary the phrasing and perspective of the generated questions.'
+        },
+        generate: {
+          title: 'Generate',
+          text: 'Builds the suite with the LLM: a knowledge-graph pass over the corpus first (this is the minutes-long part), then question synthesis. It runs in the background — you can close the Lab and nothing is lost. Deleting a generating suite cancels the work.'
+        },
+        importSuite: {
+          title: 'Import suite (.xlsx)',
+          text: 'Loads an existing suite in the benchmark xlsx format, compatible with the tests/rag-benchmarks gold workflow.'
+        },
+        entries: {
+          title: 'Benchmark entries',
+          text: 'One row per question with its expected answer and reference passages. Edit a question, probe it against the live corpus, flip it out-of-scope (kept for contrast, excluded from scoring), or remove it.'
+        },
+        metrics: {
+          title: 'Metrics',
+          text: 'The four defaults — faithfulness, context precision, context recall, answer relevancy — plus the extended RAGAS catalog. Metrics that need an embedding model are dropped with a warning when none is configured.'
+        },
+        run: {
+          title: 'Run benchmark',
+          text: 'Replays retrieval for every entry, generates answers, then the judge model scores each answer against the references. Progress is reported per phase; results land when the run completes.'
+        },
+        results: {
+          title: 'Results',
+          text: 'Metric means as gauges with pass thresholds, the trend across runs, and per-question detail with each answer and its scores.'
+        },
+        explain: {
+          title: 'Explain failures',
+          text: 'Attributes each failing row to retrieval, answering, or the reference itself — and suggests guarded fixes, including repository-level changes such as tags and concept curation.'
+        },
+        exports: {
+          title: 'Exports',
+          text: 'Suites and results as xlsx (compatible with the benchmark tooling) and a PDF report of the charts.'
+        }
+      },
       current: 'current',
       generate: {
         title: 'Generate a benchmark suite',

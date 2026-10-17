@@ -3067,6 +3067,67 @@ export default {
         'RAGAS e hlahloba hore na mothusi o hlahisa melaetsa le ho araba joang — tumelo, nepo le pitso ea mongobo, bohlokoa ba karabo le tse ding. Matha sete sa ditekanyo ho ela repo e le base ya tsebo.',
       aboutLabel: 'RAGAS ke eng?',
       aboutLink: 'Bala haholo go ragas.io',
+      help: {
+        show: 'Thuso',
+        hide: 'Fihla thuso',
+        more: 'Bala haholo go ragas.io',
+        repositories: {
+          title: 'Lipolokelo',
+          text: 'Ke lipolokelo life tse fepang tlhahiso — ea kajeno feela, kapa e nang le tse amanang le eona. Lipolokelo tse ngata di dumelela dipotso tsa mahop a mangata ho feta meeli ea tsona.'
+        },
+        questions: {
+          title: 'Dipotso',
+          text: 'Dipotso tse kae tsa ho hlahiswa (tloaelo 20). Sete tse kholo di nka nako e telele ka tekano ho hlahisa le ho phethahatsa.'
+        },
+        singleHop: {
+          title: 'Hop e le nngwe %',
+          text: 'Karolo ea dipotso tse hlahisoang ho tswa mohopolong o le mong.'
+        },
+        multiAbstract: {
+          title: 'Mahop a mangata (kakaretso) %',
+          text: 'Karolo ea dipotso tse kopanyang mehopolo e mengata le ho nahana ka ho feta mongolo oa tsona oa nnete.'
+        },
+        multiSpecific: {
+          title: 'Mahop a mangata (e itseng) %',
+          text: 'Karolo ea dipotso tse kopanyang mehopolo e mengata ha di ntse di tsitsela mongolong oa tsona o nepahetseng. Karolo tsena tse tharo di tlameha ho bokella 100.'
+        },
+        personas: {
+          title: 'Mekhoa ea basebedisi',
+          text: 'Ke mekhoa e me kae ea basebedisi ea maiketsetso e fapanisang mokhoa oa ho bolela le mahlobo a dipotso tse hlahiswang.'
+        },
+        generate: {
+          title: 'Hlahisa',
+          text: 'E hlahisa sete ka LLM: ho feta ka kerafo ea tsebo holim’a korpusi pele (ena ke karolo ea metsotso e mmalwa), ebe ho hlahiswa dipotso. E sebetsa ka morao — o ka kwala Lab o sieo se seng le se seng. Ho hlakola sete e ntse e hlahiswa e fedisa mosebetsi oo.'
+        },
+        importSuite: {
+          title: 'Kenya sete (.xlsx)',
+          text: 'E kenya sete e leng teng sebakeng sa xlsx sa ditekanyo, e lumellanang le tsamaiso ea gauta ea tests/rag-benchmarks.'
+        },
+        entries: {
+          title: 'Mela ea tekanyo',
+          text: 'Mola o le mong bakeng sa potso e n’ang le karabo ea eona e lebetsweng le dikarolo tsa boitlhisohedi. Lokisa potso, e lekola khahlano le korpusi ea phelang, e fetola hore e se ka sepheong (e bolokolwa bakeng sa papiso, e sieoa tekanyong), kapa e tlosa.'
+        },
+        metrics: {
+          title: 'Ditekanyo',
+          text: 'Tse nne tsa tloaelo — boinehelo, ho nepahala ha mongobo, botlalo ba mongobo, bohlokoa ba karabo — le katalogo ea RAGAS e atolositsoeng. Ditekanyo tse hlokang mohlala oa embedding di sieoa ka tlhokomeliso ha ho ea hlophiswa.'
+        },
+        run: {
+          title: 'Phethahatsa tekanyo',
+          text: 'E buseletsa ho kgetha bakeng sa mola o mong le o mong, e hlahisa dikarabo, ebe mohlala oa moahloli o lekanya karabo e n’ngoe le e n’nge khahlano le boitlhisohedi. Tswelo pele e boleloa sethabeng se seng le se seng; litseo li fihla ha tsamaello e phethahala.'
+        },
+        results: {
+          title: 'Litseo',
+          text: 'Di-average tsa ditekanyo di bontshoa ka dial tse nang le meedi ea ho feta, mokhoa oo litsebetsano li tsamaisang ka oona, le lintlha tsa potso e n’ngoe le e n’nge le karabo ea eona le dipalo tsa eona.'
+        },
+        explain: {
+          title: 'Hlalosa tse fosahetseng',
+          text: 'E laela mola ofe kapa ofe o fosahetseng ho kgetha, ho araba, kapa boitlhisohedi bo boona — mme e khothaletsa diloki tse sireletsekileng, ho kenyelletsa liphetoho tsa boemo ba polokelo joalo ka litag le tlhokomelo ea mehopolo.'
+        },
+        exports: {
+          title: 'Ho romela ka ntle',
+          text: 'Disete le litseo e le xlsx (e lumellanang le didiriswa tsa ditekanyo) le tlaleho ea PDF ea dikerafo tsa dipalo.'
+        }
+      },
       current: 'ea kajeno',
       generate: {
         title: 'Hlahisa sete ea ditekanyo',

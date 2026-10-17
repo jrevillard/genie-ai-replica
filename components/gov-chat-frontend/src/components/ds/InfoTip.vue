@@ -4,25 +4,29 @@
   fed from the i18n glossary (never a docs link as the first resort). An
   optional href adds a "read more" link INSIDE the bubble — after the
   explanation, never instead of it.
-  Hover OR keyboard-focus reveals the tip; pure CSS positioning, DS tokens.
+  Hover OR keyboard-focus reveals the tip. The hover region is the WHOLE
+  component (icon + bubble), so a link inside the bubble is reachable — the
+  original button-only hover closed the bubble the moment the pointer moved
+  toward the link (live finding, 2026-10-18). Click toggles a pinned state
+  for touch/pointer-free use; a mousedown anywhere else unpins.
 -->
 <template>
-  <span class="ds-infotip">
+  <span class="ds-infotip" @mouseenter="hovered = true" @mouseleave="hovered = false">
     <button
       type="button"
       class="ds-infotip__icon"
       :aria-label="label"
-      @click.stop.prevent
-      @focus="open = true"
-      @blur="open = false"
-      @mouseenter="open = true"
-      @mouseleave="open = false"
+      :aria-expanded="open ? 'true' : 'false'"
+      @click.stop.prevent="toggle"
+      @focus="focused = true"
+      @blur="focused = false"
+      @keydown.escape="pinned = false"
     >
       ⓘ
     </button>
-    <span v-if="open" class="ds-infotip__bubble" role="tooltip">
+    <span v-if="open" class="ds-infotip__bubble" role="tooltip" @mousedown.stop @click.stop>
       {{ text }}
-      <a v-if="href" class="ds-infotip__link" :href="href" target="_blank" rel="noopener noreferrer" @click.stop>{{
+      <a v-if="href" class="ds-infotip__link" :href="href" target="_blank" rel="noopener noreferrer">{{
         linkLabel || href
       }}</a>
     </span>
@@ -43,7 +47,26 @@ export default {
     linkLabel: { type: String, default: '' }
   },
   data() {
-    return { open: false };
+    return { hovered: false, focused: false, pinned: false };
+  },
+  computed: {
+    open() {
+      return this.hovered || this.focused || this.pinned;
+    }
+  },
+  mounted() {
+    this._onDocMouseDown = (e) => {
+      if (this.pinned && !this.$el.contains(e.target)) this.pinned = false;
+    };
+    document.addEventListener('mousedown', this._onDocMouseDown);
+  },
+  beforeUnmount() {
+    document.removeEventListener('mousedown', this._onDocMouseDown);
+  },
+  methods: {
+    toggle() {
+      this.pinned = !this.pinned;
+    }
   }
 };
 </script>

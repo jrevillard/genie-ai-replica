@@ -122,10 +122,13 @@ users:
         - manage-authorization
   # Service account user for genie-proxy-client — assigns realm-management client roles
   # keycloak-config-cli uses serviceAccountClientId to link this user entry to the client's service account
-  # Story 6-1c additions (2026-10-17): manage-realm (create the per-repo scope
-  # ROLES), manage-roles (assign/remove role mappings on groups), manage-groups
-  # (ensureGroup for forward-referenced groups). Without these, group grants
-  # 403/500 at role creation while user grants silently succeed.
+  # Story 6-1c addition (2026-10-17): manage-realm — creating the per-repo
+  # scope ROLES (POST /roles) 403s without it while user grants silently
+  # succeed, which made group-grant failures look arbitrary. NOTE: this
+  # realm's realm-management client carries the KC 26 role set — it has NO
+  # manage-roles / manage-groups roles to map (role-mapping and group writes
+  # are governed by the fine-grained admin-permission model); naming them
+  # here hard-fails the import with "Cannot find client role".
   - username: service-account-genie-proxy-client
     enabled: true
     serviceAccountClientId: genie-proxy-client
@@ -136,8 +139,6 @@ users:
         - manage-users
         - view-realm
         - manage-realm
-        - manage-roles
-        - manage-groups
   # Service account user for dataprep-service-client — assigns realm role for document-repository authorization
   - username: service-account-dataprep-service-client
     enabled: true

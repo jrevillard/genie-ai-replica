@@ -918,6 +918,10 @@ services:
       - RAGAS_JUDGE_BASE_URL=${RAGAS_JUDGE_BASE_URL:-http://vllm:8000/v1}
       - RAGAS_JUDGE_MODEL=${RAGAS_JUDGE_MODEL:-${VLLM_LLM_MODEL_ID:-}}
       - RAGAS_JUDGE_API_KEY=${RAGAS_JUDGE_API_KEY:-${VLLM_API_KEY:-}}
+      # The judge's context window — RAGAS sizes its KG-input cap from it
+      # ('auto': pair-safe derivation, see ragas_engine._doc_char_cap), so
+      # transform prompts always fit whatever model is selected.
+      - RAGAS_JUDGE_CONTEXT_TOKENS=${RAGAS_JUDGE_CONTEXT_TOKENS:-${VLLM_MAX_MODEL_LEN:-65536}}
       # Embedder (answer_relevancy + testset KG transforms). Default
       # dialect is TEI-native ({base}/embed, the project's TEI-behind-
       # nginx contract); RAGAS_EMBED_API=openai switches to any

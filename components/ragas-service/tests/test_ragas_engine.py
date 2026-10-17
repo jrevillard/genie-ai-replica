@@ -104,6 +104,8 @@ def test_generate_testset_caps_concept_text_for_the_kg(monkeypatch, engine_env):
 
     import asyncio
 
+    # auto (default) on the 65536-token local window: pair-safe derivation
+    # (65536-2048-1024)/2 * 4 = 124928 chars, clamped by the 48000 ceiling
     asyncio.run(
         ragas_engine.generate_testset(
             [
@@ -113,13 +115,34 @@ def test_generate_testset_caps_concept_text_for_the_kg(monkeypatch, engine_env):
             testset_size=2,
         )
     )
-    assert seen["node_lengths"] == [24000, 10000]  # capped, not passed through
+    assert seen["node_lengths"] == [48000, 10000]  # capped, not passed through
 
-    # <=0 disables the cap (operator escape hatch)
-    monkeypatch.setenv("RAGAS_DOC_CHAR_CAP", "0")
+    # a small judge window SHRINKS the cap below the ceiling (8192-token model)
+    monkeypatch.setenv("RAGAS_JUDGE_CONTEXT_TOKENS", "8192")
     asyncio.run(
         ragas_engine.generate_testset(
             [{"page_content": "z" * 50000, "metadata": {"repo_id": "r"}}],
+            testset_size=1,
+        )
+    )
+    assert seen["node_lengths"] == [10240]  # (8192-3072)/2 * 4
+
+    # an explicit cap number wins over the derivation
+    monkeypatch.delenv("RAGAS_JUDGE_CONTEXT_TOKENS")
+    monkeypatch.setenv("RAGAS_DOC_CHAR_CAP", "12000")
+    asyncio.run(
+        ragas_engine.generate_testset(
+            [{"page_content": "w" * 50000, "metadata": {"repo_id": "r"}}],
+            testset_size=1,
+        )
+    )
+    assert seen["node_lengths"] == [12000]
+
+    # 0/off disables the cap (operator escape hatch)
+    monkeypatch.setenv("RAGAS_DOC_CHAR_CAP", "0")
+    asyncio.run(
+        ragas_engine.generate_testset(
+            [{"page_content": "v" * 50000, "metadata": {"repo_id": "r"}}],
             testset_size=1,
         )
     )

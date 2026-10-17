@@ -1518,6 +1518,18 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   question+answer+contexts; no reasoning tokens in completions).
 # RAGAS_JUDGE_API_KEY=<bearer for the judge endpoint>
 #   Default: VLLM_API_KEY.
+# RAGAS_JUDGE_CONTEXT_TOKENS=<the judge model's context window>
+#   Default: VLLM_MAX_MODEL_LEN (65536 if unset). The benchmark KG-input cap
+#   derives from it (RAGAS_DOC_CHAR_CAP=auto): (window - 3072) / 2 pair-safe
+#   tokens * 4 chars/token, clamped by RAGAS_DOC_CHAR_MAX — so transform
+#   prompts fit whatever model is selected, local or frontier.
+# RAGAS_DOC_CHAR_CAP=<chars | auto | 0>
+#   Default: auto (derive from the window above). Explicit number wins; 0
+#   disables (the relationship builder joins concept PAIRS — only disable
+#   if you know every concept is small).
+# RAGAS_DOC_CHAR_MAX=<chars>
+#   Default: 48000. Auto-mode ceiling — huge windows stop here so generation
+#   runtime stays sane.
 # RAGAS_EMBED_BASE_URL=http://tei-embedding-server:80
 #   Default: the TEI embedding service host. Required for answer_relevancy
 #   and testset generation (KG transforms embed); unset drops those

@@ -103,6 +103,6 @@ flowchart LR
     T1[Head] --- T2[Test] --- T3[Suites] --- T4[RAGAS - NEW]
     T3 -->|saved-suites table: both kinds + DsPill RAGAS| SEL{select RAGAS suite}
     SEL -->|switches tab + loads| T4
-    T4 --> RP[RagasPanel.vue: generate form / entry table / run results: table + gauges + trend / explain chips]
+    T4 --> RP[RagasPanel.vue: generate form w/ dimensions / entry table: add-modify-remove-flip-probe / run results: table + gauges + trend + PDF report export / explain chips + advisor incl. repo-level suggestions / xlsx import-export]
   end
 ```

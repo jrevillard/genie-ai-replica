@@ -33,13 +33,17 @@ The OKF Routing Lab can prove *routing* (which repository should answer) but not
   - **intent:** Steward runs a RAGAS suite; each query gets retrieved contexts and a generated answer from the live corpus, scored by the selected RAGAS metrics — the full single-turn RAG catalog is available (see `model-requirements.md` and the companion formats), defaulting to the harness-compatible four (faithfulness, context_precision, context_recall, answer_relevancy).
   - **success:** A run completes with per-query metric scores and aggregates for every enabled metric, always including the default four; jobs obey the Lab's concurrency/lock/orphan semantics; sidecar-absence degrades to a clear 503, never a hang.
 
-- **CAP-4 — Results display**
-  - **intent:** Run results render per-query in tabular form with metric scores and in aggregate chart form (per-metric gauges plus run-over-run trend) — charts in the Lab are mandatory, not optional.
-  - **success:** A completed run renders a per-query table with the enabled metric columns and meter bars, aggregate radial gauges, and a trend line across that suite's run history; the results export deliberately omits a Charts tab — the Lab owns charting.
+- **CAP-4 — Results display and PDF reports**
+  - **intent:** Run results render per-query in tabular form with metric scores and in aggregate chart form, with every output field and chart Jerome's RAGAS scripts materialize surfaced in the UI — and the steward can export the results (tables + charts) as a PDF report.
+  - **success:** A completed run renders a per-query table with the enabled metric columns and meter bars, aggregate radial gauges, and a run-over-run trend; the output surfaces cover his scripts' outputs — per-query scores and fields, run comparisons with deltas, metric bars, precision-vs-recall scatter, status stacked bar — adapted to Lab semantics; a PDF report of the tables + charts downloads on user request. Charts are mandatory in the Lab; the xlsx export deliberately omits a Charts tab.
 
 - **CAP-5 — Explain and advise**
-  - **intent:** Failed rows get failure attribution (which pipeline stage broke) and guarded recommendations, in the same explain/advise pattern as the existing head/query tests.
-  - **success:** Explain produces per-failure attribution rows following the matrix in `failure-attribution.md` plus guarded suggestions (screened by `guardSuggestions`), persisted as a `ragas_explain` doc and rendered in the existing chip UI.
+  - **intent:** Failed rows get failure attribution (which pipeline stage broke) and guarded recommendations — knob-level and repository-level (frontmatter tags, concept content curation) — in the same explain/advise pattern as the existing head/query tests.
+  - **success:** Explain produces per-failure attribution rows following the matrix in `failure-attribution.md` plus guarded suggestions (screened by `guardSuggestions`), persisted as a `ragas_explain` doc and rendered in the existing chip UI; the advisor additionally proposes repository-level changes — tag adjustments through the existing guarded tag machinery, and concept-content curation suggestions naming the concept and the gap.
+
+- **CAP-7 — Suite management parity**
+  - **intent:** Steward manages RAGAS benchmark suite entries with full parity to the existing OKF test-suite features — add, modify, remove, flip (in-scope/out-of-scope), rename, delete suite, per-entry probe, explain, and advisor.
+  - **success:** Every entry operation available on an existing suite is available on a RAGAS suite through the cloned rows/rename/delete/probe/explain/advisor routes — including flipping an entry's in-scope/out-of-scope state (the RAGAS analog of the positive/negative flip) and per-entry probe runs persisted to the row — with no existing suite behavior changed.
 
 - **CAP-6 — Integrated suite list**
   - **intent:** RAGAS suites appear in the existing saved-suites list, visually differentiated as RAGAS benchmark tests, with full Lab job semantics.
@@ -55,6 +59,7 @@ The OKF Routing Lab can prove *routing* (which repository should answer) but not
 - Branch discipline: `feat/okf-ragas` merges to `feat/okf-server` only; nothing lands on `main` or `release/el-salvador` from this work.
 - New env vars need four-site parity (code default, docker-compose, `env` template, `env.j2`) plus config-validator coverage.
 - Suite size is bounded (`OKF_RAGAS_MAX_ENTRIES`): generation and runs cost LLM time on the shared GPU and must not starve chat answering.
+- PDF report export is client-side from a dedicated report view — no server-side rendering service enters the deployment.
 
 ## Non-goals
 

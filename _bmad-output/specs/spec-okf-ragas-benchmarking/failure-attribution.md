@@ -43,6 +43,9 @@ Extended catalog (per David 2026-10-17 the full single-turn set is selectable; t
 ## Advice generation (guarded, existing pattern)
 
 1. Collect attribution rows + failing queries.
-2. One `vllmChatCompletions` guided-JSON call (temperature 0.2, the `explainSuiteFailures` precedent) proposing actions: tag additions/removals (routed through `guardSuggestions` with the suite's passing queries as positives), prompt tweaks (text only, human-applied), reranker knobs (named, operator-applied).
+2. One `vllmChatCompletions` guided-JSON call (temperature 0.2, the `explainSuiteFailures` precedent) proposing actions in three classes:
+   - **Knob changes** — reranker/prompt surfaces named, operator-applied;
+   - **Repository changes** (per David 2026-10-17) — frontmatter tag additions/removals routed through `guardSuggestions` with the suite's passing queries as positives (the existing advisor machinery), plus concept-content curation suggestions that name the concept and the gap (text chips, steward-applied);
+   - **Prompt tweaks** — text only, human-applied.
 3. Everything not auto-applicable renders as a chip with reason — identical UI contract to the head Lab's teach/explain loop (`okf-headtest__suggestion` + add/reject chips).
 4. Mechanical rows are always shown even when the LLM adds nothing (`source: 'mechanical'` fallback; never fabricate advice).

@@ -11,3 +11,7 @@ httpx==0.28.1
 openpyxl==3.1.5
 fastapi==0.129.0
 uvicorn==0.37.0
+# testset-generation extra: the KG transforms' relationship builders do
+# string-distance (rapidfuzz) — the eval-only runner never needs it, the
+# Lab's TestsetGenerator does (live-caught 2026-10-17).
+rapidfuzz==3.14.6

@@ -2823,7 +2823,8 @@ export default {
       tab: {
         head: 'Head',
         test: 'Test',
-        suites: 'Suites & analytics'
+        suites: 'Suites & analytics',
+        ragas: 'Testes comparativos'
       },
       head: {
         dim: 'Dimensions',
@@ -3061,6 +3062,108 @@ export default {
         colScore: 'Pontuação de rerank',
         colFile: 'Arquivo',
         colContent: 'Conteúdo do fragmento'
+      }
+    },
+    ragas: {
+      current: 'atual',
+      generate: {
+        title: 'Gerar uma suíte de testes comparativos',
+        hint: 'Sintetiza perguntas com respostas esperadas a partir dos repositórios selecionados — um ou mais, o repositório atual sozinho ou com repositórios relacionados.',
+        size: 'Perguntas',
+        single: 'Salto único %',
+        multiAbstract: 'Múltiplos saltos (abstrato) %',
+        multiSpecific: 'Múltiplos saltos (específico) %',
+        personas: 'Personas',
+        button: 'Gerar',
+        working: 'Gerando — isto leva alguns minutos…'
+      },
+      import: {
+        button: 'Importar suíte (.xlsx)',
+        working: 'Importando…'
+      },
+      suite: {
+        namePlaceholder: 'Nome do teste comparativo (opcional)',
+        add: 'Adicionar pergunta',
+        addPrompt: 'Pergunta a adicionar:',
+        addReference: 'Resposta esperada (opcional):',
+        flipTip: 'Alternar dentro do escopo / fora do escopo',
+        probeTip: 'Testar esta pergunta contra o corpus real',
+        removeTip: 'Remover esta pergunta'
+      },
+      col: {
+        query: 'Pergunta',
+        reference: 'Resposta esperada',
+        passages: 'Trechos',
+        scope: 'Escopo'
+      },
+      oos: 'fora do escopo',
+      inscope: 'dentro do escopo',
+      metrics: {
+        label: 'Métricas:'
+      },
+      run: {
+        button: 'Executar o teste comparativo',
+        working: 'Executando…',
+        phase: {
+          retrieval: 'recuperando',
+          judge: 'pontuando'
+        }
+      },
+      export: {
+        suite: 'Exportar suíte (.xlsx)',
+        results: 'Exportar resultados (.xlsx)'
+      },
+      results: {
+        title: 'Resultados do teste comparativo',
+        failing: '{n} com falha',
+        allPass: 'todas aprovadas',
+        failingShort: 'com falha',
+        answer: 'Resposta',
+        state: 'Estado',
+        error: 'erro',
+        abstained: 'absteve-se',
+        answered: 'respondeu',
+        pdf: 'Exportar relatório PDF'
+      },
+      explain: {
+        button: 'Explicar as falhas',
+        title: 'Atribuição de falhas e orientações',
+        none: 'Não há linhas com falha a atribuir.',
+        stage: 'Etapa',
+        fails: 'Métricas com falha',
+        recommendation: 'Recomendação'
+      },
+      history: {
+        title: 'Histórico de execuções',
+        run: 'Execução',
+        when: 'Quando',
+        status: 'Status',
+        load: 'Ver'
+      },
+      advice: {
+        knob: 'parâmetro',
+        tag: 'etiqueta do repositório',
+        content: 'conteúdo',
+        prompt: 'prompt'
+      },
+      metric: {
+        faithfulness: 'fidelidade',
+        context_precision: 'precisão do contexto',
+        context_recall: 'cobertura do contexto',
+        answer_relevancy: 'relevância da resposta',
+        context_utilization: 'utilização do contexto',
+        context_entities_recall: 'cobertura de entidades do contexto',
+        factual_correctness: 'correção factual',
+        answer_correctness: 'correção da resposta',
+        answer_similarity: 'similaridade da resposta',
+        noise_sensitivity: 'sensibilidade a ruído'
+      },
+      pdf: {
+        title: 'Relatório de teste comparativo RAGAS',
+        suite: 'Suíte',
+        run: 'Execução',
+        summary: 'Resumo',
+        perQuery: 'Pontuações por pergunta'
       }
     }
   },

@@ -2757,7 +2757,8 @@ export default {
       tab: {
         head: 'Head',
         test: 'Test',
-        suites: 'Suites & analytics'
+        suites: 'Suites & analytics',
+        ragas: '基准测试'
       },
       head: {
         dim: 'Dimensions',
@@ -2985,6 +2986,108 @@ export default {
         colScore: '重排序得分',
         colFile: '文件',
         colContent: '块内容'
+      }
+    },
+    ragas: {
+      current: '当前',
+      generate: {
+        title: '生成基准测试集',
+        hint: '从选定的仓库合成带预期答案的问题 — 可选一个或多个：仅当前仓库，或与相关仓库一起。',
+        size: '问题数',
+        single: '单跳 %',
+        multiAbstract: '多跳（抽象）%',
+        multiSpecific: '多跳（具体）%',
+        personas: '用户画像',
+        button: '生成',
+        working: '正在生成 — 需要几分钟…'
+      },
+      import: {
+        button: '导入测试集（.xlsx）',
+        working: '正在导入…'
+      },
+      suite: {
+        namePlaceholder: '基准测试名称（可选）',
+        add: '添加问题',
+        addPrompt: '要添加的问题：',
+        addReference: '预期答案（可选）：',
+        flipTip: '切换在范围内 / 范围外',
+        probeTip: '针对实时语料库测试此问题',
+        removeTip: '移除此问题'
+      },
+      col: {
+        query: '问题',
+        reference: '预期答案',
+        passages: '段落',
+        scope: '范围'
+      },
+      oos: '范围外',
+      inscope: '范围内',
+      metrics: {
+        label: '指标：'
+      },
+      run: {
+        button: '运行基准测试',
+        working: '正在运行…',
+        phase: {
+          retrieval: '检索中',
+          judge: '评分中'
+        }
+      },
+      export: {
+        suite: '导出测试集（.xlsx）',
+        results: '导出结果（.xlsx）'
+      },
+      results: {
+        title: '基准测试结果',
+        failing: '{n} 项失败',
+        allPass: '全部通过',
+        failingShort: '失败',
+        answer: '答案',
+        state: '状态',
+        error: '错误',
+        abstained: '已拒答',
+        answered: '已回答',
+        pdf: '导出 PDF 报告'
+      },
+      explain: {
+        button: '解释失败项',
+        title: '失败归因与建议',
+        none: '没有可归因的失败行。',
+        stage: '阶段',
+        fails: '失败的指标',
+        recommendation: '建议'
+      },
+      history: {
+        title: '运行历史',
+        run: '运行',
+        when: '时间',
+        status: '状态',
+        load: '查看'
+      },
+      advice: {
+        knob: '配置项',
+        tag: '仓库标签',
+        content: '内容',
+        prompt: '提示词'
+      },
+      metric: {
+        faithfulness: '忠实度',
+        context_precision: '上下文精确率',
+        context_recall: '上下文召回率',
+        answer_relevancy: '答案相关性',
+        context_utilization: '上下文利用率',
+        context_entities_recall: '上下文实体召回率',
+        factual_correctness: '事实正确性',
+        answer_correctness: '答案正确性',
+        answer_similarity: '答案相似度',
+        noise_sensitivity: '噪声敏感度'
+      },
+      pdf: {
+        title: 'RAGAS 基准测试报告',
+        suite: '测试集',
+        run: '运行',
+        summary: '摘要',
+        perQuery: '各问题得分'
       }
     }
   },

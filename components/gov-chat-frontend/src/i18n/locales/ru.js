@@ -2821,7 +2821,8 @@ export default {
       tab: {
         head: 'Head',
         test: 'Test',
-        suites: 'Suites & analytics'
+        suites: 'Suites & analytics',
+        ragas: 'Сравнительные тесты'
       },
       head: {
         dim: 'Dimensions',
@@ -3057,6 +3058,108 @@ export default {
         colScore: 'Оценка rerank',
         colFile: 'Файл',
         colContent: 'Содержимое фрагмента'
+      }
+    },
+    ragas: {
+      current: 'текущий',
+      generate: {
+        title: 'Сгенерировать набор эталонных тестов',
+        hint: 'Синтезирует вопросы с ожидаемыми ответами на основе выбранных репозиториев — одного или нескольких: только текущий или вместе со связанными.',
+        size: 'Вопросы',
+        single: 'Одношаговые %',
+        multiAbstract: 'Многошаговые (абстрактные) %',
+        multiSpecific: 'Многошаговые (конкретные) %',
+        personas: 'Персоны',
+        button: 'Сгенерировать',
+        working: 'Генерация — это займёт несколько минут…'
+      },
+      import: {
+        button: 'Импортировать набор (.xlsx)',
+        working: 'Импорт…'
+      },
+      suite: {
+        namePlaceholder: 'Название теста (необязательно)',
+        add: 'Добавить вопрос',
+        addPrompt: 'Вопрос для добавления:',
+        addReference: 'Ожидаемый ответ (необязательно):',
+        flipTip: 'Переключить в области / вне области',
+        probeTip: 'Проверить этот вопрос на живом корпусе',
+        removeTip: 'Удалить этот вопрос'
+      },
+      col: {
+        query: 'Вопрос',
+        reference: 'Ожидаемый ответ',
+        passages: 'Отрывки',
+        scope: 'Область'
+      },
+      oos: 'вне области',
+      inscope: 'в области',
+      metrics: {
+        label: 'Метрики:'
+      },
+      run: {
+        button: 'Запустить тест',
+        working: 'Выполняется…',
+        phase: {
+          retrieval: 'поиск',
+          judge: 'оценка'
+        }
+      },
+      export: {
+        suite: 'Экспорт набора (.xlsx)',
+        results: 'Экспорт результатов (.xlsx)'
+      },
+      results: {
+        title: 'Результаты теста',
+        failing: '{n} не пройдено',
+        allPass: 'все пройдены',
+        failingShort: 'не пройдено',
+        answer: 'Ответ',
+        state: 'Состояние',
+        error: 'ошибка',
+        abstained: 'воздержался',
+        answered: 'отвечено',
+        pdf: 'Экспортировать отчёт в PDF'
+      },
+      explain: {
+        button: 'Объяснить неудачи',
+        title: 'Причины неудач и рекомендации',
+        none: 'Нет неудачных строк для анализа.',
+        stage: 'Этап',
+        fails: 'Проваленные метрики',
+        recommendation: 'Рекомендация'
+      },
+      history: {
+        title: 'История запусков',
+        run: 'Запуск',
+        when: 'Когда',
+        status: 'Статус',
+        load: 'Просмотр'
+      },
+      advice: {
+        knob: 'параметр',
+        tag: 'тег репозитория',
+        content: 'контент',
+        prompt: 'промпт'
+      },
+      metric: {
+        faithfulness: 'верность',
+        context_precision: 'точность контекста',
+        context_recall: 'полнота контекста',
+        answer_relevancy: 'релевантность ответа',
+        context_utilization: 'использование контекста',
+        context_entities_recall: 'полнота сущностей контекста',
+        factual_correctness: 'фактическая корректность',
+        answer_correctness: 'корректность ответа',
+        answer_similarity: 'сходство ответа',
+        noise_sensitivity: 'чувствительность к шуму'
+      },
+      pdf: {
+        title: 'Отчёт RAGAS по эталонным тестам',
+        suite: 'Набор',
+        run: 'Запуск',
+        summary: 'Сводка',
+        perQuery: 'Оценки по вопросам'
       }
     }
   },

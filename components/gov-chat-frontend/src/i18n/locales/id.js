@@ -2814,7 +2814,8 @@ export default {
       tab: {
         head: 'Head',
         test: 'Test',
-        suites: 'Suites & analytics'
+        suites: 'Suites & analytics',
+        ragas: 'Tolok ukur'
       },
       head: {
         dim: 'Dimensions',
@@ -3049,6 +3050,108 @@ export default {
         colScore: 'Skor rerank',
         colFile: 'File',
         colContent: 'Isi potongan'
+      }
+    },
+    ragas: {
+      current: 'saat ini',
+      generate: {
+        title: 'Buat suite tolok ukur',
+        hint: 'Mensintesis pertanyaan dengan jawaban yang diharapkan dari repositori terpilih — satu atau lebih, repositori saat ini saja atau bersama repositori terkait.',
+        size: 'Pertanyaan',
+        single: 'Satu lompatan %',
+        multiAbstract: 'Multi-lompatan (abstrak) %',
+        multiSpecific: 'Multi-lompatan (spesifik) %',
+        personas: 'Persona',
+        button: 'Buat',
+        working: 'Membuat — ini memakan waktu beberapa menit…'
+      },
+      import: {
+        button: 'Impor suite (.xlsx)',
+        working: 'Mengimpor…'
+      },
+      suite: {
+        namePlaceholder: 'Nama tolok ukur (opsional)',
+        add: 'Tambah pertanyaan',
+        addPrompt: 'Pertanyaan yang akan ditambahkan:',
+        addReference: 'Jawaban yang diharapkan (opsional):',
+        flipTip: 'Balik dalam cakupan / di luar cakupan',
+        probeTip: 'Uji pertanyaan ini terhadap korpus langsung',
+        removeTip: 'Hapus pertanyaan ini'
+      },
+      col: {
+        query: 'Pertanyaan',
+        reference: 'Jawaban yang diharapkan',
+        passages: 'Pasase',
+        scope: 'Cakupan'
+      },
+      oos: 'di luar cakupan',
+      inscope: 'dalam cakupan',
+      metrics: {
+        label: 'Metrik:'
+      },
+      run: {
+        button: 'Jalankan tolok ukur',
+        working: 'Menjalankan…',
+        phase: {
+          retrieval: 'mengambil',
+          judge: 'menilai'
+        }
+      },
+      export: {
+        suite: 'Ekspor suite (.xlsx)',
+        results: 'Ekspor hasil (.xlsx)'
+      },
+      results: {
+        title: 'Hasil tolok ukur',
+        failing: '{n} gagal',
+        allPass: 'semua lulus',
+        failingShort: 'gagal',
+        answer: 'Jawaban',
+        state: 'Status',
+        error: 'galat',
+        abstained: 'menahan diri',
+        answered: 'terjawab',
+        pdf: 'Ekspor laporan PDF'
+      },
+      explain: {
+        button: 'Jelaskan kegagalan',
+        title: 'Atribusi kegagalan dan saran',
+        none: 'Tidak ada baris gagal untuk diatribusikan.',
+        stage: 'Tahap',
+        fails: 'Metrik yang gagal',
+        recommendation: 'Rekomendasi'
+      },
+      history: {
+        title: 'Riwayat eksekusi',
+        run: 'Eksekusi',
+        when: 'Kapan',
+        status: 'Status',
+        load: 'Lihat'
+      },
+      advice: {
+        knob: 'parameter',
+        tag: 'tag repositori',
+        content: 'konten',
+        prompt: 'prompt'
+      },
+      metric: {
+        faithfulness: 'kesetiaan',
+        context_precision: 'presisi konteks',
+        context_recall: 'recall konteks',
+        answer_relevancy: 'relevansi jawaban',
+        context_utilization: 'pemanfaatan konteks',
+        context_entities_recall: 'recall entitas konteks',
+        factual_correctness: 'ketepatan faktual',
+        answer_correctness: 'ketepatan jawaban',
+        answer_similarity: 'kemiripan jawaban',
+        noise_sensitivity: 'sensitivitas derau'
+      },
+      pdf: {
+        title: 'Laporan tolok ukur RAGAS',
+        suite: 'Suite',
+        run: 'Eksekusi',
+        summary: 'Ringkasan',
+        perQuery: 'Skor per pertanyaan'
       }
     }
   },

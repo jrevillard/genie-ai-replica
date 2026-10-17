@@ -1361,6 +1361,284 @@ const actions = {
     }
   },
 
+  // ------- Story 8-6 — RAGAS benchmark suites (ADR-okf-043) -------
+  // Same {ok, code, message, result|runs} envelope and store-side poll
+  // discipline as the headSuite actions above.
+
+  /** Generate a benchmark suite (202 + store-side poll until the doc lands). */
+  async ragasGenerate(_ctx, { repoId, options } = {}) {
+    try {
+      ensureServices();
+      const started = await ragasService.generateSuite(repoId, options || {});
+      if (!started || !started.suite_key) return { ok: true, result: started };
+      const POLL_MS = 2500;
+      const DEADLINE_MS = 10 * 60 * 1000; // generation is minutes of LLM work
+      const deadline = Date.now() + DEADLINE_MS;
+      for (;;) {
+        if (Date.now() > deadline) {
+          return {
+            ok: false,
+            code: 'GENERATION_TIMEOUT',
+            message: 'The generation is still running — reopen the Lab later; nothing was lost.'
+          };
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        const doc = await ragasService.getSuite(repoId, started.suite_key);
+        if (!doc || doc.status === 'generating') continue;
+        if (doc.status === 'failed') {
+          return {
+            ok: false,
+            code: (doc.error && doc.error.code) || 'GENERATION_FAILED',
+            message: (doc.error && doc.error.message) || 'Generation failed'
+          };
+        }
+        return { ok: true, result: doc };
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'GENERATION_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  async ragasGetSuite(_ctx, { repoId, suiteKey } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.getSuite(repoId, suiteKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'SUITE_NOT_FOUND',
+        message: err.message
+      };
+    }
+  },
+
+  async ragasUpdateRows(_ctx, { repoId, suiteKey, payload } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.updateSuiteRows(repoId, suiteKey, payload);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'UPDATE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  async ragasAddQueries(_ctx, { repoId, suiteKey, queries } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.addQueries(repoId, suiteKey, queries);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'ADD_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  async ragasRename(_ctx, { repoId, suiteKey, name } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.renameSuite(repoId, suiteKey, name);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RENAME_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  async ragasDelete(_ctx, { repoId, suiteKey } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.deleteSuite(repoId, suiteKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'DELETE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Run the suite (202 + store-side poll with live progress). opts.onProgress
+   * (a plain function, not serialized) receives each poll's {phase, done, total}. */
+  async ragasRun(_ctx, { repoId, suiteKey, metrics, onProgress } = {}) {
+    try {
+      ensureServices();
+      const started = await ragasService.runSuite(repoId, suiteKey, metrics ? { metrics } : {});
+      if (!started || !started.run_key) return { ok: true, result: started };
+      const POLL_MS = 2000;
+      const DEADLINE_MS = 30 * 60 * 1000; // large suites + judge time
+      const deadline = Date.now() + DEADLINE_MS;
+      for (;;) {
+        if (Date.now() > deadline) {
+          return {
+            ok: false,
+            code: 'RUN_TIMEOUT',
+            message: 'The run is still executing on the server — reopen the Lab later to see its result.'
+          };
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        const doc = await ragasService.getRun(repoId, suiteKey, started.run_key);
+        if (!doc || doc.status === 'running') {
+          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
+          continue;
+        }
+        if (doc.status === 'failed') {
+          return {
+            ok: false,
+            code: (doc.error && doc.error.code) || 'RUN_FAILED',
+            message: (doc.error && doc.error.message) || 'Run failed'
+          };
+        }
+        return { ok: true, result: doc };
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RUN_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Load one already-finished run doc (history View button) — no poll. */
+  async ragasGetRunQuiet(_ctx, { repoId, suiteKey, runKey } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.getRun(repoId, suiteKey, runKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RUN_NOT_FOUND',
+        message: err.message
+      };
+    }
+  },
+
+  async ragasListRuns(_ctx, { repoId, kind = 'all', limit = 20 } = {}) {
+    try {
+      ensureServices();
+      const runs = await ragasService.listRuns(repoId, { kind, limit });
+      return { ok: true, runs };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RUNS_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  async ragasProbe(_ctx, { repoId, suiteKey, id } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.probeEntry(repoId, suiteKey, id);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'PROBE_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Explain failures (202 + store-side poll). */
+  async ragasExplain(_ctx, { repoId, suiteKey, runKey } = {}) {
+    try {
+      ensureServices();
+      const started = await ragasService.explainFailures(repoId, suiteKey, runKey ? { run_key: runKey } : {});
+      if (!started || !started.run_key) return { ok: true, result: started };
+      const POLL_MS = 2000;
+      const DEADLINE_MS = 15 * 60 * 1000;
+      const deadline = Date.now() + DEADLINE_MS;
+      for (;;) {
+        if (Date.now() > deadline) {
+          return {
+            ok: false,
+            code: 'EXPLAIN_TIMEOUT',
+            message: 'The explain is still running — reopen the Lab later; nothing was lost.'
+          };
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        const doc = await ragasService.getExplain(repoId, suiteKey, started.run_key);
+        if (!doc || doc.status === 'running') continue;
+        if (doc.status === 'failed') {
+          return {
+            ok: false,
+            code: (doc.error && doc.error.code) || 'EXPLAIN_FAILED',
+            message: (doc.error && doc.error.message) || 'Explain failed'
+          };
+        }
+        return { ok: true, result: doc.payload };
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'EXPLAIN_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** xlsx: suite export / import + results export (arraybuffer passthrough). */
+  async ragasExportSuite(_ctx, { repoId, suiteKey } = {}) {
+    try {
+      ensureServices();
+      const data = await ragasService.exportSuite(repoId, suiteKey);
+      return { ok: true, data };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'EXPORT_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  async ragasImportSuite(_ctx, { repoId, arrayBuffer } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.importSuite(repoId, arrayBuffer);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'IMPORT_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  async ragasExportResults(_ctx, { repoId, suiteKey, runKeys } = {}) {
+    try {
+      ensureServices();
+      const data = await ragasService.exportResults(repoId, { suite_key: suiteKey, run_keys: runKeys });
+      return { ok: true, data };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'EXPORT_FAILED',
+        message: err.message
+      };
+    }
+  },
+
   setEditorSubTab({ commit }, subTab) {
     commit('setEditorSubTab', subTab === 'wizard' ? 'wizard' : 'editor');
   }
@@ -1373,6 +1651,7 @@ let crawlerToOkfService;
 let conceptService;
 let okfRepoOps;
 let headTestService;
+let ragasService;
 function ensureServices() {
   if (!studioService) studioService = require('@/services/studioService').default;
   if (!repoOkfService) repoOkfService = require('@/services/repoOkfService').default;
@@ -1380,6 +1659,7 @@ function ensureServices() {
   if (!conceptService) conceptService = require('@/services/conceptService').default;
   if (!okfRepoOps) okfRepoOps = require('@/services/okfRepoOps');
   if (!headTestService) headTestService = require('@/services/headTestService').default;
+  if (!ragasService) ragasService = require('@/services/ragasService').default;
 }
 
 const actionsWithServices = {};

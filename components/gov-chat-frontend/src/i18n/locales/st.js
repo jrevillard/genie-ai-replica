@@ -2822,7 +2822,8 @@ export default {
       tab: {
         head: 'Head',
         test: 'Test',
-        suites: 'Suites & analytics'
+        suites: 'Suites & analytics',
+        ragas: 'Ditekanyo'
       },
       head: {
         dim: 'Dimensions',
@@ -3058,6 +3059,108 @@ export default {
         colScore: 'Sekala sa rerank',
         colFile: 'Faele',
         colContent: 'Tsa kahare tsa phisege'
+      }
+    },
+    ragas: {
+      current: 'ea kajeno',
+      generate: {
+        title: 'Hlahisa sete ea ditekanyo',
+        hint: 'E hlahisa dipotso tse nang le dikarabo tse lebetsweng ho tswa polokelong tse khethiloeng — e le nngwe kapa tse ngata, polokelo ea kajeno feela kapa e nang le tse amanang le eona.',
+        size: 'Dipotso',
+        single: 'Hop e le nngwe %',
+        multiAbstract: 'Mahop a mangata (kakaretso) %',
+        multiSpecific: 'Mahop a mangata (e itseng) %',
+        personas: 'Mekhoa ea basebedisi',
+        button: 'Hlahisa',
+        working: 'E hlahisa — hona ho nka metsotso e mmalwa…'
+      },
+      import: {
+        button: 'Kenya sete (.xlsx)',
+        working: 'E kenya…'
+      },
+      suite: {
+        namePlaceholder: 'Lebitso la tekanyo (ha ho hlokahale)',
+        add: 'Eketsa potso',
+        addPrompt: 'Potso ea ho eketsewa:',
+        addReference: 'Karabo e lebetsweng (ha ho hlokahale):',
+        flipTip: 'Fetola ka hare / ka ntle ho sepheo',
+        probeTip: 'Lekola potso ena khahlano le korpusi ea phelang',
+        removeTip: 'Tlosa potso ena'
+      },
+      col: {
+        query: 'Potso',
+        reference: 'Karabo e lebetsweng',
+        passages: 'Dikarolo',
+        scope: 'Sepheo'
+      },
+      oos: 'ka ntle ho sepheo',
+      inscope: 'ka hare ho sepheo',
+      metrics: {
+        label: 'Ditekanyo:'
+      },
+      run: {
+        button: 'Phethahatsa tekanyo',
+        working: 'E phethahatsa…',
+        phase: {
+          retrieval: 'e kgetha',
+          judge: 'e lekanya'
+        }
+      },
+      export: {
+        suite: 'Romela sete ka ntle (.xlsx)',
+        results: 'Romela litseo ka ntle (.xlsx)'
+      },
+      results: {
+        title: 'Litseo tsa tekanyo',
+        failing: '{n} li hlolehile',
+        allPass: 'tsohle li feta',
+        failingShort: 'li hlolehile',
+        answer: 'Karabo',
+        state: 'Seemo',
+        error: 'phoso',
+        abstained: 'e ikgethetse',
+        answered: 'e arabitse',
+        pdf: 'Romela tlaleho ea PDF ka ntle'
+      },
+      explain: {
+        button: 'Hlalosa tse fosahetseng',
+        title: 'Mabaka a ho hloleha le tataiso',
+        none: 'Ha ho mela e fosahetseng ea ho e hlalosa.',
+        stage: 'Setha',
+        fails: 'Ditekanyo tse fosahetseng',
+        recommendation: 'Khothaletso'
+      },
+      history: {
+        title: 'Histori ea tsamaello',
+        run: 'Tsamaello',
+        when: 'Neng',
+        status: 'Seemo',
+        load: 'Jarisa'
+      },
+      advice: {
+        knob: 'taolo',
+        tag: 'tag ea polokelo',
+        content: 'litaba',
+        prompt: 'taelo'
+      },
+      metric: {
+        faithfulness: 'boinehelo',
+        context_precision: 'ho nepahala ha mongobo',
+        context_recall: 'botlalo ba mongobo',
+        answer_relevancy: 'bohlokwa ba karabo',
+        context_utilization: 'tšebeliso ea mongobo',
+        context_entities_recall: 'botlalo ba lintho tsa mongobo',
+        factual_correctness: 'nepahalo ea lintlha',
+        answer_correctness: 'nepahalo ea karabo',
+        answer_similarity: 'ho tšoana ha dikarabo',
+        noise_sensitivity: 'kutloelo molumong o tiehang'
+      },
+      pdf: {
+        title: 'Tlaleho ea ditekanyo tsa RAGAS',
+        suite: 'Sete',
+        run: 'Tsamaello',
+        summary: 'Kakaretso',
+        perQuery: 'Dipalo ka potso e nngwe le e nngwe'
       }
     }
   },

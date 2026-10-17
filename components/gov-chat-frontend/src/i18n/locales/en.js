@@ -1462,7 +1462,8 @@ export default {
       tab: {
         head: 'Head',
         test: 'Test',
-        suites: 'Suites & analytics'
+        suites: 'Suites & analytics',
+        ragas: 'Benchmarks'
       },
       head: {
         dim: 'Dimensions',
@@ -1696,6 +1697,108 @@ export default {
         colScore: 'Rerank score',
         colFile: 'File',
         colContent: 'Chunk content'
+      }
+    },
+    ragas: {
+      current: 'current',
+      generate: {
+        title: 'Generate a benchmark suite',
+        hint: 'Synthesizes questions with expected outputs from the selected repositories — one or more, the current repo alone or with related repos.',
+        size: 'Questions',
+        single: 'Single-hop %',
+        multiAbstract: 'Multi-hop (abstract) %',
+        multiSpecific: 'Multi-hop (specific) %',
+        personas: 'Personas',
+        button: 'Generate',
+        working: 'Generating — this takes minutes…'
+      },
+      import: {
+        button: 'Import suite (.xlsx)',
+        working: 'Importing…'
+      },
+      suite: {
+        namePlaceholder: 'Benchmark name (optional)',
+        add: 'Add question',
+        addPrompt: 'Question to add:',
+        addReference: 'Expected answer (optional):',
+        flipTip: 'Flip in-scope / out-of-scope',
+        probeTip: 'Probe this question against the live corpus',
+        removeTip: 'Remove this question'
+      },
+      col: {
+        query: 'Question',
+        reference: 'Expected answer',
+        passages: 'Passages',
+        scope: 'Scope'
+      },
+      oos: 'out-of-scope',
+      inscope: 'in scope',
+      metrics: {
+        label: 'Metrics:'
+      },
+      run: {
+        button: 'Run benchmark',
+        working: 'Running…',
+        phase: {
+          retrieval: 'retrieving',
+          judge: 'scoring'
+        }
+      },
+      export: {
+        suite: 'Export suite (.xlsx)',
+        results: 'Export results (.xlsx)'
+      },
+      results: {
+        title: 'Benchmark results',
+        failing: '{n} failing',
+        allPass: 'all passing',
+        failingShort: 'failing',
+        answer: 'Answer',
+        state: 'State',
+        error: 'error',
+        abstained: 'abstained',
+        answered: 'answered',
+        pdf: 'Export PDF report'
+      },
+      explain: {
+        button: 'Explain failures',
+        title: 'Failure attribution and advice',
+        none: 'No failing rows to attribute.',
+        stage: 'Stage',
+        fails: 'Failing metrics',
+        recommendation: 'Recommendation'
+      },
+      history: {
+        title: 'Run history',
+        run: 'Run',
+        when: 'When',
+        status: 'Status',
+        load: 'View'
+      },
+      advice: {
+        knob: 'knob',
+        tag: 'repo tag',
+        content: 'content',
+        prompt: 'prompt'
+      },
+      metric: {
+        faithfulness: 'faithfulness',
+        context_precision: 'context precision',
+        context_recall: 'context recall',
+        answer_relevancy: 'answer relevancy',
+        context_utilization: 'context utilization',
+        context_entities_recall: 'context entities recall',
+        factual_correctness: 'factual correctness',
+        answer_correctness: 'answer correctness',
+        answer_similarity: 'answer similarity',
+        noise_sensitivity: 'noise sensitivity'
+      },
+      pdf: {
+        title: 'RAGAS benchmark report',
+        suite: 'Suite',
+        run: 'Run',
+        summary: 'Summary',
+        perQuery: 'Per-question scores'
       }
     },
     versions: {

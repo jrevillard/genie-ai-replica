@@ -2808,7 +2808,8 @@ export default {
       tab: {
         head: 'Head',
         test: 'Test',
-        suites: 'Suites & analytics'
+        suites: 'Suites & analytics',
+        ragas: 'Vipimo vya kulinganisha'
       },
       head: {
         dim: 'Dimensions',
@@ -3044,6 +3045,108 @@ export default {
         colScore: 'Alama ya rerank',
         colFile: 'Faili',
         colContent: 'Maudhui ya kipande'
+      }
+    },
+    ragas: {
+      current: 'ya sasa',
+      generate: {
+        title: 'Tengeneza seti ya vipimo vya kulinganisha',
+        hint: 'Huunda maswali yenye majibu yanayotarajiwa kutoka kwenye hazina zilizochaguliwa — moja au zaidi, hazina ya sasa pekee au pamoja na hazina zinazohusiana.',
+        size: 'Maswali',
+        single: 'Hatua moja %',
+        multiAbstract: 'Hatua nyingi (dhahania) %',
+        multiSpecific: 'Hatua nyingi (maalum) %',
+        personas: 'Mitindo ya watumiaji',
+        button: 'Tengeneza',
+        working: 'Inatengeneza — hii inachukua dakika kadhaa…'
+      },
+      import: {
+        button: 'Ingiza seti (.xlsx)',
+        working: 'Inaingiza…'
+      },
+      suite: {
+        namePlaceholder: 'Jina la kipimo (si lazima)',
+        add: 'Ongeza swali',
+        addPrompt: 'Swali la kuongeza:',
+        addReference: 'Jibu linalotarajiwa (si lazima):',
+        flipTip: 'Badilisha ndani ya wigo / nje ya wigo',
+        probeTip: 'Jaribu swali hili kwa korpusi hai',
+        removeTip: 'Ondoa swali hili'
+      },
+      col: {
+        query: 'Swali',
+        reference: 'Jibu linalotarajiwa',
+        passages: 'Vifungu',
+        scope: 'Wigo'
+      },
+      oos: 'nje ya wigo',
+      inscope: 'ndani ya wigo',
+      metrics: {
+        label: 'Vipimo:'
+      },
+      run: {
+        button: 'Endesha kipimo',
+        working: 'Inaendesha…',
+        phase: {
+          retrieval: 'inarudisha',
+          judge: 'inapima'
+        }
+      },
+      export: {
+        suite: 'Hamisha seti (.xlsx)',
+        results: 'Hamisha matokeo (.xlsx)'
+      },
+      results: {
+        title: 'Matokeo ya kipimo',
+        failing: '{n} zimeshindwa',
+        allPass: 'zote zimefaulu',
+        failingShort: 'zimeshindwa',
+        answer: 'Jibu',
+        state: 'Hali',
+        error: 'hitilafu',
+        abstained: 'imejiepusha',
+        answered: 'imejibiwa',
+        pdf: 'Hamisha ripoti ya PDF'
+      },
+      explain: {
+        button: 'Eleza makosa',
+        title: 'Chanzo cha makosa na ushauri',
+        none: 'Hakuna safu zilizoshindwa za kuelezwa.',
+        stage: 'Hatua',
+        fails: 'Vipimo vilivyoshindwa',
+        recommendation: 'Pendekezo'
+      },
+      history: {
+        title: 'Historia ya utekelezaji',
+        run: 'Utekelezaji',
+        when: 'Lini',
+        status: 'Hali',
+        load: 'Tazama'
+      },
+      advice: {
+        knob: 'kidhibiti',
+        tag: 'lebo ya hazina',
+        content: 'maudhui',
+        prompt: 'maelekezo'
+      },
+      metric: {
+        faithfulness: 'uaminifu',
+        context_precision: 'usahihi wa muktadha',
+        context_recall: 'ufuniko wa muktadha',
+        answer_relevancy: 'umuhimu wa jibu',
+        context_utilization: 'matumizi ya muktadha',
+        context_entities_recall: 'ufuniko wa vitu vya muktadha',
+        factual_correctness: 'usahihi wa ukweli',
+        answer_correctness: 'usahihi wa jibu',
+        answer_similarity: 'kufanana kwa jibu',
+        noise_sensitivity: 'unyeti wa kelele'
+      },
+      pdf: {
+        title: 'Ripoti ya vipimo vya RAGAS',
+        suite: 'Seti',
+        run: 'Utekelezaji',
+        summary: 'Muhtasari',
+        perQuery: 'Alama kwa kila swali'
       }
     }
   },

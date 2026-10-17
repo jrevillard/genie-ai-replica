@@ -397,3 +397,17 @@ MR !474):
   runs replay retrieval Lab-internally; suite xlsx feeds `xlsx_to_gold.py`
   unmodified. Spec: `specs/spec-okf-ragas-benchmarking/` under
   `_bmad-output/`.
+
+## Amendment C ADRs (2026-10-18)
+
+- [ADR-okf-044](../../../../docs/adr/okf-044-frontier-model-routing.md)
+  — Frontier-model routing for admin operations AND RAG inference (Story 8.7,
+  design phase): a central `llm-router` in okf-server resolves operation →
+  provider (frontier profile in `okf_system_config` when configured+toggled,
+  else the local vLLM — the cardinal default rule); two provider adapters
+  (`openai-compatible` incl. vLLM/LiteLLM/OpenRouter, and Anthropic-native)
+  normalize chat/streaming/schema-forced-JSON/model-listing; OPEA services
+  (dataprep, chatqna) resolve routing via an internal-secret endpoint with a
+  TTL cache; embeddings and reranking are never routed (dimension-coupled).
+  Prompt sizing derives from the selected model's context window everywhere.
+  Spec: `specs/spec-okf-frontier-model-routing/` under `_bmad-output/`.

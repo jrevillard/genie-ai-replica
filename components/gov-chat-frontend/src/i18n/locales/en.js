@@ -1895,7 +1895,7 @@ export default {
       },
       access: {
         label: 'Repository access',
-        title: 'Access',
+        title: 'Access Control',
         restricted: 'Restricted',
         openForAll: 'Open for all users',
         hintRestricted:
@@ -2729,7 +2729,7 @@ export default {
         versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
-        title: 'Handoff',
+        title: 'Secure and Finish',
         hint: 'This repository is ready for review. Publishing never happens here — submit it for approval on the dashboard, then approve and publish from the dashboard or the editor.',
         nameOk: 'Repository name set',
         labelsOk: 'Labels selected',

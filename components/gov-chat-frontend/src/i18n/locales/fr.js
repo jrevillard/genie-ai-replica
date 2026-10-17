@@ -1594,7 +1594,7 @@ export default {
       },
       access: {
         label: 'Accès au dépôt',
-        title: 'Accès',
+        title: "Contrôle d'accès",
         restricted: 'Restreint',
         openForAll: 'Ouvert à tous',
         hintRestricted:
@@ -2434,7 +2434,7 @@ export default {
         versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
-        title: 'Remise',
+        title: 'Sécuriser et terminer',
         hint: 'Ce référentiel est prêt pour examen. La publication n’a jamais lieu ici — soumettez-le pour approbation depuis le tableau de bord ; l’approbation et la publication se font depuis le tableau de bord ou l’éditeur.',
         nameOk: 'Nom du référentiel défini',
         labelsOk: 'Libellés sélectionnés',

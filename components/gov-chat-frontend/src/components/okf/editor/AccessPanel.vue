@@ -25,7 +25,7 @@
 <template>
   <section class="okf-access" :aria-label="translate('okf.editor.access.label', 'Repository access')">
     <header class="okf-access__head">
-      <h4>{{ translate('okf.editor.access.title', 'Access') }}</h4>
+      <h4>{{ translate('okf.editor.access.title', 'Access Control') }}</h4>
       <DsPill :variant="model.restricted ? 'danger' : 'success'">
         {{
           model.restricted

@@ -1573,7 +1573,7 @@ export default {
       },
       access: {
         label: 'الوصول إلى المستودع',
-        title: 'الوصول',
+        title: 'التحكم في الوصول',
         restricted: 'مقيّد',
         openForAll: 'مفتوح للجميع',
         hintRestricted:
@@ -2396,7 +2396,7 @@ export default {
         versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
-        title: 'التسليم',
+        title: 'تأمين وإنهاء',
         hint: 'هذا المستودع جاهز للمراجعة. النشر لا يحدث هنا أبدًا — أرسله للموافقة من لوحة التحكم؛ تتم الموافقة والنشر من لوحة التحكم أو المحرر.',
         nameOk: 'تم تعيين اسم المستودع',
         labelsOk: 'تم تحديد التسميات',

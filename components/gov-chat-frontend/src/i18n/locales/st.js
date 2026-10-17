@@ -1591,7 +1591,7 @@ export default {
       },
       access: {
         label: 'Phihlelo ea polokelo',
-        title: 'Phihlelo',
+        title: 'Taolo ya tsamaiso',
         restricted: 'E fokotsoeng',
         openForAll: 'E bulehileng ho bohle',
         hintRestricted:
@@ -2426,7 +2426,7 @@ export default {
         versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
-        title: 'Neo',
+        title: 'Phekola e feditse',
         hint: 'Polokelo ena e loketse hlahlobo. Ho hatisoa ha etsahala mona ka mohla — e romelle bakeng sa tumello dashboard; tumello le ho hatisoa etsahala ho tswa dashboard kapa mohlophisi.',
         nameOk: 'Lebitso la polokelo le behiloe',
         labelsOk: 'Lileibole li khethiloe',

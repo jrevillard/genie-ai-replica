@@ -1585,7 +1585,7 @@ export default {
       },
       access: {
         label: 'Akses repositori',
-        title: 'Akses',
+        title: 'Kontrol akses',
         restricted: 'Dibatasi',
         openForAll: 'Terbuka untuk semua',
         hintRestricted:
@@ -2419,7 +2419,7 @@ export default {
         versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
-        title: 'Serah Terima',
+        title: 'Amankan dan Selesaikan',
         hint: 'Repositori ini siap untuk ditinjau. Penerbitan tidak pernah terjadi di sini — kirimkan untuk persetujuan dari dasbor; persetujuan dan penerbitan dilakukan dari dasbor atau editor.',
         nameOk: 'Nama repositori ditetapkan',
         labelsOk: 'Label dipilih',

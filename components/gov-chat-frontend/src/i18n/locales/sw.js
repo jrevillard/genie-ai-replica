@@ -1578,7 +1578,7 @@ export default {
       },
       access: {
         label: 'Ufikiaji wa hifadhi',
-        title: 'Ufikiaji',
+        title: 'Udhibiti wa ufikiaji',
         restricted: 'Imepunguzwa',
         openForAll: 'Wazi kwa wote',
         hintRestricted:
@@ -2413,7 +2413,7 @@ export default {
         versionSummary: '{n} version(s) · latest v{latest}'
       },
       publish: {
-        title: 'Kuhamisha',
+        title: 'Linda na Kamilisha',
         hint: 'Hifadhi hii iko tayari kwa uhakiki. Uchapishaji hufanyika hapa kamwe — iwasilishe kwa idhini kutoka kwenye dashibodi; idhini na uchapishaji hufanyika kutoka kwenye dashibodi au kihariri.',
         nameOk: 'Jina la ghala limewekwa',
         labelsOk: 'Lebo zimechaguliwa',

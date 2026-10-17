@@ -108,7 +108,12 @@ beforeEach(() => {
     if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
     if (u.includes('/jobs/j-gen'))
       return Promise.resolve(
-        okJson({ job_id: 'j-gen', kind: 'generate-testset', status: 'done', result: { samples: GEN_SAMPLES, generator: { model: 'm', embed_model: 'e' } } })
+        okJson({
+          job_id: 'j-gen',
+          kind: 'generate-testset',
+          status: 'done',
+          result: { samples: GEN_SAMPLES, generator: { model: 'm', embed_model: 'e' } }
+        })
       );
     if (u.includes('/jobs/j-eval'))
       return Promise.resolve(
@@ -235,7 +240,9 @@ describe('beginSuiteGeneration / getSuite', () => {
         });
       }
       if (u.includes('/jobs/j-gen'))
-        return Promise.resolve(okJson({ job_id: 'j-gen', status: 'done', result: { samples: GEN_SAMPLES, generator: {} } }));
+        return Promise.resolve(
+          okJson({ job_id: 'j-gen', status: 'done', result: { samples: GEN_SAMPLES, generator: {} } })
+        );
       return Promise.resolve(okJson({}));
     });
     const first = await svc.beginSuiteGeneration('me', {}, {});
@@ -256,6 +263,76 @@ describe('beginSuiteGeneration / getSuite', () => {
       code: 'RAGAS_UNAVAILABLE',
       status: 503
     });
+  });
+
+  it('a vanished job is terminal AND the poller cancels it (no GPU orphan)', async () => {
+    const deletes = [];
+    global.fetch = jest.fn((url, init) => {
+      const u = String(url);
+      if (u.includes('/generate-testset')) return Promise.resolve(okJson({ job_id: 'j-vanish' }));
+      if (u.includes('/jobs/j-vanish')) {
+        if (init && init.method === 'DELETE') {
+          deletes.push(u);
+          return Promise.resolve(okJson({ job_id: 'j-vanish', status: 'cancelled' }));
+        }
+        return Promise.resolve({ ok: false, status: 404, json: async () => ({ detail: 'unknown job' }) });
+      }
+      return Promise.reject(new Error(`unexpected fetch ${u}`));
+    });
+    await expect(svc.beginSuiteGeneration('me', {}, {}).then((r) => r.done)).rejects.toMatchObject({
+      code: 'RAGAS_UNAVAILABLE'
+    });
+    expect(deletes).toEqual([expect.stringContaining('/jobs/j-vanish')]);
+  });
+
+  it('a cancelled job surfaces RAGAS_JOB_CANCELLED to the worker', async () => {
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/generate-testset')) return Promise.resolve(okJson({ job_id: 'j-cut' }));
+      if (u.includes('/jobs/j-cut')) return Promise.resolve(okJson({ job_id: 'j-cut', status: 'cancelled' }));
+      return Promise.reject(new Error(`unexpected fetch ${u}`));
+    });
+    await expect(svc.beginSuiteGeneration('me', {}, {}).then((r) => r.done)).rejects.toMatchObject({
+      code: 'RAGAS_JOB_CANCELLED'
+    });
+  });
+
+  it('deleting a GENERATING suite cancels its sidecar job instead of 404', async () => {
+    const deletes = [];
+    let releasePoll;
+    let deleted = false;
+    global.fetch = jest.fn((url, init) => {
+      const u = String(url);
+      if (u.includes('/generate-testset')) return Promise.resolve(okJson({ job_id: 'j-live' }));
+      if (u.includes('/jobs/j-live')) {
+        if (init && init.method === 'DELETE') {
+          deleted = true;
+          deletes.push(u);
+          return Promise.resolve(okJson({ job_id: 'j-live', status: 'cancelled' }));
+        }
+        if (deleted) {
+          // the delete dropped the job from the sidecar registry — 404
+          return Promise.resolve({ ok: false, status: 404, json: async () => ({ detail: 'unknown job' }) });
+        }
+        return new Promise((resolve) => {
+          releasePoll = () => resolve(okJson({ job_id: 'j-live', status: 'running' }));
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch ${u}`));
+    });
+    const begun = await svc.beginSuiteGeneration('me', {}, {});
+    // Let the detached worker reach its first (held) poll: db mocks → corpus
+    // build → POST → 5ms poll sleep. One setImmediate is not enough.
+    for (let i = 0; i < 100 && typeof releasePoll !== 'function'; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    expect(typeof releasePoll).toBe('function');
+    const out = await svc.deleteSuite('me', begun.suite_key);
+    expect(out).toMatchObject({ deleted: begun.suite_key, cancelled_generation: true });
+    expect(deletes).toEqual([expect.stringContaining('/jobs/j-live')]);
+    releasePoll(); // in-flight poll resolves 'running' → next tick 404s → worker fails
+    await expect(begun.done).rejects.toBeTruthy();
   });
 });
 
@@ -371,7 +448,9 @@ describe('run', () => {
         });
       }
       if (u.includes('/jobs/j-eval'))
-        return Promise.resolve(okJson({ job_id: 'j-eval', status: 'done', result: { aggregate: {}, per_query: [{}, {}] } }));
+        return Promise.resolve(
+          okJson({ job_id: 'j-eval', status: 'done', result: { aggregate: {}, per_query: [{}, {}] } })
+        );
       if (u.includes('/rerank')) return Promise.resolve(okJson([{ index: 0, score: 0.9 }]));
       return Promise.reject(new Error('unexpected'));
     });

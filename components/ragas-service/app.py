@@ -87,11 +87,17 @@ async def ready():
 # The registry is in-memory by design (stateless service, single uvicorn
 # worker): a restart orphans running jobs and the caller's next poll 404s,
 # which okf-server maps to a typed "job vanished" failure. Nothing persists.
+#
+# Cancellation: DELETE /jobs/{id} cancels a running job's asyncio task, so a
+# caller that gives up (suite deleted, worker failed, operator aborted)
+# STOPS paying the GPU — an orphaned judge run kept a box at 100% for
+# ~25 minutes before this existed (2026-10-17).
 
 
 JOBS: dict[str, dict] = {}
 JOBS_LOCK = asyncio.Lock()
 MAX_CONCURRENT_JOBS = int(os.getenv("RAGAS_MAX_CONCURRENT_JOBS") or "2")
+TERMINAL_TTL_S = int(os.getenv("RAGAS_JOB_TTL_S") or "3600")
 
 
 def _snapshot(job: dict) -> dict:
@@ -103,6 +109,11 @@ def _snapshot(job: dict) -> dict:
 
 async def _start_job(kind: str) -> str:
     async with JOBS_LOCK:
+        # Registry hygiene: terminal jobs older than the TTL are reaped so a
+        # long-lived process does not accumulate finished entries forever.
+        now = time.time()
+        for jid in [jid for jid, j in JOBS.items() if j.get("finished_at") and now - j["finished_at"] > TERMINAL_TTL_S]:
+            del JOBS[jid]
         running = sum(1 for j in JOBS.values() if j.get("status") in ("queued", "running"))
         if running >= MAX_CONCURRENT_JOBS:
             raise HTTPException(
@@ -110,7 +121,7 @@ async def _start_job(kind: str) -> str:
                 detail=f"busy: {running} job(s) already running (RAGAS_MAX_CONCURRENT_JOBS={MAX_CONCURRENT_JOBS})",
             )
         job_id = uuid.uuid4().hex[:12]
-        JOBS[job_id] = {"job_id": job_id, "kind": kind, "status": "queued", "phase": "", "started_at": time.time()}
+        JOBS[job_id] = {"job_id": job_id, "kind": kind, "status": "queued", "phase": "", "started_at": now}
     return job_id
 
 
@@ -130,6 +141,12 @@ async def _run_job(job_id: str, coro) -> None:
         result = await coro
         job["status"] = "done"
         job["result"] = result
+    except asyncio.CancelledError:
+        # CancelledError is a BaseException — invisible to the except below.
+        # This task IS the cancellation target, so recording and ending here
+        # is correct; the engine coroutine is torn down with us.
+        job["status"] = "cancelled"
+        logger.info("job %s (%s) cancelled", job_id, job.get("kind"))
     except Exception as e:  # noqa: BLE001 — the failure IS the job result
         logger.exception("job %s (%s) failed", job_id, job.get("kind"))
         job["status"] = "failed"
@@ -138,12 +155,38 @@ async def _run_job(job_id: str, coro) -> None:
         job["finished_at"] = time.time()
 
 
+def _spawn_job(job_id: str, coro) -> None:
+    JOBS[job_id]["task"] = asyncio.create_task(_run_job(job_id, coro))
+
+
 @app.get("/jobs/{job_id}")
 async def get_job(job_id: str):
     job = JOBS.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="unknown or expired job (sidecar restarted?)")
     return _snapshot(job)
+
+
+@app.delete("/jobs/{job_id}")
+async def cancel_job(job_id: str):
+    """Cancel a running job (or drop a terminal one from the registry)."""
+    job = JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="unknown or expired job (sidecar restarted?)")
+    task = job.get("task")
+    if job.get("status") in ("queued", "running") and task is not None and not task.done():
+        task.cancel()
+        # Give the loop a moment to deliver the cancellation so the response
+        # usually reflects the terminal status. Best-effort — the caller's
+        # next poll is authoritative either way.
+        for _ in range(30):
+            if job.get("status") not in ("queued", "running"):
+                break
+            await asyncio.sleep(0.1)
+    snapshot = _snapshot(job)
+    if job.get("status") in ("done", "failed", "cancelled"):
+        JOBS.pop(job_id, None)
+    return snapshot
 
 
 # --- generation -----------------------------------------------------------
@@ -165,17 +208,15 @@ async def generate_testset(req: GenerateRequest):
             status_code=503, detail="judge endpoint not configured (RAGAS_JUDGE_BASE_URL / RAGAS_JUDGE_MODEL)"
         )
     job_id = await _start_job("generate-testset")
-    asyncio.create_task(
-        _run_job(
-            job_id,
-            ragas_engine.generate_testset(
-                req.documents,
-                req.testset_size,
-                req.query_distribution,
-                req.num_personas,
-                progress=_phase_tracker(job_id),
-            ),
-        )
+    _spawn_job(
+        job_id,
+        ragas_engine.generate_testset(
+            req.documents,
+            req.testset_size,
+            req.query_distribution,
+            req.num_personas,
+            progress=_phase_tracker(job_id),
+        ),
     )
     return {"job_id": job_id, "status": "queued", "poll": f"/jobs/{job_id}"}
 
@@ -198,13 +239,11 @@ async def evaluate(req: EvaluateRequest):
             status_code=503, detail="judge endpoint not configured (RAGAS_JUDGE_BASE_URL / RAGAS_JUDGE_MODEL)"
         )
     job_id = await _start_job("evaluate")
-    asyncio.create_task(
-        _run_job(
-            job_id,
-            ragas_engine.evaluate_samples(
-                req.samples, req.metrics or _DEFAULT_METRICS, req.timeout_s, progress=_phase_tracker(job_id)
-            ),
-        )
+    _spawn_job(
+        job_id,
+        ragas_engine.evaluate_samples(
+            req.samples, req.metrics or _DEFAULT_METRICS, req.timeout_s, progress=_phase_tracker(job_id)
+        ),
     )
     return {"job_id": job_id, "status": "queued", "poll": f"/jobs/{job_id}"}
 

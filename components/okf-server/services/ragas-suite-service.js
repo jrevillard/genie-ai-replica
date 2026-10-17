@@ -187,7 +187,9 @@ async function sidecar(path, { method = 'POST', json, body, contentType, timeout
       e.name === 'AbortError' ||
       cause.name === 'TimeoutError' ||
       cause.name === 'AbortError';
-    const detail = timedOut ? `ragas-service timed out after ${Math.round(budget / 1000)}s (the job may still be running there)` : `ragas-service unreachable (${e.message})`;
+    const detail = timedOut
+      ? `ragas-service timed out after ${Math.round(budget / 1000)}s (the job may still be running there)`
+      : `ragas-service unreachable (${e.message})`;
     const err = new Error(detail);
     err.code = 'RAGAS_UNAVAILABLE';
     err.status = 503;
@@ -242,6 +244,12 @@ async function pollSidecarJob(jobId) {
       err.status = 502;
       throw err;
     }
+    if (job.status === 'cancelled') {
+      const err = new Error(`ragas-service: job ${jobId} was cancelled (suite deleted or caller gave up)`);
+      err.code = 'RAGAS_JOB_CANCELLED';
+      err.status = 502;
+      throw err;
+    }
     if (Date.now() > deadline) {
       const err = new Error(
         `ragas-service job ${jobId} still ${job.status || 'running'} after ${Math.round(RAGAS_LONG_TIMEOUT_MS / 1000)}s — polling gave up (the job may still finish there)`
@@ -250,6 +258,47 @@ async function pollSidecarJob(jobId) {
       err.status = 503;
       throw err;
     }
+  }
+}
+
+// Active sidecar jobs this process started, so abandonment can CANCEL them:
+// a caller that gives up (suite deleted, worker failed) must stop paying the
+// GPU — orphans kept the box at 100% for ~25 min before this existed
+// (2026-10-17). job_id -> { kind, repo_id, suite_key, run_key? }
+const activeSidecarJobs = new Map();
+
+async function cancelSidecarJob(jobId, why) {
+  if (!jobId) return;
+  activeSidecarJobs.delete(jobId);
+  try {
+    await sidecar(`/jobs/${jobId}`, { method: 'DELETE' });
+    logger.info('ragas-suite.sidecar_job_cancelled', { job_id: jobId, why });
+  } catch (e) {
+    logger.warn('ragas-suite.sidecar_job_cancel_failed', { job_id: jobId, why, error: e.message });
+  }
+}
+
+/** Cancel every active sidecar job belonging to a suite (best-effort). */
+async function cancelSuiteJobs(suiteKey, why) {
+  const jobIds = [...activeSidecarJobs.entries()]
+    .filter(([, meta]) => meta && meta.suite_key === suiteKey)
+    .map(([jid]) => jid);
+  await Promise.all(jobIds.map((jid) => cancelSidecarJob(jid, why)));
+}
+
+/**
+ * Poll a sidecar job; on failure, cancel it (we are its only consumer — if
+ * we are throwing, nobody is left to collect the result).
+ */
+async function pollSidecarJobOwned(jobId, meta) {
+  activeSidecarJobs.set(jobId, meta);
+  try {
+    const result = await pollSidecarJob(jobId);
+    activeSidecarJobs.delete(jobId);
+    return result;
+  } catch (e) {
+    await cancelSidecarJob(jobId, `poller failed: ${e.code || e.message}`);
+    throw e;
   }
 }
 
@@ -518,7 +567,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       }
     });
     const genStarted = await genResp.json();
-    const gen = await pollSidecarJob(genStarted.job_id);
+    const gen = await pollSidecarJobOwned(genStarted.job_id, {
+      kind: 'generate-testset',
+      repo_id: repoId,
+      suite_key: opts.suiteKey
+    });
     const samples = Array.isArray(gen.samples) ? gen.samples : [];
     if (!samples.length) {
       const err = new Error('the generator produced no samples (judge/embedder logs have the cause)');
@@ -745,6 +798,14 @@ async function renameSuite(repoId, suiteKey, payload = {}, opts = {}) {
 }
 
 async function deleteSuite(repoId, suiteKey) {
+  // A suite still GENERATING has no doc yet — deleting it means cancelling
+  // the sidecar job (the worker will fail and record genFailure; nothing
+  // persists). The GPU stops the moment we cancel.
+  if (genInFlight.get(repoId) === suiteKey) {
+    await cancelSuiteJobs(suiteKey, 'suite deleted while generating');
+    logger.info('ragas-suite.deleted_generating', { repo_id: repoId, suite_key: suiteKey });
+    return { deleted: suiteKey, cancelled_generation: true };
+  }
   const db = await dbService.getConnection();
   await ensureCollection(db);
   await loadSuite(db, repoId, suiteKey); // 404 now if the suite does not exist
@@ -755,6 +816,7 @@ async function deleteSuite(repoId, suiteKey) {
     err.details = { run_key: runInFlight.get(suiteKey) };
     throw err;
   }
+  await cancelSuiteJobs(suiteKey, 'suite deleted');
   const cursor = await db.query(
     `FOR d IN ${COLLECTION} FILTER d.repo_id == @rid AND d.suite_key == @sk REMOVE d IN ${COLLECTION}`,
     { rid: repoId, sk: suiteKey }
@@ -939,7 +1001,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     }));
     const evalStarted = await sidecar('/evaluate', { json: { samples, metrics: opts.metrics } });
     const evalStartedBody = await evalStarted.json();
-    const evaluation = await pollSidecarJob(evalStartedBody.job_id);
+    const evaluation = await pollSidecarJobOwned(evalStartedBody.job_id, {
+      kind: 'evaluate',
+      repo_id: repoId,
+      suite_key: suiteKey,
+      run_key: opts.runKey
+    });
     const perQuery = Array.isArray(evaluation.per_query) ? evaluation.per_query : [];
     // sidecar returns rows in sample order (EvaluationDataset preserves it)
     for (let i = 0; i < results.length; i += 1) {

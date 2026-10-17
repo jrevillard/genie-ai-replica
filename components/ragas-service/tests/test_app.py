@@ -228,3 +228,41 @@ def test_jobs_enforce_the_concurrency_cap(client, monkeypatch):
 def test_unknown_job_404(client):
     r = client.get("/jobs/nope", headers=_auth())
     assert r.status_code == 404
+
+
+def test_cancel_stops_a_running_job_and_drops_it(client, monkeypatch):
+    async def slow_generate(*args, **kwargs):
+        await asyncio.sleep(30)
+        return {"samples": []}
+
+    monkeypatch.setattr(app_module.ragas_engine, "generate_testset", slow_generate)
+    r = client.post(
+        "/generate-testset",
+        json={"documents": [{"page_content": "x", "metadata": {}}], "testset_size": 2},
+        headers=_auth(),
+    )
+    job_id = r.json()["job_id"]
+    mid = client.get(f"/jobs/{job_id}", headers=_auth()).json()
+    assert mid["status"] == "running"
+    d = client.delete(f"/jobs/{job_id}", headers=_auth())
+    assert d.status_code == 200
+    assert d.json()["status"] == "cancelled"
+    # terminal job is dropped from the registry by the delete
+    assert client.get(f"/jobs/{job_id}", headers=_auth()).status_code == 404
+
+
+def test_cancel_of_a_terminal_job_is_idempotent(client, monkeypatch):
+    async def fake_generate(*args, **kwargs):
+        return {"samples": []}
+
+    monkeypatch.setattr(app_module.ragas_engine, "generate_testset", fake_generate)
+    r = client.post(
+        "/generate-testset",
+        json={"documents": [{"page_content": "x", "metadata": {}}], "testset_size": 1},
+        headers=_auth(),
+    )
+    job_id = r.json()["job_id"]
+    _poll_job(client, job_id)
+    d = client.delete(f"/jobs/{job_id}", headers=_auth())
+    assert d.status_code == 200
+    assert d.json()["status"] == "done"

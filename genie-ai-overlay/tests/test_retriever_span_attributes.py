@@ -14,6 +14,7 @@ Confidently wrong data is worse than absent data.
 """
 
 import ast
+import inspect
 import os
 import pathlib
 from unittest import mock
@@ -266,6 +267,99 @@ class TestScoreAlignment:
         attrs = self._attrs([], {}, [])
         assert attrs[A["rag_scores_dense"]] == []
         assert attrs[A["rag_scores_capped"]] is False
+
+
+class TestHybridConfiguration:
+    """The RRF configuration in force must be on the span, not inferred.
+
+    Before this, an operator reading ``rag.scores.*`` had to infer the retrieval
+    mode from the ABSENCE of ``rag.scores.bm25`` -- which is indistinguishable
+    from a fusion that ran and found nothing, or that ran and failed.
+    """
+
+    def test_disabled_hybrid_is_recorded_as_false_not_omitted(self):
+        """The defect this closes: an absent flag reads as 'unknown'."""
+        with patch.object(retriever_module, "HYBRID_RETRIEVAL_ENABLED", False):
+            attrs = retriever_module._hybrid_configuration_attributes()
+        assert attrs[A["rag_hybrid_enabled"]] is False
+
+    def test_enabled_hybrid_is_recorded(self):
+        with patch.object(retriever_module, "HYBRID_RETRIEVAL_ENABLED", True):
+            attrs = retriever_module._hybrid_configuration_attributes()
+        assert attrs[A["rag_hybrid_enabled"]] is True
+
+    def test_weights_and_k_are_read_off_the_fusion_itself(self):
+        """Not off config.py: the signature IS what runs.
+
+        ``rrf_fuse`` is called with no keyword arguments, so its defaults are
+        the configuration in force. A span quoting ``config.py`` separately
+        could disagree with the fusion that actually ran.
+        """
+        attrs = retriever_module._hybrid_configuration_attributes()
+        parameters = inspect.signature(retriever_module.rrf_fuse).parameters
+        assert attrs[A["rag_hybrid_dense_weight"]] == float(parameters["dense_weight"].default)
+        assert attrs[A["rag_hybrid_lexical_weight"]] == float(parameters["lexical_weight"].default)
+        assert attrs[A["rag_hybrid_rrf_k"]] == int(parameters["k"].default)
+
+    def test_the_values_are_primitives_the_otel_sdk_accepts(self):
+        with patch.object(retriever_module, "HYBRID_RETRIEVAL_ENABLED", True):
+            for key, value in retriever_module._hybrid_configuration_attributes().items():
+                assert isinstance(value, (bool, int, float)), key
+
+    def test_they_travel_with_the_other_retrieval_parameters(self):
+        with patch.object(retriever_module, "HYBRID_RETRIEVAL_ENABLED", True):
+            attrs = _retrieval_parameter_attributes({}, base_mode="chunk", labels=[])
+        assert attrs[A["rag_hybrid_enabled"]] is True
+        assert A["rag_hybrid_rrf_k"] in attrs
+
+    def test_privacy(self):
+        with patch.object(retriever_module, "HYBRID_RETRIEVAL_ENABLED", True):
+            assert_no_free_text(_retrieval_parameter_attributes({}, base_mode="chunk", labels=[]))
+
+
+class TestHybridConfigurationWiring:
+    """Drives the real invoke(); the helper tests stay green if every emission
+    site is deleted."""
+
+    @pytest.mark.asyncio
+    async def test_hybrid_off_is_reported_on_the_real_span(self, invoke_env, captured_spans):
+        with patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", False):
+            await invoke_env["retriever"].invoke(create_mock_input(search_start="chunk"))
+        (span,) = captured_spans("retriever.hybrid_search")
+        assert span.attributes[A["rag_hybrid_enabled"]] is False
+        assert A["rag_hybrid_rrf_k"] in span.attributes
+
+    @pytest.mark.asyncio
+    async def test_hybrid_on_is_reported_on_the_real_span(self, invoke_env, captured_spans):
+        retriever = invoke_env["retriever"]
+        vdb = invoke_env["vector_db"]
+        hit = _FakeDoc(id="chunkA", page_content="dense", metadata={})
+        vdb.asimilarity_search_with_relevance_scores.return_value = [(hit, 0.9)]
+        with (
+            patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", True),
+            patch.object(retriever, "_bm25_search", return_value=[{"doc": hit, "score": 1.5}]),
+        ):
+            await retriever.invoke(create_mock_input(search_start="chunk", k=2))
+        (span,) = captured_spans("retriever.hybrid_search")
+        assert span.attributes[A["rag_hybrid_enabled"]] is True
+        assert span.attributes[A["rag_hybrid_dense_weight"]] > 0
+        assert span.attributes[A["rag_hybrid_lexical_weight"]] > 0
+        assert span.attributes[A["rag_hybrid_rrf_k"]] > 0
+        # The configuration and the scores it produced are on the same span.
+        assert A["rag_scores_bm25"] in span.attributes
+
+    @pytest.mark.asyncio
+    async def test_a_fusion_that_produced_nothing_still_reports_enabled(self, invoke_env, captured_spans):
+        """The distinction the flag buys: 'lexical channel on, no lexical hit'
+        versus 'lexical channel off' -- previously both showed no bm25 array."""
+        with (
+            patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", True),
+            patch.object(invoke_env["retriever"], "_bm25_search", return_value=[]),
+        ):
+            await invoke_env["retriever"].invoke(create_mock_input(search_start="chunk"))
+        (span,) = captured_spans("retriever.hybrid_search")
+        assert span.attributes[A["rag_hybrid_enabled"]] is True
+        assert A["rag_scores_bm25"] not in span.attributes
 
 
 class TestCeilingIsDerivedFromTheDeployment:

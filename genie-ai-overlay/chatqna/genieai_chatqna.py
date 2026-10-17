@@ -3611,6 +3611,30 @@ class ChatQnAService:
                         yield "data: " + json.dumps({"type": "metadata", **metadata}) + "\n\n"
                         yield "data: [DONE]\n\n"
 
+                    # The outcome span is recorded here too, not only from
+                    # _stream_with_metadata. It used to be emitted by the answer
+                    # stream alone, so an abstained turn produced NO span and a
+                    # dashboard computing abstention rate over this span read
+                    # 0/0 -- "the system never abstains" rather than "we do not
+                    # record abstentions here". Absence of the span now means
+                    # one thing only: the turn was not streamed.
+                    #
+                    # Parented on _orchestrate_context for the same reason the
+                    # answer path is: this branch returns from inside the
+                    # orchestrate block, and an unparented span would still be
+                    # lost beside the retrieval and reranking spans.
+                    #
+                    # Values come from the metadata dict the SSE body is about
+                    # to serialise, so the trace and the payload cannot disagree.
+                    _emit_stream_outcome_span(
+                        parent_context=_orchestrate_context,
+                        retrieval_confidence=metadata["retrieval_confidence_score"],
+                        self_confidence=None,
+                        is_grounded=metadata["is_grounded"],
+                        sentinel_present=False,
+                        abstained=metadata["abstained"],
+                    )
+
                     return StreamingResponse(_abstention_stream(), media_type="text/event-stream")
 
                 return {"response": final_text, "metadata": metadata}

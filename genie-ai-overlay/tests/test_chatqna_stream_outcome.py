@@ -15,6 +15,7 @@ span carrying the right attributes on the wrong trace still hides the turn.
 """
 
 import ast
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,6 +26,13 @@ from opentelemetry import trace as otel_trace
 import chatqna.genieai_chatqna as chatqna_module
 from core.span_attrs import ATTRIBUTE_NAMES as A
 from core.span_attrs import assert_no_free_text
+from tests.test_chatqna import (
+    _fake_parms,
+    _patched_chat_request,
+    create_chatqna_service,
+    create_mock_chat_request_data,
+    create_mock_request,
+)
 
 CHATQNA_SOURCE = Path(chatqna_module.__file__)
 
@@ -265,6 +273,101 @@ class TestHandleRequestWiring:
         assert outcome.attributes[A["retrieval_confidence"]] == 0.6
         assert outcome.attributes[A["answer_is_grounded"]] is True
         assert outcome.attributes[A["llm_self_confidence"]] == 0.64
+
+
+class TestAbstentionPathRecordsTheOutcome:
+    """An abstained turn must be recorded, not silently missing.
+
+    The outcome span used to be emitted by the ANSWER stream alone. The
+    reranker-abstention branch returns its own ``_abstention_stream()`` and never
+    reaches that generator, so every existing span said ``abstained=false`` and a
+    dashboard computing ``count(abstained==true) / count(abstained)`` read
+    0/0 -- indistinguishable from "the system never abstains".
+    """
+
+    def _abstaining_service(self):
+        svc = create_chatqna_service()
+        svc.user_profile_client = MagicMock()
+        svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+        async def _raise_marker(*_args, **_kwargs):
+            raise chatqna_module._RerankerInputTooLongError("TEI rejected input")
+
+        svc.megaservice.schedule = _raise_marker
+        return svc
+
+    async def _run(self, stream: bool):
+        svc = self._abstaining_service()
+        req = create_mock_request(
+            data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+            headers={"Authorization": "Bearer dummy.jwt.token"},
+        )
+        with (
+            patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+            patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+            patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+            _patched_chat_request(stream=stream),
+        ):
+            return await svc.handle_request(req)
+
+    @pytest.mark.asyncio
+    async def test_a_streamed_abstention_emits_the_outcome_span(self, captured_spans):
+        response = await self._run(stream=True)
+        assert isinstance(response, StreamingResponse)
+        (outcome,) = captured_spans(STREAM_OUTCOME)
+        assert outcome.attributes[A["answer_abstained"]] is True
+        assert outcome.attributes[A["answer_is_grounded"]] is False
+        assert outcome.attributes[A["retrieval_confidence"]] == 0.0
+        assert A["llm_self_confidence"] not in outcome.attributes
+
+    @pytest.mark.asyncio
+    async def test_the_abstention_span_joins_the_rag_trace(self, captured_spans):
+        response = await self._run(stream=True)
+        await _drain(response.body_iterator)
+        (orchestrate,) = captured_spans(ORCHESTRATE)
+        (outcome,) = captured_spans(STREAM_OUTCOME)
+        assert outcome.parent.span_id == orchestrate.context.span_id
+        assert outcome.context.trace_id == orchestrate.context.trace_id
+
+    @pytest.mark.asyncio
+    async def test_the_span_agrees_with_the_payload_the_caller_receives(self, captured_spans):
+        """The span and the SSE metadata are two views of one event."""
+        response = await self._run(stream=True)
+        events = [item async for item in response.body_iterator]
+        payloads = [json.loads(e[len("data: ") :]) for e in events if isinstance(e, str) and e.startswith("data: {")]
+        (outcome,) = captured_spans(STREAM_OUTCOME)
+        assert payloads[0]["abstained"] == outcome.attributes[A["answer_abstained"]]
+        assert payloads[0]["is_grounded"] == outcome.attributes[A["answer_is_grounded"]]
+        assert payloads[0]["retrieval_confidence_score"] == outcome.attributes[A["retrieval_confidence"]]
+
+    @pytest.mark.asyncio
+    async def test_absence_of_the_span_now_means_only_not_streamed(self, captured_spans):
+        """The property the change buys, stated as a test: a non-streamed
+        abstention emits no span, so span presence means "a streamed turn"."""
+        await self._run(stream=False)
+        assert list(captured_spans(STREAM_OUTCOME)) == []
+
+    @pytest.mark.asyncio
+    async def test_exactly_one_outcome_span_per_abstained_turn(self, captured_spans):
+        await self._run(stream=True)
+        assert len(captured_spans(STREAM_OUTCOME)) == 1
+
+    def test_the_abstention_branch_emits_the_span(self):
+        """Source-level guard: the emission is not commented out or dropped by
+        a later refactor while the behaviour test still passes by accident."""
+        calls = [
+            node
+            for node in ast.walk(_function_node("handle_request"))
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_emit_stream_outcome_span"
+        ]
+        assert len(calls) == 1, "the abstention branch must record the outcome exactly once"
+
+    @pytest.mark.asyncio
+    async def test_privacy(self, captured_spans):
+        await self._run(stream=True)
+        assert_no_free_text(dict(captured_spans(STREAM_OUTCOME)[0].attributes))
 
 
 class _FakeParms:

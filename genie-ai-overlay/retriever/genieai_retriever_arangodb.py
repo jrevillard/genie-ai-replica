@@ -1,6 +1,7 @@
 # Copyright (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+import inspect
 import json
 import os
 import time
@@ -341,6 +342,7 @@ def _retrieval_parameter_attributes(input_dict: dict, base_mode: str, labels: li
         A["traversal_score_threshold"]: _as_float(input_dict.get("traversal_score_threshold")),
         A["traversal_injected_docs"]: 0,
         A["traversal_injected_neighbor_items"]: 0,
+        **_hybrid_configuration_attributes(),
     }
 
 
@@ -422,6 +424,33 @@ def rrf_fuse(dense, bm25, k=HYBRID_RRF_K, dense_weight=HYBRID_DENSE_WEIGHT, lexi
             entry = scores.setdefault(chunk_id, {"doc": item["doc"], "score": 0.0})
             entry["score"] += weight / (k + rank)
     return sorted(scores.values(), key=lambda x: x["score"], reverse=True)
+
+
+def _hybrid_configuration_attributes() -> dict:
+    """The RRF configuration in force, read off ``rrf_fuse``'s own signature.
+
+    Read from the function rather than re-referenced from ``config.py``:
+    ``rrf_fuse`` is called without keyword arguments, so its defaults ARE the
+    configuration in force, and a span that quoted the config module could
+    disagree with the fusion that actually ran.
+
+    ``rag.hybrid.enabled`` is the DEPLOY flag. Fusion additionally requires a
+    chunk search start, recorded separately as ``rag.search_start_base``, so an
+    operator reading both can tell "the lexical channel is switched off" from
+    "it is on, but this request did not search chunks".
+
+    Recorded as an explicit ``false``, never omitted. Without it a reader of
+    ``rag.scores.*`` must infer the retrieval mode from the ABSENCE of
+    ``rag.scores.bm25``, which is indistinguishable from a fusion that ran and
+    failed or found nothing.
+    """
+    parameters = inspect.signature(rrf_fuse).parameters
+    return {
+        A["rag_hybrid_enabled"]: bool(HYBRID_RETRIEVAL_ENABLED),
+        A["rag_hybrid_dense_weight"]: float(parameters["dense_weight"].default),
+        A["rag_hybrid_lexical_weight"]: float(parameters["lexical_weight"].default),
+        A["rag_hybrid_rrf_k"]: int(parameters["k"].default),
+    }
 
 
 @OpeaComponentRegistry.register("GENIE_RETRIEVER_ARANGODB")

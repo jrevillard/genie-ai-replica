@@ -2990,7 +2990,8 @@ export default {
     },
     ragas: {
       paneTitle: 'RAGAS 基准测试',
-      about: 'RAGAS 为助手的检索与回答打分——忠实度、上下文精确率与召回率、回答相关性等。运行基准测试套件，将仓库作为知识库来衡量。',
+      about:
+        'RAGAS 为助手的检索与回答打分——忠实度、上下文精确率与召回率、回答相关性等。运行基准测试套件，将仓库作为知识库来衡量。',
       aboutLabel: '什么是 RAGAS？',
       aboutLink: '在 ragas.io 阅读更多',
       current: '当前',

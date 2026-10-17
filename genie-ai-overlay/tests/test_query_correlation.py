@@ -135,6 +135,39 @@ class TestChatqnaStamping:
         (span,) = captured_spans("chatqna.stream_outcome")
         assert QUERY_ID_KEY not in span.attributes
 
+    def test_stream_outcome_reads_the_id_from_the_parent_handle(self, captured_spans):
+        """The id is read off ``parent_context``, which is baggage-retaining.
+
+        A streaming body can be consumed outside whatever context sent the
+        request — a different ASGI wrapper, a future move to a background task.
+        Reading the ACTIVE context there would silently drop the correlation id
+        even though the captured parent handle still carries it, because
+        ``set_span_in_context`` preserves the baggage it was derived from.
+        Reading the parent handle is what survives that, and it degrades
+        identically when there is no id at all.
+
+        The captured handle here carries baggage but no span, so the emitted
+        span is a root — this test is about the id, not about the parent link,
+        which is covered by the stream-outcome parenting tests.
+        """
+        parent = _attach_baggage({QUERY_ID_KEY: "query-key-5"})
+        try:
+            captured_parent = otel_context.get_current()
+        finally:
+            otel_context.detach(parent)
+        # The span is emitted from a context that carries NO baggage, exactly
+        # the situation the parent handle exists to survive.
+        chatqna_module._emit_stream_outcome_span(
+            parent_context=captured_parent,
+            retrieval_confidence=0.5,
+            self_confidence=None,
+            is_grounded=True,
+            sentinel_present=False,
+            abstained=False,
+        )
+        (span,) = captured_spans("chatqna.stream_outcome")
+        assert span.attributes[QUERY_ID_KEY] == "query-key-5"
+
     def test_orchestrate_carries_the_query_id(self, captured_spans):
         token = _attach_baggage({QUERY_ID_KEY: "query-key-2"})
         try:

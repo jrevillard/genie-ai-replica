@@ -168,10 +168,9 @@ ATTRIBUTE_NAMES = {
     "answer_abstained": "answer.abstained",
     # Reranker adaptive
     "rag_adaptive_chunk_keys": "rag.adaptive_chunk_keys",
-    # chatqna.orchestrate — emitted today at genieai_chatqna.py:2807-2808 and
-    # SURVIVING this work: task 4 adds blend/history/prompt-budget attributes
-    # beside these writes rather than replacing them, so they are destination
-    # vocabulary, not backlog.
+    # chatqna.orchestrate — written at genieai_chatqna.py:2807-2808. The
+    # blend / history / prompt-budget attributes sit BESIDE these writes rather
+    # than replacing them, so these are destination vocabulary, not backlog.
     "rag_query_length": "rag.query_length",
     "rag_model_id": "rag.model_id",
 }
@@ -207,9 +206,9 @@ ATTRIBUTE_NAMES = {
 # still subject to the full layer-2 shape check, so prose on any of these is still
 # a violation.
 DEPRECATED_ATTRIBUTE_NAMES = {
-    # chatqna.reranker_selection — genieai_chatqna.py:114-118. Task 8 adds
-    # rag.adaptive_chunk_keys as a PARALLEL array and explicitly does not reshape
-    # these. Exactly two of these five are the eval-harness contract
+    # chatqna.reranker_selection — genieai_chatqna.py:114-118.
+    # rag.adaptive_chunk_keys is a PARALLEL array and does not reshape these.
+    # Exactly two of these five are the eval-harness contract
     # (tests/rag-benchmarks/eval/run_eval.py:331-332); the other three are
     # chatqna-local diagnostics with no reader outside the write site.
     #
@@ -222,33 +221,33 @@ DEPRECATED_ATTRIBUTE_NAMES = {
     "rag.selected_scores": "legacy: no production reader outside its write site",
     "rag.candidate_count": "legacy: no production reader outside its write site",
     "rag.selected_count": "legacy: no production reader outside its write site",
-    # retriever.hybrid_search — genieai_retriever_arangodb.py:878-879. Task 5 adds
-    # rag.search_type / rag.fetch_k beside these; it never deletes lines 878-879.
+    # retriever.hybrid_search — genieai_retriever_arangodb.py:878-879.
+    # rag.search_type and rag.fetch_k sit beside these; neither replaces the pair
+    # at 878-879.
     "rag.search_mode": "legacy: superseded in meaning, not in emission",
     "rag.top_k": "legacy: superseded in meaning, not in emission",
     # rag.chunk_count is written on BOTH retriever.hybrid_search
-    # (:1428) and chatqna.orchestrate (genieai_chatqna.py:2870); no task touches
-    # either site.
-    "rag.chunk_count": "legacy: no task touches either write site",
-    "retriever.summarizer.input_too_long": "legacy: no task touches the write site",
-    "retriever.summarizer.overflow_count": "legacy: no task touches the write site",
-    # reranker.tei_invoke — genieai_tei_reranker.py. Task 8 adds
-    # rag.adaptive_chunk_keys and removes nothing.
-    "reranker.strategy": "legacy: no task touches the write site",
-    "reranker.top_n": "legacy: no task touches the write site",
-    "reranker.model_id": "legacy: no task touches the write site",
-    "reranker.input_doc_count": "legacy: no task touches the write site",
-    "reranker.output_doc_count": "legacy: no task touches the write site",
-    "reranker.score_threshold": "legacy: no task touches the write site",
-    "reranker.input_too_long": "legacy: no task touches the write site",
-    "reranker.rejected_tokens": "legacy: no task touches the write site",
-    "rag.adaptive_context_decay_factor": "legacy: no task touches the write site",
-    "rag.adaptive_min_value_threshold": "legacy: no task touches the write site",
+    # (:1428) and chatqna.orchestrate (genieai_chatqna.py:2870).
+    "rag.chunk_count": "legacy: written on two spans, unchanged on both",
+    "retriever.summarizer.input_too_long": "legacy: pre-existing write site, unchanged",
+    "retriever.summarizer.overflow_count": "legacy: pre-existing write site, unchanged",
+    # reranker.tei_invoke — genieai_tei_reranker.py. rag.adaptive_chunk_keys is
+    # added alongside these and removes nothing.
+    "reranker.strategy": "legacy: pre-existing write site, unchanged",
+    "reranker.top_n": "legacy: pre-existing write site, unchanged",
+    "reranker.model_id": "legacy: pre-existing write site, unchanged",
+    "reranker.input_doc_count": "legacy: pre-existing write site, unchanged",
+    "reranker.output_doc_count": "legacy: pre-existing write site, unchanged",
+    "reranker.score_threshold": "legacy: pre-existing write site, unchanged",
+    "reranker.input_too_long": "legacy: pre-existing write site, unchanged",
+    "reranker.rejected_tokens": "legacy: pre-existing write site, unchanged",
+    "rag.adaptive_context_decay_factor": "legacy: pre-existing write site, unchanged",
+    "rag.adaptive_min_value_threshold": "legacy: pre-existing write site, unchanged",
     # chatqna.orchestrate — genieai_chatqna.py:2891. Nothing removes this write;
     # the abstention flag added on a DIFFERENT span (chatqna.stream_outcome) is
     # additive. The two coexist: a per-request reason here, a per-response flag
     # there.
-    "abstained.reason": "legacy: survives — another task adds a flag on a different span, it does not remove this",
+    "abstained.reason": "legacy: survives — a new flag lands on a different span, this one is not removed",
 }
 
 # The complete set of reasons a DEPRECATED_ATTRIBUTE_NAMES value may carry.
@@ -261,9 +260,9 @@ LEGACY_REASONS = frozenset(
         "legacy: eval-harness contract",
         "legacy: no production reader outside its write site",
         "legacy: superseded in meaning, not in emission",
-        "legacy: no task touches either write site",
-        "legacy: no task touches the write site",
-        "legacy: survives — another task adds a flag on a different span, it does not remove this",
+        "legacy: written on two spans, unchanged on both",
+        "legacy: pre-existing write site, unchanged",
+        "legacy: survives — a new flag lands on a different span, this one is not removed",
     }
 )
 
@@ -283,7 +282,7 @@ EVAL_HARNESS_KEYS = frozenset({"rag.candidate_chunk_keys", "rag.selected_chunk_k
 # a leaf still fails.
 #
 # Distinct from ``ATTRIBUTE_NAMES``: the vocabulary's own ``rag.candidate_keys`` /
-# ``rag.selected_chunk_keys`` / task 8's ``rag.adaptive_chunk_keys`` are FLAT lists
+# ``rag.selected_chunk_keys`` / ``rag.adaptive_chunk_keys`` are FLAT lists
 # of scalars, which OTel represents natively, so they are emitted as real arrays,
 # not JSON. Only genuinely unrepresentable structures belong here.
 JSON_ENCODED_ATTRIBUTE_NAMES = {
@@ -396,8 +395,14 @@ def assert_no_free_text(attributes: dict) -> None:
         raise AssertionError(f"Span attribute leak (no collector-side redaction on the traces pipeline): {violations}")
 
 
-def query_id_from_baggage() -> str | None:
-    """Return the ``genie.query_id`` correlation id from the active context.
+def query_id_from_baggage(context=None) -> str | None:
+    """Return the ``genie.query_id`` correlation id from a baggage-carrying context.
+
+    Reads the ACTIVE context unless ``context`` is given. Pass the captured
+    context explicitly wherever the span is parented to something other than the
+    current context: a context derived with ``set_span_in_context`` RETAINS its
+    baggage, so the captured handle is the more reliable source — it does not
+    depend on the id still being in scope wherever the span happens to be opened.
 
     ``None`` when the caller sent no baggage — any client that is not the Node
     backend, or a hand-crafted request. Callers omit the attribute in that case
@@ -406,4 +411,4 @@ def query_id_from_baggage() -> str | None:
     """
     from opentelemetry import baggage as _baggage
 
-    return _baggage.get_baggage(QUERY_ID_KEY)
+    return _baggage.get_baggage(QUERY_ID_KEY, context=context)

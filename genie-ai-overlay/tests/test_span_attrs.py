@@ -371,7 +371,7 @@ class TestOwnedSpanCoverage:
         assert name not in OWNED_SPAN_NAMES
 
     def test_orchestrate_bites(self, span_sweep, captured_spans, span_exporter):
-        """The gap that motivated round 4: tasks 4/6/7 write here."""
+        """The primary RAG span, and the one carrying the blend and prompt-budget attributes."""
         _emit("chatqna.orchestrate", {"rag.sniffed_query": "banana"})
         with pytest.raises(AssertionError):
             span_sweep(captured_spans())
@@ -404,6 +404,40 @@ class TestOwnedSpanCoverage:
             f"dataprep pin is stale: code emits {sorted(emitted)}, pin lists {sorted(DATAPREP_SPAN_NAMES)}"
         )
         assert not (emitted & set(owned_span_names)), "a dataprep span started being swept"
+
+    def test_only_deliberate_leak_tests_may_clear_the_exporter(self):
+        """``span_exporter`` is a hole in the sweep; keep it exactly as wide as it must be.
+
+        The autouse sweep reads the exporter at teardown. A test that emits a
+        leak on purpose to prove the sweep bites must therefore clear the
+        exporter itself, or it is reported twice and fails for the wrong reason
+        — which trains a reader to ignore the sweep. That is the whole reason the
+        fixture exists.
+
+        The cost is that any future test CAN request it and silence the sweep for
+        itself. Naming a closed set of tests here is the cheapest thing that
+        makes that a deliberate act: adding a fifth caller fails this test, and
+        the reviewer has to look at why. A "deliberate leak" marker attribute is
+        the wrong closure — the sweep's first layer rejects unregistered keys, so
+        the marker would have to enter the shipped trace vocabulary.
+        """
+        import pathlib
+        import re as _re
+
+        root = pathlib.Path(__file__).resolve().parent
+        requester = _re.compile(r"def (test_\w+)\([^)]*\bspan_exporter\b")
+        callers = set()
+        for path in sorted(root.glob("test_*.py")):
+            callers.update(requester.findall(path.read_text(encoding="utf-8", errors="replace")))
+        expected = {
+            "test_orchestrate_bites",
+            "test_prose_on_a_registered_key_fails_the_sweep",
+            "test_sweep_names_the_span_and_the_key",
+            "test_unregistered_key_on_an_owned_span_fails_the_sweep",
+        }
+        assert callers == expected, (
+            f"span_exporter callers changed: found {sorted(callers)}, expected {sorted(expected)}"
+        )
 
 
 class TestOwnedSpanSweep:

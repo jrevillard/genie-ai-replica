@@ -2928,26 +2928,67 @@ docker exec <chatqna-container> sh -c \
 python3 - <<'PY'
 import json
 spans = json.load(open("/tmp/trace.json"))["data"][0]["spans"]
+
+# Unconditional: emitted on every chat turn, whatever the configuration.
 expected = {
-    "llm.invoke": ["llm.model", "llm.usage.prompt_tokens",
-                   "llm.usage.completion_tokens", "llm.finish_reason"],
-    "chatqna.orchestrate": ["genie.query_id", "rag.blend.alpha",
-                            "rag.history.segments_in"],
+    "llm.invoke": ["genie.query_id", "llm.model", "llm.stream",
+                   "llm.finish_reason"],
+    "chatqna.orchestrate": ["genie.query_id", "rag.model_id",
+                            "rag.query_length",
+                            "rag.prompt.budget_window_tokens"],
     "retriever.hybrid_search": ["rag.fetch_k", "rag.search_type",
                                 "rag.filter_labels_enabled",
+                                "rag.hybrid.enabled",
+                                "traversal.injected_docs",
                                 "rag.candidate_keys", "rag.scores.dense",
                                 "rag.scores.dense_present",
-                                "traversal.injected_docs"],
-    "reranker.tei_invoke": ["genie.query_id", "rag.adaptive_chunk_keys"],
-    "chatqna.stream_outcome": ["retrieval.confidence", "answer.is_grounded"],
+                                "rag.scores.fused", "rag.scores.capped"],
+    "chatqna.stream_outcome": ["genie.query_id", "retrieval.confidence",
+                                "answer.is_grounded",
+                                "answer.sentinel_present",
+                                "answer.abstained"],
 }
+
+# Configuration-dependent. Each needs the named setting, so a stock deployment
+# fails on these and the failure is not evidence of a regression — flip the
+# setting, or read this list as the inventory of what to re-check after one.
+conditional = {
+    "chatqna.orchestrate": {
+        "rag.blend.alpha": "MULTI_TURN_BLEND_ENABLED=true (default false)",
+        "rag.history.segments_in": "a prior turn with history (default 0 segments)",
+    },
+    "reranker.tei_invoke": {
+        "rag.adaptive_chunk_keys": "RERANKING_STRATEGY in (threshold, "
+                                   "slice_threshold, knee_threshold, adaptive) "
+                                   "— the default `slice` does not emit it",
+    },
+    "llm.invoke": {
+        "llm.usage.prompt_tokens": "unstreamed turn, OR a streamed turn where "
+                                   "stream_options.include_usage reached vLLM",
+    },
+}
+
 for name, attrs in expected.items():
     hit = [s for s in spans if s.get("operationName") == name]
     assert hit, f"missing span {name}"
     have = set(hit[0].get("tags") or [])
     missing = [a for a in attrs if a not in have]
     assert not missing, f"{name} missing {missing}"
-print("all attributes present")
+
+absent = {}
+for name, attrs in conditional.items():
+    hit = [s for s in spans if s.get("operationName") == name]
+    if not hit:
+        continue
+    have = set(hit[0].get("tags") or [])
+    for attr, precondition in attrs.items():
+        if attr not in have:
+            absent.setdefault(attr, precondition)
+if absent:
+    print("absent, each needs its precondition:")
+    for attr, precondition in sorted(absent.items()):
+        print(f"  {attr}: {precondition}")
+print("all unconditional attributes present")
 PY
 ```
 

@@ -272,7 +272,7 @@ def _emit_llm_invoke_open(llm_parameters_dict: dict, *, stream_known: bool | Non
     _record_llm_request_params(span, params)
     if stream_observed:
         span.set_attribute(ATTRIBUTE_NAMES["llm_stream_options_include_usage"], True)
-    _query_id = query_id_from_baggage()
+    _query_id = query_id_from_baggage(context=parent_ctx)
     if _query_id:
         span.set_attribute(QUERY_ID_KEY, _query_id)
     return span
@@ -336,11 +336,12 @@ def _emit_stream_outcome_span(
     span = stream_outcome_tracer.start_span("chatqna.stream_outcome", context=parent_context)
     try:
         if span.is_recording():
-            # The correlation id comes from the ACTIVE context, not from
-            # ``parent_context``: the parent handle carries the trace, while the
-            # id travels as baggage, which is a property of whatever context is
-            # running right now. Omitted when no client sent one.
-            _query_id = query_id_from_baggage()
+            # Read from ``parent_context``, not the active context: that handle
+            # was derived with set_span_in_context, which RETAINS the baggage it
+            # was created from, so it still carries the id even when the span is
+            # opened somewhere the baggage is no longer in scope. Omitted when
+            # no client sent one.
+            _query_id = query_id_from_baggage(context=parent_context)
             if _query_id:
                 span.set_attribute(QUERY_ID_KEY, _query_id)
             span.set_attribute(ATTRIBUTE_NAMES["retrieval_confidence"], float(retrieval_confidence))
@@ -2208,6 +2209,15 @@ def align_generator(self, gen, *, parent_context=None, **kwargs):
 
     The signature is comps': ``align_generator(self, gen, **kwargs)``. Nothing
     new is required of the caller.
+
+    UNVERIFIED, and recorded rather than assumed: the hook is registered as
+    ``ServiceOrchestrator.align_generator``, and whether comps branches on
+    ``inspect.isgeneratorfunction(...)`` before invoking it cannot be checked
+    from this source tree. The normal shape — call the hook, iterate what it
+    returns — is unaffected by the wrapper. If comps did require a generator
+    function by type, the consequence would be a total streaming outage rather
+    than a missing attribute, so it is worth a check against a running
+    deployment before this reaches production.
     """
     return _align_generator_body(
         gen,
@@ -3695,13 +3705,11 @@ class ChatQnAService:
                         yield "data: " + json.dumps({"type": "metadata", **metadata}) + "\n\n"
                         yield "data: [DONE]\n\n"
 
-                    # The outcome span is recorded here too, not only from
-                    # _stream_with_metadata. It used to be emitted by the answer
-                    # stream alone, so an abstained turn produced NO span and a
-                    # dashboard computing abstention rate over this span read
-                    # 0/0 -- "the system never abstains" rather than "we do not
-                    # record abstentions here". Absence of the span now means
-                    # one thing only: the turn was not streamed.
+                    # The outcome span is recorded here as well as from
+                    # _stream_with_metadata, so an abstained turn produces a span
+                    # like any other. Absence of chatqna.stream_outcome on a
+                    # streamed turn therefore means the turn was not streamed --
+                    # not that the outcome went unrecorded.
                     #
                     # Parented on _orchestrate_context for the same reason the
                     # answer path is: this branch returns from inside the

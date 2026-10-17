@@ -83,6 +83,11 @@ if (require.main === module) {
       require('./services/head-suite-service')
         .sweepInterruptedRuns()
         .catch((err) => logger.error('Head-suite run boot sweep failed (non-fatal)', { error: err.message }));
+      // Story 8-6: same orphan self-heal for async RAGAS benchmark runs
+      // (ragas_run placeholders share the okf_head_test_runs collection).
+      require('./services/ragas-suite-service')
+        .sweepInterruptedRuns()
+        .catch((err) => logger.error('RAGAS run boot sweep failed (non-fatal)', { error: err.message }));
       // Story 10.5: same shape for the Studio wizard's resumable curation draft —
       // TTL-reap drafts idle past OKF_STUDIO_DRAFT_TTL_DAYS and any whose repo
       // is gone (incl. repos deleted before the cascade shipped). Boot-only

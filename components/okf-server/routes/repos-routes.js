@@ -171,6 +171,63 @@ router.post(
   ctrl.addTestSuiteQueries
 );
 
+// Story 8-6 (2026-10-17, ADR-okf-043) — RAGAS benchmark suites. Same shape
+// and scope discipline as the routing-testsuite block above: async jobs
+// (generate / run / explain) answer 202 + poll; literal segments (`runs`,
+// `explain`, `export`, `import`) stay ABOVE /:suite_key so they are never
+// parsed as a key. The xlsx import takes the workbook as the RAW request
+// body (express.raw overrides the global JSON parser for that one route;
+// 20 MiB bounds a MAX_ENTRIES workbook generously). Sidecar absence maps
+// to 503 RAGAS_UNAVAILABLE — honest degradation, never a hang.
+router.get('/:repo_id/ragas-testsuite/runs', requireRepoScope('repo_id', 'read'), ctrl.listRagasSuiteRuns);
+router.post(
+  '/:repo_id/ragas-testsuite/import',
+  requireRepoScope('repo_id', 'admin'),
+  express.raw({ type: '*/*', limit: '20mb' }),
+  ctrl.importRagasSuiteXlsx
+);
+router.get(
+  '/:repo_id/ragas-testsuite/:suite_key/export',
+  requireRepoScope('repo_id', 'read'),
+  ctrl.exportRagasSuiteXlsx
+);
+router.get('/:repo_id/ragas-testsuite/:suite_key', requireRepoScope('repo_id', 'read'), ctrl.getRagasSuite);
+router.post('/:repo_id/ragas-testsuite', requireRepoScope('repo_id', 'admin'), ctrl.generateRagasSuite);
+router.post(
+  '/:repo_id/ragas-testsuite/:suite_key/results-export',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.exportRagasResultsXlsx
+);
+router.post('/:repo_id/ragas-testsuite/:suite_key/run', requireRepoScope('repo_id', 'admin'), ctrl.runRagasSuite);
+router.get(
+  '/:repo_id/ragas-testsuite/:suite_key/runs/:run_key',
+  requireRepoScope('repo_id', 'read'),
+  ctrl.getRagasSuiteRun
+);
+router.post(
+  '/:repo_id/ragas-testsuite/:suite_key/rows',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.updateRagasSuiteRows
+);
+router.post(
+  '/:repo_id/ragas-testsuite/:suite_key/queries',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.addRagasSuiteQueries
+);
+router.post('/:repo_id/ragas-testsuite/:suite_key/rename', requireRepoScope('repo_id', 'admin'), ctrl.renameRagasSuite);
+router.delete('/:repo_id/ragas-testsuite/:suite_key', requireRepoScope('repo_id', 'admin'), ctrl.deleteRagasSuite);
+router.post('/:repo_id/ragas-testsuite/:suite_key/probe', requireRepoScope('repo_id', 'admin'), ctrl.probeRagasEntry);
+router.post(
+  '/:repo_id/ragas-testsuite/:suite_key/explain',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.explainRagasFailures
+);
+router.get(
+  '/:repo_id/ragas-testsuite/:suite_key/explain/:run_key',
+  requireRepoScope('repo_id', 'read'),
+  ctrl.getRagasExplainFailures
+);
+
 // Version mint + manifests (Story 2.9.7 — ADR-031): mint is an admin mutation
 // (publish/crawl/manual trigger); listing/reading versions is read-scope
 // (backs 4.5's diff/list UI and version-pinned citation).

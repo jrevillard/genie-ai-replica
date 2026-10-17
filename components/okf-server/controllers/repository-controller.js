@@ -1906,6 +1906,213 @@ async function listTestSuiteRuns(req, res, next) {
   }
 }
 
+// ---------- Story 8-6 — RAGAS benchmark suites (ADR-okf-043) --------------
+// Thin wrappers over ragas-suite-service, mirroring the head-suite shapes:
+// 202+poll for the three async jobs (generate / run / explain), 200 JSON
+// for reads, xlsx bytes for the interchange routes. Sidecar absence maps
+// to 503 RAGAS_UNAVAILABLE (the service owns that mapping).
+
+async function generateRagasSuite(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const { suite_key, done } = await ragasSuiteService.beginSuiteGeneration(req.params.repo_id, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    done.catch(() => {});
+    res.status(202).json({ suite_key, status: 'generating' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getRagasSuite(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const doc = await ragasSuiteService.getSuite(req.params.repo_id, req.params.suite_key);
+    res.status(200).json(doc);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function updateRagasSuiteRows(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const suite = await ragasSuiteService.updateSuiteRows(req.params.repo_id, req.params.suite_key, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(suite);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function addRagasSuiteQueries(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const { suite, added, duplicates_dropped } = await ragasSuiteService.addQueries(
+      req.params.repo_id,
+      req.params.suite_key,
+      req.body || {},
+      { authz: authzForService(req), actor: actorFrom(req) }
+    );
+    res.status(200).json({ suite, added, duplicates_dropped });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function renameRagasSuite(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const suite = await ragasSuiteService.renameSuite(req.params.repo_id, req.params.suite_key, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(suite);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function deleteRagasSuite(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const out = await ragasSuiteService.deleteSuite(req.params.repo_id, req.params.suite_key);
+    res.status(200).json(out);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function runRagasSuite(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const { run_key, done } = await ragasSuiteService.beginRunSuite(
+      req.params.repo_id,
+      req.params.suite_key,
+      req.body || {},
+      {
+        authz: authzForService(req),
+        actor: actorFrom(req)
+      }
+    );
+    done.catch(() => {});
+    res.status(202).json({ run_key, status: 'running' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getRagasSuiteRun(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const doc = await ragasSuiteService.getRunSuite(req.params.repo_id, req.params.suite_key, req.params.run_key);
+    res.status(200).json(doc);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function listRagasSuiteRuns(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const runs = await ragasSuiteService.listRuns(req.params.repo_id, req.query || {});
+    res.status(200).json({ runs });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function explainRagasFailures(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const { run_key, explain_key, done } = await ragasSuiteService.beginExplainFailures(
+      req.params.repo_id,
+      req.params.suite_key,
+      req.body || {},
+      { authz: authzForService(req), actor: actorFrom(req) }
+    );
+    done.catch(() => {});
+    res.status(202).json({ run_key, explain_key, status: 'running' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getRagasExplainFailures(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const doc = await ragasSuiteService.getExplainFailures(
+      req.params.repo_id,
+      req.params.suite_key,
+      req.params.run_key
+    );
+    res.status(200).json(doc);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function probeRagasEntry(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const probe = await ragasSuiteService.probeEntry(req.params.repo_id, req.params.suite_key, req.body || {}, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(200).json(probe);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function exportRagasSuiteXlsx(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const { body, filename } = await ragasSuiteService.exportSuiteXlsx(req.params.repo_id, req.params.suite_key);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(body);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function importRagasSuiteXlsx(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || []);
+    if (!bytes.length) {
+      const err = new Error('empty upload — expected the suite xlsx as the request body');
+      err.code = 'VALIDATION_ERROR';
+      err.status = 400;
+      return next(err);
+    }
+    const suite = await ragasSuiteService.importSuiteXlsx(req.params.repo_id, bytes, {
+      authz: authzForService(req),
+      actor: actorFrom(req)
+    });
+    res.status(201).json(suite);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function exportRagasResultsXlsx(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const { body, filename } = await ragasSuiteService.exportResultsXlsx(req.params.repo_id, req.body || {});
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(body);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createRepo,
   convertFromCrawl,
@@ -1936,6 +2143,21 @@ module.exports = {
   explainTestSuiteFailures,
   getExplainFailures,
   listTestSuiteRuns,
+  generateRagasSuite,
+  getRagasSuite,
+  updateRagasSuiteRows,
+  addRagasSuiteQueries,
+  renameRagasSuite,
+  deleteRagasSuite,
+  runRagasSuite,
+  getRagasSuiteRun,
+  listRagasSuiteRuns,
+  explainRagasFailures,
+  getRagasExplainFailures,
+  probeRagasEntry,
+  exportRagasSuiteXlsx,
+  importRagasSuiteXlsx,
+  exportRagasResultsXlsx,
   piiScan,
   getPiiConceptScan,
   importRepoConcepts,

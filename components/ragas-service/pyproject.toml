@@ -1,0 +1,15 @@
+[project]
+name = "genie-ai-ragas-service"
+version = "1.0.0"
+description = "OKF RAGAS benchmarking sidecar (Story 8-6, ADR-okf-043): testset generation, metric evaluation, and Jerome-compatible xlsx serialization"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

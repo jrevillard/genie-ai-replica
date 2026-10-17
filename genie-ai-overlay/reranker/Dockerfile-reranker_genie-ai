@@ -53,6 +53,11 @@ COPY genie-ai-overlay/build-patches/docarray_alias_shim.py /app/docarray_alias_s
 # Step D.5: Copy shared OTel tracing module (importable from PYTHONPATH=/app)
 COPY genie-ai-overlay/tracing.py /app/tracing.py
 
+# Copy the shared span-attribute vocabulary (importable as core.span_attrs).
+# The reranker imports it for the attribute names and the adaptive-breakdown
+# chunk-key sentinel; without this the image fails at import, not at runtime.
+COPY genie-ai-overlay/core/span_attrs.py /app/core/span_attrs.py
+
 # Step E: "Overlay" custom GENIE-AI files
 # 1. Place the custom reranker class into the integrations folder
 COPY genie-ai-overlay/reranker/genieai_tei_reranker.py /app/comps/rerankings/src/integrations/genieai_tei_reranker.py

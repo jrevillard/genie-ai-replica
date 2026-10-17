@@ -4,6 +4,7 @@ companions:
   - architecture-diagrams.md
   - xlsx-compat-formats.md
   - stack.md
+  - model-requirements.md
   - failure-attribution.md
   - ../../../tests/rag-benchmarks/eval/CLAUDE.md
   - ../../../tests/rag-benchmarks/eval/RUNBOOK.md
@@ -21,12 +22,12 @@ The OKF Routing Lab can prove *routing* (which repository should answer) but not
 ## Capabilities
 
 - **CAP-1 — Generate RAGAS suites**
-  - **intent:** Steward selects the current repository plus related repositories and generates a benchmark suite with expected outputs (queries, reference answers, reference passages) synthesized from the selected repos' concepts.
-  - **success:** A generated suite with ≥1 multi-repo query exists as a `ragas_suite` document whose entries carry query + reference answer + reference passages; generation runs as a 202+poll job with progress phases.
+  - **intent:** Steward selects one or more repositories — the current repository alone, or together with any number of related repositories — and generates a benchmark suite with expected outputs (queries, reference answers, reference passages) synthesized from the selected repos' concepts.
+  - **success:** With two or more repositories selected, the suite contains at least one multi-repo query; with a single repository, entries still carry query + reference answer + reference passages; the suite exists as a `ragas_suite` document and generation ran as a 202+poll job with progress phases.
 
 - **CAP-2 — xlsx interchange**
-  - **intent:** Steward imports and exports RAGAS suites AND results as xlsx files compatible with Jerome's `tests/rag-benchmarks` toolchain formats.
-  - **success:** An exported suite xlsx fed to `xlsx_to_gold.py` (unmodified) yields a gold dataset with zero format-driven skips; a suite authored in his format imports and runs; a results xlsx round-trips back into run history.
+  - **intent:** Steward imports and exports RAGAS benchmark suites AND results as xlsx files compatible with Jerome's `tests/rag-benchmarks` toolchain formats.
+  - **success:** An exported benchmark-suite xlsx fed to `xlsx_to_gold.py` (unmodified) yields the harness's `gold_dataset.json` with zero format-driven skips; a suite authored in his format imports and runs; a results xlsx round-trips back into run history.
 
 - **CAP-3 — Execute suites**
   - **intent:** Steward runs a RAGAS suite; each query gets retrieved contexts and a generated answer from the live corpus, scored by the four RAGAS metrics (faithfulness, context_precision, context_recall, answer_relevancy).
@@ -49,7 +50,7 @@ The OKF Routing Lab can prove *routing* (which repository should answer) but not
 - ragas is Python-only and pinned at **0.4.3** (Jerome's pin): metric-number and report-shape parity with his chain is a hard requirement, so the sidecar dep set is frozen to his `requirements.txt` versions.
 - xlsx compatibility is positional and tab-exact: the layouts in `xlsx-compat-formats.md` must be emitted and consumed verbatim (sheet name, header row 1, column order, `new-N` id joins, tab set, `NEW_COLS`/`COMPARE_HEADERS` names).
 - 100% additive to the existing Lab: no modification of head-suite behavior, existing suite semantics, or the four Lab entry points; RAGAS rides the same collection, job pattern, routes shape, and store envelope.
-- Sovereign stack: judge LLM and embedder must run on the deployment's local vLLM and TEI; the judge model must support guided JSON (the `VLLM_LLM_MODEL_ID` contract).
+- Sovereign stack: judge, generator, and embedder run on deployment-local endpoints **selected by use case and resource availability — no feature is indexed on a specific model**; every LLM-consuming task (suite generation, RAGAS judging, the answer leg, data curation, the existing suite tests) must meet the capability minimums in `model-requirements.md`: strict/guided JSON wherever structured output is parsed, per-task window minimums, no reasoning-token leak into judge completions.
 - Project code standards: CommonJS backend, Vue 3 Options API, `translate()` i18n with 14 deep-key-identical locales, `vue3-apexcharts` only, direct AQL, per-route auth middleware.
 - Branch discipline: `feat/okf-ragas` merges to `feat/okf-server` only; nothing lands on `main` or `release/el-salvador` from this work.
 - New env vars need four-site parity (code default, docker-compose, `env` template, `env.j2`) plus config-validator coverage.
@@ -66,11 +67,11 @@ The OKF Routing Lab can prove *routing* (which repository should answer) but not
 
 ## Success signal
 
-A steward generates a suite from two repositories, runs it, and sees four metric scores per query with charts and failure explanations; the same suite exported as xlsx runs unmodified through `xlsx_to_gold.py` → `run_eval.py dump-tuples` → `run_ragas_eval.py` on the swarm node.
+A steward generates a suite from one or more repositories, runs it, and sees four metric scores per query with charts and failure explanations; the same suite exported as xlsx runs unmodified through `xlsx_to_gold.py` → `run_eval.py dump-tuples` → `run_ragas_eval.py` on the swarm node.
 
 ## Assumptions
 
-- Assumed the granite-class local judge (`VLLM_LLM_MODEL_ID`) suffices for ragas structured outputs: guided JSON is validated in dataprep, and Jerome validated the judge path live 2026-10-06 (LiteLLM → MiniMax-M3 plus TEI bge-large).
+- Assumed any model meeting the `model-requirements.md` minimums works for every task; granite-4.1-8b and MiniMax-M3 (+ TEI bge-large) are validated instances, not requirements.
 - Assumed default testset size 12 keeps generation tractable on a shared GPU (config knob `OKF_RAGAS_TESTSET_SIZE_DEFAULT`).
 - Assumed sheet name `Test Dataset` (his `--sheet-name` default) is acceptable for exports.
 - Assumed `okf_head_test_runs` tolerates the new kinds without index changes (`repo_id` and `created_at` indexes already present).

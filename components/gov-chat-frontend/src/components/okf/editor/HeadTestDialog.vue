@@ -1529,7 +1529,7 @@ export default {
         { value: 'head', label: this.translate('okf.headTest.tab.head', 'Head') },
         { value: 'test', label: this.translate('okf.headTest.tab.test', 'Test') },
         { value: 'suites', label: this.translate('okf.headTest.tab.suites', 'Suites & analytics') },
-        { value: 'ragas', label: this.translate('okf.headTest.tab.ragas', 'Benchmarks') }
+        { value: 'ragas', label: this.translate('okf.headTest.tab.ragas', 'RAGAS Benchmarks') }
       ];
     },
     /** Story 8-6: the unified saved-suites list — head suites and RAGAS

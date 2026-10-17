@@ -2807,7 +2807,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'মানদণ্ড পরীক্ষা'
+        ragas: 'RAGAS মানদণ্ড পরীক্ষা'
       },
       head: {
         dim: 'Dimensions',
@@ -3045,6 +3045,10 @@ export default {
       }
     },
     ragas: {
+      paneTitle: 'RAGAS মানদণ্ড পরীক্ষা',
+      about: 'RAGAS মাপে সহকারী কত ভালো তথ্য খুঁজে ও উত্তর দেয় — সততা, প্রসঙ্গের নির্ভুলতা ও স্মরণ, উত্তরের প্রাসঙ্গিকতা ইত্যাদি। রিপোজিটরিটিকে জ্ঞানভান্ডার হিসেবে মাপতে একটি মানদণ্ড স্যুট চালান।',
+      aboutLabel: 'RAGAS কী?',
+      aboutLink: 'ragas.io-তে আরও পড়ুন',
       current: 'বর্তমান',
       generate: {
         title: 'মানদণ্ড পরীক্ষার একটি স্যুট তৈরি করুন',

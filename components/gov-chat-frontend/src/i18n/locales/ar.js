@@ -2787,7 +2787,7 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'اختبارات مرجعية'
+        ragas: 'اختبارات RAGAS المرجعية'
       },
       head: {
         dim: 'Dimensions',
@@ -3022,6 +3022,10 @@ export default {
       }
     },
     ragas: {
+      paneTitle: 'اختبارات RAGAS المرجعية',
+      about: 'تقيّم RAGAS مدى نجاح المساعد في الاسترجاع والإجابة — الأمانة ودقة السياق واستدعائه وملاءمة الإجابة وغيرها. شغّل مجموعة اختبارات مرجعية لقياس المستودع كقاعدة معرفة.',
+      aboutLabel: 'ما هو RAGAS؟',
+      aboutLink: 'اقرأ المزيد على ragas.io',
       current: 'الحالي',
       generate: {
         title: 'إنشاء مجموعة اختبارات مرجعية',

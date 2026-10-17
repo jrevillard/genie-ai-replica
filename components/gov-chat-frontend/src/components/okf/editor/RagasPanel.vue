@@ -1,5 +1,23 @@
 <template>
   <div class="okf-ragas">
+    <!-- PANE HEAD — the renamed surface (David, 2026-10-17): the ⓘ glosses
+         RAGAS in plain language and links to ragas.io for deeper reading. -->
+    <div class="okf-ragas__pane-head">
+      <h4 class="okf-headtest__pane-title">
+        {{ translate('okf.ragas.paneTitle', 'RAGAS Benchmarks') }}
+      </h4>
+      <DsInfoTip
+        :text="
+          translate(
+            'okf.ragas.about',
+            'RAGAS scores how well the assistant retrieves and answers — faithfulness, context precision and recall, answer relevancy and more. Run a benchmark suite to measure the repository as a knowledge base.'
+          )
+        "
+        :label="translate('okf.ragas.aboutLabel', 'What is RAGAS?')"
+        href="https://www.ragas.io/"
+        :link-label="translate('okf.ragas.aboutLink', 'Read more at ragas.io')"
+      />
+    </div>
     <!-- GENERATION + INTERCHANGE -->
     <div class="okf-ragas__section">
       <h4 class="okf-headtest__pane-title">
@@ -380,6 +398,7 @@ import DsButton from '../../ds/Button.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 import DsProgress from '../../ds/Progress.vue';
+import DsInfoTip from '../../ds/InfoTip.vue';
 import translateMixin from '../../../mixins/translateMixin';
 import { useChartTheme } from '@/composables/useChartTheme';
 
@@ -396,7 +415,7 @@ const ALL_METRICS = [
 
 export default {
   name: 'OkfRagasPanel',
-  components: { DsButton, DsPill, DsSpinner, DsProgress },
+  components: { DsButton, DsPill, DsSpinner, DsProgress, DsInfoTip },
   mixins: [translateMixin],
   props: {
     repo: { type: Object, default: null },
@@ -922,6 +941,12 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.okf-ragas__pane-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
 }
 
 .okf-ragas__section {

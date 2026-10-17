@@ -21,8 +21,11 @@ endpoints; capability minimums live in the spec's model-requirements.md.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import time
+import uuid
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
@@ -72,6 +75,77 @@ async def ready():
     )
 
 
+# --- background jobs (202 + poll) ------------------------------------------
+# Generation and evaluation are LONG: minutes for a small suite, hours for
+# the large query sets this feature exists for (David, 2026-10-17: "if it
+# needs to be done async then do it async"). Holding one HTTP connection
+# open for that long breaks on proxy idle timeouts and reports nothing — so
+# the two model-bound endpoints return 202 + job_id immediately and run in
+# background asyncio tasks the caller polls via GET /jobs/{id}. Same shape
+# as okf-server's own 202+poll contract.
+#
+# The registry is in-memory by design (stateless service, single uvicorn
+# worker): a restart orphans running jobs and the caller's next poll 404s,
+# which okf-server maps to a typed "job vanished" failure. Nothing persists.
+
+
+JOBS: dict[str, dict] = {}
+JOBS_LOCK = asyncio.Lock()
+MAX_CONCURRENT_JOBS = int(os.getenv("RAGAS_MAX_CONCURRENT_JOBS") or "2")
+
+
+def _snapshot(job: dict) -> dict:
+    out = {k: job.get(k) for k in ("job_id", "kind", "status", "phase", "error", "started_at", "finished_at")}
+    if job.get("status") == "done":
+        out["result"] = job.get("result")
+    return out
+
+
+async def _start_job(kind: str) -> str:
+    async with JOBS_LOCK:
+        running = sum(1 for j in JOBS.values() if j.get("status") in ("queued", "running"))
+        if running >= MAX_CONCURRENT_JOBS:
+            raise HTTPException(
+                status_code=503,
+                detail=f"busy: {running} job(s) already running (RAGAS_MAX_CONCURRENT_JOBS={MAX_CONCURRENT_JOBS})",
+            )
+        job_id = uuid.uuid4().hex[:12]
+        JOBS[job_id] = {"job_id": job_id, "kind": kind, "status": "queued", "phase": "", "started_at": time.time()}
+    return job_id
+
+
+def _phase_tracker(job_id: str):
+    def _update(phase: str) -> None:
+        job = JOBS.get(job_id)
+        if job is not None and job.get("status") == "running":
+            job["phase"] = phase
+
+    return _update
+
+
+async def _run_job(job_id: str, coro) -> None:
+    job = JOBS[job_id]
+    try:
+        job["status"] = "running"
+        result = await coro
+        job["status"] = "done"
+        job["result"] = result
+    except Exception as e:  # noqa: BLE001 — the failure IS the job result
+        logger.exception("job %s (%s) failed", job_id, job.get("kind"))
+        job["status"] = "failed"
+        job["error"] = f"{type(e).__name__}: {e}"
+    finally:
+        job["finished_at"] = time.time()
+
+
+@app.get("/jobs/{job_id}")
+async def get_job(job_id: str):
+    job = JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="unknown or expired job (sidecar restarted?)")
+    return _snapshot(job)
+
+
 # --- generation -----------------------------------------------------------
 
 
@@ -82,7 +156,7 @@ class GenerateRequest(BaseModel):
     num_personas: int = Field(default=3, ge=1, le=10)
 
 
-@app.post("/generate-testset")
+@app.post("/generate-testset", status_code=202)
 async def generate_testset(req: GenerateRequest):
     if not req.documents:
         raise HTTPException(status_code=400, detail="documents must not be empty")
@@ -90,17 +164,20 @@ async def generate_testset(req: GenerateRequest):
         raise HTTPException(
             status_code=503, detail="judge endpoint not configured (RAGAS_JUDGE_BASE_URL / RAGAS_JUDGE_MODEL)"
         )
-    try:
-        return await ragas_engine.generate_testset(
-            req.documents, req.testset_size, req.query_distribution, req.num_personas
+    job_id = await _start_job("generate-testset")
+    asyncio.create_task(
+        _run_job(
+            job_id,
+            ragas_engine.generate_testset(
+                req.documents,
+                req.testset_size,
+                req.query_distribution,
+                req.num_personas,
+                progress=_phase_tracker(job_id),
+            ),
         )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
-    except Exception as e:  # noqa: BLE001 — surface as 502 with the cause
-        logger.exception("generate-testset failed")
-        raise HTTPException(status_code=502, detail=f"generation failed: {e}") from e
+    )
+    return {"job_id": job_id, "status": "queued", "poll": f"/jobs/{job_id}"}
 
 
 # --- evaluation -----------------------------------------------------------
@@ -112,7 +189,7 @@ class EvaluateRequest(BaseModel):
     timeout_s: int = Field(default=600, ge=30, le=3600)
 
 
-@app.post("/evaluate")
+@app.post("/evaluate", status_code=202)
 async def evaluate(req: EvaluateRequest):
     if not req.samples:
         raise HTTPException(status_code=400, detail="samples must not be empty")
@@ -120,15 +197,16 @@ async def evaluate(req: EvaluateRequest):
         raise HTTPException(
             status_code=503, detail="judge endpoint not configured (RAGAS_JUDGE_BASE_URL / RAGAS_JUDGE_MODEL)"
         )
-    try:
-        return await ragas_engine.evaluate_samples(req.samples, req.metrics or _DEFAULT_METRICS, req.timeout_s)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
-    except Exception as e:  # noqa: BLE001
-        logger.exception("evaluate failed")
-        raise HTTPException(status_code=502, detail=f"evaluation failed: {e}") from e
+    job_id = await _start_job("evaluate")
+    asyncio.create_task(
+        _run_job(
+            job_id,
+            ragas_engine.evaluate_samples(
+                req.samples, req.metrics or _DEFAULT_METRICS, req.timeout_s, progress=_phase_tracker(job_id)
+            ),
+        )
+    )
+    return {"job_id": job_id, "status": "queued", "poll": f"/jobs/{job_id}"}
 
 
 # --- xlsx -----------------------------------------------------------------

@@ -334,6 +334,7 @@ async def generate_testset(
     testset_size: int,
     query_distribution: list[dict] | None = None,
     num_personas: int = 3,
+    progress=None,
 ) -> dict:
     """Generate benchmark-suite samples from concept documents.
 
@@ -341,6 +342,8 @@ async def generate_testset(
     metadata. Multi-repo input feeds ONE knowledge graph so multi-hop
     synthesizers cross repo boundaries. query_distribution (optional)
     overrides the default synthesizer mix, as [{synthesizer, weight}].
+    progress (optional): callback str -> None, called at phase boundaries so
+    the app layer's job registry can expose coarse progress to pollers.
     """
     from langchain_core.documents import Document as LCDocument
     from ragas.run_config import RunConfig
@@ -364,6 +367,8 @@ async def generate_testset(
     # body (verified against its source: default transforms → DOCUMENT
     # nodes → apply_transforms → generate) so the persona count rides
     # through, per the user-settable-dimensions contract.
+    if progress:
+        progress("building-knowledge-graph")
     transforms = default_transforms(documents=docs, llm=llm, embedding_model=embeddings)
     nodes = [
         Node(
@@ -376,6 +381,8 @@ async def generate_testset(
     apply_transforms(kg, transforms, run_config=RunConfig())
     generator.knowledge_graph = kg
 
+    if progress:
+        progress("synthesizing-questions")
     dist = _resolve_distribution(query_distribution, llm)
     testset = generator.generate(
         testset_size=int(testset_size),
@@ -444,13 +451,16 @@ def _resolve_distribution(query_distribution: list[dict] | None, llm):
 # --------------------------------------------------------------------------
 
 
-async def evaluate_samples(samples: list[dict], metrics: list[str] | None, timeout_s: int = 600) -> dict:
+async def evaluate_samples(samples: list[dict], metrics: list[str] | None, timeout_s: int = 600, progress=None) -> dict:
     """Score samples with the selected metrics. Sample keys are his exact
     mapping (user_input / retrieved_contexts / response / reference) plus
-    reference_contexts for the context-metrics that consume them."""
+    reference_contexts for the context-metrics that consume them.
+    progress (optional): callback str -> None for the job registry."""
     from ragas import EvaluationDataset, evaluate
     from ragas.run_config import RunConfig
 
+    if progress:
+        progress("scoring")
     metric_instances, dropped = resolve_metrics(metrics)
     if not metric_instances:
         raise RuntimeError("no metrics available (embedder unconfigured and only embedding metrics requested?)")

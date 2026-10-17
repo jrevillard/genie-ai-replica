@@ -52,6 +52,13 @@ const COLLECTION = 'okf_head_test_runs'; // kinds: ragas_suite | ragas_run | rag
 
 const RAGAS_URL = () => (process.env.OKF_RAGAS_URL || 'http://ragas-service:8090').replace(/\/+$/, '');
 const RAGAS_TIMEOUT_MS = parseInt(process.env.OKF_RAGAS_TIMEOUT_MS || '600000', 10);
+// Generation and evaluation are LONG jobs (minutes to hours for large
+// suites), so they run sidecar-side as 202+poll background jobs — no HTTP
+// connection is held open. This budget is the TOTAL job deadline the poller
+// enforces (David's first generation outran the old 10-min held-open fetch
+// while the GPU was 100% busy; async jobs are the durable fix).
+const RAGAS_LONG_TIMEOUT_MS = parseInt(process.env.OKF_RAGAS_LONG_TIMEOUT_MS || '3600000', 10);
+const RAGAS_JOB_POLL_MS = parseInt(process.env.OKF_RAGAS_JOB_POLL_MS || '3000', 10);
 const TESTSET_SIZE_DEFAULT = Math.max(1, parseInt(process.env.OKF_RAGAS_TESTSET_SIZE_DEFAULT || '20', 10));
 const MAX_ENTRIES = Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_ENTRIES || '200', 10));
 const RUN_CONCURRENCY = Math.max(1, parseInt(process.env.OKF_RAGAS_RUN_CONCURRENCY || '2', 10));
@@ -150,7 +157,7 @@ function ragasSecret() {
  * Call the ragas-service sidecar. Network-class failures map to a typed
  * RAGAS_UNAVAILABLE (503) — the panel says so honestly; nothing hangs.
  */
-async function sidecar(path, { method = 'POST', json, body, contentType } = {}) {
+async function sidecar(path, { method = 'POST', json, body, contentType, timeoutMs } = {}) {
   const headers = { 'X-RAGAS-Secret': ragasSecret() };
   let payload;
   if (json !== undefined) {
@@ -160,16 +167,28 @@ async function sidecar(path, { method = 'POST', json, body, contentType } = {}) 
     headers['Content-Type'] = contentType || 'application/octet-stream';
     payload = body;
   }
+  const budget = timeoutMs || RAGAS_TIMEOUT_MS;
   let resp;
   try {
     resp = await fetch(`${RAGAS_URL()}${path}`, {
       method,
       headers,
       body: payload,
-      signal: AbortSignal.timeout(RAGAS_TIMEOUT_MS)
+      signal: AbortSignal.timeout(budget)
     });
   } catch (e) {
-    const err = new Error(`ragas-service unreachable (${e.message})`);
+    // A timeout is NOT unreachability — the sidecar may still be working.
+    // undici wraps the abort as TypeError("fetch failed") with the
+    // TimeoutError on .cause; name it honestly so the operator reads
+    // "timed out", not "service down".
+    const cause = e.cause || e;
+    const timedOut =
+      e.name === 'TimeoutError' ||
+      e.name === 'AbortError' ||
+      cause.name === 'TimeoutError' ||
+      cause.name === 'AbortError';
+    const detail = timedOut ? `ragas-service timed out after ${Math.round(budget / 1000)}s (the job may still be running there)` : `ragas-service unreachable (${e.message})`;
+    const err = new Error(detail);
     err.code = 'RAGAS_UNAVAILABLE';
     err.status = 503;
     throw err;
@@ -188,6 +207,50 @@ async function sidecar(path, { method = 'POST', json, body, contentType } = {}) 
     throw err;
   }
   return resp;
+}
+
+/**
+ * Poll a sidecar background job to completion (202 + poll — the same
+ * contract this service itself exposes). RAGAS_LONG_TIMEOUT_MS is the TOTAL
+ * job deadline; each individual HTTP call uses the short default budget, so
+ * no connection is ever held open while the judge grinds. A vanished job
+ * (404 — sidecar restarted) fails fast; transient poll errors retry until
+ * the deadline.
+ */
+async function pollSidecarJob(jobId) {
+  const deadline = Date.now() + RAGAS_LONG_TIMEOUT_MS;
+  for (;;) {
+    await sleepMs(RAGAS_JOB_POLL_MS);
+    let job;
+    try {
+      const resp = await sidecar(`/jobs/${jobId}`, { method: 'GET' });
+      job = await resp.json();
+    } catch (e) {
+      if (e.status === 404) {
+        const err = new Error(`ragas-service job ${jobId} vanished (sidecar restarted mid-job?)`);
+        err.code = 'RAGAS_UNAVAILABLE';
+        err.status = 503;
+        throw err;
+      }
+      if (Date.now() > deadline) throw e; // network-class failure + out of time
+      continue; // transient poll failure — the job may still be fine
+    }
+    if (job.status === 'done') return job.result;
+    if (job.status === 'failed') {
+      const err = new Error(`ragas-service: ${job.kind || 'job'} failed: ${job.error || 'unknown error'}`);
+      err.code = 'RAGAS_REQUEST_FAILED';
+      err.status = 502;
+      throw err;
+    }
+    if (Date.now() > deadline) {
+      const err = new Error(
+        `ragas-service job ${jobId} still ${job.status || 'running'} after ${Math.round(RAGAS_LONG_TIMEOUT_MS / 1000)}s — polling gave up (the job may still finish there)`
+      );
+      err.code = 'RAGAS_JOB_TIMEOUT';
+      err.status = 503;
+      throw err;
+    }
+  }
 }
 
 // ---------- retrieval leg (Lab-internal replay) ---------------------------
@@ -444,6 +507,8 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       err.status = 409;
       throw err;
     }
+    // 202 + poll: the sidecar starts a background job and we poll it — no
+    // connection is held open for the (potentially hour-long) generation.
     const genResp = await sidecar('/generate-testset', {
       json: {
         documents: docs,
@@ -452,7 +517,8 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         num_personas: clampCount(payload.num_personas, 1, 10)
       }
     });
-    const gen = await genResp.json();
+    const genStarted = await genResp.json();
+    const gen = await pollSidecarJob(genStarted.job_id);
     const samples = Array.isArray(gen.samples) ? gen.samples : [];
     if (!samples.length) {
       const err = new Error('the generator produced no samples (judge/embedder logs have the cause)');
@@ -871,8 +937,9 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       reference: e.reference_answer || '',
       reference_contexts: e.reference_passages || []
     }));
-    const evalResp = await sidecar('/evaluate', { json: { samples, metrics: opts.metrics } });
-    const evaluation = await evalResp.json();
+    const evalStarted = await sidecar('/evaluate', { json: { samples, metrics: opts.metrics } });
+    const evalStartedBody = await evalStarted.json();
+    const evaluation = await pollSidecarJob(evalStartedBody.job_id);
     const perQuery = Array.isArray(evaluation.per_query) ? evaluation.per_query : [];
     // sidecar returns rows in sample order (EvaluationDataset preserves it)
     for (let i = 0; i < results.length; i += 1) {

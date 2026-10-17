@@ -1372,7 +1372,10 @@ const actions = {
       const started = await ragasService.generateSuite(repoId, options || {});
       if (!started || !started.suite_key) return { ok: true, result: started };
       const POLL_MS = 2500;
-      const DEADLINE_MS = 10 * 60 * 1000; // generation is minutes of LLM work
+      // Matches the server's long-job budget (OKF_RAGAS_LONG_TIMEOUT_MS,
+      // 60 min default): first-generation on a contended GPU runs past 10
+      // minutes legitimately (live finding, 2026-10-17).
+      const DEADLINE_MS = 60 * 60 * 1000;
       const deadline = Date.now() + DEADLINE_MS;
       for (;;) {
         if (Date.now() > deadline) {
@@ -1481,7 +1484,8 @@ const actions = {
       const started = await ragasService.runSuite(repoId, suiteKey, metrics ? { metrics } : {});
       if (!started || !started.run_key) return { ok: true, result: started };
       const POLL_MS = 2000;
-      const DEADLINE_MS = 30 * 60 * 1000; // large suites + judge time
+      // Matches the server's long-job budget — evaluation is judge-bound.
+      const DEADLINE_MS = 60 * 60 * 1000;
       const deadline = Date.now() + DEADLINE_MS;
       for (;;) {
         if (Date.now() > deadline) {

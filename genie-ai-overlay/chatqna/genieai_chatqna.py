@@ -71,6 +71,12 @@ align_tracer = get_tracer("chatqna.align_outputs")
 # lifetime is owned by the streaming generator, not by an orchestrator node.
 llm_tracer = get_tracer("chatqna.llm")
 
+# Tracer for the answer-level outcome of a streamed turn. The span is opened by
+# the streaming generator once the orchestrate span has ended, so it is parented
+# on the orchestrate context captured by handle_request rather than on whatever
+# context happens to be active at that point.
+stream_outcome_tracer = get_tracer("chatqna.stream_outcome")
+
 # Sampling parameters recorded on spans, keyed by the field name they carry on
 # the wire. Shared so the llm.invoke span and the chatqna.orchestrate span stamp
 # the same set under the same names — one vocabulary, one place to add a
@@ -270,6 +276,42 @@ def _emit_llm_invoke_record(span, response) -> None:
 def _emit_llm_invoke_close(span) -> None:
     """End the llm.invoke span."""
     span.end()
+
+
+def _emit_stream_outcome_span(
+    parent_context,
+    retrieval_confidence: float,
+    self_confidence,
+    is_grounded: bool,
+    sentinel_present: bool,
+    abstained: bool,
+) -> None:
+    """Record the answer-level outcome of a streamed turn.
+
+    A span of its own, not an attribute on chatqna.orchestrate: the streaming
+    body is iterated by the framework AFTER the orchestrate span has ended, so
+    anything written to that span by then is dropped without error.
+
+    ``parent_context`` is the context captured from chatqna.orchestrate before
+    its ``with`` block closed, and it is what makes the span join the RAG trace.
+    By the time the body is consumed the active context belongs to the request
+    task, so a span opened without an explicit parent starts a NEW trace and the
+    outcome never appears next to the retrieval and reranking spans an operator
+    is looking at.
+    """
+    span = stream_outcome_tracer.start_span("chatqna.stream_outcome", context=parent_context)
+    try:
+        if span.is_recording():
+            span.set_attribute(ATTRIBUTE_NAMES["retrieval_confidence"], float(retrieval_confidence))
+            # Omitted, never nulled: an absent self-grade means the sentinel
+            # never completed, which is a different fact from a score of 0.
+            if self_confidence is not None:
+                span.set_attribute(ATTRIBUTE_NAMES["llm_self_confidence"], float(self_confidence))
+            span.set_attribute(ATTRIBUTE_NAMES["answer_is_grounded"], bool(is_grounded))
+            span.set_attribute(ATTRIBUTE_NAMES["answer_sentinel_present"], bool(sentinel_present))
+            span.set_attribute(ATTRIBUTE_NAMES["answer_abstained"], bool(abstained))
+    finally:
+        span.end()
 
 
 # Respect LOG_LEVEL: patch uvicorn's LOGGING_CONFIG (applied at startup via
@@ -2439,7 +2481,7 @@ class ChatQnAService:
 
         return source_documents_formatted, retrieval_confidence_score, is_grounded
 
-    async def _stream_with_metadata(self, body_iterator, result_dict, token: str):
+    async def _stream_with_metadata(self, body_iterator, result_dict, token: str, parent_context=None):
         """Forward the LLM token stream, then append a `metadata` SSE event.
 
         The metadata event carries the reranker-grounded source documents, confidence,
@@ -2456,6 +2498,9 @@ class ChatQnAService:
 
         The terminal ``[DONE]`` is suppressed and re-emitted after the metadata. Metadata
         is computed **after** the token stream so it never delays Time-To-First-Token.
+
+        ``parent_context`` is the chatqna.orchestrate context captured by handle_request.
+        It parents the answer-level outcome span emitted once the metadata is known.
         """
         buffer = ""
         self_confidence = None  # LLM self-grade value, captured from the sentinel
@@ -2537,6 +2582,18 @@ class ChatQnAService:
             f"Streaming confidence emission: retrieval={retrieval_confidence} "
             f"self={self_confidence} self_conf_enabled={LLM_SELF_CONFIDENCE_ENABLED} "
             f"-> confidence_score={_cs}"
+        )
+        # Every input of the answer-level outcome is known here, so this is the
+        # first point at which the span can be recorded. `sentinel_present`
+        # reports whether a self-grade was actually parsed, so an operator can
+        # tell "no self-grade requested" from "requested and never completed".
+        _emit_stream_outcome_span(
+            parent_context=parent_context,
+            retrieval_confidence=retrieval_confidence,
+            self_confidence=self_confidence,
+            is_grounded=is_grounded,
+            sentinel_present=self_confidence is not None,
+            abstained=False,
         )
         metadata = {
             "type": "metadata",
@@ -3395,6 +3452,10 @@ class ChatQnAService:
         # RAG orchestration with tracing span
         tracer = get_tracer("chatqna.orchestrate")
         with tracer.start_as_current_span("chatqna.orchestrate") as span:
+            # Captured here because the streaming body is consumed after this
+            # block closes, when the active context is the request task's rather
+            # than this trace's. The outcome span it parents needs this handle.
+            _orchestrate_context = otel_trace.set_span_in_context(span)
             span.set_attribute("rag.query_length", len(last_translated_message_content))
             span.set_attribute("rag.model_id", _get_llm_model())
             # What this request actually blended, and the answer reserve it is
@@ -3580,7 +3641,9 @@ class ChatQnAService:
                 # confidence, is_grounded) is emitted before [DONE]. Without this the
                 # backend would re-run retrieval without the category filter / reranker.
                 return StreamingResponse(
-                    self._stream_with_metadata(response.body_iterator, result_dict, token=token_str),
+                    self._stream_with_metadata(
+                        response.body_iterator, result_dict, token=token_str, parent_context=_orchestrate_context
+                    ),
                     media_type="text/event-stream",
                 )
 

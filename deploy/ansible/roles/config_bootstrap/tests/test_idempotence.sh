@@ -12,7 +12,7 @@
 #                             synchronize task buys us.
 #
 # Usage:
-#   test_idempotence.sh <inventory_file> <host> [vault_id] [become_password]
+#   test_idempotence.sh <inventory_file> <host> [vault_id] [become_password] [repo_branch]
 #
 #   <inventory_file>  Required. e.g. inventory/itu_rtx_el_salvador.ini
 #   <host>            Required. A single host from that inventory, e.g. el-salvador-01
@@ -21,6 +21,12 @@
 #                     --become-password-file to every ansible call (ansible has
 #                     no --become-password flag). The file is removed on exit.
 #                     Needed when the target's sudo is not passwordless.
+#   [repo_branch]     Optional. Branch the role seeds from. Defaults to the
+#                     playbook's repo_branch (main). ALWAYS pass the branch the
+#                     host is actually deployed from when it is not main:
+#                     --ignore-existing never removes files, so seeding main
+#                     assets onto e.g. a release/el-salvador node leaves them
+#                     there forever.
 #
 # Both the inventory and the host must be given explicitly: the script never
 # guesses a target, and it never falls back to a hardcoded host. Run it against
@@ -34,8 +40,8 @@
 #   deploy/ansible/group_vars/all.yml:22         config_dir: "{{ deploy_dir }}/config"
 #   deploy/ansible/roles/config_bootstrap/defaults/main.yml:26-33
 #                                               config_bootstrap_pairs (dest_subdir)
-#   deploy/ansible/roles/config_bootstrap/tasks/main.yml:92-94
-#                                               rsync_opts: --ignore-existing
+#   deploy/ansible/roles/config_bootstrap/tasks/main.yml
+#                                               rsync --ignore-existing (preserve edits)
 #   deploy/ansible/deploy.yml:418-423            play tags [config, deploy]
 #   deploy/ansible/templates/env.j2:412-413      CONFIG_DIR_FRONTEND / CONFIG_DIR_KEYCLOAK
 #   docker-compose.yaml:402                      /config  <- ${CONFIG_DIR_FRONTEND}:ro
@@ -56,7 +62,7 @@ readonly MARKER="/* config_bootstrap smoke-test marker - safe to delete */"
 usage() {
     cat <<'USAGE'
 Usage:
-  test_idempotence.sh <inventory_file> <host> [vault_id] [become_password]
+  test_idempotence.sh <inventory_file> <host> [vault_id] [become_password] [repo_branch]
 
   <inventory_file>  Required. e.g. inventory/itu_rtx_el_salvador.ini
   <host>            Required. A single host from that inventory, e.g. el-salvador-01
@@ -100,12 +106,13 @@ INVENTORY="$1"
 HOST="$2"
 VAULT_ID="${3:-}"
 BECOME_PASSWORD="${4:-}"
+REPO_BRANCH="${5:-}"
 
 [ -n "$INVENTORY" ] || die "inventory file must not be empty."
 [ -n "$HOST" ] || die "host must not be empty."
 [ -f "$INVENTORY" ] || die "inventory file not found: $INVENTORY"
 
-readonly INVENTORY HOST VAULT_ID BECOME_PASSWORD
+readonly INVENTORY HOST VAULT_ID BECOME_PASSWORD REPO_BRANCH
 
 # Run from deploy/ansible so group_vars/ (which defines deploy_dir/config_dir)
 # is on the vars path, and so deploy.yml resolves.
@@ -137,10 +144,15 @@ remote_sh() {
 }
 
 run_role() {
+    # Without an explicit branch, deploy.yml's repo_branch default (main) is
+    # what gets seeded. See the [repo_branch] argument note above.
+    local -a branch_args=()
+    [ -n "$REPO_BRANCH" ] && branch_args+=(-e "repo_branch=$REPO_BRANCH")
     ansible_run -i "$INVENTORY" deploy.yml \
         --tags "$ROLE_TAG" \
         --limit "$HOST" \
-        --become
+        --become \
+        "${branch_args[@]+"${branch_args[@]}"}"
 }
 
 # --- config_dir resolution ----------------------------------------------------

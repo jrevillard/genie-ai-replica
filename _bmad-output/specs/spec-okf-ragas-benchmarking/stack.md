@@ -29,10 +29,10 @@
 | `OKF_RAGAS_URL` | `http://ragas-service:8090` | okf-server → sidecar base URL |
 | `RAGAS_INTERNAL_SECRET` | = `OKF_INTERNAL_SECRET` | sidecar auth (fail-closed both sides) |
 | `RAGAS_JUDGE_BASE_URL` | = `VLLM_ENDPOINT` `/v1` | judge LLM (OpenAI-compatible) |
-| `RAGAS_JUDGE_MODEL` | = `VLLM_LLM_MODEL_ID` | judge model id (guided-JSON capable) |
+| `RAGAS_JUDGE_MODEL` | = `VLLM_LLM_MODEL_ID` *(inherited default — override per deployment; minimums: [model-requirements.md](model-requirements.md))* | judge/generator model id |
 | `RAGAS_JUDGE_API_KEY` | = `VLLM_API_KEY` | judge bearer |
 | `RAGAS_EMBED_BASE_URL` | TEI embedding service | embedder endpoint (answer_relevancy) |
-| `RAGAS_EMBED_MODEL` | = `EMBED_MODEL_ID` | embedder id |
+| `RAGAS_EMBED_MODEL` | = `EMBED_MODEL_ID` *(inherited default — override per deployment)* | embedder id |
 | `OKF_RAGAS_TESTSET_SIZE_DEFAULT` | `12` | default suite size on generate |
 | `OKF_RAGAS_MAX_ENTRIES` | `200` | hard cap per suite (import + generate) |
 | `OKF_RAGAS_RUN_CONCURRENCY` | `2` | per-run query concurrency (shared GPU) |
@@ -48,7 +48,7 @@ Ops mapping to Jerome's runner: `RAGAS_JUDGE_*` ≡ his `EVAL_JUDGE_*`; `RAGAS_E
 
 ## Test surface
 
-- Sidecar pytest: xlsx round-trips against golden fixtures (one exported suite → re-imported equality; one hand-authored sheet in his layout → expected entries; results round-trip); generate/evaluate handlers against mocked ragas.
+- Sidecar pytest: xlsx round-trips against pinned reference fixtures (one exported benchmark suite → re-imported equality; one hand-authored sheet in his layout → expected entries; results round-trip); generate/evaluate handlers against mocked ragas.
 - okf-server jest: `__tests__/ragas-suite-service.test.js` with the `head-suite-service.test.js:11-45` mock header (arango-mock stores, frontmatter-service mocks); route/controller thin-wrap tests; 503-degrade path.
 - Frontend jest: `ragas-panel.test.js` on the `mountDialog`/`fakeStore` pattern (`head-test-dialog.test.js:29-76`); progress-contract test mirroring `head-test-progress.test.js`.
 - Config-validator: new-var coverage per AC7.

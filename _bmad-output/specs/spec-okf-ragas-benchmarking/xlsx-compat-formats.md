@@ -30,7 +30,7 @@ What `xlsx_to_gold.py` reads and what our export must emit:
 
 Tab order: `Gold`, `Run_<label>`…, `Compare`, `Calibrate`. Charts tab omitted (UI charts are the feature).
 
-- `Gold` tab: the suite in the §1 layout verbatim.
+- `Gold` tab: the benchmark suite in the §1 layout verbatim (`Gold` is his tab name, kept for compatibility).
 - `Run_<label>` tab (`build_run_tab` shape, `enrich_xlsx_v2.py:934-976`):
   - Row 1 config block: A1 `params` (bold), B1 params JSON string; D1 `note`, E1 note text.
   - Row 2 header: suite columns (§1) + the 22 `NEW_COLS` in his exact order (`:80-103`): `gold_recall, gold_complete_recall, gold_precision, gold_noise, gold_retrieval_recall, gold_passage_recall, selected_keys, candidate_keys, trace_found, ragas_faithfulness, ragas_context_precision, ragas_context_recall, ragas_answer_relevancy, ragas_nan, answer_first_200, abstained, abstention_reason, answer_lang, gold_match_status_per_chunk, gold_chunk_count, is_unresolved, n_evaluable_helper`.
@@ -49,6 +49,6 @@ Tab order: `Gold`, `Run_<label>`…, `Compare`, `Calibrate`. Charts tab omitted 
 
 ## 4. Join semantics (the spine)
 
-- Suite↔run↔results join on entry `id` (`new-N`), exactly his gold→anchor→tuples spine.
+- Suite↔run↔results join on entry `id` (`new-N`) — the same join spine his chain runs from gold dataset → anchor report → eval tuples.
 - RAGAS per-query joins on **stripped question text** in his chain (`enrich_xlsx_v2.py:499-510`); our run doc keeps both `id` and `query` so both joins work.
 - `content_hash` (sha256[:16] of normalized text, `chunk_identity.py:23-38`) is NOT used by the RAGAS path — but export keeps `reference_passages` verbatim so his Phase-2 matcher can hash them on his side.

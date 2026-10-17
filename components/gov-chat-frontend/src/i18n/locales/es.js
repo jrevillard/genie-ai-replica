@@ -1629,7 +1629,9 @@ export default {
         },
         viaRole: 'rol directo',
         noHolders: 'Ningún usuario ni grupo con acceso.',
-        groupPlaceholder: 'Nombre del grupo',
+        groupPlaceholder: 'Elegir un grupo…',
+        groupSearch: 'Buscar grupos',
+        groupNoResults: 'Ningún grupo coincide',
         grantGroup: 'Conceder al grupo',
         groupHint:
           'Cada miembro del grupo obtiene acceso en su próximo inicio de sesión — una sola operación para cualquier número de usuarios.',

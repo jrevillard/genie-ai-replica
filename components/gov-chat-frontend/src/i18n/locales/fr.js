@@ -1633,7 +1633,9 @@ export default {
         },
         viaRole: 'rôle direct',
         noHolders: 'Aucun utilisateur ni groupe autorisé.',
-        groupPlaceholder: 'Nom du groupe',
+        groupPlaceholder: 'Choisir un groupe…',
+        groupSearch: 'Rechercher des groupes',
+        groupNoResults: 'Aucun groupe correspondant',
         grantGroup: 'Accorder au groupe',
         groupHint:
           "Chaque membre du groupe obtient l'accès à sa prochaine connexion — une seule opération, quel que soit le nombre d'utilisateurs.",

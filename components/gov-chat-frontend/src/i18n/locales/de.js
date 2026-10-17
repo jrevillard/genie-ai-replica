@@ -1630,7 +1630,9 @@ export default {
         },
         viaRole: 'direkte Rolle',
         noHolders: 'Keine Benutzer oder Gruppen mit Zugang.',
-        groupPlaceholder: 'Gruppenname',
+        groupPlaceholder: 'Gruppe wählen…',
+        groupSearch: 'Gruppen suchen',
+        groupNoResults: 'Keine Gruppen gefunden',
         grantGroup: 'Gruppe berechtigen',
         groupHint:
           'Jedes Gruppenmitglied erhält den Zugang bei der nächsten Anmeldung — eine Operation für beliebig viele Benutzer.',

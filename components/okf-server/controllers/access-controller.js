@@ -215,6 +215,31 @@ async function getAccessUsers(req, res, next) {
   }
 }
 
+/** GET /:repo_id/access/groups?q= — the group combobox's search. Server-side
+ * Keycloak group search; each result marked with whether the group already
+ * holds this repo's query access. */
+async function getAccessGroups(req, res, next) {
+  try {
+    requireConfigured();
+    const repo = await loadRepo(req.params.repo_id);
+    const q = typeof req.query.q === 'string' ? req.query.q.slice(0, 200) : '';
+    const groups = await keycloakAccess.searchGroups(q, 50);
+    const holderNames = new Set();
+    try {
+      (await keycloakAccess.roleMembers(`okf:t:${repo.repo_id}:read`)).groups.forEach((g) => holderNames.add(g.name));
+    } catch (err) {
+      if (err.statusCode !== 404) throw err; // role never created — no group grants yet
+    }
+    res.status(200).json({
+      repo_id: repo.repo_id,
+      q,
+      groups: groups.map((g) => ({ ...g, has_access: holderNames.has(g.name) }))
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 /** PUT /:repo_id/access — toggle the restriction gate (works while serving). */
 async function putAccess(req, res, next) {
   try {
@@ -379,6 +404,7 @@ async function revokeGroupAccess(req, res, next) {
 module.exports = {
   getAccess,
   getAccessUsers,
+  getAccessGroups,
   putAccess,
   grantAccess,
   revokeAccess,

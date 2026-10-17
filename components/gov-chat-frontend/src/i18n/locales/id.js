@@ -1623,7 +1623,9 @@ export default {
         },
         viaRole: 'peran langsung',
         noHolders: 'Belum ada pengguna atau grup yang diberi akses.',
-        groupPlaceholder: 'Nama grup',
+        groupPlaceholder: 'Pilih grup…',
+        groupSearch: 'Cari grup',
+        groupNoResults: 'Tidak ada grup yang cocok',
         grantGroup: 'Berikan ke grup',
         groupHint:
           'Setiap anggota grup memperoleh akses saat login berikutnya — satu operasi untuk jumlah pengguna berapa pun.',

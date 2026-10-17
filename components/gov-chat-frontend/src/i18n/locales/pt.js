@@ -1628,7 +1628,9 @@ export default {
         },
         viaRole: 'papel direto',
         noHolders: 'Nenhum usuário ou grupo com acesso.',
-        groupPlaceholder: 'Nome do grupo',
+        groupPlaceholder: 'Escolher um grupo…',
+        groupSearch: 'Pesquisar grupos',
+        groupNoResults: 'Nenhum grupo corresponde',
         grantGroup: 'Conceder ao grupo',
         groupHint:
           'Cada membro do grupo obtém acesso no próximo login — uma operação para qualquer número de usuários.',

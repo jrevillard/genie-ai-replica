@@ -53,6 +53,7 @@ router.delete('/:repo_id', requireRepoScope('repo_id', 'admin'), ctrl.deleteRepo
 // okf-server); the toggle and the read-path ENFORCEMENT need no Keycloak.
 router.get('/:repo_id/access', requireRepoScope('repo_id', 'read'), accessCtrl.getAccess);
 router.get('/:repo_id/access/users', requireRepoScope('repo_id', 'admin'), accessCtrl.getAccessUsers);
+router.get('/:repo_id/access/groups', requireRepoScope('repo_id', 'admin'), accessCtrl.getAccessGroups);
 router.put('/:repo_id/access', requireRepoScope('repo_id', 'admin'), accessCtrl.putAccess);
 router.post('/:repo_id/access/grant', requireRepoScope('repo_id', 'admin'), accessCtrl.grantAccess);
 router.post('/:repo_id/access/revoke', requireRepoScope('repo_id', 'admin'), accessCtrl.revokeAccess);

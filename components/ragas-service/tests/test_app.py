@@ -1,13 +1,17 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 """App-surface tests: auth fail-closed, health/ready open, import/export
+endpoints, and the 202+poll background-job contract for the two model-bound
 endpoints. These run WITHOUT the ragas/langchain stack (engine imports are
-deferred) — fastapi + openpyxl + httpx only, via TestClient.
+deferred; the engine functions are monkeypatched) — fastapi + openpyxl +
+httpx only, via TestClient.
 """
 
 from __future__ import annotations
 
+import asyncio
 import io
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,15 +23,34 @@ import app as app_module
 @pytest.fixture()
 def client(monkeypatch):
     monkeypatch.setenv("RAGAS_INTERNAL_SECRET", "test-secret")
+    monkeypatch.setenv("RAGAS_JUDGE_BASE_URL", "http://localhost:1/v1")
+    monkeypatch.setenv("RAGAS_JUDGE_MODEL", "test-model")
     # Reimport so the middleware reads the patched env at call time anyway
     from importlib import reload
 
     reload(app_module)
-    return TestClient(app_module.app)
+    # Context-managed: one long-lived portal whose event loop keeps the
+    # background job tasks advancing between requests (a bare TestClient
+    # opens a portal per request — tasks created by a POST would never run).
+    with TestClient(app_module.app) as c:
+        yield c
 
 
 def _auth(headers=None):
     return {"X-RAGAS-Secret": "test-secret", **(headers or {})}
+
+
+def _poll_job(client, job_id, timeout_s=10):
+    """Poll until terminal; the TestClient portal loop advances the task."""
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        r = client.get(f"/jobs/{job_id}", headers=_auth())
+        if r.status_code == 200:
+            job = r.json()
+            if job["status"] in ("done", "failed"):
+                return job
+        time.sleep(0.05)
+    pytest.fail(f"job {job_id} did not finish in {timeout_s}s")
 
 
 def test_health_open_without_secret(client):
@@ -50,6 +73,11 @@ def test_auth_fail_closed_no_secret(client, monkeypatch):
 def test_auth_rejects_wrong_secret(client):
     r = client.post("/xlsx/export-suite", json={"name": "x", "entries": []}, headers={"X-RAGAS-Secret": "nope"})
     assert r.status_code == 503
+
+
+def test_auth_guards_job_poll(client):
+    r = client.get("/jobs/whatever")
+    assert r.status_code == 503  # behind the shared secret like everything else
 
 
 def test_export_import_suite_roundtrip_via_http(client):
@@ -111,3 +139,92 @@ def test_generate_503_when_judge_unconfigured(client, monkeypatch):
         headers=_auth(),
     )
     assert r.status_code == 503
+
+
+def test_generate_is_202_plus_poll_with_result(client, monkeypatch):
+    seen_kwargs = {}
+
+    async def fake_generate(documents, testset_size, query_distribution=None, num_personas=3, progress=None):
+        seen_kwargs.update({"testset_size": testset_size, "num_personas": num_personas})
+        if progress:
+            progress("synthesizing-questions")
+        return {"samples": [{"user_input": "q"}], "generator": {}}
+
+    monkeypatch.setattr(app_module.ragas_engine, "generate_testset", fake_generate)
+    r = client.post(
+        "/generate-testset",
+        json={"documents": [{"page_content": "x", "metadata": {}}], "testset_size": 4, "num_personas": 6},
+        headers=_auth(),
+    )
+    assert r.status_code == 202
+    body = r.json()
+    assert body["job_id"]
+    job = _poll_job(client, body["job_id"])
+    assert job["status"] == "done"
+    assert job["kind"] == "generate-testset"
+    assert job["phase"] == "synthesizing-questions"
+    assert job["result"]["samples"][0]["user_input"] == "q"
+    assert seen_kwargs == {"testset_size": 4, "num_personas": 6}
+
+
+def test_generate_job_failure_surfaces_the_error(client, monkeypatch):
+    async def fake_generate(*args, **kwargs):
+        raise ValueError("bad distribution")
+
+    monkeypatch.setattr(app_module.ragas_engine, "generate_testset", fake_generate)
+    r = client.post(
+        "/generate-testset",
+        json={"documents": [{"page_content": "x", "metadata": {}}], "testset_size": 2},
+        headers=_auth(),
+    )
+    assert r.status_code == 202
+    job = _poll_job(client, r.json()["job_id"])
+    assert job["status"] == "failed"
+    assert "ValueError" in job["error"]
+    assert "bad distribution" in job["error"]
+    assert "result" not in job
+
+
+def test_evaluate_is_202_plus_poll_with_result(client, monkeypatch):
+    async def fake_evaluate(samples, metrics, timeout_s=600, progress=None):
+        if progress:
+            progress("scoring")
+        return {"aggregate": {"faithfulness": 1.0}, "per_query": [], "n": 0, "dropped": []}
+
+    monkeypatch.setattr(app_module.ragas_engine, "evaluate_samples", fake_evaluate)
+    r = client.post("/evaluate", json={"samples": [{"user_input": "q"}]}, headers=_auth())
+    assert r.status_code == 202
+    job = _poll_job(client, r.json()["job_id"])
+    assert job["status"] == "done"
+    assert job["kind"] == "evaluate"
+    assert job["result"]["aggregate"]["faithfulness"] == 1.0
+
+
+def test_jobs_enforce_the_concurrency_cap(client, monkeypatch):
+    monkeypatch.setattr(app_module, "MAX_CONCURRENT_JOBS", 1)
+
+    async def slow_generate(*args, **kwargs):
+        await asyncio.sleep(1.0)
+        return {"samples": []}
+
+    monkeypatch.setattr(app_module.ragas_engine, "generate_testset", slow_generate)
+    first = client.post(
+        "/generate-testset",
+        json={"documents": [{"page_content": "x", "metadata": {}}], "testset_size": 1},
+        headers=_auth(),
+    )
+    assert first.status_code == 202
+    second = client.post(
+        "/generate-testset",
+        json={"documents": [{"page_content": "x", "metadata": {}}], "testset_size": 1},
+        headers=_auth(),
+    )
+    assert second.status_code == 503
+    assert "busy" in second.json()["detail"]
+    job = _poll_job(client, first.json()["job_id"])
+    assert job["status"] == "done"
+
+
+def test_unknown_job_404(client):
+    r = client.get("/jobs/nope", headers=_auth())
+    assert r.status_code == 404

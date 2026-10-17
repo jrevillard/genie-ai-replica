@@ -209,7 +209,7 @@ async function main() {
   check('generate answers 202 + suite_key', gen.suite_key && gen.status === 'generating', JSON.stringify(gen).slice(0, 120));
   SUITE_KEY = gen.suite_key;
   let suite = null;
-  const genDeadline = Date.now() + 10 * 60 * 1000;
+  const genDeadline = Date.now() + 65 * 60 * 1000; // matches OKF_RAGAS_LONG_TIMEOUT_MS (60 min) + margin
   for (;;) {
     if (Date.now() > genDeadline) break;
     await sleep(4000);
@@ -238,7 +238,7 @@ async function main() {
   check('run answers 202 + run_key', run.run_key && run.status === 'running', JSON.stringify(run).slice(0, 120));
   let runDoc = null;
   let lastProgress = null;
-  const runDeadline = Date.now() + 20 * 60 * 1000;
+  const runDeadline = Date.now() + 65 * 60 * 1000; // matches OKF_RAGAS_LONG_TIMEOUT_MS (60 min) + margin
   for (;;) {
     if (Date.now() > runDeadline) break;
     await sleep(3000);

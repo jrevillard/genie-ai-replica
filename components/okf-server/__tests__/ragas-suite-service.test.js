@@ -31,6 +31,10 @@ jest.mock('../services/head-test-service', () => ({
   guardSuggestions: jest.fn()
 }));
 
+// The sidecar poller's interval is read at module load — shrink it before
+// the require so 202+poll flows complete in milliseconds, not 3s hops.
+process.env.OKF_RAGAS_JOB_POLL_MS = '5';
+
 const svc = require('../services/ragas-suite-service');
 const frontmatterService = require('../services/frontmatter-service');
 const repositoryService = require('../services/repository-service');
@@ -100,19 +104,29 @@ beforeEach(() => {
       );
     }
     if (u.includes('/generate-testset'))
-      return Promise.resolve(okJson({ samples: GEN_SAMPLES, generator: { model: 'm', embed_model: 'e' } }));
-    if (u.includes('/evaluate'))
+      return Promise.resolve(okJson({ job_id: 'j-gen', status: 'queued', poll: '/jobs/j-gen' }));
+    if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+    if (u.includes('/jobs/j-gen'))
+      return Promise.resolve(
+        okJson({ job_id: 'j-gen', kind: 'generate-testset', status: 'done', result: { samples: GEN_SAMPLES, generator: { model: 'm', embed_model: 'e' } } })
+      );
+    if (u.includes('/jobs/j-eval'))
       return Promise.resolve(
         okJson({
-          aggregate: { faithfulness: 1.0 },
-          per_query: GEN_SAMPLES.map(() => ({
-            faithfulness: 1.0,
-            context_precision: 0.5,
-            context_recall: 0.5,
-            answer_relevancy: 1.0
-          })),
-          model: 'm',
-          n: 2
+          job_id: 'j-eval',
+          kind: 'evaluate',
+          status: 'done',
+          result: {
+            aggregate: { faithfulness: 1.0 },
+            per_query: GEN_SAMPLES.map(() => ({
+              faithfulness: 1.0,
+              context_precision: 0.5,
+              context_recall: 0.5,
+              answer_relevancy: 1.0
+            })),
+            model: 'm',
+            n: 2
+          }
         })
       );
     if (u.includes('/xlsx/')) return Promise.resolve(okJson({}));
@@ -214,11 +228,14 @@ describe('beginSuiteGeneration / getSuite', () => {
   it('409 GENERATION_IN_FLIGHT with the adoptable key while one runs', async () => {
     let release;
     global.fetch = jest.fn((url) => {
-      if (String(url).includes('/generate-testset')) {
+      const u = String(url);
+      if (u.includes('/generate-testset')) {
         return new Promise((resolve) => {
-          release = () => resolve(okJson({ samples: GEN_SAMPLES, generator: {} }));
+          release = () => resolve(okJson({ job_id: 'j-gen', status: 'queued' }));
         });
       }
+      if (u.includes('/jobs/j-gen'))
+        return Promise.resolve(okJson({ job_id: 'j-gen', status: 'done', result: { samples: GEN_SAMPLES, generator: {} } }));
       return Promise.resolve(okJson({}));
     });
     const first = await svc.beginSuiteGeneration('me', {}, {});
@@ -350,9 +367,11 @@ describe('run', () => {
       const u = String(url);
       if (u.includes('/evaluate')) {
         return new Promise((resolve) => {
-          releaseEval = () => resolve(okJson({ aggregate: {}, per_query: [{}, {}] }));
+          releaseEval = () => resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
         });
       }
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(okJson({ job_id: 'j-eval', status: 'done', result: { aggregate: {}, per_query: [{}, {}] } }));
       if (u.includes('/rerank')) return Promise.resolve(okJson([{ index: 0, score: 0.9 }]));
       return Promise.reject(new Error('unexpected'));
     });
@@ -410,17 +429,24 @@ describe('explain', () => {
     global.fetch = jest.fn((url) => {
       const u = String(url);
       if (u.includes('/evaluate')) {
+        return Promise.resolve(okJson({ job_id: 'j-eval2', status: 'queued' }));
+      }
+      if (u.includes('/jobs/j-eval2')) {
         return Promise.resolve(
           okJson({
-            aggregate: {},
-            per_query: GEN_SAMPLES.map((_s, i) => ({
-              faithfulness: 1.0,
-              context_precision: 0.9,
-              context_recall: i === 0 ? 0.1 : 0.9,
-              answer_relevancy: 1.0
-            })),
-            model: 'm',
-            n: 2
+            job_id: 'j-eval2',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map((_s, i) => ({
+                faithfulness: 1.0,
+                context_precision: 0.9,
+                context_recall: i === 0 ? 0.1 : 0.9,
+                answer_relevancy: 1.0
+              })),
+              model: 'm',
+              n: 2
+            }
           })
         );
       }

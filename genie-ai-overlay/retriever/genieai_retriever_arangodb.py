@@ -1,6 +1,7 @@
 # Copyright (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+import inspect
 import json
 import os
 import time
@@ -21,6 +22,8 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.model_cache import get_model_id
+from core.span_attrs import ATTRIBUTE_NAMES as A
+from core.span_attrs import QUERY_ID_KEY, label_digest, query_id_from_baggage
 from tracing import (
     background_span,
     install_uvicorn_access_logging,
@@ -115,6 +118,29 @@ logflag = os.getenv("LOGFLAG", False)
 ARANGO_TEXT_FIELD = "text"
 ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
+
+# Deployment default for the per-request ``fetch_k``. Mirrors the constant
+# chatqna builds from the same environment variable (genieai_chatqna.py:503).
+DEFAULT_RETRIEVER_FETCH_K = 20
+
+# Ceiling for the per-candidate score vectors on a span. DERIVED FROM THE
+# DEPLOYMENT rather than hard-coded: a deployment configured for more candidates
+# must not be silently truncated, and one configured for fewer must not carry a
+# handful of huge arrays.
+#
+# The fused candidate set can hold BOTH legs -- every dense candidate plus every
+# BM25 candidate -- so the ceiling sums the two configured widths rather than
+# reading ``fetch_k`` alone, which would cap the hybrid path below the number of
+# candidates it legitimately produces.
+#
+# The environment variable is ``RETRIEVER_ARANGO_FETCH_K`` (read by
+# retriever/config.py consumers and set in docker-compose.yaml). It is NOT
+# ``RETRIEVER_FETCH_K``: that name is the chatqna-side Python CONSTANT, and a
+# ceiling reading it would be pinned to its default in every deployment.
+SCORE_ARRAY_CEILING = max(
+    1,
+    int(os.getenv("RETRIEVER_ARANGO_FETCH_K", DEFAULT_RETRIEVER_FETCH_K)) + max(0, HYBRID_BM25_CANDIDATES),
+)
 
 
 class QueryInstructionEmbeddingsWrapper:
@@ -252,6 +278,128 @@ def _overflow_doc_ids_json(doc_ids: list[str]) -> str:
     return json.dumps(doc_ids, ensure_ascii=False)
 
 
+def _result_key(result: dict):
+    """Return the chunk identity a retrieval result carries.
+
+    Both legs key on the raw ``doc.id`` so ``_dense_by_id`` and the fused key
+    list are built from the SAME function on the SAME Document objects -- which
+    is what makes index alignment a property of the code rather than a
+    coincidence. ``None`` (an unkeyable document) stays ``None`` rather than
+    becoming a shared placeholder that would merge two distinct documents.
+
+    INVARIANT the callers rely on: at most ONE retrieval result per request has
+    no id. Both legs key their documents -- the BM25 leg builds
+    ``Document(id=row["key"])`` from an AQL ``RETURN doc._key``, and the dense
+    leg comes from langchain-arangodb, which sets ``Document.id`` to the chunk
+    key -- so an unkeyable document is not a case either leg produces.
+
+    Where it would break: ``_dense_by_id`` is a plain dict comprehension over
+    the dense leg, so ``None`` is a single dict key -- two or more unkeyable
+    dense documents would collapse onto it, keeping only the last score, and
+    ``key in _dense_by_id`` would report ``dense_present`` true for EVERY
+    unkeyable slot in the fused list. ``rrf_fuse`` does not have that hole: it
+    gives each unkeyable doc a distinct ``__unkeyed_<n>`` identity, so two of
+    them stay two entries there and would disagree with the dense map here.
+    Recorded rather than restructured: the stated contract excludes the case, and
+    adding a synthetic key to ``_result_key`` would change what
+    ``rag.candidate_keys`` reports for every span.
+    """
+    return getattr(result.get("doc"), "id", None)
+
+
+def _as_int(value, default: int = 0) -> int:
+    """Coerce a request field to ``int``, falling back rather than raising.
+
+    ``model_dump`` hands back whatever the caller serialized, so a numeric
+    field can arrive as a string or as junk. Tracing must never be the reason a
+    retrieval request fails, so an unparseable value degrades to ``default``.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value, default: float = 0.0) -> float:
+    """Coerce a request field to ``float``, falling back rather than raising."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _retrieval_parameter_attributes(input_dict: dict, base_mode: str, labels: list[str]) -> dict:
+    """Retrieval-parameter half of the retriever span attributes.
+
+    ``base_mode`` and ``labels`` are the DECODED values (post
+    ``decode_filter_labels``), so the trace shows the effective search rather
+    than the encoded wire form.
+
+    Label values become digests: the taxonomy is fetched from the backend at
+    runtime, so no static vocabulary exists to validate them against, and real
+    labels contain spaces.
+
+    The traversal INJECTED counters are seeded at zero here and overwritten
+    after the traversal loop. A traversal that is off and a traversal that ran
+    and injected nothing are therefore both recorded, and both read as zero --
+    which is correct, because ``traversal_enabled`` distinguishes them. Without
+    this seeding, "off" would be an absent attribute and only "on but found
+    nothing" would be zero.
+    """
+    return {
+        A["rag_search_start_base"]: base_mode,
+        A["rag_search_type"]: input_dict.get("search_type") or "default",
+        A["rag_fetch_k"]: _as_int(input_dict.get("fetch_k")),
+        A["rag_filter_labels_enabled"]: bool(labels),
+        A["rag_filter_label_count"]: len(labels),
+        A["rag_filter_label_digests"]: [label_digest(label) for label in labels],
+        A["traversal_enabled"]: str(input_dict.get("enable_traversal") or "").lower() == "true",
+        A["traversal_max_depth"]: _as_int(input_dict.get("traversal_max_depth")),
+        A["traversal_max_returned"]: _as_int(input_dict.get("traversal_max_returned")),
+        A["traversal_score_threshold"]: _as_float(input_dict.get("traversal_score_threshold")),
+        A["traversal_injected_docs"]: 0,
+        A["traversal_injected_neighbor_items"]: 0,
+        **_hybrid_configuration_attributes(base_mode),
+    }
+
+
+def _retrieval_score_attributes(
+    keys: list[str],
+    dense_by_id: dict,
+    dense_present: list[bool],
+    bm25_by_id: dict | None = None,
+    fused: list | None = None,
+) -> dict:
+    """Per-candidate half of the retriever span attributes.
+
+    EVERY array is index-aligned to ``keys``, which is the ordering the caller
+    reports (the fused ordering on the hybrid path). Each leg is keyed by chunk
+    id and re-expanded in that order: a chunk a leg never returned gets ``0.0``
+    and ``False`` in the presence mask, never another chunk's score.
+
+    The presence mask is what makes the two distinguishable. Without it a
+    BM25-only chunk and a dense chunk that genuinely scored zero would emit the
+    same value in the same slot, and a reader would have no way to know which.
+
+    ``rag.scores.capped`` is computed from the PRE-truncation length, so it stays
+    truthful after ``keys`` has been sliced.
+    """
+    present = list(dense_present or [])
+    truncated_keys = list(keys)[:SCORE_ARRAY_CEILING]
+    dense_by_id = dense_by_id or {}
+    attrs = {
+        A["rag_candidate_keys"]: truncated_keys,
+        A["rag_scores_dense"]: [_as_float(dense_by_id.get(k)) for k in truncated_keys],
+        A["rag_scores_dense_present"]: [bool(p) for p in present[:SCORE_ARRAY_CEILING]],
+        A["rag_scores_capped"]: len(present) > SCORE_ARRAY_CEILING,
+    }
+    if bm25_by_id is not None:
+        attrs[A["rag_scores_bm25"]] = [_as_float(bm25_by_id.get(k)) for k in truncated_keys]
+    if fused is not None:
+        attrs[A["rag_scores_fused"]] = [_as_float(s) for s in list(fused)[:SCORE_ARRAY_CEILING]]
+    return attrs
+
+
 def rrf_fuse(dense, bm25, k=HYBRID_RRF_K, dense_weight=HYBRID_DENSE_WEIGHT, lexical_weight=HYBRID_LEXICAL_WEIGHT):
     """Fuse dense + BM25 result lists via weighted Reciprocal Rank Fusion.
 
@@ -293,6 +441,36 @@ def rrf_fuse(dense, bm25, k=HYBRID_RRF_K, dense_weight=HYBRID_DENSE_WEIGHT, lexi
             entry = scores.setdefault(chunk_id, {"doc": item["doc"], "score": 0.0})
             entry["score"] += weight / (k + rank)
     return sorted(scores.values(), key=lambda x: x["score"], reverse=True)
+
+
+def _hybrid_configuration_attributes(search_start: str) -> dict:
+    """The RRF configuration in force, read off ``rrf_fuse``'s own signature.
+
+    Read from the function rather than re-referenced from ``config.py``:
+    ``rrf_fuse`` is called without keyword arguments, so its defaults ARE the
+    configuration in force, and a span that quoted the config module could
+    disagree with the fusion that actually ran.
+
+    ``rag.hybrid.enabled`` reports whether the lexical channel was ENGAGED for
+    this request -- the deploy flag on AND a chunk search start -- which is the
+    same condition the fusion block is guarded by. The deploy flag alone is not
+    it: on an ``edge`` or ``node`` search the span would say ``true`` while no
+    fusion ran at all, and one attribute is what an operator reads. The search
+    start itself is recorded alongside as ``rag.search_start_base``.
+
+    ``true`` means the channel was engaged, not that it returned anything: a
+    BM25 search that found nothing, or that failed and degraded to dense-only,
+    still reports ``true`` and shows up as the ABSENCE of ``rag.scores.bm25``.
+    That is the distinction the flag exists to preserve -- "on, no lexical hit"
+    versus "off" -- and both are recorded as an explicit boolean, never omitted.
+    """
+    parameters = inspect.signature(rrf_fuse).parameters
+    return {
+        A["rag_hybrid_enabled"]: bool(HYBRID_RETRIEVAL_ENABLED and search_start == "chunk"),
+        A["rag_hybrid_dense_weight"]: float(parameters["dense_weight"].default),
+        A["rag_hybrid_lexical_weight"]: float(parameters["lexical_weight"].default),
+        A["rag_hybrid_rrf_k"]: int(parameters["k"].default),
+    }
 
 
 @OpeaComponentRegistry.register("GENIE_RETRIEVER_ARANGODB")
@@ -877,6 +1055,9 @@ class GenieaiArangoRetriever(OpeaComponent):
         span = tracer.start_span("retriever.hybrid_search")
         span.set_attribute("rag.search_mode", ARANGO_SEARCH_MODE)
         span.set_attribute("rag.top_k", input.k if hasattr(input, "k") else 0)
+        _query_id = query_id_from_baggage()
+        if _query_id:
+            span.set_attribute(QUERY_ID_KEY, _query_id)
 
         try:
             #################
@@ -895,6 +1076,14 @@ class GenieaiArangoRetriever(OpeaComponent):
             input_dict["search_start"] = _base_mode  # restore base mode
             if _encoded_labels:
                 input_dict["_encoded_filter_labels"] = _encoded_labels
+
+            # Emitted UNCONDITIONALLY, above the `if _encoded_labels:` branch
+            # below. Putting it inside that branch would set nothing at all on
+            # every label-free query -- most production traffic, and precisely
+            # the case where "did the filter silently not apply?" is the
+            # question being asked of the trace.
+            for _key, _value in _retrieval_parameter_attributes(input_dict, _base_mode, _encoded_labels).items():
+                span.set_attribute(_key, _value)
 
             query = input_dict.get("input", input_dict.get("text"))
             if logflag:
@@ -1169,6 +1358,14 @@ class GenieaiArangoRetriever(OpeaComponent):
                     )
                 ]
 
+            # Snapshot the DENSE leg unconditionally, once the dense search and
+            # the label filter have both settled. Deliberately ABOVE the hybrid
+            # block: when HYBRID_RETRIEVAL_ENABLED is off, a snapshot
+            # taken inside it would leave the variable undefined on every
+            # non-hybrid request.
+            _dense_by_id = {_result_key(r): _as_float(r.get("score")) for r in search_res}
+            _scores_emitted = False
+
             # Hybrid BM25 + RRF fusion (Contextual Retrieval Part B)
             # Opt-in lexical (BM25) channel over <GRAPH>_SOURCE.text fused with
             # the dense results via weighted Reciprocal Rank Fusion. Runs BEFORE
@@ -1187,7 +1384,24 @@ class GenieaiArangoRetriever(OpeaComponent):
                         aql_filter_clause=aql_filter_clause if search_start == "chunk" else "",
                     )
                     if bm25_res:
-                        search_res = rrf_fuse(search_res, bm25_res)[: int(input.k)]
+                        _fused_all = rrf_fuse(search_res, bm25_res)
+                        # The fused order drives EVERY array. rrf_fuse returns a
+                        # new, de-duplicated, re-sorted list that can contain
+                        # BM25-only chunks the dense leg never saw, so emitting
+                        # the pre-fusion dense list beside it would make index i
+                        # of two attributes describe different chunks.
+                        _fused_keys = [_result_key(r) for r in _fused_all]
+                        _bm25_by_id = {_result_key(r): _as_float(r.get("score")) for r in bm25_res}
+                        for _key, _value in _retrieval_score_attributes(
+                            keys=_fused_keys,
+                            dense_by_id=_dense_by_id,
+                            dense_present=[key in _dense_by_id for key in _fused_keys],
+                            bm25_by_id=_bm25_by_id,
+                            fused=[_as_float(r.get("score")) for r in _fused_all],
+                        ).items():
+                            span.set_attribute(_key, _value)
+                        _scores_emitted = True
+                        search_res = _fused_all[: int(input.k)]
                         logger.info(f"Hybrid RRF fusion: {len(search_res)} documents after fusing dense + BM25.")
                 except Exception as e:
                     # Graceful degradation: never let the hybrid channel break the request.
@@ -1196,6 +1410,15 @@ class GenieaiArangoRetriever(OpeaComponent):
             if not search_res:
                 logger.info("No documents found.")
                 return []
+
+            if not _scores_emitted:
+                _dense_keys = [_result_key(r) for r in search_res]
+                for _key, _value in _retrieval_score_attributes(
+                    keys=_dense_keys,
+                    dense_by_id=_dense_by_id,
+                    dense_present=[True] * len(_dense_keys),
+                ).items():
+                    span.set_attribute(_key, _value)
 
             logger.info(f"Found {len(search_res)} documents.")
             logger.info(f"Search results after similarity search: {search_res}")
@@ -1238,11 +1461,19 @@ class GenieaiArangoRetriever(OpeaComponent):
                 )
 
                 logger.info(f"Results after fetching neighborhood: {neighborhoods}")
+                _injected_docs = 0
+                _injected_neighbor_items = 0
                 for r in search_res:
                     neighborhood = neighborhoods.get(r["doc"].id)
 
                     if not neighborhood:
                         continue
+
+                    # Counted AFTER the empty-neighborhood guard, so these are
+                    # documents that actually received injected content -- not
+                    # documents the traversal was merely asked about.
+                    _injected_docs += 1
+                    _injected_neighbor_items += len(neighborhood) if isinstance(neighborhood, (list, tuple)) else 1
 
                     # Common header for added related info
                     r["doc"].page_content += "\n------\nRELATED INFORMATION:\n------\n"
@@ -1297,6 +1528,8 @@ class GenieaiArangoRetriever(OpeaComponent):
                             if file_id:
                                 r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
 
+                span.set_attribute(A["traversal_injected_docs"], _injected_docs)
+                span.set_attribute(A["traversal_injected_neighbor_items"], _injected_neighbor_items)
                 logger.info(f"Added neighborhoods to {len(search_res)} documents.")
 
             ################################

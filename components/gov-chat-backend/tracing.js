@@ -42,7 +42,6 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     ATTR_DEPLOYMENT_ENVIRONMENT
   } = require('@opentelemetry/semantic-conventions');
   const { BatchSpanProcessor } = require('@opentelemetry/sdk-trace-base');
-  const { W3CTraceContextPropagator } = require('@opentelemetry/core');
   const { trace } = require('@opentelemetry/api');
   const { resourceFromAttributes } = require('@opentelemetry/resources');
   const { redactAttributes } = require('./tracing-pii');
@@ -50,6 +49,10 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // below so the emitted shutdown logs inherit a real trace_id instead of
   // being orphaned. Deep import matches the existing shared-lib/X pattern.
   const { withBackgroundSpan } = require('./shared-lib/tracing-background');
+  // Propagator factory — the shared test asserts on this factory, not on a
+  // propagator it builds itself, so the wiring below cannot silently regress.
+  // Deep import matches the existing shared-lib/X pattern.
+  const { tracingBaggage } = require('./shared-lib/tracing-baggage');
 
   // Custom SpanProcessor that redacts PII and drops noise spans before export
   class PIIRedactionProcessor {
@@ -220,7 +223,10 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
         }
       })
     ],
-    textMapPropagator: new W3CTraceContextPropagator(),
+    // Trace context ALONE drops the baggage header, so `genie.query_id` would
+    // never reach chatqna. Built by the shared factory so the test asserts on
+    // the propagator production actually installs.
+    textMapPropagator: tracingBaggage.createGeniePropagator(),
     spanProcessors: [new PIIRedactionProcessor(exporter)]
   });
 

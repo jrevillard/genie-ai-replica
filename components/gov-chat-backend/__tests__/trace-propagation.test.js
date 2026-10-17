@@ -99,13 +99,17 @@ describe('traceparent propagation on outbound HTTP calls', () => {
     expect(headers1.traceparent).toContain(traceId);
   });
 
-  it('W3CTraceContextPropagator is configured in tracing.js', () => {
+  it('the composite propagator is configured in tracing.js', () => {
     const fs = require('fs');
     const path = require('path');
     const tracingPath = path.join(__dirname, '..', 'tracing.js');
     const tracingSource = fs.readFileSync(tracingPath, 'utf8');
 
-    expect(tracingSource).toContain('W3CTraceContextPropagator');
+    // The shared factory builds trace-context + baggage. A bare
+    // W3CTraceContextPropagator here would drop the `baggage` header and
+    // `genie.query_id` would never reach chatqna.
+    expect(tracingSource).toContain('tracingBaggage.createGeniePropagator()');
+    expect(tracingSource).not.toContain('new W3CTraceContextPropagator()');
     expect(tracingSource).toContain('textMapPropagator');
     expect(tracingSource).toContain('getNodeAutoInstrumentations');
   });

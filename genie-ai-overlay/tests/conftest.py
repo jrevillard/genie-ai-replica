@@ -207,3 +207,176 @@ def set_env_vars(monkeypatch):
     monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
     monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "BAAI/bge-large-en-v1.5")
     monkeypatch.setenv("RETRIEVER_MODEL_ID", "BAAI/bge-large-en-v1.5")
+
+
+# --- Tracing test support -----------------------------------------------------
+# Assertions read FINISHED spans out of an in-memory exporter, never mock span
+# objects. A mock assertion passes regardless of what the SDK does, and this
+# repo has the counter-example: tests/otel-collector/run-pii-smoke.sh passed
+# against a completely broken redactor because it asserted on the wrong surface.
+#
+# Installed in pytest_configure, NOT on first fixture use: set_tracer_provider is
+# once-per-process, and test_dataprep_tracing.py / test_reranker_tracing.py call
+# the real tracing.setup_tracing(), which installs a provider of their own. First
+# caller wins, so ours has to be first — otherwise a CI shard or a -k filter
+# silently yields zero spans.
+from opentelemetry import trace as _otel_trace
+from opentelemetry.sdk.trace import TracerProvider as _SdkTracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor as _SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+    InMemorySpanExporter as _InMemorySpanExporter,
+)
+
+# ``metrics`` re-exports ``sanitize_attributes`` from ``tracing``; the bare
+# MagicMock installed above does not, so the name resolves to a callable that
+# RETURNS a MagicMock. The OTel SDK cannot tell that from a scalar value: it
+# runs the return through its attribute-value cleaner, which stringifies it,
+# then calls ``.items()`` on the string and raises. Reachable only once a real
+# TracerProvider is installed — a NonRecordingSpan ignores set_attributes
+# entirely — so the mock could lie about its contract for as long as the suite
+# had no real provider. Use the real function rather than a hand-written
+# stand-in: chatqna tests rely on the PII key filtering actually happening.
+import tracing  # noqa: E402  (after the sys.modules mocks, as above)
+from core.span_attrs import free_text_violations
+
+sys.modules["metrics"].sanitize_attributes = tracing.sanitize_attributes
+
+_SPAN_EXPORTER = _InMemorySpanExporter()
+
+
+def pytest_configure(config):
+    provider = _SdkTracerProvider()
+    provider.add_span_processor(_SimpleSpanProcessor(_SPAN_EXPORTER))
+    _otel_trace.set_tracer_provider(provider)
+    installed = _otel_trace.get_tracer_provider()
+    if installed is not provider:
+        raise RuntimeError(
+            "Tracing tests cannot run: another TracerProvider was installed "
+            f"first ({type(installed).__name__}). The in-memory exporter would "
+            "receive no spans and every captured_spans() assertion would fail."
+        )
+
+
+def pytest_unconfigure(config):
+    _SPAN_EXPORTER.clear()
+
+
+# Spans whose attributes the vocabulary sweep polices.
+#
+# COVERS every span this project emits that records vocabulary-governed
+# attributes, across chatqna, retriever and reranker. Each name here is one a
+# later task adds attributes to, so an unswept name is one where a new leak
+# would go uncaught — that is why ``chatqna.orchestrate`` and ``reranker.rerank``
+# are included alongside the obvious five.
+#
+# DOES NOT COVER, deliberately:
+#   * FastAPI auto-instrumentation (``http.method`` / ``url.full`` /
+#     ``http.status_code`` …). Legitimately outside our vocabulary; sweeping them
+#     would mean suppressing failures we do not understand.
+#   * ``dataprep.*`` — all 14 spans the service emits (``ingest``,
+#     ``ingest.background``, ``retract``, ``kill_ingest``, ``chunking``,
+#     ``healthcheck``, ``ensure_vector_index``, ``initialize_client``,
+#     ``log_environment_variables``, and the five ``llm.*`` ones). Known unswept
+#     debt: dataprep is a separate service outside this issue's scope, and its
+#     spans carry vocabulary-bearing attributes — ``dataprep.ingest`` records
+#     ``dataprep.file_type`` / ``dataprep.file_id`` straight from the upload
+#     payload, and ``dataprep.llm.label_chunk`` / ``dataprep.llm.context_doc``
+#     record ``dataprep.llm_model``. Exactly the emissions this sweep exists to
+#     catch. Recorded as follow-up debt in the task report rather than fixed or
+#     silently omitted here; ``TestOwnedSpanCoverage::test_dataprep_pin_matches_the_code``
+#     re-derives the list from the source so the pin cannot drift.
+OWNED_SPAN_NAMES = frozenset(
+    {
+        "llm.invoke",
+        "chatqna.orchestrate",
+        "chatqna.reranker_selection",
+        "chatqna.stream_outcome",
+        "retriever.hybrid_search",
+        "reranker.rerank",
+        "reranker.tei_invoke",
+    }
+)
+
+
+def assert_spans_clean(spans, owned_span_names=OWNED_SPAN_NAMES):
+    """Raise AssertionError naming every leaking attribute on an owned span.
+
+    Split out from the fixture so a test can prove the sweep bites: an
+    autouse-fixture failure cannot be asserted from inside the test it fails.
+    """
+    leaks = []
+    for span in spans:
+        if span.name not in owned_span_names:
+            continue
+        violations = free_text_violations(dict(span.attributes))
+        if violations:
+            leaks.append(f"{span.name}: {violations}")
+    if leaks:
+        raise AssertionError(
+            f"Span attribute leak on an owned span (no collector-side redaction on the traces pipeline): {leaks}"
+        )
+
+
+@pytest.fixture(autouse=True)
+def sweep_owned_spans():
+    """Fail any test whose spans carry undeclared attributes or prose values.
+
+    Enforcement has to be automatic: the vocabulary is only as strong as the
+    habit of checking it, and ``tracing.with_span`` cannot do that check (it
+    sees only the attributes passed at construction, while emission sites call
+    ``span.set_attribute()`` afterwards). Sweeping the exported spans is the one
+    place that sees the final state of every attribute.
+    """
+    _SPAN_EXPORTER.clear()
+    yield
+    try:
+        assert_spans_clean(_SPAN_EXPORTER.get_finished_spans())
+    finally:
+        _SPAN_EXPORTER.clear()
+
+
+@pytest.fixture
+def owned_span_names():
+    """Expose OWNED_SPAN_NAMES so a test can assert the mirror has not drifted."""
+    return OWNED_SPAN_NAMES
+
+
+@pytest.fixture
+def span_sweep():
+    """Expose ``assert_spans_clean`` so tests can prove the sweep bites."""
+    return assert_spans_clean
+
+
+@pytest.fixture
+def span_exporter():
+    """Expose the in-memory exporter, so a deliberate leak can be cleaned up.
+
+    Only for tests that emit a leaking span ON PURPOSE to assert the sweep
+    catches it. The autouse sweep reads the same exporter at teardown, so
+    without a ``clear()`` at the end of such a test the leak is reported twice
+    -- once by the test's own assertion and once by the sweep -- and the test
+    fails for the wrong reason, which trains a reader to ignore the sweep.
+    """
+    return _SPAN_EXPORTER
+
+
+@pytest.fixture
+def captured_spans():
+    """Return a callable giving finished spans, optionally filtered by name.
+
+    Clears on SETUP only. A teardown clear here would empty the exporter before
+    ``sweep_owned_spans`` reads it: autouse fixtures are set up first and torn
+    down last, so this fixture's teardown runs FIRST and the sweep would see an
+    empty exporter and pass silently on every test that requests this one --
+    which is most tests that emit an owned span. The sweep clears at setup and
+    in its own ``finally``, so it owns the exporter's boundaries.
+    """
+    _SPAN_EXPORTER.clear()
+
+    def _get(name=None):
+        spans = _SPAN_EXPORTER.get_finished_spans()
+        if name is not None:
+            spans = [s for s in spans if s.name == name]
+        return spans
+
+    return _get

@@ -132,6 +132,7 @@ const { createValidToken } = require('../fixtures/tokens');
 const queryService = require('../../services/query-service');
 const axios = require('axios');
 const { keycloakAuthMiddleware } = require('../../middleware/keycloak-auth-middleware');
+const { context, propagation, trace } = require('@opentelemetry/api');
 
 const validToken = createValidToken();
 
@@ -147,6 +148,21 @@ beforeEach(() => {
     next();
   });
   process.env.OPEA_STREAMING = 'true';
+});
+
+// `tracingBaggage.withBaggage` scopes the correlation id to the chatqna request
+// through context propagation. The SDK registers AsyncLocalStorageContextManager
+// at startup, but NODE_ENV === 'test' short-circuits tracing.js, so without a
+// context manager `context.with` degrades to a plain call and the baggage never
+// becomes active — the code under test would be correct but untestable.
+// Unregistered afterwards so the global does not leak to other suites.
+beforeAll(() => {
+  const { AsyncLocalStorageContextManager } = require('@opentelemetry/context-async-hooks');
+  context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
+});
+
+afterAll(() => {
+  context.disable();
 });
 
 function authGet(path) {
@@ -1041,6 +1057,182 @@ describe('GET /:queryId', () => {
       expect(response.status).toBe(200);
       expect(response.text).toContain('"type":"done","queryId":"q1"');
     });
+  });
+
+  // The chatqna request is the ONE place genie.query_id attaches to outgoing
+  // traffic. Everything else here proves the stream works, not that the
+  // correlation id rides along with it — deleting the withBaggage wrapper in
+  // query-routes.js leaves every other test in this file green.
+  describe('query id correlation baggage', () => {
+    const QUERY_ID_KEY = 'genie.query_id';
+
+    // Serialize the active baggage the way the W3C header would carry it.
+    const activeBaggageEntries = () => {
+      const baggage = propagation.getActiveBaggage();
+      if (!baggage) return [];
+      return [...baggage.getAllEntries()].map(([key, entry]) => `${key}=${entry.value}`);
+    };
+
+    // The baggage must be read INSIDE the mock, at call time. Reading it after
+    // the handler returns would observe an already-unwound context and pass
+    // vacuously — that timing is the entire test.
+    const captureBaggageOnPost = () => {
+      const seen = [];
+      axios.post.mockImplementation(() => {
+        seen.push(activeBaggageEntries());
+        const mockStream = new Readable({ read() {} });
+        mockStream.push('data: {"type":"chunk","content":"hi"}\n\n');
+        mockStream.push('data: {"type":"done","queryId":"q-1"}\n\n');
+        mockStream.push(null);
+        return Promise.resolve({ data: mockStream });
+      });
+      return seen;
+    };
+
+    beforeEach(() => {
+      queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+      queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    });
+
+    it('carries genie.query_id on the chatqna request when a query id exists', async () => {
+      queryService.initStreamQuery.mockResolvedValue({
+        queryId: 'q-1',
+        opeaUrl: 'http://chatqna:8888/v1/chatqna',
+        opeaPayload: { messages: [] }
+      });
+      const seen = captureBaggageOnPost();
+
+      const response = await authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      expect(response.status).toBe(200);
+      expect(seen).toEqual([[`${QUERY_ID_KEY}=q-1`]]);
+    });
+
+    it('sends no baggage at all when there is no query id, never the string "undefined"', async () => {
+      queryService.initStreamQuery.mockResolvedValue({
+        opeaUrl: 'http://chatqna:8888/v1/chatqna',
+        opeaPayload: { messages: [] }
+      });
+      const seen = captureBaggageOnPost();
+
+      const response = await authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      expect(response.status).toBe(200);
+      expect(seen).toEqual([[]]);
+      // `propagation.createBaggage` coerces undefined to the literal string
+      // "undefined", which passes every downstream shape check and joins to
+      // nothing. Assert on the flattened entries so any such value is caught.
+      expect(seen.flat().join(',')).not.toContain('undefined');
+    });
+  });
+});
+
+// The id must also land on the span covering THIS handler, not only on the
+// outbound request. Baggage alone covers the trace when chatqna gets far enough
+// to stamp something; the server span is what keeps a turn joinable to the
+// stored query when it does not — a chatqna call that times out, or dies
+// before its first span is exported.
+//
+// Driven by calling the route handler directly, inside a real active span:
+// supertest runs the handler on the server side of an in-process HTTP hop, and
+// the AsyncLocalStorage context of the test does NOT cross it (verified — an
+// outer active span is not visible in an Express handler under supertest). A
+// direct call keeps the context in one chain, and it is the only way to put a
+// real recording span in front of the handler without standing up the full SDK.
+describe('query id correlation on the server span', () => {
+  const QUERY_ID_KEY = 'genie.query_id';
+  const { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } = require('@opentelemetry/sdk-trace-base');
+
+  let spanExporter;
+  let tracer;
+  let streamHandler;
+
+  beforeAll(() => {
+    spanExporter = new InMemorySpanExporter();
+    // BasicTracerProvider, NOT the global provider: `trace.setTracerProvider`
+    // is once-per-process and the rest of this file runs against the default
+    // no-op provider. The node provider's own constructor ignores a
+    // `spanProcessors` config in SDK 2.x — verified — so it would silently
+    // export nothing.
+    const provider = new BasicTracerProvider({ spanProcessors: [new SimpleSpanProcessor(spanExporter)] });
+    tracer = provider.getTracer('test.query-routes');
+
+    const buildRouter = require('../../routes/query-routes');
+    const layer = buildRouter(queryService).stack.find((entry) => entry.route && entry.route.path === '/stream');
+    streamHandler = layer.route.stack[0].handle;
+  });
+
+  beforeEach(() => {
+    spanExporter.reset();
+  });
+
+  // axios.post is made to reject so the handler takes its error path: the
+  // correlation id is stamped before the request goes out, and this way no
+  // keepalive interval or stream listener survives the test.
+  const _runStreamHandler = async ({ queryId }) => {
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId,
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    axios.post.mockRejectedValue(Object.assign(new Error('upstream down'), { code: 'ECONNABORTED' }));
+
+    const res = {
+      writableEnded: false,
+      headersSent: false,
+      writeHead: jest.fn(() => {
+        res.headersSent = true;
+      }),
+      write: jest.fn(),
+      end: jest.fn(() => {
+        res.writableEnded = true;
+      }),
+      status: jest.fn(() => res),
+      json: jest.fn()
+    };
+    const req = {
+      user: { iss_sub: 'http://localhost:8080/realms/genie#user-123' },
+      body: { sessionId: 's1', messages: [{ role: 'user', content: 'hello' }] },
+      headers: { authorization: 'Bearer t' },
+      on: jest.fn()
+    };
+
+    // startSpan + context.with rather than startActiveSpan: the SDK version
+    // pinned here does not export the span startActiveSpan opens (verified),
+    // so the end has to be explicit for the assertion to see anything.
+    const span = tracer.startSpan('express.server POST /api/queries/stream');
+    try {
+      await context.with(trace.setSpan(context.active(), span), async () => {
+        await streamHandler(req, res);
+      });
+    } finally {
+      span.end();
+    }
+  };
+
+  const _serverSpan = () => {
+    const [span] = spanExporter.getFinishedSpans().filter((s) => s.name.startsWith('express.server'));
+    return span;
+  };
+
+  it('stamps genie.query_id on the span covering the handler', async () => {
+    await _runStreamHandler({ queryId: 'q-42' });
+
+    expect(_serverSpan().attributes[QUERY_ID_KEY]).toBe('q-42');
+  });
+
+  it('writes nothing when there is no query id, never a placeholder', async () => {
+    await _runStreamHandler({ queryId: undefined });
+
+    const span = _serverSpan();
+    expect(span).toBeDefined();
+    expect(QUERY_ID_KEY in span.attributes).toBe(false);
   });
 });
 

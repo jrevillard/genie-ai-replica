@@ -12,6 +12,7 @@ import os
 import re
 import time
 from datetime import date, datetime
+from urllib.parse import urlparse
 
 from metrics import (
     chat_rag_duration_seconds,
@@ -22,6 +23,7 @@ from metrics import (
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.model_cache import get_max_model_len, get_model_id
+from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, query_id_from_baggage
 from tracing import (
     get_tracer,
     install_uvicorn_access_logging,
@@ -34,6 +36,8 @@ setup_tracing("genieai-chatqna")
 
 import aiohttp  # for async http requests
 import httpx
+from opentelemetry import context as otel_context
+from opentelemetry import trace as otel_trace
 from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
@@ -61,6 +65,47 @@ install_uvicorn_access_logging()
 # The orchestrate handler keeps its own scope-local tracer; this one serves the
 # service-merge path where both candidate and selected chunk ids are known.
 align_tracer = get_tracer("chatqna.align_outputs")
+
+# Tracer for the per-LLM-call span. Separate from align_tracer because the
+# llm.invoke span is opened with start_span (not start_as_current_span) and its
+# lifetime is owned by the streaming generator, not by an orchestrator node.
+#
+# UNVERIFIED, and stated rather than assumed: whether comps invokes the align
+# function inside handle_request's orchestrate block cannot be checked from this
+# tree. `comps` is vendored at build time, is not installed in the test venv, and
+# no Docker is available here. `align_generator` therefore captures the active
+# context when it is CALLED and parents the span on that, which closes the window
+# where a lazily-iterated generator would open its span against the request task's
+# context and start a new trace. If comps hands the chain over before the
+# orchestrate block closes, that capture is the orchestrate context and the span
+# joins the RAG trace; if it hands it over after, the capture is still earlier
+# than first iteration but may not be the RAG trace. Which of the two happens is
+# a fact about comps, not about this file.
+llm_tracer = get_tracer("chatqna.llm")
+
+# Tracer for the answer-level outcome of a streamed turn. The span is opened by
+# the streaming generator once the orchestrate span has ended, so it is parented
+# on the orchestrate context captured by handle_request rather than on whatever
+# context happens to be active at that point.
+stream_outcome_tracer = get_tracer("chatqna.stream_outcome")
+
+# Sampling parameters recorded on spans, keyed by the field name they carry on
+# the wire. Shared so the llm.invoke span and the chatqna.orchestrate span stamp
+# the same set under the same names — one vocabulary, one place to add a
+# parameter.
+#
+# Every entry here is a field `align_inputs` writes into `next_inputs`. A
+# parameter chatqna never sends is deliberately absent: `repetition_penalty` is
+# the obvious candidate (it is in the span vocabulary, because it is a real vLLM
+# sampling parameter) but chatqna does not put it in the request body, so
+# recording a value for it would advertise a parameter vLLM never received.
+# Add it here in the same commit that adds the `next_inputs` write.
+_LLM_REQUEST_PARAM_ATTRS = (
+    ("max_tokens", "llm_req_max_tokens"),
+    ("top_p", "llm_req_top_p"),
+    ("temperature", "llm_req_temperature"),
+    ("frequency_penalty", "llm_req_frequency_penalty"),
+)
 
 
 class _RerankerInputTooLongError(Exception):
@@ -116,6 +161,199 @@ def _emit_reranker_selection_span(candidate_chunk_keys, selected_chunk_keys, sel
         sel_span.set_attribute("rag.selected_scores", selected_scores)
         sel_span.set_attribute("rag.candidate_count", len(candidate_chunk_keys))
         sel_span.set_attribute("rag.selected_count", len(selected_chunk_keys))
+        _query_id = query_id_from_baggage()
+        if _query_id:
+            sel_span.set_attribute(QUERY_ID_KEY, _query_id)
+
+
+def _llm_request_params(llm_parameters_dict) -> dict:
+    """Return comps' LLM parameters as a plain mapping.
+
+    ``llm_parameters_dict`` arrives as a dict in the sync/streaming align
+    hooks. Tolerating a pydantic-style object costs nothing and keeps the
+    callers free of the distinction.
+    """
+    if not llm_parameters_dict:
+        return {}
+    if hasattr(llm_parameters_dict, "get"):
+        return llm_parameters_dict
+    for attr in ("model_dump", "dict"):
+        dumper = getattr(llm_parameters_dict, attr, None)
+        if callable(dumper):
+            try:
+                return dict(dumper())
+            except Exception:
+                break
+    return {}
+
+
+def _record_llm_request_params(span, request_fields) -> None:
+    """Stamp the sampling params carried by ``request_fields`` onto ``span``.
+
+    ``request_fields`` is the request body where one is available — the
+    ``next_inputs`` ``align_inputs`` assembles — so the span reports what goes on
+    the wire, not what a parameter dictionary intended. The two differ: chatqna
+    takes ``temperature`` and ``frequency_penalty`` from ``inputs``, not from
+    ``llm_parameters_dict``.
+
+    Each param is written ONLY when present: absence is the signal this span
+    exists to surface (a param dropped between chatqna and vLLM), so no
+    sentinel values are written in its place.
+    """
+    params = _llm_request_params(request_fields)
+    for key, attr in _LLM_REQUEST_PARAM_ATTRS:
+        value = params.get(key)
+        if value is not None:
+            span.set_attribute(ATTRIBUTE_NAMES[attr], value)
+
+
+def _stamp_llm_request_params_on_current_span(request_fields) -> None:
+    """Record the request params on the enclosing chatqna.orchestrate span.
+
+    Called from the ``align_inputs`` LLM branch with the assembled
+    ``next_inputs``. ``align_inputs`` is also the one hook guaranteed to see
+    ``llm_parameters_dict`` as a named positional, while ``align_generator`` is
+    only reachable through ``**kwargs`` and whether comps forwards the dict
+    there cannot be verified from this source tree — recording the params here
+    as well means they reach a span either way. A module-level holder was
+    rejected: chatqna serves concurrent turns, so mutable module state would
+    interleave between requests.
+    """
+    span = otel_trace.get_current_span()
+    if span is None or not span.is_recording():
+        return
+    _record_llm_request_params(span, request_fields)
+
+
+def _emit_llm_invoke_open(llm_parameters_dict: dict, *, stream_known: bool | None = None, parent_context=None):
+    """Open the llm.invoke span and record the request parameters.
+
+    ``start_span``, not ``start_as_current_span``: the latter returns an
+    ``_AgnosticContextManager``, not a Span, and calling ``set_attribute`` on it
+    raises AttributeError. The streaming path needs a real Span whose lifetime
+    it owns — open across the generator's yields, closed from a finally when the
+    upstream raises or the consumer abandons the stream.
+
+    The two ``align`` hooks that open this span have no request body in scope,
+    so the parameters come from ``llm_parameters_dict`` — comps' record of the
+    request it is about to issue. That is the best available source here, and it
+    is why the authoritative copy lands on ``chatqna.orchestrate``, stamped from
+    ``next_inputs`` in ``align_inputs``.
+
+    ``stream_known`` carries what the CALL SITE knows about streaming, which the
+    parameter dict cannot always be asked for. ``align_generator`` IS the
+    streaming branch — the non-streaming LLM branch of ``align_outputs`` is
+    guarded on ``not llm_parameters_dict["stream"]`` — but it reaches this
+    function only through ``**kwargs``, and whether comps forwards the dict
+    there cannot be verified from this source tree. Deriving ``llm.stream`` from
+    an absent dict therefore records ``false`` on the one span whose job is to
+    report what the LLM call was, and confidently-wrong data is worse than none.
+
+    With ``stream_known`` set, ``llm.stream`` is that value.
+    ``llm.stream_options.include_usage`` is different: it is only emitted when
+    the dict actually carried ``stream``, because whether the request asked for
+    usage alongside the stream is genuinely unknown without it. Absence is the
+    correct degradation for an unknown; a guessed ``true`` is not. When
+    ``stream_known`` is None the dict is the only source and both attributes
+    resolve from it, so they cannot disagree.
+
+    ``parent_context`` parents the span to an explicitly captured context instead
+    of whatever is active at open time. A lazily-started generator can be
+    consumed after the orchestrating span has closed, at which point the active
+    context belongs to the request task and an unparented span starts a NEW
+    trace.
+    """
+    params = _llm_request_params(llm_parameters_dict)
+    stream_observed = bool(params.get("stream"))
+    stream = stream_observed if stream_known is None else bool(stream_known)
+    parent_ctx = otel_context.get_current() if parent_context is None else parent_context
+    span = llm_tracer.start_span("llm.invoke", context=parent_ctx)
+    span.set_attribute(ATTRIBUTE_NAMES["llm_stream"], stream)
+    _record_llm_request_params(span, params)
+    if stream_observed:
+        span.set_attribute(ATTRIBUTE_NAMES["llm_stream_options_include_usage"], True)
+    _query_id = query_id_from_baggage(context=parent_ctx)
+    if _query_id:
+        span.set_attribute(QUERY_ID_KEY, _query_id)
+    return span
+
+
+def _emit_llm_invoke_record(span, response) -> None:
+    """Record model, token usage and finish_reason from one OpenAI response.
+
+    Accepts a single chunk while streaming: fields absent from that chunk are
+    not written, so the chunk that carries usage lands them.
+    """
+    if not isinstance(response, dict):
+        return
+    model = response.get("model")
+    if model:
+        span.set_attribute(ATTRIBUTE_NAMES["llm_model"], model)
+    usage = response.get("usage")
+    if isinstance(usage, dict):
+        for key, attr in (
+            ("prompt_tokens", "llm_usage_prompt_tokens"),
+            ("completion_tokens", "llm_usage_completion_tokens"),
+            ("total_tokens", "llm_usage_total_tokens"),
+        ):
+            value = usage.get(key)
+            if value is not None:
+                span.set_attribute(ATTRIBUTE_NAMES[attr], value)
+    for choice in response.get("choices") or []:
+        if not isinstance(choice, dict):
+            continue
+        reason = choice.get("finish_reason")
+        if reason:
+            span.set_attribute(ATTRIBUTE_NAMES["llm_finish_reason"], reason)
+
+
+def _emit_llm_invoke_close(span) -> None:
+    """End the llm.invoke span."""
+    span.end()
+
+
+def _emit_stream_outcome_span(
+    parent_context,
+    retrieval_confidence: float,
+    self_confidence,
+    is_grounded: bool,
+    sentinel_present: bool,
+    abstained: bool,
+) -> None:
+    """Record the answer-level outcome of a streamed turn.
+
+    A span of its own, not an attribute on chatqna.orchestrate: the streaming
+    body is iterated by the framework AFTER the orchestrate span has ended, so
+    anything written to that span by then is dropped without error.
+
+    ``parent_context`` is the context captured from chatqna.orchestrate before
+    its ``with`` block closed, and it is what makes the span join the RAG trace.
+    By the time the body is consumed the active context belongs to the request
+    task, so a span opened without an explicit parent starts a NEW trace and the
+    outcome never appears next to the retrieval and reranking spans an operator
+    is looking at.
+    """
+    span = stream_outcome_tracer.start_span("chatqna.stream_outcome", context=parent_context)
+    try:
+        if span.is_recording():
+            # Read from ``parent_context``, not the active context: that handle
+            # was derived with set_span_in_context, which RETAINS the baggage it
+            # was created from, so it still carries the id even when the span is
+            # opened somewhere the baggage is no longer in scope. Omitted when
+            # no client sent one.
+            _query_id = query_id_from_baggage(context=parent_context)
+            if _query_id:
+                span.set_attribute(QUERY_ID_KEY, _query_id)
+            span.set_attribute(ATTRIBUTE_NAMES["retrieval_confidence"], float(retrieval_confidence))
+            # Omitted, never nulled: an absent self-grade means the sentinel
+            # never completed, which is a different fact from a score of 0.
+            if self_confidence is not None:
+                span.set_attribute(ATTRIBUTE_NAMES["llm_self_confidence"], float(self_confidence))
+            span.set_attribute(ATTRIBUTE_NAMES["answer_is_grounded"], bool(is_grounded))
+            span.set_attribute(ATTRIBUTE_NAMES["answer_sentinel_present"], bool(sentinel_present))
+            span.set_attribute(ATTRIBUTE_NAMES["answer_abstained"], bool(abstained))
+    finally:
+        span.end()
 
 
 # Respect LOG_LEVEL: patch uvicorn's LOGGING_CONFIG (applied at startup via
@@ -217,8 +455,6 @@ LLM_SERVER_PROTOCOL = "http"
 # override host/port/protocol so MicroService constructs the correct URL.
 _VLLM_LLM_ENDPOINT = os.getenv("VLLM_LLM_ENDPOINT", "")
 if _VLLM_LLM_ENDPOINT:
-    from urllib.parse import urlparse
-
     _parsed = urlparse(_VLLM_LLM_ENDPOINT)
     LLM_SERVER_HOST_IP = _parsed.hostname or LLM_SERVER_HOST_IP
     LLM_SERVER_PORT = _parsed.port or 443
@@ -414,13 +650,25 @@ def _extract_history_text(translated_history_string, n_turns):
 
     Returns "" on empty input, first turn (no prior history), or n_turns<=0.
     """
-    if not translated_history_string or n_turns <= 0:
+    prior = _prior_history_segments(translated_history_string)
+    if not prior or n_turns <= 0:
         return ""
+    return " ".join(prior[-n_turns:])
+
+
+def _prior_history_segments(translated_history_string):
+    """Return the history segments preceding the current user turn.
+
+    The current turn is the query (already extracted via USER_MSG_PATTERN), so
+    only what comes before it is blendable history. Empty when the blob is
+    empty or holds a single turn.
+    """
+    if not translated_history_string:
+        return []
     segments = [s.strip() for s in translated_history_string.split("|<-MSG->|") if s.strip()]
     if len(segments) < 2:
-        return ""
-    prior = segments[:-1]
-    return " ".join(prior[-n_turns:])
+        return []
+    return segments[:-1]
 
 
 def _blend_embeddings(query_emb, history_emb, alpha):
@@ -505,6 +753,97 @@ def _parse_condense_response(content) -> str:
     if not isinstance(query, str) or not query.strip():
         raise CondenseError("empty_query", f"standalone_query missing/blank: {stripped[:120]}")
     return query.strip()
+
+
+def _resolved_blend_settings(translated_history_string):
+    """Resolve the multi-turn blend configuration for ONE request.
+
+    Returns (enabled, alpha, history_turns). `alpha` and `history_turns` are
+    what this request actually blends, not the module defaults: the configured
+    turn count is only an upper bound, and a first-turn conversation feeds the
+    blend nothing at all. A span reporting the configuration verbatim would
+    misreport every request the conversation shape differs from.
+    """
+    if not (MULTI_TURN_BLEND_ENABLED and MULTI_TURN_HISTORY_TURNS > 0):
+        return False, None, 0
+    fed = _prior_history_segments(translated_history_string)[-MULTI_TURN_HISTORY_TURNS:]
+    if not fed:
+        return True, None, 0
+    return True, MULTI_TURN_BLEND_ALPHA, len(fed)
+
+
+def _resolve_answer_budget_tokens(max_tokens) -> int:
+    """Return the answer reserve the context-budget guard reserves.
+
+    A request that omits max_tokens falls back to DEFAULT_MAX_ANSWER_TOKENS,
+    so both the span attribute and the truncation event must read the reserve
+    through this helper — two derivations would disagree in exactly the
+    default configuration.
+    """
+    return int(max_tokens or DEFAULT_MAX_ANSWER_TOKENS)
+
+
+def _blend_attributes(enabled: bool, alpha, history_turns: int) -> dict:
+    """Multi-turn blend attributes for the chatqna.orchestrate span.
+
+    `alpha` is emitted only when a blend actually ran: with no history fed
+    there is no blend weight in play, and omitting beats reporting a number
+    the request never used.
+    """
+    attrs = {
+        ATTRIBUTE_NAMES["rag_blend_enabled"]: bool(enabled),
+        ATTRIBUTE_NAMES["rag_blend_history_turns"]: int(history_turns or 0),
+    }
+    if enabled and alpha is not None:
+        attrs[ATTRIBUTE_NAMES["rag_blend_alpha"]] = float(alpha)
+    return attrs
+
+
+def _prompt_budget_attributes(window_tokens, answer_budget_tokens, estimate) -> dict:
+    """Prompt-budget attributes for the chatqna.orchestrate span.
+
+    Absent values are omitted rather than nulled: a null teaches the reader
+    nothing and satisfies a naive assertion perfectly.
+    """
+    attrs = {}
+    if window_tokens is not None:
+        attrs[ATTRIBUTE_NAMES["rag_prompt_window_tokens"]] = int(window_tokens)
+    if answer_budget_tokens is not None:
+        attrs[ATTRIBUTE_NAMES["rag_prompt_answer_budget_tokens"]] = int(answer_budget_tokens)
+    if estimate is not None:
+        attrs[ATTRIBUTE_NAMES["rag_prompt_tokens_estimate"]] = int(estimate)
+    return attrs
+
+
+def _emit_budget_truncation_event(
+    current_span, dropped_segments, window_tokens, answer_budget_tokens, max_history_tokens
+) -> None:
+    """Record that the context-budget guard dropped history segments.
+
+    A no-op when nothing was dropped, so the presence of the event always means
+    "truncation happened" rather than "the guard ran".
+    """
+    if not dropped_segments:
+        return
+    if current_span is None or not current_span.is_recording():
+        return
+    current_span.add_event(
+        "context_budget.truncated",
+        {
+            "dropped_segments": int(dropped_segments),
+            "window_tokens": int(window_tokens or 0),
+            "answer_budget_tokens": int(answer_budget_tokens or 0),
+            "max_history_tokens": int(max_history_tokens or 0),
+        },
+    )
+
+
+def _set_attributes(span, attributes: dict) -> None:
+    """Write a prepared attribute dict onto a span that is recording."""
+    if span is None or not span.is_recording():
+        return
+    for key, value in attributes.items():
+        span.set_attribute(key, value)
 
 
 # ---------------------------------------------------------------------------
@@ -1364,7 +1703,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
         tokenizer = get_tokenizer()
         max_model_tokens = _get_max_model_len()
-        max_answer_tokens = llm_parameters_dict.get("max_tokens") or DEFAULT_MAX_ANSWER_TOKENS
+        max_answer_tokens = _resolve_answer_budget_tokens(llm_parameters_dict.get("max_tokens"))
         # Count tokens part by part: the pieces feed the history budget below,
         # so encoding them separately costs nothing extra on overflow requests.
         # The 200-token buffer absorbs the ±1 boundary tokens the combined
@@ -1372,6 +1711,15 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         system_tokens = len(tokenizer.encode(system_instructions))
         user_content_tokens = len(tokenizer.encode(user_content))
         full_prompt_tokens = system_tokens + user_content_tokens
+        _active_span = otel_trace.get_current_span()
+        _set_attributes(
+            _active_span,
+            _prompt_budget_attributes(
+                window_tokens=max_model_tokens,
+                answer_budget_tokens=max_answer_tokens,
+                estimate=full_prompt_tokens,
+            ),
+        )
         # Check if the total token count exceeds the model's limit
         if full_prompt_tokens + max_answer_tokens > max_model_tokens - 200:  # Leave buffer
             # Budget for the history: the window minus what is already known to
@@ -1396,6 +1744,24 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                 truncated_history.insert(0, segment)  # Maintain order
                 current_tokens += segment_tokens
             dropped_segments = len(history_segments) - len(truncated_history)
+            # Both counts are written here, inside the branch, so that
+            # ABSENCE means "the guard did not run" rather than "0 segments".
+            # segments_sent is the TRUNCATED length: recording the incoming
+            # count for both would make a truncated turn look untouched.
+            _set_attributes(
+                _active_span,
+                {
+                    ATTRIBUTE_NAMES["rag_history_segments_in"]: len(history_segments),
+                    ATTRIBUTE_NAMES["rag_history_segments_sent"]: len(truncated_history),
+                },
+            )
+            _emit_budget_truncation_event(
+                current_span=_active_span,
+                dropped_segments=dropped_segments,
+                window_tokens=max_model_tokens,
+                answer_budget_tokens=max_answer_tokens,
+                max_history_tokens=max_history_tokens,
+            )
             if dropped_segments:
                 # kept/dropped counts live in the warning log — metric attributes
                 # stay low-cardinality (one series per path).
@@ -1425,8 +1791,29 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         next_inputs["max_tokens"] = llm_parameters_dict["max_tokens"]
         next_inputs["top_p"] = llm_parameters_dict["top_p"]
         next_inputs["stream"] = inputs["stream"]
+        if llm_parameters_dict.get("stream"):
+            # vLLM returns `usage` on a streamed response only when the request
+            # opts in. Without this the llm.invoke span reports tokens for the
+            # sync path and nothing for the streaming path.
+            #
+            # DEPENDENCY (unverifiable from this tree): chatqna -> textgen -> vLLM
+            # must forward `stream_options`. Whether the vendored textgen wrapper
+            # does is only observable against a running deployment; if it is
+            # dropped, streaming usage is unavailable at this layer and the
+            # llm.invoke span omits the token attributes rather than reporting
+            # wrong ones.
+            next_inputs["stream_options"] = {"include_usage": True}
         next_inputs["frequency_penalty"] = inputs["frequency_penalty"]
         next_inputs["temperature"] = inputs["temperature"]
+        # Stamp from next_inputs — the body actually sent — not from
+        # llm_parameters_dict. max_tokens/top_p do come from that dict, but
+        # temperature and frequency_penalty come from `inputs`, so a span
+        # reading llm_parameters_dict would report values the wire never
+        # carries: the exact blind spot this span exists to close. Reading the
+        # body also collapses the divergence between next_inputs["stream"]
+        # (from `inputs`) and the stream_options gate (from
+        # llm_parameters_dict) onto one recorded truth.
+        _stamp_llm_request_params_on_current_span(next_inputs)
         inputs = next_inputs
         if logflag:
             logger.debug(f"Raw input of the llm\n {inputs}\n")
@@ -1775,12 +2162,20 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             next_data["file_id_pairs"] = inputs["file_id_pairs"]
 
     elif self.services[cur_node].service_type == ServiceType.LLM and not llm_parameters_dict["stream"]:
-        if "faqgen" in self.services[cur_node].endpoint:
-            next_data = data
-        else:
-            if logflag:
-                logger.debug(f"\nRaw output of the llm\n {data}\n")
-            next_data["text"] = data["choices"][0]["message"]["content"]
+        _llm_span = _emit_llm_invoke_open(llm_parameters_dict)
+        try:
+            _emit_llm_invoke_record(_llm_span, data)
+            _service_path = urlparse(self.services[cur_node].endpoint).path
+            if _service_path:
+                _llm_span.set_attribute(ATTRIBUTE_NAMES["llm_service_path"], _service_path)
+            if "faqgen" in self.services[cur_node].endpoint:
+                next_data = data
+            else:
+                if logflag:
+                    logger.debug(f"\nRaw output of the llm\n {data}\n")
+                next_data["text"] = data["choices"][0]["message"]["content"]
+        finally:
+            _emit_llm_invoke_close(_llm_span)
         if logflag:
             logger.debug(f"\nAligned output of the llm\n {next_data}\n")
     else:
@@ -1794,32 +2189,84 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
     return next_data
 
 
-def align_generator(self, gen, **kwargs):
+def align_generator(self, gen, *, parent_context=None, **kwargs):
+    """Wrap the LLM byte stream, recording it on an ``llm.invoke`` span.
+
+    A NON-generator on purpose, delegating the body to ``_align_generator_body``.
+    As a generator function its body would not run until something iterated it,
+    so every read of the active context inside the body would happen at first
+    iteration rather than at call time. If the framework hands out the lazy
+    chain from ``schedule()``, first iteration can land after the
+    ``chatqna.orchestrate`` ``with`` block has closed -- the active context then
+    belongs to the request task, and an ``llm.invoke`` span opened there starts a
+    NEW trace and never appears beside the retrieval and reranking spans it
+    belongs with. Capturing the context here, before the body is handed on, is
+    strictly earlier than first iteration and strictly no worse.
+
+    Whether comps calls the align function inside the orchestrate block cannot be
+    verified from this source tree: ``comps`` is vendored at build time and is
+    not installed in the test venv. So this removes one failure mode without
+    proving the span always joins the RAG trace -- ``parent_context`` lets a
+    caller that knows better state the parent explicitly.
+
+    The signature is comps': ``align_generator(self, gen, **kwargs)``. Nothing
+    new is required of the caller.
+
+    UNVERIFIED, and recorded rather than assumed: the hook is registered as
+    ``ServiceOrchestrator.align_generator``, and whether comps branches on
+    ``inspect.isgeneratorfunction(...)`` before invoking it cannot be checked
+    from this source tree. The normal shape — call the hook, iterate what it
+    returns — is unaffected by the wrapper. If comps did require a generator
+    function by type, the consequence would be a total streaming outage rather
+    than a missing attribute, so it is worth a check against a running
+    deployment before this reaches production.
+    """
+    return _align_generator_body(
+        gen,
+        kwargs.get("llm_parameters_dict") or {},
+        # Resolved HERE, not inside the body: a fallback evaluated at first
+        # iteration is exactly the late read this split exists to prevent.
+        parent_context=otel_context.get_current() if parent_context is None else parent_context,
+    )
+
+
+def _align_generator_body(gen, llm_parameters_dict, parent_context):
     # OpenAI response format
     # data:{"id":"","object":"text_completion","created":1725530204,
     # "model":"meta-llama/Meta-Llama-3-8B-Instruct","system_fingerprint":"2.0.1-native",
     # "choices":[{"index":0,"delta":{"role":"assistant","content":"?"},"logprobs":null,
     # "finish_reason":null}]}\n\n'
-    for line in gen:
-        line = line.decode("utf-8")
-        chunks = [chunk.strip() for chunk in line.split("\n\n") if chunk.strip()]
-        for line in chunks:
-            start = line.find("{")
-            end = line.rfind("}") + 1
-            json_str = line[start:end]
-            try:
-                # sometimes yield empty chunk, do a fallback here
-                json_data = json.loads(json_str)
-                if "ops" in json_data and "op" in json_data["ops"][0]:
-                    if "value" in json_data["ops"][0] and isinstance(json_data["ops"][0]["value"], str):
-                        yield f"data: {repr(json_data['ops'][0]['value'].encode('utf-8'))}\n\n"
-                    else:
-                        pass
-                elif "content" in json_data["choices"][0]["delta"]:
-                    yield f"data: {repr(json_data['choices'][0]['delta']['content'].encode('utf-8'))}\n\n"
-            except Exception:
-                yield f"data: {repr(json_str.encode('utf-8'))}\n\n"
-    yield "data: [DONE]\n\n"
+    _llm_span = _emit_llm_invoke_open(
+        llm_parameters_dict,
+        stream_known=True,
+        parent_context=parent_context,
+    )
+    try:
+        for line in gen:
+            line = line.decode("utf-8")
+            chunks = [chunk.strip() for chunk in line.split("\n\n") if chunk.strip()]
+            for line in chunks:
+                start = line.find("{")
+                end = line.rfind("}") + 1
+                json_str = line[start:end]
+                try:
+                    # sometimes yield empty chunk, do a fallback here
+                    json_data = json.loads(json_str)
+                    _emit_llm_invoke_record(_llm_span, json_data)
+                    if "ops" in json_data and "op" in json_data["ops"][0]:
+                        if "value" in json_data["ops"][0] and isinstance(json_data["ops"][0]["value"], str):
+                            yield f"data: {repr(json_data['ops'][0]['value'].encode('utf-8'))}\n\n"
+                        else:
+                            pass
+                    elif "content" in json_data["choices"][0]["delta"]:
+                        yield f"data: {repr(json_data['choices'][0]['delta']['content'].encode('utf-8'))}\n\n"
+                except Exception:
+                    yield f"data: {repr(json_str.encode('utf-8'))}\n\n"
+        yield "data: [DONE]\n\n"
+    finally:
+        # Closes even if the upstream generator raises or the consumer abandons
+        # the stream mid-iteration.
+        _emit_llm_invoke_close(_llm_span)
 
 
 class ChatQnAService:
@@ -2123,7 +2570,7 @@ class ChatQnAService:
 
         return source_documents_formatted, retrieval_confidence_score, is_grounded
 
-    async def _stream_with_metadata(self, body_iterator, result_dict, token: str):
+    async def _stream_with_metadata(self, body_iterator, result_dict, token: str, parent_context=None):
         """Forward the LLM token stream, then append a `metadata` SSE event.
 
         The metadata event carries the reranker-grounded source documents, confidence,
@@ -2140,6 +2587,9 @@ class ChatQnAService:
 
         The terminal ``[DONE]`` is suppressed and re-emitted after the metadata. Metadata
         is computed **after** the token stream so it never delays Time-To-First-Token.
+
+        ``parent_context`` is the chatqna.orchestrate context captured by handle_request.
+        It parents the answer-level outcome span emitted once the metadata is known.
         """
         buffer = ""
         self_confidence = None  # LLM self-grade value, captured from the sentinel
@@ -2221,6 +2671,18 @@ class ChatQnAService:
             f"Streaming confidence emission: retrieval={retrieval_confidence} "
             f"self={self_confidence} self_conf_enabled={LLM_SELF_CONFIDENCE_ENABLED} "
             f"-> confidence_score={_cs}"
+        )
+        # Every input of the answer-level outcome is known here, so this is the
+        # first point at which the span can be recorded. `sentinel_present`
+        # reports whether a self-grade was actually parsed, so an operator can
+        # tell "no self-grade requested" from "requested and never completed".
+        _emit_stream_outcome_span(
+            parent_context=parent_context,
+            retrieval_confidence=retrieval_confidence,
+            self_confidence=self_confidence,
+            is_grounded=is_grounded,
+            sentinel_present=self_confidence is not None,
+            abstained=False,
         )
         metadata = {
             "type": "metadata",
@@ -2944,6 +3406,10 @@ class ChatQnAService:
             "original_language": original_language,
             "user_details": user_details,
         }
+        # Blend resolution is mutually exclusive with condense mode, so neither
+        # branch of the chain below may leave these unset: the span attributes
+        # further down read them on every request.
+        _blend_enabled, _blend_alpha, _blend_turns = False, None, 0
         if MULTI_TURN_MODE == "condense":
             if MULTI_TURN_BLEND_ENABLED:
                 logger.warning(
@@ -2988,6 +3454,8 @@ class ChatQnAService:
                 with _condense_tracer.start_as_current_span("chatqna.query_condense") as _span:
                     _condense_span_attrs(_span, "skipped_no_history", 0)
         elif MULTI_TURN_BLEND_ENABLED and MULTI_TURN_HISTORY_TURNS > 0:
+            _blend_enabled, _blend_alpha, _blend_turns = _resolved_blend_settings(translated_history_string)
+        if _blend_enabled:
             history_text = _extract_history_text(translated_history_string, MULTI_TURN_HISTORY_TURNS)
             if history_text and logflag:
                 logger.debug(
@@ -3073,8 +3541,41 @@ class ChatQnAService:
         # RAG orchestration with tracing span
         tracer = get_tracer("chatqna.orchestrate")
         with tracer.start_as_current_span("chatqna.orchestrate") as span:
+            # Captured here because the streaming body is consumed after this
+            # block closes, when the active context is the request task's rather
+            # than this trace's. The outcome span it parents needs this handle.
+            _orchestrate_context = otel_trace.set_span_in_context(span)
+            # Stamped here so the id is on the span that owns the turn, not only
+            # on the leaf spans below it: a request that dies before the LLM
+            # node still leaves a trace an operator can join to the stored query.
+            # Omitted when the caller sent no baggage, never a placeholder.
+            _query_id = query_id_from_baggage()
+            if _query_id:
+                span.set_attribute(QUERY_ID_KEY, _query_id)
             span.set_attribute("rag.query_length", len(last_translated_message_content))
             span.set_attribute("rag.model_id", _get_llm_model())
+            # What this request actually blended, and the answer reserve it is
+            # budgeted against. The token estimate and the history counts are
+            # written by align_inputs, which is the only site that measures
+            # them. window_tokens is written here as well as there: the two
+            # agree (same TTL-cached discovery), and the copy here survives a
+            # request that dies before the LLM node runs.
+            _set_attributes(span, _blend_attributes(_blend_enabled, _blend_alpha, _blend_turns))
+            _set_attributes(
+                span,
+                _prompt_budget_attributes(
+                    window_tokens=_get_max_model_len(),
+                    # Same reserve align_inputs reads, via the same helper. The
+                    # two sources agree because comps turns LLMParams into a
+                    # dict that preserves the dataclass default: align_inputs
+                    # indexes that dict's "max_tokens" unguarded, so an absent
+                    # key would already KeyError there. align_inputs also
+                    # rewrites this attribute last, so a divergence can only
+                    # survive on a request that dies before the LLM node.
+                    answer_budget_tokens=_resolve_answer_budget_tokens(getattr(parameters, "max_tokens", None)),
+                    estimate=None,
+                ),
+            )
 
             _rag_start = time.time()
 
@@ -3206,6 +3707,28 @@ class ChatQnAService:
                         yield "data: " + json.dumps({"type": "metadata", **metadata}) + "\n\n"
                         yield "data: [DONE]\n\n"
 
+                    # The outcome span is recorded here as well as from
+                    # _stream_with_metadata, so an abstained turn produces a span
+                    # like any other. Absence of chatqna.stream_outcome on a
+                    # streamed turn therefore means the turn was not streamed --
+                    # not that the outcome went unrecorded.
+                    #
+                    # Parented on _orchestrate_context for the same reason the
+                    # answer path is: this branch returns from inside the
+                    # orchestrate block, and an unparented span would still be
+                    # lost beside the retrieval and reranking spans.
+                    #
+                    # Values come from the metadata dict the SSE body is about
+                    # to serialise, so the trace and the payload cannot disagree.
+                    _emit_stream_outcome_span(
+                        parent_context=_orchestrate_context,
+                        retrieval_confidence=metadata["retrieval_confidence_score"],
+                        self_confidence=None,
+                        is_grounded=metadata["is_grounded"],
+                        sentinel_present=False,
+                        abstained=metadata["abstained"],
+                    )
+
                     return StreamingResponse(_abstention_stream(), media_type="text/event-stream")
 
                 return {"response": final_text, "metadata": metadata}
@@ -3236,7 +3759,9 @@ class ChatQnAService:
                 # confidence, is_grounded) is emitted before [DONE]. Without this the
                 # backend would re-run retrieval without the category filter / reranker.
                 return StreamingResponse(
-                    self._stream_with_metadata(response.body_iterator, result_dict, token=token_str),
+                    self._stream_with_metadata(
+                        response.body_iterator, result_dict, token=token_str, parent_context=_orchestrate_context
+                    ),
                     media_type="text/event-stream",
                 )
 

@@ -291,7 +291,10 @@ async def generate_testset(
     overrides the default synthesizer mix, as [{synthesizer, weight}].
     """
     from langchain_core.documents import Document as LCDocument
+    from ragas.run_config import RunConfig
     from ragas.testset import TestsetGenerator
+    from ragas.testset.graph import KnowledgeGraph, Node, NodeType
+    from ragas.testset.transforms import apply_transforms, default_transforms
 
     llm = build_llm(temperature=0.3)  # generation benefits from mild creativity
     embeddings = build_embeddings()
@@ -304,16 +307,30 @@ async def generate_testset(
     ]
     generator = TestsetGenerator(llm=llm, embedding_model=embeddings)
 
-    kwargs: dict[str, Any] = {
-        "testset_size": int(testset_size),
-        "num_personas": int(num_personas),
-        "raise_exceptions": False,
-    }
-    dist = _resolve_distribution(query_distribution, llm)
-    if dist:
-        kwargs["query_distribution"] = dist
+    # generate_with_langchain_docs() (ragas 0.4.3) does NOT accept
+    # num_personas — only generate() does. Replicate the wrapper's own
+    # body (verified against its source: default transforms → DOCUMENT
+    # nodes → apply_transforms → generate) so the persona count rides
+    # through, per the user-settable-dimensions contract.
+    transforms = default_transforms(documents=docs, llm=llm, embedding_model=embeddings)
+    nodes = [
+        Node(
+            type=NodeType.DOCUMENT,
+            properties={"page_content": doc.page_content, "document_metadata": doc.metadata},
+        )
+        for doc in docs
+    ]
+    kg = KnowledgeGraph(nodes=nodes)
+    apply_transforms(kg, transforms, run_config=RunConfig())
+    generator.knowledge_graph = kg
 
-    testset = generator.generate_with_langchain_docs(docs, **kwargs)
+    dist = _resolve_distribution(query_distribution, llm)
+    testset = generator.generate(
+        testset_size=int(testset_size),
+        query_distribution=dist,
+        num_personas=int(num_personas),
+        raise_exceptions=False,
+    )
 
     samples = []
     for ts in testset.samples:

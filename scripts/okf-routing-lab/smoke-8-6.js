@@ -10,8 +10,9 @@
 //   DELETE /api/okf/repos/:id/ragas-testsuite/:k       (cleanup)
 // Same auth spine as smoke-1-8d.js: throwaway Keycloak user + tools-admin
 // role + temporary ROPC (reverted immediately + on exit). The generated
-// suite is deleted before exit — compensating writes only. Secrets are
-// never printed.
+// suite and the throwaway user are deleted before exit — compensating
+// writes only; user creation is idempotent (a 409 adopts the leftover).
+// Secrets are never printed.
 const https = require('https');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -109,10 +110,11 @@ async function ropcEnable() {
 
 async function ropcRevert() {
   if (!ROPC_ON || !CLIENT_UUID || !ADMIN_TOKEN) return;
-  await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/clients/${CLIENT_UUID}`, {
+  const r = await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/clients/${CLIENT_UUID}`, {
     token: ADMIN_TOKEN,
     json: { directAccessGrantsEnabled: false }
   });
+  if (r.status < 200 || r.status >= 300) throw new Error(`ROPC revert HTTP ${r.status}`);
   ROPC_ON = false;
 }
 
@@ -131,15 +133,30 @@ async function userToken() {
   return r.access_token;
 }
 
-async function main() {
-  console.log(`smoke-8-6 against repo ${REPO_ID}`);
-  // --- auth spine ---
+async function refreshAdminToken() {
+  // Master tokens are short-lived and a full run (10-20 min polls) outlives
+  // the one minted at start — cleanup re-mints before its admin calls. Keeps
+  // the previous token when the mint fails softly.
   const at = j(
     await req('POST', `${AUTH_BASE}/realms/master/protocol/openid-connect/token`, {
       form: { client_id: 'admin-cli', username: 'admin', password: ADMIN_PW, grant_type: 'password' }
     })
   );
-  ADMIN_TOKEN = at.access_token;
+  if (at.access_token) ADMIN_TOKEN = at.access_token;
+}
+
+async function resolveUserId() {
+  const r = await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/users?username=${SMOKE_USER}&exact=true`, {
+    token: ADMIN_TOKEN
+  });
+  const users = j(r);
+  return Array.isArray(users) && users[0] && users[0].id;
+}
+
+async function main() {
+  console.log(`smoke-8-6 against repo ${REPO_ID}`);
+  // --- auth spine ---
+  await refreshAdminToken();
   if (!ADMIN_TOKEN) throw new Error('no master token');
   const mk = await req('POST', `${AUTH_BASE}/admin/realms/${REALM}/users`, {
     token: ADMIN_TOKEN,
@@ -153,11 +170,22 @@ async function main() {
       credentials: [{ type: 'password', value: SMOKE_PW, temporary: false }]
     }
   });
-  check('throwaway user created', mk.status === 201, `HTTP ${mk.status}`);
-  const users = j(
-    await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/users?username=${SMOKE_USER}&exact=true`, { token: ADMIN_TOKEN })
-  );
-  USER_ID = users[0] && users[0].id;
+  USER_ID = await resolveUserId();
+  if (mk.status === 201) {
+    check('throwaway user created', true);
+  } else if (mk.status === 409 && USER_ID) {
+    // Leftover from an aborted round whose cleanup failed to delete it.
+    // Adopt it: re-set the password via the dedicated credentials endpoint —
+    // never PUT the whole user object (that overwrites the credentials).
+    const rp = await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}/reset-password`, {
+      token: ADMIN_TOKEN,
+      json: { type: 'password', value: SMOKE_PW, temporary: false }
+    });
+    check('leftover user adopted (password reset)', rp.status >= 200 && rp.status < 300, `HTTP ${rp.status}`);
+  } else {
+    check('throwaway user created', false, `HTTP ${mk.status}`);
+  }
+  if (!USER_ID) throw new Error('smoke user id unresolved');
   const role = j(
     await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/roles/tools-admin`, { token: ADMIN_TOKEN })
   );
@@ -165,7 +193,7 @@ async function main() {
     token: ADMIN_TOKEN,
     json: [role]
   });
-  check('tools-admin granted', ar.status === 204, `HTTP ${ar.status}`);
+  check('tools-admin granted', ar.status >= 200 && ar.status < 300, `HTTP ${ar.status}`); // repeat grant is a no-op
   await ropcEnable();
   check('ROPC enabled (will revert)', ROPC_ON);
   const token = await userToken();
@@ -299,15 +327,19 @@ async function main() {
     failures += 1;
     console.error('SMOKE ERROR:', e.message);
   } finally {
-    // --- compensating cleanup, ALWAYS ---
+    // --- compensating cleanup, ALWAYS (steps isolated: one failing step
+    // must not skip the others; every HTTP status checked, never silent) ---
     try {
-      if (SUITE_KEY && ADMIN_TOKEN) {
-        // need a user token again? the delete needs admin scope — reuse ROPC
-        if (ROPC_ON) {
-          const t = await userToken();
-          const del = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`, { token: t });
-          check('suite deleted (cleanup)', del.status === 200, `HTTP ${del.status}`);
-        }
+      await refreshAdminToken(); // round-2 lesson: cleanup can outlive the master token
+    } catch (e) {
+      console.error('cleanup (admin token refresh) failed:', e.message);
+    }
+    try {
+      if (SUITE_KEY && ROPC_ON) {
+        // the suite delete needs a user token, so it must run while ROPC is ON
+        const t = await userToken();
+        const del = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`, { token: t });
+        check('suite deleted (cleanup)', del.status === 200 || del.status === 404, `HTTP ${del.status}`);
       }
     } catch (e) {
       console.error('cleanup (suite) failed:', e.message);
@@ -320,11 +352,16 @@ async function main() {
       failures += 1;
     }
     try {
-      if (USER_ID && ADMIN_TOKEN) {
-        await req('DELETE', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}`, { token: ADMIN_TOKEN });
+      if (ADMIN_TOKEN) {
+        if (!USER_ID) USER_ID = await resolveUserId(); // resolve even if main() died before its own lookup
+        if (USER_ID) {
+          const du = await req('DELETE', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}`, { token: ADMIN_TOKEN });
+          check('user deleted (cleanup)', (du.status >= 200 && du.status < 300) || du.status === 404, `HTTP ${du.status}`);
+        }
       }
     } catch (e) {
       console.error('cleanup (user) failed:', e.message);
+      failures += 1;
     }
   }
   console.log(failures === 0 ? 'SMOKE 8-6: ALL CHECKS PASSED' : `SMOKE 8-6: ${failures} FAILURES`);

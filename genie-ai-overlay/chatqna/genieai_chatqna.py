@@ -566,13 +566,25 @@ def _extract_history_text(translated_history_string, n_turns):
 
     Returns "" on empty input, first turn (no prior history), or n_turns<=0.
     """
-    if not translated_history_string or n_turns <= 0:
+    prior = _prior_history_segments(translated_history_string)
+    if not prior or n_turns <= 0:
         return ""
+    return " ".join(prior[-n_turns:])
+
+
+def _prior_history_segments(translated_history_string):
+    """Return the history segments preceding the current user turn.
+
+    The current turn is the query (already extracted via USER_MSG_PATTERN), so
+    only what comes before it is blendable history. Empty when the blob is
+    empty or holds a single turn.
+    """
+    if not translated_history_string:
+        return []
     segments = [s.strip() for s in translated_history_string.split("|<-MSG->|") if s.strip()]
     if len(segments) < 2:
-        return ""
-    prior = segments[:-1]
-    return " ".join(prior[-n_turns:])
+        return []
+    return segments[:-1]
 
 
 def _blend_embeddings(query_emb, history_emb, alpha):
@@ -657,6 +669,95 @@ def _parse_condense_response(content) -> str:
     if not isinstance(query, str) or not query.strip():
         raise CondenseError("empty_query", f"standalone_query missing/blank: {stripped[:120]}")
     return query.strip()
+def _resolved_blend_settings(translated_history_string):
+    """Resolve the multi-turn blend configuration for ONE request.
+
+    Returns (enabled, alpha, history_turns). `alpha` and `history_turns` are
+    what this request actually blends, not the module defaults: the configured
+    turn count is only an upper bound, and a first-turn conversation feeds the
+    blend nothing at all. A span reporting the configuration verbatim would
+    misreport every request the conversation shape differs from.
+    """
+    if not (MULTI_TURN_BLEND_ENABLED and MULTI_TURN_HISTORY_TURNS > 0):
+        return False, None, 0
+    fed = _prior_history_segments(translated_history_string)[-MULTI_TURN_HISTORY_TURNS:]
+    if not fed:
+        return True, None, 0
+    return True, MULTI_TURN_BLEND_ALPHA, len(fed)
+
+
+def _resolve_answer_budget_tokens(max_tokens) -> int:
+    """Return the answer reserve the context-budget guard reserves.
+
+    A request that omits max_tokens falls back to DEFAULT_MAX_ANSWER_TOKENS,
+    so both the span attribute and the truncation event must read the reserve
+    through this helper — two derivations would disagree in exactly the
+    default configuration.
+    """
+    return int(max_tokens or DEFAULT_MAX_ANSWER_TOKENS)
+
+
+def _blend_attributes(enabled: bool, alpha, history_turns: int) -> dict:
+    """Multi-turn blend attributes for the chatqna.orchestrate span.
+
+    `alpha` is emitted only when a blend actually ran: with no history fed
+    there is no blend weight in play, and omitting beats reporting a number
+    the request never used.
+    """
+    attrs = {
+        ATTRIBUTE_NAMES["rag_blend_enabled"]: bool(enabled),
+        ATTRIBUTE_NAMES["rag_blend_history_turns"]: int(history_turns or 0),
+    }
+    if enabled and alpha is not None:
+        attrs[ATTRIBUTE_NAMES["rag_blend_alpha"]] = float(alpha)
+    return attrs
+
+
+def _prompt_budget_attributes(window_tokens, answer_budget_tokens, estimate) -> dict:
+    """Prompt-budget attributes for the chatqna.orchestrate span.
+
+    Absent values are omitted rather than nulled: a null teaches the reader
+    nothing and satisfies a naive assertion perfectly.
+    """
+    attrs = {}
+    if window_tokens is not None:
+        attrs[ATTRIBUTE_NAMES["rag_prompt_window_tokens"]] = int(window_tokens)
+    if answer_budget_tokens is not None:
+        attrs[ATTRIBUTE_NAMES["rag_prompt_answer_budget_tokens"]] = int(answer_budget_tokens)
+    if estimate is not None:
+        attrs[ATTRIBUTE_NAMES["rag_prompt_tokens_estimate"]] = int(estimate)
+    return attrs
+
+
+def _emit_budget_truncation_event(
+    current_span, dropped_segments, window_tokens, answer_budget_tokens, max_history_tokens
+) -> None:
+    """Record that the context-budget guard dropped history segments.
+
+    A no-op when nothing was dropped, so the presence of the event always means
+    "truncation happened" rather than "the guard ran".
+    """
+    if not dropped_segments:
+        return
+    if current_span is None or not current_span.is_recording():
+        return
+    current_span.add_event(
+        "context_budget.truncated",
+        {
+            "dropped_segments": int(dropped_segments),
+            "window_tokens": int(window_tokens or 0),
+            "answer_budget_tokens": int(answer_budget_tokens or 0),
+            "max_history_tokens": int(max_history_tokens or 0),
+        },
+    )
+
+
+def _set_attributes(span, attributes: dict) -> None:
+    """Write a prepared attribute dict onto a span that is recording."""
+    if span is None or not span.is_recording():
+        return
+    for key, value in attributes.items():
+        span.set_attribute(key, value)
 
 
 # ---------------------------------------------------------------------------
@@ -1516,7 +1617,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
         tokenizer = get_tokenizer()
         max_model_tokens = _get_max_model_len()
-        max_answer_tokens = llm_parameters_dict.get("max_tokens") or DEFAULT_MAX_ANSWER_TOKENS
+        max_answer_tokens = _resolve_answer_budget_tokens(llm_parameters_dict.get("max_tokens"))
         # Count tokens part by part: the pieces feed the history budget below,
         # so encoding them separately costs nothing extra on overflow requests.
         # The 200-token buffer absorbs the ±1 boundary tokens the combined
@@ -1524,6 +1625,15 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         system_tokens = len(tokenizer.encode(system_instructions))
         user_content_tokens = len(tokenizer.encode(user_content))
         full_prompt_tokens = system_tokens + user_content_tokens
+        _active_span = otel_trace.get_current_span()
+        _set_attributes(
+            _active_span,
+            _prompt_budget_attributes(
+                window_tokens=max_model_tokens,
+                answer_budget_tokens=max_answer_tokens,
+                estimate=full_prompt_tokens,
+            ),
+        )
         # Check if the total token count exceeds the model's limit
         if full_prompt_tokens + max_answer_tokens > max_model_tokens - 200:  # Leave buffer
             # Budget for the history: the window minus what is already known to
@@ -1548,6 +1658,22 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                 truncated_history.insert(0, segment)  # Maintain order
                 current_tokens += segment_tokens
             dropped_segments = len(history_segments) - len(truncated_history)
+            # segments_sent is the TRUNCATED length: recording the incoming
+            # count for both would make a truncated turn look untouched.
+            _set_attributes(
+                _active_span,
+                {
+                    ATTRIBUTE_NAMES["rag_history_segments_in"]: len(history_segments),
+                    ATTRIBUTE_NAMES["rag_history_segments_sent"]: len(truncated_history),
+                },
+            )
+            _emit_budget_truncation_event(
+                current_span=_active_span,
+                dropped_segments=dropped_segments,
+                window_tokens=max_model_tokens,
+                answer_budget_tokens=max_answer_tokens,
+                max_history_tokens=max_history_tokens,
+            )
             if dropped_segments:
                 # kept/dropped counts live in the warning log — metric attributes
                 # stay low-cardinality (one series per path).
@@ -3132,6 +3258,10 @@ class ChatQnAService:
             "original_language": original_language,
             "user_details": user_details,
         }
+        # Blend resolution is mutually exclusive with condense mode, so neither
+        # branch of the chain below may leave these unset: the span attributes
+        # further down read them on every request.
+        _blend_enabled, _blend_alpha, _blend_turns = False, None, 0
         if MULTI_TURN_MODE == "condense":
             if MULTI_TURN_BLEND_ENABLED:
                 logger.warning(
@@ -3176,6 +3306,8 @@ class ChatQnAService:
                 with _condense_tracer.start_as_current_span("chatqna.query_condense") as _span:
                     _condense_span_attrs(_span, "skipped_no_history", 0)
         elif MULTI_TURN_BLEND_ENABLED and MULTI_TURN_HISTORY_TURNS > 0:
+            _blend_enabled, _blend_alpha, _blend_turns = _resolved_blend_settings(translated_history_string)
+        if _blend_enabled:
             history_text = _extract_history_text(translated_history_string, MULTI_TURN_HISTORY_TURNS)
             if history_text and logflag:
                 logger.debug(
@@ -3263,6 +3395,19 @@ class ChatQnAService:
         with tracer.start_as_current_span("chatqna.orchestrate") as span:
             span.set_attribute("rag.query_length", len(last_translated_message_content))
             span.set_attribute("rag.model_id", _get_llm_model())
+            # What this request actually blended, and the answer reserve it is
+            # budgeted against. The token estimate and the history counts are
+            # written by align_inputs, which is the only site that measures
+            # them.
+            _set_attributes(span, _blend_attributes(_blend_enabled, _blend_alpha, _blend_turns))
+            _set_attributes(
+                span,
+                _prompt_budget_attributes(
+                    window_tokens=_get_max_model_len(),
+                    answer_budget_tokens=_resolve_answer_budget_tokens(getattr(parameters, "max_tokens", None)),
+                    estimate=None,
+                ),
+            )
 
             _rag_start = time.time()
 

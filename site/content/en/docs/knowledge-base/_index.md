@@ -11,6 +11,16 @@ from. This section is for the people who **own and curate that content** —
 knowledge managers, domain experts, and administrators — not developers of the
 pipeline internals.
 
+There are two ways knowledge enters the pipeline:
+
+- **Documents** — upload files through the admin UI or API; the pipeline
+  parses, chunks, labels and embeds them into the shared corpus.
+- **OKF repositories** — curated *concept documents* (Markdown with
+  frontmatter and links) organized into versioned repositories, created and
+  maintained in the [OKF Studio](/docs/knowledge-base/okf-studio/), each
+  publishing as its own retrieval graph with tag-driven routing and
+  per-repository [access control](/docs/knowledge-base/access-control/).
+
 If you want to understand *how retrieval works under the hood*, read the
 [RAG Pipeline]({{< relref "/docs/rag-pipeline" >}}) section first. This section is about
 the **operational** side: how documents get in, how they are processed, how to

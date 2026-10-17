@@ -385,3 +385,15 @@ MR !474):
 - [ADR-okf-042](../../../../docs/adr/okf-042-wizard-clone-via-48-api.md)
   — wizard clone via the 4.8 clone API (wholesale meta copy), shell-delete
   with 409 backoff.
+
+## Amendment B ADRs (2026-10-17)
+
+- [ADR-okf-043](../../../../docs/adr/okf-043-ragas-benchmarking-via-python-sidecar.md)
+  — RAGAS benchmarking in the Routing Lab (Story 8.6): a stateless Python
+  `ragas-service` sidecar (ragas 0.4.3, deps frozen to the
+  `tests/rag-benchmarks` runner's versions) owns testset generation,
+  `evaluate()`, and all xlsx serialization; Node `ragas-suite-service.js`
+  keeps orchestration (new kinds in `okf_head_test_runs`, Lab 202+poll jobs);
+  runs replay retrieval Lab-internally; suite xlsx feeds `xlsx_to_gold.py`
+  unmodified. Spec: `specs/spec-okf-ragas-benchmarking/` under
+  `_bmad-output/`.

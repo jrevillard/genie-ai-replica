@@ -1,0 +1,326 @@
+// Story 8-6 live smoke (local build). NOT committed — dev-only harness.
+// Proves the RAGAS benchmarking surface end-to-end against the deployed
+// stack (sidecar + okf-server + remote GPU judge):
+//   POST /api/okf/repos/:id/ragas-testsuite            (202 + poll)
+//   GET  /api/okf/repos/:id/ragas-testsuite/:k         (suite doc)
+//   POST /api/okf/repos/:id/ragas-testsuite/:k/run     (202 + poll)
+//   GET  /api/okf/repos/:id/ragas-testsuite/:k/export  (xlsx bytes)
+//   POST /api/okf/repos/:id/ragas-testsuite/:k/explain (202 + poll)
+//   DELETE /api/okf/repos/:id/ragas-testsuite/:k       (cleanup)
+// Same auth spine as smoke-1-8d.js: throwaway Keycloak user + tools-admin
+// role + temporary ROPC (reverted immediately + on exit). The generated
+// suite is deleted before exit — compensating writes only. Secrets are
+// never printed.
+const https = require('https');
+const fs = require('fs');
+const crypto = require('crypto');
+
+const REPO_ID = process.argv[2] || 'f043215b-cead-4af2-ad37-e675a8eec4b7';
+const SMOKE_USER = 'okf-smoke-86';
+const SMOKE_PW = crypto.randomBytes(18).toString('base64url') + '#aA1!';
+
+const env = {};
+for (const line of fs.readFileSync('.env', 'utf8').split(/\r?\n/)) {
+  const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+  if (m) env[m[1]] = m[2].replace(/^"|"$/g, '');
+}
+const ADMIN_PW = env.KEYCLOAK_ADMIN_PASSWORD;
+if (!ADMIN_PW) {
+  console.error('FATAL: KEYCLOAK_ADMIN_PASSWORD missing from .env');
+  process.exit(1);
+}
+const AUTH_BASE = 'https://localhost/auth';
+const API_BASE = 'https://localhost';
+const REALM = env.KEYCLOAK_REALM || 'genie';
+const CLIENT_ID = env.KEYCLOAK_CLIENT_ID || 'genie-app';
+
+function req(method, url, { token, form, json, binary } = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const body = json ? JSON.stringify(json) : form ? new URLSearchParams(form).toString() : null;
+    const r = https.request(
+      {
+        method,
+        hostname: u.hostname,
+        port: u.port || 443,
+        path: u.pathname + u.search,
+        rejectUnauthorized: false,
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(body
+            ? { 'Content-Type': json ? 'application/json' : 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
+            : {})
+        }
+      },
+      (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () =>
+          resolve({ status: res.statusCode, body: Buffer.concat(chunks), headers: res.headers })
+        );
+      }
+    );
+    r.on('error', reject);
+    if (body) r.write(body);
+    r.end();
+  });
+}
+const j = (r) => {
+  try {
+    return JSON.parse(r.body.toString());
+  } catch {
+    return { raw: r.body.toString().slice(0, 300) };
+  }
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+let ADMIN_TOKEN = '';
+let CLIENT_UUID = '';
+let ROPC_ON = false;
+let USER_ID = '';
+let SUITE_KEY = '';
+
+let failures = 0;
+function check(name, ok, detail = '') {
+  if (ok) console.log(`  ok   ${name}`);
+  else {
+    failures += 1;
+    console.log(`  FAIL ${name} ${detail}`);
+  }
+}
+
+async function ropcEnable() {
+  const clients = j(await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/clients?clientId=${CLIENT_ID}`, { token: ADMIN_TOKEN }));
+  CLIENT_UUID = clients[0] && clients[0].id;
+  if (!CLIENT_UUID) throw new Error('client not found');
+  const r = await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/clients/${CLIENT_UUID}`, {
+    token: ADMIN_TOKEN,
+    json: { directAccessGrantsEnabled: true }
+  });
+  ROPC_ON = r.status === 204;
+  if (!ROPC_ON) throw new Error(`ROPC enable HTTP ${r.status}`);
+}
+
+async function ropcRevert() {
+  if (!ROPC_ON || !CLIENT_UUID || !ADMIN_TOKEN) return;
+  await req('PUT', `${AUTH_BASE}/admin/realms/${REALM}/clients/${CLIENT_UUID}`, {
+    token: ADMIN_TOKEN,
+    json: { directAccessGrantsEnabled: false }
+  });
+  ROPC_ON = false;
+}
+
+async function userToken() {
+  const r = j(
+    await req('POST', `${AUTH_BASE}/realms/${REALM}/protocol/openid-connect/token`, {
+      form: {
+        grant_type: 'password',
+        client_id: CLIENT_ID,
+        username: SMOKE_USER,
+        password: SMOKE_PW
+      }
+    })
+  );
+  if (!r.access_token) throw new Error('no token for smoke user');
+  return r.access_token;
+}
+
+async function main() {
+  console.log(`smoke-8-6 against repo ${REPO_ID}`);
+  // --- auth spine ---
+  const at = j(
+    await req('POST', `${AUTH_BASE}/realms/master/protocol/openid-connect/token`, {
+      form: { client_id: 'admin-cli', username: 'admin', password: ADMIN_PW, grant_type: 'password' }
+    })
+  );
+  ADMIN_TOKEN = at.access_token;
+  if (!ADMIN_TOKEN) throw new Error('no master token');
+  const mk = await req('POST', `${AUTH_BASE}/admin/realms/${REALM}/users`, {
+    token: ADMIN_TOKEN,
+    json: {
+      username: SMOKE_USER,
+      email: `${SMOKE_USER}@example.invalid`,
+      emailVerified: true,
+      firstName: 'Smoke',
+      lastName: '86',
+      enabled: true,
+      credentials: [{ type: 'password', value: SMOKE_PW, temporary: false }]
+    }
+  });
+  check('throwaway user created', mk.status === 201, `HTTP ${mk.status}`);
+  const users = j(
+    await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/users?username=${SMOKE_USER}&exact=true`, { token: ADMIN_TOKEN })
+  );
+  USER_ID = users[0] && users[0].id;
+  const role = j(
+    await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/roles/tools-admin`, { token: ADMIN_TOKEN })
+  );
+  const ar = await req('POST', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}/role-mappings/realm`, {
+    token: ADMIN_TOKEN,
+    json: [role]
+  });
+  check('tools-admin granted', ar.status === 204, `HTTP ${ar.status}`);
+  await ropcEnable();
+  check('ROPC enabled (will revert)', ROPC_ON);
+  const token = await userToken();
+
+  // --- 1. generate (202 + poll) ---
+  console.log('generate: 2 questions, single repo…');
+  const gen = j(
+    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite`, {
+      token,
+      json: { testset_size: 2, num_personas: 1 }
+    })
+  );
+  check('generate answers 202 + suite_key', gen.suite_key && gen.status === 'generating', JSON.stringify(gen).slice(0, 120));
+  SUITE_KEY = gen.suite_key;
+  let suite = null;
+  const genDeadline = Date.now() + 10 * 60 * 1000;
+  for (;;) {
+    if (Date.now() > genDeadline) break;
+    await sleep(4000);
+    const doc = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`, { token }));
+    if (doc.status === 'generating') continue;
+    if (doc.status === 'failed') {
+      console.log('  generation failed:', JSON.stringify(doc.error).slice(0, 300));
+      break;
+    }
+    suite = doc;
+    break;
+  }
+  check('suite generated', !!(suite && suite.kind === 'ragas_suite'));
+  if (!suite) throw new Error('no suite — aborting remaining checks');
+  check(
+    'entries carry query + expected outputs',
+    suite.payload.entries.length >= 1 &&
+      suite.payload.entries.every((e) => e.query && typeof e.reference_answer === 'string')
+  );
+
+  // --- 2. run (202 + poll) ---
+  console.log('run: retrieval + answer + judge…');
+  const run = j(
+    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/run`, { token, json: {} })
+  );
+  check('run answers 202 + run_key', run.run_key && run.status === 'running', JSON.stringify(run).slice(0, 120));
+  let runDoc = null;
+  let lastProgress = null;
+  const runDeadline = Date.now() + 20 * 60 * 1000;
+  for (;;) {
+    if (Date.now() > runDeadline) break;
+    await sleep(3000);
+    const doc = j(
+      await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/runs/${run.run_key}`, { token })
+    );
+    if (doc.status === 'running') {
+      if (doc.progress && doc.progress !== lastProgress) {
+        lastProgress = doc.progress;
+        console.log(`  progress: ${doc.progress.phase} ${doc.progress.done}/${doc.progress.total}`);
+      }
+      continue;
+    }
+    if (doc.status === 'failed') {
+      console.log('  run failed:', JSON.stringify(doc.error).slice(0, 300));
+      break;
+    }
+    runDoc = doc;
+    break;
+  }
+  check('run completed', !!(runDoc && runDoc.status === 'done'));
+  if (runDoc) {
+    const r0 = runDoc.payload.results[0];
+    check('results carry contexts + answer + metrics', !!(r0 && Array.isArray(r0.contexts) && typeof r0.answer === 'string' && r0.metrics));
+    check(
+      'default four metrics present',
+      ['faithfulness', 'context_precision', 'context_recall', 'answer_relevancy'].every((m) => m in (r0.metrics || {}))
+    );
+    const numeric = Object.values(runDoc.payload.summary.metrics || {}).some((v) => typeof v === 'number');
+    check('summary has numeric metric means', numeric, JSON.stringify(runDoc.payload.summary.metrics).slice(0, 200));
+    check('fidelity recorded', !!runDoc.payload.fidelity.retrieval.algorithm);
+
+    // --- 3. explain (202 + poll) ---
+    console.log('explain: attribution + advice…');
+    const ex = j(
+      await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/explain`, {
+        token,
+        json: { run_key: run.run_key }
+      })
+    );
+    let explainDoc = null;
+    const exDeadline = Date.now() + 6 * 60 * 1000;
+    for (;;) {
+      if (Date.now() > exDeadline) break;
+      await sleep(2500);
+      const doc = j(
+        await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/explain/${run.run_key}`, { token })
+      );
+      if (doc.status === 'running') continue;
+      if (doc.status === 'failed') {
+        console.log('  explain failed:', JSON.stringify(doc.error).slice(0, 300));
+        break;
+      }
+      explainDoc = doc;
+      break;
+    }
+    check('explain persisted', !!(explainDoc && explainDoc.kind === 'ragas_explain'));
+    if (explainDoc) {
+      check(
+        'attribution rows computed (array)',
+        Array.isArray(explainDoc.payload.attributions) && explainDoc.payload.advice
+      );
+    }
+
+    // --- 4. suite export (his format bytes) ---
+    const exp = await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/export`, { token });
+    check('suite export streams xlsx', exp.status === 200 && exp.body.length > 500 && exp.body.slice(0, 2).toString() === 'PK');
+    fs.writeFileSync('smoke-8-6-suite.xlsx', exp.body);
+    console.log(`  exported ${exp.body.length} bytes -> smoke-8-6-suite.xlsx (feed to xlsx_to_gold.py for the compat check)`);
+
+    // --- 5. results export ---
+    const expr = await req(
+      'POST',
+      `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/results-export`,
+      { token, json: { suite_key: SUITE_KEY, run_keys: [run.run_key] } }
+    );
+    check('results export streams xlsx', expr.status === 200 && expr.body.slice(0, 2).toString() === 'PK');
+    fs.writeFileSync('smoke-8-6-results.xlsx', expr.body);
+  }
+}
+
+(async () => {
+  try {
+    await main();
+  } catch (e) {
+    failures += 1;
+    console.error('SMOKE ERROR:', e.message);
+  } finally {
+    // --- compensating cleanup, ALWAYS ---
+    try {
+      if (SUITE_KEY && ADMIN_TOKEN) {
+        // need a user token again? the delete needs admin scope — reuse ROPC
+        if (ROPC_ON) {
+          const t = await userToken();
+          const del = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}`, { token: t });
+          check('suite deleted (cleanup)', del.status === 200, `HTTP ${del.status}`);
+        }
+      }
+    } catch (e) {
+      console.error('cleanup (suite) failed:', e.message);
+    }
+    try {
+      await ropcRevert();
+      check('ROPC reverted', !ROPC_ON);
+    } catch (e) {
+      console.error('cleanup (ROPC revert) FAILED — VERIFY MANUALLY:', e.message);
+      failures += 1;
+    }
+    try {
+      if (USER_ID && ADMIN_TOKEN) {
+        await req('DELETE', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}`, { token: ADMIN_TOKEN });
+      }
+    } catch (e) {
+      console.error('cleanup (user) failed:', e.message);
+    }
+  }
+  console.log(failures === 0 ? 'SMOKE 8-6: ALL CHECKS PASSED' : `SMOKE 8-6: ${failures} FAILURES`);
+  process.exit(failures === 0 ? 0 : 1);
+})();

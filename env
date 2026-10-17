@@ -1518,12 +1518,15 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   question+answer+contexts; no reasoning tokens in completions).
 # RAGAS_JUDGE_API_KEY=<bearer for the judge endpoint>
 #   Default: VLLM_API_KEY.
-# RAGAS_EMBED_BASE_URL=http://tei-embedding-server:80/v1
-#   Default: the TEI embedding service's OpenAI-compatible route
-#   (/v1/embeddings — hence the /v1 suffix; point any OpenAI-compatible
-#   embeddings endpoint here). Required for answer_relevancy and testset
-#   generation (KG transforms embed); unset drops those honestly with a
-#   warning.
+# RAGAS_EMBED_BASE_URL=http://tei-embedding-server:80
+#   Default: the TEI embedding service host. Required for answer_relevancy
+#   and testset generation (KG transforms embed); unset drops those
+#   honestly with a warning.
+# RAGAS_EMBED_API=tei
+#   Default: tei — POSTs {RAGAS_EMBED_BASE_URL}/embed with {inputs,
+#   truncate} (the project's TEI-behind-nginx contract; the OpenAI-style
+#   /v1/embeddings route is NOT exposed by those nginxes). Set openai for
+#   any OpenAI-compatible embeddings endpoint (LiteLLM, external APIs).
 # RAGAS_EMBED_MODEL=<embedding model id>
 #   Default: EMBEDDING_MODEL_ID. Consistent within a run; matching the corpus
 #   embedder is recommended but not required for answer_relevancy.

@@ -103,3 +103,48 @@ def test_resolve_metrics_rejects_unknown(engine_env):
 
     with pytest.raises(ValueError, match="unknown metrics"):
         ragas_engine.resolve_metrics(["not_a_metric"])
+
+
+def test_build_embeddings_defaults_to_the_tei_dialect(monkeypatch, engine_env):
+    import ragas_engine
+
+    emb = ragas_engine.build_embeddings()
+    inner = getattr(emb, "embeddings", None) or getattr(emb, "langchain_embeddings", emb)
+    assert isinstance(inner, ragas_engine._TeiEmbeddings)
+
+
+def test_tei_embeddings_posts_the_native_contract(monkeypatch, engine_env):
+    import ragas_engine
+
+    captured = {}
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [[0.1, 0.2], [0.3, 0.4]]
+
+    def fake_post(url, json=None, headers=None, verify=None, timeout=None):
+        captured.update({"url": url, "json": json, "headers": headers})
+        return _Resp()
+
+    import httpx
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    tei = ragas_engine._TeiEmbeddings("http://tei:80/", "tok", "bge")
+    vecs = tei.embed_documents(["a", "b"])
+    assert vecs == [[0.1, 0.2], [0.3, 0.4]]
+    assert captured["url"] == "http://tei:80/embed"
+    assert captured["json"] == {"inputs": ["a", "b"], "truncate": True}
+    assert captured["headers"]["Authorization"] == "Bearer tok"
+    assert tei.embed_query("q") == [0.1, 0.2]
+
+
+def test_build_embeddings_openai_dialect(monkeypatch, engine_env):
+    import ragas_engine
+
+    monkeypatch.setenv("RAGAS_EMBED_API", "openai")
+    emb = ragas_engine.build_embeddings()
+    inner = getattr(emb, "embeddings", None) or getattr(emb, "langchain_embeddings", emb)
+    assert type(inner).__name__ == "OpenAIEmbeddings"

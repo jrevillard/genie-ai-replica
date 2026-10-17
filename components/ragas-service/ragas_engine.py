@@ -185,23 +185,65 @@ def build_llm(temperature: float = 0.0):
     return LangchainLLMWrapper(inner)
 
 
+class _TeiEmbeddings:
+    """TEI-native embeddings for the langchain Embeddings interface.
+
+    The project's sovereign deployments front TEI through nginx at `/embed`
+    (the same contract okf-server's teiEmbed uses) — NOT the OpenAI-
+    compatible /v1/embeddings route, which those nginxes do not expose
+    (live-verified 2026-10-17: 404 on /v1/embeddings, 200 on /embed).
+    """
+
+    def __init__(self, url: str, api_key: str, model: str):
+        self.url = url.rstrip("/")
+        self.api_key = api_key
+        self.model = model
+
+    def _post(self, texts: list[str]) -> list[list[float]]:
+        import httpx
+
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        resp = httpx.post(
+            f"{self.url}/embed",
+            json={"inputs": texts, "truncate": True},
+            headers=headers,
+            verify=False,
+            timeout=120,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self._post(list(texts))
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._post([text])[0]
+
+
 def build_embeddings():
     """Wrap the embedder endpoint. Returns None when unconfigured —
     answer_relevancy is then dropped from the wanted metrics with a loud
-    warning (his documented pitfall: silent drop)."""
-    from langchain_openai import OpenAIEmbeddings
+    warning (his documented pitfall: silent drop).
+
+    RAGAS_EMBED_API selects the dialect: 'tei' (default — POSTs
+    {RAGAS_EMBED_BASE_URL}/embed with {inputs, truncate}, the project's
+    TEI-behind-nginx contract) or 'openai' (any OpenAI-compatible
+    embeddings endpoint, e.g. LiteLLM — uses /embeddings)."""
     from ragas.embeddings import LangchainEmbeddingsWrapper
 
     model = os.getenv("RAGAS_EMBED_MODEL")
     if not model:
         return None
     base = (os.getenv("RAGAS_EMBED_BASE_URL") or _judge_base_url()).rstrip("/")
-    emb = OpenAIEmbeddings(
-        model=model,
-        api_key=os.getenv("RAGAS_EMBED_API_KEY") or os.getenv("RAGAS_JUDGE_API_KEY") or "sk-no-key",
-        base_url=base,
-    )
-    return LangchainEmbeddingsWrapper(emb)
+    api_key = os.getenv("RAGAS_EMBED_API_KEY") or os.getenv("RAGAS_JUDGE_API_KEY") or ""
+    dialect = (os.getenv("RAGAS_EMBED_API") or "tei").lower()
+    if dialect == "openai":
+        from langchain_openai import OpenAIEmbeddings
+
+        return LangchainEmbeddingsWrapper(OpenAIEmbeddings(model=model, api_key=api_key or "sk-no-key", base_url=base))
+    return LangchainEmbeddingsWrapper(_TeiEmbeddings(base, api_key, model))
 
 
 # --------------------------------------------------------------------------

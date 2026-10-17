@@ -920,10 +920,13 @@ services:
       - RAGAS_JUDGE_BASE_URL=${RAGAS_JUDGE_BASE_URL:-http://vllm:8000/v1}
       - RAGAS_JUDGE_MODEL=${RAGAS_JUDGE_MODEL:-${VLLM_LLM_MODEL_ID:-}}
       - RAGAS_JUDGE_API_KEY=${RAGAS_JUDGE_API_KEY:-${VLLM_API_KEY:-}}
-      # Embedder (answer_relevancy + testset KG transforms) — TEI's
-      # OpenAI-compatible route is /v1/embeddings, hence the /v1 suffix.
-      - RAGAS_EMBED_BASE_URL=${RAGAS_EMBED_BASE_URL:-http://tei-embedding-server:80/v1}
+      # Embedder (answer_relevancy + testset KG transforms). Default
+      # dialect is TEI-native ({base}/embed, the project's TEI-behind-
+      # nginx contract); RAGAS_EMBED_API=openai switches to any
+      # OpenAI-compatible embeddings endpoint (/embeddings).
+      - RAGAS_EMBED_BASE_URL=${RAGAS_EMBED_BASE_URL:-http://tei-embedding-server:80}
       - RAGAS_EMBED_MODEL=${RAGAS_EMBED_MODEL:-${EMBEDDING_MODEL_ID:-}}
+      - RAGAS_EMBED_API=${RAGAS_EMBED_API:-tei}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     build:
       context: components/ragas-service/

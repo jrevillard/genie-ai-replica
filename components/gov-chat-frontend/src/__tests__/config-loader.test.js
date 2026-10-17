@@ -33,11 +33,14 @@ describe('loadConfig', () => {
   const cssPropsSet = () => setProperty.mock.calls.map((call) => call[0]);
 
   it('attempts to fetch the runtime config URL on every call', async () => {
-    global.fetch.mockResolvedValueOnce({ ok: false, status: 404 });
+    global.fetch.mockResolvedValue({ ok: false, status: 404 });
 
     await loadConfig();
+    await loadConfig();
 
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    // Per-call re-fetch is the contract operators rely on for edit → browser
+    // reload without a container restart; caching would break that workflow.
+    expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(global.fetch).toHaveBeenCalledWith(CONFIG_URL);
   });
 

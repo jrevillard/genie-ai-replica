@@ -865,6 +865,9 @@ GENIE_AI_KEYCLOAK_CONFIG_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/gen
 GENIE_AI_KEYCLOAK_CONFIG_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 GENIE_AI_TEMPO_PROXY_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-tempo-proxy
 GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+#   Docker: N/A (images built locally for `docker compose up`, pulled from registry for Swarm)
+#   Swarm:  images pulled from GitLab Container Registry (per-service vars above)
+
 #
 # Runtime theme config bind mounts. These are the HOST paths that docker-compose
 # mounts read-only at /app/dist/config (frontend) and /opt/keycloak/themes/genie
@@ -875,10 +878,10 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # On a deployed node you do NOT set these by hand: Ansible writes them from
 # config_dir (deploy/ansible/templates/env.j2) and the config_bootstrap role
 # seeds the directories from the repository. The values below are the local-dev
-# defaults and match docker-compose exactly.
-#
-#   Docker: N/A (images built locally for `docker compose up`, pulled from registry for Swarm)
-#   Swarm:  images pulled from GitLab Container Registry (per-service vars above)
+# defaults and match docker-compose exactly; Docker resolves them against the
+# compose file's directory. `docker stack deploy` only accepts ABSOLUTE bind
+# sources, so a Swarm node deployed without the Ansible playbook must have
+# CONFIG_DIR_FRONTEND / CONFIG_DIR_KEYCLOAK set to absolute host paths.
 
 # A bind mount never falls back to the image contents. Docker creates a missing
 # source path as an empty root-owned directory, which then shadows everything

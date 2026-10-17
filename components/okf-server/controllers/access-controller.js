@@ -368,6 +368,20 @@ async function grantGroupAccess(req, res, next) {
     await audit('repo.access.grant_group', req, repo.repo_id, { group, level, scope });
     res.status(200).json({ ok: true, group, level, scope, note: 'effective at each member next login' });
   } catch (err) {
+    // Field bug (2026-10-17): a Keycloak 403 on role create surfaced as a
+    // bare 500. The overwhelmingly likely cause is the service account
+    // missing its realm-management grants — say so instead of a stack trace.
+    if (err && err.statusCode === 502 && /role|group/i.test(err.message || '')) {
+      return next(
+        new AccessError(
+          'KEYCLOAK_FORBIDDEN',
+          'Keycloak refused the role/group operation — the okf-server service account is probably missing ' +
+            'realm-management grants (manage-realm, manage-roles, manage-groups). See ' +
+            'configs/keycloak/genie-realm.yaml, service-account-genie-proxy-client.',
+          502
+        )
+      );
+    }
     next(err);
   }
 }

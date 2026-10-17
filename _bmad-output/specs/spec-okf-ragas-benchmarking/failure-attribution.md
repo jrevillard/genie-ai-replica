@@ -2,7 +2,9 @@
 
 The mechanical matrix behind CAP-5, adapted from Jerome's Phase-5 table (`tests/rag-benchmarks/eval/CLAUDE.md` "Semantic path") with routing-aware additions the Lab is uniquely positioned to make. Applied per failing row (any metric below its threshold); every match emits an attribution row `{query, pattern, stage, evidence, fix_surface, recommendation}`.
 
-## Thresholds (v1, config-overridable via suite/run settings)
+## Thresholds (config-overridable via suite/run settings; applied to every enabled metric)
+
+Default four (always present):
 
 | Metric | Fail below |
 |---|---|
@@ -10,6 +12,16 @@ The mechanical matrix behind CAP-5, adapted from Jerome's Phase-5 table (`tests/
 | `context_precision` | 0.5 |
 | `context_recall` | 0.5 |
 | `answer_relevancy` | 0.6 |
+
+Extended catalog (per David 2026-10-17 the full single-turn set is selectable; thresholds apply when enabled):
+
+| Metric | Fail outside |
+|---|---|
+| `answer_correctness` / `factual_correctness` | < 0.6 |
+| `answer_similarity` (semantic similarity) | < 0.7 |
+| `context_entities_recall` | < 0.5 |
+| `context_utilization` (precision w/o reference) | < 0.5 |
+| `noise_sensitivity` | > 0.4 (lower is better) |
 
 ## Attribution matrix
 
@@ -21,6 +33,10 @@ The mechanical matrix behind CAP-5, adapted from Jerome's Phase-5 table (`tests/
 | `context_precision` low + recall ok | Reranker (ranking) | rerank weights / strategy | Noise ranked above signal — same reranker surfaces as above |
 | `faithfulness` low + contexts scored good | LLM | `CHATQNA_SYSTEM_PROMPT`, temperature, model | Answer drifts from context — tighten prompt grounding; note judge verdict quotes |
 | `answer_relevancy` low + contexts good | LLM / language | prompt or language mismatch | Check answer language vs suite entry language; prompt specificity |
+| `answer_correctness` / `factual_correctness` low + faithfulness ok | LLM (answer quality) | prompt, model | Answer is grounded but wrong vs the reference — tighten accuracy prompting or assess model minimums |
+| `answer_similarity` low + correctness ok | LLM (wording) | prompt / language | Right facts, wrong shape — phrasing, completeness, or language mismatch vs the reference |
+| `noise_sensitivity` high | Reranker (noise) | rerank knobs | Noisy selection flips answers between runs — same surfaces as precision losses |
+| `context_entities_recall` low | Corpus (entities) | concept content | Key entities of the reference are unretrievable — re-curate the concept or enrich entity mentions |
 | `answer_relevancy` low + `abstained` = yes | Abstention | abstention instructions | Model abstained on an answerable query — abstention threshold too strict for this entry |
 | All four ≈ 0/NaN + judge errors in run log | Judge | judge model / endpoint | Judge failure, not pipeline failure — verify `RAGAS_JUDGE_*` (his known failure modes: reasoning-token budget, non-JSON judge, missing embed model) |
 

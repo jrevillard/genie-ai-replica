@@ -15,8 +15,8 @@
 
 - `GET /health` — liveness (okf-server 503-map probe).
 - `POST /generate-testset` — `{documents: [{page_content, metadata}], testset_size, query_distribution?, num_personas?}` → samples (see xlsx-compat-formats.md §3). Internally: ragas `TestsetGenerator` + `default_transforms`, `LangchainLLMWrapper`/`LangchainEmbeddingsWrapper` (deprecated-but-functional path — exactly `run_ragas_eval.py`'s surface).
-- `POST /evaluate` — samples (`user_input/retrieved_contexts/response/reference`) + `metrics` → `{aggregate, per_query}`.
-- `POST /xlsx/export-suite`, `/xlsx/export-results`, `/xlsx/import-suite`, `/xlsx/import-results` — JSON in, xlsx bytes out (and reverse); openpyxl only, layouts per xlsx-compat-formats.md.
+- `POST /evaluate` — samples (`user_input/retrieved_contexts/response/reference` [+ `reference_contexts` for the non-LLM metrics]) + `metrics: [<selection from the single-turn catalog; default = the harness four>]` → `{aggregate, per_query}`.
+- `POST /xlsx/export-suite`, `/xlsx/export-results`, `/xlsx/import-suite` — JSON in, xlsx bytes out (and reverse for suite import); openpyxl only, layouts per xlsx-compat-formats.md. No results import (per David 2026-10-17).
 
 ## Dependencies (frozen — parity with Jerome's runner)
 
@@ -33,7 +33,7 @@
 | `RAGAS_JUDGE_API_KEY` | = `VLLM_API_KEY` | judge bearer |
 | `RAGAS_EMBED_BASE_URL` | TEI embedding service | embedder endpoint (answer_relevancy) |
 | `RAGAS_EMBED_MODEL` | = `EMBED_MODEL_ID` *(inherited default — override per deployment)* | embedder id |
-| `OKF_RAGAS_TESTSET_SIZE_DEFAULT` | `12` | default suite size on generate |
+| `OKF_RAGAS_TESTSET_SIZE_DEFAULT` | `20` | default suite size on generate (user-settable per generation, like the existing suite-generator knobs) |
 | `OKF_RAGAS_MAX_ENTRIES` | `200` | hard cap per suite (import + generate) |
 | `OKF_RAGAS_RUN_CONCURRENCY` | `2` | per-run query concurrency (shared GPU) |
 | `OKF_RAGAS_TIMEOUT_MS` | `600000` | sidecar call timeout (his EVAL_RAGAS_TIMEOUT=600s precedent) |
@@ -48,7 +48,7 @@ Ops mapping to Jerome's runner: `RAGAS_JUDGE_*` ≡ his `EVAL_JUDGE_*`; `RAGAS_E
 
 ## Test surface
 
-- Sidecar pytest: xlsx round-trips against pinned reference fixtures (one exported benchmark suite → re-imported equality; one hand-authored sheet in his layout → expected entries; results round-trip); generate/evaluate handlers against mocked ragas.
+- Sidecar pytest: xlsx round-trips against pinned reference fixtures (one exported benchmark suite → re-imported equality; one hand-authored sheet in his layout → expected entries; results export carries his column vocabulary incl. extended-metric columns); generate/evaluate handlers against mocked ragas incl. a non-default metric selection.
 - okf-server jest: `__tests__/ragas-suite-service.test.js` with the `head-suite-service.test.js:11-45` mock header (arango-mock stores, frontmatter-service mocks); route/controller thin-wrap tests; 503-degrade path.
 - Frontend jest: `ragas-panel.test.js` on the `mountDialog`/`fakeStore` pattern (`head-test-dialog.test.js:29-76`); progress-contract test mirroring `head-test-progress.test.js`.
 - Config-validator: new-var coverage per AC7.

@@ -89,11 +89,11 @@ flowchart TB
   subgraph Import
     F3[Jerome-format suite .xlsx] -->|bytes| X3[sidecar /xlsx/import-suite]
     X3 -->|entries as new-N| S2[ragas_suite doc]
-    F4[results .xlsx ours or his v2] -->|bytes| X4[sidecar /xlsx/import-results]
-    X4 -->|runs tagged imported| R2[ragas_run docs]
   end
   F1 -. feeds unmodified .-> JT[xlsx_to_gold.py on the swarm node]
 ```
+
+No results import — results flow one way (export); only benchmark suites import (per David 2026-10-17).
 
 ## UI placement (CAP-4/5/6)
 

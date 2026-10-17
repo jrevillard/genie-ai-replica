@@ -3070,6 +3070,67 @@ export default {
         'O RAGAS pontua quão bem o assistente recupera e responde — fidelidade, precisão e recall de contexto, relevância da resposta e mais. Execute uma suíte de testes comparativos para medir o repositório como base de conhecimento.',
       aboutLabel: 'O que é RAGAS?',
       aboutLink: 'Leia mais em ragas.io',
+      help: {
+        show: 'Ajuda',
+        hide: 'Ocultar ajuda',
+        more: 'Leia mais em ragas.io',
+        repositories: {
+          title: 'Repositórios',
+          text: 'Quais repositórios alimentam a geração — apenas o atual, ou junto com relacionados. Vários repositórios permitem que perguntas de múltiplos saltos atravessem suas fronteiras.'
+        },
+        questions: {
+          title: 'Perguntas',
+          text: 'Quantas perguntas sintetizar (padrão 20). Conjuntos maiores levam proporcionalmente mais tempo para gerar e executar.'
+        },
+        singleHop: {
+          title: 'Salto único %',
+          text: 'Parcela das perguntas extraídas de um único conceito.'
+        },
+        multiAbstract: {
+          title: 'Múltiplos saltos (abstrato) %',
+          text: 'Parcela das perguntas que combinam vários conceitos e raciocinam além do seu texto literal.'
+        },
+        multiSpecific: {
+          title: 'Múltiplos saltos (específico) %',
+          text: 'Parcela das perguntas que combinam vários conceitos mantendo-se fiéis à redação exata deles. As três parcelas devem somar 100.'
+        },
+        personas: {
+          title: 'Personas',
+          text: 'Quantas personas sintéticas variam a formulação e a perspectiva das perguntas geradas.'
+        },
+        generate: {
+          title: 'Gerar',
+          text: 'Constrói a suíte com o LLM: primeiro uma passagem do grafo de conhecimento sobre o corpus (esta é a parte de vários minutos), depois a síntese das perguntas. Roda em segundo plano — você pode fechar o Lab sem perder nada. Excluir uma suíte em geração cancela o trabalho.'
+        },
+        importSuite: {
+          title: 'Importar suíte (.xlsx)',
+          text: 'Carrega uma suíte existente no formato xlsx de testes comparativos, compatível com o fluxo de referência de tests/rag-benchmarks.'
+        },
+        entries: {
+          title: 'Entradas do teste comparativo',
+          text: 'Uma linha por pergunta com sua resposta esperada e trechos de referência. Edite uma pergunta, teste-a contra o corpus real, tire-a do escopo (mantida por contraste, excluída da pontuação) ou remova-a.'
+        },
+        metrics: {
+          title: 'Métricas',
+          text: 'As quatro padrão — fidelidade, precisão do contexto, cobertura do contexto, relevância da resposta — mais o catálogo estendido do RAGAS. Métricas que precisam de um modelo de embeddings são descartadas com um aviso quando nenhum está configurado.'
+        },
+        run: {
+          title: 'Executar o teste comparativo',
+          text: 'Repete a recuperação para cada entrada, gera respostas e então o modelo juiz pontua cada resposta contra as referências. O progresso é relatado por fase; os resultados chegam quando a execução termina.'
+        },
+        results: {
+          title: 'Resultados',
+          text: 'Médias das métricas como medidores com limiares de aprovação, a tendência entre execuções e o detalhe por pergunta com cada resposta e suas pontuações.'
+        },
+        explain: {
+          title: 'Explicar as falhas',
+          text: 'Atribui cada linha com falha à recuperação, à resposta ou à própria referência — e sugere correções cautelosas, incluindo mudanças no nível do repositório, como etiquetas e curadoria de conceitos.'
+        },
+        exports: {
+          title: 'Exportações',
+          text: 'Suítes e resultados como xlsx (compatíveis com as ferramentas de teste comparativo) e um relatório PDF dos gráficos.'
+        }
+      },
       current: 'atual',
       generate: {
         title: 'Gerar uma suíte de testes comparativos',

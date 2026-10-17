@@ -3080,6 +3080,67 @@ export default {
         'RAGAS bewertet, wie gut der Assistent abruft und antwortet — Treue, Kontextgenauigkeit und -treffer, Antwortrelevanz und mehr. Führen Sie eine Vergleichstestsuite aus, um das Repository als Wissensbasis zu messen.',
       aboutLabel: 'Was ist RAGAS?',
       aboutLink: 'Mehr auf ragas.io',
+      help: {
+        show: 'Hilfe',
+        hide: 'Hilfe ausblenden',
+        more: 'Mehr auf ragas.io',
+        repositories: {
+          title: 'Repositories',
+          text: 'Welche Repositories die Generierung speisen — nur das aktuelle oder zusammen mit verwandten. Mehrere Repositories erlauben es Mehrfach-Hop-Fragen, ihre Grenzen zu überschreiten.'
+        },
+        questions: {
+          title: 'Fragen',
+          text: 'Wie viele Fragen synthetisiert werden (Standard 20). Größere Sätze dauern sowohl zum Generieren als auch zum Ausführen proportional länger.'
+        },
+        singleHop: {
+          title: 'Einzel-Hop %',
+          text: 'Anteil der Fragen, die aus einem einzelnen Konzept stammen.'
+        },
+        multiAbstract: {
+          title: 'Mehrfach-Hop (abstrakt) %',
+          text: 'Anteil der Fragen, die mehrere Konzepte kombinieren und über ihren wörtlichen Text hinaus schlussfolgern.'
+        },
+        multiSpecific: {
+          title: 'Mehrfach-Hop (spezifisch) %',
+          text: 'Anteil der Fragen, die mehrere Konzepte kombinieren und ihrem genauen Wortlaut treu bleiben. Die drei Anteile sollten zusammen 100 ergeben.'
+        },
+        personas: {
+          title: 'Personas',
+          text: 'Wie viele synthetische Personas die Formulierung und Perspektive der generierten Fragen variieren.'
+        },
+        generate: {
+          title: 'Generieren',
+          text: 'Erstellt die Suite mit dem LLM: zuerst ein Wissensgraph-Durchlauf über den Korpus (der Teil, der Minuten dauert), dann die Fragesynthese. Läuft im Hintergrund — Sie können das Lab schließen, ohne etwas zu verlieren. Wird eine Suite während der Generierung gelöscht, wird die Arbeit abgebrochen.'
+        },
+        importSuite: {
+          title: 'Suite importieren (.xlsx)',
+          text: 'Lädt eine bestehende Suite im xlsx-Benchmarkformat, kompatibel mit dem Gold-Workflow von tests/rag-benchmarks.'
+        },
+        entries: {
+          title: 'Benchmark-Einträge',
+          text: 'Eine Zeile pro Frage mit erwarteter Antwort und Referenzstellen. Bearbeiten Sie eine Frage, testen Sie sie gegen den Live-Korpus, schalten Sie sie außerhalb des Geltungsbereichs (zum Kontrast aufgehoben, von der Bewertung ausgeschlossen) oder entfernen Sie sie.'
+        },
+        metrics: {
+          title: 'Metriken',
+          text: 'Die vier Standards — Treue, Kontextgenauigkeit, Kontextabdeckung, Antwortrelevanz — plus der erweiterte RAGAS-Katalog. Metriken, die ein Embedding-Modell benötigen, werden mit einer Warnung verworfen, wenn keines konfiguriert ist.'
+        },
+        run: {
+          title: 'Vergleichstest ausführen',
+          text: 'Spielt den Abruf für jeden Eintrag erneut, generiert Antworten, dann bewertet das Judge-Modell jede Antwort anhand der Referenzen. Der Fortschritt wird pro Phase gemeldet; die Ergebnisse liegen vor, sobald der Lauf abgeschlossen ist.'
+        },
+        results: {
+          title: 'Ergebnisse',
+          text: 'Metrik-Mittelwerte als Gauges mit Bestehensschwellen, der Trend über Läufe hinweg und das Detail je Frage mit jeder Antwort und ihren Scores.'
+        },
+        explain: {
+          title: 'Fehlschläge erklären',
+          text: 'Ordnet jede fehlgeschlagene Zeile dem Abruf, dem Antworten oder der Referenz selbst zu — und schlägt abgesicherte Korrekturen vor, darunter Änderungen auf Repository-Ebene wie Tags und die Kuratierung von Konzepten.'
+        },
+        exports: {
+          title: 'Exporte',
+          text: 'Suites und Ergebnisse als xlsx (kompatibel mit dem Benchmark-Tooling) und ein PDF-Bericht der Diagramme.'
+        }
+      },
       current: 'aktuell',
       generate: {
         title: 'Vergleichstest-Suite generieren',

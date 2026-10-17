@@ -3078,6 +3078,67 @@ export default {
         'RAGAS évalue la qualité de récupération et de réponse de l’assistant — fidélité, précision et rappel du contexte, pertinence des réponses, etc. Lancez une suite de bancs d’essai pour mesurer le dépôt comme base de connaissances.',
       aboutLabel: 'Qu’est-ce que RAGAS ?',
       aboutLink: 'En savoir plus sur ragas.io',
+      help: {
+        show: 'Aide',
+        hide: 'Masquer l’aide',
+        more: 'En savoir plus sur ragas.io',
+        repositories: {
+          title: 'Dépôts',
+          text: 'Quels dépôts alimentent la génération — le dépôt actuel seul, ou avec des dépôts apparentés. Plusieurs dépôts permettent aux questions multi-sauts de franchir leurs frontières.'
+        },
+        questions: {
+          title: 'Questions',
+          text: 'Combien de questions synthétiser (20 par défaut). Les ensembles plus grands prennent proportionnellement plus de temps à générer et à exécuter.'
+        },
+        singleHop: {
+          title: 'Mono-saut %',
+          text: 'Part des questions tirées d’un seul concept.'
+        },
+        multiAbstract: {
+          title: 'Multi-sauts (abstrait) %',
+          text: 'Part des questions qui combinent plusieurs concepts et raisonnent au-delà de leur texte littéral.'
+        },
+        multiSpecific: {
+          title: 'Multi-sauts (spécifique) %',
+          text: 'Part des questions qui combinent plusieurs concepts en restant fidèles à leur formulation exacte. Les trois parts doivent totaliser 100.'
+        },
+        personas: {
+          title: 'Personas',
+          text: 'Combien de personas synthétiques font varier la formulation et la perspective des questions générées.'
+        },
+        generate: {
+          title: 'Générer',
+          text: 'Construit la suite avec le LLM : d’abord un passage du graphe de connaissances sur le corpus (c’est la partie qui prend des minutes), puis la synthèse des questions. Tout tourne en arrière-plan — vous pouvez fermer le Lab sans rien perdre. Supprimer une suite en cours de génération annule le travail.'
+        },
+        importSuite: {
+          title: 'Importer une suite (.xlsx)',
+          text: 'Charge une suite existante au format xlsx de banc d’essai, compatible avec le flux de référence de tests/rag-benchmarks.'
+        },
+        entries: {
+          title: 'Entrées du banc d’essai',
+          text: 'Une ligne par question avec sa réponse attendue et ses passages de référence. Modifiez une question, sondez-la sur le corpus réel, sortez-la du périmètre (conservée pour contraste, exclue du score) ou retirez-la.'
+        },
+        metrics: {
+          title: 'Métriques',
+          text: 'Les quatre par défaut — fidélité, précision du contexte, rappel du contexte, pertinence de la réponse — plus le catalogue RAGAS étendu. Les métriques nécessitant un modèle d’embedding sont écartées avec un avertissement quand aucun n’est configuré.'
+        },
+        run: {
+          title: 'Lancer le banc d’essai',
+          text: 'Rejoue la récupération pour chaque entrée, génère les réponses, puis le modèle juge note chaque réponse par rapport aux références. La progression est rapportée par phase ; les résultats arrivent à la fin de l’exécution.'
+        },
+        results: {
+          title: 'Résultats',
+          text: 'Moyennes des métriques en jauges avec seuils de réussite, la tendance d’une exécution à l’autre et le détail par question avec chaque réponse et ses scores.'
+        },
+        explain: {
+          title: 'Expliquer les échecs',
+          text: 'Attribue chaque ligne en échec à la récupération, à la réponse ou à la référence elle-même — et suggère des correctifs prudents, y compris des changements au niveau du dépôt tels que les étiquettes et la curation des concepts.'
+        },
+        exports: {
+          title: 'Exportations',
+          text: 'Suites et résultats en xlsx (compatibles avec l’outillage de banc d’essai) et un rapport PDF des graphiques.'
+        }
+      },
       current: 'en cours',
       generate: {
         title: 'Générer une suite de bancs d’essai',

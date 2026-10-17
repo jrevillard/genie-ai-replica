@@ -3058,6 +3058,67 @@ export default {
         'RAGAS menilai seberapa baik asisten menemukan dan menjawab informasi — kesetiaan, presisi dan recall konteks, relevansi jawaban, dan lainnya. Jalankan suite tolok ukur untuk mengukur repositori sebagai basis pengetahuan.',
       aboutLabel: 'Apa itu RAGAS?',
       aboutLink: 'Baca selengkapnya di ragas.io',
+      help: {
+        show: 'Bantuan',
+        hide: 'Sembunyikan bantuan',
+        more: 'Baca selengkapnya di ragas.io',
+        repositories: {
+          title: 'Repositori',
+          text: 'Repositori mana yang menjadi sumber pembuatan — hanya yang saat ini, atau bersama yang terkait. Beberapa repositori memungkinkan pertanyaan multi-lompatan melintasi batas mereka.'
+        },
+        questions: {
+          title: 'Pertanyaan',
+          text: 'Berapa banyak pertanyaan yang disintesis (default 20). Set yang lebih besar memakan waktu lebih lama secara proporsional untuk dibuat dan dijalankan.'
+        },
+        singleHop: {
+          title: 'Satu lompatan %',
+          text: 'Porsi pertanyaan yang diambil dari satu konsep tunggal.'
+        },
+        multiAbstract: {
+          title: 'Multi-lompatan (abstrak) %',
+          text: 'Porsi pertanyaan yang menggabungkan beberapa konsep dan menalar melampaui teks literalnya.'
+        },
+        multiSpecific: {
+          title: 'Multi-lompatan (spesifik) %',
+          text: 'Porsi pertanyaan yang menggabungkan beberapa konsep sambil tetap berpijak pada kata-kata persisnya. Ketiga porsi harus berjumlah 100.'
+        },
+        personas: {
+          title: 'Persona',
+          text: 'Berapa banyak persona sintetis yang memvariasikan kalimat dan sudut pandang pertanyaan yang dihasilkan.'
+        },
+        generate: {
+          title: 'Buat',
+          text: 'Membangun suite dengan LLM: awalnya satu lintasan graf pengetahuan atas korpus (ini bagian yang makan waktu beberapa menit), lalu sintesis pertanyaan. Berjalan di latar belakang — Anda bisa menutup Lab tanpa kehilangan apa pun. Menghapus suite yang sedang dibuat membatalkan pekerjaan itu.'
+        },
+        importSuite: {
+          title: 'Impor suite (.xlsx)',
+          text: 'Memuat suite yang sudah ada dalam format xlsx tolok ukur, kompatibel dengan alur kerja baku di tests/rag-benchmarks.'
+        },
+        entries: {
+          title: 'Entri tolok ukur',
+          text: 'Satu baris per pertanyaan dengan jawaban yang diharapkan dan pasase referensinya. Edit pertanyaan, uji terhadap korpus langsung, keluarkan dari cakupan (disimpan sebagai pembanding, dikecualikan dari penilaian), atau hapus.'
+        },
+        metrics: {
+          title: 'Metrik',
+          text: 'Empat default — kesetiaan, presisi konteks, recall konteks, relevansi jawaban — plus katalog RAGAS yang diperluas. Metrik yang membutuhkan model embedding diabaikan dengan peringatan bila tidak ada yang dikonfigurasi.'
+        },
+        run: {
+          title: 'Jalankan tolok ukur',
+          text: 'Memutar ulang pengambilan untuk setiap entri, menghasilkan jawaban, lalu model juri menilai setiap jawaban terhadap referensi. Kemajuan dilaporkan per tahap; hasil muncul saat eksekusi selesai.'
+        },
+        results: {
+          title: 'Hasil',
+          text: 'Rata-rata metrik sebagai meteran dengan ambang lolos, tren antar eksekusi, dan rincian per pertanyaan dengan setiap jawaban dan skornya.'
+        },
+        explain: {
+          title: 'Jelaskan kegagalan',
+          text: 'Mengatribusikan setiap baris gagal ke pengambilan, menjawab, atau referensinya sendiri — dan menyarankan perbaikan yang terjaga, termasuk perubahan tingkat repositori seperti tag dan kurasi konsep.'
+        },
+        exports: {
+          title: 'Ekspor',
+          text: 'Suite dan hasil sebagai xlsx (kompatibel dengan perangkat tolok ukur) serta laporan PDF dari grafiknya.'
+        }
+      },
       current: 'saat ini',
       generate: {
         title: 'Buat suite tolok ukur',

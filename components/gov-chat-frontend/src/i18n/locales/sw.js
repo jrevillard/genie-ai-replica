@@ -3053,6 +3053,67 @@ export default {
         'RAGAS hupima msaidizi anavyopata taarifa na kujibu — uaminifu, usahihi wa muktadha na kukumbuka, umuhimu wa jibu na mengine. Endesha seti ya vipimo vya kulinganisha kupima hifadhi kama msingi wa maarifa.',
       aboutLabel: 'RAGAS ni nini?',
       aboutLink: 'Soma zaidi kwenye ragas.io',
+      help: {
+        show: 'Msaada',
+        hide: 'Ficha msaada',
+        more: 'Soma zaidi kwenye ragas.io',
+        repositories: {
+          title: 'Hazina',
+          text: 'Ni hazina zipi zinazolisha utengenezaji — ya sasa pekee, au pamoja na zinazohusiana. Hazina nyingi huruhusu maswali ya hatua nyingi kuvuka mipaka yao.'
+        },
+        questions: {
+          title: 'Maswali',
+          text: 'Maswali mangapi yanayotengenezwa (chaguo-msingi 20). Seti kubwa huchukua muda mrefu zaidi kwa uwiano kutengeneza na kuendesha.'
+        },
+        singleHop: {
+          title: 'Hatua moja %',
+          text: 'Uwiano wa maswali yanayotokana na dhana moja.'
+        },
+        multiAbstract: {
+          title: 'Hatua nyingi (dhahania) %',
+          text: 'Uwiano wa maswali yanayounganisha dhana kadhaa na kufikiri zaidi ya maandishi yake ya moja kwa moja.'
+        },
+        multiSpecific: {
+          title: 'Hatua nyingi (maalum) %',
+          text: 'Uwiano wa maswali yanayounganisha dhana kadhaa huku yakibaki katika maneno yake kamili. Viwango vitatu vinapaswa kujumlisha 100.'
+        },
+        personas: {
+          title: 'Mitindo ya watumiaji',
+          text: 'Ni mitindo mingapi ya watumiaji wa kutengenezwa hubadilisha msimbo na mtazamo wa maswali yaliyotengenezwa.'
+        },
+        generate: {
+          title: 'Tengeneza',
+          text: 'Hujenga seti kwa LLM: kwanza pitisho la grafu ya maarifa kwenye korpusi (hii ndiyo sehemu inayochukua dakika kadhaa), kisha utengenezaji wa maswali. Inafanya kazi katika usuli — unaweza kufunga Lab bila kupoteza chochote. Kufuta seti inayotengenezwa husitisha kazi hiyo.'
+        },
+        importSuite: {
+          title: 'Ingiza seti (.xlsx)',
+          text: 'Hupakia seti iliyopo katika Umbizo la xlsx la vipimo vya kulinganisha, inayolingana na mtiririko wa dhahabu wa tests/rag-benchmarks.'
+        },
+        entries: {
+          title: 'Maingizo ya kipimo',
+          text: 'Safu moja kwa kila swali na jibu lake linalotarajiwa na vifungu vya rejea. Hariri swali, lijaribishe kwenye korpusi hai, litoe nje ya wigo (huhifadhiwa kwa kulinganisha, huondolewa kwenye alama), au lione.'
+        },
+        metrics: {
+          title: 'Vipimo',
+          text: 'Manne ya chaguo-msingi — uaminifu, usahihi wa muktadha, ufuniko wa muktadha, umuhimu wa jibu — pamoja na katalogu ya RAGAS iliyopanuliwa. Vipimo vinavyohitaji modeli ya embedding huondolewa na onyo linapotolewa hakuna iliyowekwa.'
+        },
+        run: {
+          title: 'Endesha kipimo',
+          text: 'Huurudisha upya upatikanaji kwa kila ingizo, huzalisha majibu, kisha modeli ya mwamuzi hupima kila jibu kulinganisha na rejea. Maendeleo huripotiwa kwa kila hatua; matokeo hufika utakapokamilika.'
+        },
+        results: {
+          title: 'Matokeo',
+          text: 'Wastani wa vipimo kama geji zenye vizingiti vya kufuzu, mwelekeo katika utekelezaji, na maelezo kwa kila swali na jibu lake na alama zake.'
+        },
+        explain: {
+          title: 'Eleza makosa',
+          text: 'Huainisha kila safu iliyoshindwa kwa upatikanaji, kujibu, au rejea yenyewe — na hupendekeza marekebisho ya tahadhari, pamoja na mabadiliko ya kiwango cha hazina kama lebo na uteuzi wa dhana.'
+        },
+        exports: {
+          title: 'Uhamisho',
+          text: 'Seti na matokeo kama xlsx (inayolingana na zana za kipimo) na ripoti ya PDF ya chati.'
+        }
+      },
       current: 'ya sasa',
       generate: {
         title: 'Tengeneza seti ya vipimo vya kulinganisha',

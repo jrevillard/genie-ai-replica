@@ -1,7 +1,9 @@
 <template>
   <div class="okf-ragas">
     <!-- PANE HEAD — the renamed surface (David, 2026-10-17): the ⓘ glosses
-         RAGAS in plain language and links to ragas.io for deeper reading. -->
+         RAGAS in plain language and links to ragas.io for deeper reading;
+         the Help toggle expands the every-control reference below it
+         (David, 2026-10-18). -->
     <div class="okf-ragas__pane-head">
       <h4 class="okf-headtest__pane-title">
         {{ translate('okf.ragas.paneTitle', 'RAGAS Benchmarks') }}
@@ -17,6 +19,21 @@
         href="https://www.ragas.io/"
         :link-label="translate('okf.ragas.aboutLink', 'Read more at ragas.io')"
       />
+      <button type="button" class="okf-ragas__help-toggle" @click="showHelp = !showHelp">
+        {{ showHelp ? translate('okf.ragas.help.hide', 'Hide help') : translate('okf.ragas.help.show', 'Help') }}
+      </button>
+    </div>
+    <!-- HELP — every field and control on the screen, in one place. -->
+    <div v-if="showHelp" class="okf-ragas__section okf-ragas__help">
+      <dl class="okf-ragas__help-list">
+        <div v-for="item in helpItems" :key="item.key" class="okf-ragas__help-row">
+          <dt>{{ item.title }}</dt>
+          <dd>{{ item.text }}</dd>
+        </div>
+      </dl>
+      <a class="okf-ragas__help-more" href="https://www.ragas.io/" target="_blank" rel="noopener noreferrer">{{
+        translate('okf.ragas.help.more', 'Read more at ragas.io')
+      }}</a>
     </div>
     <!-- GENERATION + INTERCHANGE -->
     <div class="okf-ragas__section">
@@ -425,6 +442,7 @@ export default {
   emits: ['changed'],
   data() {
     return {
+      showHelp: false,
       repoChoices: [],
       selectedRepoIds: [],
       genSize: 20,
@@ -451,6 +469,31 @@ export default {
     };
   },
   computed: {
+    /** The every-control reference rendered by the Help panel — titles and
+     *  text straight from i18n so every locale carries the full glossary. */
+    helpItems() {
+      const keys = [
+        'repositories',
+        'questions',
+        'singleHop',
+        'multiAbstract',
+        'multiSpecific',
+        'personas',
+        'generate',
+        'importSuite',
+        'entries',
+        'metrics',
+        'run',
+        'results',
+        'explain',
+        'exports'
+      ];
+      return keys.map((k) => ({
+        key: k,
+        title: this.translate(`okf.ragas.help.${k}.title`, k),
+        text: this.translate(`okf.ragas.help.${k}.text`, '')
+      }));
+    },
     entries() {
       return (this.suite && this.suite.payload && this.suite.payload.entries) || [];
     },
@@ -947,6 +990,60 @@ export default {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
+}
+
+.okf-ragas__help-toggle {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0 var(--space-xs);
+}
+.okf-ragas__help-toggle:hover,
+.okf-ragas__help-toggle:focus {
+  color: var(--accent);
+}
+
+.okf-ragas__help-list {
+  margin: 0;
+}
+.okf-ragas__help-row {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--border);
+}
+.okf-ragas__help-row:last-child {
+  border-bottom: 0;
+}
+.okf-ragas__help-row dt {
+  font-weight: 600;
+  color: var(--fg);
+  font-size: var(--text-sm);
+}
+.okf-ragas__help-row dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.okf-ragas__help-more {
+  display: inline-block;
+  margin-top: var(--space-sm);
+  color: var(--accent);
+  text-decoration: underline;
+  font-size: var(--text-sm);
+}
+@media (max-width: 720px) {
+  .okf-ragas__help-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
 }
 
 .okf-ragas__section {

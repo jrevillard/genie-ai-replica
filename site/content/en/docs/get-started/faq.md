@@ -28,7 +28,13 @@ rather than a GENIE.AI-built one), onto a machine with internet, copy them
 air-gapped host. Models are pulled at first start from
 HuggingFace Hub (set `HUGGING_FACE_HUB_TOKEN` in `.env`); for air-gapped
 deployments you must pre-warm the `hf_cache` Docker volume or set
-`HF_HUB_OFFLINE=1` with the model baked into the image at build time.
+`HF_HUB_OFFLINE=1` with the model baked into the image at build time. The
+runtime theme assets are another first-deploy download: Ansible pulls the
+branding archives from the GitLab repository-archive endpoint on every deploy
+node, so an air-gapped node must either reach that endpoint or have the two
+host config directories (`/opt/genieai/config/frontend/` and
+`/opt/genieai/config/keycloak/themes/genie/`) pre-seeded by hand with
+`config_bootstrap_sync_enabled: false`.
 
 ### 3. Does it work with my SSO?
 

@@ -46,13 +46,12 @@ Two files are deliberately **outside** the mount and must not be hand-edited:
    ```bash
    sudo vi /opt/genieai/config/frontend/genie-ai-config.json
    ```
-2. **Force the container to pick up the mount contents.** A bind mount is resolved when the container starts, so a plain restart is required — the file change alone is not visible to the running container.
+2. **Restart only what caches.** A directory bind mount is live: the frontend nginx reads the mounted files from disk on every request, so a web-app change needs nothing beyond the browser reload below. Keycloak caches themes in memory, so it is the one container that must be restarted after a theme file change:
    ```bash
-   # Swarm
-   docker service update --force <stack>_frontend
+   # Swarm — Keycloak only
    docker service update --force <stack>_keycloak
    ```
-   In Compose mode use `docker compose up -d --force-recreate frontend keycloak` instead.
+   In Compose mode use `docker compose up -d --force-recreate keycloak` instead.
 3. **Reload the browser.** The first time you do this after upgrading from an older deployment, do a **hard reload** (Ctrl+Shift+R, or Cmd+Shift+R). Browsers that visited the site before the upgrade may still hold a one-year immutable copy of these paths from the previous cache headers, and a normal reload will happily reuse it. After that first hard reload, `/config/` and `/runtime/config.js` are served `Cache-Control: no-cache, must-revalidate`, so ordinary reloads are enough.
 
 Keycloak caches themes in memory, so the forced restart is not optional for Keycloak — see [Troubleshooting](#troubleshooting).

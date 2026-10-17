@@ -751,6 +751,15 @@ services:
       # the probe reports verdict unknown with an honest note.
       - OKF_RERANK_ENDPOINT=${OKF_RERANK_ENDPOINT:-}
       - OKF_RERANK_TOKEN=${OKF_RERANK_TOKEN:-}
+      # Story 8-6 — the RAGAS benchmark sidecar. URL of the ragas-service
+      # container; the suite/run/explain/xlsx routes degrade to honest 503
+      # RAGAS_UNAVAILABLE when it is unreachable. Concurrency/size knobs
+      # bound LLM cost on the shared GPU (defaults live in the service).
+      - OKF_RAGAS_URL=${OKF_RAGAS_URL:-http://ragas-service:8090}
+      - RAGAS_INTERNAL_SECRET=${RAGAS_INTERNAL_SECRET:-${OKF_INTERNAL_SECRET:-}}
+      - OKF_RAGAS_TESTSET_SIZE_DEFAULT=${OKF_RAGAS_TESTSET_SIZE_DEFAULT:-20}
+      - OKF_RAGAS_MAX_ENTRIES=${OKF_RAGAS_MAX_ENTRIES:-200}
+      - OKF_RAGAS_RUN_CONCURRENCY=${OKF_RAGAS_RUN_CONCURRENCY:-2}
       - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
       - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
       # Story 1-8g-p: whole-corpus TOPIC-LINK AUTHORING. The import wizard runs
@@ -877,6 +886,52 @@ services:
       timeout: 10s
       retries: 3
       start_period: 120s
+    networks:
+      - genieai_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+
+  # Story 8-6 (ADR-okf-043) — RAGAS benchmarking sidecar. Stateless Python
+  # (ragas 0.4.3, deps frozen to the tests/rag-benchmarks runner's pins):
+  # testset generation, metric evaluation, and xlsx serialization. INTERNAL
+  # only — the okf-server calls it container-to-container on genieai_network
+  # (like pii-service); the Lab degrades to honest 503 RAGAS_UNAVAILABLE
+  # when it is absent. Judge/embedder point at the deployment's local
+  # vLLM/TEI (RAGAS_JUDGE_* / RAGAS_EMBED_* below); NO feature is indexed
+  # on a specific model — minimums live in the spec's model-requirements.
+  ragas-service:
+    logging: *fluent-logging
+    restart: unless-stopped
+    environment:
+      # Shared secret with okf-server (fail-closed when unset). Defaults to
+      # the dataprep-callback secret — one deployment-wide internal secret.
+      - RAGAS_INTERNAL_SECRET=${RAGAS_INTERNAL_SECRET:-${OKF_INTERNAL_SECRET:-}}
+      # Judge LLM (OpenAI-compatible) — defaults inherit the deployment's
+      # LLM config; override per endpoint freely (model-requirements minimums).
+      - RAGAS_JUDGE_BASE_URL=${RAGAS_JUDGE_BASE_URL:-http://vllm:8000/v1}
+      - RAGAS_JUDGE_MODEL=${RAGAS_JUDGE_MODEL:-${VLLM_LLM_MODEL_ID:-}}
+      - RAGAS_JUDGE_API_KEY=${RAGAS_JUDGE_API_KEY:-${VLLM_API_KEY:-}}
+      # Embedder (answer_relevancy + testset KG transforms)
+      - RAGAS_EMBED_BASE_URL=${RAGAS_EMBED_BASE_URL:-http://tei-embedding-server:80}
+      - RAGAS_EMBED_MODEL=${RAGAS_EMBED_MODEL:-${EMBED_MODEL_ID:-}}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    build:
+      context: components/ragas-service/
+      dockerfile: Dockerfile
+    image: ${GENIE_AI_RAGAS_SERVICE_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-ragas-service}:${GENIE_AI_RAGAS_SERVICE_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=8)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - genieai_network
     deploy:

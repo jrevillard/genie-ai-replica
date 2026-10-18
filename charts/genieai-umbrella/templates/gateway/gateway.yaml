@@ -7,7 +7,7 @@ HTTPRoute hostname validation rejects ports, and hostname matching
 strips the port from the Host header anyway.
 */}}
 {{- define "genieai-umbrella.ingressHostname" -}}
-{{- (.Values.ingress.host | default "genieai.local") | splitList ":" | first -}}
+{{- (.Values.ingress.host | required "ingress.host is required — supply the public hostname (may carry :port) in the environment overlay" | splitList ":" | first) -}}
 {{- end -}}
 {{/*
 Canonical TLS Secret name. Precedence:

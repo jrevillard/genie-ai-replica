@@ -121,8 +121,9 @@ kubectl -n genieai get pods -l app.kubernetes.io/name=<chart>
 # Pod env (BEFORE theorizing why a feature is misbehaving)
 kubectl -n genieai exec deploy/genieai-genieai-umbrella-backend -- env | grep -E 'KEYCLOAK|OPEA|CORS'
 
-# Port-forward nginx to a browser-friendly port (laptop overlay uses 8080)
-kubectl -n genieai port-forward svc/nginx 8080:80
+# Port-forward the Envoy data-plane Service for browser validation
+# (nginx is gone from the data path; the laptop browses https://genieai.local:4443)
+kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:443
 
 # Arango port-forward + cluster-secret password (NOT the repo .env value)
 kubectl -n genieai port-forward svc/arangodb-single-single 8529:8529
@@ -148,12 +149,25 @@ Special case — `vllm-api-key` carries **two** keys:
 
 ## Live validation set
 
-The end-to-end test that proves the stack works. Per cycle, run all four:
+The end-to-end test that proves the stack works. Per cycle, run all six
+(last full pass: 0.2.32, 2026-10-18):
 
-1. `/api/health` returns 200 via `kubectl -n genieai port-forward svc/nginx 8080:80` → `curl localhost:8080/api/health`.
-2. Chat stream in French — UI lang `fr`, send a question, confirm the streamed response arrives in French in real time (validates streaming translation: `STREAMING_TRANSLATION_ENABLED=1`).
-3. Document upload → ClamAV scan → dataprep ingestion — drop a PDF in the doc-repo UI; observe GRAPH_SOURCE collection grow (Arango query).
-4. RAG answer with citations — ask a domain question whose answer is in the just-ingested PDF; confirm the `sources` array on the answer is non-empty.
+1. `/api/health` returns 200 through the edge: `kubectl -n genieai
+   port-forward svc/envoy-genieai-genieai-<hash> 8443:443` →
+   `curl -sk -H "Host: genieai.local" https://localhost:8443/api/health`.
+2. Login page carries the genie theme — fetch the realm login form (PKCE
+   challenge needed) and grep for `login/genie/css/genie.css`; theme
+   delivery = ConfigMap tgz + initContainer (regen: `make keycloak-theme`).
+3. Register link present on the login page (realm `registrationAllowed`).
+4. Chat stream in French — send a question with UI lang `fr`, confirm the
+   streamed response arrives in French in real time (validates streaming
+   translation: `STREAMING_TRANSLATION_ENABLED=1`).
+5. Document upload → ClamAV scan → dataprep ingestion — upload via
+   `POST /api/files/upload` (EN-only content) then trigger
+   `POST /api/files/<id>/ingest`; watch dataprep status go `Ingested`.
+6. RAG answer with citations — ask a question whose answer is in the
+   just-ingested file; confirm the answer is correct AND `source_documents`
+   cites the file.
 
 ## Local image iteration (laptop-build, primary use case)
 

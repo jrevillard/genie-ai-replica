@@ -789,6 +789,40 @@ contract:dataprep-arango:
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
 
+contract:chatqna-server:
+  <<: *contract_template
+  needs:
+    - job: build:chatqna-server
+  variables:
+    IMAGE_NAME: "genie-ai-chatqna-server"
+    # Chatqna-shaped wire contract, run in the chatqna image. The retriever job
+    # runs the same file, but against the RETRIEVER's vendored comps — this one
+    # proves the image carrying the chat orchestrator builds a real
+    # ServiceOrchestrator graph and registers all four services.
+    #
+    # NOT `test_contract_mock_reality_parity.py`, tempting though it looks: it
+    # reads `../tests/conftest.py` for its stub inventory, and the template only
+    # docker-cp's `contracts/` into the container. With no conftest present the
+    # inventory is empty, every real comps module reads as a "missing stub", and
+    # the test fails for a reason that has nothing to do with the image.
+    CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_nfrp_budgets.py::test_wire_latency_within_budget"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+
 # Pure contract tests — repo-side, no built image needed (run in a plain venv).
 # These validate the harness logic + telemetry assertions against the repo's
 # dashboards (which live in the checkout, not in the module images). They never

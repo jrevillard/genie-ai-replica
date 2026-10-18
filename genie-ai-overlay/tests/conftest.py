@@ -263,37 +263,51 @@ def pytest_unconfigure(config):
 
 # Spans whose attributes the vocabulary sweep polices.
 #
-# COVERS every span this project emits that records vocabulary-governed
-# attributes, across chatqna, retriever and reranker. Each name here is one a
-# later task adds attributes to, so an unswept name is one where a new leak
-# would go uncaught — that is why ``chatqna.orchestrate`` and ``reranker.rerank``
-# are included alongside the obvious five.
+# COVERS every span this project opens with an explicit name, across chatqna,
+# retriever, reranker and dataprep. The list is not a judgement about
+# importance — it is "everything", and
+# ``TestOwnedSpanCoverage::test_every_emitted_span_is_swept`` re-derives it from
+# the sources so a span added tomorrow fails CI instead of starting unswept.
 #
-# DOES NOT COVER, deliberately:
+# TWO SPANS ARE NOT OURS and are excluded:
 #   * FastAPI auto-instrumentation (``http.method`` / ``url.full`` /
 #     ``http.status_code`` …). Legitimately outside our vocabulary; sweeping them
 #     would mean suppressing failures we do not understand.
-#   * ``dataprep.*`` — all 14 spans the service emits (``ingest``,
-#     ``ingest.background``, ``retract``, ``kill_ingest``, ``chunking``,
-#     ``healthcheck``, ``ensure_vector_index``, ``initialize_client``,
-#     ``log_environment_variables``, and the five ``llm.*`` ones). Known unswept
-#     debt: dataprep is a separate service outside this issue's scope, and its
-#     spans carry vocabulary-bearing attributes — ``dataprep.ingest`` records
-#     ``dataprep.file_type`` / ``dataprep.file_id`` straight from the upload
-#     payload, and ``dataprep.llm.label_chunk`` / ``dataprep.llm.context_doc``
-#     record ``dataprep.llm_model``. Exactly the emissions this sweep exists to
-#     catch. Recorded as follow-up debt in the task report rather than fixed or
-#     silently omitted here; ``TestOwnedSpanCoverage::test_dataprep_pin_matches_the_code``
-#     re-derives the list from the source so the pin cannot drift.
+#   * ``service.operation``, the example in ``tracing.with_span``'s docstring.
+#     Matched by the derivation regex, opened by nothing.
+#
+# Dataprep was swept in a follow-up. It is the one service where document content
+# is closest to a span: ``dataprep.ingest`` records ``dataprep.file_type`` and
+# ``dataprep.file_id`` straight from the upload payload — an externally supplied
+# HTTP body, not an internal value — and the ``llm.*`` spans sit one attribute
+# away from the chunk text they are labelling.
 OWNED_SPAN_NAMES = frozenset(
     {
         "llm.invoke",
         "chatqna.orchestrate",
+        "chatqna.query_condense",
         "chatqna.reranker_selection",
         "chatqna.stream_outcome",
+        "retriever.check_health",
         "retriever.hybrid_search",
+        "retriever.initialize_client",
+        "retriever.initialize_llm",
         "reranker.rerank",
         "reranker.tei_invoke",
+        "dataprep.chunking",
+        "dataprep.ensure_vector_index",
+        "dataprep.healthcheck",
+        "dataprep.ingest",
+        "dataprep.ingest.background",
+        "dataprep.initialize_client",
+        "dataprep.kill_ingest",
+        "dataprep.llm.context_batch",
+        "dataprep.llm.context_chunk",
+        "dataprep.llm.context_doc",
+        "dataprep.llm.label_batch",
+        "dataprep.llm.label_chunk",
+        "dataprep.log_environment_variables",
+        "dataprep.retract",
     }
 )
 

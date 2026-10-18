@@ -24,10 +24,17 @@ import pytest
 
 OVERLAY_ROOT = Path(__file__).resolve().parent.parent
 
-# Service module -> the Dockerfile that builds its image.
+# Overlay module -> the Dockerfile that builds its image.
+#
+# One entry per MODULE that imports ``core.*``, not one per service: a service
+# directory holds several modules that all land in the same image, and the
+# mapping above is what decides whether a given import is checked at all. Keying
+# it by service would let ``retriever/config.py`` import ``core.*`` with no entry
+# naming it — which is exactly how ``retriever/config.py`` slipped through.
 SERVICE_IMAGES: dict[str, Path] = {
     "chatqna/genieai_chatqna.py": OVERLAY_ROOT / "chatqna" / "Dockerfile-chatqna_genie-ai",
     "retriever/genieai_retriever_arangodb.py": OVERLAY_ROOT / "retriever" / "Dockerfile-retriever_genie-ai",
+    "retriever/config.py": OVERLAY_ROOT / "retriever" / "Dockerfile-retriever_genie-ai",
     "reranker/genieai_tei_reranker.py": OVERLAY_ROOT / "reranker" / "Dockerfile-reranker_genie-ai",
     "dataprep/genieai_dataprep_arangodb.py": OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",
 }
@@ -89,3 +96,30 @@ def test_the_pin_covers_every_service_directory_with_a_dockerfile() -> None:
 
     services_with_core_imports = {service for service in SERVICE_IMAGES if _core_imports(OVERLAY_ROOT / service)}
     assert services_with_core_imports, "no pinned service imports from core — the pin is stale"
+
+
+def test_no_overlay_module_imports_core_without_being_pinned() -> None:
+    """The gap that let ``retriever/config.py`` import ``core.*`` unchecked.
+
+    ``SERVICE_IMAGES`` is a hand-maintained list, and a hand-maintained list only
+    fails if someone remembers to add to it. ``retriever/config.py`` imports
+    ``core.embedding_query_prefix`` and shipped for months with no entry naming
+    it — the module whose Dockerfile was pinned passed every assertion while the
+    import itself was never compared against a ``COPY`` line.
+
+    So: walk the overlay, find every module importing ``core.*``, and require
+    each one to appear in the pin. A new module that imports ``core.*`` now
+    fails here by name rather than failing to fail at all.
+    """
+    SKIP_DIRS = {"tests", "contracts", ".venv", "reports", ".ruff_cache"}
+    unpinned = sorted(
+        str(path.relative_to(OVERLAY_ROOT))
+        for path in OVERLAY_ROOT.rglob("*.py")
+        if path.relative_to(OVERLAY_ROOT).parts[0] not in SKIP_DIRS
+        and str(path.relative_to(OVERLAY_ROOT)) not in SERVICE_IMAGES
+        and _core_imports(path)
+    )
+    assert not unpinned, (
+        f"modules importing core.* but not listed in SERVICE_IMAGES: {unpinned}. "
+        "Add each one, mapped to the Dockerfile that builds its image."
+    )

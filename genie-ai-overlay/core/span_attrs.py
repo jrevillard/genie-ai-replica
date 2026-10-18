@@ -21,7 +21,7 @@ enforced at emission and checked mechanically, in two layers:
    allowlist — the one value that would have required one (taxonomy labels) is
    handled structurally, below, which is what lets layer 2 stay absolute.
 
-Layer 1 accepts a second set, ``DEPRECATED_ATTRIBUTE_NAMES``: keys production
+Layer 1 accepts a second set, ``LEGACY_ATTRIBUTE_NAMES``: keys production
 emits today that are NOT part of the destination vocabulary. They are registered
 so the sweep can police existing spans without reporting the backlog as a fresh
 leak — see that dict for why they are deliberately not in ``ATTRIBUTE_NAMES``.
@@ -79,8 +79,20 @@ _DIGEST_SIZE = 4  # bytes -> 8 hex characters
 
 _ANY_WHITESPACE = re.compile(r"\s")
 
-# The full vocabulary (52 entries), keyed by a short identifier for call sites.
+# The full vocabulary (80 entries), keyed by a short identifier for call sites.
 # Values are the literal attribute name.
+#
+# SCOPE: every span attribute the pipeline publishes, on the QUERY path
+# (chatqna / retriever / reranker, keys ``rag.*`` / ``llm.*`` /
+# ``retrieval.*`` / ``answer.*`` / ``traversal.*`` / ``reranker.*``) and on the
+# INGEST path (dataprep, keys ``dataprep.*``). The two live in one register
+# because they answer the same question — "may this value be written onto a
+# span?" — and splitting them by service would mean a third register whose axis
+# is the directory layout, which moves.
+#
+# METRIC attribute keys are NOT here: they never reach a span and are policed
+# by their own path (``tracing.sanitize_attributes``). ``dataprep.call_site`` is
+# the worked example.
 #
 # Two entries are REQUEST-derived rather than deploy-derived, and are flagged
 # where they are declared:
@@ -128,7 +140,7 @@ ATTRIBUTE_NAMES = {
     # JOIN SENTINELS — two different literals, both meaning "the join failed".
     #
     # ``rag.candidate_chunk_keys`` / ``rag.selected_chunk_keys`` (see
-    # DEPRECATED_ATTRIBUTE_NAMES) use the literal "N/A" — a pre-existing write
+    # LEGACY_ATTRIBUTE_NAMES) use the literal "N/A" — a pre-existing write
     # at chatqna/genieai_chatqna.py, NOT changed here: the eval harness reads
     # those arrays, and a different token would be a second way for it to see an
     # unresolved entry as a chunk key.
@@ -173,6 +185,72 @@ ATTRIBUTE_NAMES = {
     # than replacing them, so these are destination vocabulary, not backlog.
     "rag_query_length": "rag.query_length",
     "rag_model_id": "rag.model_id",
+    # ------------------------------------------------------------------------
+    # DATAPREP — the ingest path, swept on the same terms as the query path.
+    #
+    # Dataprep is the one service where a span attribute comes from an EXTERNALLY
+    # SUPPLIED HTTP body rather than from internal state: ``dataprep.file_type``
+    # and ``dataprep.file_id`` are read off the upload payload verbatim. Nothing
+    # upstream constrains them, so a client that posts ``fileId: "Contrat de
+    # Jean Dupont"`` would put that string on a span and, with no collector-side
+    # redaction on the traces pipeline, into VictoriaTraces for the retention
+    # window. That is what the shape rule below exists to stop.
+    #
+    # Every other dataprep key is a count, a length, a flag, or an enum — none
+    # carries document content. The five ``llm.*`` spans sit one attribute away
+    # from the chunk text they are labelling, which is the other reason they are
+    # swept.
+    #
+    # METRIC-ONLY KEYS ARE DELIBERATELY ABSENT. ``dataprep.call_site`` labels the
+    # input-too-long counter and never reaches a span; listing it here would make
+    # this register claim a key no span carries.
+    # ------------------------------------------------------------------------
+    # Ingest entry (dataprep.ingest) / retract (dataprep.retract) / kill
+    "dataprep_file_type": "dataprep.file_type",
+    "dataprep_file_size_bytes": "dataprep.file_size_bytes",
+    "dataprep_file_id": "dataprep.file_id",
+    "dataprep_kill_result": "dataprep.kill_result",
+    # Chunking — dataprep.chunking and the llm.* spans that label the chunks
+    "dataprep_chunk_count": "dataprep.chunk_count",
+    "dataprep_chunk_index": "dataprep.chunk_index",
+    "dataprep_chunk_indices": "dataprep.chunk_indices",
+    # Vector index — dataprep.ensure_vector_index
+    "dataprep_graph_name": "dataprep.graph_name",
+    "dataprep_index_action": "dataprep.index_action",
+    "dataprep_index_dim": "dataprep.index_dim",
+    # Dataprep's own LLM calls — separate from the pipeline's llm.invoke span,
+    # which covers the chat LLM only.
+    "dataprep_llm_model": "dataprep.llm_model",
+    "dataprep_llm_batched": "dataprep.llm_batched",
+    "dataprep_llm_batch_size": "dataprep.llm_batch_size",
+    "dataprep_llm_attempt": "dataprep.llm_attempt",
+    "dataprep_llm_prompt_tokens": "dataprep.llm.prompt_tokens",
+    "dataprep_llm_completion_tokens": "dataprep.llm.completion_tokens",
+    # Contextual Retrieval — the per-chunk doc-context generation
+    "dataprep_contextual_retrieval": "dataprep.contextual_retrieval",
+    "dataprep_contextual_strategy": "dataprep.contextual_strategy",
+    "dataprep_context_chars": "dataprep.context_chars",
+    "dataprep_contexts_generated": "dataprep.contexts_generated",
+    "dataprep_partial_recovery_count": "dataprep.partial_recovery_count",
+    # Labelling + overflow
+    "dataprep_labels_suggested": "dataprep.labels_suggested",
+    "dataprep_input_too_long": "dataprep.input_too_long",
+    # ------------------------------------------------------------------------
+    # chatqna.query_condense — the multi-turn query rewrite. This span sits
+    # directly beside the user's query text, so it is swept for the same reason
+    # dataprep.ingest is: nothing structural keeps the query off it.
+    #
+    # ``genie.condense.mode`` is read from ``MULTI_TURN_MODE``, an operator-set
+    # env var, not user input — but it is still free-form text from the
+    # environment's point of view, and the shape rule is what stops a typo'd
+    # value like ``MULTI_TURN_MODE="condense v2"`` from reaching the traces
+    # pipeline verbatim. Status and counters are emitted as declared.
+    # ------------------------------------------------------------------------
+    "condense_mode": "genie.condense.mode",
+    "condense_status": "genie.condense.status",
+    "condense_latency_ms": "genie.condense.latency_ms",
+    "condense_prompt_tokens": "genie.condense.prompt_tokens",
+    "condense_completion_tokens": "genie.condense.completion_tokens",
 }
 
 # Attributes EMITTED TODAY by production code that are NOT in the destination
@@ -205,7 +283,7 @@ ATTRIBUTE_NAMES = {
 # What this set does NOT do is relax the privacy guard: a registered legacy key is
 # still subject to the full layer-2 shape check, so prose on any of these is still
 # a violation.
-DEPRECATED_ATTRIBUTE_NAMES = {
+LEGACY_ATTRIBUTE_NAMES = {
     # chatqna.reranker_selection — genieai_chatqna.py:114-118.
     # rag.adaptive_chunk_keys is a PARALLEL array and does not reshape these.
     # Exactly two of these five are the eval-harness contract
@@ -250,7 +328,7 @@ DEPRECATED_ATTRIBUTE_NAMES = {
     "abstained.reason": "legacy: survives — a new flag lands on a different span, this one is not removed",
 }
 
-# The complete set of reasons a DEPRECATED_ATTRIBUTE_NAMES value may carry.
+# The complete set of reasons a LEGACY_ATTRIBUTE_NAMES value may carry.
 #
 # Closed on purpose (see the block comment above). A test asserts membership in
 # both directions: no entry may use a reason outside this set, and no reason here
@@ -363,7 +441,7 @@ def free_text_violations(attributes: dict) -> list[str]:
     Layer 1: an unregistered key is a leak by definition — it means something
     wrote to a span without declaring what it was. A key is registered if it is
     in EITHER ``ATTRIBUTE_NAMES`` (destination vocabulary) or
-    ``DEPRECATED_ATTRIBUTE_NAMES`` (emitted today, outside that vocabulary and
+    ``LEGACY_ATTRIBUTE_NAMES`` (emitted today, outside that vocabulary and
     all of it surviving this work). Registering a legacy key relaxes nothing
     about its VALUE — layer 2 applies identically to both sets, so prose on a
     legacy key is still caught.
@@ -373,7 +451,7 @@ def free_text_violations(attributes: dict) -> list[str]:
     defeated by wording nobody anticipated, whereas whitespace and length are
     properties no phrasing avoids.
     """
-    registered = set(ATTRIBUTE_NAMES.values()) | set(DEPRECATED_ATTRIBUTE_NAMES)
+    registered = set(ATTRIBUTE_NAMES.values()) | set(LEGACY_ATTRIBUTE_NAMES)
     violations = []
     for key, value in (attributes or {}).items():
         if key in JSON_ENCODED_ATTRIBUTE_NAMES:

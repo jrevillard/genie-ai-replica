@@ -22,6 +22,27 @@ from dataprep.genieai_dataprep_arangodb import GenieArangoDataprep
 # ---------------------------------------------------------------------------
 
 
+def llm_response(content, prompt_tokens=80, completion_tokens=20):
+    """A chat-completion response shaped like the real client's returns.
+
+    ``usage`` carries INTEGER counters, and that is the whole point. A bare
+    ``MagicMock`` answers ``response.usage.completion_tokens`` with another
+    MagicMock, which passes production's ``getattr(_usage, "completion_tokens",
+    None) is not None`` guard and is then handed to ``span.set_attribute``. The
+    OTel SDK rejects the type and substitutes the mock's ``__str__`` — a
+    free-text attribute that reaches VictoriaTraces verbatim.
+
+    The span privacy sweep catches it, which is exactly why the fixture is
+    shaped like the real response rather than the guard being loosened: the
+    guard was right and the mock was lying about the contract.
+    """
+    response = MagicMock()
+    response.choices = [MagicMock()]
+    response.choices[0].message.content = content
+    response.usage = MagicMock(completion_tokens=completion_tokens, prompt_tokens=prompt_tokens)
+    return response
+
+
 def create_dataprep(db_mock=None, embeddings_mock=None, graph_mock=None):
     """Create a GenieArangoDataprep with mocked dependencies.
 
@@ -585,9 +606,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare"]})
+        mock_response = llm_response(json.dumps({"labels": ["Healthcare"]}))
 
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
@@ -635,9 +654,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"labels": ["healthcare"]})
+        mock_response = llm_response(json.dumps({"labels": ["healthcare"]}))
 
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
@@ -664,10 +681,8 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
         # LLM suggests a sibling crop (Cucumber) plus the in-scope Tomato.
-        mock_response.choices[0].message.content = json.dumps({"labels": ["Cucumber", "Tomato"]})
+        mock_response = llm_response(json.dumps({"labels": ["Cucumber", "Tomato"]}))
 
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
@@ -699,9 +714,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare"]})
+        mock_response = llm_response(json.dumps({"labels": ["Healthcare"]}))
 
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
@@ -723,9 +736,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
         monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"0": ["Healthcare"], "1": ["Education"]})
+        mock_response = llm_response(json.dumps({"0": ["Healthcare"], "1": ["Education"]}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -751,12 +762,8 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
         monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
 
-        bad = MagicMock()
-        bad.choices = [MagicMock()]
-        bad.choices[0].message.content = "not json"
-        good = MagicMock()
-        good.choices = [MagicMock()]
-        good.choices[0].message.content = json.dumps({"labels": ["Healthcare"]})
+        bad = llm_response("not json")
+        good = llm_response(json.dumps({"labels": ["Healthcare"]}))
 
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(side_effect=[bad, good, good])
@@ -781,10 +788,8 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
         monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
         # chunk 0 -> labels, chunk 1 -> null (model's "no labels" convention)
-        mock_response.choices[0].message.content = json.dumps({"0": ["Healthcare"], "1": None})
+        mock_response = llm_response(json.dumps({"0": ["Healthcare"], "1": None}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -807,9 +812,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"labels": None})
+        mock_response = llm_response(json.dumps({"labels": None}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -831,9 +834,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
         monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"0": "Healthcare", "1": ["Education"]})
+        mock_response = llm_response(json.dumps({"0": "Healthcare", "1": ["Education"]}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -856,10 +857,8 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
         monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
         # chunk 0 -> number (unusable), chunk 1 -> valid list
-        mock_response.choices[0].message.content = json.dumps({"0": 123, "1": ["Education"]})
+        mock_response = llm_response(json.dumps({"0": 123, "1": ["Education"]}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -881,10 +880,8 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
         # Two exact-match labels → previously 2 per-label logs + 1 final = 3.
-        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare", "Education"]})
+        mock_response = llm_response(json.dumps({"labels": ["Healthcare", "Education"]}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -906,9 +903,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare", "QuantumAgriculture"]})
+        mock_response = llm_response(json.dumps({"labels": ["Healthcare", "QuantumAgriculture"]}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -933,9 +928,7 @@ class TestLabelWithLlm:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare"]})
+        mock_response = llm_response(json.dumps({"labels": ["Healthcare"]}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -2117,10 +2110,7 @@ class TestContextualRetrieval:
             # per_chunk batches chunks → user message is a JSON list of {index, text}.
             items = json.loads(kwargs["messages"][1]["content"])
             contexts = {str(it["index"]): f"CTX[{it['text'][:5]}]" for it in items}
-            r = MagicMock()
-            r.choices = [MagicMock()]
-            r.choices[0].message.content = json.dumps({"contexts": contexts})
-            r.usage = MagicMock(completion_tokens=20, prompt_tokens=80)
+            r = llm_response(json.dumps({"contexts": contexts}))
             return r
 
         mock_client = AsyncMock()
@@ -2170,10 +2160,7 @@ class TestContextualRetrieval:
     @pytest.mark.asyncio
     async def test_context_single_call_parses_json_context(self, monkeypatch):
         dp = create_dataprep()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"context": "doc context"})
-        mock_response.usage = MagicMock(completion_tokens=7)
+        mock_response = llm_response(json.dumps({"context": "doc context"}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
         with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
@@ -2192,10 +2179,7 @@ class TestContextualRetrieval:
         """
         dp = create_dataprep()
         monkeypatch.setattr(dp_module, "CONTEXTUAL_MAX_TOKENS", 333)
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"context": "ctx"})
-        mock_response.usage = MagicMock(completion_tokens=3, prompt_tokens=10)
+        mock_response = llm_response(json.dumps({"context": "ctx"}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
         with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
@@ -2333,10 +2317,7 @@ class TestContextualRetrieval:
         monkeypatch.setenv("VLLM_API_KEY", "k")
         monkeypatch.setenv("VLLM_ENDPOINT", "http://x")
         monkeypatch.setenv("VLLM_MODEL_ID", "m")
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"context": "CUCUMBER GUIDE"})
-        mock_response.usage = MagicMock(completion_tokens=10, prompt_tokens=40)
+        mock_response = llm_response(json.dumps({"context": "CUCUMBER GUIDE"}))
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
         chunks = ["c1", "c2", "c3"]
@@ -2383,10 +2364,7 @@ class TestContextualRetrieval:
         async def fake_create(*args, **kwargs):
             items = json.loads(kwargs["messages"][1]["content"])
             ctxmap = {str(it["index"]): f"C{it['index']}" for it in items}
-            r = MagicMock()
-            r.choices = [MagicMock()]
-            r.choices[0].message.content = json.dumps({"contexts": ctxmap})
-            r.usage = MagicMock(completion_tokens=10, prompt_tokens=40)
+            r = llm_response(json.dumps({"contexts": ctxmap}))
             return r
 
         mock_client = AsyncMock()
@@ -2409,10 +2387,7 @@ class TestContextualRetrieval:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "m")
         # Batch response unparseable → _context_batch_call falls back to per-chunk.
-        bad = MagicMock()
-        bad.choices = [MagicMock()]
-        bad.choices[0].message.content = "not json"
-        bad.usage = MagicMock(completion_tokens=1, prompt_tokens=1)
+        bad = llm_response("not json")
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=bad)
         called = []
@@ -2482,10 +2457,7 @@ class TestContextualRetrieval:
 
     def _make_batch_response(self, contexts_dict: dict):
         """Build a mock chat completion response returning ``{"contexts": {...}}``."""
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = json.dumps({"contexts": contexts_dict})
-        mock_response.usage = MagicMock(completion_tokens=10, prompt_tokens=20)
+        mock_response = llm_response(json.dumps({"contexts": contexts_dict}))
         return mock_response
 
     @pytest.mark.asyncio

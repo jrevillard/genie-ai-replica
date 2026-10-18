@@ -185,7 +185,7 @@ spec:
             - name: KC_CLIENT_ID
               value: {{ .Values.data.keycloak.webClientId | quote }}
             - name: KC_PUBLIC_ORIGIN
-              value: {{ printf "%s://%s" (.Values.ingress.scheme | default "https") (.Values.ingress.host | default "genieai.local") | quote }}
+              value: {{ printf "%s://%s" (.Values.ingress.scheme | default "https") (.Values.ingress.host | required "ingress.host is required — supply the public hostname (may carry :port) in the environment overlay") | quote }}
             - name: KC_MOBILE_CLIENT_ID
               value: {{ .Values.data.keycloak.mobileClientId | default "genie-mobile" | quote }}
             - name: KC_MOBILE_REDIRECT_SCHEME
@@ -207,10 +207,13 @@ spec:
             # variable — so unset fields get non-empty sentinels instead
             # empty strings would fail kcc's substitution. With auth=false the
             # host/user values are never dialed.
+            # Real values are required once an smtp server is declared;
+            # with smtp:null the sentinels stay inert (nothing is dialed,
+            # no mail leaves) while keeping kcc's substitution resolvable.
             - name: EMAIL_FROM
-              value: {{ $smtp.from | default "no-reply@genieai.local" | quote }}
+              value: {{ if $smtp }}{{ $smtp.from | required "data.keycloak.smtp.from is required when smtp is set" | quote }}{{ else }}no-reply@genieai.local{{ end }}
             - name: EMAIL_HOST
-              value: {{ $smtp.host | default "localhost" | quote }}
+              value: {{ if $smtp }}{{ $smtp.host | required "data.keycloak.smtp.host is required when smtp is set" | quote }}{{ else }}localhost{{ end }}
             - name: EMAIL_PORT
               value: {{ $smtp.port | default 25 | int | quote }}
             - name: EMAIL_SECURE
@@ -220,7 +223,7 @@ spec:
             - name: EMAIL_SMTP_AUTH
               value: {{ eq ($smtp.auth | default false | toString) "true" | quote }}
             - name: EMAIL_USER
-              value: {{ $smtp.user | default "unused" | quote }}
+              value: {{ if and $smtp ($smtp.auth) }}{{ $smtp.user | required "data.keycloak.smtp.user is required when smtp.auth is true" | quote }}{{ else }}unused{{ end }}
             - name: KEYCLOAK_REGISTRATION_ENABLED
               value: {{ eq ((.Values.data.keycloak.registrationAllowed | default false) | toString) "true" | quote }}
             - name: KEYCLOAK_VERIFY_EMAIL

@@ -700,3 +700,87 @@ def test_build_embeddings_openai_dialect(monkeypatch, engine_env):
     emb = ragas_engine.build_embeddings()
     inner = getattr(emb, "embeddings", None) or getattr(emb, "langchain_embeddings", emb)
     assert type(inner).__name__ == "OpenAIEmbeddings"
+
+
+def test_evaluate_batches_rows_and_reports_progress(monkeypatch, engine_env):
+    """Row-batched evaluation (2026-10-18: per-phase progress bars): each
+    batch produces a done/total progress tick, per_query merges across
+    batches in order, and cancel between batches aborts honestly."""
+    import asyncio
+    import threading
+
+    import ragas as ragas_mod
+
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda: object())
+    monkeypatch.setenv("RAGAS_EVAL_BATCH_ROWS", "2")
+
+    class _M:
+        name = "faithfulness"
+
+    class _Frame:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def iterrows(self):
+            return iter(enumerate(self._rows))
+
+    class _Result:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def to_pandas(self):
+            return _Frame(self._rows)
+
+    def fake_evaluate(dataset, metrics, llm, embeddings, run_config, show_progress, raise_exceptions):
+        rows = [
+            {
+                "user_input": s.user_input,
+                "retrieved_contexts": list(s.retrieved_contexts or []),
+                "response": s.response or "",
+                "reference": s.reference or "",
+            }
+            for s in dataset.samples
+        ]
+        return _Result(
+            [
+                {
+                    "user_input": r["user_input"],
+                    "retrieved_contexts": r["retrieved_contexts"],
+                    "response": r["response"],
+                    "reference": r["reference"],
+                    "faithfulness": 1.0,
+                }
+                for r in rows
+            ]
+        )
+
+    monkeypatch.setattr(ragas_mod, "evaluate", fake_evaluate)
+    monkeypatch.setattr(ragas_engine, "resolve_metrics", lambda metrics: ([_M()], []))
+
+    ticks = []
+
+    def progress(phase, done=None, total=None):
+        ticks.append((phase, done, total))
+
+    samples = [
+        {"user_input": f"q{i}", "response": "a", "reference": "r", "retrieved_contexts": ["c"]} for i in range(5)
+    ]
+    out = asyncio.run(ragas_engine.evaluate_samples(samples, ["faithfulness"], progress=progress))
+    assert [t[1] for t in ticks] == [None, 2, 4, 5]  # phase announce, then batch boundaries 2/5 -> 4/5 -> 5/5
+    assert ticks[1][2] == 5  # the first batch tick carries the row total
+    assert len(out["per_query"]) == 5
+    assert out["per_query"][0]["user_input"] == "q0" and out["per_query"][4]["user_input"] == "q4"
+    assert out["aggregate"]["faithfulness"] == 1.0
+
+    # cancel between batches: the tick after the first batch flips the event
+    ev = threading.Event()
+
+    def progress_cancel(phase, done=None, total=None):
+        if done is not None and done >= 2:
+            ev.set()
+
+    with pytest.raises(ragas_engine.EngineCancelled):
+        asyncio.run(
+            ragas_engine.evaluate_samples(samples[:4], ["faithfulness"], progress=progress_cancel, cancel_event=ev)
+        )

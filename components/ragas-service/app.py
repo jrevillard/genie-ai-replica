@@ -101,11 +101,28 @@ MAX_CONCURRENT_JOBS = int(os.getenv("RAGAS_MAX_CONCURRENT_JOBS") or "2")
 TERMINAL_TTL_S = int(os.getenv("RAGAS_JOB_TTL_S") or "3600")
 
 
+def _nan_safe(value):
+    """Recursively replace NaN/Inf floats with None — starlette renders
+    responses with allow_nan=False, so ONE out-of-range float anywhere in a
+    job payload 500s every poll of that job and strands its result (live
+    2026-10-18: a NaN metric score in a finished run's per_query did exactly
+    that). The engine nulls NaNs at the source; this is the safety net."""
+    if isinstance(value, float):
+        return value if value == value and value not in (float("inf"), float("-inf")) else None
+    if isinstance(value, dict):
+        return {k: _nan_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_nan_safe(v) for v in value]
+    return value
+
+
 def _snapshot(job: dict) -> dict:
     out = {k: job.get(k) for k in ("job_id", "kind", "status", "phase", "error", "started_at", "finished_at")}
+    if job.get("progress"):
+        out["progress"] = job.get("progress")
     if job.get("status") == "done":
         out["result"] = job.get("result")
-    return out
+    return _nan_safe(out)
 
 
 async def _start_job(kind: str) -> str:
@@ -138,10 +155,19 @@ async def _start_job(kind: str) -> str:
 
 
 def _phase_tracker(job_id: str):
-    def _update(phase: str) -> None:
+    """Progress callback for engine jobs: phase + optional done/total counts
+    (David 2026-10-18: per-phase progress bars, granular status)."""
+
+    def _update(phase: str, done=None, total=None) -> None:
         job = JOBS.get(job_id)
         if job is not None and job.get("status") == "running":
             job["phase"] = phase
+            prog = {"phase": phase}
+            if done is not None:
+                prog["done"] = done
+            if total is not None:
+                prog["total"] = total
+            job["progress"] = prog
 
     return _update
 

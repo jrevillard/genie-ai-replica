@@ -32,8 +32,9 @@ deployments you must pre-warm the `hf_cache` Docker volume or set
 runtime theme assets are another first-deploy download: Ansible pulls the
 branding archives from the GitLab repository-archive endpoint on every deploy
 node, so an air-gapped node must either reach that endpoint or have the two
-host config directories (`/opt/genieai/config/frontend/` and
-`/opt/genieai/config/keycloak/themes/`) pre-seeded by hand with
+host config directories (`<config_dir>/frontend/` and
+`<config_dir>/keycloak/themes/` — default `/opt/genieai/config/...`, the path
+follows the `deploy_dir` group var) pre-seeded by hand with
 `config_bootstrap_sync_enabled: false`.
 
 ### 3. Does it work with my SSO?

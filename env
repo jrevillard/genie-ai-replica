@@ -896,7 +896,8 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # directories); Docker resolves them against the compose file's directory.
 # `docker stack deploy` only accepts ABSOLUTE bind sources, so a Swarm node
 # deployed without the Ansible playbook must have CONFIG_DIR_FRONTEND /
-# CONFIG_DIR_KEYCLOAK set to absolute host paths. For example:
+# CONFIG_DIR_KEYCLOAK set to absolute host paths. For example (config_dir
+# follows the deploy_dir group var — /opt/genieai is the default):
 #   CONFIG_DIR_FRONTEND=/opt/genieai/config/frontend
 #   CONFIG_DIR_KEYCLOAK=/opt/genieai/config/keycloak/themes
 

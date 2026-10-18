@@ -33,6 +33,8 @@ Both brand surfaces are bind-mounted into their containers from the node, so the
 | Web app config + assets | `components/gov-chat-frontend/public/config/` | `/opt/genieai/config/frontend/` |
 | Keycloak themes (all of them) | `configs/keycloak/themes/` | `/opt/genieai/config/keycloak/themes/` |
 
+Node paths above use the default `config_dir` (`/opt/genieai/config`, derived from the `deploy_dir` group var in `deploy/ansible/group_vars/all.yml`). If your deployment overrides `deploy_dir`, substitute accordingly — the node's rendered `.env` always names the exact `CONFIG_DIR_FRONTEND` / `CONFIG_DIR_KEYCLOAK` paths in use.
+
 Both are mounted **read-only** inside the container, so the container never writes over your edits. The Ansible role (`config_bootstrap`) seeds the node directories from the repo at deploy time, and a routine `ansible-playbook deploy.yml --tags deploy` does it for you.
 
 Two files are deliberately **outside** the mount and must not be hand-edited:

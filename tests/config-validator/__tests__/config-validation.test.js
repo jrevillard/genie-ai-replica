@@ -107,15 +107,11 @@ describe('Configuration Validation Suite', () => {
     // as comments (86 OKF_* lines are commented against 1 active), and the
     // parser used to skip them entirely, so they could not reach the orphan
     // gate even in principle.
-    const { unwired, allowlisted } = findUnwiredDocumented(
-      envParsed.documented,
-      composeVars,
-      { allowlist: UNIMPLEMENTED_OKF_KNOBS }
-    );
+    const { unwired, allowlisted } = findUnwiredDocumented(envParsed.documented, composeVars, {
+      allowlist: UNIMPLEMENTED_OKF_KNOBS
+    });
 
-    expect(
-      unwired.map((u) => `${u.name} (env section: ${u.section})`)
-    ).toEqual([]);
+    expect(unwired.map((u) => `${u.name} (env section: ${u.section})`)).toEqual([]);
 
     // The allowlist is not a place to hide things: it is asserted to be EXACTLY
     // the two documented-unimplemented knobs, so adding a third name fails here
@@ -468,7 +464,7 @@ describe('Configuration Validation Suite', () => {
     });
   });
 
-// --- env.j2 per-service image vars vs docker-compose references ---
+  // --- env.j2 per-service image vars vs docker-compose references ---
   // env.j2 (rendered by Ansible) is the only producer of the per-service
   // GENIE_AI_<NAME>_IMAGE / _IMAGE_TAG values; docker-compose.yaml is their
   // only consumer. A name mismatch on either side makes compose silently
@@ -538,13 +534,16 @@ describe('Configuration Validation Suite', () => {
         const a = ansibleVars[v];
         if (!a || a.defaultIsJinja || a.default === null) continue; // guarded/no-literal: presence-only
         const composeDefault = okfComposeVars[v];
-        if (composeDefault !== '' && a.default !== composeDefault) mismatches.push(v + ': compose=' + composeDefault + ' ansible=' + a.default);
+        if (composeDefault !== '' && a.default !== composeDefault)
+          mismatches.push(v + ': compose=' + composeDefault + ' ansible=' + a.default);
       }
       expect(mismatches).toEqual([]);
     });
 
     test('env.j2 emits each OKF var exactly once (no last-wins shadowing)', () => {
-      const dupes = Object.entries(ansibleVars).filter(([k, a]) => /^OKF_/.test(k) && a.count > 1).map(([k]) => k);
+      const dupes = Object.entries(ansibleVars)
+        .filter(([k, a]) => /^OKF_/.test(k) && a.count > 1)
+        .map(([k]) => k);
       expect(dupes).toEqual([]);
     });
 
@@ -739,7 +738,11 @@ describe('Configuration Validation Suite', () => {
       const scopeVars = parseAnsibleEnvVars(
         fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
       );
-      expect({ name: 'OKF_SCOPE_MODE', found: !!scopeVars.OKF_SCOPE_MODE, default: scopeVars.OKF_SCOPE_MODE ? scopeVars.OKF_SCOPE_MODE.default : null }).toEqual({
+      expect({
+        name: 'OKF_SCOPE_MODE',
+        found: !!scopeVars.OKF_SCOPE_MODE,
+        default: scopeVars.OKF_SCOPE_MODE ? scopeVars.OKF_SCOPE_MODE.default : null
+      }).toEqual({
         name: 'OKF_SCOPE_MODE',
         found: true,
         default: 'open'
@@ -774,7 +777,10 @@ describe('Configuration Validation Suite', () => {
       const vars = parseAnsibleEnvVars(
         fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
       );
-      expect({ found: !!vars.OKF_RERANK_ENDPOINT, default: vars.OKF_RERANK_ENDPOINT ? vars.OKF_RERANK_ENDPOINT.default : null }).toEqual({
+      expect({
+        found: !!vars.OKF_RERANK_ENDPOINT,
+        default: vars.OKF_RERANK_ENDPOINT ? vars.OKF_RERANK_ENDPOINT.default : null
+      }).toEqual({
         found: true,
         default: ''
       });
@@ -808,6 +814,35 @@ describe('Configuration Validation Suite', () => {
       expect(envText).toMatch(/^#\s*OKF_RAGAS_TESTSET_SIZE_DEFAULT=20.*$/m);
     });
 
+    test('the judge cache + liveness-horizon vars land in all four sites (2026-10-18 batch)', () => {
+      // compose: sidecar carries the cache; okf-server carries the horizon
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const ragasBlock = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(ragasBlock).toMatch(/- RAGAS_LLM_CACHE=\$\{RAGAS_LLM_CACHE:-1\}/);
+      expect(ragasBlock).toMatch(/- RAGAS_LLM_CACHE_DIR=\$\{RAGAS_LLM_CACHE_DIR:-\/tmp\/ragas-llm-cache\}/);
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(/- OKF_RAGAS_LONG_TIMEOUT_MS=\$\{OKF_RAGAS_LONG_TIMEOUT_MS:-3600000\}/);
+      expect(okfBlock).toMatch(/- OKF_RAGAS_JOB_POLL_MS=\$\{OKF_RAGAS_JOB_POLL_MS:-3000\}/);
+      // env template documents all of them
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*RAGAS_LLM_CACHE=1.*$/m);
+      expect(envText).toMatch(/^#\s*RAGAS_LLM_CACHE_DIR=\/tmp\/ragas-llm-cache.*$/m);
+      expect(envText).toMatch(/^#\s*OKF_RAGAS_LONG_TIMEOUT_MS=3600000.*$/m);
+      expect(envText).toMatch(/LIVENESS HORIZON, not a job deadline/);
+      // ansible env.j2 emits them
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect({
+        c: vars.RAGAS_LLM_CACHE && vars.RAGAS_LLM_CACHE.default,
+        d: vars.RAGAS_LLM_CACHE_DIR && vars.RAGAS_LLM_CACHE_DIR.default
+      }).toEqual({
+        c: '1',
+        d: '/tmp/ragas-llm-cache'
+      });
+      expect(vars.OKF_RAGAS_LONG_TIMEOUT_MS && vars.OKF_RAGAS_LONG_TIMEOUT_MS.default).toBe('3600000');
+    });
+
     test('the ragas vars are emitted by ansible env.j2 (inherited defaults)', () => {
       const vars = parseAnsibleEnvVars(
         fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
@@ -816,11 +851,17 @@ describe('Configuration Validation Suite', () => {
         found: true,
         url: 'http://ragas-service:8090'
       });
-      expect({ found: !!vars.RAGAS_JUDGE_BASE_URL, url: vars.RAGAS_JUDGE_BASE_URL ? vars.RAGAS_JUDGE_BASE_URL.default : null }).toEqual({
+      expect({
+        found: !!vars.RAGAS_JUDGE_BASE_URL,
+        url: vars.RAGAS_JUDGE_BASE_URL ? vars.RAGAS_JUDGE_BASE_URL.default : null
+      }).toEqual({
         found: true,
         url: 'http://vllm:8000/v1'
       });
-      expect({ found: !!vars.RAGAS_EMBED_BASE_URL, url: vars.RAGAS_EMBED_BASE_URL ? vars.RAGAS_EMBED_BASE_URL.default : null }).toEqual({
+      expect({
+        found: !!vars.RAGAS_EMBED_BASE_URL,
+        url: vars.RAGAS_EMBED_BASE_URL ? vars.RAGAS_EMBED_BASE_URL.default : null
+      }).toEqual({
         found: true,
         url: 'http://tei-embedding-server:80'
       });
@@ -828,14 +869,20 @@ describe('Configuration Validation Suite', () => {
         found: true,
         v: 'tei'
       });
-      expect({ found: !!vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT, v: vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT ? vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT.default : null }).toEqual({
+      expect({
+        found: !!vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT,
+        v: vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT ? vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT.default : null
+      }).toEqual({
         found: true,
         v: '20'
       });
     });
 
     test('the ragas-service image is in the ansible image list', () => {
-      const facts = fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/tasks/deploy-shared-facts.yml'), 'utf8');
+      const facts = fs.readFileSync(
+        path.resolve(__dirname, '../../../deploy/ansible/tasks/deploy-shared-facts.yml'),
+        'utf8'
+      );
       expect(facts).toMatch(/name: "genie-ai-ragas-service"/);
     });
   });
@@ -874,7 +921,7 @@ describe('Configuration Validation Suite', () => {
       'DATAPREP_CONTEXTUAL_MAX_TOKENS',
       'CONTEXTUAL_STRATEGY',
       'CONTEXTUAL_RETRIEVAL_ENABLED',
-      'CONTEXTUAL_LABEL_RAW',
+      'CONTEXTUAL_LABEL_RAW'
     ];
 
     test('the dataprep compose block parsed (guard — a silent re-scope must not pass)', () => {

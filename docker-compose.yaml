@@ -762,6 +762,11 @@ services:
       - OKF_RAGAS_TESTSET_SIZE_DEFAULT=${OKF_RAGAS_TESTSET_SIZE_DEFAULT:-20}
       - OKF_RAGAS_MAX_ENTRIES=${OKF_RAGAS_MAX_ENTRIES:-200}
       - OKF_RAGAS_RUN_CONCURRENCY=${OKF_RAGAS_RUN_CONCURRENCY:-2}
+      # Liveness horizon (NOT a job deadline): a reachable running job is
+      # never timed out; this bounds only the unreachable-sidecar retries.
+      # Cancel is the user's call (David 2026-10-18).
+      - OKF_RAGAS_LONG_TIMEOUT_MS=${OKF_RAGAS_LONG_TIMEOUT_MS:-3600000}
+      - OKF_RAGAS_JOB_POLL_MS=${OKF_RAGAS_JOB_POLL_MS:-3000}
       - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
       - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
       # Story 1-8g-p: whole-corpus TOPIC-LINK AUTHORING. The import wizard runs
@@ -931,6 +936,11 @@ services:
       - RAGAS_EMBED_BASE_URL=${RAGAS_EMBED_BASE_URL:-http://tei-embedding-server:80}
       - RAGAS_EMBED_MODEL=${RAGAS_EMBED_MODEL:-${EMBEDDING_MODEL_ID:-}}
       - RAGAS_EMBED_API=${RAGAS_EMBED_API:-tei}
+      # Disk judge cache (2026-10-18): responses keyed by prompt+params
+      # persist in the container — repeat generations of the same repos skip
+      # the whole KG phase. 0 disables; the dir is best-effort only.
+      - RAGAS_LLM_CACHE=${RAGAS_LLM_CACHE:-1}
+      - RAGAS_LLM_CACHE_DIR=${RAGAS_LLM_CACHE_DIR:-/tmp/ragas-llm-cache}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     build:
       context: components/ragas-service/

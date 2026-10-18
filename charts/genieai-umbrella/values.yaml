@@ -182,10 +182,12 @@ data:
     adminUsername: genie-admin
     defaultLocale: en
     # Login/account/admin/email theme name, exported as KEYCLOAK_THEME.
-    # The `genie` theme ships in the genie-ai-keycloak image; with the
-    # operator's stock image (image.repository empty) Keycloak silently
-    # falls back to its default theme. See issue !998 for the
-    # mount-only branding work.
+    # The `genie` theme source lives at configs/keycloak/themes (mounted
+    # at runtime on the compose path since #998). The Keycloak CR has no
+    # volume surface, so the theme reaches the pod only through
+    # image.repository pointing at a theme-baked image — with the
+    # operator's stock image Keycloak silently falls back to its
+    # default theme. See #998 for the runtime-mount branding model.
     theme: genie
     # Unset = the keycloak-operator's pinned stock image (no GENIE.AI
     # theme). Set repository to the theme-baked genie-ai-keycloak image
@@ -406,10 +408,12 @@ services:
     image: { repository: genie-ai-frontend, tag: "main" }
     port: 8090
     # Image USER is root (uid 0). The entrypoint writes
-    # /app/dist/config.js at startup — that path is owned by root in
+    # /app/dist/runtime/config.js at startup (the runtime writer moved
+    # out of /app/dist/config, which is a mount point for
+    # operator-editable theme assets) — /app/dist is owned by root in
     # the image, so the pod must run as root or the write fails with
-    # EACCES. To make this non-root, the image's entrypoint would
-    # need to chown /app/dist before the write, which is a rebuild.
+    # EACCES. The theme assets themselves are baked into the image; a
+    # ConfigMap mounted at /app/dist/config overrides them at runtime.
     securityContext:
       runAsNonRoot: false
       runAsUser: 0

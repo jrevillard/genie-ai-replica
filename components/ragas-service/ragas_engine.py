@@ -349,6 +349,158 @@ _DEFAULT_METRICS_TUPLE = ("faithfulness", "context_precision", "context_recall",
 # --------------------------------------------------------------------------
 
 
+def _make_headlines_seeder():
+    """Build the transform that back-fills node.properties['headlines'] = [].
+
+    Live bug (2026-10-18): ragas 0.4.3's default long-doc chain pairs
+    HeadlinesExtractor — which only sets 'headlines' on DOCUMENT nodes over
+    500 tokens (testset/transforms/default.py:68-72, 87-89,
+    filter_doc_with_num_tokens) — with HeadlineSplitter, which hard-requires
+    the property on EVERY node and checks it before its own min_tokens
+    early-return (testset/transforms/splitters/headline.py:63-68:
+    ValueError "'headlines' property not found in this node"). One concept
+    at or under 500 tokens therefore killed the whole suite build. Extractor
+    LLM failures would also leave the property unset, but those surface
+    loudly at the extractor step itself (run_async_tasks re-raises the first
+    task exception, async_utils.py:226-228) — the silent gap is the filter
+    mismatch, so the seeder runs unfiltered over every node.
+
+    Seeding [] preserves the splitter's own no-headlines semantics: the
+    headline loop no-ops, the whole text stays a single chunk, and the node
+    is returned unsplit (headline.py:70-81).
+
+    Implemented as a Transform subclass, not a bare callable, because
+    apply_transforms accepts only BaseGraphTransformation / Parallel in its
+    sequence — anything else hits "Invalid transforms type"
+    (testset/transforms/engine.py:68-89). The interface mirrors the base
+    class (testset/transforms/base.py:32-117): async transform(kg) plus
+    generate_execution_plan(kg) returning coroutines that mutate the graph.
+    """
+    from dataclasses import dataclass
+
+    from ragas.testset.transforms import BaseGraphTransformation
+
+    @dataclass
+    class _HeadlinesSeeder(BaseGraphTransformation):
+        async def transform(self, kg):
+            for node in kg.nodes:
+                if node.get_property("headlines") is None:
+                    node.add_property("headlines", [])
+
+        def generate_execution_plan(self, kg):
+            async def apply_seed():
+                await self.transform(kg)
+
+            return [apply_seed()]
+
+    return _HeadlinesSeeder()
+
+
+def _build_testset_transforms(documents, llm, embedding_model):
+    """Explicit mirror of ragas 0.4.3 default_transforms()
+    (.venv/Lib/site-packages/ragas/testset/transforms/default.py:34-167)
+    with ONE change: a headlines-seeding step (_make_headlines_seeder)
+    spliced between HeadlinesExtractor and HeadlineSplitter.
+
+    Built explicitly rather than taken from default_transforms() so the
+    sequence is visible, assertable, and safely insertable — the parity
+    test in tests/test_ragas_engine.py pins it against the library default
+    so a ragas upgrade that reorders the defaults fails loudly instead of
+    drifting silently. Both branch bodies and the token-bin choice are
+    replicated verbatim from default.py (line refs inline).
+    """
+    from ragas.testset.graph import NodeType
+    from ragas.testset.transforms import (
+        CosineSimilarityBuilder,
+        CustomNodeFilter,
+        EmbeddingExtractor,
+        HeadlinesExtractor,
+        HeadlineSplitter,
+        OverlapScoreBuilder,
+        Parallel,
+        SummaryExtractor,
+    )
+    from ragas.testset.transforms.extractors.llm_based import NERExtractor, ThemesExtractor
+    from ragas.utils import num_tokens_from_string
+
+    def filter_doc_with_num_tokens(node, min_num_tokens=500):
+        return (
+            node.type == NodeType.DOCUMENT and num_tokens_from_string(node.properties["page_content"]) > min_num_tokens
+        )
+
+    def filter_docs(node):
+        return node.type == NodeType.DOCUMENT
+
+    def filter_chunks(node):
+        return node.type == NodeType.CHUNK
+
+    # token-length bins pick the branch (default.py:80-82, 86, 131, 162-165)
+    bin_ranges = [(0, 100), (101, 500), (501, float("inf"))]
+    counts = [num_tokens_from_string(doc.page_content) for doc in documents]
+    bins = {f"{start}-{end}": 0 for start, end in bin_ranges}
+    for num in counts:
+        for start, end in bin_ranges:
+            if start <= num <= end:
+                bins[f"{start}-{end}"] += 1
+                break
+    fractions = {k: v / len(documents) for k, v in bins.items()}
+
+    if fractions["501-inf"] >= 0.25:
+        # long-doc branch (default.py:86-130) + seeder after HeadlinesExtractor
+        return [
+            HeadlinesExtractor(llm=llm, filter_nodes=filter_doc_with_num_tokens),
+            _make_headlines_seeder(),
+            HeadlineSplitter(min_tokens=500),
+            SummaryExtractor(llm=llm, filter_nodes=filter_doc_with_num_tokens),
+            CustomNodeFilter(llm=llm, filter_nodes=filter_chunks),
+            Parallel(
+                EmbeddingExtractor(
+                    embedding_model=embedding_model,
+                    property_name="summary_embedding",
+                    embed_property_name="summary",
+                    filter_nodes=filter_doc_with_num_tokens,
+                ),
+                ThemesExtractor(llm=llm, filter_nodes=filter_chunks),
+                NERExtractor(llm=llm, filter_nodes=filter_chunks),
+            ),
+            Parallel(
+                CosineSimilarityBuilder(
+                    property_name="summary_embedding",
+                    new_property_name="summary_similarity",
+                    threshold=0.7,
+                    filter_nodes=filter_doc_with_num_tokens,
+                ),
+                OverlapScoreBuilder(threshold=0.01, filter_nodes=filter_chunks),
+            ),
+        ]
+    if fractions["101-500"] >= 0.25:
+        # medium-doc branch (default.py:131-161) — verbatim, no splitter here
+        return [
+            SummaryExtractor(llm=llm, filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100)),
+            CustomNodeFilter(llm=llm),
+            Parallel(
+                EmbeddingExtractor(
+                    embedding_model=embedding_model,
+                    property_name="summary_embedding",
+                    embed_property_name="summary",
+                    filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100),
+                ),
+                ThemesExtractor(llm=llm, filter_nodes=filter_docs),
+                NERExtractor(llm=llm),
+            ),
+            Parallel(
+                CosineSimilarityBuilder(
+                    property_name="summary_embedding",
+                    new_property_name="summary_similarity",
+                    threshold=0.5,
+                    filter_nodes=lambda node: filter_doc_with_num_tokens(node, 100),
+                ),
+                OverlapScoreBuilder(threshold=0.01),
+            ),
+        ]
+    raise ValueError("Documents appears to be too short (ie 100 tokens or less). Please provide longer documents.")
+
+
 async def generate_testset(
     documents: list[dict],
     testset_size: int,
@@ -369,7 +521,7 @@ async def generate_testset(
     from ragas.run_config import RunConfig
     from ragas.testset import TestsetGenerator
     from ragas.testset.graph import KnowledgeGraph, Node, NodeType
-    from ragas.testset.transforms import apply_transforms, default_transforms
+    from ragas.testset.transforms import apply_transforms
 
     llm = build_llm(temperature=0.3)  # generation benefits from mild creativity
     embeddings = build_embeddings()
@@ -410,10 +562,13 @@ async def generate_testset(
     # num_personas — only generate() does. Replicate the wrapper's own
     # body (verified against its source: default transforms → DOCUMENT
     # nodes → apply_transforms → generate) so the persona count rides
-    # through, per the user-settable-dimensions contract.
+    # through, per the user-settable-dimensions contract. The transforms
+    # come from our explicit mirror of the 0.4.3 defaults (see
+    # _build_testset_transforms) — the library's own list crashes on
+    # docs the HeadlinesExtractor filter skips (live 2026-10-18).
     if progress:
         progress("building-knowledge-graph")
-    transforms = default_transforms(documents=docs, llm=llm, embedding_model=embeddings)
+    transforms = _build_testset_transforms(documents=docs, llm=llm, embedding_model=embeddings)
     nodes = [
         Node(
             type=NodeType.DOCUMENT,

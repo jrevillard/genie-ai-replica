@@ -223,6 +223,37 @@ class TestCondenseQueryCall:
         assert captured["headers"]["Authorization"] == "Bearer test-key"
 
     @pytest.mark.asyncio
+    async def test_system_prompt_env_override_reaches_payload(self):
+        """MULTI_TURN_CONDENSE_SYSTEM_PROMPT (two-tier priority, same contract
+        as CHATQNA_SYSTEM_PROMPT): a set value drives the rewrite call's
+        system message; empty/whitespace falls back to the built-in default."""
+        svc = create_chatqna_service()
+        captured = {}
+
+        def _post(url, json=None, headers=None):
+            captured.update(json=json)
+            return _make_httpx_response(json_data=_condense_response_payload())
+
+        override = "CUSTOM rewrite prompt. Output JSON only."
+        with (
+            patch.dict("os.environ", {"MULTI_TURN_CONDENSE_SYSTEM_PROMPT": override}, clear=False),
+            patch.object(chatqna_module, "_get_llm_model", return_value="granite-4.1-8b"),
+            patch.object(chatqna_module, "OPENAI_API_KEY", "test-key"),
+            patch.object(chatqna_module.httpx, "AsyncClient", _make_fake_client(_post)),
+        ):
+            await svc._condense_query("USER: bean?\nASSISTANT: EAC ...", "maize instead")
+        assert captured["json"]["messages"][0]["content"] == override
+
+        with (
+            patch.dict("os.environ", {"MULTI_TURN_CONDENSE_SYSTEM_PROMPT": "   "}, clear=False),
+            patch.object(chatqna_module, "_get_llm_model", return_value="granite-4.1-8b"),
+            patch.object(chatqna_module, "OPENAI_API_KEY", "test-key"),
+            patch.object(chatqna_module.httpx, "AsyncClient", _make_fake_client(_post)),
+        ):
+            await svc._condense_query("USER: bean?\nASSISTANT: EAC ...", "maize instead")
+        assert captured["json"]["messages"][0]["content"] == _CONDENSE_SYSTEM_PROMPT
+
+    @pytest.mark.asyncio
     async def test_token_attrs_emitted_via_raw_set_attribute_bypass_pii_filter(self):
         """Finding #1: ``sanitize_attributes`` drops any key whose name matches
         the ``token`` PII regex — the condense span's ``prompt_tokens`` /

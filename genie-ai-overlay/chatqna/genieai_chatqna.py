@@ -696,6 +696,10 @@ def _blend_embeddings(query_emb, history_emb, alpha):
 # LLM's endpoint/model and is fail-closed: any failure classification below
 # fails the turn with LLM-failure semantics (503) — no blend or raw-query
 # fallback. Product stance: a wrong answer is worse than a failed turn.
+# Built-in default; MULTI_TURN_CONDENSE_SYSTEM_PROMPT overrides it per call
+# (two-tier priority, same contract as CHATQNA_SYSTEM_PROMPT). A custom prompt
+# must still demand JSON-only output — the response is parsed as
+# {"standalone_query": "..."} and anything else fails the turn (bad_body).
 _CONDENSE_SYSTEM_PROMPT = (
     "You rewrite a user's follow-up message into a standalone information-retrieval "
     "query. Resolve pronouns and implicit references using the chat history. "
@@ -3025,10 +3029,11 @@ class ChatQnAService:
             f"{LLM_SERVER_PROTOCOL}://{LLM_SERVER_HOST_IP}:{LLM_SERVER_PORT}"
             f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions"
         )
+        system_prompt = os.getenv("MULTI_TURN_CONDENSE_SYSTEM_PROMPT", "").strip() or _CONDENSE_SYSTEM_PROMPT
         payload = {
             "model": _get_llm_model(),
             "messages": [
-                {"role": "system", "content": _CONDENSE_SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": _build_condense_user_content(history_text, last_message)},
             ],
             "temperature": 0.0,

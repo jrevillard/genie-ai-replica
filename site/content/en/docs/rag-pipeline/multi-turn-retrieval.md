@@ -161,6 +161,7 @@ rather than a confident-but-wrong answer.
 | `MULTI_TURN_CONDENSE_HISTORY_TURNS` | `8` | Number of prior conversation segments fed to the condense rewrite prompt. Only consulted when `MULTI_TURN_MODE=condense`; the blend path keeps its own `MULTI_TURN_HISTORY_TURNS` knob. |
 | `MULTI_TURN_CONDENSE_MAX_TOKENS` | `256` | Output cap (tokens) for the condense rewrite LLM call. A rewrite longer than the cap truncates the guided JSON mid-string → `bad_body` → the turn fails closed (503). Raise it if valid rewrites of long multi-clause follow-ups keep failing. |
 | `MULTI_TURN_CONDENSE_TIMEOUT_SECONDS` | `5.0` | Fail-closed budget (seconds) for the condense rewrite call. A timeout fails the turn (503). Raise it for slow GPU nodes. |
+| `MULTI_TURN_CONDENSE_SYSTEM_PROMPT` | *(built-in)* | Overrides the condense rewrite prompt. A custom prompt must still demand JSON-only output — the response is parsed as `{"standalone_query": "..."}` and anything else fails the turn (503). |
 
 Setting `MULTI_TURN_MODE=condense` while `MULTI_TURN_BLEND_ENABLED=true`
 logs a warning and **ignores the blend flag** — the two paths cannot

@@ -37,7 +37,7 @@
 #
 # Grounded in:
 #   deploy/ansible/group_vars/all.yml:9          deploy_dir: /opt/genieai
-#   deploy/ansible/group_vars/all.yml:22         config_dir: "{{ deploy_dir }}/config"
+#   deploy/ansible/group_vars/all.yml:21         config_dir: "{{ deploy_dir }}/config"
 #   deploy/ansible/roles/config_bootstrap/defaults/main.yml:26-33
 #                                               config_bootstrap_pairs (dest_subdir)
 #   deploy/ansible/roles/config_bootstrap/tasks/main.yml

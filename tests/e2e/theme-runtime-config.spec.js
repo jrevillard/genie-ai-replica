@@ -75,7 +75,16 @@ test.describe('Keycloak runtime theme mount', () => {
     ).toContain(`${base.replace(/^https?:\/\//, '')}/auth/realms/genie`);
   });
 
-  test('login page renders the mounted genie theme', async ({ request }) => {
+  // A deployment may select any mounted theme via KEYCLOAK_THEME (default
+  // genie). Built-in theme names are rejected: their assets are what Keycloak
+  // serves on an unmounted/broken theme, so asserting one would make the test
+  // pass on exactly the failure it exists to catch.
+  const expectedTheme = process.env.KEYCLOAK_THEME || 'genie';
+  if (/^keycloak/.test(expectedTheme)) {
+    throw new Error(`KEYCLOAK_THEME=${expectedTheme} is a built-in theme; the theme-mount test cannot assert it`);
+  }
+
+  test(`login page renders the mounted ${expectedTheme} theme`, async ({ request }) => {
     // Keycloak enforces PKCE (S256, min 43 chars) for genie-app and only
     // renders the login form after validating the request. A syntactically
     // valid dummy challenge yields the real login page without any session;
@@ -92,10 +101,7 @@ test.describe('Keycloak runtime theme mount', () => {
     const html = await response.text();
     // Theme assets are referenced as /auth/resources/<hash>/login/<theme>/...;
     // referencing the selected theme proves the MOUNTED theme resolved — the
-    // built-in fallback would reference login/keycloak[.v2] instead. The
-    // expected theme follows the deployment's KEYCLOAK_THEME (default genie),
-    // so themed deployments (e.g. genie-el-salvador) validate their own theme.
-    const expectedTheme = process.env.KEYCLOAK_THEME || 'genie';
+    // built-in fallback would reference login/keycloak[.v2] instead.
     expect(
       html,
       `login page should load the mounted ${expectedTheme} theme assets`

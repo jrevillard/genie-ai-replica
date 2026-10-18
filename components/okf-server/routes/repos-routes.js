@@ -192,6 +192,14 @@ router.get(
   ctrl.exportRagasSuiteXlsx
 );
 router.get('/:repo_id/ragas-testsuite/:suite_key', requireRepoScope('repo_id', 'read'), ctrl.getRagasSuite);
+// User-facing generation cancel (David 2026-10-18): the UI control that
+// stops a long generation — cancels the sidecar job; the state poll then
+// reports RAGAS_JOB_CANCELLED honestly.
+router.post(
+  '/:repo_id/ragas-testsuite/:suite_key/cancel',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.cancelRagasSuiteGeneration
+);
 router.post('/:repo_id/ragas-testsuite', requireRepoScope('repo_id', 'admin'), ctrl.generateRagasSuite);
 router.post(
   '/:repo_id/ragas-testsuite/:suite_key/results-export',

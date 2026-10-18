@@ -1936,6 +1936,16 @@ async function getRagasSuite(req, res, next) {
   }
 }
 
+async function cancelRagasSuiteGeneration(req, res, next) {
+  try {
+    const ragasSuiteService = require('../services/ragas-suite-service');
+    const out = await ragasSuiteService.cancelSuiteGeneration(req.params.repo_id);
+    res.status(200).json(out);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function updateRagasSuiteRows(req, res, next) {
   try {
     const ragasSuiteService = require('../services/ragas-suite-service');
@@ -2145,6 +2155,7 @@ module.exports = {
   listTestSuiteRuns,
   generateRagasSuite,
   getRagasSuite,
+  cancelRagasSuiteGeneration,
   updateRagasSuiteRows,
   addRagasSuiteQueries,
   renameRagasSuite,

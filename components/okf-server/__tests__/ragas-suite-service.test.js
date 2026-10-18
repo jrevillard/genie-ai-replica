@@ -301,6 +301,47 @@ describe('beginSuiteGeneration / getSuite', () => {
     });
   });
 
+  it('user cancel stops the sidecar job and records RAGAS_JOB_CANCELLED (not "vanished")', async () => {
+    const deletes = [];
+    let releasePoll;
+    let cancelled = false;
+    global.fetch = jest.fn((url, init) => {
+      const u = String(url);
+      if (u.includes('/generate-testset')) return Promise.resolve(okJson({ job_id: 'j-usercut' }));
+      if (u.includes('/jobs/j-usercut')) {
+        if (init && init.method === 'DELETE') {
+          cancelled = true;
+          deletes.push(u);
+          return Promise.resolve(okJson({ job_id: 'j-usercut', status: 'cancelled' }));
+        }
+        if (cancelled) {
+          // the sidecar registry dropped the job on DELETE — post-cancel polls 404
+          return Promise.resolve({ ok: false, status: 404, json: async () => ({ detail: 'unknown job' }) });
+        }
+        return new Promise((resolve) => {
+          releasePoll = () => resolve(okJson({ job_id: 'j-usercut', status: 'running' }));
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch ${u}`));
+    });
+    const begun = await svc.beginSuiteGeneration('me', {}, {});
+    for (let i = 0; i < 100 && typeof releasePoll !== 'function'; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    const out = await svc.cancelSuiteGeneration('me');
+    expect(out).toMatchObject({ cancelled: true, suite_key: begun.suite_key });
+    expect(deletes).toEqual([expect.stringContaining('/jobs/j-usercut')]);
+    releasePoll(); // in-flight poll resolves running → next poll 404s → worker fails
+    await expect(begun.done).rejects.toBeTruthy();
+    // the honest reason: user cancel, not the misleading post-cancel 404
+    const doc = await svc.getSuite('me', begun.suite_key);
+    expect(doc.status).toBe('failed');
+    expect(doc.error.code).toBe('RAGAS_JOB_CANCELLED');
+    // and a second cancel is a clean 409 — nothing running anymore
+    await expect(svc.cancelSuiteGeneration('me')).rejects.toMatchObject({ code: 'NO_GENERATION_IN_FLIGHT' });
+  });
+
   it('a healthy long-running job is NEVER timed out — the liveness horizon rolls (David 2026-10-18)', async () => {
     // OKF_RAGAS_LONG_TIMEOUT_MS=1 means every poll outlives the horizon;
     // a reachable running job must still complete, not RAGAS_JOB_TIMEOUT.

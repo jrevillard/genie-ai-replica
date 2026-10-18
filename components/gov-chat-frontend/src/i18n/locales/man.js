@@ -3097,7 +3097,9 @@ export default {
         multiSpecific: 'Multi-hop (specific) %',
         personas: 'Personas',
         button: 'Generate',
-        working: 'Generating — this takes minutes…'
+        working: 'Generating — this takes minutes…',
+        cancel: 'Cancel',
+        cancelling: 'Cancelling…'
       },
       import: {
         button: 'Import suite (.xlsx)',

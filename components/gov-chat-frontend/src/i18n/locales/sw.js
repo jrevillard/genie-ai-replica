@@ -3124,7 +3124,9 @@ export default {
         multiSpecific: 'Hatua nyingi (maalum) %',
         personas: 'Mitindo ya watumiaji',
         button: 'Tengeneza',
-        working: 'Inatengeneza — hii inachukua dakika kadhaa…'
+        working: 'Inatengeneza — hii inachukua dakika kadhaa…',
+        cancel: 'Ghairi',
+        cancelling: 'Inaghairi…'
       },
       import: {
         button: 'Ingiza seti (.xlsx)',

@@ -3121,7 +3121,9 @@ export default {
         multiSpecific: 'বহু-হপ (নির্দিষ্ট) %',
         personas: 'ব্যক্তিত্ব',
         button: 'তৈরি করুন',
-        working: 'তৈরি হচ্ছে — এতে কয়েক মিনিট লাগবে…'
+        working: 'তৈরি হচ্ছে — এতে কয়েক মিনিট লাগবে…',
+        cancel: 'বাতিল',
+        cancelling: 'বাতিল হচ্ছে…'
       },
       import: {
         button: 'স্যুট ইমপোর্ট করুন (.xlsx)',

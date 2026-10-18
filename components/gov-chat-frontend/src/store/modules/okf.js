@@ -1365,12 +1365,15 @@ const actions = {
   // Same {ok, code, message, result|runs} envelope and store-side poll
   // discipline as the headSuite actions above.
 
-  /** Generate a benchmark suite (202 + store-side poll until the doc lands). */
-  async ragasGenerate(_ctx, { repoId, options } = {}) {
+  /** Generate a benchmark suite (202 + store-side poll until the doc lands).
+   * onStarted(suite_key) fires when the 202 returns so the UI can offer
+   * Cancel mid-generation (David 2026-10-18 requirement). */
+  async ragasGenerate(_ctx, { repoId, options, onStarted } = {}) {
     try {
       ensureServices();
       const started = await ragasService.generateSuite(repoId, options || {});
       if (!started || !started.suite_key) return { ok: true, result: started };
+      if (typeof onStarted === 'function') onStarted(started.suite_key);
       const POLL_MS = 2500;
       // The server NEVER kills a healthy long job (David 2026-10-18: never
       // trash running work) — OKF_RAGAS_LONG_TIMEOUT_MS is only the
@@ -1403,6 +1406,23 @@ const actions = {
       return {
         ok: false,
         code: (err && (err.code || (err.data && err.data.error))) || 'GENERATION_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Cancel an in-flight benchmark-suite generation (user-initiated stop —
+   * the GPU drains within one in-flight LLM batch; the ragasGenerate poll
+   * then exits with RAGAS_JOB_CANCELLED). */
+  async ragasCancelGeneration(_ctx, { repoId, suiteKey } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.cancelSuiteGeneration(repoId, suiteKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'CANCEL_FAILED',
         message: err.message
       };
     }

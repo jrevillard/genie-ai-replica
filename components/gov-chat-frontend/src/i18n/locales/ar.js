@@ -3098,7 +3098,9 @@ export default {
         multiSpecific: 'خطوات متعددة (محددة) %',
         personas: 'الشخصيات',
         button: 'إنشاء',
-        working: 'جارٍ الإنشاء — يستغرق هذا دقائق…'
+        working: 'جارٍ الإنشاء — يستغرق هذا دقائق…',
+        cancel: 'إلغاء',
+        cancelling: 'جارٍ الإلغاء…'
       },
       import: {
         button: 'استيراد مجموعة (.xlsx)',

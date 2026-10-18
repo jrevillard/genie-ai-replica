@@ -99,6 +99,18 @@
         <DsSpinner v-if="generateBusy" size="sm">
           {{ translate('okf.ragas.generate.working', 'Generating — this takes minutes…') }}
         </DsSpinner>
+        <DsButton
+          v-if="generateBusy && generatingKey"
+          variant="secondary"
+          small
+          :disabled="cancelBusy"
+          @click="onCancelGenerate"
+        >
+          {{ translate('okf.ragas.generate.cancel', 'Cancel') }}
+        </DsButton>
+        <DsSpinner v-if="cancelBusy" size="sm">
+          {{ translate('okf.ragas.generate.cancelling', 'Cancelling…') }}
+        </DsSpinner>
         <label v-if="!readOnly" class="okf-ragas__file-label">
           <input type="file" accept=".xlsx" :disabled="importBusy" @change="onImportFile" />
           <DsButton variant="secondary" small tag="span" :disabled="importBusy">
@@ -458,6 +470,8 @@ export default {
       error: '',
       busy: null, // shared write lock (the dialog's discipline)
       generateBusy: false,
+      generatingKey: null, // suite_key of the in-flight generation (Cancel target)
+      cancelBusy: false,
       runBusy: false,
       explainBusy: false,
       importBusy: false,
@@ -699,6 +713,9 @@ export default {
             testset_size: this.genSize,
             query_distribution: dist,
             num_personas: this.genPersonas
+          },
+          onStarted: (suiteKey) => {
+            this.generatingKey = suiteKey;
           }
         });
         if (res.ok) {
@@ -709,7 +726,20 @@ export default {
         }
       } finally {
         this.generateBusy = false;
+        this.generatingKey = null;
+        this.cancelBusy = false;
       }
+    },
+    async onCancelGenerate() {
+      if (!this.generatingKey) return;
+      this.cancelBusy = true;
+      const res = await this.$store.dispatch('okf/ragasCancelGeneration', {
+        repoId: this.repo && this.repo.repo_id,
+        suiteKey: this.generatingKey
+      });
+      if (!res.ok) this.error = res.message;
+      // On ok: nothing to do here — the ragasGenerate poll exits on its next
+      // tick with RAGAS_JOB_CANCELLED and clears the busy state.
     },
     async onRename(name) {
       if (!this.suite || !name || !name.trim() || name === this.suite.name) return;

@@ -3129,7 +3129,9 @@ export default {
         multiSpecific: 'Multi-lompatan (spesifik) %',
         personas: 'Persona',
         button: 'Buat',
-        working: 'Membuat — ini memakan waktu beberapa menit…'
+        working: 'Membuat — ini memakan waktu beberapa menit…',
+        cancel: 'Batalkan',
+        cancelling: 'Membatalkan…'
       },
       import: {
         button: 'Impor suite (.xlsx)',

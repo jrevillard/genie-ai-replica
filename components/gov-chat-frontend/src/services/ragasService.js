@@ -46,6 +46,13 @@ const ragasService = {
     return res && res.data ? res.data : null;
   },
 
+  /** Cancel an in-flight generation for this repo (user stop — the poll
+   * then reports RAGAS_JOB_CANCELLED). */
+  async cancelSuiteGeneration(repoId, suiteKey) {
+    const res = await httpService.post(`/okf/repos/${rid(repoId)}/ragas-testsuite/${sk(suiteKey)}/cancel`);
+    return res && res.data ? res.data : null;
+  },
+
   /** Edit rows in place: modifications[{id, query?, reference_answer?,
    * reference_passages?, flip_oos?}] + remove_ids[]. */
   async updateSuiteRows(repoId, suiteKey, payload) {

@@ -3138,7 +3138,9 @@ export default {
         multiSpecific: 'Mahop a mangata (e itseng) %',
         personas: 'Mekhoa ea basebedisi',
         button: 'Hlahisa',
-        working: 'E hlahisa — hona ho nka metsotso e mmalwa…'
+        working: 'E hlahisa — hona ho nka metsotso e mmalwa…',
+        cancel: 'Khansela',
+        cancelling: 'E khanseletswa…'
       },
       import: {
         button: 'Kenya sete (.xlsx)',

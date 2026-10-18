@@ -53,7 +53,8 @@ API surface (okf-routes.js):
 
 ## The screen (first OKF admin-config UI)
 
-Placement: a new **AdminDashboard tab** ("Model Routing") — system-level config is
+Placement: a new **AdminDashboard tab** titled **"Model Routing"** (decided David
+2026-10-18 — "Remote GPU Config" was considered and set aside) — system-level config is
 repo-independent; NOT inside RepoEditor/HeadTestDialog (repo-scoped). Visibility follows
 the `isAdmin` NavBar pattern; enforcement is the server-side `requireRole`.
 

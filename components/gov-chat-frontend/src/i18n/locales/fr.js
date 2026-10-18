@@ -3149,7 +3149,9 @@ export default {
         multiSpecific: 'Multi-sauts (spécifique) %',
         personas: 'Personas',
         button: 'Générer',
-        working: 'Génération — cela prend plusieurs minutes…'
+        working: 'Génération — cela prend plusieurs minutes…',
+        cancel: 'Annuler',
+        cancelling: 'Annulation…'
       },
       import: {
         button: 'Importer une suite (.xlsx)',

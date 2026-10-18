@@ -532,15 +532,46 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
     .then((suite) => suite)
     .finally(() => genInFlight.delete(repoId));
   done.catch((e) => {
+    // A user cancel must surface AS a cancel: the sidecar drops the job on
+    // DELETE, so the poller's next contact is a 404 that would otherwise
+    // read as "vanished (sidecar restarted?)" — misleading in the UI.
+    const userCancelled = userCancelledGen.delete(suiteKey);
     genFailure.set(repoId, {
       suite_key: suiteKey,
-      code: e.code || 'GENERATION_FAILED',
-      message: e.message,
+      code: userCancelled ? 'RAGAS_JOB_CANCELLED' : e.code || 'GENERATION_FAILED',
+      message: userCancelled ? 'generation cancelled by user' : e.message,
       at: new Date().toISOString()
     });
-    logger.error('ragas-suite.generate.async_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message });
+    logger.error('ragas-suite.generate.async_failed', {
+      repo_id: repoId,
+      suite_key: suiteKey,
+      cancelled: userCancelled,
+      error: e.message
+    });
   });
   return { suite_key: suiteKey, done };
+}
+
+const userCancelledGen = new Set(); // suite_keys the user asked to stop
+
+/**
+ * User-initiated generation cancel (David 2026-10-18: the user must be able
+ * to cancel/kill a generation whenever they like, from the UI). Cancels the
+ * in-flight generation's sidecar job — the GPU stops within one in-flight
+ * LLM batch (cooperative cancel_event) — and records the honest reason.
+ */
+async function cancelSuiteGeneration(repoId) {
+  const suiteKey = genInFlight.get(repoId);
+  if (!suiteKey) {
+    const err = new Error('no benchmark-suite generation is running for this repository');
+    err.code = 'NO_GENERATION_IN_FLIGHT';
+    err.status = 409;
+    throw err;
+  }
+  userCancelledGen.add(suiteKey);
+  await cancelSuiteJobs(suiteKey, 'cancelled by user');
+  logger.info('ragas-suite.generation_cancelled_by_user', { repo_id: repoId, suite_key: suiteKey });
+  return { cancelled: true, suite_key: suiteKey };
 }
 
 function normalizeRepoIds(primary, listed) {
@@ -1641,6 +1672,7 @@ module.exports = {
   ALL_METRICS,
   DEFAULT_METRICS,
   beginSuiteGeneration,
+  cancelSuiteGeneration,
   generateSuite,
   getSuite,
   updateSuiteRows,

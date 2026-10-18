@@ -3151,7 +3151,9 @@ export default {
         multiSpecific: 'Mehrfach-Hop (spezifisch) %',
         personas: 'Personas',
         button: 'Generieren',
-        working: 'Wird generiert — das dauert einige Minuten…'
+        working: 'Wird generiert — das dauert einige Minuten…',
+        cancel: 'Abbrechen',
+        cancelling: 'Wird abgebrochen…'
       },
       import: {
         button: 'Suite importieren (.xlsx)',

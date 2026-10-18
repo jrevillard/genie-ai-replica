@@ -3141,7 +3141,9 @@ export default {
         multiSpecific: 'Múltiplos saltos (específico) %',
         personas: 'Personas',
         button: 'Gerar',
-        working: 'Gerando — isto leva alguns minutos…'
+        working: 'Gerando — isto leva alguns minutos…',
+        cancel: 'Cancelar',
+        cancelling: 'A cancelar…'
       },
       import: {
         button: 'Importar suíte (.xlsx)',

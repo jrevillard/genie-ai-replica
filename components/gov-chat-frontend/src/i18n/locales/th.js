@@ -3104,7 +3104,9 @@ export default {
         multiSpecific: 'หลายฮอป (เฉพาะเจาะจง) %',
         personas: 'บุคลิกผู้ใช้',
         button: 'สร้าง',
-        working: 'กำลังสร้าง — ใช้เวลาไม่กี่นาที…'
+        working: 'กำลังสร้าง — ใช้เวลาไม่กี่นาที…',
+        cancel: 'ยกเลิก',
+        cancelling: 'กำลังยกเลิก…'
       },
       import: {
         button: 'นำเข้าชุดทดสอบ (.xlsx)',

@@ -3162,6 +3162,7 @@ export default {
       run: {
         button: 'Jalankan tolok ukur',
         working: 'Menjalankan…',
+        cancel: 'Batalkan proses',
         phase: {
           retrieval: 'mengambil',
           judge: 'menilai'

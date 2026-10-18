@@ -1368,7 +1368,7 @@ const actions = {
   /** Generate a benchmark suite (202 + store-side poll until the doc lands).
    * onStarted(suite_key) fires when the 202 returns so the UI can offer
    * Cancel mid-generation (David 2026-10-18 requirement). */
-  async ragasGenerate(_ctx, { repoId, options, onStarted } = {}) {
+  async ragasGenerate(_ctx, { repoId, options, onStarted, onProgress } = {}) {
     try {
       ensureServices();
       const started = await ragasService.generateSuite(repoId, options || {});
@@ -1392,7 +1392,10 @@ const actions = {
         }
         await new Promise((resolve) => setTimeout(resolve, POLL_MS));
         const doc = await ragasService.getSuite(repoId, started.suite_key);
-        if (!doc || doc.status === 'generating') continue;
+        if (!doc || doc.status === 'generating') {
+          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
+          continue;
+        }
         if (doc.status === 'failed') {
           return {
             ok: false,
@@ -1418,6 +1421,22 @@ const actions = {
     try {
       ensureServices();
       const result = await ragasService.cancelSuiteGeneration(repoId, suiteKey);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'CANCEL_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Cancel an in-flight benchmark RUN (user stop — the ragasRun poll then
+   * exits with the cancelled run record). */
+  async ragasCancelRun(_ctx, { repoId, suiteKey, runKey } = {}) {
+    try {
+      ensureServices();
+      const result = await ragasService.cancelRun(repoId, suiteKey, runKey);
       return { ok: true, result };
     } catch (err) {
       return {
@@ -1500,11 +1519,12 @@ const actions = {
 
   /** Run the suite (202 + store-side poll with live progress). opts.onProgress
    * (a plain function, not serialized) receives each poll's {phase, done, total}. */
-  async ragasRun(_ctx, { repoId, suiteKey, metrics, onProgress } = {}) {
+  async ragasRun(_ctx, { repoId, suiteKey, metrics, onProgress, onStarted } = {}) {
     try {
       ensureServices();
       const started = await ragasService.runSuite(repoId, suiteKey, metrics ? { metrics } : {});
       if (!started || !started.run_key) return { ok: true, result: started };
+      if (typeof onStarted === 'function') onStarted(started.run_key);
       const POLL_MS = 2000;
       // Judge-bound run — the server never times out a live job (see
       // generateRagasSuite above); 24h bounds only this open dialog.

@@ -3131,6 +3131,7 @@ export default {
       run: {
         button: 'تشغيل الاختبار المرجعي',
         working: 'جارٍ التشغيل…',
+        cancel: 'إلغاء التشغيل',
         phase: {
           retrieval: 'جارٍ الاسترجاع',
           judge: 'جارٍ التقييم'

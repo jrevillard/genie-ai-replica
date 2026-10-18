@@ -3137,6 +3137,7 @@ export default {
       run: {
         button: 'เรียกใช้การทดสอบเปรียบเทียบ',
         working: 'กำลังเรียกใช้…',
+        cancel: 'ยกเลิกการรัน',
         phase: {
           retrieval: 'กำลังดึงข้อมูล',
           judge: 'กำลังให้คะแนน'

@@ -3154,6 +3154,7 @@ export default {
       run: {
         button: 'মানদণ্ড পরীক্ষা চালান',
         working: 'চলছে…',
+        cancel: 'রান বাতিল',
         phase: {
           retrieval: 'পুনরুদ্ধার হচ্ছে',
           judge: 'মূল্যায়ন হচ্ছে'

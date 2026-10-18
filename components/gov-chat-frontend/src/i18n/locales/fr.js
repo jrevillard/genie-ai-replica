@@ -3182,6 +3182,7 @@ export default {
       run: {
         button: 'Lancer le banc d’essai',
         working: 'Exécution…',
+        cancel: 'Annuler l’exécution',
         phase: {
           retrieval: 'récupération',
           judge: 'évaluation'

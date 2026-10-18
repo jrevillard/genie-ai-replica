@@ -3174,6 +3174,7 @@ export default {
       run: {
         button: 'Executar o teste comparativo',
         working: 'Executando…',
+        cancel: 'Cancelar execução',
         phase: {
           retrieval: 'recuperando',
           judge: 'pontuando'

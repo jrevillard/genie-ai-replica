@@ -124,7 +124,9 @@ with suites interchangeable with that harness's xlsx formats:
   scored by the selected RAGAS metrics — faithfulness, context precision,
   context recall, and answer relevancy by default, with the full
   single-turn catalog selectable (factual and answer correctness, semantic
-  similarity, entity recall, noise sensitivity, and more).
+  similarity, entity recall, noise sensitivity, and more). A progress bar
+  reports each phase with counts (retrieving i/n, scoring i/n), and a
+  **Cancel run** control stops a benchmark that is taking too long.
 - **Results** render per-question in a table with metric bars, as aggregate
   gauges, as a run-over-run trend, and as a status breakdown — and export
   as a **PDF report**, or as an xlsx workbook using the offline harness's

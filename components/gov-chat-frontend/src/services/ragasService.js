@@ -53,6 +53,15 @@ const ragasService = {
     return res && res.data ? res.data : null;
   },
 
+  /** Cancel an in-flight benchmark run (user stop — cancels the evaluate
+   * sidecar job; the run record lands status:'cancelled'). */
+  async cancelRun(repoId, suiteKey, runKey) {
+    const res = await httpService.post(
+      `/okf/repos/${rid(repoId)}/ragas-testsuite/${sk(suiteKey)}/runs/${encodeURIComponent(runKey)}/cancel`
+    );
+    return res && res.data ? res.data : null;
+  },
+
   /** Edit rows in place: modifications[{id, query?, reference_answer?,
    * reference_passages?, flip_oos?}] + remove_ids[]. */
   async updateSuiteRows(repoId, suiteKey, payload) {

@@ -3170,6 +3170,7 @@ export default {
       run: {
         button: 'Запустить тест',
         working: 'Выполняется…',
+        cancel: 'Отменить запуск',
         phase: {
           retrieval: 'поиск',
           judge: 'оценка'

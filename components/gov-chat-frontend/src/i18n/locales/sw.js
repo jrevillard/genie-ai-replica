@@ -3157,6 +3157,7 @@ export default {
       run: {
         button: 'Endesha kipimo',
         working: 'Inaendesha…',
+        cancel: 'Ghairi uendeshaji',
         phase: {
           retrieval: 'inarudisha',
           judge: 'inapima'

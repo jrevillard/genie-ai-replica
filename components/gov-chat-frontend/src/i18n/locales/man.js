@@ -3130,6 +3130,7 @@ export default {
       run: {
         button: 'Run benchmark',
         working: 'Running…',
+        cancel: 'Cancel run',
         phase: {
           retrieval: 'retrieving',
           judge: 'scoring'

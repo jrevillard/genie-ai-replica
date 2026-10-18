@@ -65,6 +65,7 @@ volumes:
   certbot-webroot:
   certbot-etc:
   vm-data:
+  ragas_llm_cache:
   grafana-data:
   vlogs-data:
   vtraces-data:
@@ -937,11 +938,15 @@ services:
       - RAGAS_EMBED_MODEL=${RAGAS_EMBED_MODEL:-${EMBEDDING_MODEL_ID:-}}
       - RAGAS_EMBED_API=${RAGAS_EMBED_API:-tei}
       # Disk judge cache (2026-10-18): responses keyed by prompt+params
-      # persist in the container — repeat generations of the same repos skip
-      # the whole KG phase. 0 disables; the dir is best-effort only.
+      # persist on the ragas_llm_cache VOLUME — repeat generations of the
+      # same repos skip the whole KG phase and suite re-runs re-judge only
+      # what changed, surviving container recreates. 0 disables; the dir is
+      # best-effort only.
       - RAGAS_LLM_CACHE=${RAGAS_LLM_CACHE:-1}
       - RAGAS_LLM_CACHE_DIR=${RAGAS_LLM_CACHE_DIR:-/tmp/ragas-llm-cache}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ragas_llm_cache:/tmp/ragas-llm-cache
     build:
       context: components/ragas-service/
       dockerfile: Dockerfile

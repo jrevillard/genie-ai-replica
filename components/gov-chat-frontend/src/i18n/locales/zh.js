@@ -3098,6 +3098,7 @@ export default {
       run: {
         button: '运行基准测试',
         working: '正在运行…',
+        cancel: '取消运行',
         phase: {
           retrieval: '检索中',
           judge: '评分中'

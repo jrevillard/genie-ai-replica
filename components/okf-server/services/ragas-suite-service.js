@@ -227,7 +227,7 @@ async function sidecar(path, { method = 'POST', json, body, contentType, timeout
  * job record fails honestly (the sidecar is down, the result is
  * uncollectable either way).
  */
-async function pollSidecarJob(jobId) {
+async function pollSidecarJob(jobId, { onProgress } = {}) {
   let horizon = Date.now() + RAGAS_LONG_TIMEOUT_MS;
   for (;;) {
     await sleepMs(RAGAS_JOB_POLL_MS);
@@ -244,6 +244,14 @@ async function pollSidecarJob(jobId) {
       }
       if (Date.now() > horizon) throw e; // sidecar unreachable + out of horizon
       continue; // transient poll failure — the job may still be fine
+    }
+    // live progress (phase + done/total) — surfaced to the UI on every poll
+    if (onProgress && job && job.progress) {
+      try {
+        onProgress(job.progress);
+      } catch (e) {
+        logger.warn('ragas-suite.progress_callback_failed', { job_id: jobId, error: e.message });
+      }
     }
     if (job.status === 'done') return job.result;
     if (job.status === 'failed') {
@@ -301,10 +309,10 @@ async function cancelSuiteJobs(suiteKey, why) {
  * Poll a sidecar job; on failure, cancel it (we are its only consumer — if
  * we are throwing, nobody is left to collect the result).
  */
-async function pollSidecarJobOwned(jobId, meta) {
+async function pollSidecarJobOwned(jobId, meta, { onProgress } = {}) {
   activeSidecarJobs.set(jobId, meta);
   try {
-    const result = await pollSidecarJob(jobId);
+    const result = await pollSidecarJob(jobId, { onProgress });
     activeSidecarJobs.delete(jobId);
     return result;
   } catch (e) {
@@ -520,6 +528,7 @@ async function graphNamesFor(db, repoIds) {
 
 const genInFlight = new Map(); // repo_id -> suite_key
 const genFailure = new Map(); // repo_id -> {suite_key, code, message, at}
+const genProgress = new Map(); // suite_key -> live sidecar progress {phase, done, total}
 
 async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
   const inflight = genInFlight.get(repoId);
@@ -548,7 +557,10 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
     { ...opts, suiteKey }
   )
     .then((suite) => suite)
-    .finally(() => genInFlight.delete(repoId));
+    .finally(() => {
+      genInFlight.delete(repoId);
+      genProgress.delete(suiteKey);
+    });
   done.catch((e) => {
     // A user cancel must surface AS a cancel: the sidecar drops the job on
     // DELETE, so the poller's next contact is a 404 that would otherwise
@@ -571,6 +583,28 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
 }
 
 const userCancelledGen = new Set(); // suite_keys the user asked to stop
+const userCancelledRun = new Set(); // run_keys the user asked to stop
+
+/**
+ * User-initiated RUN cancel (David 2026-10-18: kill controls for suite
+ * generation AND benchmarks). Cancels the evaluate sidecar job (the GPU
+ * drains within one in-flight batch) and records the honest reason; the
+ * detached worker observes the terminal status and persists
+ * status:'cancelled' with RAGAS_JOB_CANCELLED.
+ */
+async function cancelSuiteRun(repoId, suiteKey, runKey) {
+  const inflight = runInFlight.get(suiteKey);
+  if (!inflight || inflight !== runKey) {
+    const err = new Error('no such run is executing for this suite');
+    err.code = 'NO_RUN_IN_FLIGHT';
+    err.status = 409;
+    throw err;
+  }
+  userCancelledRun.add(runKey);
+  await cancelSuiteJobs(suiteKey, `run cancelled by user (${runKey})`);
+  logger.info('ragas-suite.run_cancelled_by_user', { repo_id: repoId, suite_key: suiteKey, run_key: runKey });
+  return { cancelled: true, run_key: runKey };
+}
 
 /**
  * User-initiated generation cancel (David 2026-10-18: the user must be able
@@ -627,11 +661,19 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       }
     });
     const genStarted = await genResp.json();
-    const gen = await pollSidecarJobOwned(genStarted.job_id, {
-      kind: 'generate-testset',
-      repo_id: repoId,
-      suite_key: opts.suiteKey
-    });
+    const gen = await pollSidecarJobOwned(
+      genStarted.job_id,
+      {
+        kind: 'generate-testset',
+        repo_id: repoId,
+        suite_key: opts.suiteKey
+      },
+      {
+        // live KG/synthesis counts land on the generating envelope (getSuite)
+        onProgress: (p) => genProgress.set(opts.suiteKey, p)
+      }
+    );
+    genProgress.delete(opts.suiteKey);
     const samples = Array.isArray(gen.samples) ? gen.samples : [];
     if (!samples.length) {
       const err = new Error('the generator produced no samples (judge/embedder logs have the cause)');
@@ -703,7 +745,10 @@ async function getSuite(repoId, suiteKey) {
   await ensureCollection(db);
   const inflight = genInFlight.get(repoId);
   if (inflight === suiteKey) {
-    return { suite_key: suiteKey, status: 'generating' };
+    const envelope = { suite_key: suiteKey, status: 'generating' };
+    const prog = genProgress.get(suiteKey);
+    if (prog) envelope.progress = prog;
+    return envelope;
   }
   const failed = genFailure.get(repoId);
   if (failed && failed.suite_key === suiteKey) {
@@ -958,8 +1003,15 @@ async function beginRunSuite(repoId, suiteKey, payload = {}, opts = {}) {
   })
     .then((runDoc) => runDoc)
     .catch(async (e) => {
-      const code = typeof e.code === 'string' && e.code ? e.code : 'RUN_FAILED';
-      const failDoc = { ...placeholder, status: 'failed', error: { code, message: e.message } };
+      // a user cancel must surface AS a cancel, not as the post-cancel 404
+      const userCancelled = userCancelledRun.delete(runKey);
+      const code = userCancelled ? 'RAGAS_JOB_CANCELLED' : typeof e.code === 'string' && e.code ? e.code : 'RUN_FAILED';
+      const failDoc = {
+        ...placeholder,
+        status: 'cancelled',
+        error: { code, message: userCancelled ? 'run cancelled by user' : e.message }
+      };
+      if (!userCancelled) failDoc.status = 'failed';
       await db
         .collection(COLLECTION)
         .replace(runKey, failDoc)
@@ -1061,12 +1113,25 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     }));
     const evalStarted = await sidecar('/evaluate', { json: { samples, metrics: opts.metrics } });
     const evalStartedBody = await evalStarted.json();
-    const evaluation = await pollSidecarJobOwned(evalStartedBody.job_id, {
-      kind: 'evaluate',
-      repo_id: repoId,
-      suite_key: suiteKey,
-      run_key: opts.runKey
-    });
+    const evaluation = await pollSidecarJobOwned(
+      evalStartedBody.job_id,
+      {
+        kind: 'evaluate',
+        repo_id: repoId,
+        suite_key: suiteKey,
+        run_key: opts.runKey
+      },
+      {
+        // the sidecar's rows-done/rows-total becomes the run's judge-phase
+        // progress (David 2026-10-18: per-phase progress bars)
+        onProgress: (p) =>
+          report(opts, {
+            phase: 'judge',
+            done: Number(p && p.done) || 0,
+            total: Number(p && p.total) || total
+          })
+      }
+    );
     const perQuery = Array.isArray(evaluation.per_query) ? evaluation.per_query : [];
     // sidecar returns rows in sample order (EvaluationDataset preserves it)
     for (let i = 0; i < results.length; i += 1) {
@@ -1704,6 +1769,7 @@ module.exports = {
   renameSuite,
   deleteSuite,
   beginRunSuite,
+  cancelSuiteRun,
   runSuite,
   getRunSuite,
   listRuns,

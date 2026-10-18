@@ -99,6 +99,7 @@
         <DsSpinner v-if="generateBusy" size="sm">
           {{ translate('okf.ragas.generate.working', 'Generating — this takes minutes…') }}
         </DsSpinner>
+        <span v-if="generateBusy && genProgressLabel" class="okf-ragas__muted">{{ genProgressLabel }}</span>
         <DsButton
           v-if="generateBusy && generatingKey"
           variant="secondary"
@@ -118,6 +119,9 @@
           </DsButton>
         </label>
         <DsSpinner v-if="importBusy" size="sm">{{ translate('okf.ragas.import.working', 'Importing…') }}</DsSpinner>
+      </div>
+      <div v-if="generateBusy && genProgress" class="okf-ragas__progress">
+        <DsProgress :value="genProgressPct" />
       </div>
     </div>
 
@@ -169,6 +173,15 @@
         <DsSpinner v-if="runBusy" size="sm">
           {{ runProgressLabel }}
         </DsSpinner>
+        <DsButton
+          v-if="runBusy && runningRunKey"
+          variant="secondary"
+          small
+          :disabled="runCancelBusy"
+          @click="onCancelRun"
+        >
+          {{ translate('okf.ragas.run.cancel', 'Cancel run') }}
+        </DsButton>
       </div>
       <div v-if="runProgress" class="okf-ragas__progress">
         <DsProgress :value="progressPct" />
@@ -475,6 +488,9 @@ export default {
       generateBusy: false,
       generatingKey: null, // suite_key of the in-flight generation (Cancel target)
       cancelBusy: false,
+      genProgress: null, // live {phase, done, total} from the generating envelope
+      runningRunKey: null, // run_key of the in-flight benchmark (Cancel target)
+      runCancelBusy: false,
       runBusy: false,
       explainBusy: false,
       importBusy: false,
@@ -571,6 +587,17 @@ export default {
       const phase = p && p.phase ? this.translate(`okf.ragas.run.phase.${p.phase}`, p.phase) : '';
       const counts = p ? ` ${p.done}/${p.total}` : '';
       return this.translate('okf.ragas.run.working', 'Running…') + (phase ? ` — ${phase}` : '') + counts;
+    },
+    genProgressPct() {
+      const p = this.genProgress;
+      if (!p || !p.total) return 0;
+      return Math.min(100, Math.round((p.done / p.total) * 100));
+    },
+    genProgressLabel() {
+      const p = this.genProgress;
+      if (!p || !p.phase) return '';
+      const phase = this.translate(`okf.ragas.run.phase.${p.phase}`, p.phase);
+      return p.total ? `${phase} ${p.done}/${p.total}` : phase;
     },
     adviceChips() {
       const advice = this.explainDoc && this.explainDoc.advice;
@@ -703,6 +730,7 @@ export default {
     async onGenerate() {
       this.error = '';
       this.generateBusy = true;
+      this.genProgress = null;
       try {
         const dist = [
           { synthesizer: 'single_hop_specific', weight: Number(this.distSingle) || 0 },
@@ -719,6 +747,9 @@ export default {
           },
           onStarted: (suiteKey) => {
             this.generatingKey = suiteKey;
+          },
+          onProgress: (p) => {
+            this.genProgress = p;
           }
         });
         if (res.ok) {
@@ -731,6 +762,7 @@ export default {
         this.generateBusy = false;
         this.generatingKey = null;
         this.cancelBusy = false;
+        this.genProgress = null;
       }
     },
     async onCancelGenerate() {
@@ -743,6 +775,18 @@ export default {
       if (!res.ok) this.error = res.message;
       // On ok: nothing to do here — the ragasGenerate poll exits on its next
       // tick with RAGAS_JOB_CANCELLED and clears the busy state.
+    },
+    async onCancelRun() {
+      if (!this.runningRunKey) return;
+      this.runCancelBusy = true;
+      const res = await this.$store.dispatch('okf/ragasCancelRun', {
+        repoId: this.repo && this.repo.repo_id,
+        suiteKey: this.suite && this.suite.suite_key,
+        runKey: this.runningRunKey
+      });
+      this.runCancelBusy = false;
+      if (!res.ok) this.error = res.message;
+      // On ok: the ragasRun poll observes the cancelled run record next tick.
     },
     async onRename(name) {
       if (!this.suite || !name || !name.trim() || name === this.suite.name) return;
@@ -816,12 +860,16 @@ export default {
     async onRun() {
       this.error = '';
       this.runBusy = true;
+      this.runningRunKey = null;
       this.runProgress = { phase: 'retrieval', done: 0, total: this.entries.length };
       try {
         const res = await this.$store.dispatch('okf/ragasRun', {
           repoId: this.repo && this.repo.repo_id,
           suiteKey: this.suite.suite_key,
           metrics: this.selectedMetrics,
+          onStarted: (runKey) => {
+            this.runningRunKey = runKey;
+          },
           onProgress: (p) => {
             this.runProgress = p;
           }
@@ -836,6 +884,8 @@ export default {
       } finally {
         this.runBusy = false;
         this.runProgress = null;
+        this.runningRunKey = null;
+        this.runCancelBusy = false;
       }
     },
     async refreshHistory() {

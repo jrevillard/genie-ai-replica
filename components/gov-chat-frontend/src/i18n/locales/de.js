@@ -3184,6 +3184,7 @@ export default {
       run: {
         button: 'Vergleichstest ausführen',
         working: 'Wird ausgeführt…',
+        cancel: 'Lauf abbrechen',
         phase: {
           retrieval: 'Abruf läuft',
           judge: 'Bewertung läuft'

@@ -3171,6 +3171,7 @@ export default {
       run: {
         button: 'Phethahatsa tekanyo',
         working: 'E phethahatsa…',
+        cancel: 'Khansela tsamaiso',
         phase: {
           retrieval: 'e kgetha',
           judge: 'e lekanya'

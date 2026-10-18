@@ -171,7 +171,10 @@ data:
     # bootstrap prerequisite — NOT a chart dependency.
     enabled: true
     instances: 1                      # 2 on prod via clusterProfile
-    adminEmail: genie-admin@genieai.local
+    # Operator contact email for the genie-admin realm user — deployment
+    # data, supplied per environment. No chart default: the render fails
+    # loudly when it is missing.
+    adminEmail: ""
     # Realm and client identifiers the convergence Job exports for the
     # realm file's $(env:VAR) placeholders. These must match the
     # clientIds consumers use; changing one after install does not

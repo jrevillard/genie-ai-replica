@@ -51,3 +51,48 @@ test.describe('Runtime theme config cache headers', () => {
     expect(response.headers()['cache-control']).toBe(IMMUTABLE_ASSET_CACHE);
   });
 });
+
+test.describe('Keycloak runtime theme mount', () => {
+  // The keycloak side of the runtime theme contract: the login page must be
+  // served through the gateway with the MOUNTED genie theme. A bind mount
+  // never falls back to image contents, so an unseeded or misrouted mount
+  // silently serves Keycloak's unbranded built-in theme — no crash, no health
+  // signal. These are the only tests that would catch it.
+
+  test('realm is reachable through the gateway', async ({ request }) => {
+    const response = await request.get('/auth/realms/genie/.well-known/openid-configuration');
+    expect(response.status(), 'realm discovery endpoint should be served').toBe(200);
+    // JSON, not an HTML error page served with a 200 (nginx fallback class).
+    expect(response.headers()['content-type']).toContain('application/json');
+    // The issuer comes from Keycloak's own hostname config (KC_HOSTNAME), not
+    // from this request's URL: a wrong hostname setting keeps the endpoint
+    // green while silently breaking every OIDC redirect.
+    const base = process.env.BASE_URL || 'https://localhost';
+    const body = await response.json();
+    expect(
+      body.issuer,
+      'issuer must use the public origin the browser reaches'
+    ).toContain(`${base.replace(/^https?:\/\//, '')}/auth/realms/genie`);
+  });
+
+  test('login page renders the mounted genie theme', async ({ request }) => {
+    // Keycloak enforces PKCE (S256, min 43 chars) for genie-app and only
+    // renders the login form after validating the request. A syntactically
+    // valid dummy challenge yields the real login page without any session;
+    // the redirect URI is accepted via the client's KC_PUBLIC_ORIGIN/* wildcard.
+    const base = process.env.BASE_URL || 'https://localhost';
+    const challenge = 'a'.repeat(43);
+    const response = await request.get(
+      `/auth/realms/genie/protocol/openid-connect/auth` +
+        `?client_id=genie-app&response_type=code&scope=openid` +
+        `&redirect_uri=${encodeURIComponent(`${base}/callback`)}` +
+        `&code_challenge=${challenge}&code_challenge_method=S256`
+    );
+    expect(response.status(), 'login page should be served').toBe(200);
+    const html = await response.text();
+    // Theme assets are referenced as /auth/resources/<hash>/login/<theme>/...;
+    // `login/genie/` proves the mounted genie theme resolved — the built-in
+    // fallback would reference login/keycloak[.v2] instead.
+    expect(html, 'login page should load the mounted genie theme assets').toContain('login/genie/');
+  });
+});

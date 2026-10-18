@@ -45,7 +45,7 @@
 #   deploy/ansible/deploy.yml:418-423            play tags [config, deploy]
 #   deploy/ansible/templates/env.j2:412-413      CONFIG_DIR_FRONTEND / CONFIG_DIR_KEYCLOAK
 #   docker-compose.yaml:402                      /config  <- ${CONFIG_DIR_FRONTEND}:ro
-#   docker-compose.yaml:1616                     themes   <- ${CONFIG_DIR_KEYCLOAK}:ro
+#   docker-compose.yaml:1620                     themes root <- ${CONFIG_DIR_KEYCLOAK}:ro
 #   components/gov-chat-frontend/nginx.conf:20-46
 #                                               /config vs /runtime/config.js vs /theme-fallback.css
 #   components/gov-chat-frontend/docker-entrypoint.sh
@@ -229,7 +229,7 @@ CONFIG_DIR="$(resolve_config_dir)"
 # the sub-path joins below are unambiguous whether or not it carries a slash.
 CONFIG_DIR="${CONFIG_DIR%/}"
 FRONTEND_DIR="${CONFIG_DIR}/frontend"
-KEYCLOAK_THEME_DIR="${CONFIG_DIR}/keycloak/themes/genie"
+KEYCLOAK_THEME_DIR="${CONFIG_DIR}/keycloak/themes"
 THEME_CSS="${FRONTEND_DIR}/theme-variables.css"
 printf '  config_dir           = %s\n' "$CONFIG_DIR"
 printf '  frontend config dir  = %s\n' "$FRONTEND_DIR"
@@ -277,8 +277,8 @@ step "Asserting the seeded Keycloak theme set"
 # KEYCLOAK_THEME value, so all four subtrees must exist. A missing one is a
 # silent regression: Keycloak falls back to its built-in theme.
 for sub in login account admin email; do
-    remote_sh "test -f '$KEYCLOAK_THEME_DIR/$sub/theme.properties'" ||
-        fail "keycloak theme subtree incomplete: $sub/theme.properties missing under $KEYCLOAK_THEME_DIR"
+    remote_sh "test -f '$KEYCLOAK_THEME_DIR/genie/$sub/theme.properties'" ||
+        fail "keycloak theme subtree incomplete: $sub/theme.properties missing under $KEYCLOAK_THEME_DIR/genie"
     pass "keycloak theme present: $sub/theme.properties"
 done
 

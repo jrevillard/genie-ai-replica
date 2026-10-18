@@ -2,6 +2,14 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **2026-10-18 revision (post-execution):** the Keycloak mount contract changed
+> after live validation — the bind mount and `CONFIG_DIR_KEYCLOAK` point at the
+> themes ROOT (`configs/keycloak/themes` → `/opt/keycloak/themes`), not a single
+> theme, so extra themes (e.g. `genie-el-salvador`, `parent=genie`) can resolve.
+> Task text below still shows the earlier single-theme paths where it quotes
+> compose/env.j2 snippets; the shipped files and the design spec's revision
+> note are authoritative.
+
 **Goal:** Move GENIE.AI theme assets (frontend palette, brand JSON, Keycloak theme CSS) from image-baked to host-mounted runtime configuration so that editing a file on a Swarm node + `docker service update --force <svc>` makes the change visible in the browser without an image rebuild.
 
 **Architecture:** Per-component bind mount (`/opt/genieai-<env>/config/{frontend,keycloak/themes/genie}/` from host → corresponding service target) layered over image-baked defaults. One new Ansible role (`config_bootstrap`) cross-tree rsyncs the repo paths into the host directory on every deploy using `--ignore-existing` to preserve manual operator edits. Two new env vars (`CONFIG_DIR_FRONTEND`, `CONFIG_DIR_KEYCLOAK`) follow the existing `${VAR:-default}` envsubst pattern, so `docker compose up` works locally with zero config and Swarm reads the Ansible-written paths. The Keycloak image moves to upstream `quay.io/keycloak/keycloak:26.7.0` (the local `configs/keycloak/Dockerfile` is deleted), and a new nginx `location ^~ /config/` block ensures runtime assets are not subject to the existing immutable-cache regex.

@@ -2,6 +2,27 @@
 
 - **Issue**: [#998](https://opensource.unicc.org/un/itu/genie-ai/-/issues/998)
 - **Date**: 2026-10-16
+
+> **Revisions (post-design, keep in mind when reading):**
+>
+> 1. **Shipped role differs from the Ansible sketch below**: `config_bootstrap`
+>    seeds from a branch-pinned GitLab archive (like the Grafana provisioning
+>    download) and runs plain `rsync` on the target via `ansible.builtin.command`
+>    — not `ansible.posix.synchronize` from `playbook_dir`. See
+>    `deploy/ansible/roles/config_bootstrap/` for the authoritative tasks.
+> 2. **2026-10-18 — Keycloak mount widened to the themes ROOT.** The bind mount
+>    is `${CONFIG_DIR_KEYCLOAK:-./configs/keycloak/themes}:/opt/keycloak/themes`
+>    (the directory CONTAINING the themes), not a single theme at
+>    `/opt/keycloak/themes/genie`. Reason: deployments may ship extra themes
+>    next to `genie` (e.g. `genie-el-salvador` with `parent=genie`), and a
+>    `parent=` reference only resolves when both directory names exist under the
+>    mounted root; mounting one theme under a fixed name makes it inherit from
+>    itself and hangs Keycloak's theme resolver. Built-in themes live inside
+>    jars, so the root mount cannot shadow them. Theme selection stays with
+>    `KEYCLOAK_THEME` / realm `loginTheme` settings. The role pair seeds
+>    `configs/keycloak/themes` → `keycloak/themes` (expect
+>    `genie/login/theme.properties`), and `env.j2` renders
+>    `CONFIG_DIR_KEYCLOAK={{ config_dir }}/keycloak/themes`.
 - **Status**: Draft (post-brainstorming, pre-implementation)
 - **Author**: brainstorming session output
 - **Path**: architectural (multi-component, alters deploy interface)

@@ -1622,7 +1622,16 @@ services:
       - KC_SMTP_PASSWORD=${EMAIL_PASSWORD:-}
       - KC_SMTP_FROM=${EMAIL_FROM:-}
     volumes:
-      - ${CONFIG_DIR_KEYCLOAK:-./configs/keycloak/themes/genie}:/opt/keycloak/themes/genie:ro
+      # Mount the WHOLE themes directory, not a single theme: deployments may
+      # ship several themes (e.g. genie + genie-el-salvador) next to each other,
+      # and a theme may declare `parent=genie`, which only resolves when both
+      # directory names exist under /opt/keycloak/themes. Mounting one theme
+      # under a fixed name would make such a theme inherit from itself and
+      # wedge Keycloak's theme resolver. Built-in themes (keycloak, keycloak.v2,
+      # ...) live inside jars, not in this directory, so the mount cannot
+      # shadow them. The active theme is selected by KEYCLOAK_THEME (realm
+      # import) or the realm's loginTheme/accountTheme/... settings.
+      - ${CONFIG_DIR_KEYCLOAK:-./configs/keycloak/themes}:/opt/keycloak/themes:ro
     healthcheck:
       test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8080' || exit 1"]
       interval: 15s

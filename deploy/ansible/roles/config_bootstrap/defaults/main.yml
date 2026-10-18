@@ -27,6 +27,10 @@ config_bootstrap_pairs:
   - src: "components/gov-chat-frontend/public/config"
     dest_subdir: "frontend"
     expect: "theme-variables.css"
-  - src: "configs/keycloak/themes/genie"
-    dest_subdir: "keycloak/themes/genie"
-    expect: "login/theme.properties"
+  # Seed the whole themes tree, not one theme: additional themes (e.g.
+  # genie-el-salvador with parent=genie) must sit next to genie under the
+  # mounted directory, or their parent reference cannot resolve. The mount
+  # target in docker-compose.yaml is /opt/keycloak/themes (the root).
+  - src: "configs/keycloak/themes"
+    dest_subdir: "keycloak/themes"
+    expect: "genie/login/theme.properties"

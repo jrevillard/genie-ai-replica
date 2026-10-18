@@ -18,7 +18,7 @@ The brand surface is small (one JSON config, four logo files, two CSS files) and
 GENIE.AI exposes two brand surfaces:
 
 1. **The web app** (`components/gov-chat-frontend/`) — driven by `public/config/genie-ai-config.json` and `src/config-loader.js`. Logo, app title, favicon, and brand color live here. The brand color flows through the entire UI via the Design System `--brand` CSS variable.
-2. **The Keycloak login + account + admin + email templates** (`configs/keycloak/themes/genie/`) — driven by theme properties files and FreeMarker templates. Logo, favicon, and theme colors live here.
+2. **The Keycloak login + account + admin + email templates** (`configs/keycloak/themes/`) — driven by theme properties files and FreeMarker templates. Logo, favicon, and theme colors live here. The default theme is `genie`; additional themes can ship next to it (see [Multiple themes](#multiple-themes-and-theme-selection)).
 
 The two surfaces are independent: changing the web app's logo does not change the Keycloak login screen, and vice versa. Plan to update both for a full rebrand.
 
@@ -31,7 +31,7 @@ Both brand surfaces are bind-mounted into their containers from the node, so the
 | Surface | Repo path (canonical) | Path on a deployed node |
 |---|---|---|
 | Web app config + assets | `components/gov-chat-frontend/public/config/` | `/opt/genieai/config/frontend/` |
-| Keycloak themes | `configs/keycloak/themes/genie/` | `/opt/genieai/config/keycloak/themes/genie/` |
+| Keycloak themes (all of them) | `configs/keycloak/themes/` | `/opt/genieai/config/keycloak/themes/` |
 
 Both are mounted **read-only** inside the container, so the container never writes over your edits. The Ansible role (`config_bootstrap`) seeds the node directories from the repo at deploy time, and a routine `ansible-playbook deploy.yml --tags deploy` does it for you.
 
@@ -183,6 +183,29 @@ The Keycloak login, account, admin, and email screens are themed by the `genie` 
 | Email | `configs/keycloak/themes/genie/email/theme.properties` | `resources/img/logo.png` | n/a | n/a |
 
 The `genie` theme is a child of the Keycloak `keycloak.v2` (login/admin) / `keycloak.v3` (account) / `keycloak` (email) base themes — defined by the `parent=` line in each `theme.properties`.
+
+### Multiple themes and theme selection
+
+The runtime mount delivers **the whole `themes/` directory** to Keycloak (`/opt/keycloak/themes`), not a single theme. This matters in two ways:
+
+- **Extra themes work.** You can ship additional themes next to `genie` — for example `genie-el-salvador/`, whose `theme.properties` declares `parent=genie`. Such a parent reference only resolves when both directory names exist under the mounted directory. (Mounting one theme under a fixed name would make it inherit from itself and hang Keycloak's theme resolver — which is why the mount is the themes root.)
+- **The active theme is a setting, not the mount.** All four surfaces follow the `KEYCLOAK_THEME` environment variable at realm-import time (`configs/keycloak/genie-realm.yaml`). Default: `genie`. To activate another theme:
+
+```bash
+# Either redeploy with the variable set (realm import applies it):
+#   .env: KEYCLOAK_THEME=genie-el-salvador   (Ansible: keycloak_theme group var)
+# Or switch a running realm via the admin API:
+ADMIN_TOKEN=$(curl -sk -X POST "https://<host>/auth/realms/master/protocol/openid-connect/token" \
+  -d "client_id=admin-cli" -d "username=admin" -d "password=<KEYCLOAK_ADMIN_PASSWORD>" -d "grant_type=password" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+curl -sk -X PUT "https://<host>/auth/admin/realms/genie" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"loginTheme":"genie-el-salvador"}'
+```
+
+Then restart the Keycloak container — it caches themes in memory.
+
+**Adding a new theme in three steps:** (1) create `configs/keycloak/themes/<your-theme>/` with `login/` (and optionally `account/`, `admin/`, `email/`) subdirectories, each with a `theme.properties` — `parent=genie` reuses the GENIE.AI layout and only overrides your files; (2) deploy — the `config_bootstrap` role seeds the whole `themes/` tree; (3) set `KEYCLOAK_THEME` (or the realm setting) to `<your-theme>`. On an already-deployed node, dropping the theme directory into `/opt/genieai/config/keycloak/themes/` and restarting Keycloak is enough — the bind mount serves it live.
 
 ### How to change the Keycloak login logo
 

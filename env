@@ -879,10 +879,15 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 
 #
 # Runtime theme config bind mounts. These are the HOST paths that docker-compose
-# mounts read-only at /app/dist/config (frontend) and /opt/keycloak/themes/genie
-# (Keycloak). Everything under them -- theme-variables.css, genie-ai-config.json,
-# the logo and splash assets, the whole genie Keycloak theme -- is editable at
-# runtime without rebuilding any image.
+# mounts read-only at /app/dist/config (frontend) and /opt/keycloak/themes
+# (Keycloak themes ROOT, all themes). Everything under them --
+# theme-variables.css, genie-ai-config.json, the logo and splash assets, the
+# Keycloak themes -- is editable at runtime without rebuilding any image.
+#
+# CONFIG_DIR_KEYCLOAK must be the directory that CONTAINS the themes (genie/,
+# and any extra themes like genie-el-salvador/), never a single theme: a theme
+# can declare parent=genie, which only resolves when both directory names are
+# present. The active theme is chosen by KEYCLOAK_THEME, not by this path.
 #
 # On a deployed node you do NOT set these by hand: Ansible writes them from
 # config_dir (deploy/ansible/templates/env.j2) and the config_bootstrap role
@@ -893,7 +898,7 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # deployed without the Ansible playbook must have CONFIG_DIR_FRONTEND /
 # CONFIG_DIR_KEYCLOAK set to absolute host paths. For example:
 #   CONFIG_DIR_FRONTEND=/opt/genieai/config/frontend
-#   CONFIG_DIR_KEYCLOAK=/opt/genieai/config/keycloak/themes/genie
+#   CONFIG_DIR_KEYCLOAK=/opt/genieai/config/keycloak/themes
 
 # A bind mount never falls back to the image contents. Docker creates a missing
 # source path as an empty root-owned directory, which then shadows everything

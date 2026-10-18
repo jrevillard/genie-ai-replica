@@ -17,6 +17,7 @@ job.
 """
 
 import ast
+import os
 import re
 from pathlib import Path
 
@@ -65,6 +66,28 @@ def _copied_core_modules(dockerfile: Path) -> set[str]:
     return set(_COPY_CORE.findall(dockerfile.read_text(encoding="utf-8")))
 
 
+# Directories that never hold overlay source. ``.venv`` is here because CI
+# creates it at the overlay root (test:python) and caches it; walking into it
+# with ``rglob`` visits every file in site-packages before a filter can discard
+# them, which cost 3.2 s of a 4.4 s test and grew with the dependency count.
+SKIP_DIRS = frozenset({"tests", "contracts", ".venv", "reports", ".ruff_cache", "__pycache__", ".git"})
+
+
+def _overlay_modules() -> list[str]:
+    """Overlay-relative paths of every Python file that is project source.
+
+    Prunes in-place rather than filtering after the fact: ``rglob`` cannot skip a
+    directory it has already descended into.
+    """
+    found: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(OVERLAY_ROOT):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for name in filenames:
+            if name.endswith(".py"):
+                found.append(str(Path(dirpath, name).relative_to(OVERLAY_ROOT)))
+    return found
+
+
 @pytest.mark.parametrize("service", sorted(SERVICE_IMAGES), ids=sorted(SERVICE_IMAGES))
 def test_image_ships_every_core_module_the_service_imports(service: str) -> None:
     source_path = OVERLAY_ROOT / service
@@ -111,13 +134,8 @@ def test_no_overlay_module_imports_core_without_being_pinned() -> None:
     each one to appear in the pin. A new module that imports ``core.*`` now
     fails here by name rather than failing to fail at all.
     """
-    SKIP_DIRS = {"tests", "contracts", ".venv", "reports", ".ruff_cache"}
     unpinned = sorted(
-        str(path.relative_to(OVERLAY_ROOT))
-        for path in OVERLAY_ROOT.rglob("*.py")
-        if path.relative_to(OVERLAY_ROOT).parts[0] not in SKIP_DIRS
-        and str(path.relative_to(OVERLAY_ROOT)) not in SERVICE_IMAGES
-        and _core_imports(path)
+        rel for rel in _overlay_modules() if rel not in SERVICE_IMAGES and _core_imports(OVERLAY_ROOT / rel)
     )
     assert not unpinned, (
         f"modules importing core.* but not listed in SERVICE_IMAGES: {unpinned}. "

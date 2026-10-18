@@ -1,13 +1,30 @@
 // Global mock for shared-lib (only exists at Docker build time).
 //
-// jest.config.js maps EVERY `shared-lib(/...)?` require to this one file, so it
-// has to cover every helper `src/` deep-imports — not just the barrel's
-// `logger` / `dbService`. A helper missing here fails as `undefined is not a
-// function`, which reads like a bug in the caller rather than an incomplete
-// mock.
-const tracingBackground = require('../../../../shared/lib/tracing-background');
-const tracingBaggage = require('../../../../shared/lib/tracing-baggage');
-
+// jest.config.js maps EVERY `shared-lib(/.*)?` require to this one file, so the
+// two things it must get right are:
+//
+//   1. The shape. `src/tracing.js` deep-imports and DESTRUCTURES —
+//      `const { setScopeName, withBackgroundSpan } = require('../shared-lib/
+//      tracing-background')`. Every key the module map swallows therefore has to
+//      exist here at the TOP LEVEL, not nested under a namespace the caller
+//      never looks in; otherwise it resolves to `undefined` and the caller
+//      throws `undefined is not a function`.
+//
+//   2. The dependencies. These are deliberately jest.fn() stubs and NOT
+//      re-exports of the real modules. The real `tracing-background.js` /
+//      `tracing-baggage.js` require `@opentelemetry/api` and
+//      `@opentelemetry/core`, which resolve out of `components/shared/lib/
+//      node_modules` — a directory the `test:doc-repo` CI job never creates (it
+//      runs only `npm ci` inside document-repository, unlike `test:backend`,
+//      which installs shared/lib first). Re-exporting the real modules turned
+//      every suite that loads this file into a MODULE_NOT_FOUND.
+//
+// Nothing is lost by stubbing: `src/tracing.js` returns a no-op stub whenever
+// NODE_ENV === 'test', which Jest always sets, so the SDK object it configures
+// never exists under test. Which propagator that file installs is asserted
+// directly against its source in tracing-doc-repo-logs.test.js — a behavioural
+// test is not possible here, and pretending otherwise is what would let the
+// wiring regress.
 module.exports = {
   logger: {
     debug: jest.fn(),
@@ -18,11 +35,8 @@ module.exports = {
   dbService: {
     getConnection: jest.fn()
   },
-  // Re-exported for real, not stubbed, for the same reason the backend mock
-  // does it: `createGeniePropagator` decides whether an inbound `genie.query_id`
-  // survives this hop, and a stub returning undefined would make the SDK fall
-  // back to trace-context-only — silently reproducing the exact bug the real
-  // factory exists to prevent.
-  tracingBackground,
-  tracingBaggage
+  setScopeName: jest.fn(),
+  withBackgroundSpan: jest.fn(),
+  createGeniePropagator: jest.fn(),
+  withBaggage: jest.fn()
 };

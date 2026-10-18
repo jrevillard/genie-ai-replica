@@ -337,34 +337,88 @@ def _emit(name, attributes):
     return span
 
 
+# Matches a span name passed as the FIRST POSITIONAL argument to one of the four
+# span openers. The character class is deliberately wider than the current
+# vocabulary: it accepts digits, hyphens and uppercase so a rename like
+# ``llm.v2.invoke`` or ``dataprep.ingest-v2`` is still DERIVED rather than
+# silently escaping — an unswept span is the failure this whole guard exists to
+# prevent, so the pattern must not be narrower than names people actually write.
+_SPAN_OPENER = r"""(?:start_span|start_as_current_span|background_span|with_span)\("""
+_SPAN_LITERAL = re.compile(_SPAN_OPENER + r"""\s*["']([\w.:-]+)["']""")
+
+# A span opened with anything OTHER than a plain string literal: a variable, an
+# f-string, a concatenation. The derivation above cannot see those, so a span
+# opened this way would be unguarded AND invisible to the guard — the worst of
+# both. ``_non_literal_span_openers`` reports them by file and line so the
+# remedy is obvious (pass the name as a literal).
+_SPAN_NON_LITERAL = re.compile(
+    _SPAN_OPENER + r"""(?!\s*["'])""",
+)
+
+
+def _overlay_root():
+    return pathlib.Path(__file__).resolve().parent.parent
+
+
+def _overlay_sources():
+    """Every Python file under the overlay that may open a span."""
+    root = _overlay_root()
+    paths = [root / "tracing.py"]
+    for directory in ("chatqna", "retriever", "reranker", "dataprep", "core"):
+        paths.extend(sorted((root / directory).glob("*.py")))
+    return [p for p in paths if p.exists()]
+
+
+def _span_call_sites():
+    """Sources that CALL a span opener, as opposed to defining one.
+
+    ``tracing.py`` is excluded: it is where ``with_span`` /
+    ``background_span`` are implemented, so its first argument is the parameter
+    ``name`` by design. Scanning it would flag every one of them and tell you
+    nothing. Its docstring example is still covered for the literal case, via
+    ``NOT_A_SPAN``.
+    """
+    return [p for p in _overlay_sources() if p.name != "tracing.py"]
+
+
 def _emitted_span_names():
-    """Every span name the overlay opens with an explicit literal.
+    """Every span name the overlay opens with an explicit string literal.
 
     Derived from the sources rather than hand-listed, because a hand-maintained
     list goes stale silently — that is the defect the previous dataprep pin
     existed to have caught, and re-introducing it in a new shape would be worse
     than the drift.
 
-    The regex only matches a name passed as the FIRST positional argument to one
-    of the four span openers. Two things that look like spans and are not:
+    Two things that look like spans and are not:
 
     * an attribute-key prefix (``dataprep.file_id``) — never the first argument;
     * ``service.operation``, the usage example in ``tracing.with_span``'s
       docstring — see ``NOT_A_SPAN``.
 
-    FastAPI auto-instrumentation is invisible here by construction: those spans
-    are named by the framework, not by us.
+    Spans opened with a non-literal name are invisible here by construction;
+    ``test_no_span_is_opened_with_a_non_literal_name`` is what stops that from
+    being a silent gap.
+
+    FastAPI auto-instrumentation is invisible here too, by construction: those
+    spans are named by the framework, not by us.
     """
-    root = pathlib.Path(__file__).resolve().parent.parent
-    opener = re.compile(
-        r"""(?:start_span|start_as_current_span|background_span|with_span)\(\s*["']([a-z][a-z_.]*)["']"""
-    )
     emitted = set()
-    for directory in ("chatqna", "retriever", "reranker", "dataprep"):
-        for path in sorted((root / directory).glob("*.py")):
-            emitted.update(opener.findall(path.read_text(encoding="utf-8", errors="replace")))
-    emitted.update(opener.findall((root / "tracing.py").read_text(encoding="utf-8", errors="replace")))
+    for path in _overlay_sources():
+        emitted.update(_SPAN_LITERAL.findall(path.read_text(encoding="utf-8", errors="replace")))
     return emitted - NOT_A_SPAN
+
+
+def _non_literal_span_openers():
+    """Span openers whose first argument is not a plain string literal."""
+    root = _overlay_root()
+    found = []
+    for path in _span_call_sites():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for match in _SPAN_NON_LITERAL.finditer(text):
+            line = text.count("\n", 0, match.start()) + 1
+            snippet = text[match.end() : match.end() + 40].split("\n")[0].strip()
+            found.append(f"{path.relative_to(root)}:{line} ({snippet})")
+    return found
 
 
 class TestOwnedSpanCoverage:
@@ -401,6 +455,25 @@ class TestOwnedSpanCoverage:
         stale = sorted(set(owned_span_names) - _emitted_span_names())
         assert not stale, f"OWNED_SPAN_NAMES lists spans no module opens: {stale}"
 
+    def test_no_span_is_opened_with_a_non_literal_name(self):
+        """A span whose name is computed is invisible to the guard that owns it.
+
+        ``test_every_emitted_span_is_swept`` reads span names out of the source,
+        so it can only see literals. ``with_span(SPAN_NAME)`` or an f-string
+        would produce a span that is BOTH unswept and unseeable — the autouse
+        fixture skips it (absent from ``OWNED_SPAN_NAMES``) and the derivation
+        never reports it. Nothing else in the suite would fail.
+
+        So a non-literal opener is itself the finding: pass the name as a
+        literal, or the span is unguarded by construction.
+        """
+        offenders = _non_literal_span_openers()
+        assert not offenders, (
+            f"span opened with a non-literal name: {offenders}. The coverage "
+            "derivation reads names from the source, so such a span is neither "
+            "swept nor reported. Pass the name as a plain string literal."
+        )
+
     def test_mirror_matches_conftest(self, owned_span_names):
         """A conftest that drops a span must fail here, not just silently."""
         assert set(owned_span_names) == OWNED_SPAN_NAMES
@@ -434,18 +507,37 @@ class TestOwnedSpanCoverage:
         assert span_sweep(captured_spans()) is None
 
     def test_prose_from_an_upload_payload_fails_a_dataprep_span(self, span_sweep, captured_spans, span_exporter):
-        """The defect the follow-up closed, restated as a test.
+        """The case the sweep DOES close, on the attribute with no upstream constraint.
 
         ``dataprep.file_id`` is read off the request body with nothing upstream
-        constraining it, so a client posting a human-readable id would put that
-        text on a span and — with no collector-side redaction on the traces
+        constraining it. A client posting a human-readable id WITH SPACES puts
+        that text on a span and — with no collector-side redaction on the traces
         pipeline — into VictoriaTraces for the retention window.
+
+        SCOPE, stated so the next reader does not over-trust this: the shape rule
+        is whitespace-or-length, so an id written with separators instead of
+        spaces (``Contrat_de_Jean_Dupont_Q3.pdf``) passes both layers and still
+        lands. Closing that means constraining the value at the write site —
+        validating ``DocRepoIngestPayload.fileId`` or recording a digest — which
+        is a change to the ingest API's contract, not a vocabulary decision.
+        It is tracked on issue #1093 rather than done here.
         """
         _emit("dataprep.ingest", {"dataprep.file_id": "Facture de Jean Dupont"})
         with pytest.raises(AssertionError) as excinfo:
             span_sweep(captured_spans())
         assert "free-text value" in str(excinfo.value)
         span_exporter.clear()
+
+    def test_the_shape_rule_does_not_constrain_an_unvalidated_payload_value(self):
+        """Pins the residual above so it cannot be quietly forgotten.
+
+        A test asserting what the guard DOES NOT catch is unusual, and that is
+        the point: without it the neighbouring test reads as a complete answer
+        to "can a client put PII on a dataprep span?", and it is a partial one.
+        If a future change constrains ``file_id`` at the write site, this test
+        fails and the docstring above should be rewritten with it.
+        """
+        assert free_text_violations({"dataprep.file_id": "Contrat_de_Jean_Dupont_Q3.pdf"}) == []
 
     def test_only_deliberate_leak_tests_may_clear_the_exporter(self):
         """``span_exporter`` is a hole in the sweep; keep it exactly as wide as it must be.

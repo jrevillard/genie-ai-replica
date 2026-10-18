@@ -194,6 +194,10 @@ data:
     # (busybox qualifies). Override for air-gapped clusters with a
     # mirrored image.
     themeUnpackImage: busybox:1.36
+    # Self-registration ("Register" link on the login page). Mirrors the
+    # compose default (KEYCLOAK_REGISTRATION_ENABLED:-true). Works without
+    # SMTP while verifyEmail is false — accounts activate immediately.
+    registrationAllowed: true
     # Gates the new-user email-verification flow; requires smtp to be set
     # when true (Keycloak rejects verification emails without a server).
     verifyEmail: false

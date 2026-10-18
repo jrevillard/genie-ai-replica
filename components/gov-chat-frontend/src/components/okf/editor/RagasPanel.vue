@@ -725,7 +725,74 @@ export default {
           ...new Set([...DEFAULT_METRICS, ...((this.suite.payload && this.suite.payload.metrics_config) || [])])
         ];
         this.$emit('changed');
+        this.adoptInFlight(suiteKey);
+      } else if (res.ok && res.result && res.result.status === 'generating') {
+        // refresh/reopen adoption (David 2026-10-18): a generating suite
+        // must never be orphaned from the UI — restore progress + Cancel
+        this.adoptGeneration(suiteKey, res.result);
       }
+    },
+    /** Re-attach to server-side work that outlived this page load. */
+    async adoptInFlight(suiteKey) {
+      if (this.runBusy) return;
+      await this.refreshHistory(); // history may not be loaded yet on first mount
+      const running = (this.runHistory || []).find(
+        (r) => r.status === 'running' && (!r.suite_key || r.suite_key === suiteKey)
+      );
+      if (!running) return;
+      this.runBusy = true;
+      this.runningRunKey = running._key;
+      this.runProgress = (running && running.progress) || { phase: 'retrieval', done: 0, total: 0 };
+      this.$store
+        .dispatch('okf/ragasAdoptRun', {
+          repoId: this.repo && this.repo.repo_id,
+          suiteKey,
+          runKey: running._key,
+          onProgress: (p) => {
+            this.runProgress = p;
+          }
+        })
+        .then((res) => {
+          if (res.ok) {
+            this.runDoc = res.result;
+            this.refreshHistory();
+            this.$emit('changed');
+          } else {
+            this.error = res.message;
+          }
+        })
+        .finally(() => {
+          this.runBusy = false;
+          this.runningRunKey = null;
+          this.runProgress = null;
+        });
+    },
+    adoptGeneration(suiteKey, envelope) {
+      if (this.generateBusy) return;
+      this.generateBusy = true;
+      this.generatingKey = suiteKey;
+      this.genProgress = (envelope && envelope.progress) || null;
+      this.$store
+        .dispatch('okf/ragasAdoptGeneration', {
+          repoId: this.repo && this.repo.repo_id,
+          suiteKey,
+          onProgress: (p) => {
+            this.genProgress = p;
+          }
+        })
+        .then((res) => {
+          if (res.ok) {
+            this.suite = res.result;
+            this.$emit('changed');
+          } else {
+            this.error = res.message;
+          }
+        })
+        .finally(() => {
+          this.generateBusy = false;
+          this.generatingKey = null;
+          this.genProgress = null;
+        });
     },
     async onGenerate() {
       this.error = '';

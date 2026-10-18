@@ -1562,6 +1562,80 @@ const actions = {
     }
   },
 
+  /** Adopt an ALREADY-RUNNING benchmark run after a page refresh or dialog
+   * reopen (David 2026-10-18: refreshing must never orphan the UI from an
+   * in-flight run — the run doc is the source of truth). Same poll loop and
+   * envelope as ragasRun, minus the start call. */
+  async ragasAdoptRun(_ctx, { repoId, suiteKey, runKey, onProgress } = {}) {
+    try {
+      ensureServices();
+      const POLL_MS = 2000;
+      const DEADLINE_MS = 24 * 60 * 60 * 1000;
+      const deadline = Date.now() + DEADLINE_MS;
+      for (;;) {
+        if (Date.now() > deadline) {
+          return { ok: false, code: 'RUN_TIMEOUT', message: 'The run is still executing on the server.' };
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        const doc = await ragasService.getRun(repoId, suiteKey, runKey);
+        if (!doc || doc.status === 'running') {
+          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
+          continue;
+        }
+        if (doc.status === 'failed' || doc.status === 'cancelled') {
+          return {
+            ok: false,
+            code: (doc.error && doc.error.code) || 'RUN_FAILED',
+            message: (doc.error && doc.error.message) || 'Run failed'
+          };
+        }
+        return { ok: true, result: doc };
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'RUN_FAILED',
+        message: err.message
+      };
+    }
+  },
+
+  /** Adopt an ALREADY-GENERATING suite after a refresh/reopen — same poll
+   * as ragasGenerate's tail; the generating envelope carries live progress. */
+  async ragasAdoptGeneration(_ctx, { repoId, suiteKey, onProgress } = {}) {
+    try {
+      ensureServices();
+      const POLL_MS = 2500;
+      const DEADLINE_MS = 24 * 60 * 60 * 1000;
+      const deadline = Date.now() + DEADLINE_MS;
+      for (;;) {
+        if (Date.now() > deadline) {
+          return { ok: false, code: 'GENERATION_TIMEOUT', message: 'The generation is still running server-side.' };
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        const doc = await ragasService.getSuite(repoId, suiteKey);
+        if (!doc || doc.status === 'generating') {
+          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
+          continue;
+        }
+        if (doc.status === 'failed') {
+          return {
+            ok: false,
+            code: (doc.error && doc.error.code) || 'GENERATION_FAILED',
+            message: (doc.error && doc.error.message) || 'Generation failed'
+          };
+        }
+        return { ok: true, result: doc };
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && (err.code || (err.data && err.data.error))) || 'GENERATION_FAILED',
+        message: err.message
+      };
+    }
+  },
+
   /** Load one already-finished run doc (history View button) — no poll. */
   async ragasGetRunQuiet(_ctx, { repoId, suiteKey, runKey } = {}) {
     try {

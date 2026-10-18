@@ -195,7 +195,9 @@ spec:
             - name: GENIE_ADMIN_USERNAME
               value: {{ .Values.data.keycloak.adminUsername | quote }}
             - name: GENIE_ADMIN_EMAIL
-              value: {{ .Values.data.keycloak.adminEmail | default "genie-admin@genieai.local" | quote }}
+              # Supplied per environment (operator contact) — no silent
+              # placeholder fallback.
+              value: {{ .Values.data.keycloak.adminEmail | required "data.keycloak.adminEmail is required — supply the operator contact email in the environment overlay" | quote }}
             {{- $smtp := .Values.data.keycloak.smtp | default dict }}
             # The realm file's smtpServer block is unconditional, so the
             # EMAIL_* vars must resolve on every install — including

@@ -830,6 +830,13 @@ async def generate_testset(
             }
         )
     _check_cancel(cancel_event)  # a cancel beats partial results — the user asked to stop
+    # The split arithmetic can ceil ABOVE the request (3 synthesizers ×
+    # ceil(N/3) ≥ N) and the wrapper truncation bounds per-synthesizer, not
+    # the total — the user asked for N questions, ship N (2026-10-18: a
+    # 5-question request displayed 200 entries after the overshoot bug).
+    if len(samples) > int(testset_size):
+        dropped += len(samples) - int(testset_size)
+        samples = samples[: int(testset_size)]
     if not samples:
         raise RuntimeError(
             f"no questions could be synthesized ({dropped} candidate(s) dropped — every synthesis "

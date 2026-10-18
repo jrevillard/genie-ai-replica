@@ -455,6 +455,18 @@ def test_generate_testset_filters_dropped_samples(monkeypatch, engine_env):
     assert len(out["samples"]) == 1
     assert out["dropped"] == 2
 
+    # the shipped count never exceeds the request, whatever the split
+    # arithmetic produced (ceil can round 5 up to 6 across synthesizers)
+    def fake_generate_many(self, **kwargs):
+        return _testset_with(_StubTS(), _StubTS(), _StubTS())
+
+    monkeypatch.setattr(TestsetGenerator, "generate", fake_generate_many)
+    out2 = asyncio.run(
+        ragas_engine.generate_testset([{"page_content": "b", "metadata": {}}], testset_size=2)
+    )
+    assert len(out2["samples"]) == 2
+    assert out2["dropped"] == 1  # the third valid sample was capped away
+
 
 def test_generate_testset_all_dropped_raises_an_honest_error(monkeypatch, engine_env):
     import asyncio

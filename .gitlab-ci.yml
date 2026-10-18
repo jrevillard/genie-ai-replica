@@ -374,7 +374,7 @@ workflow:
       echo "E2E_BASE_URL=${E2E_BASE_URL}" > .e2e-ropc-env
       echo "ADMIN_TOKEN=${ADMIN_TOKEN}" >> .e2e-ropc-env
       echo "CLIENT_UUID=${CLIENT_UUID}" >> .e2e-ropc-env
-    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ --project=chromium
+    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ tests/e2e/theme-runtime-config.spec.js --project=chromium
   after_script:
     - |
       # ROPC cleanup - CRITICAL: always revert, even on test failure
@@ -400,7 +400,7 @@ workflow:
 
 # GitLab official Container Scanning template — produces the correct-schema report
 # (GitLab security dashboard + MR widget) + CycloneDX SBOM. Overridden below to
-# scan each of the 16 candidate images in tmp/. Blocking on HIGH/CRITICAL is via
+# scan each of the 15 candidate images in tmp/. Blocking on HIGH/CRITICAL is via
 # MR approval rules (see docs/adr/0001).
 include:
   # --- Security testing suite (GitLab Ultimate) ---
@@ -544,7 +544,7 @@ container_scanning:
 # dashboard "Parsing errors" in pipelines 6385 and 6402).
 #
 # Each scan:IMAGE job extends container_scanning via this alias (kept for
-# backward compatibility with the 16 existing scan:IMAGE jobs), sets its own
+# backward compatibility with the 15 existing scan:IMAGE jobs), sets its own
 # CS_IMAGE to the corresponding tmp/... image built in stage `build`, and adds
 # rules so the scan only runs when relevant files change. The
 # global container_scanning override above moves the stage from `test` to
@@ -1833,80 +1833,6 @@ promote:postgres-init:
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
         paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
-
-# genie-ai-keycloak
-build:keycloak:
-  <<: *build_template
-  variables:
-    IMAGE_NAME: "genie-ai-keycloak"
-    CONTEXT: "configs/keycloak/"
-    DOCKERFILE: "configs/keycloak/Dockerfile"
-  rules:
-    - if: $FORCE_IMAGE_REBUILD == "true"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "web"
-      when: never
-    - if: $CI_COMMIT_TAG
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      changes:
-        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
-        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      changes:
-        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
-    - if: $CI_COMMIT_BRANCH =~ /^release\//
-      changes:
-        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
-
-scan:keycloak:
-  <<: *scan_template
-  needs:
-    - job: build:keycloak
-  variables:
-    IMAGE_NAME: "genie-ai-keycloak"
-  rules:
-    - if: $FORCE_IMAGE_REBUILD == "true"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "web"
-      when: never
-    - if: $CI_COMMIT_TAG
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      changes:
-        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
-        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      changes:
-        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
-    - if: $CI_COMMIT_BRANCH =~ /^release\//
-      changes:
-        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
-
-promote:keycloak:
-  <<: *promote_template
-  needs:
-    - job: scan:keycloak
-      artifacts: true
-  variables:
-    IMAGE_NAME: "genie-ai-keycloak"
-  rules:
-    - if: $FORCE_IMAGE_REBUILD == "true"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "web"
-      when: never
-    - if: $CI_COMMIT_TAG
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      changes:
-        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
-        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      changes:
-        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
-    - if: $CI_COMMIT_BRANCH =~ /^release\//
-      changes:
-        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
 
 # genie-ai-keycloak-config
 build:keycloak-config:

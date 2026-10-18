@@ -6,7 +6,7 @@
 # DEPLOYMENT OPTIONS
 # =============================================================================
 gpu_env_file: env.rtx6000
-repo_branch: deployment-stabilization
+repo_branch: main
 
 # =============================================================================
 # API GATEWAY

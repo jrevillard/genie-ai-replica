@@ -1,0 +1,36 @@
+---
+# config_dir is NOT defined here. It lives in group_vars/all.yml because the
+# docker-compose bind mounts are rendered by the separate `deploy` play, which
+# does not include this role — role defaults are scoped to the role's own plays
+# and would render as an empty string there.
+
+# Whether to actually seed the host config dirs from the repo. Operators can set
+# false to skip when they want to manage the host directory entirely by hand.
+config_bootstrap_sync_enabled: true
+
+# Scratch directory for the branch-pinned archive downloads and their extraction.
+# Cleaned up at the end of the play.
+config_bootstrap_tmp_root: /tmp/genieai-config-extract
+
+# List of (source, destination) pairs.
+#   src        - repo-relative directory. Used two ways: as the `?path=` argument
+#                of the GitLab archive endpoint (so the assets come from
+#                repo_branch, matching how the rest of the playbook obtains
+#                deployed content), and as the relative subpath the archive
+#                unpacks to after --strip-components=1.
+#   dest_subdir - subdirectory of config_dir to seed, matching the host paths
+#                rendered as CONFIG_DIR_FRONTEND / CONFIG_DIR_KEYCLOAK.
+#   expect      - a file that MUST exist in the extracted archive. Checked before
+#                anything is synced, so a wrong branch or a failed extraction
+#                fails the deploy instead of silently seeding a broken mount.
+config_bootstrap_pairs:
+  - src: "components/gov-chat-frontend/public/config"
+    dest_subdir: "frontend"
+    expect: "theme-variables.css"
+  # Seed the whole themes tree, not one theme: additional themes (e.g.
+  # genie-el-salvador with parent=genie) must sit next to genie under the
+  # mounted directory, or their parent reference cannot resolve. The mount
+  # target in docker-compose.yaml is /opt/keycloak/themes (the root).
+  - src: "configs/keycloak/themes"
+    dest_subdir: "keycloak/themes"
+    expect: "genie/login/theme.properties"

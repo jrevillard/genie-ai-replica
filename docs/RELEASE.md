@@ -54,7 +54,7 @@ See [Section 5 — Pre-releases](#5-pre-releases).
 ### What Gets Versioned
 
 The **only deliverable** is the set of Docker images. Each Git tag produces
-16 Docker images tagged with the version number in the
+15 Docker images tagged with the version number in the
 [GitLab Container Registry](https://opensource.unicc.org/un/itu/genie-ai/container_registry).
 
 Component-level versions in `package.json`, `pyproject.toml`, and `pubspec.yaml` are
@@ -284,7 +284,7 @@ Pushing the tag triggers the full CI pipeline:
 ```
 git tag push
   → lint + test + config (includes changelog validation)
-  → build (16 images, tmp/ namespace)
+  → build (15 images, tmp/ namespace)
   → scan (Trivy + Syft SBOM)
   → e2e (skipped for tag pipelines)
   → promote (tmp/ → stable namespace, tags: v2.1.0 + latest)
@@ -307,7 +307,7 @@ Docker tag summary:
 
 2. **Verify Docker images** in the
    [Container Registry](https://opensource.unicc.org/un/itu/genie-ai/container_registry).
-   All 16 images should have the `v2.1.0` tag.
+   All 15 images should have the `v2.1.0` tag.
 
 3. **Verify the GitLab Release** at
    [Deploy → Releases](https://opensource.unicc.org/un/itu/genie-ai/-/releases).
@@ -530,7 +530,7 @@ Copy this checklist into the release MR or issue.
 ### Verification
 
 - [ ] CI pipeline passed (lint → test → config → build → scan → promote → release)
-- [ ] All 16 Docker images tagged with the new version in Container Registry
+- [ ] All 15 Docker images tagged with the new version in Container Registry
 - [ ] GitLab Release created with changelog content
 - [ ] `latest` Docker tag updated (stable releases only — skip for pre-releases)
 - [ ] Dry-run deployment with the new tag succeeds

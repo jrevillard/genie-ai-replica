@@ -398,6 +398,8 @@ services:
       - VUE_PROXY_HOST=${VUE_PROXY_HOST:-localhost}
       - VUE_APP_CSP_CONNECT_SRC=${VUE_APP_CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
       - VUE_APP_AVAILABLE_LOCALES=${VUE_APP_AVAILABLE_LOCALES:-}
+    volumes:
+      - ${CONFIG_DIR_FRONTEND:-./components/gov-chat-frontend/public/config}:/app/dist/config:ro
     # Port 8090 is internal only - outer nginx on 80/443 is the public entry point
     # ports:
     #   - "${FRONTEND_PORT:-8090}:8090"
@@ -1580,12 +1582,21 @@ services:
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
-    build: configs/keycloak/
-    image: ${GENIE_AI_KEYCLOAK_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-keycloak}:${GENIE_AI_KEYCLOAK_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: quay.io/keycloak/keycloak:26.7.0
+    # The upstream image ships an empty CMD (kc.sh prints its usage and exits
+    # without a subcommand). The dropped custom image baked `start` via its
+    # Dockerfile; restore that explicit startup for both compose and swarm.
+    command: ["start"]
     environment:
       - KC_BOOTSTRAP_ADMIN_USERNAME=admin
       - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
       - KC_DB=${KC_DB:-postgres}
+      # Health and metrics endpoints on the management port 9000
+      # (/health, /health/ready, /health/live, /metrics). Upstream Keycloak
+      # defaults both to false; they were enabled by the removed
+      # configs/keycloak/Dockerfile, so set them here to keep the behavior.
+      - KC_HEALTH_ENABLED=true
+      - KC_METRICS_ENABLED=true
       - KC_DB_URL=${KC_DB_URL:-jdbc:postgresql://postgres:5432/keycloak}
       - KC_DB_USERNAME=${KC_DB_USERNAME:-keycloak}
       - KC_DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
@@ -1610,6 +1621,17 @@ services:
       - KC_SMTP_USER=${EMAIL_USER:-}
       - KC_SMTP_PASSWORD=${EMAIL_PASSWORD:-}
       - KC_SMTP_FROM=${EMAIL_FROM:-}
+    volumes:
+      # Mount the WHOLE themes directory, not a single theme: deployments may
+      # ship several themes (e.g. genie + genie-el-salvador) next to each other,
+      # and a theme may declare `parent=genie`, which only resolves when both
+      # directory names exist under /opt/keycloak/themes. Mounting one theme
+      # under a fixed name would make such a theme inherit from itself and
+      # wedge Keycloak's theme resolver. Built-in themes (keycloak, keycloak.v2,
+      # ...) live inside jars, not in this directory, so the mount cannot
+      # shadow them. The active theme is selected by KEYCLOAK_THEME (realm
+      # import) or the realm's loginTheme/accountTheme/... settings.
+      - ${CONFIG_DIR_KEYCLOAK:-./configs/keycloak/themes}:/opt/keycloak/themes:ro
     healthcheck:
       test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8080' || exit 1"]
       interval: 15s

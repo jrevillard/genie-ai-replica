@@ -24,7 +24,12 @@ fi
 # Keycloak client ID (defaults to genie-app)
 KEYCLOAK_CLIENT_ID="${VUE_APP_KEYCLOAK_CLIENT_ID:-genie-app}"
 
-cat > /app/dist/config.js << EOF
+# Runtime config is generated into /runtime/, outside the read-only bind mount on
+# /config/ so the mount can stay read-only and carry only operator-editable
+# assets. nginx serves it via the `= /runtime/config.js` exact-match location.
+mkdir -p /app/dist/runtime
+
+cat > /app/dist/runtime/config.js << EOF
 window.APP_CONFIG = {
   apiUrl: "${API_URL}",
   proxyHost: "${VUE_PROXY_HOST:-localhost}",

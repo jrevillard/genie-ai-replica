@@ -6,7 +6,7 @@
 
 ## Context
 
-GENIE.AI ships 16 custom Docker images (frontend, backend, db-migrations,
+GENIE.AI ships 15 custom Docker images (frontend, backend, db-migrations,
 document-repository, nginx, kong-config, 6 OPEA AI/ML services, postgres-init,
 keycloak, keycloak-config, tempo-proxy). Until this change, those images were
 built and pushed only to a **local Swarm registry** (`localhost:5000`) by Ansible
@@ -17,7 +17,7 @@ published anything.
 The project's GitLab instance (`opensource.unicc.org`, **17.5.2-ee**, project ID
 90) has the Container Registry feature enabled at
 `registry.opensource.unicc.org` (was empty before this change). We want every
-MR / `main` commit / tag to publish all 16 images, scanned, to the GitLab
+MR / `main` commit / tag to publish all 15 images, scanned, to the GitLab
 registry — and progressively retire the local Swarm registry.
 
 ### Constraints
@@ -144,14 +144,14 @@ gate, which produced raw JSON that GitLab could not ingest (wrong schema).
 
 ## Consequences
 
-- **Positive**: 16 images published per pipeline; vulnerable images quarantined;
+- **Positive**: 15 images published per pipeline; vulnerable images quarantined;
   SBOM artifacts for audit; deployable tags always point at scanned digests;
   local Swarm registry can be retired in phase 3.
 - **Negative**: pipeline adds 3 stages of wall-clock time (build + scan +
   promote) per MR; BuildKit rootless adds a learning curve vs classic docker
   build; `needs:matrix` requires GitLab ≥15.9 (verified: 17.5.2-ee).
 - **Mitigations**: BuildKit registry cache reduces rebuild cost after warm-up;
-  matrix parallelizes the 16 images; interruptible: true on build/scan lets
+  matrix parallelizes the 15 images; interruptible: true on build/scan lets
   newer pipelines cancel stale ones.
 
 ## Phasing

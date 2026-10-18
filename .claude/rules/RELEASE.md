@@ -73,7 +73,7 @@ the step-by-step commands an AI agent needs to execute a release.
    git tag vX.Y.Z && git push origin vX.Y.Z
    ```
 
-7. **Verify:** pipeline green, 16 Docker images tagged `vX.Y.Z`, GitLab Release
+7. **Verify:** pipeline green, 15 Docker images tagged `vX.Y.Z`, GitLab Release
    created, `latest` Docker tag updated.
 
 ## PATCH Release

@@ -66,11 +66,15 @@ jest.mock('../../eventBus', () => ({
   }
 }));
 
-// Mock dynamic import of main.js (loadQuickHelpButtons)
-jest.mock('../../main.js', () => ({
-  loadConfig: jest.fn().mockResolvedValue({
+// Mock the runtime config loader (loadQuickHelpButtons imports it dynamically).
+// Must mock config-loader, the module that actually exports loadConfig —
+// mocking main.js would fake an export the production module no longer has.
+jest.mock('../../config-loader', () => ({
+  __esModule: true,
+  default: jest.fn().mockResolvedValue({
     features: { chat: { quickHelp: { buttons: [] } } }
-  })
+  }),
+  config: {}
 }));
 
 // Mock heavy libraries
@@ -992,7 +996,7 @@ describe('ChatBotComponent', () => {
     // -----------------------------------------------------------------------
 
     it('loadQuickHelpButtons filters hidden buttons', async () => {
-      const { loadConfig } = require('../../main.js');
+      const loadConfig = require('../../config-loader').default;
       loadConfig.mockResolvedValue({
         features: {
           chat: {
@@ -1017,7 +1021,7 @@ describe('ChatBotComponent', () => {
     });
 
     it('loadQuickHelpButtons reads serviceLabels and sets serviceKey to first English label', async () => {
-      const { loadConfig } = require('../../main.js');
+      const loadConfig = require('../../config-loader').default;
       loadConfig.mockResolvedValue({
         features: {
           chat: {
@@ -1048,7 +1052,7 @@ describe('ChatBotComponent', () => {
     });
 
     it('loadQuickHelpButtons falls back to id when no serviceLabels', async () => {
-      const { loadConfig } = require('../../main.js');
+      const loadConfig = require('../../config-loader').default;
       loadConfig.mockResolvedValue({
         features: {
           chat: {

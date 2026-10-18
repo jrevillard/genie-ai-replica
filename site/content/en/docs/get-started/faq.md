@@ -21,12 +21,21 @@ LLM. The minimum for a 7B model is 16 GB. See
 
 ### 2. Can I run GENIE.AI fully air-gapped?
 
-Yes. Pull the 16 Docker images from the GitLab Container Registry onto a
-machine with internet, copy them (`docker save` / `docker load`), and run the
-Compose stack on the air-gapped host. Models are pulled at first start from
+Yes. Pull the 15 Docker images from the GitLab Container Registry, plus
+`quay.io/keycloak/keycloak:26.7.0` (Keycloak runs from its upstream image
+rather than a GENIE.AI-built one), onto a machine with internet, copy them
+(`docker save` / `docker load`), and run the Compose stack on the
+air-gapped host. Models are pulled at first start from
 HuggingFace Hub (set `HUGGING_FACE_HUB_TOKEN` in `.env`); for air-gapped
 deployments you must pre-warm the `hf_cache` Docker volume or set
-`HF_HUB_OFFLINE=1` with the model baked into the image at build time.
+`HF_HUB_OFFLINE=1` with the model baked into the image at build time. The
+runtime theme assets are another first-deploy download: Ansible pulls the
+branding archives from the GitLab repository-archive endpoint on every deploy
+node, so an air-gapped node must either reach that endpoint or have the two
+host config directories (`<config_dir>/frontend/` and
+`<config_dir>/keycloak/themes/` — default `/opt/genieai/config/...`, the path
+follows the `deploy_dir` group var) pre-seeded by hand with
+`config_bootstrap_sync_enabled: false`.
 
 ### 3. Does it work with my SSO?
 

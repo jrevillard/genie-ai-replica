@@ -1372,10 +1372,12 @@ const actions = {
       const started = await ragasService.generateSuite(repoId, options || {});
       if (!started || !started.suite_key) return { ok: true, result: started };
       const POLL_MS = 2500;
-      // Matches the server's long-job budget (OKF_RAGAS_LONG_TIMEOUT_MS,
-      // 60 min default): first-generation on a contended GPU runs past 10
-      // minutes legitimately (live finding, 2026-10-17).
-      const DEADLINE_MS = 60 * 60 * 1000;
+      // The server NEVER kills a healthy long job (David 2026-10-18: never
+      // trash running work) — OKF_RAGAS_LONG_TIMEOUT_MS is only the
+      // unreachable-sidecar horizon. This UI horizon (24h) just bounds a
+      // left-open dialog; the job keeps running server-side and the
+      // timeout message says so.
+      const DEADLINE_MS = 24 * 60 * 60 * 1000;
       const deadline = Date.now() + DEADLINE_MS;
       for (;;) {
         if (Date.now() > deadline) {
@@ -1484,8 +1486,9 @@ const actions = {
       const started = await ragasService.runSuite(repoId, suiteKey, metrics ? { metrics } : {});
       if (!started || !started.run_key) return { ok: true, result: started };
       const POLL_MS = 2000;
-      // Matches the server's long-job budget — evaluation is judge-bound.
-      const DEADLINE_MS = 60 * 60 * 1000;
+      // Judge-bound run — the server never times out a live job (see
+      // generateRagasSuite above); 24h bounds only this open dialog.
+      const DEADLINE_MS = 24 * 60 * 60 * 1000;
       const deadline = Date.now() + DEADLINE_MS;
       for (;;) {
         if (Date.now() > deadline) {

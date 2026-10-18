@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 import time
 import uuid
 
@@ -121,7 +122,18 @@ async def _start_job(kind: str) -> str:
                 detail=f"busy: {running} job(s) already running (RAGAS_MAX_CONCURRENT_JOBS={MAX_CONCURRENT_JOBS})",
             )
         job_id = uuid.uuid4().hex[:12]
-        JOBS[job_id] = {"job_id": job_id, "kind": kind, "status": "queued", "phase": "", "started_at": now}
+        JOBS[job_id] = {
+            "job_id": job_id,
+            "kind": kind,
+            "status": "queued",
+            "phase": "",
+            "started_at": now,
+            # the cooperative-stop signal: engine phases and synthesizer
+            # wrappers poll it, so a cancelled job stops paying the GPU
+            # within one in-flight LLM batch even though the worker thread
+            # cannot be interrupted mid-call
+            "cancel_event": threading.Event(),
+        }
     return job_id
 
 
@@ -144,9 +156,17 @@ async def _run_job(job_id: str, coro) -> None:
     except asyncio.CancelledError:
         # CancelledError is a BaseException — invisible to the except below.
         # This task IS the cancellation target, so recording and ending here
-        # is correct; the engine coroutine is torn down with us.
+        # is correct. The engine's heavy work runs in a worker thread
+        # (thread confinement — see ragas_engine) which task.cancel cannot
+        # interrupt: setting the event is what actually stops the judge
+        # calls; the thread drains and exits on its own.
+        job["cancel_event"].set()
         job["status"] = "cancelled"
         logger.info("job %s (%s) cancelled", job_id, job.get("kind"))
+    except ragas_engine.EngineCancelled as e:
+        # the engine saw the cancel event mid-run (cooperative stop)
+        job["status"] = "cancelled"
+        logger.info("job %s (%s) cancelled mid-run (%s)", job_id, job.get("kind"), e)
     except Exception as e:  # noqa: BLE001 — the failure IS the job result
         logger.exception("job %s (%s) failed", job_id, job.get("kind"))
         job["status"] = "failed"
@@ -175,6 +195,7 @@ async def cancel_job(job_id: str):
         raise HTTPException(status_code=404, detail="unknown or expired job (sidecar restarted?)")
     task = job.get("task")
     if job.get("status") in ("queued", "running") and task is not None and not task.done():
+        job["cancel_event"].set()  # cooperative stop first — the thread starts draining now
         task.cancel()
         # Give the loop a moment to deliver the cancellation so the response
         # usually reflects the terminal status. Best-effort — the caller's
@@ -216,6 +237,7 @@ async def generate_testset(req: GenerateRequest):
             req.query_distribution,
             req.num_personas,
             progress=_phase_tracker(job_id),
+            cancel_event=JOBS[job_id]["cancel_event"],
         ),
     )
     return {"job_id": job_id, "status": "queued", "poll": f"/jobs/{job_id}"}
@@ -242,7 +264,11 @@ async def evaluate(req: EvaluateRequest):
     _spawn_job(
         job_id,
         ragas_engine.evaluate_samples(
-            req.samples, req.metrics or _DEFAULT_METRICS, req.timeout_s, progress=_phase_tracker(job_id)
+            req.samples,
+            req.metrics or _DEFAULT_METRICS,
+            req.timeout_s,
+            progress=_phase_tracker(job_id),
+            cancel_event=JOBS[job_id]["cancel_event"],
         ),
     )
     return {"job_id": job_id, "status": "queued", "poll": f"/jobs/{job_id}"}

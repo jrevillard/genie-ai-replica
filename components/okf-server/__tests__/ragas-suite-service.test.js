@@ -31,9 +31,13 @@ jest.mock('../services/head-test-service', () => ({
   guardSuggestions: jest.fn()
 }));
 
-// The sidecar poller's interval is read at module load — shrink it before
-// the require so 202+poll flows complete in milliseconds, not 3s hops.
+// The sidecar poller's interval and liveness horizon are read at module
+// load — shrink both before the require so 202+poll flows complete in
+// milliseconds, not 3s hops. The 1ms horizon specifically makes EVERY poll
+// of a running job outlive the horizon, which is how the never-timeout-
+// a-live-job contract gets exercised below.
 process.env.OKF_RAGAS_JOB_POLL_MS = '5';
+process.env.OKF_RAGAS_LONG_TIMEOUT_MS = '1';
 
 const svc = require('../services/ragas-suite-service');
 const frontmatterService = require('../services/frontmatter-service');
@@ -295,6 +299,37 @@ describe('beginSuiteGeneration / getSuite', () => {
     await expect(svc.beginSuiteGeneration('me', {}, {}).then((r) => r.done)).rejects.toMatchObject({
       code: 'RAGAS_JOB_CANCELLED'
     });
+  });
+
+  it('a healthy long-running job is NEVER timed out — the liveness horizon rolls (David 2026-10-18)', async () => {
+    // OKF_RAGAS_LONG_TIMEOUT_MS=1 means every poll outlives the horizon;
+    // a reachable running job must still complete, not RAGAS_JOB_TIMEOUT.
+    let polls = 0;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/generate-testset')) return Promise.resolve(okJson({ job_id: 'j-long' }));
+      if (u.includes('/jobs/j-long')) {
+        polls += 1;
+        if (polls <= 5) return Promise.resolve(okJson({ job_id: 'j-long', status: 'running', phase: 'synthesizing-questions' }));
+        return Promise.resolve(
+          okJson({ job_id: 'j-long', status: 'done', result: { samples: GEN_SAMPLES, generator: {} } })
+        );
+      }
+      return Promise.reject(new Error(`unexpected fetch ${u}`));
+    });
+    const begun = await svc.beginSuiteGeneration('me', {}, {});
+    const suite = await begun.done; // generateSuite resolves with the suite doc
+    expect(suite).toBeTruthy();
+    expect(polls).toBeGreaterThanOrEqual(6); // it really ran past multiple horizons
+  });
+
+  it('an UNREACHABLE sidecar past the horizon fails the job honestly', async () => {
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/generate-testset')) return Promise.resolve(okJson({ job_id: 'j-dark' }));
+      return sidecarDown(); // every poll: connection refused
+    });
+    await expect(svc.beginSuiteGeneration('me', {}, {}).then((r) => r.done)).rejects.toBeTruthy();
   });
 
   it('deleting a GENERATING suite cancels its sidecar job instead of 404', async () => {

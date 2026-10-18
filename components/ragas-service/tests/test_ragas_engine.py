@@ -29,6 +29,65 @@ def engine_env(monkeypatch):
     monkeypatch.setenv("RAGAS_EMBED_MODEL", "test-embed")
 
 
+class _StubSample:
+    user_input = "what is the answer?"
+    reference = "the answer"
+    reference_contexts = ["ctx"]
+    persona_name = "persona"
+    query_style = "formal"
+    query_length = "short"
+
+
+class _StubTS:
+    def __init__(self, sample=None):
+        s = sample if sample is not None else _StubSample()
+        self.eval_sample = s
+        self.synthesizer_name = "stub_synth"
+        self.persona_name = ""
+        self.query_style = ""
+        self.query_length = ""
+
+
+def _testset_with(*samples):
+    return type("_Testset", (), {"samples": list(samples)})()
+
+
+class _StubSynth:
+    """Inner synthesizer stand-in: name + optional spies on its methods."""
+
+    name = "stub_synth"
+
+    def __init__(self, fail_sample=False, fail_scenarios=False):
+        self.fail_sample = fail_sample
+        self.fail_scenarios = fail_scenarios
+        self.sample_calls = 0
+        self.scenario_calls = 0
+
+    async def generate_sample(self, scenario, callbacks=None):
+        self.sample_calls += 1
+        if self.fail_sample:
+            raise ValueError("simulated synthesis failure")
+        return _StubSample()
+
+    async def generate_scenarios(self, n, knowledge_graph, persona_list, callbacks=None):
+        self.scenario_calls += 1
+        if self.fail_scenarios:
+            raise ValueError("simulated scenario failure")
+        return [object()] * n
+
+
+def _stub_default_distribution(monkeypatch, stub=None):
+    """The engine builds ragas's DEFAULT distribution itself (so the default
+    mix gets the _TolerantSynthesizer protection) — replace it with a stub
+    so generate-path tests exercise our code, not the library's KG
+    clustering on a transforms-stubbed graph."""
+    import ragas.testset.synthesizers as synth_mod
+
+    stub = stub or _StubSynth()
+    monkeypatch.setattr(synth_mod, "default_query_distribution", lambda llm, kg, llm_context=None: [(stub, 1.0)])
+    return stub
+
+
 def test_generate_testset_passes_num_personas_to_generate(monkeypatch, engine_env):
     from ragas.testset import TestsetGenerator
 
@@ -37,12 +96,9 @@ def test_generate_testset_passes_num_personas_to_generate(monkeypatch, engine_en
 
     seen = {}
 
-    class _Testset:
-        samples = []
-
     def fake_generate(self, **kwargs):
         seen.update(kwargs)
-        return _Testset()
+        return _testset_with(_StubTS())
 
     def fake_apply_transforms(kg, transforms, run_config=None):
         seen["kg_nodes"] = len(kg.nodes)
@@ -59,6 +115,7 @@ def test_generate_testset_passes_num_personas_to_generate(monkeypatch, engine_en
     import ragas.testset.transforms as transforms_module
 
     monkeypatch.setattr(transforms_module, "apply_transforms", fake_apply_transforms)
+    _stub_default_distribution(monkeypatch)
 
     import asyncio
 
@@ -72,7 +129,12 @@ def test_generate_testset_passes_num_personas_to_generate(monkeypatch, engine_en
     assert seen["num_personas"] == 7
     assert seen["testset_size"] == 5
     assert seen["kg_nodes"] == 1  # one DOCUMENT node per concept
-    assert out["samples"] == []
+    # the distribution handed to generate() is the tolerant-wrapped stub —
+    # the wrapping is the bug-#9 fix (executor must never see a raise)
+    dist, _w = seen["query_distribution"][0]
+    assert isinstance(dist, ragas_engine._TolerantSynthesizer)
+    assert dist.name == "stub_synth"
+    assert out["samples"][0]["user_input"] == "what is the answer?"
 
 
 def test_generate_testset_caps_concept_text_for_the_kg(monkeypatch, engine_env):
@@ -86,11 +148,8 @@ def test_generate_testset_caps_concept_text_for_the_kg(monkeypatch, engine_env):
 
     seen = {}
 
-    class _Testset:
-        samples = []
-
     def fake_generate(self, **kwargs):
-        return _Testset()
+        return _testset_with(_StubTS())
 
     def fake_apply_transforms(kg, transforms, run_config=None):
         seen["node_lengths"] = [len(n.properties.get("page_content") or "") for n in kg.nodes]
@@ -100,6 +159,7 @@ def test_generate_testset_caps_concept_text_for_the_kg(monkeypatch, engine_env):
     import ragas.testset.transforms as transforms_module
 
     monkeypatch.setattr(transforms_module, "apply_transforms", fake_apply_transforms)
+    _stub_default_distribution(monkeypatch)
 
     import asyncio
 
@@ -206,14 +266,12 @@ def test_generate_testset_seeds_missing_headlines_before_splitter(monkeypatch, e
 
     out = {}
 
-    class _Testset:
-        samples = []
-
     def fake_generate(self, **kwargs):
         out["chunk_nodes"] = sum(1 for n in self.knowledge_graph.nodes if n.type.name == "CHUNK")
-        return _Testset()
+        return _testset_with(_StubTS())
 
     monkeypatch.setattr(TestsetGenerator, "generate", fake_generate)
+    _stub_default_distribution(monkeypatch)
 
     # mixed lengths: ~1200-token doc containing the mocked headline (both
     # halves clear the splitter's 500-token min, so it splits into 2 chunks),
@@ -227,7 +285,7 @@ def test_generate_testset_seeds_missing_headlines_before_splitter(monkeypatch, e
     ]
 
     result = asyncio.run(ragas_engine.generate_testset(documents, testset_size=2))
-    assert result["samples"] == []
+    assert len(result["samples"]) == 1  # the stub's one synthesized question
     # the splitter saw all 3 DOCUMENT nodes, each carrying headlines — the
     # short one via the seeded []
     assert len(seen_by_splitter) == 3
@@ -249,6 +307,155 @@ def test_generate_testset_seeds_missing_headlines_before_splitter(monkeypatch, e
         )
         with pytest.raises(ValueError, match="'headlines' property not found"):
             asyncio.run(ragas_engine.generate_testset(documents, testset_size=2))
+
+
+def test_tolerant_synthesizer_never_raises_to_the_executor(engine_env):
+    """Regression (live 2026-10-18, bug #9): with raise_exceptions=False,
+    ragas's Executor turns a raised call into np.nan (executor.py:84) and
+    generate.py:610 feeds that nan to TestsetSample — pydantic rejects it
+    and ONE failed question kills the whole run ("2 validation errors for
+    TestsetSample ... input_value=nan"). The wrapper must convert failures
+    into valid droppable results so the executor never sees an exception."""
+    import asyncio
+    import threading
+
+    failing = _StubSynth(fail_sample=True, fail_scenarios=True)
+    wrapped = ragas_engine._TolerantSynthesizer(failing)
+
+    sample = asyncio.run(wrapped.generate_sample(scenario=object()))
+    assert getattr(sample, "user_input", None) == ""  # valid-but-droppable, NOT a raise
+    assert failing.sample_calls == 1  # the inner was really attempted
+
+    scenarios = asyncio.run(wrapped.generate_scenarios(n=3, knowledge_graph=object(), persona_list=[]))
+    assert scenarios == []  # a failed batch drops its questions, not the run
+    assert wrapped.name == "stub_synth"
+
+    # cancellation seam: once the event is set, remaining calls return
+    # instantly WITHOUT touching the judge
+    cancelled_inner = _StubSynth()
+    cancel_event = threading.Event()
+    cancel_event.set()
+    wrapped_cancelled = ragas_engine._TolerantSynthesizer(cancelled_inner, cancel_event)
+    s = asyncio.run(wrapped_cancelled.generate_sample(scenario=object()))
+    assert getattr(s, "user_input", None) == ""
+    assert cancelled_inner.sample_calls == 0
+    assert asyncio.run(wrapped_cancelled.generate_scenarios(n=5, knowledge_graph=object(), persona_list=[])) == []
+    assert cancelled_inner.scenario_calls == 0
+
+
+def test_generate_testset_filters_dropped_samples(monkeypatch, engine_env):
+    """A partially-failing synthesis shrinks the suite instead of crashing:
+    empty user_input rows (the tolerant wrapper's placeholders) are counted
+    in `dropped` and never shipped."""
+    import asyncio
+
+    from ragas.testset import TestsetGenerator
+
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda: object())
+    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+    import ragas.testset.transforms as transforms_module
+
+    monkeypatch.setattr(transforms_module, "apply_transforms", lambda kg, transforms, run_config=None: None)
+    _stub_default_distribution(monkeypatch)
+
+    empty = type("E", (), {"user_input": "", "reference": None, "reference_contexts": None})()
+    blank = type("B", (), {"user_input": "   ", "reference": None, "reference_contexts": None})()
+
+    def fake_generate(self, **kwargs):
+        return _testset_with(_StubTS(), _StubTS(empty), _StubTS(blank))
+
+    monkeypatch.setattr(TestsetGenerator, "generate", fake_generate)
+    out = asyncio.run(
+        ragas_engine.generate_testset([{"page_content": "b", "metadata": {}}], testset_size=3)
+    )
+    assert len(out["samples"]) == 1
+    assert out["dropped"] == 2
+
+
+def test_generate_testset_all_dropped_raises_an_honest_error(monkeypatch, engine_env):
+    import asyncio
+
+    from ragas.testset import TestsetGenerator
+
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda: object())
+    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+    import ragas.testset.transforms as transforms_module
+
+    monkeypatch.setattr(transforms_module, "apply_transforms", lambda kg, transforms, run_config=None: None)
+    _stub_default_distribution(monkeypatch)
+
+    empty = type("E", (), {"user_input": "", "reference": None, "reference_contexts": None})()
+
+    def fake_generate(self, **kwargs):
+        return _testset_with(_StubTS(empty), _StubTS(empty))
+
+    monkeypatch.setattr(TestsetGenerator, "generate", fake_generate)
+    with pytest.raises(RuntimeError, match="no questions could be synthesized"):
+        asyncio.run(ragas_engine.generate_testset([{"page_content": "b", "metadata": {}}], testset_size=2))
+
+
+def test_generate_testset_cancel_beats_partial_results(monkeypatch, engine_env):
+    """If the user cancels while synthesis is finishing, the job reports
+    cancelled — partial samples are never shipped as a surprise result."""
+    import asyncio
+    import threading
+
+    from ragas.testset import TestsetGenerator
+
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda temperature=0.0: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda: object())
+    monkeypatch.setattr(ragas_engine, "_build_testset_transforms", lambda documents, llm, embedding_model: [])
+    import ragas.testset.transforms as transforms_module
+
+    monkeypatch.setattr(transforms_module, "apply_transforms", lambda kg, transforms, run_config=None: None)
+    _stub_default_distribution(monkeypatch)
+
+    cancel_event = threading.Event()
+
+    def fake_generate(self, **kwargs):
+        cancel_event.set()  # cancelled mid-run, after some samples exist
+        return _testset_with(_StubTS())
+
+    monkeypatch.setattr(TestsetGenerator, "generate", fake_generate)
+    with pytest.raises(ragas_engine.EngineCancelled):
+        asyncio.run(
+            ragas_engine.generate_testset(
+                [{"page_content": "b", "metadata": {}}], testset_size=1, cancel_event=cancel_event
+            )
+        )
+
+
+def test_resolve_distribution_wraps_both_paths(monkeypatch, engine_env):
+    """Both the DEFAULT mix and user-specified synthesizers get the
+    _TolerantSynthesizer protection — the default path is where the live
+    bug-#9 crash ran."""
+    import ragas.testset.synthesizers as synth_mod
+
+    stub = _stub_default_distribution(monkeypatch)
+    dist = ragas_engine._resolve_distribution(None, llm=object(), kg=object())
+    assert isinstance(dist[0][0], ragas_engine._TolerantSynthesizer)
+    assert dist[0][0]._inner is stub
+    assert dist[0][1] == 1.0
+
+    # user-specified path: stub the three classes the factory imports
+    class _UserSynth:
+        def __init__(self, llm=None):
+            self.name = "user_synth"
+
+    for cls_name in (
+        "SingleHopSpecificQuerySynthesizer",
+        "MultiHopAbstractQuerySynthesizer",
+        "MultiHopSpecificQuerySynthesizer",
+    ):
+        monkeypatch.setattr(synth_mod, cls_name, _UserSynth)
+    dist2 = ragas_engine._resolve_distribution(
+        [{"synthesizer": "multi_hop_abstract", "weight": 0.7}], llm=object()
+    )
+    assert isinstance(dist2[0][0], ragas_engine._TolerantSynthesizer)
+    assert dist2[0][0].name == "user_synth"
+    assert dist2[0][1] == 0.7
 
 
 def test_transform_sequence_matches_ragas_default_plus_seeder():

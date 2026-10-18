@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -501,12 +502,80 @@ def _build_testset_transforms(documents, llm, embedding_model):
     raise ValueError("Documents appears to be too short (ie 100 tokens or less). Please provide longer documents.")
 
 
+class EngineCancelled(Exception):
+    """Raised when a cancel_event fires mid-run; the app layer maps this to
+    the job's 'cancelled' status (a user stop is not a failure)."""
+
+
+def _check_cancel(cancel_event: threading.Event | None) -> None:
+    if cancel_event is not None and cancel_event.is_set():
+        raise EngineCancelled("cancelled")
+
+
+def _empty_sample():
+    """Minimal VALID sample (all fields optional on SingleTurnSample) — the
+    droppable placeholder a failed synthesis returns."""
+    from ragas.dataset_schema import SingleTurnSample
+
+    return SingleTurnSample(user_input="")
+
+
+class _TolerantSynthesizer:
+    """Proxy that keeps one failed question from killing the whole run.
+
+    ragas 0.4.3's Executor (executor.py:84) turns a failed call into np.nan
+    when raise_exceptions=False; generate.py:610 then feeds that nan to
+    TestsetSample and pydantic rejects it — one bad question destroys the
+    ENTIRE generation (live 2026-10-18: "2 validation errors for
+    TestsetSample ... input_value=nan"). A failed scenario call is equally
+    lethal: iterating a nan raises TypeError. This proxy converts failures
+    into valid-but-droppable results — [] for a scenario batch, an empty
+    SingleTurnSample per question — which extraction filters out, so the
+    run completes with the questions that DID synthesize. It is also the
+    cancellation seam: once cancel_event is set, every remaining call
+    short-circuits without touching the judge, so a cancelled run drains
+    within one in-flight LLM batch instead of grinding the GPU to the end.
+    """
+
+    def __init__(self, inner, cancel_event: threading.Event | None = None):
+        self._inner = inner
+        self._cancel = cancel_event
+
+    @property
+    def name(self):
+        return self._inner.name
+
+    def _cancelled(self) -> bool:
+        return self._cancel is not None and self._cancel.is_set()
+
+    async def generate_scenarios(self, n, knowledge_graph, persona_list, callbacks=None):
+        if self._cancelled():
+            return []
+        try:
+            return await self._inner.generate_scenarios(
+                n=n, knowledge_graph=knowledge_graph, persona_list=persona_list, callbacks=callbacks
+            )
+        except Exception as e:  # noqa: BLE001 — dropping this batch IS the recovery
+            logger.warning("scenario generation failed for %s (dropping its questions): %s", self.name, e)
+            return []
+
+    async def generate_sample(self, scenario, callbacks=None):
+        if self._cancelled():
+            return _empty_sample()
+        try:
+            return await self._inner.generate_sample(scenario=scenario, callbacks=callbacks)
+        except Exception as e:  # noqa: BLE001 — dropping this question IS the recovery
+            logger.warning("sample synthesis failed for %s (dropping question): %s", self.name, e)
+            return _empty_sample()
+
+
 async def generate_testset(
     documents: list[dict],
     testset_size: int,
     query_distribution: list[dict] | None = None,
     num_personas: int = 3,
     progress=None,
+    cancel_event: threading.Event | None = None,
 ) -> dict:
     """Generate benchmark-suite samples from concept documents.
 
@@ -516,6 +585,9 @@ async def generate_testset(
     overrides the default synthesizer mix, as [{synthesizer, weight}].
     progress (optional): callback str -> None, called at phase boundaries so
     the app layer's job registry can expose coarse progress to pollers.
+    cancel_event (optional): set by the app layer on DELETE; checked at
+    phase boundaries and inside the synthesizer wrappers (see
+    _TolerantSynthesizer).
     """
     from langchain_core.documents import Document as LCDocument
     from ragas.run_config import RunConfig
@@ -558,14 +630,15 @@ async def generate_testset(
     ]
     generator = TestsetGenerator(llm=llm, embedding_model=embeddings)
 
-    # generate_with_langchain_docs() (ragas 0.4.3) does NOT accept
-    # num_personas — only generate() does. Replicate the wrapper's own
-    # body (verified against its source: default transforms → DOCUMENT
-    # nodes → apply_transforms → generate) so the persona count rides
-    # through, per the user-settable-dimensions contract. The transforms
-    # come from our explicit mirror of the 0.4.3 defaults (see
-    # _build_testset_transforms) — the library's own list crashes on
-    # docs the HeadlinesExtractor filter skips (live 2026-10-18).
+    # Thread confinement (live 2026-10-18): ragas's Executor re-enters
+    # whatever loop is running via nest_asyncio (executor.py:214
+    # apply_nest_asyncio). Driven on the uvicorn loop, that reentrancy
+    # corrupted the loop's ready-deque ("IndexError: pop from an empty
+    # deque"), killed the server process, restarted the container and
+    # vanished every in-flight job. In a plain worker thread no loop is
+    # running, so ragas's run() takes the plain asyncio.run path — a
+    # private ephemeral loop, no patching, no shared state (async_utils.run).
+    # The same confinement keeps the uvicorn loop free for health checks.
     if progress:
         progress("building-knowledge-graph")
     transforms = _build_testset_transforms(documents=docs, llm=llm, embedding_model=embeddings)
@@ -577,22 +650,39 @@ async def generate_testset(
         for doc in docs
     ]
     kg = KnowledgeGraph(nodes=nodes)
-    apply_transforms(kg, transforms, run_config=RunConfig())
+    await asyncio.to_thread(apply_transforms, kg, transforms, run_config=RunConfig())
+    _check_cancel(cancel_event)
     generator.knowledge_graph = kg
 
+    # generate_with_langchain_docs() (ragas 0.4.3) does NOT accept
+    # num_personas — only generate() does. Replicate the wrapper's own
+    # body (verified against its source: default transforms → DOCUMENT
+    # nodes → apply_transforms → generate) so the persona count rides
+    # through, per the user-settable-dimensions contract. The transforms
+    # come from our explicit mirror of the 0.4.3 defaults (see
+    # _build_testset_transforms) — the library's own list crashes on
+    # docs the HeadlinesExtractor filter skips (live 2026-10-18).
     if progress:
         progress("synthesizing-questions")
-    dist = _resolve_distribution(query_distribution, llm)
-    testset = generator.generate(
+    dist = _resolve_distribution(query_distribution, llm, kg=kg, cancel_event=cancel_event)
+    testset = await asyncio.to_thread(
+        generator.generate,
         testset_size=int(testset_size),
         query_distribution=dist,
         num_personas=int(num_personas),
         raise_exceptions=False,
     )
+    _check_cancel(cancel_event)
 
     samples = []
+    dropped = 0
     for ts in testset.samples:
         s = ts.eval_sample
+        if not str(getattr(s, "user_input", None) or "").strip():
+            # a failed/cancelled synthesis (see _TolerantSynthesizer) —
+            # count it, never ship it
+            dropped += 1
+            continue
         samples.append(
             {
                 "user_input": getattr(s, "user_input", None) or "",
@@ -604,13 +694,25 @@ async def generate_testset(
                 "synthesizer_name": getattr(ts, "synthesizer_name", None) or "",
             }
         )
+    _check_cancel(cancel_event)  # a cancel beats partial results — the user asked to stop
+    if not samples:
+        raise RuntimeError(
+            f"no questions could be synthesized ({dropped} candidate(s) dropped — every synthesis "
+            "failed); see ragas-service logs for per-question failures (judge output quality / window fit)"
+        )
     return {
         "samples": samples,
+        "dropped": dropped,
         "generator": {"model": os.getenv("RAGAS_JUDGE_MODEL"), "embed_model": os.getenv("RAGAS_EMBED_MODEL")},
     }
 
 
-def _resolve_distribution(query_distribution: list[dict] | None, llm):
+def _resolve_distribution(
+    query_distribution: list[dict] | None,
+    llm,
+    kg=None,
+    cancel_event: threading.Event | None = None,
+):
     """Map [{synthesizer, weight}] specs to a ragas QueryDistribution.
 
     synthesizer is one of single_hop_specific | multi_hop_abstract |
@@ -618,9 +720,22 @@ def _resolve_distribution(query_distribution: list[dict] | None, llm):
     injected into each instance — a bare cls() triggers ragas's default
     OpenAI() client, which raises without OPENAI_API_KEY (sovereign
     deployments must never need one).
+
+    Every synthesizer is wrapped in _TolerantSynthesizer (2026-10-18): with
+    ragas 0.4.3 + raise_exceptions=False a single failed sample becomes
+    np.nan (executor.py:84) and pydantic then rejects the whole Testset —
+    wrappers convert failures to droppable results instead. When no user
+    distribution is given and the KG is available, the DEFAULT distribution
+    is built here (same call generate() would make) so the default mix gets
+    the same protection.
     """
     if not query_distribution:
-        return None
+        if kg is None:
+            return None  # no KG to filter against — let generate() build its own
+        from ragas.testset.synthesizers import default_query_distribution
+
+        base = default_query_distribution(llm, kg)
+        return [(_TolerantSynthesizer(s, cancel_event), w) for s, w in base]
     from ragas.testset.synthesizers import (
         MultiHopAbstractQuerySynthesizer,
         MultiHopSpecificQuerySynthesizer,
@@ -641,7 +756,7 @@ def _resolve_distribution(query_distribution: list[dict] | None, llm):
             raise ValueError(
                 f"bad query_distribution entry {spec}; synthesizer must be one of {sorted(factory)} with weight > 0"
             )
-        out.append((cls(llm=llm), weight))
+        out.append((_TolerantSynthesizer(cls(llm=llm), cancel_event), weight))
     return out
 
 
@@ -650,11 +765,15 @@ def _resolve_distribution(query_distribution: list[dict] | None, llm):
 # --------------------------------------------------------------------------
 
 
-async def evaluate_samples(samples: list[dict], metrics: list[str] | None, timeout_s: int = 600, progress=None) -> dict:
+async def evaluate_samples(
+    samples: list[dict], metrics: list[str] | None, timeout_s: int = 600, progress=None, cancel_event=None
+) -> dict:
     """Score samples with the selected metrics. Sample keys are his exact
     mapping (user_input / retrieved_contexts / response / reference) plus
     reference_contexts for the context-metrics that consume them.
-    progress (optional): callback str -> None for the job registry."""
+    progress (optional): callback str -> None for the job registry.
+    cancel_event (optional): checked when evaluate() returns — a cancelled
+    run reports cancelled rather than shipping scores the user abandoned."""
     from ragas import EvaluationDataset, evaluate
     from ragas.run_config import RunConfig
 
@@ -680,7 +799,11 @@ async def evaluate_samples(samples: list[dict], metrics: list[str] | None, timeo
         rows.append(row)
 
     dataset = EvaluationDataset.from_list(rows)
-    result = evaluate(
+    # Same thread confinement as generation (2026-10-18): evaluate() drives
+    # ragas's Executor, whose nest_asyncio reentrancy on the uvicorn loop
+    # corrupts it; in a worker thread it takes the plain asyncio.run path.
+    result = await asyncio.to_thread(
+        evaluate,
         dataset=dataset,
         metrics=metric_instances,
         llm=llm,
@@ -689,6 +812,7 @@ async def evaluate_samples(samples: list[dict], metrics: list[str] | None, timeo
         show_progress=False,
         raise_exceptions=False,
     )
+    _check_cancel(cancel_event)
 
     per_query = []
     frame = result.to_pandas()

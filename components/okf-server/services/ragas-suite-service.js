@@ -54,9 +54,10 @@ const RAGAS_URL = () => (process.env.OKF_RAGAS_URL || 'http://ragas-service:8090
 const RAGAS_TIMEOUT_MS = parseInt(process.env.OKF_RAGAS_TIMEOUT_MS || '600000', 10);
 // Generation and evaluation are LONG jobs (minutes to hours for large
 // suites), so they run sidecar-side as 202+poll background jobs — no HTTP
-// connection is held open. This budget is the TOTAL job deadline the poller
-// enforces (David's first generation outran the old 10-min held-open fetch
-// while the GPU was 100% busy; async jobs are the durable fix).
+// connection is held open. This budget is the poller's LIVENESS HORIZON —
+// how long an UNREACHABLE sidecar is retried before the job record fails.
+// A reachable, running job is never timed out (David 2026-10-18: never
+// trash running work on a timer); cancellation is the user's call.
 const RAGAS_LONG_TIMEOUT_MS = parseInt(process.env.OKF_RAGAS_LONG_TIMEOUT_MS || '3600000', 10);
 const RAGAS_JOB_POLL_MS = parseInt(process.env.OKF_RAGAS_JOB_POLL_MS || '3000', 10);
 const TESTSET_SIZE_DEFAULT = Math.max(1, parseInt(process.env.OKF_RAGAS_TESTSET_SIZE_DEFAULT || '20', 10));
@@ -213,14 +214,21 @@ async function sidecar(path, { method = 'POST', json, body, contentType, timeout
 
 /**
  * Poll a sidecar background job to completion (202 + poll — the same
- * contract this service itself exposes). RAGAS_LONG_TIMEOUT_MS is the TOTAL
- * job deadline; each individual HTTP call uses the short default budget, so
- * no connection is ever held open while the judge grinds. A vanished job
- * (404 — sidecar restarted) fails fast; transient poll errors retry until
- * the deadline.
+ * contract this service itself exposes). Each individual HTTP call uses the
+ * short default budget, so no connection is ever held open while the judge
+ * grinds. A vanished job (404 — sidecar restarted) fails fast.
+ *
+ * RAGAS_LONG_TIMEOUT_MS is a LIVENESS HORIZON, not a kill switch (David,
+ * 2026-10-18: "I do not want to trash work automatically"). A job that is
+ * demonstrably alive — the poll just returned a non-terminal status — never
+ * times out: the horizon rolls forward and we keep watching; only the
+ * user's cancel ends a healthy long run. The horizon bounds only the
+ * UNREACHABLE case: transient poll errors retry until it expires, then the
+ * job record fails honestly (the sidecar is down, the result is
+ * uncollectable either way).
  */
 async function pollSidecarJob(jobId) {
-  const deadline = Date.now() + RAGAS_LONG_TIMEOUT_MS;
+  let horizon = Date.now() + RAGAS_LONG_TIMEOUT_MS;
   for (;;) {
     await sleepMs(RAGAS_JOB_POLL_MS);
     let job;
@@ -234,7 +242,7 @@ async function pollSidecarJob(jobId) {
         err.status = 503;
         throw err;
       }
-      if (Date.now() > deadline) throw e; // network-class failure + out of time
+      if (Date.now() > horizon) throw e; // sidecar unreachable + out of horizon
       continue; // transient poll failure — the job may still be fine
     }
     if (job.status === 'done') return job.result;
@@ -250,13 +258,16 @@ async function pollSidecarJob(jobId) {
       err.status = 502;
       throw err;
     }
-    if (Date.now() > deadline) {
-      const err = new Error(
-        `ragas-service job ${jobId} still ${job.status || 'running'} after ${Math.round(RAGAS_LONG_TIMEOUT_MS / 1000)}s — polling gave up (the job may still finish there)`
-      );
-      err.code = 'RAGAS_JOB_TIMEOUT';
-      err.status = 503;
-      throw err;
+    if (Date.now() > horizon) {
+      // Alive but long-running: the successful poll above IS the liveness
+      // proof, so extend the horizon and keep watching. Cancel is the
+      // user's call (DELETE on the suite / job), not a timer's.
+      logger.info('ragas-suite.long_job_alive', {
+        job_id: jobId,
+        status: job.status || 'running',
+        horizon_s: Math.round(RAGAS_LONG_TIMEOUT_MS / 1000)
+      });
+      horizon = Date.now() + RAGAS_LONG_TIMEOUT_MS;
     }
   }
 }

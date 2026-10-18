@@ -19,9 +19,9 @@ import pytest
 import core.span_attrs
 from core.span_attrs import (
     ATTRIBUTE_NAMES,
-    LEGACY_ATTRIBUTE_NAMES,
     EVAL_HARNESS_KEYS,
     JSON_ENCODED_ATTRIBUTE_NAMES,
+    LEGACY_ATTRIBUTE_NAMES,
     LEGACY_REASONS,
     MAX_STRING_LEN,
     QUERY_ID_KEY,

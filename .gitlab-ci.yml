@@ -3072,6 +3072,7 @@ chart:lint:
       helm template test charts/genieai-umbrella -n genieai
       --set data.keycloak.failOnPlaceholderSecrets=false
       --set data.keycloak.adminEmail=ci-render@example.org
+      --set ingress.host=ci-render.local
       --set 'data.keycloak.clientSecrets.proxyClient=lint-dummy'
       --set 'data.keycloak.clientSecrets.dataprep=lint-dummy'
       --set 'data.keycloak.clientSecrets.grafana=lint-dummy'
@@ -3135,6 +3136,7 @@ chart:install:
       helm install test charts/genieai-umbrella -n genieai --create-namespace
       --set data.keycloak.failOnPlaceholderSecrets=false
       --set data.keycloak.adminEmail=ci-render@example.org
+      --set ingress.host=ci-render.local
       --set "data.keycloak.clientSecrets.proxyClient=${CI_JOB_ID}-proxy"
       --set "data.keycloak.clientSecrets.dataprep=${CI_JOB_ID}-dataprep"
       --set "data.keycloak.clientSecrets.grafana=${CI_JOB_ID}-grafana"

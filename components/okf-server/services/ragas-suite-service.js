@@ -318,9 +318,15 @@ async function pollSidecarJobOwned(jobId, meta) {
 const RERANK_RETRY_ATTEMPTS = 3;
 const RERANK_RETRY_STATUSES = new Set([429, 502, 503, 504]);
 const RERANK_TIMEOUT_MS = 15000;
+// TEI rerankers cap batches (live 2026-10-18: "batch size 48 > maximum
+// allowed batch size 32" — 24 candidates x 2 graphs 422'd EVERY probe and
+// run row, surfacing as "unknown" answers). Client-side batching like
+// teiEmbed's TEI_EMBED_CHUNK: every caller is bounded regardless of fanout.
+const RERANK_BATCH = 32;
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Same TEI rerank contract as head-suite's rerankTexts (env-shared). */
+/** Same TEI rerank contract as head-suite's rerankTexts (env-shared).
+ * Batches at RERANK_BATCH and remaps chunk-local indices to global ones. */
 async function rerankTexts(query, texts) {
   const rerankUrl = process.env.OKF_RERANK_ENDPOINT || '';
   if (!rerankUrl) {
@@ -331,38 +337,50 @@ async function rerankTexts(query, texts) {
   const headers = { 'Content-Type': 'application/json' };
   const token = process.env.OKF_RERANK_TOKEN || '';
   if (token) headers.Authorization = `Bearer ${token}`;
-  for (let attempt = 1; attempt <= RERANK_RETRY_ATTEMPTS; attempt += 1) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), RERANK_TIMEOUT_MS);
-    try {
-      const resp = await fetch(rerankUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ query, texts }),
-        signal: controller.signal
-      });
-      if (!resp.ok) {
-        const err = new Error(`HTTP ${resp.status}`);
-        err.status = resp.status;
-        err.retryable = RERANK_RETRY_STATUSES.has(resp.status);
-        const ra = Number(resp.headers && resp.headers.get && resp.headers.get('retry-after'));
-        if (Number.isFinite(ra) && ra > 0) err.retryAfterMs = ra * 1000;
-        throw err;
+  const merged = [];
+  for (let offset = 0; offset < texts.length; offset += RERANK_BATCH) {
+    const batch = texts.slice(offset, offset + RERANK_BATCH);
+    let decoded;
+    for (let attempt = 1; attempt <= RERANK_RETRY_ATTEMPTS; attempt += 1) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), RERANK_TIMEOUT_MS);
+      try {
+        const resp = await fetch(rerankUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ query, texts: batch }),
+          signal: controller.signal
+        });
+        if (!resp.ok) {
+          const err = new Error(`HTTP ${resp.status}`);
+          err.status = resp.status;
+          err.retryable = RERANK_RETRY_STATUSES.has(resp.status);
+          const ra = Number(resp.headers && resp.headers.get && resp.headers.get('retry-after'));
+          if (Number.isFinite(ra) && ra > 0) err.retryAfterMs = ra * 1000;
+          throw err;
+        }
+        decoded = await resp.json();
+        if (!Array.isArray(decoded)) throw new Error('unexpected rerank response shape');
+        break;
+      } catch (e) {
+        if (e.retryable === true && attempt < RERANK_RETRY_ATTEMPTS) {
+          await sleepMs(retryDelayMs(e, attempt));
+          continue;
+        }
+        throw e;
+      } finally {
+        clearTimeout(timer);
       }
-      const decoded = await resp.json();
-      if (!Array.isArray(decoded)) throw new Error('unexpected rerank response shape');
-      return decoded;
-    } catch (e) {
-      if (e.retryable === true && attempt < RERANK_RETRY_ATTEMPTS) {
-        await sleepMs(retryDelayMs(e, attempt));
-        continue;
+    }
+    // chunk-local indices -> global indices before merging
+    for (const r of decoded) {
+      const i = Number(r && r.index);
+      if (Number.isInteger(i) && i >= 0 && i < batch.length) {
+        merged.push({ index: i + offset, score: Number(r && r.score) || 0 });
       }
-      throw e;
-    } finally {
-      clearTimeout(timer);
     }
   }
-  throw new Error('rerank failed: retry loop exited unexpectedly'); // defensive
+  return merged;
 }
 
 function retryDelayMs(e, attempt) {
@@ -1676,6 +1694,7 @@ async function probeEntry(repoId, suiteKey, payload = {}, opts = {}) {
 module.exports = {
   ALL_METRICS,
   DEFAULT_METRICS,
+  rerankTexts,
   beginSuiteGeneration,
   cancelSuiteGeneration,
   generateSuite,

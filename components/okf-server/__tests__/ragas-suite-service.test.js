@@ -342,6 +342,24 @@ describe('beginSuiteGeneration / getSuite', () => {
     await expect(svc.cancelSuiteGeneration('me')).rejects.toMatchObject({ code: 'NO_GENERATION_IN_FLIGHT' });
   });
 
+  it('rerank batches at 32 and remaps chunk-local indices to global (live: 48 texts 422d)', async () => {
+    const calls = [];
+    global.fetch = jest.fn(async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push(body.texts.length);
+      // TEI contract: chunk-local indices into THIS batch, sorted by score
+      return okJson(body.texts.map((t, i) => ({ index: i, score: 0.9 - i * 0.01 })));
+    });
+    const texts = Array.from({ length: 48 }, (_, i) => `chunk ${i}`);
+    const out = await svc.rerankTexts('q', texts);
+    expect(calls).toEqual([32, 16]); // two batches, both under the cap
+    // second batch's chunk-local index 0 is GLOBAL index 32
+    const bumped = out.find((r) => r.index === 32);
+    expect(bumped).toBeTruthy();
+    expect(bumped.score).toBeCloseTo(0.9, 5);
+    expect(out.every((r) => r.index >= 0 && r.index < 48)).toBe(true);
+  });
+
   it('a healthy long-running job is NEVER timed out — the liveness horizon rolls (David 2026-10-18)', async () => {
     // OKF_RAGAS_LONG_TIMEOUT_MS=1 means every poll outlives the horizon;
     // a reachable running job must still complete, not RAGAS_JOB_TIMEOUT.

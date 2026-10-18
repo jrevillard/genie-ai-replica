@@ -3171,6 +3171,11 @@ export default {
       run: {
         button: 'Phethahatsa tekanyo',
         working: 'E phethahatsa…',
+        retrieved: 'hlailwe',
+        pass: 'hantshwe',
+        fail: 'hlokile',
+        abstained: 'ikhethile',
+        rowError: 'phoso',
         cancel: 'Khansela tsamaiso',
         phase: {
           retrieval: 'e kgetha',

@@ -3157,6 +3157,11 @@ export default {
       run: {
         button: 'Endesha kipimo',
         working: 'Inaendesha…',
+        retrieved: 'zilizopatikana',
+        pass: 'imefaulu',
+        fail: 'imeshindwa',
+        abstained: 'imejitoa',
+        rowError: 'kosa',
         cancel: 'Ghairi uendeshaji',
         phase: {
           retrieval: 'inarudisha',

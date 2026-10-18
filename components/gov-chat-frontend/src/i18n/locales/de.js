@@ -3184,6 +3184,11 @@ export default {
       run: {
         button: 'Vergleichstest ausführen',
         working: 'Wird ausgeführt…',
+        retrieved: 'abgerufen',
+        pass: 'bestanden',
+        fail: 'fehlgeschlagen',
+        abstained: 'abgelehnt',
+        rowError: 'Fehler',
         cancel: 'Lauf abbrechen',
         phase: {
           retrieval: 'Abruf läuft',

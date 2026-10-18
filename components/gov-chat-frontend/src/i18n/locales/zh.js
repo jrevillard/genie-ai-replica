@@ -3098,6 +3098,11 @@ export default {
       run: {
         button: '运行基准测试',
         working: '正在运行…',
+        retrieved: '已检索',
+        pass: '通过',
+        fail: '失败',
+        abstained: '弃答',
+        rowError: '错误',
         cancel: '取消运行',
         phase: {
           retrieval: '检索中',

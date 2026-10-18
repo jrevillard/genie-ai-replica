@@ -3137,6 +3137,11 @@ export default {
       run: {
         button: 'เรียกใช้การทดสอบเปรียบเทียบ',
         working: 'กำลังเรียกใช้…',
+        retrieved: 'ที่ดึงมา',
+        pass: 'ผ่าน',
+        fail: 'ไม่ผ่าน',
+        abstained: 'งดตอบ',
+        rowError: 'ข้อผิดพลาด',
         cancel: 'ยกเลิกการรัน',
         phase: {
           retrieval: 'กำลังดึงข้อมูล',

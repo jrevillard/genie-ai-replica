@@ -3162,6 +3162,11 @@ export default {
       run: {
         button: 'Jalankan tolok ukur',
         working: 'Menjalankan…',
+        retrieved: 'diambil',
+        pass: 'lulus',
+        fail: 'gagal',
+        abstained: 'menolak',
+        rowError: 'galat',
         cancel: 'Batalkan proses',
         phase: {
           retrieval: 'mengambil',

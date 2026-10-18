@@ -3131,6 +3131,11 @@ export default {
       run: {
         button: 'تشغيل الاختبار المرجعي',
         working: 'جارٍ التشغيل…',
+        retrieved: 'المسترجع',
+        pass: 'ناجح',
+        fail: 'فاشل',
+        abstained: 'امتنع',
+        rowError: 'خطأ',
         cancel: 'إلغاء التشغيل',
         phase: {
           retrieval: 'جارٍ الاسترجاع',

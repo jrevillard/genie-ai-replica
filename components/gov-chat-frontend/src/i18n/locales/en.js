@@ -1809,6 +1809,11 @@ export default {
       run: {
         button: 'Run benchmark',
         working: 'Running…',
+        retrieved: 'retrieved',
+        pass: 'pass',
+        fail: 'fail',
+        abstained: 'abstained',
+        rowError: 'error',
         cancel: 'Cancel run',
         phase: {
           retrieval: 'retrieving',

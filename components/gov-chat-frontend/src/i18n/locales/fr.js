@@ -3182,6 +3182,11 @@ export default {
       run: {
         button: 'Lancer le banc d’essai',
         working: 'Exécution…',
+        retrieved: 'récupérés',
+        pass: 'réussi',
+        fail: 'échoué',
+        abstained: 'abstenu',
+        rowError: 'erreur',
         cancel: 'Annuler l’exécution',
         phase: {
           retrieval: 'récupération',

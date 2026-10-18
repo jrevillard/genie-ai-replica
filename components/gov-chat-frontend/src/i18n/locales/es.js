@@ -3181,6 +3181,11 @@ export default {
       run: {
         button: 'Ejecutar la prueba comparativa',
         working: 'Ejecutando…',
+        retrieved: 'recuperados',
+        pass: 'aprobado',
+        fail: 'fallido',
+        abstained: 'abstenido',
+        rowError: 'error',
         cancel: 'Cancelar ejecución',
         phase: {
           retrieval: 'recuperando',

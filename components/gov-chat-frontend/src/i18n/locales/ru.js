@@ -3170,6 +3170,11 @@ export default {
       run: {
         button: 'Запустить тест',
         working: 'Выполняется…',
+        retrieved: 'найдено',
+        pass: 'успех',
+        fail: 'провал',
+        abstained: 'воздержался',
+        rowError: 'ошибка',
         cancel: 'Отменить запуск',
         phase: {
           retrieval: 'поиск',

@@ -222,11 +222,22 @@
                 @change="onEditEntry(e, 'reference_answer', $event.target.value)"
               ></textarea>
             </td>
-            <td>{{ (e.reference_passages || []).length }}</td>
+            <td>
+              <span :title="passagesTitle(e)">{{ (e.reference_passages || []).length }}</span>
+              <span v-if="runOutcome(e)" class="okf-ragas__muted">
+                · {{ translate('okf.ragas.run.retrieved', 'retrieved') }} {{ runOutcome(e).retrieved }}</span
+              >
+            </td>
             <td>
               <DsPill
                 :variant="e.oos ? 'warning' : 'success'"
                 :label="e.oos ? translate('okf.ragas.oos', 'out-of-scope') : translate('okf.ragas.inscope', 'in scope')"
+              />
+              <DsPill
+                v-if="runOutcome(e)"
+                :variant="runOutcome(e).ok ? 'success' : 'danger'"
+                :label="runOutcomeLabel(e)"
+                class="okf-ragas__run-chip"
               />
             </td>
             <td v-if="!readOnly" class="okf-ragas__row-actions">
@@ -462,6 +473,16 @@ export default {
   name: 'OkfRagasPanel',
   components: { DsButton, DsPill, DsSpinner, DsProgress, DsInfoTip },
   mixins: [translateMixin],
+  setup() {
+    // Registered ONCE here (in setup context) so the composable's
+    // MutationObserver actually arms — calling useChartTheme() inside a
+    // computed creates throwaway refs whose observers never attach, so
+    // theme flips never re-rendered the charts (live 2026-10-18:
+    // light/dark breakage). chartTheme is read by the option computeds,
+    // making them reactive to mode changes.
+    const { theme, getCssVarStrings } = useChartTheme();
+    return { chartTheme: theme, chartThemeStrings: getCssVarStrings };
+  },
   props: {
     repo: { type: Object, default: null },
     readOnly: { type: Boolean, default: false },
@@ -618,29 +639,33 @@ export default {
       return chips;
     },
     trendOptions() {
-      const t = useChartTheme().getCssVarStrings();
+      // this.chartTheme read = reactive dependency on mode flips
+      const t = this.chartThemeStrings();
+      const mode = this.chartTheme === 'dark' ? 'dark' : 'light';
       return {
         chart: { toolbar: { show: false }, animations: { enabled: false } },
-        theme: { mode: 'dark' },
+        theme: { mode },
         colors: t.chartColors,
         xaxis: {
           categories: [...this.runHistory]
             .filter((h) => h.summary && h.summary.metrics)
             .reverse()
             .map((h) => String(h.created_at || '').slice(5, 16)),
-          labels: { style: { colors: t.fg } }
+          labels: { style: { colors: t.textColor } }
         },
-        yaxis: { min: 0, max: 1, labels: { style: { colors: t.fg } } },
+        yaxis: { min: 0, max: 1, labels: { style: { colors: t.textColor } } },
         stroke: { curve: 'straight', width: 2 }
       };
     },
     statusOptions() {
-      const t = useChartTheme().getCssVarStrings();
+      const t = this.chartThemeStrings();
+      const mode = this.chartTheme === 'dark' ? 'dark' : 'light';
       return {
         chart: { type: 'bar', stacked: true, toolbar: { show: false } },
+        theme: { mode },
         colors: t.chartColors,
-        xaxis: { categories: [''], labels: { style: { colors: t.fg } } },
-        legend: { labels: { colors: t.fg } },
+        xaxis: { categories: [''], labels: { style: { colors: t.textColor } } },
+        legend: { labels: { colors: t.textColor } },
         plotOptions: { bar: { horizontal: true } }
       };
     }
@@ -675,17 +700,52 @@ export default {
       if (!s) return false;
       return (s.failing || []).some((f) => f.id === r.id);
     },
+    /** Latest-run outcome for a suite entry, by id (null before any run).
+     * Pass/fail comes from the SERVER's summary.failing (the same source
+     * the results table uses) — no client-side threshold invention. */
+    runOutcome(e) {
+      if (!this.runRows || !this.runRows.length) return null;
+      const r = this.runRows.find((x) => x.id === e.id);
+      if (!r) return null;
+      const s = this.runDoc && this.runDoc.payload && this.runDoc.payload.summary;
+      const fails = (((s || {}).failing || []).find((f) => f.id === e.id) || {}).fails || [];
+      const errored = !!(r.error && r.error.code);
+      return {
+        retrieved: (r.contexts || []).length,
+        abstained: !!r.abstained,
+        failed: errored,
+        fails,
+        ok: !errored && !r.abstained && fails.length === 0
+      };
+    },
+    runOutcomeLabel(e) {
+      const o = this.runOutcome(e);
+      if (!o) return '';
+      if (o.failed) return this.translate('okf.ragas.run.rowError', 'error');
+      if (o.abstained) return this.translate('okf.ragas.run.abstained', 'abstained');
+      return o.ok
+        ? this.translate('okf.ragas.run.pass', 'pass')
+        : `${this.translate('okf.ragas.run.fail', 'fail')}: ${o.fails.join(', ')}`;
+    },
+    passagesTitle(e) {
+      const ps = e.reference_passages || [];
+      const o = this.runOutcome(e);
+      const head = ps.length ? String(ps[0]).slice(0, 120) : '';
+      return o ? `retrieved ${o.retrieved} — ${head}` : head;
+    },
     gaugeOptions(g) {
-      const t = useChartTheme().getCssVarStrings();
+      const t = this.chartThemeStrings();
+      const mode = this.chartTheme === 'dark' ? 'dark' : 'light';
       return {
         chart: { type: 'radialBar', sparkline: { enabled: true } },
+        theme: { mode },
         colors: [t.chartColors[Math.abs(g.key.length) % t.chartColors.length]],
         plotOptions: {
           radialBar: {
             hollow: { size: '55%' },
             dataLabels: {
               name: { show: false },
-              value: { show: true, formatter: (v) => `${(Number(v) / 100).toFixed(2)}`, color: t.fg }
+              value: { show: true, formatter: (v) => `${(Number(v) / 100).toFixed(2)}`, color: t.textColor }
             }
           }
         }

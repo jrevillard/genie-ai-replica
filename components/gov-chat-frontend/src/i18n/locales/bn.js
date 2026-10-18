@@ -3154,6 +3154,11 @@ export default {
       run: {
         button: 'মানদণ্ড পরীক্ষা চালান',
         working: 'চলছে…',
+        retrieved: 'উদ্ধৃত',
+        pass: 'উত্তীর্ণ',
+        fail: 'ব্যর্থ',
+        abstained: 'বিরত',
+        rowError: 'ত্রুটি',
         cancel: 'রান বাতিল',
         phase: {
           retrieval: 'পুনরুদ্ধার হচ্ছে',

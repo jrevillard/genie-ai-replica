@@ -198,9 +198,15 @@ data:
     # compose default (KEYCLOAK_REGISTRATION_ENABLED:-true). Works without
     # SMTP while verifyEmail is false — accounts activate immediately.
     registrationAllowed: true
-    # Gates the new-user email-verification flow; requires smtp to be set
-    # when true (Keycloak rejects verification emails without a server).
-    verifyEmail: false
+    # "Forgot password?" link on the login page. Mirrors the compose
+    # default (KEYCLOAK_RESET_PASSWORD:-true); the reset flow needs a
+    # working smtp to actually deliver.
+    resetPasswordAllowed: true
+    # Email verification on new accounts. Mirrors the compose default
+    # (KEYCLOAK_VERIFY_EMAIL:-true). Registration and password reset
+    # send mails — set data.keycloak.smtp or those flows error at send
+    # time (realm import itself is unaffected).
+    verifyEmail: true
     # Realm password policy — defaults to the Swarm export value
     # (public-sector baseline). Non-empty on purpose: an empty value
     # would be dropped from the convergence Job's env (K8s omitempty),

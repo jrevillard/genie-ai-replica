@@ -8,7 +8,7 @@ aliases:
 mode: how-to
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-18
 ---
 
 This guide covers GENIE.AI on Kubernetes via the `genieai-umbrella` Helm chart.
@@ -51,8 +51,9 @@ reconcilers and failed releases.
 | `sealed-secrets` (or alternative) | ≥ 0.40 | Encrypts Secrets into the deploy repo |
 
 Later tiers add: GPU device plugin + node feature discovery (when
-`opea.gpu.mode=in-cluster`), Envoy Gateway (Phase 2 ingress — see
-[Access](#access)).
+`opea.gpu.mode=in-cluster`). The Envoy Gateway is NOT a prerequisite — it
+ships as a chart dependency (`envoyGateway.enabled`, default on); see
+[Exposure topologies](#exposure-topologies).
 
 **Node labels** (when running models in-cluster):
 
@@ -165,11 +166,13 @@ topology. Valid values: `dev`, `staging`, `prod`. `sovereign` is reserved
 until that profile lands. Per-service overrides go through
 `clusterProfileReplicas` in your overlay.
 
-**`ingress.host` and `ingress.scheme`** — public origin. `scheme` feeds
-`KC_PUBLIC_ORIGIN` (realm `redirectUris`/`webOrigins`): a port-forward
-demo requires `http://` or every login redirect mismatches the issuer.
-TLS terminate at Envoy Gateway (Phase 2); issuer pinning lands in the same
-phase.
+**`ingress.host` and `ingress.scheme`** — public origin, **required** (no
+chart default: the render fails with a supply-it message when unset).
+`host` may carry a port (`genieai.local:4443`) — the port is kept for the
+OIDC issuer and redirect URLs, and stripped where Kubernetes expects a
+bare hostname (HTTPRoute hostnames, TLS `dnsNames`). `scheme` feeds
+`KC_PUBLIC_ORIGIN` (realm `redirectUris`/`webOrigins`). See
+[Exposure topologies](#exposure-topologies) below for the full matrix.
 
 **`opea.enabled`** and **`opea.gpu.mode`** — enable the six OPEA
 orchestrators (chatqna, retriever, dataprep, reranker, embedding,
@@ -194,22 +197,135 @@ per dashboard render).
 **`pluggable.storageClassName`** — overrides the cluster default StorageClass
 for chart-managed PVCs. Empty string = use the cluster default.
 
-## Access
+## Exposure topologies
 
-**Dev port-forward.** The validated dev loop on a laptop minikube:
+The chart ships an Envoy Gateway as an optional dependency
+(`envoyGateway.enabled`, default `true`) and renders Gateway API
+resources (`Gateway`, `GatewayClass`, `HTTPRoute`, optional
+cert-manager `Certificate` and CORS `SecurityPolicy`). **There is no nginx
+in the Kubernetes data path** — Envoy routes every public path (`/` SPA,
+`/api/`, `/api-docs/`, `/auth/` Keycloak, `/api/files/` + `/uploads/`
+document repository). Pick one of three scenarios:
 
-```bash
-kubectl -n genieai port-forward svc/nginx 8080:80
-# Browse http://localhost:8080
+### Scenario 1 — No ingress (port-forward, laptop/dev)
+
+`ingress.enabled: false`. Nothing is exposed; you reach the stack through
+`kubectl port-forward` against the Envoy data-plane Service.
+
+```mermaid
+flowchart LR
+    dev["Developer browser<br/>https://genieai.local:4443"]
+    pf["kubectl port-forward<br/>4443 → envoy svc 443"]
+    edge["Envoy data-plane<br/>(still deployed, no Gateway API resources)"]
+    subgraph cluster ["namespace: genieai"]
+        edge --> spa["frontend (SPA)"]
+        edge --> api["backend"]
+        edge --> kc["keycloak"]
+    end
+    dev --> pf --> edge
 ```
 
-The overlay sets `ingress.scheme: http` and `ingress.host: localhost:8080`
-in this mode so Keycloak's issuer match and the SPA's secure-context
-require a `localhost` browser origin.
+| Knob | Value |
+|---|---|
+| `ingress.enabled` | `false` |
+| `ingress.host` | still required — the port-forward origin must match the OIDC issuer (e.g. `genieai.local:4443`, `https://` scheme) |
 
-**Phase 2 ingress** (Gateway API + Envoy Gateway + cert-manager) is on the
-remaining phases list; once shipped the `kubectl port-forward` step above
-will move to the Gateway's external hostname.
+### Scenario 2 — Envoy Gateway in-chart (default)
+
+`ingress.enabled: true` + `envoyGateway.enabled: true` (default). The chart
+installs Envoy Gateway, owns the `GatewayClass`, terminates TLS
+(cert-manager `Certificate` from `ingress.tls.issuerName`, or a pre-baked
+Secret via `ingress.tls.secretName`), and NetworkPolicies only admit the
+Envoy data-plane pods as external peers.
+
+```mermaid
+flowchart LR
+    user["Users<br/>https://genie.example.org"]
+    subgraph chart ["chart-managed edge"]
+        gc["GatewayClass: envoy"]
+        gw["Gateway genieai<br/>(TLS terminate)"]
+        hr["HTTPRoute genieai<br/>/ → frontend · /api/ → backend<br/>/auth/ → keycloak · /api/files/ → doc-repo"]
+    end
+    eg["Envoy Gateway controller<br/>(chart dependency)"]
+    dp["Envoy data-plane pods<br/>(Gateway's namespace)"]
+    subgraph app ["namespace: genieai"]
+        spa["frontend"]
+        api["backend"]
+        kc["keycloak"]
+        dr["document-repository"]
+    end
+    eg -- adopts --> gc
+    gc --> dp
+    user --> dp --> gw
+    hr -.routes.- dp
+    gw --> hr
+    hr --> spa & api & kc & dr
+```
+
+| Knob | Value |
+|---|---|
+| `ingress.enabled` | `true` |
+| `envoyGateway.enabled` | `true` (default) |
+| `ingress.tls.enabled` / `issuerName` / `secretName` | cert-manager flow or pre-baked certificate |
+| `ingress.cors.allowOrigins` | optional CORS `SecurityPolicy` (empty = same-origin, no policy rendered) |
+
+### Scenario 3 — External controller / off-cluster edge
+
+`ingress.enabled: true` + `envoyGateway.enabled: false`. The chart still
+renders the `Gateway`/`HTTPRoute` set; your own controller implements the
+`envoy` class (`ingress.className`). Typical sovereign shape: a DMZ edge
+outside the cluster fronts Envoy (TLS re-encrypt or SNI passthrough) while
+Envoy stays the single in-cluster path router — one routing table, no
+second aggregator to keep in sync.
+
+```mermaid
+flowchart LR
+    user["Users"]
+    dmz["DMZ edge<br/>(site-owned: LB / firewall / VIP)"]
+    subgraph cluster ["Kubernetes cluster"]
+        ctl["your Gateway API controller<br/>(implements class: envoy)"]
+        dp["Envoy data-plane"]
+        subgraph app ["namespace: genieai"]
+            svc["frontend · backend · keycloak · doc-repo"]
+        end
+    end
+    user --> dmz -- "TLS re-encrypt or SNI passthrough" --> dp
+    ctl -.adopts.-> dp
+    dp --> svc
+```
+
+| Knob | Value |
+|---|---|
+| `ingress.enabled` | `true` |
+| `envoyGateway.enabled` | `false` |
+| `ingress.className` | your controller's class (default `envoy`) |
+| `ingress.dataplaneNamespace` | set when the data-plane runs outside the app namespace (NetworkPolicy peers) |
+
+### In-cluster transport security
+
+The chart deliberately ships **no application-level TLS inside the
+cluster**: TLS terminates at the edge, and service-to-service traffic
+(frontend → backend, backend → chatqna, JWTs included) rides the pod
+network in the clear. Clusters that require wire encryption for that
+traffic should enable it at the CNI (WireGuard encryption in Cilium or
+Calico) at cluster bootstrap — that covers every pod, including same-node
+veth traffic, without per-service certificates or a mesh.
+
+## Access
+
+**Dev port-forward** (Scenario 1 — the validated laptop loop):
+
+```bash
+kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:443
+# Browse https://genieai.local:4443  (self-signed certificate)
+```
+
+The overlay sets `ingress.host: genieai.local:4443` and `scheme: https`;
+`/etc/hosts` maps `genieai.local` to `127.0.0.1`. The browser origin must
+carry the same port as the OIDC issuer or login redirects mismatch.
+
+**Exposed environments** (Scenarios 2–3): browse the `ingress.host`
+origin directly; TLS is the edge's concern.
 
 ## Validation
 
@@ -223,12 +339,15 @@ helm test genieai -n genieai
 Both test Pods need `kubectl`; the chart's init container downloads it
 into a shared `emptyDir`.
 
-**Service health** — once nginx is reachable:
+**Service health** — through the edge:
 
 ```bash
-curl -sk http://localhost:8080/healthz                    # nginx
-curl -sk http://localhost:8080/api/health                 # backend (per-values wiring)
+curl -sk -H "Host: genieai.local" https://localhost:4443/api/health   # backend
 ```
+
+**Full live set** (per release cycle): themed login page, Register link,
+French streamed chat, document upload → scan → ingestion, and a RAG answer
+citing the freshly ingested document.
 
 **Flux reconciliation:**
 

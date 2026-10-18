@@ -97,6 +97,19 @@ _ANY_WHITESPACE = re.compile(r"\s")
 ATTRIBUTE_NAMES = {
     # Correlation
     "query_id": QUERY_ID_KEY,
+    # OKF multi-repo fan-out routing (feat/okf-server line). Values are
+    # counts/booleans except leg.graph_name, which carries the Arango graph
+    # collection name (identifier-charset, no whitespace).
+    "okf_fanout_exclude_legacy": "okf.fanout.exclude_legacy",
+    "okf_fanout_engaged": "okf.fanout.engaged",
+    "okf_fanout_carrier_graph_count": "okf.fanout.carrier_graph_count",
+    "okf_fanout_timeout_ms": "okf.fanout.timeout_ms",
+    "okf_fanout_graph_count": "okf.fanout.graph_count",
+    "okf_fanout_leg_graph_name": "okf.fanout.leg.graph_name",
+    "okf_fanout_leg_empty_fallback": "okf.fanout.leg_empty_fallback",
+    "okf_fanout_legs_succeeded": "okf.fanout.legs_succeeded",
+    "okf_fanout_legs_failed": "okf.fanout.legs_failed",
+    "okf_fanout_fused_count": "okf.fanout.fused_count",
     # LLM invoke
     "llm_model": "llm.model",
     "llm_service_path": "llm.service_path",

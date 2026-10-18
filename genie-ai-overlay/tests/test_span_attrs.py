@@ -161,8 +161,10 @@ class TestVocabularyShape:
     def test_values_are_unique(self):
         assert len(set(VOCABULARY)) == len(VOCABULARY)
 
-    def test_vocabulary_has_fifty_two_entries(self):
-        assert len(ATTRIBUTE_NAMES) == 52
+    def test_vocabulary_has_sixty_two_entries(self):
+        # 52 from the #1090 tracing wave + 10 okf.fanout.* routing attributes
+        # (feat/okf-server line, registered during the 2026-10-18 rebase).
+        assert len(ATTRIBUTE_NAMES) == 62
 
 
 class TestDeprecatedAttributeNames:
@@ -255,7 +257,7 @@ class TestDeprecatedAttributeNames:
         ]
 
     def test_registering_the_backlog_did_not_inflate_the_vocabulary(self):
-        assert len(ATTRIBUTE_NAMES) == 52
+        assert len(ATTRIBUTE_NAMES) == 62
         assert len(DEPRECATED_ATTRIBUTE_NAMES) == 21
 
 

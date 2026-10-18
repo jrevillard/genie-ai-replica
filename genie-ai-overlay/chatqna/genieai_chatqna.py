@@ -393,6 +393,15 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_float(name: str, default: float) -> float:
+    """Parse a float env var tolerantly — same contract as ``_env_int``:
+    unset, set-to-empty, or non-numeric values fall back to the default."""
+    try:
+        return float(os.getenv(name) or default)
+    except ValueError:
+        return default
+
+
 MEGA_SERVICE_PORT = _env_int("MEGA_SERVICE_PORT", 8888)
 GUARDRAIL_SERVICE_HOST_IP = os.getenv("GUARDRAIL_SERVICE_HOST_IP", "0.0.0.0")
 GUARDRAIL_SERVICE_PORT = int(os.getenv("GUARDRAIL_SERVICE_PORT", 80))
@@ -693,8 +702,13 @@ _CONDENSE_SYSTEM_PROMPT = (
     "EXCLUDE anything the user rejects. Output JSON only: "
     '{"standalone_query": "..."}'
 )
-_CONDENSE_MAX_TOKENS = 64
-_CONDENSE_TIMEOUT_SECONDS = 5.0
+# Env-tunable (MULTI_TURN_CONDENSE_MAX_TOKENS / MULTI_TURN_CONDENSE_TIMEOUT_SECONDS).
+# The token cap must clear the longest valid rewrite: a guided-JSON output cut
+# mid-string parses as bad_body and fails the turn (503). 256 = ~4x the worst
+# observed rewrite (a multi-clause follow-up, ~60 tokens); only consumed tokens
+# cost anything, and a runaway generation is still bounded by the timeout.
+_CONDENSE_MAX_TOKENS = _env_int("MULTI_TURN_CONDENSE_MAX_TOKENS", 256)
+_CONDENSE_TIMEOUT_SECONDS = _env_float("MULTI_TURN_CONDENSE_TIMEOUT_SECONDS", 5.0)
 
 
 class CondenseError(Exception):

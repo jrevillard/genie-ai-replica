@@ -159,6 +159,8 @@ rather than a confident-but-wrong answer.
 |------|---------|---------|
 | `MULTI_TURN_MODE` | `blend` | Mode selector. Only the exact string `condense` (after `strip().lower()`) enters the condense branch — anything else skips it. Vector-space blending runs in the `elif` branch, gated on `MULTI_TURN_BLEND_ENABLED=true` AND `MULTI_TURN_HISTORY_TURNS > 0`. A typo'd mode with blend disabled (the default) falls through to stateless retrieval on the raw query — neither condense nor blend runs. |
 | `MULTI_TURN_CONDENSE_HISTORY_TURNS` | `8` | Number of prior conversation segments fed to the condense rewrite prompt. Only consulted when `MULTI_TURN_MODE=condense`; the blend path keeps its own `MULTI_TURN_HISTORY_TURNS` knob. |
+| `MULTI_TURN_CONDENSE_MAX_TOKENS` | `256` | Output cap (tokens) for the condense rewrite LLM call. A rewrite longer than the cap truncates the guided JSON mid-string → `bad_body` → the turn fails closed (503). Raise it if valid rewrites of long multi-clause follow-ups keep failing. |
+| `MULTI_TURN_CONDENSE_TIMEOUT_SECONDS` | `5.0` | Fail-closed budget (seconds) for the condense rewrite call. A timeout fails the turn (503). Raise it for slow GPU nodes. |
 
 Setting `MULTI_TURN_MODE=condense` while `MULTI_TURN_BLEND_ENABLED=true`
 logs a warning and **ignores the blend flag** — the two paths cannot

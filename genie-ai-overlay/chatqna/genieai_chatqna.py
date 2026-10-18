@@ -3015,7 +3015,8 @@ class ChatQnAService:
         """Rewrite a follow-up into a standalone retrieval query (issue #1091).
 
         One short LLM call against the chat LLM's endpoint/model
-        (temperature 0, guided JSON, 5 s timeout, no retry). Fail-closed:
+        (temperature 0, guided JSON, fail-closed timeout via
+        MULTI_TURN_CONDENSE_TIMEOUT_SECONDS, no retry). Fail-closed:
         every failure classification raises HTTPException(503) — the turn
         fails with LLM-failure semantics; retrieval never sees the raw or
         blended query on this path.
